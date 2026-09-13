@@ -1,0 +1,11 @@
+.env
+__pycache__/
+.venv/
+.pytest_cache/
+node_modules/
+dist/
+.claude/
+docs/
+.coverage
+.superpowers/
+frontend/design-system/
