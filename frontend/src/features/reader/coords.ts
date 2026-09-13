@@ -24,20 +24,33 @@ function onSameLine(a: PdfRect, b: PdfRect): boolean {
   return verticalOverlap >= smallerHeight / 2 && horizontalGap <= SAME_LINE_GAP_PT
 }
 
-export function mergeLines(rects: PdfRect[]): PdfRect[] {
-  const sorted = [...rects].sort((a, b) => a[1] - b[1] || a[0] - b[0])
-  return sorted.reduce<PdfRect[]>((lines, rect) => {
-    const index = lines.findIndex((line) => onSameLine(line, rect))
-    if (index === -1) return [...lines, rect]
-    const line = lines[index]
+function mergeRound(lines: PdfRect[]): PdfRect[] {
+  return lines.reduce<PdfRect[]>((result, rect) => {
+    const index = result.findIndex((line) => onSameLine(line, rect))
+    if (index === -1) return [...result, rect]
+    const line = result[index]
     const merged: PdfRect = [
       Math.min(line[0], rect[0]),
       Math.min(line[1], rect[1]),
       Math.max(line[2], rect[2]),
       Math.max(line[3], rect[3]),
     ]
-    return lines.map((existing, i) => (i === index ? merged : existing))
+    return result.map((existing, i) => (i === index ? merged : existing))
   }, [])
+}
+
+export function mergeLines(rects: PdfRect[]): PdfRect[] {
+  const sorted = [...rects].sort((a, b) => a[1] - b[1] || a[0] - b[0])
+  let lines = mergeRound(sorted)
+
+  // Transitive merge: repeat until stable (handles rects that bridge multiple lines)
+  while (true) {
+    const nextLines = mergeRound(lines)
+    if (nextLines.length === lines.length) break
+    lines = nextLines
+  }
+
+  return lines
 }
 
 export function clientRectsToPdfRects(rects: ClientRectLike[], page: ClientRectLike, scale: number): PdfRect[] {

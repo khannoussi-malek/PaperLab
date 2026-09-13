@@ -21,6 +21,13 @@ describe('mergeLines', () => {
       [72, 412, 200, 422],
     ])
   })
+
+  it('folds lines that a later rect bridges into one', () => {
+    const L: PdfRect = [72, 400, 98, 410]
+    const M: PdfRect = [300, 400, 326, 410]
+    const bridge: PdfRect = [95, 402, 305, 411]
+    expect(mergeLines([L, M, bridge])).toEqual([[72, 400, 326, 411]])
+  })
 })
 
 describe('clientRectsToPdfRects', () => {
