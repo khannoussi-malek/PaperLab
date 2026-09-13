@@ -1,4 +1,5 @@
 import { Upload } from 'lucide-react'
+import { useRef } from 'react'
 import type { Paper } from '@/api/client'
 import { useDeletePaper, usePapers, useUploadPapers } from '@/api/queries'
 import { ModeToggle } from '@/components/mode-toggle'
@@ -16,6 +17,7 @@ export function LibraryPage() {
   const papers = usePapers()
   const upload = useUploadPapers()
   const remove = useDeletePaper()
+  const fileInput = useRef<HTMLInputElement>(null)
 
   function onFiles(input: HTMLInputElement) {
     const files = [...(input.files ?? [])]
@@ -34,20 +36,18 @@ export function LibraryPage() {
       <header className="flex items-center justify-between gap-2">
         <h1 className="font-heading text-3xl font-semibold">PaperLab</h1>
         <div className="flex items-center gap-2">
-          <Button asChild>
-            <label>
-              <Upload aria-hidden />
-              {upload.isPending ? 'Uploading…' : 'Upload PDFs'}
-              <input
-                type="file"
-                accept="application/pdf"
-                multiple
-                hidden
-                disabled={upload.isPending}
-                onChange={(e) => onFiles(e.currentTarget)}
-              />
-            </label>
+          <Button type="button" disabled={upload.isPending} onClick={() => fileInput.current?.click()}>
+            <Upload aria-hidden />
+            {upload.isPending ? 'Uploading…' : 'Upload PDFs'}
           </Button>
+          <input
+            ref={fileInput}
+            type="file"
+            accept="application/pdf"
+            multiple
+            hidden
+            onChange={(e) => onFiles(e.currentTarget)}
+          />
           <ModeToggle />
         </div>
       </header>
@@ -86,7 +86,7 @@ export function LibraryPage() {
                     </Badge>
                   </TableCell>
                   <TableCell className="w-0">
-                    <Button variant="ghost" size="sm" onClick={() => onDelete(paper)}>
+                    <Button variant="ghost" size="sm" className="text-destructive" onClick={() => onDelete(paper)}>
                       Delete
                     </Button>
                   </TableCell>

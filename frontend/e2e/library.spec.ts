@@ -43,3 +43,10 @@ test('a failed first load can be retried', async ({ page }) => {
   await expect(page.getByRole('alert')).not.toBeVisible()
   await expect(page.getByText('Loading…')).not.toBeVisible()
 })
+
+test('the upload action is a keyboard-reachable button', async ({ page }) => {
+  await page.goto('/')
+  const upload = page.getByRole('button', { name: 'Upload PDFs' })
+  await upload.focus()
+  await expect(upload).toBeFocused()
+})
