@@ -91,6 +91,13 @@ Fonts: body `Atkinson Hyperlegible Next Variable` (`font-sans`), headings `Crims
   and the colour names "Yellow" … "Orange" / "Custom colour").
   Style with utility classes next to them.
 - One primary button per view. Destructive actions use `text-destructive` and ask for confirmation.
+- **The hover card manages its note.** It is `NoteCard` in its compact variant (`div.hover-note`, never an
+  `article.note`): colour, Edit, Delete. It stays open while the pointer is on the highlight or the card, closes
+  300 ms after it leaves both, and never closes while any of its notes is being edited. Keyboard users use the panel.
+- **Right-click is resolved by the highlight hit-test.** A saved highlight opens the note menu (colours, Edit note,
+  Copy quote, Delete note); the pending selection opens the draft menu (Highlight in <colour>, Add note…, Copy text,
+  Cancel); anywhere else the browser keeps its own menu. The menu is the shadcn `DropdownMenu` anchored at the
+  pointer, and a failed copy shows in the error alert.
 
 ## Pre-delivery check (from ui-ux-pro-max Quick Reference §1–§3)
 
