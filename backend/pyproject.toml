@@ -32,6 +32,8 @@ pythonpath = ["."]
 # Only applies when coverage runs (`uv run pytest --cov`), so single-file test runs aren't gated.
 [tool.coverage.run]
 source = ["app"]
+# The default C tracer loses route lines after an SQLAlchemy greenlet switch; sys.monitoring doesn't.
+core = "sysmon"
 
 [tool.coverage.report]
 fail_under = 80
