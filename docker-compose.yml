@@ -44,6 +44,16 @@ services:
     # Not `arq --watch`: that restarts the worker in-process and never re-imports changed code.
     command: watchfiles --filter python "arq app.workers.settings.WorkerSettings" app
 
+  frontend:
+    build: ./frontend
+    environment:
+      API_URL: http://api:8000
+    ports: ["5180:5173"]
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on: [api]
+
 volumes:
   pgdata:
   pdfs:
