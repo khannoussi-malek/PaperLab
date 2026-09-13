@@ -87,3 +87,10 @@ async def delete_paper(session: AsyncSession, paper_id: uuid.UUID) -> None:
     await session.delete(paper)
     await session.commit()
     await asyncio.to_thread(Path(paper.file_path).unlink, missing_ok=True)
+
+
+async def get_paper_file(session: AsyncSession, paper_id: uuid.UUID) -> Path:
+    path = Path((await get_paper(session, paper_id)).file_path)
+    if not await asyncio.to_thread(path.is_file):
+        raise NotFound(f"PDF for paper {paper_id} is missing from storage")
+    return path

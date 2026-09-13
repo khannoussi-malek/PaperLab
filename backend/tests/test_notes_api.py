@@ -1,0 +1,62 @@
+import uuid
+
+import pytest
+
+from app.models import Paper
+
+pytestmark = pytest.mark.anyio
+
+
+async def make_paper(session, file_path: str, page_count=2) -> Paper:
+    paper = Paper(title="api paper", file_path=file_path, page_count=page_count)
+    session.add(paper)
+    await session.commit()
+    return paper
+
+
+async def test_note_lifecycle_over_http(client, session, tmp_path):
+    pdf = tmp_path / "paper.pdf"
+    pdf.write_bytes(b"%PDF-1.4 test")
+    paper = await make_paper(session, str(pdf))
+
+    pdf_response = await client.get(f"/api/papers/{paper.id}/file")
+    assert pdf_response.status_code == 200
+    assert pdf_response.headers["content-type"] == "application/pdf"
+
+    anchor = {"paper_id": str(paper.id), "page": 2, "bbox": [[10, 20, 30, 40]], "quoted_text": "self-atten-\ntion"}
+    created = await client.post("/api/notes", json={"body": "key claim", "anchor": anchor})
+    assert created.status_code == 201
+    note = created.json()
+    assert note["provenance"] == "human"
+    assert note["anchors"] == [
+        {"paper_id": str(paper.id), "page": 2, "bbox": [[10, 20, 30, 40]], "quoted_text": "self-attention"}
+    ]
+
+    listed = await client.get(f"/api/papers/{paper.id}/notes")
+    assert [n["id"] for n in listed.json()] == [note["id"]]
+
+    patched = await client.patch(f"/api/notes/{note['id']}", json={"body": "revised"})
+    assert patched.status_code == 200
+    assert patched.json()["body"] == "revised"
+
+    assert (await client.delete(f"/api/notes/{note['id']}")).status_code == 204
+    assert (await client.get(f"/api/papers/{paper.id}/notes")).json() == []
+
+    assert (await client.delete(f"/api/papers/{paper.id}")).status_code == 204
+    assert (await client.get(f"/api/papers/{paper.id}")).status_code == 404
+    assert not pdf.exists()
+
+
+async def test_note_and_file_errors_map_to_status_codes(client, session):
+    paper = await make_paper(session, "/missing.pdf", page_count=1)
+    anchor = {"paper_id": str(paper.id), "page": 1, "bbox": [[1, 2, 3, 4]], "quoted_text": "q"}
+
+    bad_rect = await client.post("/api/notes", json={"anchor": {**anchor, "bbox": [[1, 2, 3]]}})
+    page_out_of_range = await client.post("/api/notes", json={"anchor": {**anchor, "page": 5}})
+    unknown_paper = await client.post("/api/notes", json={"anchor": {**anchor, "paper_id": str(uuid.uuid4())}})
+    missing_file = await client.get(f"/api/papers/{paper.id}/file")
+
+    assert bad_rect.status_code == 422
+    assert page_out_of_range.status_code == 422
+    assert unknown_paper.status_code == 404
+    assert missing_file.status_code == 404

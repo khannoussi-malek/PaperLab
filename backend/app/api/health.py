@@ -1,12 +1,11 @@
 import random
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import bindparam, select, text
-from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import SessionDep
 from app.config import settings
-from app.db import get_session
 from app.models import Chunk, Paper
 
 router = APIRouter(tags=["health"])
@@ -17,7 +16,7 @@ NEAREST_SQL = text(
 
 
 @router.get("/api/health")
-async def health(session: AsyncSession = Depends(get_session)) -> dict:
+async def health(session: SessionDep) -> dict:
     """Write a vector, read it back through the ORM and through raw SQL, then roll back.
 
     Exercises both paths the app relies on (ORM for ordinary access, text() for retrieval),
