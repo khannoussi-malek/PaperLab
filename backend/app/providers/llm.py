@@ -5,6 +5,7 @@ from collections.abc import AsyncIterator
 
 import anthropic
 import httpx
+import httpx2
 
 from app.config import settings
 from app.providers.base import LLM, LLMError, LLMUnavailable
@@ -76,6 +77,10 @@ class AnthropicLLM:
             raise LLMUnavailable(f"Model {self.model} isn't available on the Anthropic API") from exc
         # The base class on purpose: an overload mid-stream arrives as APIStatusError with status 200.
         except anthropic.APIError as exc:
+            raise LLMError(f"Anthropic API error: {exc}") from exc
+        # A transport drop mid-stream (not an SSE `error` event): the SDK only wraps errors from the
+        # initial send, so a read failure during iteration surfaces as a raw httpx2 exception.
+        except httpx2.HTTPError as exc:
             raise LLMError(f"Anthropic API error: {exc}") from exc
 
 

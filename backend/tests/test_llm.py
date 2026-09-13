@@ -72,6 +72,10 @@ async def test_ollama_connection_refused_is_unavailable():
         await collect(ollama(handler), [])
 
 
+def test_ollama_uses_a_generous_read_timeout_for_cold_model_loads():
+    assert llm.OLLAMA_TIMEOUT == httpx.Timeout(120, connect=5)
+
+
 async def test_ollama_error_line_mid_stream_is_an_llm_error():
     body = ndjson(token_line("Attention"), {"error": "an error was encountered while running the model"})
     model = ollama(lambda request: httpx.Response(200, text=body))
@@ -137,6 +141,40 @@ async def test_anthropic_overload_mid_stream_is_an_llm_error():
     with pytest.raises(LLMError, match="Overloaded"):
         await collect(anthropic_model(handler), tokens)
     assert tokens == ["Attention [C"]
+
+
+class _DropAfterOneChunk(httpx2.AsyncByteStream):
+    """A transport that delivers some bytes, then dies — not an SSE `error` event."""
+
+    def __init__(self, chunk: bytes):
+        self._chunk = chunk
+
+    async def __aiter__(self):
+        yield self._chunk
+        raise httpx2.ReadError("connection dropped")
+
+
+async def test_anthropic_transport_error_mid_stream_is_an_llm_error():
+    message = {
+        "id": "msg_1", "type": "message", "role": "assistant", "model": "claude-sonnet-5", "content": [],
+        "stop_reason": None, "stop_sequence": None, "usage": {"input_tokens": 10, "output_tokens": 0},
+    }
+    chunk = (
+        sse("message_start", {"type": "message_start", "message": message})
+        + sse("content_block_start", {"type": "content_block_start", "index": 0,
+                                      "content_block": {"type": "text", "text": ""}})
+        + sse("content_block_delta", {"type": "content_block_delta", "index": 0,
+                                      "delta": {"type": "text_delta", "text": "Attention"}})
+    ).encode()
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(200, headers={"content-type": "text/event-stream"},
+                               stream=_DropAfterOneChunk(chunk))
+
+    tokens = []
+    with pytest.raises(LLMError, match="connection dropped"):
+        await collect(anthropic_model(handler), tokens)
+    assert tokens == ["Attention"]
 
 
 async def test_anthropic_unknown_model_is_unavailable():
