@@ -98,10 +98,16 @@ def pdf_dir(tmp_path, monkeypatch):
 
 
 @pytest.fixture
-async def client(session, arq, pdf_dir):
-    app = create_app()
-    app.dependency_overrides[get_session] = lambda: session
-    app.state.arq = arq
+def app(session, arq, pdf_dir):
+    """The app bound to the test session. Tests add their own dependency_overrides (e.g. the LLM)."""
+    application = create_app()
+    application.dependency_overrides[get_session] = lambda: session
+    application.state.arq = arq
+    return application
+
+
+@pytest.fixture
+async def client(app):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http:
         yield http
 
