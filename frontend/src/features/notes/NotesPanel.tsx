@@ -1,4 +1,6 @@
 import type { Note } from '@/api/client'
+import { glass } from '@/components/glass'
+import { cn } from '@/lib/utils'
 import type { SelectionAnchor } from '../reader/selection'
 import { NoteCard } from './NoteCard'
 import { NoteComposer } from './NoteComposer'
@@ -21,7 +23,7 @@ const draftKey = (draft: SelectionAnchor) => `${draft.page}:${draft.rects.flat()
 export function NotesPanel(props: Props) {
   const { paperId, notes, draft, activeNoteId } = props
   return (
-    <aside className="flex flex-col gap-3 overflow-auto border-l bg-background p-4" aria-label="Notes">
+    <aside className={cn('flex flex-col gap-3 overflow-auto border-l border-glass-border p-4', glass)} aria-label="Notes">
       {draft ? (
         <NoteComposer key={draftKey(draft)} draft={draft} onSave={props.onSaveDraft} onCancel={props.onCancelDraft} />
       ) : (

@@ -14,7 +14,12 @@ type Props = {
 /** Read-only preview of the notes under the pointer. The overlay ignores the mouse, so selection still works. */
 export function NoteHoverCard({ notes, paperId, style }: Props) {
   return (
-    <Card size="sm" className="note-hover-card absolute z-10 w-72 gap-2 p-2 shadow-lg" style={style}>
+    // Blur earns its place here: the card floats over the PDF text it would otherwise clash with.
+    <Card
+      size="sm"
+      className="note-hover-card absolute z-10 w-72 gap-2 bg-glass-strong p-2 ring-glass-border shadow-lg backdrop-blur-lg backdrop-saturate-150"
+      style={style}
+    >
       {notes.map((note) => (
         // Provenance is never subtle: badge on every note, and AI text gets its own background.
         <div

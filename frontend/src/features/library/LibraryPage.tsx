@@ -2,6 +2,7 @@ import { Upload } from 'lucide-react'
 import { useRef } from 'react'
 import type { Paper } from '@/api/client'
 import { useDeletePaper, usePapers, useUploadPapers } from '@/api/queries'
+import { glass } from '@/components/glass'
 import { ModeToggle } from '@/components/mode-toggle'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
@@ -9,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table'
 import { readerHref } from '@/lib/route'
+import { cn } from '@/lib/utils'
 
 const STATUS_VARIANT = { ready: 'secondary', failed: 'destructive' } as const
 const statusVariant = (status: string) => STATUS_VARIANT[status as keyof typeof STATUS_VARIANT] ?? 'outline'
@@ -53,7 +55,7 @@ export function LibraryPage() {
       </header>
 
       {error && (
-        <Alert variant="destructive">
+        <Alert variant="destructive" className={cn('border-glass-border', glass)}>
           <AlertDescription>{error.message}</AlertDescription>
         </Alert>
       )}
@@ -69,7 +71,7 @@ export function LibraryPage() {
       ) : papers.data.length === 0 ? (
         <p className="text-muted-foreground">No papers yet. Upload a PDF to start.</p>
       ) : (
-        <Card className="py-0">
+        <Card className={cn('py-0 ring-glass-border', glass)}>
           <Table>
             <TableBody>
               {papers.data.map((paper) => (

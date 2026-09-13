@@ -18,6 +18,19 @@ for landing pages, so only these parts of its output were kept:
   `search.py "research paper reader note-taking productivity tool calm minimal content-first academic" --design-system`.
 - Rejected from its output: landing-page patterns, the mobile touch-first flat style, the OLED-dark-only
   style, and loading fonts from Google (this app is local-first, so fonts are bundled with `@fontsource`).
+- Glass (added 2026-09-13, "subtle"): ui-ux-pro-max's Glassmorphism style (`search.py "glassmorphism" --domain style`),
+  toned down for reading: more opaque surfaces than its 15–30% default, so text keeps ≥ 4.5:1.
+
+## Glass
+
+The app chrome is frosted glass over a faint blue/violet glow on the page background. The paper is not.
+- **Glass (`glass` from `@/components/glass`: `bg-glass backdrop-blur-lg backdrop-saturate-150`)**, with a
+  `border-glass-border` or `ring-glass-border` hairline: reader toolbar, notes panel, library list card, alerts.
+- **Strong glass (`bg-glass-strong`)** where content sits behind: note cards and the composer (no blur of their
+  own; blur inside blur looks muddy), the theme menu and the hover card (these two also blur).
+- **Never glass:** the PDF page, highlights, and the AI provenance surface (`bg-provenance-llm-surface` wins).
+- OS "Reduce transparency" swaps both glass tokens for `card`, so every surface turns solid.
+- Measured contrast on glass (screenshots, both themes): body text 10.8–17.7:1, muted text 5.8–7.5:1.
 
 ## Stack
 
@@ -46,6 +59,9 @@ Defined in `src/index.css` as CSS variables and exposed to Tailwind through `@th
 | `provenance-llm` / `-foreground` | `#6d28d9` / `#ffffff` | `#a78bfa` / `#1e1b4b` | AI provenance badge |
 | `provenance-llm-surface` | `#f5f3ff` | `#2e1065` | AI note card background |
 | `highlight` / `-active` / `-draft` | yellow 40% / orange 50% / blue 25% | same | Highlights on the (always white) PDF page |
+| `glass` / `glass-strong` | white 70% / white 85% | slate-800 55% / slate-800 92% | Frosted chrome / cards and floating surfaces |
+| `glass-border` | slate-400 35% | white 10% | Hairline on glass |
+| `ambient-1` / `ambient-2` (body glow) | blue 12% / violet 10% | blue 18% / violet 16% | Radial glows behind the glass |
 
 All text pairs above meet WCAG AA (4.5:1) in their theme. Check any new pair before using it.
 

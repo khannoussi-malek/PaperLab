@@ -34,7 +34,11 @@ export function NoteCard({ note, paperId, active, onSelect, onUpdate, onDelete }
       {/* Provenance is never subtle: every note shows a badge, and AI text gets its own background. */}
       <Card
         size="sm"
-        className={cn(note.provenance !== 'human' && 'bg-provenance-llm-surface', active && 'ring-2 ring-primary')}
+        className={cn(
+          'bg-glass-strong ring-glass-border',
+          note.provenance !== 'human' && 'bg-provenance-llm-surface',
+          active && 'ring-2 ring-primary',
+        )}
       >
         <CardHeader className="flex items-center justify-between">
           <ProvenanceBadge provenance={note.provenance} />

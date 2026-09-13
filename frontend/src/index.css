@@ -34,6 +34,9 @@
     --color-highlight: var(--highlight);
     --color-highlight-active: var(--highlight-active);
     --color-highlight-draft: var(--highlight-draft);
+    --color-glass: var(--glass);
+    --color-glass-strong: var(--glass-strong);
+    --color-glass-border: var(--glass-border);
     --radius-sm: calc(var(--radius) * 0.6);
     --radius-md: calc(var(--radius) * 0.8);
     --radius-lg: var(--radius);
@@ -71,6 +74,12 @@
     --highlight: rgb(255 212 0 / 0.4);
     --highlight-active: rgb(255 140 0 / 0.5);
     --highlight-draft: rgb(37 99 235 / 0.25);
+    /* Subtle glass: chrome (toolbar, panels, menus) is frosted over a faint blue/violet glow. */
+    --glass: rgb(255 255 255 / 0.7);
+    --glass-strong: rgb(255 255 255 / 0.85);
+    --glass-border: rgb(148 163 184 / 0.35);
+    --ambient-1: rgb(37 99 235 / 0.12);
+    --ambient-2: rgb(124 58 237 / 0.1);
 }
 
 .dark {
@@ -95,6 +104,20 @@
     --provenance-llm: #a78bfa;
     --provenance-llm-foreground: #1e1b4b;
     --provenance-llm-surface: #2e1065;
+    --glass: rgb(30 41 59 / 0.55);
+    --glass-strong: rgb(30 41 59 / 0.92);
+    --glass-border: rgb(255 255 255 / 0.1);
+    --ambient-1: rgb(59 130 246 / 0.18);
+    --ambient-2: rgb(139 92 246 / 0.16);
+}
+
+/* "Reduce transparency" in the OS: glass becomes solid; blur over an opaque fill shows nothing. */
+@media (prefers-reduced-transparency: reduce) {
+    :root,
+    .dark {
+        --glass: var(--card);
+        --glass-strong: var(--card);
+    }
 }
 
 @layer base {
@@ -103,6 +126,11 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* The glow gives the glass something to frost; fixed so it doesn't scroll with content. */
+    background-image:
+      radial-gradient(60rem 40rem at 5% -10%, var(--ambient-1), transparent 70%),
+      radial-gradient(50rem 40rem at 100% 110%, var(--ambient-2), transparent 70%);
+    background-attachment: fixed;
   }
   html {
     @apply font-sans;

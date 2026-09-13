@@ -28,7 +28,7 @@ export function NoteComposer({ draft, onSave, onCancel }: Props) {
         void save()
       }}
     >
-      <Card size="sm" className="ring-2 ring-primary">
+      <Card size="sm" className="bg-glass-strong ring-2 ring-primary">
         <CardContent className="flex flex-col gap-2">
           <blockquote className="border-l-2 pl-2 text-muted-foreground">{draft.quotedText}</blockquote>
           <Textarea

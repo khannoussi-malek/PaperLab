@@ -1,6 +1,7 @@
 import { useMemo, useState, type MouseEvent } from 'react'
 import { api, type Note } from '@/api/client'
 import { useNoteMutations, useNotes, usePaper } from '@/api/queries'
+import { glass } from '@/components/glass'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { cn } from '@/lib/utils'
 import { NoteHoverCard } from '../notes/NoteHoverCard'
@@ -132,7 +133,7 @@ export function ReaderPage({ paperId }: { paperId: string }) {
       {shownError && (
         <Alert
           variant="destructive"
-          className="fixed bottom-4 left-4 z-10 w-auto max-w-md cursor-pointer shadow-lg"
+          className={cn('fixed bottom-4 left-4 z-10 w-auto max-w-md cursor-pointer border-glass-border shadow-lg', glass)}
           onClick={() => setError(null)}
         >
           <AlertDescription>{shownError}</AlertDescription>
@@ -140,7 +141,7 @@ export function ReaderPage({ paperId }: { paperId: string }) {
       )}
 
       <section
-        className="overflow-auto bg-muted p-4"
+        className="overflow-auto p-4"
         onMouseUp={captureSelection}
         onMouseMove={trackHover}
         onMouseLeave={() => setHover(null)}
