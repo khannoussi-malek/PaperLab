@@ -7,14 +7,16 @@
 **Architecture:**
 - **Backend:** notes CRUD in `backend/app/core/notes.py`, which holds the provenance rules. Thin FastAPI routers expose it, plus routes to serve and delete a paper's PDF.
 - **Frontend:** a Vite/React app renders each page with PDF.js (canvas + `TextLayerBuilder`). It converts browser selections into PDF-point rectangles (the same coordinate system PyMuPDF stores for chunks) and draws highlights from those rectangles at any zoom.
+  - From Task 4.5 on, the UI is built from shadcn/ui components on Tailwind CSS 4, with a light/dark toggle and tokens from `frontend/design-system/MASTER.md` (derived from ui-ux-pro-max).
+  - Server data goes through TanStack Query hooks in `frontend/src/api/queries.ts`, wrapping the typed `api` client.
 - **Testing:** every task ends with automated tests that exercise what it built.
   - Backend: pytest against real Postgres.
   - Pure frontend logic: Vitest.
   - Every user-visible flow: Playwright against the real stack. Library, reader rendering and zoom, note create/edit/delete, and cross-page selection each have a spec.
 
-**Tech Stack:** FastAPI, SQLAlchemy 2.0 async, pytest + anyio + httpx, React 19, Vite 8, TypeScript 6, pdfjs-dist 6.3.289, Vitest 5.0.0, Playwright 1.63.0, openapi-typescript 7.13.0.
+**Tech Stack:** FastAPI, SQLAlchemy 2.0 async, pytest + anyio + httpx, React 19, Vite 8, TypeScript 6, pdfjs-dist 6.3.289, Vitest 5.0.0, Playwright 1.63.0, openapi-typescript 7.13.0, Tailwind CSS 4.3.3, shadcn/ui (CLI 4.21.0, style `radix-nova`), lucide-react, TanStack Query 5.102.8.
 
-**Spec:** [docs/superpowers/specs/2026-09-13-paperlab-brief.md](../specs/2026-09-13-paperlab-brief.md). Build order step 3. Read it together with the [roadmap](2026-09-13-paperlab-roadmap.md), whose decision log (D1–D18) explains the non-obvious choices below.
+**Spec:** [docs/superpowers/specs/2026-09-13-paperlab-brief.md](../specs/2026-09-13-paperlab-brief.md). Build order step 3. Read it together with the [roadmap](2026-09-13-paperlab-roadmap.md), whose decision log (D1–D24) explains the non-obvious choices below. D24 (UI stack) supersedes D14 (no data-fetching library).
 
 ## Global Constraints
 
@@ -25,7 +27,13 @@
 - "Store PDF points and page dimensions; convert at render time." Anchors are stored as a list of `[x0, y0, x1, y1]` rects in PDF points, top-left origin, pages 1-based (D1, D2).
 - "Generate frontend types from FastAPI's OpenAPI schema (`openapi-typescript`) as a build step, from day one."
 - `async_sessionmaker(expire_on_commit=False)`; no implicit lazy loads; no blocking calls inside async routes.
-- Pinned versions: `create-vite@9.2.1`, `pdfjs-dist@6.3.289`, `vitest@5.0.0`, `@playwright/test@1.63.0`, `openapi-typescript@7.13.0` (via `npx`, D12).
+- Pinned versions: `create-vite@9.2.1`, `pdfjs-dist@6.3.289`, `vitest@5.0.0`, `@playwright/test@1.63.0`, `openapi-typescript@7.13.0` (via `npx`, D12), `tailwindcss@4.3.3`, `@tailwindcss/vite@4.3.3`, `shadcn@4.21.0` (via `npx`), `@tanstack/react-query@5.102.8`.
+- **UI rules (from Task 4.5 on, D24):**
+  - Build UI from shadcn/ui components and Tailwind utility classes. Add components with `npx shadcn@4.21.0 add <name>` or the shadcn MCP server; never hand-copy one.
+  - No per-feature `.css` files. The only stylesheets are `src/index.css` (tokens) and PDF.js's `pdf_viewer.css`.
+  - Every UI task reads `frontend/design-system/MASTER.md` first and ends with its "Pre-delivery check" in both themes.
+  - Server state goes through `src/api/queries.ts` hooks; components never call `api.*` for reads directly.
+  - Keep the class names and accessible names the Playwright specs use; add styling next to them.
 - Ports: API `:8000`, Postgres `:5433`, frontend `:5180` (D16).
 - Commits: `<type>: <description>`, no attribution trailer.
 
@@ -34,7 +42,7 @@
 These follow the roadmap's testing policy; every task must meet them.
 
 1. **A task is not done until its automated tests pass.** Manual checks (Task 5 Step 9, Task 7 Step 1) are extra and never replace a test.
-2. **Red first.** Write the test before the code and watch it fail. Where the UI already exists and a new E2E spec can't be red first (Tasks 3 and 5), a step introduces a named deliberate bug, shows the spec failing, then undoes the bug.
+2. **Red first.** Write the test before the code and watch it fail. Where the UI already exists and a new E2E spec can't be red first (Tasks 3, 4.5 and 5), a step introduces a named deliberate bug, shows the spec failing, then undoes the bug.
 3. **Coverage by layer:**
    - Each core function: a service test, including its error branches.
    - Each API route: an HTTP test for success and for every error status it returns.
@@ -67,6 +75,24 @@ Three findings are baked in:
 - `pdf_viewer.mjs` crashes unless `pdfjs-dist` is evaluated first (hence `pdfjs.ts`).
 - `TextLayerBuilder.render`'s types wrongly require `images`.
 
+**Tasks 4.5–6 (UI stack rewrite, D24)** were replayed on a clean export of branch `m3-reader-notes` at `d1daecc` (Task 4 done), then re-run with `6594a1d`'s `coords.ts` (transitive line merge). The replay ran every command in Task 4.5 as written and used the exact file blocks in this plan. Results:
+- **After Task 4.5:** `tsc -b` clean; `Tests  9 passed (9)` (route 2, coords 5, queries 2); `vite build` succeeds; `4 passed` (3 library + 1 theme). The theme spec fails against the Task 4 app first.
+- **After Task 5:** `6 passed`.
+- **Task 6's spec, before its code:** fails 5 of 5 as described.
+- **After Task 6:** `11 passed`; `npm run typecheck:e2e` clean.
+- **Deliberate-bug checks:** all 7 were re-run on the new UI (library stops polling, no text layer, blank canvas, highlight ignores zoom, cross-page allowed, human badge mislabelled, edit never saved), and each fails its named spec.
+- **Also checked:**
+  - Every token pair in `MASTER.md` meets WCAG AA.
+  - The shadcn MCP server answers `tools/list` when started as `.mcp.json` runs it.
+  - Light and dark screenshots were reviewed.
+
+Five more findings are baked in:
+- `shadcn init` fails `Validating Tailwind CSS` unless `src/index.css` already imports Tailwind, so Task 4.5 writes that line first.
+- TypeScript 6 deprecates `baseUrl`, so the `@/*` alias uses `paths` alone.
+- Tailwind's reset doesn't disturb PDF.js: it only sets `display: block` on `canvas`, and `pdf_viewer.css` is unlayered, so it wins over `@layer base`. `reader-render.spec.ts` confirms the text layer stays on PyMuPDF's rects at three zooms.
+- TanStack Query retries failed queries 3 times by default, which delays a 404 alert past the spec timeout. Hence `retry: false`.
+- The compose frontend keeps `node_modules` in an anonymous volume, so new dependencies need `docker compose up -d --build -V frontend`.
+
 ## File Structure
 
 ```
@@ -89,29 +115,40 @@ backend/
   tests/test_notes_edges.py          create: error branches and unknown ids (Task 2 Step 10a)
 docker-compose.yml                   modify: frontend service
 README.md                            modify: frontend + test commands
+.mcp.json                            create (Task 4.5): shadcn MCP server for agents
 frontend/                            create via create-vite, then:
-  package.json                       modify: scripts, deps
-  vite.config.ts                     rewrite: /api proxy, vitest include
+  package.json                       modify: scripts, deps (Task 4.5 adds Tailwind, shadcn deps, TanStack Query, fonts)
+  vite.config.ts                     rewrite: /api proxy, vitest include (Task 4.5: + Tailwind plugin, @ alias)
+  tsconfig.json, tsconfig.app.json   modify (Task 4.5): @/* paths
+  components.json                    generated (Task 4.5): shadcn config
+  design-system/MASTER.md            create (Task 4.5): tokens, rules, pre-delivery check
   Dockerfile, .dockerignore          create
   playwright.config.ts               create: real stack, workers 1, 10 s action timeout
   tsconfig.e2e.json                  create: type-checks e2e/ (npm run typecheck:e2e)
   .gitignore                         modify: playwright output
-  src/index.css                      rewrite: base tokens + buttons
+  src/index.css                      rewrite: base tokens + buttons (Task 4.5: Tailwind + theme tokens)
+  src/main.tsx                       rewrite (Task 4.5): QueryClientProvider + ThemeProvider
   src/App.tsx                        rewrite: route → page
   src/api/schema.d.ts                generated (committed)
   src/api/client.ts                  create: typed fetch wrappers
+  src/api/queries.ts (+ .test.ts)    create (Task 4.5): TanStack Query hooks, poll interval
+  src/components/ui/*, src/lib/utils.ts                  generated (Task 4.5): shadcn components
+  src/components/theme-provider.tsx, mode-toggle.tsx     create (Task 4.5): light/dark/system
   src/lib/route.ts (+ .test.ts)      create: hash routing
-  src/features/library/LibraryPage.tsx, library.css      create
+  src/features/library/LibraryPage.tsx                   create (Task 3), rewrite on components (Task 4.5)
+  src/features/library/library.css                       create (Task 3), delete (Task 4.5)
   src/features/reader/coords.ts (+ .test.ts)             create: the three coordinate systems
   src/features/reader/pdfjs.ts                           create: the only PDF.js import point
   src/features/reader/usePdfDocument.ts                  create
   src/features/reader/PdfPage.tsx                        create: canvas + text layer + overlay
+  src/features/reader/zoom.ts, ReaderToolbar.tsx         create (Task 5): zoom steps, toolbar
   src/features/reader/selection.ts                       create: browser selection → anchor
-  src/features/reader/ReaderPage.tsx, reader.css         create
-  src/features/notes/NotesPanel.tsx, NoteCard.tsx, NoteComposer.tsx, ProvenanceBadge.tsx, notes.css   create
+  src/features/reader/ReaderPage.tsx                     create
+  src/features/notes/NotesPanel.tsx, NoteCard.tsx, NoteComposer.tsx, ProvenanceBadge.tsx   create
   e2e/fixtures/make_sample_paper.py, sample-paper.pdf    create (Task 3)
   e2e/fixtures.ts                                        create (Task 3): paperId fixture + selection helpers
-  e2e/library.spec.ts                                    create (Task 3): upload → ready → delete; non-PDF error
+  e2e/library.spec.ts                                    create (Task 3): upload → ready → delete; non-PDF error; retry
+  e2e/theme.spec.ts                                      create (Task 4.5): toggle, reload, system preference
   e2e/reader-render.spec.ts                              create (Task 5): ink, text layer on chunk at 3 zooms, missing paper
   e2e/highlight-to-note.spec.ts                          create (Task 6): create, zoom, edit, delete, cross-page
 ```
@@ -1019,6 +1056,8 @@ git commit -m "feat: notes API, paper file and delete routes"
 
 ### Task 3: Frontend scaffold, typed client, library page
 
+> **Styling here is superseded.** This task was built before D24. Task 4.5 replaces the hand-written `index.css` tokens, `library.css`, and the `useState`/`fetch` data loading in `LibraryPage.tsx` with shadcn/ui, Tailwind and TanStack Query. The routing, API client, E2E harness and library spec from this task stay as they are.
+
 **Files:**
 - Create: `frontend/` (scaffolded), `frontend/Dockerfile`, `frontend/.dockerignore`
 - Modify: `frontend/package.json`, `frontend/index.html`, `docker-compose.yml`, `README.md`
@@ -1900,20 +1939,738 @@ git commit -m "feat: reader coordinate conversions between PDF points and DOM pi
 
 ---
 
-### Task 5: PDF rendering with zoom
+### Task 4.5: UI foundation (shadcn/ui, Tailwind, TanStack Query, themes)
+
+Decided after Task 4 was built (roadmap D24, which supersedes D14): the frontend uses shadcn/ui components on Tailwind CSS 4, TanStack Query for API calls, a light/dark theme toggle, and a design system derived from the ui-ux-pro-max skill. This task installs all of it and moves the Library page over. Tasks 5 and 6 then build the reader and notes with it, so no feature ships with hand-written CSS.
 
 **Files:**
-- Create: `frontend/src/features/reader/pdfjs.ts`, `usePdfDocument.ts`, `PdfPage.tsx`, `ReaderPage.tsx` (view-only version), `reader.css`
+- Create: `.mcp.json` (repo root), `frontend/design-system/MASTER.md`, `frontend/components.json` (generated), `frontend/src/components/ui/*` (generated), `frontend/src/lib/utils.ts` (generated)
+- Create: `frontend/src/api/queries.ts`, `frontend/src/components/theme-provider.tsx`, `frontend/src/components/mode-toggle.tsx`
+- Rewrite: `frontend/vite.config.ts`, `frontend/tsconfig.json`, `frontend/src/index.css`, `frontend/src/main.tsx`, `frontend/src/App.tsx`, `frontend/src/features/library/LibraryPage.tsx`
+- Modify: `frontend/tsconfig.app.json`, `frontend/package.json`, `frontend/package-lock.json`
+- Delete: `frontend/src/features/library/library.css`
+- Test: `frontend/e2e/theme.spec.ts`, `frontend/src/api/queries.test.ts`; `frontend/e2e/library.spec.ts` (unchanged) guards the restyled page
+
+**Interfaces:**
+- Consumes: the `api` client and types (Task 3); the E2E harness (Task 3).
+- Produces:
+  - `@/` import alias for `frontend/src`.
+  - shadcn components in `@/components/ui/`: `alert`, `badge`, `button`, `card`, `dropdown-menu`, `table`, `textarea`. `cn` from `@/lib/utils`.
+  - `frontend/src/api/queries.ts`:
+    - `queryClient` (queries don't retry).
+    - `usePapers()`, which polls every `PAPERS_POLL_MS` while `papersPollInterval(papers)` says a paper is ingesting.
+    - `usePaper(id)`, `useNotes(paperId)`.
+    - `useUploadPapers()`, `useDeletePaper()`, which invalidate the papers list.
+    - `useNoteMutations(paperId)`: `{create, update, remove}`, which invalidate that paper's notes.
+  - `ThemeProvider`, `useTheme()`, and `<ModeToggle />`: a button named "Toggle theme" with menu items Light / Dark / System. The choice is stored in `localStorage` under `paperlab-theme` and applied as the `dark` class on `<html>`.
+  - Theme tokens in `src/index.css`: shadcn's (`background`, `primary`, `muted`, …) plus `provenance-llm`, `provenance-llm-foreground`, `provenance-llm-surface`, `highlight`, `highlight-active`, `highlight-draft`.
+  - DOM contract kept from Task 3: heading "PaperLab", `input[type="file"]`, `.paper-row` rows with `a[href="#/papers/<id>"]`, `.status` holding the raw status, a "Delete" button with `window.confirm`, errors in `role="alert"`, and a "Retry" button after a failed first load.
+
+- [ ] **Step 1: Write the failing theme spec**
+
+Create `frontend/e2e/theme.spec.ts`:
+
+```ts
+import { expect, test } from './fixtures'
+
+test('the theme toggle switches to dark, survives a reload, and "System" follows the OS', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' })
+  await page.goto('/')
+  const html = page.locator('html')
+  await expect(html).not.toHaveClass(/\bdark\b/)
+
+  await page.getByRole('button', { name: 'Toggle theme' }).click()
+  await page.getByRole('menuitem', { name: 'Dark' }).click()
+  await expect(html).toHaveClass(/\bdark\b/)
+  await page.reload()
+  await expect(html).toHaveClass(/\bdark\b/)
+
+  await page.getByRole('button', { name: 'Toggle theme' }).click()
+  await page.getByRole('menuitem', { name: 'System' }).click()
+  await expect(html).not.toHaveClass(/\bdark\b/)
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await expect(html).toHaveClass(/\bdark\b/)
+})
+```
+
+Run: `cd frontend && npm run typecheck:e2e && npx playwright test e2e/theme.spec.ts`
+Expected: no type errors, then `1 failed` with `TimeoutError: locator.click: Timeout 10000ms exceeded`, waiting for the `Toggle theme` button (it doesn't exist yet).
+
+- [ ] **Step 2: Write the failing poll-interval test**
+
+Create `frontend/src/api/queries.test.ts`:
+
+```ts
+import { describe, expect, it } from 'vitest'
+import type { Paper } from './client'
+import { PAPERS_POLL_MS, papersPollInterval } from './queries'
+
+const paper = (status: string) => ({ status }) as Paper
+
+describe('papersPollInterval', () => {
+  it('polls while any paper is still ingesting', () => {
+    expect(papersPollInterval([paper('ready'), paper('extracting')])).toBe(PAPERS_POLL_MS)
+  })
+
+  it('stops once every paper is ready or failed, or before the first load', () => {
+    expect(papersPollInterval([paper('ready'), paper('failed')])).toBe(false)
+    expect(papersPollInterval(undefined)).toBe(false)
+  })
+})
+```
+
+Run: `cd frontend && npm test`
+Expected: FAIL, `Failed to resolve import "./queries"`.
+
+- [ ] **Step 3: Install Tailwind, TanStack Query and the fonts; add the `@` alias**
+
+```bash
+cd frontend
+npm install tailwindcss@4.3.3 @tailwindcss/vite@4.3.3 @tanstack/react-query@5.102.8 \
+  @fontsource-variable/crimson-pro@5.3.0 @fontsource-variable/atkinson-hyperlegible-next@5.3.0
+```
+
+Replace `frontend/vite.config.ts` with:
+
+```ts
+/// <reference types="vitest/config" />
+import tailwindcss from '@tailwindcss/vite'
+import react from '@vitejs/plugin-react'
+import { fileURLToPath } from 'node:url'
+import { defineConfig } from 'vite'
+
+export default defineConfig({
+  plugins: [react(), tailwindcss()],
+  resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
+  server: {
+    // API_URL is http://api:8000 inside compose; the host default is for `npm run dev` on the host.
+    proxy: { '/api': process.env.API_URL ?? 'http://localhost:8000' },
+  },
+  test: { include: ['src/**/*.test.ts'] },
+})
+```
+
+Replace `frontend/tsconfig.json` with:
+
+```json
+{
+  "files": [],
+  "compilerOptions": { "paths": { "@/*": ["./src/*"] } },
+  "references": [
+    { "path": "./tsconfig.app.json" },
+    { "path": "./tsconfig.node.json" }
+  ]
+}
+```
+
+In `frontend/tsconfig.app.json`, add this line directly after `"jsx": "react-jsx",`:
+
+```json
+    "paths": { "@/*": ["./src/*"] },
+```
+
+Don't add `baseUrl`, even though the shadcn guide shows it. TypeScript 6 deprecates it, and `paths` works without it.
+
+- [ ] **Step 4: Initialise shadcn/ui and add the components**
+
+`shadcn init` checks that Tailwind is wired into the stylesheet and fails with `✖ Validating Tailwind CSS` otherwise, so write the import first:
+
+```bash
+printf '@import "tailwindcss";\n' > src/index.css
+npx --yes shadcn@4.21.0 init -t vite -b radix -p nova --no-monorepo --no-rtl -y < /dev/null
+npx --yes shadcn@4.21.0 add alert badge card dropdown-menu table textarea -y
+npm uninstall @fontsource-variable/geist
+```
+
+Expected:
+- `init` prints `✔ Validating Tailwind CSS. Found v4.` and `✔ Validating import alias.`, then creates `components.json`, `src/components/ui/button.tsx` and `src/lib/utils.ts`. It installs `radix-ui`, `class-variance-authority`, `cn` (shadcn's own class-merging package), `lucide-react`, `tw-animate-css` and `shadcn`.
+- `add` prints `✔ Created 6 files`.
+- The `< /dev/null` stops `init` from waiting on a prompt when run by an agent.
+- The Geist font that `init` installs is removed, because the design system uses its own fonts.
+
+- [ ] **Step 5: Design system and theme tokens**
+
+Create `frontend/design-system/MASTER.md`:
+
+````markdown
+# PaperLab design system
+
+The single source of truth for how PaperLab looks. Read this before any task that changes what the
+UI looks like or how it behaves. If a value here and a value in `src/index.css` disagree, fix
+`index.css`.
+
+## Direction
+
+A calm reading tool, in the spirit of Readwise Reader or Zotero 7. The PDF is the content; the
+interface around it stays quiet. Desktop first. Light and dark themes, chosen with the toggle
+(Light / Dark / System).
+
+Derived from ui-ux-pro-max (`~/.claude/skills/ui-ux-pro-max`), then curated. The generator is tuned
+for landing pages, so only these parts of its output were kept:
+- Palette: "document grey + scan blue", from
+  `search.py "document reader annotation tool minimalism swiss neutral" --design-system`.
+- Type pairing: Crimson Pro + Atkinson Hyperlegible ("academic, research, scholarly, accessible"), from
+  `search.py "research paper reader note-taking productivity tool calm minimal content-first academic" --design-system`.
+- Rejected from its output: landing-page patterns, the mobile touch-first flat style, the OLED-dark-only
+  style, and loading fonts from Google (this app is local-first, so fonts are bundled with `@fontsource`).
+
+## Stack
+
+- Components: shadcn/ui, style `radix-nova`, in `src/components/ui/`. Add one with
+  `npx shadcn@4.21.0 add <name>` or through the shadcn MCP server (`.mcp.json` at the repo root).
+  Never hand-copy a component.
+- Styling: Tailwind CSS 4 utility classes. No per-feature `.css` files. The only stylesheets are
+  `src/index.css` (tokens) and PDF.js's own `pdf_viewer.css`.
+- Icons: `lucide-react` only. Decorative icons get `aria-hidden`; icon-only buttons get `aria-label`.
+- Class merging: `cn` from `@/lib/utils`.
+
+## Tokens
+
+Defined in `src/index.css` as CSS variables and exposed to Tailwind through `@theme inline`
+(so `bg-primary`, `text-muted-foreground`, `bg-provenance-llm-surface`, …).
+
+| Token | Light | Dark | Use |
+|---|---|---|---|
+| `background` | `#f8fafc` | `#0f172a` | App background |
+| `foreground` | `#0f172a` | `#f1f5f9` | Body text |
+| `card` | `#ffffff` | `#1e293b` | Cards, toolbar |
+| `primary` / `primary-foreground` | `#2563eb` / `#ffffff` | `#60a5fa` / `#0f172a` | The one primary action per view, focus ring |
+| `muted` / `muted-foreground` | `#f1f5f9` / `#475569` | `#1e293b` / `#94a3b8` | Reader pane background, secondary text, quotes |
+| `destructive` | `#dc2626` | `#f87171` | Errors, delete |
+| `border` / `input` | `#e2e8f0` / `#cbd5e1` | white 10% / white 15% | Dividers, field borders |
+| `provenance-llm` / `-foreground` | `#6d28d9` / `#ffffff` | `#a78bfa` / `#1e1b4b` | AI provenance badge |
+| `provenance-llm-surface` | `#f5f3ff` | `#2e1065` | AI note card background |
+| `highlight` / `-active` / `-draft` | yellow 40% / orange 50% / blue 25% | same | Highlights on the (always white) PDF page |
+
+All text pairs above meet WCAG AA (4.5:1) in their theme. Check any new pair before using it.
+
+Fonts: body `Atkinson Hyperlegible Next Variable` (`font-sans`), headings `Crimson Pro Variable`
+(`font-heading`). Radius `0.625rem`.
+
+## PaperLab-specific rules
+
+- **Provenance is never subtle.** Every note shows a `ProvenanceBadge` with an icon and a label
+  ("You", "AI", "AI · edited"). AI notes also get the `provenance-llm-surface` background. Never
+  rely on colour alone.
+- **The PDF page stays white in both themes.** It is the paper. Highlights use `mix-blend-multiply`.
+- **Nothing that shifts selection coordinates** goes on `.pdf-page`: no border, no padding.
+- **Stable test hooks.** Keep the class names and accessible names the Playwright specs use
+  (`.paper-row`, `.status`, `.pdf-page`, `.pdf-overlay`, `.highlight`, `.draft`, `.zoom-level`,
+  `article.note`, `.provenance-badge`, the "Note" / "Save note" / "Zoom in" / "Toggle theme" names).
+  Style with utility classes next to them.
+- One primary button per view. Destructive actions use `text-destructive` and ask for confirmation.
+
+## Pre-delivery check (from ui-ux-pro-max Quick Reference §1–§3)
+
+Run through this before finishing any UI task, in **both** themes:
+- [ ] Text contrast ≥ 4.5:1; focus rings visible when tabbing through every control.
+- [ ] Every icon-only button has an `aria-label`; every field has a visible or `aria-label` label.
+- [ ] Tab order follows the visual order; Escape closes menus and cancels the note draft.
+- [ ] Errors appear in an `Alert` (`role="alert"`) near what failed, with a way to recover (Retry, dismiss).
+- [ ] Buttons show a pointer cursor and a disabled state while their action runs.
+- [ ] No layout shift when data loads; long titles truncate with the full text in `title`.
+- [ ] No emoji as icons.
+````
+
+Replace `frontend/src/index.css` with:
+
+```css
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/atkinson-hyperlegible-next";
+@import "@fontsource-variable/crimson-pro";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Theme tokens for PaperLab. Values come from frontend/design-system/MASTER.md; change them there first. */
+@theme inline {
+    --font-sans: 'Atkinson Hyperlegible Next Variable', ui-sans-serif, system-ui, sans-serif;
+    --font-heading: 'Crimson Pro Variable', ui-serif, Georgia, serif;
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --color-card: var(--card);
+    --color-card-foreground: var(--card-foreground);
+    --color-popover: var(--popover);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-primary: var(--primary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-secondary: var(--secondary);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-muted: var(--muted);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-accent: var(--accent);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-destructive: var(--destructive);
+    --color-border: var(--border);
+    --color-input: var(--input);
+    --color-ring: var(--ring);
+    --color-provenance-llm: var(--provenance-llm);
+    --color-provenance-llm-foreground: var(--provenance-llm-foreground);
+    --color-provenance-llm-surface: var(--provenance-llm-surface);
+    --color-highlight: var(--highlight);
+    --color-highlight-active: var(--highlight-active);
+    --color-highlight-draft: var(--highlight-draft);
+    --radius-sm: calc(var(--radius) * 0.6);
+    --radius-md: calc(var(--radius) * 0.8);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) * 1.4);
+    --radius-2xl: calc(var(--radius) * 1.8);
+    --radius-3xl: calc(var(--radius) * 2.2);
+    --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+    --background: #f8fafc;
+    --foreground: #0f172a;
+    --card: #ffffff;
+    --card-foreground: #0f172a;
+    --popover: #ffffff;
+    --popover-foreground: #0f172a;
+    --primary: #2563eb;
+    --primary-foreground: #ffffff;
+    --secondary: #f1f5f9;
+    --secondary-foreground: #1e293b;
+    --muted: #f1f5f9;
+    --muted-foreground: #475569;
+    --accent: #f1f5f9;
+    --accent-foreground: #1e293b;
+    --destructive: #dc2626;
+    --border: #e2e8f0;
+    --input: #cbd5e1;
+    --ring: #2563eb;
+    --radius: 0.625rem;
+    /* Provenance is never subtle: AI text gets its own badge colour and card background. */
+    --provenance-llm: #6d28d9;
+    --provenance-llm-foreground: #ffffff;
+    --provenance-llm-surface: #f5f3ff;
+    /* Highlights are drawn on the white PDF page in both themes. */
+    --highlight: rgb(255 212 0 / 0.4);
+    --highlight-active: rgb(255 140 0 / 0.5);
+    --highlight-draft: rgb(37 99 235 / 0.25);
+}
+
+.dark {
+    --background: #0f172a;
+    --foreground: #f1f5f9;
+    --card: #1e293b;
+    --card-foreground: #f1f5f9;
+    --popover: #1e293b;
+    --popover-foreground: #f1f5f9;
+    --primary: #60a5fa;
+    --primary-foreground: #0f172a;
+    --secondary: #1e293b;
+    --secondary-foreground: #f1f5f9;
+    --muted: #1e293b;
+    --muted-foreground: #94a3b8;
+    --accent: #334155;
+    --accent-foreground: #f1f5f9;
+    --destructive: #f87171;
+    --border: rgb(255 255 255 / 0.1);
+    --input: rgb(255 255 255 / 0.15);
+    --ring: #60a5fa;
+    --provenance-llm: #a78bfa;
+    --provenance-llm-foreground: #1e1b4b;
+    --provenance-llm-surface: #2e1065;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+  button:not(:disabled),
+  [role="menuitem"] {
+    cursor: pointer;
+  }
+}
+```
+
+- [ ] **Step 6: Query hooks, theme provider and toggle**
+
+Create `frontend/src/api/queries.ts`:
+
+```ts
+import { QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { api, type NoteCreate, type Paper } from './client'
+
+export const PAPERS_POLL_MS = 2000
+
+export const queryClient = new QueryClient({
+  // A local API answers or fails at once; retrying a 404 only delays the error the user needs to see.
+  defaultOptions: { queries: { retry: false } },
+})
+
+const keys = {
+  papers: ['papers'] as const,
+  paper: (id: string) => ['papers', id] as const,
+  notes: (paperId: string) => ['papers', paperId, 'notes'] as const,
+}
+
+/** Poll the library only while a paper is still ingesting. */
+export function papersPollInterval(papers: Paper[] | undefined): number | false {
+  return papers?.some((paper) => paper.status !== 'ready' && paper.status !== 'failed') ? PAPERS_POLL_MS : false
+}
+
+export const usePapers = () =>
+  useQuery({
+    queryKey: keys.papers,
+    queryFn: api.listPapers,
+    refetchInterval: (query) => papersPollInterval(query.state.data),
+  })
+
+export const usePaper = (id: string) => useQuery({ queryKey: keys.paper(id), queryFn: () => api.getPaper(id) })
+
+export const useNotes = (paperId: string) =>
+  useQuery({ queryKey: keys.notes(paperId), queryFn: () => api.listNotes(paperId) })
+
+export function useUploadPapers() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: async (files: File[]) => {
+      for (const file of files) await api.uploadPaper(file)
+    },
+    onSettled: () => client.invalidateQueries({ queryKey: keys.papers }),
+  })
+}
+
+export function useDeletePaper() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: api.deletePaper,
+    onSettled: () => client.invalidateQueries({ queryKey: keys.papers }),
+  })
+}
+
+export function useNoteMutations(paperId: string) {
+  const client = useQueryClient()
+  const onSuccess = () => client.invalidateQueries({ queryKey: keys.notes(paperId) })
+  return {
+    create: useMutation({ mutationFn: (note: NoteCreate) => api.createNote(note), onSuccess }),
+    update: useMutation({ mutationFn: ({ id, body }: { id: string; body: string }) => api.updateNote(id, body), onSuccess }),
+    remove: useMutation({ mutationFn: api.deleteNote, onSuccess }),
+  }
+}
+```
+
+`retry: false` matters. TanStack Query retries a failed query three times with backoff by default, so a missing paper would take about 7 s to show its error, and the reader spec's alert assertion would time out first.
+
+Create `frontend/src/components/theme-provider.tsx`:
+
+```tsx
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+
+export type Theme = 'dark' | 'light' | 'system'
+
+const STORAGE_KEY = 'paperlab-theme'
+
+type ThemeState = { theme: Theme; setTheme: (theme: Theme) => void }
+
+const ThemeContext = createContext<ThemeState | null>(null)
+
+// ponytail: shadcn's Vite dark-mode provider. The class is set after first paint, so a dark
+// user sees one light frame on load; add an inline script in index.html if that ever bothers.
+export function ThemeProvider({ children }: { children: ReactNode }) {
+  const [theme, setThemeState] = useState<Theme>(() => (localStorage.getItem(STORAGE_KEY) as Theme | null) ?? 'system')
+
+  useEffect(() => {
+    const root = document.documentElement
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
+    const apply = () => {
+      const dark = theme === 'dark' || (theme === 'system' && media.matches)
+      root.classList.toggle('dark', dark)
+    }
+    apply()
+    if (theme !== 'system') return
+    media.addEventListener('change', apply)
+    return () => media.removeEventListener('change', apply)
+  }, [theme])
+
+  const setTheme = (next: Theme) => {
+    localStorage.setItem(STORAGE_KEY, next)
+    setThemeState(next)
+  }
+
+  return <ThemeContext.Provider value={{ theme, setTheme }}>{children}</ThemeContext.Provider>
+}
+
+export function useTheme(): ThemeState {
+  const context = useContext(ThemeContext)
+  if (!context) throw new Error('useTheme must be used within a ThemeProvider')
+  return context
+}
+```
+
+Create `frontend/src/components/mode-toggle.tsx`:
+
+```tsx
+import { Moon, Sun } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { useTheme } from '@/components/theme-provider'
+
+export function ModeToggle() {
+  const { setTheme } = useTheme()
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="icon" aria-label="Toggle theme">
+          <Sun className="scale-100 rotate-0 transition-all dark:scale-0 dark:-rotate-90" />
+          <Moon className="absolute scale-0 rotate-90 transition-all dark:scale-100 dark:rotate-0" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={() => setTheme('light')}>Light</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setTheme('dark')}>Dark</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setTheme('system')}>System</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+```
+
+Replace `frontend/src/main.tsx` with:
+
+```tsx
+import { QueryClientProvider } from '@tanstack/react-query'
+import { StrictMode } from 'react'
+import { createRoot } from 'react-dom/client'
+import { queryClient } from './api/queries'
+import App from './App.tsx'
+import { ThemeProvider } from './components/theme-provider'
+import './index.css'
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>
+    </QueryClientProvider>
+  </StrictMode>,
+)
+```
+
+- [ ] **Step 7: Move the Library page onto the components**
+
+Replace `frontend/src/features/library/LibraryPage.tsx` with:
+
+```tsx
+import { Upload } from 'lucide-react'
+import type { Paper } from '@/api/client'
+import { useDeletePaper, usePapers, useUploadPapers } from '@/api/queries'
+import { ModeToggle } from '@/components/mode-toggle'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table'
+import { readerHref } from '@/lib/route'
+
+const STATUS_VARIANT = { ready: 'secondary', failed: 'destructive' } as const
+const statusVariant = (status: string) => STATUS_VARIANT[status as keyof typeof STATUS_VARIANT] ?? 'outline'
+
+export function LibraryPage() {
+  const papers = usePapers()
+  const upload = useUploadPapers()
+  const remove = useDeletePaper()
+
+  function onFiles(input: HTMLInputElement) {
+    const files = [...(input.files ?? [])]
+    input.value = ''
+    if (files.length > 0) upload.mutate(files)
+  }
+
+  function onDelete(paper: Paper) {
+    if (!window.confirm(`Delete "${paper.title}"? Its highlights go with it; notes are kept.`)) return
+    remove.mutate(paper.id)
+  }
+
+  const error = upload.error ?? remove.error ?? papers.error
+  return (
+    <main className="mx-auto flex max-w-4xl flex-col gap-4 px-4 py-6">
+      <header className="flex items-center justify-between gap-2">
+        <h1 className="font-heading text-3xl font-semibold">PaperLab</h1>
+        <div className="flex items-center gap-2">
+          <Button asChild>
+            <label>
+              <Upload aria-hidden />
+              {upload.isPending ? 'Uploading…' : 'Upload PDFs'}
+              <input
+                type="file"
+                accept="application/pdf"
+                multiple
+                hidden
+                disabled={upload.isPending}
+                onChange={(e) => onFiles(e.currentTarget)}
+              />
+            </label>
+          </Button>
+          <ModeToggle />
+        </div>
+      </header>
+
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error.message}</AlertDescription>
+        </Alert>
+      )}
+
+      {papers.data === undefined ? (
+        papers.isError ? (
+          <Button variant="outline" className="self-start" onClick={() => void papers.refetch()}>
+            Retry
+          </Button>
+        ) : (
+          <p className="text-muted-foreground">Loading…</p>
+        )
+      ) : papers.data.length === 0 ? (
+        <p className="text-muted-foreground">No papers yet. Upload a PDF to start.</p>
+      ) : (
+        <Card className="py-0">
+          <Table>
+            <TableBody>
+              {papers.data.map((paper) => (
+                <TableRow key={paper.id} className="paper-row">
+                  <TableCell className="whitespace-normal">
+                    <a href={readerHref(paper.id)} className="font-medium hover:underline">
+                      {paper.title}
+                    </a>
+                    {paper.status_error && <p className="text-xs text-destructive">{paper.status_error}</p>}
+                  </TableCell>
+                  <TableCell className="w-0">
+                    <Badge variant={statusVariant(paper.status)} className="status">
+                      {paper.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="w-0">
+                    <Button variant="ghost" size="sm" onClick={() => onDelete(paper)}>
+                      Delete
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
+      )}
+    </main>
+  )
+}
+```
+
+Replace `frontend/src/App.tsx` with this version (Task 5 replaces it):
+
+```tsx
+import { LibraryPage } from './features/library/LibraryPage'
+import { useRoute } from './lib/route'
+
+export default function App() {
+  const route = useRoute()
+  // The reader lands in Task 5; until then a paper link shows this.
+  if (route.name === 'reader')
+    return (
+      <p className="p-6">
+        Reader coming next. <a href="#/" className="text-primary underline">Back to library</a>
+      </p>
+    )
+  return <LibraryPage />
+}
+```
+
+Delete `frontend/src/features/library/library.css`.
+
+Run: `cd frontend && npx tsc -b && npm test && npx vite build`
+Expected: no tsc output; `Tests  9 passed (9)`; `✓ built in …`.
+
+- [ ] **Step 8: shadcn MCP server for agents**
+
+Create `.mcp.json` at the repo root:
+
+```json
+{
+  "mcpServers": {
+    "shadcn": {
+      "command": "npx",
+      "args": ["shadcn@4.21.0", "mcp", "--cwd", "frontend"]
+    }
+  }
+}
+```
+
+`--cwd frontend` points the server at `frontend/components.json`, so "add a dialog" installs into the right project from the repo root or any worktree root. Claude Code picks it up on its next start; `/mcp` shows whether it connected.
+
+- [ ] **Step 9: Rebuild the frontend container and run the specs**
+
+The compose service keeps `node_modules` in an anonymous volume, and a plain rebuild reuses the old one without the new packages. `-V` recreates it:
+
+```bash
+docker compose up -d --build -V frontend
+cd frontend && npm run typecheck:e2e && npx playwright test e2e/library.spec.ts e2e/theme.spec.ts
+```
+
+Expected: no type errors; `4 passed` (3 library + 1 theme).
+
+- [ ] **Step 10: Prove the library spec still guards polling**
+
+Polling moved from a `setInterval` into TanStack Query, so re-prove that the spec catches a library that stops polling:
+1. In `frontend/src/api/queries.ts`, replace `refetchInterval: (query) => papersPollInterval(query.state.data),` with `refetchInterval: false,`.
+2. Run: `cd frontend && npx playwright test -g "upload a PDF through the UI"`
+   Expected: `1 failed`, with `Expected: "ready"` and `Received: "uploaded"`.
+3. Undo the edit and run the same command again.
+   Expected: `1 passed`.
+
+- [ ] **Step 11: UI review**
+
+Walk through the Library page in both themes against the "Pre-delivery check" in `frontend/design-system/MASTER.md`. Fix anything that fails and re-run Step 9. This review is extra; it doesn't replace the specs.
+
+- [ ] **Step 12: Commit**
+
+```bash
+git add .mcp.json frontend
+git status --short frontend | grep node_modules && echo "STOP: node_modules staged" || true
+git commit -m "feat: shadcn/ui, Tailwind, TanStack Query and theme toggle; library page on components"
+```
+
+---
+
+### Task 5: PDF rendering with zoom
+
+Built on Task 4.5's components. Read `frontend/design-system/MASTER.md` first.
+
+**Files:**
+- Create: `frontend/src/features/reader/pdfjs.ts`, `usePdfDocument.ts`, `PdfPage.tsx`, `zoom.ts`, `ReaderToolbar.tsx`, `ReaderPage.tsx` (view-only version)
 - Rewrite: `frontend/src/App.tsx`
 - Test: `frontend/e2e/reader-render.spec.ts`
 
 **Interfaces:**
-- Consumes: `api.getPaper`, `api.paperFileUrl` (Task 3); the E2E harness in `frontend/e2e/fixtures.ts` (Task 3).
+- Consumes:
+  - `api.paperFileUrl` (Task 3).
+  - `usePaper`, `ModeToggle`, and the `button` and `alert` components (Task 4.5).
+  - The E2E harness in `frontend/e2e/fixtures.ts` (Task 3).
 - Produces:
   - `pdfjs.ts` exports `getDocument`, `TextLayerBuilder`, and types `PDFDocumentProxy`, `PDFPageProxy`. **All PDF.js imports go through this file.**
   - `usePdfDocument(url): {doc: PDFDocumentProxy | null, error: string | null}`.
   - `<PdfPage doc pageNumber scale>{overlay children}</PdfPage>` renders `div.pdf-page[data-page=N]` sized `pointSize × scale`. It contains a canvas, `div.pdf-overlay` (the children, in CSS px of the page), and the PDF.js `.textLayer`.
-  - `<ReaderPage paperId>`.
+  - `zoom.ts`: `ZOOM_STEPS = [0.75, 1, 1.25, 1.5, 2, 2.5, 3]`, `DEFAULT_ZOOM_INDEX = 3` (150%).
+  - `<ReaderToolbar title zoomIndex onZoomChange>` renders:
+    - an h1 with the title
+    - a "← Library" link
+    - "Zoom out" and "Zoom in" icon buttons
+    - `.zoom-level`, holding e.g. `150%`
+    - the theme toggle
+  - `<ReaderPage paperId>`. Errors show in a `role="alert"`.
 
 - [ ] **Step 1: PDF.js entry point**
 
@@ -1932,6 +2689,8 @@ GlobalWorkerOptions.workerSrc = workerSrc
 export { getDocument, TextLayerBuilder }
 export type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist'
 ```
+
+PDF.js's own `pdf_viewer.css` stays: it lays out the text layer. It is unlayered, so it wins over Tailwind's reset (which lives in `@layer base`). The reset only sets `display: block` on `canvas`; `max-width: 100%` applies to images and video, so page canvases keep their size at every zoom.
 
 - [ ] **Step 2: Document loading hook**
 
@@ -2058,107 +2817,79 @@ export function PdfPage({ doc, pageNumber, scale, children }: Props) {
   const size = pointSize ?? US_LETTER
   const box = { width: size.width * scale, height: size.height * scale }
   return (
+    // Block layout + auto margins (not flex centering) so a page wider than the pane can still be
+    // scrolled to its left edge. No border or padding: either would shift selection coordinates.
+    // The page stays white in dark mode; it is the paper.
     <div
       ref={pageRef}
-      className="pdf-page"
+      className="pdf-page relative mx-auto mb-4 bg-white shadow-md"
       data-page={pageNumber}
       style={{ ...box, '--total-scale-factor': scale } as CSSProperties}
     >
       <canvas ref={canvasRef} style={box} />
-      <div className="pdf-overlay">{children}</div>
+      <div className="pdf-overlay pointer-events-none absolute inset-0">{children}</div>
       <div ref={textLayerRef} />
     </div>
   )
 }
 ```
 
-- [ ] **Step 4: Reader styles**
+- [ ] **Step 4: Zoom steps and toolbar**
 
-Create `frontend/src/features/reader/reader.css`:
+Create `frontend/src/features/reader/zoom.ts`. It's a separate file so the toolbar module exports only components, which React Fast Refresh needs:
 
-```css
-.reader {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
-  grid-template-rows: auto minmax(0, 1fr);
-  height: 100vh;
+```ts
+export const ZOOM_STEPS = [0.75, 1, 1.25, 1.5, 2, 2.5, 3]
+export const DEFAULT_ZOOM_INDEX = 3
+```
+
+Create `frontend/src/features/reader/ReaderToolbar.tsx`:
+
+```tsx
+import { ZoomIn, ZoomOut } from 'lucide-react'
+import { ModeToggle } from '@/components/mode-toggle'
+import { Button } from '@/components/ui/button'
+import { ZOOM_STEPS } from './zoom'
+
+type Props = {
+  title: string | undefined
+  zoomIndex: number
+  onZoomChange: (index: number) => void
 }
 
-.reader-toolbar {
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-}
-
-.reader-toolbar h1 {
-  flex: 1;
-  margin: 0 0.5rem;
-  font-size: 1rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.zoom-level {
-  min-width: 3.5rem;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-}
-
-.reader-error {
-  position: fixed;
-  left: 1rem;
-  bottom: 1rem;
-  z-index: 10;
-  margin: 0;
-  padding: 0.6rem 0.9rem;
-  background: var(--surface);
-  border: 1px solid var(--danger);
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.reader-pages {
-  overflow: auto;
-  padding: 1rem;
-}
-
-/* Block layout + auto margins (not flex centering) so a page wider than the pane can still
-   be scrolled to its left edge. No border either: it would shift selection coordinates. */
-.pdf-page {
-  position: relative;
-  margin: 0 auto 1rem;
-  background: #fff;
-  box-shadow: 0 1px 4px rgb(0 0 0 / 0.18);
-}
-
-.pdf-page canvas {
-  display: block;
-}
-
-.pdf-overlay {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-
-.highlight {
-  position: absolute;
-  border-radius: 2px;
-  background: rgb(255 212 0 / 0.4);
-  mix-blend-mode: multiply;
-}
-
-.highlight.active {
-  background: rgb(255 140 0 / 0.5);
-}
-
-.highlight.draft {
-  background: rgb(47 91 211 / 0.25);
+export function ReaderToolbar({ title, zoomIndex, onZoomChange }: Props) {
+  return (
+    <header className="col-span-full flex items-center gap-2 border-b bg-card px-4 py-2">
+      <Button variant="ghost" size="sm" asChild>
+        <a href="#/">← Library</a>
+      </Button>
+      <h1 className="mx-2 flex-1 truncate font-heading text-xl font-semibold" title={title}>
+        {title ?? 'Loading…'}
+      </h1>
+      <Button
+        variant="outline"
+        size="icon"
+        aria-label="Zoom out"
+        disabled={zoomIndex === 0}
+        onClick={() => onZoomChange(Math.max(0, zoomIndex - 1))}
+      >
+        <ZoomOut />
+      </Button>
+      <span className="zoom-level min-w-14 text-center text-sm tabular-nums">
+        {Math.round(ZOOM_STEPS[zoomIndex] * 100)}%
+      </span>
+      <Button
+        variant="outline"
+        size="icon"
+        aria-label="Zoom in"
+        disabled={zoomIndex === ZOOM_STEPS.length - 1}
+        onClick={() => onZoomChange(Math.min(ZOOM_STEPS.length - 1, zoomIndex + 1))}
+      >
+        <ZoomIn />
+      </Button>
+      <ModeToggle />
+    </header>
+  )
 }
 ```
 
@@ -2167,60 +2898,33 @@ Create `frontend/src/features/reader/reader.css`:
 Create `frontend/src/features/reader/ReaderPage.tsx` (Task 6 replaces it with the note-taking version):
 
 ```tsx
-import { useEffect, useState } from 'react'
-import { api, type Paper } from '../../api/client'
+import { useState } from 'react'
+import { api } from '@/api/client'
+import { usePaper } from '@/api/queries'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { PdfPage } from './PdfPage'
+import { ReaderToolbar } from './ReaderToolbar'
 import { usePdfDocument } from './usePdfDocument'
-import './reader.css'
-
-const ZOOM_STEPS = [0.75, 1, 1.25, 1.5, 2, 2.5, 3]
-const DEFAULT_ZOOM_INDEX = 3
+import { DEFAULT_ZOOM_INDEX, ZOOM_STEPS } from './zoom'
 
 export function ReaderPage({ paperId }: { paperId: string }) {
   const { doc, error: pdfError } = usePdfDocument(api.paperFileUrl(paperId))
-  const [paper, setPaper] = useState<Paper | null>(null)
+  const paper = usePaper(paperId)
   const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX)
-  const [error, setError] = useState<string | null>(null)
   const scale = ZOOM_STEPS[zoomIndex]
 
-  useEffect(() => {
-    api.getPaper(paperId).then(setPaper, (e: Error) => setError(e.message))
-  }, [paperId])
-
-  const shownError = error ?? pdfError
+  const shownError = paper.error?.message ?? pdfError
   return (
-    <div className="reader">
-      <header className="reader-toolbar">
-        <a href="#/" className="link-button">
-          ← Library
-        </a>
-        <h1 title={paper?.title}>{paper?.title ?? 'Loading…'}</h1>
-        <button
-          type="button"
-          aria-label="Zoom out"
-          disabled={zoomIndex === 0}
-          onClick={() => setZoomIndex((i) => Math.max(0, i - 1))}
-        >
-          −
-        </button>
-        <span className="zoom-level">{Math.round(scale * 100)}%</span>
-        <button
-          type="button"
-          aria-label="Zoom in"
-          disabled={zoomIndex === ZOOM_STEPS.length - 1}
-          onClick={() => setZoomIndex((i) => Math.min(ZOOM_STEPS.length - 1, i + 1))}
-        >
-          +
-        </button>
-      </header>
+    <div className="grid h-dvh grid-cols-[minmax(0,1fr)_360px] grid-rows-[auto_minmax(0,1fr)]">
+      <ReaderToolbar title={paper.data?.title} zoomIndex={zoomIndex} onZoomChange={setZoomIndex} />
 
       {shownError && (
-        <p role="alert" className="error reader-error">
-          {shownError}
-        </p>
+        <Alert variant="destructive" className="fixed bottom-4 left-4 z-10 w-auto max-w-md shadow-lg">
+          <AlertDescription>{shownError}</AlertDescription>
+        </Alert>
       )}
 
-      <section className="reader-pages">
+      <section className="overflow-auto bg-muted p-4">
         {doc &&
           Array.from({ length: doc.numPages }, (_, i) => i + 1).map((pageNumber) => (
             <PdfPage key={pageNumber} doc={doc} pageNumber={pageNumber} scale={scale} />
@@ -2228,7 +2932,7 @@ export function ReaderPage({ paperId }: { paperId: string }) {
       </section>
 
       {/* Notes panel column; filled in by Task 6. */}
-      <aside />
+      <aside className="border-l" />
     </div>
   )
 }
@@ -2253,7 +2957,7 @@ export default function App() {
 
 This spec checks the reader against the backend's own data:
 - The canvas actually has ink on it.
-- The PDF.js text layer sits inside the rect PyMuPDF stored for the same text, at three zoom levels.
+- The PDF.js text layer sits inside the rect PyMuPDF stored for the same text, at three zoom levels. This is also what proves Tailwind's reset doesn't move the text layer.
 - Pages scale with zoom.
 - A missing paper shows an error instead of a blank screen.
 
@@ -2325,7 +3029,7 @@ test('a missing paper shows an error instead of a blank reader', async ({ page }
 ```
 
 Run: `cd frontend && npm run typecheck:e2e && npm run e2e`
-Expected: no type errors; `4 passed` (2 library + 2 reader).
+Expected: no type errors; `6 passed` (3 library + 1 theme + 2 reader).
 
 - [ ] **Step 8: Prove the reader spec catches rendering bugs**
 
@@ -2342,14 +3046,15 @@ After undoing both, run the same command again. Expected: `1 passed`.
 Run: `cd frontend && npx tsc -b && npm test && npx vite build`
 Expected:
 - No tsc output.
-- `Tests  6 passed (6)`.
+- `Tests  9 passed (9)`.
 - Vite prints `✓ built in …`. A ">500 kB chunk" warning from pdfjs is expected (roadmap K5).
 
-Manual check at http://localhost:5180, in addition to the automated tests (open a `ready` two-column paper):
-- Pages render sharply.
+Manual check at http://localhost:5180, in addition to the automated tests. Open a `ready` two-column paper and check, in light and dark theme:
+- Pages render sharply and stay white in dark mode.
 - The browser console shows no errors.
 - Text can be selected with the mouse, and the selection follows the words.
 - Scrolling a long paper renders pages as they approach.
+- The toolbar passes the "Pre-delivery check" in `frontend/design-system/MASTER.md`.
 
 - [ ] **Step 10: Commit**
 
@@ -2362,24 +3067,27 @@ git commit -m "feat: PDF.js reader with text layer, zoom, and lazy page renderin
 
 ### Task 6: Highlight → note (E2E first)
 
+Built on Task 4.5's components. Read `frontend/design-system/MASTER.md` first.
+
 **Files:**
 - Test: `frontend/e2e/highlight-to-note.spec.ts`. The Playwright config, fixture paper and `fixtures.ts` already exist from Task 3.
 - Create: `frontend/src/features/reader/selection.ts`
-- Create: `frontend/src/features/notes/ProvenanceBadge.tsx`, `NoteComposer.tsx`, `NoteCard.tsx`, `NotesPanel.tsx`, `notes.css`
+- Create: `frontend/src/features/notes/ProvenanceBadge.tsx`, `NoteComposer.tsx`, `NoteCard.tsx`, `NotesPanel.tsx`
 - Rewrite: `frontend/src/features/reader/ReaderPage.tsx`
 
 **Interfaces:**
 - Consumes:
-  - `api.listNotes/createNote/updateNote/deleteNote` and the `Note` type (Task 3).
+  - `useNotes`, `useNoteMutations`, `usePaper` (Task 4.5) and the `Note` type (Task 3).
+  - The `badge`, `button`, `card`, `textarea` and `alert` components, the `provenance-llm*` and `highlight*` tokens, and `cn` (Task 4.5).
   - `pdfRectToCss`, `clientRectsToPdfRects`, `PdfRect` (Task 4).
-  - `PdfPage` with overlay children, rendering `.pdf-page[data-page]` (Task 5).
+  - `PdfPage` with overlay children, rendering `.pdf-page[data-page]`; `ReaderToolbar`; `ZOOM_STEPS`, `DEFAULT_ZOOM_INDEX` (Task 5).
   - From `frontend/e2e/fixtures.ts` (Task 3): `test` with `paperId`, `openReader`, `selectText`, `saveNoteOn`, `boxOffset`.
 - Produces:
   - `readSelection(scale): SelectionResult` (`{kind:'none'} | {kind:'invalid', reason} | {kind:'anchor', anchor: SelectionAnchor}`), where `SelectionAnchor = {page, rects: PdfRect[], quotedText}`.
   - DOM contract the E2E relies on:
     - `.highlight[data-note-id]` (saved) and `.highlight.draft` (pending selection) inside `.pdf-overlay`.
-    - `.note` cards containing `.provenance-badge`.
-    - A textbox labelled `Note` and a button `Save note`.
+    - Saved notes are `article.note` cards containing `.provenance-badge` ("You", "AI", "AI · edited"). The draft composer is a `form`, never an `article`.
+    - A textbox labelled `Note` and a button `Save note`; on each card, `Edit`, `Save`, `Delete` and a textbox labelled `Edit note`.
 
 - [ ] **Step 1: Write the failing E2E spec**
 
@@ -2522,7 +3230,10 @@ export function readSelection(scale: number): SelectionResult {
 Create `frontend/src/features/notes/ProvenanceBadge.tsx`:
 
 ```tsx
-import type { Note } from '../../api/client'
+import { Sparkles, UserRound } from 'lucide-react'
+import type { Note } from '@/api/client'
+import { Badge } from '@/components/ui/badge'
+import { cn } from '@/lib/utils'
 
 type Provenance = Note['provenance']
 
@@ -2539,10 +3250,17 @@ const DESCRIPTION: Record<Provenance, string> = {
 }
 
 export function ProvenanceBadge({ provenance }: { provenance: Provenance }) {
+  const human = provenance === 'human'
   return (
-    <span className={`provenance-badge provenance-${provenance}`} title={DESCRIPTION[provenance]}>
+    // An icon as well as a colour, so provenance never depends on colour vision.
+    <Badge
+      variant={human ? 'secondary' : 'default'}
+      className={cn('provenance-badge', !human && 'bg-provenance-llm text-provenance-llm-foreground')}
+      title={DESCRIPTION[provenance]}
+    >
+      {human ? <UserRound aria-hidden /> : <Sparkles aria-hidden />}
       {LABEL[provenance]}
-    </span>
+    </Badge>
   )
 }
 ```
@@ -2553,6 +3271,9 @@ Create `frontend/src/features/notes/NoteComposer.tsx`:
 
 ```tsx
 import { useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardFooter } from '@/components/ui/card'
+import { Textarea } from '@/components/ui/textarea'
 import type { SelectionAnchor } from '../reader/selection'
 
 type Props = {
@@ -2572,36 +3293,40 @@ export function NoteComposer({ draft, onSave, onCancel }: Props) {
   }
 
   return (
+    // A form, not an <article>: saved notes are the only articles in the panel.
     <form
-      className="note note-draft"
       onSubmit={(e) => {
         e.preventDefault()
         void save()
       }}
     >
-      <blockquote>{draft.quotedText}</blockquote>
-      <textarea
-        autoFocus
-        aria-label="Note"
-        placeholder="Your note (optional). Ctrl/⌘+Enter saves."
-        value={body}
-        onChange={(e) => setBody(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-            e.preventDefault()
-            void save()
-          }
-          if (e.key === 'Escape') onCancel()
-        }}
-      />
-      <div className="note-actions">
-        <button type="button" onClick={onCancel}>
-          Cancel
-        </button>
-        <button type="submit" className="button-primary" disabled={saving}>
-          Save note
-        </button>
-      </div>
+      <Card size="sm" className="ring-2 ring-primary">
+        <CardContent className="flex flex-col gap-2">
+          <blockquote className="border-l-2 pl-2 text-muted-foreground">{draft.quotedText}</blockquote>
+          <Textarea
+            autoFocus
+            aria-label="Note"
+            placeholder="Your note (optional). Ctrl/⌘+Enter saves."
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault()
+                void save()
+              }
+              if (e.key === 'Escape') onCancel()
+            }}
+          />
+        </CardContent>
+        <CardFooter className="justify-end gap-2">
+          <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button type="submit" size="sm" disabled={saving}>
+            Save note
+          </Button>
+        </CardFooter>
+      </Card>
     </form>
   )
 }
@@ -2611,7 +3336,11 @@ Create `frontend/src/features/notes/NoteCard.tsx`:
 
 ```tsx
 import { useState } from 'react'
-import type { Note } from '../../api/client'
+import type { Note } from '@/api/client'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
+import { Textarea } from '@/components/ui/textarea'
+import { cn } from '@/lib/utils'
 import { ProvenanceBadge } from './ProvenanceBadge'
 
 type Props = {
@@ -2638,43 +3367,56 @@ export function NoteCard({ note, paperId, active, onSelect, onUpdate, onDelete }
   }
 
   return (
-    <article className={`note provenance-${note.provenance}${active ? ' active' : ''}`} data-note-id={note.id}>
-      <header className="note-header">
-        <ProvenanceBadge provenance={note.provenance} />
-        {anchor && (
-          <button type="button" className="link-button" onClick={onSelect}>
-            p. {anchor.page}
-          </button>
-        )}
-      </header>
+    <article className="note" data-note-id={note.id}>
+      {/* Provenance is never subtle: every note shows a badge, and AI text gets its own background. */}
+      <Card
+        size="sm"
+        className={cn(note.provenance !== 'human' && 'bg-provenance-llm-surface', active && 'ring-2 ring-primary')}
+      >
+        <CardHeader className="flex items-center justify-between">
+          <ProvenanceBadge provenance={note.provenance} />
+          {anchor && (
+            <Button variant="link" size="xs" onClick={onSelect}>
+              p. {anchor.page}
+            </Button>
+          )}
+        </CardHeader>
 
-      {anchor && <blockquote onClick={onSelect}>{anchor.quoted_text}</blockquote>}
+        <CardContent className="flex flex-col gap-2">
+          {anchor && (
+            <blockquote className="cursor-pointer border-l-2 pl-2 text-muted-foreground" onClick={onSelect}>
+              {anchor.quoted_text}
+            </blockquote>
+          )}
+          {editing ? (
+            <Textarea autoFocus aria-label="Edit note" value={body} onChange={(e) => setBody(e.target.value)} />
+          ) : (
+            note.body && <p className="whitespace-pre-wrap">{note.body}</p>
+          )}
+        </CardContent>
 
-      {editing ? (
-        <>
-          <textarea autoFocus aria-label="Edit note" value={body} onChange={(e) => setBody(e.target.value)} />
-          <div className="note-actions">
-            <button type="button" onClick={cancel}>
-              Cancel
-            </button>
-            <button type="button" className="button-primary" onClick={() => void save()}>
-              Save
-            </button>
-          </div>
-        </>
-      ) : (
-        <>
-          {note.body && <p className="note-body">{note.body}</p>}
-          <div className="note-actions">
-            <button type="button" className="link-button" onClick={() => setEditing(true)}>
-              Edit
-            </button>
-            <button type="button" className="link-button" onClick={() => void onDelete()}>
-              Delete
-            </button>
-          </div>
-        </>
-      )}
+        <CardFooter className="justify-end gap-2">
+          {editing ? (
+            <>
+              <Button variant="ghost" size="sm" onClick={cancel}>
+                Cancel
+              </Button>
+              <Button size="sm" onClick={() => void save()}>
+                Save
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
+                Edit
+              </Button>
+              <Button variant="ghost" size="sm" className="text-destructive" onClick={() => void onDelete()}>
+                Delete
+              </Button>
+            </>
+          )}
+        </CardFooter>
+      </Card>
     </article>
   )
 }
@@ -2683,11 +3425,10 @@ export function NoteCard({ note, paperId, active, onSelect, onUpdate, onDelete }
 Create `frontend/src/features/notes/NotesPanel.tsx`:
 
 ```tsx
-import type { Note } from '../../api/client'
+import type { Note } from '@/api/client'
 import type { SelectionAnchor } from '../reader/selection'
 import { NoteCard } from './NoteCard'
 import { NoteComposer } from './NoteComposer'
-import './notes.css'
 
 type Props = {
   paperId: string
@@ -2707,11 +3448,11 @@ const draftKey = (draft: SelectionAnchor) => `${draft.page}:${draft.rects.flat()
 export function NotesPanel(props: Props) {
   const { paperId, notes, draft, activeNoteId } = props
   return (
-    <aside className="notes-panel" aria-label="Notes">
+    <aside className="flex flex-col gap-3 overflow-auto border-l bg-background p-4" aria-label="Notes">
       {draft ? (
         <NoteComposer key={draftKey(draft)} draft={draft} onSave={props.onSaveDraft} onCancel={props.onCancelDraft} />
       ) : (
-        <p className="notes-hint">Select text in the paper to add a note.</p>
+        <p className="text-sm text-muted-foreground">Select text in the paper to add a note.</p>
       )}
       {notes.map((note) => (
         <NoteCard
@@ -2729,118 +3470,23 @@ export function NotesPanel(props: Props) {
 }
 ```
 
-Create `frontend/src/features/notes/notes.css`:
-
-```css
-.notes-panel {
-  overflow: auto;
-  padding: 1rem;
-  background: var(--bg);
-  border-left: 1px solid var(--border);
-}
-
-.notes-hint {
-  color: var(--muted);
-}
-
-.note {
-  margin-bottom: 0.75rem;
-  padding: 0.7rem 0.8rem;
-  border: 1px solid var(--border);
-  border-left-width: 4px;
-  border-radius: 6px;
-}
-
-.note blockquote {
-  margin: 0.4rem 0;
-  padding-left: 0.6rem;
-  color: var(--muted);
-  font-size: 0.9rem;
-  border-left: 2px solid var(--border);
-  cursor: pointer;
-}
-
-.note-body {
-  margin: 0.4rem 0;
-  white-space: pre-wrap;
-}
-
-.note textarea {
-  width: 100%;
-  min-height: 5rem;
-  font: inherit;
-  resize: vertical;
-}
-
-.note-header,
-.note-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.note-actions {
-  justify-content: flex-end;
-}
-
-.note.active {
-  box-shadow: 0 0 0 2px var(--accent);
-}
-
-.note-draft {
-  background: var(--surface);
-  border-left-color: var(--accent);
-}
-
-/* Provenance is never subtle: every note shows a badge and a distinct background. */
-.note.provenance-human {
-  background: var(--surface);
-  border-left-color: #8a8a8f;
-}
-
-.note.provenance-llm,
-.note.provenance-llm_edited {
-  background: #f1ecff;
-  border-left-color: #7a5cd6;
-}
-
-.provenance-badge {
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  padding: 0.1rem 0.45rem;
-  border-radius: 999px;
-}
-
-.provenance-human {
-  color: #3b3b40;
-  background: #ececee;
-}
-
-.provenance-llm,
-.provenance-llm_edited {
-  color: #fff;
-  background: #7a5cd6;
-}
-```
-
 - [ ] **Step 6: Wire notes into the reader**
 
 Replace `frontend/src/features/reader/ReaderPage.tsx` with:
 
 ```tsx
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { api, type Note, type Paper } from '../../api/client'
+import { useMemo, useState } from 'react'
+import { api, type Note } from '@/api/client'
+import { useNoteMutations, useNotes, usePaper } from '@/api/queries'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { cn } from '@/lib/utils'
 import { NotesPanel } from '../notes/NotesPanel'
 import { pdfRectToCss, type PdfRect } from './coords'
 import { PdfPage } from './PdfPage'
+import { ReaderToolbar } from './ReaderToolbar'
 import { readSelection, type SelectionAnchor } from './selection'
 import { usePdfDocument } from './usePdfDocument'
-import './reader.css'
-
-const ZOOM_STEPS = [0.75, 1, 1.25, 1.5, 2, 2.5, 3]
-const DEFAULT_ZOOM_INDEX = 3
+import { DEFAULT_ZOOM_INDEX, ZOOM_STEPS } from './zoom'
 
 type PageHighlight = { key: string; noteId: string | null; rect: PdfRect }
 
@@ -2861,23 +3507,28 @@ function groupHighlights(notes: Note[], draft: SelectionAnchor | null, paperId: 
 
 export function ReaderPage({ paperId }: { paperId: string }) {
   const { doc, error: pdfError } = usePdfDocument(api.paperFileUrl(paperId))
-  const [paper, setPaper] = useState<Paper | null>(null)
-  const [notes, setNotes] = useState<Note[]>([])
+  const paper = usePaper(paperId)
+  const notesQuery = useNotes(paperId)
+  const mutations = useNoteMutations(paperId)
   const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX)
   const [draft, setDraft] = useState<SelectionAnchor | null>(null)
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const scale = ZOOM_STEPS[zoomIndex]
-
-  const reportError = useCallback((e: unknown) => setError(e instanceof Error ? e.message : String(e)), [])
-  const refreshNotes = useCallback(() => api.listNotes(paperId).then(setNotes, reportError), [paperId, reportError])
-
-  useEffect(() => {
-    api.getPaper(paperId).then(setPaper, reportError)
-    void refreshNotes()
-  }, [paperId, refreshNotes, reportError])
+  const notes = useMemo(() => notesQuery.data ?? [], [notesQuery.data])
 
   const highlightsByPage = useMemo(() => groupHighlights(notes, draft, paperId), [notes, draft, paperId])
+
+  /** Runs a mutation; failures show in the alert instead of throwing. */
+  async function attempt(action: () => Promise<unknown>): Promise<boolean> {
+    try {
+      await action()
+      return true
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+      return false
+    }
+  }
 
   function captureSelection() {
     const result = readSelection(scale)
@@ -2890,40 +3541,18 @@ export function ReaderPage({ paperId }: { paperId: string }) {
 
   async function saveDraft(body: string): Promise<boolean> {
     if (!draft) return false
-    try {
-      await api.createNote({
-        body,
-        anchor: { paper_id: paperId, page: draft.page, bbox: draft.rects, quoted_text: draft.quotedText },
-      })
+    const anchor = { paper_id: paperId, page: draft.page, bbox: draft.rects, quoted_text: draft.quotedText }
+    const saved = await attempt(() => mutations.create.mutateAsync({ body, anchor }))
+    if (saved) {
       setDraft(null)
       window.getSelection()?.removeAllRanges()
-      await refreshNotes()
-      return true
-    } catch (e) {
-      reportError(e)
-      return false
     }
-  }
-
-  async function updateNote(note: Note, body: string): Promise<boolean> {
-    try {
-      await api.updateNote(note.id, body)
-      await refreshNotes()
-      return true
-    } catch (e) {
-      reportError(e)
-      return false
-    }
+    return saved
   }
 
   async function deleteNote(note: Note) {
     if (!window.confirm('Delete this note?')) return
-    try {
-      await api.deleteNote(note.id)
-      await refreshNotes()
-    } catch (e) {
-      reportError(e)
-    }
+    await attempt(() => mutations.remove.mutateAsync(note.id))
   }
 
   function focusNote(note: Note) {
@@ -2933,40 +3562,22 @@ export function ReaderPage({ paperId }: { paperId: string }) {
       ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
 
-  const shownError = error ?? pdfError
+  const shownError = error ?? paper.error?.message ?? notesQuery.error?.message ?? pdfError
   return (
-    <div className="reader">
-      <header className="reader-toolbar">
-        <a href="#/" className="link-button">
-          ← Library
-        </a>
-        <h1 title={paper?.title}>{paper?.title ?? 'Loading…'}</h1>
-        <button
-          type="button"
-          aria-label="Zoom out"
-          disabled={zoomIndex === 0}
-          onClick={() => setZoomIndex((i) => Math.max(0, i - 1))}
-        >
-          −
-        </button>
-        <span className="zoom-level">{Math.round(scale * 100)}%</span>
-        <button
-          type="button"
-          aria-label="Zoom in"
-          disabled={zoomIndex === ZOOM_STEPS.length - 1}
-          onClick={() => setZoomIndex((i) => Math.min(ZOOM_STEPS.length - 1, i + 1))}
-        >
-          +
-        </button>
-      </header>
+    <div className="grid h-dvh grid-cols-[minmax(0,1fr)_360px] grid-rows-[auto_minmax(0,1fr)]">
+      <ReaderToolbar title={paper.data?.title} zoomIndex={zoomIndex} onZoomChange={setZoomIndex} />
 
       {shownError && (
-        <p role="alert" className="error reader-error" onClick={() => setError(null)}>
-          {shownError}
-        </p>
+        <Alert
+          variant="destructive"
+          className="fixed bottom-4 left-4 z-10 w-auto max-w-md cursor-pointer shadow-lg"
+          onClick={() => setError(null)}
+        >
+          <AlertDescription>{shownError}</AlertDescription>
+        </Alert>
       )}
 
-      <section className="reader-pages" onMouseUp={captureSelection}>
+      <section className="overflow-auto bg-muted p-4" onMouseUp={captureSelection}>
         {doc &&
           Array.from({ length: doc.numPages }, (_, i) => i + 1).map((pageNumber) => (
             <PdfPage key={pageNumber} doc={doc} pageNumber={pageNumber} scale={scale}>
@@ -2974,9 +3585,11 @@ export function ReaderPage({ paperId }: { paperId: string }) {
                 <div
                   key={h.key}
                   data-note-id={h.noteId ?? undefined}
-                  className={['highlight', h.noteId === null && 'draft', h.noteId !== null && h.noteId === activeNoteId && 'active']
-                    .filter(Boolean)
-                    .join(' ')}
+                  className={cn(
+                    'highlight absolute rounded-xs bg-highlight mix-blend-multiply',
+                    h.noteId === null && 'draft bg-highlight-draft',
+                    h.noteId !== null && h.noteId === activeNoteId && 'active bg-highlight-active',
+                  )}
                   style={pdfRectToCss(h.rect, scale)}
                 />
               ))}
@@ -2992,7 +3605,7 @@ export function ReaderPage({ paperId }: { paperId: string }) {
         onSaveDraft={saveDraft}
         onCancelDraft={() => setDraft(null)}
         onSelectNote={focusNote}
-        onUpdateNote={updateNote}
+        onUpdateNote={(note, body) => attempt(() => mutations.update.mutateAsync({ id: note.id, body }))}
         onDeleteNote={deleteNote}
       />
     </div>
@@ -3005,9 +3618,9 @@ export function ReaderPage({ paperId }: { paperId: string }) {
 Run: `cd frontend && npx tsc -b && npm test && npm run typecheck:e2e && npm run e2e`
 Expected:
 - No tsc output.
-- `Tests  6 passed (6)`.
+- `Tests  9 passed (9)`.
 - No e2e type errors.
-- `9 passed` (2 library + 2 reader + 5 highlight-to-note).
+- `11 passed` (3 library + 1 theme + 2 reader + 5 highlight-to-note).
 
 If a spec fails, use superpowers:systematic-debugging. Start by opening the trace printed in the failure (`npx playwright show-trace …`) and checking the browser console for `pageerror`s before changing code.
 
@@ -3022,9 +3635,13 @@ Each break below must turn the named test red. Undo each one before the next.
 | Human note mislabelled as AI | `ProvenanceBadge.tsx`: `human: 'You',` → `human: 'AI',` | `npx playwright test -g "save a note"` | `1 failed` |
 | Edits never saved | `NoteCard.tsx`: `if (await onUpdate(body)) setEditing(false)` → `setEditing(false)` | `npx playwright test -g "editing a human note"` | `1 failed` |
 
-After undoing all four, `npm run e2e` must show `9 passed` again.
+After undoing all four, `npm run e2e` must show `11 passed` again.
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 9: UI review**
+
+In light and dark theme, create, edit and delete a note, and tab through the notes panel. Check it against the "Pre-delivery check" in `frontend/design-system/MASTER.md`. Every fix re-runs Step 7.
+
+- [ ] **Step 10: Commit**
 
 ```bash
 git add frontend
@@ -3054,6 +3671,8 @@ Use at least one of your own two-column papers with figures, at http://localhost
 - [ ] Editing and deleting a note work; a reload keeps everything.
 - [ ] Selecting across two pages shows "Select text within a single page…".
 - [ ] A scanned PDF shows its failure reason in the library.
+- [ ] Light, Dark and System themes all read comfortably; the PDF page stays white; AI and human notes are told apart by badge icon and label, not colour alone.
+- [ ] The "Pre-delivery check" in `frontend/design-system/MASTER.md` passes on the library, reader and notes panel, in both themes, using only the keyboard to reach every control.
 
 Anything that feels wrong gets fixed in this branch before continuing, using superpowers:systematic-debugging. **Every fix lands with a test that fails without it:** a Vitest test when the fix is logic, or a new test in the matching E2E spec when it is a flow. Re-run the whole suite after each fix.
 
@@ -3075,7 +3694,7 @@ cd ../frontend && npx tsc -b && npm test && npm run typecheck:e2e && npm run e2e
 Expected:
 - **pytest:** every test passes, including `tests/test_invariants.py` (no fastapi in core; migrations round-trip) and `tests/test_notes_edges.py`, and the gate prints `Required test coverage of 80% reached`. At plan time this was 47 tests at 97.5%.
 - **Ruff and core check:** `All checks passed!`, `core clean`.
-- **Frontend:** `Tests  6 passed (6)`, no e2e type errors, `9 passed`.
+- **Frontend:** `Tests  9 passed (9)`, no e2e type errors, `11 passed`.
 
 A count lower than these means a test was skipped or deleted. Find out why before continuing.
 
