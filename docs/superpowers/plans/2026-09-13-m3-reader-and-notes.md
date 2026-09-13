@@ -7,7 +7,10 @@
 **Architecture:**
 - **Backend:** notes CRUD in `backend/app/core/notes.py`, which holds the provenance rules. Thin FastAPI routers expose it, plus routes to serve and delete a paper's PDF.
 - **Frontend:** a Vite/React app renders each page with PDF.js (canvas + `TextLayerBuilder`). It converts browser selections into PDF-point rectangles (the same coordinate system PyMuPDF stores for chunks) and draws highlights from those rectangles at any zoom.
-- **Testing:** a Playwright spec runs the whole flow against the real stack.
+- **Testing:** every task ends with automated tests that exercise what it built.
+  - Backend: pytest against real Postgres.
+  - Pure frontend logic: Vitest.
+  - Every user-visible flow: Playwright against the real stack. Library, reader rendering and zoom, note create/edit/delete, and cross-page selection each have a spec.
 
 **Tech Stack:** FastAPI, SQLAlchemy 2.0 async, pytest + anyio + httpx, React 19, Vite 8, TypeScript 6, pdfjs-dist 6.3.289, Vitest 5.0.0, Playwright 1.63.0, openapi-typescript 7.13.0.
 
@@ -26,12 +29,37 @@
 - Ports: API `:8000`, Postgres `:5433`, frontend `:5180` (D16).
 - Commits: `<type>: <description>`, no attribution trailer.
 
+## Testing rules for this plan
+
+These follow the roadmap's testing policy; every task must meet them.
+
+1. **A task is not done until its automated tests pass.** Manual checks (Task 5 Step 9, Task 7 Step 1) are extra and never replace a test.
+2. **Red first.** Write the test before the code and watch it fail. Where the UI already exists and a new E2E spec can't be red first (Tasks 3 and 5), a step introduces a named deliberate bug, shows the spec failing, then undoes the bug.
+3. **Coverage by layer:**
+   - Each core function: a service test, including its error branches.
+   - Each API route: an HTTP test for success and for every error status it returns.
+   - Each pure frontend function: a Vitest test.
+   - Each user-visible flow: a Playwright spec.
+4. **E2E specs use the real stack, and the `paperId` fixture** (`frontend/e2e/fixtures.ts`), which uploads its own paper and deletes it afterwards even when the test fails. Specs are type-checked (`npm run typecheck:e2e`) and run one at a time (`workers: 1`) because they share one library.
+5. **A red test that isn't yours means stop.** If a test outside the current task goes red, use superpowers:systematic-debugging before touching it.
+
 ## Verified before writing
 
 The final code in this plan was executed while writing it; every full-file block was diffed against the files that ran:
-- **Backend:** 12 pytest tests passed against the compose Postgres; Ruff clean.
-- **Frontend:** `tsc -b` clean (including the intermediate versions in Tasks 3 and 5); 6 Vitest tests passed; `vite build` succeeds.
-- **E2E:** the Playwright spec passed against the full stack. The Task 6 red step (spec against the Task 5 reader) was also run and fails exactly as described, with cleanup intact. Vite in Docker picks up edits from the bind mount.
+- **Backend:** 12 pytest tests passed against the compose Postgres; Ruff clean. With the M1–M2 test pack from `main` plus `tests/test_notes_edges.py`, 47 tests pass at 97.5% coverage (100% on `core/notes.py`, `api/notes.py`, `schemas/notes.py`).
+- **Frontend:** `tsc -b` clean (including the intermediate versions in Tasks 3 and 5); 6 Vitest tests passed; `vite build` succeeds; `npm run typecheck:e2e` clean.
+- **E2E:** all 9 Playwright tests pass against a full isolated stack.
+  - Each spec was also run against the app as it is at its own task: the Task 3 app passes 2, the Task 5 reader passes 4, and the finished app passes 9.
+  - The Task 6 red step (its spec against the Task 5 reader) fails 5 of 5 as described, and cleanup still runs.
+  - Vite in Docker picks up edits from the bind mount.
+- **Mutation check:** 7 deliberate bugs, each caught by the spec named in its step. The bugs are:
+  - Highlight ignores zoom.
+  - No text layer.
+  - Blank canvas.
+  - Cross-page selection allowed.
+  - Human badge mislabelled.
+  - Edit never saved.
+  - Library stops polling.
 - **Red-step messages in Tasks 1–4:** predicted, not captured.
 
 Three findings are baked in:
@@ -58,13 +86,15 @@ backend/
   tests/conftest.py                  create: rolled-back DB session + httpx client fixtures
   tests/test_notes.py                create: service tests
   tests/test_notes_api.py            create: HTTP tests
+  tests/test_notes_edges.py          create: error branches and unknown ids (Task 2 Step 10a)
 docker-compose.yml                   modify: frontend service
 README.md                            modify: frontend + test commands
 frontend/                            create via create-vite, then:
   package.json                       modify: scripts, deps
   vite.config.ts                     rewrite: /api proxy, vitest include
   Dockerfile, .dockerignore          create
-  playwright.config.ts               create
+  playwright.config.ts               create: real stack, workers 1, 10 s action timeout
+  tsconfig.e2e.json                  create: type-checks e2e/ (npm run typecheck:e2e)
   .gitignore                         modify: playwright output
   src/index.css                      rewrite: base tokens + buttons
   src/App.tsx                        rewrite: route → page
@@ -79,8 +109,11 @@ frontend/                            create via create-vite, then:
   src/features/reader/selection.ts                       create: browser selection → anchor
   src/features/reader/ReaderPage.tsx, reader.css         create
   src/features/notes/NotesPanel.tsx, NoteCard.tsx, NoteComposer.tsx, ProvenanceBadge.tsx, notes.css   create
-  e2e/fixtures/make_sample_paper.py, sample-paper.pdf    create
-  e2e/highlight-to-note.spec.ts                          create
+  e2e/fixtures/make_sample_paper.py, sample-paper.pdf    create (Task 3)
+  e2e/fixtures.ts                                        create (Task 3): paperId fixture + selection helpers
+  e2e/library.spec.ts                                    create (Task 3): upload → ready → delete; non-PDF error
+  e2e/reader-render.spec.ts                              create (Task 5): ink, text layer on chunk at 3 zooms, missing paper
+  e2e/highlight-to-note.spec.ts                          create (Task 6): create, zoom, edit, delete, cross-page
 ```
 
 ---
@@ -583,7 +616,7 @@ git commit -m "feat: notes domain with provenance rules and paper deletion"
 - Rewrite: `backend/app/api/papers.py`
 - Modify: `backend/app/api/health.py`
 - Modify: `backend/app/main.py`
-- Test: `backend/tests/test_notes_api.py`
+- Test: `backend/tests/test_notes_api.py`, `backend/tests/test_notes_edges.py` (Step 10a)
 
 **Interfaces:**
 - Consumes: everything Task 1 produces.
@@ -904,6 +937,66 @@ In `backend/app/main.py`, replace `from app.api import health, papers` with `fro
 Run: `cd backend && uv run pytest -q`
 Expected: `12 passed`.
 
+- [ ] **Step 10a: Cover the remaining error branches**
+
+The Task 1 and Task 2 tests cover the happy paths and the main errors. This file adds the branches they leave out, so every route and core function has its error paths tested (testing rule 3). The code already exists, so these pass on the first run; **a failure here means Task 1 or 2 has a bug**, not that the test is wrong.
+
+Create `backend/tests/test_notes_edges.py`:
+
+```python
+"""Branches the M3 happy-path tests leave uncovered: empty quotes, repeated LLM edits, unknown ids."""
+
+import uuid
+
+import pytest
+
+from app.core import notes
+from app.core.errors import InvalidInput
+from app.models import Note, Paper, Provenance
+
+pytestmark = pytest.mark.anyio
+
+
+async def test_whitespace_only_quote_is_rejected(session):
+    paper = Paper(title="edge paper", file_path="/nonexistent.pdf", page_count=1)
+    session.add(paper)
+    await session.commit()
+
+    with pytest.raises(InvalidInput):
+        await notes.create_human_note(session, "", notes.Anchor(paper.id, 1, [(1.0, 2.0, 3.0, 4.0)], "  \n "))
+
+
+async def test_llm_edited_note_stays_llm_edited_on_later_edits(session):
+    note = Note(body="model said", provenance=Provenance.LLM)
+    session.add(note)
+    await session.commit()
+
+    await notes.update_note_body(session, note.id, "edit one")
+    assert (await notes.update_note_body(session, note.id, "edit two")).provenance == Provenance.LLM_EDITED
+
+
+async def test_unknown_ids_are_404_on_every_notes_route(client):
+    missing = uuid.uuid4()
+    assert (await client.get(f"/api/papers/{missing}/notes")).status_code == 404
+    assert (await client.patch(f"/api/notes/{missing}", json={"body": "x"})).status_code == 404
+    assert (await client.delete(f"/api/notes/{missing}")).status_code == 404
+    assert (await client.delete(f"/api/papers/{missing}")).status_code == 404
+
+
+async def test_blank_quote_over_http_is_422(client, session):
+    paper = Paper(title="edge paper", file_path="/nonexistent.pdf", page_count=1)
+    session.add(paper)
+    await session.commit()
+    anchor = {"paper_id": str(paper.id), "page": 1, "bbox": [[1, 2, 3, 4]], "quoted_text": "   "}
+
+    assert (await client.post("/api/notes", json={"anchor": anchor})).status_code == 422
+```
+
+Run: `cd backend && uv run pytest tests/test_notes_edges.py -q`
+Expected: `4 passed`.
+
+If `main` already has the M1–M2 test pack with the coverage gate (roadmap D21), also run `cd backend && uv run pytest --cov` in a checkout that includes it. Expected: `Required test coverage of 80% reached`. Task 7 enforces this before the branch is finished.
+
 - [ ] **Step 11: Lint, check the invariant, and check the live API**
 
 The api container reloads from the worktree mount.
@@ -931,7 +1024,9 @@ git commit -m "feat: notes API, paper file and delete routes"
 - Modify: `frontend/package.json`, `frontend/index.html`, `docker-compose.yml`, `README.md`
 - Rewrite: `frontend/vite.config.ts`, `frontend/src/index.css`, `frontend/src/App.tsx`
 - Create: `frontend/src/api/client.ts`, `frontend/src/api/schema.d.ts` (generated), `frontend/src/lib/route.ts`, `frontend/src/features/library/LibraryPage.tsx`, `frontend/src/features/library/library.css`
-- Test: `frontend/src/lib/route.test.ts`
+- Create (E2E harness): `frontend/playwright.config.ts`, `frontend/tsconfig.e2e.json`, `frontend/e2e/fixtures.ts`, `frontend/e2e/fixtures/make_sample_paper.py`, `frontend/e2e/fixtures/sample-paper.pdf` (generated)
+- Modify: `frontend/.gitignore`
+- Test: `frontend/src/lib/route.test.ts`, `frontend/e2e/library.spec.ts`
 
 **Interfaces:**
 - Consumes: the Task 2 HTTP routes and the existing `GET/POST /api/papers`.
@@ -940,6 +1035,12 @@ git commit -m "feat: notes API, paper file and delete routes"
   - Types `Paper`, `Chunk`, `Note`, `NoteCreate` (from generated `components['schemas']`).
   - `frontend/src/lib/route.ts`: `Route = {name:'library'} | {name:'reader', paperId}`, `parseRoute(hash)`, `readerHref(paperId)`, `useRoute()`.
   - CSS tokens in `index.css`: `--bg --surface --text --muted --border --accent --ok --danger`; classes `.button .button-primary .link-button .error`.
+  - E2E harness in `frontend/e2e/fixtures.ts`, used by Tasks 5 and 6:
+    - `test` with a `paperId` fixture: a freshly ingested fixture paper, deleted after the test.
+    - `expect`, `FIXTURE_FILE`, `FIXTURE_TITLE` (`'PaperLab E2E Fixture'`), `FIRST_LINE` (`'Highlights are the anchor'`), `type Rect`.
+    - `removePaperAndNotes(request, paperId)`.
+    - `openReader(page, paperId): Promise<Locator>` (page 1's first text-layer line).
+    - `selectText(start, end?)`, `saveNoteOn(page, line, body): Promise<Locator>` (the note card), `boxOffset(a, b): Promise<number>`.
 
 - [ ] **Step 1: Scaffold with create-vite**
 
@@ -955,6 +1056,7 @@ npm install
 npm install pdfjs-dist@6.3.289
 npm install -D vitest@5.0.0 @playwright/test@1.63.0
 npm pkg set scripts.test="vitest run" scripts.e2e="playwright test" scripts.prebuild="npm run gen:api"
+npm pkg set scripts.typecheck:e2e="tsc -p tsconfig.e2e.json"
 npm pkg set scripts.gen:api='npx --yes openapi-typescript@7.13.0 "${API_URL:-http://localhost:8000}/openapi.json" -o src/api/schema.d.ts'
 ```
 
@@ -1373,7 +1475,7 @@ In `docker-compose.yml`, add this service after `worker:` (inside `services:`):
 
 Run: `docker compose up -d --build frontend`
 
-- [ ] **Step 10: Verify**
+- [ ] **Step 10: Verify the app builds and is served**
 
 ```bash
 cd frontend && npx tsc -b && npm test
@@ -1387,9 +1489,233 @@ Expected:
 - `200`.
 - A JSON array through the Vite proxy.
 
-Manual: open http://localhost:5180, upload a PDF, and watch its status move to `ready`.
+- [ ] **Step 11: End-to-end harness**
 
-- [ ] **Step 11: Document the commands**
+Every later task adds Playwright specs on top of this harness.
+
+Create `frontend/e2e/fixtures/make_sample_paper.py`:
+
+```python
+"""Regenerates sample-paper.pdf: two pages, one heading and one paragraph each.
+
+Run with the backend environment (it has PyMuPDF):
+  cd backend && uv run python ../frontend/e2e/fixtures/make_sample_paper.py ../frontend/e2e/fixtures/sample-paper.pdf
+"""
+
+import sys
+
+import pymupdf
+
+INTRO = (
+    "Highlights are the anchor for every note in PaperLab. A note keeps the exact page and "
+    "region of the passage it came from, so a citation can always jump back to the source. "
+    "This paragraph exists so the end-to-end test has real, selectable text to work with."
+)
+METHOD = (
+    "The second page describes a method in enough words to form its own chunk. Coordinates are "
+    "stored in PDF points with a top-left origin and converted to screen pixels only at render time."
+)
+
+doc = pymupdf.open()
+for heading, body in [("1 Introduction", INTRO), ("2 Method", METHOD)]:
+    page = doc.new_page(width=612, height=792)
+    page.insert_text((72, 90), heading, fontsize=14, fontname="Times-Bold")
+    page.insert_textbox(pymupdf.Rect(72, 110, 540, 300), body, fontsize=11, fontname="Times-Roman")
+doc.set_metadata({"title": "PaperLab E2E Fixture"})
+doc.save(sys.argv[1])
+```
+
+Run: `cd backend && uv run python ../frontend/e2e/fixtures/make_sample_paper.py ../frontend/e2e/fixtures/sample-paper.pdf && ls -l ../frontend/e2e/fixtures/sample-paper.pdf`
+Expected: a file of roughly 2 KB.
+
+Create `frontend/playwright.config.ts`:
+
+```ts
+import { defineConfig } from '@playwright/test'
+
+// Runs against the real stack: `docker compose up -d` first. No mocked backend.
+export default defineConfig({
+  testDir: 'e2e',
+  timeout: 60_000,
+  // One real backend and one shared library: run specs one at a time.
+  workers: 1,
+  use: {
+    baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:5180',
+    // Fail a stuck action in seconds, so a broken UI fails fast and fixtures still clean up.
+    actionTimeout: 10_000,
+    trace: 'retain-on-failure',
+  },
+})
+```
+
+Create `frontend/tsconfig.e2e.json`. Playwright strips types without checking them, so this is the only thing that catches a type error in a spec:
+
+```json
+{
+  "compilerOptions": {
+    "target": "es2023",
+    "lib": ["ES2023", "DOM"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "types": ["node"],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "verbatimModuleSyntax": true,
+    "noUnusedLocals": true
+  },
+  "include": ["e2e", "playwright.config.ts"]
+}
+```
+
+Create `frontend/e2e/fixtures.ts`:
+
+```ts
+import { readFile } from 'node:fs/promises'
+import { fileURLToPath } from 'node:url'
+import { test as base, expect, type APIRequestContext, type Locator, type Page } from '@playwright/test'
+
+export { expect }
+
+export const FIXTURE_FILE = fileURLToPath(new URL('./fixtures/sample-paper.pdf', import.meta.url))
+export const FIXTURE_TITLE = 'PaperLab E2E Fixture'
+export const FIRST_LINE = 'Highlights are the anchor'
+export type Rect = [number, number, number, number]
+
+async function uploadAndWaitUntilReady(request: APIRequestContext): Promise<string> {
+  const upload = await request.post('/api/papers', {
+    multipart: {
+      file: { name: 'sample-paper.pdf', mimeType: 'application/pdf', buffer: await readFile(FIXTURE_FILE) },
+    },
+  })
+  expect(upload.status()).toBe(201)
+  const { id } = await upload.json()
+  await expect
+    .poll(async () => (await (await request.get(`/api/papers/${id}`)).json()).status, { timeout: 30_000 })
+    .toBe('ready')
+  return id
+}
+
+export async function removePaperAndNotes(request: APIRequestContext, paperId: string) {
+  const notes = await request.get(`/api/papers/${paperId}/notes`)
+  if (!notes.ok()) return // already deleted
+  // Notes deliberately survive paper deletion, so remove them first.
+  for (const note of await notes.json()) await request.delete(`/api/notes/${note.id}`)
+  await request.delete(`/api/papers/${paperId}`)
+}
+
+/** `paperId`: a freshly ingested copy of the fixture paper, removed after the test even if it fails. */
+export const test = base.extend<{ paperId: string }>({
+  paperId: async ({ request }, use) => {
+    const id = await uploadAndWaitUntilReady(request)
+    await use(id)
+    await removePaperAndNotes(request, id)
+  },
+})
+
+/** Opens the reader and returns page 1's first text-layer line once it is rendered. */
+export async function openReader(page: Page, paperId: string): Promise<Locator> {
+  await page.goto(`/#/papers/${paperId}`)
+  const line = page.locator('.pdf-page[data-page="1"] .textLayer span', { hasText: FIRST_LINE })
+  await expect(line).toBeVisible()
+  return line
+}
+
+/** Selects from the start of `start` to the end of `end` like a mouse drag, then releases the mouse. */
+export async function selectText(start: Locator, end: Locator = start) {
+  const endElement = await end.elementHandle()
+  await start.evaluate((from, to) => {
+    const range = document.createRange()
+    range.setStart(from.firstChild!, 0)
+    range.setEnd(to!.firstChild!, to!.textContent!.length)
+    window.getSelection()!.removeAllRanges()
+    window.getSelection()!.addRange(range)
+  }, endElement)
+  await start.dispatchEvent('mouseup')
+}
+
+export async function saveNoteOn(page: Page, line: Locator, body: string): Promise<Locator> {
+  await selectText(line)
+  await page.getByRole('textbox', { name: 'Note' }).fill(body)
+  await page.getByRole('button', { name: 'Save note' }).click()
+  const card = page.locator('article.note', { hasText: body })
+  await expect(card).toBeVisible()
+  return card
+}
+
+/** Largest offset in px between two elements' boxes; retried by callers while layout settles. */
+export async function boxOffset(a: Locator, b: Locator): Promise<number> {
+  const [boxA, boxB] = [await a.boundingBox(), await b.boundingBox()]
+  if (!boxA || !boxB) return Number.POSITIVE_INFINITY
+  return Math.max(Math.abs(boxA.x - boxB.x), Math.abs(boxA.y - boxB.y), Math.abs(boxA.width - boxB.width))
+}
+```
+
+Append to `frontend/.gitignore`:
+
+```
+test-results
+playwright-report
+```
+
+Run: `cd frontend && npx playwright install chromium && npm run typecheck:e2e`
+Expected: Chromium installs; `tsc -p tsconfig.e2e.json` prints no errors.
+
+- [ ] **Step 12: Library E2E spec**
+
+Create `frontend/e2e/library.spec.ts`:
+
+```ts
+import { FIXTURE_FILE, FIXTURE_TITLE, expect, removePaperAndNotes, test } from './fixtures'
+
+test('upload a PDF through the UI, watch it become ready, then delete it', async ({ page, request }) => {
+  await page.goto('/')
+  const [uploaded] = await Promise.all([
+    page.waitForResponse((r) => r.url().endsWith('/api/papers') && r.request().method() === 'POST'),
+    page.locator('input[type="file"]').setInputFiles(FIXTURE_FILE),
+  ])
+  const { id } = await uploaded.json()
+
+  try {
+    const row = page.locator('.paper-row').filter({ has: page.locator(`a[href="#/papers/${id}"]`) })
+    // The library polls while ingesting; the title switches from the file name to the PDF's metadata title.
+    await expect(row.locator('.status')).toHaveText('ready', { timeout: 30_000 })
+    await expect(row.getByRole('link')).toHaveText(FIXTURE_TITLE)
+
+    page.once('dialog', (dialog) => dialog.accept())
+    await row.getByRole('button', { name: 'Delete' }).click()
+    await expect(row).toHaveCount(0)
+    expect((await request.get(`/api/papers/${id}`)).status()).toBe(404)
+  } finally {
+    await removePaperAndNotes(request, id)
+  }
+})
+
+test('a non-PDF upload shows the error and creates no paper', async ({ page, request }) => {
+  await page.goto('/')
+  await page
+    .locator('input[type="file"]')
+    .setInputFiles({ name: 'not-a-paper.txt', mimeType: 'text/plain', buffer: Buffer.from('plain text') })
+
+  await expect(page.getByRole('alert')).toContainText('is not a PDF')
+  const papers: { title: string }[] = await (await request.get('/api/papers')).json()
+  expect(papers.some((p) => p.title === 'not-a-paper')).toBe(false)
+})
+```
+
+Run: `cd frontend && npm run typecheck:e2e && npm run e2e`
+Expected: no type errors; `2 passed`.
+
+- [ ] **Step 13: Prove the library spec catches a broken library**
+
+The page was built before the spec, so the spec couldn't be red first. Break the page on purpose instead:
+1. In `frontend/src/features/library/LibraryPage.tsx`, replace `if (!ingesting) return` with `return`. The library now never polls.
+2. Run: `cd frontend && npx playwright test -g "upload a PDF through the UI"`
+   Expected: `1 failed`, because the status never shows `ready`.
+3. Undo the edit and run the same command again.
+   Expected: `1 passed`.
+
+- [ ] **Step 14: Document the commands**
 
 Replace `README.md` with:
 
@@ -1409,11 +1735,12 @@ curl -X POST localhost:8000/api/papers/<id>/reingest     # idempotent re-run aft
 cd backend && uv run pytest && uv run ruff check .       # needs the compose db
 cd frontend && npm run gen:api                           # regenerate API types (api running)
 cd frontend && npx tsc -b && npm test                    # types + unit tests
-cd frontend && npx playwright install chromium && npm run e2e   # end-to-end against the running stack
+cd frontend && npx playwright install chromium            # once
+cd frontend && npm run typecheck:e2e && npm run e2e      # end-to-end against the running stack
 ```
 ````
 
-- [ ] **Step 12: Commit**
+- [ ] **Step 15: Commit**
 
 ```bash
 git add frontend docker-compose.yml README.md
@@ -1578,9 +1905,10 @@ git commit -m "feat: reader coordinate conversions between PDF points and DOM pi
 **Files:**
 - Create: `frontend/src/features/reader/pdfjs.ts`, `usePdfDocument.ts`, `PdfPage.tsx`, `ReaderPage.tsx` (view-only version), `reader.css`
 - Rewrite: `frontend/src/App.tsx`
+- Test: `frontend/e2e/reader-render.spec.ts`
 
 **Interfaces:**
-- Consumes: `api.getPaper`, `api.paperFileUrl` (Task 3).
+- Consumes: `api.getPaper`, `api.paperFileUrl` (Task 3); the E2E harness in `frontend/e2e/fixtures.ts` (Task 3).
 - Produces:
   - `pdfjs.ts` exports `getDocument`, `TextLayerBuilder`, and types `PDFDocumentProxy`, `PDFPageProxy`. **All PDF.js imports go through this file.**
   - `usePdfDocument(url): {doc: PDFDocumentProxy | null, error: string | null}`.
@@ -1921,7 +2249,95 @@ export default function App() {
 }
 ```
 
-- [ ] **Step 7: Verify**
+- [ ] **Step 7: Reader rendering E2E spec**
+
+This spec checks the reader against the backend's own data:
+- The canvas actually has ink on it.
+- The PDF.js text layer sits inside the rect PyMuPDF stored for the same text, at three zoom levels.
+- Pages scale with zoom.
+- A missing paper shows an error instead of a blank screen.
+
+Create `frontend/e2e/reader-render.spec.ts`:
+
+```ts
+import { FIXTURE_TITLE, expect, openReader, test, type Rect } from './fixtures'
+
+const LETTER_WIDTH_PT = 612
+
+test('renders every page with ink, and the text layer sits on PyMuPDF’s chunk at each zoom', async ({
+  page,
+  request,
+  paperId,
+}) => {
+  const line = await openReader(page, paperId)
+  await expect(page.getByRole('heading', { name: FIXTURE_TITLE })).toBeVisible()
+  await expect(page.locator('.pdf-page')).toHaveCount(2)
+
+  const firstPage = page.locator('.pdf-page[data-page="1"]')
+  // A correctly sized but blank canvas would pass every other check, so count dark pixels.
+  await expect
+    .poll(() =>
+      firstPage.locator('canvas').evaluate((canvas: HTMLCanvasElement) => {
+        const { data } = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height)
+        let dark = 0
+        for (let i = 0; i < data.length; i += 4) if (data[i] < 128) dark++
+        return dark
+      }),
+    )
+    .toBeGreaterThan(100)
+
+  const [chunk] = await (await request.get(`/api/papers/${paperId}/chunks?page=1`)).json()
+  const [x0, y0, x1, y1] = chunk.bbox[0] as Rect
+  const tolerance = 4
+
+  for (const [zoomLabel, scale] of [['150%', 1.5], ['200%', 2], ['125%', 1.25]] as const) {
+    if (zoomLabel === '200%') await page.getByRole('button', { name: 'Zoom in' }).click()
+    if (zoomLabel === '125%') {
+      await page.getByRole('button', { name: 'Zoom out' }).click()
+      await page.getByRole('button', { name: 'Zoom out' }).click()
+    }
+    await expect(page.locator('.zoom-level')).toHaveText(zoomLabel)
+    await expect.poll(async () => (await firstPage.boundingBox())?.width).toBeCloseTo(LETTER_WIDTH_PT * scale, 0)
+
+    await expect
+      .poll(async () => {
+        const pageBox = (await firstPage.boundingBox())!
+        const lineBox = await line.boundingBox()
+        if (!lineBox) return false
+        return (
+          lineBox.x >= pageBox.x + x0 * scale - tolerance &&
+          lineBox.y >= pageBox.y + y0 * scale - tolerance &&
+          lineBox.x + lineBox.width <= pageBox.x + x1 * scale + tolerance &&
+          lineBox.y + lineBox.height <= pageBox.y + y1 * scale + tolerance
+        )
+      })
+      .toBe(true)
+  }
+
+  await page.getByRole('link', { name: '← Library' }).click()
+  await expect(page.getByRole('heading', { name: 'PaperLab' })).toBeVisible()
+})
+
+test('a missing paper shows an error instead of a blank reader', async ({ page }) => {
+  await page.goto('/#/papers/00000000-0000-0000-0000-000000000000')
+  await expect(page.getByRole('alert')).toBeVisible()
+})
+```
+
+Run: `cd frontend && npm run typecheck:e2e && npm run e2e`
+Expected: no type errors; `4 passed` (2 library + 2 reader).
+
+- [ ] **Step 8: Prove the reader spec catches rendering bugs**
+
+Each break below must turn `npx playwright test -g "renders every page"` red. Undo each one before starting the next.
+1. **No text layer.** In `PdfPage.tsx`, replace `await Promise.all([renderTask.promise, textLayer.render(textLayerOptions)])` with `await renderTask.promise`.
+   Expected: `1 failed`.
+2. **Blank canvas.** In `PdfPage.tsx`, replace `renderTask = page.render(` with `renderTask = page.render.bind(page, `. The page is now never drawn.
+   Expected: `1 failed`.
+
+After undoing both, run the same command again. Expected: `1 passed`.
+
+- [ ] **Step 9: Verify**
 
 Run: `cd frontend && npx tsc -b && npm test && npx vite build`
 Expected:
@@ -1929,17 +2345,16 @@ Expected:
 - `Tests  6 passed (6)`.
 - Vite prints `✓ built in …`. A ">500 kB chunk" warning from pdfjs is expected (roadmap K5).
 
-Manual at http://localhost:5180 (open a `ready` two-column paper):
+Manual check at http://localhost:5180, in addition to the automated tests (open a `ready` two-column paper):
 - Pages render sharply.
 - The browser console shows no errors.
 - Text can be selected with the mouse, and the selection follows the words.
-- `+`/`−` re-render at the new zoom and text stays selectable.
 - Scrolling a long paper renders pages as they approach.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 10: Commit**
 
 ```bash
-git add frontend/src
+git add frontend/src frontend/e2e
 git commit -m "feat: PDF.js reader with text layer, zoom, and lazy page rendering"
 ```
 
@@ -1948,8 +2363,7 @@ git commit -m "feat: PDF.js reader with text layer, zoom, and lazy page renderin
 ### Task 6: Highlight → note (E2E first)
 
 **Files:**
-- Create: `frontend/playwright.config.ts`, `frontend/e2e/fixtures/make_sample_paper.py`, `frontend/e2e/fixtures/sample-paper.pdf` (generated), `frontend/e2e/highlight-to-note.spec.ts`
-- Modify: `frontend/.gitignore`
+- Test: `frontend/e2e/highlight-to-note.spec.ts`. The Playwright config, fixture paper and `fixtures.ts` already exist from Task 3.
 - Create: `frontend/src/features/reader/selection.ts`
 - Create: `frontend/src/features/notes/ProvenanceBadge.tsx`, `NoteComposer.tsx`, `NoteCard.tsx`, `NotesPanel.tsx`, `notes.css`
 - Rewrite: `frontend/src/features/reader/ReaderPage.tsx`
@@ -1959,6 +2373,7 @@ git commit -m "feat: PDF.js reader with text layer, zoom, and lazy page renderin
   - `api.listNotes/createNote/updateNote/deleteNote` and the `Note` type (Task 3).
   - `pdfRectToCss`, `clientRectsToPdfRects`, `PdfRect` (Task 4).
   - `PdfPage` with overlay children, rendering `.pdf-page[data-page]` (Task 5).
+  - From `frontend/e2e/fixtures.ts` (Task 3): `test` with `paperId`, `openReader`, `selectText`, `saveNoteOn`, `boxOffset`.
 - Produces:
   - `readSelection(scale): SelectionResult` (`{kind:'none'} | {kind:'invalid', reason} | {kind:'anchor', anchor: SelectionAnchor}`), where `SelectionAnchor = {page, rects: PdfRect[], quotedText}`.
   - DOM contract the E2E relies on:
@@ -1966,162 +2381,107 @@ git commit -m "feat: PDF.js reader with text layer, zoom, and lazy page renderin
     - `.note` cards containing `.provenance-badge`.
     - A textbox labelled `Note` and a button `Save note`.
 
-- [ ] **Step 1: Generate the fixture paper**
+- [ ] **Step 1: Write the failing E2E spec**
 
-Create `frontend/e2e/fixtures/make_sample_paper.py`:
-
-```python
-"""Regenerates sample-paper.pdf: two pages, one heading and one paragraph each.
-
-Run with the backend environment (it has PyMuPDF):
-  cd backend && uv run python ../frontend/e2e/fixtures/make_sample_paper.py ../frontend/e2e/fixtures/sample-paper.pdf
-"""
-
-import sys
-
-import pymupdf
-
-INTRO = (
-    "Highlights are the anchor for every note in PaperLab. A note keeps the exact page and "
-    "region of the passage it came from, so a citation can always jump back to the source. "
-    "This paragraph exists so the end-to-end test has real, selectable text to work with."
-)
-METHOD = (
-    "The second page describes a method in enough words to form its own chunk. Coordinates are "
-    "stored in PDF points with a top-left origin and converted to screen pixels only at render time."
-)
-
-doc = pymupdf.open()
-for heading, body in [("1 Introduction", INTRO), ("2 Method", METHOD)]:
-    page = doc.new_page(width=612, height=792)
-    page.insert_text((72, 90), heading, fontsize=14, fontname="Times-Bold")
-    page.insert_textbox(pymupdf.Rect(72, 110, 540, 300), body, fontsize=11, fontname="Times-Roman")
-doc.set_metadata({"title": "PaperLab E2E Fixture"})
-doc.save(sys.argv[1])
-```
-
-Run: `cd backend && uv run python ../frontend/e2e/fixtures/make_sample_paper.py ../frontend/e2e/fixtures/sample-paper.pdf && ls -l ../frontend/e2e/fixtures/sample-paper.pdf`
-Expected: a file of roughly 2 KB.
-
-- [ ] **Step 2: Configure Playwright**
-
-Create `frontend/playwright.config.ts`:
-
-```ts
-import { defineConfig } from '@playwright/test'
-
-// Runs against the real stack: `docker compose up -d` first. No mocked backend.
-export default defineConfig({
-  testDir: 'e2e',
-  timeout: 60_000,
-  use: {
-    baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:5180',
-    // Fail a stuck action fast so the spec's `finally` cleanup still has a live request context.
-    actionTimeout: 10_000,
-    trace: 'retain-on-failure',
-  },
-})
-```
-
-Append to `frontend/.gitignore`:
-
-```
-test-results
-playwright-report
-```
-
-Run: `cd frontend && npx playwright install chromium`
-
-- [ ] **Step 3: Write the failing E2E spec**
+Five behaviours, each its own test. Every test gets a fresh paper from the `paperId` fixture:
+- Create a note, then reload: the highlight is still on the text, and the stored anchor lies inside PyMuPDF's chunk.
+- Highlights follow zoom.
+- Editing a human note keeps the "You" badge.
+- Deleting a note removes its card and its highlight.
+- A selection across two pages is rejected.
 
 Create `frontend/e2e/highlight-to-note.spec.ts`:
 
 ```ts
-import { readFile } from 'node:fs/promises'
-import { expect, test, type APIRequestContext } from '@playwright/test'
+import { boxOffset, expect, openReader, saveNoteOn, selectText, test, type Rect } from './fixtures'
 
-const FIXTURE = new URL('./fixtures/sample-paper.pdf', import.meta.url)
-const NOTE_BODY = 'The anchor is the whole point.'
+test('select a passage, save a note, and find it highlighted after reload', async ({ page, request, paperId }) => {
+  const line = await openReader(page, paperId)
+  const card = await saveNoteOn(page, line, 'The anchor is the whole point.')
+  await expect(card).toContainText('Highlights are the anchor')
+  await expect(card.locator('.provenance-badge')).toHaveText('You')
 
-type Rect = [number, number, number, number]
+  // The stored anchor (PDF.js coordinates) must sit inside the chunk PyMuPDF extracted.
+  const [note] = await (await request.get(`/api/papers/${paperId}/notes`)).json()
+  const [chunk] = await (await request.get(`/api/papers/${paperId}/chunks?page=1`)).json()
+  const [nx0, ny0, nx1, ny1] = note.anchors[0].bbox[0] as Rect
+  const [cx0, cy0, cx1, cy1] = chunk.bbox[0] as Rect
+  const tolerance = 3
+  expect(nx0).toBeGreaterThanOrEqual(cx0 - tolerance)
+  expect(ny0).toBeGreaterThanOrEqual(cy0 - tolerance)
+  expect(nx1).toBeLessThanOrEqual(cx1 + tolerance)
+  expect(ny1).toBeLessThanOrEqual(cy1 + tolerance)
+  expect(note.anchors[0].quoted_text).toContain('Highlights are the anchor')
 
-async function uploadAndWaitUntilReady(request: APIRequestContext): Promise<string> {
-  const upload = await request.post('/api/papers', {
-    multipart: {
-      file: { name: 'sample-paper.pdf', mimeType: 'application/pdf', buffer: await readFile(FIXTURE) },
-    },
-  })
-  expect(upload.status()).toBe(201)
-  const { id } = await upload.json()
-  await expect
-    .poll(async () => (await (await request.get(`/api/papers/${id}`)).json()).status, { timeout: 30_000 })
-    .toBe('ready')
-  return id
-}
+  // After a reload, the highlight is drawn from stored PDF points over the same text.
+  await page.reload()
+  await expect(page.locator('article.note', { hasText: 'The anchor is the whole point.' })).toBeVisible()
+  const highlight = page.locator(`.highlight[data-note-id="${note.id}"]`).first()
+  await expect.poll(() => boxOffset(line, highlight)).toBeLessThan(4)
+})
 
-async function removePaperAndNotes(request: APIRequestContext, paperId: string) {
-  // Notes deliberately survive paper deletion, so the test removes its own note first.
-  const notes = await (await request.get(`/api/papers/${paperId}/notes`)).json()
-  for (const note of notes) await request.delete(`/api/notes/${note.id}`)
-  await request.delete(`/api/papers/${paperId}`)
-}
+test('highlights stay on their text when zooming', async ({ page, paperId }) => {
+  const line = await openReader(page, paperId)
+  await saveNoteOn(page, line, 'zoom check')
+  const highlight = page.locator('.highlight:not(.draft)').first()
 
-test('select a passage, save a note, and find it highlighted after reload', async ({ page, request }) => {
-  const paperId = await uploadAndWaitUntilReady(request)
-  try {
-    await page.goto(`/#/papers/${paperId}`)
-    const line = page.locator('.pdf-page[data-page="1"] .textLayer span', { hasText: 'Highlights are the anchor' })
-    await expect(line).toBeVisible()
-
-    // Select the first line of the paragraph the way a mouse drag would, then release.
-    await line.evaluate((span) => {
-      const range = document.createRange()
-      range.selectNodeContents(span)
-      window.getSelection()!.removeAllRanges()
-      window.getSelection()!.addRange(range)
-    })
-    await line.dispatchEvent('mouseup')
-
-    await page.getByRole('textbox', { name: 'Note' }).fill(NOTE_BODY)
-    await page.getByRole('button', { name: 'Save note' }).click()
-
-    const card = page.locator('.note', { hasText: NOTE_BODY })
-    await expect(card).toContainText('Highlights are the anchor')
-    await expect(card.locator('.provenance-badge')).toHaveText('You')
-
-    // The stored anchor (PDF.js coordinates) must sit inside the chunk PyMuPDF extracted.
-    const [note] = await (await request.get(`/api/papers/${paperId}/notes`)).json()
-    const [chunk] = await (await request.get(`/api/papers/${paperId}/chunks?page=1`)).json()
-    const [nx0, ny0, nx1, ny1] = note.anchors[0].bbox[0] as Rect
-    const [cx0, cy0, cx1, cy1] = chunk.bbox[0] as Rect
-    const tolerance = 3
-    expect(nx0).toBeGreaterThanOrEqual(cx0 - tolerance)
-    expect(ny0).toBeGreaterThanOrEqual(cy0 - tolerance)
-    expect(nx1).toBeLessThanOrEqual(cx1 + tolerance)
-    expect(ny1).toBeLessThanOrEqual(cy1 + tolerance)
-
-    // After a reload, the highlight is drawn from stored PDF points over the same text.
-    await page.reload()
-    await expect(page.locator('.note', { hasText: NOTE_BODY })).toBeVisible()
-    const highlight = page.locator(`.pdf-page[data-page="1"] .highlight[data-note-id="${note.id}"]`).first()
-    await expect(line).toBeVisible()
-    const lineBox = (await line.boundingBox())!
-    const highlightBox = (await highlight.boundingBox())!
-    expect(Math.abs(lineBox.x - highlightBox.x)).toBeLessThan(4)
-    expect(Math.abs(lineBox.y - highlightBox.y)).toBeLessThan(4)
-    expect(Math.abs(lineBox.width - highlightBox.width)).toBeLessThan(4)
-  } finally {
-    await removePaperAndNotes(request, paperId)
+  for (const button of ['Zoom in', 'Zoom out', 'Zoom out']) {
+    await page.getByRole('button', { name: button }).click()
+    await expect.poll(() => boxOffset(line, highlight)).toBeLessThan(4)
   }
+})
+
+test('editing a human note keeps the "You" badge and survives reload', async ({ page, paperId }) => {
+  const line = await openReader(page, paperId)
+  await saveNoteOn(page, line, 'first draft')
+  const card = page.locator('article.note', { hasText: 'Highlights are the anchor' })
+
+  await card.getByRole('button', { name: 'Edit' }).click()
+  await card.getByRole('textbox', { name: 'Edit note' }).fill('second thought')
+  await card.getByRole('button', { name: 'Save', exact: true }).click()
+
+  await expect(card).toContainText('second thought')
+  await expect(card.locator('.provenance-badge')).toHaveText('You')
+  await page.reload()
+  await expect(page.locator('article.note', { hasText: 'Highlights are the anchor' })).toContainText('second thought')
+})
+
+test('deleting a note removes its card and its highlight', async ({ page, request, paperId }) => {
+  const line = await openReader(page, paperId)
+  const card = await saveNoteOn(page, line, 'to be deleted')
+  await expect(page.locator('.highlight')).not.toHaveCount(0)
+
+  page.once('dialog', (dialog) => dialog.accept())
+  await card.getByRole('button', { name: 'Delete' }).click()
+
+  await expect(card).toHaveCount(0)
+  await expect(page.locator('.highlight')).toHaveCount(0)
+  expect(await (await request.get(`/api/papers/${paperId}/notes`)).json()).toEqual([])
+})
+
+test('a selection spanning two pages is rejected with a message', async ({ page, paperId }) => {
+  const firstPageLine = await openReader(page, paperId)
+  const secondPageLine = page.locator('.pdf-page[data-page="2"] .textLayer span', { hasText: 'The second page' })
+  await secondPageLine.scrollIntoViewIfNeeded()
+  await expect(secondPageLine).toBeVisible()
+
+  await selectText(firstPageLine, secondPageLine)
+
+  await expect(page.getByRole('alert')).toContainText('Select text within a single page')
+  await expect(page.getByRole('textbox', { name: 'Note' })).toHaveCount(0)
 })
 ```
 
-- [ ] **Step 4: Run it to verify it fails**
+- [ ] **Step 2: Run it to verify it fails**
 
-Run: `cd frontend && npm run e2e`
-Expected: 1 failed with `TimeoutError: locator.fill: Timeout 10000ms exceeded … waiting for getByRole('textbox', { name: 'Note' })`, because no composer exists yet. The `finally` block still deletes the uploaded paper, so the library's paper count is unchanged.
+Run: `cd frontend && npm run typecheck:e2e && npx playwright test e2e/highlight-to-note.spec.ts`
+Expected: no type errors, then `5 failed`:
+- Four with `TimeoutError: locator.fill: Timeout 10000ms exceeded`, waiting for the `Note` textbox (no composer exists yet).
+- The cross-page test on `expect(locator).toContainText` (no alert).
 
-- [ ] **Step 5: Selection capture**
+The `paperId` fixture still deletes every uploaded paper, so the library's paper count is unchanged.
+
+- [ ] **Step 3: Selection capture**
 
 Create `frontend/src/features/reader/selection.ts`:
 
@@ -2157,7 +2517,7 @@ export function readSelection(scale: number): SelectionResult {
 }
 ```
 
-- [ ] **Step 6: Provenance badge**
+- [ ] **Step 4: Provenance badge**
 
 Create `frontend/src/features/notes/ProvenanceBadge.tsx`:
 
@@ -2187,7 +2547,7 @@ export function ProvenanceBadge({ provenance }: { provenance: Provenance }) {
 }
 ```
 
-- [ ] **Step 7: Composer, card, and panel**
+- [ ] **Step 5: Composer, card, and panel**
 
 Create `frontend/src/features/notes/NoteComposer.tsx`:
 
@@ -2465,7 +2825,7 @@ Create `frontend/src/features/notes/notes.css`:
 }
 ```
 
-- [ ] **Step 8: Wire notes into the reader**
+- [ ] **Step 6: Wire notes into the reader**
 
 Replace `frontend/src/features/reader/ReaderPage.tsx` with:
 
@@ -2640,17 +3000,31 @@ export function ReaderPage({ paperId }: { paperId: string }) {
 }
 ```
 
-- [ ] **Step 9: Run everything**
+- [ ] **Step 7: Run everything**
 
-Run: `cd frontend && npx tsc -b && npm test && npm run e2e`
+Run: `cd frontend && npx tsc -b && npm test && npm run typecheck:e2e && npm run e2e`
 Expected:
 - No tsc output.
 - `Tests  6 passed (6)`.
-- `1 passed` for `highlight-to-note.spec.ts`.
+- No e2e type errors.
+- `9 passed` (2 library + 2 reader + 5 highlight-to-note).
 
-If the E2E fails, use superpowers:systematic-debugging. Start by opening the trace printed in the failure (`npx playwright show-trace …`) and checking the browser console for `pageerror`s before changing code.
+If a spec fails, use superpowers:systematic-debugging. Start by opening the trace printed in the failure (`npx playwright show-trace …`) and checking the browser console for `pageerror`s before changing code.
 
-- [ ] **Step 10: Commit**
+- [ ] **Step 8: Prove the note specs guard the rules that matter**
+
+Each break below must turn the named test red. Undo each one before the next.
+
+| Break | File and change | Run | Expected |
+|---|---|---|---|
+| Highlights ignore zoom | `coords.ts`: `top: y0 * scale,` → `top: y0 * 1.5,` | `npx playwright test -g "highlights stay on their text"` | `1 failed` |
+| Cross-page selection allowed | `selection.ts`: `if (page !== pageElementOf(range.endContainer)) {` → `if (false) {` | `npx playwright test -g "spanning two pages"` | `1 failed` |
+| Human note mislabelled as AI | `ProvenanceBadge.tsx`: `human: 'You',` → `human: 'AI',` | `npx playwright test -g "save a note"` | `1 failed` |
+| Edits never saved | `NoteCard.tsx`: `if (await onUpdate(body)) setEditing(false)` → `setEditing(false)` | `npx playwright test -g "editing a human note"` | `1 failed` |
+
+After undoing all four, `npm run e2e` must show `9 passed` again.
+
+- [ ] **Step 9: Commit**
 
 ```bash
 git add frontend
@@ -2681,18 +3055,29 @@ Use at least one of your own two-column papers with figures, at http://localhost
 - [ ] Selecting across two pages shows "Select text within a single page…".
 - [ ] A scanned PDF shows its failure reason in the library.
 
-Anything that feels wrong gets fixed in this branch before continuing. Use superpowers:systematic-debugging; add a unit test when the fix is logic, or extend the E2E when it is a flow.
+Anything that feels wrong gets fixed in this branch before continuing, using superpowers:systematic-debugging. **Every fix lands with a test that fails without it:** a Vitest test when the fix is logic, or a new test in the matching E2E spec when it is a flow. Re-run the whole suite after each fix.
 
-- [ ] **Step 2: Run the exit criteria**
+- [ ] **Step 2: Bring in main's test pack and run the full exit criteria**
 
-Use superpowers:verification-before-completion and read the output of each command:
+`main` carries the M1–M2 test pack and the 80% coverage gate (roadmap D21). Merge it so M3 is held to the same bar. Run this in the worktree, and resolve any conflict by keeping the tests from both sides:
 
 ```bash
-cd backend && uv run pytest -q && uv run ruff check . && (grep -r fastapi app/core/ || echo "core clean")
-cd ../frontend && npx tsc -b && npm test && npm run e2e
+git merge main
 ```
 
-Expected: `12 passed`, `All checks passed!`, `core clean`, `Tests  6 passed (6)`, `1 passed`.
+Then use superpowers:verification-before-completion and read the output of each command:
+
+```bash
+cd backend && uv run pytest --cov && uv run ruff check . && (grep -r fastapi app/core/ || echo "core clean")
+cd ../frontend && npx tsc -b && npm test && npm run typecheck:e2e && npm run e2e
+```
+
+Expected:
+- **pytest:** every test passes, including `tests/test_invariants.py` (no fastapi in core; migrations round-trip) and `tests/test_notes_edges.py`, and the gate prints `Required test coverage of 80% reached`. At plan time this was 47 tests at 97.5%.
+- **Ruff and core check:** `All checks passed!`, `core clean`.
+- **Frontend:** `Tests  6 passed (6)`, no e2e type errors, `9 passed`.
+
+A count lower than these means a test was skipped or deleted. Find out why before continuing.
 
 - [ ] **Step 3: Code review**
 
