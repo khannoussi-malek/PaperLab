@@ -1,11 +1,11 @@
 import uuid
 
 import pytest
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 
 from app.core import notes
 from app.core.errors import InvalidInput, NotFound
-from app.models import Chunk, LLMOutput, Paper, Provenance
+from app.models import Chunk, LLMOutput, Note, Paper, Provenance
 
 pytestmark = pytest.mark.anyio
 
@@ -72,6 +72,44 @@ async def test_promote_rejects_what_the_answer_cannot_back(session):
         await notes.promote_llm_fragment(session, output.id, "Layers stack", [uuid.uuid4()])
     with pytest.raises(InvalidInput, match="no longer exists"):
         await notes.promote_llm_fragment(session, output.id, "Layers stack", [chunks[2].id])
+
+
+async def test_promote_rejects_empty_chunk_ids(session):
+    output, chunks = await make_answer(session)
+
+    with pytest.raises(InvalidInput, match="at least one cited chunk"):
+        await notes.promote_llm_fragment(session, output.id, "Layers stack", [])
+
+    assert list(await session.scalars(select(Note).where(Note.source_id == output.id))) == []
+
+
+async def test_promote_collapses_anchors_sharing_page_and_bbox(session):
+    paper = Paper(title="Dup paper", file_path="/nonexistent-dup.pdf", status="ready", page_count=1)
+    session.add(paper)
+    await session.flush()
+    bbox = [[72, 100, 300, 120]]
+    dup_chunks = [
+        Chunk(
+            paper_id=paper.id, ordinal=i, page=1, bbox=bbox, text=f"dup {i} text",
+            embed_model="test", strategy_ver=1,
+        )
+        for i in range(2)
+    ]
+    session.add_all(dup_chunks)
+    await session.flush()
+    output = LLMOutput(
+        paper_id=paper.id, kind="chat", question="how?", content="Same spot twice.", model="fake", prompt_version=1,
+        source_chunks=[c.id for c in dup_chunks],
+    )
+    session.add(output)
+    await session.commit()
+
+    note = await notes.promote_llm_fragment(
+        session, output.id, "Same spot twice.", [dup_chunks[0].id, dup_chunks[1].id]
+    )
+
+    assert len(note.anchors) == 1
+    assert note.anchors[0].quoted_text == "dup 0 text"
 
 
 async def test_promote_over_http_then_edit_flips_the_badge(client, session):

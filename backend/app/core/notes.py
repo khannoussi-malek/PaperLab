@@ -179,6 +179,8 @@ async def promote_llm_fragment(
     if _collapse_whitespace(text) not in _collapse_whitespace(output.content):
         raise InvalidInput("body_not_in_output")
     wanted = list(dict.fromkeys(chunk_ids))
+    if not wanted:
+        raise InvalidInput("a promoted note needs at least one cited chunk")
     if not set(wanted) <= set(output.source_chunks):
         raise InvalidInput("a chunk is not a source of this answer")
     chunks = {c.id: c for c in await session.scalars(select(Chunk).where(Chunk.id.in_(wanted)))}
@@ -188,11 +190,16 @@ async def promote_llm_fragment(
     note = Note(body=text, provenance=Provenance.LLM, source_id=output.id)
     session.add(note)
     await session.flush()
-    anchors = [
-        {"note_id": note.id, "paper_id": c.paper_id, "page": c.page, "bbox": c.bbox, "quoted_text": c.text}
-        for c in (chunks[chunk_id] for chunk_id in wanted)
-    ]
-    await session.execute(insert(note_anchors), anchors)
+    # note_anchors' PK is (note_id, paper_id, page, bbox); two chunks can share a spot on the
+    # page, so collapse to one anchor per key or the bulk insert hits a duplicate-key error.
+    anchors: dict[tuple, dict] = {}
+    for chunk_id in wanted:
+        c = chunks[chunk_id]
+        key = (c.paper_id, c.page, tuple(tuple(rect) for rect in c.bbox))
+        anchors.setdefault(
+            key, {"note_id": note.id, "paper_id": c.paper_id, "page": c.page, "bbox": c.bbox, "quoted_text": c.text}
+        )
+    await session.execute(insert(note_anchors), list(anchors.values()))
     await session.commit()
     await session.refresh(note)
     return (await _with_anchors(session, [note]))[0]
