@@ -33,3 +33,13 @@ test('a non-PDF upload shows the error and creates no paper', async ({ page, req
   const papers: { title: string }[] = await (await request.get('/api/papers')).json()
   expect(papers.some((p) => p.title === 'not-a-paper')).toBe(false)
 })
+
+test('a failed first load can be retried', async ({ page }) => {
+  await page.route('**/api/papers', (route) => route.abort(), { times: 1 })
+  await page.goto('/')
+
+  await expect(page.getByRole('alert')).toBeVisible()
+  await page.getByRole('button', { name: 'Retry' }).click()
+  await expect(page.getByRole('alert')).not.toBeVisible()
+  await expect(page.getByText('Loading…')).not.toBeVisible()
+})

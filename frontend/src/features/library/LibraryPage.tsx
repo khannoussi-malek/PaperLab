@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, type Paper } from '../../api/client'
 import { readerHref } from '../../lib/route'
 import './library.css'
@@ -16,7 +16,13 @@ export function LibraryPage() {
     [],
   )
 
+  // ponytail: StrictMode double-invokes this effect in dev, firing two GETs whose results race
+  // (the first's error can land after the second's success, or vice versa); the ref makes the
+  // initial load idempotent without touching refresh(), which upload/remove/polling still share.
+  const loadedOnce = useRef(false)
   useEffect(() => {
+    if (loadedOnce.current) return
+    loadedOnce.current = true
     void refresh()
   }, [refresh])
 
@@ -78,7 +84,19 @@ export function LibraryPage() {
       )}
 
       {papers === null ? (
-        <p>Loading…</p>
+        error ? (
+          <button
+            type="button"
+            onClick={() => {
+              setError(null)
+              void refresh()
+            }}
+          >
+            Retry
+          </button>
+        ) : (
+          <p>Loading…</p>
+        )
       ) : papers.length === 0 ? (
         <p>No papers yet. Upload a PDF to start.</p>
       ) : (
