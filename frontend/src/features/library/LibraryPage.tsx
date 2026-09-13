@@ -1,117 +1,100 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, type Paper } from '../../api/client'
-import { readerHref } from '../../lib/route'
-import './library.css'
+import { Upload } from 'lucide-react'
+import type { Paper } from '@/api/client'
+import { useDeletePaper, usePapers, useUploadPapers } from '@/api/queries'
+import { ModeToggle } from '@/components/mode-toggle'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table'
+import { readerHref } from '@/lib/route'
 
-const POLL_MS = 2000
-const isSettled = (paper: Paper) => paper.status === 'ready' || paper.status === 'failed'
+const STATUS_VARIANT = { ready: 'secondary', failed: 'destructive' } as const
+const statusVariant = (status: string) => STATUS_VARIANT[status as keyof typeof STATUS_VARIANT] ?? 'outline'
 
 export function LibraryPage() {
-  const [papers, setPapers] = useState<Paper[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [uploading, setUploading] = useState(false)
+  const papers = usePapers()
+  const upload = useUploadPapers()
+  const remove = useDeletePaper()
 
-  const refresh = useCallback(
-    () => api.listPapers().then(setPapers, (e: Error) => setError(e.message)),
-    [],
-  )
-
-  // ponytail: StrictMode double-invokes this effect in dev, firing two GETs whose results race
-  // (the first's error can land after the second's success, or vice versa); the ref makes the
-  // initial load idempotent without touching refresh(), which upload/remove/polling still share.
-  const loadedOnce = useRef(false)
-  useEffect(() => {
-    if (loadedOnce.current) return
-    loadedOnce.current = true
-    void refresh()
-  }, [refresh])
-
-  // Poll only while something is still ingesting.
-  const ingesting = papers?.some((paper) => !isSettled(paper)) ?? false
-  useEffect(() => {
-    if (!ingesting) return
-    const timer = setInterval(refresh, POLL_MS)
-    return () => clearInterval(timer)
-  }, [ingesting, refresh])
-
-  async function upload(input: HTMLInputElement) {
+  function onFiles(input: HTMLInputElement) {
     const files = [...(input.files ?? [])]
     input.value = ''
-    if (files.length === 0) return
-    setUploading(true)
-    setError(null)
-    try {
-      for (const file of files) await api.uploadPaper(file)
-    } catch (e) {
-      setError((e as Error).message)
-    } finally {
-      setUploading(false)
-      await refresh()
-    }
+    if (files.length > 0) upload.mutate(files)
   }
 
-  async function remove(paper: Paper) {
+  function onDelete(paper: Paper) {
     if (!window.confirm(`Delete "${paper.title}"? Its highlights go with it; notes are kept.`)) return
-    try {
-      await api.deletePaper(paper.id)
-      await refresh()
-    } catch (e) {
-      setError((e as Error).message)
-    }
+    remove.mutate(paper.id)
   }
 
+  const error = upload.error ?? remove.error ?? papers.error
   return (
-    <main className="library">
-      <header className="library-header">
-        <h1>PaperLab</h1>
-        <label className="button button-primary">
-          {uploading ? 'Uploading…' : 'Upload PDFs'}
-          <input
-            type="file"
-            accept="application/pdf"
-            multiple
-            hidden
-            disabled={uploading}
-            onChange={(e) => void upload(e.currentTarget)}
-          />
-        </label>
+    <main className="mx-auto flex max-w-4xl flex-col gap-4 px-4 py-6">
+      <header className="flex items-center justify-between gap-2">
+        <h1 className="font-heading text-3xl font-semibold">PaperLab</h1>
+        <div className="flex items-center gap-2">
+          <Button asChild>
+            <label>
+              <Upload aria-hidden />
+              {upload.isPending ? 'Uploading…' : 'Upload PDFs'}
+              <input
+                type="file"
+                accept="application/pdf"
+                multiple
+                hidden
+                disabled={upload.isPending}
+                onChange={(e) => onFiles(e.currentTarget)}
+              />
+            </label>
+          </Button>
+          <ModeToggle />
+        </div>
       </header>
 
       {error && (
-        <p role="alert" className="error">
-          {error}
-        </p>
+        <Alert variant="destructive">
+          <AlertDescription>{error.message}</AlertDescription>
+        </Alert>
       )}
 
-      {papers === null ? (
-        error ? (
-          <button
-            type="button"
-            onClick={() => {
-              setError(null)
-              void refresh()
-            }}
-          >
+      {papers.data === undefined ? (
+        papers.isError ? (
+          <Button variant="outline" className="self-start" onClick={() => void papers.refetch()}>
             Retry
-          </button>
+          </Button>
         ) : (
-          <p>Loading…</p>
+          <p className="text-muted-foreground">Loading…</p>
         )
-      ) : papers.length === 0 ? (
-        <p>No papers yet. Upload a PDF to start.</p>
+      ) : papers.data.length === 0 ? (
+        <p className="text-muted-foreground">No papers yet. Upload a PDF to start.</p>
       ) : (
-        <ul className="paper-list">
-          {papers.map((paper) => (
-            <li key={paper.id} className="paper-row">
-              <a href={readerHref(paper.id)}>{paper.title}</a>
-              <span className={`status status-${paper.status}`}>{paper.status}</span>
-              <button type="button" className="link-button" onClick={() => void remove(paper)}>
-                Delete
-              </button>
-              {paper.status_error && <small className="error">{paper.status_error}</small>}
-            </li>
-          ))}
-        </ul>
+        <Card className="py-0">
+          <Table>
+            <TableBody>
+              {papers.data.map((paper) => (
+                <TableRow key={paper.id} className="paper-row">
+                  <TableCell className="whitespace-normal">
+                    <a href={readerHref(paper.id)} className="font-medium hover:underline">
+                      {paper.title}
+                    </a>
+                    {paper.status_error && <p className="text-xs text-destructive">{paper.status_error}</p>}
+                  </TableCell>
+                  <TableCell className="w-0">
+                    <Badge variant={statusVariant(paper.status)} className="status">
+                      {paper.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="w-0">
+                    <Button variant="ghost" size="sm" onClick={() => onDelete(paper)}>
+                      Delete
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
       )}
     </main>
   )

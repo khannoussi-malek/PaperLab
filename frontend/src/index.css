@@ -1,59 +1,114 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/atkinson-hyperlegible-next";
+@import "@fontsource-variable/crimson-pro";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Theme tokens for PaperLab. Values come from frontend/design-system/MASTER.md; change them there first. */
+@theme inline {
+    --font-sans: 'Atkinson Hyperlegible Next Variable', ui-sans-serif, system-ui, sans-serif;
+    --font-heading: 'Crimson Pro Variable', ui-serif, Georgia, serif;
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --color-card: var(--card);
+    --color-card-foreground: var(--card-foreground);
+    --color-popover: var(--popover);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-primary: var(--primary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-secondary: var(--secondary);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-muted: var(--muted);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-accent: var(--accent);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-destructive: var(--destructive);
+    --color-border: var(--border);
+    --color-input: var(--input);
+    --color-ring: var(--ring);
+    --color-provenance-llm: var(--provenance-llm);
+    --color-provenance-llm-foreground: var(--provenance-llm-foreground);
+    --color-provenance-llm-surface: var(--provenance-llm-surface);
+    --color-highlight: var(--highlight);
+    --color-highlight-active: var(--highlight-active);
+    --color-highlight-draft: var(--highlight-draft);
+    --radius-sm: calc(var(--radius) * 0.6);
+    --radius-md: calc(var(--radius) * 0.8);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) * 1.4);
+    --radius-2xl: calc(var(--radius) * 1.8);
+    --radius-3xl: calc(var(--radius) * 2.2);
+    --radius-4xl: calc(var(--radius) * 2.6);
+}
+
 :root {
-  color-scheme: light;
-  --bg: #f6f5f1;
-  --surface: #ffffff;
-  --text: #1d1d1f;
-  --muted: #6b6b70;
-  --border: #dcdad3;
-  --accent: #2f5bd3;
-  --ok: #1e7a3a;
-  --danger: #b3261e;
-  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
-  font-size: 15px;
-  color: var(--text);
-  background: var(--bg);
+    --background: #f8fafc;
+    --foreground: #0f172a;
+    --card: #ffffff;
+    --card-foreground: #0f172a;
+    --popover: #ffffff;
+    --popover-foreground: #0f172a;
+    --primary: #2563eb;
+    --primary-foreground: #ffffff;
+    --secondary: #f1f5f9;
+    --secondary-foreground: #1e293b;
+    --muted: #f1f5f9;
+    --muted-foreground: #475569;
+    --accent: #f1f5f9;
+    --accent-foreground: #1e293b;
+    --destructive: #dc2626;
+    --border: #e2e8f0;
+    --input: #cbd5e1;
+    --ring: #2563eb;
+    --radius: 0.625rem;
+    /* Provenance is never subtle: AI text gets its own badge colour and card background. */
+    --provenance-llm: #6d28d9;
+    --provenance-llm-foreground: #ffffff;
+    --provenance-llm-surface: #f5f3ff;
+    /* Highlights are drawn on the white PDF page in both themes. */
+    --highlight: rgb(255 212 0 / 0.4);
+    --highlight-active: rgb(255 140 0 / 0.5);
+    --highlight-draft: rgb(37 99 235 / 0.25);
 }
 
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
+.dark {
+    --background: #0f172a;
+    --foreground: #f1f5f9;
+    --card: #1e293b;
+    --card-foreground: #f1f5f9;
+    --popover: #1e293b;
+    --popover-foreground: #f1f5f9;
+    --primary: #60a5fa;
+    --primary-foreground: #0f172a;
+    --secondary: #1e293b;
+    --secondary-foreground: #f1f5f9;
+    --muted: #1e293b;
+    --muted-foreground: #94a3b8;
+    --accent: #334155;
+    --accent-foreground: #f1f5f9;
+    --destructive: #f87171;
+    --border: rgb(255 255 255 / 0.1);
+    --input: rgb(255 255 255 / 0.15);
+    --ring: #60a5fa;
+    --provenance-llm: #a78bfa;
+    --provenance-llm-foreground: #1e1b4b;
+    --provenance-llm-surface: #2e1065;
 }
 
-body {
-  margin: 0;
-}
-
-button,
-.button {
-  font: inherit;
-  cursor: pointer;
-  color: var(--text);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 0.35rem 0.75rem;
-}
-
-button:disabled {
-  cursor: default;
-  opacity: 0.5;
-}
-
-.button-primary {
-  color: #fff;
-  background: var(--accent);
-  border-color: var(--accent);
-}
-
-.link-button {
-  color: var(--muted);
-  background: none;
-  border: none;
-  padding: 0;
-  text-decoration: none;
-}
-
-.error {
-  color: var(--danger);
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+  button:not(:disabled),
+  [role="menuitem"] {
+    cursor: pointer;
+  }
 }
