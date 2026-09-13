@@ -288,7 +288,7 @@ export function ReaderPage({ paperId, tab }: { paperId: string; tab: ReaderTab }
             onDeleteNote={deleteNote}
           />
         }
-        chat={<ChatPanel />}
+        chat={<ChatPanel paperId={paperId} />}
       />
 
       <ReaderContextMenu

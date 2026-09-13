@@ -12,6 +12,7 @@ const keys = {
   papers: ['papers'] as const,
   paper: (id: string) => ['papers', id] as const,
   notes: (paperId: string) => ['papers', paperId, 'notes'] as const,
+  chat: (paperId: string) => ['papers', paperId, 'chat'] as const,
 }
 
 /** Poll the library only while a paper is still ingesting. */
@@ -30,6 +31,25 @@ export const usePaper = (id: string) => useQuery({ queryKey: keys.paper(id), que
 
 export const useNotes = (paperId: string) =>
   useQuery({ queryKey: keys.notes(paperId), queryFn: () => api.listNotes(paperId) })
+
+/** Saved questions and answers for a paper, oldest first. */
+export const useChatHistory = (paperId: string) =>
+  useQuery({ queryKey: keys.chat(paperId), queryFn: () => api.listChat(paperId) })
+
+/** For the chat stream, which isn't a query: refetch the history once an answer is saved. */
+export function useInvalidateChatHistory(paperId: string) {
+  const client = useQueryClient()
+  return () => client.invalidateQueries({ queryKey: keys.chat(paperId) })
+}
+
+/** Re-runs ingestion, which embeds the paper: the fix for papers ingested before chat existed. */
+export function useReindexPaper(paperId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: () => api.reingestPaper(paperId),
+    onSettled: () => client.invalidateQueries({ queryKey: keys.paper(paperId) }),
+  })
+}
 
 export function useUploadPapers() {
   const client = useQueryClient()
