@@ -19,6 +19,8 @@ export function ChatPanel({ paperId }: { paperId: string }) {
   const { stream, ask, retry } = useChatStream(paperId)
   const [question, setQuestion] = useState('')
   const listRef = useRef<HTMLDivElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const wasBusy = useRef(false)
   const answers = history.data ?? []
   const busy = stream.status === 'sources' || stream.status === 'streaming'
   // A saved answer comes back in the history, so the live copy hides instead of showing twice.
@@ -27,6 +29,12 @@ export function ChatPanel({ paperId }: { paperId: string }) {
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight })
   }, [answers.length, stream.status])
+
+  // Enter disables the Textarea while busy, so the browser blurs it to <body>; bring focus back once it clears.
+  useEffect(() => {
+    if (wasBusy.current && !busy) textareaRef.current?.focus()
+    wasBusy.current = busy
+  }, [busy])
 
   function submit() {
     const text = question.trim()
@@ -79,6 +87,7 @@ export function ChatPanel({ paperId }: { paperId: string }) {
         }}
       >
         <Textarea
+          ref={textareaRef}
           aria-label="Question"
           placeholder="Ask about this paper. Enter sends, Shift+Enter adds a line."
           rows={2}

@@ -47,6 +47,18 @@ test('the Chat tab is kept in the hash across a reload, and selecting text retur
   await expect(page).toHaveURL(new RegExp(`#/papers/${paperId}$`))
 })
 
+test('the question box regains focus once the answer is saved', async ({ page, paperId }) => {
+  await openChat(page, paperId)
+  const question = page.getByRole('textbox', { name: 'Question' })
+  // page.keyboard, not the locator's fill()/press(): those refocus the element themselves and would
+  // hide a focus loss that happens while the field is disabled mid-stream.
+  await question.click()
+  await page.keyboard.type('Does focus return?')
+  await page.keyboard.press('Enter')
+  await expect(page.locator('article.chat-answer[data-output-id]', { hasText: 'Does focus return?' })).toBeVisible()
+  await expect(question).toBeFocused()
+})
+
 test('an answer streams in after its sources are shown, and is saved', async ({ page, request, paperId }) => {
   await openChat(page, paperId)
   // At every DOM change, note whether the answer has text yet and whether its sources were already on screen.
