@@ -24,13 +24,12 @@ type Props = {
   onHighlightDraft: (hex: string) => void
   onAddNote: () => void
   onCancelDraft: () => void
+  onCopy: (text: string) => void
 }
 
 const Swatch = ({ hex }: { hex: string }) => (
   <span aria-hidden className="size-3 rounded-full ring-1 ring-foreground/20" style={{ backgroundColor: hex }} />
 )
-
-const copy = (text: string) => void navigator.clipboard?.writeText(text)
 
 /** Right-click menu for a highlight or the pending selection, opened where the user clicked. */
 export function ReaderContextMenu({ menu, onClose, ...actions }: Props) {
@@ -60,7 +59,7 @@ export function ReaderContextMenu({ menu, onClose, ...actions }: Props) {
               <Pencil aria-hidden />
               Edit note
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => copy(target.quote)}>
+            <DropdownMenuItem onSelect={() => actions.onCopy(target.quote)}>
               <Copy aria-hidden />
               Copy quote
             </DropdownMenuItem>
@@ -83,7 +82,7 @@ export function ReaderContextMenu({ menu, onClose, ...actions }: Props) {
               <NotebookPen aria-hidden />
               Add note…
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => copy(target.quote)}>
+            <DropdownMenuItem onSelect={() => actions.onCopy(target.quote)}>
               <Copy aria-hidden />
               Copy text
             </DropdownMenuItem>

@@ -81,6 +81,13 @@ test('right-clicking a highlight recolours or deletes its note', async ({ page, 
   const highlight = page.locator(`.highlight[data-note-id="${note.id}"]`).first()
 
   await line.click({ button: 'right' })
+  await page.getByRole('menuitem', { name: 'Edit note' }).click()
+  await expect(
+    page.locator(`.note-hover-card [data-note-id="${note.id}"]`).getByRole('textbox', { name: 'Edit note' }),
+  ).toBeFocused()
+  await page.locator(`.note-hover-card [data-note-id="${note.id}"]`).getByRole('button', { name: 'Cancel' }).click()
+
+  await line.click({ button: 'right' })
   await page.getByRole('menuitem', { name: 'Blue' }).click()
   await expect.poll(() => backgroundOf(highlight)).toBe('rgba(96, 165, 250, 0.4)')
 
@@ -89,6 +96,17 @@ test('right-clicking a highlight recolours or deletes its note', async ({ page, 
   await page.getByRole('menuitem', { name: 'Delete note' }).click()
   await expect(page.locator(`article.note[data-note-id="${note.id}"]`)).toHaveCount(0)
   expect(await (await request.get(`/api/papers/${paperId}/notes`)).json()).toEqual([])
+})
+
+test('copy quote puts the quote on the clipboard', async ({ page, paperId }) => {
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
+  const line = await openReader(page, paperId)
+  await saveNoteOn(page, line, 'copy target')
+
+  await line.click({ button: 'right' })
+  await page.getByRole('menuitem', { name: 'Copy quote' }).click()
+
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toContain('Highlights are the anchor')
 })
 
 test('right-clicking the pending selection highlights it in a colour straight away', async ({

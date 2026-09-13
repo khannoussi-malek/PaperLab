@@ -141,7 +141,17 @@ export function ReaderPage({ paperId }: { paperId: string }) {
     if (!anchor) return
     hoverCard.open({ page: anchor.page, noteIds: [note.id], editNoteId: note.id })
     // Same race as focusComposer: the closing menu's focus scope can steal focus back from the new textarea.
-    window.setTimeout(() => document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Edit note"]')?.focus())
+    // Scoped to this note: another note's hover or panel card can also have an "Edit note" textarea open.
+    window.setTimeout(() =>
+      document
+        .querySelector<HTMLTextAreaElement>(`.note-hover-card [data-note-id="${note.id}"] textarea[aria-label="Edit note"]`)
+        ?.focus(),
+    )
+  }
+
+  function copyText(text: string) {
+    if (!navigator.clipboard) return setError('Copying needs clipboard access, which this browser blocks here.')
+    navigator.clipboard.writeText(text).catch(() => setError('Could not copy: the browser blocked clipboard access.'))
   }
 
   function focusComposer() {
@@ -276,6 +286,7 @@ export function ReaderPage({ paperId }: { paperId: string }) {
         onHighlightDraft={(color) => void highlightDraft(color)}
         onAddNote={focusComposer}
         onCancelDraft={() => setDraft(null)}
+        onCopy={copyText}
       />
     </div>
   )
