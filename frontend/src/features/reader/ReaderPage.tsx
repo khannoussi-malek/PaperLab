@@ -1,4 +1,4 @@
-import { useMemo, useState, type MouseEvent } from 'react'
+import { useCallback, useMemo, useState, type MouseEvent } from 'react'
 import { api, type Note } from '@/api/client'
 import { useNoteMutations, useNotes, usePaper } from '@/api/queries'
 import { glass } from '@/components/glass'
@@ -55,8 +55,15 @@ export function ReaderPage({ paperId }: { paperId: string }) {
   const [draft, setDraft] = useState<SelectionAnchor | null>(null)
   const [draftColor, setDraftColor] = useState(() => loadLastColor(browserStorage()))
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null)
-  const [hoverEditing, setHoverEditing] = useState(false)
-  const hoverCard = useHoverCard(hoverEditing)
+  // Ids of hover-card notes being edited; the card stays open while any is.
+  const [editingNoteIds, setEditingNoteIds] = useState<string[]>([])
+  const setNoteEditing = useCallback((noteId: string, editing: boolean) => {
+    setEditingNoteIds((ids) => {
+      if (editing === ids.includes(noteId)) return ids // unchanged: same array, no re-render
+      return editing ? [...ids, noteId] : ids.filter((id) => id !== noteId)
+    })
+  }, [])
+  const hoverCard = useHoverCard(editingNoteIds.length > 0)
   const [error, setError] = useState<string | null>(null)
   const scale = ZOOM_STEPS[zoomIndex]
   const notes = useMemo(() => notesQuery.data ?? [], [notesQuery.data])
@@ -186,7 +193,7 @@ export function ReaderPage({ paperId }: { paperId: string }) {
                   style={hoverCardPosition(highlightsByPage.get(pageNumber) ?? [], hover.noteIds, scale)}
                   onPointerEnter={hoverCard.stay}
                   onPointerLeave={hoverCard.leave}
-                  onEditingChange={setHoverEditing}
+                  onEditingChange={setNoteEditing}
                   onUpdate={updateNoteBody}
                   onColorChange={recolorNote}
                   onDelete={deleteNote}

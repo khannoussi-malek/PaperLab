@@ -18,8 +18,8 @@ type Props = {
   onUpdate: (body: string) => Promise<boolean>
   onColorChange: (hex: string) => Promise<boolean>
   onDelete: () => Promise<void>
-  /** Told whenever editing starts or stops, and "stopped" when the card unmounts. */
-  onEditingChange?: (editing: boolean) => void
+  /** Told the note's id and whether it's editing, whenever editing starts or stops, and "stopped" on unmount. */
+  onEditingChange?: (noteId: string, editing: boolean) => void
   className?: string
 }
 
@@ -41,9 +41,9 @@ export function NoteCard({
   const anchor = note.anchors.find((a) => a.paper_id === paperId)
 
   useEffect(() => {
-    onEditingChange?.(editing)
-    return () => onEditingChange?.(false)
-  }, [editing, onEditingChange])
+    onEditingChange?.(note.id, editing)
+    return () => onEditingChange?.(note.id, false)
+  }, [editing, note.id, onEditingChange])
 
   async function save() {
     if (await onUpdate(body)) setEditing(false)

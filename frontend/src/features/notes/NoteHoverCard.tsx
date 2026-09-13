@@ -9,7 +9,7 @@ type Props = {
   style: CSSProperties
   onPointerEnter: () => void
   onPointerLeave: () => void
-  onEditingChange: (editing: boolean) => void
+  onEditingChange: (noteId: string, editing: boolean) => void
   onUpdate: (note: Note, body: string) => Promise<boolean>
   onColorChange: (note: Note, hex: string) => Promise<boolean>
   onDelete: (note: Note) => Promise<void>
