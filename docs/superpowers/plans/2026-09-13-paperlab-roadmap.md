@@ -47,7 +47,7 @@ Every milestone follows the same loop. Skills are named exactly as they are invo
 1. **Plan:** `superpowers:writing-plans` writes `docs/superpowers/plans/YYYY-MM-DD-mN-<slug>.md`.
    Spike unfamiliar library APIs in the scratchpad *before* writing plan code. In M3 this caught three API surprises before any task was written.
    Run `superpowers:brainstorming` first only when the brief leaves real product decisions open (likely M4 chat UX, M7 graph UX, M7.5 references panel UX, and the M12 facet schema).
-2. **Branch:** in the project folder itself, `git switch -c mN-<slug>`. No git worktrees (D25).
+2. **Branch:** in the project folder itself, `git switch -c mN-<slug>`. No git worktrees (D25). A second milestone running in parallel uses a sibling clone instead (D27, see "Parallel tracks").
    The compose stack keeps running from the project folder; after adding frontend dependencies, run `docker compose up -d --build -V frontend`.
 3. **Execute:** `superpowers:subagent-driven-development`. Use `superpowers:test-driven-development` for each task and `superpowers:systematic-debugging` for anything unexpected.
 4. **Verify:** `superpowers:verification-before-completion`. Run the milestone's exit-criteria commands below and read the output before ticking anything.
@@ -121,19 +121,40 @@ The testing policy says *how* we test. These rules say what every milestone plan
 
 Commits use `<type>: <description>` (feat, fix, refactor, docs, test, chore, perf, ci) with no attribution trailer.
 
+### Parallel tracks (D27)
+
+The dependency graph decides what can run at once:
+
+| Wave | Milestones | Unblocked by |
+|---|---|---|
+| 1 | M4 · M6.5 | M3 |
+| 2 | M5, M8, M9 (after M4) · M7 (after M6.5) | wave 1 |
+| 3 | M6 (M4 + M5) · M7.5 (M4 + M6.5) · M8.5 (M5) | wave 2 |
+| 4 | M7.6 (M7.5) | wave 3 |
+| Gated | M10, M11, M12 | a real corpus: the owner reading 30+ papers in the app, which can happen during any wave |
+
+- **Track A** is the project folder and its stack (:5433 / :8000 / :5180).
+- **Every other track** is a sibling clone `../research-note-mN` with its own compose project and shifted ports. It runs one Claude Code session per track, and that session runs subagent-driven-development for its tasks.
+- **Clone setup** needs no tracked-file changes:
+  - `git clone <project> ../research-note-mN`, then copy `.env` and `.claude/skills`.
+  - Add `COMPOSE_PROJECT_NAME=paperlab-mN` to the clone's `.env`.
+  - Add an untracked `docker-compose.override.yml` with `ports: !override [...]` per service, listed in `.git/info/exclude`.
+  - Tests take the ports through `TEST_DATABASE_URL` and `E2E_BASE_URL`.
+- **Merge order:** whichever track finishes first merges first. The second rebases onto main, renumbers its Alembic revision and its D-entries if they collide, and regenerates the API types.
+
 ---
 
 ## Milestone board
 
 | # | Milestone | Status | Plan |
 |---|---|---|---|
-| M1 | Stack, migration, vector round-trip | ✅ Done (uncommitted; committed by M3 Task 0) | none, built before the roadmap existed |
-| M2 | Upload → worker → extract → chunks with bboxes | ✅ Done (uncommitted; committed by M3 Task 0) | none, built before the roadmap existed |
-| M3 | Reader: PDF.js, selection, highlight → note | ⏭ Next | [2026-09-13-m3-reader-and-notes.md](2026-09-13-m3-reader-and-notes.md) |
-| M4 | Embeddings, naive retrieval, SSE chat (one paper), citations, eval harness | Planned | written when M3 is merged |
-| M5 | Categories, cross-paper retrieval | Planned | |
-| M6 | MCP server | Planned | |
-| M6.5 | Enrichment: authors, topics, paper metadata, retraction banner | Planned | |
+| M1 | Stack, migration, vector round-trip | ✅ Done | none, built before the roadmap existed |
+| M2 | Upload → worker → extract → chunks with bboxes | ✅ Done | none, built before the roadmap existed |
+| M3 | Reader: PDF.js, selection, highlight → note | ✅ Done (PR #1, merged 2026-09-13) | [2026-09-13-m3-reader-and-notes.md](2026-09-13-m3-reader-and-notes.md) |
+| M4 | Embeddings, naive retrieval, SSE chat (one paper), citations, eval harness | ⏭ Wave 1, track A (project folder) | to be written |
+| M5 | Categories, cross-paper retrieval | Planned (wave 2) | |
+| M6 | MCP server | Planned (wave 3) | |
+| M6.5 | Enrichment: authors, topics, paper metadata, retraction banner | ⏭ Wave 1, track B (`../research-note-m6.5`) | to be written |
 | M7 | Graph view: citation, then co-author, then topic edges | Planned | |
 | M7.5 | References panel: external refs, ranking, import, citing works | Planned | |
 | M7.6 | Paper watch: saved searches, daily bot, ranked inbox | Planned | design: [paper-watch spec](../specs/2026-09-13-paper-watch-design.md) |
@@ -505,6 +526,7 @@ Newest last. Entry format: decision, then why. Don't reverse one without adding 
 | D24 | 2026-09-13 | **Supersedes D14's "no data-fetching library".**<br>Frontend UI is shadcn/ui (style `radix-nova`, CLI 4.21.0) on Tailwind CSS 4, with lucide icons, TanStack Query for server state, and a light/dark/system theme.<br>Tokens and rules live in `frontend/design-system/MASTER.md`, derived from `ui-ux-pro-max`: slate + blue palette, Crimson Pro headings, Atkinson Hyperlegible body, bundled via `@fontsource`.<br>The shadcn MCP server is configured in `.mcp.json`.<br>Lands as M3 Task 4.5, before the reader and notes UI. Hash routing from D14 stays | The owner doesn't want hand-written HTML/CSS. Components we own (copied, not a runtime library), plus an MCP server agents can query, keep UI work fast and consistent.<br>TanStack Query replaces the manual polling, refresh and error state that every page would otherwise re-implement. Queries use `retry: false` because a local API fails immediately.<br>Doing it before Task 5 means only the 100-line Library page needed restyling |
 | D25 | 2026-09-13 | Milestones are built on a branch in the project folder, not in a git worktree. M3 moved from `.claude/worktrees/m3-reader-notes` back into the project folder mid-milestone | The owner wants the code where they work. A worktree kept the code and the running stack somewhere else, which was confusing |
 | D26 | 2026-09-13 | Subtle glassmorphism on the app chrome (toolbar, notes panel, library card, menus, alerts, hover card) over a faint blue/violet body glow. Tokens `glass`, `glass-strong`, `glass-border`, `ambient-1/2` in `index.css`; rules in MASTER.md "Glass". The PDF page, highlights and the AI provenance surface stay opaque. OS "Reduce transparency" makes glass solid | The owner asked for a glass look via ui-ux-pro-max. "Subtle" was chosen over "vivid" so the paper stays the focus. Surfaces are more opaque than the skill's 15–30% so text keeps ≥ 4.5:1; measured 5.8:1 for the lowest (muted text, dark) |
+| D27 | 2026-09-13 | **Amends D25.** Milestones that can run in parallel do so as tracks. Track A stays in the project folder. Each extra track is a sibling clone (`../research-note-mN`) with its own compose project on shifted ports, and its own Claude Code session. Still no git worktrees | The owner wants as much parallel progress as possible. One folder can't hold two checked-out branches, and one stack can't run two branches' E2E suites. A visible sibling folder keeps the code where the owner can see it, unlike a hidden worktree |
 
 ## Open questions and known issues
 
