@@ -79,3 +79,11 @@ async def replace_chunks(session: AsyncSession, paper_id: uuid.UUID, drafts: lis
         for d in drafts
     )
     await session.commit()
+
+
+async def delete_paper(session: AsyncSession, paper_id: uuid.UUID) -> None:
+    """Chunks and note anchors cascade. Notes survive: they are the primary object."""
+    paper = await get_paper(session, paper_id)
+    await session.delete(paper)
+    await session.commit()
+    await asyncio.to_thread(Path(paper.file_path).unlink, missing_ok=True)
