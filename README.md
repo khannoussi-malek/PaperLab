@@ -13,5 +13,6 @@ curl -X POST localhost:8000/api/papers/<id>/reingest     # idempotent re-run aft
 cd backend && uv run pytest && uv run ruff check .       # needs the compose db
 cd frontend && npm run gen:api                           # regenerate API types (api running)
 cd frontend && npx tsc -b && npm test                    # types + unit tests
-cd frontend && npx playwright install chromium && npm run e2e   # end-to-end against the running stack
+cd frontend && npx playwright install chromium            # once
+cd frontend && npm run typecheck:e2e && npm run e2e      # end-to-end against the running stack
 ```

@@ -11,7 +11,8 @@
     "test": "vitest run",
     "e2e": "playwright test",
     "prebuild": "npm run gen:api",
-    "gen:api": "npx --yes openapi-typescript@7.13.0 \"${API_URL:-http://localhost:8000}/openapi.json\" -o src/api/schema.d.ts"
+    "gen:api": "npx --yes openapi-typescript@7.13.0 \"${API_URL:-http://localhost:8000}/openapi.json\" -o src/api/schema.d.ts",
+    "typecheck:e2e": "tsc -p tsconfig.e2e.json"
   },
   "dependencies": {
     "pdfjs-dist": "^6.3.289",
