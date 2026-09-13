@@ -21,6 +21,7 @@ class Note(Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, server_default=text("gen_random_uuid()"))
     body: Mapped[str] = mapped_column(Text)
     provenance: Mapped[str] = mapped_column(Text)
+    color: Mapped[str] = mapped_column(Text, server_default=text("'#facc15'"))
     # The database enforces the FK to llm_outputs; that table gets a mapping in M4.
     source_id: Mapped[uuid.UUID | None]
     created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))

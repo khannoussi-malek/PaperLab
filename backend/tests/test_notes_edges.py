@@ -25,8 +25,8 @@ async def test_llm_edited_note_stays_llm_edited_on_later_edits(session):
     session.add(note)
     await session.commit()
 
-    await notes.update_note_body(session, note.id, "edit one")
-    assert (await notes.update_note_body(session, note.id, "edit two")).provenance == Provenance.LLM_EDITED
+    await notes.update_note(session, note.id, body="edit one")
+    assert (await notes.update_note(session, note.id, body="edit two")).provenance == Provenance.LLM_EDITED
 
 
 async def test_unknown_ids_are_404_on_every_notes_route(client):

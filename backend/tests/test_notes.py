@@ -67,9 +67,9 @@ async def test_editing_llm_note_flips_provenance_but_human_stays_human(session):
     session.add(llm_note)
     await session.commit()
 
-    assert (await notes.update_note_body(session, human.id, "still mine")).provenance == Provenance.HUMAN
-    assert (await notes.update_note_body(session, llm_note.id, "model said")).provenance == Provenance.LLM
-    assert (await notes.update_note_body(session, llm_note.id, "I rewrote it")).provenance == Provenance.LLM_EDITED
+    assert (await notes.update_note(session, human.id, body="still mine")).provenance == Provenance.HUMAN
+    assert (await notes.update_note(session, llm_note.id, body="model said")).provenance == Provenance.LLM
+    assert (await notes.update_note(session, llm_note.id, body="I rewrote it")).provenance == Provenance.LLM_EDITED
 
 
 async def test_delete_note(session):

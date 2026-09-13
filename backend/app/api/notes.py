@@ -16,12 +16,13 @@ async def list_paper_notes(paper_id: uuid.UUID, session: SessionDep) -> list[Not
 
 @router.post("/api/notes", status_code=201)
 async def create_note(payload: NoteCreate, session: SessionDep) -> NoteOut:
-    return await notes.create_human_note(session, payload.body, notes.Anchor(**payload.anchor.model_dump()))
+    anchor = notes.Anchor(**payload.anchor.model_dump())
+    return await notes.create_human_note(session, payload.body, anchor, payload.color)
 
 
 @router.patch("/api/notes/{note_id}")
 async def update_note(note_id: uuid.UUID, payload: NoteUpdate, session: SessionDep) -> NoteOut:
-    return await notes.update_note_body(session, note_id, payload.body)
+    return await notes.update_note(session, note_id, body=payload.body, color=payload.color)
 
 
 @router.delete("/api/notes/{note_id}", status_code=204)
