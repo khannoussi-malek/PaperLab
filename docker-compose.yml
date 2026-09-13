@@ -1,0 +1,50 @@
+name: paperlab
+
+x-backend: &backend
+  build: ./backend
+  env_file: .env
+  volumes:
+    - ./backend:/src
+    - pdfs:/data/pdfs
+    - hfcache:/root/.cache/huggingface
+  depends_on:
+    db:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: paperlab
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-paperlab}
+      POSTGRES_DB: paperlab
+    ports: ["5433:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U paperlab"]
+      interval: 2s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      retries: 30
+
+  api:
+    <<: *backend
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    ports: ["8000:8000"]
+
+  worker:
+    <<: *backend
+    # Not `arq --watch`: that restarts the worker in-process and never re-imports changed code.
+    command: watchfiles --filter python "arq app.workers.settings.WorkerSettings" app
+
+volumes:
+  pgdata:
+  pdfs:
+  hfcache:
