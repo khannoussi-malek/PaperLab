@@ -1,0 +1,47 @@
+[project]
+name = "paperlab"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "alembic>=1.13",
+    "arq>=0.26",
+    "asyncpg>=0.30",
+    "fastapi>=0.115",
+    "pgvector>=0.3",
+    "pydantic-settings>=2.6",
+    "pymupdf>=1.25",
+    "python-multipart>=0.0.18",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "uvicorn[standard]>=0.32",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28",
+    "pytest>=8",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.16.7",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+
+# Only applies when coverage runs (`uv run pytest --cov`), so single-file test runs aren't gated.
+[tool.coverage.run]
+source = ["app"]
+# The default C tracer loses route lines after an SQLAlchemy greenlet switch; sys.monitoring doesn't.
+core = "sysmon"
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+skip_covered = true
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
