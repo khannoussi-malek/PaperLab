@@ -12,6 +12,7 @@ import { clientPointToPdf, notesAt } from './hitTest'
 import { PdfPage } from './PdfPage'
 import { ReaderToolbar } from './ReaderToolbar'
 import { readSelection, type SelectionAnchor } from './selection'
+import { useHoverCard } from './useHoverCard'
 import { usePdfDocument } from './usePdfDocument'
 import { DEFAULT_ZOOM_INDEX, ZOOM_STEPS } from './zoom'
 
@@ -35,8 +36,6 @@ function groupHighlights(notes: Note[], draft: SelectionAnchor | null, paperId: 
   return byPage
 }
 
-type Hover = { page: number; noteIds: string[] }
-
 const HOVER_CARD_GAP_PT = 4
 
 /** Places the hover card just below the lowest rect of the hovered notes, aligned with the leftmost. */
@@ -56,7 +55,8 @@ export function ReaderPage({ paperId }: { paperId: string }) {
   const [draft, setDraft] = useState<SelectionAnchor | null>(null)
   const [draftColor, setDraftColor] = useState(() => loadLastColor(browserStorage()))
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null)
-  const [hover, setHover] = useState<Hover | null>(null)
+  const [hoverEditing, setHoverEditing] = useState(false)
+  const hoverCard = useHoverCard(hoverEditing)
   const [error, setError] = useState<string | null>(null)
   const scale = ZOOM_STEPS[zoomIndex]
   const notes = useMemo(() => notesQuery.data ?? [], [notesQuery.data])
@@ -115,6 +115,10 @@ export function ReaderPage({ paperId }: { paperId: string }) {
 
   /** Shows the notes under the pointer and scrolls the panel to the first, only when that set changes. */
   function trackHover(event: MouseEvent) {
+    if ((event.target as Element).closest('.note-hover-card')) {
+      hoverCard.stay()
+      return
+    }
     const pageElement = (event.target as Element).closest<HTMLElement>('.pdf-page')
     const pageNumber = Number(pageElement?.dataset.page)
     const noteIds =
@@ -124,17 +128,18 @@ export function ReaderPage({ paperId }: { paperId: string }) {
             clientPointToPdf({ x: event.clientX, y: event.clientY }, pageElement.getBoundingClientRect(), scale),
           )
         : []
-    const next = noteIds.length > 0 ? { page: pageNumber, noteIds } : null
-    if (next?.page === hover?.page && next?.noteIds.join() === hover?.noteIds.join()) return
-
-    setHover(next)
-    if (!next) return
-    setActiveNoteId(next.noteIds[0])
+    if (noteIds.length === 0) {
+      hoverCard.leave()
+      return
+    }
+    if (!hoverCard.show({ page: pageNumber, noteIds })) return
+    setActiveNoteId(noteIds[0])
     document
-      .querySelector(`article.note[data-note-id="${next.noteIds[0]}"]`)
+      .querySelector(`article.note[data-note-id="${noteIds[0]}"]`)
       ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
   }
 
+  const hover = hoverCard.target
   const hoveredNotes = hover ? notes.filter((note) => hover.noteIds.includes(note.id)) : []
 
   const shownError = error ?? paper.error?.message ?? notesQuery.error?.message ?? pdfError
@@ -156,7 +161,7 @@ export function ReaderPage({ paperId }: { paperId: string }) {
         className="overflow-auto p-4"
         onMouseUp={captureSelection}
         onMouseMove={trackHover}
-        onMouseLeave={() => setHover(null)}
+        onMouseLeave={hoverCard.leave}
       >
         {doc &&
           Array.from({ length: doc.numPages }, (_, i) => i + 1).map((pageNumber) => (
@@ -179,6 +184,12 @@ export function ReaderPage({ paperId }: { paperId: string }) {
                   notes={hoveredNotes}
                   paperId={paperId}
                   style={hoverCardPosition(highlightsByPage.get(pageNumber) ?? [], hover.noteIds, scale)}
+                  onPointerEnter={hoverCard.stay}
+                  onPointerLeave={hoverCard.leave}
+                  onEditingChange={setHoverEditing}
+                  onUpdate={updateNoteBody}
+                  onColorChange={recolorNote}
+                  onDelete={deleteNote}
                 />
               )}
             </PdfPage>
