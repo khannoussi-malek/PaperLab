@@ -94,3 +94,13 @@ async def get_paper_file(session: AsyncSession, paper_id: uuid.UUID) -> Path:
     if not await asyncio.to_thread(path.is_file):
         raise NotFound(f"PDF for paper {paper_id} is missing from storage")
     return path
+
+
+async def set_embeddings(session: AsyncSession, chunk_ids: list[uuid.UUID], vectors: list[list[float]]) -> None:
+    """One executemany UPDATE by primary key.
+
+    Not unnest(): pgvector's ARRAY(Vector) bind fails ("expected list or ndarray"), and 500 rows take under a second.
+    """
+    rows = [{"id": chunk_id, "embedding": vector} for chunk_id, vector in zip(chunk_ids, vectors, strict=True)]
+    await session.execute(update(Chunk), rows)
+    await session.commit()
