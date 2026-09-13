@@ -18,7 +18,7 @@ test('renders every page with ink, and the text layer sits on PyMuPDF’s chunk 
       firstPage.locator('canvas').evaluate((canvas: HTMLCanvasElement) => {
         const { data } = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height)
         let dark = 0
-        for (let i = 0; i < data.length; i += 4) if (data[i] < 128) dark++
+        for (let i = 0; i < data.length; i += 4) if (data[i + 3] > 0 && data[i] < 128) dark++
         return dark
       }),
     )

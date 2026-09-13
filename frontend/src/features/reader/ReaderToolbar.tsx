@@ -25,7 +25,7 @@ export function ReaderToolbar({ title, zoomIndex, onZoomChange }: Props) {
         disabled={zoomIndex === 0}
         onClick={() => onZoomChange(Math.max(0, zoomIndex - 1))}
       >
-        <ZoomOut />
+        <ZoomOut aria-hidden />
       </Button>
       <span className="zoom-level min-w-14 text-center text-sm tabular-nums">
         {Math.round(ZOOM_STEPS[zoomIndex] * 100)}%
@@ -37,7 +37,7 @@ export function ReaderToolbar({ title, zoomIndex, onZoomChange }: Props) {
         disabled={zoomIndex === ZOOM_STEPS.length - 1}
         onClick={() => onZoomChange(Math.min(ZOOM_STEPS.length - 1, zoomIndex + 1))}
       >
-        <ZoomIn />
+        <ZoomIn aria-hidden />
       </Button>
       <ModeToggle />
     </header>
