@@ -4,20 +4,24 @@ version = "0.1.0"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "alembic>=1.13",
+    "anthropic>=1.5.0",
     "arq>=0.26",
     "asyncpg>=0.30",
     "fastapi>=0.115",
+    "httpx>=0.28",
     "pgvector>=0.3",
     "pydantic-settings>=2.6",
     "pymupdf>=1.25",
     "python-multipart>=0.0.18",
+    "pyyaml>=6",
+    "sentence-transformers>=6.0.1",
     "sqlalchemy[asyncio]>=2.0.36",
+    "torch>=2.14.0",
     "uvicorn[standard]>=0.32",
 ]
 
 [dependency-groups]
 dev = [
-    "httpx>=0.28",
     "pytest>=8",
     "pytest-cov>=7.1.0",
     "ruff>=0.16.7",
@@ -45,3 +49,13 @@ line-length = 120
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]
+
+# torch must be a direct dependency: tool.uv.sources is ignored for transitive deps, and PyPI's
+# Linux torch wheels pull ~43 CUDA packages (several GB) into the image.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
