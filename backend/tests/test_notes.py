@@ -37,6 +37,12 @@ async def test_create_rejects_page_outside_paper(session):
         await notes.create_human_note(session, "", anchor(paper, page=4))
 
 
+async def test_create_rejects_empty_bbox(session):
+    paper = await make_paper(session)
+    with pytest.raises(InvalidInput):
+        await notes.create_human_note(session, "", notes.Anchor(paper.id, 1, [], "a quote"))
+
+
 async def test_create_rejects_unknown_paper(session):
     never_saved = Paper(id=uuid.uuid4(), title="ghost", file_path="/ghost.pdf")
     with pytest.raises(NotFound):

@@ -89,6 +89,8 @@ async def create_human_note(session: AsyncSession, body: str, anchor: Anchor) ->
     paper = await get_paper(session, anchor.paper_id)
     if paper.page_count is not None and not 1 <= anchor.page <= paper.page_count:
         raise InvalidInput(f"page {anchor.page} is outside 1..{paper.page_count}")
+    if not anchor.bbox:
+        raise InvalidInput("an anchor needs at least one rect")
     quote = normalize_quote(anchor.quoted_text)
     if not quote:
         raise InvalidInput("an anchor needs the quoted text")
