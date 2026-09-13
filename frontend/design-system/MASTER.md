@@ -86,11 +86,12 @@ Fonts: body `Atkinson Hyperlegible Next Variable` (`font-sans`), headings `Crims
 - **The PDF page stays white in both themes.** It is the paper. Highlights use `mix-blend-multiply`.
 - **Nothing that shifts selection coordinates** goes on `.pdf-page`: no border, no padding.
 - **Stable test hooks.** Keep the class names and accessible names the Playwright specs use
-  (`.paper-row`, `.status`, `.pdf-page`, `.pdf-overlay`, `.highlight`, `.draft`, `.zoom-level`,
+  (`.paper-row`, `.status`, `.paper-preview`, `.pdf-page`, `.pdf-overlay`, `.highlight`, `.draft`, `.zoom-level`,
   `article.note`, `.provenance-badge`, `.note-hover-card`, the "Note" / "Save note" / "Zoom in" / "Toggle theme" names,
   and the colour names "Yellow" … "Orange" / "Custom colour").
   Style with utility classes next to them.
 - One primary button per view. Destructive actions use `text-destructive` and ask for confirmation.
+  A delete icon repeated on every list row stays `text-muted-foreground` until its row is hovered or focused.
 - **The hover card manages its note.** It is `NoteCard` in its compact variant (`div.hover-note`, never an
   `article.note`): colour, Edit, Delete. It stays open while the pointer is on the highlight or the card, closes
   300 ms after it leaves both, and never closes while any of its notes is being edited. Keyboard users use the panel.

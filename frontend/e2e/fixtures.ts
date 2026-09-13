@@ -9,7 +9,7 @@ export const FIXTURE_TITLE = 'PaperLab E2E Fixture'
 export const FIRST_LINE = 'Highlights are the anchor'
 export type Rect = [number, number, number, number]
 
-async function uploadAndWaitUntilReady(request: APIRequestContext): Promise<string> {
+export async function uploadAndWaitUntilReady(request: APIRequestContext): Promise<string> {
   const upload = await request.post('/api/papers', {
     multipart: {
       file: { name: 'sample-paper.pdf', mimeType: 'application/pdf', buffer: await readFile(FIXTURE_FILE) },
