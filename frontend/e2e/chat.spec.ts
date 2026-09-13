@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test'
-import { expect, openReader, selectText, test } from './fixtures'
+import { expect, openReader, selectText, test, type Rect } from './fixtures'
 
 /** What `FakeLLM` always answers (backend `LLM_PROVIDER=fake`). */
 const FAKE_ANSWER = 'Fake answer: the method is described here [C1].'
@@ -165,4 +165,40 @@ test('a refused question offers Re-index, and a broken stream keeps its text and
   await broken.getByRole('button', { name: 'Retry' }).click()
   await expect(broken.locator('.chat-answer-footer')).toContainText('AI · ')
   await expect(broken.getByRole('alert')).toHaveCount(0)
+})
+
+test('clicking [C1] scrolls the paper to the cited chunk and flashes its rects', async ({ page, request, paperId }) => {
+  await openChat(page, paperId)
+  const answer = await ask(page, 'Where does the paper say it?')
+  const firstPage = page.locator('.pdf-page[data-page="1"]')
+  const flash = firstPage.locator('.chunk-flash')
+
+  // Scroll the paper to its end, so page 1's chunk is out of view before the click.
+  const firstLine = firstPage.locator('.textLayer span').first()
+  await expect(firstLine).toBeVisible()
+  await page.locator('section:has(> .pdf-page)').evaluate((pane) => pane.scrollTo({ top: pane.scrollHeight }))
+  await expect(firstLine).not.toBeInViewport()
+
+  await answer.locator('.chat-answer-text').getByRole('button', { name: /^Source C1 · p\.1/ }).first().click()
+
+  await expect(flash.first()).toBeInViewport()
+  // Same check as reader-render.spec.ts: the rect sits where PyMuPDF put the chunk, at the reader's 150% zoom.
+  const [chunk] = await (await request.get(`/api/papers/${paperId}/chunks?page=1`)).json()
+  const [x0, y0, x1, y1] = chunk.bbox[0] as Rect
+  const scale = 1.5
+  await expect
+    .poll(async () => {
+      const pageBox = await firstPage.boundingBox()
+      const box = await flash.first().boundingBox()
+      if (!pageBox || !box) return Number.POSITIVE_INFINITY
+      return Math.max(
+        Math.abs(box.x - (pageBox.x + x0 * scale)),
+        Math.abs(box.y - (pageBox.y + y0 * scale)),
+        Math.abs(box.width - (x1 - x0) * scale),
+        Math.abs(box.height - (y1 - y0) * scale),
+      )
+    })
+    .toBeLessThan(2)
+  await expect(flash).toHaveCount(chunk.bbox.length)
+  await expect(flash).toHaveCount(0, { timeout: 3_000 }) // it fades after about 1.5 s
 })

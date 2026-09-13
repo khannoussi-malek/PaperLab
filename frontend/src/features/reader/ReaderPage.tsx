@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type MouseEvent } from 'react'
+import { useCallback, useEffect, useMemo, useState, type MouseEvent } from 'react'
 import { api, type Note } from '@/api/client'
 import { useNoteMutations, useNotes, usePaper } from '@/api/queries'
 import { glass } from '@/components/glass'
@@ -41,6 +41,15 @@ function groupHighlights(notes: Note[], draft: SelectionAnchor | null, paperId: 
 }
 
 const HOVER_CARD_GAP_PT = 4
+const FLASH_MS = 1500
+
+/** A cited chunk being shown; `id` restarts the flash when the same citation is clicked again. */
+type Flash = { id: number; page: number; rects: PdfRect[] }
+
+/** The reader's one scroll path: notes, hovered highlights and cited chunks are all brought into view with it. */
+function scrollToElement(selector: string, block: ScrollLogicalPosition) {
+  document.querySelector(selector)?.scrollIntoView({ behavior: 'smooth', block })
+}
 
 /** Places the hover card just below the lowest rect of the hovered notes, aligned with the leftmost. */
 function hoverCardPosition(highlights: PageHighlight[], noteIds: string[], scale: number) {
@@ -77,11 +86,22 @@ export function ReaderPage({ paperId, tab }: { paperId: string; tab: ReaderTab }
   }, [])
   const hoverCard = useHoverCard(editingNoteIds.length > 0)
   const [menu, setMenu] = useState<ContextMenuState | null>(null)
+  const [flash, setFlash] = useState<Flash | null>(null)
   const [error, setError] = useState<string | null>(null)
   const scale = ZOOM_STEPS[zoomIndex]
   const notes = useMemo(() => notesQuery.data ?? [], [notesQuery.data])
 
   const highlightsByPage = useMemo(() => groupHighlights(notes, draft, paperId), [notes, draft, paperId])
+
+  // Rendering the flash first gives the scroll a target, even on a page whose canvas hasn't rendered yet.
+  useEffect(() => {
+    if (!flash) return
+    scrollToElement('.chunk-flash', 'center')
+    const timer = window.setTimeout(() => setFlash(null), FLASH_MS)
+    return () => window.clearTimeout(timer)
+  }, [flash])
+
+  const flashChunk = (page: number, rects: PdfRect[]) => setFlash({ id: Date.now(), page, rects })
 
   // replace, not assign: switching tabs shouldn't add history entries for Back to walk through.
   const showTab = (next: ReaderTab) => window.location.replace(readerHref(paperId, next))
@@ -138,9 +158,7 @@ export function ReaderPage({ paperId, tab }: { paperId: string; tab: ReaderTab }
 
   function focusNote(note: Note) {
     setActiveNoteId(note.id)
-    document
-      .querySelector(`.highlight[data-note-id="${note.id}"]`)
-      ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    scrollToElement(`.highlight[data-note-id="${note.id}"]`, 'center')
   }
 
   function editNote(note: Note) {
@@ -180,9 +198,7 @@ export function ReaderPage({ paperId, tab }: { paperId: string; tab: ReaderTab }
     }
     if (!hoverCard.show({ page: where.page, noteIds })) return
     setActiveNoteId(noteIds[0])
-    document
-      .querySelector(`article.note[data-note-id="${noteIds[0]}"]`)
-      ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    scrollToElement(`article.note[data-note-id="${noteIds[0]}"]`, 'nearest')
   }
 
   /** Right-click on a highlight or the pending selection opens our menu; anywhere else keeps the browser's. */
@@ -251,6 +267,14 @@ export function ReaderPage({ paperId, tab }: { paperId: string; tab: ReaderTab }
                   style={{ ...pdfRectToCss(h.rect, scale), backgroundColor: h.color ? highlightFill(h.color) : undefined }}
                 />
               ))}
+              {flash?.page === pageNumber &&
+                flash.rects.map((rect, r) => (
+                  <div
+                    key={`${flash.id}-${r}`}
+                    className="chunk-flash absolute rounded-xs bg-highlight-draft outline-2 outline-offset-1 outline-primary mix-blend-multiply motion-safe:animate-pulse"
+                    style={pdfRectToCss(rect, scale)}
+                  />
+                ))}
               {hover?.page === pageNumber && hoveredNotes.length > 0 && (
                 <NoteHoverCard
                   notes={hoveredNotes}
@@ -288,7 +312,7 @@ export function ReaderPage({ paperId, tab }: { paperId: string; tab: ReaderTab }
             onDeleteNote={deleteNote}
           />
         }
-        chat={<ChatPanel paperId={paperId} />}
+        chat={<ChatPanel paperId={paperId} onCite={(source) => flashChunk(source.page, source.bbox)} />}
       />
 
       <ReaderContextMenu
