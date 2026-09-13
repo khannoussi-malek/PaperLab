@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { ChatAnswer as SavedAnswer } from '@/api/client'
+import type { ChatSource, ChatAnswer as SavedAnswer } from '@/api/client'
 import { useChatHistory, useReindexPaper } from '@/api/queries'
 import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -14,7 +14,12 @@ const MAX_QUESTION = 2000 // the API's limit (spec §3.10)
 /** Labels whose chunk still exists; markers for any other label render as plain text. */
 const knownLabels = (answer: SavedAnswer) => new Set(answer.sources.flatMap((source) => (source ? [source.label] : [])))
 
-export function ChatPanel({ paperId }: { paperId: string }) {
+type Props = {
+  paperId: string
+  onCite: (source: ChatSource) => void
+}
+
+export function ChatPanel({ paperId, onCite }: Props) {
   const history = useChatHistory(paperId)
   const { stream, ask, retry } = useChatStream(paperId)
   const [question, setQuestion] = useState('')
@@ -63,6 +68,7 @@ export function ChatPanel({ paperId }: { paperId: string }) {
             sources={answer.sources}
             segments={splitCitations(answer.content, knownLabels(answer))}
             footer={{ model: answer.model, promptVersion: answer.prompt_version }}
+            onCite={onCite}
           />
         ))}
         {showLive && (
@@ -73,6 +79,7 @@ export function ChatPanel({ paperId }: { paperId: string }) {
             segments={stream.segments}
             footer={stream.done && { model: stream.done.model, promptVersion: stream.done.prompt_version }}
             pending={busy}
+            onCite={onCite}
           >
             {stream.problem && <ProblemAlert paperId={paperId} problem={stream.problem} onRetry={retry} />}
           </ChatAnswer>
