@@ -148,6 +148,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/notes/promote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Promote Note */
+        post: operations["promote_note_api_notes_promote_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/notes/{note_id}": {
         parameters: {
             query?: never;
@@ -164,6 +181,27 @@ export interface paths {
         head?: never;
         /** Update Note */
         patch: operations["update_note_api_notes__note_id__patch"];
+        trace?: never;
+    };
+    "/api/papers/{paper_id}/chat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** History */
+        get: operations["history_api_papers__paper_id__chat_get"];
+        put?: never;
+        /**
+         * Ask
+         * @description Events: sources, token (repeated), then done. error replaces done, and then nothing is saved.
+         */
+        post: operations["ask_api_papers__paper_id__chat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
 }
@@ -213,6 +251,57 @@ export interface components {
             /** File */
             file: string;
         };
+        /** ChatAnswer */
+        ChatAnswer: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Question */
+            question: string;
+            /** Content */
+            content: string;
+            /** Model */
+            model: string;
+            /** Prompt Version */
+            prompt_version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Whole Paper */
+            whole_paper: boolean;
+            /** Sources */
+            sources: (components["schemas"]["ChatSource"] | null)[];
+        };
+        /** ChatRequest */
+        ChatRequest: {
+            /** Question */
+            question: string;
+        };
+        /** ChatSource */
+        ChatSource: {
+            /** Label */
+            label: string;
+            /**
+             * Chunk Id
+             * Format: uuid
+             */
+            chunk_id: string;
+            /** Page */
+            page: number;
+            /** Section */
+            section: string | null;
+            /** Bbox */
+            bbox: [
+                number,
+                number,
+                number,
+                number
+            ][];
+        };
         /** ChunkOut */
         ChunkOut: {
             /**
@@ -237,6 +326,27 @@ export interface components {
             text: string;
             /** Strategy Ver */
             strategy_ver: number;
+        };
+        /** DoneEvent */
+        DoneEvent: {
+            /**
+             * Output Id
+             * Format: uuid
+             */
+            output_id: string;
+            /** Model */
+            model: string;
+            /** Prompt Version */
+            prompt_version: number;
+            /** Cited */
+            cited: string[];
+        };
+        /** ErrorEvent */
+        ErrorEvent: {
+            /** Message */
+            message: string;
+            /** Retryable */
+            retryable: boolean;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -325,6 +435,30 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** PromoteRequest */
+        PromoteRequest: {
+            /**
+             * Output Id
+             * Format: uuid
+             */
+            output_id: string;
+            /** Body */
+            body: string;
+            /** Chunk Ids */
+            chunk_ids: string[];
+        };
+        /** SourcesEvent */
+        SourcesEvent: {
+            /** Whole Paper */
+            whole_paper: boolean;
+            /** Sources */
+            sources: components["schemas"]["ChatSource"][];
+        };
+        /** TokenEvent */
+        TokenEvent: {
+            /** Text */
+            text: string;
         };
         /** ValidationError */
         ValidationError: {
@@ -640,6 +774,39 @@ export interface operations {
             };
         };
     };
+    promote_note_api_notes_promote_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PromoteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     delete_note_api_notes__note_id__delete: {
         parameters: {
             query?: never;
@@ -691,6 +858,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NoteOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    history_api_papers__paper_id__chat_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                paper_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatAnswer"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ask_api_papers__paper_id__chat_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                paper_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": components["schemas"]["SourcesEvent"] | components["schemas"]["TokenEvent"] | components["schemas"]["DoneEvent"] | components["schemas"]["ErrorEvent"];
                 };
             };
             /** @description Validation Error */

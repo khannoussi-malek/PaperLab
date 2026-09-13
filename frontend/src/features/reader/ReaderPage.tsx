@@ -3,7 +3,9 @@ import { api, type Note } from '@/api/client'
 import { useNoteMutations, useNotes, usePaper } from '@/api/queries'
 import { glass } from '@/components/glass'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { readerHref, type ReaderTab } from '@/lib/route'
 import { cn } from '@/lib/utils'
+import { ChatPanel } from '../chat/ChatPanel'
 import { browserStorage, highlightFill, loadLastColor, saveLastColor } from '../notes/highlightColors'
 import { NoteHoverCard } from '../notes/NoteHoverCard'
 import { NotesPanel } from '../notes/NotesPanel'
@@ -12,6 +14,7 @@ import { clientPointToPdf, notesAt, rectContains } from './hitTest'
 import { PdfPage } from './PdfPage'
 import { ReaderContextMenu, type ContextMenuState } from './ReaderContextMenu'
 import { ReaderToolbar } from './ReaderToolbar'
+import { RightPanel } from './RightPanel'
 import { readSelection, type SelectionAnchor } from './selection'
 import { useHoverCard } from './useHoverCard'
 import { usePdfDocument } from './usePdfDocument'
@@ -55,7 +58,7 @@ function pointOnPage(event: MouseEvent, scale: number) {
   return { page: Number(element.dataset.page), point }
 }
 
-export function ReaderPage({ paperId }: { paperId: string }) {
+export function ReaderPage({ paperId, tab }: { paperId: string; tab: ReaderTab }) {
   const { doc, error: pdfError } = usePdfDocument(api.paperFileUrl(paperId))
   const paper = usePaper(paperId)
   const notesQuery = useNotes(paperId)
@@ -80,6 +83,9 @@ export function ReaderPage({ paperId }: { paperId: string }) {
 
   const highlightsByPage = useMemo(() => groupHighlights(notes, draft, paperId), [notes, draft, paperId])
 
+  // replace, not assign: switching tabs shouldn't add history entries for Back to walk through.
+  const showTab = (next: ReaderTab) => window.location.replace(readerHref(paperId, next))
+
   /** Runs a mutation; failures show in the alert instead of throwing. */
   async function attempt(action: () => Promise<unknown>): Promise<boolean> {
     try {
@@ -98,6 +104,7 @@ export function ReaderPage({ paperId }: { paperId: string }) {
     if (result.kind === 'anchor') {
       setError(null)
       setDraft(result.anchor)
+      if (tab !== 'notes') showTab('notes') // the composer lives on the Notes tab
     }
   }
 
@@ -262,19 +269,26 @@ export function ReaderPage({ paperId }: { paperId: string }) {
           ))}
       </section>
 
-      <NotesPanel
-        paperId={paperId}
-        notes={notes}
-        draft={draft}
-        draftColor={draftColor}
-        activeNoteId={activeNoteId}
-        onDraftColorChange={setDraftColor}
-        onSaveDraft={saveDraft}
-        onCancelDraft={() => setDraft(null)}
-        onSelectNote={focusNote}
-        onUpdateNote={updateNoteBody}
-        onColorNote={recolorNote}
-        onDeleteNote={deleteNote}
+      <RightPanel
+        tab={tab}
+        onTabChange={showTab}
+        notes={
+          <NotesPanel
+            paperId={paperId}
+            notes={notes}
+            draft={draft}
+            draftColor={draftColor}
+            activeNoteId={activeNoteId}
+            onDraftColorChange={setDraftColor}
+            onSaveDraft={saveDraft}
+            onCancelDraft={() => setDraft(null)}
+            onSelectNote={focusNote}
+            onUpdateNote={updateNoteBody}
+            onColorNote={recolorNote}
+            onDeleteNote={deleteNote}
+          />
+        }
+        chat={<ChatPanel />}
       />
 
       <ReaderContextMenu
