@@ -9,11 +9,14 @@ type Props = {
   paperId: string
   notes: Note[]
   draft: SelectionAnchor | null
+  draftColor: string
   activeNoteId: string | null
+  onDraftColorChange: (hex: string) => void
   onSaveDraft: (body: string) => Promise<boolean>
   onCancelDraft: () => void
   onSelectNote: (note: Note) => void
   onUpdateNote: (note: Note, body: string) => Promise<boolean>
+  onColorNote: (note: Note, hex: string) => Promise<boolean>
   onDeleteNote: (note: Note) => Promise<void>
 }
 
@@ -25,7 +28,14 @@ export function NotesPanel(props: Props) {
   return (
     <aside className={cn('flex flex-col gap-3 overflow-auto border-l border-glass-border p-4', glass)} aria-label="Notes">
       {draft ? (
-        <NoteComposer key={draftKey(draft)} draft={draft} onSave={props.onSaveDraft} onCancel={props.onCancelDraft} />
+        <NoteComposer
+          key={draftKey(draft)}
+          draft={draft}
+          color={props.draftColor}
+          onColorChange={props.onDraftColorChange}
+          onSave={props.onSaveDraft}
+          onCancel={props.onCancelDraft}
+        />
       ) : (
         <p className="text-sm text-muted-foreground">Select text in the paper to add a note.</p>
       )}
@@ -37,6 +47,7 @@ export function NotesPanel(props: Props) {
           active={note.id === activeNoteId}
           onSelect={() => props.onSelectNote(note)}
           onUpdate={(body) => props.onUpdateNote(note, body)}
+          onColorChange={(hex) => props.onColorNote(note, hex)}
           onDelete={() => props.onDeleteNote(note)}
         />
       ))}

@@ -250,6 +250,11 @@ export interface components {
              * @default
              */
             body: string;
+            /**
+             * Color
+             * @default #facc15
+             */
+            color: string;
             anchor: components["schemas"]["AnchorIn"];
         };
         /** NoteOut */
@@ -266,6 +271,8 @@ export interface components {
              * @enum {string}
              */
             provenance: "human" | "llm" | "llm_edited";
+            /** Color */
+            color: string;
             /** Source Id */
             source_id: string | null;
             /**
@@ -284,7 +291,9 @@ export interface components {
         /** NoteUpdate */
         NoteUpdate: {
             /** Body */
-            body: string;
+            body?: string | null;
+            /** Color */
+            color?: string | null;
         };
         /** PaperOut */
         PaperOut: {

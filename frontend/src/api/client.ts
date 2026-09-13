@@ -4,6 +4,7 @@ export type Paper = components['schemas']['PaperOut']
 export type Chunk = components['schemas']['ChunkOut']
 export type Note = components['schemas']['NoteOut']
 export type NoteCreate = components['schemas']['NoteCreate']
+export type NoteUpdate = components['schemas']['NoteUpdate']
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, init)
@@ -32,6 +33,6 @@ export const api = {
   paperFileUrl: (id: string) => `/api/papers/${id}/file`,
   listNotes: (paperId: string) => request<Note[]>(`/api/papers/${paperId}/notes`),
   createNote: (note: NoteCreate) => request<Note>('/api/notes', sendJson('POST', note)),
-  updateNote: (id: string, body: string) => request<Note>(`/api/notes/${id}`, sendJson('PATCH', { body })),
+  updateNote: (id: string, patch: NoteUpdate) => request<Note>(`/api/notes/${id}`, sendJson('PATCH', patch)),
   deleteNote: (id: string) => request<void>(`/api/notes/${id}`, { method: 'DELETE' }),
 }

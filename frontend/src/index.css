@@ -31,8 +31,6 @@
     --color-provenance-llm: var(--provenance-llm);
     --color-provenance-llm-foreground: var(--provenance-llm-foreground);
     --color-provenance-llm-surface: var(--provenance-llm-surface);
-    --color-highlight: var(--highlight);
-    --color-highlight-active: var(--highlight-active);
     --color-highlight-draft: var(--highlight-draft);
     --color-glass: var(--glass);
     --color-glass-strong: var(--glass-strong);
@@ -71,8 +69,6 @@
     --provenance-llm-foreground: #ffffff;
     --provenance-llm-surface: #f5f3ff;
     /* Highlights are drawn on the white PDF page in both themes. */
-    --highlight: rgb(255 212 0 / 0.4);
-    --highlight-active: rgb(255 140 0 / 0.5);
     --highlight-draft: rgb(37 99 235 / 0.25);
     /* Subtle glass: chrome (toolbar, panels, menus) is frosted over a faint blue/violet glow. */
     --glass: rgb(255 255 255 / 0.7);

@@ -3,14 +3,17 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
 import type { SelectionAnchor } from '../reader/selection'
+import { HighlightColorPicker } from './HighlightColorPicker'
 
 type Props = {
   draft: SelectionAnchor
+  color: string
+  onColorChange: (hex: string) => void
   onSave: (body: string) => Promise<boolean>
   onCancel: () => void
 }
 
-export function NoteComposer({ draft, onSave, onCancel }: Props) {
+export function NoteComposer({ draft, color, onColorChange, onSave, onCancel }: Props) {
   const [body, setBody] = useState('')
   const [saving, setSaving] = useState(false)
 
@@ -45,6 +48,7 @@ export function NoteComposer({ draft, onSave, onCancel }: Props) {
               if (e.key === 'Escape') onCancel()
             }}
           />
+          <HighlightColorPicker value={color} onChange={onColorChange} />
         </CardContent>
         <CardFooter className="justify-end gap-2">
           <Button type="button" variant="ghost" size="sm" onClick={onCancel}>

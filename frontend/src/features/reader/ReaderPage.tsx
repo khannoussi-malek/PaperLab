@@ -4,6 +4,7 @@ import { useNoteMutations, useNotes, usePaper } from '@/api/queries'
 import { glass } from '@/components/glass'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { cn } from '@/lib/utils'
+import { browserStorage, highlightFill, loadLastColor, saveLastColor } from '../notes/highlightColors'
 import { NoteHoverCard } from '../notes/NoteHoverCard'
 import { NotesPanel } from '../notes/NotesPanel'
 import { pdfRectToCss, type PdfRect } from './coords'
@@ -14,7 +15,8 @@ import { readSelection, type SelectionAnchor } from './selection'
 import { usePdfDocument } from './usePdfDocument'
 import { DEFAULT_ZOOM_INDEX, ZOOM_STEPS } from './zoom'
 
-type PageHighlight = { key: string; noteId: string | null; rect: PdfRect }
+/** One drawn rect. `color` is its note's colour, or null for the pending selection (drawn with the draft token). */
+type PageHighlight = { key: string; noteId: string | null; color: string | null; rect: PdfRect }
 
 function groupHighlights(notes: Note[], draft: SelectionAnchor | null, paperId: string) {
   const byPage = new Map<number, PageHighlight[]>()
@@ -24,10 +26,12 @@ function groupHighlights(notes: Note[], draft: SelectionAnchor | null, paperId: 
   for (const note of notes) {
     note.anchors.forEach((anchor, a) => {
       if (anchor.paper_id !== paperId) return
-      anchor.bbox.forEach((rect, r) => add(anchor.page, { key: `${note.id}-${a}-${r}`, noteId: note.id, rect }))
+      anchor.bbox.forEach((rect, r) =>
+        add(anchor.page, { key: `${note.id}-${a}-${r}`, noteId: note.id, color: note.color, rect }),
+      )
     })
   }
-  draft?.rects.forEach((rect, r) => add(draft.page, { key: `draft-${r}`, noteId: null, rect }))
+  draft?.rects.forEach((rect, r) => add(draft.page, { key: `draft-${r}`, noteId: null, color: null, rect }))
   return byPage
 }
 
@@ -50,6 +54,7 @@ export function ReaderPage({ paperId }: { paperId: string }) {
   const mutations = useNoteMutations(paperId)
   const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX)
   const [draft, setDraft] = useState<SelectionAnchor | null>(null)
+  const [draftColor, setDraftColor] = useState(() => loadLastColor(browserStorage()))
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null)
   const [hover, setHover] = useState<Hover | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -81,13 +86,20 @@ export function ReaderPage({ paperId }: { paperId: string }) {
   async function saveDraft(body: string): Promise<boolean> {
     if (!draft) return false
     const anchor = { paper_id: paperId, page: draft.page, bbox: draft.rects, quoted_text: draft.quotedText }
-    const saved = await attempt(() => mutations.create.mutateAsync({ body, anchor }))
+    const saved = await attempt(() => mutations.create.mutateAsync({ body, color: draftColor, anchor }))
     if (saved) {
+      saveLastColor(browserStorage(), draftColor)
       setDraft(null)
       window.getSelection()?.removeAllRanges()
     }
     return saved
   }
+
+  const updateNoteBody = (note: Note, body: string) =>
+    attempt(() => mutations.update.mutateAsync({ id: note.id, body }))
+
+  const recolorNote = (note: Note, color: string) =>
+    attempt(() => mutations.update.mutateAsync({ id: note.id, color }))
 
   async function deleteNote(note: Note) {
     if (!window.confirm('Delete this note?')) return
@@ -154,11 +166,12 @@ export function ReaderPage({ paperId }: { paperId: string }) {
                   key={h.key}
                   data-note-id={h.noteId ?? undefined}
                   className={cn(
-                    'highlight absolute rounded-xs bg-highlight mix-blend-multiply',
+                    'highlight absolute rounded-xs mix-blend-multiply',
                     h.noteId === null && 'draft bg-highlight-draft',
-                    h.noteId !== null && h.noteId === activeNoteId && 'active bg-highlight-active',
+                    // An outline, not a colour swap: any colour can be the note's own.
+                    h.noteId !== null && h.noteId === activeNoteId && 'active outline-2 outline-offset-1 outline-primary',
                   )}
-                  style={pdfRectToCss(h.rect, scale)}
+                  style={{ ...pdfRectToCss(h.rect, scale), backgroundColor: h.color ? highlightFill(h.color) : undefined }}
                 />
               ))}
               {hover?.page === pageNumber && hoveredNotes.length > 0 && (
@@ -176,11 +189,14 @@ export function ReaderPage({ paperId }: { paperId: string }) {
         paperId={paperId}
         notes={notes}
         draft={draft}
+        draftColor={draftColor}
         activeNoteId={activeNoteId}
+        onDraftColorChange={setDraftColor}
         onSaveDraft={saveDraft}
         onCancelDraft={() => setDraft(null)}
         onSelectNote={focusNote}
-        onUpdateNote={(note, body) => attempt(() => mutations.update.mutateAsync({ id: note.id, body }))}
+        onUpdateNote={updateNoteBody}
+        onColorNote={recolorNote}
         onDeleteNote={deleteNote}
       />
     </div>

@@ -58,7 +58,7 @@ Defined in `src/index.css` as CSS variables and exposed to Tailwind through `@th
 | `border` / `input` | `#e2e8f0` / `#cbd5e1` | white 10% / white 15% | Dividers, field borders |
 | `provenance-llm` / `-foreground` | `#6d28d9` / `#ffffff` | `#a78bfa` / `#1e1b4b` | AI provenance badge |
 | `provenance-llm-surface` | `#f5f3ff` | `#2e1065` | AI note card background |
-| `highlight` / `-active` / `-draft` | yellow 40% / orange 50% / blue 25% | same | Highlights on the (always white) PDF page |
+| `highlight-draft` | blue 25% | same | The pending selection. Saved highlights use their note's colour (see "Highlight colours") |
 | `glass` / `glass-strong` | white 70% / white 85% | slate-800 55% / slate-800 92% | Frosted chrome / cards and floating surfaces |
 | `glass-border` | slate-400 35% | white 10% | Hairline on glass |
 | `ambient-1` / `ambient-2` (body glow) | blue 12% / violet 10% | blue 18% / violet 16% | Radial glows behind the glass |
@@ -67,6 +67,16 @@ All text pairs above meet WCAG AA (4.5:1) in their theme. Check any new pair bef
 
 Fonts: body `Atkinson Hyperlegible Next Variable` (`font-sans`), headings `Crimson Pro Variable`
 (`font-heading`). Radius `0.625rem`.
+
+## Highlight colours
+
+- Each note has one colour, lowercase `#rrggbb`. Presets: Yellow `#facc15` (default), Green `#4ade80`,
+  Blue `#60a5fa`, Pink `#f472b6`, Orange `#fb923c`, plus any custom colour. No violet preset: violet means AI.
+- A highlight draws its colour at 40% with `mix-blend-multiply`. The active note gets a `primary` outline,
+  never a colour swap.
+- Pick colours with `HighlightColorPicker` only (composer, panel card, hover card). Swatches are named buttons
+  with `aria-pressed`; a custom colour commits when the native picker closes.
+- New highlights start on the last colour used (`localStorage` `paperlab-highlight-color`, yellow if unavailable).
 
 ## PaperLab-specific rules
 
@@ -77,7 +87,8 @@ Fonts: body `Atkinson Hyperlegible Next Variable` (`font-sans`), headings `Crims
 - **Nothing that shifts selection coordinates** goes on `.pdf-page`: no border, no padding.
 - **Stable test hooks.** Keep the class names and accessible names the Playwright specs use
   (`.paper-row`, `.status`, `.pdf-page`, `.pdf-overlay`, `.highlight`, `.draft`, `.zoom-level`,
-  `article.note`, `.provenance-badge`, `.note-hover-card`, the "Note" / "Save note" / "Zoom in" / "Toggle theme" names).
+  `article.note`, `.provenance-badge`, `.note-hover-card`, the "Note" / "Save note" / "Zoom in" / "Toggle theme" names,
+  and the colour names "Yellow" … "Orange" / "Custom colour").
   Style with utility classes next to them.
 - One primary button per view. Destructive actions use `text-destructive` and ask for confirmation.
 

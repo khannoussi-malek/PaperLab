@@ -1,5 +1,5 @@
 import { QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api, type NoteCreate, type Paper } from './client'
+import { api, type NoteCreate, type NoteUpdate, type Paper } from './client'
 
 export const PAPERS_POLL_MS = 2000
 
@@ -54,7 +54,10 @@ export function useNoteMutations(paperId: string) {
   const onSuccess = () => client.invalidateQueries({ queryKey: keys.notes(paperId) })
   return {
     create: useMutation({ mutationFn: (note: NoteCreate) => api.createNote(note), onSuccess }),
-    update: useMutation({ mutationFn: ({ id, body }: { id: string; body: string }) => api.updateNote(id, body), onSuccess }),
+    update: useMutation({
+      mutationFn: ({ id, ...patch }: { id: string } & NoteUpdate) => api.updateNote(id, patch),
+      onSuccess,
+    }),
     remove: useMutation({ mutationFn: api.deleteNote, onSuccess }),
   }
 }

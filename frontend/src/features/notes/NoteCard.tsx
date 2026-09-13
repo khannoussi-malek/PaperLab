@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
+import { HighlightColorPicker } from './HighlightColorPicker'
 import { ProvenanceBadge } from './ProvenanceBadge'
 
 type Props = {
@@ -12,10 +13,11 @@ type Props = {
   active: boolean
   onSelect: () => void
   onUpdate: (body: string) => Promise<boolean>
+  onColorChange: (hex: string) => Promise<boolean>
   onDelete: () => Promise<void>
 }
 
-export function NoteCard({ note, paperId, active, onSelect, onUpdate, onDelete }: Props) {
+export function NoteCard({ note, paperId, active, onSelect, onUpdate, onColorChange, onDelete }: Props) {
   const [editing, setEditing] = useState(false)
   const [body, setBody] = useState(note.body)
   const anchor = note.anchors.find((a) => a.paper_id === paperId)
@@ -60,6 +62,7 @@ export function NoteCard({ note, paperId, active, onSelect, onUpdate, onDelete }
           ) : (
             note.body && <p className="whitespace-pre-wrap">{note.body}</p>
           )}
+          <HighlightColorPicker value={note.color} onChange={(hex) => void onColorChange(hex)} />
         </CardContent>
 
         <CardFooter className="justify-end gap-2">
