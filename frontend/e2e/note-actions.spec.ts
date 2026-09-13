@@ -1,5 +1,5 @@
 import { backgroundOf } from './computedStyle'
-import { expect, openReader, saveNoteOn, test } from './fixtures'
+import { expect, openReader, saveNoteOn, selectText, test } from './fixtures'
 
 test('the hover card stays open on the way to it and manages the note without the panel', async ({
   page,
@@ -72,4 +72,58 @@ test('the hover card stays open while any of its overlapping notes is still bein
   await page.waitForTimeout(600)
   await expect(hoverCard).toBeVisible()
   await expect(hoverCard.getByRole('textbox', { name: 'Edit note' })).toHaveCount(1)
+})
+
+test('right-clicking a highlight recolours or deletes its note', async ({ page, request, paperId }) => {
+  const line = await openReader(page, paperId)
+  await saveNoteOn(page, line, 'menu target')
+  const [note] = await (await request.get(`/api/papers/${paperId}/notes`)).json()
+  const highlight = page.locator(`.highlight[data-note-id="${note.id}"]`).first()
+
+  await line.click({ button: 'right' })
+  await page.getByRole('menuitem', { name: 'Blue' }).click()
+  await expect.poll(() => backgroundOf(highlight)).toBe('rgba(96, 165, 250, 0.4)')
+
+  await line.click({ button: 'right' })
+  page.once('dialog', (dialog) => dialog.accept())
+  await page.getByRole('menuitem', { name: 'Delete note' }).click()
+  await expect(page.locator(`article.note[data-note-id="${note.id}"]`)).toHaveCount(0)
+  expect(await (await request.get(`/api/papers/${paperId}/notes`)).json()).toEqual([])
+})
+
+test('right-clicking the pending selection highlights it in a colour straight away', async ({
+  page,
+  request,
+  paperId,
+}) => {
+  const line = await openReader(page, paperId)
+  await selectText(line)
+  await expect(page.locator('.highlight.draft').first()).toBeVisible()
+
+  await line.click({ button: 'right' })
+  await page.getByRole('menuitem', { name: 'Highlight in Pink' }).click()
+
+  await expect(page.getByRole('textbox', { name: 'Note' })).toHaveCount(0)
+  await expect(page.locator('.highlight.draft')).toHaveCount(0)
+  await expect.poll(async () => (await (await request.get(`/api/papers/${paperId}/notes`)).json()).length).toBe(1)
+  const [note] = await (await request.get(`/api/papers/${paperId}/notes`)).json()
+  expect([note.color, note.body]).toEqual(['#f472b6', ''])
+  await expect.poll(() => backgroundOf(page.locator(`.highlight[data-note-id="${note.id}"]`).first())).toBe(
+    'rgba(244, 114, 182, 0.4)',
+  )
+})
+
+test('right-clicking blank page space leaves the browser menu alone', async ({ page, paperId }) => {
+  await openReader(page, paperId)
+  await page.evaluate(() => {
+    window.addEventListener('contextmenu', (event) => {
+      ;(window as unknown as { lastMenuPrevented: boolean }).lastMenuPrevented = event.defaultPrevented
+    })
+  })
+  // The page's top margin, above the heading: on the page, inside the viewport, and not on any text.
+  const box = (await page.locator('.pdf-page[data-page="1"]').boundingBox())!
+  await page.mouse.click(box.x + 20, box.y + 20, { button: 'right' })
+
+  expect(await page.evaluate(() => (window as unknown as { lastMenuPrevented: boolean }).lastMenuPrevented)).toBe(false)
+  await expect(page.getByRole('menu')).toHaveCount(0)
 })

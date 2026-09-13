@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from 'react'
 /** Grace period for the pointer to travel between a highlight and its card. */
 export const HOVER_CLOSE_DELAY_MS = 300
 
-export type HoverTarget = { page: number; noteIds: string[] }
+/** `editNoteId`: open that note straight in edit mode (from the right-click menu). */
+export type HoverTarget = { page: number; noteIds: string[]; editNoteId?: string }
 
 /**
  * Which notes the hover card shows. Pointing at a highlight shows them at once; leaving both the highlight
@@ -49,5 +50,11 @@ export function useHoverCard(locked: boolean) {
     setTarget(null)
   }
 
-  return { target, show, leave, stay, close }
+  /** Show exactly this target now, regardless of the pointer. */
+  function open(next: HoverTarget) {
+    stay()
+    setTarget(next)
+  }
+
+  return { target, show, leave, stay, close, open }
 }

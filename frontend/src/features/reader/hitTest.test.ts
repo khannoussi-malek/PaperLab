@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clientPointToPdf, notesAt, type NoteRect } from './hitTest'
+import { clientPointToPdf, notesAt, rectContains, type NoteRect } from './hitTest'
 
 const highlights: NoteRect[] = [
   { noteId: 'a', rect: [72, 400, 290, 410] },
@@ -29,5 +29,12 @@ describe('notesAt', () => {
 describe('clientPointToPdf', () => {
   it('converts a viewport pointer position into PDF points on the page', () => {
     expect(clientPointToPdf({ x: 158, y: 1600 }, { left: 50, top: 1000 }, 1.5)).toEqual([72, 400])
+  })
+})
+
+describe('rectContains', () => {
+  it('includes the edges and excludes points outside', () => {
+    expect(rectContains([10, 10, 20, 20], [10, 20])).toBe(true)
+    expect(rectContains([10, 10, 20, 20], [21, 15])).toBe(false)
   })
 })

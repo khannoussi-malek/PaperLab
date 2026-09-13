@@ -8,8 +8,9 @@ import { browserStorage, highlightFill, loadLastColor, saveLastColor } from '../
 import { NoteHoverCard } from '../notes/NoteHoverCard'
 import { NotesPanel } from '../notes/NotesPanel'
 import { pdfRectToCss, type PdfRect } from './coords'
-import { clientPointToPdf, notesAt } from './hitTest'
+import { clientPointToPdf, notesAt, rectContains } from './hitTest'
 import { PdfPage } from './PdfPage'
+import { ReaderContextMenu, type ContextMenuState } from './ReaderContextMenu'
 import { ReaderToolbar } from './ReaderToolbar'
 import { readSelection, type SelectionAnchor } from './selection'
 import { useHoverCard } from './useHoverCard'
@@ -46,6 +47,14 @@ function hoverCardPosition(highlights: PageHighlight[], noteIds: string[], scale
   return { left: left * scale, top: (bottom + HOVER_CARD_GAP_PT) * scale }
 }
 
+/** The pointer in PDF points on the page under it, or null when it isn't over a page. */
+function pointOnPage(event: MouseEvent, scale: number) {
+  const element = (event.target as Element).closest<HTMLElement>('.pdf-page')
+  if (!element) return null
+  const point = clientPointToPdf({ x: event.clientX, y: event.clientY }, element.getBoundingClientRect(), scale)
+  return { page: Number(element.dataset.page), point }
+}
+
 export function ReaderPage({ paperId }: { paperId: string }) {
   const { doc, error: pdfError } = usePdfDocument(api.paperFileUrl(paperId))
   const paper = usePaper(paperId)
@@ -64,6 +73,7 @@ export function ReaderPage({ paperId }: { paperId: string }) {
     })
   }, [])
   const hoverCard = useHoverCard(editingNoteIds.length > 0)
+  const [menu, setMenu] = useState<ContextMenuState | null>(null)
   const [error, setError] = useState<string | null>(null)
   const scale = ZOOM_STEPS[zoomIndex]
   const notes = useMemo(() => notesQuery.data ?? [], [notesQuery.data])
@@ -81,7 +91,8 @@ export function ReaderPage({ paperId }: { paperId: string }) {
     }
   }
 
-  function captureSelection() {
+  function captureSelection(event: MouseEvent) {
+    if (event.button !== 0) return // a right-click opens the menu instead
     const result = readSelection(scale)
     if (result.kind === 'invalid') setError(result.reason)
     if (result.kind === 'anchor') {
@@ -90,16 +101,21 @@ export function ReaderPage({ paperId }: { paperId: string }) {
     }
   }
 
-  async function saveDraft(body: string): Promise<boolean> {
+  async function saveDraft(body: string, color: string = draftColor): Promise<boolean> {
     if (!draft) return false
     const anchor = { paper_id: paperId, page: draft.page, bbox: draft.rects, quoted_text: draft.quotedText }
-    const saved = await attempt(() => mutations.create.mutateAsync({ body, color: draftColor, anchor }))
+    const saved = await attempt(() => mutations.create.mutateAsync({ body, color, anchor }))
     if (saved) {
-      saveLastColor(browserStorage(), draftColor)
+      saveLastColor(browserStorage(), color)
       setDraft(null)
       window.getSelection()?.removeAllRanges()
     }
     return saved
+  }
+
+  async function highlightDraft(color: string) {
+    setDraftColor(color)
+    await saveDraft('', color)
   }
 
   const updateNoteBody = (note: Note, body: string) =>
@@ -120,30 +136,61 @@ export function ReaderPage({ paperId }: { paperId: string }) {
       ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
 
+  function editNote(note: Note) {
+    const anchor = note.anchors.find((a) => a.paper_id === paperId)
+    if (!anchor) return
+    hoverCard.open({ page: anchor.page, noteIds: [note.id], editNoteId: note.id })
+    // Same race as focusComposer: the closing menu's focus scope can steal focus back from the new textarea.
+    window.setTimeout(() => document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Edit note"]')?.focus())
+  }
+
+  function focusComposer() {
+    // After the menu has finished closing, or its focus handling takes focus straight back.
+    window.setTimeout(() => document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Note"]')?.focus())
+  }
+
   /** Shows the notes under the pointer and scrolls the panel to the first, only when that set changes. */
   function trackHover(event: MouseEvent) {
     if ((event.target as Element).closest('.note-hover-card')) {
       hoverCard.stay()
       return
     }
-    const pageElement = (event.target as Element).closest<HTMLElement>('.pdf-page')
-    const pageNumber = Number(pageElement?.dataset.page)
-    const noteIds =
-      pageElement && event.buttons === 0 // no preview while dragging a selection
-        ? notesAt(
-            highlightsByPage.get(pageNumber) ?? [],
-            clientPointToPdf({ x: event.clientX, y: event.clientY }, pageElement.getBoundingClientRect(), scale),
-          )
-        : []
-    if (noteIds.length === 0) {
+    const where = event.buttons === 0 ? pointOnPage(event, scale) : null // no preview while dragging a selection
+    const noteIds = where ? notesAt(highlightsByPage.get(where.page) ?? [], where.point) : []
+    if (!where || noteIds.length === 0) {
       hoverCard.leave()
       return
     }
-    if (!hoverCard.show({ page: pageNumber, noteIds })) return
+    if (!hoverCard.show({ page: where.page, noteIds })) return
     setActiveNoteId(noteIds[0])
     document
       .querySelector(`article.note[data-note-id="${noteIds[0]}"]`)
       ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }
+
+  /** Right-click on a highlight or the pending selection opens our menu; anywhere else keeps the browser's. */
+  function openContextMenu(event: MouseEvent) {
+    const where = pointOnPage(event, scale)
+    if (!where) return
+    const [noteId] = notesAt(highlightsByPage.get(where.page) ?? [], where.point)
+    const note = notes.find((n) => n.id === noteId)
+    // Once the composer opens it takes focus and the live selection is gone, so the draft is the usual target.
+    // A selection that is still live (no composer yet) becomes the draft.
+    const live = readSelection(scale)
+    const pending = live.kind === 'anchor' ? live.anchor : draft
+    const onPending =
+      pending !== null && pending.page === where.page && pending.rects.some((rect) => rectContains(rect, where.point))
+    if (!note && !(pending && onPending)) return
+
+    event.preventDefault()
+    hoverCard.close()
+    if (note) {
+      const quote = note.anchors.find((a) => a.paper_id === paperId)?.quoted_text ?? ''
+      setMenu({ x: event.clientX, y: event.clientY, target: { kind: 'note', note, quote } })
+    } else if (pending) {
+      setDraft(pending)
+      setMenu({ x: event.clientX, y: event.clientY, target: { kind: 'draft', quote: pending.quotedText } })
+    }
   }
 
   const hover = hoverCard.target
@@ -169,6 +216,7 @@ export function ReaderPage({ paperId }: { paperId: string }) {
         onMouseUp={captureSelection}
         onMouseMove={trackHover}
         onMouseLeave={hoverCard.leave}
+        onContextMenu={openContextMenu}
       >
         {doc &&
           Array.from({ length: doc.numPages }, (_, i) => i + 1).map((pageNumber) => (
@@ -191,6 +239,7 @@ export function ReaderPage({ paperId }: { paperId: string }) {
                   notes={hoveredNotes}
                   paperId={paperId}
                   style={hoverCardPosition(highlightsByPage.get(pageNumber) ?? [], hover.noteIds, scale)}
+                  editNoteId={hover.editNoteId}
                   onPointerEnter={hoverCard.stay}
                   onPointerLeave={hoverCard.leave}
                   onEditingChange={setNoteEditing}
@@ -216,6 +265,17 @@ export function ReaderPage({ paperId }: { paperId: string }) {
         onUpdateNote={updateNoteBody}
         onColorNote={recolorNote}
         onDeleteNote={deleteNote}
+      />
+
+      <ReaderContextMenu
+        menu={menu}
+        onClose={() => setMenu(null)}
+        onColorNote={(note, color) => void recolorNote(note, color)}
+        onEditNote={editNote}
+        onDeleteNote={(note) => void deleteNote(note)}
+        onHighlightDraft={(color) => void highlightDraft(color)}
+        onAddNote={focusComposer}
+        onCancelDraft={() => setDraft(null)}
       />
     </div>
   )
