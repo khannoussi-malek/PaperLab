@@ -64,6 +64,35 @@ test('deleting a note removes its card and its highlight', async ({ page, reques
   expect(await (await request.get(`/api/papers/${paperId}/notes`)).json()).toEqual([])
 })
 
+test('hovering a highlight shows its note and scrolls the notes panel to it', async ({ page, request, paperId }) => {
+  // Eight notes on page 1 push the page-2 note's card below the fold of the notes panel.
+  const createNote = (pageNumber: number, bbox: Rect[], quote: string, body: string) =>
+    request.post('/api/notes', { data: { body, anchor: { paper_id: paperId, page: pageNumber, bbox, quoted_text: quote } } })
+  for (let i = 0; i < 8; i++) {
+    expect((await createNote(1, [[72, 600 + i * 12, 300, 610 + i * 12]], `filler quote ${i}`, `filler ${i}`)).ok()).toBe(true)
+  }
+  const [chunk] = await (await request.get(`/api/papers/${paperId}/chunks?page=2`)).json()
+  const target = await (await createNote(2, chunk.bbox, 'The second page describes a method', 'hover target note')).json()
+
+  await openReader(page, paperId)
+  const targetCard = page.locator(`article.note[data-note-id="${target.id}"]`)
+  await expect(targetCard).toBeVisible()
+  await expect(targetCard).not.toBeInViewport()
+
+  const secondPageLine = page.locator('.pdf-page[data-page="2"] .textLayer span', { hasText: 'The second page' })
+  await secondPageLine.scrollIntoViewIfNeeded()
+  await secondPageLine.hover()
+
+  const hoverCard = page.locator('.note-hover-card')
+  await expect(hoverCard).toContainText('hover target note')
+  await expect(hoverCard.locator('.provenance-badge')).toHaveText('You')
+  await expect(page.locator(`.highlight.active[data-note-id="${target.id}"]`).first()).toBeVisible()
+  await expect(targetCard).toBeInViewport()
+
+  await page.getByRole('heading', { level: 1 }).hover()
+  await expect(hoverCard).toHaveCount(0)
+})
+
 test('a selection spanning two pages is rejected with a message', async ({ page, paperId }) => {
   const firstPageLine = await openReader(page, paperId)
   const secondPageLine = page.locator('.pdf-page[data-page="2"] .textLayer span', { hasText: 'The second page' })

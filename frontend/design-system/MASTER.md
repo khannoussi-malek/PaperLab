@@ -61,7 +61,7 @@ Fonts: body `Atkinson Hyperlegible Next Variable` (`font-sans`), headings `Crims
 - **Nothing that shifts selection coordinates** goes on `.pdf-page`: no border, no padding.
 - **Stable test hooks.** Keep the class names and accessible names the Playwright specs use
   (`.paper-row`, `.status`, `.pdf-page`, `.pdf-overlay`, `.highlight`, `.draft`, `.zoom-level`,
-  `article.note`, `.provenance-badge`, the "Note" / "Save note" / "Zoom in" / "Toggle theme" names).
+  `article.note`, `.provenance-badge`, `.note-hover-card`, the "Note" / "Save note" / "Zoom in" / "Toggle theme" names).
   Style with utility classes next to them.
 - One primary button per view. Destructive actions use `text-destructive` and ask for confirmation.
 
