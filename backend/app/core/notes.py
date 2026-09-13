@@ -1,7 +1,7 @@
 """Notes and their anchors. The provenance rules live here and nowhere else:
 
-- LLM responses go to llm_outputs, never directly into notes.            (M4)
-- Promoting an LLM fragment creates a note with provenance='llm' + source_id. (M4)
+- LLM responses go to llm_outputs, never directly into notes.            (core/chat.py)
+- Promoting an LLM fragment creates a note with provenance='llm' + source_id. (here)
 - Editing an 'llm' note flips it to 'llm_edited'.                          (here)
 - Changing a note's colour never changes its provenance.                     (here)
 - Notes created through MCP get provenance='llm'.                          (M6)
@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.chunking import join_lines
 from app.core.errors import InvalidInput, NotFound
 from app.core.papers import get_paper
-from app.models import Note, Provenance, note_anchors
+from app.models import Chunk, LLMOutput, Note, Provenance, note_anchors
 
 Rect = tuple[float, float, float, float]
 
@@ -156,3 +156,43 @@ async def delete_note(session: AsyncSession, note_id: uuid.UUID) -> None:
     await _get_note(session, note_id)
     await session.execute(delete(Note).where(Note.id == note_id))
     await session.commit()
+
+
+def _collapse_whitespace(text: str) -> str:
+    return " ".join(text.split())
+
+
+async def promote_llm_fragment(
+    session: AsyncSession, output_id: uuid.UUID, body: str, chunk_ids: list[uuid.UUID]
+) -> NoteView:
+    """Save part of a stored answer as a note with provenance='llm' and source_id = the answer.
+
+    The body must come from the answer, so text a person wrote can never be labelled as AI output.
+    One anchor per cited chunk; chunk_id stays NULL because a re-ingest replaces chunks (D10).
+    """
+    output = await session.get(LLMOutput, output_id)
+    if output is None:
+        raise NotFound(f"answer {output_id} not found")
+    text = body.strip()
+    if not text:
+        raise InvalidInput("a promoted note needs the selected text")
+    if _collapse_whitespace(text) not in _collapse_whitespace(output.content):
+        raise InvalidInput("body_not_in_output")
+    wanted = list(dict.fromkeys(chunk_ids))
+    if not set(wanted) <= set(output.source_chunks):
+        raise InvalidInput("a chunk is not a source of this answer")
+    chunks = {c.id: c for c in await session.scalars(select(Chunk).where(Chunk.id.in_(wanted)))}
+    if len(chunks) != len(wanted):
+        raise InvalidInput("a cited chunk no longer exists; the paper was re-ingested, so ask again")
+
+    note = Note(body=text, provenance=Provenance.LLM, source_id=output.id)
+    session.add(note)
+    await session.flush()
+    anchors = [
+        {"note_id": note.id, "paper_id": c.paper_id, "page": c.page, "bbox": c.bbox, "quoted_text": c.text}
+        for c in (chunks[chunk_id] for chunk_id in wanted)
+    ]
+    await session.execute(insert(note_anchors), anchors)
+    await session.commit()
+    await session.refresh(note)
+    return (await _with_anchors(session, [note]))[0]

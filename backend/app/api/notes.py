@@ -4,6 +4,7 @@ from fastapi import APIRouter, Response
 
 from app.api.deps import SessionDep
 from app.core import notes
+from app.schemas.chat import PromoteRequest
 from app.schemas.notes import NoteCreate, NoteOut, NoteUpdate
 
 router = APIRouter(tags=["notes"])
@@ -18,6 +19,11 @@ async def list_paper_notes(paper_id: uuid.UUID, session: SessionDep) -> list[Not
 async def create_note(payload: NoteCreate, session: SessionDep) -> NoteOut:
     anchor = notes.Anchor(**payload.anchor.model_dump())
     return await notes.create_human_note(session, payload.body, anchor, payload.color)
+
+
+@router.post("/api/notes/promote", status_code=201)
+async def promote_note(payload: PromoteRequest, session: SessionDep) -> NoteOut:
+    return await notes.promote_llm_fragment(session, payload.output_id, payload.body, payload.chunk_ids)
 
 
 @router.patch("/api/notes/{note_id}")
