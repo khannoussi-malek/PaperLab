@@ -30,6 +30,19 @@ async function selectAllOf(element: Locator) {
   await element.dispatchEvent('mouseup')
 }
 
+/** Selects from the very start of `start` to the very end of `end` (which may be a later sibling), then releases. */
+async function selectFromStartToEnd(start: Locator, end: Locator) {
+  const endHandle = await end.elementHandle()
+  await start.evaluate((startNode, endNode) => {
+    const range = document.createRange()
+    range.setStart(startNode, 0)
+    range.setEnd(endNode!, endNode!.childNodes.length)
+    window.getSelection()!.removeAllRanges()
+    window.getSelection()!.addRange(range)
+  }, endHandle)
+  await start.dispatchEvent('mouseup')
+}
+
 test('the Chat tab is kept in the hash across a reload, and selecting text returns to Notes', async ({
   page,
   paperId,
@@ -273,4 +286,54 @@ test('a passage with no citation nearby cannot be saved, and the button says why
   await expect(save).toBeDisabled()
   await page.locator('.save-as-note span[tabindex="0"]').focus()
   await expect(page.getByRole('tooltip')).toHaveText('Include a cited passage [C…] to anchor this note')
+})
+
+test('selecting past the answer into its footer still saves just the answer text', async ({ page, request, paperId }) => {
+  // A triple-click or a drag that overshoots into the footer must still anchor to the answer's own text.
+  await openChat(page, paperId)
+  const answer = await ask(page, 'What anchors a note?')
+  await selectFromStartToEnd(answer.locator('.chat-answer-text'), answer.locator('.chat-answer-footer'))
+
+  await page.getByRole('button', { name: 'Save as note' }).click()
+  await expect.poll(async () => (await (await request.get(`/api/papers/${paperId}/notes`)).json()).length).toBe(1)
+  const [note] = await (await request.get(`/api/papers/${paperId}/notes`)).json()
+  expect(note.body).toBe(FAKE_ANSWER)
+})
+
+test('extending a selection with Shift+ArrowLeft changes what gets saved', async ({ page, request, paperId }) => {
+  await openChat(page, paperId)
+  const answer = await ask(page, 'What anchors a note?')
+  const text = answer.locator('.chat-answer-text')
+  await selectAllOf(text)
+  // Real Shift+ArrowLeft only adjusts a page selection with caret browsing on (off by default, incl. headless
+  // Chromium), so this drives the same standard Selection.extend() call the browser makes internally: move the
+  // focus, which selectAllOf left at the very end, back by one character (the trailing "."), anchor unchanged.
+  await text.evaluate((node) => {
+    const selection = window.getSelection()!
+    const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT)
+    let last: Text | null = null
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) last = n as Text
+    selection.extend(last!, (last!.textContent?.length ?? 1) - 1)
+  })
+
+  await page.getByRole('button', { name: 'Save as note' }).click()
+  await expect.poll(async () => (await (await request.get(`/api/papers/${paperId}/notes`)).json()).length).toBe(1)
+  const [note] = await (await request.get(`/api/papers/${paperId}/notes`)).json()
+  expect(note.body).toBe(FAKE_ANSWER.slice(0, -1))
+})
+
+test('a failed promote shows a readable message next to the Save button', async ({ page, paperId }) => {
+  await openChat(page, paperId)
+  const answer = await ask(page, 'What anchors a note?')
+  await page.route('**/api/notes/promote', (route) =>
+    route.fulfill({ status: 422, contentType: 'application/json', body: '{"detail":"body_not_in_output"}' }),
+  )
+
+  await selectAllOf(answer.locator('.chat-answer-text'))
+  await page.getByRole('button', { name: 'Save as note' }).click()
+
+  const message = page.getByRole('alert').filter({ hasText: "doesn't match the saved answer" })
+  await expect(message).toBeInViewport()
+  // The button stays up so the user can select again without losing their place.
+  await expect(page.getByRole('button', { name: 'Save as note' })).toBeVisible()
 })
