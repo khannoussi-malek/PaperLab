@@ -1,42 +1,16 @@
-import json
 import uuid
-from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 
 import pytest
+from conftest import parse_sse
 from sqlalchemy import delete, func, select
 
-from app.api import chat as chat_api
 from app.core import chat
 from app.main import create_app
 from app.models import Chunk, LLMOutput, Note, Paper
-from app.providers.llm import FAKE_ANSWER, FAKE_TOKENS, FakeLLM, get_llm
+from app.providers.llm import FAKE_ANSWER, FAKE_TOKENS
 
 pytestmark = pytest.mark.anyio
-
-
-def parse_sse(raw: str) -> list[tuple[str, dict]]:
-    events = []
-    for block in raw.strip().split("\n\n"):
-        lines = [line for line in block.split("\n") if not line.startswith(":")]  # ": ping" keepalives
-        name = next(line.removeprefix("event: ") for line in lines if line.startswith("event: "))
-        data = "\n".join(line.removeprefix("data: ") for line in lines if line.startswith("data: "))
-        events.append((name, json.loads(data)))
-    return events
-
-
-@pytest.fixture
-def fake_llm(app, session, monkeypatch):
-    fake = FakeLLM()
-    app.dependency_overrides[get_llm] = lambda: fake
-
-    @asynccontextmanager
-    async def test_session():
-        yield session
-
-    # The answer is saved in a fresh session after the stream; keep it inside the test transaction.
-    monkeypatch.setattr(chat_api, "SessionLocal", test_session)
-    return fake
 
 
 async def make_paper(session, texts: list[str], status="ready") -> tuple[Paper, list[Chunk]]:
@@ -70,12 +44,18 @@ async def test_chat_streams_sources_then_tokens_then_done_and_saves_one_output(c
     events = parse_sse(response.text)
     assert [name for name, _ in events] == ["sources"] + ["token"] * len(FAKE_TOKENS) + ["done"]
     rect = [[72, 100, 300, 120]]
+    paper_id = str(paper.id)
     assert events[0][1] == {
         "whole_paper": True,
         "sources": [
-            {"label": "C1", "chunk_id": str(chunks[0].id), "page": 1, "section": None, "bbox": rect},
-            {"label": "C2", "chunk_id": str(chunks[1].id), "page": 2, "section": "Method", "bbox": rect},
+            {"label": "C1", "chunk_id": str(chunks[0].id), "paper_id": paper_id, "page": 1, "section": None,
+             "bbox": rect},
+            {"label": "C2", "chunk_id": str(chunks[1].id), "paper_id": paper_id, "page": 2, "section": "Method",
+             "bbox": rect},
         ],
+        "notes": [],  # notes and their counts belong to workspace chat
+        "notes_used": None,
+        "notes_total": None,
     }
     assert "".join(data["text"] for name, data in events if name == "token") == FAKE_ANSWER
 
@@ -153,8 +133,12 @@ async def test_history_lists_answers_oldest_first_with_replaced_chunks_as_null(c
     )
     assert first["sources"] == [
         None,
-        {"label": "C2", "chunk_id": str(chunks[1].id), "page": 2, "section": "Method", "bbox": [[72, 100, 300, 120]]},
+        {
+            "label": "C2", "chunk_id": str(chunks[1].id), "paper_id": str(paper.id), "page": 2, "section": "Method",
+            "bbox": [[72, 100, 300, 120]],
+        },
     ]
+    assert (first["notes"], first["notes_used"], first["notes_total"]) == ([], None, None)
     assert second["sources"][0]["label"] == "C1"
     assert {"id", "model", "prompt_version", "created_at"} <= first.keys()
     assert (await client.get(f"/api/papers/{uuid.uuid4()}/chat")).status_code == 404
