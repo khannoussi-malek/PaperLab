@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type MouseEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { api, type Note } from '@/api/client'
 import { useNoteMutations, useNotes, usePaper } from '@/api/queries'
 import { glass } from '@/components/glass'
@@ -87,6 +87,7 @@ export function ReaderPage({ paperId, tab }: { paperId: string; tab: ReaderTab }
   const hoverCard = useHoverCard(editingNoteIds.length > 0)
   const [menu, setMenu] = useState<ContextMenuState | null>(null)
   const [flash, setFlash] = useState<Flash | null>(null)
+  const promotedNoteId = useRef<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const scale = ZOOM_STEPS[zoomIndex]
   const notes = useMemo(() => notesQuery.data ?? [], [notesQuery.data])
@@ -102,6 +103,13 @@ export function ReaderPage({ paperId, tab }: { paperId: string; tab: ReaderTab }
   }, [flash])
 
   const flashChunk = (page: number, rects: PdfRect[]) => setFlash({ id: Date.now(), page, rects })
+
+  // Once the Notes tab is showing, bring a just-promoted note's card into view.
+  useEffect(() => {
+    if (tab !== 'notes' || !promotedNoteId.current) return
+    scrollToElement(`article.note[data-note-id="${promotedNoteId.current}"]`, 'nearest')
+    promotedNoteId.current = null
+  }, [tab])
 
   // replace, not assign: switching tabs shouldn't add history entries for Back to walk through.
   const showTab = (next: ReaderTab) => window.location.replace(readerHref(paperId, next))
@@ -159,6 +167,12 @@ export function ReaderPage({ paperId, tab }: { paperId: string; tab: ReaderTab }
   function focusNote(note: Note) {
     setActiveNoteId(note.id)
     scrollToElement(`.highlight[data-note-id="${note.id}"]`, 'center')
+  }
+
+  function showPromotedNote(note: Note) {
+    setActiveNoteId(note.id)
+    promotedNoteId.current = note.id
+    showTab('notes')
   }
 
   function editNote(note: Note) {
@@ -312,7 +326,13 @@ export function ReaderPage({ paperId, tab }: { paperId: string; tab: ReaderTab }
             onDeleteNote={deleteNote}
           />
         }
-        chat={<ChatPanel paperId={paperId} onCite={(source) => flashChunk(source.page, source.bbox)} />}
+        chat={
+          <ChatPanel
+            paperId={paperId}
+            onCite={(source) => flashChunk(source.page, source.bbox)}
+            onPromoted={showPromotedNote}
+          />
+        }
       />
 
       <ReaderContextMenu
