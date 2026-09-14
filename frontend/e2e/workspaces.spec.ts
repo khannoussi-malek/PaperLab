@@ -78,8 +78,14 @@ test('keyboard: Escape on a workspace menu returns focus to its trigger, and fin
   workspaceName,
 }) => {
   await page.goto('/')
-  await sidebar(page).getByRole('button', { name: 'New workspace' }).click()
+  const newWorkspaceButton = sidebar(page).getByRole('button', { name: 'New workspace' })
+  await newWorkspaceButton.click()
   const name = sidebar(page).getByRole('textbox', { name: 'Workspace name' })
+  // Cancelling with Escape stays on this same page (no navigation), so focus returns to the button directly.
+  await name.press('Escape')
+  await expect(newWorkspaceButton).toBeFocused()
+
+  await newWorkspaceButton.click()
   await name.fill(workspaceName)
   await name.press('Enter')
   await expect(sidebar(page).getByRole('link', { name: workspaceName, exact: true })).toBeVisible()
@@ -92,7 +98,6 @@ test('keyboard: Escape on a workspace menu returns focus to its trigger, and fin
   await page.keyboard.press('Escape')
   await expect(trigger).toBeFocused()
 
-  const newWorkspaceButton = sidebar(page).getByRole('button', { name: 'New workspace' })
   await newWorkspaceButton.focus()
   await page.keyboard.press('Enter')
   await name.fill(`${workspaceName} 2`)

@@ -36,7 +36,10 @@ export function WorkspacePage({ workspaceId, tab }: { workspaceId: string; tab: 
           <h1
             ref={headingRef}
             tabIndex={-1}
-            className="truncate rounded-sm font-heading text-3xl font-semibold outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+            // `focus:` (not `focus-visible:`), so this always shows: it's not Tab-reachable, so the only way here is
+            // our own arrival focus or a direct click, and `:focus-visible` can go unset for either depending on
+            // what the user did just before landing (a mouse click earlier in the flow is enough to suppress it).
+            className="truncate rounded-sm font-heading text-3xl font-semibold outline-none focus:ring-3 focus:ring-ring/50"
             title={title}
           >
             {title}

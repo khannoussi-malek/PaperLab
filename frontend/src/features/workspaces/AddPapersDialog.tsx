@@ -27,6 +27,9 @@ export function AddPapersDialog({ workspaceId, open, onOpenChange }: Props) {
   const membership = useWorkspaceMembership()
   const [selected, setSelected] = useState<string[]>([])
   const candidates = (papers.data ?? []).filter((paper) => !paper.workspace_ids.includes(workspaceId))
+  // A candidate can disappear while ticked (added elsewhere, or deleted) without `selected` noticing; only count
+  // and submit the ones still real, so the button's label and its request never lie about what's selected.
+  const validSelected = selected.filter((id) => candidates.some((paper) => paper.id === id))
 
   function close() {
     setSelected([])
@@ -49,29 +52,42 @@ export function AddPapersDialog({ workspaceId, open, onOpenChange }: Props) {
           <CommandInput aria-label="Search papers" placeholder="Search your library…" />
           <CommandList>
             <CommandEmpty>
-              {candidates.length === 0 ? 'Every library paper is already in this workspace.' : 'No matching papers.'}
+              {papers.isPending
+                ? 'Loading your library…'
+                : papers.isError
+                  ? "Couldn't load your library."
+                  : candidates.length === 0
+                    ? 'Every library paper is already in this workspace.'
+                    : 'No matching papers.'}
             </CommandEmpty>
-            {candidates.map((paper) => {
-              const checked = selected.includes(paper.id)
-              return (
-                <CommandItem
-                  key={paper.id}
-                  // The id keeps two papers with the same title apart; the filter searches the keywords.
-                  value={paper.id}
-                  keywords={[paper.title, byline(paper)]}
-                  data-paper-id={paper.id}
-                  data-checked={checked}
-                  aria-checked={checked}
-                  onSelect={() => toggle(paper.id)}
-                >
-                  <span className="min-w-0 flex-1 truncate" title={paper.title}>
-                    {paper.title}
-                  </span>
-                </CommandItem>
-              )
-            })}
+            {!papers.isPending &&
+              !papers.isError &&
+              candidates.map((paper) => {
+                const checked = selected.includes(paper.id)
+                return (
+                  <CommandItem
+                    key={paper.id}
+                    // The id keeps two papers with the same title apart; the filter searches the keywords.
+                    value={paper.id}
+                    keywords={[paper.title, byline(paper)]}
+                    data-paper-id={paper.id}
+                    data-checked={checked}
+                    aria-checked={checked}
+                    onSelect={() => toggle(paper.id)}
+                  >
+                    <span className="min-w-0 flex-1 truncate" title={paper.title}>
+                      {paper.title}
+                    </span>
+                  </CommandItem>
+                )
+              })}
           </CommandList>
         </Command>
+        {papers.isError && (
+          <Alert variant="destructive" className="border-glass-border">
+            <AlertDescription>{papers.error.message}</AlertDescription>
+          </Alert>
+        )}
         {membership.error && (
           <Alert variant="destructive" className="border-glass-border">
             <AlertDescription>{membership.error.message}</AlertDescription>
@@ -82,10 +98,12 @@ export function AddPapersDialog({ workspaceId, open, onOpenChange }: Props) {
             Cancel
           </Button>
           <Button
-            disabled={selected.length === 0 || membership.isPending}
-            onClick={() => membership.mutate({ workspaceId, paperIds: selected, member: true }, { onSuccess: close })}
+            disabled={validSelected.length === 0 || membership.isPending}
+            onClick={() =>
+              membership.mutate({ workspaceId, paperIds: validSelected, member: true }, { onSuccess: close })
+            }
           >
-            {selected.length === 1 ? 'Add 1 paper' : `Add ${selected.length} papers`}
+            {validSelected.length === 1 ? 'Add 1 paper' : `Add ${validSelected.length} papers`}
           </Button>
         </DialogFooter>
       </DialogContent>
