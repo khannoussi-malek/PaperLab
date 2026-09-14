@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { readerHref } from '@/lib/route'
 import { cn } from '@/lib/utils'
-import { PaperMenu } from './PaperMenu'
+import { PaperContextMenu, PaperMenu } from './PaperMenu'
 import { PaperPreview } from './PaperPreview'
 import { byline, pageCountLabel } from './paperMeta'
 
@@ -29,53 +29,52 @@ type RowProps = {
 
 function PaperRow({ paper, previewed, workspaceId, onPreview, onDelete, onMembershipChange }: RowProps) {
   const meta = [byline(paper), pageCountLabel(paper.page_count)].filter(Boolean).join(' · ')
+  const onMembership = (id: string, member: boolean) => onMembershipChange(paper, id, member)
   return (
-    <li
-      className={cn(
-        'paper-row group relative flex items-start gap-3 px-4 py-3 transition-colors duration-150 hover:bg-foreground/5',
-        previewed && 'lg:bg-primary/5 lg:shadow-[inset_3px_0_0_var(--color-primary)]',
-      )}
-      onMouseEnter={() => onPreview(paper.id, false)}
-      onFocus={() => onPreview(paper.id, true)}
-    >
-      <FileText aria-hidden className="mt-1 size-4 shrink-0 text-muted-foreground" />
-      <div className="min-w-0 flex-1">
-        {/* The link's ::after covers the row, so the whole row opens the reader. */}
-        <a
-          href={readerHref(paper.id)}
-          title={paper.title}
-          className="line-clamp-2 rounded-sm font-heading wrap-anywhere text-lg leading-snug font-semibold outline-none after:absolute after:inset-0 focus-visible:ring-3 focus-visible:ring-ring/50"
+    <PaperContextMenu paper={paper} workspaceId={workspaceId} onMembershipChange={onMembership}>
+      <li
+        className={cn(
+          'paper-row group relative flex items-start gap-3 px-4 py-3 transition-colors duration-150 hover:bg-foreground/5',
+          previewed && 'lg:bg-primary/5 lg:shadow-[inset_3px_0_0_var(--color-primary)]',
+        )}
+        onMouseEnter={() => onPreview(paper.id, false)}
+        onFocus={() => onPreview(paper.id, true)}
+      >
+        <FileText aria-hidden className="mt-1 size-4 shrink-0 text-muted-foreground" />
+        <div className="min-w-0 flex-1">
+          {/* The link's ::after covers the row, so the whole row opens the reader. */}
+          <a
+            href={readerHref(paper.id)}
+            title={paper.title}
+            className="line-clamp-2 rounded-sm font-heading wrap-anywhere text-lg leading-snug font-semibold outline-none after:absolute after:inset-0 focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            {paper.title}
+          </a>
+          {meta && <p className="mt-0.5 truncate text-sm text-muted-foreground">{meta}</p>}
+          {paper.status_error && <p className="mt-0.5 text-xs text-destructive">{paper.status_error}</p>}
+        </div>
+        {/* Ready is the normal state: announced, not shown. Only in-progress and failed papers get a visible badge. */}
+        <Badge
+          variant={paper.status === 'failed' ? 'destructive' : 'outline'}
+          className={cn('status mt-1', paper.status === 'ready' && 'sr-only')}
         >
-          {paper.title}
-        </a>
-        {meta && <p className="mt-0.5 truncate text-sm text-muted-foreground">{meta}</p>}
-        {paper.status_error && <p className="mt-0.5 text-xs text-destructive">{paper.status_error}</p>}
-      </div>
-      {/* Ready is the normal state: announced, not shown. Only in-progress and failed papers get a visible badge. */}
-      <Badge
-        variant={paper.status === 'failed' ? 'destructive' : 'outline'}
-        className={cn('status mt-1', paper.status === 'ready' && 'sr-only')}
-      >
-        {isIngesting(paper) && <LoaderCircle aria-hidden className="motion-safe:animate-spin" />}
-        {paper.status}
-      </Badge>
-      <PaperMenu
-        paper={paper}
-        workspaceId={workspaceId}
-        onMembershipChange={(id, member) => onMembershipChange(paper, id, member)}
-      />
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        aria-label="Delete"
-        title="Delete"
-        // Quiet until the row is in play: a red icon on every row would shout over the titles.
-        className="relative z-10 text-muted-foreground group-focus-within:text-destructive group-hover:text-destructive hover:bg-destructive/10"
-        onClick={() => onDelete(paper)}
-      >
-        <Trash2 aria-hidden />
-      </Button>
-    </li>
+          {isIngesting(paper) && <LoaderCircle aria-hidden className="motion-safe:animate-spin" />}
+          {paper.status}
+        </Badge>
+        <PaperMenu paper={paper} workspaceId={workspaceId} onMembershipChange={onMembership} />
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Delete"
+          title="Delete"
+          // Quiet until the row is in play: a red icon on every row would shout over the titles.
+          className="relative z-10 text-muted-foreground group-focus-within:text-destructive group-hover:text-destructive hover:bg-destructive/10"
+          onClick={() => onDelete(paper)}
+        >
+          <Trash2 aria-hidden />
+        </Button>
+      </li>
+    </PaperContextMenu>
   )
 }
 
