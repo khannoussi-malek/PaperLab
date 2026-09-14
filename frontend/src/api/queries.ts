@@ -12,6 +12,7 @@ const keys = {
   papers: ['papers'] as const,
   paper: (id: string) => ['papers', id] as const,
   notes: (paperId: string) => ['papers', paperId, 'notes'] as const,
+  chunks: (paperId: string, page: number) => ['papers', paperId, 'chunks', page] as const,
   chat: (paperId: string) => ['papers', paperId, 'chat'] as const,
 }
 
@@ -31,6 +32,14 @@ export const usePaper = (id: string) => useQuery({ queryKey: keys.paper(id), que
 
 export const useNotes = (paperId: string) =>
   useQuery({ queryKey: keys.notes(paperId), queryFn: () => api.listNotes(paperId) })
+
+/** One page's chunks, fetched only when `page` is set: the reader's `?chunk=` target needs its rects. */
+export const useChunksOnPage = (paperId: string, page: number | null) =>
+  useQuery({
+    queryKey: keys.chunks(paperId, page ?? 0),
+    queryFn: () => api.listChunks(paperId, page!),
+    enabled: page !== null,
+  })
 
 /** Saved questions and answers for a paper, oldest first. */
 export const useChatHistory = (paperId: string) =>
