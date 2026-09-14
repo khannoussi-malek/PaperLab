@@ -38,19 +38,29 @@ def new_client(mailto: str, transport: httpx.AsyncBaseTransport | None = None) -
 # Retry-After wait here if bulk uploads start coming back without metadata.
 
 
+def _json(response: httpx.Response) -> dict:
+    """response.json(), but a malformed 200 body (a proxy's HTML page, say) raises httpx.HTTPError like every
+    other OpenAlex failure, instead of a bare json.JSONDecodeError callers don't expect."""
+    try:
+        return response.json()
+    except ValueError as exc:
+        raise httpx.DecodingError(str(exc), request=response.request) from exc
+
+
 async def get_work(http: httpx.AsyncClient, key: str) -> dict | None:
     """`key` is an OpenAlex work ID ("W2963341956") or "doi:<doi>". None when OpenAlex has no such work."""
     response = await http.get(f"/works/{key}", params={"select": WORK_FIELDS})
     if response.status_code == 404:
         return None
-    return response.raise_for_status().json()
+    return _json(response.raise_for_status())
 
 
 async def search_works(http: httpx.AsyncClient, title: str) -> list[dict]:
     # A comma inside a filter value is rejected with HTTP 400 even when percent-encoded, and "|" means OR.
     query = re.sub(r"[,|]", " ", title)
     params = {"filter": f"title.search:{query}", "per-page": SEARCH_RESULTS, "select": WORK_FIELDS}
-    return (await http.get("/works", params=params)).raise_for_status().json()["results"]
+    response = await http.get("/works", params=params)
+    return _json(response.raise_for_status())["results"]
 
 
 async def get_authors(http: httpx.AsyncClient, openalex_ids: list[str]) -> list[dict]:
@@ -59,5 +69,6 @@ async def get_authors(http: httpx.AsyncClient, openalex_ids: list[str]) -> list[
     for start in range(0, len(openalex_ids), AUTHOR_BATCH):
         batch = "|".join(openalex_ids[start : start + AUTHOR_BATCH])
         params = {"filter": f"openalex_id:{batch}", "per-page": AUTHOR_BATCH, "select": AUTHOR_FIELDS}
-        records += (await http.get("/authors", params=params)).raise_for_status().json()["results"]
+        response = await http.get("/authors", params=params)
+        records += _json(response.raise_for_status())["results"]
     return records

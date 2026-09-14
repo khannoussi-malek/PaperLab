@@ -110,8 +110,9 @@ class FakeOpenAlex:
     """OpenAlex behind httpx.MockTransport: serves recorded JSON by route and records every request. No network.
 
     A route key is a request path plus "?<filter>" for a filtered request, or the bare path to match any filter.
-    Unrouted requests get OpenAlex's HTML 404. A route's replies are served in order and the last one repeats;
-    a reply that is an exception is raised, the way httpx raises network errors and timeouts.
+    An unrouted request fails loudly (AssertionError) instead of getting a default reply, so a path bug in the
+    provider can't hide behind a plausible-looking 404. A route's replies are served in order and the last one
+    repeats; a reply that is an exception is raised, the way httpx raises network errors and timeouts.
     """
 
     MAILTO = "paperlab-tests@example.com"
@@ -130,7 +131,9 @@ class FakeOpenAlex:
         self.requests.append(request)
         path = request.url.path
         key = f"{path}?{request.url.params['filter']}" if "filter" in request.url.params else path
-        replies = self.routes.get(key) or self.routes.get(path) or [httpx.Response(404, text="<!doctype html>")]
+        replies = self.routes.get(key) or self.routes.get(path)
+        if replies is None:
+            raise AssertionError(f"unrouted OpenAlex request: {request.url}")
         reply = replies.pop(0) if len(replies) > 1 else replies[0]
         if isinstance(reply, Exception):
             raise reply

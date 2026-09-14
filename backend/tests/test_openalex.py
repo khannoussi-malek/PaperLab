@@ -19,6 +19,8 @@ async def test_every_request_carries_mailto_and_selects_only_the_fields_enrichme
 
 
 async def test_a_work_openalex_does_not_have_is_none(fake_openalex):
+    fake_openalex.route("/works/doi:10.9999/not-in-openalex", httpx.Response(404, text="<!doctype html>"))
+
     assert await openalex.get_work(fake_openalex.client, "doi:10.9999/not-in-openalex") is None
 
 
@@ -38,6 +40,23 @@ async def test_failures_raise_an_httpx_error_after_one_request(fake_openalex, fa
     with pytest.raises(httpx.HTTPError):
         await openalex.get_work(fake_openalex.client, "W1")
     assert len(fake_openalex.requests) == 1
+
+
+@pytest.mark.parametrize(
+    ("route_path", "call"),
+    [
+        ("/works/W1", lambda client: openalex.get_work(client, "W1")),
+        ("/works", lambda client: openalex.search_works(client, "BERT")),
+        ("/authors", lambda client: openalex.get_authors(client, ["A1"])),
+    ],
+    ids=["get_work", "search_works", "get_authors"],
+)
+async def test_a_malformed_200_body_raises_an_httpx_error(fake_openalex, route_path, call):
+    # A proxy or an OpenAlex outage can answer 200 with an HTML page instead of JSON.
+    fake_openalex.route(route_path, httpx.Response(200, text="<!doctype html>"))
+
+    with pytest.raises(httpx.HTTPError):
+        await call(fake_openalex.client)
 
 
 async def test_title_search_strips_the_characters_openalex_rejects_in_a_filter(fake_openalex):
