@@ -1,15 +1,20 @@
-import { useEffect, useRef, useState } from 'react'
-import type { ChatSource, ChatAnswer as SavedAnswer } from '@/api/client'
-import { useChatHistory, useReindexPaper } from '@/api/queries'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import type { ChatSource, Note, ChatAnswer as SavedAnswer } from '@/api/client'
+import { useChatHistory, usePromoteNote, useReindexPaper } from '@/api/queries'
 import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
+import { readAnswerSelection } from './answerSelection'
 import { ChatAnswer } from './ChatAnswer'
 import { splitCitations } from './citations'
+import { promoteSelection, type PromoteDraft } from './promote'
+import { SaveAsNoteButton } from './SaveAsNoteButton'
 import { useChatStream, type ChatProblem } from './useChatStream'
 
 const MAX_QUESTION = 2000 // the API's limit (spec §3.10)
+// ponytail: a fixed width keeps the floating button inside the panel; measure it if the label ever changes.
+const SAVE_BUTTON_WIDTH = 140
 
 /** Labels whose chunk still exists; markers for any other label render as plain text. */
 const knownLabels = (answer: SavedAnswer) => new Set(answer.sources.flatMap((source) => (source ? [source.label] : [])))
@@ -17,12 +22,19 @@ const knownLabels = (answer: SavedAnswer) => new Set(answer.sources.flatMap((sou
 type Props = {
   paperId: string
   onCite: (source: ChatSource) => void
+  /** Called with the new note once it is saved and listed. */
+  onPromoted: (note: Note) => void
 }
 
-export function ChatPanel({ paperId, onCite }: Props) {
+type Promote = { outputId: string; draft: PromoteDraft; style: CSSProperties }
+
+export function ChatPanel({ paperId, onCite, onPromoted }: Props) {
   const history = useChatHistory(paperId)
   const { stream, ask, retry } = useChatStream(paperId)
   const [question, setQuestion] = useState('')
+  const [promote, setPromote] = useState<Promote | null>(null)
+  const promoteNote = usePromoteNote(paperId)
+  const rootRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const wasBusy = useRef(false)
@@ -41,6 +53,36 @@ export function ChatPanel({ paperId, onCite }: Props) {
     wasBusy.current = busy
   }, [busy])
 
+  // Clicking anywhere else clears the selection, and with it the button.
+  useEffect(() => {
+    if (!promote) return
+    const hideWhenCleared = () => window.getSelection()?.isCollapsed !== false && setPromote(null)
+    document.addEventListener('selectionchange', hideWhenCleared)
+    return () => document.removeEventListener('selectionchange', hideWhenCleared)
+  }, [promote])
+
+  function captureSelection() {
+    const selected = readAnswerSelection()
+    const answer = answers.find((a) => a.id === selected?.outputId)
+    const draft = selected && answer && promoteSelection(answer.content, answer.sources, selected.anchor, selected.focus)
+    const box = rootRef.current?.getBoundingClientRect()
+    if (!selected || !draft || !box) return setPromote(null)
+    const left = Math.max(8, Math.min(selected.rect.left - box.left, box.width - SAVE_BUTTON_WIDTH))
+    setPromote({ outputId: selected.outputId, draft, style: { left, top: selected.rect.bottom - box.top + 6 } })
+  }
+
+  async function saveAsNote() {
+    if (!promote) return
+    const { outputId, draft } = promote
+    const note = await promoteNote
+      .mutateAsync({ output_id: outputId, body: draft.body, chunk_ids: draft.chunkIds })
+      .catch(() => null) // shown from promoteNote.error
+    if (!note) return
+    setPromote(null)
+    window.getSelection()?.removeAllRanges()
+    onPromoted(note)
+  }
+
   function submit() {
     const text = question.trim()
     if (!text || busy) return
@@ -49,11 +91,16 @@ export function ChatPanel({ paperId, onCite }: Props) {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div ref={listRef} className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto p-4">
-        {history.error && (
+    <div ref={rootRef} className="relative flex min-h-0 flex-1 flex-col">
+      <div
+        ref={listRef}
+        className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto p-4"
+        onMouseUp={captureSelection}
+        onScroll={() => setPromote(null)}
+      >
+        {(history.error ?? promoteNote.error) && (
           <Alert variant="destructive" className={cn('border-glass-border')}>
-            <AlertDescription>{history.error.message}</AlertDescription>
+            <AlertDescription>{(history.error ?? promoteNote.error)?.message}</AlertDescription>
           </Alert>
         )}
         {answers.length === 0 && !showLive && (
@@ -85,6 +132,16 @@ export function ChatPanel({ paperId, onCite }: Props) {
           </ChatAnswer>
         )}
       </div>
+
+      {/* Outside the list, so pressing it doesn't re-run the list's mouseup selection check. */}
+      {promote && (
+        <SaveAsNoteButton
+          canSave={promote.draft.chunkIds.length > 0}
+          saving={promoteNote.isPending}
+          style={promote.style}
+          onSave={() => void saveAsNote()}
+        />
+      )}
 
       <form
         className="flex flex-col gap-2 border-t border-glass-border p-3"

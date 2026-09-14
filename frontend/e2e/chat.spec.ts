@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 import { expect, openReader, selectText, test, type Rect } from './fixtures'
 
 /** What `FakeLLM` always answers (backend `LLM_PROVIDER=fake`). */
@@ -17,6 +17,17 @@ async function ask(page: Page, question: string) {
   const answer = page.locator('article.chat-answer[data-output-id]', { hasText: question })
   await expect(answer.locator('.chat-answer-footer')).toContainText('AI · ')
   return answer
+}
+
+/** Selects all of an element's text like a mouse drag, then releases the mouse. */
+async function selectAllOf(element: Locator) {
+  await element.evaluate((node) => {
+    const range = document.createRange()
+    range.selectNodeContents(node)
+    window.getSelection()!.removeAllRanges()
+    window.getSelection()!.addRange(range)
+  })
+  await element.dispatchEvent('mouseup')
 }
 
 test('the Chat tab is kept in the hash across a reload, and selecting text returns to Notes', async ({
@@ -201,4 +212,65 @@ test('clicking [C1] scrolls the paper to the cited chunk and flashes its rects',
     .toBeLessThan(2)
   await expect(flash).toHaveCount(chunk.bbox.length)
   await expect(flash).toHaveCount(0, { timeout: 3_000 }) // it fades after about 1.5 s
+})
+
+test('saving a passage of an answer makes an AI note on its cited chunk, and editing it marks it edited', async ({
+  page,
+  request,
+  paperId,
+}) => {
+  await openChat(page, paperId)
+  const answer = await ask(page, 'What anchors a note?')
+  const [saved] = await (await request.get(`/api/papers/${paperId}/chat`)).json()
+
+  await selectAllOf(answer.locator('.chat-answer-text'))
+  await page.getByRole('button', { name: 'Save as note' }).click()
+
+  await expect(page.getByRole('tab', { name: 'Notes' })).toHaveAttribute('aria-selected', 'true')
+  await expect.poll(async () => (await (await request.get(`/api/papers/${paperId}/notes`)).json()).length).toBe(1)
+  const [note] = await (await request.get(`/api/papers/${paperId}/notes`)).json()
+  const [chunk] = await (await request.get(`/api/papers/${paperId}/chunks?page=1`)).json()
+  // The body keeps the raw [C1] marker: the API only accepts a verbatim slice of the stored answer.
+  expect([note.provenance, note.source_id, note.body]).toEqual(['llm', saved.id, FAKE_ANSWER])
+  expect([note.anchors[0].page, note.anchors[0].bbox]).toEqual([1, chunk.bbox])
+
+  const card = page.locator(`article.note[data-note-id="${note.id}"]`)
+  await expect(card).toBeInViewport()
+  await expect(card.locator('.provenance-badge')).toHaveText('AI')
+
+  await card.getByRole('button', { name: 'Edit' }).click()
+  await card.getByRole('textbox', { name: 'Edit note' }).fill('In my own words now.')
+  await card.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(card.locator('.provenance-badge')).toHaveText('AI · edited')
+  await page.reload()
+  await expect(page.locator(`article.note[data-note-id="${note.id}"] .provenance-badge`)).toHaveText('AI · edited')
+})
+
+test('a passage with no citation nearby cannot be saved, and the button says why', async ({ page, paperId }) => {
+  // The fake model always cites [C1], so this one history answer, with no marker at all, is faked.
+  await page.route('**/chat', (route) =>
+    route.request().method() === 'GET'
+      ? route.fulfill({
+          json: [
+            {
+              id: '00000000-0000-4000-8000-000000000001',
+              question: 'Uncited?',
+              content: 'An answer that cites nothing.',
+              model: 'fake',
+              prompt_version: 1,
+              created_at: '2026-09-13T00:00:00Z',
+              whole_paper: true,
+              sources: [],
+            },
+          ],
+        })
+      : route.fallback(),
+  )
+  await openChat(page, paperId)
+  await selectAllOf(page.locator('article.chat-answer .chat-answer-text'))
+
+  const save = page.getByRole('button', { name: 'Save as note' })
+  await expect(save).toBeDisabled()
+  await page.locator('.save-as-note span[tabindex="0"]').focus()
+  await expect(page.getByRole('tooltip')).toHaveText('Include a cited passage [C…] to anchor this note')
 })

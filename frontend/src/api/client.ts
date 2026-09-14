@@ -12,6 +12,7 @@ export type ChatSourcesEvent = components['schemas']['SourcesEvent']
 export type ChatTokenEvent = components['schemas']['TokenEvent']
 export type ChatDoneEvent = components['schemas']['DoneEvent']
 export type ChatErrorEvent = components['schemas']['ErrorEvent']
+export type PromoteRequest = components['schemas']['PromoteRequest']
 
 /** A failed response's `detail` as text. FastAPI sends a string, or a list of validation errors. */
 export async function errorDetail(response: Response): Promise<string> {
@@ -47,6 +48,7 @@ export const api = {
   updateNote: (id: string, patch: NoteUpdate) => request<Note>(`/api/notes/${id}`, sendJson('PATCH', patch)),
   deleteNote: (id: string) => request<void>(`/api/notes/${id}`, { method: 'DELETE' }),
   listChat: (paperId: string) => request<ChatAnswer[]>(`/api/papers/${paperId}/chat`),
+  promoteNote: (promote: PromoteRequest) => request<Note>('/api/notes/promote', sendJson('POST', promote)),
   /** The raw response: on success its body is the SSE stream that `useChatStream` reads. */
   askChat: (paperId: string, question: string) =>
     fetch(`/api/papers/${paperId}/chat`, sendJson('POST', { question })),

@@ -1,5 +1,5 @@
 import { QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api, type NoteCreate, type NoteUpdate, type Paper } from './client'
+import { api, type NoteCreate, type NoteUpdate, type Paper, type PromoteRequest } from './client'
 
 export const PAPERS_POLL_MS = 2000
 
@@ -48,6 +48,15 @@ export function useReindexPaper(paperId: string) {
   return useMutation({
     mutationFn: () => api.reingestPaper(paperId),
     onSettled: () => client.invalidateQueries({ queryKey: keys.paper(paperId) }),
+  })
+}
+
+/** Saves part of a chat answer as an AI note. Resolves once the notes list has refetched and includes it. */
+export function usePromoteNote(paperId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (promote: PromoteRequest) => api.promoteNote(promote),
+    onSuccess: () => client.invalidateQueries({ queryKey: keys.notes(paperId) }),
   })
 }
 
