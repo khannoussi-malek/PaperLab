@@ -1,5 +1,6 @@
 from collections import Counter
 from dataclasses import dataclass
+from itertools import takewhile
 from pathlib import Path
 
 import pymupdf
@@ -21,6 +22,10 @@ class ExtractedDoc:
     page_count: int
     title: str | None
     blocks: list[Block]
+    # For enrichment: page 1 as plain text (unlike blocks, it keeps rotated text such as the arXiv stamp),
+    # and the PDF's embedded metadata (title, author, subject, keywords, creationDate, ...).
+    first_page_text: str
+    metadata: dict[str, str]
 
 
 def _block(page_number: int, raw: dict) -> Block | None:
@@ -45,6 +50,22 @@ def _block(page_number: int, raw: dict) -> Block | None:
     )
 
 
+def _title_from_blocks(blocks: list[Block]) -> str | None:
+    """The largest text on page 1, continued through the blocks right after it in the same size and weight.
+
+    K1: a centred second title line is its own block. Requiring the same bold flag too keeps a same-size,
+    non-bold author line right below the title from being swallowed into it.
+    """
+    first_page = [b for b in blocks if b.page == 1]
+    if not first_page:
+        return None
+    size = max(b.size for b in first_page)
+    start = next(i for i, b in enumerate(first_page) if b.size == size)
+    bold = first_page[start].bold
+    continued = takewhile(lambda b: b.size == size and b.bold == bold, first_page[start:])
+    return join_lines([b.text for b in continued])
+
+
 def extract(path: str | Path) -> ExtractedDoc:
     """Text blocks with bboxes in PDF points (top-left origin, relative to the crop box).
 
@@ -58,11 +79,16 @@ def extract(path: str | Path) -> ExtractedDoc:
             if raw["type"] == 0 and (block := _block(page.number + 1, raw))
         ]
         page_count = doc.page_count
-        meta_title = (doc.metadata or {}).get("title", "").strip()
+        metadata = {key: value.strip() for key, value in (doc.metadata or {}).items() if isinstance(value, str)}
+        first_page_text = doc[0].get_text() if page_count else ""
 
     if sum(len(b.text) for b in blocks) < MIN_CHARS_PER_PAGE * page_count:
         raise InvalidInput("PDF has no usable text layer (scanned?). Run OCR on it and upload again.")
 
-    first_page = [b for b in blocks if b.page == 1]
-    largest = max(first_page, key=lambda b: b.size, default=None)
-    return ExtractedDoc(page_count=page_count, title=meta_title or (largest.text if largest else None), blocks=blocks)
+    return ExtractedDoc(
+        page_count=page_count,
+        title=metadata.get("title") or _title_from_blocks(blocks),
+        blocks=blocks,
+        first_page_text=first_page_text,
+        metadata=metadata,
+    )
