@@ -143,7 +143,9 @@ async def make_workspace(session, papers: list[Paper]) -> Workspace:
     workspace = Workspace(name=f"Retrieval {uuid.uuid4()}")  # unique: the owner's workspaces share the database
     session.add(workspace)
     await session.flush()
-    await session.execute(insert(workspace_papers), [{"workspace_id": workspace.id, "paper_id": p.id} for p in papers])
+    if papers:  # an executemany with an empty list of rows is invalid
+        rows = [{"workspace_id": workspace.id, "paper_id": p.id} for p in papers]
+        await session.execute(insert(workspace_papers), rows)
     await session.commit()
     return workspace
 
@@ -222,3 +224,20 @@ async def test_a_forced_hnsw_plan_still_returns_k_rows(session, embedder):
     assert len(by_ids) == 6
     assert [r.distance for r in by_ids] == sorted(r.distance for r in by_ids)
     assert len(await retrieve(session, QUERY, workspace_id=workspace.id, k=6, embedder=embedder)) == 6
+
+
+async def test_a_single_paper_workspace_is_not_capped(session, embedder):
+    paper = await add_paper(session, fresh_query(embedder), "Solo", [0.1 * (i + 1) for i in range(10)])
+    workspace = await make_workspace(session, [paper])
+
+    found = await retrieve(session, QUERY, workspace_id=workspace.id, embedder=embedder)
+
+    assert len(found) == 8  # k defaults to 8; a lone paper is uncapped, same as passing its id directly
+    assert {r.paper_id for r in found} == {paper.id}
+
+
+async def test_an_empty_workspace_returns_nothing_without_embedding_the_query(session, embedder):
+    workspace = await make_workspace(session, [])
+
+    assert await retrieve(session, QUERY, workspace_id=workspace.id, embedder=embedder) == []
+    assert embedder.calls == []
