@@ -48,6 +48,40 @@ async def test_a_doi_can_belong_to_one_paper_only(session):
         await enrichment.correct_metadata(session, paper.id, {"doi": "10.5555/TAKEN"})
 
 
+async def test_correcting_the_doi_clears_a_stale_match_so_a_new_one_can_apply(session, fake_openalex):
+    # The paper's PDF prints BERT's DOI (wrong: it's actually the retracted hydroxychloroquine paper), so the first
+    # enrichment matches the wrong work.
+    fake_openalex.route("/works/doi:10.18653/v1/n19-1423", recorded("work_bert"))
+    fake_openalex.route("/works/doi:10.1016/j.ijantimicag.2020.105949", recorded("work_retracted"))
+    fake_openalex.route("/authors", {"results": []})  # author details are covered in test_enrichment_authors.py
+    paper = await add_paper(session)
+    hints = PdfHints(doi=None, arxiv_id=None, years=frozenset(), text="", authors=[], keywords=[])
+    await enrichment.correct_metadata(session, paper.id, {"doi": "10.18653/v1/n19-1423"})
+    await enrichment.enrich_paper(session, fake_openalex.client, paper.id, hints)
+    await session.refresh(paper)
+    assert paper.openalex_id == "W2963341956"  # the wrong match, from the wrong DOI
+
+    corrected = await enrichment.correct_metadata(session, paper.id, {"doi": "10.1016/j.ijantimicag.2020.105949"})
+
+    # Cleared, but not locked: enrichment must be free to write the new match's own id right back.
+    assert corrected.openalex_id is None
+    assert corrected.manual_fields == ["doi"]
+
+    await enrichment.enrich_paper(session, fake_openalex.client, paper.id, hints)
+    await session.refresh(paper)
+    assert paper.openalex_id == "W3010930696"  # the corrected DOI's real work, not the stale one
+
+
+async def test_the_same_doi_re_entered_in_url_form_keeps_the_openalex_id(session):
+    paper = await add_paper(session, doi="10.18653/v1/n19-1423", openalex_id="W2963341956")
+
+    corrected = await enrichment.correct_metadata(
+        session, paper.id, {"doi": "https://doi.org/10.18653/V1/N19-1423"}
+    )
+
+    assert (corrected.doi, corrected.openalex_id) == ("10.18653/v1/n19-1423", "W2963341956")
+
+
 async def test_correcting_an_unknown_paper_is_not_found(session):
     with pytest.raises(NotFound):
         await enrichment.correct_metadata(session, uuid.uuid4(), {"title": "BERT"})
