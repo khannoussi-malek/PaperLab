@@ -1,11 +1,15 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
+import httpx
 import numpy as np
 import pytest
-from conftest import unit_vector
-from sqlalchemy import select
+from conftest import recorded, unit_vector
+from sqlalchemy import func, select
 
-from app.models import Chunk, Paper
+from app.config import settings
+from app.core import papers
+from app.models import Author, Chunk, Paper, paper_authors, paper_topics
 from app.providers import embedding
 from app.workers import ingest
 from app.workers.settings import WorkerSettings
@@ -150,3 +154,134 @@ async def test_enriched_title_is_not_overwritten(worker_session, sample_pdf, ctx
     await worker_session.refresh(paper)
 
     assert paper.status == "ready" and paper.title == "Title From OpenAlex"
+
+
+BERT_WORK = "/works/doi:10.18653/v1/n19-1423"  # the DOI doi_pdf prints
+E2E_FIXTURES = Path(__file__).parents[2] / "frontend/e2e/fixtures"
+
+
+@pytest.fixture
+def statuses(monkeypatch):
+    """Every status the worker writes, in order."""
+    written = []
+    set_status = papers.set_status
+
+    async def recording(session, paper_id, status, *args, **kwargs):
+        written.append(str(status))
+        await set_status(session, paper_id, status, *args, **kwargs)
+
+    monkeypatch.setattr(papers, "set_status", recording)
+    return written
+
+
+async def count(session, table, paper_id) -> int:
+    return await session.scalar(select(func.count()).select_from(table).where(table.c.paper_id == paper_id))
+
+
+async def test_a_doi_paper_is_enriched_on_its_way_to_ready(worker_session, doi_pdf, ctx, fake_openalex, statuses):
+    fake_openalex.route(BERT_WORK, recorded("work_bert"))
+    fake_openalex.route("/authors", recorded("authors_bert"))
+    paper = await add_paper(worker_session, doi_pdf)
+
+    await ingest.ingest_paper({**ctx, "openalex": fake_openalex.client}, str(paper.id))
+    await worker_session.refresh(paper)
+
+    assert statuses == ["extracting", "chunking", "embedding", "enriching", "ready"]
+    assert (paper.status, paper.openalex_id, paper.year) == ("ready", "W2963341956", 2019)
+    assert paper.title.startswith("BERT: Pre-training")  # OpenAlex's title replaces the PDF's
+    ids = select(Author.openalex_id).join(paper_authors).where(paper_authors.c.paper_id == paper.id)
+    assert set(await worker_session.scalars(ids)) == {"A5057457287", "A5076904467", "A5081862885", "A5053947885"}
+    assert await count(worker_session, paper_topics, paper.id) == 11  # 9 from OpenAlex, 2 embedded keywords
+
+
+async def test_a_reingest_keeps_one_row_per_author_and_topic(worker_session, doi_pdf, ctx, fake_openalex):
+    fake_openalex.route(BERT_WORK, recorded("work_bert"))
+    fake_openalex.route("/works/W2963341956", recorded("work_bert"))  # the re-run looks up the now-stored id
+    fake_openalex.route("/authors", recorded("authors_bert"))
+    paper = await add_paper(worker_session, doi_pdf)
+    enriching = {**ctx, "openalex": fake_openalex.client}
+
+    await ingest.ingest_paper(enriching, str(paper.id))
+    await ingest.ingest_paper(enriching, str(paper.id))
+
+    assert await count(worker_session, paper_authors, paper.id) == 4
+    assert await count(worker_session, paper_topics, paper.id) == 11
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        None,  # OpenAlex has no such DOI, and title search finds nothing
+        httpx.ConnectError("OpenAlex unreachable"),
+        httpx.ReadTimeout("OpenAlex timed out"),
+        httpx.Response(429, headers={"retry-after": "1"}, json={"error": "Rate limit exceeded"}),
+    ],
+    ids=["no match", "network error", "timeout", "rate limited"],
+)
+async def test_without_openalex_the_paper_still_reaches_ready_with_pdf_metadata(
+    worker_session, doi_pdf, ctx, fake_openalex, failure
+):
+    fake_openalex.route("/works", recorded("search_no_match"))
+    # "no match": OpenAlex has no such DOI, a clean 404 rather than leaving the request unrouted.
+    fake_openalex.route(BERT_WORK, failure if failure is not None else httpx.Response(404))
+    paper = await add_paper(worker_session, doi_pdf)
+
+    await ingest.ingest_paper({**ctx, "openalex": fake_openalex.client}, str(paper.id))
+    await worker_session.refresh(paper)
+
+    assert (paper.status, paper.status_error, paper.openalex_id) == ("ready", None, None)
+    assert paper.authors == ["Jacob Devlin", "Ming-Wei Chang"]  # from the PDF's embedded author field
+
+
+async def test_a_second_copy_of_a_matched_paper_still_reaches_ready(worker_session, doi_pdf, ctx, fake_openalex):
+    fake_openalex.route(BERT_WORK, recorded("work_bert"))
+    # /authors is deliberately left unrouted: enrichment gets as far as writing the match (doi dropped, per
+    # _taken) before the author-detail fetch fails; _enrich's catch-all is what still lets the paper reach ready.
+    await add_paper(worker_session, "/first-copy.pdf", doi="10.18653/v1/n19-1423")
+    copy = await add_paper(worker_session, doi_pdf)
+
+    await ingest.ingest_paper({**ctx, "openalex": fake_openalex.client}, str(copy.id))
+    await worker_session.refresh(copy)
+
+    # papers.doi is UNIQUE: doi is dropped instead of raising (core/enrichment.py's _taken), the rest of the match
+    # (title included) still applies -- symmetric with test_enrichment.py's test_a_duplicate_openalex_match_....
+    assert (copy.status, copy.status_error, copy.doi) == ("ready", None, None)
+    assert copy.title.startswith("BERT: Pre-training")
+
+
+async def test_a_corrected_title_survives_a_reingest(worker_session, sample_pdf, ctx):
+    paper = await add_paper(worker_session, sample_pdf, title="My Own Title", manual_fields=["title"])
+
+    await ingest.ingest_paper(ctx, str(paper.id))
+    await worker_session.refresh(paper)
+
+    assert (paper.status, paper.title) == ("ready", "My Own Title")
+
+
+@pytest.mark.parametrize("pdf", sorted(E2E_FIXTURES.glob("*.pdf")), ids=lambda p: p.name)
+async def test_the_e2e_fixture_paper_sends_no_openalex_request(worker_session, ctx, fake_openalex, pdf):
+    # No DOI, no arXiv ID and no creation date: nothing to look up and no year to confirm a title search.
+    # This keeps the Playwright stack off the network even with OPENALEX_MAILTO set. Loops over every fixture PDF
+    # in the directory (M10), in case another spec adds a second one later.
+    paper = await add_paper(worker_session, pdf)
+
+    await ingest.ingest_paper({**ctx, "openalex": fake_openalex.client}, str(paper.id))
+    await worker_session.refresh(paper)
+
+    assert (paper.status, fake_openalex.requests) == ("ready", [])
+
+
+async def test_the_worker_opens_an_openalex_client_only_with_a_mailto(embedder, monkeypatch):
+    monkeypatch.setattr(embedding, "load", lambda: embedder)
+    monkeypatch.setattr(settings, "openalex_mailto", "")
+    off = {}
+    await WorkerSettings.on_startup(off)
+    assert off["openalex"] is None
+    await WorkerSettings.on_shutdown(off)
+
+    monkeypatch.setattr(settings, "openalex_mailto", "me@example.com")
+    on = {}
+    await WorkerSettings.on_startup(on)
+    assert on["openalex"].params["mailto"] == "me@example.com"
+    await WorkerSettings.on_shutdown(on)
+    assert on["openalex"].is_closed
