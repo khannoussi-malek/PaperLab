@@ -115,13 +115,16 @@ export async function addNote(request: APIRequestContext, paperId: string, page:
   return (await created.json()) as { id: string }
 }
 
-/** Asks with Enter, and waits until the answer is saved: only a saved answer has `data-output-id`. */
-export async function ask(page: Page, question: string): Promise<Locator> {
+/**
+ * Asks with Enter, and waits until the answer is saved: only a saved answer has `data-output-id`.
+ * `timeoutMs` defaults to 15s; pass a longer one for the suite's first retrieving question, which also pays
+ * for loading the embedding model on a freshly recreated API.
+ */
+export async function ask(page: Page, question: string, timeoutMs = 15_000): Promise<Locator> {
   await page.getByRole('textbox', { name: 'Question' }).fill(question)
   await page.getByRole('textbox', { name: 'Question' }).press('Enter')
   const answer = page.locator('article.chat-answer[data-output-id]', { hasText: question })
-  // 15s: the first workspace question on a freshly recreated API also loads the embedding model (~3.4s cold).
-  await expect(answer.locator('.chat-answer-footer')).toContainText('AI · ', { timeout: 15_000 })
+  await expect(answer.locator('.chat-answer-footer')).toContainText('AI · ', { timeout: timeoutMs })
   return answer
 }
 
