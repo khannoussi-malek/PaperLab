@@ -70,6 +70,15 @@ export async function saveNoteOn(page: Page, line: Locator, body: string): Promi
   return card
 }
 
+/** Creates a note through the API, anchored on a line-sized rect near the top of `page`, and returns it. */
+export async function addNote(request: APIRequestContext, paperId: string, page: number, body: string) {
+  const created = await request.post('/api/notes', {
+    data: { body, anchor: { paper_id: paperId, page, bbox: [[72, 110, 540, 124]], quoted_text: `Quote for ${body}` } },
+  })
+  expect(created.status()).toBe(201)
+  return (await created.json()) as { id: string }
+}
+
 /** Largest offset in px between two elements' boxes; retried by callers while layout settles. */
 export async function boxOffset(a: Locator, b: Locator): Promise<number> {
   const [boxA, boxB] = [await a.boundingBox(), await b.boundingBox()]

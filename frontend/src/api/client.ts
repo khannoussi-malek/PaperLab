@@ -60,6 +60,7 @@ export const api = {
   deletePaper: (id: string) => request<void>(`/api/papers/${id}`, { method: 'DELETE' }),
   reingestPaper: (id: string) => request<Paper>(`/api/papers/${id}/reingest`, { method: 'POST' }),
   paperFileUrl: (id: string) => `/api/papers/${id}/file`,
+  listChunks: (paperId: string, page: number) => request<Chunk[]>(`/api/papers/${paperId}/chunks?page=${page}`),
   listNotes: (paperId: string) => request<Note[]>(`/api/papers/${paperId}/notes`),
   createNote: (note: NoteCreate) => request<Note>('/api/notes', sendJson('POST', note)),
   updateNote: (id: string, patch: NoteUpdate) => request<Note>(`/api/notes/${id}`, sendJson('PATCH', patch)),

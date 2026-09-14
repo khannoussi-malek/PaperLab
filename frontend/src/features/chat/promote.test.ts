@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest'
 import type { ChatSource } from '@/api/client'
 import { promoteSelection } from './promote'
 
-const source = (label: string): ChatSource => ({ label, chunk_id: `chunk-${label}`, page: 1, section: null, bbox: [] })
+const source = (label: string): ChatSource => ({
+  label,
+  chunk_id: `chunk-${label}`,
+  paper_id: 'paper-1',
+  page: 1,
+  section: null,
+  bbox: [],
+})
 const SOURCES = [source('C1'), source('C2'), source('C3')]
 const ANSWER =
   'Highlights anchor notes [C1]. They keep the page [C3].\n\nA second paragraph cites [C2].\n\nNo citations here.'
