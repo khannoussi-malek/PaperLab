@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { chunkHref, noteHref, parseRoute, readerHref, workspaceHref } from './route'
+import {
+  chartHref,
+  chartsHref,
+  chunkHref,
+  datasetHref,
+  editChartHref,
+  newChartHref,
+  noteHref,
+  parseRoute,
+  readerHref,
+  regionHref,
+  workspaceHref,
+} from './route'
 
 const id = '1f0e7570-3249-4d59-aa5c-8f9a03c2b70a'
 const other = '9b2d4c1e-7f3a-4e55-8c21-0d6b5a4f3e21'
@@ -53,10 +65,56 @@ describe('parseRoute', () => {
     expect(parseRoute(`#/workspaces/${id}?tab=graph`)).toEqual({ name: 'workspace', workspaceId: id, tab: 'papers' })
   })
 
+  it('keeps the Data tab in the hash', () => {
+    expect(readerHref(id, 'data')).toBe(`#/papers/${id}?tab=data`)
+    expect(parseRoute(readerHref(id, 'data'))).toEqual({ name: 'reader', paperId: id, tab: 'data', target: null })
+  })
+
+  it('reads a region target (a page and its rects) for the reader to flash once, on the Data tab', () => {
+    const rects: [number, number, number, number][] = [
+      [72, 100, 90, 110.5],
+      [72, 112, 90, 122],
+    ]
+    expect(regionHref(id, 7, rects)).toBe(`#/papers/${id}?tab=data&page=7&rects=72,100,90,110.5;72,112,90,122`)
+    expect(parseRoute(regionHref(id, 7, rects))).toEqual({
+      name: 'reader',
+      paperId: id,
+      tab: 'data',
+      target: { kind: 'region', id: '7:72,100,90,110.5;72,112,90,122', page: 7, rects },
+    })
+  })
+
+  it('ignores a region target with a malformed rect or no page', () => {
+    const data = { name: 'reader', paperId: id, tab: 'data', target: null }
+    expect(parseRoute(`#/papers/${id}?tab=data&page=7&rects=72,100,90`)).toEqual(data)
+    expect(parseRoute(`#/papers/${id}?tab=data&page=7&rects=72,100,x,110`)).toEqual(data)
+    expect(parseRoute(`#/papers/${id}?tab=data&rects=72,100,90,110`)).toEqual(data)
+  })
+
+  it('opens the charts page, a chart, the chart builder (new or editing) and a dataset', () => {
+    expect([chartsHref, chartHref(id), editChartHref(id), newChartHref(), newChartHref(other), datasetHref(other)]).toEqual([
+      '#/charts',
+      `#/charts/${id}`,
+      `#/charts/${id}/edit`,
+      '#/charts/new',
+      `#/charts/new?dataset=${other}`,
+      `#/datasets/${other}`,
+    ])
+    expect(parseRoute(chartsHref)).toEqual({ name: 'charts' })
+    expect(parseRoute(chartHref(id))).toEqual({ name: 'chart', chartId: id })
+    expect(parseRoute(editChartHref(id))).toEqual({ name: 'chart-builder', chartId: id, datasetId: null })
+    expect(parseRoute(newChartHref())).toEqual({ name: 'chart-builder', chartId: null, datasetId: null })
+    expect(parseRoute(newChartHref(other))).toEqual({ name: 'chart-builder', chartId: null, datasetId: other })
+    expect(parseRoute(`#/charts/new?dataset=nope`)).toEqual({ name: 'chart-builder', chartId: null, datasetId: null })
+    expect(parseRoute(datasetHref(other))).toEqual({ name: 'dataset', datasetId: other })
+  })
+
   it('falls back to the library for anything else', () => {
     expect(parseRoute('')).toEqual({ name: 'library' })
     expect(parseRoute('#/')).toEqual({ name: 'library' })
     expect(parseRoute('#/papers/not-an-id')).toEqual({ name: 'library' })
     expect(parseRoute('#/workspaces/not-an-id')).toEqual({ name: 'library' })
+    expect(parseRoute('#/charts/not-an-id')).toEqual({ name: 'library' })
+    expect(parseRoute('#/datasets/not-an-id')).toEqual({ name: 'library' })
   })
 })

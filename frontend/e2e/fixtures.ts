@@ -27,9 +27,27 @@ export async function uploadAndWaitUntilReady(request: APIRequestContext): Promi
 export async function removePaperAndNotes(request: APIRequestContext, paperId: string) {
   const notes = await request.get(`/api/papers/${paperId}/notes`)
   if (!notes.ok()) return // already deleted
-  // Notes deliberately survive paper deletion, so remove them first.
+  // Notes and datasets deliberately survive paper deletion, so remove them first.
   for (const note of await notes.json()) await request.delete(`/api/notes/${note.id}`)
+  const datasets = await request.get(`/api/datasets?paper_id=${paperId}`)
+  for (const dataset of datasets.ok() ? await datasets.json() : []) {
+    await request.delete(`/api/datasets/${dataset.id}?force=true`)
+  }
   await request.delete(`/api/papers/${paperId}`)
+}
+
+/** A captured table on `page` of the paper, as the capture dialog saves one: every cell read from that page. */
+export async function addTable(request: APIRequestContext, paperId: string, page: number, name: string, rows: string[][]) {
+  const region: Rect = [72, 110, 540, 110 + 14 * rows.length]
+  const grid = {
+    columns: rows[0].map((header) => ({ name: header })),
+    rows: rows.slice(1).map((row, r) => ({
+      cells: row.map((raw, c) => ({ raw, extracted: raw, page, bbox: [[72 + 150 * c, 124 + 14 * r, 150 + 150 * c, 134 + 14 * r]] })),
+    })),
+  }
+  const created = await request.post('/api/datasets', { data: { name, kind: 'table', paper_id: paperId, page, region, grid } })
+  expect(created.status()).toBe(201)
+  return (await created.json()) as { id: string; region: Rect; columns: { id: string; name: string }[] }
 }
 
 /** Deletes every workspace whose name starts with `prefix`. Deleting a workspace keeps its papers and notes. */
