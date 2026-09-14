@@ -188,3 +188,14 @@ test('the paper menu opens its workspace list beside the menu, fully on screen',
     )
     .toBe(true)
 })
+
+test('right-clicking a paper row opens its menu', async ({ page, paperId, workspaceName, workspaceId }) => {
+  expect(workspaceId).toBeTruthy()
+  await page.goto('/')
+  const row = page.locator('.paper-row').filter({ has: page.locator(`a[href="#/papers/${paperId}"]`) })
+  await row.click({ button: 'right' })
+  await page.getByRole('menuitem', { name: 'Add to workspace…' }).hover()
+  await expect(page.getByRole('menuitemcheckbox', { name: workspaceName })).toBeVisible()
+  // The right-click didn't also follow the row's link to the reader.
+  await expect(page).not.toHaveURL(/#\/papers\//)
+})

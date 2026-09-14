@@ -22,16 +22,19 @@ type Props = {
   paper: Paper
   /** The workspace being shown, if any: its row also offers "Remove from workspace". */
   workspaceId?: string
+  /** Controlled by the row, which also opens the menu on right-click. */
+  open: boolean
+  onOpenChange: (open: boolean) => void
   onMembershipChange: (workspaceId: string, member: boolean) => void
 }
 
 /** A paper row's menu: workspaces with check marks that toggle membership. */
-export function PaperMenu({ paper, workspaceId, onMembershipChange }: Props) {
+export function PaperMenu({ paper, workspaceId, open, onOpenChange, onMembershipChange }: Props) {
   const workspaces = useWorkspaces()
   // The API already orders workspaces by name (Postgres collation); no client re-sort.
   const sorted = workspaces.data ?? []
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"

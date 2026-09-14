@@ -29,6 +29,7 @@ type RowProps = {
 
 function PaperRow({ paper, previewed, workspaceId, onPreview, onDelete, onMembershipChange }: RowProps) {
   const meta = [byline(paper), pageCountLabel(paper.page_count)].filter(Boolean).join(' · ')
+  const [menuOpen, setMenuOpen] = useState(false)
   return (
     <li
       className={cn(
@@ -37,6 +38,11 @@ function PaperRow({ paper, previewed, workspaceId, onPreview, onDelete, onMember
       )}
       onMouseEnter={() => onPreview(paper.id, false)}
       onFocus={() => onPreview(paper.id, true)}
+      // ponytail: the menu opens at its ⋮ button, not the cursor; a Radix ContextMenu would place it there.
+      onContextMenu={(event) => {
+        event.preventDefault()
+        setMenuOpen(true)
+      }}
     >
       <FileText aria-hidden className="mt-1 size-4 shrink-0 text-muted-foreground" />
       <div className="min-w-0 flex-1">
@@ -62,6 +68,8 @@ function PaperRow({ paper, previewed, workspaceId, onPreview, onDelete, onMember
       <PaperMenu
         paper={paper}
         workspaceId={workspaceId}
+        open={menuOpen}
+        onOpenChange={setMenuOpen}
         onMembershipChange={(id, member) => onMembershipChange(paper, id, member)}
       />
       <Button
