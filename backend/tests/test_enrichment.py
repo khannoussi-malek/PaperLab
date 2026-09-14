@@ -48,6 +48,7 @@ async def topics_of(session, paper_id) -> dict[tuple[str, str], float | None]:
 async def test_a_doi_match_fills_the_paper_metadata(session, fake_openalex):
     work = recorded("work_bert")
     fake_openalex.route(BERT_WORK, work)
+    fake_openalex.route("/authors", {"results": []})  # author details are covered in test_enrichment_authors.py
     paper = await add_paper(session, title="BERT: Pre-training of Deep Bidirectional Transformers for")
 
     paper = await enrich(session, fake_openalex, paper, hints(doi=BERT_DOI))
@@ -66,6 +67,7 @@ async def test_a_doi_match_keeps_topics_with_source_and_score(session, fake_open
     fake_openalex.route(BERT_WORK, recorded("work_bert"))
     # The re-run below finds the paper's now-stored openalex_id first (0 credits), same underlying work.
     fake_openalex.route("/works/W2963341956", recorded("work_bert"))
+    fake_openalex.route("/authors", {"results": []})  # author details are covered in test_enrichment_authors.py
     paper = await add_paper(session)
 
     await enrich(session, fake_openalex, paper, hints(doi=BERT_DOI, keywords=["language models"]))
@@ -81,6 +83,7 @@ async def test_a_doi_match_keeps_topics_with_source_and_score(session, fake_open
 
 async def test_a_retracted_work_sets_the_flag_venue_issn_and_oa_location(session, fake_openalex):
     fake_openalex.route("/works/doi:10.1016/j.ijantimicag.2020.105949", recorded("work_retracted"))
+    fake_openalex.route("/authors", {"results": []})  # author details are covered in test_enrichment_authors.py
     paper = await add_paper(session, title="Hydroxychloroquine and azithromycin as a treatment of COVID-19")
 
     paper = await enrich(session, fake_openalex, paper, hints(doi="10.1016/j.ijantimicag.2020.105949"))
@@ -98,6 +101,7 @@ def test_the_abstract_is_rebuilt_from_the_inverted_index():
 
 async def test_an_arxiv_id_is_tried_as_a_doi_before_title_search(session, fake_openalex):
     fake_openalex.route("/works/doi:10.48550/arxiv.2210.12440", recorded("work_bert"))
+    fake_openalex.route("/authors", {"results": []})  # author details are covered in test_enrichment_authors.py
     paper = await add_paper(session)
 
     paper = await enrich(session, fake_openalex, paper, hints(arxiv_id="2210.12440", years={2022}))
@@ -111,6 +115,7 @@ async def test_title_search_accepts_a_hit_whose_year_and_first_author_agree(sess
     # explicit route rather than relying on FakeOpenAlex's (removed) default reply.
     fake_openalex.route("/works/doi:10.48550/arxiv.1810.04805", httpx.Response(404))
     fake_openalex.route(BERT_SEARCH, recorded("search_bert"))
+    fake_openalex.route("/authors", {"results": []})  # author details are covered in test_enrichment_authors.py
     paper = await add_paper(session)
 
     # The arXiv PDF says 2018; OpenAlex dates the merged NAACL record 2019. One year apart still agrees.
@@ -125,6 +130,7 @@ async def test_title_search_skips_a_hit_whose_first_author_is_not_on_the_page(se
     results = recorded("search_bert")
     # The decoy first: a 2020 Japanese article whose title mentions Jacob Devlin, first author 柴田 知秀.
     fake_openalex.route(BERT_SEARCH, {**results, "results": results["results"][::-1]})
+    fake_openalex.route("/authors", {"results": []})  # author details are covered in test_enrichment_authors.py
     paper = await add_paper(session)
 
     paper = await enrich(session, fake_openalex, paper, hints(years={2020}))
@@ -213,6 +219,7 @@ async def test_a_matched_paper_keeps_its_data_while_openalex_is_down(session, fa
 
 async def test_corrected_fields_are_never_overwritten(session, fake_openalex):
     fake_openalex.route(BERT_WORK, recorded("work_bert"))
+    fake_openalex.route("/authors", {"results": []})  # author details are covered in test_enrichment_authors.py
     paper = await add_paper(session, title="My Title", is_retracted=True, manual_fields=["title", "is_retracted"])
 
     paper = await enrich(session, fake_openalex, paper, hints(doi=BERT_DOI))
@@ -244,6 +251,7 @@ async def test_a_title_search_match_keeps_the_stored_doi_when_the_work_has_none(
     # The stored DOI is tried first (404: no such work), so the search below still runs.
     fake_openalex.route(f"/works/doi:{fallback_doi}", httpx.Response(404))
     fake_openalex.route(BERT_SEARCH, {"results": [{**recorded("work_bert"), "doi": None}]})
+    fake_openalex.route("/authors", {"results": []})  # author details are covered in test_enrichment_authors.py
 
     paper = await enrich(session, fake_openalex, paper, hints(years={2019}))
 
@@ -263,6 +271,7 @@ async def test_a_trusted_id_match_with_no_authorships_keeps_the_stored_byline(se
 async def test_a_duplicate_openalex_match_keeps_the_second_papers_metadata_and_topics(session, fake_openalex):
     # Symmetric with the doi case: two papers matching the same work must not raise on papers.openalex_id UNIQUE.
     fake_openalex.route(BERT_WORK, recorded("work_bert"))
+    fake_openalex.route("/authors", {"results": []})  # author details are covered in test_enrichment_authors.py
     paper1 = await add_paper(session)
     paper2 = await add_paper(session)
 
