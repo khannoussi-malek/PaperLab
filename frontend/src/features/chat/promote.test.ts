@@ -55,4 +55,15 @@ describe('promoteSelection', () => {
     expect(promoteSelection(ANSWER, SOURCES, end, start)).toEqual({ body: 'A second paragraph', chunkIds: ['chunk-C2'] })
     expect(promoteSelection(ANSWER, SOURCES, ...over('\n\n'))).toBeNull()
   })
+
+  it('computes the paragraph fallback from the trimmed body, not a start sitting on the break itself', () => {
+    // The selection starts on the leading "\n" of the "\n\n" before paragraph 2, not inside paragraph 2's text.
+    // The body still trims down to paragraph 2, so its anchors must be paragraph 2's markers, not paragraph 1's.
+    const breakStart = ANSWER.indexOf('\n\n')
+    const [, end] = over('A second paragraph')
+    expect(promoteSelection(ANSWER, SOURCES, breakStart, end)).toEqual({
+      body: 'A second paragraph',
+      chunkIds: ['chunk-C2'],
+    })
+  })
 })
