@@ -101,7 +101,8 @@ export function PaperList({ papers, workspaceId }: Props) {
   }
 
   function onDelete(paper: Paper) {
-    if (!window.confirm(`Delete "${paper.title}"? Its highlights go with it; notes are kept.`)) return
+    if (!window.confirm(`Delete "${paper.title}" from your library and every workspace? Its highlights go with it; notes are kept.`))
+      return
     remove.mutate(paper.id)
   }
 
