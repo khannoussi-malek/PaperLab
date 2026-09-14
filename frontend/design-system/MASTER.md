@@ -25,10 +25,12 @@ for landing pages, so only these parts of its output were kept:
 
 The app chrome is frosted glass over a faint blue/violet glow on the page background. The paper is not.
 - **Glass (`glass` from `@/components/glass`: `bg-glass backdrop-blur-lg backdrop-saturate-150`)**, with a
-  `border-glass-border` or `ring-glass-border` hairline: reader toolbar, notes panel, library list card, alerts.
-- **Strong glass (`bg-glass-strong`)** where content sits behind: note cards and the composer (no blur of their
-  own; blur inside blur looks muddy), the theme menu and the hover card (these two also blur).
-- **Never glass:** the PDF page, highlights, and the AI provenance surface (`bg-provenance-llm-surface` wins).
+  `border-glass-border` or `ring-glass-border` hairline: reader toolbar, the reader's right panel (Notes | Chat), library
+  list card, alerts.
+- **Strong glass (`bg-glass-strong`)** where content sits behind: note cards, the composer and chat questions (no blur
+  of their own; blur inside blur looks muddy), the theme menu and the hover card (these two also blur).
+- **Never glass:** the PDF page, highlights, the citation flash, and the AI provenance surface
+  (`bg-provenance-llm-surface` wins, including under chat answers).
 - OS "Reduce transparency" swaps both glass tokens for `card`, so every surface turns solid.
 - Measured contrast on glass (screenshots, both themes): body text 10.8–17.7:1, muted text 5.8–7.5:1.
 
@@ -87,7 +89,9 @@ Fonts: body `Atkinson Hyperlegible Next Variable` (`font-sans`), headings `Crims
 - **Nothing that shifts selection coordinates** goes on `.pdf-page`: no border, no padding.
 - **Stable test hooks.** Keep the class names and accessible names the Playwright specs use
   (`.paper-row`, `.status`, `.paper-preview`, `.pdf-page`, `.pdf-overlay`, `.highlight`, `.draft`, `.zoom-level`,
-  `article.note`, `.provenance-badge`, `.note-hover-card`, the "Note" / "Save note" / "Zoom in" / "Toggle theme" names,
+  `article.note`, `.provenance-badge`, `.note-hover-card`, `article.chat-answer`, `.chat-question`, `.chat-sources`,
+  `.chat-answer-text`, `.chat-cite`, `.chat-answer-footer`, `.chunk-flash`, `.save-as-note`, the "Note" / "Save note" /
+  "Zoom in" / "Toggle theme" / "Question" / "Save as note" / "Retry" / "Re-index" names, the "Notes" / "Chat" tabs,
   and the colour names "Yellow" … "Orange" / "Custom colour").
   Style with utility classes next to them.
 - One primary button per view. Destructive actions use `text-destructive` and ask for confirmation.
@@ -99,6 +103,31 @@ Fonts: body `Atkinson Hyperlegible Next Variable` (`font-sans`), headings `Crims
   Copy quote, Delete note); the pending selection opens the draft menu (Highlight in <colour>, Add note…, Copy text,
   Cancel); anywhere else the browser keeps its own menu. The menu is the shadcn `DropdownMenu` anchored at the
   pointer, and a failed copy shows in the error alert.
+
+## Chat (M4)
+
+Pattern from ui-ux-pro-max (`search.py "AI chat panel streaming answer citations sidebar" --domain ux`): stream text as
+it arrives instead of a long spinner, and label AI output clearly (severity High). shadcn guidance
+(`--stack shadcn "tabs tooltip"`): Tabs for switching related panels, Tooltip rather than `title` for hints.
+- **Where:** the second tab of the reader's right panel (`RightPanel`, shadcn `Tabs`). The PDF keeps its width. The tab
+  is in the hash (`#/papers/:id?tab=chat`). Both panels stay mounted, so switching never loses a streaming answer.
+  Selecting text in the PDF switches to Notes, where the composer is.
+- **One Q&A:** the question is a `bg-glass-strong` bubble on the right. The answer sits on `bg-provenance-llm-surface`:
+  sources first (outline chips `C1 · p.4 · Method`, or one `Whole paper · N chunks` badge), then the streamed text,
+  then the footer `Sparkles` + `AI · <model> · prompt v<N>` in `text-xs text-muted-foreground`
+  (6.9:1 light, 5.9:1 dark on the surface).
+- **Citations:** `[C1]` is an inline `text-primary` button (4.7:1 light, 6.0:1 dark on the surface) whose visible text
+  stays `[C1]`, with an `aria-label` naming the source. Its text must equal the answer's own characters: promote counts
+  offsets in it. A marker with no surviving source is plain text.
+- **Citation flash:** clicking a citation or a source chip scrolls the reader to the chunk and draws its rects for
+  1.5 s with `bg-highlight-draft`, a `primary` outline and `mix-blend-multiply`. It pulses only under `motion-safe`.
+- **Save as note:** selecting text inside one saved answer floats a small primary "Save as note" button (`Sparkles`)
+  just below the selection. With nothing to anchor on it is disabled, and a `Tooltip` on a focusable wrapper says
+  "Include a cited passage [C…] to anchor this note" (a disabled button gets no pointer or focus events).
+- **Input:** a labelled `Textarea` ("Question") pinned under the list. Enter sends, Shift+Enter adds a line, and it is
+  disabled while an answer streams.
+- **Errors:** a destructive `Alert` inside the Q&A it belongs to, with Retry or Re-index in `AlertAction`. A mid-stream
+  error keeps the partial text above it.
 
 ## Pre-delivery check (from ui-ux-pro-max Quick Reference §1–§3)
 

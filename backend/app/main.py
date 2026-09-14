@@ -5,11 +5,11 @@ from arq.connections import RedisSettings
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from app.api import health, notes, papers
+from app.api import chat, health, notes, papers
 from app.config import settings
-from app.core.errors import DomainError, InvalidInput, NotFound
+from app.core.errors import Conflict, DomainError, InvalidInput, NotFound
 
-STATUS_BY_ERROR = {NotFound: 404, InvalidInput: 422}
+STATUS_BY_ERROR = {NotFound: 404, InvalidInput: 422, Conflict: 409}
 
 
 @asynccontextmanager
@@ -24,6 +24,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(papers.router)
     app.include_router(notes.router)
+    app.include_router(chat.router)
 
     @app.exception_handler(DomainError)
     async def domain_error(_: Request, exc: DomainError) -> JSONResponse:

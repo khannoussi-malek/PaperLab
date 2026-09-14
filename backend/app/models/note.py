@@ -22,7 +22,7 @@ class Note(Base):
     body: Mapped[str] = mapped_column(Text)
     provenance: Mapped[str] = mapped_column(Text)
     color: Mapped[str] = mapped_column(Text, server_default=text("'#facc15'"))
-    # The database enforces the FK to llm_outputs; that table gets a mapping in M4.
+    # The database enforces the FK to llm_outputs (ON DELETE SET NULL since 0003).
     source_id: Mapped[uuid.UUID | None]
     created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
     updated_at: Mapped[datetime] = mapped_column(server_default=text("now()"))

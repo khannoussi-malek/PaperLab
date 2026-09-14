@@ -1,6 +1,9 @@
+import math
 import os
+import random
 from pathlib import Path
 
+import numpy as np
 import pymupdf
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -59,6 +62,34 @@ def arq():
     return FakeArq()
 
 
+def unit_vector(seed: str) -> list[float]:
+    """A fixed pseudo-random 768-d unit vector per seed."""
+    rng = random.Random(seed)
+    vector = [rng.gauss(0, 1) for _ in range(768)]
+    norm = math.sqrt(sum(x * x for x in vector))
+    return [x / norm for x in vector]
+
+
+class FakeEmbedder:
+    """Stands in for SentenceTransformer: records every encode call instead of running a model.
+
+    A text embeds to `vectors[text]` when a test set one, otherwise to `unit_vector(text)`.
+    """
+
+    def __init__(self):
+        self.calls: list[tuple[list[str], dict]] = []
+        self.vectors: dict[str, list[float]] = {}
+
+    def encode(self, texts: list[str], **kwargs):
+        self.calls.append((list(texts), kwargs))
+        return np.array([self.vectors.get(t) or unit_vector(t) for t in texts], dtype=np.float32)
+
+
+@pytest.fixture
+def embedder():
+    return FakeEmbedder()
+
+
 @pytest.fixture
 def pdf_dir(tmp_path, monkeypatch):
     directory = tmp_path / "pdfs"
@@ -67,10 +98,16 @@ def pdf_dir(tmp_path, monkeypatch):
 
 
 @pytest.fixture
-async def client(session, arq, pdf_dir):
-    app = create_app()
-    app.dependency_overrides[get_session] = lambda: session
-    app.state.arq = arq
+def app(session, arq, pdf_dir):
+    """The app bound to the test session. Tests add their own dependency_overrides (e.g. the LLM)."""
+    application = create_app()
+    application.dependency_overrides[get_session] = lambda: session
+    application.state.arq = arq
+    return application
+
+
+@pytest.fixture
+async def client(app):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http:
         yield http
 

@@ -8,3 +8,7 @@ class NotFound(DomainError):
 
 class InvalidInput(DomainError):
     pass
+
+
+class Conflict(DomainError):
+    """The request is valid but the resource isn't in a state that allows it (e.g. paper_not_ready)."""
