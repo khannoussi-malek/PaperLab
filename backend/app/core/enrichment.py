@@ -12,19 +12,22 @@ import re
 import unicodedata
 import uuid
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Any
 
 import httpx
-from sqlalchemy import delete, exists, insert, select, update
+from sqlalchemy import delete, exists, func, insert, or_, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.papers import get_paper
-from app.models import Paper, paper_topics
+from app.models import Author, Paper, paper_authors, paper_topics
 from app.providers import openalex
 
 logger = logging.getLogger(__name__)
 
 ARXIV_DOI_PREFIX = "10.48550/arxiv."
+AUTHOR_REFRESH_AFTER = timedelta(days=30)
 YEAR_TOLERANCE = 1  # an arXiv preprint and its published version are often dated a year apart
 
 _DOI = re.compile(r"10\.\d{4,9}/\S+")
@@ -176,7 +179,73 @@ def _regresses(new: Any, old: Any) -> bool:
 
 async def _taken(session: AsyncSession, paper_id: uuid.UUID, column: Any, value: Any) -> bool:
     """True when a different paper already holds this UNIQUE `column` value."""
+    # ponytail: check-then-UPDATE, not atomic. ARQ runs up to 10 jobs at once, so two concurrent duplicates could
+    # still both pass this check and hit the UNIQUE constraint on the later UPDATE; the ingest `except` then marks
+    # that paper failed. Upgrade path: `ON CONFLICT` on the UPDATE, or a savepoint around check+write.
     return bool(await session.scalar(select(exists().where(column == value, Paper.id != paper_id))))
+
+
+async def _replace_authorships(session: AsyncSession, paper_id: uuid.UUID, work: dict[str, Any]) -> list[str]:
+    """Upserts the work's authors by OpenAlex ID and links them in author order. Returns their OpenAlex IDs."""
+    first_listing: dict[str, tuple[int, dict]] = {}
+    for position, authorship in enumerate(work.get("authorships") or [], start=1):
+        if openalex_id := short_id(authorship["author"].get("id")):  # never create an author from a name alone
+            first_listing.setdefault(openalex_id, (position, authorship))
+    await session.execute(delete(paper_authors).where(paper_authors.c.paper_id == paper_id))
+    if not first_listing:
+        return []
+
+    new_authors = [
+        {"openalex_id": oid, "display_name": a["author"]["display_name"], "orcid": short_id(a["author"].get("orcid"))}
+        for oid, (_, a) in first_listing.items()
+    ]
+    # ponytail: two OpenAlex IDs sharing one ORCID break authors.orcid UNIQUE, and the paper keeps no authors (still
+    # non-fatal). Drop the ORCID on conflict if OpenAlex's duplicate profiles ever show up.
+    await session.execute(pg_insert(Author).values(new_authors).on_conflict_do_nothing(index_elements=["openalex_id"]))
+    rows = await session.execute(select(Author.openalex_id, Author.id).where(Author.openalex_id.in_(first_listing)))
+    author_ids = dict(rows.all())
+    links = [
+        {
+            "paper_id": paper_id,
+            "author_id": author_ids[oid],
+            "position": position,
+            "is_corresponding": bool(a.get("is_corresponding")),
+            # The affiliation printed on this paper, not the author's current one.
+            "institution": next((i["display_name"] for i in a.get("institutions") or []), None),
+        }
+        for oid, (position, a) in first_listing.items()
+    ]
+    await session.execute(insert(paper_authors), links)
+    return list(first_listing)
+
+
+async def refresh_authors(session: AsyncSession, http: httpx.AsyncClient, openalex_ids: list[str]) -> None:
+    """Fetches details (h-index, works count, ...) for authors not fetched in the last 30 days, 50 per request."""
+    stale = list(
+        await session.scalars(
+            select(Author.openalex_id).where(
+                Author.openalex_id.in_(openalex_ids),
+                or_(Author.fetched_at.is_(None), Author.fetched_at < func.now() - AUTHOR_REFRESH_AFTER),
+            )
+        )
+    )
+    if not stale:
+        return
+    stale.sort(key=openalex_ids.index)  # author order, so requests are predictable
+    for record in await openalex.get_authors(http, stale):
+        values = {
+            "display_name": record["display_name"],
+            "orcid": short_id(record.get("orcid")),
+            "alt_names": record.get("display_name_alternatives") or [],
+            "last_institution": next((i["display_name"] for i in record.get("last_known_institutions") or []), None),
+            "works_count": record.get("works_count"),
+            "cited_by_count": record.get("cited_by_count"),
+            "h_index": (record.get("summary_stats") or {}).get("h_index"),
+            "topics": [{"label": t["display_name"], "count": t.get("count")} for t in record.get("topics") or []],
+            "fetched_at": func.now(),
+        }
+        await session.execute(update(Author).where(Author.openalex_id == short_id(record["id"])).values(**values))
+    await session.commit()
 
 
 async def _write(session: AsyncSession, paper: Paper, fields: dict[str, Any]) -> None:
@@ -198,9 +267,8 @@ async def enrich_paper(
 ) -> None:
     """Fills a paper's metadata from OpenAlex, or from the PDF when OpenAlex has nothing. No client: OpenAlex is off.
 
-    OpenAlex failures are logged and fall back to the PDF. A DOI another paper already holds is silently dropped
-    (see `_write`) instead of raising; a duplicate `openalex_id` match still raises, and the ingest worker treats
-    that as non-fatal too.
+    OpenAlex failures are logged and fall back to the PDF. A DOI or `openalex_id` another paper already holds is
+    silently dropped instead of raising (see `_write`).
     """
     paper = await get_paper(session, paper_id)
     await session.refresh(paper)  # the pipeline changed the title with a bulk UPDATE since this object was loaded
@@ -222,3 +290,9 @@ async def enrich_paper(
     await _write(session, paper, work_fields(work))
     await _replace_topics(session, paper_id, "openalex", work_topics(work))
     await session.commit()
+    author_ids = await _replace_authorships(session, paper_id, work)
+    await session.commit()
+    try:
+        await refresh_authors(session, http, author_ids)
+    except httpx.HTTPError as exc:  # the paper and its authorships are saved; details come on the next run
+        logger.warning("OpenAlex author fetch failed for paper %s: %r", paper_id, exc)
