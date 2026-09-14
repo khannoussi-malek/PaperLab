@@ -174,16 +174,21 @@ def _regresses(new: Any, old: Any) -> bool:
     return new in (None, []) and old not in (None, [])
 
 
-async def _doi_taken(session: AsyncSession, paper_id: uuid.UUID, doi: str) -> bool:
-    return bool(await session.scalar(select(exists().where(Paper.doi == doi, Paper.id != paper_id))))
+async def _taken(session: AsyncSession, paper_id: uuid.UUID, column: Any, value: Any) -> bool:
+    """True when a different paper already holds this UNIQUE `column` value."""
+    return bool(await session.scalar(select(exists().where(column == value, Paper.id != paper_id))))
 
 
 async def _write(session: AsyncSession, paper: Paper, fields: dict[str, Any]) -> None:
     values = {
         k: v for k, v in fields.items() if k not in paper.manual_fields and not _regresses(v, getattr(paper, k))
     }
-    if (doi := values.get("doi")) and await _doi_taken(session, paper.id, doi):
-        values = {k: v for k, v in values.items() if k != "doi"}  # another paper already holds this DOI
+    # A duplicate upload can match the very work (or carry the very DOI) an existing paper already holds; doi and
+    # openalex_id are both UNIQUE, so a value another paper already has is dropped here instead of raising. A copy
+    # left without an openalex_id is treated as unmatched by later steps keyed on it (e.g. authorships in Task 5).
+    for column, key in ((Paper.doi, "doi"), (Paper.openalex_id, "openalex_id")):
+        if (value := values.get(key)) and await _taken(session, paper.id, column, value):
+            values = {k: v for k, v in values.items() if k != key}
     if values:
         await session.execute(update(Paper).where(Paper.id == paper.id).values(**values))
 
