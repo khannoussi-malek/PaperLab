@@ -160,3 +160,55 @@ test('a duplicate or blank name is refused with a message, when creating and whe
   const names = (await (await request.get('/api/workspaces')).json()).map((w: { name: string }) => w.name)
   expect(names.filter((n: string) => n.startsWith(workspaceName)).sort()).toEqual([`${workspaceName} A`, `${workspaceName} B`])
 })
+
+test('the paper menu opens its workspace list beside the menu, fully on screen', async ({
+  page,
+  paperId,
+  workspaceName,
+  workspaceId,
+}) => {
+  expect(workspaceId).toBeTruthy()
+  await page.goto('/')
+  const row = page.locator('.paper-row').filter({ has: page.locator(`a[href="#/papers/${paperId}"]`) })
+  await row.getByRole('button', { name: 'Paper actions' }).click()
+  await page.getByRole('menuitem', { name: 'Add to workspace…' }).hover()
+  const tick = page.getByRole('menuitemcheckbox', { name: workspaceName })
+  await expect(tick).toBeVisible()
+
+  // Not rendered inside the parent menu, whose scroll box and glass filter would clip it.
+  expect(await tick.evaluate((el) => el.closest('[data-slot="dropdown-menu-content"]') === null)).toBe(true)
+  // Really painted where it is: the element at its centre is the item itself.
+  await expect
+    .poll(() =>
+      tick.evaluate((el) => {
+        const box = el.getBoundingClientRect()
+        const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)
+        return hit !== null && el.contains(hit)
+      }),
+    )
+    .toBe(true)
+})
+
+test('right-clicking a paper row opens its menu where the pointer is', async ({
+  page,
+  paperId,
+  workspaceName,
+  workspaceId,
+}) => {
+  expect(workspaceId).toBeTruthy()
+  await page.goto('/')
+  const row = page.locator('.paper-row').filter({ has: page.locator(`a[href="#/papers/${paperId}"]`) })
+  const rowBox = (await row.boundingBox())!
+  const click = { x: rowBox.width / 3, y: rowBox.height / 2 }
+  await row.click({ button: 'right', position: click })
+
+  const add = page.getByRole('menuitem', { name: 'Add to workspace…' })
+  const menuBox = (await page.getByRole('menu').filter({ has: add }).boundingBox())!
+  expect(Math.abs(menuBox.x - (rowBox.x + click.x))).toBeLessThan(8)
+  expect(Math.abs(menuBox.y - (rowBox.y + click.y))).toBeLessThan(8)
+
+  await add.hover()
+  await expect(page.getByRole('menuitemcheckbox', { name: workspaceName })).toBeVisible()
+  // The right-click didn't also follow the row's link to the reader.
+  await expect(page).not.toHaveURL(/#\/papers\//)
+})
