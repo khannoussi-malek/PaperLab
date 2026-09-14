@@ -5,6 +5,7 @@ import httpx2
 import pytest
 
 from app.config import settings
+from app.core.chat import WORKSPACE_SYSTEM_PROMPT
 from app.providers import llm
 from app.providers.base import LLMError, LLMUnavailable
 
@@ -194,6 +195,19 @@ async def test_fake_llm_splits_the_citation_marker_and_records_calls():
     assert "".join(tokens) == llm.FAKE_ANSWER
     assert ["[C", "1]"] == tokens[tokens.index("[C") : tokens.index("[C") + 2]
     assert fake.calls == [("You cite sources.", "Question: why?")]
+
+
+async def test_fake_llm_gives_the_workspace_answer_to_the_workspace_prompt():
+    fake = llm.FakeLLM()
+
+    tokens = [token async for token in fake.stream(WORKSPACE_SYSTEM_PROMPT, "Question: why?")]
+
+    assert "".join(tokens) == llm.FAKE_WORKSPACE_ANSWER
+    assert llm.FAKE_WORKSPACE_ANSWER == (
+        "Fake workspace answer: both papers describe the method [C1][C2], as your note says [N1]."
+    )
+    assert tokens[tokens.index("[C") : tokens.index("[C") + 4] == ["[C", "1]", "[C", "2]"]
+    assert ["[N", "1]"] == tokens[tokens.index("[N") : tokens.index("[N") + 2]
 
 
 async def test_fake_llm_can_fail_mid_stream():

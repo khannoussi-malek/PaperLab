@@ -8,6 +8,7 @@ import httpx
 import httpx2
 
 from app.config import settings
+from app.core.chat import WORKSPACE_SYSTEM_PROMPT
 from app.providers.base import LLM, LLMError, LLMUnavailable
 
 # Streaming, so a generous cap costs nothing when unused and never truncates a long answer.
@@ -92,6 +93,13 @@ class AnthropicLLM:
 FAKE_ANSWER = "Fake answer: the method is described here [C1]."
 # Word by word, with the citation marker split across two tokens like a real model does.
 FAKE_TOKENS = ["Fake ", "answer: ", "the ", "method ", "is ", "described ", "here ", "[C", "1]", "."]
+# Given the workspace system prompt: cites a passage from each of two papers and a note, as the workspace chat
+# end-to-end spec expects.
+FAKE_WORKSPACE_ANSWER = "Fake workspace answer: both papers describe the method [C1][C2], as your note says [N1]."
+FAKE_WORKSPACE_TOKENS = [
+    "Fake ", "workspace ", "answer: ", "both ", "papers ", "describe ", "the ", "method ",
+    "[C", "1]", "[C", "2]", ", ", "as ", "your ", "note ", "says ", "[N", "1]", ".",
+]
 
 
 class FakeLLM:
@@ -106,7 +114,8 @@ class FakeLLM:
 
     async def stream(self, system: str, prompt: str) -> AsyncIterator[str]:
         self.calls.append((system, prompt))
-        for index, token in enumerate(FAKE_TOKENS):
+        tokens = FAKE_WORKSPACE_TOKENS if system == WORKSPACE_SYSTEM_PROMPT else FAKE_TOKENS
+        for index, token in enumerate(tokens):
             if index == self.fail_after:
                 raise LLMError("fake model failed mid-answer")
             await asyncio.sleep(self.delay)
