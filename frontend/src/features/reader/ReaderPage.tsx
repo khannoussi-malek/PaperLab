@@ -7,6 +7,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { readerHref, type ReaderTab, type ReaderTarget } from '@/lib/route'
 import { cn } from '@/lib/utils'
 import { ChatPanel } from '../chat/ChatPanel'
+import { DataPanel } from '../data/DataPanel'
 import { browserStorage, highlightFill, loadLastColor, saveLastColor } from '../notes/highlightColors'
 import { NoteHoverCard } from '../notes/NoteHoverCard'
 import { NotesPanel } from '../notes/NotesPanel'
@@ -110,12 +111,14 @@ export function ReaderPage({ paperId, tab, target }: Props) {
   const highlightsByPage = useMemo(() => groupHighlights(notes, draft, paperId), [notes, draft, paperId])
 
   // Rendering the flash first gives the scroll a target, even on a page whose canvas hasn't rendered yet.
+  // A flash asked for before the PDF has loaded (Show in paper clicked straight after opening) waits for `doc`,
+  // since until then no page exists to draw it on or scroll to.
   useEffect(() => {
-    if (!flash) return
+    if (!flash || !doc) return
     scrollToElement('.chunk-flash', 'center')
     const timer = window.setTimeout(() => setFlash(null), FLASH_MS)
     return () => window.clearTimeout(timer)
-  }, [flash])
+  }, [flash, doc])
 
   const flashChunk = (page: number, rects: PdfRect[]) => setFlash({ id: Date.now(), page, rects })
 
@@ -138,6 +141,8 @@ export function ReaderPage({ paperId, tab, target }: Props) {
       if (!targetChunks.data) return
       const chunk = targetChunks.data.find((c) => c.id === target.id)
       if (chunk) flashChunk(chunk.page, chunk.bbox)
+    } else if (target.kind === 'region') {
+      flashChunk(target.page, target.rects)
     } else {
       if (!notesQuery.data) return
       const note = notesQuery.data.find((n) => n.id === target.id)
@@ -377,6 +382,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
             onPromoted={showPromotedNote}
           />
         }
+        data={<DataPanel paperId={paperId} onShowRegion={flashChunk} />}
       />
 
       <ReaderContextMenu
