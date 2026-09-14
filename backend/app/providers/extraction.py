@@ -51,16 +51,19 @@ def _block(page_number: int, raw: dict) -> Block | None:
 
 
 def _title_from_blocks(blocks: list[Block]) -> str | None:
-    """The largest text on page 1, continued through the blocks right after it in the same size.
+    """The largest text on page 1, continued through the blocks right after it in the same size and weight.
 
-    K1: a centred second title line is its own block.
+    K1: a centred second title line is its own block. Requiring the same bold flag too keeps a same-size,
+    non-bold author line right below the title from being swallowed into it.
     """
     first_page = [b for b in blocks if b.page == 1]
     if not first_page:
         return None
     size = max(b.size for b in first_page)
     start = next(i for i, b in enumerate(first_page) if b.size == size)
-    return join_lines([b.text for b in takewhile(lambda b: b.size == size, first_page[start:])])
+    bold = first_page[start].bold
+    continued = takewhile(lambda b: b.size == size and b.bold == bold, first_page[start:])
+    return join_lines([b.text for b in continued])
 
 
 def extract(path: str | Path) -> ExtractedDoc:
