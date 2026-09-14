@@ -9,3 +9,4 @@ docs/
 .coverage
 .superpowers/
 frontend/design-system/
+.DS_Store
