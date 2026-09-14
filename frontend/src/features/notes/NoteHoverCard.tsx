@@ -1,5 +1,7 @@
 import type { CSSProperties } from 'react'
 import type { Note } from '@/api/client'
+import { popIn } from '@/components/motion'
+import { cn } from '@/lib/utils'
 import { NoteCard } from './NoteCard'
 
 type Props = {
@@ -24,7 +26,7 @@ type Props = {
 export function NoteHoverCard({ notes, paperId, style, editNoteId, ...handlers }: Props) {
   return (
     <div
-      className="note-hover-card pointer-events-auto absolute z-10 flex w-80 flex-col gap-2"
+      className={cn('note-hover-card pointer-events-auto absolute z-10 flex w-80 origin-top-left flex-col gap-2', popIn)}
       style={style}
       onMouseEnter={handlers.onPointerEnter}
       onMouseLeave={handlers.onPointerLeave}

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } fr
 import { api, type Note } from '@/api/client'
 import { useNoteMutations, useNotes, usePaper } from '@/api/queries'
 import { glass } from '@/components/glass'
+import { fadeIn } from '@/components/motion'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { readerHref, type ReaderTab } from '@/lib/route'
 import { cn } from '@/lib/utils'
@@ -10,6 +11,7 @@ import { browserStorage, highlightFill, loadLastColor, saveLastColor } from '../
 import { NoteHoverCard } from '../notes/NoteHoverCard'
 import { NotesPanel } from '../notes/NotesPanel'
 import { pdfRectToCss, type PdfRect } from './coords'
+import { MAX_PANEL_SHARE, MIN_PANEL_WIDTH, loadPanelWidth, savePanelWidth } from './panelWidth'
 import { clientPointToPdf, notesAt, rectContains } from './hitTest'
 import { PdfPage } from './PdfPage'
 import { ReaderContextMenu, type ContextMenuState } from './ReaderContextMenu'
@@ -21,7 +23,7 @@ import { usePdfDocument } from './usePdfDocument'
 import { DEFAULT_ZOOM_INDEX, ZOOM_STEPS } from './zoom'
 
 /** One drawn rect. `color` is its note's colour, or null for the pending selection (drawn with the draft token). */
-type PageHighlight = { key: string; noteId: string | null; color: string | null; rect: PdfRect }
+type PageHighlight = { key: string; noteId: string | null; color: string | null; provenance?: Note['provenance']; rect: PdfRect }
 
 function groupHighlights(notes: Note[], draft: SelectionAnchor | null, paperId: string) {
   const byPage = new Map<number, PageHighlight[]>()
@@ -32,7 +34,7 @@ function groupHighlights(notes: Note[], draft: SelectionAnchor | null, paperId: 
     note.anchors.forEach((anchor, a) => {
       if (anchor.paper_id !== paperId) return
       anchor.bbox.forEach((rect, r) =>
-        add(anchor.page, { key: `${note.id}-${a}-${r}`, noteId: note.id, color: note.color, rect }),
+        add(anchor.page, { key: `${note.id}-${a}-${r}`, noteId: note.id, color: note.color, provenance: note.provenance, rect }),
       )
     })
   }
@@ -89,7 +91,10 @@ export function ReaderPage({ paperId, tab }: { paperId: string; tab: ReaderTab }
   const [flash, setFlash] = useState<Flash | null>(null)
   const promotedNoteId = useRef<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [panelWidth, setPanelWidth] = useState(() => loadPanelWidth(browserStorage()))
   const scale = ZOOM_STEPS[zoomIndex]
+
+  useEffect(() => savePanelWidth(browserStorage(), panelWidth), [panelWidth])
   const notes = useMemo(() => notesQuery.data ?? [], [notesQuery.data])
 
   const highlightsByPage = useMemo(() => groupHighlights(notes, draft, paperId), [notes, draft, paperId])
@@ -245,7 +250,11 @@ export function ReaderPage({ paperId, tab }: { paperId: string; tab: ReaderTab }
 
   const shownError = error ?? paper.error?.message ?? notesQuery.error?.message ?? pdfError
   return (
-    <div className="grid h-dvh grid-cols-[minmax(0,1fr)_360px] grid-rows-[auto_minmax(0,1fr)]">
+    <div
+      className={cn('reader grid h-dvh grid-rows-[auto_minmax(0,1fr)]', fadeIn)}
+      // CSS clamps too, so a stored width still fits after the window shrinks; the handle clamps as it drags.
+      style={{ gridTemplateColumns: `minmax(0,1fr) clamp(${MIN_PANEL_WIDTH}px, ${panelWidth}px, ${MAX_PANEL_SHARE * 100}vw)` }}
+    >
       <ReaderToolbar title={paper.data?.title} zoomIndex={zoomIndex} onZoomChange={setZoomIndex} />
 
       {shownError && (
@@ -278,7 +287,7 @@ export function ReaderPage({ paperId, tab }: { paperId: string; tab: ReaderTab }
                     // An outline, not a colour swap: any colour can be the note's own.
                     h.noteId !== null && h.noteId === activeNoteId && 'active outline-2 outline-offset-1 outline-primary',
                   )}
-                  style={{ ...pdfRectToCss(h.rect, scale), backgroundColor: h.color ? highlightFill(h.color) : undefined }}
+                  style={{ ...pdfRectToCss(h.rect, scale), backgroundColor: h.color ? highlightFill(h.color, h.provenance) : undefined }}
                 />
               ))}
               {flash?.page === pageNumber &&
@@ -310,6 +319,8 @@ export function ReaderPage({ paperId, tab }: { paperId: string; tab: ReaderTab }
       <RightPanel
         tab={tab}
         onTabChange={showTab}
+        width={panelWidth}
+        onWidthChange={setPanelWidth}
         notes={
           <NotesPanel
             paperId={paperId}

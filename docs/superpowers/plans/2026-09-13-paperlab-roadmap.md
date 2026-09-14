@@ -157,7 +157,7 @@ The dependency graph decides what can run at once:
 | M6 | MCP server | Planned (wave 3) | |
 | M6.5 | Enrichment: authors, topics, paper metadata, retraction banner | ⏭ Wave 1, track B (`../research-note-m6.5`) | to be written |
 | M7 | Graph view: citation, then co-author, then topic edges | Planned | |
-| M7.5 | References panel: external refs, ranking, import, citing works | Planned | |
+| M7.5 | References panel: external refs, ranking, import, citing works, in-text citation preview (D31) | Planned | |
 | M7.6 | Paper watch: saved searches, daily bot, ranked inbox | Planned | design: [paper-watch spec](../specs/2026-09-13-paper-watch-design.md) |
 | M8 | Hybrid retrieval + reranking, measured | ⏭ Wave 2 | |
 | M8.5 | Query router, then map-reduce | Planned | |
@@ -354,7 +354,22 @@ Author page UI (addendum §6b) is a read-only view over M6.5 data and has no bui
   - Import: an ARQ job fetches `oa_pdf_url`, runs the normal pipeline, and sets `imported_as` on `ready`. Closed access shows the DOI link plus manual drop. No transitive expansion.
   - Citing-works direction (`cited_by`) in the same UI, newest first.
   - External-ref authors go into the same `authors` table.
+  - **In-text citation preview** (D31): hovering a citation link in the reader (e.g. `[51]`) opens a card for the cited work.
+    - Finding the reference: scan the PDF's link annotations once per paper (pdf.js `getAnnotations`, internal `dest` only)
+      and resolve each target to page + point. Read the reference string at the target: from its `[N]` label
+      (numbered styles) or the target point (author-year), in the target's column, down to the next link target below.
+    - Matching: the string is matched to one of this paper's `paper_references` (`cites`) rows, by DOI when the string
+      contains one, else by title similarity. No confident match means no match.
+    - The card: title, authors, year, venue, `cited_by_count` and OA status; for a reference with `imported_as`, its
+      first page (the library's `FirstPage`). Click opens it: in library → the reader; open access → the import offer;
+      otherwise the DOI page. Unmatched: the reference string itself, with its DOI link when it has one.
+    - Display only: the string is never stored or parsed into data, so §3a ("do not parse the references section") holds.
+    - Probe (2026-09-14, a 30-page ACM paper): 209 internal links to 100 targets, all named `cite.*` XYZ destinations.
+      Text read at a target reproduced the reference, but a plain y-range also caught the previous entry's last line,
+      hence the `[N]` label start. The E2E fixture PDF has no links, so this needs its own fixture.
 - **Exit criteria:**
+  - Hovering `[N]` in a library paper shows the matching reference's metadata. An in-library reference also shows its
+    first page, and clicking it opens the paper in the reader.
   - A reference cited by two library papers ranks above an uncited famous one.
   - Importing an OA reference marks it in-library for every paper that cites it.
   - Importing does not fetch the imported paper's references until the user asks.
@@ -368,6 +383,15 @@ Author page UI (addendum §6b) is a read-only view over M6.5 data and has no bui
     - A closed-access reference fetches nothing and offers the DOI link.
     - Importing a paper requests none of *its* references (no transitive expansion).
   - **Citing works:** listed newest first.
+  - **Citation preview:**
+    - Reference string extraction (unit, synthetic pdf.js text items): starts at `[N]` without the previous entry's tail,
+      stops at the next target, falls back to the target point for author-year styles, stays in the target's column,
+      and caps its length.
+    - Matching (unit): a DOI in the string wins; otherwise the title matches its `external_refs` row; a weak match
+      returns nothing.
+    - Playwright: a fixture PDF with a real `[1]` link (PyMuPDF `insert_link`, `LINK_GOTO`) and a references page.
+      Hovering `[1]` shows entry 1's metadata and not entry 2's, plain text shows no card, and clicking an in-library
+      reference opens it in the reader.
   - **Playwright:** open the references panel, import an OA reference, and see it marked in-library on both citing papers.
 
 ### M7.6: Paper watch
@@ -534,6 +558,7 @@ Newest last. Entry format: decision, then why. Don't reverse one without adding 
 | D27 | 2026-09-13 | **Amends D25.** Milestones that can run in parallel do so as tracks. Track A stays in the project folder. Each extra track is a sibling clone (`../research-note-mN`) with its own compose project on shifted ports, and its own Claude Code session. Still no git worktrees | The owner wants as much parallel progress as possible. One folder can't hold two checked-out branches, and one stack can't run two branches' E2E suites. A visible sibling folder keeps the code where the owner can see it, unlike a hidden worktree |
 | D28 | 2026-09-14 | K3: references-section chunks are **kept**. Measured 2 of 160 top-8 slots (1.25%) across the 20 eval questions; threshold 10% | recall@4 0.95, recall@8 1.00 at the M4 baseline; above 10%, about one slot per answer is noise |
 | D29 | 2026-09-14 | K2: front-matter heading false positives are **kept**. Measured 0 of 160 top-8 slots (0%) as heading-like (<12 words); threshold 10% | They mislabel the section in the context line; they matter for retrieval only if they take slots |
+| D31 | 2026-09-14 | The in-text citation preview is part of **M7.5**, not a standalone feature: hovering `[51]` in the reader shows the cited work's metadata (its first page when it is in the library), and a click opens it. Nothing is built before M7.5 | The owner wants the cited paper's details, not the raw reference string. Those come from M7.5's `external_refs`, filled by M6.5's OpenAlex client. Building it earlier would duplicate that client and pre-empt M7.5's schema. (D30 is taken on `m5-workspaces`.) |
 
 ## Open questions and known issues
 

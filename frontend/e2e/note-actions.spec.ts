@@ -145,3 +145,43 @@ test('right-clicking blank page space leaves the browser menu alone', async ({ p
   expect(await page.evaluate(() => (window as unknown as { lastMenuPrevented: boolean }).lastMenuPrevented)).toBe(false)
   await expect(page.getByRole('menu')).toHaveCount(0)
 })
+
+test('the You and AI filter chips filter the notes list, and AI includes edited AI notes', async ({ page, paperId }) => {
+  // One note of each provenance. AI notes only come from chat or MCP, so the list is faked.
+  const note = (id: string, body: string, provenance: string) => ({
+    id: `00000000-0000-4000-8000-00000000030${id}`,
+    body,
+    provenance,
+    color: '#facc15',
+    source_id: null,
+    created_at: '2026-09-14T00:00:00Z',
+    updated_at: '2026-09-14T00:00:00Z',
+    anchors: [{ paper_id: paperId, page: 1, bbox: [[72, 100 + Number(id) * 20, 300, 110 + Number(id) * 20]], quoted_text: `quote ${id}` }],
+  })
+  const notes = [note('1', 'mine', 'human'), note('2', 'from the model', 'llm'), note('3', 'model, then me', 'llm_edited')]
+  await page.route('**/api/papers/*/notes', (route) =>
+    route.request().method() === 'GET' ? route.fulfill({ json: notes }) : route.fallback(),
+  )
+  await openReader(page, paperId)
+  const cards = page.locator('article.note')
+  const filters = page.getByRole('group', { name: 'Show notes from' })
+  const you = filters.getByRole('button', { name: 'You (1)' })
+  const ai = filters.getByRole('button', { name: 'AI (2)' })
+  await expect(you).toHaveAttribute('aria-pressed', 'true')
+  await expect(ai).toHaveAttribute('aria-pressed', 'true')
+  await expect(cards).toHaveCount(3)
+
+  await ai.click()
+  await expect(ai).toHaveAttribute('aria-pressed', 'false')
+  await expect(cards).toHaveText([/mine/])
+  // Filtering the list leaves the paper alone: every highlight is still drawn.
+  await expect(page.locator('.highlight')).toHaveCount(3)
+
+  await ai.click()
+  await you.click()
+  await expect(cards).toHaveText([/from the model/, /model, then me/])
+
+  await ai.press('Enter') // a keyboard toggle works too
+  await expect(cards).toHaveCount(0)
+  await expect(page.getByText('No notes match these filters.')).toBeVisible()
+})
