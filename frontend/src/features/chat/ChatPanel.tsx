@@ -19,6 +19,13 @@ const SAVE_BUTTON_WIDTH = 140
 /** Labels whose chunk still exists; markers for any other label render as plain text. */
 const knownLabels = (answer: SavedAnswer) => new Set(answer.sources.flatMap((source) => (source ? [source.label] : [])))
 
+/** A readable reason a promote failed. The API's own codes aren't meant for display. */
+function promoteErrorMessage(message: string): string {
+  return message === 'body_not_in_output'
+    ? "This selection doesn't match the saved answer. Select the text again."
+    : "Couldn't save the note. Try again."
+}
+
 type Props = {
   paperId: string
   onCite: (source: ChatSource) => void
@@ -33,6 +40,7 @@ export function ChatPanel({ paperId, onCite, onPromoted }: Props) {
   const { stream, ask, retry } = useChatStream(paperId)
   const [question, setQuestion] = useState('')
   const [promote, setPromote] = useState<Promote | null>(null)
+  const [promoteError, setPromoteError] = useState<string | null>(null)
   const promoteNote = usePromoteNote(paperId)
   const rootRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
@@ -53,15 +61,8 @@ export function ChatPanel({ paperId, onCite, onPromoted }: Props) {
     wasBusy.current = busy
   }, [busy])
 
-  // Clicking anywhere else clears the selection, and with it the button.
-  useEffect(() => {
-    if (!promote) return
-    const hideWhenCleared = () => window.getSelection()?.isCollapsed !== false && setPromote(null)
-    document.addEventListener('selectionchange', hideWhenCleared)
-    return () => document.removeEventListener('selectionchange', hideWhenCleared)
-  }, [promote])
-
   function captureSelection() {
+    setPromoteError(null) // a changed selection retires any error about the old one
     const selected = readAnswerSelection()
     const answer = answers.find((a) => a.id === selected?.outputId)
     const draft = selected && answer && promoteSelection(answer.content, answer.sources, selected.anchor, selected.focus)
@@ -71,16 +72,25 @@ export function ChatPanel({ paperId, onCite, onPromoted }: Props) {
     setPromote({ outputId: selected.outputId, draft, style: { left, top: selected.rect.bottom - box.top + 6 } })
   }
 
+  // The selection can change without a mouseup: dragging still fires this repeatedly, and so does
+  // Shift+Arrow. Re-running the full capture (not just hiding on collapse) keeps the draft live, not stale.
+  useEffect(() => {
+    document.addEventListener('selectionchange', captureSelection)
+    return () => document.removeEventListener('selectionchange', captureSelection)
+  })
+
   async function saveAsNote() {
     if (!promote) return
     const { outputId, draft } = promote
-    const note = await promoteNote
-      .mutateAsync({ output_id: outputId, body: draft.body, chunk_ids: draft.chunkIds })
-      .catch(() => null) // shown from promoteNote.error
-    if (!note) return
-    setPromote(null)
-    window.getSelection()?.removeAllRanges()
-    onPromoted(note)
+    try {
+      const note = await promoteNote.mutateAsync({ output_id: outputId, body: draft.body, chunk_ids: draft.chunkIds })
+      setPromote(null)
+      window.getSelection()?.removeAllRanges()
+      onPromoted(note)
+    } catch (e) {
+      // The button (and selection) stay up: the message sits right next to it, and the user can retry.
+      setPromoteError(promoteErrorMessage(e instanceof Error ? e.message : String(e)))
+    }
   }
 
   function submit() {
@@ -98,9 +108,9 @@ export function ChatPanel({ paperId, onCite, onPromoted }: Props) {
         onMouseUp={captureSelection}
         onScroll={() => setPromote(null)}
       >
-        {(history.error ?? promoteNote.error) && (
+        {history.error && (
           <Alert variant="destructive" className={cn('border-glass-border')}>
-            <AlertDescription>{(history.error ?? promoteNote.error)?.message}</AlertDescription>
+            <AlertDescription>{history.error.message}</AlertDescription>
           </Alert>
         )}
         {answers.length === 0 && !showLive && (
@@ -138,6 +148,7 @@ export function ChatPanel({ paperId, onCite, onPromoted }: Props) {
         <SaveAsNoteButton
           canSave={promote.draft.chunkIds.length > 0}
           saving={promoteNote.isPending}
+          error={promoteError}
           style={promote.style}
           onSave={() => void saveAsNote()}
         />
