@@ -24,7 +24,7 @@ const ABSTRACT_MAX_LENGTH = 10_000
 
 const DETAIL_MESSAGES: Record<string, string> = { doi_taken: 'Another paper in your library already has this DOI.' }
 
-function Field({ id, label, children }: { id: string; label: string; children: ReactNode }) {
+function Field({ id, label, children }: { id: string; label: ReactNode; children: ReactNode }) {
   return (
     <div className="grid gap-1.5">
       <Label htmlFor={id}>{label}</Label>
@@ -68,19 +68,27 @@ export function PaperDetailsDialog({ paper }: { paper: Paper }) {
           Edit details
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg">
         <form onSubmit={submit} className="grid gap-4">
           <DialogHeader>
             <DialogTitle>Edit details</DialogTitle>
             <DialogDescription>Fields you change here are kept when the paper is processed again.</DialogDescription>
           </DialogHeader>
-          <Field id="paper-title" label="Title *">
+          <Field
+            id="paper-title"
+            label={
+              <>
+                Title <span aria-hidden="true">*</span>
+              </>
+            }
+          >
             <Input id="paper-title" required value={form.title} onChange={(e) => set({ title: e.target.value })} />
           </Field>
           <Field id="paper-authors" label="Authors">
             <Textarea
               id="paper-authors"
               placeholder="One author per line"
+              className="max-h-60 overflow-y-auto"
               value={form.authors}
               onChange={(e) => set({ authors: e.target.value })}
             />
@@ -107,6 +115,7 @@ export function PaperDetailsDialog({ paper }: { paper: Paper }) {
             <Textarea
               id="paper-abstract"
               maxLength={ABSTRACT_MAX_LENGTH}
+              className="max-h-60 overflow-y-auto"
               value={form.abstract}
               onChange={(e) => set({ abstract: e.target.value })}
             />
@@ -130,7 +139,10 @@ export function PaperDetailsDialog({ paper }: { paper: Paper }) {
                 Cancel
               </Button>
             </DialogClose>
-            <Button type="submit" disabled={save.isPending || Object.keys(update).length === 0}>
+            <Button
+              type="submit"
+              disabled={save.isPending || Object.keys(update).length === 0 || !form.title.trim()}
+            >
               {save.isPending ? 'Saving…' : 'Save'}
             </Button>
           </DialogFooter>

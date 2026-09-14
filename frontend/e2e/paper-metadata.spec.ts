@@ -75,3 +75,32 @@ test('a correction the server refuses keeps the dialog open to fix it', async ({
   await expect(dialog).toBeHidden()
   expect((await (await request.get(`/api/papers/${paperId}`)).json()).doi).toBe(doi)
 })
+
+test('a 10,000-character abstract keeps Save and Cancel reachable, and still saves', async ({ page, paperId }) => {
+  await openReader(page, paperId)
+  await page.getByRole('button', { name: 'Edit details' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Edit details' })
+  const longAbstract = 'a '.repeat(5000) // exactly 10,000 chars, the field's maxLength
+  await dialog.getByLabel('Abstract').fill(longAbstract)
+  // The dialog scrolls internally now, instead of growing past the viewport with no way to reach the footer.
+  const save = dialog.getByRole('button', { name: 'Save' })
+  const cancel = dialog.getByRole('button', { name: 'Cancel' })
+  await save.scrollIntoViewIfNeeded()
+  await expect(save).toBeInViewport()
+  await cancel.scrollIntoViewIfNeeded()
+  await expect(cancel).toBeInViewport()
+  await save.click()
+  await expect(dialog).toBeHidden()
+
+  await page.reload()
+  await page.getByRole('button', { name: 'Edit details' }).click()
+  await expect(dialog.getByLabel('Abstract')).toHaveValue(longAbstract.trim())
+})
+
+test('a whitespace-only title disables Save', async ({ page, paperId }) => {
+  await openReader(page, paperId)
+  await page.getByRole('button', { name: 'Edit details' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Edit details' })
+  await dialog.getByLabel('Title').fill('   ')
+  await expect(dialog.getByRole('button', { name: 'Save' })).toBeDisabled()
+})
