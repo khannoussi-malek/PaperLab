@@ -5,7 +5,7 @@ from typing import Any
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import ForeignKey, Text, text
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -32,9 +32,19 @@ class Paper(Base):
     openalex_id: Mapped[str | None] = mapped_column(Text, unique=True)
     title: Mapped[str] = mapped_column(Text)
     abstract: Mapped[str | None] = mapped_column(Text)
-    authors: Mapped[list[Any]] = mapped_column(JSONB, server_default=text("'[]'"))
+    # The byline: display names in order, never an identity. Identities live in authors/paper_authors (Q3).
+    authors: Mapped[list[str]] = mapped_column(JSONB, server_default=text("'[]'"))
     year: Mapped[int | None]
     venue: Mapped[str | None] = mapped_column(Text)
+    type: Mapped[str | None] = mapped_column(Text)
+    is_retracted: Mapped[bool] = mapped_column(server_default=text("false"))
+    oa_status: Mapped[str | None] = mapped_column(Text)
+    oa_url: Mapped[str | None] = mapped_column(Text)
+    cited_by_count: Mapped[int | None]
+    referenced_works_count: Mapped[int | None]
+    issn: Mapped[str | None] = mapped_column(Text)
+    # Columns the user corrected by hand. Extraction and enrichment never overwrite them.
+    manual_fields: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default=text("'{}'"))
     file_path: Mapped[str] = mapped_column(Text)
     page_count: Mapped[int | None]
     status: Mapped[str] = mapped_column(Text, server_default=PaperStatus.UPLOADED)

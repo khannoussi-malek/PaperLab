@@ -7,8 +7,6 @@ Create Date: 2026-09-13
 
 from alembic import op
 
-# Collision rule (D27): track B (M6.5) also adds a 0003. Whichever branch merges second renumbers
-# its revision and down_revision.
 revision = "0003"
 down_revision = "0002"
 branch_labels = None

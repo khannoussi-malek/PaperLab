@@ -5,9 +5,9 @@ from fastapi.responses import FileResponse
 
 from app.api.deps import SessionDep
 from app.config import settings
-from app.core import papers
+from app.core import enrichment, papers
 from app.models import PaperStatus
-from app.schemas.papers import ChunkOut, PaperOut
+from app.schemas.papers import ChunkOut, PaperOut, PaperUpdate
 
 router = APIRouter(prefix="/api/papers", tags=["papers"])
 
@@ -31,6 +31,11 @@ async def list_papers(session: SessionDep) -> list[PaperOut]:
 @router.get("/{paper_id}")
 async def get_paper(paper_id: uuid.UUID, session: SessionDep) -> PaperOut:
     return await papers.get_paper(session, paper_id)
+
+
+@router.patch("/{paper_id}")
+async def correct_paper(paper_id: uuid.UUID, payload: PaperUpdate, session: SessionDep) -> PaperOut:
+    return await enrichment.correct_metadata(session, paper_id, payload.model_dump(exclude_unset=True))
 
 
 @router.delete("/{paper_id}", status_code=204)

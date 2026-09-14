@@ -60,7 +60,8 @@ export interface paths {
         delete: operations["delete_paper_api_papers__paper_id__delete"];
         options?: never;
         head?: never;
-        patch?: never;
+        /** Correct Paper */
+        patch: operations["correct_paper_api_papers__paper_id__patch"];
         trace?: never;
     };
     "/api/papers/{paper_id}/file": {
@@ -414,16 +415,32 @@ export interface components {
             id: string;
             /** Doi */
             doi: string | null;
+            /** Openalex Id */
+            openalex_id: string | null;
             /** Title */
             title: string;
             /** Abstract */
             abstract: string | null;
             /** Authors */
-            authors: unknown[];
+            authors: string[];
             /** Year */
             year: number | null;
             /** Venue */
             venue: string | null;
+            /** Type */
+            type: string | null;
+            /** Is Retracted */
+            is_retracted: boolean;
+            /** Oa Status */
+            oa_status: string | null;
+            /** Oa Url */
+            oa_url: string | null;
+            /** Cited By Count */
+            cited_by_count: number | null;
+            /** Referenced Works Count */
+            referenced_works_count: number | null;
+            /** Issn */
+            issn: string | null;
             /** Page Count */
             page_count: number | null;
             /** Status */
@@ -435,6 +452,26 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /**
+         * PaperUpdate
+         * @description A manual correction. Only the fields sent change; null clears venue, doi, abstract or year.
+         */
+        PaperUpdate: {
+            /** Title */
+            title?: string | null;
+            /** Authors */
+            authors?: string[] | null;
+            /** Year */
+            year?: number | null;
+            /** Venue */
+            venue?: string | null;
+            /** Doi */
+            doi?: string | null;
+            /** Abstract */
+            abstract?: string | null;
+            /** Is Retracted */
+            is_retracted?: boolean | null;
         };
         /** PromoteRequest */
         PromoteRequest: {
@@ -605,6 +642,41 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    correct_paper_api_papers__paper_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                paper_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PaperUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaperOut"];
+                };
             };
             /** @description Validation Error */
             422: {

@@ -72,7 +72,7 @@ async def test_large_paper_sends_the_8_nearest_chunks(session, embedder):
 
 
 def test_context_names_author_year_page_and_section():
-    paper = Paper(title="BERT", authors=[{"name": "Jacob Devlin"}], year=2019)
+    paper = Paper(title="BERT", authors=["Jacob Devlin"], year=2019)
 
     context = chat.format_context(paper, [source(), source(page=5, section=None, text="Second.")])
 
@@ -81,9 +81,20 @@ def test_context_names_author_year_page_and_section():
     )
 
 
-def test_context_falls_back_to_the_title_without_authors_or_year():
+def test_context_falls_back_to_the_title_without_an_author():
     assert chat.format_context(Paper(title="BERT", authors=[], year=2019), [source()]).startswith("[C1] (BERT, p.4,")
-    assert chat.format_context(Paper(title="BERT", authors=["Jacob Devlin"]), [source()]).startswith("[C1] (BERT, p.4,")
+
+
+@pytest.mark.parametrize(
+    ("authors", "year", "label"),
+    [
+        (["Jacob Devlin"], None, "Devlin"),  # K9: a missing year no longer drops the author
+        (["   ", "Ming-Wei Chang"], 2019, "Chang 2019"),  # K9: a blank name used to raise IndexError
+        (["  "], 2019, "BERT"),
+    ],
+)
+def test_source_label_uses_whatever_is_known(authors, year, label):
+    assert chat.source_label(Paper(title="BERT", authors=authors, year=year)) == label
 
 
 def test_prompt_loader_reads_by_name_and_version(tmp_path, monkeypatch):

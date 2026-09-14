@@ -16,6 +16,7 @@ import { clientPointToPdf, notesAt, rectContains } from './hitTest'
 import { PdfPage } from './PdfPage'
 import { ReaderContextMenu, type ContextMenuState } from './ReaderContextMenu'
 import { ReaderToolbar } from './ReaderToolbar'
+import { RetractionBanner } from './RetractionBanner'
 import { RightPanel } from './RightPanel'
 import { readSelection, type SelectionAnchor } from './selection'
 import { useHoverCard } from './useHoverCard'
@@ -255,7 +256,11 @@ export function ReaderPage({ paperId, tab }: { paperId: string; tab: ReaderTab }
       // CSS clamps too, so a stored width still fits after the window shrinks; the handle clamps as it drags.
       style={{ gridTemplateColumns: `minmax(0,1fr) clamp(${MIN_PANEL_WIDTH}px, ${panelWidth}px, ${MAX_PANEL_SHARE * 100}vw)` }}
     >
-      <ReaderToolbar title={paper.data?.title} zoomIndex={zoomIndex} onZoomChange={setZoomIndex} />
+      {/* One grid row either way, so the pages and the panel keep their row whether or not the banner shows. */}
+      <div className="col-span-full">
+        <ReaderToolbar paper={paper.data} zoomIndex={zoomIndex} onZoomChange={setZoomIndex} />
+        {paper.data?.is_retracted && <RetractionBanner paper={paper.data} />}
+      </div>
 
       {shownError && (
         <Alert

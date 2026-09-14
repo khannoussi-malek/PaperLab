@@ -15,6 +15,9 @@ always marked as AI in the interface.
 
 - Upload PDFs. A background worker extracts the text, splits it into sections and chunks, and indexes it for search.
 - Hover a paper in the list to preview its first page and details.
+- Optionally fill in each paper's title, authors, year, venue and topics from [OpenAlex](https://openalex.org/), and
+correct any of them by hand with **Edit details**. Your corrections are kept when a paper is processed again.
+- A retracted paper shows a banner at the top of the reader that can't be dismissed.
 
 **Read and highlight**
 
@@ -42,7 +45,8 @@ scroll the paper to that passage and flash it.
 ## Principles
 
 - **Local first.** One user, one machine, no accounts. Your PDFs, notes and search index live in a local Postgres
-database. With the default Ollama model, the text of your papers never leaves your computer.
+database. With the default Ollama model, the text of your papers never leaves your computer. Metadata lookups on
+OpenAlex are off unless you turn them on, and they send a paper's DOI or title, never its text.
 - **AI is always labelled.** AI text is stored separately from yours, keeps the model and prompt version that
 produced it, and shows an AI badge. Editing an AI note marks it "AI · edited", never "You".
 - **Answers show their sources.** Chat answers cite passages you can click, so you can check every claim against the paper.
@@ -73,6 +77,7 @@ Settings live in `.env`.
 | `LLM_MODEL`                                                 | `qwen3:8b`                          | The chat model to use                                                                             |
 | `OLLAMA_URL`                                                | `http://host.docker.internal:11434` | Where Ollama runs: on the host, not in Compose                                                    |
 | `ANTHROPIC_API_KEY`                                         | none                                | Required when `LLM_PROVIDER=anthropic`. The passages sent with each question then go to Anthropic |
+| `OPENALEX_MAILTO`                                           | empty (off)                         | Your email. Setting it turns on OpenAlex metadata; OpenAlex receives it with every request        |
 | `POSTGRES_PASSWORD`, `DATABASE_URL`, `REDIS_URL`, `PDF_DIR` | see `.env.example`                  | Database, queue and PDF storage                                                                   |
 
 
@@ -92,7 +97,8 @@ flowchart LR
 
 
 - **Ingestion:** an upload queues one job that can safely run again. The paper's status moves through
-`uploaded → extracting → chunking → embedding → ready`, or `failed` with the reason. PyMuPDF extracts the text with
+`uploaded → extracting → chunking → embedding → enriching → ready`, or `failed` with the reason. Enrichment never fails
+a paper: with no OpenAlex match, or no network, it is still ready. PyMuPDF extracts the text with
 its coordinates, so highlights and citations can point at exact rectangles on the page. Chunks are embedded with
 `nomic-embed-text-v1.5` into `vector(768)` columns.
 - **Chat:** a question retrieves the closest chunks for that paper (or sends the whole paper if it's short), streams the
@@ -104,7 +110,7 @@ versioned files in `backend/prompts/`.
 backend/
   app/api/         HTTP routes: papers, notes, chat, health
   app/core/        domain logic: chunking, retrieval, chat, note provenance rules
-  app/providers/   PDF extraction, embeddings, LLM adapters (Ollama, Anthropic, fake)
+  app/providers/   PDF extraction, embeddings, OpenAlex, LLM adapters (Ollama, Anthropic, fake)
   app/workers/     the ARQ ingestion job
   prompts/         versioned prompts
   evals/           retrieval eval: recall@k over questions.yaml
