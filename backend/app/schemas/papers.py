@@ -30,6 +30,7 @@ class PaperOut(BaseModel):
     status: str
     status_error: str | None
     created_at: datetime
+    workspace_ids: list[uuid.UUID]
 
 
 AuthorName = Annotated[str, Field(min_length=1, max_length=300)]

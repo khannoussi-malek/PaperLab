@@ -57,6 +57,17 @@ describe('citationSplitter', () => {
   it('renders a repeated marker every time it appears', () => {
     expect(run(['[C2] a [C2]'])).toEqual([cite('C2'), text(' a '), cite('C2')])
   })
+
+  it('splits note markers like passage markers, holding back a partial [N', () => {
+    const known = new Set(['C1', 'C2', 'N1'])
+    expect(run(['both describe it [C1][C2], as your note says [N', '1].'], known)).toEqual([
+      text('both describe it '), cite('C1'), cite('C2'), text(', as your note says '), cite('N1'), text('.'),
+    ])
+  })
+
+  it('leaves an unknown note marker, or any other letter, as plain text', () => {
+    expect(run(['[N9] and [X1] and [N1]'], new Set(['N1']))).toEqual([text('[N9] and [X1] and '), cite('N1')])
+  })
 })
 
 describe('splitCitations', () => {
@@ -74,5 +85,15 @@ describe('describeSource', () => {
 
   it('leaves out the section when the passage has none', () => {
     expect(describeSource({ ...source, section: null })).toBe('Source 12: page 6')
+  })
+
+  it('names the paper first when an answer cites several papers', () => {
+    expect(describeSource(source, 'Karpukhin 2020')).toBe('Source 12: Karpukhin 2020, page 6, section “2.4 Analysis”')
+  })
+
+  it('describes a [N…] note as a note, with who wrote it and where, never as a numbered source', () => {
+    const note = { label: 'N1', note_id: 'n', paper_id: 'p', page: 4, provenance: 'human' as const }
+    expect(describeSource(note, 'BERT')).toBe('N1 · You · BERT p.4')
+    expect(describeSource({ ...note, label: 'N2', provenance: 'llm_edited' }, 'BERT')).toBe('N2 · AI · edited · BERT p.4')
   })
 })

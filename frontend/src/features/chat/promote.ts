@@ -18,8 +18,9 @@ function chunkIdsOf(markers: Marker[], sources: (ChatSource | null)[]): string[]
 }
 
 /**
- * Maps a selection inside an answer (character offsets into its content, either order) to a note (spec §2 Promote).
- * Anchors: the chunks cited inside the selection; else those cited in the paragraph the selection starts in; else none.
+ * Maps a selection inside an answer (character offsets into its content, either order) to a note.
+ * Anchors: the chunks cited inside the selection; else, if it cites only notes (`[N…]`), none; else those cited in the
+ * paragraph the selection starts in; else none. Only `[C…]` markers ever anchor: a note citation has no chunk.
  * A marker the selection only partly covers counts and is included whole, so the body stays a verbatim slice of the
  * answer, which the API requires. Returns null for a blank selection.
  */
@@ -42,6 +43,8 @@ export function promoteSelection(
 
   const selected = chunkIdsOf(touched, sources)
   if (selected.length > 0) return { body, chunkIds: selected }
+  // A passage quoting the user's note isn't evidence from the paper, so the paragraph's passages mustn't stand in.
+  if (touched.length > 0 && touched.every((m) => m.label.startsWith('N'))) return { body, chunkIds: [] }
 
   const breakBefore = content.lastIndexOf(PARAGRAPH_BREAK, trimmedStart - 1)
   const paragraphStart = breakBefore === -1 ? 0 : breakBefore + PARAGRAPH_BREAK.length

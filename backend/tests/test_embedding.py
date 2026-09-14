@@ -35,3 +35,10 @@ def test_the_api_model_loads_once_per_process(monkeypatch):
     finally:
         embedding.get_model.cache_clear()
     assert loads == ["load"]
+
+
+def test_no_test_can_load_the_real_model():
+    """conftest's autouse fixture stops an unmocked chat or retrieval from downloading 523 MB."""
+    embedding.get_model.cache_clear()
+    with pytest.raises(RuntimeError, match="tests must not load the embedding model"):
+        embedding.get_model()

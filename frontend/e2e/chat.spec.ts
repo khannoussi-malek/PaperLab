@@ -1,33 +1,15 @@
 import type { Locator, Page } from '@playwright/test'
-import { expect, openReader, selectText, test, type Rect } from './fixtures'
+import { ask, expect, openReader, selectAllOf, selectText, test, type Rect } from './fixtures'
 
 /** What `FakeLLM` always answers (backend `LLM_PROVIDER=fake`). */
 const FAKE_ANSWER = 'Fake answer: the method is described here [C1].'
+/** Faked responses follow the API: single-paper chat sends no notes. */
+const NO_NOTES = { notes: [], notes_used: null, notes_total: null }
 
 /** Opens the reader on the Chat tab. */
 async function openChat(page: Page, paperId: string) {
   await page.goto(`/#/papers/${paperId}?tab=chat`)
   await expect(page.getByRole('tab', { name: 'Chat' })).toHaveAttribute('aria-selected', 'true')
-}
-
-/** Asks with Enter, and waits until the answer is saved: only a saved answer has `data-output-id`. */
-async function ask(page: Page, question: string) {
-  await page.getByRole('textbox', { name: 'Question' }).fill(question)
-  await page.getByRole('textbox', { name: 'Question' }).press('Enter')
-  const answer = page.locator('article.chat-answer[data-output-id]', { hasText: question })
-  await expect(answer.locator('.chat-answer-footer')).toContainText('AI · ')
-  return answer
-}
-
-/** Selects all of an element's text like a mouse drag, then releases the mouse. */
-async function selectAllOf(element: Locator) {
-  await element.evaluate((node) => {
-    const range = document.createRange()
-    range.selectNodeContents(node)
-    window.getSelection()!.removeAllRanges()
-    window.getSelection()!.addRange(range)
-  })
-  await element.dispatchEvent('mouseup')
 }
 
 /** Selects from the very start of `start` to the very end of `end` (which may be a later sibling), then releases. */
@@ -147,8 +129,8 @@ test("an answer's sources are small pills under its text, and its details wait b
   const [chunk] = await (await request.get(`/api/papers/${paperId}/chunks?page=1`)).json()
   const longSection = 'A section heading long enough to run past the edge of the side panel'
   const sources = [
-    { label: 'C1', chunk_id: chunk.id, page: 1, section: 'Method', bbox: chunk.bbox },
-    { label: 'C2', chunk_id: chunk.id, page: 1, section: longSection, bbox: chunk.bbox },
+    { label: 'C1', chunk_id: chunk.id, paper_id: paperId, page: 1, section: 'Method', bbox: chunk.bbox },
+    { label: 'C2', chunk_id: chunk.id, paper_id: paperId, page: 1, section: longSection, bbox: chunk.bbox },
   ]
   await page.route('**/chat', (route) =>
     route.request().method() === 'POST'
@@ -156,7 +138,7 @@ test("an answer's sources are small pills under its text, and its details wait b
           status: 200,
           contentType: 'text/event-stream',
           body:
-            `event: sources\ndata: ${JSON.stringify({ whole_paper: false, sources })}\n\n` +
+            `event: sources\ndata: ${JSON.stringify({ whole_paper: false, sources, ...NO_NOTES })}\n\n` +
             'event: token\ndata: {"text":"Two passages [C1] and [C2]."}\n\n' +
             `event: done\ndata: ${JSON.stringify({ output_id: '00000000-0000-4000-8000-000000000002', model: 'fake', prompt_version: 1 })}\n\n`,
         })
@@ -254,7 +236,7 @@ test('a refused question offers Re-index, and a broken stream keeps its text and
     .toBe(true)
 
   // The model goes away mid-answer: the partial text stays, nothing is saved, and Retry asks again for real.
-  const source = { label: 'C1', chunk_id: chunk!.id, page: 1, section: null, bbox: chunk!.bbox }
+  const source = { label: 'C1', chunk_id: chunk!.id, paper_id: paperId, page: 1, section: null, bbox: chunk!.bbox }
   await page.unrouteAll()
   await page.route('**/chat', (route) =>
     route.request().method() === 'POST'
@@ -262,7 +244,7 @@ test('a refused question offers Re-index, and a broken stream keeps its text and
           status: 200,
           contentType: 'text/event-stream',
           body:
-            `event: sources\ndata: ${JSON.stringify({ whole_paper: true, sources: [source] })}\n\n` +
+            `event: sources\ndata: ${JSON.stringify({ whole_paper: true, sources: [source], ...NO_NOTES })}\n\n` +
             'event: token\ndata: {"text":"Partial answer [C"}\n\n' +
             `event: error\ndata: ${JSON.stringify({ message: "Can't reach Ollama at http://host.docker.internal:11434", retryable: true })}\n\n`,
         })
@@ -374,6 +356,7 @@ test('a chat history taller than the panel scrolls inside the panel, never the w
     created_at: '2026-09-14T00:00:00Z',
     whole_paper: true,
     sources: [],
+    ...NO_NOTES,
   }))
   await page.route('**/chat', (route) => (route.request().method() === 'GET' ? route.fulfill({ json: answers }) : route.fallback()))
   await openChat(page, paperId)
@@ -400,6 +383,7 @@ test('a passage with no citation nearby cannot be saved, and the button says why
               created_at: '2026-09-13T00:00:00Z',
               whole_paper: true,
               sources: [],
+              ...NO_NOTES,
             },
           ],
         })

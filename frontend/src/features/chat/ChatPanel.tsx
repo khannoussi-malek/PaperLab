@@ -1,6 +1,6 @@
 import { ArrowUp, MessageSquareText } from 'lucide-react'
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
-import type { ChatSource, Note, ChatAnswer as SavedAnswer } from '@/api/client'
+import type { ChatScope, ChatSource, Note, NoteSource, ChatAnswer as SavedAnswer } from '@/api/client'
 import { useChatHistory, usePromoteNote, useReindexPaper } from '@/api/queries'
 import { pressable } from '@/components/motion'
 import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert'
@@ -11,16 +11,30 @@ import { readAnswerSelection } from './answerSelection'
 import { ChatAnswer } from './ChatAnswer'
 import { splitCitations } from './citations'
 import { promoteSelection, type PromoteDraft } from './promote'
+import type { ChatProblem } from './refusals'
 import { SaveAsNoteButton } from './SaveAsNoteButton'
-import { useChatStream, type ChatProblem } from './useChatStream'
+import { useChatStream } from './useChatStream'
 
 const MAX_QUESTION = 2000 // the API's limit (spec §3.10)
 // ponytail: a fixed width keeps the floating button inside the panel; measure it if the label ever changes.
 const SAVE_BUTTON_WIDTH = 140
-const STARTER_QUESTIONS = ['Summarize the main contribution', 'What method do they use?', 'What are the limitations?']
+// What an empty chat offers, by scope: a workspace's starter questions look across its papers.
+const EMPTY_CHAT = {
+  paper: {
+    heading: 'Ask this paper',
+    help: 'Answers cite the passages they use. Click a citation to see it in the paper.',
+    starters: ['Summarize the main contribution', 'What method do they use?', 'What are the limitations?'],
+  },
+  workspace: {
+    heading: 'Ask this workspace',
+    help: 'Answers cite passages from its papers and your notes. Click a citation to open it in the paper.',
+    starters: ['Compare their main contributions', 'How do their methods differ?', 'What do my notes say about them?'],
+  },
+}
 
-/** Labels whose chunk still exists; markers for any other label render as plain text. */
-const knownLabels = (answer: SavedAnswer) => new Set(answer.sources.flatMap((source) => (source ? [source.label] : [])))
+/** Labels whose chunk or note still exists; markers for any other label render as plain text. */
+const knownLabels = (answer: SavedAnswer) =>
+  new Set([...answer.sources, ...answer.notes].flatMap((source) => (source ? [source.label] : [])))
 
 /** A readable reason a promote failed. The API's own codes aren't meant for display. */
 function promoteErrorMessage(message: string): string {
@@ -30,27 +44,32 @@ function promoteErrorMessage(message: string): string {
 }
 
 type Props = {
-  paperId: string
-  onCite: (source: ChatSource) => void
+  scope: ChatScope
+  /** Why nothing can be asked yet (an empty workspace): shown under the disabled question box. */
+  unavailable?: string
+  /** Names a source's paper in pills and citations. Given on a workspace, whose answers cite several papers. */
+  paperLabel?: (paperId: string) => string
+  onCite: (source: ChatSource | NoteSource) => void
   /** Called with the new note once it is saved and listed. */
   onPromoted: (note: Note) => void
 }
 
 type Promote = { outputId: string; draft: PromoteDraft; style: CSSProperties }
 
-export function ChatPanel({ paperId, onCite, onPromoted }: Props) {
-  const history = useChatHistory(paperId)
-  const { stream, ask, retry } = useChatStream(paperId)
+export function ChatPanel({ scope, unavailable, paperLabel, onCite, onPromoted }: Props) {
+  const history = useChatHistory(scope)
+  const { stream, ask, retry } = useChatStream(scope)
   const [question, setQuestion] = useState('')
   const [promote, setPromote] = useState<Promote | null>(null)
   const [promoteError, setPromoteError] = useState<string | null>(null)
-  const promoteNote = usePromoteNote(paperId)
+  const promoteNote = usePromoteNote()
   const rootRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const wasBusy = useRef(false)
   const answers = history.data ?? []
   const busy = stream.status === 'sources' || stream.status === 'streaming'
+  const closed = busy || unavailable !== undefined
   // A saved answer comes back in the history, so the live copy hides instead of showing twice.
   const showLive = stream.status !== 'idle' && !answers.some((answer) => answer.id === stream.done?.output_id)
 
@@ -98,7 +117,7 @@ export function ChatPanel({ paperId, onCite, onPromoted }: Props) {
 
   function submit() {
     const text = question.trim()
-    if (!text || busy) return
+    if (!text || closed) return
     setQuestion('')
     void ask(text)
   }
@@ -119,7 +138,7 @@ export function ChatPanel({ paperId, onCite, onPromoted }: Props) {
           </Alert>
         )}
         {answers.length === 0 && !showLive && !history.isPending && (
-          <EmptyChat disabled={busy} onAsk={(text) => void ask(text)} />
+          <EmptyChat kind={scope.kind} disabled={closed} onAsk={(text) => void ask(text)} />
         )}
         {answers.map((answer) => (
           <ChatAnswer
@@ -128,8 +147,12 @@ export function ChatPanel({ paperId, onCite, onPromoted }: Props) {
             question={answer.question}
             wholePaper={answer.whole_paper}
             sources={answer.sources}
+            notes={answer.notes}
+            notesUsed={answer.notes_used}
+            notesTotal={answer.notes_total}
             segments={splitCitations(answer.content, knownLabels(answer))}
             footer={{ model: answer.model, promptVersion: answer.prompt_version }}
+            paperLabel={paperLabel}
             onCite={onCite}
           />
         ))}
@@ -138,13 +161,17 @@ export function ChatPanel({ paperId, onCite, onPromoted }: Props) {
             question={stream.question}
             wholePaper={stream.wholePaper}
             sources={stream.sources}
+            notes={stream.notes}
+            notesUsed={stream.notesUsed}
+            notesTotal={stream.notesTotal}
             segments={stream.segments}
             footer={stream.done && { model: stream.done.model, promptVersion: stream.done.prompt_version }}
             pending={busy}
             animate
+            paperLabel={paperLabel}
             onCite={onCite}
           >
-            {stream.problem && <ProblemAlert paperId={paperId} problem={stream.problem} onRetry={retry} />}
+            {stream.problem && <ProblemAlert scope={scope} problem={stream.problem} onRetry={retry} />}
           </ChatAnswer>
         )}
       </div>
@@ -173,11 +200,11 @@ export function ChatPanel({ paperId, onCite, onPromoted }: Props) {
             ref={textareaRef}
             aria-label="Question"
             aria-describedby="chat-question-hint"
-            placeholder="Ask about this paper…"
+            placeholder={`Ask about this ${scope.kind}…`}
             rows={1}
             maxLength={MAX_QUESTION}
             value={question}
-            disabled={busy}
+            disabled={closed}
             className="max-h-40 min-h-0 resize-none rounded-none border-0 bg-transparent px-0 py-1 focus-visible:ring-0 disabled:bg-transparent dark:bg-transparent dark:disabled:bg-transparent"
             onChange={(e) => setQuestion(e.target.value)}
             onKeyDown={(e) => {
@@ -187,28 +214,31 @@ export function ChatPanel({ paperId, onCite, onPromoted }: Props) {
               }
             }}
           />
-          <Button type="submit" size="icon-sm" aria-label="Ask" className={pressable} disabled={busy || !question.trim()}>
+          <Button type="submit" size="icon-sm" aria-label="Ask" className={pressable} disabled={closed || !question.trim()}>
             <ArrowUp aria-hidden />
           </Button>
         </div>
         <p id="chat-question-hint" className="px-1 text-xs text-muted-foreground">
-          Enter to send · Shift+Enter for a new line
+          {unavailable ?? 'Enter to send · Shift+Enter for a new line'}
         </p>
       </form>
     </div>
   )
 }
 
-function EmptyChat({ disabled, onAsk }: { disabled: boolean; onAsk: (question: string) => void }) {
+type EmptyChatProps = { kind: ChatScope['kind']; disabled: boolean; onAsk: (question: string) => void }
+
+function EmptyChat({ kind, disabled, onAsk }: EmptyChatProps) {
+  const { heading, help, starters } = EMPTY_CHAT[kind]
   return (
     <div className="m-auto flex w-full max-w-xs flex-col items-center gap-3 py-6 text-center">
       <span className="flex size-10 items-center justify-center rounded-full bg-provenance-llm-surface text-provenance-llm">
         <MessageSquareText aria-hidden className="size-5" />
       </span>
-      <h2 className="font-heading text-xl font-semibold">Ask this paper</h2>
-      <p className="text-sm text-muted-foreground">Answers cite the passages they use. Click a citation to see it in the paper.</p>
+      <h2 className="font-heading text-xl font-semibold">{heading}</h2>
+      <p className="text-sm text-muted-foreground">{help}</p>
       <ul aria-label="Suggested questions" className="mt-1 flex w-full flex-col gap-2">
-        {STARTER_QUESTIONS.map((starter) => (
+        {starters.map((starter) => (
           <li key={starter}>
             <Button
               variant="outline"
@@ -226,8 +256,9 @@ function EmptyChat({ disabled, onAsk }: { disabled: boolean; onAsk: (question: s
   )
 }
 
-function ProblemAlert({ paperId, problem, onRetry }: { paperId: string; problem: ChatProblem; onRetry: () => void }) {
-  const reindex = useReindexPaper(paperId)
+function ProblemAlert({ scope, problem, onRetry }: { scope: ChatScope; problem: ChatProblem; onRetry: () => void }) {
+  // Only a paper's `paper_not_indexed` refusal offers Re-index, so `scope` is a paper whenever that button shows.
+  const reindex = useReindexPaper(scope.id)
   const message = reindex.isSuccess
     ? 'Re-indexing started. Ask again once the paper is ready.'
     : (reindex.error?.message ?? problem.message)

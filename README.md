@@ -15,6 +15,8 @@ always marked as AI in the interface.
 
 - Upload PDFs. A background worker extracts the text, splits it into sections and chunks, and indexes it for search.
 - Hover a paper in the list to preview its first page and details.
+- Group papers into workspaces (a paper can be in several), see all their notes in one place, and chat with a whole
+workspace: answers cite passages from each paper and your notes.
 - Optionally fill in each paper's title, authors, year, venue and topics from [OpenAlex](https://openalex.org/), and
 correct any of them by hand with **Edit details**. Your corrections are kept when a paper is processed again.
 - A retracted paper shows a banner at the top of the reader that can't be dismissed.
@@ -65,6 +67,30 @@ open http://localhost:5180
 ```
 
 The first upload takes longer: the worker downloads the embedding model once and caches it.
+
+### First start
+
+The worker loads the embedding model (`nomic-ai/nomic-embed-text-v1.5`, about 523 MB) when it starts, and the API
+loads it on the first question that retrieves: every workspace chat, and large papers. Both read the `hfcache`
+volume. Download the model into it once, before the first `docker compose up`:
+
+```sh
+docker compose build api
+docker compose run --rm --no-deps api python -c "from app.providers.embedding import load; load()"
+```
+
+Hugging Face gives up on a download after 10 seconds without data. On a slow connection, raise that in `.env`
+(both containers read it):
+
+```sh
+HF_HUB_DOWNLOAD_TIMEOUT=60
+```
+
+Real chats also need the model: `ollama pull qwen3:8b` on the host, or set `LLM_PROVIDER` / `LLM_MODEL` in `.env`
+to choose a different provider and model.
+
+Metadata enrichment (fetching paper details from OpenAlex) is optional and off by default. Set `OPENALEX_MAILTO`
+in `.env` to turn it on; the value is sent to api.openalex.org as a `mailto` parameter on every request.
 
 ### Configuration
 
@@ -133,6 +159,7 @@ cd frontend && npm run gen:api                           # regenerate API types 
 cd frontend && npx tsc -b && npm test                    # types + unit tests
 cd frontend && npx playwright install chromium            # once
 cd frontend && npm run typecheck:e2e && npm run e2e      # end-to-end against the running stack
+docker compose exec api python -m evals.answer_check --paper "<title prefix>" --workspace "<name>"  # manual, real LLM
 ```
 
 - **End-to-end tests** run against the real stack, with no mocked backend. They expect the fake model, which always
