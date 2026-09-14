@@ -1,4 +1,5 @@
 from app.core.enrichment import PdfHints, normalize_doi, pdf_hints
+from app.providers.extraction import extract
 
 ARXIV_PAGE = "BERT: Pre-training of Deep\nJacob Devlin Ming-Wei Chang\narXiv:1810.04805v2 [cs.CL] 24 May 2019\n"
 
@@ -18,6 +19,30 @@ def test_normalize_doi_strips_sentence_punctuation_but_keeps_balanced_parenthese
 def test_normalize_doi_rejects_text_without_one():
     assert normalize_doi("not a doi") is None
     assert normalize_doi("10.12/too-short-prefix") is None
+
+
+def test_normalize_doi_strips_unbalanced_trailing_brackets():
+    # Fix round 1, finding 1: a citation-list "[3] ... doi:X]" left a trailing "]" on the DOI.
+    assert normalize_doi("[3] Some Ref, doi:10.1000/abc]") == "10.1000/abc"
+    assert normalize_doi("(see doi:10.1000/abc).") == "10.1000/abc"
+    assert normalize_doi("[3] 10.1000/abc],") == "10.1000/abc"
+
+
+def test_pdf_hints_finds_old_style_arxiv_ids():
+    # Fix round 1, finding 2: pre-2007 arXiv IDs ("archive/YYMMNNN") weren't matched at all.
+    hints = pdf_hints("See arXiv:hep-th/9901001v2 for details", {})
+    assert hints.arxiv_id == "hep-th/9901001"
+
+
+def test_pdf_hints_from_a_real_extraction_finds_the_printed_doi(doi_pdf):
+    # Fix round 1, finding 4: the extraction -> hints seam, using a real extracted PDF instead of hand-written text.
+    doc = extract(doi_pdf)
+    assert pdf_hints(doc.first_page_text, doc.metadata).doi == "10.18653/v1/n19-1423"
+
+
+def test_pdf_hints_from_a_real_extraction_finds_the_arxiv_id(arxiv_pdf):
+    doc = extract(arxiv_pdf)
+    assert pdf_hints(doc.first_page_text, doc.metadata).arxiv_id == "1810.04805"
 
 
 def test_an_arxiv_first_page_gives_the_arxiv_id_and_its_year():

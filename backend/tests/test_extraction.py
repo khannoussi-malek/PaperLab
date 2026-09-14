@@ -1,8 +1,9 @@
 import pytest
 from conftest import BERT_TITLE_LINES
 
+from app.core.chunking import Block
 from app.core.errors import InvalidInput
-from app.providers.extraction import extract
+from app.providers.extraction import _title_from_blocks, extract
 
 
 def test_blocks_have_one_based_pages_and_top_left_bboxes(sample_pdf):
@@ -60,3 +61,12 @@ def test_keeps_the_embedded_metadata(doi_pdf):
     assert metadata["author"] == "Jacob Devlin; Ming-Wei Chang"
     assert metadata["keywords"] == "language models, pre-training"
     assert metadata["creationDate"] == "D:20190528000751Z"
+
+
+def test_two_line_title_join_stops_at_a_same_size_non_bold_line():
+    # Fix round 1, finding 3: a same-size author line right below a one-line title was joined into it.
+    blocks = [
+        Block(page=1, bbox=(0, 0, 1, 1), text="Title Line One", size=14, bold=True),
+        Block(page=1, bbox=(0, 1, 1, 2), text="Jacob Devlin Ming-Wei Chang", size=14, bold=False),
+    ]
+    assert _title_from_blocks(blocks) == "Title Line One"
