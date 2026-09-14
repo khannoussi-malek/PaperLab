@@ -232,6 +232,19 @@ test('saving a passage of an answer makes an AI note on its cited chunk, and edi
   request,
   paperId,
 }) => {
+  // Notes sort by (page, y0, x0) (backend `reading_position`), so eight page-1 fillers above the cited chunk
+  // (y0 110, per the fixture's first chunk) sort before the new AI note, pushing its card below the fold — a
+  // real check that "scrolls to the new note" works, not one that would pass anyway with a single card in view.
+  for (let i = 0; i < 8; i++) {
+    const created = await request.post('/api/notes', {
+      data: {
+        body: `filler ${i}`,
+        anchor: { paper_id: paperId, page: 1, bbox: [[72, 10 + i * 10, 300, 20 + i * 10]], quoted_text: `filler quote ${i}` },
+      },
+    })
+    expect(created.ok()).toBe(true)
+  }
+
   await openChat(page, paperId)
   const answer = await ask(page, 'What anchors a note?')
   const [saved] = await (await request.get(`/api/papers/${paperId}/chat`)).json()
@@ -240,8 +253,9 @@ test('saving a passage of an answer makes an AI note on its cited chunk, and edi
   await page.getByRole('button', { name: 'Save as note' }).click()
 
   await expect(page.getByRole('tab', { name: 'Notes' })).toHaveAttribute('aria-selected', 'true')
-  await expect.poll(async () => (await (await request.get(`/api/papers/${paperId}/notes`)).json()).length).toBe(1)
-  const [note] = await (await request.get(`/api/papers/${paperId}/notes`)).json()
+  await expect.poll(async () => (await (await request.get(`/api/papers/${paperId}/notes`)).json()).length).toBe(9)
+  const notes = await (await request.get(`/api/papers/${paperId}/notes`)).json()
+  const note = notes.find((n: { provenance: string }) => n.provenance === 'llm')
   const [chunk] = await (await request.get(`/api/papers/${paperId}/chunks?page=1`)).json()
   // The body keeps the raw [C1] marker: the API only accepts a verbatim slice of the stored answer.
   expect([note.provenance, note.source_id, note.body]).toEqual(['llm', saved.id, FAKE_ANSWER])
