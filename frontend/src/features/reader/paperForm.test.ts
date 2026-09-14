@@ -42,6 +42,17 @@ describe('toUpdate', () => {
     expect(toUpdate(paper, { ...toForm(paper), year: '2018', venue: 'NAACL' })).toEqual({ year: 2018, venue: 'NAACL' })
   })
 
+  it('does not treat an untouched but padded stored value as a change', () => {
+    const padded = {
+      ...paper,
+      title: '  BERT: Pre-training of Deep  ',
+      venue: ' NAACL ',
+      doi: ' 10.18653/v1/n19-1423 ',
+      abstract: ' We introduce a new language representation model. ',
+    } as Paper
+    expect(toUpdate(padded, toForm(padded))).toEqual({})
+  })
+
   // Owner ruling: abstract corrections use the same changed-fields rule as venue/doi.
   it('sends the abstract when changed, clears it when blanked, and omits it unchanged', () => {
     expect(toUpdate(paper, { ...toForm(paper), abstract: 'A revised abstract.' })).toEqual({

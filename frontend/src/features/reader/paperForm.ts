@@ -28,12 +28,13 @@ export function toUpdate(paper: Paper, form: PaperForm): PaperUpdate {
   const authors = form.authors.split('\n').map((name) => name.trim()).filter(Boolean)
   const year = form.year.trim() ? Number(form.year) : null
   const update: PaperUpdate = {}
-  if (form.title.trim() !== paper.title) update.title = form.title.trim()
+  // Compare against the stored values trimmed too, so an untouched but padded stored value isn't sent as a change.
+  if (form.title.trim() !== paper.title.trim()) update.title = form.title.trim()
   if (authors.join('\n') !== paper.authors.join('\n')) update.authors = authors
   if (year !== paper.year) update.year = year
-  if (orNull(form.venue) !== paper.venue) update.venue = orNull(form.venue)
-  if (orNull(form.doi) !== paper.doi) update.doi = orNull(form.doi)
-  if (orNull(form.abstract) !== paper.abstract) update.abstract = orNull(form.abstract)
+  if (orNull(form.venue) !== orNull(paper.venue ?? '')) update.venue = orNull(form.venue)
+  if (orNull(form.doi) !== orNull(paper.doi ?? '')) update.doi = orNull(form.doi)
+  if (orNull(form.abstract) !== orNull(paper.abstract ?? '')) update.abstract = orNull(form.abstract)
   if (form.isRetracted !== paper.is_retracted) update.is_retracted = form.isRetracted
   return update
 }
