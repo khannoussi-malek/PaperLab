@@ -24,6 +24,31 @@ async def test_a_work_openalex_does_not_have_is_none(fake_openalex):
     assert await openalex.get_work(fake_openalex.client, "doi:10.9999/not-in-openalex") is None
 
 
+async def test_a_merged_works_301_redirect_is_followed(fake_openalex):
+    # OpenAlex answers a merged-away work id with a 301 to the record it was merged into. A relative Location
+    # replaces the whole query string (RFC 3986), so it must repeat mailto for every request to still carry one.
+    location = f"/works/W123?mailto={FakeOpenAlex.MAILTO}"
+    fake_openalex.route("/works/W999", httpx.Response(301, headers={"location": location}))
+    fake_openalex.route("/works/W123", recorded("work_bert"))
+
+    work = await openalex.get_work(fake_openalex.client, "W999")
+
+    assert work["id"] == "https://openalex.org/W2963341956"
+    assert [r.url.path for r in fake_openalex.requests] == ["/works/W999", "/works/W123"]
+
+
+async def test_a_doi_containing_a_question_mark_is_percent_encoded_not_truncated_into_a_query(fake_openalex):
+    # "?" inside a DOI path segment must not be read as the start of the query string.
+    fake_openalex.route("/works/doi:10.1000/abc?xyz", recorded("work_bert"))
+
+    work = await openalex.get_work(fake_openalex.client, "doi:10.1000/abc?xyz")
+
+    assert work["id"] == "https://openalex.org/W2963341956"
+    [request] = fake_openalex.requests
+    assert request.url.path == "/works/doi:10.1000/abc?xyz"
+    assert request.url.params["select"] == openalex.WORK_FIELDS  # the real query string still parses
+
+
 @pytest.mark.parametrize(
     "failure",
     [

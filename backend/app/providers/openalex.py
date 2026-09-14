@@ -6,6 +6,7 @@ filter 10, out of 1,000 free credits a day. Bursts over 10 requests per second g
 """
 
 import re
+from urllib.parse import quote
 
 import httpx
 
@@ -31,7 +32,10 @@ AUTHOR_FIELDS = ",".join(
 
 def new_client(mailto: str, transport: httpx.AsyncBaseTransport | None = None) -> httpx.AsyncClient:
     # Client-level params are merged into every request, so no call can leave out mailto.
-    return httpx.AsyncClient(base_url=BASE_URL, params={"mailto": mailto}, timeout=TIMEOUT, transport=transport)
+    # follow_redirects: OpenAlex answers a merged-away work id with a 301 to the record it merged into.
+    return httpx.AsyncClient(
+        base_url=BASE_URL, params={"mailto": mailto}, timeout=TIMEOUT, transport=transport, follow_redirects=True
+    )
 
 
 # ponytail: no retry, not even on a 429. Enrichment is non-fatal and a re-ingest looks the paper up again. Add one
@@ -49,7 +53,8 @@ def _json(response: httpx.Response) -> dict:
 
 async def get_work(http: httpx.AsyncClient, key: str) -> dict | None:
     """`key` is an OpenAlex work ID ("W2963341956") or "doi:<doi>". None when OpenAlex has no such work."""
-    response = await http.get(f"/works/{key}", params={"select": WORK_FIELDS})
+    # A DOI can contain "?" or other reserved characters; left bare they'd truncate the path into a query string.
+    response = await http.get(f"/works/{quote(key, safe='/:')}", params={"select": WORK_FIELDS})
     if response.status_code == 404:
         return None
     return _json(response.raise_for_status())
