@@ -194,18 +194,25 @@ async def test_a_doi_paper_is_enriched_on_its_way_to_ready(worker_session, doi_p
     assert await count(worker_session, paper_topics, paper.id) == 11  # 9 from OpenAlex, 2 embedded keywords
 
 
-async def test_a_reingest_keeps_one_row_per_author_and_topic(worker_session, doi_pdf, ctx, fake_openalex):
+async def test_a_reingest_keeps_one_row_per_author_and_topic(worker_session, doi_pdf, ctx, fake_openalex, caplog):
     fake_openalex.route(BERT_WORK, recorded("work_bert"))
     fake_openalex.route("/works/W2963341956", recorded("work_bert"))  # the re-run looks up the now-stored id
     fake_openalex.route("/authors", recorded("authors_bert"))
     paper = await add_paper(worker_session, doi_pdf)
+    # Captured once: a failed re-enrichment rolls back inside _enrich, which expires `paper`, and a bare attribute
+    # read after that raises MissingGreenlet instead of a clean assertion failure (see ingest.py's _enrich comment).
+    paper_id = paper.id
     enriching = {**ctx, "openalex": fake_openalex.client}
 
-    await ingest.ingest_paper(enriching, str(paper.id))
-    await ingest.ingest_paper(enriching, str(paper.id))
+    await ingest.ingest_paper(enriching, str(paper_id))
+    await ingest.ingest_paper(enriching, str(paper_id))
 
-    assert await count(worker_session, paper_authors, paper.id) == 4
-    assert await count(worker_session, paper_topics, paper.id) == 11
+    assert await count(worker_session, paper_authors, paper_id) == 4
+    assert await count(worker_session, paper_topics, paper_id) == 11
+    # Those counts alone would look identical if the second run silently skipped re-enrichment (or _enrich's
+    # catch-all quietly ate a failure): confirm the re-run actually looked the stored id up again, and cleanly.
+    assert [r.url.path for r in fake_openalex.requests].count("/works/W2963341956") == 1
+    assert "enrichment failed" not in caplog.text
 
 
 @pytest.mark.parametrize(
@@ -233,10 +240,14 @@ async def test_without_openalex_the_paper_still_reaches_ready_with_pdf_metadata(
     assert paper.authors == ["Jacob Devlin", "Ming-Wei Chang"]  # from the PDF's embedded author field
 
 
-async def test_a_second_copy_of_a_matched_paper_still_reaches_ready(worker_session, doi_pdf, ctx, fake_openalex):
+async def test_a_second_copy_of_a_matched_paper_still_reaches_ready(
+    worker_session, doi_pdf, ctx, fake_openalex, caplog
+):
     fake_openalex.route(BERT_WORK, recorded("work_bert"))
-    # /authors is deliberately left unrouted: enrichment gets as far as writing the match (doi dropped, per
-    # _taken) before the author-detail fetch fails; _enrich's catch-all is what still lets the paper reach ready.
+    # A malformed /authors reply (no "display_name") makes refresh_authors raise a realistic KeyError -- not an
+    # accident of FakeOpenAlex's unrouted-request guard -- and _enrich's catch-all is what still lets the paper
+    # reach ready.
+    fake_openalex.route("/authors", httpx.Response(200, json={"results": [{}]}))
     await add_paper(worker_session, "/first-copy.pdf", doi="10.18653/v1/n19-1423")
     copy = await add_paper(worker_session, doi_pdf)
 
@@ -247,6 +258,7 @@ async def test_a_second_copy_of_a_matched_paper_still_reaches_ready(worker_sessi
     # (title included) still applies -- symmetric with test_enrichment.py's test_a_duplicate_openalex_match_....
     assert (copy.status, copy.status_error, copy.doi) == ("ready", None, None)
     assert copy.title.startswith("BERT: Pre-training")
+    assert "enrichment failed" in caplog.text  # _enrich's except actually ran, not a lucky no-op
 
 
 async def test_a_corrected_title_survives_a_reingest(worker_session, sample_pdf, ctx):

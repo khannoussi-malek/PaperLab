@@ -180,8 +180,9 @@ def _regresses(new: Any, old: Any) -> bool:
 async def _taken(session: AsyncSession, paper_id: uuid.UUID, column: Any, value: Any) -> bool:
     """True when a different paper already holds this UNIQUE `column` value."""
     # ponytail: check-then-UPDATE, not atomic. ARQ runs up to 10 jobs at once, so two concurrent duplicates could
-    # still both pass this check and hit the UNIQUE constraint on the later UPDATE; the ingest `except` then marks
-    # that paper failed. Upgrade path: `ON CONFLICT` on the UPDATE, or a savepoint around check+write.
+    # still both pass this check and hit the UNIQUE constraint on the later UPDATE; the worker's `_enrich` catch-all
+    # logs it and the paper still ends `ready`. Upgrade path: `ON CONFLICT` on the UPDATE, or a savepoint around
+    # check+write.
     return bool(await session.scalar(select(exists().where(column == value, Paper.id != paper_id))))
 
 
