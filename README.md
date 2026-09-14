@@ -15,6 +15,7 @@ always marked as AI in the interface.
 
 - Upload PDFs. A background worker extracts the text, splits it into sections and chunks, and indexes it for search.
 - Hover a paper in the list to preview its first page and details.
+- Group papers into workspaces (a paper can be in several), see all their notes in one place, and chat with a whole workspace: answers cite passages from each paper and your notes.
 - Optionally fill in each paper's title, authors, year, venue and topics from [OpenAlex](https://openalex.org/), and
 correct any of them by hand with **Edit details**. Your corrections are kept when a paper is processed again.
 - A retracted paper shows a banner at the top of the reader that can't be dismissed.
