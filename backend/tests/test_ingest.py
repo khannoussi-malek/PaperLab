@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -6,9 +7,10 @@ import numpy as np
 import pytest
 from conftest import recorded, unit_vector
 from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.core import papers
+from app.core import enrichment, papers
 from app.models import Author, Chunk, Paper, paper_authors, paper_topics
 from app.providers import embedding
 from app.workers import ingest
@@ -268,6 +270,35 @@ async def test_a_corrected_title_survives_a_reingest(worker_session, sample_pdf,
     await worker_session.refresh(paper)
 
     assert (paper.status, paper.title) == ("ready", "My Own Title")
+
+
+async def test_a_title_correction_made_mid_extraction_survives_ingestion(worker_session, sample_pdf, ctx, monkeypatch):
+    """`paper` is loaded once at job start; a PATCH racing `extract` must not be clobbered by the font heuristic."""
+    paper = await add_paper(worker_session, sample_pdf)
+    loop = asyncio.get_running_loop()
+    real_extract = ingest.extract
+
+    async def apply_correction():
+        # A separate session, as the API's PATCH handler would use -- not `worker_session`'s in-memory `paper`.
+        other = AsyncSession(bind=worker_session.bind, expire_on_commit=False, join_transaction_mode="create_savepoint")
+        async with other:
+            await enrichment.correct_metadata(other, paper.id, {"title": "User's Corrected Title"})
+
+    def racing_extract(path):
+        doc = real_extract(path)
+        # extract() runs in a worker thread (asyncio.to_thread); hop back onto the event loop to commit the
+        # correction while ingest_paper is still awaiting this call, simulating the real race.
+        asyncio.run_coroutine_threadsafe(apply_correction(), loop).result()
+        return doc
+
+    monkeypatch.setattr(ingest, "extract", racing_extract)
+
+    await ingest.ingest_paper(ctx, str(paper.id))
+    await worker_session.refresh(paper)
+
+    assert paper.status == "ready"
+    assert paper.title == "User's Corrected Title"
+    assert "title" in paper.manual_fields
 
 
 @pytest.mark.parametrize("pdf", sorted(E2E_FIXTURES.glob("*.pdf")), ids=lambda p: p.name)
