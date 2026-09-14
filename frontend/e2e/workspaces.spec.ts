@@ -97,7 +97,11 @@ test('keyboard: Escape on a workspace menu returns focus to its trigger, and fin
   await page.keyboard.press('Enter')
   await name.fill(`${workspaceName} 2`)
   await name.press('Enter')
-  await expect(newWorkspaceButton).toBeFocused()
+  // Finishing create navigates to the new workspace's own page (a fresh sidebar, so the button above is gone):
+  // its heading takes focus instead of leaving it stranded on the body.
+  const heading = page.getByRole('heading', { level: 1 })
+  await expect(heading).toHaveText(`${workspaceName} 2`)
+  await expect(heading).toBeFocused()
 })
 
 test('deleting a paper refreshes its workspaces without a reload', async ({ page, request, paperId, workspaceName }) => {

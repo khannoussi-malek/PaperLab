@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { useWorkspace } from '@/api/queries'
 import { glass } from '@/components/glass'
 import { ModeToggle } from '@/components/mode-toggle'
@@ -22,11 +23,22 @@ export function WorkspacePage({ workspaceId, tab }: { workspaceId: string; tab: 
   const showTab = (next: WorkspaceTab) => window.location.replace(workspaceHref(workspaceId, next))
   const title = workspace.data?.name ?? (workspace.data === null ? 'Workspace not found' : 'Loading…')
 
+  // This page swaps in for the library on the same hash-driven route, remounting from scratch (a new
+  // WorkspaceSidebar included). Any focus a click or the sidebar's own "New workspace" flow just set is lost with
+  // the old tree, so land it here instead: the heading is the one thing every arrival at this page has in common.
+  const headingRef = useRef<HTMLHeadingElement>(null)
+  useEffect(() => headingRef.current?.focus(), [])
+
   return (
     <main className={cn('mx-auto flex h-dvh max-w-7xl flex-col gap-4 px-4 py-6', fadeIn)}>
       <header className="flex items-center justify-between gap-2">
         <div className="min-w-0">
-          <h1 className="truncate font-heading text-3xl font-semibold" title={title}>
+          <h1
+            ref={headingRef}
+            tabIndex={-1}
+            className="truncate rounded-sm font-heading text-3xl font-semibold outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+            title={title}
+          >
             {title}
           </h1>
           {workspace.data && (
