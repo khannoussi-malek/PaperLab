@@ -104,7 +104,7 @@ async def test_a_correction_survives_the_next_enrichment(session, fake_openalex)
     assert (paper.title, paper.is_retracted, paper.year, paper.openalex_id) == ("My BERT", True, 2019, "W2963341956")
 
 
-# Owner ruling (Task 7): the abstract is correctable, locked the same way as every other manual field.
+# The abstract is correctable, locked the same way as every other manual field.
 
 
 async def test_a_corrected_abstract_is_written_and_remembered(session):

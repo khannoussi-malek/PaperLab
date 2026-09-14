@@ -7,9 +7,9 @@ Create Date: 2026-09-14
 
 from alembic import op
 
-# Collision rule (D27): track A (M5) also adds a 0004. Whichever branch merges second renumbers its revision and
-# down_revision, after running `alembic downgrade 0003` on its own database: a database stamped with the other
-# branch's 0004 would skip this migration without an error.
+# If another branch also adds a 0004, whichever merges second renumbers its revision and down_revision, after
+# running `alembic downgrade 0003` on its own database: a database stamped with the other branch's 0004 would
+# skip this migration without an error.
 revision = "0004"
 down_revision = "0003"
 branch_labels = None

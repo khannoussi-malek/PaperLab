@@ -131,7 +131,7 @@ it arrives instead of a long spinner, and label AI output clearly (severity High
 - **Errors:** a destructive `Alert` inside the Q&A it belongs to, with Retry or Re-index in `AlertAction`. A mid-stream
   error keeps the partial text above it.
 
-## Paper metadata (M6.5)
+## Paper metadata
 
 Pattern from ui-ux-pro-max (`search.py "critical warning banner persistent alert content page" --domain ux`): toasts are
 for non-critical information and auto-dismiss, so a critical fact is not a toast. `search.py "edit form dialog modal

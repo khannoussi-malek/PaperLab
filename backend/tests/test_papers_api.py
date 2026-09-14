@@ -158,7 +158,7 @@ async def test_correcting_a_paper_errors(client, session):
         assert response.status_code == 422, body
 
 
-# Owner ruling (Task 7): the abstract is correctable via the same PATCH, string or null to clear.
+# The abstract is correctable via the same PATCH, string or null to clear.
 
 
 async def test_correcting_a_paper_abstract(client):
