@@ -1,6 +1,6 @@
 import { Sparkles } from 'lucide-react'
 import type { ReactNode } from 'react'
-import type { ChatSource } from '@/api/client'
+import type { ChatSource, NoteSource } from '@/api/client'
 import { pressable, slideUpIn } from '@/components/motion'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -13,6 +13,11 @@ type Props = {
   wholePaper: boolean
   /** In label order (C1, C2, …). An entry is null when a re-ingest replaced its chunk; the list is null until known. */
   sources: (ChatSource | null)[] | null
+  /** Workspace chat: the notes it could cite, in label order (N1, N2, …), null once deleted. Empty in the reader. */
+  notes: (NoteSource | null)[]
+  /** How many of the workspace's notes fit the prompt, of how many; null in the reader. */
+  notesUsed: number | null
+  notesTotal: number | null
   segments: Segment[]
   /** Set once the answer is saved: the model label is only known then. */
   footer: { model: string; promptVersion: number } | null
@@ -21,17 +26,25 @@ type Props = {
   pending?: boolean
   /** Fade up on mount: only the answer being asked now, never ones loaded from history. */
   animate?: boolean
-  /** Shows a source in the paper: the reader scrolls to its chunk and flashes it. */
-  onCite: (source: ChatSource) => void
+  /** Names a source's paper. Given on a workspace, whose answers cite several papers. */
+  paperLabel?: (paperId: string) => string
+  /** Shows a source: the reader flashes a passage in place; a workspace opens the reader on a passage or a note. */
+  onCite: (source: Cited) => void
   /** Shown under the answer, e.g. an error with Retry. */
   children?: ReactNode
 }
 
+type Cited = ChatSource | NoteSource
+
 const CITE_HINT = 'The AI used this passage. Click to see it in the paper.'
+const NOTE_HINT = 'The AI used this note. Click to see it in the paper.'
+const hintFor = (source: Cited) => ('note_id' in source ? NOTE_HINT : CITE_HINT)
 
 export function ChatAnswer(props: Props) {
-  const { question, wholePaper, sources, segments, footer, outputId, pending, animate, onCite, children } = props
-  const sourceFor = (label: string) => sources?.find((source) => source?.label === label)
+  const { question, wholePaper, sources, notes, notesUsed, notesTotal, segments, footer, outputId, pending } = props
+  const { animate, paperLabel, onCite, children } = props
+  const sourceFor = (label: string) => [...(sources ?? []), ...notes].find((source) => source?.label === label)
+  const describe = (source: Cited) => describeSource(source, paperLabel?.(source.paper_id))
   const waiting = pending && segments.length === 0
   return (
     <article className={cn('chat-answer flex flex-col gap-2', animate && slideUpIn)} data-output-id={outputId}>
@@ -54,11 +67,11 @@ export function ChatAnswer(props: Props) {
                   const source = segment.kind === 'cite' ? sourceFor(segment.label) : undefined
                   // The tooltip renders in a portal, so the paragraph's text (which promote.ts counts) is unchanged.
                   return source ? (
-                    <Hint key={i} label={describeSource(source)} detail={CITE_HINT}>
+                    <Hint key={i} label={describe(source)} detail={hintFor(source)}>
                       <button
                         type="button"
                         className="chat-cite rounded-xs font-medium text-primary underline-offset-2 hover:underline"
-                        aria-label={describeSource(source)}
+                        aria-label={describe(source)}
                         onClick={() => onCite(source)}
                       >
                         [{source.label}]
@@ -72,7 +85,19 @@ export function ChatAnswer(props: Props) {
             )}
 
             {(footer || sources !== null) && (
-              <AnswerMeta footer={footer} sources={sources} wholePaper={wholePaper} onCite={onCite} />
+              <AnswerMeta
+                footer={footer}
+                sources={sources}
+                notes={notes}
+                wholePaper={wholePaper}
+                describe={describe}
+                onCite={onCite}
+              />
+            )}
+            {notesUsed !== null && notesTotal !== null && notesUsed < notesTotal && (
+              <p className="text-xs text-muted-foreground">
+                Using {notesUsed} of {notesTotal} notes (newest first)
+              </p>
             )}
           </div>
         </TooltipProvider>
@@ -94,14 +119,32 @@ function TypingIndicator({ label }: { label: string }) {
   )
 }
 
-type MetaProps = Pick<Props, 'footer' | 'sources' | 'wholePaper' | 'onCite'>
+type MetaProps = Pick<Props, 'footer' | 'sources' | 'notes' | 'wholePaper' | 'onCite'> & {
+  describe: (source: Cited) => string
+}
 
 /**
  * One quiet row: the AI mark, then a pill per source. Everything longer (the model, each passage's page and section)
  * waits in a tooltip, so a thread of answers doesn't repeat the same line under each one.
  */
-function AnswerMeta({ footer, sources, wholePaper, onCite }: MetaProps) {
+function AnswerMeta({ footer, sources, notes, wholePaper, describe, onCite }: MetaProps) {
   const aiLabel = footer ? `AI · ${footer.model} · prompt v${footer.promptVersion}` : 'AI'
+  const pill = (source: Cited | null) =>
+    source && (
+      <li key={source.label}>
+        <Hint label={describe(source)} detail={hintFor(source)}>
+          <Button
+            variant="outline"
+            size="xs"
+            className={cn('min-w-8 tabular-nums', pressable)}
+            aria-label={describe(source)}
+            onClick={() => onCite(source)}
+          >
+            {source.label}
+          </Button>
+        </Hint>
+      </li>
+    )
   // The pills wrap among themselves, so the AI mark keeps its place at the start of the row.
   return (
     <div className="flex items-start gap-1.5">
@@ -125,25 +168,9 @@ function AnswerMeta({ footer, sources, wholePaper, onCite }: MetaProps) {
               <Badge variant="outline">Whole paper · {sources.length} chunks</Badge>
             </li>
           ) : (
-            sources.map(
-              (source) =>
-                source && (
-                  <li key={source.label}>
-                    <Hint label={describeSource(source)} detail={CITE_HINT}>
-                      <Button
-                        variant="outline"
-                        size="xs"
-                        className={cn('min-w-8 tabular-nums', pressable)}
-                        aria-label={describeSource(source)}
-                        onClick={() => onCite(source)}
-                      >
-                        {source.label}
-                      </Button>
-                    </Hint>
-                  </li>
-                ),
-            )
+            sources.map(pill)
           )}
+          {notes.map(pill)}
         </ul>
       )}
     </div>

@@ -115,6 +115,27 @@ export async function addNote(request: APIRequestContext, paperId: string, page:
   return (await created.json()) as { id: string }
 }
 
+/** Asks with Enter, and waits until the answer is saved: only a saved answer has `data-output-id`. */
+export async function ask(page: Page, question: string): Promise<Locator> {
+  await page.getByRole('textbox', { name: 'Question' }).fill(question)
+  await page.getByRole('textbox', { name: 'Question' }).press('Enter')
+  const answer = page.locator('article.chat-answer[data-output-id]', { hasText: question })
+  // 15s: the first workspace question on a freshly recreated API also loads the embedding model (~3.4s cold).
+  await expect(answer.locator('.chat-answer-footer')).toContainText('AI · ', { timeout: 15_000 })
+  return answer
+}
+
+/** Selects all of an element's text like a mouse drag, then releases the mouse. */
+export async function selectAllOf(element: Locator) {
+  await element.evaluate((node) => {
+    const range = document.createRange()
+    range.selectNodeContents(node)
+    window.getSelection()!.removeAllRanges()
+    window.getSelection()!.addRange(range)
+  })
+  await element.dispatchEvent('mouseup')
+}
+
 /** Largest offset in px between two elements' boxes; retried by callers while layout settles. */
 export async function boxOffset(a: Locator, b: Locator): Promise<number> {
   const [boxA, boxB] = [await a.boundingBox(), await b.boundingBox()]

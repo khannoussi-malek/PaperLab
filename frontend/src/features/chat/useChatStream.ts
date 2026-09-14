@@ -4,15 +4,16 @@ import {
   errorDetail,
   type ChatDoneEvent,
   type ChatErrorEvent,
+  type ChatScope,
   type ChatSource,
   type ChatSourcesEvent,
   type ChatTokenEvent,
+  type NoteSource,
 } from '@/api/client'
 import { useInvalidateChatHistory } from '@/api/queries'
 import { appendSegments, citationSplitter, type Segment } from './citations'
+import { refusal, type ChatProblem } from './refusals'
 import { readSse } from './sse'
-
-export type ChatProblem = { message: string; retryable: boolean; reindex: boolean }
 
 /** `sources`: asked, nothing streamed yet. `sources` stays null until its event arrives. */
 export type ChatStream = {
@@ -20,6 +21,10 @@ export type ChatStream = {
   question: string
   sources: ChatSource[] | null
   wholePaper: boolean
+  /** Workspace chat only: the notes the answer can cite, and how many of the workspace's notes fit the prompt. */
+  notes: NoteSource[]
+  notesUsed: number | null
+  notesTotal: number | null
   segments: Segment[]
   done: ChatDoneEvent | null
   problem: ChatProblem | null
@@ -30,51 +35,44 @@ const IDLE: ChatStream = {
   question: '',
   sources: null,
   wholePaper: false,
+  notes: [],
+  notesUsed: null,
+  notesTotal: null,
   segments: [],
   done: null,
   problem: null,
 }
 
-// The 409s POST /chat answers before streaming (spec §3.10), in words. Any other refusal shows its detail.
-const REFUSALS: Record<string, ChatProblem> = {
-  paper_not_ready: {
-    message: 'This paper is still being processed. Ask again once it is ready.',
-    retryable: true,
-    reindex: false,
-  },
-  paper_not_indexed: {
-    message: 'This paper was added before chat existed, so it has no search index yet.',
-    retryable: false,
-    reindex: true,
-  },
-}
-
 const STOPPED: ChatProblem = { message: 'The answer stopped before it finished.', retryable: true, reindex: false }
 
 /** Asks one question and follows its SSE stream: idle → sources → streaming → done | error. */
-export function useChatStream(paperId: string) {
+export function useChatStream(scope: ChatScope) {
   const [stream, setStream] = useState<ChatStream>(IDLE)
-  const invalidateHistory = useInvalidateChatHistory(paperId)
+  const invalidateHistory = useInvalidateChatHistory(scope)
 
   async function ask(question: string) {
     setStream({ ...IDLE, status: 'sources', question })
     const fail = (problem: ChatProblem, tail: Segment[] = []) =>
       setStream((s) => ({ ...s, status: 'error', problem, segments: appendSegments(s.segments, tail) }))
 
-    const response = await api.askChat(paperId, question).catch(() => null)
+    const response = await api.askChat(scope, question).catch(() => null)
     if (!response) return fail({ message: "Can't reach the PaperLab API.", retryable: true, reindex: false })
-    if (!response.ok || !response.body) {
-      const detail = await errorDetail(response)
-      return fail(REFUSALS[detail] ?? { message: detail, retryable: false, reindex: false })
-    }
+    if (!response.ok || !response.body) return fail(refusal(response.status, await errorDetail(response)))
 
     let splitter = citationSplitter(new Set())
     try {
       for await (const { event, data } of readSse(response.body)) {
         if (event === 'sources') {
-          const { sources, whole_paper } = JSON.parse(data) as ChatSourcesEvent
-          splitter = citationSplitter(new Set(sources.map((source) => source.label)))
-          setStream((s) => ({ ...s, sources, wholePaper: whole_paper }))
+          const { sources, whole_paper, notes, notes_used, notes_total } = JSON.parse(data) as ChatSourcesEvent
+          splitter = citationSplitter(new Set([...sources, ...notes].map((source) => source.label)))
+          setStream((s) => ({
+            ...s,
+            sources,
+            wholePaper: whole_paper,
+            notes,
+            notesUsed: notes_used,
+            notesTotal: notes_total,
+          }))
         } else if (event === 'token') {
           const added = splitter.feed((JSON.parse(data) as ChatTokenEvent).text)
           setStream((s) => ({ ...s, status: 'streaming', segments: appendSegments(s.segments, added) }))

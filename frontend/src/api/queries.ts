@@ -1,5 +1,13 @@
 import { QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api, type NoteCreate, type NoteUpdate, type Paper, type PaperUpdate, type PromoteRequest } from './client'
+import {
+  api,
+  type ChatScope,
+  type NoteCreate,
+  type NoteUpdate,
+  type Paper,
+  type PaperUpdate,
+  type PromoteRequest,
+} from './client'
 
 export const PAPERS_POLL_MS = 2000
 
@@ -13,7 +21,7 @@ const keys = {
   paper: (id: string) => ['papers', id] as const,
   notes: (paperId: string) => ['papers', paperId, 'notes'] as const,
   chunks: (paperId: string, page: number) => ['papers', paperId, 'chunks', page] as const,
-  chat: (paperId: string) => ['papers', paperId, 'chat'] as const,
+  chat: (scope: ChatScope) => [scope.kind === 'paper' ? 'papers' : 'workspaces', scope.id, 'chat'] as const,
   // Every workspace query starts with this, so one invalidation refreshes the list, its counts and each home's tabs.
   workspaces: ['workspaces'] as const,
   workspacePapers: (id: string) => ['workspaces', id, 'papers'] as const,
@@ -45,14 +53,14 @@ export const useChunksOnPage = (paperId: string, page: number | null) =>
     enabled: page !== null,
   })
 
-/** Saved questions and answers for a paper, oldest first. */
-export const useChatHistory = (paperId: string) =>
-  useQuery({ queryKey: keys.chat(paperId), queryFn: () => api.listChat(paperId) })
+/** Saved questions and answers for a paper or a workspace, oldest first. */
+export const useChatHistory = (scope: ChatScope) =>
+  useQuery({ queryKey: keys.chat(scope), queryFn: () => api.listChat(scope) })
 
 /** For the chat stream, which isn't a query: refetch the history once an answer is saved. */
-export function useInvalidateChatHistory(paperId: string) {
+export function useInvalidateChatHistory(scope: ChatScope) {
   const client = useQueryClient()
-  return () => client.invalidateQueries({ queryKey: keys.chat(paperId) })
+  return () => client.invalidateQueries({ queryKey: keys.chat(scope) })
 }
 
 /** Re-runs ingestion, which embeds the paper: the fix for papers ingested before chat existed. */
@@ -64,12 +72,17 @@ export function useReindexPaper(paperId: string) {
   })
 }
 
-/** Saves part of a chat answer as an AI note. Resolves once the notes list has refetched and includes it. */
-export function usePromoteNote(paperId: string) {
+/** Saves part of a chat answer as an AI note. Resolves once the lists that show it have refetched and include it. */
+export function usePromoteNote() {
   const client = useQueryClient()
   return useMutation({
     mutationFn: (promote: PromoteRequest) => api.promoteNote(promote),
-    onSuccess: () => client.invalidateQueries({ queryKey: keys.notes(paperId) }),
+    // A workspace answer can anchor the note on several papers, and workspace Notes tabs and counts list it too.
+    onSuccess: (note) =>
+      Promise.all([
+        ...note.anchors.map((anchor) => client.invalidateQueries({ queryKey: keys.notes(anchor.paper_id) })),
+        client.invalidateQueries({ queryKey: keys.workspaces }),
+      ]),
   })
 }
 

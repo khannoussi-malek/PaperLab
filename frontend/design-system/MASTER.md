@@ -95,7 +95,8 @@ Fonts: body `Atkinson Hyperlegible Next Variable` (`font-sans`), headings `Crims
   `.retraction-banner`, `.reader`, `.highlight.active`, `a.workspace-note`, `section[data-paper-id]`, `.chat-scope`,
   `[data-paper-id]` on "Add papers" options, the "Note" / "Save note" / "Zoom in" / "Toggle theme" / "Question" / "Ask" /
   "Save as note" / "Retry" / "Re-index" / "Resize panel" / "Edit details" / "Save" / "Cancel" names, the "Ask this paper"
-  heading and "Suggested questions" list, the "Edit details" dialog with its "Title" / "Authors" / "Year" / "Venue" /
+  and "Ask this workspace" headings and "Suggested questions" list, the "Edit details" dialog with its "Title" /
+  "Authors" / "Year" / "Venue" /
   "DOI" fields and "Retracted" checkbox, the "Workspaces" navigation with "New workspace" / "Workspace name" /
   "Workspace actions" / "Rename" / "Delete", the "Paper actions" / "Add to workspace…" / "Remove from workspace" /
   "Add papers" / "Search papers" names, the "Notes" / "Chat" and "Papers" / "Notes" / "Chat" tabs, and the colour names
@@ -232,12 +233,15 @@ Input with a custom dropdown; Dialog for modal content, High).
   as "Quotes stay short"), the body (6 lines). AI notes keep `bg-provenance-llm-surface`. No filter chips: the reader's
   Notes tab has them, and this tab only points into the reader.
 - **Chat tab:** the reader's `ChatPanel` in a glass card, under the `.chat-scope` line ("2 papers (1 not indexed) · 3
-  notes"). Chips name the paper: `C1 · Karpukhin 2020 p.3`, `N1 · You · BERT p.4` (the paper label is the first
-  author's surname and year, the surname alone without a year, else the title cut to 24 characters, as in the prompt
-  the model sees). "Using 58 of 64 notes (newest first)" is a
-  `text-xs text-muted-foreground` line under the chips. Citations navigate (`location.hash`, so Back returns to the
-  answer): `[C…]` to the reader flashing the passage, `[N…]` to the reader focusing the note. An empty workspace shows
-  "Add papers to chat with this workspace." and disables the input. Answers keep the opaque AI surface.
+  notes"). Answers look as in the reader ("Chat (M4)"): short pills `C1`, `C2`, … then `N1`, … for cited notes, with
+  the words behind hover and focus. On a workspace the words name the paper: `Source 1: Karpukhin 2020, page 3,
+  section “Method”` for a passage, and `N1 · You · BERT p.4` over "The AI used this note. Click to see it in the
+  paper." for a note (`describeSource`, with `paperLabel`: the first author's surname and year, the surname alone
+  without a year, else the title cut to 24 characters, as in the prompt the model sees). "Using 58 of 64 notes (newest
+  first)" is a `text-xs text-muted-foreground` line under the pills. Citations and pills navigate (`location.hash`, so
+  Back returns to the answer): `[C…]` to the reader flashing the passage, `[N…]` to the reader focusing the note. The
+  empty chat is "Ask this workspace" with starters that look across its papers. An empty workspace disables the
+  starters and the question box, and the hint under the box says "Add papers to chat with this workspace."
 
 ## Pre-delivery check (from ui-ux-pro-max Quick Reference §1–§3)
 

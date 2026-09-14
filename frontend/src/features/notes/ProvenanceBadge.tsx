@@ -5,7 +5,8 @@ import { cn } from '@/lib/utils'
 
 type Provenance = Note['provenance']
 
-const LABEL: Record<Provenance, string> = {
+/** Also names a cited note in chat ("N1 · You · BERT p.4"). */
+export const PROVENANCE_LABEL: Record<Provenance, string> = {
   human: 'You',
   llm: 'AI',
   llm_edited: 'AI · edited',
@@ -27,7 +28,7 @@ export function ProvenanceBadge({ provenance }: { provenance: Provenance }) {
       title={DESCRIPTION[provenance]}
     >
       {human ? <UserRound aria-hidden /> : <Sparkles aria-hidden />}
-      {LABEL[provenance]}
+      {PROVENANCE_LABEL[provenance]}
     </Badge>
   )
 }

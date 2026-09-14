@@ -7,6 +7,7 @@ export type Note = components['schemas']['NoteOut']
 export type NoteCreate = components['schemas']['NoteCreate']
 export type NoteUpdate = components['schemas']['NoteUpdate']
 export type ChatSource = components['schemas']['ChatSource']
+export type NoteSource = components['schemas']['NoteSource']
 export type ChatAnswer = components['schemas']['ChatAnswer']
 // Prefixed: the DOM already has a global `ErrorEvent`.
 export type ChatSourcesEvent = components['schemas']['SourcesEvent']
@@ -15,6 +16,10 @@ export type ChatDoneEvent = components['schemas']['DoneEvent']
 export type ChatErrorEvent = components['schemas']['ErrorEvent']
 export type PromoteRequest = components['schemas']['PromoteRequest']
 export type Workspace = components['schemas']['WorkspaceOut']
+
+/** Where a chat lives: the reader's paper, or a workspace. */
+export type ChatScope = { kind: 'paper' | 'workspace'; id: string }
+const chatUrl = (scope: ChatScope) => `/api/${scope.kind === 'paper' ? 'papers' : 'workspaces'}/${scope.id}/chat`
 
 /** The last `loc` segment of each FastAPI validation error that has one, deduplicated and in order. */
 function invalidFields(errors: unknown[]): string[] {
@@ -79,9 +84,8 @@ export const api = {
     request<void>(`/api/workspaces/${workspaceId}/papers/${paperId}`, { method: 'PUT' }),
   removeFromWorkspace: (workspaceId: string, paperId: string) =>
     request<void>(`/api/workspaces/${workspaceId}/papers/${paperId}`, { method: 'DELETE' }),
-  listChat: (paperId: string) => request<ChatAnswer[]>(`/api/papers/${paperId}/chat`),
+  listChat: (scope: ChatScope) => request<ChatAnswer[]>(chatUrl(scope)),
   promoteNote: (promote: PromoteRequest) => request<Note>('/api/notes/promote', sendJson('POST', promote)),
   /** The raw response: on success its body is the SSE stream that `useChatStream` reads. */
-  askChat: (paperId: string, question: string) =>
-    fetch(`/api/papers/${paperId}/chat`, sendJson('POST', { question })),
+  askChat: (scope: ChatScope, question: string) => fetch(chatUrl(scope), sendJson('POST', { question })),
 }

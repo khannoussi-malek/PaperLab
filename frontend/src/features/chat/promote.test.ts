@@ -63,6 +63,22 @@ describe('promoteSelection', () => {
     expect(promoteSelection(ANSWER, SOURCES, ...over('\n\n'))).toBeNull()
   })
 
+  it('has nothing to anchor on when the selection cites only notes, even with passages in its paragraph', () => {
+    const content = 'Both papers describe it [C1][C2], as your note says [N1].'
+    expect(promoteSelection(content, SOURCES, ...over('as your note says [N1]', content))).toEqual({
+      body: 'as your note says [N1]',
+      chunkIds: [],
+    })
+  })
+
+  it('anchors a selection citing passages and a note on the passages only', () => {
+    const content = 'Both papers describe it [C1][C2], as your note says [N1].'
+    expect(promoteSelection(content, SOURCES, 0, content.length)).toEqual({
+      body: content,
+      chunkIds: ['chunk-C1', 'chunk-C2'],
+    })
+  })
+
   it('computes the paragraph fallback from the trimmed body, not a start sitting on the break itself', () => {
     // The selection starts on the leading "\n" of the "\n\n" before paragraph 2, not inside paragraph 2's text.
     // The body still trims down to paragraph 2, so its anchors must be paragraph 2's markers, not paragraph 1's.
