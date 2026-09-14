@@ -249,7 +249,7 @@ export function ReaderPage({ paperId, tab }: { paperId: string; tab: ReaderTab }
     <div className="grid h-dvh grid-cols-[minmax(0,1fr)_360px] grid-rows-[auto_minmax(0,1fr)]">
       {/* One grid row either way, so the pages and the panel keep their row whether or not the banner shows. */}
       <div className="col-span-full">
-        <ReaderToolbar title={paper.data?.title} zoomIndex={zoomIndex} onZoomChange={setZoomIndex} />
+        <ReaderToolbar paper={paper.data} zoomIndex={zoomIndex} onZoomChange={setZoomIndex} />
         {paper.data?.is_retracted && <RetractionBanner paper={paper.data} />}
       </div>
 

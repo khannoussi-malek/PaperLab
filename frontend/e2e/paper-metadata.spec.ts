@@ -28,3 +28,50 @@ test('a retracted paper shows a banner above the pages, and only while it is ret
   await expect(page.getByRole('heading', { name: FIXTURE_TITLE })).toBeVisible()
   await expect(banner).toHaveCount(0)
 })
+
+test('corrected details persist across a reload, and marking the paper retracted shows the banner', async ({
+  page,
+  paperId,
+}) => {
+  const line = await openReader(page, paperId)
+  await page.getByRole('button', { name: 'Edit details' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Edit details' })
+  await dialog.getByLabel('Title').fill('Corrected Fixture Title')
+  await dialog.getByLabel('Authors').fill('Ada Lovelace\nAlan Turing')
+  await dialog.getByLabel('Year').fill('1843')
+  // Owner ruling: the abstract is correctable in this dialog too, locked in manual_fields the same way.
+  await dialog.getByLabel('Abstract').fill('A corrected abstract for the fixture paper.')
+  await dialog.getByRole('checkbox', { name: 'Retracted' }).check()
+  await dialog.getByRole('button', { name: 'Save' }).click()
+
+  await expect(dialog).toBeHidden()
+  const heading = page.getByRole('heading', { name: 'Corrected Fixture Title' })
+  await expect(heading).toBeVisible()
+  await expect(page.locator('.retraction-banner')).toBeVisible()
+
+  await page.reload()
+  await expect(line).toBeVisible()
+  await expect(heading).toBeVisible()
+  await expect(page.locator('.retraction-banner')).toBeVisible()
+  await page.getByRole('button', { name: 'Edit details' }).click()
+  await expect(dialog.getByLabel('Authors')).toHaveValue('Ada Lovelace\nAlan Turing')
+  await expect(dialog.getByLabel('Year')).toHaveValue('1843')
+  await expect(dialog.getByLabel('Abstract')).toHaveValue('A corrected abstract for the fixture paper.')
+  await expect(dialog.getByRole('button', { name: 'Save' })).toBeDisabled() // nothing changed yet
+})
+
+test('a correction the server refuses keeps the dialog open to fix it', async ({ page, request, paperId }) => {
+  await openReader(page, paperId)
+  await page.getByRole('button', { name: 'Edit details' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Edit details' })
+  await dialog.getByLabel('DOI').fill('not a doi')
+  await dialog.getByRole('button', { name: 'Save' }).click()
+  await expect(dialog.getByRole('alert')).toHaveText("not a DOI: 'not a doi'")
+
+  // Still open, with the draft intact: fixing the value is enough.
+  const doi = `10.5555/e2e-${paperId}`
+  await dialog.getByLabel('DOI').fill(`https://doi.org/${doi}`)
+  await dialog.getByRole('button', { name: 'Save' }).click()
+  await expect(dialog).toBeHidden()
+  expect((await (await request.get(`/api/papers/${paperId}`)).json()).doi).toBe(doi)
+})
