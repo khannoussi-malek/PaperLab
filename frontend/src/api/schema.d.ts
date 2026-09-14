@@ -37,7 +37,10 @@ export interface paths {
         /** List Papers */
         get: operations["list_papers_api_papers_get"];
         put?: never;
-        /** Upload Paper */
+        /**
+         * Upload Paper
+         * @description workspace_id: also add the new paper to this workspace (404 before anything is stored if it's unknown).
+         */
         post: operations["upload_paper_api_papers_post"];
         delete?: never;
         options?: never;
@@ -194,11 +197,117 @@ export interface paths {
         /** History */
         get: operations["history_api_papers__paper_id__chat_get"];
         put?: never;
-        /**
-         * Ask
-         * @description Events: sources, token (repeated), then done. error replaces done, and then nothing is saved.
-         */
+        /** Ask */
         post: operations["ask_api_papers__paper_id__chat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/chat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Workspace History */
+        get: operations["workspace_history_api_workspaces__workspace_id__chat_get"];
+        put?: never;
+        /**
+         * Ask Workspace
+         * @description Checked in the dependency first: 404, 409 workspace_empty or workspace_not_indexed, 422.
+         */
+        post: operations["ask_workspace_api_workspaces__workspace_id__chat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Workspaces */
+        get: operations["list_workspaces_api_workspaces_get"];
+        put?: never;
+        /** Create Workspace */
+        post: operations["create_workspace_api_workspaces_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Workspace */
+        delete: operations["delete_workspace_api_workspaces__workspace_id__delete"];
+        options?: never;
+        head?: never;
+        /** Rename Workspace */
+        patch: operations["rename_workspace_api_workspaces__workspace_id__patch"];
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/papers/{paper_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Add Paper */
+        put: operations["add_paper_api_workspaces__workspace_id__papers__paper_id__put"];
+        post?: never;
+        /** Remove Paper */
+        delete: operations["remove_paper_api_workspaces__workspace_id__papers__paper_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/papers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Papers */
+        get: operations["list_papers_api_workspaces__workspace_id__papers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Notes */
+        get: operations["list_notes_api_workspaces__workspace_id__notes_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -251,6 +360,8 @@ export interface components {
         Body_upload_paper_api_papers_post: {
             /** File */
             file: string;
+            /** Workspace Id */
+            workspace_id?: string | null;
         };
         /** ChatAnswer */
         ChatAnswer: {
@@ -276,6 +387,12 @@ export interface components {
             whole_paper: boolean;
             /** Sources */
             sources: (components["schemas"]["ChatSource"] | null)[];
+            /** Notes */
+            notes: (components["schemas"]["NoteSource"] | null)[];
+            /** Notes Used */
+            notes_used: number | null;
+            /** Notes Total */
+            notes_total: number | null;
         };
         /** ChatRequest */
         ChatRequest: {
@@ -291,6 +408,11 @@ export interface components {
              * Format: uuid
              */
             chunk_id: string;
+            /**
+             * Paper Id
+             * Format: uuid
+             */
+            paper_id: string;
             /** Page */
             page: number;
             /** Section */
@@ -399,6 +521,28 @@ export interface components {
             /** Anchors */
             anchors: components["schemas"]["AnchorOut"][];
         };
+        /** NoteSource */
+        NoteSource: {
+            /** Label */
+            label: string;
+            /**
+             * Note Id
+             * Format: uuid
+             */
+            note_id: string;
+            /**
+             * Paper Id
+             * Format: uuid
+             */
+            paper_id: string;
+            /** Page */
+            page: number;
+            /**
+             * Provenance
+             * @enum {string}
+             */
+            provenance: "human" | "llm" | "llm_edited";
+        };
         /** NoteUpdate */
         NoteUpdate: {
             /** Body */
@@ -452,6 +596,8 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Workspace Ids */
+            workspace_ids: string[];
         };
         /**
          * PaperUpdate
@@ -491,6 +637,12 @@ export interface components {
             whole_paper: boolean;
             /** Sources */
             sources: components["schemas"]["ChatSource"][];
+            /** Notes */
+            notes: components["schemas"]["NoteSource"][];
+            /** Notes Used */
+            notes_used: number | null;
+            /** Notes Total */
+            notes_total: number | null;
         };
         /** TokenEvent */
         TokenEvent: {
@@ -509,6 +661,35 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** WorkspaceCreate */
+        WorkspaceCreate: {
+            /** Name */
+            name: string;
+        };
+        /** WorkspaceOut */
+        WorkspaceOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Paper Count */
+            paper_count: number;
+            /** Note Count */
+            note_count: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** WorkspaceRename */
+        WorkspaceRename: {
+            /** Name */
+            name: string;
         };
     };
     responses: never;
@@ -996,6 +1177,311 @@ export interface operations {
                 };
                 content: {
                     "text/event-stream": components["schemas"]["SourcesEvent"] | components["schemas"]["TokenEvent"] | components["schemas"]["DoneEvent"] | components["schemas"]["ErrorEvent"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    workspace_history_api_workspaces__workspace_id__chat_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatAnswer"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ask_workspace_api_workspaces__workspace_id__chat_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": components["schemas"]["SourcesEvent"] | components["schemas"]["TokenEvent"] | components["schemas"]["DoneEvent"] | components["schemas"]["ErrorEvent"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_workspaces_api_workspaces_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceOut"][];
+                };
+            };
+        };
+    };
+    create_workspace_api_workspaces_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkspaceCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_workspace_api_workspaces__workspace_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rename_workspace_api_workspaces__workspace_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkspaceRename"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_paper_api_workspaces__workspace_id__papers__paper_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                paper_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_paper_api_workspaces__workspace_id__papers__paper_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                paper_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_papers_api_workspaces__workspace_id__papers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaperOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_notes_api_workspaces__workspace_id__notes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteOut"][];
                 };
             };
             /** @description Validation Error */

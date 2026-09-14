@@ -1,11 +1,12 @@
 import uuid
+from typing import Annotated
 
-from fastapi import APIRouter, Request, Response, UploadFile
+from fastapi import APIRouter, Form, Request, Response, UploadFile
 from fastapi.responses import FileResponse
 
 from app.api.deps import SessionDep
 from app.config import settings
-from app.core import enrichment, papers
+from app.core import enrichment, papers, workspaces
 from app.models import PaperStatus
 from app.schemas.papers import ChunkOut, PaperOut, PaperUpdate
 
@@ -17,8 +18,18 @@ async def _enqueue_ingest(request: Request, paper_id: uuid.UUID) -> None:
 
 
 @router.post("", status_code=201)
-async def upload_paper(file: UploadFile, request: Request, session: SessionDep) -> PaperOut:
+async def upload_paper(
+    file: UploadFile,
+    request: Request,
+    session: SessionDep,
+    workspace_id: Annotated[uuid.UUID | None, Form()] = None,
+) -> PaperOut:
+    """workspace_id: also add the new paper to this workspace (404 before anything is stored if it's unknown)."""
+    if workspace_id is not None:
+        await workspaces.get(session, workspace_id)
     paper = await papers.create_paper(session, file.filename or "untitled.pdf", await file.read(), settings.pdf_dir)
+    if workspace_id is not None:
+        await workspaces.add_paper(session, workspace_id, paper.id)
     await _enqueue_ingest(request, paper.id)
     return paper
 

@@ -3,6 +3,7 @@ import math
 import os
 import random
 import re
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import httpx
@@ -14,11 +15,13 @@ from sqlalchemy import delete, or_
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
+from app.api import chat as chat_api
 from app.config import settings
 from app.db import get_session
 from app.main import create_app
 from app.models import Author, Paper
-from app.providers import openalex
+from app.providers import embedding, openalex
+from app.providers.llm import FakeLLM, get_llm
 
 # The compose Postgres, published on the host. Every test runs inside a transaction that is
 # rolled back afterwards, so tests can share the dev database without leaving rows behind.
@@ -37,6 +40,16 @@ BODY_TEXT = "The quick brown fox jumps over the lazy dog near the river bank tod
 @pytest.fixture
 def anyio_backend():
     return "asyncio"
+
+
+@pytest.fixture(autouse=True)
+def no_real_embedding_model(monkeypatch):
+    """A test that forgets to pass a FakeEmbedder fails at once instead of downloading 523 MB."""
+
+    def refuse():
+        raise RuntimeError("tests must not load the embedding model; pass a FakeEmbedder or patch get_model")
+
+    monkeypatch.setattr(embedding, "load", refuse)
 
 
 @pytest.fixture
@@ -181,6 +194,30 @@ def app(session, arq, pdf_dir):
 async def client(app):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http:
         yield http
+
+
+def parse_sse(raw: str) -> list[tuple[str, dict]]:
+    events = []
+    for block in raw.strip().split("\n\n"):
+        lines = [line for line in block.split("\n") if not line.startswith(":")]  # ": ping" keepalives
+        name = next(line.removeprefix("event: ") for line in lines if line.startswith("event: "))
+        data = "\n".join(line.removeprefix("data: ") for line in lines if line.startswith("data: "))
+        events.append((name, json.loads(data)))
+    return events
+
+
+@pytest.fixture
+def fake_llm(app, session, monkeypatch):
+    fake = FakeLLM()
+    app.dependency_overrides[get_llm] = lambda: fake
+
+    @asynccontextmanager
+    async def test_session():
+        yield session
+
+    # The answer is saved in a fresh session after the stream; keep it inside the test transaction.
+    monkeypatch.setattr(chat_api, "SessionLocal", test_session)
+    return fake
 
 
 def _write_pdf(path: Path, pages: list[list[tuple]], metadata: dict[str, str] | None = None) -> Path:

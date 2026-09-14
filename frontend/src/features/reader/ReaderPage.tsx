@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { api, type Note } from '@/api/client'
-import { useNoteMutations, useNotes, usePaper } from '@/api/queries'
+import { useChunksOnPage, useNoteMutations, useNotes, usePaper } from '@/api/queries'
 import { glass } from '@/components/glass'
 import { fadeIn } from '@/components/motion'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { readerHref, type ReaderTab } from '@/lib/route'
+import { readerHref, type ReaderTab, type ReaderTarget } from '@/lib/route'
 import { cn } from '@/lib/utils'
 import { ChatPanel } from '../chat/ChatPanel'
 import { browserStorage, highlightFill, loadLastColor, saveLastColor } from '../notes/highlightColors'
@@ -70,7 +70,14 @@ function pointOnPage(event: MouseEvent, scale: number) {
   return { page: Number(element.dataset.page), point }
 }
 
-export function ReaderPage({ paperId, tab }: { paperId: string; tab: ReaderTab }) {
+type Props = {
+  paperId: string
+  tab: ReaderTab
+  /** A chunk to flash or a note to focus once, from the hash. */
+  target: ReaderTarget
+}
+
+export function ReaderPage({ paperId, tab, target }: Props) {
   const { doc, error: pdfError } = usePdfDocument(api.paperFileUrl(paperId))
   const paper = usePaper(paperId)
   const notesQuery = useNotes(paperId)
@@ -91,6 +98,8 @@ export function ReaderPage({ paperId, tab }: { paperId: string; tab: ReaderTab }
   const [menu, setMenu] = useState<ContextMenuState | null>(null)
   const [flash, setFlash] = useState<Flash | null>(null)
   const promotedNoteId = useRef<string | null>(null)
+  const shownTargetId = useRef<string | null>(null)
+  const targetChunks = useChunksOnPage(paperId, target?.kind === 'chunk' ? target.page : null)
   const [error, setError] = useState<string | null>(null)
   const [panelWidth, setPanelWidth] = useState(() => loadPanelWidth(browserStorage()))
   const scale = ZOOM_STEPS[zoomIndex]
@@ -119,6 +128,24 @@ export function ReaderPage({ paperId, tab }: { paperId: string; tab: ReaderTab }
 
   // replace, not assign: switching tabs shouldn't add history entries for Back to walk through.
   const showTab = (next: ReaderTab) => window.location.replace(readerHref(paperId, next))
+
+  // A one-shot target from the hash. Once the PDF and what the target needs have loaded, it goes
+  // through the same path as a citation click or a note click, then leaves the hash so a reload doesn't repeat it.
+  // replaceState fires no hashchange and adds no history entry, so Back still returns to where the link was.
+  useEffect(() => {
+    if (!doc || !target || shownTargetId.current === target.id) return
+    if (target.kind === 'chunk') {
+      if (!targetChunks.data) return
+      const chunk = targetChunks.data.find((c) => c.id === target.id)
+      if (chunk) flashChunk(chunk.page, chunk.bbox)
+    } else {
+      if (!notesQuery.data) return
+      const note = notesQuery.data.find((n) => n.id === target.id)
+      if (note) focusNote(note)
+    }
+    shownTargetId.current = target.id
+    window.history.replaceState(null, '', readerHref(paperId, tab))
+  })
 
   /** Runs a mutation; failures show in the alert instead of throwing. */
   async function attempt(action: () => Promise<unknown>): Promise<boolean> {
@@ -344,8 +371,9 @@ export function ReaderPage({ paperId, tab }: { paperId: string; tab: ReaderTab }
         }
         chat={
           <ChatPanel
-            paperId={paperId}
-            onCite={(source) => flashChunk(source.page, source.bbox)}
+            scope={{ kind: 'paper', id: paperId }}
+            // Single-paper answers cite only passages ('bbox' in source); their notes list is always empty.
+            onCite={(source) => 'bbox' in source && flashChunk(source.page, source.bbox)}
             onPromoted={showPromotedNote}
           />
         }

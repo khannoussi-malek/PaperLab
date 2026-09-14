@@ -1,5 +1,13 @@
 import { QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api, type NoteCreate, type NoteUpdate, type Paper, type PaperUpdate, type PromoteRequest } from './client'
+import {
+  api,
+  type ChatScope,
+  type NoteCreate,
+  type NoteUpdate,
+  type Paper,
+  type PaperUpdate,
+  type PromoteRequest,
+} from './client'
 
 export const PAPERS_POLL_MS = 2000
 
@@ -12,7 +20,12 @@ const keys = {
   papers: ['papers'] as const,
   paper: (id: string) => ['papers', id] as const,
   notes: (paperId: string) => ['papers', paperId, 'notes'] as const,
-  chat: (paperId: string) => ['papers', paperId, 'chat'] as const,
+  chunks: (paperId: string, page: number) => ['papers', paperId, 'chunks', page] as const,
+  chat: (scope: ChatScope) => [scope.kind === 'paper' ? 'papers' : 'workspaces', scope.id, 'chat'] as const,
+  // Every workspace query starts with this, so one invalidation refreshes the list, its counts and each home's tabs.
+  workspaces: ['workspaces'] as const,
+  workspacePapers: (id: string) => ['workspaces', id, 'papers'] as const,
+  workspaceNotes: (id: string) => ['workspaces', id, 'notes'] as const,
 }
 
 /** Poll the library only while a paper is still ingesting. */
@@ -32,14 +45,22 @@ export const usePaper = (id: string) => useQuery({ queryKey: keys.paper(id), que
 export const useNotes = (paperId: string) =>
   useQuery({ queryKey: keys.notes(paperId), queryFn: () => api.listNotes(paperId) })
 
-/** Saved questions and answers for a paper, oldest first. */
-export const useChatHistory = (paperId: string) =>
-  useQuery({ queryKey: keys.chat(paperId), queryFn: () => api.listChat(paperId) })
+/** One page's chunks, fetched only when `page` is set: the reader's `?chunk=` target needs its rects. */
+export const useChunksOnPage = (paperId: string, page: number | null) =>
+  useQuery({
+    queryKey: keys.chunks(paperId, page ?? 0),
+    queryFn: () => api.listChunks(paperId, page!),
+    enabled: page !== null,
+  })
+
+/** Saved questions and answers for a paper or a workspace, oldest first. */
+export const useChatHistory = (scope: ChatScope) =>
+  useQuery({ queryKey: keys.chat(scope), queryFn: () => api.listChat(scope) })
 
 /** For the chat stream, which isn't a query: refetch the history once an answer is saved. */
-export function useInvalidateChatHistory(paperId: string) {
+export function useInvalidateChatHistory(scope: ChatScope) {
   const client = useQueryClient()
-  return () => client.invalidateQueries({ queryKey: keys.chat(paperId) })
+  return () => client.invalidateQueries({ queryKey: keys.chat(scope) })
 }
 
 /** Re-runs ingestion, which embeds the paper: the fix for papers ingested before chat existed. */
@@ -51,12 +72,17 @@ export function useReindexPaper(paperId: string) {
   })
 }
 
-/** Saves part of a chat answer as an AI note. Resolves once the notes list has refetched and includes it. */
-export function usePromoteNote(paperId: string) {
+/** Saves part of a chat answer as an AI note. Resolves once the lists that show it have refetched and include it. */
+export function usePromoteNote() {
   const client = useQueryClient()
   return useMutation({
     mutationFn: (promote: PromoteRequest) => api.promoteNote(promote),
-    onSuccess: () => client.invalidateQueries({ queryKey: keys.notes(paperId) }),
+    // A workspace answer can anchor the note on several papers, and workspace Notes tabs and counts list it too.
+    onSuccess: (note) =>
+      Promise.all([
+        ...note.anchors.map((anchor) => client.invalidateQueries({ queryKey: keys.notes(anchor.paper_id) })),
+        client.invalidateQueries({ queryKey: keys.workspaces }),
+      ]),
   })
 }
 
@@ -72,13 +98,18 @@ export function useUpdatePaper(paperId: string) {
   })
 }
 
-export function useUploadPapers() {
+/** Uploads PDFs one by one; with a `workspaceId` (a workspace's Papers tab) each also joins that workspace. */
+export function useUploadPapers(workspaceId?: string) {
   const client = useQueryClient()
   return useMutation({
     mutationFn: async (files: File[]) => {
-      for (const file of files) await api.uploadPaper(file)
+      for (const file of files) await api.uploadPaper(file, workspaceId)
     },
-    onSettled: () => client.invalidateQueries({ queryKey: keys.papers }),
+    onSettled: () =>
+      Promise.all([
+        client.invalidateQueries({ queryKey: keys.papers }),
+        client.invalidateQueries({ queryKey: keys.workspaces }),
+      ]),
   })
 }
 
@@ -86,7 +117,71 @@ export function useDeletePaper() {
   const client = useQueryClient()
   return useMutation({
     mutationFn: api.deletePaper,
-    onSettled: () => client.invalidateQueries({ queryKey: keys.papers }),
+    // The paper drops out of any workspace it was in; refresh their counts and membership lists too.
+    onSettled: () =>
+      Promise.all([
+        client.invalidateQueries({ queryKey: keys.papers }),
+        client.invalidateQueries({ queryKey: keys.workspaces }),
+      ]),
+  })
+}
+
+/** Workspaces with their paper and note counts. */
+export const useWorkspaces = () => useQuery({ queryKey: keys.workspaces, queryFn: api.listWorkspaces })
+
+/** One workspace, read from the list (the API has no single-workspace route). `null` once loaded if it doesn't exist. */
+export const useWorkspace = (id: string) =>
+  useQuery({
+    queryKey: keys.workspaces,
+    queryFn: api.listWorkspaces,
+    select: (workspaces) => workspaces.find((workspace) => workspace.id === id) ?? null,
+  })
+
+/** A workspace's papers. Polls while one is ingesting, like the library, so an upload from the Papers tab shows progress. */
+export const useWorkspacePapers = (id: string) =>
+  useQuery({
+    queryKey: keys.workspacePapers(id),
+    queryFn: () => api.listWorkspacePapers(id),
+    refetchInterval: (query) => papersPollInterval(query.state.data),
+  })
+
+/** Every note anchored in a workspace's papers, each once, by paper title then reading position. */
+export const useWorkspaceNotes = (id: string) =>
+  useQuery({ queryKey: keys.workspaceNotes(id), queryFn: () => api.listWorkspaceNotes(id) })
+
+export function useWorkspaceMutations() {
+  const client = useQueryClient()
+  const onSuccess = () => client.invalidateQueries({ queryKey: keys.workspaces })
+  return {
+    create: useMutation({ mutationFn: api.createWorkspace, onSuccess }),
+    rename: useMutation({
+      mutationFn: ({ id, name }: { id: string; name: string }) => api.renameWorkspace(id, name),
+      onSuccess,
+    }),
+    remove: useMutation({
+      mutationFn: api.deleteWorkspace,
+      // Papers keep existing, but their `workspace_ids` lose this workspace.
+      onSuccess: () => Promise.all([onSuccess(), client.invalidateQueries({ queryKey: keys.papers })]),
+    }),
+  }
+}
+
+type Membership = { workspaceId: string; paperIds: string[]; member: boolean }
+
+/** Adds papers to a workspace (`member: true`) or removes them. Check marks, counts and the workspace's tabs follow. */
+export function useWorkspaceMembership() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ workspaceId, paperIds, member }: Membership) => {
+      for (const paperId of paperIds) {
+        await (member ? api.addToWorkspace(workspaceId, paperId) : api.removeFromWorkspace(workspaceId, paperId))
+      }
+    },
+    onSettled: () =>
+      Promise.all([
+        client.invalidateQueries({ queryKey: keys.papers }),
+        client.invalidateQueries({ queryKey: keys.workspaces }),
+      ]),
   })
 }
 

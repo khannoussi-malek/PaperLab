@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { test as base, expect, type APIRequestContext, type Locator, type Page } from '@playwright/test'
@@ -31,12 +32,47 @@ export async function removePaperAndNotes(request: APIRequestContext, paperId: s
   await request.delete(`/api/papers/${paperId}`)
 }
 
-/** `paperId`: a freshly ingested copy of the fixture paper, removed after the test even if it fails. */
-export const test = base.extend<{ paperId: string }>({
+/** Deletes every workspace whose name starts with `prefix`. Deleting a workspace keeps its papers and notes. */
+export async function removeWorkspacesNamed(request: APIRequestContext, prefix: string) {
+  const workspaces = await request.get('/api/workspaces')
+  if (!workspaces.ok()) return
+  for (const workspace of await workspaces.json()) {
+    if (workspace.name.startsWith(prefix)) await request.delete(`/api/workspaces/${workspace.id}`)
+  }
+}
+
+type Fixtures = {
+  /** A freshly ingested copy of the fixture paper, removed after the test even if it fails. */
+  paperId: string
+  /** Another, separately ingested copy: workspace specs need two papers. */
+  secondPaperId: string
+  /** A unique workspace name. Every workspace whose name starts with it is deleted after the test. */
+  workspaceName: string
+  /** An empty workspace named `workspaceName`. */
+  workspaceId: string
+}
+
+export const test = base.extend<Fixtures>({
   paperId: async ({ request }, use) => {
     const id = await uploadAndWaitUntilReady(request)
     await use(id)
     await removePaperAndNotes(request, id)
+  },
+  secondPaperId: async ({ request }, use) => {
+    const id = await uploadAndWaitUntilReady(request)
+    await use(id)
+    await removePaperAndNotes(request, id)
+  },
+  workspaceName: async ({ request }, use) => {
+    const name = `E2E workspace ${randomUUID().slice(0, 8)}`
+    await use(name)
+    await removeWorkspacesNamed(request, name)
+  },
+  // No teardown of its own: `workspaceName` deletes it.
+  workspaceId: async ({ request, workspaceName }, use) => {
+    const created = await request.post('/api/workspaces', { data: { name: workspaceName } })
+    expect(created.status()).toBe(201)
+    await use((await created.json()).id)
   },
 })
 
@@ -68,6 +104,39 @@ export async function saveNoteOn(page: Page, line: Locator, body: string): Promi
   const card = page.locator('article.note', { hasText: body })
   await expect(card).toBeVisible()
   return card
+}
+
+/** Creates a note through the API, anchored on a line-sized rect near the top of `page`, and returns it. */
+export async function addNote(request: APIRequestContext, paperId: string, page: number, body: string) {
+  const created = await request.post('/api/notes', {
+    data: { body, anchor: { paper_id: paperId, page, bbox: [[72, 110, 540, 124]], quoted_text: `Quote for ${body}` } },
+  })
+  expect(created.status()).toBe(201)
+  return (await created.json()) as { id: string }
+}
+
+/**
+ * Asks with Enter, and waits until the answer is saved: only a saved answer has `data-output-id`.
+ * `timeoutMs` defaults to 15s; pass a longer one for the suite's first retrieving question, which also pays
+ * for loading the embedding model on a freshly recreated API.
+ */
+export async function ask(page: Page, question: string, timeoutMs = 15_000): Promise<Locator> {
+  await page.getByRole('textbox', { name: 'Question' }).fill(question)
+  await page.getByRole('textbox', { name: 'Question' }).press('Enter')
+  const answer = page.locator('article.chat-answer[data-output-id]', { hasText: question })
+  await expect(answer.locator('.chat-answer-footer')).toContainText('AI · ', { timeout: timeoutMs })
+  return answer
+}
+
+/** Selects all of an element's text like a mouse drag, then releases the mouse. */
+export async function selectAllOf(element: Locator) {
+  await element.evaluate((node) => {
+    const range = document.createRange()
+    range.selectNodeContents(node)
+    window.getSelection()!.removeAllRanges()
+    window.getSelection()!.addRange(range)
+  })
+  await element.dispatchEvent('mouseup')
 }
 
 /** Largest offset in px between two elements' boxes; retried by callers while layout settles. */

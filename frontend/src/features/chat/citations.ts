@@ -1,20 +1,31 @@
-import type { ChatSource } from '@/api/client'
+import type { ChatSource, NoteSource } from '@/api/client'
+import { PROVENANCE_LABEL } from '@/features/notes/ProvenanceBadge'
 
-/** A `[C<n>]` source in words, e.g. `Source 1: page 6, section “2.4 Analysis”`. "C1" alone means nothing to a reader. */
-export function describeSource(source: Pick<ChatSource, 'label' | 'page' | 'section'>): string {
-  const where = `Source ${source.label.replace(/^C/, '')}: page ${source.page}`
+/**
+ * A cited source in words. "C1" alone means nothing to a reader. A passage: `Source 1: page 6, section “2.4 Analysis”`,
+ * with its paper's name after the colon when an answer can cite several papers. A note: `N1 · You · BERT p.4`.
+ */
+export function describeSource(
+  source: Pick<ChatSource, 'label' | 'page' | 'section'> | Pick<NoteSource, 'label' | 'page' | 'provenance'>,
+  paperName?: string,
+): string {
+  if ('provenance' in source) {
+    const where = paperName ? `${paperName} p.${source.page}` : `p.${source.page}`
+    return [source.label, PROVENANCE_LABEL[source.provenance], where].join(' · ')
+  }
+  const where = `Source ${source.label.replace(/^C/, '')}: ${paperName ? `${paperName}, ` : ''}page ${source.page}`
   return source.section ? `${where}, section “${source.section}”` : where
 }
 
-/** A piece of an answer: plain text, or a `[C<n>]` marker for a known source label. */
+/** A piece of an answer: plain text, or a marker for a known source label: `[C<n>]` a passage, `[N<n>]` a note. */
 export type Segment = { kind: 'text'; text: string } | { kind: 'cite'; label: string }
 
-export const MARKER = /\[(C\d{1,3})\]/g
+export const MARKER = /\[([CN]\d{1,3})\]/g
 // ponytail: up to 3 digits, so at most 999 sources per answer; widen both patterns if k ever gets there.
-const PARTIAL = /\[(?:C\d{0,3})?$/
+const PARTIAL = /\[(?:[CN]\d{0,3})?$/
 
 /**
- * Splits a token stream into segments as it arrives. A trailing `[`, `[C` or `[C12` is held back until the next
+ * Splits a token stream into segments as it arrives. A trailing `[`, `[C`, `[N` or `[C12` is held back until the next
  * token decides whether it is a marker, so a citation never flashes as text first. Unknown labels stay text.
  */
 export function citationSplitter(known: ReadonlySet<string>) {
