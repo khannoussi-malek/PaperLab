@@ -141,8 +141,8 @@ async def test_an_arxiv_id_is_tried_as_a_doi_before_title_search(session, fake_o
 
 
 async def test_title_search_accepts_a_hit_whose_year_and_first_author_agree(session, fake_openalex):
-    # BERT's arXiv DOI is merged into the NAACL record, so OpenAlex answers 404 for it; ruling 2 requires the
-    # explicit route rather than relying on FakeOpenAlex's (removed) default reply.
+    # BERT's arXiv DOI is merged into the NAACL record, so OpenAlex answers 404 for it. FakeOpenAlex has no
+    # default reply, so the 404 is routed explicitly.
     fake_openalex.route("/works/doi:10.48550/arxiv.1810.04805", httpx.Response(404))
     fake_openalex.route(BERT_SEARCH, recorded("search_bert"))
     fake_openalex.route("/authors", {"results": []})  # author details are covered in test_enrichment_authors.py

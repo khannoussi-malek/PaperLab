@@ -53,7 +53,7 @@ describe('toUpdate', () => {
     expect(toUpdate(padded, toForm(padded))).toEqual({})
   })
 
-  // Owner ruling: abstract corrections use the same changed-fields rule as venue/doi.
+  // Abstract corrections use the same changed-fields rule as venue/doi.
   it('sends the abstract when changed, clears it when blanked, and omits it unchanged', () => {
     expect(toUpdate(paper, { ...toForm(paper), abstract: 'A revised abstract.' })).toEqual({
       abstract: 'A revised abstract.',

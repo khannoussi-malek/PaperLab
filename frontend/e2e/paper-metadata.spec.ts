@@ -44,7 +44,7 @@ test('corrected details persist across a reload, and marking the paper retracted
   await dialog.getByLabel('Title').fill('Corrected Fixture Title')
   await dialog.getByLabel('Authors').fill('Ada Lovelace\nAlan Turing')
   await dialog.getByLabel('Year').fill('1843')
-  // Owner ruling: the abstract is correctable in this dialog too, locked in manual_fields the same way.
+  // The abstract is correctable in this dialog too.
   await dialog.getByLabel('Abstract').fill('A corrected abstract for the fixture paper.')
   await dialog.getByRole('checkbox', { name: 'Retracted' }).check()
   await dialog.getByRole('button', { name: 'Save' }).click()

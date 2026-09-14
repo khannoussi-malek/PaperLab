@@ -156,7 +156,7 @@ async def fake_openalex(session):
 
 @pytest.fixture(autouse=True)
 def _openalex_off(monkeypatch):
-    # I7: a real .env value (a developer's own OPENALEX_MAILTO, set for Task 6 Step 8's manual check) must never
+    # A real .env value (a developer's own OPENALEX_MAILTO, e.g. for a manual live check) must never
     # leak into a test. Off by default; a test that wants it on sets it back itself (test_ingest.py does).
     monkeypatch.setattr(settings, "openalex_mailto", "")
 
