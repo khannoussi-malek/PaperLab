@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { Note } from '@/api/client'
+import { isFresh, slideUpIn } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
@@ -56,7 +57,7 @@ export function NoteCard({
 
   const Root = compact ? 'div' : 'article'
   return (
-    <Root className={compact ? 'hover-note' : 'note'} data-note-id={note.id}>
+    <Root className={compact ? 'hover-note' : cn('note', isFresh(note.created_at) && slideUpIn)} data-note-id={note.id}>
       {/* Provenance is never subtle: every note shows a badge, and AI text gets its own background. */}
       <Card
         size="sm"
@@ -78,7 +79,12 @@ export function NoteCard({
 
         <CardContent className="flex flex-col gap-2">
           {!compact && anchor && (
-            <blockquote className="cursor-pointer border-l-2 pl-2 text-muted-foreground" onClick={onSelect}>
+            // Two lines are enough to recognise the passage; the rest is in the title and on the highlight itself.
+            <blockquote
+              className="line-clamp-2 cursor-pointer border-l-2 pl-2 text-muted-foreground"
+              title={anchor.quoted_text}
+              onClick={onSelect}
+            >
               {anchor.quoted_text}
             </blockquote>
           )}
@@ -93,7 +99,12 @@ export function NoteCard({
           ) : note.body ? (
             <p className={cn('whitespace-pre-wrap', compact && 'line-clamp-6')}>{note.body}</p>
           ) : (
-            compact && anchor && <p className="line-clamp-3 text-muted-foreground">{anchor.quoted_text}</p>
+            compact &&
+            anchor && (
+              <p className="line-clamp-2 text-muted-foreground" title={anchor.quoted_text}>
+                {anchor.quoted_text}
+              </p>
+            )
           )}
           <HighlightColorPicker value={note.color} onChange={(hex) => void onColorChange(hex)} />
         </CardContent>

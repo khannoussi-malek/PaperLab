@@ -1,3 +1,5 @@
+import type { Note } from '@/api/client'
+
 export type ColorChoice = { name: string; hex: string }
 export type ColorStorage = Pick<Storage, 'getItem' | 'setItem'>
 
@@ -14,15 +16,17 @@ export const PRESET_COLORS: ColorChoice[] = [
 
 const HEX_COLOR = /^#[0-9a-f]{6}$/i
 const FILL_ALPHA = 0.4
+// AI notes (edited or not) draw fainter, so the reader's own highlights stand out on the page.
+const AI_FILL_ALPHA = 0.15
 const STORAGE_KEY = 'paperlab-highlight-color'
 
 export const isHexColor = (value: unknown): value is string => typeof value === 'string' && HEX_COLOR.test(value)
 
-/** A highlight's fill: the note colour at 40%, drawn with mix-blend-multiply so the text stays readable. */
-export function highlightFill(hex: string): string {
+/** A highlight's fill: the note colour at 40% (15% for AI notes), drawn with mix-blend-multiply so the text stays readable. */
+export function highlightFill(hex: string, provenance: Note['provenance'] = 'human'): string {
   const color = isHexColor(hex) ? hex : DEFAULT_COLOR
   const [r, g, b] = [1, 3, 5].map((i) => parseInt(color.slice(i, i + 2), 16))
-  return `rgba(${r}, ${g}, ${b}, ${FILL_ALPHA})`
+  return `rgba(${r}, ${g}, ${b}, ${provenance === 'human' ? FILL_ALPHA : AI_FILL_ALPHA})`
 }
 
 /** `window.localStorage`, or undefined where even reading it throws (sandboxed or blocked storage). */

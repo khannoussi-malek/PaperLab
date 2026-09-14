@@ -4,6 +4,7 @@ import type { Paper } from '@/api/client'
 import { useDeletePaper, usePapers, useUploadPapers } from '@/api/queries'
 import { glass } from '@/components/glass'
 import { ModeToggle } from '@/components/mode-toggle'
+import { fadeIn } from '@/components/motion'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -105,7 +106,7 @@ export function LibraryPage() {
   const previewed = list?.find((paper) => paper.id === previewId) ?? list?.[0]
 
   return (
-    <main className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-6">
+    <main className={cn('mx-auto flex max-w-6xl flex-col gap-4 px-4 py-6', fadeIn)}>
       <header className="flex items-center justify-between gap-2">
         <div>
           <h1 className="font-heading text-3xl font-semibold">PaperLab</h1>

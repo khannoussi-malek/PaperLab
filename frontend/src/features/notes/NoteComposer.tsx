@@ -1,7 +1,9 @@
 import { useState } from 'react'
+import { popIn } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
+import { cn } from '@/lib/utils'
 import type { SelectionAnchor } from '../reader/selection'
 import { HighlightColorPicker } from './HighlightColorPicker'
 
@@ -26,6 +28,7 @@ export function NoteComposer({ draft, color, onColorChange, onSave, onCancel }: 
   return (
     // A form, not an <article>: saved notes are the only articles in the panel.
     <form
+      className={cn('origin-top', popIn)}
       onSubmit={(e) => {
         e.preventDefault()
         void save()
@@ -33,7 +36,9 @@ export function NoteComposer({ draft, color, onColorChange, onSave, onCancel }: 
     >
       <Card size="sm" className="bg-glass-strong ring-2 ring-primary">
         <CardContent className="flex flex-col gap-2">
-          <blockquote className="border-l-2 pl-2 text-muted-foreground">{draft.quotedText}</blockquote>
+          <blockquote className="line-clamp-2 border-l-2 pl-2 text-muted-foreground" title={draft.quotedText}>
+            {draft.quotedText}
+          </blockquote>
           <Textarea
             autoFocus
             aria-label="Note"
