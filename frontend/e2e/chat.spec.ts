@@ -116,6 +116,96 @@ test('an answer streams in after its sources are shown, and is saved', async ({ 
   expect(saved.map((a: { content: string }) => a.content)).toEqual([FAKE_ANSWER])
 })
 
+test('an empty chat offers starter questions that ask in one click, and Ask sends a typed question', async ({
+  page,
+  paperId,
+}) => {
+  await openChat(page, paperId)
+  const heading = page.getByRole('heading', { name: 'Ask this paper' })
+  await expect(heading).toBeVisible()
+  const starters = page.getByRole('list', { name: 'Suggested questions' }).getByRole('button')
+  await expect(starters).toHaveText(['Summarize the main contribution', 'What method do they use?', 'What are the limitations?'])
+
+  await starters.filter({ hasText: 'What are the limitations?' }).click()
+  await expect(page.locator('article.chat-answer[data-output-id] .chat-question')).toHaveText('What are the limitations?')
+  await expect(heading).toHaveCount(0)
+
+  await page.getByRole('textbox', { name: 'Question' }).fill('Typed question?')
+  await page.getByRole('button', { name: 'Ask', exact: true }).click()
+  await expect(page.locator('article.chat-answer[data-output-id] .chat-question')).toHaveText([
+    'What are the limitations?',
+    'Typed question?',
+  ])
+})
+
+test("an answer's sources are small pills under its text, and its details wait behind hover", async ({
+  page,
+  request,
+  paperId,
+}) => {
+  // The fixture paper is small enough to be sent whole, so a stream with separate sources is faked.
+  const [chunk] = await (await request.get(`/api/papers/${paperId}/chunks?page=1`)).json()
+  const longSection = 'A section heading long enough to run past the edge of the side panel'
+  const sources = [
+    { label: 'C1', chunk_id: chunk.id, page: 1, section: 'Method', bbox: chunk.bbox },
+    { label: 'C2', chunk_id: chunk.id, page: 1, section: longSection, bbox: chunk.bbox },
+  ]
+  await page.route('**/chat', (route) =>
+    route.request().method() === 'POST'
+      ? route.fulfill({
+          status: 200,
+          contentType: 'text/event-stream',
+          body:
+            `event: sources\ndata: ${JSON.stringify({ whole_paper: false, sources })}\n\n` +
+            'event: token\ndata: {"text":"Two passages [C1] and [C2]."}\n\n' +
+            `event: done\ndata: ${JSON.stringify({ output_id: '00000000-0000-4000-8000-000000000002', model: 'fake', prompt_version: 1 })}\n\n`,
+        })
+      : route.fallback(),
+  )
+  await openChat(page, paperId)
+  await page.getByRole('textbox', { name: 'Question' }).fill('Two sources?')
+  await page.getByRole('textbox', { name: 'Question' }).press('Enter')
+
+  const answer = page.locator('article.chat-answer', { hasText: 'Two sources?' })
+  const list = answer.locator('.chat-sources')
+  const pills = list.getByRole('button')
+  await expect(pills).toHaveText(['C1', 'C2'])
+  await expect(pills.nth(1)).toHaveAccessibleName(`Source 2: page 1, section “${longSection}”`)
+  const textComesFirst = await answer
+    .locator('.chat-answer-text')
+    .evaluate((text, other) => (text.compareDocumentPosition(other!) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0, await list.elementHandle())
+  expect(textComesFirst).toBe(true)
+
+  // "C1" alone means nothing to a reader, so hovering a marker in the text says in words what it is.
+  // Hovered top to bottom: each tooltip opens above its trigger, so the next trigger down is never under it.
+  await glideTo(page, answer.locator('.chat-cite').first())
+  await expect(page.getByRole('tooltip')).toContainText('Source 1: page 1, section “Method”')
+  // The model and prompt version sit behind the AI mark instead of repeating under every answer.
+  await glideTo(page, answer.locator('.chat-answer-footer'))
+  await expect(page.getByRole('tooltip', { name: 'AI · fake · prompt v1' })).toBeVisible()
+  // Pills explain themselves the same way, and moving to the next pill shows the next one's explanation.
+  await glideTo(page, pills.nth(0))
+  // Moving from C1's open (wide) tooltip onto its neighbour is the case that once kept showing C1.
+  await expect(page.getByRole('tooltip', { name: /^Source 1: page 1/ })).toBeVisible()
+  await glideTo(page, pills.nth(1))
+  const explained = page.getByRole('tooltip')
+  await expect(explained).toHaveCount(1) // the earlier ones have closed
+  await expect(explained).toContainText(`Source 2: page 1, section “${longSection}”`)
+  await expect(explained).toContainText('The AI used this passage. Click to see it in the paper.')
+})
+
+/**
+ * Moves the mouse to an element's centre like a person would: many small moves with short pauses, then a rest.
+ * Radix tooltips decide open/close from the pointer's path, and a few instant jumps don't look like one.
+ */
+async function glideTo(page: Page, target: Locator) {
+  const box = (await target.boundingBox())!
+  const [x, y] = [box.x + box.width / 2, box.y + box.height / 2]
+  await page.mouse.move(x, y, { steps: 25 })
+  await page.mouse.move(x + 1, y)
+  await page.waitForTimeout(150) // ponytail: a human rest; tooltips open on pointer movement, not on a timer
+}
+
 test('past questions and answers reload with the paper, oldest first', async ({ page, paperId }) => {
   await openChat(page, paperId)
   await ask(page, 'First question?')
@@ -203,7 +293,7 @@ test('clicking [C1] scrolls the paper to the cited chunk and flashes its rects',
   await page.locator('section:has(> .pdf-page)').evaluate((pane) => pane.scrollTo({ top: pane.scrollHeight }))
   await expect(firstLine).not.toBeInViewport()
 
-  await answer.locator('.chat-answer-text').getByRole('button', { name: /^Source C1 · p\.1/ }).first().click()
+  await answer.locator('.chat-answer-text').getByRole('button', { name: /^Source 1: page 1/ }).first().click()
 
   await expect(flash.first()).toBeInViewport()
   // Same check as reader-render.spec.ts: the rect sits where PyMuPDF put the chunk, at the reader's 150% zoom.
@@ -271,6 +361,28 @@ test('saving a passage of an answer makes an AI note on its cited chunk, and edi
   await expect(card.locator('.provenance-badge')).toHaveText('AI · edited')
   await page.reload()
   await expect(page.locator(`article.note[data-note-id="${note.id}"] .provenance-badge`)).toHaveText('AI · edited')
+})
+
+test('a chat history taller than the panel scrolls inside the panel, never the whole page', async ({ page, paperId }) => {
+  // Enough saved answers to overflow the panel, faked so the test doesn't ask the model a dozen times.
+  const answers = Array.from({ length: 12 }, (_, i) => ({
+    id: `00000000-0000-4000-8000-0000000001${String(i).padStart(2, '0')}`,
+    question: `Question ${i}?`,
+    content: 'An answer long enough to take a few lines in the side panel, so that twelve of them overflow it.',
+    model: 'fake',
+    prompt_version: 1,
+    created_at: '2026-09-14T00:00:00Z',
+    whole_paper: true,
+    sources: [],
+  }))
+  await page.route('**/chat', (route) => (route.request().method() === 'GET' ? route.fulfill({ json: answers }) : route.fallback()))
+  await openChat(page, paperId)
+  await expect(page.locator('article.chat-answer')).toHaveCount(12)
+
+  const list = page.locator('article.chat-answer').first().locator('..')
+  expect(await list.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true)
+  // Screen-reader-only labels are absolutely positioned: they must not escape the list and stretch the page.
+  expect(await page.evaluate(() => document.scrollingElement!.scrollHeight - window.innerHeight)).toBe(0)
 })
 
 test('a passage with no citation nearby cannot be saved, and the button says why', async ({ page, paperId }) => {

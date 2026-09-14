@@ -1,4 +1,37 @@
+import type { Locator } from '@playwright/test'
 import { boxOffset, expect, openReader, saveNoteOn, selectText, test, type Rect } from './fixtures'
+
+/** How many lines a quote shows, and whether some of its text is cut off. */
+const quoteLines = (quote: Locator) =>
+  quote.evaluate((element) => ({
+    lines: Math.round(element.clientHeight / Number.parseFloat(getComputedStyle(element).lineHeight)),
+    cut: element.scrollHeight > element.clientHeight,
+  }))
+
+test('a long quote shows at most two lines, cut with an ellipsis, in the composer and on the saved card', async ({
+  page,
+  paperId,
+}) => {
+  const line = await openReader(page, paperId)
+  // From page 1's first line to its last: far more than two lines in the panel.
+  const lastLine = page.locator('.pdf-page[data-page="1"] .textLayer span').last()
+  await selectText(line, lastLine)
+
+  const draftQuote = page.locator('form blockquote')
+  await expect(draftQuote).toBeVisible()
+  expect(await quoteLines(draftQuote)).toEqual({ lines: 2, cut: true })
+  const fullQuote = (await draftQuote.getAttribute('title')) ?? ''
+  expect(fullQuote).toContain('Highlights are the anchor') // the whole selection is one hover away
+
+  await page.getByRole('textbox', { name: 'Note' }).fill('long quote')
+  await page.getByRole('button', { name: 'Save note' }).click()
+  const cardQuote = page.locator('article.note', { hasText: 'long quote' }).locator('blockquote')
+  await expect(cardQuote).toBeVisible()
+  expect(await quoteLines(cardQuote)).toEqual({ lines: 2, cut: true })
+  // Same passage; the saved copy's line breaks may come back as spaces.
+  const squash = (text: string | null) => (text ?? '').replace(/\s+/g, ' ').trim()
+  expect(squash(await cardQuote.getAttribute('title'))).toBe(squash(fullQuote))
+})
 
 test('select a passage, save a note, and find it highlighted after reload', async ({ page, request, paperId }) => {
   const line = await openReader(page, paperId)

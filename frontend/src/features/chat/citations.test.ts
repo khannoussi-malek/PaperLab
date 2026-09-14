@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { appendSegments, citationSplitter, splitCitations, type Segment } from './citations'
+import { appendSegments, citationSplitter, describeSource, splitCitations, type Segment } from './citations'
 
 const KNOWN = new Set(['C1', 'C2', 'C3', 'C12'])
 const text = (value: string): Segment => ({ kind: 'text', text: value })
@@ -62,5 +62,17 @@ describe('citationSplitter', () => {
 describe('splitCitations', () => {
   it('splits a finished answer in one go, including a trailing marker', () => {
     expect(splitCitations('Done [C1]', new Set(['C1']))).toEqual([text('Done '), cite('C1')])
+  })
+})
+
+describe('describeSource', () => {
+  const source = { label: 'C12', chunk_id: 'x', page: 6, section: '2.4 Analysis', bbox: [] }
+
+  it('says in words which passage a [C…] marker points at', () => {
+    expect(describeSource(source)).toBe('Source 12: page 6, section “2.4 Analysis”')
+  })
+
+  it('leaves out the section when the passage has none', () => {
+    expect(describeSource({ ...source, section: null })).toBe('Source 12: page 6')
   })
 })

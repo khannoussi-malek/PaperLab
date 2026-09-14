@@ -1,5 +1,6 @@
 import { Sparkles } from 'lucide-react'
 import type { CSSProperties } from 'react'
+import { popIn } from '@/components/motion'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -24,7 +25,7 @@ export function SaveAsNoteButton({ canSave, saving, error, style, onSave }: Prop
   return (
     // preventDefault on mousedown keeps the selection alive while the button is pressed.
     <div
-      className="save-as-note absolute z-20 flex flex-col items-start gap-1"
+      className={cn('save-as-note absolute z-20 flex origin-top-left flex-col items-start gap-1', popIn)}
       style={style}
       onMouseDown={(e) => e.preventDefault()}
     >

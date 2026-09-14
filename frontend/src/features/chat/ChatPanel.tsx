@@ -1,6 +1,8 @@
+import { ArrowUp, MessageSquareText } from 'lucide-react'
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { ChatSource, Note, ChatAnswer as SavedAnswer } from '@/api/client'
 import { useChatHistory, usePromoteNote, useReindexPaper } from '@/api/queries'
+import { pressable } from '@/components/motion'
 import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -15,6 +17,7 @@ import { useChatStream, type ChatProblem } from './useChatStream'
 const MAX_QUESTION = 2000 // the API's limit (spec §3.10)
 // ponytail: a fixed width keeps the floating button inside the panel; measure it if the label ever changes.
 const SAVE_BUTTON_WIDTH = 140
+const STARTER_QUESTIONS = ['Summarize the main contribution', 'What method do they use?', 'What are the limitations?']
 
 /** Labels whose chunk still exists; markers for any other label render as plain text. */
 const knownLabels = (answer: SavedAnswer) => new Set(answer.sources.flatMap((source) => (source ? [source.label] : [])))
@@ -102,9 +105,11 @@ export function ChatPanel({ paperId, onCite, onPromoted }: Props) {
 
   return (
     <div ref={rootRef} className="relative flex min-h-0 flex-1 flex-col">
+      {/* `relative`: absolutely positioned children (sr-only labels) must be clipped by this scroller, not escape it
+          and stretch the whole page. */}
       <div
         ref={listRef}
-        className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto p-4"
+        className="relative flex min-h-0 flex-1 flex-col gap-6 overflow-auto p-4"
         onMouseUp={captureSelection}
         onScroll={() => setPromote(null)}
       >
@@ -113,8 +118,8 @@ export function ChatPanel({ paperId, onCite, onPromoted }: Props) {
             <AlertDescription>{history.error.message}</AlertDescription>
           </Alert>
         )}
-        {answers.length === 0 && !showLive && (
-          <p className="text-sm text-muted-foreground">Ask a question about this paper. Answers cite the passages they use.</p>
+        {answers.length === 0 && !showLive && !history.isPending && (
+          <EmptyChat disabled={busy} onAsk={(text) => void ask(text)} />
         )}
         {answers.map((answer) => (
           <ChatAnswer
@@ -136,6 +141,7 @@ export function ChatPanel({ paperId, onCite, onPromoted }: Props) {
             segments={stream.segments}
             footer={stream.done && { model: stream.done.model, promptVersion: stream.done.prompt_version }}
             pending={busy}
+            animate
             onCite={onCite}
           >
             {stream.problem && <ProblemAlert paperId={paperId} problem={stream.problem} onRetry={retry} />}
@@ -155,32 +161,67 @@ export function ChatPanel({ paperId, onCite, onPromoted }: Props) {
       )}
 
       <form
-        className="flex flex-col gap-2 border-t border-glass-border p-3"
+        className="flex flex-col gap-1.5 border-t border-glass-border p-3"
         onSubmit={(e) => {
           e.preventDefault()
           submit()
         }}
       >
-        <Textarea
-          ref={textareaRef}
-          aria-label="Question"
-          placeholder="Ask about this paper. Enter sends, Shift+Enter adds a line."
-          rows={2}
-          maxLength={MAX_QUESTION}
-          value={question}
-          disabled={busy}
-          onChange={(e) => setQuestion(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-              e.preventDefault()
-              submit()
-            }
-          }}
-        />
-        <Button type="submit" size="sm" className="self-end" disabled={busy || !question.trim()}>
-          Ask
-        </Button>
+        {/* One field-looking box: the ring moves from the textarea to the box so the send button sits inside it. */}
+        <div className="flex items-end gap-2 rounded-xl border border-input bg-glass-strong p-1.5 pl-3 transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50">
+          <Textarea
+            ref={textareaRef}
+            aria-label="Question"
+            aria-describedby="chat-question-hint"
+            placeholder="Ask about this paper…"
+            rows={1}
+            maxLength={MAX_QUESTION}
+            value={question}
+            disabled={busy}
+            className="max-h-40 min-h-0 resize-none rounded-none border-0 bg-transparent px-0 py-1 focus-visible:ring-0 disabled:bg-transparent dark:bg-transparent dark:disabled:bg-transparent"
+            onChange={(e) => setQuestion(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault()
+                submit()
+              }
+            }}
+          />
+          <Button type="submit" size="icon-sm" aria-label="Ask" className={pressable} disabled={busy || !question.trim()}>
+            <ArrowUp aria-hidden />
+          </Button>
+        </div>
+        <p id="chat-question-hint" className="px-1 text-xs text-muted-foreground">
+          Enter to send · Shift+Enter for a new line
+        </p>
       </form>
+    </div>
+  )
+}
+
+function EmptyChat({ disabled, onAsk }: { disabled: boolean; onAsk: (question: string) => void }) {
+  return (
+    <div className="m-auto flex w-full max-w-xs flex-col items-center gap-3 py-6 text-center">
+      <span className="flex size-10 items-center justify-center rounded-full bg-provenance-llm-surface text-provenance-llm">
+        <MessageSquareText aria-hidden className="size-5" />
+      </span>
+      <h2 className="font-heading text-xl font-semibold">Ask this paper</h2>
+      <p className="text-sm text-muted-foreground">Answers cite the passages they use. Click a citation to see it in the paper.</p>
+      <ul aria-label="Suggested questions" className="mt-1 flex w-full flex-col gap-2">
+        {STARTER_QUESTIONS.map((starter) => (
+          <li key={starter}>
+            <Button
+              variant="outline"
+              size="sm"
+              className={cn('h-auto w-full justify-start bg-glass-strong py-1.5 text-left whitespace-normal', pressable)}
+              disabled={disabled}
+              onClick={() => onAsk(starter)}
+            >
+              {starter}
+            </Button>
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }
