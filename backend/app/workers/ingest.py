@@ -34,6 +34,8 @@ async def ingest_paper(ctx: dict, paper_id: str) -> None:
         try:
             await papers.set_status(session, pid, PaperStatus.EXTRACTING)
             doc = await asyncio.to_thread(extract, paper.file_path)
+            # extract() can take seconds; re-read the lock right before deciding, in case a PATCH landed meanwhile.
+            await session.refresh(paper, ["openalex_id", "manual_fields"])
 
             # Enriched or corrected titles beat the font heuristic; don't overwrite them on re-runs.
             keep = paper.openalex_id is not None or "title" in paper.manual_fields

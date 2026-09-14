@@ -2,6 +2,7 @@ import httpx
 import pytest
 from conftest import recorded
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import enrichment
 from app.core.enrichment import PdfHints
@@ -225,6 +226,31 @@ async def test_corrected_fields_are_never_overwritten(session, fake_openalex):
     paper = await enrich(session, fake_openalex, paper, hints(doi=BERT_DOI))
 
     assert (paper.title, paper.is_retracted, paper.year) == ("My Title", True, 2019)
+
+
+async def test_a_title_correction_made_mid_lookup_survives_enrichment(session, fake_openalex, monkeypatch):
+    """`_write` must re-check `manual_fields` right before it writes: a PATCH racing the OpenAlex lookup (which can
+    take seconds) must not have its correction overwritten by the match `find_work` was already in flight to fetch."""
+    fake_openalex.route(BERT_WORK, recorded("work_bert"))
+    fake_openalex.route("/authors", {"results": []})  # author details are covered in test_enrichment_authors.py
+    paper = await add_paper(session)
+    real_find_work = enrichment.find_work
+
+    async def racing_find_work(http, paper_arg, hints):
+        work = await real_find_work(http, paper_arg, hints)
+        # A separate session, as the API's PATCH handler would use -- not `session`'s in-memory `paper`.
+        other = AsyncSession(bind=session.bind, expire_on_commit=False, join_transaction_mode="create_savepoint")
+        async with other:
+            await enrichment.correct_metadata(other, paper_arg.id, {"title": "User's Corrected Title"})
+        return work
+
+    monkeypatch.setattr(enrichment, "find_work", racing_find_work)
+
+    paper = await enrich(session, fake_openalex, paper, hints(doi=BERT_DOI))
+
+    assert paper.title == "User's Corrected Title"
+    assert "title" in paper.manual_fields
+    assert paper.openalex_id == "W2963341956"  # the rest of the match still applies
 
 
 async def test_a_duplicate_pdf_printed_doi_keeps_the_second_papers_authors_and_topics(session):

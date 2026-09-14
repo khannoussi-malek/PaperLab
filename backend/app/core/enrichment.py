@@ -251,6 +251,8 @@ async def refresh_authors(session: AsyncSession, http: httpx.AsyncClient, openal
 
 
 async def _write(session: AsyncSession, paper: Paper, fields: dict[str, Any]) -> None:
+    # The OpenAlex lookup can take seconds; re-read the lock right before writing, in case a PATCH landed meanwhile.
+    await session.refresh(paper, ["manual_fields"])
     values = {
         k: v for k, v in fields.items() if k not in paper.manual_fields and not _regresses(v, getattr(paper, k))
     }
