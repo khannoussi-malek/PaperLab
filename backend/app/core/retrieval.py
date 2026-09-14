@@ -81,13 +81,12 @@ async def retrieve(
 ) -> list[RetrievedChunk]:
     """The k chunks nearest to the query, closest first. embedder=None uses the process-cached model.
 
-    Scope: paper_ids, workspace_id, or neither (the whole library). A scope that can cover several papers (a
-    workspace, or 2+ paper_ids) keeps at most per_paper (default MAX_PER_PAPER) chunks from each paper.
+    Scope: paper_ids, workspace_id, or neither (the whole library). A scope that resolves to 2+ papers (a
+    workspace with several members, or 2+ paper_ids) keeps at most per_paper (default MAX_PER_PAPER) chunks
+    from each paper; a workspace with exactly one paper is uncapped, same as passing that one paper's id.
     """
     if paper_ids is not None and workspace_id is not None:
         raise ValueError("retrieve takes paper_ids or workspace_id, not both")
-    if per_paper is None and (workspace_id is not None or (paper_ids is not None and len(paper_ids) > 1)):
-        per_paper = MAX_PER_PAPER
     if workspace_id is not None:
         # Ids first, not a subquery in the scan: with literal ids the planner sees a small scope and sorts it
         # exactly; behind ARRAY(subquery) it guesses, picks HNSW, and bloat can starve the scan (see above).
@@ -95,9 +94,13 @@ async def retrieve(
         paper_ids = list(await session.scalars(members))
     if paper_ids is not None and not paper_ids:
         return []
+    # The cap is decided from the resolved paper_ids, not from workspace_id itself: a workspace can resolve to
+    # just one paper, which must be as uncapped as passing that paper's id directly.
+    if per_paper is None and paper_ids is not None and len(paper_ids) > 1:
+        per_paper = MAX_PER_PAPER
     model = embedder if embedder is not None else await asyncio.to_thread(embedding.get_model)
     params = {"q": await embedding.embed_query(model, query), "k": k, "candidates": max(CANDIDATES, k)}
-    params["per_paper"] = per_paper or k
+    params["per_paper"] = k if per_paper is None else per_paper
     if paper_ids is None:
         statement = NEAREST
     else:
