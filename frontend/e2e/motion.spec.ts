@@ -14,13 +14,16 @@ async function saveNote(page: Page, line: Locator, body: string) {
   return card
 }
 
+/** Faked chat responses follow the API: single-paper chat sends no notes. */
+const NO_NOTES = { notes: [], notes_used: null, notes_total: null }
+
 /** A chat stream that stops after its first words, so the live answer stays on screen (nothing gets saved). */
 const unfinishedStream = (paperId: string) => (route: Parameters<Parameters<Page['route']>[1]>[0]) =>
   route.request().method() === 'POST'
     ? route.fulfill({
         status: 200,
         contentType: 'text/event-stream',
-        body: `event: sources\ndata: ${JSON.stringify({ whole_paper: true, sources: [] })}\n\nevent: token\ndata: {"text":"Partial for ${paperId}"}\n\n`,
+        body: `event: sources\ndata: ${JSON.stringify({ whole_paper: true, sources: [], ...NO_NOTES })}\n\nevent: token\ndata: {"text":"Partial for ${paperId}"}\n\n`,
       })
     : route.fallback()
 
@@ -78,7 +81,7 @@ test.describe('with motion allowed', () => {
     await page.route('**/chat', (route) =>
       route.request().method() === 'GET'
         ? route.fulfill({
-            json: [{ id: '00000000-0000-4000-8000-000000000502', question: 'Asked before?', content: 'Yes.', model: 'fake', prompt_version: 1, created_at: old, whole_paper: true, sources: [] }],
+            json: [{ id: '00000000-0000-4000-8000-000000000502', question: 'Asked before?', content: 'Yes.', model: 'fake', prompt_version: 1, created_at: old, whole_paper: true, sources: [], ...NO_NOTES }],
           })
         : unfinishedStream(paperId)(route),
     )

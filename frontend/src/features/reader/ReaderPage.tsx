@@ -371,8 +371,9 @@ export function ReaderPage({ paperId, tab, target }: Props) {
         }
         chat={
           <ChatPanel
-            paperId={paperId}
-            onCite={(source) => flashChunk(source.page, source.bbox)}
+            scope={{ kind: 'paper', id: paperId }}
+            // Single-paper answers cite only passages ('bbox' in source); their notes list is always empty.
+            onCite={(source) => 'bbox' in source && flashChunk(source.page, source.bbox)}
             onPromoted={showPromotedNote}
           />
         }

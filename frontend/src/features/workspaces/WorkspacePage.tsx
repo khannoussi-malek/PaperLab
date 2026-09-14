@@ -7,6 +7,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { workspaceHref, type WorkspaceTab } from '@/lib/route'
 import { cn } from '@/lib/utils'
+import { WorkspaceChat } from './WorkspaceChat'
 import { WorkspaceNotes } from './WorkspaceNotes'
 import { WorkspacePapers } from './WorkspacePapers'
 import { WorkspaceSidebar } from './WorkspaceSidebar'
@@ -16,7 +17,7 @@ import { countsLine } from './workspaceMeta'
 // like the reader's panels. `text-base` undoes TabsContent's `text-sm`.
 const panel = cn('min-h-0 flex-1 overflow-auto text-base data-[state=inactive]:hidden', fadeIn)
 
-/** A workspace's home: its name and counts over Papers and Notes tabs, with the sidebar beside them. */
+/** A workspace's home: its name and counts over Papers, Notes and Chat tabs, with the sidebar beside them. */
 export function WorkspacePage({ workspaceId, tab }: { workspaceId: string; tab: WorkspaceTab }) {
   const workspace = useWorkspace(workspaceId)
   // replace, not assign: switching tabs shouldn't add history entries for Back to walk through.
@@ -68,12 +69,17 @@ export function WorkspacePage({ workspaceId, tab }: { workspaceId: string; tab: 
             <TabsList>
               <TabsTrigger value="papers">Papers</TabsTrigger>
               <TabsTrigger value="notes">Notes</TabsTrigger>
+              <TabsTrigger value="chat">Chat</TabsTrigger>
             </TabsList>
             <TabsContent value="papers" forceMount className={panel}>
               <WorkspacePapers workspaceId={workspaceId} />
             </TabsContent>
             <TabsContent value="notes" forceMount className={panel}>
               <WorkspaceNotes workspaceId={workspaceId} />
+            </TabsContent>
+            {/* The chat panel scrolls its own answer list and keeps the question box in view. */}
+            <TabsContent value="chat" forceMount className={cn(panel, 'flex flex-col overflow-hidden')}>
+              <WorkspaceChat workspace={workspace.data} onShowNotes={() => showTab('notes')} />
             </TabsContent>
           </Tabs>
         )}
