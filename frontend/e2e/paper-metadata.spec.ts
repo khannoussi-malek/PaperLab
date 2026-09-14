@@ -21,6 +21,11 @@ test('a retracted paper shows a banner above the pages, and only while it is ret
   const bannerBox = await banner.boundingBox()
   const pageBox = await page.locator('.pdf-page[data-page="1"]').boundingBox()
   expect(bannerBox!.y + bannerBox!.height).toBeLessThanOrEqual(pageBox!.y)
+  // Full opacity: the description must not render dimmer than the title (AA contrast).
+  const color = (locator: import('@playwright/test').Locator) => locator.evaluate((el) => getComputedStyle(el).color)
+  expect(await color(banner.locator('[data-slot="alert-description"]'))).toBe(
+    await color(banner.locator('[data-slot="alert-title"]'))
+  )
 
   expect((await request.patch(`/api/papers/${paperId}`, { data: { is_retracted: false } })).status()).toBe(200)
   await page.reload()

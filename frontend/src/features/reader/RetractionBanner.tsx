@@ -5,7 +5,12 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 /** Full width under the toolbar, opaque, never dismissible: reading a retracted paper unknowingly is the failure. */
 export function RetractionBanner({ paper }: { paper: Paper }) {
   return (
-    <Alert variant="destructive" className="retraction-banner rounded-none border-x-0 border-t-0 px-4 py-2.5">
+    <Alert
+      variant="destructive"
+      // Full opacity, matching the title: the shared alert.tsx dims the description to text-destructive/90,
+      // which measures 4.32:1 on this banner's opaque `card` background -- under the 4.5:1 AA minimum.
+      className="retraction-banner rounded-none border-x-0 border-t-0 px-4 py-2.5 *:data-[slot=alert-description]:text-destructive"
+    >
       <TriangleAlert aria-hidden />
       <AlertTitle>This paper has been retracted</AlertTitle>
       <AlertDescription>
