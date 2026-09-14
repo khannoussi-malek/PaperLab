@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { test as base, expect, type APIRequestContext, type Locator, type Page } from '@playwright/test'
@@ -31,12 +32,32 @@ export async function removePaperAndNotes(request: APIRequestContext, paperId: s
   await request.delete(`/api/papers/${paperId}`)
 }
 
-/** `paperId`: a freshly ingested copy of the fixture paper, removed after the test even if it fails. */
-export const test = base.extend<{ paperId: string }>({
+/** Deletes every workspace whose name starts with `prefix`. Deleting a workspace keeps its papers and notes. */
+export async function removeWorkspacesNamed(request: APIRequestContext, prefix: string) {
+  const workspaces = await request.get('/api/workspaces')
+  if (!workspaces.ok()) return
+  for (const workspace of await workspaces.json()) {
+    if (workspace.name.startsWith(prefix)) await request.delete(`/api/workspaces/${workspace.id}`)
+  }
+}
+
+type Fixtures = {
+  /** A freshly ingested copy of the fixture paper, removed after the test even if it fails. */
+  paperId: string
+  /** A unique workspace name. Every workspace whose name starts with it is deleted after the test. */
+  workspaceName: string
+}
+
+export const test = base.extend<Fixtures>({
   paperId: async ({ request }, use) => {
     const id = await uploadAndWaitUntilReady(request)
     await use(id)
     await removePaperAndNotes(request, id)
+  },
+  workspaceName: async ({ request }, use) => {
+    const name = `E2E workspace ${randomUUID().slice(0, 8)}`
+    await use(name)
+    await removeWorkspacesNamed(request, name)
   },
 })
 

@@ -14,6 +14,7 @@ export type ChatTokenEvent = components['schemas']['TokenEvent']
 export type ChatDoneEvent = components['schemas']['DoneEvent']
 export type ChatErrorEvent = components['schemas']['ErrorEvent']
 export type PromoteRequest = components['schemas']['PromoteRequest']
+export type Workspace = components['schemas']['WorkspaceOut']
 
 /** The last `loc` segment of each FastAPI validation error that has one, deduplicated and in order. */
 function invalidFields(errors: unknown[]): string[] {
@@ -65,6 +66,15 @@ export const api = {
   createNote: (note: NoteCreate) => request<Note>('/api/notes', sendJson('POST', note)),
   updateNote: (id: string, patch: NoteUpdate) => request<Note>(`/api/notes/${id}`, sendJson('PATCH', patch)),
   deleteNote: (id: string) => request<void>(`/api/notes/${id}`, { method: 'DELETE' }),
+  listWorkspaces: () => request<Workspace[]>('/api/workspaces'),
+  createWorkspace: (name: string) => request<Workspace>('/api/workspaces', sendJson('POST', { name })),
+  renameWorkspace: (id: string, name: string) =>
+    request<Workspace>(`/api/workspaces/${id}`, sendJson('PATCH', { name })),
+  deleteWorkspace: (id: string) => request<void>(`/api/workspaces/${id}`, { method: 'DELETE' }),
+  addToWorkspace: (workspaceId: string, paperId: string) =>
+    request<void>(`/api/workspaces/${workspaceId}/papers/${paperId}`, { method: 'PUT' }),
+  removeFromWorkspace: (workspaceId: string, paperId: string) =>
+    request<void>(`/api/workspaces/${workspaceId}/papers/${paperId}`, { method: 'DELETE' }),
   listChat: (paperId: string) => request<ChatAnswer[]>(`/api/papers/${paperId}/chat`),
   promoteNote: (promote: PromoteRequest) => request<Note>('/api/notes/promote', sendJson('POST', promote)),
   /** The raw response: on success its body is the SSE stream that `useChatStream` reads. */
