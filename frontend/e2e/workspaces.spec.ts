@@ -68,7 +68,57 @@ test('create a workspace, tick it on a paper, rename it, then delete it and keep
   await expect(workspaceRow(page, `${workspaceName} renamed`)).toHaveCount(0)
   expect(confirmations).toEqual([`Delete the workspace "${workspaceName} renamed"? Papers and notes stay in your library.`])
   await expect(row).toBeVisible()
-  expect(await workspaceIdsOf(page, paperId)).toEqual([])
+  // A poll, not a single read: the delete confirms in the UI slightly before the membership row's own
+  // cascade is guaranteed visible to a fresh, unrelated request.
+  await expect.poll(() => workspaceIdsOf(page, paperId)).toEqual([])
+})
+
+test('keyboard: Escape on a workspace menu returns focus to its trigger, and finishing create moves focus off the body', async ({
+  page,
+  workspaceName,
+}) => {
+  await page.goto('/')
+  await sidebar(page).getByRole('button', { name: 'New workspace' }).click()
+  const name = sidebar(page).getByRole('textbox', { name: 'Workspace name' })
+  await name.fill(workspaceName)
+  await name.press('Enter')
+  await expect(sidebar(page).getByRole('link', { name: workspaceName, exact: true })).toBeVisible()
+
+  await page.goto('/')
+  const trigger = workspaceRow(page, workspaceName).getByRole('button', { name: 'Workspace actions' })
+  await trigger.focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByRole('menu')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(trigger).toBeFocused()
+
+  const newWorkspaceButton = sidebar(page).getByRole('button', { name: 'New workspace' })
+  await newWorkspaceButton.focus()
+  await page.keyboard.press('Enter')
+  await name.fill(`${workspaceName} 2`)
+  await name.press('Enter')
+  await expect(newWorkspaceButton).toBeFocused()
+})
+
+test('deleting a paper refreshes its workspaces without a reload', async ({ page, request, paperId, workspaceName }) => {
+  const created = await request.post('/api/workspaces', { data: { name: workspaceName } })
+  expect(created.status()).toBe(201)
+  const workspace = await created.json()
+  expect((await request.put(`/api/workspaces/${workspace.id}/papers/${paperId}`)).status()).toBe(204)
+
+  await page.goto('/')
+  // Wait for the page's own initial fetches (every paper row's menu also queries workspaces) to fully
+  // settle, so the wait below can only catch a later refetch, not a straggling one from first mount.
+  await expect(sidebar(page).getByRole('link', { name: workspaceName, exact: true })).toBeVisible()
+  await page.waitForLoadState('networkidle')
+  const row = page.locator('.paper-row').filter({ has: page.locator(`a[href="#/papers/${paperId}"]`) })
+  page.once('dialog', (dialog) => void dialog.accept())
+  // The delete mutation invalidating `keys.workspaces` is what makes the app refetch this on its own.
+  const refetch = page.waitForResponse(
+    (response) => response.request().method() === 'GET' && response.url().endsWith('/api/workspaces'),
+  )
+  await row.getByRole('button', { name: 'Delete' }).click()
+  await refetch
 })
 
 test('a duplicate or blank name is refused with a message, when creating and when renaming', async ({

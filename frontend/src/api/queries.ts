@@ -97,7 +97,12 @@ export function useDeletePaper() {
   const client = useQueryClient()
   return useMutation({
     mutationFn: api.deletePaper,
-    onSettled: () => client.invalidateQueries({ queryKey: keys.papers }),
+    // The paper drops out of any workspace it was in; refresh their counts and membership lists too.
+    onSettled: () =>
+      Promise.all([
+        client.invalidateQueries({ queryKey: keys.papers }),
+        client.invalidateQueries({ queryKey: keys.workspaces }),
+      ]),
   })
 }
 
