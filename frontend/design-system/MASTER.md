@@ -120,7 +120,7 @@ Fonts: body `Atkinson Hyperlegible Next Variable` (`font-sans`), headings `Crims
   Cancel); anywhere else the browser keeps its own menu. The menu is the shadcn `DropdownMenu` anchored at the
   pointer, and a failed copy shows in the error alert.
 
-## Chat (M4)
+## Chat
 
 Pattern from ui-ux-pro-max (`search.py "AI chat panel streaming answer citations sidebar" --domain ux`): stream text as
 it arrives instead of a long spinner, and label AI output clearly (severity High). shadcn guidance
@@ -233,7 +233,7 @@ Input with a custom dropdown; Dialog for modal content, High).
   as "Quotes stay short"), the body (6 lines). AI notes keep `bg-provenance-llm-surface`. No filter chips: the reader's
   Notes tab has them, and this tab only points into the reader.
 - **Chat tab:** the reader's `ChatPanel` in a glass card, under the `.chat-scope` line ("2 papers (1 not indexed) · 3
-  notes"). Answers look as in the reader ("Chat (M4)"): short pills `C1`, `C2`, … then `N1`, … for cited notes, with
+  notes"). Answers look as in the reader (the reader's Chat section): short pills `C1`, `C2`, … then `N1`, … for cited notes, with
   the words behind hover and focus. On a workspace the words name the paper: `Source 1: Karpukhin 2020, page 3,
   section “Method”` for a passage, and `N1 · You · BERT p.4` over "The AI used this note. Click to see it in the
   paper." for a note (`describeSource`, with `paperLabel`: the first author's surname and year, the surname alone
