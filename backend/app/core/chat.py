@@ -52,11 +52,12 @@ async def _size(session: AsyncSession, paper_id: uuid.UUID) -> tuple[int, int]:
 
 
 def source_label(paper: Paper) -> str:
-    """'Devlin 2019' when the first author and year are known, otherwise the title."""
-    # ponytail: M6.5 settles the authors shape (Q3); this reads {"name": ...} entries.
-    first = paper.authors[0] if paper.authors else None
-    name = first.get("name", "") if isinstance(first, dict) else ""
-    return f"{name.split()[-1]} {paper.year}" if name and paper.year else paper.title
+    """'Devlin 2019', or 'Devlin' without a year. The title when no author name is known."""
+    # ponytail: the last word of the first non-blank name. "Le Cun" gives "Cun"; the label only orients the model.
+    family = next((name.split()[-1] for name in paper.authors if name.strip()), None)
+    if family is None:
+        return paper.title
+    return f"{family} {paper.year}" if paper.year else family
 
 
 def format_context(paper: Paper, sources: list[RetrievedChunk]) -> str:

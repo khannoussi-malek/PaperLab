@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     llm_model: str = "qwen3:8b"
     ollama_url: str = "http://host.docker.internal:11434"
     anthropic_api_key: str | None = None
+    # Sent as `mailto` on every OpenAlex request. Empty turns OpenAlex off: enrichment then uses only the PDF.
+    openalex_mailto: str = ""
 
     @model_validator(mode="after")
     def anthropic_needs_a_key(self) -> Self:
