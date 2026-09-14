@@ -44,8 +44,12 @@ export async function removeWorkspacesNamed(request: APIRequestContext, prefix: 
 type Fixtures = {
   /** A freshly ingested copy of the fixture paper, removed after the test even if it fails. */
   paperId: string
+  /** Another, separately ingested copy: workspace specs need two papers. */
+  secondPaperId: string
   /** A unique workspace name. Every workspace whose name starts with it is deleted after the test. */
   workspaceName: string
+  /** An empty workspace named `workspaceName`. */
+  workspaceId: string
 }
 
 export const test = base.extend<Fixtures>({
@@ -54,10 +58,21 @@ export const test = base.extend<Fixtures>({
     await use(id)
     await removePaperAndNotes(request, id)
   },
+  secondPaperId: async ({ request }, use) => {
+    const id = await uploadAndWaitUntilReady(request)
+    await use(id)
+    await removePaperAndNotes(request, id)
+  },
   workspaceName: async ({ request }, use) => {
     const name = `E2E workspace ${randomUUID().slice(0, 8)}`
     await use(name)
     await removeWorkspacesNamed(request, name)
+  },
+  // No teardown of its own: `workspaceName` deletes it.
+  workspaceId: async ({ request, workspaceName }, use) => {
+    const created = await request.post('/api/workspaces', { data: { name: workspaceName } })
+    expect(created.status()).toBe(201)
+    await use((await created.json()).id)
   },
 })
 

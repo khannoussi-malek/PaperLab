@@ -191,8 +191,10 @@ one-off animation classes.
 - **`popIn`** (fade + grow from 95%, 200 ms) for pop-ups, with an `origin-*` class pointing at where they come from: the
   highlight hover card and "Save as note" (`origin-top-left`), the note composer (`origin-top`).
 - **`slideUpIn`** (fade up 8 px, 300 ms) for a new list item, once: a note card created in the last few seconds
-  (`isFresh(created_at)`) and the chat answer being asked now. Items loaded from the server, or re-shown by a filter, stay still.
-- **`fadeIn`** (300 ms) for the library and reader pages and the Notes / Chat tab panels (it replays each time a panel is shown).
+  (`isFresh(created_at)`), in the reader or on a workspace's Notes tab, and the chat answer being asked now. Items loaded
+  from the server, or re-shown by a filter, stay still.
+- **`fadeIn`** (300 ms) for the library, workspace and reader pages, the reader's Notes / Chat panels and the workspace
+  home's Papers / Notes / Chat panels (it replays each time a panel is shown).
 - **The PDF canvas** fades in (300 ms) once it has drawn, instead of flashing from blank.
 - **`pressable`** (scale to 97% while held) on filter chips, starter questions, source pills and the send button.
 - **No exit animations** (they need the element to outlive its unmount).
@@ -226,8 +228,9 @@ Input with a custom dropdown; Dialog for modal content, High).
 - **Add papers:** a `Dialog` on strong glass with a `Command` checklist of library papers not yet in the workspace.
   The item's check mark is `data-checked`; the footer's primary button counts the choice ("Add 2 papers").
 - **Notes tab:** papers in title order, each an `h2` over a two-column grid of read-only note cards. A card is one link
-  (`a.workspace-note`) to the reader focused on it: provenance badge and page, the quote (4 lines), the body (6 lines).
-  AI notes keep `bg-provenance-llm-surface`.
+  (`a.workspace-note`) to the reader focused on it: provenance badge and page, the quote (2 lines, full text in `title`,
+  as "Quotes stay short"), the body (6 lines). AI notes keep `bg-provenance-llm-surface`. No filter chips: the reader's
+  Notes tab has them, and this tab only points into the reader.
 - **Chat tab:** the reader's `ChatPanel` in a glass card, under the `.chat-scope` line ("2 papers (1 not indexed) · 3
   notes"). Chips name the paper: `C1 · Karpukhin 2020 p.3`, `N1 · You · BERT p.4` (the paper label is the first
   author's surname and year, the surname alone without a year, else the title cut to 24 characters, as in the prompt

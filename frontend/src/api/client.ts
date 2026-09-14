@@ -52,9 +52,11 @@ const sendJson = (method: string, body: unknown): RequestInit => ({
 export const api = {
   listPapers: () => request<Paper[]>('/api/papers'),
   getPaper: (id: string) => request<Paper>(`/api/papers/${id}`),
-  uploadPaper: (file: File) => {
+  /** With a `workspaceId`, the new paper also joins that workspace. */
+  uploadPaper: (file: File, workspaceId?: string) => {
     const form = new FormData()
     form.append('file', file)
+    if (workspaceId) form.append('workspace_id', workspaceId)
     return request<Paper>('/api/papers', { method: 'POST', body: form })
   },
   updatePaper: (id: string, update: PaperUpdate) => request<Paper>(`/api/papers/${id}`, sendJson('PATCH', update)),
@@ -71,6 +73,8 @@ export const api = {
   renameWorkspace: (id: string, name: string) =>
     request<Workspace>(`/api/workspaces/${id}`, sendJson('PATCH', { name })),
   deleteWorkspace: (id: string) => request<void>(`/api/workspaces/${id}`, { method: 'DELETE' }),
+  listWorkspacePapers: (id: string) => request<Paper[]>(`/api/workspaces/${id}/papers`),
+  listWorkspaceNotes: (id: string) => request<Note[]>(`/api/workspaces/${id}/notes`),
   addToWorkspace: (workspaceId: string, paperId: string) =>
     request<void>(`/api/workspaces/${workspaceId}/papers/${paperId}`, { method: 'PUT' }),
   removeFromWorkspace: (workspaceId: string, paperId: string) =>
