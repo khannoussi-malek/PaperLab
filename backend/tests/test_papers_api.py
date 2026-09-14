@@ -111,3 +111,64 @@ async def test_reingest_unknown_paper_is_404_and_enqueues_nothing(client, arq):
 
 async def test_health_vector_roundtrip(client):
     assert (await client.get("/api/health")).json() == {"orm_roundtrip": True, "raw_sql_nearest_is_self": True}
+
+
+async def test_a_paper_shows_its_enrichment_metadata(client):
+    created = (await upload(client)).json()
+
+    assert {k: created[k] for k in ("openalex_id", "type", "is_retracted", "oa_status", "oa_url", "issn")} == {
+        "openalex_id": None,
+        "type": None,
+        "is_retracted": False,
+        "oa_status": None,
+        "oa_url": None,
+        "issn": None,
+    }
+    assert (created["cited_by_count"], created["referenced_works_count"], created["authors"]) == (None, None, [])
+
+
+async def test_correcting_a_paper_persists(client):
+    created = (await upload(client)).json()
+    correction = {"title": " BERT ", "authors": ["Jacob Devlin", "Ming-Wei Chang"], "year": 2019, "is_retracted": True}
+
+    response = await client.patch(f"/api/papers/{created['id']}", json=correction)
+
+    assert response.status_code == 200
+    reloaded = (await client.get(f"/api/papers/{created['id']}")).json()
+    assert reloaded == response.json()
+    assert (reloaded["title"], reloaded["authors"], reloaded["year"], reloaded["is_retracted"]) == (
+        "BERT",
+        ["Jacob Devlin", "Ming-Wei Chang"],
+        2019,
+        True,
+    )
+
+
+async def test_correcting_a_paper_errors(client, session):
+    created = (await upload(client)).json()
+    session.add(Paper(title="taken", file_path="/other.pdf", doi="10.1000/taken"))
+    await session.commit()
+    url = f"/api/papers/{created['id']}"
+
+    assert (await client.patch(f"/api/papers/{uuid.uuid4()}", json={"title": "x"})).status_code == 404
+    response = await client.patch(url, json={"doi": "10.1000/TAKEN"})
+    assert (response.status_code, response.json()) == (409, {"detail": "doi_taken"})  # I6: every error status
+    for body in [{}, {"title": "   "}, {"title": None}, {"authors": ["Ada", " "]}, {"year": 99}, {"doi": "nope"}]:
+        response = await client.patch(url, json=body)
+        assert response.status_code == 422, body
+
+
+# Owner ruling (Task 7): the abstract is correctable via the same PATCH, string or null to clear.
+
+
+async def test_correcting_a_paper_abstract(client):
+    created = (await upload(client)).json()
+    assert created["abstract"] is None
+
+    response = await client.patch(f"/api/papers/{created['id']}", json={"abstract": "A corrected abstract."})
+
+    assert response.status_code == 200
+    assert response.json()["abstract"] == "A corrected abstract."
+
+    cleared = await client.patch(f"/api/papers/{created['id']}", json={"abstract": None})
+    assert (cleared.status_code, cleared.json()["abstract"]) == (200, None)

@@ -20,6 +20,7 @@ from sqlalchemy import delete, exists, func, insert, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.errors import Conflict, InvalidInput
 from app.core.papers import get_paper
 from app.models import Author, Paper, paper_authors, paper_topics
 from app.providers import openalex
@@ -297,3 +298,24 @@ async def enrich_paper(
         await refresh_authors(session, http, author_ids)
     except httpx.HTTPError as exc:  # the paper and its authorships are saved; details come on the next run
         logger.warning("OpenAlex author fetch failed for paper %s: %r", paper_id, exc)
+
+
+async def correct_metadata(session: AsyncSession, paper_id: uuid.UUID, fields: dict[str, Any]) -> Paper:
+    """The user's corrections, written as given and added to manual_fields so nothing overwrites them later.
+
+    `fields` holds only what the user changed. Raises NotFound, InvalidInput (a DOI that isn't one) or
+    Conflict("doi_taken").
+    """
+    paper = await get_paper(session, paper_id)
+    if fields.get("doi") is not None:
+        doi = normalize_doi(fields["doi"])
+        if doi is None:
+            raise InvalidInput(f"not a DOI: {fields['doi']!r}")
+        if await session.scalar(select(Paper.id).where(Paper.doi == doi, Paper.id != paper_id)):
+            raise Conflict("doi_taken")
+        fields = {**fields, "doi": doi}
+    manual_fields = sorted(set(paper.manual_fields) | fields.keys())
+    await session.execute(update(Paper).where(Paper.id == paper_id).values(**fields, manual_fields=manual_fields))
+    await session.commit()
+    await session.refresh(paper)
+    return paper
