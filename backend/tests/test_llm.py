@@ -54,6 +54,7 @@ async def test_ollama_streams_content_until_the_done_line():
         ],
         "stream": True,
         "think": False,
+        "options": {"num_ctx": llm.OLLAMA_NUM_CTX},
     }
 
 

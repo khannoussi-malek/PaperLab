@@ -14,6 +14,10 @@ from app.providers.base import LLM, LLMError, LLMUnavailable
 ANTHROPIC_MAX_TOKENS = 64_000
 # Cold model loads take 7-10 s before the first line; httpx's default 5 s read timeout is too short.
 OLLAMA_TIMEOUT = httpx.Timeout(120, connect=5)
+# ponytail: Ollama defaults to a 4096-token context, which truncates from the head and drops the system
+# prompt on a whole-paper prompt (SMALL_PAPER_CHARS=24_000 chars is ~5-6k tokens). KV-cache memory grows
+# with context; lower this together with SMALL_PAPER_CHARS if memory is tight.
+OLLAMA_NUM_CTX = 16_384
 
 
 class OllamaLLM:
@@ -29,6 +33,7 @@ class OllamaLLM:
             "stream": True,
             # Thinking models (qwen3, deepseek-r1) otherwise stream empty content while they think.
             "think": False,
+            "options": {"num_ctx": OLLAMA_NUM_CTX},
         }
         client = httpx.AsyncClient(base_url=self.base_url, timeout=OLLAMA_TIMEOUT, transport=self._transport)
         try:
