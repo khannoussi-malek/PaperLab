@@ -16,12 +16,18 @@ BERT_AUTHOR_IDS = ["A5057457287", "A5076904467", "A5081862885", "A5053947885"]
 
 
 async def enrich_with(session, fake, work: dict, doi: str = BERT_DOI) -> Paper:
-    """Enriches a new paper whose PDF prints `doi`, with OpenAlex answering `work` for it."""
+    """Enriches a new paper whose PDF prints `doi`, with OpenAlex answering `work` for it.
+
+    Finding 3: a hinted DOI must pass the first-author check, so the fake page text always carries `work`'s own
+    first author -- these tests are about authorship linking, not about the match-confirmation rule.
+    """
     fake.route(f"/works/doi:{doi}", work)
     paper = Paper(title="placeholder", file_path="/nonexistent.pdf")
     session.add(paper)
     await session.commit()
-    hints = PdfHints(doi=doi, arxiv_id=None, years=frozenset(), text="", authors=[], keywords=[])
+    authorships = work.get("authorships") or []
+    first_author = authorships[0]["author"]["display_name"] if authorships else ""
+    hints = PdfHints(doi=doi, arxiv_id=None, years=frozenset(), text=first_author, authors=[], keywords=[])
     await enrichment.enrich_paper(session, fake.client, paper.id, hints)
     return paper
 

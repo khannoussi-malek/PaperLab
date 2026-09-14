@@ -93,7 +93,11 @@ async def test_a_correction_survives_the_next_enrichment(session, fake_openalex)
     paper = await add_paper(session)
     await enrichment.correct_metadata(session, paper.id, {"title": "My BERT", "is_retracted": True})
 
-    hints = PdfHints(doi="10.18653/v1/n19-1423", arxiv_id=None, years=frozenset(), text="", authors=[], keywords=[])
+    # Finding 3: this DOI is only a PDF hint (the title, not the DOI, was corrected), so the match must still pass
+    # the first-author check -- the page must actually carry the work's first author.
+    hints = PdfHints(
+        doi="10.18653/v1/n19-1423", arxiv_id=None, years=frozenset(), text="Jacob Devlin", authors=[], keywords=[]
+    )
     await enrichment.enrich_paper(session, fake_openalex.client, paper.id, hints)
     await session.refresh(paper)
 
@@ -118,7 +122,11 @@ async def test_a_corrected_abstract_survives_the_next_enrichment(session, fake_o
     paper = await add_paper(session)
     await enrichment.correct_metadata(session, paper.id, {"abstract": "The corrected abstract."})
 
-    hints = PdfHints(doi="10.18653/v1/n19-1423", arxiv_id=None, years=frozenset(), text="", authors=[], keywords=[])
+    # Finding 3: this DOI is only a PDF hint (the abstract, not the DOI, was corrected), so the match must still
+    # pass the first-author check -- the page must actually carry the work's first author.
+    hints = PdfHints(
+        doi="10.18653/v1/n19-1423", arxiv_id=None, years=frozenset(), text="Jacob Devlin", authors=[], keywords=[]
+    )
     await enrichment.enrich_paper(session, fake_openalex.client, paper.id, hints)
     await session.refresh(paper)
 
