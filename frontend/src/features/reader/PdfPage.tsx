@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { cn } from '@/lib/utils'
 import { TextLayerBuilder, type PDFDocumentProxy, type PDFPageProxy } from './pdfjs'
 
 type Props = {
@@ -20,6 +21,8 @@ export function PdfPage({ doc, pageNumber, scale, children }: Props) {
   const textLayerRef = useRef<HTMLDivElement>(null)
   const [pointSize, setPointSize] = useState<Size | null>(null)
   const [nearViewport, setNearViewport] = useState(false)
+  // The canvas fades in once drawn; until then it is blank anyway (a zoom clears it), so nothing flashes.
+  const [drawn, setDrawn] = useState(false)
 
   // Page size is cheap to read, so every page gets its real height up front and scrolling
   // to a note on page 12 lands in the right place before pages 1-11 have rendered.
@@ -71,6 +74,7 @@ export function PdfPage({ doc, pageNumber, scale, children }: Props) {
         // The types mark `images` as required; the runtime treats it as optional.
         const textLayerOptions = { viewport } as Parameters<TextLayerBuilder['render']>[0]
         await Promise.all([renderTask.promise, textLayer.render(textLayerOptions)])
+        if (active) setDrawn(true)
       })
       .catch((error: Error) => {
         if (active && error.name !== 'RenderingCancelledException') console.error(`page ${pageNumber}`, error)
@@ -78,6 +82,7 @@ export function PdfPage({ doc, pageNumber, scale, children }: Props) {
 
     return () => {
       active = false
+      setDrawn(false)
       renderTask?.cancel()
       textLayer?.cancel()
       canvas.width = 0
@@ -97,7 +102,11 @@ export function PdfPage({ doc, pageNumber, scale, children }: Props) {
       data-page={pageNumber}
       style={{ ...box, '--total-scale-factor': scale } as CSSProperties}
     >
-      <canvas ref={canvasRef} style={box} />
+      <canvas
+        ref={canvasRef}
+        className={cn('transition-opacity duration-300 ease-out motion-reduce:transition-none', drawn ? 'opacity-100' : 'opacity-0')}
+        style={box}
+      />
       <div className="pdf-overlay pointer-events-none absolute inset-0">{children}</div>
       <div ref={textLayerRef} />
     </div>

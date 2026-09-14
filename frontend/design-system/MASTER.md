@@ -59,7 +59,7 @@ Defined in `src/index.css` as CSS variables and exposed to Tailwind through `@th
 | `destructive` | `#dc2626` | `#f87171` | Errors, delete |
 | `border` / `input` | `#e2e8f0` / `#cbd5e1` | white 10% / white 15% | Dividers, field borders |
 | `provenance-llm` / `-foreground` | `#6d28d9` / `#ffffff` | `#a78bfa` / `#1e1b4b` | AI provenance badge |
-| `provenance-llm-surface` | `#f5f3ff` | `#2e1065` | AI note card background |
+| `provenance-llm-surface` | `#f5f3ff` | `#221d3a` | AI note card and chat answer background (dark: slate with a violet tint, softened 2026-09-14) |
 | `highlight-draft` | blue 25% | same | The pending selection. Saved highlights use their note's colour (see "Highlight colours") |
 | `glass` / `glass-strong` | white 70% / white 85% | slate-800 55% / slate-800 92% | Frosted chrome / cards and floating surfaces |
 | `glass-border` | slate-400 35% | white 10% | Hairline on glass |
@@ -74,7 +74,8 @@ Fonts: body `Atkinson Hyperlegible Next Variable` (`font-sans`), headings `Crims
 
 - Each note has one colour, lowercase `#rrggbb`. Presets: Yellow `#facc15` (default), Green `#4ade80`,
   Blue `#60a5fa`, Pink `#f472b6`, Orange `#fb923c`, plus any custom colour. No violet preset: violet means AI.
-- A highlight draws its colour at 40% with `mix-blend-multiply`. The active note gets a `primary` outline,
+- A highlight draws its colour at 40% with `mix-blend-multiply`. An AI note's highlight ("AI" or "AI · edited") draws at
+  15%, so the reader's own highlights stand out (`highlightFill(hex, provenance)`). The active note gets a `primary` outline,
   never a colour swap.
 - Pick colours with `HighlightColorPicker` only (composer, panel card, hover card). Swatches are named buttons
   with `aria-pressed`; a custom colour commits when the native picker closes.
@@ -89,13 +90,22 @@ Fonts: body `Atkinson Hyperlegible Next Variable` (`font-sans`), headings `Crims
 - **Nothing that shifts selection coordinates** goes on `.pdf-page`: no border, no padding.
 - **Stable test hooks.** Keep the class names and accessible names the Playwright specs use
   (`.paper-row`, `.status`, `.paper-preview`, `.pdf-page`, `.pdf-overlay`, `.highlight`, `.draft`, `.zoom-level`,
-  `article.note`, `.provenance-badge`, `.note-hover-card`, `article.chat-answer`, `.chat-question`, `.chat-sources`,
-  `.chat-answer-text`, `.chat-cite`, `.chat-answer-footer`, `.chunk-flash`, `.save-as-note`, `.retraction-banner`, the
-  "Note" / "Save note" / "Zoom in" / "Toggle theme" / "Question" / "Save as note" / "Retry" / "Re-index" /
-  "Edit details" / "Save" / "Cancel" names, the "Edit details" dialog with its "Title" / "Authors" / "Year" / "Venue" /
+  `article.note`, `.provenance-badge`, `.note-hover-card`, `.reader-panel`, `article.chat-answer`, `.chat-question`,
+  `.chat-sources`, `.chat-answer-text`, `.chat-cite`, `.chat-answer-footer`, `.chunk-flash`, `.save-as-note`,
+  `.retraction-banner`, `.reader`, the "Note" / "Save note" / "Zoom in" / "Toggle theme" / "Question" / "Ask" /
+  "Save as note" / "Retry" / "Re-index" / "Resize panel" / "Edit details" / "Save" / "Cancel" names, the "Ask this paper"
+  heading and "Suggested questions" list, the "Edit details" dialog with its "Title" / "Authors" / "Year" / "Venue" /
   "DOI" fields and "Retracted" checkbox, the "Notes" / "Chat" tabs, and the colour names "Yellow" … "Orange" /
   "Custom colour").
   Style with utility classes next to them.
+- **Notes filter.** The top of the Notes tab has two filter chips in a `role="group"` "Show notes from": `aria-pressed`
+  rounded-full buttons "You" and "AI", each with a count (`tabular-nums`). On: filled in the provenance badge's colours
+  (You `bg-secondary ring-input`, AI `bg-provenance-llm-surface text-provenance-llm`) with a `Check` icon. Off: their own
+  `UserRound` / `Sparkles` icon, no fill, `text-muted-foreground` and a `ring-border` outline. So state never rests on
+  colour alone. Both start on; "AI" covers edited AI notes. They filter the list only, never the highlights on the paper.
+  With every note filtered out, the list says "No notes match these filters."
+- **Quotes stay short.** A note's quoted passage (panel card, composer, hover card) shows at most two lines, cut with
+  an ellipsis (`line-clamp-2`), with the full passage in `title`. The note's own body is never clamped in the panel.
 - One primary button per view. Destructive actions use `text-destructive` and ask for confirmation.
   A delete icon repeated on every list row stays `text-muted-foreground` until its row is hovered or focused.
 - **The hover card manages its note.** It is `NoteCard` in its compact variant (`div.hover-note`, never an
@@ -111,13 +121,25 @@ Fonts: body `Atkinson Hyperlegible Next Variable` (`font-sans`), headings `Crims
 Pattern from ui-ux-pro-max (`search.py "AI chat panel streaming answer citations sidebar" --domain ux`): stream text as
 it arrives instead of a long spinner, and label AI output clearly (severity High). shadcn guidance
 (`--stack shadcn "tabs tooltip"`): Tabs for switching related panels, Tooltip rather than `title` for hints.
-- **Where:** the second tab of the reader's right panel (`RightPanel`, shadcn `Tabs`). The PDF keeps its width. The tab
+- **Where:** the second tab of the reader's right panel (`RightPanel`, shadcn `Tabs`). The tab
   is in the hash (`#/papers/:id?tab=chat`). Both panels stay mounted, so switching never loses a streaming answer.
   Selecting text in the PDF switches to Notes, where the composer is.
-- **One Q&A:** the question is a `bg-glass-strong` bubble on the right. The answer sits on `bg-provenance-llm-surface`:
-  sources first (outline chips `C1 · p.4 · Method`, or one `Whole paper · N chunks` badge), then the streamed text,
-  then the footer `Sparkles` + `AI · <model> · prompt v<N>` in `text-xs text-muted-foreground`
-  (6.9:1 light, 5.9:1 dark on the surface).
+- **One Q&A** (Q&As `gap-6` apart): the question is a `text-sm` `bg-glass-strong` bubble on the right, at most 85% wide,
+  `rounded-2xl rounded-br-sm`. The answer is a soft card: `rounded-2xl bg-provenance-llm-surface p-3.5`, no border, and
+  nothing that repeats under every answer (the owner found a per-answer footer line and a side border repetitive,
+  2026-09-14). Inside: the streamed text (`text-sm leading-relaxed`), then one quiet row with the `Sparkles` AI mark in
+  `text-provenance-llm` and a small outline pill per source (`C1`, `C2`, …) that wrap among themselves.
+- **Details wait behind hover and focus** (shadcn `Tooltip`, one provider per answer): the AI mark (focusable, class
+  `chat-answer-footer`, its sr-only text is the label) shows `AI · <model> · prompt v<N>`. A pill and an inline `[C1]`
+  show the source in words, `Source 1: page 6, section “2.4 Analysis”` (`describeSource` in `citations.ts`), over
+  "The AI used this passage. Click to see it in the paper." "C1" alone means nothing to a reader, so the same words
+  are each button's accessible name. A whole-paper answer shows one `Whole paper · N chunks` badge instead of pills.
+- **Waiting:** until the first token, three `bg-provenance-llm` dots bounce (`motion-safe` only) in a `role="status"`
+  with a screen-reader label ("Finding sources…", then "Writing the answer…").
+- **Empty chat:** a centred `MessageSquareText` in a provenance-surface circle, the `font-heading` heading
+  "Ask this paper", one line of `text-muted-foreground` help, and three outline starter buttons
+  (`Suggested questions`: "Summarize the main contribution", "What method do they use?", "What are the limitations?")
+  that ask in one click.
 - **Citations:** `[C1]` is an inline `text-primary` button (4.7:1 light, 6.0:1 dark on the surface) whose visible text
   stays `[C1]`, with an `aria-label` naming the source. Its text must equal the answer's own characters: promote counts
   offsets in it. A marker with no surviving source is plain text.
@@ -126,8 +148,10 @@ it arrives instead of a long spinner, and label AI output clearly (severity High
 - **Save as note:** selecting text inside one saved answer floats a small primary "Save as note" button (`Sparkles`)
   just below the selection. With nothing to anchor on it is disabled, and a `Tooltip` on a focusable wrapper says
   "Include a cited passage [C…] to anchor this note" (a disabled button gets no pointer or focus events).
-- **Input:** a labelled `Textarea` ("Question") pinned under the list. Enter sends, Shift+Enter adds a line, and it is
-  disabled while an answer streams.
+- **Input:** one rounded-xl `bg-glass-strong` box pinned under the list, holding a borderless auto-growing `Textarea`
+  ("Question", up to `max-h-40`) and an `icon-sm` primary `ArrowUp` button ("Ask"); the focus ring is on the box
+  (`focus-within`). Under it, the hint "Enter to send · Shift+Enter for a new line" (`aria-describedby`). Enter sends,
+  Shift+Enter adds a line, and it is disabled while an answer streams.
 - **Errors:** a destructive `Alert` inside the Q&A it belongs to, with Retry or Re-index in `AlertAction`. A mid-stream
   error keeps the partial text above it.
 
@@ -146,6 +170,33 @@ fields validation" --domain ux`: mark required fields, show loading then success
   a "Retracted" `Checkbox`. Save is disabled until something changed and reads "Saving…" while it runs. A refusal
   shows a destructive `Alert` inside the dialog, which stays open with the draft. Only changed fields are sent: the
   server remembers them as corrections that re-processing never overwrites.
+
+## Resizable panel
+
+- The reader's right panel is resizable from its left edge (`PanelResizeHandle`, the WAI-ARIA window splitter:
+  `role="separator"`, "Resize panel", `aria-valuenow`/`min`/`max`). Drag it; or focus it and use ←/→ (16 px steps);
+  double-click or Enter goes back to 360 px. A 2px `primary` line shows on hover (60%), focus and drag.
+- Width: 360 px default, 320 px minimum, at most 60% of the window (`panelWidth.ts`). The grid clamps with CSS `clamp()`
+  too, so a remembered width still fits a smaller window. Remembered in `localStorage` `paperlab-panel-width`.
+
+## Motion
+
+From ui-ux-pro-max (Quick Reference §7): 150–300 ms, ease-out on entry, opacity and transform only, no layout shift,
+one or two moving things per view. Tokens live in `@/components/motion` (built on `tw-animate-css`); use them, not
+one-off animation classes.
+- **Everything is `motion-safe`.** With the OS set to reduce motion nothing moves, and the PDF canvas shows without a fade.
+- **`popIn`** (fade + grow from 95%, 200 ms) for pop-ups, with an `origin-*` class pointing at where they come from: the
+  highlight hover card and "Save as note" (`origin-top-left`), the note composer (`origin-top`).
+- **`slideUpIn`** (fade up 8 px, 300 ms) for a new list item, once: a note card created in the last few seconds
+  (`isFresh(created_at)`) and the chat answer being asked now. Items loaded from the server, or re-shown by a filter, stay still.
+- **`fadeIn`** (300 ms) for the library and reader pages and the Notes / Chat tab panels (it replays each time a panel is shown).
+- **The PDF canvas** fades in (300 ms) once it has drawn, instead of flashing from blank.
+- **`pressable`** (scale to 97% while held) on filter chips, starter questions, source pills and the send button.
+- **No exit animations** (they need the element to outlive its unmount).
+- **Tooltips on adjacent triggers** (the source pills) use `TooltipProvider disableHoverableContent`: a hoverable wide
+  tooltip keeps its "pointer heading to the tooltip" zone over the next pill and shows the wrong explanation.
+- **E2E:** `e2e/motion.spec.ts` checks `animationName` (`enter` or `none`) under both motion settings. Hover tests move
+  the mouse like a person (`glideTo`: many small steps, then a rest); instant jumps confuse Radix's pointer tracking.
 
 ## Pre-delivery check (from ui-ux-pro-max Quick Reference §1–§3)
 

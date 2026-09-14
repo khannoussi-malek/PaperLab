@@ -1,3 +1,11 @@
+import type { ChatSource } from '@/api/client'
+
+/** A `[C<n>]` source in words, e.g. `Source 1: page 6, section “2.4 Analysis”`. "C1" alone means nothing to a reader. */
+export function describeSource(source: Pick<ChatSource, 'label' | 'page' | 'section'>): string {
+  const where = `Source ${source.label.replace(/^C/, '')}: page ${source.page}`
+  return source.section ? `${where}, section “${source.section}”` : where
+}
+
 /** A piece of an answer: plain text, or a `[C<n>]` marker for a known source label. */
 export type Segment = { kind: 'text'; text: string } | { kind: 'cite'; label: string }
 

@@ -23,6 +23,12 @@ describe('highlightFill', () => {
   it('falls back to yellow for a malformed colour', () => {
     expect(highlightFill('green')).toBe(highlightFill(DEFAULT_COLOR))
   })
+
+  it("draws an AI note, edited or not, at a lower 15% so the reader's own highlights stand out", () => {
+    expect(highlightFill('#4ade80', 'llm')).toBe('rgba(74, 222, 128, 0.15)')
+    expect(highlightFill('#4ade80', 'llm_edited')).toBe('rgba(74, 222, 128, 0.15)')
+    expect(highlightFill('#4ade80', 'human')).toBe('rgba(74, 222, 128, 0.4)')
+  })
 })
 
 describe('isHexColor', () => {
