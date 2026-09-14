@@ -1,24 +1,35 @@
+import json
 import math
 import os
 import random
+import re
 from pathlib import Path
 
+import httpx
 import numpy as np
 import pymupdf
 import pytest
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import delete, or_
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from app.config import settings
 from app.db import get_session
 from app.main import create_app
+from app.models import Author, Paper
+from app.providers import openalex
 
 # The compose Postgres, published on the host. Every test runs inside a transaction that is
 # rolled back afterwards, so tests can share the dev database without leaving rows behind.
 TEST_DATABASE_URL = os.environ.get(
     "TEST_DATABASE_URL", "postgresql+asyncpg://paperlab:paperlab@localhost:5433/paperlab"
 )
+
+OPENALEX_FIXTURES = Path(__file__).parent / "fixtures" / "openalex"
+_RECORDINGS = "".join(path.read_text() for path in OPENALEX_FIXTURES.glob("*.json"))
+RECORDED_IDS = sorted(set(re.findall(r"openalex\.org/([WA]\d+)", _RECORDINGS)))
+RECORDED_DOIS = sorted({doi.lower() for doi in re.findall(r"doi\.org/(10\.[^\"]+)", _RECORDINGS)})
 
 BODY_TEXT = "The quick brown fox jumps over the lazy dog near the river bank today. " * 3
 
@@ -88,6 +99,63 @@ class FakeEmbedder:
 @pytest.fixture
 def embedder():
     return FakeEmbedder()
+
+
+def recorded(name: str) -> dict:
+    """A response body recorded from OpenAlex by tests/fixtures/openalex/record.py."""
+    return json.loads((OPENALEX_FIXTURES / f"{name}.json").read_text())
+
+
+class FakeOpenAlex:
+    """OpenAlex behind httpx.MockTransport: serves recorded JSON by route and records every request. No network.
+
+    A route key is a request path plus "?<filter>" for a filtered request, or the bare path to match any filter.
+    Unrouted requests get OpenAlex's HTML 404. A route's replies are served in order and the last one repeats;
+    a reply that is an exception is raised, the way httpx raises network errors and timeouts.
+    """
+
+    MAILTO = "paperlab-tests@example.com"
+
+    def __init__(self):
+        self.routes: dict[str, list] = {}
+        self.requests: list[httpx.Request] = []
+        self.client = openalex.new_client(self.MAILTO, transport=httpx.MockTransport(self._handle))
+
+    def route(self, key: str, *replies) -> None:
+        self.routes[key] = [
+            r if isinstance(r, httpx.Response | Exception) else httpx.Response(200, json=r) for r in replies
+        ]
+
+    def _handle(self, request: httpx.Request) -> httpx.Response:
+        self.requests.append(request)
+        path = request.url.path
+        key = f"{path}?{request.url.params['filter']}" if "filter" in request.url.params else path
+        replies = self.routes.get(key) or self.routes.get(path) or [httpx.Response(404, text="<!doctype html>")]
+        reply = replies.pop(0) if len(replies) > 1 else replies[0]
+        if isinstance(reply, Exception):
+            raise reply
+        return reply
+
+
+@pytest.fixture
+async def fake_openalex(session):
+    # D15 shares the dev database, which may hold the very papers and authors these recordings describe (enrich BERT
+    # once and they're there). Hide them inside the test's rolled-back transaction so UNIQUE keys and the 30-day
+    # author cache start clean.
+    await session.execute(delete(Paper).where(or_(Paper.openalex_id.in_(RECORDED_IDS), Paper.doi.in_(RECORDED_DOIS))))
+    await session.execute(delete(Author).where(Author.openalex_id.in_(RECORDED_IDS)))
+    fake = FakeOpenAlex()
+    yield fake
+    await fake.client.aclose()
+    # After every test that used it: no request, anywhere, went out without mailto.
+    assert all(r.url.params.get("mailto") == FakeOpenAlex.MAILTO for r in fake.requests)
+
+
+@pytest.fixture(autouse=True)
+def _openalex_off(monkeypatch):
+    # I7: a real .env value (a developer's own OPENALEX_MAILTO, set for Task 6 Step 8's manual check) must never
+    # leak into a test. Off by default; a test that wants it on sets it back itself (test_ingest.py does).
+    monkeypatch.setattr(settings, "openalex_mailto", "")
 
 
 @pytest.fixture
