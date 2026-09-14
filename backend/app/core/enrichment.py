@@ -98,16 +98,20 @@ def _fold(text: str) -> str:
     return "".join(c for c in text if not unicodedata.combining(c)).casefold()
 
 
-def is_confirmed_match(work: dict[str, Any], hints: PdfHints) -> bool:
-    """A title-search hit counts only when its year and its first author agree with the PDF."""
-    year = work.get("publication_year")
-    if year is None or not any(abs(year - y) <= YEAR_TOLERANCE for y in hints.years):
-        return False
+def _first_author_matches(work: dict[str, Any], hints: PdfHints) -> bool:
     authorships = work.get("authorships") or []
     names = _fold(authorships[0]["author"]["display_name"]).split() if authorships else []
     # ponytail: the family name as a whole word on page 1. A name in a non-Latin script never matches: a miss,
     # never a wrong match.
     return bool(names) and re.search(rf"\b{re.escape(names[-1])}\b", _fold(hints.text)) is not None
+
+
+def is_confirmed_match(work: dict[str, Any], hints: PdfHints) -> bool:
+    """A title-search hit counts only when its year and its first author agree with the PDF."""
+    year = work.get("publication_year")
+    if year is None or not any(abs(year - y) <= YEAR_TOLERANCE for y in hints.years):
+        return False
+    return _first_author_matches(work, hints)
 
 
 def short_id(url: str | None) -> str | None:
@@ -142,7 +146,7 @@ def work_fields(work: dict[str, Any]) -> dict[str, Any]:
         "cited_by_count": work.get("cited_by_count"),
         "referenced_works_count": work.get("referenced_works_count"),
     }
-    return fields if fields["title"] else {k: v for k, v in fields.items() if k != "title"}  # title is NOT NULL
+    return fields
 
 
 def work_topics(work: dict[str, Any]) -> dict[str, float]:
@@ -154,12 +158,22 @@ def work_topics(work: dict[str, Any]) -> dict[str, float]:
 
 
 async def find_work(http: httpx.AsyncClient, paper: Paper, hints: PdfHints) -> dict[str, Any] | None:
-    """Trusted identifiers first, then a confirmed title-search hit. Raises httpx.HTTPError when OpenAlex fails."""
-    doi = paper.doi or hints.doi
-    keys = [paper.openalex_id, doi and f"doi:{doi}", hints.arxiv_id and f"doi:{ARXIV_DOI_PREFIX}{hints.arxiv_id}"]
-    for key in filter(None, keys):
+    """The stored openalex_id and a manually corrected DOI are trusted outright: the user (or an earlier confirmed
+    match) vouched for them. A DOI merely hinted by the PDF -- or left over from an earlier unconfirmed fallback
+    write -- and an arXiv ID from the PDF must also pass the first-author check; a miss falls through to title
+    search. Raises httpx.HTTPError when OpenAlex fails.
+    """
+    trusted_doi = paper.doi if paper.doi and "doi" in paper.manual_fields else None
+    for key in filter(None, [paper.openalex_id, trusted_doi and f"doi:{trusted_doi}"]):
         if work := await openalex.get_work(http, key):
             return work
+
+    hinted_doi = None if trusted_doi else (paper.doi or hints.doi)
+    hinted_keys = [hinted_doi and f"doi:{hinted_doi}", hints.arxiv_id and f"doi:{ARXIV_DOI_PREFIX}{hints.arxiv_id}"]
+    for key in filter(None, hinted_keys):
+        if (work := await openalex.get_work(http, key)) and _first_author_matches(work, hints):
+            return work
+
     if not hints.years:
         return None  # a hit could never be confirmed, so don't spend 10 credits on the search
     return next((w for w in await openalex.search_works(http, paper.title) if is_confirmed_match(w, hints)), None)
@@ -257,8 +271,9 @@ async def _write(session: AsyncSession, paper: Paper, fields: dict[str, Any]) ->
         k: v for k, v in fields.items() if k not in paper.manual_fields and not _regresses(v, getattr(paper, k))
     }
     # A duplicate upload can match the very work (or carry the very DOI) an existing paper already holds; doi and
-    # openalex_id are both UNIQUE, so a value another paper already has is dropped here instead of raising. A copy
-    # left without an openalex_id is treated as unmatched by later steps keyed on it (e.g. authorships in Task 5).
+    # openalex_id are both UNIQUE, so a value another paper already has is dropped here instead of raising. The
+    # copy still gets the match's authorships and topics: those are written regardless, keyed on paper_id, not on
+    # the papers.openalex_id column this function may have just dropped.
     for column, key in ((Paper.doi, "doi"), (Paper.openalex_id, "openalex_id")):
         if (value := values.get(key)) and await _taken(session, paper.id, column, value):
             values = {k: v for k, v in values.items() if k != key}

@@ -86,13 +86,42 @@ async def test_a_retracted_work_sets_the_flag_venue_issn_and_oa_location(session
     fake_openalex.route("/works/doi:10.1016/j.ijantimicag.2020.105949", recorded("work_retracted"))
     fake_openalex.route("/authors", {"results": []})  # author details are covered in test_enrichment_authors.py
     paper = await add_paper(session, title="Hydroxychloroquine and azithromycin as a treatment of COVID-19")
+    # Finding 3: a page-1-hinted DOI (not the stored id, not a manual correction) must also pass the first-author
+    # check, so this page must actually carry the work's first author, unlike the (irrelevant, BERT) default text.
+    pdf = hints(doi="10.1016/j.ijantimicag.2020.105949", text="... Philippe Gautret et al. ...")
 
-    paper = await enrich(session, fake_openalex, paper, hints(doi="10.1016/j.ijantimicag.2020.105949"))
+    paper = await enrich(session, fake_openalex, paper, pdf)
 
     assert paper.is_retracted is True
     assert (paper.venue, paper.issn) == ("International Journal of Antimicrobial Agents", "0924-8579")
     assert (paper.oa_status, paper.oa_url) == ("green", "https://www.ncbi.nlm.nih.gov/pmc/articles/7102549")
     assert paper.abstract is None  # OpenAlex withholds this publisher's abstracts
+
+
+async def test_a_hint_doi_whose_first_author_is_missing_is_rejected_and_title_search_runs(session, fake_openalex):
+    # Page 1 carries an unrelated DOI (a cited work, a Zenodo code DOI, ...): the hit's own first author, Philippe
+    # Gautret, is nowhere on the page, so it must be rejected rather than overwrite the paper's real metadata.
+    fake_openalex.route("/works/doi:10.1016/j.ijantimicag.2020.105949", recorded("work_retracted"))
+    fake_openalex.route(BERT_SEARCH, recorded("search_no_match"))
+    paper = await add_paper(session)
+
+    pdf = hints(doi="10.1016/j.ijantimicag.2020.105949", years={2019}, text="a page mentioning no author at all")
+    paper = await enrich(session, fake_openalex, paper, pdf)
+
+    assert paper.openalex_id is None
+    assert works_requests(fake_openalex) == ["/works/doi:10.1016/j.ijantimicag.2020.105949", "/works"]
+    assert paper.doi == "10.1016/j.ijantimicag.2020.105949"  # the fallback still records it, but unconfirmed
+
+
+async def test_a_hint_doi_whose_first_author_matches_is_accepted(session, fake_openalex):
+    fake_openalex.route(BERT_WORK, recorded("work_bert"))
+    fake_openalex.route("/authors", {"results": []})  # author details are covered in test_enrichment_authors.py
+    paper = await add_paper(session)
+
+    pdf = hints(doi=BERT_DOI, years=(), text="... presented by Jacob Devlin at NAACL ...")
+    paper = await enrich(session, fake_openalex, paper, pdf)
+
+    assert paper.openalex_id == "W2963341956"
 
 
 def test_the_abstract_is_rebuilt_from_the_inverted_index():
