@@ -139,12 +139,13 @@ fields validation" --domain ux`: mark required fields, show loading then success
 - **Retraction banner:** a destructive `Alert` (`role="alert"`, `TriangleAlert`) spanning the reader under the toolbar,
   above the pages and the right panel, never over the PDF. Opaque `bg-card`, never glass, never dismissible. Title
   "This paper has been retracted", then "Check the retraction notice before relying on its findings." and the DOI link
-  when there is one. `text-destructive` on `card`: 4.8:1 light, 5.3:1 dark.
+  when there is one. `text-destructive` on `card`, full opacity for both the title and the description (the banner's
+  own class overrides `alert.tsx`'s `/90` description, which measures 4.32:1 here -- under AA): 4.8:1 light, 5.3:1 dark.
 - **Edit details:** an outline "Edit details" button (`PencilLine`) in the reader toolbar opens a shadcn `Dialog`:
-  Title (required), Authors (`Textarea`, one per line), Year and Venue side by side, DOI, and a "Retracted" `Checkbox`.
-  Save is disabled until something changed and reads "Saving…" while it runs. A refusal shows a destructive `Alert`
-  inside the dialog, which stays open with the draft. Only changed fields are sent: the server remembers them as
-  corrections that re-processing never overwrites.
+  Title (required), Authors (`Textarea`, one per line), Year and Venue side by side, DOI, Abstract (`Textarea`), and
+  a "Retracted" `Checkbox`. Save is disabled until something changed and reads "Saving…" while it runs. A refusal
+  shows a destructive `Alert` inside the dialog, which stays open with the draft. Only changed fields are sent: the
+  server remembers them as corrections that re-processing never overwrites.
 
 ## Pre-delivery check (from ui-ux-pro-max Quick Reference §1–§3)
 
