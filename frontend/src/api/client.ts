@@ -15,10 +15,25 @@ export type ChatDoneEvent = components['schemas']['DoneEvent']
 export type ChatErrorEvent = components['schemas']['ErrorEvent']
 export type PromoteRequest = components['schemas']['PromoteRequest']
 
-/** A failed response's `detail` as text. FastAPI sends a string, or a list of validation errors. */
+/** The last `loc` segment of each FastAPI validation error that has one, deduplicated and in order. */
+function invalidFields(errors: unknown[]): string[] {
+  const fields = errors.flatMap((error) => {
+    const loc = typeof error === 'object' && error !== null && 'loc' in error ? (error as { loc: unknown }).loc : null
+    const field = Array.isArray(loc) ? loc.at(-1) : null
+    return typeof field === 'string' ? [field] : []
+  })
+  return [...new Set(fields)]
+}
+
+/** A failed response's `detail` as readable text. FastAPI sends a string, or a list of validation errors. */
 export async function errorDetail(response: Response): Promise<string> {
   const detail: unknown = await response.json().then((body) => body.detail, () => response.statusText)
-  return typeof detail === 'string' ? detail : JSON.stringify(detail)
+  if (typeof detail === 'string') return detail
+  if (Array.isArray(detail)) {
+    const fields = invalidFields(detail)
+    return fields.length > 0 ? `Check these fields: ${fields.join(', ')}.` : 'Some details are invalid.'
+  }
+  return JSON.stringify(detail)
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
