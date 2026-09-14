@@ -160,3 +160,31 @@ test('a duplicate or blank name is refused with a message, when creating and whe
   const names = (await (await request.get('/api/workspaces')).json()).map((w: { name: string }) => w.name)
   expect(names.filter((n: string) => n.startsWith(workspaceName)).sort()).toEqual([`${workspaceName} A`, `${workspaceName} B`])
 })
+
+test('the paper menu opens its workspace list beside the menu, fully on screen', async ({
+  page,
+  paperId,
+  workspaceName,
+  workspaceId,
+}) => {
+  expect(workspaceId).toBeTruthy()
+  await page.goto('/')
+  const row = page.locator('.paper-row').filter({ has: page.locator(`a[href="#/papers/${paperId}"]`) })
+  await row.getByRole('button', { name: 'Paper actions' }).click()
+  await page.getByRole('menuitem', { name: 'Add to workspace…' }).hover()
+  const tick = page.getByRole('menuitemcheckbox', { name: workspaceName })
+  await expect(tick).toBeVisible()
+
+  // Not rendered inside the parent menu, whose scroll box and glass filter would clip it.
+  expect(await tick.evaluate((el) => el.closest('[data-slot="dropdown-menu-content"]') === null)).toBe(true)
+  // Really painted where it is: the element at its centre is the item itself.
+  await expect
+    .poll(() =>
+      tick.evaluate((el) => {
+        const box = el.getBoundingClientRect()
+        const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)
+        return hit !== null && el.contains(hit)
+      }),
+    )
+    .toBe(true)
+})
