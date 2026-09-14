@@ -26,9 +26,9 @@ for landing pages, so only these parts of its output were kept:
 The app chrome is frosted glass over a faint blue/violet glow on the page background. The paper is not.
 - **Glass (`glass` from `@/components/glass`: `bg-glass backdrop-blur-lg backdrop-saturate-150`)**, with a
   `border-glass-border` or `ring-glass-border` hairline: reader toolbar, the reader's right panel (Notes | Chat), library
-  list card, alerts.
+  list card, the workspace sidebar, the workspace Chat tab, alerts.
 - **Strong glass (`bg-glass-strong`)** where content sits behind: note cards, the composer and chat questions (no blur
-  of their own; blur inside blur looks muddy), the theme menu and the hover card (these two also blur).
+  of their own; blur inside blur looks muddy), the theme menu, row menus, the hover card and dialogs (these also blur).
 - **Never glass:** the PDF page, highlights, the citation flash, and the AI provenance surface
   (`bg-provenance-llm-surface` wins, including under chat answers).
 - OS "Reduce transparency" swaps both glass tokens for `card`, so every surface turns solid.
@@ -92,11 +92,14 @@ Fonts: body `Atkinson Hyperlegible Next Variable` (`font-sans`), headings `Crims
   (`.paper-row`, `.status`, `.paper-preview`, `.pdf-page`, `.pdf-overlay`, `.highlight`, `.draft`, `.zoom-level`,
   `article.note`, `.provenance-badge`, `.note-hover-card`, `.reader-panel`, `article.chat-answer`, `.chat-question`,
   `.chat-sources`, `.chat-answer-text`, `.chat-cite`, `.chat-answer-footer`, `.chunk-flash`, `.save-as-note`,
-  `.retraction-banner`, `.reader`, the "Note" / "Save note" / "Zoom in" / "Toggle theme" / "Question" / "Ask" /
+  `.retraction-banner`, `.reader`, `.highlight.active`, `a.workspace-note`, `section[data-paper-id]`, `.chat-scope`,
+  `[data-paper-id]` on "Add papers" options, the "Note" / "Save note" / "Zoom in" / "Toggle theme" / "Question" / "Ask" /
   "Save as note" / "Retry" / "Re-index" / "Resize panel" / "Edit details" / "Save" / "Cancel" names, the "Ask this paper"
   heading and "Suggested questions" list, the "Edit details" dialog with its "Title" / "Authors" / "Year" / "Venue" /
-  "DOI" fields and "Retracted" checkbox, the "Notes" / "Chat" tabs, and the colour names "Yellow" … "Orange" /
-  "Custom colour").
+  "DOI" fields and "Retracted" checkbox, the "Workspaces" navigation with "New workspace" / "Workspace name" /
+  "Workspace actions" / "Rename" / "Delete", the "Paper actions" / "Add to workspace…" / "Remove from workspace" /
+  "Add papers" / "Search papers" names, the "Notes" / "Chat" and "Papers" / "Notes" / "Chat" tabs, and the colour names
+  "Yellow" … "Orange" / "Custom colour").
   Style with utility classes next to them.
 - **Notes filter.** The top of the Notes tab has two filter chips in a `role="group"` "Show notes from": `aria-pressed`
   rounded-full buttons "You" and "AI", each with a count (`tabular-nums`). On: filled in the provenance badge's colours
@@ -197,6 +200,41 @@ one-off animation classes.
   tooltip keeps its "pointer heading to the tooltip" zone over the next pill and shows the wrong explanation.
 - **E2E:** `e2e/motion.spec.ts` checks `animationName` (`enter` or `none`) under both motion settings. Hover tests move
   the mouse like a person (`glideTo`: many small steps, then a rest); instant jumps confuse Radix's pointer tracking.
+
+## Workspaces
+
+Patterns from ui-ux-pro-max: `search.py "sidebar navigation workspace project list rename delete" --domain ux` (tab
+order matches visual order, severity High), `search.py "active navigation state hover actions destructive
+confirmation" --domain ux` (highlight the active nav item; confirm before delete, High) and `search.py "dialog
+command searchable list dropdown submenu checkbox" --stack shadcn` (Command for a searchable list rather than an
+Input with a custom dropdown; Dialog for modal content, High).
+- **Sidebar:** a plain `nav` ("Workspaces") on glass beside the library and each workspace home, never in the reader
+  (the paper keeps its width). "All papers", then the workspaces alphabetically, then a ghost "New workspace" (`Plus`).
+  The active item has `aria-current="page"`, `bg-primary/10` and the same 3 px `primary` inset bar as the previewed
+  paper row. Each workspace's `EllipsisVertical` "Workspace actions" button stays invisible until its row is hovered
+  or focused, like the rows' delete icon.
+- **Names:** create and rename are an inline `Input` ("Workspace name"): Enter saves, Escape cancels, leaving it blank
+  cancels. A refusal is a `role="alert"` line under the field in `text-xs text-destructive`: "Enter a name" or "A
+  workspace with this name already exists". Delete asks with `window.confirm`, like papers and notes, and says
+  "Papers and notes stay in your library".
+- **Paper rows:** one row component everywhere (`PaperList`). Its `EllipsisVertical` "Paper actions" menu holds the
+  "Add to workspace…" submenu (`DropdownMenuCheckboxItem`s that stay open while ticking) and, on a workspace home,
+  "Remove from workspace".
+- **Workspace home:** the header is the workspace name (Crimson Pro, `text-3xl`) over "N papers · M notes". Tabs are
+  shadcn `Tabs` kept in the hash (`?tab=notes|chat`, `location.replace`), all `forceMount`ed. Papers: "Add papers" is
+  the view's primary button, "Upload PDFs" is outline.
+- **Add papers:** a `Dialog` on strong glass with a `Command` checklist of library papers not yet in the workspace.
+  The item's check mark is `data-checked`; the footer's primary button counts the choice ("Add 2 papers").
+- **Notes tab:** papers in title order, each an `h2` over a two-column grid of read-only note cards. A card is one link
+  (`a.workspace-note`) to the reader focused on it: provenance badge and page, the quote (4 lines), the body (6 lines).
+  AI notes keep `bg-provenance-llm-surface`.
+- **Chat tab:** the reader's `ChatPanel` in a glass card, under the `.chat-scope` line ("2 papers (1 not indexed) · 3
+  notes"). Chips name the paper: `C1 · Karpukhin 2020 p.3`, `N1 · You · BERT p.4` (the paper label is the first
+  author's surname and year, the surname alone without a year, else the title cut to 24 characters, as in the prompt
+  the model sees). "Using 58 of 64 notes (newest first)" is a
+  `text-xs text-muted-foreground` line under the chips. Citations navigate (`location.hash`, so Back returns to the
+  answer): `[C…]` to the reader flashing the passage, `[N…]` to the reader focusing the note. An empty workspace shows
+  "Add papers to chat with this workspace." and disables the input. Answers keep the opaque AI surface.
 
 ## Pre-delivery check (from ui-ux-pro-max Quick Reference §1–§3)
 

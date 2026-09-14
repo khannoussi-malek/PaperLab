@@ -14,6 +14,8 @@ const keys = {
   notes: (paperId: string) => ['papers', paperId, 'notes'] as const,
   chunks: (paperId: string, page: number) => ['papers', paperId, 'chunks', page] as const,
   chat: (paperId: string) => ['papers', paperId, 'chat'] as const,
+  // Every workspace query starts with this, so one invalidation refreshes the list, its counts and each home's tabs.
+  workspaces: ['workspaces'] as const,
 }
 
 /** Poll the library only while a paper is still ingesting. */
@@ -96,6 +98,45 @@ export function useDeletePaper() {
   return useMutation({
     mutationFn: api.deletePaper,
     onSettled: () => client.invalidateQueries({ queryKey: keys.papers }),
+  })
+}
+
+/** Workspaces with their paper and note counts. */
+export const useWorkspaces = () => useQuery({ queryKey: keys.workspaces, queryFn: api.listWorkspaces })
+
+export function useWorkspaceMutations() {
+  const client = useQueryClient()
+  const onSuccess = () => client.invalidateQueries({ queryKey: keys.workspaces })
+  return {
+    create: useMutation({ mutationFn: api.createWorkspace, onSuccess }),
+    rename: useMutation({
+      mutationFn: ({ id, name }: { id: string; name: string }) => api.renameWorkspace(id, name),
+      onSuccess,
+    }),
+    remove: useMutation({
+      mutationFn: api.deleteWorkspace,
+      // Papers keep existing, but their `workspace_ids` lose this workspace.
+      onSuccess: () => Promise.all([onSuccess(), client.invalidateQueries({ queryKey: keys.papers })]),
+    }),
+  }
+}
+
+type Membership = { workspaceId: string; paperIds: string[]; member: boolean }
+
+/** Adds papers to a workspace (`member: true`) or removes them. Check marks, counts and the workspace's tabs follow. */
+export function useWorkspaceMembership() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ workspaceId, paperIds, member }: Membership) => {
+      for (const paperId of paperIds) {
+        await (member ? api.addToWorkspace(workspaceId, paperId) : api.removeFromWorkspace(workspaceId, paperId))
+      }
+    },
+    onSettled: () =>
+      Promise.all([
+        client.invalidateQueries({ queryKey: keys.papers }),
+        client.invalidateQueries({ queryKey: keys.workspaces }),
+      ]),
   })
 }
 
