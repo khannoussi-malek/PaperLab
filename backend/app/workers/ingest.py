@@ -13,7 +13,8 @@ logger = logging.getLogger(__name__)
 
 
 async def _enrich(session, http, paper_id: uuid.UUID, doc: ExtractedDoc) -> None:
-    """Never fatal (addendum §6d): on any error the paper keeps what extraction gave it and still reaches ready."""
+    """Never fatal (addendum §6d): on any error the paper keeps whatever was saved before the error and still
+    reaches ready."""
     try:
         await enrichment.enrich_paper(session, http, paper_id, enrichment.pdf_hints(doc.first_page_text, doc.metadata))
     except Exception:
@@ -48,6 +49,8 @@ async def ingest_paper(ctx: dict, paper_id: str) -> None:
 
             await papers.set_status(session, pid, PaperStatus.ENRICHING)
             await _enrich(session, ctx.get("openalex"), pid, doc)
+            # Don't read paper's ORM attributes past this point: _enrich's rollback (on the failure path) expires
+            # them, and an async lazy load outside an awaited call raises MissingGreenlet, not a clean re-fetch.
 
             await papers.set_status(session, pid, PaperStatus.READY)
             logger.info("ingested %s: %d pages, %d chunks", pid, doc.page_count, len(drafts))
