@@ -73,6 +73,30 @@ def test_notes_block_overflow_keeps_the_newest_whole_lines():
     assert all(line.endswith('" — ' + "b" * 400) for line in block.split("\n"))  # no line was split
 
 
+def test_notes_block_keeps_every_line_when_the_block_lands_exactly_on_the_budget():
+    # 27 full-size lines are 15,893 chars (see above); a 28th line of exactly 106 chars (quote "x"*81, no
+    # body) brings the joined block to exactly 15,893 + 1 (newline) + 106 = 16,000: the budget itself.
+    full = [view(BERT, quote="q" * 160, body="b" * 400, minutes_ago=i) for i in range(27)]
+    boundary = view(BERT, quote="x" * 81, body="", minutes_ago=27)
+
+    block, used = chat.format_notes_block(full + [boundary], PAPERS)
+
+    assert len(block) == 16_000
+    assert [s.id for s in used] == [n.id for n in full] + [boundary.id]
+
+
+def test_notes_block_drops_the_line_that_would_push_past_the_budget():
+    # One character more than the exact-fit case above (quote "x"*82) makes the would-be block 16,001: over
+    # budget, so the whole 28th line is dropped rather than truncated.
+    full = [view(BERT, quote="q" * 160, body="b" * 400, minutes_ago=i) for i in range(27)]
+    over = view(BERT, quote="x" * 82, body="", minutes_ago=27)
+
+    block, used = chat.format_notes_block(full + [over], PAPERS)
+
+    assert len(block) == 15_893
+    assert [s.id for s in used] == [n.id for n in full]  # notes_used (27) is one less than notes_total (28)
+
+
 async def make_workspace(session, papers: list[Paper]) -> Workspace:
     workspace = Workspace(name=f"Workspace {uuid.uuid4().hex[:6]}")
     session.add(workspace)
@@ -162,6 +186,28 @@ async def test_workspace_prepare_rejects_unknown_empty_and_unindexed_workspaces(
     with pytest.raises(Conflict, match="^workspace_not_indexed$"):
         await chat.prepare(session, chat.Scope(workspace_id=unindexed.id), "q", embedder)
     assert embedder.calls == []
+
+
+async def test_workspace_prepare_retrieves_only_from_ready_papers(session, embedder):
+    run = uuid.uuid4().hex
+    ready = await make_paper(session, "Ready paper", [f"{run} ready {i}" for i in range(3)])
+    # Mid re-ingest: not ready, but still carries embedded chunks from before the re-ingest started.
+    reingesting = await make_paper(
+        session, "Mid re-ingest", [f"{run} reingest {i}" for i in range(3)], status="embedding"
+    )
+    workspace = await make_workspace(session, [ready, reingesting])
+    embedder.vectors["search_query: q"] = unit_vector(f"{run} reingest 1")  # an exact match, but not ready
+
+    prepared = await chat.prepare(session, chat.Scope(workspace_id=workspace.id), "q", embedder)
+
+    assert prepared.sources and {s.paper_id for s in prepared.sources} == {ready.id}
+
+
+def test_scope_requires_exactly_one_of_paper_id_or_workspace_id():
+    with pytest.raises(ValueError, match="exactly one"):
+        chat.Scope()
+    with pytest.raises(ValueError, match="exactly one"):
+        chat.Scope(paper_id=uuid.uuid4(), workspace_id=uuid.uuid4())
 
 
 def test_parse_citations_reads_passage_and_note_labels_separately():

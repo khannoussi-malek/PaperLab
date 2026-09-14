@@ -45,6 +45,10 @@ class Scope:
     paper_id: uuid.UUID | None = None
     workspace_id: uuid.UUID | None = None
 
+    def __post_init__(self):
+        if (self.paper_id is None) == (self.workspace_id is None):
+            raise ValueError("Scope needs exactly one of paper_id or workspace_id")
+
 
 def _scope(scope: uuid.UUID | Scope) -> Scope:
     return scope if isinstance(scope, Scope) else Scope(paper_id=scope)
@@ -155,7 +159,7 @@ async def _prepare_workspace(session: AsyncSession, workspace_id: uuid.UUID, que
     ready = [paper_id for paper_id, paper in members.items() if paper.status == PaperStatus.READY]
     if not await session.scalar(select(func.count(Chunk.embedding)).where(Chunk.paper_id.in_(ready))):
         raise Conflict("workspace_not_indexed")
-    sources = await retrieve(session, question, workspace_id=workspace_id, k=RETRIEVE_K, embedder=embedder)
+    sources = await retrieve(session, question, paper_ids=ready, k=RETRIEVE_K, embedder=embedder)
     every_note = await workspaces.notes(session, workspace_id)
     block, used = format_notes_block(every_note, members)
     prompt = WORKSPACE_PROMPT_TEMPLATE.format(
