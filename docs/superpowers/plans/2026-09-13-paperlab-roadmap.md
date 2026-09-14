@@ -118,7 +118,7 @@ The testing policy says *how* we test. These rules say what every milestone plan
 | Frontend type check / unit tests | `cd frontend && npx tsc -b && npm test` |
 | E2E spec type check | `cd frontend && npm run typecheck:e2e` |
 | End-to-end (whole stack running) | `cd frontend && npm run e2e` |
-| End-to-end with the fake LLM (M4+) | `LLM_PROVIDER=fake docker compose up -d api && (cd frontend && npm run e2e); docker compose up -d api` |
+| End-to-end with the fake LLM (M4+) | `LLM_PROVIDER=fake docker compose up -d api && (cd frontend && npm run e2e); rc=$?; docker compose up -d api; exit $rc` (restores the real provider either way, and keeps the E2E exit code; avoid the zsh-reserved name `status`) |
 
 Commits use `<type>: <description>` (feat, fix, refactor, docs, test, chore, perf, ci) with no attribution trailer.
 
@@ -225,10 +225,11 @@ Author page UI (addendum §6b) is a read-only view over M6.5 data and has no bui
   - `evals/questions.yaml` (20 questions) and `evals/run.py` printing recall@k.
 - **Exit criteria:**
   - Recall@k baseline recorded in this file.
-  - **Baseline (2026-09-14):** recall@4 = 0.95, recall@8 = 1.00 on 20 questions over the two arXiv papers (python -m evals.run, nomic-embed-text-v1.5, vector top-k, no rerank).
+  - **Baseline (2026-09-14):** recall@4 = 0.95, recall@8 = 1.00 on 20 questions over the two arXiv papers (python -m evals.run, nomic-embed-text-v1.5, vector top-k, no rerank). See K8: the first run right after a re-ingest instead read recall@4 = 0.85, recall@8 = 0.90; re-running gave the numbers above.
   - Chat on a paper streams sources before tokens.
   - A promoted note shows the AI badge; editing it flips the badge to "AI · edited".
-- **Carried in:** K2, K3 (decide using eval numbers), D10 (chunk ↔ anchor resolution).
+- **Carried in:** K2, K3 (decided by D29 and D28 respectively), D10 (chunk ↔ anchor resolution).
+- **Owner note:** the default `LLM_MODEL=qwen3:8b` must be pulled (`ollama pull qwen3:8b`) before real chats.
 - **Required tests:**
   - **Embedding stage (worker):**
     - Chunks are embedded with the `search_document:` prefix and queries with `search_query:`. A fake embedder records its inputs.
@@ -261,7 +262,7 @@ Author page UI (addendum §6b) is a read-only view over M6.5 data and has no bui
   - `retrieve` scoped by `category_id` or multiple `paper_ids`, with the diversity cap (max 2–3 chunks per paper). The cap lands here because this is the first multi-paper scope.
   - Category page = notes tagged with the category.
 - **Exit criteria:** eval recall@k does not regress; a multi-paper question cites chunks from at least two papers.
-- **Carried in:** K7 (HNSW filtered scan).
+- **Carried in:** K7 (HNSW filtered scan), K8 (recall baseline re-run caveat: run the eval twice after any re-ingest before comparing against the M4 baseline).
 - **Required tests:**
   - **Categories:**
     - Duplicate sibling names are rejected, including at the root (D4).
@@ -406,6 +407,7 @@ Author page UI (addendum §6b) is a read-only view over M6.5 data and has no bui
 
 - **Scope:** BM25 top-30 via `ts_rank`, reciprocal rank fusion (`Σ 1/(60 + rank)`), `bge-reranker-v2-m3` cross-encoder rerank to `k`. The `retrieve` signature stays unchanged.
 - **Exit criteria:** eval recall@k before/after is recorded here. Keep only the steps that measurably help.
+- **Carried in:** K8 (recall baseline re-run caveat: run the eval twice after any re-ingest before comparing before/after numbers).
 - **Required tests:**
   - **Fusion and rerank (unit):**
     - RRF over known rank lists gives the hand-computed order.
@@ -547,3 +549,5 @@ Newest last. Entry format: decision, then why. Don't reverse one without adding 
 | K5 | Frontend bundle > 500 kB because of pdfjs | Only if it matters; local app |
 | K6 | `.claude/skills/fastapi/` is an untracked project skill that is not part of the baseline commit | Owner decides whether to commit it |
 | K7 | HNSW with a `paper_id = ANY(:ids)` filter can silently drop rows: the planner post-filters within `ef_search` (40) candidates, and a forced HNSW plan returned 0 of 8 (M4 spike). M4 is unaffected because single-paper queries use an exact scan at current size. Before multi-paper scopes ship, add `SET LOCAL hnsw.iterative_scan = relaxed_order` and re-sort in an outer query (or use `strict_order`) | M5 |
+| K8 | Eval run right after a re-ingest can read partially replaced chunks or a cold planner: the first M4 baseline run gave recall@4 0.85 / recall@8 0.90, and immediate re-runs gave 0.95 / 1.00. Candidate causes: the re-ingest status race (fixed in the M4 final-review fix, `POST /reingest` now flips status to `uploaded` before enqueueing) and an HNSW vs exact-scan planner flip right after the bulk chunk replace. Mitigation: run the eval twice after any re-ingest before comparing against the baseline | M5 / M8 |
+| K9 | M4 follow-ups from final-review triage, grouped by milestone: **M5** — make `llm_outputs.cited_chunks`/`source_chunks` NOT NULL and assert the `'{}'` default; tests for `retrieve(paper_ids=[])` and default k; a spy test locking the commit in `prepare_answer`; treat 5xx chat refusals as retryable with a unit test for `REFUSALS`/`useChatStream`; document pre-seeding the HF model cache and `HF_HUB_DOWNLOAD_TIMEOUT`; an answer-level eval on one small paper with a real provider (recall@k can't see prompt truncation); an autouse fixture making `embedding.load` raise in tests. **M6.5** — `source_label` is all-or-nothing, and a whitespace-only author name raises `IndexError`; the migration renumber rule (D27). **M9** — log LLM errors, plus a catch-all error event for non-`LLMError` exceptions; scroll follows streaming tokens; memoize `ChatAnswer`; an AbortController on unmount; `console.warn` in the silent catch; the `.chat-cite` focus ring; partial-selection E2E, clamping the Save button's top, and promote state after tab hide/show; show the server's 422 text on promote failures; `ANTHROPIC_MAX_TOKENS` configurable; `anthropic_api_key` as `SecretStr`, and a key check that doesn't crash the worker; single-flight `get_model` loading | M5 / M6.5 / M9 |
