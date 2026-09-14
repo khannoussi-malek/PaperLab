@@ -56,6 +56,23 @@ def test_notes_block_cuts_quote_and_body_at_the_exact_limits():
     assert second == f'[N2] (You · BERT p.1) "{"q" * 160}" — {"b" * 400}'
 
 
+def test_notes_block_strips_stale_citation_markers_from_quote_and_body():
+    note = view(BERT, quote="in-batch negatives [C1][C2]", body="DPR uses in-batch negatives [C1][C2] as noted [N2].")
+
+    block, _ = chat.format_notes_block([note], PAPERS)
+
+    assert block == '[N1] (You · BERT p.1) "in-batch negatives" — DPR uses in-batch negatives as noted .'
+
+
+def test_notes_block_strips_markers_before_the_length_limit_is_applied():
+    quote = "q" * 160 + "[C1]"  # only fits the 160-char budget once the marker is stripped first
+    note = view(BERT, quote=quote, body="")
+
+    block, _ = chat.format_notes_block([note], PAPERS)
+
+    assert block == f'[N1] (You · BERT p.1) "{"q" * 160}"'
+
+
 def test_notes_block_omits_an_empty_body():
     block, _ = chat.format_notes_block([view(BERT, body="  \n ", quote="just a highlight")], PAPERS)
 

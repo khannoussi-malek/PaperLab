@@ -28,7 +28,7 @@ WORKSPACE_SYSTEM_PROMPT, WORKSPACE_PROMPT_TEMPLATE = prompts.load("chat_workspac
 SMALL_PAPER_CHARS = 24_000
 RETRIEVE_K = 8
 # Workspace notes. With OLLAMA_NUM_CTX = 16_384: ~0.5k tokens of instructions, ~3k for 8 passages, ~4k for
-# notes, leaving ~2k for the answer.
+# notes, about 7.5k of the 16k context, leaving ~9k for the answer.
 NOTE_QUOTE_CHARS = 160
 NOTE_BODY_CHARS = 400
 # ponytail: newest-first is a guess at relevance; rank by similarity to the question if users hit the budget.
@@ -138,8 +138,11 @@ def format_notes_block(notes: list[NoteView], papers: dict[uuid.UUID, Paper]) ->
     for note in sorted(notes, key=lambda n: n.updated_at, reverse=True):
         anchor = _first_anchor(note, papers)
         label = f"{BADGES[note.provenance]} · {source_label(papers[anchor.paper_id])} p.{anchor.page}"
-        line = f'[N{len(lines) + 1}] ({label}) "{_cut(anchor.quoted_text, NOTE_QUOTE_CHARS)}"'
-        if body := _cut(note.body, NOTE_BODY_CHARS):
+        # A promoted AI note's body/quote is a verbatim answer slice and may still carry that answer's own
+        # [C#]/[N#] markers; strip them first so the model can't echo one that now points elsewhere.
+        quote = _cut(_CITATION.sub("", anchor.quoted_text), NOTE_QUOTE_CHARS)
+        line = f'[N{len(lines) + 1}] ({label}) "{quote}"'
+        if body := _cut(_CITATION.sub("", note.body), NOTE_BODY_CHARS):
             line += f" — {body}"
         if sum(map(len, lines)) + len(lines) + len(line) > NOTES_CHAR_BUDGET:  # len(lines): the newlines
             break
