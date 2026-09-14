@@ -1,0 +1,88 @@
+# Retrieval eval over the two arXiv papers ingested in M2. Run: python -m evals.run (see run.py).
+# paper: a case-insensitive title prefix that must match exactly one paper (uploads keep no filename).
+# A question is a hit at k when one of its top-k chunks is on an expected page and contains that phrase
+# (case and whitespace ignored). Several expected entries mean "any of these".
+questions:
+  # Attention Is All You Need (Vaswani et al., 2017)
+  - paper: Attention Is All You Need
+    question: How many identical layers make up the encoder?
+    expected:
+      - {page: 3, contains: "composed of a stack of N = 6 identical layers"}
+  - paper: Attention Is All You Need
+    question: How is scaled dot-product attention computed from queries and keys?
+    expected:
+      - {page: 4, contains: "We compute the dot products of the query with all keys"}
+  - paper: Attention Is All You Need
+    question: What does multi-head attention give the model that a single attention head does not?
+    expected:
+      - {page: 5, contains: "jointly attend to information from different representation subspaces"}
+  - paper: Attention Is All You Need
+    question: What is inside the position-wise feed-forward network?
+    expected:
+      - {page: 5, contains: "two linear transformations with a ReLU activation in between"}
+  - paper: Attention Is All You Need
+    question: Without recurrence or convolution, how does the model know the order of tokens?
+    expected:
+      - {page: 6, contains: "inject some information about the relative or absolute position"}
+  - paper: Attention Is All You Need
+    question: When are self-attention layers computationally faster than recurrent layers?
+    expected:
+      - {page: 6, contains: "self-attention layers are faster than recurrent layers"}
+  - paper: Attention Is All You Need
+    question: Which dataset was used to train the English-German model, and how large is it?
+    expected:
+      - {page: 7, contains: "WMT 2014 English-German dataset consisting of about 4.5 million sentence pairs"}
+  - paper: Attention Is All You Need
+    question: What hardware were the models trained on?
+    expected:
+      - {page: 7, contains: "one machine with 8 NVIDIA P100 GPUs"}
+  - paper: Attention Is All You Need
+    question: What BLEU score did the big Transformer reach on English-to-German translation?
+    expected:
+      - {page: 8, contains: "new state-of-the-art BLEU score of 28.4"}
+  - paper: Attention Is All You Need
+    question: Does the Transformer generalize to tasks other than translation?
+    expected:
+      - {page: 9, contains: "experiments on English constituency parsing"}
+
+  # BERT (Devlin et al., 2019). The stored title is cut after "for" (roadmap K1).
+  - paper: "BERT: Pre-training"
+    question: What does the name BERT stand for?
+    expected:
+      - {page: 1, contains: "Bidirectional Encoder Representations from Transformers"}
+  - paper: "BERT: Pre-training"
+    question: How many layers, hidden units and parameters does BERT-large have?
+    expected:
+      - {page: 3, contains: "BERTLARGE (L=24, H=1024, A=16, Total Parameters=340M)"}
+  - paper: "BERT: Pre-training"
+    question: How does the masked language model objective work?
+    expected:
+      - {page: 4, contains: "mask some percentage of the input tokens at random"}
+  - paper: "BERT: Pre-training"
+    question: Why does BERT pre-train on next sentence prediction?
+    expected:
+      - {page: 4, contains: "understanding the relationship between two sentences"}
+  - paper: "BERT: Pre-training"
+    question: How is the input representation of a token built?
+    expected:
+      - {page: 5, contains: "sum of the token embeddings, the segmentation embeddings and the position embeddings"}
+  - paper: "BERT: Pre-training"
+    question: How expensive is fine-tuning compared with pre-training?
+    expected:
+      - {page: 5, contains: "at most 1 hour on a single Cloud TPU"}
+  - paper: "BERT: Pre-training"
+    question: By how much did BERT improve the average GLUE accuracy?
+    expected:
+      - {page: 6, contains: "4.5% and 7.0% respective average accuracy improvement"}
+  - paper: "BERT: Pre-training"
+    question: How does BERT handle SQuAD 2.0 questions that have no answer?
+    expected:
+      - {page: 7, contains: "answer span with start and end at the [CLS] token"}
+  - paper: "BERT: Pre-training"
+    question: How long did pre-training take and on what hardware?
+    expected:
+      - {page: 13, contains: "Each pretraining took 4 days to complete"}
+  - paper: "BERT: Pre-training"
+    question: Which learning rates are recommended for fine-tuning?
+    expected:
+      - {page: 14, contains: "Learning rate (Adam): 5e-5, 3e-5, 2e-5"}

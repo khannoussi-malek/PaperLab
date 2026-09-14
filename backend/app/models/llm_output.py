@@ -1,0 +1,26 @@
+import uuid
+from datetime import datetime
+
+from sqlalchemy import DateTime, ForeignKey, Text, text
+from sqlalchemy.dialects.postgresql import ARRAY, UUID
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.models.base import Base
+
+
+class LLMOutput(Base):
+    __tablename__ = "llm_outputs"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, server_default=text("gen_random_uuid()"))
+    paper_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("papers.id", ondelete="CASCADE"))
+    kind: Mapped[str] = mapped_column(Text)
+    question: Mapped[str | None] = mapped_column(Text)
+    content: Mapped[str] = mapped_column(Text)
+    # C{i} is source_chunks[i-1]. No FK on array elements: a re-ingest deletes chunks, and their
+    # markers then render as plain text.
+    source_chunks: Mapped[list[uuid.UUID]] = mapped_column(ARRAY(UUID(as_uuid=True)), server_default=text("'{}'"))
+    cited_chunks: Mapped[list[uuid.UUID]] = mapped_column(ARRAY(UUID(as_uuid=True)), server_default=text("'{}'"))
+    whole_paper: Mapped[bool] = mapped_column(server_default=text("false"))
+    model: Mapped[str] = mapped_column(Text)
+    prompt_version: Mapped[int]
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()"))

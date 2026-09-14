@@ -47,7 +47,7 @@ Every milestone follows the same loop. Skills are named exactly as they are invo
 1. **Plan:** `superpowers:writing-plans` writes `docs/superpowers/plans/YYYY-MM-DD-mN-<slug>.md`.
    Spike unfamiliar library APIs in the scratchpad *before* writing plan code. In M3 this caught three API surprises before any task was written.
    Run `superpowers:brainstorming` first only when the brief leaves real product decisions open (likely M4 chat UX, M7 graph UX, M7.5 references panel UX, and the M12 facet schema).
-2. **Branch:** in the project folder itself, `git switch -c mN-<slug>`. No git worktrees (D25).
+2. **Branch:** in the project folder itself, `git switch -c mN-<slug>`. No git worktrees (D25). A second milestone running in parallel uses a sibling clone instead (D27, see "Parallel tracks").
    The compose stack keeps running from the project folder; after adding frontend dependencies, run `docker compose up -d --build -V frontend`.
 3. **Execute:** `superpowers:subagent-driven-development`. Use `superpowers:test-driven-development` for each task and `superpowers:systematic-debugging` for anything unexpected.
 4. **Verify:** `superpowers:verification-before-completion`. Run the milestone's exit-criteria commands below and read the output before ticking anything.
@@ -118,8 +118,30 @@ The testing policy says *how* we test. These rules say what every milestone plan
 | Frontend type check / unit tests | `cd frontend && npx tsc -b && npm test` |
 | E2E spec type check | `cd frontend && npm run typecheck:e2e` |
 | End-to-end (whole stack running) | `cd frontend && npm run e2e` |
+| End-to-end with the fake LLM (M4+) | `LLM_PROVIDER=fake docker compose up -d api && (cd frontend && npm run e2e); rc=$?; docker compose up -d api; exit $rc` (restores the real provider either way, and keeps the E2E exit code; avoid the zsh-reserved name `status`) |
 
 Commits use `<type>: <description>` (feat, fix, refactor, docs, test, chore, perf, ci) with no attribution trailer.
+
+### Parallel tracks (D27)
+
+The dependency graph decides what can run at once:
+
+| Wave | Milestones | Unblocked by |
+|---|---|---|
+| 1 | M4 · M6.5 | M3 |
+| 2 | M5, M8, M9 (after M4) · M7 (after M6.5) | wave 1 |
+| 3 | M6 (M4 + M5) · M7.5 (M4 + M6.5) · M8.5 (M5) | wave 2 |
+| 4 | M7.6 (M7.5) | wave 3 |
+| Gated | M10, M11, M12 | a real corpus: the owner reading 30+ papers in the app, which can happen during any wave |
+
+- **Track A** is the project folder and its stack (:5433 / :8000 / :5180).
+- **Every other track** is a sibling clone `../research-note-mN` with its own compose project and shifted ports. It runs one Claude Code session per track, and that session runs subagent-driven-development for its tasks.
+- **Clone setup** needs no tracked-file changes:
+  - `git clone <project> ../research-note-mN`, then copy `.env` and `.claude/skills`.
+  - Add `COMPOSE_PROJECT_NAME=paperlab-mN` to the clone's `.env`.
+  - Add an untracked `docker-compose.override.yml` with `ports: !override [...]` per service, listed in `.git/info/exclude`.
+  - Tests take the ports through `TEST_DATABASE_URL` and `E2E_BASE_URL`.
+- **Merge order:** whichever track finishes first merges first. The second rebases onto main, renumbers its Alembic revision and its D-entries if they collide, and regenerates the API types.
 
 ---
 
@@ -127,19 +149,19 @@ Commits use `<type>: <description>` (feat, fix, refactor, docs, test, chore, per
 
 | # | Milestone | Status | Plan |
 |---|---|---|---|
-| M1 | Stack, migration, vector round-trip | ✅ Done (uncommitted; committed by M3 Task 0) | none, built before the roadmap existed |
-| M2 | Upload → worker → extract → chunks with bboxes | ✅ Done (uncommitted; committed by M3 Task 0) | none, built before the roadmap existed |
-| M3 | Reader: PDF.js, selection, highlight → note | ⏭ Next | [2026-09-13-m3-reader-and-notes.md](2026-09-13-m3-reader-and-notes.md) |
-| M4 | Embeddings, naive retrieval, SSE chat (one paper), citations, eval harness | Planned | written when M3 is merged |
-| M5 | Categories, cross-paper retrieval | Planned | |
-| M6 | MCP server | Planned | |
-| M6.5 | Enrichment: authors, topics, paper metadata, retraction banner | Planned | |
+| M1 | Stack, migration, vector round-trip | ✅ Done | none, built before the roadmap existed |
+| M2 | Upload → worker → extract → chunks with bboxes | ✅ Done | none, built before the roadmap existed |
+| M3 | Reader: PDF.js, selection, highlight → note | ✅ Done (PR #1, merged 2026-09-13) | [2026-09-13-m3-reader-and-notes.md](2026-09-13-m3-reader-and-notes.md) |
+| M4 | Embeddings, naive retrieval, SSE chat (one paper), citations, eval harness | ✅ Done (PR pending) | [2026-09-13-m4-chat.md](2026-09-13-m4-chat.md) |
+| M5 | Categories, cross-paper retrieval | ⏭ Wave 2 | |
+| M6 | MCP server | Planned (wave 3) | |
+| M6.5 | Enrichment: authors, topics, paper metadata, retraction banner | ⏭ Wave 1, track B (`../research-note-m6.5`) | to be written |
 | M7 | Graph view: citation, then co-author, then topic edges | Planned | |
 | M7.5 | References panel: external refs, ranking, import, citing works | Planned | |
 | M7.6 | Paper watch: saved searches, daily bot, ranked inbox | Planned | design: [paper-watch spec](../specs/2026-09-13-paper-watch-design.md) |
-| M8 | Hybrid retrieval + reranking, measured | Planned | |
+| M8 | Hybrid retrieval + reranking, measured | ⏭ Wave 2 | |
 | M8.5 | Query router, then map-reduce | Planned | |
-| M9 | Model manager | Planned | |
+| M9 | Model manager | ⏭ Wave 2 | |
 | M10 | Community detection + summaries | Planned | needs a real corpus |
 | M11 | Concept extraction from notes | Planned | needs a real corpus |
 | M12 | Facets + comparison table | Blocked until 30+ papers have been read in the app | |
@@ -203,9 +225,11 @@ Author page UI (addendum §6b) is a read-only view over M6.5 data and has no bui
   - `evals/questions.yaml` (20 questions) and `evals/run.py` printing recall@k.
 - **Exit criteria:**
   - Recall@k baseline recorded in this file.
+  - **Baseline (2026-09-14):** recall@4 = 0.95, recall@8 = 1.00 on 20 questions over the two arXiv papers (python -m evals.run, nomic-embed-text-v1.5, vector top-k, no rerank). See K8: the first run right after a re-ingest instead read recall@4 = 0.85, recall@8 = 0.90; re-running gave the numbers above.
   - Chat on a paper streams sources before tokens.
   - A promoted note shows the AI badge; editing it flips the badge to "AI · edited".
-- **Carried in:** K2, K3 (decide using eval numbers), D10 (chunk ↔ anchor resolution).
+- **Carried in:** K2, K3 (decided by D29 and D28 respectively), D10 (chunk ↔ anchor resolution).
+- **Owner note:** the default `LLM_MODEL=qwen3:8b` must be pulled (`ollama pull qwen3:8b`) before real chats.
 - **Required tests:**
   - **Embedding stage (worker):**
     - Chunks are embedded with the `search_document:` prefix and queries with `search_query:`. A fake embedder records its inputs.
@@ -238,6 +262,7 @@ Author page UI (addendum §6b) is a read-only view over M6.5 data and has no bui
   - `retrieve` scoped by `category_id` or multiple `paper_ids`, with the diversity cap (max 2–3 chunks per paper). The cap lands here because this is the first multi-paper scope.
   - Category page = notes tagged with the category.
 - **Exit criteria:** eval recall@k does not regress; a multi-paper question cites chunks from at least two papers.
+- **Carried in:** K7 (HNSW filtered scan), K8 (recall baseline re-run caveat: run the eval twice after any re-ingest before comparing against the M4 baseline).
 - **Required tests:**
   - **Categories:**
     - Duplicate sibling names are rejected, including at the root (D4).
@@ -382,6 +407,7 @@ Author page UI (addendum §6b) is a read-only view over M6.5 data and has no bui
 
 - **Scope:** BM25 top-30 via `ts_rank`, reciprocal rank fusion (`Σ 1/(60 + rank)`), `bge-reranker-v2-m3` cross-encoder rerank to `k`. The `retrieve` signature stays unchanged.
 - **Exit criteria:** eval recall@k before/after is recorded here. Keep only the steps that measurably help.
+- **Carried in:** K8 (recall baseline re-run caveat: run the eval twice after any re-ingest before comparing before/after numbers).
 - **Required tests:**
   - **Fusion and rerank (unit):**
     - RRF over known rank lists gives the hand-computed order.
@@ -505,6 +531,9 @@ Newest last. Entry format: decision, then why. Don't reverse one without adding 
 | D24 | 2026-09-13 | **Supersedes D14's "no data-fetching library".**<br>Frontend UI is shadcn/ui (style `radix-nova`, CLI 4.21.0) on Tailwind CSS 4, with lucide icons, TanStack Query for server state, and a light/dark/system theme.<br>Tokens and rules live in `frontend/design-system/MASTER.md`, derived from `ui-ux-pro-max`: slate + blue palette, Crimson Pro headings, Atkinson Hyperlegible body, bundled via `@fontsource`.<br>The shadcn MCP server is configured in `.mcp.json`.<br>Lands as M3 Task 4.5, before the reader and notes UI. Hash routing from D14 stays | The owner doesn't want hand-written HTML/CSS. Components we own (copied, not a runtime library), plus an MCP server agents can query, keep UI work fast and consistent.<br>TanStack Query replaces the manual polling, refresh and error state that every page would otherwise re-implement. Queries use `retry: false` because a local API fails immediately.<br>Doing it before Task 5 means only the 100-line Library page needed restyling |
 | D25 | 2026-09-13 | Milestones are built on a branch in the project folder, not in a git worktree. M3 moved from `.claude/worktrees/m3-reader-notes` back into the project folder mid-milestone | The owner wants the code where they work. A worktree kept the code and the running stack somewhere else, which was confusing |
 | D26 | 2026-09-13 | Subtle glassmorphism on the app chrome (toolbar, notes panel, library card, menus, alerts, hover card) over a faint blue/violet body glow. Tokens `glass`, `glass-strong`, `glass-border`, `ambient-1/2` in `index.css`; rules in MASTER.md "Glass". The PDF page, highlights and the AI provenance surface stay opaque. OS "Reduce transparency" makes glass solid | The owner asked for a glass look via ui-ux-pro-max. "Subtle" was chosen over "vivid" so the paper stays the focus. Surfaces are more opaque than the skill's 15–30% so text keeps ≥ 4.5:1; measured 5.8:1 for the lowest (muted text, dark) |
+| D27 | 2026-09-13 | **Amends D25.** Milestones that can run in parallel do so as tracks. Track A stays in the project folder. Each extra track is a sibling clone (`../research-note-mN`) with its own compose project on shifted ports, and its own Claude Code session. Still no git worktrees | The owner wants as much parallel progress as possible. One folder can't hold two checked-out branches, and one stack can't run two branches' E2E suites. A visible sibling folder keeps the code where the owner can see it, unlike a hidden worktree |
+| D28 | 2026-09-14 | K3: references-section chunks are **kept**. Measured 2 of 160 top-8 slots (1.25%) across the 20 eval questions; threshold 10% | recall@4 0.95, recall@8 1.00 at the M4 baseline; above 10%, about one slot per answer is noise |
+| D29 | 2026-09-14 | K2: front-matter heading false positives are **kept**. Measured 0 of 160 top-8 slots (0%) as heading-like (<12 words); threshold 10% | They mislabel the section in the context line; they matter for retrieval only if they take slots |
 
 ## Open questions and known issues
 
@@ -514,8 +543,11 @@ Newest last. Entry format: decision, then why. Don't reverse one without adding 
 | Q2 | `edges.type='cites'` (M7) overlaps `paper_references` + `external_refs.imported_as` (M7.5). Decide whether in-library citation edges stay stored or are derived from the references tables. Similarly, derive `shares_topic`/`co_authored`/`co_anchored`/`same_category` at query time rather than storing them | M7 / M7.5 |
 | Q3 | `papers.authors` jsonb duplicates `authors`/`paper_authors`. Decide whether to drop it or keep it for papers with no OpenAlex record, since manual author entry must not invent name-keyed authors | M6.5 |
 | K1 | The title heuristic keeps only the first line of multi-line titles (e.g. "BERT: … Transformers for") | M6.5 (OpenAlex metadata) |
-| K2 | Heading false positives in front matter (author names, second title line, bold bullets) | M4: measure with evals before tuning |
-| K3 | References-section chunks are indexed and may pollute retrieval | M4/M8: decide with eval numbers |
+| K2 | Heading false positives in front matter (author names, second title line, bold bullets) | D29 (kept) |
+| K3 | References-section chunks are indexed and may pollute retrieval | D28 (kept; re-measure after M8 hybrid retrieval) |
 | K4 | Pages assume rotation 0 (`providers/extraction.py`) | When a rotated PDF shows up |
 | K5 | Frontend bundle > 500 kB because of pdfjs | Only if it matters; local app |
 | K6 | `.claude/skills/fastapi/` is an untracked project skill that is not part of the baseline commit | Owner decides whether to commit it |
+| K7 | HNSW with a `paper_id = ANY(:ids)` filter can silently drop rows: the planner post-filters within `ef_search` (40) candidates, and a forced HNSW plan returned 0 of 8 (M4 spike). M4 is unaffected because single-paper queries use an exact scan at current size. Before multi-paper scopes ship, add `SET LOCAL hnsw.iterative_scan = relaxed_order` and re-sort in an outer query (or use `strict_order`) | M5 |
+| K8 | Eval run right after a re-ingest can read partially replaced chunks or a cold planner: the first M4 baseline run gave recall@4 0.85 / recall@8 0.90, and immediate re-runs gave 0.95 / 1.00. Candidate causes: the re-ingest status race (fixed in the M4 final-review fix, `POST /reingest` now flips status to `uploaded` before enqueueing) and an HNSW vs exact-scan planner flip right after the bulk chunk replace. Mitigation: run the eval twice after any re-ingest before comparing against the baseline | M5 / M8 |
+| K9 | M4 follow-ups from final-review triage, grouped by milestone: **M5** — make `llm_outputs.cited_chunks`/`source_chunks` NOT NULL and assert the `'{}'` default; tests for `retrieve(paper_ids=[])` and default k; a spy test locking the commit in `prepare_answer`; treat 5xx chat refusals as retryable with a unit test for `REFUSALS`/`useChatStream`; document pre-seeding the HF model cache and `HF_HUB_DOWNLOAD_TIMEOUT`; an answer-level eval on one small paper with a real provider (recall@k can't see prompt truncation); an autouse fixture making `embedding.load` raise in tests. **M6.5** — `source_label` is all-or-nothing, and a whitespace-only author name raises `IndexError`; the migration renumber rule (D27). **M9** — log LLM errors, plus a catch-all error event for non-`LLMError` exceptions; scroll follows streaming tokens; memoize `ChatAnswer`; an AbortController on unmount; `console.warn` in the silent catch; the `.chat-cite` focus ring; partial-selection E2E, clamping the Save button's top, and promote state after tab hide/show; show the server's 422 text on promote failures; `ANTHROPIC_MAX_TOKENS` configurable; `anthropic_api_key` as `SecretStr`, and a key check that doesn't crash the worker; single-flight `get_model` loading | M5 / M6.5 / M9 |

@@ -5,7 +5,7 @@ from sqlalchemy import text, update
 
 from app.core import papers
 from app.core.chunking import ChunkDraft
-from app.models import Paper
+from app.models import Paper, PaperStatus
 
 pytestmark = pytest.mark.anyio
 
@@ -84,14 +84,22 @@ async def test_chunks_of_unknown_paper_is_404(client):
     assert (await client.get(f"/api/papers/{uuid.uuid4()}/chunks")).status_code == 404
 
 
-async def test_reingest_enqueues_job(client, arq):
+async def test_reingest_enqueues_job(client, arq, session):
     created = (await upload(client)).json()
+    paper_id = uuid.UUID(created["id"])
+    # A paper reads `ready` before a re-ingest is requested, same as any paper due for a refresh.
+    await papers.set_status(session, paper_id, PaperStatus.READY)
     arq.jobs.clear()
 
     response = await client.post(f"/api/papers/{created['id']}/reingest")
 
     assert response.status_code == 202
+    # The status flips to `uploaded` immediately, so the chat panel's "ask again once ready" is true
+    # the instant reingest is requested, not just once the worker gets around to it.
+    assert response.json()["status"] == "uploaded"
     assert arq.jobs == [("ingest_paper", created["id"])]
+    refreshed = await client.get(f"/api/papers/{created['id']}")
+    assert refreshed.json()["status"] == "uploaded"
 
 
 async def test_reingest_unknown_paper_is_404_and_enqueues_nothing(client, arq):

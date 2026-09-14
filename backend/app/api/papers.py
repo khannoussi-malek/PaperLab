@@ -6,6 +6,7 @@ from fastapi.responses import FileResponse
 from app.api.deps import SessionDep
 from app.config import settings
 from app.core import papers
+from app.models import PaperStatus
 from app.schemas.papers import ChunkOut, PaperOut
 
 router = APIRouter(prefix="/api/papers", tags=["papers"])
@@ -51,5 +52,9 @@ async def list_chunks(paper_id: uuid.UUID, session: SessionDep, page: int | None
 @router.post("/{paper_id}/reingest", status_code=202)
 async def reingest_paper(paper_id: uuid.UUID, request: Request, session: SessionDep) -> PaperOut:
     paper = await papers.get_paper(session, paper_id)
+    # Flips the status before enqueueing, so a chat request racing the worker sees `uploaded`
+    # (paper_not_ready) instead of a `ready` paper whose chunks are mid-replacement.
+    await papers.set_status(session, paper.id, PaperStatus.UPLOADED)
+    await session.refresh(paper)
     await _enqueue_ingest(request, paper.id)
     return paper
