@@ -33,15 +33,19 @@ export function promoteSelection(
   const touched = markers.filter((m) => m.start < Math.max(anchor, focus) && m.end > Math.min(anchor, focus))
   const start = Math.min(anchor, focus, ...touched.map((m) => m.start))
   const end = Math.max(anchor, focus, ...touched.map((m) => m.end))
-  const body = content.slice(start, end).trim()
+  const untrimmed = content.slice(start, end)
+  const body = untrimmed.trim()
   if (!body) return null
+  // The paragraph lookup uses where the body itself begins, not the raw (possibly whitespace) selection start:
+  // a start sitting on the "\n" of the break before a paragraph must not be read as still inside the one before it.
+  const trimmedStart = start + (untrimmed.length - untrimmed.trimStart().length)
 
   const selected = chunkIdsOf(touched, sources)
   if (selected.length > 0) return { body, chunkIds: selected }
 
-  const breakBefore = content.lastIndexOf(PARAGRAPH_BREAK, start - 1)
+  const breakBefore = content.lastIndexOf(PARAGRAPH_BREAK, trimmedStart - 1)
   const paragraphStart = breakBefore === -1 ? 0 : breakBefore + PARAGRAPH_BREAK.length
-  const breakAfter = content.indexOf(PARAGRAPH_BREAK, start)
+  const breakAfter = content.indexOf(PARAGRAPH_BREAK, trimmedStart)
   const paragraphEnd = breakAfter === -1 ? content.length : breakAfter
   const inParagraph = markers.filter((m) => m.start >= paragraphStart && m.end <= paragraphEnd)
   return { body, chunkIds: chunkIdsOf(inParagraph, sources) }
