@@ -1,27 +1,16 @@
-import { FileText, Upload } from 'lucide-react'
-import { useRef } from 'react'
+import { FileText } from 'lucide-react'
 import { usePapers, useUploadPapers } from '@/api/queries'
-import { glass } from '@/components/glass'
 import { ModeToggle } from '@/components/mode-toggle'
 import { fadeIn } from '@/components/motion'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { WorkspaceSidebar } from '../workspaces/WorkspaceSidebar'
+import { ErrorAlert, LoadError } from './ErrorAlert'
 import { PaperList } from './PaperList'
+import { UploadPdfsButton } from './UploadPdfsButton'
 
 export function LibraryPage() {
   const papers = usePapers()
   const upload = useUploadPapers()
-  const fileInput = useRef<HTMLInputElement>(null)
-
-  function onFiles(input: HTMLInputElement) {
-    const files = [...(input.files ?? [])]
-    input.value = ''
-    if (files.length > 0) upload.mutate(files)
-  }
-
-  const error = upload.error ?? papers.error
   const list = papers.data
 
   return (
@@ -36,18 +25,7 @@ export function LibraryPage() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          <Button type="button" disabled={upload.isPending} onClick={() => fileInput.current?.click()}>
-            <Upload aria-hidden />
-            {upload.isPending ? 'Uploading…' : 'Upload PDFs'}
-          </Button>
-          <input
-            ref={fileInput}
-            type="file"
-            accept="application/pdf"
-            multiple
-            hidden
-            onChange={(e) => onFiles(e.currentTarget)}
-          />
+          <UploadPdfsButton isPending={upload.isPending} onUpload={(files) => upload.mutate(files)} />
           <ModeToggle />
         </div>
       </header>
@@ -55,17 +33,11 @@ export function LibraryPage() {
       <div className="grid items-start gap-4 lg:grid-cols-[14rem_minmax(0,1fr)]">
         <WorkspaceSidebar activeId={null} />
         <div className="flex min-w-0 flex-col gap-4">
-          {error && (
-            <Alert variant="destructive" className={cn('border-glass-border', glass)}>
-              <AlertDescription>{error.message}</AlertDescription>
-            </Alert>
-          )}
+          {upload.error && <ErrorAlert message={upload.error.message} />}
 
           {list === undefined ? (
             papers.isError ? (
-              <Button variant="outline" className="self-start" onClick={() => void papers.refetch()}>
-                Retry
-              </Button>
+              <LoadError message={papers.error.message} onRetry={() => void papers.refetch()} />
             ) : (
               <p className="text-muted-foreground">Loading…</p>
             )

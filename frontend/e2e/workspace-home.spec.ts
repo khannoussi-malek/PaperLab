@@ -2,6 +2,16 @@ import { FIXTURE_FILE, FIXTURE_TITLE, addNote, expect, removePaperAndNotes, test
 
 const EMPTY = 'No papers in this workspace yet'
 
+test('a failed load of the workspace Papers tab can be retried', async ({ page, workspaceId }) => {
+  await page.route(`**/api/workspaces/${workspaceId}/papers`, (route) => route.abort(), { times: 1 })
+  await page.goto(`/#/workspaces/${workspaceId}`)
+
+  await expect(page.getByRole('alert')).toBeVisible()
+  await page.getByRole('button', { name: 'Retry' }).click()
+  await expect(page.getByRole('alert')).not.toBeVisible()
+  await expect(page.getByText(EMPTY)).toBeVisible()
+})
+
 test("add two library papers to a workspace, see both papers' notes, and open one focused in the reader", async ({
   page,
   request,
