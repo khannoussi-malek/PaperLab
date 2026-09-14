@@ -16,6 +16,8 @@ const keys = {
   chat: (paperId: string) => ['papers', paperId, 'chat'] as const,
   // Every workspace query starts with this, so one invalidation refreshes the list, its counts and each home's tabs.
   workspaces: ['workspaces'] as const,
+  workspacePapers: (id: string) => ['workspaces', id, 'papers'] as const,
+  workspaceNotes: (id: string) => ['workspaces', id, 'notes'] as const,
 }
 
 /** Poll the library only while a paper is still ingesting. */
@@ -83,13 +85,18 @@ export function useUpdatePaper(paperId: string) {
   })
 }
 
-export function useUploadPapers() {
+/** Uploads PDFs one by one; with a `workspaceId` (a workspace's Papers tab) each also joins that workspace. */
+export function useUploadPapers(workspaceId?: string) {
   const client = useQueryClient()
   return useMutation({
     mutationFn: async (files: File[]) => {
-      for (const file of files) await api.uploadPaper(file)
+      for (const file of files) await api.uploadPaper(file, workspaceId)
     },
-    onSettled: () => client.invalidateQueries({ queryKey: keys.papers }),
+    onSettled: () =>
+      Promise.all([
+        client.invalidateQueries({ queryKey: keys.papers }),
+        client.invalidateQueries({ queryKey: keys.workspaces }),
+      ]),
   })
 }
 
@@ -108,6 +115,26 @@ export function useDeletePaper() {
 
 /** Workspaces with their paper and note counts. */
 export const useWorkspaces = () => useQuery({ queryKey: keys.workspaces, queryFn: api.listWorkspaces })
+
+/** One workspace, read from the list (the API has no single-workspace route). `null` once loaded if it doesn't exist. */
+export const useWorkspace = (id: string) =>
+  useQuery({
+    queryKey: keys.workspaces,
+    queryFn: api.listWorkspaces,
+    select: (workspaces) => workspaces.find((workspace) => workspace.id === id) ?? null,
+  })
+
+/** A workspace's papers. Polls while one is ingesting, like the library, so an upload from the Papers tab shows progress. */
+export const useWorkspacePapers = (id: string) =>
+  useQuery({
+    queryKey: keys.workspacePapers(id),
+    queryFn: () => api.listWorkspacePapers(id),
+    refetchInterval: (query) => papersPollInterval(query.state.data),
+  })
+
+/** Every note anchored in a workspace's papers, each once, by paper title then reading position. */
+export const useWorkspaceNotes = (id: string) =>
+  useQuery({ queryKey: keys.workspaceNotes(id), queryFn: () => api.listWorkspaceNotes(id) })
 
 export function useWorkspaceMutations() {
   const client = useQueryClient()
