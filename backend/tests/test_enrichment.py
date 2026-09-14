@@ -258,3 +258,20 @@ async def test_a_trusted_id_match_with_no_authorships_keeps_the_stored_byline(se
     paper = await enrich(session, fake_openalex, paper, hints())
 
     assert paper.authors == ["Jacob Devlin"]
+
+
+async def test_a_duplicate_openalex_match_keeps_the_second_papers_metadata_and_topics(session, fake_openalex):
+    # Symmetric with the doi case: two papers matching the same work must not raise on papers.openalex_id UNIQUE.
+    fake_openalex.route(BERT_WORK, recorded("work_bert"))
+    paper1 = await add_paper(session)
+    paper2 = await add_paper(session)
+
+    paper1 = await enrich(session, fake_openalex, paper1, hints(doi=BERT_DOI))
+    paper2 = await enrich(session, fake_openalex, paper2, hints(doi=BERT_DOI))
+
+    assert paper1.openalex_id == "W2963341956"
+    assert (paper2.openalex_id, paper2.doi) == (None, None)  # dropped: another paper already holds them
+    assert paper2.title == BERT_TITLE  # the rest of the match still applies
+    assert paper2.authors == paper1.authors
+    topics = await topics_of(session, paper2.id)
+    assert topics[("openalex", "Topic Modeling")] == pytest.approx(0.9999, abs=1e-4)
