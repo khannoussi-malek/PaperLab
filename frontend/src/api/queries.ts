@@ -1,5 +1,5 @@
 import { QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api, type NoteCreate, type NoteUpdate, type Paper, type PromoteRequest } from './client'
+import { api, type NoteCreate, type NoteUpdate, type Paper, type PaperUpdate, type PromoteRequest } from './client'
 
 export const PAPERS_POLL_MS = 2000
 
@@ -57,6 +57,18 @@ export function usePromoteNote(paperId: string) {
   return useMutation({
     mutationFn: (promote: PromoteRequest) => api.promoteNote(promote),
     onSuccess: () => client.invalidateQueries({ queryKey: keys.notes(paperId) }),
+  })
+}
+
+/** Saves a manual correction. The reader shows the saved paper at once; the library refetches. */
+export function useUpdatePaper(paperId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (update: PaperUpdate) => api.updatePaper(paperId, update),
+    onSuccess: (paper) => {
+      client.setQueryData(keys.paper(paperId), paper)
+      return client.invalidateQueries({ queryKey: keys.papers, exact: true })
+    },
   })
 }
 

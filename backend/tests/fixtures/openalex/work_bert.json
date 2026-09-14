@@ -1,0 +1,18 @@
+{
+"id": "https://openalex.org/W2963341956",
+"doi": "https://doi.org/10.18653/v1/n19-1423",
+"title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+"publication_year": 2019,
+"type": "conference-paper",
+"is_retracted": false,
+"open_access": {"oa_status": "gold"},
+"best_oa_location": {"pdf_url": null, "landing_page_url": "https://doi.org/10.18653/v1/n19-1423"},
+"primary_location": {"raw_source_name": "Proceedings of the 2019 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies, Volume 1 (Long and Short Papers)", "source": null},
+"cited_by_count": 33590,
+"referenced_works_count": 52,
+"authorships": [{"author": {"id": "https://openalex.org/A5057457287", "display_name": "Jacob Devlin", "orcid": null}, "is_corresponding": false, "institutions": []}, {"author": {"id": "https://openalex.org/A5076904467", "display_name": "Ming‐Wei Chang", "orcid": "https://orcid.org/0000-0002-0137-8895"}, "is_corresponding": false, "institutions": []}, {"author": {"id": "https://openalex.org/A5081862885", "display_name": "Kenton Lee", "orcid": "https://orcid.org/0000-0002-9534-5970"}, "is_corresponding": false, "institutions": []}, {"author": {"id": "https://openalex.org/A5053947885", "display_name": "Kristina Toutanova", "orcid": null}, "is_corresponding": false, "institutions": []}],
+"topics": [{"display_name": "Topic Modeling", "score": 0.9998999834060669}, {"display_name": "Natural Language Processing Techniques", "score": 0.9998000264167786}, {"display_name": "Computational and Text Analysis Methods", "score": 0.9847999811172485}],
+"keywords": [{"display_name": "Computer science", "score": 0.5349990129470825}, {"display_name": "Computational linguistics", "score": 0.4984705448150635}, {"display_name": "Linguistics", "score": 0.4571102261543274}, {"display_name": "Library science", "score": 0.4096672534942627}, {"display_name": "Artificial intelligence", "score": 0.27855488657951355}, {"display_name": "Philosophy", "score": 0.21961429715156555}],
+"concepts": [{"display_name": "Computer science", "score": 0.5349990129470825}, {"display_name": "Computational linguistics", "score": 0.4984705448150635}, {"display_name": "Linguistics", "score": 0.4571102261543274}, {"display_name": "Library science", "score": 0.4096672534942627}, {"display_name": "Artificial intelligence", "score": 0.27855488657951355}, {"display_name": "Philosophy", "score": 0.21961429715156555}],
+"abstract_inverted_index": {"Jacob": [0], "Devlin,": [1], "Ming-Wei": [2], "Chang,": [3], "Kenton": [4], "Lee,": [5], "Kristina": [6], "Toutanova.": [7], "Proceedings": [8], "of": [9, 13, 18], "the": [10, 14, 19], "2019": [11], "Conference": [12], "North": [15], "American": [16], "Chapter": [17], "Association": [20], "for": [21], "Computational": [22], "Linguistics:": [23], "Human": [24], "Language": [25], "Technologies,": [26], "Volume": [27], "1": [28], "(Long": [29], "and": [30], "Short": [31], "Papers).": [32], "2019.": [33]}
+}

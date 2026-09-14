@@ -1,16 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { authorNames, byline, pageCountLabel, shortAuthors } from './paperMeta'
-
-describe('authorNames', () => {
-  it('reads plain strings and {name} / {display_name} objects, skipping anything else', () => {
-    expect(authorNames(['Ada Lovelace', { name: 'Alan Turing' }, { display_name: 'Grace Hopper' }])).toEqual([
-      'Ada Lovelace',
-      'Alan Turing',
-      'Grace Hopper',
-    ])
-    expect(authorNames([null, 42, { id: 'A1' }, '  ', { name: '' }])).toEqual([])
-  })
-})
+import { byline, pageCountLabel, shortAuthors } from './paperMeta'
 
 describe('shortAuthors', () => {
   it('lists up to two names, then "et al."', () => {

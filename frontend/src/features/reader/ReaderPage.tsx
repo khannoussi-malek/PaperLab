@@ -14,6 +14,7 @@ import { clientPointToPdf, notesAt, rectContains } from './hitTest'
 import { PdfPage } from './PdfPage'
 import { ReaderContextMenu, type ContextMenuState } from './ReaderContextMenu'
 import { ReaderToolbar } from './ReaderToolbar'
+import { RetractionBanner } from './RetractionBanner'
 import { RightPanel } from './RightPanel'
 import { readSelection, type SelectionAnchor } from './selection'
 import { useHoverCard } from './useHoverCard'
@@ -246,7 +247,11 @@ export function ReaderPage({ paperId, tab }: { paperId: string; tab: ReaderTab }
   const shownError = error ?? paper.error?.message ?? notesQuery.error?.message ?? pdfError
   return (
     <div className="grid h-dvh grid-cols-[minmax(0,1fr)_360px] grid-rows-[auto_minmax(0,1fr)]">
-      <ReaderToolbar title={paper.data?.title} zoomIndex={zoomIndex} onZoomChange={setZoomIndex} />
+      {/* One grid row either way, so the pages and the panel keep their row whether or not the banner shows. */}
+      <div className="col-span-full">
+        <ReaderToolbar paper={paper.data} zoomIndex={zoomIndex} onZoomChange={setZoomIndex} />
+        {paper.data?.is_retracted && <RetractionBanner paper={paper.data} />}
+      </div>
 
       {shownError && (
         <Alert

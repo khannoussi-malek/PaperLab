@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { readerHref } from '@/lib/route'
 import { cn } from '@/lib/utils'
 import { FirstPage } from './FirstPage'
-import { authorNames, pageCountLabel } from './paperMeta'
+import { pageCountLabel } from './paperMeta'
 
 const addedDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { dateStyle: 'medium' })
 
@@ -30,7 +30,6 @@ function PagePlaceholder({ paper }: { paper: Paper }) {
 }
 
 export function PaperPreview({ paper }: { paper: Paper }) {
-  const authors = authorNames(paper.authors)
   const facts = [paper.year, paper.venue, pageCountLabel(paper.page_count)].filter(Boolean)
   const fileUrl = api.paperFileUrl(paper.id)
 
@@ -47,7 +46,7 @@ export function PaperPreview({ paper }: { paper: Paper }) {
 
       <div className="flex flex-col gap-1">
         <h2 className="font-heading text-xl leading-snug font-semibold wrap-anywhere">{paper.title}</h2>
-        {authors.length > 0 && <p className="text-sm">{authors.join(', ')}</p>}
+        {paper.authors.length > 0 && <p className="text-sm">{paper.authors.join(', ')}</p>}
         {facts.length > 0 && <p className="text-sm text-muted-foreground">{facts.join(' · ')}</p>}
         <p className="text-xs text-muted-foreground">Added {addedDate(paper.created_at)}</p>
         {paper.doi && (
