@@ -112,7 +112,7 @@ async def client(app):
         yield http
 
 
-def _write_pdf(path: Path, pages: list[list[tuple]], metadata_title: str | None = None) -> Path:
+def _write_pdf(path: Path, pages: list[list[tuple]], metadata: dict[str, str] | None = None) -> Path:
     doc = pymupdf.open()
     for items in pages:
         page = doc.new_page()
@@ -126,8 +126,8 @@ def _write_pdf(path: Path, pages: list[list[tuple]], metadata_title: str | None 
             elif kind == "rotated":
                 point, text = args
                 page.insert_text(point, text, fontsize=11, rotate=90)
-    if metadata_title:
-        doc.set_metadata({"title": metadata_title})
+    if metadata:
+        doc.set_metadata(metadata)
     doc.save(path)
     doc.close()
     return path
@@ -151,7 +151,48 @@ def titled_pdf(tmp_path) -> Path:
     return _write_pdf(
         tmp_path / "titled.pdf",
         [[("text", (72, 72), "Largest Font Line", 18, True), ("box", (72, 100, 520, 300), BODY_TEXT)]],
-        metadata_title="Title From Metadata",
+        metadata={"title": "Title From Metadata"},
+    )
+
+
+BERT_TITLE_LINES = ("BERT: Pre-training of Deep Bidirectional Transformers for", "Language Understanding")
+
+
+@pytest.fixture
+def arxiv_pdf(tmp_path) -> Path:
+    """BERT's first page as arXiv serves it: a two-line title whose second line is its own block (K1), the authors,
+    the rotated arXiv stamp, and no DOI or embedded metadata."""
+    return _write_pdf(
+        tmp_path / "arxiv.pdf",
+        [
+            [
+                ("text", (72, 72), BERT_TITLE_LINES[0], 14, True),
+                ("text", (190, 100), BERT_TITLE_LINES[1], 14, True),
+                ("text", (72, 130), "Jacob Devlin  Ming-Wei Chang  Kenton Lee  Kristina Toutanova", 11, False),
+                ("box", (72, 160, 520, 360), BODY_TEXT),
+                ("rotated", (40, 700), "arXiv:1810.04805v2 [cs.CL] 24 May 2019"),
+            ]
+        ],
+    )
+
+
+@pytest.fixture
+def doi_pdf(tmp_path) -> Path:
+    """A journal-style first page that prints its DOI, with an embedded author, keywords and creation date."""
+    return _write_pdf(
+        tmp_path / "doi.pdf",
+        [
+            [
+                ("text", (72, 72), "A Paper With a Printed DOI", 14, True),
+                ("box", (72, 100, 520, 300), BODY_TEXT),
+                ("text", (72, 760), "https://doi.org/10.18653/v1/N19-1423.", 8, False),
+            ]
+        ],
+        metadata={
+            "author": "Jacob Devlin; Ming-Wei Chang",
+            "keywords": "language models, pre-training",
+            "creationDate": "D:20190528000751Z",
+        },
     )
 
 
