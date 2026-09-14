@@ -309,6 +309,7 @@ async def correct_metadata(session: AsyncSession, paper_id: uuid.UUID, fields: d
     Conflict("doi_taken").
     """
     paper = await get_paper(session, paper_id)
+    clears_match = {}
     if fields.get("doi") is not None:
         doi = normalize_doi(fields["doi"])
         if doi is None:
@@ -316,8 +317,14 @@ async def correct_metadata(session: AsyncSession, paper_id: uuid.UUID, fields: d
         if await session.scalar(select(Paper.id).where(Paper.doi == doi, Paper.id != paper_id)):
             raise Conflict("doi_taken")
         fields = {**fields, "doi": doi}
+        if doi != paper.doi:
+            # A different DOI can only mean the stored match (if any) is for the wrong paper. Not locked in
+            # manual_fields: enrichment stays free to write back whatever the corrected DOI actually resolves to.
+            clears_match = {"openalex_id": None}
     manual_fields = sorted(set(paper.manual_fields) | fields.keys())
-    await session.execute(update(Paper).where(Paper.id == paper_id).values(**fields, manual_fields=manual_fields))
+    await session.execute(
+        update(Paper).where(Paper.id == paper_id).values(**fields, **clears_match, manual_fields=manual_fields)
+    )
     await session.commit()
     await session.refresh(paper)
     return paper
