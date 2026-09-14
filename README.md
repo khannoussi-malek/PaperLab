@@ -84,6 +84,9 @@ Hugging Face gives up on a download after 10 seconds without data. On a slow con
 HF_HUB_DOWNLOAD_TIMEOUT=60
 ```
 
+Real chats also need the model: `ollama pull qwen3:8b` on the host, or set `LLM_PROVIDER` / `LLM_MODEL` in `.env`
+to choose a different provider and model.
+
 Metadata enrichment (fetching paper details from OpenAlex) is optional and off by default. Set `OPENALEX_MAILTO`
 in `.env` to turn it on; the value is sent to api.openalex.org as a `mailto` parameter on every request.
 
