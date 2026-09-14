@@ -23,12 +23,15 @@ test('a workspace answer cites a passage from each paper and a note, and each ci
   secondPaperId,
   workspaceId,
 }) => {
+  // Workspace chat always retrieves (no whole-paper shortcut), so this is the suite's first retrieving
+  // question on a freshly recreated API: it also pays for loading the embedding model (~3.4s cold, more under load).
+  test.slow()
   await addToWorkspace(request, workspaceId, paperId, secondPaperId)
   const note = await addNote(request, secondPaperId, 1, 'My note on the introduction')
   await page.goto(`/#/workspaces/${workspaceId}?tab=chat`)
   await expect(page.locator('.chat-scope')).toHaveText('2 papers · 1 note')
 
-  const answer = await ask(page, QUESTION)
+  const answer = await ask(page, QUESTION, 45_000)
   await expect(answer.locator('.chat-answer-text')).toHaveText(FAKE_WORKSPACE_ANSWER)
   await expect(answer.locator('.chat-cite')).toHaveText(['[C1]', '[C2]', '[N1]'])
   // Pills stay short; their names say which paper, and that N1 is the user's note.
