@@ -1,6 +1,7 @@
 import type { components } from './schema'
 
 export type Paper = components['schemas']['PaperOut']
+export type PaperUpdate = components['schemas']['PaperUpdate']
 export type Chunk = components['schemas']['ChunkOut']
 export type Note = components['schemas']['NoteOut']
 export type NoteCreate = components['schemas']['NoteCreate']
@@ -40,6 +41,7 @@ export const api = {
     form.append('file', file)
     return request<Paper>('/api/papers', { method: 'POST', body: form })
   },
+  updatePaper: (id: string, update: PaperUpdate) => request<Paper>(`/api/papers/${id}`, sendJson('PATCH', update)),
   deletePaper: (id: string) => request<void>(`/api/papers/${id}`, { method: 'DELETE' }),
   reingestPaper: (id: string) => request<Paper>(`/api/papers/${id}/reingest`, { method: 'POST' }),
   paperFileUrl: (id: string) => `/api/papers/${id}/file`,
