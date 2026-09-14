@@ -189,12 +189,25 @@ test('the paper menu opens its workspace list beside the menu, fully on screen',
     .toBe(true)
 })
 
-test('right-clicking a paper row opens its menu', async ({ page, paperId, workspaceName, workspaceId }) => {
+test('right-clicking a paper row opens its menu where the pointer is', async ({
+  page,
+  paperId,
+  workspaceName,
+  workspaceId,
+}) => {
   expect(workspaceId).toBeTruthy()
   await page.goto('/')
   const row = page.locator('.paper-row').filter({ has: page.locator(`a[href="#/papers/${paperId}"]`) })
-  await row.click({ button: 'right' })
-  await page.getByRole('menuitem', { name: 'Add to workspace…' }).hover()
+  const rowBox = (await row.boundingBox())!
+  const click = { x: rowBox.width / 3, y: rowBox.height / 2 }
+  await row.click({ button: 'right', position: click })
+
+  const add = page.getByRole('menuitem', { name: 'Add to workspace…' })
+  const menuBox = (await page.getByRole('menu').filter({ has: add }).boundingBox())!
+  expect(Math.abs(menuBox.x - (rowBox.x + click.x))).toBeLessThan(8)
+  expect(Math.abs(menuBox.y - (rowBox.y + click.y))).toBeLessThan(8)
+
+  await add.hover()
   await expect(page.getByRole('menuitemcheckbox', { name: workspaceName })).toBeVisible()
   // The right-click didn't also follow the row's link to the reader.
   await expect(page).not.toHaveURL(/#\/papers\//)
