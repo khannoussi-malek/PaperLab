@@ -7,8 +7,25 @@
 - A field the user corrected (papers.manual_fields) is never overwritten by the PDF or by OpenAlex.
 """
 
+import logging
 import re
+import unicodedata
+import uuid
 from dataclasses import dataclass
+from typing import Any
+
+import httpx
+from sqlalchemy import delete, insert, update
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.papers import get_paper
+from app.models import Paper, paper_topics
+from app.providers import openalex
+
+logger = logging.getLogger(__name__)
+
+ARXIV_DOI_PREFIX = "10.48550/arxiv."
+YEAR_TOLERANCE = 1  # an arXiv preprint and its published version are often dated a year apart
 
 _DOI = re.compile(r"10\.\d{4,9}/\S+")
 # New-style ("1810.04805") or old-style, pre-2007 ("hep-th/9901001", "math.GT/0309136") IDs, an optional "vN" dropped.
@@ -66,3 +83,123 @@ def pdf_hints(first_page_text: str, metadata: dict[str, str]) -> PdfHints:
         authors=_split(author, _AUTHOR_SEPARATORS),
         keywords=_split(metadata.get("keywords", ""), _KEYWORD_SEPARATORS),
     )
+
+
+_UNICODE_HYPHENS = str.maketrans("‐‑", "--")  # OpenAlex writes "Ming‐Wei" with U+2010
+
+
+def _fold(text: str) -> str:
+    """Casefolded, without accents, ASCII hyphens: "Chabrière‐Smith" and "CHABRIERE-SMITH" compare equal."""
+    text = unicodedata.normalize("NFKD", text).translate(_UNICODE_HYPHENS)
+    return "".join(c for c in text if not unicodedata.combining(c)).casefold()
+
+
+def is_confirmed_match(work: dict[str, Any], hints: PdfHints) -> bool:
+    """A title-search hit counts only when its year and its first author agree with the PDF."""
+    year = work.get("publication_year")
+    if year is None or not any(abs(year - y) <= YEAR_TOLERANCE for y in hints.years):
+        return False
+    authorships = work.get("authorships") or []
+    names = _fold(authorships[0]["author"]["display_name"]).split() if authorships else []
+    # ponytail: the family name as a whole word on page 1. A name in a non-Latin script never matches: a miss,
+    # never a wrong match.
+    return bool(names) and re.search(rf"\b{re.escape(names[-1])}\b", _fold(hints.text)) is not None
+
+
+def short_id(url: str | None) -> str | None:
+    """"https://openalex.org/W2963341956" -> "W2963341956"; also strips "https://orcid.org/"."""
+    return url.rsplit("/", 1)[-1] if url else None
+
+
+def abstract_text(inverted_index: dict[str, list[int]] | None) -> str | None:
+    if not inverted_index:
+        return None
+    return " ".join(word for _, word in sorted((i, word) for word, places in inverted_index.items() for i in places))
+
+
+def work_fields(work: dict[str, Any]) -> dict[str, Any]:
+    """The papers columns an OpenAlex work fills."""
+    location = work.get("primary_location") or {}
+    source = location.get("source") or {}
+    best_oa = work.get("best_oa_location") or {}
+    fields = {
+        "openalex_id": short_id(work["id"]),
+        "doi": normalize_doi(work.get("doi") or ""),
+        "title": work.get("title"),
+        "abstract": abstract_text(work.get("abstract_inverted_index")),
+        "authors": [a["author"]["display_name"] for a in work.get("authorships") or []],
+        "year": work.get("publication_year"),
+        "venue": source.get("display_name") or location.get("raw_source_name"),
+        "issn": source.get("issn_l"),
+        "type": work.get("type"),
+        "is_retracted": bool(work.get("is_retracted")),
+        "oa_status": (work.get("open_access") or {}).get("oa_status"),
+        "oa_url": best_oa.get("pdf_url") or best_oa.get("landing_page_url"),
+        "cited_by_count": work.get("cited_by_count"),
+        "referenced_works_count": work.get("referenced_works_count"),
+    }
+    return fields if fields["title"] else {k: v for k, v in fields.items() if k != "title"}  # title is NOT NULL
+
+
+def work_topics(work: dict[str, Any]) -> dict[str, float]:
+    """OpenAlex topics, keywords and concepts by label. A label in more than one list keeps its best score."""
+    scores: dict[str, float] = {}
+    for item in [*(work.get("topics") or []), *(work.get("keywords") or []), *(work.get("concepts") or [])]:
+        scores[item["display_name"]] = max(scores.get(item["display_name"], 0.0), item["score"])
+    return scores
+
+
+async def find_work(http: httpx.AsyncClient, paper: Paper, hints: PdfHints) -> dict[str, Any] | None:
+    """Trusted identifiers first, then a confirmed title-search hit. Raises httpx.HTTPError when OpenAlex fails."""
+    doi = paper.doi or hints.doi
+    keys = [paper.openalex_id, doi and f"doi:{doi}", hints.arxiv_id and f"doi:{ARXIV_DOI_PREFIX}{hints.arxiv_id}"]
+    for key in filter(None, keys):
+        if work := await openalex.get_work(http, key):
+            return work
+    if not hints.years:
+        return None  # a hit could never be confirmed, so don't spend 10 credits on the search
+    return next((w for w in await openalex.search_works(http, paper.title) if is_confirmed_match(w, hints)), None)
+
+
+async def _replace_topics(session: AsyncSession, paper_id: uuid.UUID, source: str, scores: dict) -> None:
+    topics = paper_topics.c
+    await session.execute(delete(paper_topics).where(topics.paper_id == paper_id, topics.source == source))
+    if scores:
+        rows = [{"paper_id": paper_id, "source": source, "label": label, "score": s} for label, s in scores.items()]
+        await session.execute(insert(paper_topics), rows)
+
+
+async def _write(session: AsyncSession, paper: Paper, fields: dict[str, Any]) -> None:
+    values = {k: v for k, v in fields.items() if k not in paper.manual_fields}
+    if values:
+        await session.execute(update(Paper).where(Paper.id == paper.id).values(**values))
+
+
+async def enrich_paper(
+    session: AsyncSession, http: httpx.AsyncClient | None, paper_id: uuid.UUID, hints: PdfHints
+) -> None:
+    """Fills a paper's metadata from OpenAlex, or from the PDF when OpenAlex has nothing. No client: OpenAlex is off.
+
+    OpenAlex failures are logged and fall back to the PDF. Database errors still raise (a second copy of a matched
+    paper breaks papers.doi UNIQUE); the ingest worker treats those as non-fatal too.
+    """
+    paper = await get_paper(session, paper_id)
+    await session.refresh(paper)  # the pipeline changed the title with a bulk UPDATE since this object was loaded
+    try:
+        work = await find_work(http, paper, hints) if http else None
+    except httpx.HTTPError as exc:
+        logger.warning("OpenAlex lookup failed for paper %s, using PDF metadata: %r", paper_id, exc)
+        work = None
+
+    await _replace_topics(session, paper_id, "author", dict.fromkeys(hints.keywords))
+    if work is None:
+        if paper.openalex_id is None:
+            fallback = {k: v for k, v in {"authors": hints.authors, "doi": hints.doi}.items() if v}
+            if fallback:
+                await _write(session, paper, fallback)  # never replaces what an earlier match found
+        await session.commit()
+        return
+
+    await _write(session, paper, work_fields(work))
+    await _replace_topics(session, paper_id, "openalex", work_topics(work))
+    await session.commit()
