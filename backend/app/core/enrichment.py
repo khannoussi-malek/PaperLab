@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import httpx
-from sqlalchemy import delete, insert, update
+from sqlalchemy import delete, exists, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.papers import get_paper
@@ -169,8 +169,21 @@ async def _replace_topics(session: AsyncSession, paper_id: uuid.UUID, source: st
         await session.execute(insert(paper_topics), rows)
 
 
+def _regresses(new: Any, old: Any) -> bool:
+    """True when a match or the PDF fallback would replace an already-known value with a blank."""
+    return new in (None, []) and old not in (None, [])
+
+
+async def _doi_taken(session: AsyncSession, paper_id: uuid.UUID, doi: str) -> bool:
+    return bool(await session.scalar(select(exists().where(Paper.doi == doi, Paper.id != paper_id))))
+
+
 async def _write(session: AsyncSession, paper: Paper, fields: dict[str, Any]) -> None:
-    values = {k: v for k, v in fields.items() if k not in paper.manual_fields}
+    values = {
+        k: v for k, v in fields.items() if k not in paper.manual_fields and not _regresses(v, getattr(paper, k))
+    }
+    if (doi := values.get("doi")) and await _doi_taken(session, paper.id, doi):
+        values = {k: v for k, v in values.items() if k != "doi"}  # another paper already holds this DOI
     if values:
         await session.execute(update(Paper).where(Paper.id == paper.id).values(**values))
 
@@ -180,8 +193,9 @@ async def enrich_paper(
 ) -> None:
     """Fills a paper's metadata from OpenAlex, or from the PDF when OpenAlex has nothing. No client: OpenAlex is off.
 
-    OpenAlex failures are logged and fall back to the PDF. Database errors still raise (a second copy of a matched
-    paper breaks papers.doi UNIQUE); the ingest worker treats those as non-fatal too.
+    OpenAlex failures are logged and fall back to the PDF. A DOI another paper already holds is silently dropped
+    (see `_write`) instead of raising; a duplicate `openalex_id` match still raises, and the ingest worker treats
+    that as non-fatal too.
     """
     paper = await get_paper(session, paper_id)
     await session.refresh(paper)  # the pipeline changed the title with a bulk UPDATE since this object was loaded

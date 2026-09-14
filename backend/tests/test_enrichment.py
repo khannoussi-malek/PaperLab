@@ -218,3 +218,43 @@ async def test_corrected_fields_are_never_overwritten(session, fake_openalex):
     paper = await enrich(session, fake_openalex, paper, hints(doi=BERT_DOI))
 
     assert (paper.title, paper.is_retracted, paper.year) == ("My Title", True, 2019)
+
+
+async def test_a_duplicate_pdf_printed_doi_keeps_the_second_papers_authors_and_topics(session):
+    # M1's fallback writes doi and authors in one UPDATE. A second paper with the same PDF-printed DOI must not
+    # lose its byline and keyword topics to the papers.doi UNIQUE constraint.
+    paper1 = await add_paper(session)
+    paper2 = await add_paper(session)
+    pdf = hints(doi="10.1000/xyz-duplicate", authors=["Ada Lovelace"], keywords=["engines"])
+
+    paper1 = await enrich(session, None, paper1, pdf)
+    paper2 = await enrich(session, None, paper2, pdf)
+
+    assert paper1.doi == "10.1000/xyz-duplicate"  # the first paper still gets it
+    assert (paper2.doi, paper2.authors) == (None, ["Ada Lovelace"])
+    assert await topics_of(session, paper2.id) == {("author", "engines"): None}
+
+
+async def test_a_title_search_match_keeps_the_stored_doi_when_the_work_has_none(session, fake_openalex):
+    fallback_doi = "10.1000/fallback-only"
+    paper = await add_paper(session)
+    paper = await enrich(session, None, paper, hints(doi=fallback_doi))
+    assert paper.doi == fallback_doi
+
+    # The stored DOI is tried first (404: no such work), so the search below still runs.
+    fake_openalex.route(f"/works/doi:{fallback_doi}", httpx.Response(404))
+    fake_openalex.route(BERT_SEARCH, {"results": [{**recorded("work_bert"), "doi": None}]})
+
+    paper = await enrich(session, fake_openalex, paper, hints(years={2019}))
+
+    assert paper.doi == fallback_doi  # the match's null doi never overwrites it
+    assert paper.openalex_id == "W2963341956"  # the rest of the match still applies
+
+
+async def test_a_trusted_id_match_with_no_authorships_keeps_the_stored_byline(session, fake_openalex):
+    fake_openalex.route("/works/W2963341956", {**recorded("work_bert"), "authorships": []})
+    paper = await add_paper(session, openalex_id="W2963341956", authors=["Jacob Devlin"])
+
+    paper = await enrich(session, fake_openalex, paper, hints())
+
+    assert paper.authors == ["Jacob Devlin"]
