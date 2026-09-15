@@ -1,10 +1,10 @@
-import { Crosshair, Hash, Table2 } from 'lucide-react'
+import { ChartColumn, Crosshair, Hash, Table2 } from 'lucide-react'
 import type { DatasetSummary } from '@/api/client'
 import { usePaperDatasets } from '@/api/queries'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
-import { datasetHref } from '@/lib/route'
+import { datasetHref, newChartHref } from '@/lib/route'
 import type { PdfRect } from '../reader/coords'
 import { datasetMeta } from './datasetMeta'
 
@@ -57,6 +57,12 @@ export function DataPanel({ paperId, onShowRegion }: Props) {
                   )}
                   <Button variant="ghost" size="sm" asChild>
                     <a href={datasetHref(dataset.id)}>Open</a>
+                  </Button>
+                  <Button variant="ghost" size="sm" asChild>
+                    <a href={newChartHref(dataset.id)}>
+                      <ChartColumn aria-hidden />
+                      Quick chart
+                    </a>
                   </Button>
                 </CardFooter>
               </Card>

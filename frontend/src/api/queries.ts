@@ -220,6 +220,12 @@ export const useAllDatasets = () => useQuery({ queryKey: [...keys.datasets, 'all
 export const useDataset = (id: string | null) =>
   useQuery({ queryKey: keys.dataset(id ?? ''), queryFn: () => api.getDataset(id!), enabled: id !== null })
 
+/** Loads a dataset from an event (the chart builder's data picker), from `useDataset`'s cache when it's there. */
+export function useLoadDataset() {
+  const client = useQueryClient()
+  return (id: string) => client.ensureQueryData({ queryKey: keys.dataset(id), queryFn: () => api.getDataset(id) })
+}
+
 /** Data changes redraw charts: every mutation refreshes datasets and charts. */
 export function useDatasetMutations() {
   const client = useQueryClient()

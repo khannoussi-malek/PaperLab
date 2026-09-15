@@ -1,3 +1,4 @@
+import { ChartBuilderPage } from './features/charts/ChartBuilderPage'
 import { ChartPage } from './features/charts/ChartPage'
 import { ChartsPage } from './features/charts/ChartsPage'
 import { DatasetPage } from './features/data/DatasetPage'
@@ -18,6 +19,11 @@ export default function App() {
   }
   if (route.name === 'charts') {
     return <ChartsPage />
+  }
+  if (route.name === 'chart-builder') {
+    return (
+      <ChartBuilderPage key={route.chartId ?? `new-${route.datasetId ?? ''}`} chartId={route.chartId} datasetId={route.datasetId} />
+    )
   }
   if (route.name === 'chart') {
     return <ChartPage key={route.chartId} chartId={route.chartId} />
