@@ -230,6 +230,21 @@ export async function ask(page: Page, question: string, timeoutMs = 15_000): Pro
   return answer
 }
 
+/** Selects `text` inside a text-layer span, like a mouse drag over just those characters, then releases the mouse. */
+export async function selectSubstring(span: Locator, text: string) {
+  await span.evaluate((element, wanted) => {
+    const node = element.firstChild!
+    const start = node.textContent!.indexOf(wanted)
+    if (start < 0) throw new Error(`"${wanted}" is not in "${node.textContent}"`)
+    const range = document.createRange()
+    range.setStart(node, start)
+    range.setEnd(node, start + wanted.length)
+    window.getSelection()!.removeAllRanges()
+    window.getSelection()!.addRange(range)
+  }, text)
+  await span.dispatchEvent('mouseup')
+}
+
 /** Selects all of an element's text like a mouse drag, then releases the mouse. */
 export async function selectAllOf(element: Locator) {
   await element.evaluate((node) => {
