@@ -71,7 +71,7 @@ export function ChatAnswer(props: Props) {
                     <Hint key={i} label={describe(source)} detail={hintFor(source)}>
                       <button
                         type="button"
-                        className="chat-cite rounded-xs font-medium text-primary underline-offset-2 hover:underline"
+                        className="chat-cite rounded-xs font-medium text-primary underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
                         aria-label={describe(source)}
                         onClick={() => onCite(source)}
                       >

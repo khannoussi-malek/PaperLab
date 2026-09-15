@@ -14,14 +14,15 @@ import { ChatAnswer } from './ChatAnswer'
 import { loadChatModel, saveChatModel } from './chatModel'
 import { splitCitations } from './citations'
 import { ModelPicker } from './ModelPicker'
-import { promoteSelection, type PromoteDraft } from './promote'
+import { promoteErrorMessage, promoteSelection, type PromoteDraft } from './promote'
 import type { ChatProblem } from './refusals'
+import { saveButtonPosition } from './saveButton'
 import { SaveAsNoteButton } from './SaveAsNoteButton'
 import { useChatStream } from './useChatStream'
 
 const MAX_QUESTION = 2000 // the API's limit (spec §3.10)
-// ponytail: a fixed width keeps the floating button inside the panel; measure it if the label ever changes.
-const SAVE_BUTTON_WIDTH = 140
+// How close to the bottom (px) still counts as "at the bottom", so a streaming answer keeps the list following it.
+const FOLLOW_THRESHOLD = 48
 // What an empty chat offers, by scope: a workspace's starter questions look across its papers.
 const EMPTY_CHAT = {
   paper: {
@@ -39,13 +40,6 @@ const EMPTY_CHAT = {
 /** Labels whose chunk or note still exists; markers for any other label render as plain text. */
 const knownLabels = (answer: SavedAnswer) =>
   new Set([...answer.sources, ...answer.notes].flatMap((source) => (source ? [source.label] : [])))
-
-/** A readable reason a promote failed. The API's own codes aren't meant for display. */
-function promoteErrorMessage(message: string): string {
-  return message === 'body_not_in_output'
-    ? "This selection doesn't match the saved answer. Select the text again."
-    : "Couldn't save the note. Try again."
-}
 
 type Props = {
   scope: ChatScope
@@ -79,6 +73,9 @@ export function ChatPanel({ scope, unavailable, paperLabel, onCite, onPromoted }
   const listRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const wasBusy = useRef(false)
+  // Whether the list was scrolled to (near) its bottom, so a streaming answer only pulls it along when it was
+  // already following. Starts true: the first tokens of a freshly asked question should always pull it down.
+  const followRef = useRef(true)
   const answers = history.data ?? []
   const busy = stream.status === 'sources' || stream.status === 'streaming'
   const noModels = chatModels.data?.length === 0
@@ -93,9 +90,13 @@ export function ChatPanel({ scope, unavailable, paperLabel, onCite, onPromoted }
     saveChatModel(browserStorage(), id)
   }
 
+  // Follows a streaming answer down as its tokens arrive, but only while the list was already at the bottom: a
+  // question just asked (`sources`) always scrolls, since that's the moment the reader expects to see it appear.
   useEffect(() => {
-    listRef.current?.scrollTo({ top: listRef.current.scrollHeight })
-  }, [answers.length, stream.status])
+    if (followRef.current || stream.status === 'sources') {
+      listRef.current?.scrollTo({ top: listRef.current.scrollHeight })
+    }
+  }, [answers.length, stream.status, stream.segments])
 
   // Enter disables the Textarea while busy, so the browser blurs it to <body>; bring focus back once it clears.
   useEffect(() => {
@@ -110,8 +111,7 @@ export function ChatPanel({ scope, unavailable, paperLabel, onCite, onPromoted }
     const draft = selected && answer && promoteSelection(answer.content, answer.sources, selected.anchor, selected.focus)
     const box = rootRef.current?.getBoundingClientRect()
     if (!selected || !draft || !box) return setPromote(null)
-    const left = Math.max(8, Math.min(selected.rect.left - box.left, box.width - SAVE_BUTTON_WIDTH))
-    setPromote({ outputId: selected.outputId, draft, style: { left, top: selected.rect.bottom - box.top + 6 } })
+    setPromote({ outputId: selected.outputId, draft, style: saveButtonPosition(selected.rect, box) })
   }
 
   // The selection can change without a mouseup: dragging still fires this repeatedly, and so does
@@ -120,6 +120,24 @@ export function ChatPanel({ scope, unavailable, paperLabel, onCite, onPromoted }
     document.addEventListener('selectionchange', captureSelection)
     return () => document.removeEventListener('selectionchange', captureSelection)
   })
+
+  // The freshest captureSelection, for the ResizeObserver below: observing must start exactly once (`observe()`
+  // itself fires one immediate callback, so re-subscribing on every render would re-fire it every render too, right
+  // after any state change -- including the one that had just set an error, clearing it straight back out).
+  const captureSelectionRef = useRef(captureSelection)
+  useEffect(() => {
+    captureSelectionRef.current = captureSelection
+  })
+
+  // The panel (or the split it sits in) can change size from under an open selection: a drag on the resize handle,
+  // or coming back to a tab that was hidden. Re-measuring keeps the button under its selection either way.
+  useEffect(() => {
+    const node = rootRef.current
+    if (!node) return
+    const observer = new ResizeObserver(() => captureSelectionRef.current())
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [])
 
   async function saveAsNote() {
     if (!promote) return
@@ -131,7 +149,7 @@ export function ChatPanel({ scope, unavailable, paperLabel, onCite, onPromoted }
       onPromoted(note)
     } catch (e) {
       // The button (and selection) stay up: the message sits right next to it, and the user can retry.
-      setPromoteError(promoteErrorMessage(e instanceof Error ? e.message : String(e)))
+      setPromoteError(promoteErrorMessage(e))
     }
   }
 
@@ -150,7 +168,11 @@ export function ChatPanel({ scope, unavailable, paperLabel, onCite, onPromoted }
         ref={listRef}
         className="relative flex min-h-0 flex-1 flex-col gap-6 overflow-auto p-4"
         onMouseUp={captureSelection}
-        onScroll={() => setPromote(null)}
+        onScroll={(e) => {
+          const el = e.currentTarget
+          followRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < FOLLOW_THRESHOLD
+          setPromote(null)
+        }}
       >
         {history.error && (
           <Alert variant="destructive" className={cn('border-glass-border')}>
