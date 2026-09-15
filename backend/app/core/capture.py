@@ -134,15 +134,22 @@ async def import_csv(session: AsyncSession, name: str | None, data: bytes) -> Da
     """Own data from CSV text: a file, or text pasted from a spreadsheet (tabs). The first row names the columns."""
     if len(data) > MAX_IMPORT_BYTES:
         raise InvalidInput(f"the file is too large (over {MAX_IMPORT_BYTES // 1_000_000} MB)")
+    not_utf8 = "the file isn't UTF-8 text; save it as UTF-8 CSV and try again"
     try:
         text = data.decode("utf-8-sig")
     except UnicodeDecodeError:
-        raise InvalidInput("the file isn't UTF-8 text; save it as UTF-8 CSV and try again") from None
+        raise InvalidInput(not_utf8) from None
+    # NUL decodes as UTF-8 (UTF-16 without a byte-order mark is full of it), but Postgres text can't store it.
+    if "\x00" in text:
+        raise InvalidInput(not_utf8)
     try:
         dialect = csv.Sniffer().sniff(text[:4096], delimiters=",\t;")
     except csv.Error:  # one column: there's no delimiter to find
         dialect = csv.excel
-    rows = [row for row in csv.reader(io.StringIO(text), dialect) if any(value.strip() for value in row)]
+    try:
+        rows = [row for row in csv.reader(io.StringIO(text), dialect) if any(value.strip() for value in row)]
+    except csv.Error as error:  # e.g. a field over csv.field_size_limit()
+        raise InvalidInput(f"the file isn't valid CSV: {error}") from None
     if not rows:
         raise InvalidInput("the file is empty")
     header, body = rows[0], rows[1:]

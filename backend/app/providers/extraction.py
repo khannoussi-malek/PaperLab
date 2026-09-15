@@ -105,6 +105,9 @@ class RegionText:
 def read_region(path: str | Path, page_number: int, region: Rect) -> RegionText:
     """The words inside `region` on a 1-based page, in PDF points with a top-left origin, like `extract`."""
     with pymupdf.open(path) as doc:
+        # The paper's stored page count can be unknown, so the document bounds the page too.
+        if not 1 <= page_number <= doc.page_count:
+            raise InvalidInput(f"page {page_number} is outside 1..{doc.page_count}")
         page = doc[page_number - 1]
         words = [Word(*w[:5]) for w in page.get_text("words", clip=pymupdf.Rect(region), flags=TEXT_FLAGS)]
         # Whole blocks, filtered by position: a clip would cut a caption block down to its lines inside the band.

@@ -114,9 +114,11 @@ async def resolve(session: AsyncSession, spec: ChartSpec) -> ResolvedData:
             select(DatasetRow).where(DatasetRow.dataset_id.in_(found)).order_by(DatasetRow.position)
         )
     )
+    # Rows are chosen by dataset in SQL, not listed: asyncpg allows 32,767 bind parameters, and datasets can be large.
     cells = await session.execute(
         select(cell_table).where(
-            cell_table.c.column_id.in_([c.id for c in columns]), cell_table.c.row_id.in_([r.id for r in rows])
+            cell_table.c.column_id.in_([c.id for c in columns]),
+            cell_table.c.row_id.in_(select(DatasetRow.id).where(DatasetRow.dataset_id.in_(found))),
         )
     )
     by_row: dict[uuid.UUID, dict[uuid.UUID, ResolvedCell]] = {}
