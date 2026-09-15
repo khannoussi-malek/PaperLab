@@ -354,8 +354,9 @@ export function ReaderPage({ paperId, tab, target }: Props) {
               {(tableMarksByPage.get(pageNumber) ?? []).map((mark) => (
                 <Fragment key={mark.datasetId}>
                   <div className="table-region absolute rounded-xs outline-1 outline-primary/40" style={pdfRectToCss(mark.region, scale)} />
-                  <div className="table-marker absolute grid place-items-center rounded-xs bg-card/90" style={pdfRectToCss(mark.marker, scale)}>
-                    <Table2 aria-hidden className="size-3.5 text-primary" />
+                  {/* Fixed light colours: the marker sits on the paper, which stays white in both themes. */}
+                  <div className="table-marker absolute grid place-items-center rounded-xs bg-white/90 ring-1 ring-blue-600/40" style={pdfRectToCss(mark.marker, scale)}>
+                    <Table2 aria-hidden className="size-3.5 text-blue-600" />
                   </div>
                 </Fragment>
               ))}

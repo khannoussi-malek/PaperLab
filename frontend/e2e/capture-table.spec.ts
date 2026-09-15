@@ -42,3 +42,21 @@ test('capture mode stops text selection, a click-sized drag does nothing, and Es
   await page.keyboard.press('Escape')
   await expect(page.getByRole('button', { name: 'Capture table' })).toHaveAttribute('aria-pressed', 'false')
 })
+
+test('Escape in the middle of a drag leaves the mode and removes the box', async ({ page, tablePaperId }) => {
+  await openReader(page, tablePaperId, TABLE_LINE)
+  const toggle = page.getByRole('button', { name: 'Capture table' })
+  await toggle.click()
+  const box = await page.locator('.pdf-page[data-page="1"]').boundingBox()
+  if (!box) throw new Error('page 1 is not rendered')
+  const scale = box.width / 612
+  await page.mouse.move(box.x + 60 * scale, box.y + 145 * scale)
+  await page.mouse.down()
+  await page.mouse.move(box.x + 420 * scale, box.y + 200 * scale, { steps: 8 })
+  await expect(page.locator('.capture-box')).toHaveCount(1)
+
+  await page.keyboard.press('Escape')
+  await page.mouse.up()
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false')
+  await expect(page.locator('.capture-box')).toHaveCount(0)
+})

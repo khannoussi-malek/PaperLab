@@ -1,4 +1,4 @@
-import { useEffect, useState, type MouseEvent } from 'react'
+import { useCallback, useEffect, useState, type MouseEvent } from 'react'
 import type { PdfRect } from '../reader/coords'
 import { clientPointToPdf } from '../reader/hitTest'
 import { dragRegion } from './pageMarks'
@@ -22,8 +22,13 @@ const pageElement = (page: number) => document.querySelector<HTMLElement>(`.pdf-
  * turns the mode off and hands back `{ page, region }` for the capture dialog. Escape leaves the mode.
  */
 export function useCaptureDrag(scale: number) {
-  const [capturing, setCapturing] = useState(false)
+  const [capturing, setCapturingState] = useState(false)
   const [drag, setDrag] = useState<Drag | null>(null)
+  // Every way out of the mode (Escape, the toggle, a finished drag) goes through here, so no box outlives it.
+  const setCapturing = useCallback((on: boolean) => {
+    setCapturingState(on)
+    if (!on) setDrag(null)
+  }, [])
   const [capture, setCapture] = useState<{ page: number; region: PdfRect } | null>(null)
 
   useEffect(() => {
@@ -31,7 +36,7 @@ export function useCaptureDrag(scale: number) {
     const leave = (event: KeyboardEvent) => event.key === 'Escape' && setCapturing(false)
     window.addEventListener('keydown', leave)
     return () => window.removeEventListener('keydown', leave)
-  }, [capturing])
+  }, [capturing, setCapturing])
 
   function startDrag(event: MouseEvent) {
     const page = capturing && event.button === 0 ? (event.target as Element).closest<HTMLElement>('.pdf-page') : null
