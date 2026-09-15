@@ -10,7 +10,7 @@ import {
   type ChatTokenEvent,
   type NoteSource,
 } from '@/api/client'
-import { useInvalidateChatHistory } from '@/api/queries'
+import { useInvalidateChatHistory, useInvalidateModels } from '@/api/queries'
 import { appendSegments, citationSplitter, type Segment } from './citations'
 import { refusal, type ChatProblem } from './refusals'
 import { readSse } from './sse'
@@ -45,19 +45,27 @@ const IDLE: ChatStream = {
 
 const STOPPED: ChatProblem = { message: 'The answer stopped before it finished.', retryable: true, reindex: false }
 
-/** Asks one question and follows its SSE stream: idle → sources → streaming → done | error. */
-export function useChatStream(scope: ChatScope) {
+/**
+ * Asks one question with the model `modelId` (null: the default) and follows its SSE stream:
+ * idle → sources → streaming → done | error.
+ */
+export function useChatStream(scope: ChatScope, modelId: string | null) {
   const [stream, setStream] = useState<ChatStream>(IDLE)
   const invalidateHistory = useInvalidateChatHistory(scope)
+  const invalidateModels = useInvalidateModels()
 
   async function ask(question: string) {
     setStream({ ...IDLE, status: 'sources', question })
     const fail = (problem: ChatProblem, tail: Segment[] = []) =>
       setStream((s) => ({ ...s, status: 'error', problem, segments: appendSegments(s.segments, tail) }))
 
-    const response = await api.askChat(scope, question).catch(() => null)
+    const response = await api.askChat(scope, question, modelId).catch(() => null)
     if (!response) return fail({ message: "Can't reach the PaperLab API.", retryable: true, reindex: false })
-    if (!response.ok || !response.body) return fail(refusal(response.status, await errorDetail(response)))
+    if (!response.ok || !response.body) {
+      // A removed model or a missing default: the dropdown refetches and falls back.
+      void invalidateModels()
+      return fail(refusal(response.status, await errorDetail(response)))
+    }
 
     let splitter = citationSplitter(new Set())
     try {

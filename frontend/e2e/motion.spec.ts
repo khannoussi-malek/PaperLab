@@ -81,7 +81,7 @@ test.describe('with motion allowed', () => {
     await page.route('**/chat', (route) =>
       route.request().method() === 'GET'
         ? route.fulfill({
-            json: [{ id: '00000000-0000-4000-8000-000000000502', question: 'Asked before?', content: 'Yes.', model: 'fake', prompt_version: 1, created_at: old, whole_paper: true, sources: [], ...NO_NOTES }],
+            json: [{ id: '00000000-0000-4000-8000-000000000502', question: 'Asked before?', content: 'Yes.', model: 'fake', connection_name: null, prompt_version: 1, created_at: old, whole_paper: true, sources: [], ...NO_NOTES }],
           })
         : unfinishedStream(paperId)(route),
     )
