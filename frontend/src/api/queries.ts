@@ -261,11 +261,12 @@ export const useCharts = () => useQuery({ queryKey: keys.charts, queryFn: api.li
 export const useChart = (id: string | null) =>
   useQuery({ queryKey: keys.chart(id ?? ''), queryFn: () => api.getChart(id!), enabled: id !== null })
 
-/** The data a spec draws. While a changed spec refetches, the last drawing stays up instead of a blank chart. */
+/** The data a spec draws, paired with that spec. While a changed spec refetches, the placeholder is the previous pair,
+ * so the last drawing stays up (compiled from its own spec) instead of a blank chart. */
 export const useResolvedChart = (spec: ChartSpec | null) =>
   useQuery({
     queryKey: keys.resolved(spec!),
-    queryFn: () => api.resolveChart(spec!),
+    queryFn: async () => ({ spec: spec!, data: await api.resolveChart(spec!) }),
     enabled: spec !== null,
     placeholderData: keepPreviousData,
   })

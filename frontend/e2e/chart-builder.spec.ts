@@ -96,3 +96,31 @@ test('editing a chart that a note shows warns, and Save as copy leaves the origi
   expect(original.spec.type).toBe('bar')
   expect(original.note_ids).toEqual([note.id])
 })
+
+test('adding a series keeps the last drawing without data warnings while the new data resolves', async ({ page, request, dataName }) => {
+  const first = await addOwnData(request, `${dataName} first`, 'run,F1\nmine,92.0\n')
+  const second = await addOwnData(request, `${dataName} second`, 'run,Acc\nmine,71.5\n')
+
+  await page.goto('/#/charts/new')
+  await page.getByRole('button', { name: 'Add series' }).click()
+  await page.getByRole('dialog', { name: 'Choose data' }).locator(`[data-dataset-id="${first.id}"]`).click()
+  await expect(page.locator('.chart-view')).toHaveAttribute('data-series-count', '1')
+
+  // Any warning drawn from here on is recorded, however briefly it shows.
+  await page.evaluate(() => {
+    const seen = window as unknown as { warned: boolean }
+    seen.warned = false
+    new MutationObserver(() => {
+      if (document.querySelector('.chart-warning')) seen.warned = true
+    }).observe(document.body, { childList: true, subtree: true, characterData: true })
+  })
+  await page.route('**/api/charts/resolve', async (route) => {
+    await new Promise((ok) => setTimeout(ok, 1500))
+    await route.continue()
+  })
+  await page.getByRole('button', { name: 'Add series' }).click()
+  await page.getByRole('dialog', { name: 'Choose data' }).locator(`[data-dataset-id="${second.id}"]`).click()
+  await expect(page.locator('.chart-view .opacity-60')).toBeVisible()
+  await expect(page.locator('.chart-view')).toHaveAttribute('data-series-count', '2')
+  expect(await page.evaluate(() => (window as unknown as { warned: boolean }).warned)).toBe(false)
+})
