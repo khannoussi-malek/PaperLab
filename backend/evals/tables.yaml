@@ -1,5 +1,5 @@
 # Ground truth for backend/evals/words_grid.py: every captioned table in the two seed papers, typed by hand
-# from the page images (see the sibling tables-truth/ PNGs), not from the "Capture table" preview.
+# from renders of each table's page region, not from the "Capture table" preview.
 - paper: "Attention Is All You Need"
   label: Table 1
   page: 6
