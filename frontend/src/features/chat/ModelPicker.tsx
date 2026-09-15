@@ -18,11 +18,14 @@ export function ModelPicker({ models, value, onChange }: Props) {
     if (next === MANAGE) return void (location.hash = settingsHref)
     onChange(next)
   }
+  const selected = models.find((model) => model.id === value)
 
   return (
     <Select value={value ?? undefined} onValueChange={handleChange}>
       <SelectTrigger size="sm" aria-label="Model" className="max-w-56">
-        <SelectValue placeholder="Choose a model" />
+        {/* Explicit children, no badge: without this Radix portals the whole selected item (Cloud badge included)
+            into the closed trigger, which breaks truncation for a cloud model. */}
+        <SelectValue placeholder="Choose a model">{selected && `${selected.name} · ${selected.connection_label}`}</SelectValue>
       </SelectTrigger>
       <SelectContent>
         {models.map((model) => (

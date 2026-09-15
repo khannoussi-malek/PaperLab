@@ -25,6 +25,8 @@ test('switching the model in paper chat answers with it, marks a cloud model, an
   const option = page.getByRole('option', { name: `e2e-second · ${llmConnection.label}` })
   await expect(option.locator('.cloud-tag')).toHaveText('Cloud')
   await option.click()
+  // The closed trigger shows a clean truncated label, not the whole selected item: no Cloud badge leaks into it.
+  await expect(page.getByRole('combobox', { name: 'Model' }).locator('.cloud-tag')).toHaveCount(0)
   const answer = await ask(page, 'Second model?')
   await expect(answer.locator('.chat-answer-footer')).toHaveText(`AI · fake:e2e-second · ${llmConnection.label} · prompt v1`)
 
