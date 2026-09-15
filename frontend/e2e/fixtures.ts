@@ -101,6 +101,15 @@ export function barSpec(dataset: SavedDataset, x: string | null, ys: string[]) {
   }
 }
 
+/** Imports `csv` as your own data through the API and returns the dataset. */
+export async function addOwnData(request: APIRequestContext, name: string, csv: string) {
+  const created = await request.post('/api/datasets/import', {
+    multipart: { name, file: { name: 'data.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) } },
+  })
+  expect(created.status()).toBe(201)
+  return (await created.json()) as { id: string; columns: { id: string; name: string }[] }
+}
+
 /** Creates a chart through the API and returns it. */
 export async function addChart(request: APIRequestContext, title: string, spec: object) {
   const created = await request.post('/api/charts', { data: { title, spec } })
