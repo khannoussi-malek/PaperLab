@@ -1,0 +1,202 @@
+# Ground truth for backend/evals/words_grid.py: every captioned table in the two seed papers, typed by hand
+# from the page images (see the sibling tables-truth/ PNGs), not from the "Capture table" preview.
+- paper: "Attention Is All You Need"
+  label: Table 1
+  page: 6
+  region: [116.0, 111.0, 496.0, 189.0]
+  rows:
+    - ["Layer Type", "Complexity per Layer", "Sequential Operations", "Maximum Path Length"]
+    - ["Self-Attention", "O(n2 · d)", "O(1)", "O(1)"]
+    - ["Recurrent", "O(n · d2)", "O(n)", "O(n)"]
+    - ["Convolutional", "O(k · n · d2)", "O(1)", "O(logk(n))"]
+    - ["Self-Attention (restricted)", "O(r · n · d)", "O(1)", "O(n/r)"]
+
+- paper: "Attention Is All You Need"
+  label: Table 2
+  page: 8
+  region: [128.0, 93.0, 484.0, 246.0]
+  rows:
+    - ["Model", "BLEU", "", "Training Cost (FLOPs)", ""]
+    - ["", "EN-DE", "EN-FR", "EN-DE", "EN-FR"]
+    - ["ByteNet [18]", "23.75", "", "", ""]
+    - ["Deep-Att + PosUnk [39]", "", "39.2", "", "1.0 · 1020"]
+    - ["GNMT + RL [38]", "24.6", "39.92", "2.3 · 1019", "1.4 · 1020"]
+    - ["ConvS2S [9]", "25.16", "40.46", "9.6 · 1018", "1.5 · 1020"]
+    - ["MoE [32]", "26.03", "40.56", "2.0 · 1019", "1.2 · 1020"]
+    - ["Deep-Att + PosUnk Ensemble [39]", "", "40.4", "", "8.0 · 1020"]
+    - ["GNMT + RL Ensemble [38]", "26.30", "41.16", "1.8 · 1020", "1.1 · 1021"]
+    - ["ConvS2S Ensemble [9]", "26.36", "41.29", "7.7 · 1019", "1.2 · 1021"]
+    - ["Transformer (base model)", "27.3", "38.1", "3.3 · 1018", ""]
+    - ["Transformer (big)", "28.4", "41.8", "2.3 · 1019", ""]
+
+- paper: "Attention Is All You Need"
+  label: Table 3
+  page: 9
+  region: [106.0, 128.0, 511.0, 386.0]
+  rows:
+    - ["", "N", "dmodel", "dff", "h", "dk", "dv", "Pdrop", "ϵls", "train steps", "PPL (dev)", "BLEU (dev)", "params ×106"]
+    - ["base", "6", "512", "2048", "8", "64", "64", "0.1", "0.1", "100K", "4.92", "25.8", "65"]
+    - ["(A)", "", "", "", "1", "512", "512", "", "", "", "5.29", "24.9", ""]
+    - ["", "", "", "", "4", "128", "128", "", "", "", "5.00", "25.5", ""]
+    - ["", "", "", "", "16", "32", "32", "", "", "", "4.91", "25.8", ""]
+    - ["", "", "", "", "32", "16", "16", "", "", "", "5.01", "25.4", ""]
+    - ["(B)", "", "", "", "", "16", "", "", "", "", "5.16", "25.1", "58"]
+    - ["", "", "", "", "", "32", "", "", "", "", "5.01", "25.4", "60"]
+    - ["(C)", "2", "", "", "", "", "", "", "", "", "6.11", "23.7", "36"]
+    - ["", "4", "", "", "", "", "", "", "", "", "5.19", "25.3", "50"]
+    - ["", "8", "", "", "", "", "", "", "", "", "4.88", "25.5", "80"]
+    - ["", "", "256", "", "", "32", "32", "", "", "", "5.75", "24.5", "28"]
+    - ["", "", "1024", "", "", "128", "128", "", "", "", "4.66", "26.0", "168"]
+    - ["", "", "", "1024", "", "", "", "", "", "", "5.12", "25.4", "53"]
+    - ["", "", "", "4096", "", "", "", "", "", "", "4.75", "26.2", "90"]
+    - ["(D)", "", "", "", "", "", "", "0.0", "", "", "5.77", "24.6", ""]
+    - ["", "", "", "", "", "", "", "0.2", "", "", "4.95", "25.5", ""]
+    - ["", "", "", "", "", "", "", "", "0.0", "", "4.67", "25.3", ""]
+    - ["", "", "", "", "", "", "", "", "0.2", "", "5.47", "25.7", ""]
+    - ["(E)", "positional embedding instead of sinusoids", "", "", "", "", "", "", "", "", "4.92", "25.7", ""]
+    - ["big", "6", "1024", "4096", "16", "", "", "0.3", "", "300K", "4.33", "26.4", "213"]
+
+- paper: "Attention Is All You Need"
+  label: Table 4
+  page: 10
+  region: [143.0, 93.0, 469.0, 239.0]
+  rows:
+    - ["Parser", "Training", "WSJ 23 F1"]
+    - ["Vinyals & Kaiser el al. (2014) [37]", "WSJ only, discriminative", "88.3"]
+    - ["Petrov et al. (2006) [29]", "WSJ only, discriminative", "90.4"]
+    - ["Zhu et al. (2013) [40]", "WSJ only, discriminative", "90.4"]
+    - ["Dyer et al. (2016) [8]", "WSJ only, discriminative", "91.7"]
+    - ["Transformer (4 layers)", "WSJ only, discriminative", "91.3"]
+    - ["Zhu et al. (2013) [40]", "semi-supervised", "91.3"]
+    - ["Huang & Harper (2009) [14]", "semi-supervised", "91.3"]
+    - ["McClosky et al. (2006) [26]", "semi-supervised", "92.1"]
+    - ["Vinyals & Kaiser el al. (2014) [37]", "semi-supervised", "92.1"]
+    - ["Transformer (4 layers)", "semi-supervised", "92.7"]
+    - ["Luong et al. (2015) [23]", "multi-task", "93.0"]
+    - ["Dyer et al. (2016) [8]", "generative", "93.3"]
+
+- paper: "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding"
+  label: Table 1
+  page: 6
+  region: [70.0, 61.0, 528.0, 156.0]
+  rows:
+    - ["System", "MNLI-(m/mm)", "QQP", "QNLI", "SST-2", "CoLA", "STS-B", "MRPC", "RTE", "Average"]
+    - ["", "392k", "363k", "108k", "67k", "8.5k", "5.7k", "3.5k", "2.5k", "-"]
+    - ["Pre-OpenAI SOTA", "80.6/80.1", "66.1", "82.3", "93.2", "35.0", "81.0", "86.0", "61.7", "74.0"]
+    - ["BiLSTM+ELMo+Attn", "76.4/76.1", "64.8", "79.8", "90.4", "36.0", "73.3", "84.9", "56.8", "71.0"]
+    - ["OpenAI GPT", "82.1/81.4", "70.3", "87.4", "91.3", "45.4", "80.0", "82.3", "56.0", "75.1"]
+    - ["BERTBASE", "84.6/83.4", "71.2", "90.5", "93.5", "52.1", "85.8", "88.9", "66.4", "79.6"]
+    - ["BERTLARGE", "86.7/85.9", "72.1", "92.7", "94.9", "60.5", "86.5", "89.3", "70.1", "82.1"]
+
+- paper: "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding"
+  label: Table 2
+  page: 7
+  region: [80.5, 61.0, 282.0, 237.0]
+  rows:
+    - ["System", "Dev", "", "Test", ""]
+    - ["", "EM", "F1", "EM", "F1"]
+    - ["Top Leaderboard Systems (Dec 10th, 2018)", "", "", "", ""]
+    - ["Human", "-", "-", "82.3", "91.2"]
+    - ["#1 Ensemble - nlnet", "-", "-", "86.0", "91.7"]
+    - ["#2 Ensemble - QANet", "-", "-", "84.5", "90.5"]
+    - ["Published", "", "", "", ""]
+    - ["BiDAF+ELMo (Single)", "-", "85.6", "-", "85.8"]
+    - ["R.M. Reader (Ensemble)", "81.2", "87.9", "82.3", "88.5"]
+    - ["Ours", "", "", "", ""]
+    - ["BERTBASE (Single)", "80.8", "88.5", "-", "-"]
+    - ["BERTLARGE (Single)", "84.1", "90.9", "-", "-"]
+    - ["BERTLARGE (Ensemble)", "85.8", "91.8", "-", "-"]
+    - ["BERTLARGE (Sgl.+TriviaQA)", "84.2", "91.1", "85.1", "91.8"]
+    - ["BERTLARGE (Ens.+TriviaQA)", "86.2", "92.2", "87.4", "93.2"]
+
+- paper: "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding"
+  label: Table 3
+  page: 7
+  region: [79.0, 297.5, 283.0, 433.5]
+  rows:
+    - ["System", "Dev", "", "Test", ""]
+    - ["", "EM", "F1", "EM", "F1"]
+    - ["Top Leaderboard Systems (Dec 10th, 2018)", "", "", "", ""]
+    - ["Human", "86.3", "89.0", "86.9", "89.5"]
+    - ["#1 Single - MIR-MRC (F-Net)", "-", "-", "74.8", "78.0"]
+    - ["#2 Single - nlnet", "-", "-", "74.2", "77.1"]
+    - ["Published", "", "", "", ""]
+    - ["unet (Ensemble)", "-", "-", "71.4", "74.9"]
+    - ["SLQA+ (Single)", "-", "", "71.4", "74.4"]
+    - ["Ours", "", "", "", ""]
+    - ["BERTLARGE (Single)", "78.7", "81.9", "80.0", "83.1"]
+
+- paper: "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding"
+  label: Table 4
+  page: 7
+  region: [344.0, 61.0, 486.5, 169.5]
+  rows:
+    - ["System", "Dev", "Test"]
+    - ["ESIM+GloVe", "51.9", "52.7"]
+    - ["ESIM+ELMo", "59.1", "59.2"]
+    - ["OpenAI GPT", "-", "78.0"]
+    - ["BERTBASE", "81.6", "-"]
+    - ["BERTLARGE", "86.6", "86.3"]
+    - ["Human (expert)†", "-", "85.0"]
+    - ["Human (5 annotations)†", "-", "88.0"]
+
+- paper: "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding"
+  label: Table 5
+  page: 8
+  region: [70.0, 61.0, 294.5, 146.5]
+  rows:
+    - ["", "Dev Set", "", "", "", ""]
+    - ["Tasks", "MNLI-m (Acc)", "QNLI (Acc)", "MRPC (Acc)", "SST-2 (Acc)", "SQuAD (F1)"]
+    - ["BERTBASE", "84.4", "88.4", "86.7", "92.7", "88.5"]
+    - ["No NSP", "83.9", "84.9", "86.5", "92.6", "87.9"]
+    - ["LTR & No NSP", "82.1", "84.3", "77.5", "92.1", "77.8"]
+    - ["+ BiLSTM", "82.1", "84.1", "75.7", "91.6", "84.9"]
+
+- paper: "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding"
+  label: Table 6
+  page: 9
+  region: [83.0, 601.0, 279.0, 702.0]
+  rows:
+    - ["Hyperparams", "", "", "", "Dev Set Accuracy", "", ""]
+    - ["#L", "#H", "#A", "LM (ppl)", "MNLI-m", "MRPC", "SST-2"]
+    - ["3", "768", "12", "5.84", "77.9", "79.8", "88.4"]
+    - ["6", "768", "3", "5.24", "80.6", "82.2", "90.7"]
+    - ["6", "768", "12", "4.68", "81.9", "84.8", "91.3"]
+    - ["12", "768", "12", "3.99", "84.4", "86.7", "92.9"]
+    - ["12", "1024", "16", "3.54", "85.7", "86.9", "93.3"]
+    - ["24", "1024", "16", "3.23", "86.6", "87.8", "93.7"]
+
+- paper: "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding"
+  label: Table 7
+  page: 9
+  region: [314.5, 61.0, 518.0, 227.5]
+  rows:
+    - ["System", "Dev F1", "Test F1"]
+    - ["ELMo (Peters et al., 2018a)", "95.7", "92.2"]
+    - ["CVT (Clark et al., 2018)", "-", "92.6"]
+    - ["CSE (Akbik et al., 2018)", "-", "93.1"]
+    - ["Fine-tuning approach", "", ""]
+    - ["BERTLARGE", "96.6", "92.8"]
+    - ["BERTBASE", "96.4", "92.4"]
+    - ["Feature-based approach (BERTBASE)", "", ""]
+    - ["Embeddings", "91.0", "-"]
+    - ["Second-to-Last Hidden", "95.6", "-"]
+    - ["Last Hidden", "94.9", "-"]
+    - ["Weighted Sum Last Four Hidden", "95.9", "-"]
+    - ["Concat Last Four Hidden", "96.1", "-"]
+    - ["Weighted Sum All 12 Layers", "95.5", "-"]
+
+- paper: "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding"
+  label: Table 8
+  page: 16
+  region: [305.0, 207.0, 529.0, 317.5]
+  rows:
+    - ["Masking Rates", "", "", "Dev Set Results", "", ""]
+    - ["MASK", "SAME", "RND", "MNLI", "NER", ""]
+    - ["", "", "", "Fine-tune", "Fine-tune", "Feature-based"]
+    - ["80%", "10%", "10%", "84.2", "95.4", "94.9"]
+    - ["100%", "0%", "0%", "84.3", "94.9", "94.0"]
+    - ["80%", "0%", "20%", "84.1", "95.2", "94.6"]
+    - ["80%", "20%", "0%", "84.4", "95.2", "94.7"]
+    - ["0%", "20%", "80%", "83.7", "94.8", "94.6"]
+    - ["0%", "0%", "100%", "83.6", "94.9", "94.6"]
