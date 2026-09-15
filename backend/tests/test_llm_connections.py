@@ -3,7 +3,7 @@ import uuid
 
 import pytest
 from sqlalchemy import delete, func, insert, select, update
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 
 from app.core import llm_connections as connections
 from app.core.errors import Conflict, InvalidInput, NotFound
@@ -71,6 +71,20 @@ async def test_invalid_addresses_and_keys_are_refused_without_quoting_the_key(
     with pytest.raises(InvalidInput, match=message) as refused:
         await connections.create_connection(session, kind, unique_label(), base_url, api_key)
     assert KEY not in str(refused.value)
+
+
+async def test_a_db_error_on_a_key_bearing_write_masks_the_key_in_the_exception_and_the_log(session, caplog):
+    # A NUL byte in base_url passes every Python-side check (label uniqueness included) and fails only at the
+    # INSERT, whose parameter tuple also carries the key.
+    with caplog.at_level(logging.ERROR):
+        with pytest.raises(DBAPIError) as excinfo:
+            await connections.create_connection(
+                session, "openai_compatible", unique_label(), "https://api.example.com/v1\x00", KEY
+            )
+        logging.getLogger(__name__).exception("write failed", exc_info=excinfo.value)
+
+    assert KEY not in str(excinfo.value)
+    assert KEY not in caplog.text
 
 
 @pytest.mark.parametrize(("api_key", "hint"), [(KEY, "T123"), ("12345678", "5678"), ("1234567", None), (None, None)])
