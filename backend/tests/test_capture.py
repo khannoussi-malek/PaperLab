@@ -59,6 +59,10 @@ async def test_a_preview_needs_a_paper_with_its_file_a_page_in_range_and_a_real_
     missing = await make_paper(session, tmp_path / "gone.pdf")
     with pytest.raises(NotFound):
         await capture.preview_table(session, missing.id, 1, TABLE_REGION)
+    # Without a stored page count, the document itself bounds the page.
+    uncounted = await make_paper(session, table_pdf, page_count=None)
+    with pytest.raises(InvalidInput, match="page 2 is outside 1..1"):
+        await capture.preview_table(session, uncounted.id, 2, TABLE_REGION)
 
 
 async def test_captured_numbers_go_into_one_numbers_dataset_per_paper(session, table_pdf):
@@ -145,6 +149,20 @@ async def test_tabs_semicolons_and_a_byte_order_mark_are_read(session, data):
 async def test_a_single_column_file_is_one_column(session):
     view = await capture.import_csv(session, "Seeds", b"Seed\n1\n2\n")
     assert [[c.raw for c in r.cells] for r in view.rows] == [["1"], ["2"]]
+
+
+@pytest.mark.parametrize(
+    ("data", "reason"),
+    [
+        # NUL decodes as UTF-8 (UTF-16 without a byte-order mark is full of it), but Postgres text refuses it.
+        (b"Model,F1\nBERT\x00,88.5\n", "isn't UTF-8 text"),
+        (b"Model,F1\n" + b"x" * 140_000 + b",1\n", "isn't valid CSV: field larger than field limit"),
+    ],
+    ids=["nul-character", "field-over-the-size-limit"],
+)
+async def test_csv_files_the_reader_or_database_cannot_take_are_refused_with_a_reason(session, data, reason):
+    with pytest.raises(InvalidInput, match=reason):
+        await capture.import_csv(session, "x", data)
 
 
 async def test_broken_csv_files_are_refused_with_a_reason(session, monkeypatch):

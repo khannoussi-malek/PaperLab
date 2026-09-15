@@ -1,7 +1,7 @@
 import uuid
 
 import pytest
-from sqlalchemy import insert
+from sqlalchemy import event, insert
 
 from app.core import charts, datasets
 from app.core.chart_spec import ChartSpecAdapter
@@ -95,6 +95,33 @@ async def test_fixing_a_cell_changes_what_every_chart_using_it_resolves(session)
     resolved = (await charts.resolve(session, spec)).datasets[0]
 
     assert resolved.rows[0].cells[bert.columns[1].id].value == 89.1
+
+
+async def test_resolve_reads_cells_with_as_many_parameters_however_many_rows_a_dataset_has(session):
+    # asyncpg takes at most 32,767 bind parameters: one per row would fail on large datasets.
+    def runs(row_count: int):
+        return grid(("Run", "F1"), *[(f"run {i}", str(i)) for i in range(row_count)])
+
+    small = await datasets.create_dataset(session, "Small", "user", runs(2))
+    large = await datasets.create_dataset(session, "Large", "user", runs(60))
+    seen: list[int] = []
+
+    def record(conn, cursor, statement, parameters, context, executemany):
+        if "FROM cells" in statement:
+            seen.append(len(parameters))
+
+    sync_engine = session.bind.engine.sync_engine
+    event.listen(sync_engine, "before_cursor_execute", record)
+    try:
+        for source in (small, large):
+            [resolved] = (await charts.resolve(session, bar(source))).datasets
+            assert len(resolved.rows) == len(source.rows)
+            assert all(len(row.cells) == 2 for row in resolved.rows)
+    finally:
+        event.remove(sync_engine, "before_cursor_execute", record)
+
+    assert len(seen) == 2
+    assert seen[0] == seen[1]
 
 
 async def test_resolve_reports_data_that_is_gone_and_draws_the_rest(session):
