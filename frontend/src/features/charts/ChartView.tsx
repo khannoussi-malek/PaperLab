@@ -24,14 +24,16 @@ export function ChartView({ spec, height = 360, staticPlot = false, withTable = 
   const theme = useChartTheme()
   const resolved = useResolvedChart(spec)
   const [showTable, setShowTable] = useState(false)
-  // The previous drawing (kept up by `useResolvedChart`'s placeholder data) stays compiled while a refetch is in flight.
-  const compiled = useMemo(() => (resolved.data ? compileChart(spec, resolved.data, theme) : null), [spec, resolved.data, theme])
+  // While a changed spec resolves, `drawn` is still the previous spec with its own data: that drawing stays up, and its
+  // warnings stay hidden, since they describe the previous spec rather than this one.
+  const drawn = resolved.data
+  const compiled = useMemo(() => (drawn ? compileChart(drawn.spec, drawn.data, theme) : null), [drawn, theme])
+  const warnings = resolved.isPlaceholderData ? [] : (compiled?.warnings ?? [])
 
   function openSource(customdata: unknown) {
     const ref = decodePoint(customdata)
-    const data = resolved.data
-    if (!ref || !data) return
-    const source = pointSource(data, ref)
+    if (!ref || !drawn) return
+    const source = pointSource(drawn.data, ref)
     // Assigned, not `location.replace`: Back from the opened source returns here.
     if (source) window.location.hash = sourceHref(source)
   }
@@ -49,7 +51,7 @@ export function ChartView({ spec, height = 360, staticPlot = false, withTable = 
         </Alert>
       )}
 
-      {compiled?.warnings.map((warning) => (
+      {warnings.map((warning) => (
         <p key={warning} role="status" className="chart-warning flex items-center gap-1.5 text-sm text-muted-foreground">
           <TriangleAlert aria-hidden className="size-4" />
           {warning}
@@ -77,7 +79,7 @@ export function ChartView({ spec, height = 360, staticPlot = false, withTable = 
         )}
       </div>
 
-      {withTable && resolved.data && (
+      {withTable && drawn && (
         <div className="flex flex-col gap-2">
           <Button
             variant="ghost"
@@ -88,7 +90,7 @@ export function ChartView({ spec, height = 360, staticPlot = false, withTable = 
           >
             View data table
           </Button>
-          {showTable && <ChartDataTable view={chartTable(spec, resolved.data)} />}
+          {showTable && <ChartDataTable view={chartTable(drawn.spec, drawn.data)} />}
         </div>
       )}
     </div>
