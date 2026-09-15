@@ -127,14 +127,35 @@ async def test_patch_keeps_a_missing_key_clears_a_null_one_and_refuses_an_empty_
     assert (kept.label, kept.has_key, kept.key_hint, kept.kind) == (
         "Renamed " + connection.label, True, "T123", "openai_compatible"
     )
+    # A host move without a new key drops it (test_patch_to_a_new_host_drops_the_key_unless_a_new_one_is_sent
+    # covers the rule); is_local still recomputes from the new address.
     moved = await connections.update_connection(session, connection.id, {"base_url": "http://localhost:1234/v1/"})
-    assert (moved.base_url, moved.is_local, moved.has_key) == ("http://localhost:1234/v1", True, True)
+    assert (moved.base_url, moved.is_local, moved.has_key) == ("http://localhost:1234/v1", True, False)
+    restored = await connections.update_connection(session, connection.id, {"api_key": KEY})
+    assert (restored.has_key, restored.key_hint) == (True, "T123")
     with pytest.raises(InvalidInput, match="can't be empty"):
         await connections.update_connection(session, connection.id, {"api_key": ""})
     cleared = await connections.update_connection(session, connection.id, {"api_key": None})
     assert (cleared.has_key, cleared.key_hint) == (False, None)
     replaced = await connections.update_connection(session, connection.id, {"api_key": "new-key-9876"})
     assert (replaced.has_key, replaced.key_hint) == (True, "9876")
+
+
+async def test_patch_to_a_new_host_drops_the_key_unless_a_new_one_is_sent(session):
+    connection = await openai_connection(session)
+
+    moved = await connections.update_connection(session, connection.id, {"base_url": "https://openrouter.ai/api/v1"})
+    assert (moved.has_key, moved.key_hint) == (False, None)
+    stored = await session.get(LLMConnection, connection.id)
+    assert stored.api_key is None
+
+    with_new_key = await connections.update_connection(
+        session, connection.id, {"base_url": "https://groq.com/openai/v1", "api_key": "new-key-9876"}
+    )
+    assert (with_new_key.has_key, with_new_key.key_hint) == (True, "9876")
+
+    same_host = await connections.update_connection(session, connection.id, {"base_url": "https://groq.com/openai/v2"})
+    assert (same_host.has_key, same_host.key_hint) == (True, "9876")
 
 
 async def test_patch_keeps_the_kind_rules(session):
