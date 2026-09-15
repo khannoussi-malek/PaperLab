@@ -1,5 +1,6 @@
-import { Copy, EllipsisVertical, Pencil, SquarePen, Trash2 } from 'lucide-react'
+import { Copy, EllipsisVertical, NotebookPen, Pencil, SquarePen, Trash2 } from 'lucide-react'
 import { useRef } from 'react'
+import type { Note } from '@/api/client'
 import { useChartMutations } from '@/api/queries'
 import { glass } from '@/components/glass'
 import { Button } from '@/components/ui/button'
@@ -13,6 +14,8 @@ type Props = {
   onRename: () => void
   /** The list keeps "Edit" in this menu; the chart page shows its own outline "Edit" button instead. */
   withEdit?: boolean
+  /** The chart page's own "Add to note…" item; the list rows don't offer it. Told the outcome to show. */
+  onAddToNote?: (result: { note: Note } | { error: string }) => void
 }
 
 const menuSurface = cn(glass, 'bg-glass-strong ring-glass-border')
@@ -23,10 +26,10 @@ const noteCount = (count: number) => `${count} note${count === 1 ? '' : 's'}`
  * A chart's "Chart actions" menu, shared by the Charts list and the chart page. Duplicate and Delete navigate to the
  * result only when this chart's own page is open; on the list they leave it as is.
  */
-export function ChartMenu({ chart, onRename, withEdit = true }: Props) {
+export function ChartMenu({ chart, onRename, withEdit = true, onAddToNote }: Props) {
   const route = useRoute()
   const onOwnPage = route.name === 'chart' && route.chartId === chart.id
-  const { duplicate, remove } = useChartMutations()
+  const { duplicate, remove, addToNote } = useChartMutations()
 
   // Renaming replaces this row's title with an autofocused input. Starting it only once this menu has actually
   // finished closing — rather than immediately on select — means that autofocus never has to fight Radix's own
@@ -45,6 +48,15 @@ export function ChartMenu({ chart, onRename, withEdit = true }: Props) {
         if (onOwnPage) window.location.hash = chartHref(created.id)
       },
     })
+  }
+
+  async function addChartToNote() {
+    try {
+      const note = await addToNote.mutateAsync(chart.id)
+      onAddToNote?.({ note })
+    } catch (e) {
+      onAddToNote?.({ error: e instanceof Error ? e.message : "Couldn't add to a note." })
+    }
   }
 
   function deleteChart() {
@@ -95,6 +107,12 @@ export function ChartMenu({ chart, onRename, withEdit = true }: Props) {
           <Copy aria-hidden />
           Duplicate
         </DropdownMenuItem>
+        {onAddToNote && (
+          <DropdownMenuItem onSelect={() => void addChartToNote()}>
+            <NotebookPen aria-hidden />
+            Add to note…
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem variant="destructive" onSelect={deleteChart}>
           <Trash2 aria-hidden />
           Delete
