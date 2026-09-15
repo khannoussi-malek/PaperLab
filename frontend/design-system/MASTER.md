@@ -265,20 +265,22 @@ shadcn `Select`, never a native select) and the dataviz skill (below).
   `primary/10` fill, never glass). Escape or the toggle leaves the mode. Releasing opens the "Capture table" dialog
   (`max-w-5xl`, strong glass): the PDF crop rendered with PDF.js at 2× (`.capture-crop`), a "Table name" field
   pre-filled from the caption, the grid editor, and Cancel + primary "Save table". Saved tables draw a 1 px
-  `primary/40` `.table-region` outline and a `.table-marker` (`Table2`, 14 pt) inside its top-right corner; clicking the
-  marker opens the Data tab. The marker is found by position like highlights (the text layer covers the page).
+  `primary/40` `.table-region` outline and a `.table-marker` (`Table2`, 14 pt) inside its top-right corner, in fixed
+  light colours in both themes (`bg-white/90`, `ring-1 ring-blue-600/40`, a `blue-600` icon) since the page stays
+  white; clicking the marker opens the Data tab. The marker is found by position like highlights (the text layer covers the page).
 - **Grid editor:** a shadcn `Table` in an `overflow-auto` wrapper. Header cells are inputs "Column N name" with a
   "Column N actions" menu (Merge with next column, Split after first word, Fill down, Set unit…, Insert column left,
   Insert column right, Delete column). Each body row starts with a "Row N actions" menu (Use as header, Insert row
   above, Insert row below, Delete row). Body cells are borderless inputs "Row R, column C" (`tabular-nums`). An edited
-  cell has `data-edited="true"`, a dashed `ring-1 ring-muted-foreground/60` and `title="Edited: extraction read “…”"`
-  (never colour alone: the tooltip and the dataset page's "edited" legend say it). "Add row" and "Add column" are ghost
+  cell has `data-edited="true"`, a 1 px dashed `outline-muted-foreground/60` (offset 1 px) and
+  `title="Edited: extraction read “…”"` (never colour alone: the tooltip says it; there is no legend). "Add row" and "Add column" are ghost
   buttons under the table.
 - **Numbers:** "Add as number" (`Hash`) in the draft menu (after "Add note…") and as a ghost button in the note composer.
   It opens the "Add as number" dialog: "Label" (required), the numbers found in the selection as a `radiogroup`
   "Number found" of outline chips (`88.5 ± 0.3`), "Value" and "± error" fields filled from the chosen chip, "Unit"
   filled from the word after it, and primary "Add number". A captured number is underlined on the page with a
-  `.number-mark`: a 2 px dashed bottom border in `foreground/60`, never violet (AI) and never a highlight fill.
+  `.number-mark`: a 2 px dashed bottom border in fixed `slate-900/60` in both themes (it sits on the white page),
+  never violet (AI) and never a highlight fill.
 - **Charts page (`#/charts`):** the library's layout, `font-heading` "Charts" over "N charts · M datasets of your own",
   outline "New dataset" and primary "New chart". A glass list of `.chart-row[data-chart-id]`: type icon, title, sources
   in muted text ("BERT, XLNet, My data"), "Used in N notes · edited 2 h ago", and a "Chart actions" menu (Edit, Rename,
@@ -296,7 +298,9 @@ shadcn `Select`, never a native select) and the dataviz skill (below).
 - **Chart page (`#/charts/:id`):** "← Charts", the title as an inline-renameable `h1`, outline "Edit", and a "Chart
   actions" menu (Rename, Duplicate, Add to note…, Delete). The chart sits in a glass card.
 - **Chart view:** `.chart-view[data-chart-type][data-series-count]`, at least 360 px tall including the axis band. While
-  data refetches the last drawing stays at `opacity-60` (no skeleton). A warning shows above it as `.chart-warning`
+  data refetches, including while a changed spec's data loads, the last drawing stays at `opacity-60` (no skeleton),
+  still compiled from the spec that drew it, and warnings stay hidden until the new data arrives. A warning shows
+  above it as `.chart-warning`
   (`role="status"`, `TriangleAlert`, text on `muted`). Plotly's mode bar keeps only "Download plot as PNG", a "Download
   SVG" button and "Reset axes"; `displaylogo: false`. Hover shows the raw text first, "· edited" when edited, then the
   series and label, then the source. Clicking a bar, point or cell opens its source. Under the chart, a ghost "View
