@@ -1,4 +1,4 @@
-import { Box, ChartCandlestick, ChartColumn, ChartLine, ChartNoAxesColumn, ChartScatter, Grid3x3, Plus, Waves } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { useState } from 'react'
 import type { ChartSummary } from '@/api/client'
 import { useAllDatasets, useCharts, useChartMutations } from '@/api/queries'
@@ -13,18 +13,7 @@ import { datasetMeta } from '../data/datasetMeta'
 import { NewDatasetDialog } from '../data/NewDatasetDialog'
 import { ChartMenu } from './ChartMenu'
 import { InlineTitle } from './InlineTitle'
-
-const TYPE_ICON: Record<ChartSummary['type'], typeof ChartColumn> = {
-  bar: ChartColumn,
-  line: ChartLine,
-  scatter: ChartScatter,
-  box: ChartCandlestick,
-  heatmap: Grid3x3,
-  scatter3d: Box,
-  surface: Box,
-  contour: Waves,
-  parcoords: ChartNoAxesColumn,
-}
+import { TYPE_ICON } from './typeIcons'
 
 const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
 const RELATIVE_UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
