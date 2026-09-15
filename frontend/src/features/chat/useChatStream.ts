@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   api,
   errorDetail,
@@ -47,19 +47,38 @@ const STOPPED: ChatProblem = { message: 'The answer stopped before it finished.'
 
 /**
  * Asks one question with the model `modelId` (null: the default) and follows its SSE stream:
- * idle → sources → streaming → done | error.
+ * idle → sources → streaming → done | error. Unmounting stops updating the panel but lets the answer finish; the
+ * server saves it. Asking again while one streams cancels the one before it.
  */
 export function useChatStream(scope: ChatScope, modelId: string | null) {
   const [stream, setStream] = useState<ChatStream>(IDLE)
   const invalidateHistory = useInvalidateChatHistory(scope)
   const invalidateModels = useInvalidateModels()
+  const controller = useRef<AbortController | null>(null)
+  // Starts false, set true by the effect: React (StrictMode) mounts, cleans up and remounts every component once,
+  // so only the effect body -- not the initial ref value -- sees the real, final mount.
+  const mounted = useRef(false)
+
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
 
   async function ask(question: string) {
-    setStream({ ...IDLE, status: 'sources', question })
-    const fail = (problem: ChatProblem, tail: Segment[] = []) =>
-      setStream((s) => ({ ...s, status: 'error', problem, segments: appendSegments(s.segments, tail) }))
+    controller.current?.abort() // a newer question replaces whatever this panel was still asking
+    const current = new AbortController()
+    controller.current = current
+    const set = (updater: (s: ChatStream) => ChatStream) => mounted.current && setStream(updater)
 
-    const response = await api.askChat(scope, question, modelId).catch(() => null)
+    set(() => ({ ...IDLE, status: 'sources', question }))
+    const fail = (problem: ChatProblem, tail: Segment[] = []) => {
+      if (current.signal.aborted) return // superseded by a newer question
+      set((s) => ({ ...s, status: 'error', problem, segments: appendSegments(s.segments, tail) }))
+    }
+
+    const response = await api.askChat(scope, question, modelId, current.signal).catch(() => null)
     if (!response) return fail({ message: "Can't reach the PaperLab API.", retryable: true, reindex: false })
     if (!response.ok || !response.body) {
       // A removed model or a missing default: the dropdown refetches and falls back.
@@ -73,7 +92,7 @@ export function useChatStream(scope: ChatScope, modelId: string | null) {
         if (event === 'sources') {
           const { sources, whole_paper, notes, notes_used, notes_total } = JSON.parse(data) as ChatSourcesEvent
           splitter = citationSplitter(new Set([...sources, ...notes].map((source) => source.label)))
-          setStream((s) => ({
+          set((s) => ({
             ...s,
             sources,
             wholePaper: whole_paper,
@@ -83,19 +102,20 @@ export function useChatStream(scope: ChatScope, modelId: string | null) {
           }))
         } else if (event === 'token') {
           const added = splitter.feed((JSON.parse(data) as ChatTokenEvent).text)
-          setStream((s) => ({ ...s, status: 'streaming', segments: appendSegments(s.segments, added) }))
+          set((s) => ({ ...s, status: 'streaming', segments: appendSegments(s.segments, added) }))
         } else if (event === 'done') {
           const done = JSON.parse(data) as ChatDoneEvent
           const tail = splitter.flush()
-          setStream((s) => ({ ...s, status: 'done', done, segments: appendSegments(s.segments, tail) }))
+          set((s) => ({ ...s, status: 'done', done, segments: appendSegments(s.segments, tail) }))
           return void invalidateHistory()
         } else if (event === 'error') {
           const { message, retryable } = JSON.parse(data) as ChatErrorEvent
           return fail({ message, retryable, reindex: false }, splitter.flush())
         }
       }
-    } catch {
+    } catch (error) {
       // A dropped connection or a malformed event: same as a stream that ends without `done`.
+      if (!current.signal.aborted) console.warn('chat stream ended early', error)
     }
     fail(STOPPED, splitter.flush())
   }
