@@ -1,3 +1,4 @@
+import { Hash } from 'lucide-react'
 import { useState } from 'react'
 import { popIn } from '@/components/motion'
 import { Button } from '@/components/ui/button'
@@ -13,9 +14,10 @@ type Props = {
   onColorChange: (hex: string) => void
   onSave: (body: string) => Promise<boolean>
   onCancel: () => void
+  onAddNumber: () => void
 }
 
-export function NoteComposer({ draft, color, onColorChange, onSave, onCancel }: Props) {
+export function NoteComposer({ draft, color, onColorChange, onSave, onCancel, onAddNumber }: Props) {
   const [body, setBody] = useState('')
   const [saving, setSaving] = useState(false)
 
@@ -56,6 +58,10 @@ export function NoteComposer({ draft, color, onColorChange, onSave, onCancel }: 
           <HighlightColorPicker value={color} onChange={onColorChange} />
         </CardContent>
         <CardFooter className="justify-end gap-2">
+          <Button type="button" variant="ghost" size="sm" onClick={onAddNumber}>
+            <Hash aria-hidden />
+            Add as number
+          </Button>
           <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
             Cancel
           </Button>

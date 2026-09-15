@@ -1,16 +1,18 @@
 import { Table2 } from 'lucide-react'
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { api, type Note } from '@/api/client'
-import { useChunksOnPage, useNoteMutations, useNotes, usePaper, usePaperDatasets } from '@/api/queries'
+import { useChunksOnPage, useDataset, useNoteMutations, useNotes, usePaper, usePaperDatasets } from '@/api/queries'
 import { glass } from '@/components/glass'
 import { fadeIn } from '@/components/motion'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { readerHref, type ReaderTab, type ReaderTarget } from '@/lib/route'
 import { cn } from '@/lib/utils'
 import { ChatPanel } from '../chat/ChatPanel'
+import { AddNumberDialog } from '../data/AddNumberDialog'
 import { CaptureTableDialog } from '../data/CaptureTableDialog'
 import { DataPanel } from '../data/DataPanel'
-import { tableMarkerAt, tableMarks } from '../data/pageMarks'
+import { NumberMarks } from '../data/NumberMarks'
+import { numberMarks, tableMarkerAt, tableMarks } from '../data/pageMarks'
 import { useCaptureDrag } from '../data/useCaptureDrag'
 import { browserStorage, highlightFill, loadLastColor, saveLastColor } from '../notes/highlightColors'
 import { NoteHoverCard } from '../notes/NoteHoverCard'
@@ -89,6 +91,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
   const mutations = useNoteMutations(paperId)
   const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX)
   const [draft, setDraft] = useState<SelectionAnchor | null>(null)
+  const [numberDraft, setNumberDraft] = useState<SelectionAnchor | null>(null)
   const [draftColor, setDraftColor] = useState(() => loadLastColor(browserStorage()))
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null)
   // Ids of hover-card notes being edited; the card stays open while any is.
@@ -110,6 +113,9 @@ export function ReaderPage({ paperId, tab, target }: Props) {
   const scale = ZOOM_STEPS[zoomIndex]
   const datasets = usePaperDatasets(paperId)
   const tableMarksByPage = useMemo(() => tableMarks(datasets.data ?? []), [datasets.data])
+  const numbersDatasetId = datasets.data?.find((d) => d.kind === 'numbers')?.id ?? null
+  const numbersDataset = useDataset(numbersDatasetId)
+  const numberMarksByPage = useMemo(() => numberMarks(numbersDataset.data), [numbersDataset.data])
   const captureDrag = useCaptureDrag(scale)
   const { capturing, capture } = captureDrag
 
@@ -252,6 +258,11 @@ export function ReaderPage({ paperId, tab, target }: Props) {
     window.setTimeout(() => document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Note"]')?.focus())
   }
 
+  /** Both entry points (the draft menu and the composer) open the dialog on the pending selection. */
+  function addNumberFromDraft() {
+    setNumberDraft(draft)
+  }
+
   /** Shows the notes under the pointer and scrolls the panel to the first, only when that set changes. */
   function trackHover(event: MouseEvent) {
     if ((event.target as Element).closest('.note-hover-card')) {
@@ -360,6 +371,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
                   </div>
                 </Fragment>
               ))}
+              <NumberMarks marks={numberMarksByPage.get(pageNumber) ?? []} scale={scale} />
               {captureDrag.box?.page === pageNumber && (
                 <div className="capture-box absolute bg-primary/10 outline-2 outline-primary" style={pdfRectToCss(captureDrag.box.rect, scale)} />
               )}
@@ -404,6 +416,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
             onDraftColorChange={setDraftColor}
             onSaveDraft={saveDraft}
             onCancelDraft={() => setDraft(null)}
+            onAddNumber={addNumberFromDraft}
             onSelectNote={focusNote}
             onUpdateNote={updateNoteBody}
             onColorNote={recolorNote}
@@ -420,6 +433,17 @@ export function ReaderPage({ paperId, tab, target }: Props) {
         }
         data={<DataPanel paperId={paperId} onShowRegion={flashChunk} />}
       />
+
+      {numberDraft && (
+        <AddNumberDialog
+          paperId={paperId}
+          anchor={numberDraft}
+          onClose={() => {
+            setNumberDraft(null)
+            setDraft(null)
+          }}
+        />
+      )}
 
       {capture && doc && (
         <CaptureTableDialog
@@ -443,6 +467,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
         onDeleteNote={(note) => void deleteNote(note)}
         onHighlightDraft={(color) => void highlightDraft(color)}
         onAddNote={focusComposer}
+        onAddNumber={addNumberFromDraft}
         onCancelDraft={() => setDraft(null)}
         onCopy={copyText}
       />
