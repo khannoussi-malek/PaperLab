@@ -7,6 +7,7 @@ from pydantic import ValidationError
 from app.core.chart_spec import (
     MAX_COLORS,
     MAX_DIMENSIONS,
+    MAX_ROW_FILTER,
     MAX_SCATTER_COLORS,
     MAX_SERIES,
     ChartSpecAdapter,
@@ -78,7 +79,10 @@ def test_an_error_is_none_from_the_cells_or_another_column():
         {"type": "bar", "series": [series()], "title": "titles live on the chart, not in its spec"},
         {"type": "bar", "version": 2, "series": [series()]},
         {"type": "bar", "series": [series()], "axes": {"y": {"scale": "exponential"}}},
+        {"type": "bar", "series": [series(rows=[str(uuid.uuid4()) for _ in range(MAX_ROW_FILTER + 1)])]},
         {"type": "heatmap", "dataset_id": str(DATASET), "row_labels": str(X), "columns": []},
+        {"type": "heatmap", "dataset_id": str(DATASET), "row_labels": str(X),
+         "columns": [str(uuid.uuid4()) for _ in range(MAX_DIMENSIONS + 1)]},
         {"type": "parcoords", "dataset_id": str(DATASET), "dimensions": [str(X)]},
         {"type": "parcoords", "dataset_id": str(DATASET),
          "dimensions": [str(uuid.uuid4()) for _ in range(MAX_DIMENSIONS + 1)]},
