@@ -294,7 +294,7 @@ shadcn `Select`, never a native select) and the dataviz skill (below).
   shadcn `Dialog` "Charts use this data" listing those chart titles, with Cancel and destructive "Save anyway". A
   focused cell from a chart point (`?row=&column=`) is scrolled to and focused once.
 - **Chart page (`#/charts/:id`):** "← Charts", the title as an inline-renameable `h1`, outline "Edit", and a "Chart
-  actions" menu (Duplicate, Add to note…, Delete). The chart sits in a glass card.
+  actions" menu (Rename, Duplicate, Add to note…, Delete). The chart sits in a glass card.
 - **Chart view:** `.chart-view[data-chart-type][data-series-count]`, at least 360 px tall including the axis band. While
   data refetches the last drawing stays at `opacity-60` (no skeleton). A warning shows above it as `.chart-warning`
   (`role="status"`, `TriangleAlert`, text on `muted`). Plotly's mode bar keeps only "Download plot as PNG", a "Download

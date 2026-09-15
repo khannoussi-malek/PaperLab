@@ -1,3 +1,4 @@
+import { PencilLine } from 'lucide-react'
 import { useState } from 'react'
 import { useChart, useChartMutations } from '@/api/queries'
 import { glass } from '@/components/glass'
@@ -5,7 +6,7 @@ import { fadeIn } from '@/components/motion'
 import { ModeToggle } from '@/components/mode-toggle'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { chartsHref } from '@/lib/route'
+import { chartsHref, editChartHref } from '@/lib/route'
 import { cn } from '@/lib/utils'
 import { ChartMenu } from './ChartMenu'
 import { ChartView } from './ChartView'
@@ -40,7 +41,19 @@ export function ChartPage({ chartId }: { chartId: string }) {
         </div>
         <div className="flex items-center gap-2">
           {chart.data && (
-            <ChartMenu chart={{ id: chart.data.id, title: chart.data.title, note_count: chart.data.note_ids.length }} onRename={() => setRenaming(true)} />
+            <>
+              <Button variant="outline" asChild>
+                <a href={editChartHref(chart.data.id)}>
+                  <PencilLine aria-hidden />
+                  Edit
+                </a>
+              </Button>
+              <ChartMenu
+                chart={{ id: chart.data.id, title: chart.data.title, note_count: chart.data.note_ids.length }}
+                onRename={() => setRenaming(true)}
+                withEdit={false}
+              />
+            </>
           )}
           <ModeToggle />
         </div>
