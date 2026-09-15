@@ -27,6 +27,13 @@ class AnchorOut(BaseModel):
     quoted_text: str
 
 
+class ChartRefOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    title: str
+
+
 class NoteCreate(BaseModel):
     body: str = Field(default="", max_length=50_000)
     color: HexColor = DEFAULT_COLOR
@@ -55,3 +62,4 @@ class NoteOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     anchors: list[AnchorOut]
+    charts: list[ChartRefOut]  # charts shown in the note, by title

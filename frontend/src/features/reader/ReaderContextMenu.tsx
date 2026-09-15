@@ -1,4 +1,4 @@
-import { Copy, NotebookPen, Pencil, Trash2, X } from 'lucide-react'
+import { Copy, Hash, NotebookPen, Pencil, Trash2, X } from 'lucide-react'
 import type { Note } from '@/api/client'
 import { glass } from '@/components/glass'
 import {
@@ -23,6 +23,7 @@ type Props = {
   onDeleteNote: (note: Note) => void
   onHighlightDraft: (hex: string) => void
   onAddNote: () => void
+  onAddNumber: () => void
   onCancelDraft: () => void
   onCopy: (text: string) => void
 }
@@ -81,6 +82,10 @@ export function ReaderContextMenu({ menu, onClose, ...actions }: Props) {
             <DropdownMenuItem onSelect={actions.onAddNote}>
               <NotebookPen aria-hidden />
               Add note…
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={actions.onAddNumber}>
+              <Hash aria-hidden />
+              Add as number…
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => actions.onCopy(target.quote)}>
               <Copy aria-hidden />

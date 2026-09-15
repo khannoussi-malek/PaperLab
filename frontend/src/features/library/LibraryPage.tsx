@@ -1,7 +1,9 @@
-import { FileText } from 'lucide-react'
+import { ChartColumn, FileText } from 'lucide-react'
 import { usePapers, useUploadPapers } from '@/api/queries'
 import { ModeToggle } from '@/components/mode-toggle'
 import { fadeIn } from '@/components/motion'
+import { Button } from '@/components/ui/button'
+import { chartsHref } from '@/lib/route'
 import { cn } from '@/lib/utils'
 import { WorkspaceSidebar } from '../workspaces/WorkspaceSidebar'
 import { ErrorAlert, LoadError } from './ErrorAlert'
@@ -25,6 +27,12 @@ export function LibraryPage() {
           )}
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" asChild>
+            <a href={chartsHref}>
+              <ChartColumn aria-hidden />
+              Charts
+            </a>
+          </Button>
           <UploadPdfsButton isPending={upload.isPending} onUpload={(files) => upload.mutate(files)} />
           <ModeToggle />
         </div>

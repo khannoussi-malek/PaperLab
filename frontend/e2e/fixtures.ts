@@ -8,13 +8,18 @@ export { expect }
 export const FIXTURE_FILE = fileURLToPath(new URL('./fixtures/sample-paper.pdf', import.meta.url))
 export const FIXTURE_TITLE = 'PaperLab E2E Fixture'
 export const FIRST_LINE = 'Highlights are the anchor'
+export const TABLE_FIXTURE_FILE = fileURLToPath(new URL('./fixtures/table-paper.pdf', import.meta.url))
+/** The start of the table paper's sentence line, which holds "88.5 ± 0.3 F1". */
+export const TABLE_LINE = 'Our best model reaches'
 export type Rect = [number, number, number, number]
 
-export async function uploadAndWaitUntilReady(request: APIRequestContext): Promise<string> {
+export async function uploadAndWaitUntilReady(
+  request: APIRequestContext,
+  file = FIXTURE_FILE,
+  filename = 'sample-paper.pdf',
+): Promise<string> {
   const upload = await request.post('/api/papers', {
-    multipart: {
-      file: { name: 'sample-paper.pdf', mimeType: 'application/pdf', buffer: await readFile(FIXTURE_FILE) },
-    },
+    multipart: { file: { name: filename, mimeType: 'application/pdf', buffer: await readFile(file) } },
   })
   expect(upload.status()).toBe(201)
   const { id } = await upload.json()
@@ -27,9 +32,27 @@ export async function uploadAndWaitUntilReady(request: APIRequestContext): Promi
 export async function removePaperAndNotes(request: APIRequestContext, paperId: string) {
   const notes = await request.get(`/api/papers/${paperId}/notes`)
   if (!notes.ok()) return // already deleted
-  // Notes deliberately survive paper deletion, so remove them first.
+  // Notes and datasets deliberately survive paper deletion, so remove them first.
   for (const note of await notes.json()) await request.delete(`/api/notes/${note.id}`)
+  const datasets = await request.get(`/api/datasets?paper_id=${paperId}`)
+  for (const dataset of datasets.ok() ? await datasets.json() : []) {
+    await request.delete(`/api/datasets/${dataset.id}?force=true`)
+  }
   await request.delete(`/api/papers/${paperId}`)
+}
+
+/** A captured table on `page` of the paper, as the capture dialog saves one: every cell read from that page. */
+export async function addTable(request: APIRequestContext, paperId: string, page: number, name: string, rows: string[][]) {
+  const region: Rect = [72, 110, 540, 110 + 14 * rows.length]
+  const grid = {
+    columns: rows[0].map((header) => ({ name: header })),
+    rows: rows.slice(1).map((row, r) => ({
+      cells: row.map((raw, c) => ({ raw, extracted: raw, page, bbox: [[72 + 150 * c, 124 + 14 * r, 150 + 150 * c, 134 + 14 * r]] })),
+    })),
+  }
+  const created = await request.post('/api/datasets', { data: { name, kind: 'table', paper_id: paperId, page, region, grid } })
+  expect(created.status()).toBe(201)
+  return (await created.json()) as { id: string; region: Rect; columns: { id: string; name: string }[] }
 }
 
 /** Deletes every workspace whose name starts with `prefix`. Deleting a workspace keeps its papers and notes. */
@@ -41,15 +64,82 @@ export async function removeWorkspacesNamed(request: APIRequestContext, prefix: 
   }
 }
 
+/** Deletes every chart whose title starts with `prefix`, then every dataset whose name does (even if charts use it). */
+export async function removeChartsAndDataNamed(request: APIRequestContext, prefix: string) {
+  const charts = await request.get('/api/charts')
+  for (const chart of charts.ok() ? await charts.json() : []) {
+    if (chart.title.startsWith(prefix)) await request.delete(`/api/charts/${chart.id}`)
+  }
+  const datasets = await request.get('/api/datasets')
+  for (const dataset of datasets.ok() ? await datasets.json() : []) {
+    if (dataset.name.startsWith(prefix)) await request.delete(`/api/datasets/${dataset.id}?force=true`)
+  }
+}
+
+type SavedDataset = { id: string; columns: { id: string; name: string }[] }
+
+/** A bar chart spec: each named y column of `dataset` against its x column. */
+export function barSpec(dataset: SavedDataset, x: string | null, ys: string[]) {
+  const column = (name: string) => {
+    const found = dataset.columns.find((c) => c.name === name)
+    if (!found) throw new Error(`no column ${name}`)
+    return found.id
+  }
+  return {
+    version: 1,
+    type: 'bar',
+    series: ys.map((y, i) => ({
+      id: `s${i + 1}`,
+      name: '',
+      dataset_id: dataset.id,
+      x: x === null ? null : column(x),
+      y: column(y),
+      error: 'none',
+      trend: 'none',
+      multiply: 1,
+    })),
+  }
+}
+
+/** Imports `csv` as your own data through the API and returns the dataset. */
+export async function addOwnData(request: APIRequestContext, name: string, csv: string) {
+  const created = await request.post('/api/datasets/import', {
+    multipart: { name, file: { name: 'data.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) } },
+  })
+  expect(created.status()).toBe(201)
+  return (await created.json()) as { id: string; columns: { id: string; name: string }[] }
+}
+
+/** Creates a chart through the API and returns it. */
+export async function addChart(request: APIRequestContext, title: string, spec: object) {
+  const created = await request.post('/api/charts', { data: { title, spec } })
+  expect(created.status()).toBe(201)
+  return (await created.json()) as { id: string; title: string }
+}
+
+/**
+ * Clicks the `index`th bar of the chart on the page. Plotly's drag layer lies over the bars, so the click goes to the
+ * bar's position rather than its element; just above the bar's base, which is on the chart for linear axes.
+ */
+export async function clickBar(page: Page, index: number) {
+  const box = await page.locator('.chart-view .barlayer .point path').nth(index).boundingBox()
+  if (!box) throw new Error(`bar ${index} is not drawn`)
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height - 4)
+}
+
 type Fixtures = {
   /** A freshly ingested copy of the fixture paper, removed after the test even if it fails. */
   paperId: string
   /** Another, separately ingested copy: workspace specs need two papers. */
   secondPaperId: string
+  /** A freshly ingested copy of the table paper: a captioned 3 × 3 table and "88.5 ± 0.3 F1" on page 1. */
+  tablePaperId: string
   /** A unique workspace name. Every workspace whose name starts with it is deleted after the test. */
   workspaceName: string
   /** An empty workspace named `workspaceName`. */
   workspaceId: string
+  /** A unique prefix for chart titles and dataset names. Every chart and dataset starting with it is deleted after the test. */
+  dataName: string
 }
 
 export const test = base.extend<Fixtures>({
@@ -60,6 +150,11 @@ export const test = base.extend<Fixtures>({
   },
   secondPaperId: async ({ request }, use) => {
     const id = await uploadAndWaitUntilReady(request)
+    await use(id)
+    await removePaperAndNotes(request, id)
+  },
+  tablePaperId: async ({ request }, use) => {
+    const id = await uploadAndWaitUntilReady(request, TABLE_FIXTURE_FILE, 'table-paper.pdf')
     await use(id)
     await removePaperAndNotes(request, id)
   },
@@ -74,14 +169,30 @@ export const test = base.extend<Fixtures>({
     expect(created.status()).toBe(201)
     await use((await created.json()).id)
   },
+  dataName: async ({ request }, use) => {
+    const name = `E2E data ${randomUUID().slice(0, 8)}`
+    await use(name)
+    await removeChartsAndDataNamed(request, name)
+  },
 })
 
-/** Opens the reader and returns page 1's first text-layer line once it is rendered. */
-export async function openReader(page: Page, paperId: string): Promise<Locator> {
+/** Opens the reader and returns page 1's text-layer line holding `firstLine` once it is rendered. */
+export async function openReader(page: Page, paperId: string, firstLine = FIRST_LINE): Promise<Locator> {
   await page.goto(`/#/papers/${paperId}`)
-  const line = page.locator('.pdf-page[data-page="1"] .textLayer span', { hasText: FIRST_LINE })
+  const line = page.locator('.pdf-page[data-page="1"] .textLayer span', { hasText: firstLine })
   await expect(line).toBeVisible()
   return line
+}
+
+/** Drags a box over `region` (PDF points, top-left origin) on a page, at whatever zoom the reader shows. */
+export async function dragBox(page: Page, pageNumber: number, [x0, y0, x1, y1]: Rect) {
+  const box = await page.locator(`.pdf-page[data-page="${pageNumber}"]`).boundingBox()
+  if (!box) throw new Error(`page ${pageNumber} is not rendered`)
+  const scale = box.width / 612 // the fixtures are US Letter
+  await page.mouse.move(box.x + x0 * scale, box.y + y0 * scale)
+  await page.mouse.down()
+  await page.mouse.move(box.x + x1 * scale, box.y + y1 * scale, { steps: 8 })
+  await page.mouse.up()
 }
 
 /** Selects from the start of `start` to the end of `end` like a mouse drag, then releases the mouse. */
@@ -126,6 +237,21 @@ export async function ask(page: Page, question: string, timeoutMs = 15_000): Pro
   const answer = page.locator('article.chat-answer[data-output-id]', { hasText: question })
   await expect(answer.locator('.chat-answer-footer')).toContainText('AI · ', { timeout: timeoutMs })
   return answer
+}
+
+/** Selects `text` inside a text-layer span, like a mouse drag over just those characters, then releases the mouse. */
+export async function selectSubstring(span: Locator, text: string) {
+  await span.evaluate((element, wanted) => {
+    const node = element.firstChild!
+    const start = node.textContent!.indexOf(wanted)
+    if (start < 0) throw new Error(`"${wanted}" is not in "${node.textContent}"`)
+    const range = document.createRange()
+    range.setStart(node, start)
+    range.setEnd(node, start + wanted.length)
+    window.getSelection()!.removeAllRanges()
+    window.getSelection()!.addRange(range)
+  }, text)
+  await span.dispatchEvent('mouseup')
 }
 
 /** Selects all of an element's text like a mouse drag, then releases the mouse. */

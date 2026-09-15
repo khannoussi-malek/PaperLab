@@ -37,6 +37,15 @@ RECORDED_DOIS = sorted({doi.lower() for doi in re.findall(r"doi\.org/(10\.[^\"]+
 BODY_TEXT = "The quick brown fox jumps over the lazy dog near the river bank today. " * 3
 
 
+@pytest.hookimpl(tryfirst=True)  # before xdist reads the markers
+def pytest_collection_modifyitems(items):
+    # Tests on the OpenAlex recordings all write the same UNIQUE papers and authors; on parallel workers their
+    # transactions deadlock. `--dist loadgroup` (pyproject addopts) runs one xdist_group on a single worker.
+    for item in items:
+        if "fake_openalex" in item.fixturenames:
+            item.add_marker(pytest.mark.xdist_group("openalex"))
+
+
 @pytest.fixture
 def anyio_backend():
     return "asyncio"
@@ -301,6 +310,30 @@ def doi_pdf(tmp_path) -> Path:
             "keywords": "language models, pre-training",
             "creationDate": "D:20190528000751Z",
         },
+    )
+
+
+TABLE_ROWS = [("System", "Dev", "Test"), ("BERT-B", "88.5", "87.0"), ("BERT-L", "90.9 ± 0.2", "91.8")]
+
+
+@pytest.fixture
+def table_pdf(tmp_path) -> Path:
+    """Page 1: a caption above a 3 x 3 table (columns at x = 72, 220 and 320, rows 14 points apart from y = 150),
+    then a paragraph well below it. Every word's box ends inside (60, 135, 420, 185)."""
+    table = [
+        ("text", (x, 150 + 14 * r), text, 10, r == 0)
+        for r, row in enumerate(TABLE_ROWS)
+        for x, text in zip((72, 220, 320), row, strict=True)
+    ]
+    return _write_pdf(
+        tmp_path / "table.pdf",
+        [
+            [
+                ("text", (72, 120), "Table 1: Results on the dev set. Higher is better.", 10, False),
+                *table,
+                ("box", (72, 300, 520, 400), BODY_TEXT),
+            ]
+        ],
     )
 
 

@@ -16,6 +16,7 @@ type Props = {
   onDraftColorChange: (hex: string) => void
   onSaveDraft: (body: string) => Promise<boolean>
   onCancelDraft: () => void
+  onAddNumber: () => void
   onSelectNote: (note: Note) => void
   onUpdateNote: (note: Note, body: string) => Promise<boolean>
   onColorNote: (note: Note, hex: string) => Promise<boolean>
@@ -63,6 +64,7 @@ export function NotesPanel(props: Props) {
           onColorChange={props.onDraftColorChange}
           onSave={props.onSaveDraft}
           onCancel={props.onCancelDraft}
+          onAddNumber={props.onAddNumber}
         />
       ) : (
         <p className="text-sm text-muted-foreground">Select text in the paper to add a note.</p>

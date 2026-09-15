@@ -16,6 +16,24 @@ export type ChatDoneEvent = components['schemas']['DoneEvent']
 export type ChatErrorEvent = components['schemas']['ErrorEvent']
 export type PromoteRequest = components['schemas']['PromoteRequest']
 export type Workspace = components['schemas']['WorkspaceOut']
+export type ChartRef = components['schemas']['ChartRefOut']
+export type Dataset = components['schemas']['DatasetOut']
+export type DatasetSummary = components['schemas']['DatasetSummaryOut']
+export type DatasetCreate = components['schemas']['DatasetCreate']
+export type GridIn = components['schemas']['GridIn']
+export type TablePreview = components['schemas']['TablePreviewOut']
+export type ChartUse = components['schemas']['ChartUseOut']
+export type NumberCandidate = components['schemas']['NumberCandidateOut']
+export type NumberCreate = components['schemas']['NumberCreate']
+export type NumberAdded = components['schemas']['NumberAddedOut']
+export type Chart = components['schemas']['ChartOut']
+export type ChartSummary = components['schemas']['ChartSummaryOut']
+export type ChartSpec = Chart['spec']
+export type SeriesChartSpec = components['schemas']['SeriesChart']
+export type SeriesSpec = components['schemas']['Series']
+export type ResolvedData = components['schemas']['ResolvedDataOut']
+export type ResolvedDataset = components['schemas']['ResolvedDatasetOut']
+export type ResolvedCell = components['schemas']['ResolvedCellOut']
 
 /** Where a chat lives: the reader's paper, or a workspace. */
 export type ChatScope = { kind: 'paper' | 'workspace'; id: string }
@@ -86,6 +104,43 @@ export const api = {
     request<void>(`/api/workspaces/${workspaceId}/papers/${paperId}`, { method: 'DELETE' }),
   listChat: (scope: ChatScope) => request<ChatAnswer[]>(chatUrl(scope)),
   promoteNote: (promote: PromoteRequest) => request<Note>('/api/notes/promote', sendJson('POST', promote)),
+  previewTable: (paperId: string, page: number, region: [number, number, number, number]) =>
+    request<TablePreview>(`/api/papers/${paperId}/tables/preview`, sendJson('POST', { page, region })),
+  addNumber: (paperId: string, number: NumberCreate) =>
+    request<NumberAdded>(`/api/papers/${paperId}/numbers`, sendJson('POST', number)),
+  numberCandidates: (text: string) => request<NumberCandidate[]>('/api/numbers/candidates', sendJson('POST', { text })),
+  /** A paper's datasets, or every dataset without a paper id. */
+  listDatasets: (paperId?: string) =>
+    request<DatasetSummary[]>(paperId ? `/api/datasets?paper_id=${paperId}` : '/api/datasets'),
+  getDataset: (id: string) => request<Dataset>(`/api/datasets/${id}`),
+  createDataset: (dataset: DatasetCreate) => request<Dataset>('/api/datasets', sendJson('POST', dataset)),
+  /** CSV from a file, or text pasted from a spreadsheet wrapped in a File. */
+  importDataset: (file: File, name?: string) => {
+    const form = new FormData()
+    form.append('file', file)
+    if (name) form.append('name', name)
+    return request<Dataset>('/api/datasets/import', { method: 'POST', body: form })
+  },
+  renameDataset: (id: string, name: string) => request<Dataset>(`/api/datasets/${id}`, sendJson('PATCH', { name })),
+  /** Without `force`, removing a column a chart uses fails with `used_by_charts`. */
+  saveGrid: (id: string, grid: GridIn, force = false) =>
+    request<Dataset>(`/api/datasets/${id}/grid${force ? '?force=true' : ''}`, sendJson('PUT', grid)),
+  deleteDataset: (id: string, force = false) =>
+    request<void>(`/api/datasets/${id}${force ? '?force=true' : ''}`, { method: 'DELETE' }),
+  listCharts: () => request<ChartSummary[]>('/api/charts'),
+  getChart: (id: string) => request<Chart>(`/api/charts/${id}`),
+  createChart: (title: string, spec: ChartSpec) => request<Chart>('/api/charts', sendJson('POST', { title, spec })),
+  updateChart: (id: string, patch: { title?: string; spec?: ChartSpec }) =>
+    request<Chart>(`/api/charts/${id}`, sendJson('PATCH', patch)),
+  duplicateChart: (id: string) => request<Chart>(`/api/charts/${id}/duplicate`, { method: 'POST' }),
+  deleteChart: (id: string) => request<void>(`/api/charts/${id}`, { method: 'DELETE' }),
+  /** The current cells a spec names, for a saved chart or an unsaved one in the builder. */
+  resolveChart: (spec: ChartSpec) => request<ResolvedData>('/api/charts/resolve', sendJson('POST', { spec })),
+  addChartToNote: (chartId: string) => request<Note>(`/api/charts/${chartId}/note`, { method: 'POST' }),
+  attachChart: (noteId: string, chartId: string) =>
+    request<void>(`/api/notes/${noteId}/charts/${chartId}`, { method: 'PUT' }),
+  detachChart: (noteId: string, chartId: string) =>
+    request<void>(`/api/notes/${noteId}/charts/${chartId}`, { method: 'DELETE' }),
   /** The raw response: on success its body is the SSE stream that `useChatStream` reads. */
   askChat: (scope: ChatScope, question: string) => fetch(chatUrl(scope), sendJson('POST', { question })),
 }
