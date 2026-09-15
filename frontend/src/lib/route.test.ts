@@ -106,7 +106,7 @@ describe('parseRoute', () => {
     expect(parseRoute(newChartHref())).toEqual({ name: 'chart-builder', chartId: null, datasetId: null })
     expect(parseRoute(newChartHref(other))).toEqual({ name: 'chart-builder', chartId: null, datasetId: other })
     expect(parseRoute(`#/charts/new?dataset=nope`)).toEqual({ name: 'chart-builder', chartId: null, datasetId: null })
-    expect(parseRoute(datasetHref(other))).toEqual({ name: 'dataset', datasetId: other })
+    expect(parseRoute(datasetHref(other))).toEqual({ name: 'dataset', datasetId: other, focus: null })
   })
 
   it('falls back to the library for anything else', () => {
@@ -116,5 +116,13 @@ describe('parseRoute', () => {
     expect(parseRoute('#/workspaces/not-an-id')).toEqual({ name: 'library' })
     expect(parseRoute('#/charts/not-an-id')).toEqual({ name: 'library' })
     expect(parseRoute('#/datasets/not-an-id')).toEqual({ name: 'library' })
+  })
+
+  it('opens a dataset focused on one cell, and ignores a half or broken focus', () => {
+    const focus = { rowId: id, columnId: other }
+    expect(datasetHref(other, focus)).toBe(`#/datasets/${other}?row=${id}&column=${other}`)
+    expect(parseRoute(datasetHref(other, focus))).toEqual({ name: 'dataset', datasetId: other, focus })
+    expect(parseRoute(`#/datasets/${other}?row=${id}`)).toEqual({ name: 'dataset', datasetId: other, focus: null })
+    expect(parseRoute(`#/datasets/${other}?row=nope&column=${other}`)).toEqual({ name: 'dataset', datasetId: other, focus: null })
   })
 })
