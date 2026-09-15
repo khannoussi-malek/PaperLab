@@ -24,6 +24,7 @@ dependencies = [
 dev = [
     "pytest>=8",
     "pytest-cov>=7.1.0",
+    "pytest-xdist>=3.8.0",
     "ruff>=0.16.7",
 ]
 
@@ -32,6 +33,9 @@ package = false
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+# 4 workers halves the run; more is slower (they wait on the shared Postgres). `-n 0` runs serially, e.g. for pdb.
+# loadgroup keeps each xdist_group on one worker (see conftest.py).
+addopts = "-n 4 --dist loadgroup"
 
 # Only applies when coverage runs (`uv run pytest --cov`), so single-file test runs aren't gated.
 [tool.coverage.run]
