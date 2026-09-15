@@ -16,13 +16,13 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from app.api import chat as chat_api
-from app.api.deps import get_transport
+from app.api.deps import get_transport, resolve_llm
 from app.config import settings
 from app.db import get_session
 from app.main import create_app
 from app.models import Author, Paper
 from app.providers import embedding, openalex
-from app.providers.llm import FakeLLM, get_llm
+from app.providers.llm import FakeLLM
 
 # The compose Postgres, published on the host. Every test runs inside a transaction that is
 # rolled back afterwards, so tests can share the dev database without leaving rows behind.
@@ -217,16 +217,21 @@ def parse_sse(raw: str) -> list[tuple[str, dict]]:
 
 
 @pytest.fixture
-def fake_llm(app, session, monkeypatch):
-    fake = FakeLLM()
-    app.dependency_overrides[get_llm] = lambda: fake
+def answers_in_test_transaction(session, monkeypatch):
+    """The answer is saved in a fresh session after the stream; keep it inside the test transaction."""
 
     @asynccontextmanager
     async def test_session():
         yield session
 
-    # The answer is saved in a fresh session after the stream; keep it inside the test transaction.
     monkeypatch.setattr(chat_api, "SessionLocal", test_session)
+
+
+@pytest.fixture
+def fake_llm(app, answers_in_test_transaction):
+    """Every chat question answered by this FakeLLM, whatever model it names."""
+    fake = FakeLLM()
+    app.dependency_overrides[resolve_llm] = lambda: fake
     return fake
 
 

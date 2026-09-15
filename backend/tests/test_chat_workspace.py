@@ -245,10 +245,12 @@ async def test_workspace_answers_are_saved_and_listed_per_workspace(session, emb
     prepared = await chat.prepare(session, chat.Scope(workspace_id=workspace.id), "why?", embedder)
     content = "Both [C2][C1], as [N2] and [N1] say. Not [N7]."
 
-    output_id = await chat.save_answer(session, chat.Scope(workspace_id=workspace.id), "why?", prepared, content, "m")
-    await chat.save_answer(session, chat.Scope(workspace_id=other.id), "elsewhere", prepared, "x", "m")
+    output_id = await chat.save_answer(
+        session, chat.Scope(workspace_id=workspace.id), "why?", prepared, content, "m", "Conn"
+    )
+    await chat.save_answer(session, chat.Scope(workspace_id=other.id), "elsewhere", prepared, "x", "m", "Conn")
     single = chat.Prepared(sources=[], system="", prompt="", whole_paper=True)
-    await chat.save_answer(session, dpr.id, "single paper", single, "y", "m")
+    await chat.save_answer(session, dpr.id, "single paper", single, "y", "m", "Conn")
     await session.execute(delete(Note).where(Note.id == deleted.id))
 
     row = await session.get(LLMOutput, output_id)

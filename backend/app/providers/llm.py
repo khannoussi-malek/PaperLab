@@ -5,7 +5,6 @@ the connection and its host, never the key: some providers echo a rejected key i
 """
 
 import asyncio
-import functools
 import json
 from collections.abc import AsyncIterator
 from urllib.parse import urlsplit
@@ -294,14 +293,3 @@ async def _anthropic_models(connection, http_client) -> list[str] | None:
     except anthropic.APIStatusError as exc:
         message = provider_message(exc.response.text, connection.api_key)
         raise LLMError(f"{connection.label} returned {exc.status_code}: {message}") from exc
-
-
-@functools.cache
-def get_llm() -> LLM:
-    """The configured provider, built once per process. Chat routes depend on it, so tests override it."""
-    if settings.llm_provider == "anthropic":
-        return AnthropicLLM(settings.llm_model, settings.anthropic_api_key)
-    if settings.llm_provider == "fake":
-        # A small delay so the E2E stack streams visibly instead of in one burst.
-        return FakeLLM(delay=0.05)
-    return OllamaLLM(settings.llm_model, settings.ollama_url)

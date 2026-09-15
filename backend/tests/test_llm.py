@@ -489,18 +489,3 @@ async def test_list_models_in_fake_mode_is_a_fixed_list_and_rejects_bad_key(monk
     assert await llm.list_models(Row("ollama", "Ollama", OLLAMA_URL)) == llm.FAKE_MODELS
     with pytest.raises(LLMUnavailable, match="^Key rejected by Groq$"):
         await llm.list_models(Row("openai_compatible", "Groq", COMPATIBLE_URL, "bad-key"))
-
-
-@pytest.mark.parametrize(
-    ("provider", "expected"),
-    [("ollama", llm.OllamaLLM), ("anthropic", llm.AnthropicLLM), ("fake", llm.FakeLLM)],
-)
-def test_get_llm_builds_the_configured_provider_once(monkeypatch, provider, expected):
-    monkeypatch.setattr(settings, "llm_provider", provider)
-    monkeypatch.setattr(settings, "anthropic_api_key", "sk-test")
-    llm.get_llm.cache_clear()
-    try:
-        assert isinstance(llm.get_llm(), expected)
-        assert llm.get_llm() is llm.get_llm()
-    finally:
-        llm.get_llm.cache_clear()
