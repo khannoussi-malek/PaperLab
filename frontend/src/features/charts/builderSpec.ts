@@ -26,9 +26,14 @@ export const isSeriesType = (type: ChartType): type is SeriesType =>
 
 export type ColumnInfo = { id: string; name: string; numeric: boolean; hasErrors: boolean; samples: string[] }
 
-/** Each column with whether it holds numbers (any parsed value) and its first few texts, for the column pickers. */
+const described = new WeakMap<Dataset, ColumnInfo[]>()
+
+/** Each column with whether it holds numbers (any parsed value) and its first few texts, for the column pickers.
+ * Remembered per dataset object: the builder asks on every render, and a refetched dataset is a new object. */
 export function columnInfo(dataset: Dataset): ColumnInfo[] {
-  return dataset.columns.map((column) => {
+  const known = described.get(dataset)
+  if (known) return known
+  const info = dataset.columns.map((column) => {
     const cells = dataset.rows.map((row) => row.cells.find((c) => c.column_id === column.id)).filter((c) => c !== undefined)
     return {
       id: column.id,
@@ -38,7 +43,15 @@ export function columnInfo(dataset: Dataset): ColumnInfo[] {
       samples: cells.map((c) => c.raw).filter(Boolean).slice(0, 3),
     }
   })
+  described.set(dataset, info)
+  return info
 }
+
+const TITLE_MAX_CHARS = 200
+const COPY_SUFFIX = ' (copy)'
+
+/** "Save as copy"'s title, cut to fit the title limit the way the server's own Duplicate does. */
+export const copyTitle = (title: string): string => title.slice(0, TITLE_MAX_CHARS - COPY_SUFFIX.length) + COPY_SUFFIX
 
 export const nextSeriesId = (series: SeriesSpec[]): string => {
   const taken = new Set(series.map((s) => s.id))

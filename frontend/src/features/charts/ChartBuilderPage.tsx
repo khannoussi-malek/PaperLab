@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input'
 import { chartHref, chartsHref } from '@/lib/route'
 import { cn } from '@/lib/utils'
 import { AxesFields } from './AxesFields'
-import { changeType, isSeriesType, newSeries, panelProblem, quickChartSpec, specDatasetIds, type ChartType } from './builderSpec'
+import { changeType, copyTitle, isSeriesType, newSeries, panelProblem, quickChartSpec, specDatasetIds, type ChartType } from './builderSpec'
 import { ChartTypePicker } from './ChartTypePicker'
 import { ChartView } from './ChartView'
 import { DataButton, DataPicker } from './DataPicker'
@@ -121,7 +121,7 @@ export function ChartBuilderPage({ chartId, datasetId }: Props) {
         await update.mutateAsync({ id: chartId, title: name, spec })
         window.location.hash = chartHref(chartId)
       } else {
-        const created = await create.mutateAsync({ title: asCopy ? `${name} (copy)` : name, spec })
+        const created = await create.mutateAsync({ title: asCopy ? copyTitle(name) : name, spec })
         window.location.hash = chartHref(created.id)
       }
     } catch {
@@ -129,7 +129,8 @@ export function ChartBuilderPage({ chartId, datasetId }: Props) {
     }
   }
 
-  const loadError = chart.error ?? quick.error
+  // A failed background refetch keeps what already loaded: only a load that never succeeded is an error here.
+  const loadError = (chart.data ? null : chart.error) ?? (quick.data ? null : quick.error)
   const problem = spec ? panelProblem(spec) : null
   const saving = create.isPending || update.isPending
   const saveError = create.error ?? update.error
