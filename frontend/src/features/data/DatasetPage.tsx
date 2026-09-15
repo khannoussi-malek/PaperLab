@@ -95,7 +95,7 @@ export function DatasetPage({ datasetId, focus }: Props) {
     )
   }
 
-  const error = saveGrid.error ?? rename.error
+  const error = saveGrid.error ?? rename.error ?? remove.error
 
   if (dataset.isError) {
     return (

@@ -74,3 +74,25 @@ test("a link to one cell of a dataset focuses that cell", async ({ page, request
   await page.goto(`/#/datasets/${table.id}?row=${rowId}&column=${columnId}`)
   await expect(page.getByRole('textbox', { name: 'Row 2, column 2' })).toBeFocused()
 })
+
+test('a failed delete shows the server error and leaves the dataset open', async ({ page, request, paperId, dataName }) => {
+  const table = await addTable(request, paperId, 1, `${dataName} table`, [
+    ['System', 'F1'],
+    ['BERT-B', '88.5'],
+  ])
+
+  // Only this test's own page's requests are intercepted, and only this dataset's own endpoint (not its /grid
+  // route), so this stays parallel-safe alongside the other specs hitting their own datasets.
+  await page.route(`**/api/datasets/${table.id}`, async (route) => {
+    if (route.request().method() === 'DELETE') await route.fulfill({ status: 500, json: { detail: 'Deleting failed' } })
+    else await route.continue()
+  })
+  page.on('dialog', (dialog) => dialog.accept())
+
+  await page.goto(`/#/datasets/${table.id}`)
+  await expect(page.getByRole('heading', { name: `${dataName} table` })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Delete dataset' }).click()
+  await expect(page.getByRole('alert')).toContainText('Deleting failed')
+  await expect(page.getByRole('heading', { name: `${dataName} table` })).toBeVisible()
+})
