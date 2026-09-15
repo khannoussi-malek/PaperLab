@@ -105,12 +105,18 @@ export function ChatPanel({ scope, unavailable, paperLabel, onCite, onPromoted }
   }, [busy])
 
   function captureSelection() {
-    setPromoteError(null) // a changed selection retires any error about the old one
     const selected = readAnswerSelection()
     const answer = answers.find((a) => a.id === selected?.outputId)
     const draft = selected && answer && promoteSelection(answer.content, answer.sources, selected.anchor, selected.focus)
     const box = rootRef.current?.getBoundingClientRect()
-    if (!selected || !draft || !box) return setPromote(null)
+    if (!selected || !draft || !box) {
+      setPromote(null)
+      setPromoteError(null)
+      return
+    }
+    // Only a genuinely different selection retires a shown error: a recapture of the *same* selection (a resize, or
+    // any other re-run of this function) must not silently clear an error the user hasn't acted on yet.
+    if (promote?.outputId !== selected.outputId || promote?.draft.body !== draft.body) setPromoteError(null)
     setPromote({ outputId: selected.outputId, draft, style: saveButtonPosition(selected.rect, box) })
   }
 
