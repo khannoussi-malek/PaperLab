@@ -34,6 +34,13 @@ test('hovering a paper previews its first page and details beside the list', asy
 test('the preview follows hover and keyboard focus', async ({ page, request, paperId }) => {
   // Uploaded last, so `newestId` heads the list and is previewed by default.
   const newestId = await uploadAndWaitUntilReady(request)
+  // Parallel workers upload too: keep the real list to this test's two papers, so another worker's can't head it.
+  await page.route('**/api/papers', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    const response = await route.fetch()
+    const papers: { id: string }[] = await response.json()
+    await route.fulfill({ response, json: papers.filter((p) => p.id === paperId || p.id === newestId) })
+  })
   try {
     await page.goto('/')
     const open = page.locator('.paper-preview').getByRole('link', { name: 'Open in reader' })

@@ -1,3 +1,4 @@
+import { ChartColumn } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { Note } from '@/api/client'
 import { isFresh, slideUpIn } from '@/components/motion'
@@ -5,7 +6,9 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
+import { AttachChartDialog } from './AttachChartDialog'
 import { HighlightColorPicker } from './HighlightColorPicker'
+import { NoteCharts } from './NoteCharts'
 import { ProvenanceBadge } from './ProvenanceBadge'
 
 type Props = {
@@ -39,6 +42,7 @@ export function NoteCard({
 }: Props) {
   const [editing, setEditing] = useState(startEditing)
   const [body, setBody] = useState(note.body)
+  const [attachingChart, setAttachingChart] = useState(false)
   const anchor = note.anchors.find((a) => a.paper_id === paperId)
 
   useEffect(() => {
@@ -106,6 +110,7 @@ export function NoteCard({
               </p>
             )
           )}
+          {!compact && <NoteCharts note={note} />}
           <HighlightColorPicker value={note.color} onChange={(hex) => void onColorChange(hex)} />
         </CardContent>
 
@@ -121,6 +126,12 @@ export function NoteCard({
             </>
           ) : (
             <>
+              {!compact && (
+                <Button variant="ghost" size="sm" onClick={() => setAttachingChart(true)}>
+                  <ChartColumn aria-hidden />
+                  Attach chart
+                </Button>
+              )}
               <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
                 Edit
               </Button>
@@ -131,6 +142,7 @@ export function NoteCard({
           )}
         </CardFooter>
       </Card>
+      {!compact && <AttachChartDialog note={note} open={attachingChart} onOpenChange={setAttachingChart} />}
     </Root>
   )
 }

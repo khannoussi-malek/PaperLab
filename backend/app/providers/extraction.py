@@ -7,6 +7,7 @@ import pymupdf
 
 from app.core.chunking import Block, join_lines
 from app.core.errors import InvalidInput
+from app.core.table_grid import CAPTION_GAP, Rect, Word
 
 # No TEXT_PRESERVE_LIGATURES: "ﬁ" must become "fi" or full-text search misses the word.
 # (TEXT_DEHYPHENATE has no effect in "dict" mode; join_lines handles hyphenation.)
@@ -92,3 +93,28 @@ def extract(path: str | Path) -> ExtractedDoc:
         first_page_text=first_page_text,
         metadata=metadata,
     )
+
+
+@dataclass(frozen=True)
+class RegionText:
+    words: list[Word]
+    # Text blocks around the region (CAPTION_GAP points above and below), where a table's caption sits.
+    blocks: list[tuple[Rect, str]]
+
+
+def read_region(path: str | Path, page_number: int, region: Rect) -> RegionText:
+    """The words inside `region` on a 1-based page, in PDF points with a top-left origin, like `extract`."""
+    with pymupdf.open(path) as doc:
+        # The paper's stored page count can be unknown, so the document bounds the page too.
+        if not 1 <= page_number <= doc.page_count:
+            raise InvalidInput(f"page {page_number} is outside 1..{doc.page_count}")
+        page = doc[page_number - 1]
+        words = [Word(*w[:5]) for w in page.get_text("words", clip=pymupdf.Rect(region), flags=TEXT_FLAGS)]
+        # Whole blocks, filtered by position: a clip would cut a caption block down to its lines inside the band.
+        top, bottom = region[1] - CAPTION_GAP, region[3] + CAPTION_GAP
+        blocks = [
+            (tuple(b[:4]), b[4])
+            for b in page.get_text("blocks", flags=TEXT_FLAGS)
+            if b[6] == 0 and b[3] >= top and b[1] <= bottom
+        ]
+    return RegionText(words=words, blocks=blocks)

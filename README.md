@@ -27,6 +27,8 @@ correct any of them by hand with **Edit details**. Your corrections are kept whe
 - Select text to highlight it in one of five colours, or a custom one, and add a note if you want.
 - Hover a highlight to see, edit, recolour or delete its note in place. Right-click it for the same actions and "Copy quote".
 - Resize the side panel by dragging its edge. It remembers the width.
+- Capture a table by drawing a box over it, or select a number like `88.5 ± 0.3` to keep it, add your own data from a
+CSV, and chart them side by side. Click any point on a chart to open its page in the paper.
 
 **Keep notes that stay findable**
 

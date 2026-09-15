@@ -1,3 +1,7 @@
+import { ChartBuilderPage } from './features/charts/ChartBuilderPage'
+import { ChartPage } from './features/charts/ChartPage'
+import { ChartsPage } from './features/charts/ChartsPage'
+import { DatasetPage } from './features/data/DatasetPage'
 import { LibraryPage } from './features/library/LibraryPage'
 import { ReaderPage } from './features/reader/ReaderPage'
 import { WorkspacePage } from './features/workspaces/WorkspacePage'
@@ -12,6 +16,20 @@ export default function App() {
   if (route.name === 'reader') {
     // Keyed by paper only: switching tabs must not remount the reader.
     return <ReaderPage key={route.paperId} paperId={route.paperId} tab={route.tab} target={route.target} />
+  }
+  if (route.name === 'charts') {
+    return <ChartsPage />
+  }
+  if (route.name === 'chart-builder') {
+    return (
+      <ChartBuilderPage key={route.chartId ?? `new-${route.datasetId ?? ''}`} chartId={route.chartId} datasetId={route.datasetId} />
+    )
+  }
+  if (route.name === 'chart') {
+    return <ChartPage key={route.chartId} chartId={route.chartId} />
+  }
+  if (route.name === 'dataset') {
+    return <DatasetPage key={route.datasetId} datasetId={route.datasetId} focus={route.focus} />
   }
   return <LibraryPage />
 }

@@ -314,6 +314,240 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/papers/{paper_id}/tables/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview Table */
+        post: operations["preview_table_api_papers__paper_id__tables_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/papers/{paper_id}/numbers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Number */
+        post: operations["add_number_api_papers__paper_id__numbers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/numbers/candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Number Candidates */
+        post: operations["number_candidates_api_numbers_candidates_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/datasets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Datasets */
+        get: operations["list_datasets_api_datasets_get"];
+        put?: never;
+        /** Create Dataset */
+        post: operations["create_dataset_api_datasets_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/datasets/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import Dataset */
+        post: operations["import_dataset_api_datasets_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/datasets/{dataset_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Dataset */
+        get: operations["get_dataset_api_datasets__dataset_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Dataset */
+        delete: operations["delete_dataset_api_datasets__dataset_id__delete"];
+        options?: never;
+        head?: never;
+        /** Rename Dataset */
+        patch: operations["rename_dataset_api_datasets__dataset_id__patch"];
+        trace?: never;
+    };
+    "/api/datasets/{dataset_id}/grid": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Save Grid */
+        put: operations["save_grid_api_datasets__dataset_id__grid_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/charts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Charts */
+        get: operations["list_charts_api_charts_get"];
+        put?: never;
+        /** Create Chart */
+        post: operations["create_chart_api_charts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/charts/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resolve Chart
+         * @description The current cells a spec names, for drawing a saved chart or previewing an unsaved one.
+         */
+        post: operations["resolve_chart_api_charts_resolve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/charts/{chart_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Chart */
+        get: operations["get_chart_api_charts__chart_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Chart */
+        delete: operations["delete_chart_api_charts__chart_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Chart */
+        patch: operations["update_chart_api_charts__chart_id__patch"];
+        trace?: never;
+    };
+    "/api/charts/{chart_id}/duplicate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Duplicate Chart */
+        post: operations["duplicate_chart_api_charts__chart_id__duplicate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/charts/{chart_id}/note": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add To Note
+         * @description A new note showing the chart, anchored where its data sits in each paper.
+         */
+        post: operations["add_to_note_api_charts__chart_id__note_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notes/{note_id}/charts/{chart_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Attach Chart */
+        put: operations["attach_chart_api_notes__note_id__charts__chart_id__put"];
+        post?: never;
+        /** Detach Chart */
+        delete: operations["detach_chart_api_notes__note_id__charts__chart_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -356,12 +590,177 @@ export interface components {
             /** Quoted Text */
             quoted_text: string;
         };
+        /** Axes */
+        Axes: {
+            x?: components["schemas"]["Axis"];
+            y?: components["schemas"]["Axis"];
+            z?: components["schemas"]["Axis"];
+        };
+        /** Axis */
+        Axis: {
+            /**
+             * Label
+             * @default
+             */
+            label: string;
+            /**
+             * Scale
+             * @default linear
+             * @enum {string}
+             */
+            scale: "linear" | "log" | "symlog" | "category";
+        };
+        /** Body_import_dataset_api_datasets_import_post */
+        Body_import_dataset_api_datasets_import_post: {
+            /** File */
+            file: string;
+            /** Name */
+            name?: string | null;
+        };
         /** Body_upload_paper_api_papers_post */
         Body_upload_paper_api_papers_post: {
             /** File */
             file: string;
             /** Workspace Id */
             workspace_id?: string | null;
+        };
+        /** CellIn */
+        CellIn: {
+            /**
+             * Raw
+             * @default
+             */
+            raw: string;
+            /** Extracted */
+            extracted?: string | null;
+            /** Page */
+            page?: number | null;
+            /** Bbox */
+            bbox?: [
+                number,
+                number,
+                number,
+                number
+            ][] | null;
+        };
+        /** CellOut */
+        CellOut: {
+            /**
+             * Column Id
+             * Format: uuid
+             */
+            column_id: string;
+            /** Raw */
+            raw: string;
+            /** Value */
+            value: number | null;
+            /** Error */
+            error: number | null;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "extracted" | "human";
+            /** Original Raw */
+            original_raw: string | null;
+            /** Page */
+            page: number | null;
+            /** Bbox */
+            bbox: [
+                number,
+                number,
+                number,
+                number
+            ][] | null;
+        };
+        /** ChartCreate */
+        ChartCreate: {
+            /** Title */
+            title: string;
+            /** Spec */
+            spec: components["schemas"]["SeriesChart"] | components["schemas"]["HeatmapChart"] | components["schemas"]["SurfaceChart"] | components["schemas"]["ParcoordsChart"];
+        };
+        /** ChartOut */
+        ChartOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Spec */
+            spec: components["schemas"]["SeriesChart"] | components["schemas"]["HeatmapChart"] | components["schemas"]["SurfaceChart"] | components["schemas"]["ParcoordsChart"];
+            /** Spec Version */
+            spec_version: number;
+            /** Note Ids */
+            note_ids: string[];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** ChartRefOut */
+        ChartRefOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+        };
+        /** ChartSummaryOut */
+        ChartSummaryOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "bar" | "line" | "scatter" | "box" | "scatter3d" | "heatmap" | "surface" | "contour" | "parcoords";
+            /** Sources */
+            sources: string[];
+            /** Note Count */
+            note_count: number;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * ChartUpdate
+         * @description A rename, a new spec, or both.
+         */
+        ChartUpdate: {
+            /** Title */
+            title?: string | null;
+            /** Spec */
+            spec?: (components["schemas"]["SeriesChart"] | components["schemas"]["HeatmapChart"] | components["schemas"]["SurfaceChart"] | components["schemas"]["ParcoordsChart"]) | null;
+        };
+        /** ChartUseOut */
+        ChartUseOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Column Ids */
+            column_ids: string[];
         };
         /** ChatAnswer */
         ChatAnswer: {
@@ -450,6 +849,149 @@ export interface components {
             /** Strategy Ver */
             strategy_ver: number;
         };
+        /** ColumnIn */
+        ColumnIn: {
+            /** Id */
+            id?: string | null;
+            /**
+             * Name
+             * @default
+             */
+            name: string;
+            /** Unit */
+            unit?: string | null;
+        };
+        /** ColumnOut */
+        ColumnOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Position */
+            position: number;
+            /** Name */
+            name: string;
+            /** Unit */
+            unit: string | null;
+        };
+        /** DatasetCreate */
+        DatasetCreate: {
+            /** Name */
+            name: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "table" | "user";
+            /** Paper Id */
+            paper_id?: string | null;
+            /** Page */
+            page?: number | null;
+            /** Region */
+            region?: [
+                number,
+                number,
+                number,
+                number
+            ] | null;
+            grid: components["schemas"]["GridIn"];
+        };
+        /** DatasetOut */
+        DatasetOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "table" | "numbers" | "user";
+            /** Paper Id */
+            paper_id: string | null;
+            /** Paper Title */
+            paper_title: string | null;
+            /** Page */
+            page: number | null;
+            /** Region */
+            region: [
+                number,
+                number,
+                number,
+                number
+            ] | null;
+            /** Row Count */
+            row_count: number;
+            /** Column Count */
+            column_count: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Columns */
+            columns: components["schemas"]["ColumnOut"][];
+            /** Rows */
+            rows: components["schemas"]["RowOut"][];
+            /** Charts */
+            charts: components["schemas"]["ChartUseOut"][];
+        };
+        /** DatasetRename */
+        DatasetRename: {
+            /** Name */
+            name: string;
+        };
+        /** DatasetSummaryOut */
+        DatasetSummaryOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "table" | "numbers" | "user";
+            /** Paper Id */
+            paper_id: string | null;
+            /** Paper Title */
+            paper_title: string | null;
+            /** Page */
+            page: number | null;
+            /** Region */
+            region: [
+                number,
+                number,
+                number,
+                number
+            ] | null;
+            /** Row Count */
+            row_count: number;
+            /** Column Count */
+            column_count: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
         /** DoneEvent */
         DoneEvent: {
             /**
@@ -471,10 +1013,81 @@ export interface components {
             /** Retryable */
             retryable: boolean;
         };
+        /**
+         * GridIn
+         * @description A whole grid. Existing rows and columns carry their ids; new ones have none.
+         */
+        GridIn: {
+            /** Columns */
+            columns: components["schemas"]["ColumnIn"][];
+            /** Rows */
+            rows: components["schemas"]["RowIn"][];
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** HeatmapChart */
+        HeatmapChart: {
+            /**
+             * Version
+             * @default 1
+             * @constant
+             */
+            version: 1;
+            axes?: components["schemas"]["Axes"];
+            layout?: components["schemas"]["Layout"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "heatmap";
+            /**
+             * Dataset Id
+             * Format: uuid
+             */
+            dataset_id: string;
+            /**
+             * Row Labels
+             * Format: uuid
+             */
+            row_labels: string;
+            /** Columns */
+            columns: string[];
+        };
+        /** Layout */
+        Layout: {
+            /**
+             * Barmode
+             * @default group
+             * @enum {string}
+             */
+            barmode: "group" | "stack";
+            /**
+             * Facet
+             * @default none
+             * @enum {string}
+             */
+            facet: "none" | "series";
+            /**
+             * Facet Columns
+             * @default 2
+             */
+            facet_columns: number;
+        };
+        /** MissingOut */
+        MissingOut: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "dataset" | "column" | "row";
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
         };
         /** NoteCreate */
         NoteCreate: {
@@ -520,6 +1133,8 @@ export interface components {
             updated_at: string;
             /** Anchors */
             anchors: components["schemas"]["AnchorOut"][];
+            /** Charts */
+            charts: components["schemas"]["ChartRefOut"][];
         };
         /** NoteSource */
         NoteSource: {
@@ -549,6 +1164,56 @@ export interface components {
             body?: string | null;
             /** Color */
             color?: string | null;
+        };
+        /** NumberAddedOut */
+        NumberAddedOut: {
+            /**
+             * Dataset Id
+             * Format: uuid
+             */
+            dataset_id: string;
+            /**
+             * Row Id
+             * Format: uuid
+             */
+            row_id: string;
+        };
+        /** NumberCandidateOut */
+        NumberCandidateOut: {
+            /** Raw */
+            raw: string;
+            /** Value */
+            value: number;
+            /** Error */
+            error: number | null;
+            /** Unit Hint */
+            unit_hint: string | null;
+        };
+        /** NumberCandidatesRequest */
+        NumberCandidatesRequest: {
+            /** Text */
+            text: string;
+        };
+        /** NumberCreate */
+        NumberCreate: {
+            /** Label */
+            label: string;
+            /** Raw */
+            raw: string;
+            /**
+             * Unit
+             * @default
+             */
+            unit: string;
+            /** Page */
+            page: number;
+            /** Bbox */
+            bbox: [
+                number,
+                number,
+                number,
+                number
+            ][];
         };
         /** PaperOut */
         PaperOut: {
@@ -619,6 +1284,31 @@ export interface components {
             /** Is Retracted */
             is_retracted?: boolean | null;
         };
+        /** ParcoordsChart */
+        ParcoordsChart: {
+            /**
+             * Version
+             * @default 1
+             * @constant
+             */
+            version: 1;
+            axes?: components["schemas"]["Axes"];
+            layout?: components["schemas"]["Layout"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "parcoords";
+            /**
+             * Dataset Id
+             * Format: uuid
+             */
+            dataset_id: string;
+            /** Dimensions */
+            dimensions: string[];
+            /** Color By */
+            color_by?: string | null;
+        };
         /** PromoteRequest */
         PromoteRequest: {
             /**
@@ -630,6 +1320,185 @@ export interface components {
             body: string;
             /** Chunk Ids */
             chunk_ids: string[];
+        };
+        /** ResolveRequest */
+        ResolveRequest: {
+            /** Spec */
+            spec: components["schemas"]["SeriesChart"] | components["schemas"]["HeatmapChart"] | components["schemas"]["SurfaceChart"] | components["schemas"]["ParcoordsChart"];
+        };
+        /** ResolvedCellOut */
+        ResolvedCellOut: {
+            /** Raw */
+            raw: string;
+            /** Value */
+            value: number | null;
+            /** Error */
+            error: number | null;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "extracted" | "human";
+            /** Original Raw */
+            original_raw: string | null;
+            /** Page */
+            page: number | null;
+            /** Bbox */
+            bbox: [
+                number,
+                number,
+                number,
+                number
+            ][] | null;
+        };
+        /** ResolvedColumnOut */
+        ResolvedColumnOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Unit */
+            unit: string | null;
+        };
+        /** ResolvedDataOut */
+        ResolvedDataOut: {
+            /** Datasets */
+            datasets: components["schemas"]["ResolvedDatasetOut"][];
+            /** Missing */
+            missing: components["schemas"]["MissingOut"][];
+        };
+        /** ResolvedDatasetOut */
+        ResolvedDatasetOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "table" | "numbers" | "user";
+            /** Paper Id */
+            paper_id: string | null;
+            /** Paper Title */
+            paper_title: string | null;
+            /** Page */
+            page: number | null;
+            /** Region */
+            region: [
+                number,
+                number,
+                number,
+                number
+            ] | null;
+            /** Columns */
+            columns: components["schemas"]["ResolvedColumnOut"][];
+            /** Rows */
+            rows: components["schemas"]["ResolvedRowOut"][];
+        };
+        /** ResolvedRowOut */
+        ResolvedRowOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Position */
+            position: number;
+            /** Cells */
+            cells: {
+                [key: string]: components["schemas"]["ResolvedCellOut"];
+            };
+        };
+        /** RowIn */
+        RowIn: {
+            /** Id */
+            id?: string | null;
+            /** Cells */
+            cells: components["schemas"]["CellIn"][];
+        };
+        /** RowOut */
+        RowOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Position */
+            position: number;
+            /** Cells */
+            cells: components["schemas"]["CellOut"][];
+        };
+        /**
+         * Series
+         * @description One series: a y column (and x, z, error columns) from one dataset, optionally only some of its rows.
+         */
+        Series: {
+            /** Id */
+            id: string;
+            /**
+             * Name
+             * @default
+             */
+            name: string;
+            /**
+             * Dataset Id
+             * Format: uuid
+             */
+            dataset_id: string;
+            /** X */
+            x?: string | null;
+            /**
+             * Y
+             * Format: uuid
+             */
+            y: string;
+            /** Z */
+            z?: string | null;
+            /**
+             * Error
+             * @default none
+             */
+            error: ("none" | "cells") | string;
+            /** Rows */
+            rows?: string[] | null;
+            /**
+             * Trend
+             * @default none
+             * @enum {string}
+             */
+            trend: "none" | "linear";
+            /**
+             * Multiply
+             * @default 1
+             */
+            multiply: number;
+            /** Color */
+            color?: string | null;
+        };
+        /** SeriesChart */
+        SeriesChart: {
+            /**
+             * Version
+             * @default 1
+             * @constant
+             */
+            version: 1;
+            axes?: components["schemas"]["Axes"];
+            layout?: components["schemas"]["Layout"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "bar" | "box" | "line" | "scatter" | "scatter3d";
+            /** Series */
+            series: components["schemas"]["Series"][];
         };
         /** SourcesEvent */
         SourcesEvent: {
@@ -643,6 +1512,63 @@ export interface components {
             notes_used: number | null;
             /** Notes Total */
             notes_total: number | null;
+        };
+        /**
+         * SurfaceChart
+         * @description Surface or contour from long-format data: one row per (x, y) point, pivoted into a grid when drawn.
+         */
+        SurfaceChart: {
+            /**
+             * Version
+             * @default 1
+             * @constant
+             */
+            version: 1;
+            axes?: components["schemas"]["Axes"];
+            layout?: components["schemas"]["Layout"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "contour" | "surface";
+            /**
+             * Dataset Id
+             * Format: uuid
+             */
+            dataset_id: string;
+            /**
+             * X
+             * Format: uuid
+             */
+            x: string;
+            /**
+             * Y
+             * Format: uuid
+             */
+            y: string;
+            /**
+             * Z
+             * Format: uuid
+             */
+            z: string;
+        };
+        /** TablePreviewOut */
+        TablePreviewOut: {
+            /** Name */
+            name: string | null;
+            grid: components["schemas"]["GridIn"];
+        };
+        /** TablePreviewRequest */
+        TablePreviewRequest: {
+            /** Page */
+            page: number;
+            /** Region */
+            region: [
+                number,
+                number,
+                number,
+                number
+            ];
         };
         /** TokenEvent */
         TokenEvent: {
@@ -1483,6 +2409,643 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["NoteOut"][];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_table_api_papers__paper_id__tables_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                paper_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TablePreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TablePreviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_number_api_papers__paper_id__numbers_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                paper_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NumberCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NumberAddedOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    number_candidates_api_numbers_candidates_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NumberCandidatesRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NumberCandidateOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_datasets_api_datasets_get: {
+        parameters: {
+            query?: {
+                paper_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DatasetSummaryOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_dataset_api_datasets_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DatasetCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DatasetOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_dataset_api_datasets_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_dataset_api_datasets_import_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DatasetOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_dataset_api_datasets__dataset_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dataset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DatasetOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_dataset_api_datasets__dataset_id__delete: {
+        parameters: {
+            query?: {
+                force?: boolean;
+            };
+            header?: never;
+            path: {
+                dataset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rename_dataset_api_datasets__dataset_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dataset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DatasetRename"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DatasetOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_grid_api_datasets__dataset_id__grid_put: {
+        parameters: {
+            query?: {
+                force?: boolean;
+            };
+            header?: never;
+            path: {
+                dataset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GridIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DatasetOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_charts_api_charts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChartSummaryOut"][];
+                };
+            };
+        };
+    };
+    create_chart_api_charts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChartCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChartOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resolve_chart_api_charts_resolve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResolvedDataOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_chart_api_charts__chart_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chart_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChartOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_chart_api_charts__chart_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chart_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_chart_api_charts__chart_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chart_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChartUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChartOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    duplicate_chart_api_charts__chart_id__duplicate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chart_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChartOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_to_note_api_charts__chart_id__note_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chart_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    attach_chart_api_notes__note_id__charts__chart_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                note_id: string;
+                chart_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    detach_chart_api_notes__note_id__charts__chart_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                note_id: string;
+                chart_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
