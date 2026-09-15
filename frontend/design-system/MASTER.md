@@ -100,7 +100,14 @@ Fonts: body `Atkinson Hyperlegible Next Variable` (`font-sans`), headings `Crims
   "DOI" fields and "Retracted" checkbox, the "Workspaces" navigation with "New workspace" / "Workspace name" /
   "Workspace actions" / "Rename" / "Delete", the "Paper actions" / "Add to workspace…" / "Remove from workspace" /
   "Add papers" / "Search papers" names, the "Notes" / "Chat" and "Papers" / "Notes" / "Chat" tabs, and the colour names
-  "Yellow" … "Orange" / "Custom colour").
+  "Yellow" … "Orange" / "Custom colour"). Also `article.dataset-card`, `.capture-box`, `.capture-crop`,
+  `.table-region`, `.table-marker`, `.number-mark`, `.chart-view`, `.chart-warning`, `.chart-row`, `a.own-dataset`,
+  `.series-card`, `.note-chart`, the "Data" tab, and the names "Capture table" / "Table name" / "Save table" /
+  "Column N name" / "Column N actions" / "Row N actions" / "Row R, column C" / "Add as number" / "Label" / "Number
+  found" / "Value" / "± error" / "Unit" / "Add number" / "Charts" / "New dataset" / "New chart" / "Chart actions" /
+  "Chart title" / "Dataset name" / "Pasted data" / "CSV file" / "Create dataset" / "Charts use this data" / "Save
+  anyway" / "View data table" / "Chart data" / "Add series" / "Choose data" / "Save chart" / "Save changes" / "Save
+  as copy" / "Attach chart" / "Search charts" / "Remove chart" / "Add to note…" / "Quick chart" / "Open".
   Style with utility classes next to them.
 - **Notes filter.** The top of the Notes tab has two filter chips in a `role="group"` "Show notes from": `aria-pressed`
   rounded-full buttons "You" and "AI", each with a count (`tabular-nums`). On: filled in the provenance badge's colours
@@ -242,6 +249,77 @@ Input with a custom dropdown; Dialog for modal content, High).
   Back returns to the answer): `[C…]` to the reader flashing the passage, `[N…]` to the reader focusing the note. The
   empty chat is "Ask this workspace" with starters that look across its papers. An empty workspace disables the
   starters and the question box, and the hint under the box says "Add papers to chat with this workspace."
+
+## Data and charts
+
+Patterns from ui-ux-pro-max (`search.py "editable data grid spreadsheet table cell editing" --domain ux`: wide tables
+scroll inside their own wrapper; `search.py "chart builder configure series live preview form" --domain ux`: every
+field labelled, loading then success or error on save; `--stack shadcn "select popover toggle group dialog form"`:
+shadcn `Select`, never a native select) and the dataviz skill (below).
+- **Data tab:** the reader's third tab. A `article.dataset-card[data-dataset-id]` per dataset: `Table2` (table) or
+  `Hash` (numbers) icon, the name (truncated, full text in `title`), "p. 7 · 3 rows × 4 columns" or "5 numbers", then
+  ghost buttons "Show in paper" (`Crosshair`, tables only), "Open" (a link to the dataset page) and "Quick chart"
+  (`ChartColumn`).
+- **Capture table:** an outline toggle "Capture table" (`Table2`, `aria-pressed`) in the reader toolbar. While on, the
+  pages show a crosshair, text can't be selected, and dragging draws a `.capture-box` (2 px `primary` outline,
+  `primary/10` fill, never glass). Escape or the toggle leaves the mode. Releasing opens the "Capture table" dialog
+  (`max-w-5xl`, strong glass): the PDF crop rendered with PDF.js at 2× (`.capture-crop`), a "Table name" field
+  pre-filled from the caption, the grid editor, and Cancel + primary "Save table". Saved tables draw a 1 px
+  `primary/40` `.table-region` outline and a `.table-marker` (`Table2`, 14 pt) inside its top-right corner; clicking the
+  marker opens the Data tab. The marker is found by position like highlights (the text layer covers the page).
+- **Grid editor:** a shadcn `Table` in an `overflow-auto` wrapper. Header cells are inputs "Column N name" with a
+  "Column N actions" menu (Merge with next column, Split after first word, Fill down, Set unit…, Insert column left,
+  Insert column right, Delete column). Each body row starts with a "Row N actions" menu (Use as header, Insert row
+  above, Insert row below, Delete row). Body cells are borderless inputs "Row R, column C" (`tabular-nums`). An edited
+  cell has `data-edited="true"`, a dashed `ring-1 ring-muted-foreground/60` and `title="Edited: extraction read “…”"`
+  (never colour alone: the tooltip and the dataset page's "edited" legend say it). "Add row" and "Add column" are ghost
+  buttons under the table.
+- **Numbers:** "Add as number" (`Hash`) in the draft menu (after "Add note…") and as a ghost button in the note composer.
+  It opens the "Add as number" dialog: "Label" (required), the numbers found in the selection as a `radiogroup`
+  "Number found" of outline chips (`88.5 ± 0.3`), "Value" and "± error" fields filled from the chosen chip, "Unit"
+  filled from the word after it, and primary "Add number". A captured number is underlined on the page with a
+  `.number-mark`: a 2 px dashed bottom border in `foreground/60`, never violet (AI) and never a highlight fill.
+- **Charts page (`#/charts`):** the library's layout, `font-heading` "Charts" over "N charts · M datasets of your own",
+  outline "New dataset" and primary "New chart". A glass list of `.chart-row[data-chart-id]`: type icon, title, sources
+  in muted text ("BERT, XLNet, My data"), "Used in N notes · edited 2 h ago", and a "Chart actions" menu (Edit, Rename,
+  Duplicate, Delete). Rename is an inline `Input` "Chart title" (Enter saves, Escape cancels, blank cancels). Delete
+  asks with `window.confirm`, saying how many notes show the chart and that they are kept. Below, "My data": a list of
+  `a.own-dataset` links. The library header gains an outline "Charts" link (`ChartColumn`).
+- **New dataset:** a dialog with shadcn `Tabs` "Type" (name + column count → an empty grid), "Paste" (a `Textarea`
+  "Pasted data" for tab-separated or CSV text) and "Upload CSV" (a native file input "CSV file"), a "Dataset name"
+  field, and primary "Create dataset"; it opens the new dataset's page.
+- **Dataset page (`#/datasets/:id`):** "← Back" (to the paper's Data tab, or the Charts page for own data), the name as
+  an inline-renameable `h1`, the source line, the grid editor, and a sticky footer with "Delete dataset" (destructive
+  ghost), "Quick chart" and primary "Save". Saving a grid that drops columns charts use opens an `AlertDialog`-style
+  shadcn `Dialog` "Charts use this data" listing those chart titles, with Cancel and destructive "Save anyway". A
+  focused cell from a chart point (`?row=&column=`) is scrolled to and focused once.
+- **Chart page (`#/charts/:id`):** "← Charts", the title as an inline-renameable `h1`, outline "Edit", and a "Chart
+  actions" menu (Duplicate, Add to note…, Delete). The chart sits in a glass card.
+- **Chart view:** `.chart-view[data-chart-type][data-series-count]`, at least 360 px tall including the axis band. While
+  data refetches the last drawing stays at `opacity-60` (no skeleton). A warning shows above it as `.chart-warning`
+  (`role="status"`, `TriangleAlert`, text on `muted`). Plotly's mode bar keeps only "Download plot as PNG", a "Download
+  SVG" button and "Reset axes"; `displaylogo: false`. Hover shows the raw text first, "· edited" when edited, then the
+  series and label, then the source. Clicking a bar, point or cell opens its source. Under the chart, a ghost "View
+  data table" toggle (`aria-expanded`) shows a shadcn `Table` with `aria-label="Chart data"`.
+- **Builder (`#/charts/new`, `#/charts/new?dataset=`, `#/charts/:id/edit`):** two columns, controls (`22rem`) and the
+  live preview. Chart type: three `role="radiogroup"`s labelled by their group, each type a toggle chip with its icon.
+  Series: one `.series-card` per series ("Series N" name input, "Data" picker (a `Command` dialog "Choose data", grouped
+  by paper, "My data" last), "X", "Y", "Z", "Error bars" `Select`s whose items show sample values, "Rows" checkboxes in a
+  collapsible, "Colour" swatches named "Colour 1"…"Colour 6", "Trend line" `Select`, "Multiply by" number input, and a
+  "Remove series" icon button); ghost "Add series". Grid charts show "Data", then their column pickers. Axes: "X axis
+  label", "Y axis label", "Y axis scale" `Select`; layout: "Bar mode" (Grouped/Stacked) and a "Small multiples"
+  checkbox; "Chart title". Footer: primary "Save chart"; when editing, primary "Save changes" and outline "Save as copy",
+  with "Used in N notes, which will show this change" when N > 0. A refused save shows the server's message in a
+  destructive `Alert` above the footer.
+- **Charts in notes:** a note card shows each chart as `.note-chart[data-chart-id]`: its title as a link to the chart
+  page, a small static plot (`staticPlot`, 160 px tall) drawn once the card scrolls into view, and a "Remove chart"
+  icon button. The card's footer gains ghost "Attach chart", opening the "Attach chart" dialog (`Command` "Search
+  charts"). The chart page's "Add to note…" creates the note and shows "Added to a note in N papers" with a link to the
+  first; a chart of only your own data shows "This chart only uses your own data, so there's no paper to note it in.
+  Attach it to a note instead."
+- **Colours:** the series palette and blue ramp in Global Constraints (validated with the dataviz checker on `card`
+  surfaces). Several series colours are under 3:1 on the surface, so every chart keeps its legend (2+ series) and its
+  data table view.
 
 ## Pre-delivery check (from ui-ux-pro-max Quick Reference §1–§3)
 

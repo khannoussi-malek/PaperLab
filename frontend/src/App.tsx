@@ -1,3 +1,4 @@
+import { ChartPage } from './features/charts/ChartPage'
 import { LibraryPage } from './features/library/LibraryPage'
 import { ReaderPage } from './features/reader/ReaderPage'
 import { WorkspacePage } from './features/workspaces/WorkspacePage'
@@ -12,6 +13,9 @@ export default function App() {
   if (route.name === 'reader') {
     // Keyed by paper only: switching tabs must not remount the reader.
     return <ReaderPage key={route.paperId} paperId={route.paperId} tab={route.tab} target={route.target} />
+  }
+  if (route.name === 'chart') {
+    return <ChartPage key={route.chartId} chartId={route.chartId} />
   }
   return <LibraryPage />
 }

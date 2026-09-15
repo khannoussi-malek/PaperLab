@@ -59,6 +59,60 @@ export async function removeWorkspacesNamed(request: APIRequestContext, prefix: 
   }
 }
 
+/** Deletes every chart whose title starts with `prefix`, then every dataset whose name does (even if charts use it). */
+export async function removeChartsAndDataNamed(request: APIRequestContext, prefix: string) {
+  const charts = await request.get('/api/charts')
+  for (const chart of charts.ok() ? await charts.json() : []) {
+    if (chart.title.startsWith(prefix)) await request.delete(`/api/charts/${chart.id}`)
+  }
+  const datasets = await request.get('/api/datasets')
+  for (const dataset of datasets.ok() ? await datasets.json() : []) {
+    if (dataset.name.startsWith(prefix)) await request.delete(`/api/datasets/${dataset.id}?force=true`)
+  }
+}
+
+type SavedDataset = { id: string; columns: { id: string; name: string }[] }
+
+/** A bar chart spec: each named y column of `dataset` against its x column. */
+export function barSpec(dataset: SavedDataset, x: string | null, ys: string[]) {
+  const column = (name: string) => {
+    const found = dataset.columns.find((c) => c.name === name)
+    if (!found) throw new Error(`no column ${name}`)
+    return found.id
+  }
+  return {
+    version: 1,
+    type: 'bar',
+    series: ys.map((y, i) => ({
+      id: `s${i + 1}`,
+      name: '',
+      dataset_id: dataset.id,
+      x: x === null ? null : column(x),
+      y: column(y),
+      error: 'none',
+      trend: 'none',
+      multiply: 1,
+    })),
+  }
+}
+
+/** Creates a chart through the API and returns it. */
+export async function addChart(request: APIRequestContext, title: string, spec: object) {
+  const created = await request.post('/api/charts', { data: { title, spec } })
+  expect(created.status()).toBe(201)
+  return (await created.json()) as { id: string; title: string }
+}
+
+/**
+ * Clicks the `index`th bar of the chart on the page. Plotly's drag layer lies over the bars, so the click goes to the
+ * bar's position rather than its element; just above the bar's base, which is on the chart for linear axes.
+ */
+export async function clickBar(page: Page, index: number) {
+  const box = await page.locator('.chart-view .barlayer .point path').nth(index).boundingBox()
+  if (!box) throw new Error(`bar ${index} is not drawn`)
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height - 4)
+}
+
 type Fixtures = {
   /** A freshly ingested copy of the fixture paper, removed after the test even if it fails. */
   paperId: string
@@ -68,6 +122,8 @@ type Fixtures = {
   workspaceName: string
   /** An empty workspace named `workspaceName`. */
   workspaceId: string
+  /** A unique prefix for chart titles and dataset names. Every chart and dataset starting with it is deleted after the test. */
+  dataName: string
 }
 
 export const test = base.extend<Fixtures>({
@@ -91,6 +147,11 @@ export const test = base.extend<Fixtures>({
     const created = await request.post('/api/workspaces', { data: { name: workspaceName } })
     expect(created.status()).toBe(201)
     await use((await created.json()).id)
+  },
+  dataName: async ({ request }, use) => {
+    const name = `E2E data ${randomUUID().slice(0, 8)}`
+    await use(name)
+    await removeChartsAndDataNamed(request, name)
   },
 })
 
