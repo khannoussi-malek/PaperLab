@@ -70,13 +70,14 @@ export function useChatStream(scope: ChatScope, modelId: string | null) {
     controller.current?.abort() // a newer question replaces whatever this panel was still asking
     const current = new AbortController()
     controller.current = current
-    const set = (updater: (s: ChatStream) => ChatStream) => mounted.current && setStream(updater)
+    // Also guards against a superseded question's events that were already parsed out of a chunk its reader had
+    // buffered before the abort took effect: without the aborted check here, those still reach `setStream`, since
+    // draining an async generator's already-yielded backlog doesn't itself touch the (now rejecting) reader again.
+    const set = (updater: (s: ChatStream) => ChatStream) => mounted.current && !current.signal.aborted && setStream(updater)
 
     set(() => ({ ...IDLE, status: 'sources', question }))
-    const fail = (problem: ChatProblem, tail: Segment[] = []) => {
-      if (current.signal.aborted) return // superseded by a newer question
+    const fail = (problem: ChatProblem, tail: Segment[] = []) =>
       set((s) => ({ ...s, status: 'error', problem, segments: appendSegments(s.segments, tail) }))
-    }
 
     const response = await api.askChat(scope, question, modelId, current.signal).catch(() => null)
     if (!response) return fail({ message: "Can't reach the PaperLab API.", retryable: true, reindex: false })

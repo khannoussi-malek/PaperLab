@@ -13,30 +13,70 @@ async function openChat(page: Page, paperId: string) {
   await expect(page.getByRole('tab', { name: 'Chat' })).toHaveAttribute('aria-selected', 'true')
 }
 
+type ChatStreamScript = {
+  /** Token text sent one per `pull()`, each waited `delayMs` first. */
+  lines: string[]
+  delayMs: number
+  /** Set: the last pull sends `done` and marks `window.chatSaved` -- standing in for the server saving the answer.
+   *  Null: the stream just never produces anything more once `lines` runs out (still "streaming", forever). */
+  done: { outputId: string } | null
+}
+
 /**
- * Answers the chat POST from inside the page with a stream that sends its sources, then `tokens` lines 20 ms apart,
- * and never ends. It records on `window.chatAborted` when the app cancels the request.
+ * Installs a `window.fetch` override that answers the chat POST with a `text/event-stream` body built one event per
+ * `pull()` -- not eagerly queued in `start()` -- so the mock only ever gets as far as the app has actually read: a
+ * regression that stops reading (e.g. bails out of the loop early after unmount) stalls the mock exactly as it
+ * would stall against a real server, instead of the mock finishing regardless of what the app does with it.
+ * Records on `window.chatAborted`, and errors the body, when the app cancels the request -- like a real aborted
+ * fetch would leave its reader rejecting instead of quietly still delivering queued-up data.
  */
-async function streamForever(page: Page, tokens: number) {
-  await page.addInitScript((count) => {
+async function installFakeChatStream(page: Page, script: ChatStreamScript) {
+  await page.addInitScript((cfg: ChatStreamScript) => {
     const realFetch = window.fetch
     window.fetch = (input, init) => {
       if (init?.method !== 'POST' || !String(input).endsWith('/chat')) return realFetch(input, init)
-      init.signal?.addEventListener('abort', () => Object.assign(window, { chatAborted: true }))
       const encoder = new TextEncoder()
       const event = (name: string, data: object) => encoder.encode(`event: ${name}\ndata: ${JSON.stringify(data)}\n\n`)
-      const body = new ReadableStream({
-        async start(controller) {
-          controller.enqueue(event('sources', { whole_paper: true, sources: [], notes: [], notes_used: null, notes_total: null }))
-          for (let i = 0; i < count; i++) {
-            await new Promise((resolve) => setTimeout(resolve, 20))
-            controller.enqueue(event('token', { text: `Line ${i} of a long answer.\n` }))
+      let controller: ReadableStreamDefaultController<Uint8Array> | null = null
+      init.signal?.addEventListener('abort', () => {
+        Object.assign(window, { chatAborted: true })
+        controller?.error(new DOMException('The user aborted a request.', 'AbortError'))
+      })
+      let sentSources = false
+      let sent = 0
+      const body = new ReadableStream<Uint8Array>({
+        start(c) {
+          controller = c
+        },
+        async pull(c) {
+          if (!sentSources) {
+            sentSources = true
+            return c.enqueue(event('sources', { whole_paper: true, sources: [], notes: [], notes_used: null, notes_total: null }))
           }
+          if (sent < cfg.lines.length) {
+            await new Promise((resolve) => setTimeout(resolve, cfg.delayMs))
+            c.enqueue(event('token', { text: cfg.lines[sent] }))
+            sent += 1
+            return
+          }
+          if (cfg.done) {
+            c.enqueue(event('done', { output_id: cfg.done.outputId, model: 'fake', connection_name: null, prompt_version: 1 }))
+            c.close()
+            Object.assign(window, { chatSaved: true }) // stands in for "the server saved it"
+            return
+          }
+          return new Promise(() => {}) // never resolves: the stream just keeps "streaming", exactly like `start` did
         },
       })
       return Promise.resolve(new Response(body, { status: 200, headers: { 'Content-Type': 'text/event-stream' } }))
     }
-  }, tokens)
+  }, script)
+}
+
+/** A stream that sends its sources, then `tokens` lines 20 ms apart, and never ends. */
+async function streamForever(page: Page, tokens: number) {
+  const lines = Array.from({ length: tokens }, (_, i) => `Line ${i} of a long answer.\n`)
+  await installFakeChatStream(page, { lines, delayMs: 20, done: null })
 }
 
 async function askWithoutWaiting(page: Page, question: string) {
@@ -71,37 +111,9 @@ test('the list follows a streaming answer down as its tokens arrive', async ({ p
   await expect.poll(() => list.evaluate((element) => element.scrollHeight - element.scrollTop - element.clientHeight)).toBeLessThan(2)
 })
 
-/**
- * Answers the chat POST from inside the page with a stream that sends its sources, then `lines` 100 ms apart, then a
- * `done` event, then marks `window.chatSaved` -- standing in for the real server finishing and saving the answer.
- * Records on `window.chatAborted` when the app cancels the request, exactly like `streamForever` above.
- */
+/** A stream that sends its sources, then `lines` 100 ms apart, then a `done` event for `outputId`. */
 async function streamThenSave(page: Page, outputId: string, lines: string[]) {
-  await page.addInitScript(
-    ([id, tokens]) => {
-      const realFetch = window.fetch
-      window.fetch = (input, init) => {
-        if (init?.method !== 'POST' || !String(input).endsWith('/chat')) return realFetch(input, init)
-        init.signal?.addEventListener('abort', () => Object.assign(window, { chatAborted: true }))
-        const encoder = new TextEncoder()
-        const event = (name: string, data: object) => encoder.encode(`event: ${name}\ndata: ${JSON.stringify(data)}\n\n`)
-        const body = new ReadableStream({
-          async start(controller) {
-            controller.enqueue(event('sources', { whole_paper: true, sources: [], notes: [], notes_used: null, notes_total: null }))
-            for (const line of tokens as string[]) {
-              await new Promise((resolve) => setTimeout(resolve, 100))
-              controller.enqueue(event('token', { text: line }))
-            }
-            controller.enqueue(event('done', { output_id: id, model: 'fake', connection_name: null, prompt_version: 1 }))
-            controller.close()
-            Object.assign(window, { chatSaved: true }) // stands in for "the server saved it"
-          },
-        })
-        return Promise.resolve(new Response(body, { status: 200, headers: { 'Content-Type': 'text/event-stream' } }))
-      }
-    },
-    [outputId, lines] as const,
-  )
+  await installFakeChatStream(page, { lines, delayMs: 100, done: { outputId } })
 }
 
 test('leaving the reader while an answer streams still saves the answer', async ({ page, paperId }) => {
@@ -123,8 +135,8 @@ test('leaving the reader while an answer streams still saves the answer', async 
   // Stands in for the real backend's history: empty until the stream (still running above) marks itself saved.
   await page.route('**/chat', async (route) => {
     if (route.request().method() !== 'GET') return route.fallback()
-    const saved_ = await page.evaluate(() => (window as unknown as { chatSaved?: boolean }).chatSaved === true)
-    await route.fulfill({ json: saved_ ? [saved] : [] })
+    const finished = await page.evaluate(() => (window as unknown as { chatSaved?: boolean }).chatSaved === true)
+    await route.fulfill({ json: finished ? [saved] : [] })
   })
 
   await openChat(page, paperId)
@@ -262,5 +274,16 @@ test("a refused promote shows the server's own 422 text", async ({ page, paperId
 
   await page.getByRole('button', { name: 'Save as note' }).click()
 
-  await expect(page.locator('.save-as-note').getByRole('alert')).toHaveText('Check these fields: body.')
+  const save = page.locator('.save-as-note')
+  const alert = save.getByRole('alert')
+  await expect(alert).toHaveText('Check these fields: body.')
+  const before = await save.boundingBox()
+
+  // A resize re-measures the button (and re-captures the still-unchanged selection) but must not silently clear
+  // an error the user hasn't acted on. Wait for the re-measure to actually land (the button moves) before checking
+  // the error is still there, so the assertion can't pass just because it ran before the resize took effect.
+  await page.getByRole('separator', { name: 'Resize panel' }).focus()
+  await page.keyboard.press('ArrowLeft')
+  await expect.poll(async () => (await save.boundingBox())?.x).not.toBe(before?.x)
+  await expect(alert).toHaveText('Check these fields: body.')
 })
