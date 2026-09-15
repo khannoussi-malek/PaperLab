@@ -4,7 +4,14 @@ import uuid
 import pytest
 from pydantic import ValidationError
 
-from app.core.chart_spec import MAX_DIMENSIONS, MAX_SERIES, ChartSpecAdapter, references
+from app.core.chart_spec import (
+    MAX_COLORS,
+    MAX_DIMENSIONS,
+    MAX_SCATTER_COLORS,
+    MAX_SERIES,
+    ChartSpecAdapter,
+    references,
+)
 
 DATASET, OTHER = uuid.uuid4(), uuid.uuid4()
 X, Y, Z, ERR = (uuid.uuid4() for _ in range(4))
@@ -81,6 +88,29 @@ def test_an_error_is_none_from_the_cells_or_another_column():
 def test_specs_that_cannot_be_drawn_are_refused(spec):
     with pytest.raises(ValidationError):
         parse(spec)
+
+
+def many(kind: str, count: int, facet: str = "none", **fields) -> dict:
+    return {"type": kind, "layout": {"facet": facet}, "series": [series(id=f"s{i}", **fields) for i in range(count)]}
+
+
+def test_one_panel_holds_only_as_many_series_as_the_palette_can_tell_apart():
+    # Bars, lines and boxes compare neighbouring colours; scatter compares every pair, so fewer colours are distinct.
+    assert len(parse(many("bar", MAX_COLORS)).series) == MAX_COLORS
+    assert len(parse(many("scatter", MAX_SCATTER_COLORS)).series) == MAX_SCATTER_COLORS
+    assert len(parse(many("scatter3d", MAX_SCATTER_COLORS, x=str(X), z=str(Z))).series) == MAX_SCATTER_COLORS
+    # More series are fine as small multiples: one series per panel.
+    assert len(parse(many("bar", MAX_SERIES, facet="series")).series) == MAX_SERIES
+    assert len(parse(many("scatter", MAX_COLORS + 1, facet="series")).series) == MAX_COLORS + 1
+    for refused in (
+        many("bar", MAX_COLORS + 1),
+        many("line", MAX_COLORS + 1),
+        many("scatter", MAX_SCATTER_COLORS + 1),
+        many("scatter3d", MAX_SCATTER_COLORS + 1, x=str(X), z=str(Z)),
+        many("scatter3d", 2, facet="series", x=str(X), z=str(Z)),  # 3D panels can't be laid out as small multiples
+    ):
+        with pytest.raises(ValidationError):
+            parse(refused)
 
 
 def test_references_name_every_dataset_column_and_row_a_spec_uses():
