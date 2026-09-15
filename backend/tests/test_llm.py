@@ -62,7 +62,7 @@ async def test_ollama_streams_content_until_the_done_line():
 async def test_ollama_missing_model_is_unavailable():
     model = ollama(lambda request: httpx.Response(404, json={"error": "model 'qwen3:8b' not found"}))
 
-    with pytest.raises(LLMUnavailable, match=r"^Model qwen3:8b isn't installed \(ollama pull qwen3:8b\)$"):
+    with pytest.raises(LLMUnavailable, match=r"^Model qwen3:8b isn't available on Ollama$"):
         await collect(model, [])
 
 
@@ -70,7 +70,7 @@ async def test_ollama_connection_refused_is_unavailable():
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("connection refused", request=request)
 
-    with pytest.raises(LLMUnavailable, match=f"^Can't reach Ollama at {OLLAMA_URL}$"):
+    with pytest.raises(LLMUnavailable, match="^Can't reach ollama.test$"):
         await collect(ollama(handler), [])
 
 
@@ -183,7 +183,7 @@ async def test_anthropic_unknown_model_is_unavailable():
     def handler(request: httpx2.Request) -> httpx2.Response:
         return httpx2.Response(404, json={"type": "error", "error": {"type": "not_found_error", "message": "model"}})
 
-    with pytest.raises(LLMUnavailable, match="^Model claude-sonnet-5 isn't available on the Anthropic API$"):
+    with pytest.raises(LLMUnavailable, match="^Model claude-sonnet-5 isn't available on Anthropic$"):
         await collect(anthropic_model(handler), [])
 
 
@@ -216,6 +216,237 @@ async def test_fake_llm_can_fail_mid_stream():
     with pytest.raises(LLMError, match="fake model failed mid-answer"):
         await collect(llm.FakeLLM(fail_after=2), tokens)
     assert len(tokens) == 2
+
+
+
+
+async def test_anthropic_max_tokens_comes_from_settings(monkeypatch):
+    monkeypatch.setattr(settings, "anthropic_max_tokens", 1234)
+    requests = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        requests.append(json.loads(request.content))
+        return httpx2.Response(200, text=anthropic_body(["ok"]), headers={"content-type": "text/event-stream"})
+
+    await collect(anthropic_model(handler), [])
+    assert requests[0]["max_tokens"] == 1234
+
+
+async def test_anthropic_rejected_key_names_the_connection_without_the_key():
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        error = {"type": "authentication_error", "message": f"invalid x-api-key {KEY}"}
+        return httpx2.Response(401, json={"type": "error", "error": error})
+
+    with pytest.raises(LLMUnavailable, match="^Key rejected by Anthropic$"):
+        await collect(anthropic_model(handler), [])
+
+
+KEY = "sk-test-SECRET123"
+COMPATIBLE_URL = "https://api.example.com/v1"
+
+
+def data_lines(*chunks: dict | str) -> str:
+    return "".join(f"data: {c if isinstance(c, str) else json.dumps(c)}\n\n" for c in chunks)
+
+
+def delta(content: str | None = None, **fields) -> dict:
+    return {"choices": [{"index": 0, "delta": {**({"content": content} if content is not None else {}), **fields}}]}
+
+
+def compatible(handler, api_key: str | None = KEY) -> llm.OpenAICompatibleLLM:
+    return llm.OpenAICompatibleLLM("gpt-5-mini", COMPATIBLE_URL, api_key, "OpenRouter", httpx.MockTransport(handler))
+
+
+async def test_openai_compatible_streams_content_deltas_in_order_and_stops_at_done():
+    requests = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        body = (
+            data_lines(delta("", role="assistant"), delta(reasoning_content="thinking"), delta("Attention [C"))
+            + ": keep-alive\n\n"
+            + data_lines(delta("1]."), "[DONE]", delta("after the end"))
+        )
+        return httpx.Response(200, text=body, headers={"content-type": "text/event-stream"})
+
+    assert await collect(compatible(handler), []) == ["Attention [C", "1]."]
+    assert str(requests[0].url) == f"{COMPATIBLE_URL}/chat/completions"
+    assert requests[0].headers["authorization"] == f"Bearer {KEY}"
+    assert json.loads(requests[0].content) == {
+        "model": "gpt-5-mini",
+        "messages": [
+            {"role": "system", "content": "You cite sources."},
+            {"role": "user", "content": "Question: why?"},
+        ],
+        "stream": True,
+    }
+
+
+async def test_openai_compatible_sends_no_authorization_header_without_a_key():
+    requests = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, text=data_lines(delta("ok"), "[DONE]"))
+
+    assert await collect(compatible(handler, api_key=None), []) == ["ok"]
+    assert "authorization" not in requests[0].headers
+
+
+@pytest.mark.parametrize(
+    ("status", "body", "error", "message"),
+    [
+        (401, {"error": {"message": f"Incorrect API key {KEY}"}}, LLMUnavailable, "^Key rejected by OpenRouter$"),
+        (403, {"error": {"message": "forbidden"}}, LLMUnavailable, "^Key rejected by OpenRouter$"),
+        (404, {"error": {"message": "no model"}}, LLMUnavailable, "^Model gpt-5-mini isn't available on OpenRouter$"),
+        (429, {"error": {"message": f"slow down {KEY}"}}, LLMError, "^OpenRouter returned 429: slow down ••••$"),
+        (500, "upstream exploded", LLMError, "^OpenRouter returned 500: upstream exploded$"),
+    ],
+)
+async def test_openai_compatible_error_statuses_in_words_never_quoting_the_key(status, body, error, message):
+    reply = httpx.Response(status, json=body) if isinstance(body, dict) else httpx.Response(status, text=body)
+
+    with pytest.raises(error, match=message) as raised:
+        await collect(compatible(lambda request: reply), [])
+    assert KEY not in str(raised.value)
+
+
+async def test_openai_compatible_error_chunk_mid_stream_is_an_llm_error():
+    body = data_lines(delta("Attention"), {"error": {"message": f"Provider returned error for {KEY}", "code": 502}})
+    tokens = []
+
+    with pytest.raises(LLMError, match="^OpenRouter: Provider returned error for ••••$"):
+        await collect(compatible(lambda request: httpx.Response(200, text=body)), tokens)
+    assert tokens == ["Attention"]
+
+
+async def test_openai_compatible_connection_refused_is_unavailable():
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused", request=request)
+
+    with pytest.raises(LLMUnavailable, match="^Can't reach api.example.com$"):
+        await collect(compatible(handler), [])
+
+
+async def test_openai_compatible_line_that_isnt_json_is_an_llm_error():
+    body = data_lines(delta("Attention")) + "data: {not json\n\n"
+    tokens = []
+
+    with pytest.raises(LLMError, match="^OpenRouter request failed: "):
+        await collect(compatible(lambda request: httpx.Response(200, text=body)), tokens)
+    assert tokens == ["Attention"]
+
+
+class Row:
+    """Stands in for an LLMConnection row: build_llm and list_models only read these four fields."""
+
+    def __init__(self, kind: str, label: str, base_url: str | None = None, api_key: str | None = None):
+        self.kind, self.label, self.base_url, self.api_key = kind, label, base_url, api_key
+
+
+@pytest.mark.parametrize(
+    ("row", "expected", "host"),
+    [
+        (Row("ollama", "Ollama", "http://host.docker.internal:11434"), llm.OllamaLLM, "host.docker.internal"),
+        (Row("openai_compatible", "LM Studio", "http://192.168.1.5:1234/v1"), llm.OpenAICompatibleLLM, "192.168.1.5"),
+        (Row("anthropic", "Claude", None, KEY), llm.AnthropicLLM, "api.anthropic.com"),
+    ],
+)
+def test_build_llm_makes_the_connections_adapter_with_its_label(row, expected, host):
+    adapter = llm.build_llm(row, "some-model")
+
+    assert isinstance(adapter, expected)
+    assert (adapter.model, adapter.connection_name, adapter.host) == ("some-model", row.label, host)
+    assert llm.build_llm(row, "some-model") is not adapter  # a new adapter per question
+
+
+def test_build_llm_in_fake_mode_reports_the_fake_and_the_connection(monkeypatch):
+    monkeypatch.setattr(settings, "llm_provider", "fake")
+
+    adapter = llm.build_llm(Row("anthropic", "Claude", None, KEY), "claude-sonnet-5")
+
+    assert isinstance(adapter, llm.FakeLLM)
+    assert (adapter.model, adapter.connection_name) == ("fake:claude-sonnet-5", "Claude")
+
+
+def listing(handler, row: Row):
+    return llm.list_models(row, transport=httpx.MockTransport(handler))
+
+
+async def test_list_models_reads_ollama_tags_and_openai_compatible_models():
+    ollama_requests, compatible_requests = [], []
+
+    def tags(request: httpx.Request) -> httpx.Response:
+        ollama_requests.append(request)
+        return httpx.Response(200, json={"models": [{"name": "qwen3:8b"}, {"name": "hf.co/a/b:Q4"}]})
+
+    def models(request: httpx.Request) -> httpx.Response:
+        compatible_requests.append(request)
+        return httpx.Response(200, json={"object": "list", "data": [{"id": "gpt-5"}, {"id": "gpt-5-mini"}]})
+
+    assert await listing(tags, Row("ollama", "Ollama", OLLAMA_URL)) == ["hf.co/a/b:Q4", "qwen3:8b"]
+    assert await listing(models, Row("openai_compatible", "OpenAI", COMPATIBLE_URL, KEY)) == ["gpt-5", "gpt-5-mini"]
+    assert str(ollama_requests[0].url) == f"{OLLAMA_URL}/api/tags"
+    assert "authorization" not in ollama_requests[0].headers
+    assert str(compatible_requests[0].url) == f"{COMPATIBLE_URL}/models"
+    assert compatible_requests[0].headers["authorization"] == f"Bearer {KEY}"
+
+
+async def test_list_models_is_none_when_the_server_has_no_list():
+    row = Row("openai_compatible", "llama.cpp", "http://localhost:8080/v1")
+    assert await listing(lambda request: httpx.Response(404, text="Not Found"), row) is None
+
+
+@pytest.mark.parametrize(
+    ("reply", "error", "message"),
+    [
+        (httpx.Response(401, json={"error": {"message": f"bad {KEY}"}}), LLMUnavailable, "^Key rejected by OpenAI$"),
+        (httpx.Response(500, json={"error": {"message": f"boom {KEY}"}}), LLMError, "^OpenAI returned 500: boom ••••$"),
+        (httpx.Response(200, json={"unexpected": True}), LLMError, "^OpenAI sent a model list PaperLab can't read$"),
+    ],
+)
+async def test_list_models_failures_in_words_never_quoting_the_key(reply, error, message):
+    with pytest.raises(error, match=message) as raised:
+        await listing(lambda request: reply, Row("openai_compatible", "OpenAI", COMPATIBLE_URL, KEY))
+    assert KEY not in str(raised.value)
+
+
+async def test_list_models_cant_reach_names_the_host():
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused", request=request)
+
+    with pytest.raises(LLMUnavailable, match="^Can't reach ollama.test$"):
+        await listing(handler, Row("ollama", "Ollama", OLLAMA_URL))
+
+
+def anthropic_listing(handler):
+    client = httpx2.AsyncClient(transport=httpx2.MockTransport(handler))
+    return llm.list_models(Row("anthropic", "Claude", None, KEY), http_client=client)
+
+
+async def test_list_models_for_anthropic():
+    page = {
+        "data": [{"id": "claude-sonnet-5", "type": "model", "display_name": "S", "created_at": "2026-01-01T00:00:00Z"}],
+        "has_more": False, "first_id": "claude-sonnet-5", "last_id": "claude-sonnet-5",
+    }
+    assert await anthropic_listing(lambda request: httpx2.Response(200, json=page)) == ["claude-sonnet-5"]
+    not_found = {"type": "error", "error": {"type": "not_found_error", "message": "no"}}
+    assert await anthropic_listing(lambda request: httpx2.Response(404, json=not_found)) is None
+
+    rejected = {"type": "error", "error": {"type": "authentication_error", "message": f"invalid x-api-key {KEY}"}}
+    with pytest.raises(LLMUnavailable, match="^Key rejected by Claude$"):
+        await anthropic_listing(lambda request: httpx2.Response(401, json=rejected))
+    broken = {"type": "error", "error": {"type": "api_error", "message": f"boom {KEY}"}}
+    with pytest.raises(LLMError, match="^Claude returned 500: boom ••••$"):
+        await anthropic_listing(lambda request: httpx2.Response(500, json=broken))
+
+
+async def test_list_models_in_fake_mode_is_a_fixed_list_and_rejects_bad_key(monkeypatch):
+    monkeypatch.setattr(settings, "llm_provider", "fake")
+
+    assert await llm.list_models(Row("ollama", "Ollama", OLLAMA_URL)) == llm.FAKE_MODELS
+    with pytest.raises(LLMUnavailable, match="^Key rejected by Groq$"):
+        await llm.list_models(Row("openai_compatible", "Groq", COMPATIBLE_URL, "bad-key"))
 
 
 @pytest.mark.parametrize(
