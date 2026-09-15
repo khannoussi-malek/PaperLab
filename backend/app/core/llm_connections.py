@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import Conflict, InvalidInput, NotFound
 from app.models import LLMConnection, LLMModel
+from app.providers.llm import host_of
 
 logger = logging.getLogger(__name__)
 
@@ -176,12 +177,16 @@ async def create_connection(
 
 async def update_connection(session: AsyncSession, connection_id: uuid.UUID, changes: dict) -> ConnectionView:
     """`changes` holds only what the request sent (label, base_url, api_key): a missing api_key keeps the key and
-    None clears it. The kind never changes. Raises NotFound, InvalidInput, Conflict."""
+    None clears it. Moving to a different host without sending a new key drops the stored key (the new address
+    hasn't proven it accepts it); a path- or port-only change on the same host keeps it. The kind never changes.
+    Raises NotFound, InvalidInput, Conflict."""
     connection = await _row(session, connection_id)
     if "label" in changes:
         await _ensure_label_free(session, changes["label"], connection_id)
     base_url = _check_url(connection.kind, changes.get("base_url", connection.base_url))
-    api_key = _check_key(connection.kind, changes.get("api_key", connection.api_key))
+    host_changed = "base_url" in changes and host_of(base_url) != host_of(connection.base_url)
+    key_input = None if (host_changed and "api_key" not in changes) else changes.get("api_key", connection.api_key)
+    api_key = _check_key(connection.kind, key_input)
     connection.label = changes.get("label", connection.label)
     connection.base_url, connection.api_key = base_url, api_key
     connection.updated_at = func.now()
