@@ -91,3 +91,37 @@ test('a blocked chart library shows an error with its own Retry, which redraws o
   await page.getByRole('button', { name: 'Retry' }).click()
   await expect(page.locator('.chart-view .barlayer .point path')).toHaveCount(1)
 })
+
+test('navigating from one chart to another purges the old plot instead of leaking it', async ({
+  page,
+  request,
+  paperId,
+  dataName,
+}) => {
+  const tableA = await addTable(request, paperId, 1, `${dataName} tableA`, [
+    ['System', 'F1'],
+    ['BERT-B', '88.5'],
+  ])
+  const chartA = await addChart(request, `${dataName} chartA`, barSpec(tableA, 'System', ['F1']))
+  const tableB = await addTable(request, paperId, 1, `${dataName} tableB`, [
+    ['System', 'F1'],
+    ['XLNet', '90.0'],
+  ])
+  const chartB = await addChart(request, `${dataName} chartB`, barSpec(tableB, 'System', ['F1']))
+
+  await page.goto(`/#/charts/${chartA.id}`)
+  await expect(page.locator('.chart-view .barlayer .point path')).toHaveCount(1)
+  const plotA = await page.locator('.js-plotly-plot').first().elementHandle()
+
+  // `ChartPage` is keyed by chart id, so this unmounts chart A's `PlotlyChart` entirely and mounts a fresh one for B
+  // — the same navigation `window.location.hash = sourceHref(...)` in `ChartView` performs.
+  await page.evaluate((id) => {
+    window.location.hash = `#/charts/${id}`
+  }, chartB.id)
+  await expect(page.getByRole('heading', { name: `${dataName} chartB` })).toBeVisible()
+  await expect(page.locator('.chart-view .barlayer .point path')).toHaveCount(1)
+
+  // `Plotly.purge` deletes its internal state (`_fullLayout` among it) from the graph div; still having it on A's
+  // now-detached node means A's plot and its listeners were never torn down — a leak on every chart-to-chart visit.
+  expect(await plotA?.evaluate((el) => (el as unknown as { _fullLayout?: unknown })._fullLayout)).toBeUndefined()
+})
