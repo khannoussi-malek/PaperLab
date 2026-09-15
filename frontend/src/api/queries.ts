@@ -5,6 +5,7 @@ import {
   type ChatScope,
   type DatasetCreate,
   type GridIn,
+  type LLMConnectionUpdate,
   type NoteCreate,
   type NumberCreate,
   type NoteUpdate,
@@ -38,6 +39,12 @@ const keys = {
   charts: ['charts'] as const,
   chart: (id: string) => ['charts', id] as const,
   resolved: (spec: ChartSpec) => ['charts', 'resolve', spec] as const,
+  // Every model query starts with this: a change on the settings page refreshes the chat dropdown too.
+  llm: ['llm'] as const,
+  chatModels: ['llm', 'models'] as const,
+  connections: ['llm', 'connections'] as const,
+  available: (connectionId: string) => ['llm', 'connections', connectionId, 'available'] as const,
+  embedding: ['embedding'] as const,
 }
 
 /** Poll the library only while a paper is still ingesting. */
@@ -301,4 +308,52 @@ export function useChartMutations() {
       onSuccess: everything,
     }),
   }
+}
+
+/** The models chat can use, for the dropdown. */
+export const useChatModels = () => useQuery({ queryKey: keys.chatModels, queryFn: api.listChatModels })
+
+export const useConnections = () => useQuery({ queryKey: keys.connections, queryFn: api.listConnections })
+
+/** A provider's own model list, fetched only while the Add model picker is open. */
+export const useAvailableModels = (connectionId: string, enabled: boolean) =>
+  useQuery({ queryKey: keys.available(connectionId), queryFn: () => api.availableModels(connectionId), enabled })
+
+export const useEmbeddingStatus = () => useQuery({ queryKey: keys.embedding, queryFn: api.embeddingStatus })
+
+/** For streams that aren't mutations (a chat refusal, a finished pull): refetch connections and chat models. */
+export function useInvalidateModels() {
+  const client = useQueryClient()
+  return () => client.invalidateQueries({ queryKey: keys.llm })
+}
+
+export function useConnectionMutations() {
+  const client = useQueryClient()
+  const onSuccess = () => client.invalidateQueries({ queryKey: keys.llm })
+  return {
+    create: useMutation({ mutationFn: api.createConnection, onSuccess }),
+    update: useMutation({
+      mutationFn: ({ id, ...body }: { id: string } & LLMConnectionUpdate) => api.updateConnection(id, body),
+      onSuccess,
+    }),
+    remove: useMutation({ mutationFn: api.deleteConnection, onSuccess }),
+    test: useMutation({ mutationFn: api.testConnection }),
+    addModel: useMutation({
+      mutationFn: ({ connectionId, name }: { connectionId: string; name: string }) => api.addModel(connectionId, name),
+      onSuccess,
+    }),
+    removeModel: useMutation({ mutationFn: api.removeModel, onSuccess }),
+    setDefault: useMutation({ mutationFn: api.setDefaultModel, onSuccess }),
+    deleteInstalled: useMutation({
+      mutationFn: ({ connectionId, name }: { connectionId: string; name: string }) =>
+        api.deleteInstalledModel(connectionId, name),
+      onSuccess,
+    }),
+  }
+}
+
+/** Queues a re-embed of every paper; the status line refetches once it's queued. */
+export function useReindexLibrary() {
+  const client = useQueryClient()
+  return useMutation({ mutationFn: api.reindexLibrary, onSettled: () => client.invalidateQueries({ queryKey: keys.embedding }) })
 }
