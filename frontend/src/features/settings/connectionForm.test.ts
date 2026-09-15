@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createBody, updateBody, type ConnectionForm } from './connectionForm'
+import { createBody, hostOf, updateBody, type ConnectionForm } from './connectionForm'
 
 const form = (fields: Partial<ConnectionForm>): ConnectionForm => ({
   kind: 'openai_compatible',
@@ -36,5 +36,20 @@ describe('updateBody', () => {
   it('sends a replacement key, or null to remove it', () => {
     expect(updateBody(form({ keyChange: 'replace', apiKey: ' sk-new ' })).api_key).toBe('sk-new')
     expect(updateBody(form({ keyChange: 'remove' })).api_key).toBeNull()
+  })
+})
+
+describe('hostOf', () => {
+  it("is Anthropic's own host, whatever base_url holds", () => {
+    expect(hostOf('anthropic', null)).toBe('api.anthropic.com')
+  })
+
+  it("is the base URL's host for the other kinds", () => {
+    expect(hostOf('openai_compatible', 'https://openrouter.ai/api/v1')).toBe('openrouter.ai')
+    expect(hostOf('ollama', 'http://host.docker.internal:11434')).toBe('host.docker.internal')
+  })
+
+  it("falls back to the raw string when it doesn't parse as a URL", () => {
+    expect(hostOf('openai_compatible', 'not-a-url')).toBe('not-a-url')
   })
 })

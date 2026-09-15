@@ -127,6 +127,49 @@ export async function clickBar(page: Page, index: number) {
   await page.mouse.click(box.x + box.width / 2, box.y + box.height - 4)
 }
 
+/** The chat dropdown's remembered pick (`features/chat/chatModel.ts`). */
+export const CHAT_MODEL_KEY = 'paperlab-chat-model'
+/** The one key `LLM_PROVIDER=fake` rejects when a connection is tested. */
+export const FAKE_BAD_KEY = 'bad-key'
+
+export type LlmConnection = { id: string; label: string; modelId: string; modelName: string }
+
+/** A connection on the fake stack (no network), with one model listed in chat. OpenAI-compatible unless `fields` say. */
+export async function addLlmConnection(
+  request: APIRequestContext,
+  label: string,
+  modelName = 'e2e-model',
+  fields: Record<string, unknown> = {},
+): Promise<LlmConnection> {
+  const created = await request.post('/api/llm/connections', {
+    data: { kind: 'openai_compatible', label, base_url: 'http://fake-provider.test/v1', ...fields },
+  })
+  expect(created.status()).toBe(201)
+  const { id } = await created.json()
+  const model = await request.post(`/api/llm/connections/${id}/models`, { data: { name: modelName } })
+  expect(model.status()).toBe(201)
+  return { id, label, modelId: (await model.json()).id, modelName }
+}
+
+/** The id of the model chat uses when none is picked, or null. */
+export async function defaultModelId(request: APIRequestContext): Promise<string | null> {
+  const models: { id: string; is_default: boolean }[] = await (await request.get('/api/llm/models')).json()
+  return models.find((model) => model.is_default)?.id ?? null
+}
+
+/** Deletes every connection whose label starts with `prefix`, with its models. */
+export async function removeConnectionsNamed(request: APIRequestContext, prefix: string) {
+  const connections = await request.get('/api/llm/connections')
+  for (const connection of connections.ok() ? await connections.json() : []) {
+    if (connection.label.startsWith(prefix)) await request.delete(`/api/llm/connections/${connection.id}`)
+  }
+}
+
+/** Starts the chat dropdown on `modelId`, as a remembered pick would, on every page load of this test. */
+export async function pickChatModel(page: Page, modelId: string) {
+  await page.addInitScript(([key, id]) => window.localStorage.setItem(key, id), [CHAT_MODEL_KEY, modelId] as const)
+}
+
 type Fixtures = {
   /** A freshly ingested copy of the fixture paper, removed after the test even if it fails. */
   paperId: string
@@ -140,6 +183,13 @@ type Fixtures = {
   workspaceId: string
   /** A unique prefix for chart titles and dataset names. Every chart and dataset starting with it is deleted after the test. */
   dataName: string
+  /**
+   * A unique prefix for connection labels. After the test the owner's default model is put back if the test moved it,
+   * and then every connection starting with it is deleted: E2E runs on the owner's database.
+   */
+  llmName: string
+  /** A connection named `llmName` with one model, `e2e-model`. */
+  llmConnection: LlmConnection
 }
 
 export const test = base.extend<Fixtures>({
@@ -173,6 +223,21 @@ export const test = base.extend<Fixtures>({
     const name = `E2E data ${randomUUID().slice(0, 8)}`
     await use(name)
     await removeChartsAndDataNamed(request, name)
+  },
+  llmName: async ({ request }, use) => {
+    const name = `E2E connection ${randomUUID().slice(0, 8)}`
+    const ownersDefault = await defaultModelId(request)
+    await use(name)
+    // Before deleting: deleting the connection that holds the default would leave the owner with none. A 404 means
+    // the owner's model is gone meanwhile, and there is nothing to put back.
+    if (ownersDefault !== null && (await defaultModelId(request)) !== ownersDefault) {
+      await request.put('/api/llm/default', { data: { model_id: ownersDefault } })
+    }
+    await removeConnectionsNamed(request, name)
+  },
+  // No teardown of its own: `llmName` deletes it.
+  llmConnection: async ({ request, llmName }, use) => {
+    await use(await addLlmConnection(request, llmName))
   },
 })
 
