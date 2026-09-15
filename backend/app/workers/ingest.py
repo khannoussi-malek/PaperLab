@@ -60,3 +60,14 @@ async def ingest_paper(ctx: dict, paper_id: str) -> None:
             logger.exception("ingest failed for %s", pid)
             await session.rollback()
             await papers.set_status(session, pid, PaperStatus.FAILED, error=f"{type(exc).__name__}: {exc}")
+
+
+async def reembed_paper(ctx: dict, paper_id: str) -> None:
+    """Embeds a paper's chunks again with the configured model, in place: chunk ids stay, so saved answers and notes
+    keep their sources. A library re-index queues one per paper."""
+    pid = uuid.UUID(paper_id)
+    async with SessionLocal() as session:
+        chunks = await papers.list_chunks(session, pid)
+        vectors = await embedding.embed_documents(ctx["embedder"], [c.text for c in chunks])
+        await papers.set_embeddings(session, [c.id for c in chunks], vectors)
+    logger.info("re-embedded %s: %d chunks", pid, len(chunks))

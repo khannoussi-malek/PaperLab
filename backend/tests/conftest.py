@@ -277,6 +277,12 @@ def _real_providers(monkeypatch):
     monkeypatch.setattr(settings, "llm_provider", "ollama")
 
 
+@pytest.fixture(autouse=True)
+def _test_embed_model(monkeypatch):
+    # Test chunks record embed_model "test", and chat refuses papers whose vectors came from another model.
+    monkeypatch.setattr(settings, "embed_model", "test")
+
+
 def _write_pdf(path: Path, pages: list[list[tuple]], metadata: dict[str, str] | None = None) -> Path:
     doc = pymupdf.open()
     for items in pages:

@@ -97,10 +97,13 @@ async def get_paper_file(session: AsyncSession, paper_id: uuid.UUID) -> Path:
 
 
 async def set_embeddings(session: AsyncSession, chunk_ids: list[uuid.UUID], vectors: list[list[float]]) -> None:
-    """One executemany UPDATE by primary key.
+    """One executemany UPDATE by primary key, recording the model the vectors came from.
 
     Not unnest(): pgvector's ARRAY(Vector) bind fails ("expected list or ndarray"), and 500 rows take under a second.
     """
-    rows = [{"id": chunk_id, "embedding": vector} for chunk_id, vector in zip(chunk_ids, vectors, strict=True)]
+    rows = [
+        {"id": chunk_id, "embedding": vector, "embed_model": settings.embed_model}
+        for chunk_id, vector in zip(chunk_ids, vectors, strict=True)
+    ]
     await session.execute(update(Chunk), rows)
     await session.commit()

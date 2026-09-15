@@ -2,6 +2,7 @@
 
 import asyncio
 import functools
+import threading
 
 from app.config import settings
 
@@ -18,13 +19,23 @@ def load():
     return SentenceTransformer(settings.embed_model)
 
 
-@functools.cache
+_load_lock = threading.Lock()
+
+
 def get_model():
     """The API's query embedder, loaded on first use.
 
+    Two first questions at once each call this on their own thread (asyncio.to_thread); the lock makes the second
+    wait for the first load instead of loading a second copy.
     ponytail: the API and the worker each hold a copy of the model (~0.6-1.2 GB). Move query
     embedding into a shared service only if memory becomes a real problem.
     """
+    with _load_lock:
+        return _load_once()
+
+
+@functools.cache
+def _load_once():
     return load()
 
 
