@@ -5,7 +5,7 @@ from arq.connections import RedisSettings
 
 from app.config import settings
 from app.providers import embedding, openalex
-from app.workers.ingest import ingest_paper
+from app.workers.ingest import ingest_paper, reembed_paper
 
 logging.basicConfig(level=logging.INFO)
 
@@ -22,7 +22,7 @@ async def shutdown(ctx: dict) -> None:
 
 
 class WorkerSettings:
-    functions = [ingest_paper]
+    functions = [ingest_paper, reembed_paper]
     on_startup = startup
     on_shutdown = shutdown
     redis_settings = RedisSettings.from_dsn(settings.redis_url)
