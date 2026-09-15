@@ -21,10 +21,16 @@ test("a saved chart draws its series and lists its numbers, and a bar opens that
   await expect(view).toHaveAttribute('data-series-count', '1')
   await expect(view.locator('.barlayer .point path')).toHaveCount(2)
 
+  // Toggling the table re-renders the view with a fresh click handler; the plot must redraw in place (Plotly.react),
+  // never purge and rebuild for a state change unrelated to the chart's data, or it would lose zoom/pan.
+  const plotSvg = await view.locator('.js-plotly-plot .main-svg').first().elementHandle()
+
   await page.getByRole('button', { name: 'View data table' }).click()
   const numbers = page.getByRole('table', { name: 'Chart data' })
   await expect(numbers.getByRole('row')).toHaveCount(3)
   await expect(numbers.getByRole('row').nth(2)).toContainText('BERT-L90.9')
+
+  expect(await plotSvg?.evaluate((el) => document.body.contains(el))).toBe(true)
 
   await clickBar(page, 1)
   await expect(page).toHaveURL(new RegExp(`#/papers/${paperId}\\?tab=data$`))
@@ -60,4 +66,28 @@ test('a chart whose data was deleted says so, and the chart redraws in the dark 
   await page.reload()
   await expect(page.locator('.chart-warning')).toHaveText('1 series lost its data')
   await expect(page.locator('.chart-view')).toHaveAttribute('data-series-count', '1')
+})
+
+test('a blocked chart library shows an error with its own Retry, which redraws once unblocked', async ({
+  page,
+  request,
+  paperId,
+  dataName,
+}) => {
+  const table = await addTable(request, paperId, 1, `${dataName} table`, [
+    ['System', 'F1'],
+    ['BERT-B', '88.5'],
+  ])
+  const chart = await addChart(request, `${dataName} chart`, barSpec(table, 'System', ['F1']))
+
+  // Simulate a flaky network or a stale-deploy 404 on the chart engine's own chunk.
+  let blocked = true
+  await page.route('**/*plotly*', (route) => (blocked ? route.abort() : route.continue()))
+
+  await page.goto(`/#/charts/${chart.id}`)
+  await expect(page.getByText("The chart library didn't load.")).toBeVisible()
+
+  blocked = false
+  await page.getByRole('button', { name: 'Retry' }).click()
+  await expect(page.locator('.chart-view .barlayer .point path')).toHaveCount(1)
 })
