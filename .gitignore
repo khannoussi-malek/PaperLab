@@ -10,3 +10,4 @@ docs/
 .superpowers/
 frontend/design-system/
 .DS_Store
+.gstack/
