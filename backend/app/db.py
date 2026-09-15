@@ -4,7 +4,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.config import settings
 
-engine = create_async_engine(settings.database_url, pool_pre_ping=True)
+# hide_parameters: a DBAPIError's text otherwise includes every bound parameter of the failing statement, an
+# API key among them (create_connection, update_connection, and the seed insert all write one).
+engine = create_async_engine(settings.database_url, pool_pre_ping=True, hide_parameters=True)
 
 # expire_on_commit=False: touching an attribute after commit would otherwise lazy-load,
 # which raises MissingGreenlet under asyncio.

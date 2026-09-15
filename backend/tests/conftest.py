@@ -69,7 +69,7 @@ def database_url():
 
 @pytest.fixture
 async def session():
-    engine = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)
+    engine = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool, hide_parameters=True)
     async with engine.connect() as connection:
         transaction = await connection.begin()
         # create_savepoint: a service's session.commit() only releases a savepoint.
