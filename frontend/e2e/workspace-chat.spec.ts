@@ -1,5 +1,5 @@
 import type { APIRequestContext } from '@playwright/test'
-import { FIXTURE_TITLE, addNote, ask, expect, selectAllOf, test } from './fixtures'
+import { FIXTURE_TITLE, addNote, ask, expect, pickChatModel, selectAllOf, test } from './fixtures'
 
 /** What `FakeLLM` answers to the workspace prompt (backend `LLM_PROVIDER=fake`). */
 const FAKE_WORKSPACE_ANSWER =
@@ -7,6 +7,11 @@ const FAKE_WORKSPACE_ANSWER =
 const QUESTION = 'Which method do these papers describe?'
 
 type Source = { label: string; chunk_id: string; paper_id: string; page: number }
+
+// Every answer here comes from this test's own connection, whatever the owner's default is.
+test.beforeEach(async ({ page, llmConnection }) => {
+  await pickChatModel(page, llmConnection.modelId)
+})
 
 async function addToWorkspace(request: APIRequestContext, workspaceId: string, ...paperIds: string[]) {
   for (const id of paperIds) expect((await request.put(`/api/workspaces/${workspaceId}/papers/${id}`)).status()).toBe(204)

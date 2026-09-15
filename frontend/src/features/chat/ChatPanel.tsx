@@ -1,15 +1,19 @@
-import { ArrowUp, MessageSquareText } from 'lucide-react'
+import { ArrowUp, MessageSquareText, Settings2 } from 'lucide-react'
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { ChatScope, ChatSource, Note, NoteSource, ChatAnswer as SavedAnswer } from '@/api/client'
-import { useChatHistory, usePromoteNote, useReindexPaper } from '@/api/queries'
+import { useChatHistory, useChatModels, usePromoteNote, useReindexPaper } from '@/api/queries'
 import { pressable } from '@/components/motion'
 import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import { browserStorage } from '@/features/notes/highlightColors'
+import { settingsHref } from '@/lib/route'
 import { cn } from '@/lib/utils'
 import { readAnswerSelection } from './answerSelection'
 import { ChatAnswer } from './ChatAnswer'
+import { loadChatModel, saveChatModel } from './chatModel'
 import { splitCitations } from './citations'
+import { ModelPicker } from './ModelPicker'
 import { promoteSelection, type PromoteDraft } from './promote'
 import type { ChatProblem } from './refusals'
 import { SaveAsNoteButton } from './SaveAsNoteButton'
@@ -58,7 +62,15 @@ type Promote = { outputId: string; draft: PromoteDraft; style: CSSProperties }
 
 export function ChatPanel({ scope, unavailable, paperLabel, onCite, onPromoted }: Props) {
   const history = useChatHistory(scope)
-  const { stream, ask, retry } = useChatStream(scope)
+  const chatModels = useChatModels()
+  const [pick, setPick] = useState<string | null>(null)
+  // The last pick while it's still listed; else the remembered or default one; null only while models are loading.
+  const modelId = chatModels.data
+    ? pick !== null && chatModels.data.some((model) => model.id === pick)
+      ? pick
+      : loadChatModel(browserStorage(), chatModels.data)
+    : null
+  const { stream, ask, retry } = useChatStream(scope, modelId)
   const [question, setQuestion] = useState('')
   const [promote, setPromote] = useState<Promote | null>(null)
   const [promoteError, setPromoteError] = useState<string | null>(null)
@@ -69,9 +81,17 @@ export function ChatPanel({ scope, unavailable, paperLabel, onCite, onPromoted }
   const wasBusy = useRef(false)
   const answers = history.data ?? []
   const busy = stream.status === 'sources' || stream.status === 'streaming'
-  const closed = busy || unavailable !== undefined
+  const noModels = chatModels.data?.length === 0
+  // `isPending`: the first models fetch hasn't settled yet, so modelId is still null. Once it errors, isPending
+  // clears and asking stays open (the server's own default answers) per the models-request-failed rule below.
+  const closed = busy || unavailable !== undefined || noModels || chatModels.isPending
   // A saved answer comes back in the history, so the live copy hides instead of showing twice.
   const showLive = stream.status !== 'idle' && !answers.some((answer) => answer.id === stream.done?.output_id)
+
+  function pickModel(id: string) {
+    setPick(id)
+    saveChatModel(browserStorage(), id)
+  }
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight })
@@ -151,7 +171,7 @@ export function ChatPanel({ scope, unavailable, paperLabel, onCite, onPromoted }
             notesUsed={answer.notes_used}
             notesTotal={answer.notes_total}
             segments={splitCitations(answer.content, knownLabels(answer))}
-            footer={{ model: answer.model, promptVersion: answer.prompt_version }}
+            footer={{ model: answer.model, connectionName: answer.connection_name, promptVersion: answer.prompt_version }}
             paperLabel={paperLabel}
             onCite={onCite}
           />
@@ -165,7 +185,9 @@ export function ChatPanel({ scope, unavailable, paperLabel, onCite, onPromoted }
             notesUsed={stream.notesUsed}
             notesTotal={stream.notesTotal}
             segments={stream.segments}
-            footer={stream.done && { model: stream.done.model, promptVersion: stream.done.prompt_version }}
+            footer={
+              stream.done && { model: stream.done.model, connectionName: stream.done.connection_name, promptVersion: stream.done.prompt_version }
+            }
             pending={busy}
             animate
             paperLabel={paperLabel}
@@ -218,8 +240,19 @@ export function ChatPanel({ scope, unavailable, paperLabel, onCite, onPromoted }
             <ArrowUp aria-hidden />
           </Button>
         </div>
+        {chatModels.data && chatModels.data.length > 0 && (
+          <div className="flex">
+            <ModelPicker models={chatModels.data} value={modelId} onChange={pickModel} />
+          </div>
+        )}
+        {noModels && (
+          <a href={settingsHref} className="inline-flex w-fit items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+            <Settings2 aria-hidden className="size-3.5" />
+            Set up a model
+          </a>
+        )}
         <p id="chat-question-hint" className="px-1 text-xs text-muted-foreground">
-          {unavailable ?? 'Enter to send · Shift+Enter for a new line'}
+          {unavailable ?? (noModels ? 'Set up a model to chat.' : 'Enter to send · Shift+Enter for a new line')}
         </p>
       </form>
     </div>
@@ -274,6 +307,11 @@ function ProblemAlert({ scope, problem, onRetry }: { scope: ChatScope; problem: 
         {problem.reindex && !reindex.isSuccess && (
           <Button variant="outline" size="xs" disabled={reindex.isPending} onClick={() => reindex.mutate()}>
             Re-index
+          </Button>
+        )}
+        {problem.settings && (
+          <Button variant="outline" size="xs" asChild>
+            <a href={settingsHref}>Open settings</a>
           </Button>
         )}
       </AlertAction>
