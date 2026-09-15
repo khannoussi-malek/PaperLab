@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Dataset } from '@/api/client'
-import { changeType, columnInfo, newSeries, nextSeriesId, panelProblem, quickChartSpec, specDatasetIds } from './builderSpec'
+import { changeType, columnInfo, copyTitle, newSeries, nextSeriesId, panelProblem, quickChartSpec, specDatasetIds } from './builderSpec'
 import { id } from './testData'
 
 /** A saved dataset as the API returns it: `cells` is a list per row, each naming its column. */
@@ -45,6 +45,20 @@ describe('builder specs', () => {
       { id: id(11), name: 'Dev F1', numeric: true, hasErrors: true, samples: ['88.5 ± 0.3', '90.9'] },
       { id: id(12), name: 'Test F1', numeric: true, hasErrors: false, samples: ['89.0', '91.2'] },
     ])
+  })
+
+  it('describes a dataset object once: the builder asks on every render', () => {
+    const first = columnInfo(table)
+    expect(columnInfo(table)).toBe(first)
+    expect(columnInfo({ ...table })).not.toBe(first)
+    expect(columnInfo({ ...table })).toEqual(first)
+  })
+
+  it('names a copy within the 200-character title limit, like a duplicate made on the server', () => {
+    expect(copyTitle('Results')).toBe('Results (copy)')
+    const long = copyTitle('x'.repeat(200))
+    expect(long).toHaveLength(200)
+    expect(long).toBe(`${'x'.repeat(193)} (copy)`)
   })
 
   it('makes a quick bar chart of every number column against the first text column', () => {
