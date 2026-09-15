@@ -33,8 +33,15 @@ export function ConnectionCard({ connection }: { connection: LLMConnection }) {
     if (window.confirm(question)) remove.mutate(connection.id)
   }
 
+  // The two share one status line, so starting either clears the other's stale result first.
+  function runTest() {
+    deleteInstalled.reset()
+    test.mutate(connection.id)
+  }
+
   function deleteFromDisk(name: string) {
     if (window.confirm(`Delete ${name} from Ollama? It is removed from this computer's disk.`)) {
+      test.reset()
       deleteInstalled.mutate({ connectionId: connection.id, name })
     }
   }
@@ -72,7 +79,7 @@ export function ConnectionCard({ connection }: { connection: LLMConnection }) {
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          <Button variant="outline" size="sm" onClick={() => test.mutate(connection.id)} disabled={test.isPending}>
+          <Button variant="outline" size="sm" onClick={runTest} disabled={test.isPending}>
             <PlugZap aria-hidden />
             {test.isPending ? 'Testing…' : 'Test'}
           </Button>

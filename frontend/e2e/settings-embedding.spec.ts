@@ -25,3 +25,19 @@ test('the embedding model is locked once papers are indexed, and re-indexing ask
   await expect(section.getByRole('status')).toHaveText('Re-indexing 3 papers in the background.')
   expect(reindexCalls).toBe(1)
 })
+
+test('a failed re-index shows the server error and leaves the dialog open to retry or cancel', async ({ page }) => {
+  // Re-indexing the owner's whole library is never run for real here: the request is answered by the test.
+  await page.route('**/api/embedding/reindex', (route) => route.fulfill({ status: 500, json: { detail: 'Re-index failed' } }))
+  await page.goto('/#/settings')
+
+  const section = page.getByRole('region', { name: 'Embedding model' })
+  await section.getByRole('button', { name: 'Re-index library' }).click()
+  const confirm = page.getByRole('dialog', { name: 'Re-index the library?' })
+  await confirm.getByRole('button', { name: 'Re-index' }).click()
+  await expect(confirm.getByRole('alert')).toContainText('Re-index failed')
+  await expect(confirm).toBeVisible()
+
+  await confirm.getByRole('button', { name: 'Cancel' }).click()
+  await expect(confirm).toBeHidden()
+})

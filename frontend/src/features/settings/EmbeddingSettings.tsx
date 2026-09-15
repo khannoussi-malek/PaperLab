@@ -16,9 +16,18 @@ export function EmbeddingSettings() {
   const reindex = useReindexLibrary()
   const [confirmOpen, setConfirmOpen] = useState(false)
 
+  function openConfirm(open: boolean) {
+    if (open) reindex.reset() // clear a previous refusal so a reopened dialog starts clean
+    setConfirmOpen(open)
+  }
+
   async function confirmReindex() {
-    await reindex.mutateAsync()
-    setConfirmOpen(false)
+    try {
+      await reindex.mutateAsync()
+      setConfirmOpen(false)
+    } catch {
+      // shown below from reindex.error; the dialog stays open so the owner can retry or cancel
+    }
   }
 
   return (
@@ -69,7 +78,7 @@ export function EmbeddingSettings() {
           )}
 
           <div>
-            <Button variant="outline" onClick={() => setConfirmOpen(true)}>
+            <Button variant="outline" onClick={() => openConfirm(true)}>
               <RefreshCw aria-hidden />
               Re-index library
             </Button>
@@ -83,7 +92,7 @@ export function EmbeddingSettings() {
         </div>
       )}
 
-      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+      <Dialog open={confirmOpen} onOpenChange={openConfirm}>
         <DialogContent className={cn(glass, 'bg-glass-strong ring-glass-border sm:max-w-md')}>
           <DialogHeader>
             <DialogTitle>Re-index the library?</DialogTitle>
@@ -91,6 +100,11 @@ export function EmbeddingSettings() {
               Every paper's passages are embedded again with {status.data?.model}, in the background.
             </DialogDescription>
           </DialogHeader>
+          {reindex.error && (
+            <Alert variant="destructive" className="border-glass-border">
+              <AlertDescription>{reindex.error.message}</AlertDescription>
+            </Alert>
+          )}
           <DialogFooter>
             <DialogClose asChild>
               <Button variant="outline">Cancel</Button>
