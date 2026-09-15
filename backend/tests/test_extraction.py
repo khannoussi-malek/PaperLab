@@ -1,9 +1,10 @@
 import pytest
-from conftest import BERT_TITLE_LINES
+from conftest import BERT_TITLE_LINES, TABLE_ROWS
 
 from app.core.chunking import Block
 from app.core.errors import InvalidInput
-from app.providers.extraction import _title_from_blocks, extract
+from app.core.table_grid import caption_name, words_to_grid
+from app.providers.extraction import _title_from_blocks, extract, read_region
 
 
 def test_blocks_have_one_based_pages_and_top_left_bboxes(sample_pdf):
@@ -70,3 +71,12 @@ def test_two_line_title_join_stops_at_a_same_size_non_bold_line():
         Block(page=1, bbox=(0, 1, 1, 2), text="Jacob Devlin Ming-Wei Chang", size=14, bold=False),
     ]
     assert _title_from_blocks(blocks) == "Title Line One"
+
+
+def test_a_region_gives_the_words_inside_it_and_the_caption_blocks_around_it(table_pdf):
+    region = (60.0, 135.0, 420.0, 185.0)
+    text = read_region(table_pdf, 1, region)
+
+    assert [[cell.text for cell in row] for row in words_to_grid(text.words)] == [list(row) for row in TABLE_ROWS]
+    assert all(region[1] <= w.y0 and w.y1 <= region[3] for w in text.words)  # the paragraph below is not read
+    assert caption_name(text.blocks, region) == "Table 1: Results on the dev set."
