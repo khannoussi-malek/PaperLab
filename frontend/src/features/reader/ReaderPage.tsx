@@ -1,13 +1,17 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
+import { Table2 } from 'lucide-react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { api, type Note } from '@/api/client'
-import { useChunksOnPage, useNoteMutations, useNotes, usePaper } from '@/api/queries'
+import { useChunksOnPage, useNoteMutations, useNotes, usePaper, usePaperDatasets } from '@/api/queries'
 import { glass } from '@/components/glass'
 import { fadeIn } from '@/components/motion'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { readerHref, type ReaderTab, type ReaderTarget } from '@/lib/route'
 import { cn } from '@/lib/utils'
 import { ChatPanel } from '../chat/ChatPanel'
+import { CaptureTableDialog } from '../data/CaptureTableDialog'
 import { DataPanel } from '../data/DataPanel'
+import { tableMarkerAt, tableMarks } from '../data/pageMarks'
+import { useCaptureDrag } from '../data/useCaptureDrag'
 import { browserStorage, highlightFill, loadLastColor, saveLastColor } from '../notes/highlightColors'
 import { NoteHoverCard } from '../notes/NoteHoverCard'
 import { NotesPanel } from '../notes/NotesPanel'
@@ -104,6 +108,10 @@ export function ReaderPage({ paperId, tab, target }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [panelWidth, setPanelWidth] = useState(() => loadPanelWidth(browserStorage()))
   const scale = ZOOM_STEPS[zoomIndex]
+  const datasets = usePaperDatasets(paperId)
+  const tableMarksByPage = useMemo(() => tableMarks(datasets.data ?? []), [datasets.data])
+  const captureDrag = useCaptureDrag(scale)
+  const { capturing, capture } = captureDrag
 
   useEffect(() => savePanelWidth(browserStorage(), panelWidth), [panelWidth])
   const notes = useMemo(() => notesQuery.data ?? [], [notesQuery.data])
@@ -163,7 +171,15 @@ export function ReaderPage({ paperId, tab, target }: Props) {
     }
   }
 
+  /** A click on a captured table's marker opens the Data tab. */
+  function openTableMarker(event: MouseEvent) {
+    if (capturing || readSelection(scale).kind !== 'none') return
+    const where = pointOnPage(event, scale)
+    if (where && tableMarkerAt(tableMarksByPage.get(where.page) ?? [], where.point)) showTab('data')
+  }
+
   function captureSelection(event: MouseEvent) {
+    if (capturing) return captureDrag.endDrag(event)
     if (event.button !== 0) return // a right-click opens the menu instead
     const result = readSelection(scale)
     if (result.kind === 'invalid') setError(result.reason)
@@ -290,7 +306,13 @@ export function ReaderPage({ paperId, tab, target }: Props) {
     >
       {/* One grid row either way, so the pages and the panel keep their row whether or not the banner shows. */}
       <div className="col-span-full">
-        <ReaderToolbar paper={paper.data} zoomIndex={zoomIndex} onZoomChange={setZoomIndex} />
+        <ReaderToolbar
+          paper={paper.data}
+          zoomIndex={zoomIndex}
+          onZoomChange={setZoomIndex}
+          capturing={capturing}
+          onCaptureChange={captureDrag.setCapturing}
+        />
         {paper.data?.is_retracted && <RetractionBanner paper={paper.data} />}
       </div>
 
@@ -305,9 +327,11 @@ export function ReaderPage({ paperId, tab, target }: Props) {
       )}
 
       <section
-        className="overflow-auto p-4"
+        className={cn('overflow-auto p-4', capturing && 'cursor-crosshair select-none')}
+        onMouseDown={captureDrag.startDrag}
         onMouseUp={captureSelection}
-        onMouseMove={trackHover}
+        onClick={openTableMarker}
+        onMouseMove={capturing ? captureDrag.moveDrag : trackHover}
         onMouseLeave={hoverCard.leave}
         onContextMenu={openContextMenu}
       >
@@ -327,6 +351,17 @@ export function ReaderPage({ paperId, tab, target }: Props) {
                   style={{ ...pdfRectToCss(h.rect, scale), backgroundColor: h.color ? highlightFill(h.color, h.provenance) : undefined }}
                 />
               ))}
+              {(tableMarksByPage.get(pageNumber) ?? []).map((mark) => (
+                <Fragment key={mark.datasetId}>
+                  <div className="table-region absolute rounded-xs outline-1 outline-primary/40" style={pdfRectToCss(mark.region, scale)} />
+                  <div className="table-marker absolute grid place-items-center rounded-xs bg-card/90" style={pdfRectToCss(mark.marker, scale)}>
+                    <Table2 aria-hidden className="size-3.5 text-primary" />
+                  </div>
+                </Fragment>
+              ))}
+              {captureDrag.box?.page === pageNumber && (
+                <div className="capture-box absolute bg-primary/10 outline-2 outline-primary" style={pdfRectToCss(captureDrag.box.rect, scale)} />
+              )}
               {flash?.page === pageNumber &&
                 flash.rects.map((rect, r) => (
                   <div
@@ -384,6 +419,20 @@ export function ReaderPage({ paperId, tab, target }: Props) {
         }
         data={<DataPanel paperId={paperId} onShowRegion={flashChunk} />}
       />
+
+      {capture && doc && (
+        <CaptureTableDialog
+          paperId={paperId}
+          doc={doc}
+          page={capture.page}
+          region={capture.region}
+          onClose={captureDrag.closeCapture}
+          onSaved={() => {
+            captureDrag.closeCapture()
+            showTab('data')
+          }}
+        />
+      )}
 
       <ReaderContextMenu
         menu={menu}
