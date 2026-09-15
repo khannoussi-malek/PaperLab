@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from app.api import chat as chat_api
+from app.api.deps import get_transport
 from app.config import settings
 from app.db import get_session
 from app.main import create_app
@@ -227,6 +228,48 @@ def fake_llm(app, session, monkeypatch):
     # The answer is saved in a fresh session after the stream; keep it inside the test transaction.
     monkeypatch.setattr(chat_api, "SessionLocal", test_session)
     return fake
+
+
+class FakeProvider:
+    """Model providers (Ollama, OpenAI-compatible servers) behind httpx.MockTransport, for routes that call one.
+
+    `reply(path, status, **response_kwargs)` answers every request to that path; `refuse(path)` raises ConnectError
+    like a server that isn't running. An unrouted request fails loudly. Every request is recorded.
+    """
+
+    def __init__(self):
+        self.replies: dict[str, tuple[int, dict] | None] = {}
+        self.requests: list[httpx.Request] = []
+        self.transport = httpx.MockTransport(self._handle)
+
+    def reply(self, path: str, status: int, **response_kwargs) -> None:
+        self.replies[path] = (status, response_kwargs)
+
+    def refuse(self, path: str) -> None:
+        self.replies[path] = None
+
+    def _handle(self, request: httpx.Request) -> httpx.Response:
+        self.requests.append(request)
+        if request.url.path not in self.replies:
+            raise AssertionError(f"unrouted provider request: {request.method} {request.url}")
+        reply = self.replies[request.url.path]
+        if reply is None:
+            raise httpx.ConnectError("connection refused", request=request)
+        status, kwargs = reply
+        return httpx.Response(status, **kwargs)
+
+
+@pytest.fixture
+def provider(app):
+    fake = FakeProvider()
+    app.dependency_overrides[get_transport] = lambda: fake.transport
+    return fake
+
+
+@pytest.fixture(autouse=True)
+def _real_providers(monkeypatch):
+    # A shell that exported LLM_PROVIDER=fake for the E2E stack must not turn provider tests into fake ones.
+    monkeypatch.setattr(settings, "llm_provider", "ollama")
 
 
 def _write_pdf(path: Path, pages: list[list[tuple]], metadata: dict[str, str] | None = None) -> Path:
