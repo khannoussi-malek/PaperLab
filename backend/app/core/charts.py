@@ -9,13 +9,15 @@ from typing import Literal
 from sqlalchemy import delete, func, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.chart_spec import ChartSpec, references
+from app.core.chart_spec import ChartSpec, ChartSpecAdapter, SeriesChart, references
 from app.core.datasets import clean_name
 from app.core.errors import InvalidInput, NotFound
+from app.core.notes import Anchor
 from app.models import Chart, Dataset, DatasetColumn, DatasetRow, Paper, cell_table, chart_datasets, note_charts
 
 COPY_SUFFIX = " (copy)"
 OWN_DATA_LABEL = "My data"
+MAX_NOTE_ANCHORS = 50
 
 
 @dataclass(frozen=True)
@@ -72,6 +74,7 @@ class ResolvedDataset:
     paper_id: uuid.UUID | None
     paper_title: str | None
     page: int | None
+    region: list[float] | None  # a captured table's box on its page
     columns: list[ResolvedColumn]
     rows: list[ResolvedRow]  # every row, in position order; a series' row filter is applied when drawing
 
@@ -94,7 +97,7 @@ async def resolve(session: AsyncSession, spec: ChartSpec) -> ResolvedData:
         d.id: d
         for d in await session.execute(
             select(Dataset.id, Dataset.name, Dataset.kind, Dataset.paper_id, Paper.title.label("paper_title"),
-                   Dataset.page)
+                   Dataset.page, Dataset.region)
             .outerjoin(Paper, Paper.id == Dataset.paper_id)
             .where(Dataset.id.in_(refs))
         )
@@ -135,7 +138,7 @@ async def resolve(session: AsyncSession, spec: ChartSpec) -> ResolvedData:
         resolved.append(
             ResolvedDataset(
                 id=d.id, name=d.name, kind=d.kind, paper_id=d.paper_id, paper_title=d.paper_title, page=d.page,
-                columns=[ResolvedColumn(c.id, c.name, c.unit) for c in own_columns],
+                region=d.region, columns=[ResolvedColumn(c.id, c.name, c.unit) for c in own_columns],
                 rows=[ResolvedRow(r.id, r.position, by_row.get(r.id, {})) for r in own_rows],
             )
         )  # fmt: skip
@@ -245,3 +248,30 @@ async def delete_chart(session: AsyncSession, chart_id: uuid.UUID) -> None:
     await _get(session, chart_id)
     await session.execute(delete(Chart).where(Chart.id == chart_id))
     await session.commit()
+
+
+async def chart_anchors(session: AsyncSession, chart_id: uuid.UUID) -> list[Anchor]:
+    """Where the chart's data sits in papers: each captured table's region, and each charted cell read from a page
+    (captured numbers). Own data has no place in a paper. At most MAX_NOTE_ANCHORS."""
+    spec = ChartSpecAdapter.validate_python((await _get(session, chart_id)).spec)
+    data = await resolve(session, spec)
+    anchors: list[Anchor] = []
+    for dataset in data.datasets:
+        if dataset.paper_id is None:
+            continue
+        if dataset.kind == "table" and dataset.page is not None and dataset.region is not None:
+            anchors.append(Anchor(dataset.paper_id, dataset.page, [tuple(dataset.region)], dataset.name))
+            continue
+        # Only the rows a series charts: every row when any series on this dataset has no row filter.
+        series = spec.series if isinstance(spec, SeriesChart) else []
+        filters = [s.rows for s in series if s.dataset_id == dataset.id] or [None]
+        chosen = None if None in filters else {row_id for rows in filters for row_id in rows}
+        for row in dataset.rows:
+            if chosen is not None and row.id not in chosen:
+                continue
+            for cell in row.cells.values():
+                if cell.page is not None and cell.bbox:
+                    anchors.append(Anchor(dataset.paper_id, cell.page, [tuple(r) for r in cell.bbox], cell.raw))
+    if not anchors:
+        raise InvalidInput("chart_has_no_paper_data")
+    return anchors[:MAX_NOTE_ANCHORS]
