@@ -13,6 +13,11 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator,
 
 SPEC_VERSION = 1
 MAX_SERIES = 20
+# Colours the categorical palette can keep apart for colour-blind readers (validated with the dataviz skill's checker
+# on PaperLab's light and dark surfaces): 6 when neighbouring marks are compared (bars, lines, boxes), 3 when every pair
+# is (scatter). More series than that go into small multiples, one series per panel.
+MAX_COLORS = 6
+MAX_SCATTER_COLORS = 3
 MAX_DIMENSIONS = 30
 MAX_ROW_FILTER = 5_000
 
@@ -89,6 +94,11 @@ class SeriesChart(_Chart):
                 raise ValueError("only a 3D scatter series has a z column")
             if s.trend != "none" and self.type not in ("line", "scatter"):
                 raise ValueError("a trend line needs a line or scatter chart")
+        if self.type == "scatter3d" and self.layout.facet != "none":
+            raise ValueError("a 3D chart can't be split into small multiples")
+        colors = MAX_SCATTER_COLORS if self.type in ("scatter", "scatter3d") else MAX_COLORS
+        if self.layout.facet == "none" and len(self.series) > colors:
+            raise ValueError(f"more than {colors} series in one panel can't be told apart; use small multiples")
         return self
 
 
