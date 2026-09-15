@@ -100,7 +100,8 @@ function errorBars(points: Point[], scale: string | undefined) {
   return { error_y: { type: 'data', symmetric: false, array: up, arrayminus: down, visible: true, thickness: 1.5, width: 4 } }
 }
 
-function trendTrace(live: LiveSeries, color: string, xCategorical: boolean, yScale: string | undefined, axes: object): Data[] {
+/** A straight segment in data space: callers only draw it when both axes are linear, where it is still straight. */
+function trendTrace(live: LiveSeries, color: string, xCategorical: boolean, axes: object): Data[] {
   const pairs = live.points
     .map((p, i) => ({ x: xCategorical ? i + 1 : p.x, y: p.y, label: p.xLabel }))
     .filter((p): p is { x: number; y: number; label: string } => p.x !== null && p.y !== null)
@@ -115,8 +116,8 @@ function trendTrace(live: LiveSeries, color: string, xCategorical: boolean, ySca
       type: 'scatter',
       mode: 'lines',
       name: `${escapeText(live.name)} · linear trend (R² ${fit.r2.toFixed(2)})`,
-      x: ends.map((p) => (xCategorical ? p.label : p.x)),
-      y: ends.map((p) => transform(yScale)(fit.slope * p.x + fit.intercept)),
+      x: ends.map((p) => (xCategorical ? escapeText(p.label) : p.x)),
+      y: ends.map((p) => fit.slope * p.x + fit.intercept),
       line: { color, width: 2, dash: 'dash' },
       hoverinfo: 'skip',
       ...axes,
@@ -127,7 +128,8 @@ function trendTrace(live: LiveSeries, color: string, xCategorical: boolean, ySca
 function trace(spec: SeriesChartSpec, live: LiveSeries, color: string, xCategorical: boolean, theme: ChartTheme, axes: object): Data {
   const xScale = spec.axes?.x?.scale
   const yScale = spec.axes?.y?.scale
-  const x = live.points.map((p) => (xCategorical ? p.xLabel : transform(xScale)(p.x)))
+  // Category labels are cell text, drawn as tick labels: escaped like every other text.
+  const x = live.points.map((p) => (xCategorical ? escapeText(p.xLabel) : transform(xScale)(p.x)))
   const y = live.points.map((p) => transform(yScale)(p.y))
   const common = {
     name: escapeText(live.name),
@@ -208,6 +210,8 @@ export function compileSeriesChart(spec: SeriesChartSpec, data: ResolvedData, th
   const xTitle = spec.axes?.x?.label || (first.series.x ? columnName(first.dataset, first.series.x) : '')
   const yTitle = spec.axes?.y?.label || columnName(first.dataset, first.series.y)
   const facet = spec.layout?.facet === 'series' && spec.type !== 'scatter3d'
+  const linearAxes = ![spec.axes?.x?.scale, spec.axes?.y?.scale].some((scale) => scale === 'log' || scale === 'symlog')
+  const trendRefused = !linearAxes && live.some((s) => s.series.trend === 'linear')
   const traces: Data[] = []
 
   live.forEach((s, i) => {
@@ -215,7 +219,7 @@ export function compileSeriesChart(spec: SeriesChartSpec, data: ResolvedData, th
     const color = seriesColor(theme, facet ? 0 : i, s.series.color)
     const axes = facet && i > 0 ? { xaxis: `x${i + 1}`, yaxis: `y${i + 1}` } : {}
     traces.push(trace(spec, s, color, xCategorical, theme, axes))
-    if (s.series.trend === 'linear') traces.push(...trendTrace(s, color, xCategorical, spec.axes?.y?.scale, axes))
+    if (s.series.trend === 'linear' && linearAxes) traces.push(...trendTrace(s, color, xCategorical, axes))
   })
 
   const xValues = live.flatMap((s) => s.points.map((p) => p.x))
@@ -253,5 +257,6 @@ export function compileSeriesChart(spec: SeriesChartSpec, data: ResolvedData, th
   if (spec.type === 'bar') layout.barmode = spec.layout?.barmode ?? 'group'
   // A legend for two or more entries; one series is named by the chart's title, and small multiples by their panels.
   layout.showlegend = !facet && traces.length >= 2
-  return { traces, layout, warnings, seriesCount: live.length }
+  const allWarnings = trendRefused ? [...warnings, 'Trend lines are drawn on linear axes only'] : warnings
+  return { traces, layout, warnings: allWarnings, seriesCount: live.length }
 }

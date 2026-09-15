@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { symlog } from './chartMath'
 import { compileChart } from './compile'
 import { SERIES_COLORS } from './palette'
-import { BERT, BERT_B, bertTable, data, F1, MINE, ownData, RUN, SCORE, series, seriesChart, STD, SYSTEM } from './testData'
+import { BERT, BERT_B, bertTable, cell, data, F1, MINE, ownData, RUN, SCORE, series, seriesChart, STD, SYSTEM } from './testData'
 
 type Trace = Record<string, unknown> & { x?: unknown[]; y?: unknown[]; error_y?: Record<string, unknown> }
 const traces = (compiled: { traces: unknown[] }) => compiled.traces as Trace[]
@@ -130,6 +130,32 @@ describe('compileChart: series charts', () => {
   it('escapes names so text from a PDF or CSV header is never markup', () => {
     const [bert] = traces(compileChart(seriesChart('bar', [series({ name: '<b>F1</b> & co' })]), data(bertTable), 'light'))
     expect(bert.name).toBe('&lt;b&gt;F1&lt;/b&gt; &amp; co')
+  })
+
+  it('escapes category labels on bars, boxes, categorical lines and their trend lines', () => {
+    const label = '<a href="x">A</a> & <b>B</b>'
+    const escaped = '&lt;a href="x"&gt;A&lt;/a&gt; &amp; &lt;b&gt;B&lt;/b&gt;'
+    const marked: typeof bertTable = {
+      ...bertTable,
+      rows: bertTable.rows.map((row, i) => ({ ...row, cells: { ...row.cells, [SYSTEM]: cell(i === 0 ? label : 'plain', null) } })),
+    }
+    const xs = (type: 'bar' | 'box' | 'line') =>
+      traces(compileChart(seriesChart(type, [series({ trend: 'linear' })]), data(marked), 'light')).map((t) => t.x)
+    expect(xs('bar')[0]).toEqual([escaped, 'plain'])
+    expect(xs('box')[0]).toEqual([escaped, 'plain'])
+    const [line, trend] = xs('line')
+    expect(line).toEqual([escaped, 'plain'])
+    expect(trend).toEqual([escaped, 'plain'])
+  })
+
+  it('draws trend lines only when both axes are linear, and says why otherwise', () => {
+    for (const axes of [{ y: { label: '', scale: 'log' as const } }, { x: { label: '', scale: 'symlog' as const } }]) {
+      const compiled = compileChart(seriesChart('scatter', [series({ x: STD, trend: 'linear' })], { axes }), data(bertTable), 'light')
+      expect(traces(compiled)).toHaveLength(1)
+      expect(compiled.warnings).toEqual(['Trend lines are drawn on linear axes only'])
+    }
+    const plain = compileChart(seriesChart('scatter', [series({ x: STD })], { axes: { y: { label: '', scale: 'log' } } }), data(bertTable), 'light')
+    expect(plain.warnings).toEqual([])
   })
 
   it('charts only the chosen rows, labelling rows without an x column by position', () => {
