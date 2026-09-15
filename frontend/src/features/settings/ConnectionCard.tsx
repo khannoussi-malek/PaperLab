@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils'
 import { AddModelDialog } from './AddModelDialog'
 import { hostOf, KIND_NAMES, type ConnectionKind } from './connectionForm'
 import { ConnectionDialog } from './ConnectionDialog'
+import { PullModelForm } from './PullModelForm'
 
 /** "•••• T123", "••••" for a key too short to hint, or "No key". */
 function keyHintText(connection: LLMConnection): string {
@@ -19,16 +20,23 @@ function keyHintText(connection: LLMConnection): string {
 }
 
 export function ConnectionCard({ connection }: { connection: LLMConnection }) {
-  const { test, remove, removeModel, setDefault } = useConnectionMutations()
+  const { test, remove, removeModel, setDefault, deleteInstalled } = useConnectionMutations()
   const [editOpen, setEditOpen] = useState(false)
   const [addModelOpen, setAddModelOpen] = useState(false)
   const host = hostOf(connection.kind, connection.base_url)
   const defaultModel = connection.models.find((model) => model.is_default)
   const radioLabelId = `default-model-${connection.id}`
+  const isOllama = connection.kind === 'ollama'
 
   function deleteConnection() {
     const question = `Delete "${connection.label}" and its models? Saved answers keep their model names.`
     if (window.confirm(question)) remove.mutate(connection.id)
+  }
+
+  function deleteFromDisk(name: string) {
+    if (window.confirm(`Delete ${name} from Ollama? It is removed from this computer's disk.`)) {
+      deleteInstalled.mutate({ connectionId: connection.id, name })
+    }
   }
 
   return (
@@ -83,10 +91,14 @@ export function ConnectionCard({ connection }: { connection: LLMConnection }) {
         </div>
       </div>
 
-      {test.data && (
-        <p role="status" className={cn('test-result flex items-center gap-1.5 text-sm', !test.data.ok && 'text-destructive')}>
-          {test.data.ok ? <CircleCheck aria-hidden className="size-4 shrink-0" /> : <CircleAlert aria-hidden className="size-4 shrink-0" />}
-          {test.data.message}
+      {(deleteInstalled.error || test.data) && (
+        <p role="status" className={cn('test-result flex items-center gap-1.5 text-sm', (deleteInstalled.error || !test.data?.ok) && 'text-destructive')}>
+          {deleteInstalled.error || !test.data?.ok ? (
+            <CircleAlert aria-hidden className="size-4 shrink-0" />
+          ) : (
+            <CircleCheck aria-hidden className="size-4 shrink-0" />
+          )}
+          {deleteInstalled.error ? deleteInstalled.error.message : test.data?.message}
         </p>
       )}
 
@@ -138,10 +150,23 @@ export function ConnectionCard({ connection }: { connection: LLMConnection }) {
                 >
                   <X aria-hidden />
                 </Button>
+                {isOllama && (
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label={`Delete ${model.name} from disk`}
+                    className="text-muted-foreground group-hover/row:text-destructive group-focus-within/row:text-destructive hover:bg-destructive/10"
+                    onClick={() => deleteFromDisk(model.name)}
+                  >
+                    <Trash2 aria-hidden />
+                  </Button>
+                )}
               </li>
             ))}
           </RadioGroup>
         )}
+
+        {isOllama && <PullModelForm connection={connection} />}
       </div>
 
       <ConnectionDialog open={editOpen} onOpenChange={setEditOpen} connection={connection} />
