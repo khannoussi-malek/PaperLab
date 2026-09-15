@@ -304,6 +304,30 @@ def doi_pdf(tmp_path) -> Path:
     )
 
 
+TABLE_ROWS = [("System", "Dev", "Test"), ("BERT-B", "88.5", "87.0"), ("BERT-L", "90.9 ± 0.2", "91.8")]
+
+
+@pytest.fixture
+def table_pdf(tmp_path) -> Path:
+    """Page 1: a caption above a 3 x 3 table (columns at x = 72, 220 and 320, rows 14 points apart from y = 150),
+    then a paragraph well below it. Every word's box ends inside (60, 135, 420, 185)."""
+    table = [
+        ("text", (x, 150 + 14 * r), text, 10, r == 0)
+        for r, row in enumerate(TABLE_ROWS)
+        for x, text in zip((72, 220, 320), row, strict=True)
+    ]
+    return _write_pdf(
+        tmp_path / "table.pdf",
+        [
+            [
+                ("text", (72, 120), "Table 1: Results on the dev set. Higher is better.", 10, False),
+                *table,
+                ("box", (72, 300, 520, 400), BODY_TEXT),
+            ]
+        ],
+    )
+
+
 @pytest.fixture
 def blank_pdf(tmp_path) -> Path:
     """Stands in for a scanned PDF: a page with no text layer."""
