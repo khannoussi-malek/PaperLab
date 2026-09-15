@@ -13,30 +13,66 @@ always marked as AI in the interface.
 
 **Build a library**
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/feature-library-dark.png">
+  <img alt="The library list with two papers still processing, a hovered paper's first-page preview with its authors, year and venue, and the Edit details card." src=".github/assets/feature-library.png">
+</picture>
+
 - Upload PDFs. A background worker extracts the text, splits it into sections and chunks, and indexes it for search.
 - Hover a paper in the list to preview its first page and details.
-- Group papers into workspaces (a paper can be in several), see all their notes in one place, and chat with a whole
-workspace: answers cite passages from each paper and your notes.
 - Optionally fill in each paper's title, authors, year, venue and topics from [OpenAlex](https://openalex.org/), and
 correct any of them by hand with **Edit details**. Your corrections are kept when a paper is processed again.
 - A retracted paper shows a banner at the top of the reader that can't be dismissed.
 
+**Group papers into workspaces**
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/feature-workspaces-dark.png">
+  <img alt="A workspace called Dense retrieval, open on its Chat tab, where an AI answer cites passages from its papers and one of your notes." src=".github/assets/feature-workspaces.png">
+</picture>
+
+- Group papers into workspaces (a paper can be in several), see all their notes in one place, and chat with a whole
+workspace: answers cite passages from its papers and your notes.
+
 **Read and highlight**
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/feature-reading-dark.png">
+  <img alt="A page of the BERT paper highlighted in five colours, the note card that opens when you hover a highlight, and the right-click menu with Copy quote." src=".github/assets/feature-reading.png">
+</picture>
 
 - Read in a PDF.js reader with zoom, in a light, dark or system theme. The page itself stays white.
 - Select text to highlight it in one of five colours, or a custom one, and add a note if you want.
 - Hover a highlight to see, edit, recolour or delete its note in place. Right-click it for the same actions and "Copy quote".
 - Resize the side panel by dragging its edge. It remembers the width.
+
+**Capture data and chart it**
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/feature-chart-your-data-dark.png">
+  <img alt="A chart of a paper's F1 scores next to your own runs from a CSV; clicking a point opens the table on its page in the paper." src=".github/assets/feature-chart-your-data.png">
+</picture>
+
 - Capture a table by drawing a box over it, or select a number like `88.5 ± 0.3` to keep it, add your own data from a
 CSV, and chart them side by side. Click any point on a chart to open its page in the paper.
 
 **Keep notes that stay findable**
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/feature-notes-dark.png">
+  <img alt="A page with two highlights, each linked to its note: one marked You and one marked AI, both on page 4, under You and AI filter chips." src=".github/assets/feature-notes.png">
+</picture>
 
 - Every note keeps the page and position of its passage. Click a note to jump back to it in the paper.
 - Each note shows who wrote it: **You**, **AI**, or **AI · edited**.
 - Filter the notes list to show only your notes, only AI notes, or both.
 
 **Ask a paper questions**
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/feature-ask-a-paper-dark.png">
+  <img alt="A question and an AI answer citing [C1] and [C2]; hovering [C1] shows its page and section, a line leads to that passage flashed on the page, and part of the answer is saved as an AI note." src=".github/assets/feature-ask-a-paper.png">
+</picture>
 
 - Chat with one paper at a time. Answers stream in as they are written.
 - Answers cite the passages they use, like `[C1]`. Hover a citation to see its page and section, and click it to
