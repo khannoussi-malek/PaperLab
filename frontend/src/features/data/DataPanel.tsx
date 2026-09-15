@@ -4,6 +4,7 @@ import { usePaperDatasets } from '@/api/queries'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
+import { datasetHref } from '@/lib/route'
 import type { PdfRect } from '../reader/coords'
 import { datasetMeta } from './datasetMeta'
 
@@ -47,14 +48,17 @@ export function DataPanel({ paperId, onShowRegion }: Props) {
                   </h3>
                 </CardHeader>
                 <CardContent className="text-sm text-muted-foreground tabular-nums">{datasetMeta(dataset)}</CardContent>
-                {dataset.page !== null && dataset.region !== null && (
-                  <CardFooter className="justify-end gap-2">
+                <CardFooter className="justify-end gap-2">
+                  {dataset.page !== null && dataset.region !== null && (
                     <Button variant="ghost" size="sm" onClick={() => onShowRegion(dataset.page!, [dataset.region!])}>
                       <Crosshair aria-hidden />
                       Show in paper
                     </Button>
-                  </CardFooter>
-                )}
+                  )}
+                  <Button variant="ghost" size="sm" asChild>
+                    <a href={datasetHref(dataset.id)}>Open</a>
+                  </Button>
+                </CardFooter>
               </Card>
             </article>
           </li>
