@@ -55,7 +55,7 @@ function CaptureCrop({ doc, page, region }: Pick<Props, 'doc' | 'page' | 'region
 
   return (
     // The paper stays white in both themes.
-    <div className="self-start overflow-auto rounded-lg bg-white ring-1 ring-glass-border">
+    <div className="max-h-full self-start overflow-auto rounded-lg bg-white ring-1 ring-glass-border">
       <canvas
         ref={canvasRef}
         className="capture-crop h-auto max-w-full"
@@ -104,16 +104,17 @@ export function CaptureTableDialog({ paperId, doc, page, region, onClose, onSave
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className={cn(glass, 'max-h-[calc(100dvh-2rem)] overflow-y-auto bg-glass-strong ring-glass-border sm:max-w-5xl')}>
-        <form onSubmit={save} className="grid gap-4">
+      {/* Only the grid scrolls on a wide screen (the whole body below lg), so the title, crop and Save stay in view. */}
+      <DialogContent className={cn(glass, 'flex max-h-[calc(100dvh-2rem)] flex-col bg-glass-strong ring-glass-border sm:max-w-5xl')}>
+        <form onSubmit={save} className="flex min-h-0 flex-col gap-4">
           <DialogHeader>
             <DialogTitle>Capture table</DialogTitle>
             <DialogDescription>Check the grid against the page, fix anything read wrong, then save it.</DialogDescription>
           </DialogHeader>
 
-          <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+          <div className="grid min-h-0 gap-4 max-lg:overflow-y-auto lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:grid-rows-[minmax(0,1fr)]">
             <CaptureCrop doc={doc} page={page} region={region} />
-            <div className="grid min-h-40 content-start gap-4">
+            <div className="flex min-h-40 min-w-0 flex-col gap-4">
               {previewError && (
                 <Alert variant="destructive">
                   <AlertDescription className="flex items-center justify-between gap-2">

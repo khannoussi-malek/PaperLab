@@ -1,0 +1,7 @@
+{
+  "files.watcherExclude": {
+    "**/.venv/**": true,
+    "**/test-results/**": true,
+    "**/playwright-report/**": true
+  }
+}

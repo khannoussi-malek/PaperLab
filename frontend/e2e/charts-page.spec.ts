@@ -4,6 +4,9 @@ test('uploading a CSV makes your own data, listed under My data', async ({ page,
   await page.goto('/')
   await page.getByRole('link', { name: 'Charts' }).click()
   await expect(page.getByRole('heading', { name: 'Charts', level: 1 })).toBeVisible()
+  await page.getByRole('link', { name: '← Library' }).click()
+  await expect(page.getByRole('heading', { name: 'PaperLab', level: 1 })).toBeVisible()
+  await page.getByRole('link', { name: 'Charts' }).click()
 
   await page.getByRole('button', { name: 'New dataset' }).click()
   const dialog = page.getByRole('dialog', { name: 'New dataset' })
