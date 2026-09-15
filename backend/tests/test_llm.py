@@ -148,12 +148,13 @@ async def test_anthropic_overload_mid_stream_is_an_llm_error():
 class _DropAfterOneChunk(httpx2.AsyncByteStream):
     """A transport that delivers some bytes, then dies — not an SSE `error` event."""
 
-    def __init__(self, chunk: bytes):
+    def __init__(self, chunk: bytes, message: str = "connection dropped"):
         self._chunk = chunk
+        self._message = message
 
     async def __aiter__(self):
         yield self._chunk
-        raise httpx2.ReadError("connection dropped")
+        raise httpx2.ReadError(self._message)
 
 
 async def test_anthropic_transport_error_mid_stream_is_an_llm_error():
@@ -177,6 +178,29 @@ async def test_anthropic_transport_error_mid_stream_is_an_llm_error():
     with pytest.raises(LLMError, match="connection dropped"):
         await collect(anthropic_model(handler), tokens)
     assert tokens == ["Attention"]
+
+
+async def test_anthropic_transport_error_mid_stream_masks_the_key():
+    msg = {
+        "id": "msg_1", "type": "message", "role": "assistant", "model": "claude-sonnet-5", "content": [],
+        "stop_reason": None, "stop_sequence": None, "usage": {"input_tokens": 10, "output_tokens": 0},
+    }
+    chunk = (
+        sse("message_start", {"type": "message_start", "message": msg})
+        + sse("content_block_start", {"type": "content_block_start", "index": 0,
+                                      "content_block": {"type": "text", "text": ""}})
+    ).encode()
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(200, headers={"content-type": "text/event-stream"},
+                               stream=_DropAfterOneChunk(chunk, message=f"connection dropped, key was {KEY}"))
+
+    client = httpx2.AsyncClient(transport=httpx2.MockTransport(handler))
+    adapter = llm.AnthropicLLM("claude-sonnet-5", KEY, "Claude", http_client=client)
+
+    with pytest.raises(LLMError, match="^Claude: connection dropped, key was ••••$") as raised:
+        await collect(adapter, [])
+    assert KEY not in str(raised.value)
 
 
 async def test_anthropic_unknown_model_is_unavailable():
@@ -337,6 +361,15 @@ async def test_openai_compatible_line_that_isnt_json_is_an_llm_error():
     assert tokens == ["Attention"]
 
 
+async def test_openai_compatible_httpx_error_masks_the_key():
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadError(f"boom {KEY}", request=request)
+
+    with pytest.raises(LLMError, match="^OpenRouter request failed: boom ••••$") as raised:
+        await collect(compatible(handler), [])
+    assert KEY not in str(raised.value)
+
+
 class Row:
     """Stands in for an LLMConnection row: build_llm and list_models only read these four fields."""
 
@@ -417,6 +450,15 @@ async def test_list_models_cant_reach_names_the_host():
 
     with pytest.raises(LLMUnavailable, match="^Can't reach ollama.test$"):
         await listing(handler, Row("ollama", "Ollama", OLLAMA_URL))
+
+
+async def test_list_models_httpx_error_masks_the_key():
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadError(f"boom {KEY}", request=request)
+
+    with pytest.raises(LLMError, match="^OpenAI request failed: boom ••••$") as raised:
+        await listing(handler, Row("openai_compatible", "OpenAI", COMPATIBLE_URL, KEY))
+    assert KEY not in str(raised.value)
 
 
 def anthropic_listing(handler):

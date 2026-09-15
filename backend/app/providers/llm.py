@@ -154,7 +154,7 @@ class OpenAICompatibleLLM:
         except httpx.ConnectError as exc:
             raise LLMUnavailable(f"Can't reach {self.host}") from exc
         except (httpx.HTTPError, ValueError) as exc:  # ValueError: a data line that isn't JSON
-            raise LLMError(f"{self.connection_name} request failed: {exc}") from exc
+            raise LLMError(f"{self.connection_name} request failed: {masked(str(exc), self._api_key)}") from exc
 
 
 class AnthropicLLM:
@@ -189,7 +189,7 @@ class AnthropicLLM:
         # A transport drop mid-stream (not an SSE `error` event): the SDK only wraps errors from the
         # initial send, so a read failure during iteration surfaces as a raw httpx2 exception.
         except httpx2.HTTPError as exc:
-            raise LLMError(f"{self.connection_name}: {exc}") from exc
+            raise LLMError(f"{self.connection_name}: {masked(str(exc), self._api_key)}") from exc
 
 
 FAKE_ANSWER = "Fake answer: the method is described here [C1]."
@@ -269,7 +269,7 @@ async def list_models(connection, transport=None, http_client=None) -> list[str]
     except httpx.ConnectError as exc:
         raise LLMUnavailable(f"Can't reach {host_of(connection.base_url)}") from exc
     except httpx.HTTPError as exc:
-        raise LLMError(f"{connection.label} request failed: {exc}") from exc
+        raise LLMError(f"{connection.label} request failed: {masked(str(exc), connection.api_key)}") from exc
     if response.status_code == 404:
         return None
     if response.is_error:
