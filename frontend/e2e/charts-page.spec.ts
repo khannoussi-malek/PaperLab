@@ -63,3 +63,36 @@ test('a chart is renamed inline, duplicated, and the copy deleted, from the list
   await expect(copy).toHaveCount(0)
   await expect(page.locator('.chart-row', { hasText: `${dataName} renamed` })).toHaveCount(1)
 })
+
+test('renaming from the menu keeps focus on the input, so typed keystrokes land there', async ({ page, request, dataName }) => {
+  const data = await addOwnData(request, `${dataName} runs`, 'run,F1\nmine,92.0\n')
+  await addChart(request, `${dataName} chart`, barSpec(data, 'run', ['F1']))
+  await page.goto('/#/charts')
+
+  const row = page.locator('.chart-row', { hasText: `${dataName} chart` })
+  await row.getByRole('button', { name: 'Chart actions' }).click()
+  await page.getByRole('menuitem', { name: 'Rename' }).click()
+  const input = row.getByRole('textbox', { name: 'Chart title' })
+
+  // Radix hands focus back to the still-mounted "Chart actions" trigger once its close animation finishes
+  // (~100ms) unless that's suppressed; wait past it so a regression here shows up as keystrokes landing on the
+  // button (which would reopen the menu on Enter) instead of the input.
+  await page.waitForTimeout(300)
+  await expect(input).toBeFocused()
+  await page.keyboard.press('Control+a')
+  await page.keyboard.type(`${dataName} typed rename`)
+  await page.keyboard.press('Enter')
+
+  await expect(page.locator('.chart-row', { hasText: `${dataName} typed rename` })).toHaveCount(1)
+})
+
+test('the chart page has a standalone Edit link, and its own menu has no Edit item', async ({ page, request, dataName }) => {
+  const data = await addOwnData(request, `${dataName} runs`, 'run,F1\nmine,92.0\n')
+  const chart = await addChart(request, `${dataName} chart`, barSpec(data, 'run', ['F1']))
+  await page.goto(`/#/charts/${chart.id}`)
+
+  await expect(page.getByRole('link', { name: 'Edit' })).toHaveAttribute('href', `#/charts/${chart.id}/edit`)
+  await page.getByRole('button', { name: 'Chart actions' }).click()
+  await expect(page.getByRole('menuitem', { name: 'Rename' })).toBeVisible()
+  await expect(page.getByRole('menuitem', { name: 'Edit' })).toHaveCount(0)
+})
