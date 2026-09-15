@@ -96,3 +96,65 @@ test('the chart page has a standalone Edit link, and its own menu has no Edit it
   await expect(page.getByRole('menuitem', { name: 'Rename' })).toBeVisible()
   await expect(page.getByRole('menuitem', { name: 'Edit' })).toHaveCount(0)
 })
+
+test('My data that fails to load says why and retries, instead of looking empty', async ({ page }) => {
+  let fail = true
+  await page.route('**/api/datasets', (route) =>
+    fail ? route.fulfill({ status: 500, json: { detail: 'Datasets are unavailable' } }) : route.continue(),
+  )
+  await page.goto('/#/charts')
+  await expect(page.getByText('Datasets are unavailable')).toBeVisible()
+  await expect(page.getByText('No datasets of your own yet.')).toHaveCount(0)
+
+  fail = false
+  await page.getByRole('button', { name: 'Retry' }).click()
+  await expect(page.getByText('Datasets are unavailable')).toHaveCount(0)
+})
+
+test('a Duplicate or Delete the server refuses says why, on the list and on the chart page', async ({ page, request, dataName }) => {
+  const data = await addOwnData(request, `${dataName} runs`, 'run,F1\nmine,92.0\n')
+  const chart = await addChart(request, `${dataName} chart`, barSpec(data, 'run', ['F1']))
+  await page.route(`**/api/charts/${chart.id}/duplicate`, (route) =>
+    route.fulfill({ status: 500, json: { detail: 'Duplicating failed on the server' } }),
+  )
+  await page.route(`**/api/charts/${chart.id}`, (route) =>
+    route.request().method() === 'DELETE' ? route.fulfill({ status: 500, json: { detail: 'Deleting failed on the server' } }) : route.continue(),
+  )
+  page.on('dialog', (confirm) => void confirm.accept())
+
+  await page.goto('/#/charts')
+  const row = page.locator('.chart-row', { hasText: `${dataName} chart` })
+  await row.getByRole('button', { name: 'Chart actions' }).click()
+  await page.getByRole('menuitem', { name: 'Duplicate' }).click()
+  await expect(page.getByText('Duplicating failed on the server')).toBeVisible()
+  await row.getByRole('button', { name: 'Chart actions' }).click()
+  await page.getByRole('menuitem', { name: 'Delete' }).click()
+  await expect(page.getByText('Deleting failed on the server')).toBeVisible()
+  await expect(row).toHaveCount(1)
+
+  await page.goto(`/#/charts/${chart.id}`)
+  await page.getByRole('button', { name: 'Chart actions' }).click()
+  await page.getByRole('menuitem', { name: 'Delete' }).click()
+  await expect(page.getByText('Deleting failed on the server')).toBeVisible()
+  await expect(page).toHaveURL(new RegExp(`#/charts/${chart.id}$`))
+})
+
+test("a chart whose refetch fails keeps its drawing and never claims it doesn't exist", async ({ page, request, dataName }) => {
+  const data = await addOwnData(request, `${dataName} runs`, 'run,F1\nmine,92.0\n')
+  const chart = await addChart(request, `${dataName} chart`, barSpec(data, 'run', ['F1']))
+  await page.goto(`/#/charts/${chart.id}`)
+  await expect(page.locator('.chart-view')).toHaveAttribute('data-series-count', '1')
+
+  await page.route(`**/api/charts/${chart.id}`, (route) =>
+    route.request().method() === 'GET' ? route.fulfill({ status: 500, json: { detail: 'Server hiccup' } }) : route.continue(),
+  )
+  const failedRefetch = page.waitForResponse((response) => response.url().endsWith(`/api/charts/${chart.id}`) && response.status() === 500)
+  await page.getByRole('button', { name: 'Chart actions' }).click()
+  await page.getByRole('menuitem', { name: 'Rename' }).click()
+  await page.getByRole('textbox', { name: 'Chart title' }).fill(`${dataName} renamed`)
+  await page.keyboard.press('Enter')
+  await failedRefetch
+
+  await expect(page.locator('.chart-view')).toHaveAttribute('data-series-count', '1')
+  await expect(page.getByText("This chart doesn't exist.")).toHaveCount(0)
+})

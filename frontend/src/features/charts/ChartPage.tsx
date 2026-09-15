@@ -58,6 +58,7 @@ export function ChartPage({ chartId }: { chartId: string }) {
                 onRename={() => setRenaming(true)}
                 withEdit={false}
                 onAddToNote={setNoteResult}
+                onError={(error) => setNoteResult({ error })}
               />
             </>
           )}
@@ -65,7 +66,7 @@ export function ChartPage({ chartId }: { chartId: string }) {
         </div>
       </header>
 
-      {chart.isError && (
+      {chart.isError && !chart.data && (
         <p className="text-muted-foreground">
           This chart doesn't exist.{' '}
           <a href={chartsHref} className="text-primary hover:underline">

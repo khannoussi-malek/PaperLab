@@ -16,6 +16,8 @@ type Props = {
   withEdit?: boolean
   /** The chart page's own "Add to note…" item; the list rows don't offer it. Told the outcome to show. */
   onAddToNote?: (result: { note: Note } | { error: string }) => void
+  /** A refused Duplicate or Delete, for the page to show. */
+  onError: (message: string) => void
 }
 
 const menuSurface = cn(glass, 'bg-glass-strong ring-glass-border')
@@ -26,7 +28,7 @@ const noteCount = (count: number) => `${count} note${count === 1 ? '' : 's'}`
  * A chart's "Chart actions" menu, shared by the Charts list and the chart page. Duplicate and Delete navigate to the
  * result only when this chart's own page is open; on the list they leave it as is.
  */
-export function ChartMenu({ chart, onRename, withEdit = true, onAddToNote }: Props) {
+export function ChartMenu({ chart, onRename, withEdit = true, onAddToNote, onError }: Props) {
   const route = useRoute()
   const onOwnPage = route.name === 'chart' && route.chartId === chart.id
   const { duplicate, remove, addToNote } = useChartMutations()
@@ -47,6 +49,7 @@ export function ChartMenu({ chart, onRename, withEdit = true, onAddToNote }: Pro
       onSuccess: (created) => {
         if (onOwnPage) window.location.hash = chartHref(created.id)
       },
+      onError: (error) => onError(error.message),
     })
   }
 
@@ -68,6 +71,7 @@ export function ChartMenu({ chart, onRename, withEdit = true, onAddToNote }: Pro
       onSuccess: () => {
         if (onOwnPage) window.location.hash = chartsHref
       },
+      onError: (error) => onError(error.message),
     })
   }
 
