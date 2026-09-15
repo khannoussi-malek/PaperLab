@@ -1,6 +1,6 @@
 import { Plus } from 'lucide-react'
-import { useEffect, useState } from 'react'
-import type { ChartSpec, Dataset } from '@/api/client'
+import { useEffect, useRef, useState } from 'react'
+import type { ChartSpec, Dataset, SeriesSpec } from '@/api/client'
 import { useChart, useChartMutations, useDataset, useLoadDataset } from '@/api/queries'
 import { glass } from '@/components/glass'
 import { fadeIn } from '@/components/motion'
@@ -55,6 +55,12 @@ export function ChartBuilderPage({ chartId, datasetId }: Props) {
   const [pickError, setPickError] = useState<string | null>(null)
   const [preview, setPreview] = useState<ChartSpec | null>(null)
   const firstDataset = useDataset(specDatasetIds(spec)[0] ?? null).data ?? null
+  // A pick applies after its dataset loads, by which time the chart may have changed: it reads the latest type here
+  // and updates the spec through `setSpec`'s updater, never the copy its render saw.
+  const latest = useRef({ spec, type })
+  useEffect(() => {
+    latest.current = { spec, type }
+  })
 
   // The starting point, once it has loaded: the saved chart, or a quick chart of the dataset.
   if (!started && chart.data) {
@@ -82,9 +88,18 @@ export function ChartBuilderPage({ chartId, datasetId }: Props) {
 
   /** "Add series" on a series chart (or no chart yet); "Change data" on a grid chart. */
   function applyData(dataset: Dataset) {
-    const next = withData(spec, type, dataset)
-    if (next) setSpec(next)
-    else setPickError(`“${dataset.name}” doesn't have the columns this chart needs.`)
+    const { spec: committed, type: currentType } = latest.current
+    if (!withData(committed, currentType, dataset)) return setPickError(`“${dataset.name}” doesn't have the columns this chart needs.`)
+    setSpec((current) => withData(current, currentType, dataset) ?? current)
+  }
+
+  /** Series change and go by id: a series card's data can finish loading after other series were added or removed. */
+  function updateSeries(change: (series: SeriesSpec[]) => SeriesSpec[]) {
+    setSpec((current) => {
+      if (!current || !('series' in current)) return current
+      const series = change(current.series)
+      return series.length > 0 ? { ...current, series } : null
+    })
   }
 
   async function pick(id: string) {
@@ -166,11 +181,8 @@ export function ChartBuilderPage({ chartId, datasetId }: Props) {
                         index={i}
                         type={spec.type}
                         facet={spec.layout?.facet === 'series'}
-                        onChange={(next) => setSpec({ ...spec, series: spec.series.map((s, j) => (j === i ? next : s)) })}
-                        onRemove={() => {
-                          const rest = spec.series.filter((_, j) => j !== i)
-                          setSpec(rest.length > 0 ? { ...spec, series: rest } : null)
-                        }}
+                        onChange={(next) => updateSeries((all) => all.map((s) => (s.id === next.id ? next : s)))}
+                        onRemove={() => updateSeries((all) => all.filter((s) => s.id !== series.id))}
                       />
                     ))}
                     <Button variant="ghost" className="justify-self-start" onClick={() => setPicking(true)}>

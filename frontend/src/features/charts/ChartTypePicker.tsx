@@ -17,12 +17,6 @@ const NEEDS: Record<ChartType, string> = {
   parcoords: 'Needs at least two number columns.',
 }
 
-/**
- * Chip labels that differ from the type's name: "3D", as the spec's type groups call it, so no other chip's name
- * contains "Scatter" (the name stays in the tooltip and in messages).
- */
-const CHIP_LABEL: Partial<Record<ChartType, string>> = { scatter3d: '3D' }
-
 type Props = {
   value: ChartType
   /** Whether a type can draw the current data. */
@@ -63,7 +57,7 @@ export function ChartTypePicker({ value, enabled, onChange }: Props) {
                     role="radio"
                     aria-checked={checked}
                     aria-disabled={disabled || undefined}
-                    title={disabled ? NEEDS[type] : CHIP_LABEL[type] && name}
+                    title={disabled ? NEEDS[type] : undefined}
                     // Roving focus: one tab stop per group, on its chosen chip (or its first).
                     tabIndex={checked || (!inGroup && i === 0) ? 0 : -1}
                     onClick={() => !disabled && onChange(type)}
@@ -75,7 +69,7 @@ export function ChartTypePicker({ value, enabled, onChange }: Props) {
                     )}
                   >
                     <Icon aria-hidden className="size-4" />
-                    {CHIP_LABEL[type] ?? name}
+                    {name}
                   </button>
                 )
               })}

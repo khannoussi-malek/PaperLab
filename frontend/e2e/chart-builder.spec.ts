@@ -9,7 +9,7 @@ test('a bar chart built from a paper table and your own data previews both serie
   const runs = await addOwnData(request, `${dataName} runs`, 'run,F1\nmine,92.0\n')
 
   await page.goto('/#/charts/new')
-  await expect(page.getByRole('radio', { name: 'Bar' })).toHaveAttribute('aria-checked', 'true')
+  await expect(page.getByRole('radio', { name: 'Bar', exact: true })).toHaveAttribute('aria-checked', 'true')
   await expect(page.getByText('Add a series to start the chart.')).toBeVisible()
   for (const id of [table.id, runs.id]) {
     await page.getByRole('button', { name: 'Add series' }).click()
@@ -22,6 +22,25 @@ test('a bar chart built from a paper table and your own data previews both serie
   await page.getByRole('button', { name: 'Save chart' }).click()
   await expect(page).toHaveURL(/#\/charts\/[0-9a-f-]{36}$/)
   await expect(page.getByRole('heading', { name: `${dataName} comparison` })).toBeVisible()
+  await expect(page.locator('.chart-view')).toHaveAttribute('data-series-count', '2')
+})
+
+test('two quick picks both add a series, even when the first dataset loads after the second pick', async ({ page, request, dataName }) => {
+  const first = await addOwnData(request, `${dataName} first`, 'run,F1\nmine,92.0\n')
+  const second = await addOwnData(request, `${dataName} second`, 'run,Acc\nmine,71.5\n')
+  for (const id of [first.id, second.id]) {
+    await page.route(`**/api/datasets/${id}`, async (route) => {
+      await new Promise((ok) => setTimeout(ok, 800))
+      await route.continue()
+    })
+  }
+
+  await page.goto('/#/charts/new')
+  for (const id of [first.id, second.id]) {
+    await page.getByRole('button', { name: 'Add series' }).click()
+    await page.getByRole('dialog', { name: 'Choose data' }).locator(`[data-dataset-id="${id}"]`).click()
+  }
+  await expect(page.locator('.series-card')).toHaveCount(2)
   await expect(page.locator('.chart-view')).toHaveAttribute('data-series-count', '2')
 })
 
@@ -43,7 +62,7 @@ test("Quick chart from the Data tab charts every number column, and too many ser
   await expect(page.locator('.series-card')).toHaveCount(2)
   await expect(page.getByRole('textbox', { name: 'Chart title' })).toHaveValue(`${dataName} table`)
 
-  await page.getByRole('radio', { name: 'Scatter' }).click()
+  await page.getByRole('radio', { name: 'Scatter', exact: true }).click()
   await expect(page.locator('.chart-view')).toHaveAttribute('data-chart-type', 'scatter')
   await page.getByRole('button', { name: 'Add series' }).click()
   await page.getByRole('dialog', { name: 'Choose data' }).locator('[data-dataset-id]', { hasText: `${dataName} table` }).click()
@@ -67,7 +86,7 @@ test('editing a chart that a note shows warns, and Save as copy leaves the origi
   await page.goto(`/#/charts/${chart.id}`)
   await page.getByRole('link', { name: 'Edit' }).click()
   await expect(page.getByText('Used in 1 note, which will show this change')).toBeVisible()
-  await page.getByRole('radio', { name: 'Line' }).click()
+  await page.getByRole('radio', { name: 'Line', exact: true }).click()
   await page.getByRole('button', { name: 'Save as copy' }).click()
 
   await expect(page.getByRole('heading', { name: `${dataName} chart (copy)` })).toBeVisible()
