@@ -93,9 +93,13 @@ export function PlotlyChart({ traces, layout, height, staticPlot = false, label,
   }, [status, traces, layout, height, staticPlot, filename])
 
   // Purges once, only when the component unmounts. The redraw effect above never tears the plot down on its own.
+  // `div` is captured now, not read inside the cleanup: React nulls a host ref during unmount's mutation phase,
+  // before this passive effect's cleanup runs, so `ref.current` would already be null by then. `plotlyRef` isn't a
+  // host ref (React never touches it), so reading its latest value inside the cleanup is fine and necessary — the
+  // module can still be loading when this effect first runs.
   useEffect(() => {
+    const div = ref.current
     return () => {
-      const div = ref.current
       const Plotly = plotlyRef.current
       if (div && Plotly) Plotly.purge(div)
     }
