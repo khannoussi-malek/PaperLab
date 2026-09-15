@@ -3,6 +3,8 @@ import { useSyncExternalStore } from 'react'
 export type ReaderTab = 'notes' | 'chat' | 'data'
 export type WorkspaceTab = 'papers' | 'notes' | 'chat'
 export type Rect = [number, number, number, number]
+/** A grid cell to scroll to and focus once, when a chart point of data typed in is opened. */
+export type CellFocus = { rowId: string; columnId: string }
 /** What the reader shows once on load, then drops from the hash. `id` tells one target from the next. */
 export type ReaderTarget =
   | { kind: 'chunk'; id: string; page: number }
@@ -16,12 +18,12 @@ export type Route =
   | { name: 'charts' }
   | { name: 'chart'; chartId: string }
   | { name: 'chart-builder'; chartId: string | null; datasetId: string | null }
-  | { name: 'dataset'; datasetId: string }
+  | { name: 'dataset'; datasetId: string; focus: CellFocus | null }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const HASH = /^#\/(papers|workspaces)\/([0-9a-f-]{36})(?:\?(.*))?$/i
 const CHARTS_HASH = /^#\/charts(?:\/(new|[0-9a-f-]{36})(\/edit)?)?(?:\?(.*))?$/i
-const DATASET_HASH = /^#\/datasets\/([0-9a-f-]{36})$/i
+const DATASET_HASH = /^#\/datasets\/([0-9a-f-]{36})(?:\?(.*))?$/i
 
 function pageOf(params: URLSearchParams): number | null {
   const page = Number(params.get('page'))
@@ -59,7 +61,13 @@ export function parseRoute(hash: string): Route {
   const charts = CHARTS_HASH.exec(hash)
   if (charts) return chartsRoute(charts)
   const dataset = DATASET_HASH.exec(hash)
-  if (dataset) return UUID.test(dataset[1]) ? { name: 'dataset', datasetId: dataset[1] } : { name: 'library' }
+  if (dataset) {
+    if (!UUID.test(dataset[1])) return { name: 'library' }
+    const params = new URLSearchParams(dataset[2])
+    const [rowId, columnId] = [params.get('row') ?? '', params.get('column') ?? '']
+    const focus = UUID.test(rowId) && UUID.test(columnId) ? { rowId, columnId } : null
+    return { name: 'dataset', datasetId: dataset[1], focus }
+  }
   const match = HASH.exec(hash)
   if (!match || !UUID.test(match[2])) return { name: 'library' }
   const params = new URLSearchParams(match[3])
@@ -92,7 +100,8 @@ export const chartHref = (chartId: string) => `#/charts/${chartId}`
 export const editChartHref = (chartId: string) => `#/charts/${chartId}/edit`
 /** With a dataset, the builder starts from a quick chart of it. */
 export const newChartHref = (datasetId?: string) => (datasetId ? `#/charts/new?dataset=${datasetId}` : '#/charts/new')
-export const datasetHref = (datasetId: string) => `#/datasets/${datasetId}`
+export const datasetHref = (datasetId: string, focus?: CellFocus) =>
+  focus ? `#/datasets/${datasetId}?row=${focus.rowId}&column=${focus.columnId}` : `#/datasets/${datasetId}`
 
 function subscribe(onChange: () => void) {
   window.addEventListener('hashchange', onChange)
