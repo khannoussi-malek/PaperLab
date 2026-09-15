@@ -5,6 +5,7 @@ import { useAllDatasets, useCharts, useChartMutations } from '@/api/queries'
 import { glass } from '@/components/glass'
 import { fadeIn } from '@/components/motion'
 import { ModeToggle } from '@/components/mode-toggle'
+import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { chartHref, datasetHref, newChartHref } from '@/lib/route'
@@ -42,9 +43,10 @@ type RowProps = {
   onRename: () => void
   onSaveTitle: (title: string) => Promise<boolean>
   onStopRenaming: () => void
+  onError: (message: string) => void
 }
 
-function ChartRow({ chart, renaming, onRename, onSaveTitle, onStopRenaming }: RowProps) {
+function ChartRow({ chart, renaming, onRename, onSaveTitle, onStopRenaming, onError }: RowProps) {
   const Icon = TYPE_ICON[chart.type]
   return (
     <li className="chart-row flex items-center gap-3 px-4 py-3" data-chart-id={chart.id}>
@@ -73,7 +75,7 @@ function ChartRow({ chart, renaming, onRename, onSaveTitle, onStopRenaming }: Ro
           Used in {plural(chart.note_count, 'note')} · edited {relativeTime(chart.updated_at)}
         </p>
       </div>
-      <ChartMenu chart={chart} onRename={onRename} />
+      <ChartMenu chart={chart} onRename={onRename} onError={onError} />
     </li>
   )
 }
@@ -85,6 +87,7 @@ export function ChartsPage() {
   const { update } = useChartMutations()
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [newDatasetOpen, setNewDatasetOpen] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
 
   const list = charts.data
   const ownDatasets = (datasets.data ?? []).filter((dataset) => dataset.kind === 'user')
@@ -119,6 +122,12 @@ export function ChartsPage() {
         </div>
       </header>
 
+      {actionError && (
+        <Alert variant="destructive" className="border-glass-border">
+          <AlertDescription>{actionError}</AlertDescription>
+        </Alert>
+      )}
+
       {list === undefined ? (
         charts.isError ? (
           <p className="text-destructive">{charts.error.message}</p>
@@ -138,6 +147,7 @@ export function ChartsPage() {
                 onRename={() => setRenamingId(chart.id)}
                 onSaveTitle={(title) => saveTitle(chart.id, title)}
                 onStopRenaming={() => setRenamingId(null)}
+                onError={setActionError}
               />
             ))}
           </ul>
@@ -146,7 +156,16 @@ export function ChartsPage() {
 
       <div className="flex flex-col gap-2">
         <h2 className="font-heading text-xl font-semibold">My data</h2>
-        {ownDatasets.length === 0 ? (
+        {datasets.isError ? (
+          <Alert variant="destructive" className="border-glass-border">
+            <AlertDescription>{datasets.error.message}</AlertDescription>
+            <AlertAction>
+              <Button variant="outline" size="xs" onClick={() => void datasets.refetch()}>
+                Retry
+              </Button>
+            </AlertAction>
+          </Alert>
+        ) : ownDatasets.length === 0 ? (
           <p className="text-sm text-muted-foreground">No datasets of your own yet.</p>
         ) : (
           <ul className="flex flex-col gap-1">
