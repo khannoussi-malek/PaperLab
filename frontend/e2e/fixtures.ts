@@ -8,13 +8,18 @@ export { expect }
 export const FIXTURE_FILE = fileURLToPath(new URL('./fixtures/sample-paper.pdf', import.meta.url))
 export const FIXTURE_TITLE = 'PaperLab E2E Fixture'
 export const FIRST_LINE = 'Highlights are the anchor'
+export const TABLE_FIXTURE_FILE = fileURLToPath(new URL('./fixtures/table-paper.pdf', import.meta.url))
+/** The start of the table paper's sentence line, which holds "88.5 ± 0.3 F1". */
+export const TABLE_LINE = 'Our best model reaches'
 export type Rect = [number, number, number, number]
 
-export async function uploadAndWaitUntilReady(request: APIRequestContext): Promise<string> {
+export async function uploadAndWaitUntilReady(
+  request: APIRequestContext,
+  file = FIXTURE_FILE,
+  filename = 'sample-paper.pdf',
+): Promise<string> {
   const upload = await request.post('/api/papers', {
-    multipart: {
-      file: { name: 'sample-paper.pdf', mimeType: 'application/pdf', buffer: await readFile(FIXTURE_FILE) },
-    },
+    multipart: { file: { name: filename, mimeType: 'application/pdf', buffer: await readFile(file) } },
   })
   expect(upload.status()).toBe(201)
   const { id } = await upload.json()
@@ -118,6 +123,8 @@ type Fixtures = {
   paperId: string
   /** Another, separately ingested copy: workspace specs need two papers. */
   secondPaperId: string
+  /** A freshly ingested copy of the table paper: a captioned 3 × 3 table and "88.5 ± 0.3 F1" on page 1. */
+  tablePaperId: string
   /** A unique workspace name. Every workspace whose name starts with it is deleted after the test. */
   workspaceName: string
   /** An empty workspace named `workspaceName`. */
@@ -134,6 +141,11 @@ export const test = base.extend<Fixtures>({
   },
   secondPaperId: async ({ request }, use) => {
     const id = await uploadAndWaitUntilReady(request)
+    await use(id)
+    await removePaperAndNotes(request, id)
+  },
+  tablePaperId: async ({ request }, use) => {
+    const id = await uploadAndWaitUntilReady(request, TABLE_FIXTURE_FILE, 'table-paper.pdf')
     await use(id)
     await removePaperAndNotes(request, id)
   },
@@ -155,12 +167,23 @@ export const test = base.extend<Fixtures>({
   },
 })
 
-/** Opens the reader and returns page 1's first text-layer line once it is rendered. */
-export async function openReader(page: Page, paperId: string): Promise<Locator> {
+/** Opens the reader and returns page 1's text-layer line holding `firstLine` once it is rendered. */
+export async function openReader(page: Page, paperId: string, firstLine = FIRST_LINE): Promise<Locator> {
   await page.goto(`/#/papers/${paperId}`)
-  const line = page.locator('.pdf-page[data-page="1"] .textLayer span', { hasText: FIRST_LINE })
+  const line = page.locator('.pdf-page[data-page="1"] .textLayer span', { hasText: firstLine })
   await expect(line).toBeVisible()
   return line
+}
+
+/** Drags a box over `region` (PDF points, top-left origin) on a page, at whatever zoom the reader shows. */
+export async function dragBox(page: Page, pageNumber: number, [x0, y0, x1, y1]: Rect) {
+  const box = await page.locator(`.pdf-page[data-page="${pageNumber}"]`).boundingBox()
+  if (!box) throw new Error(`page ${pageNumber} is not rendered`)
+  const scale = box.width / 612 // the fixtures are US Letter
+  await page.mouse.move(box.x + x0 * scale, box.y + y0 * scale)
+  await page.mouse.down()
+  await page.mouse.move(box.x + x1 * scale, box.y + y1 * scale, { steps: 8 })
+  await page.mouse.up()
 }
 
 /** Selects from the start of `start` to the end of `end` like a mouse drag, then releases the mouse. */

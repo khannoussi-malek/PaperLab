@@ -1,4 +1,4 @@
-import { ZoomIn, ZoomOut } from 'lucide-react'
+import { Table2, ZoomIn, ZoomOut } from 'lucide-react'
 import type { Paper } from '@/api/client'
 import { glass } from '@/components/glass'
 import { ModeToggle } from '@/components/mode-toggle'
@@ -11,9 +11,12 @@ type Props = {
   paper: Paper | undefined
   zoomIndex: number
   onZoomChange: (index: number) => void
+  /** Whether dragging on the pages draws a box to capture a table. */
+  capturing: boolean
+  onCaptureChange: (on: boolean) => void
 }
 
-export function ReaderToolbar({ paper, zoomIndex, onZoomChange }: Props) {
+export function ReaderToolbar({ paper, zoomIndex, onZoomChange, capturing, onCaptureChange }: Props) {
   const title = paper?.title
   return (
     <header className={cn('col-span-full flex items-center gap-2 border-b border-glass-border px-4 py-2', glass)}>
@@ -23,6 +26,16 @@ export function ReaderToolbar({ paper, zoomIndex, onZoomChange }: Props) {
       <h1 className="mx-2 flex-1 truncate font-heading text-xl font-semibold" title={title}>
         {title ?? 'Loading…'}
       </h1>
+      <Button
+        variant="outline"
+        size="sm"
+        aria-pressed={capturing}
+        className="aria-pressed:border-primary aria-pressed:bg-primary/10 aria-pressed:text-primary"
+        onClick={() => onCaptureChange(!capturing)}
+      >
+        <Table2 aria-hidden />
+        Capture table
+      </Button>
       {paper && <PaperDetailsDialog paper={paper} />}
       <Button
         variant="outline"
