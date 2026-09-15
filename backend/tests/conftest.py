@@ -37,6 +37,15 @@ RECORDED_DOIS = sorted({doi.lower() for doi in re.findall(r"doi\.org/(10\.[^\"]+
 BODY_TEXT = "The quick brown fox jumps over the lazy dog near the river bank today. " * 3
 
 
+@pytest.hookimpl(tryfirst=True)  # before xdist reads the markers
+def pytest_collection_modifyitems(items):
+    # Tests on the OpenAlex recordings all write the same UNIQUE papers and authors; on parallel workers their
+    # transactions deadlock. `--dist loadgroup` (pyproject addopts) runs one xdist_group on a single worker.
+    for item in items:
+        if "fake_openalex" in item.fixturenames:
+            item.add_marker(pytest.mark.xdist_group("openalex"))
+
+
 @pytest.fixture
 def anyio_backend():
     return "asyncio"

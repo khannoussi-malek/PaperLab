@@ -54,7 +54,12 @@ async def test_get_paper(client):
     assert response.json() == created
 
 
-@pytest.mark.parametrize(("path", "status"), [(f"/api/papers/{uuid.uuid4()}", 404), ("/api/papers/not-a-uuid", 422)])
+# Fixed ids: pytest-xdist workers must collect identical test names, and the random UUID would differ per worker.
+@pytest.mark.parametrize(
+    ("path", "status"),
+    [(f"/api/papers/{uuid.uuid4()}", 404), ("/api/papers/not-a-uuid", 422)],
+    ids=["missing", "not-a-uuid"],
+)
 async def test_get_paper_errors(client, path, status):
     assert (await client.get(path)).status_code == status
 
