@@ -38,6 +38,12 @@ function CandidateChip({ candidate, chosen, onChoose }: { candidate: NumberCandi
   )
 }
 
+/** The Value and ± error fields as a candidate fills them. */
+const fieldsOf = (candidate: NumberCandidate) => ({
+  value: String(candidate.value),
+  error: candidate.error !== null ? String(candidate.error) : '',
+})
+
 /** Opens on a text selection with the numbers found in it, and saves the chosen one as a row in the paper's numbers dataset. */
 export function AddNumberDialog({ paperId, anchor, onClose }: Props) {
   const { addNumber } = useDatasetMutations()
@@ -55,12 +61,7 @@ export function AddNumberDialog({ paperId, anchor, onClose }: Props) {
       (found) => {
         if (!active) return
         setCandidates(found)
-        const first = found[0]
-        if (first) {
-          setValue(String(first.value))
-          setError(first.error !== null ? String(first.error) : '')
-          setUnit(first.unit_hint ?? '')
-        }
+        if (found[0]) choose(0, found[0])
       },
       (e: Error) => active && setCandidatesError(e.message),
     )
@@ -70,15 +71,19 @@ export function AddNumberDialog({ paperId, anchor, onClose }: Props) {
   }, [anchor.quotedText])
 
   function choose(index: number, candidate: NumberCandidate) {
+    const fields = fieldsOf(candidate)
     setChosen(index)
-    setValue(String(candidate.value))
-    setError(candidate.error !== null ? String(candidate.error) : '')
+    setValue(fields.value)
+    setError(fields.error)
     setUnit(candidate.unit_hint ?? '')
   }
 
   async function save(event: FormEvent) {
     event.preventDefault()
-    const raw = error ? `${value} ± ${error}` : value
+    // The paper's printed text ("110M", "34%") is kept unless the owner changed the value or error it was parsed into.
+    const candidate = candidates?.[chosen]
+    const untouched = candidate !== undefined && value === fieldsOf(candidate).value && error === fieldsOf(candidate).error
+    const raw = untouched ? candidate.raw : error ? `${value} ± ${error}` : value
     try {
       await addNumber.mutateAsync({ paperId, number: { label, raw, unit, page: anchor.page, bbox: anchor.rects } })
       onClose()
