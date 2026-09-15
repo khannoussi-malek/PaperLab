@@ -2,6 +2,7 @@ import { ArrowLeft } from 'lucide-react'
 import { fadeIn } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { EmbeddingSettings } from './EmbeddingSettings'
 import { ModelsSettings } from './ModelsSettings'
 
 /** `#/settings`: model connections (which models chat lists, and the default) and the embedding model. */
@@ -19,6 +20,7 @@ export function SettingsPage() {
       </div>
 
       <ModelsSettings />
+      <EmbeddingSettings />
     </main>
   )
 }
