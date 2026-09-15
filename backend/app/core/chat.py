@@ -211,9 +211,16 @@ def parse_citations(text: str, n: int, kind: str = "C") -> list[int]:
 
 
 async def save_answer(
-    session: AsyncSession, paper_id: uuid.UUID | Scope, question: str, prepared: Prepared, content: str, model: str
+    session: AsyncSession,
+    paper_id: uuid.UUID | Scope,
+    question: str,
+    prepared: Prepared,
+    content: str,
+    model: str,
+    connection_name: str,
 ) -> uuid.UUID:
-    """Note citations aren't stored separately: they follow from content and source_notes."""
+    """Note citations aren't stored separately: they follow from content and source_notes. The model and connection
+    names are copied, so renaming or deleting the connection later never changes the answer."""
     scope = _scope(paper_id)
     source_ids = [s.id for s in prepared.sources]
     output = LLMOutput(
@@ -228,6 +235,7 @@ async def save_answer(
         notes_used=prepared.notes_used,
         notes_total=prepared.notes_total,
         model=model,
+        connection_name=connection_name,
         prompt_version=prepared.prompt_version,
         whole_paper=prepared.whole_paper,
     )

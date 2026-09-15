@@ -9,6 +9,7 @@ from app.schemas.papers import Rect
 
 class ChatRequest(BaseModel):
     question: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
+    model_id: uuid.UUID | None = None  # a model from GET /api/llm/models; None asks the default
 
 
 class ChatSource(BaseModel):
@@ -44,6 +45,7 @@ class TokenEvent(BaseModel):
 class DoneEvent(BaseModel):
     output_id: uuid.UUID
     model: str
+    connection_name: str
     prompt_version: int
     cited: list[str]  # C labels first-cited first, then N labels first-cited first
 
@@ -58,6 +60,7 @@ class ChatAnswer(BaseModel):
     question: str
     content: str
     model: str
+    connection_name: str | None  # null for answers written before model connections existed
     prompt_version: int
     created_at: datetime
     whole_paper: bool

@@ -60,8 +60,12 @@ async def test_chat_streams_sources_then_tokens_then_done_and_saves_one_output(c
     assert "".join(data["text"] for name, data in events if name == "token") == FAKE_ANSWER
 
     [output] = await outputs_for(session, paper.id)
-    assert events[-1][1] == {"output_id": str(output.id), "model": "fake", "prompt_version": 1, "cited": ["C1"]}
-    assert (output.question, output.content, output.model) == ("What is the method?", FAKE_ANSWER, "fake")
+    assert events[-1][1] == {
+        "output_id": str(output.id), "model": "fake", "connection_name": "Fake", "prompt_version": 1, "cited": ["C1"]
+    }
+    assert (output.question, output.content, output.model, output.connection_name) == (
+        "What is the method?", FAKE_ANSWER, "fake", "Fake"
+    )
     assert (output.source_chunks, output.cited_chunks) == ([c.id for c in chunks], [chunks[0].id])
     assert fake_llm.calls[0][1].rstrip().endswith("Question: What is the method?")
     assert await session.scalar(select(func.count()).select_from(Note)) == notes_before
