@@ -10,7 +10,9 @@ test('a selected number is saved with its error and unit, listed in the Data tab
   await page.getByRole('button', { name: 'Add as number' }).click()
 
   const dialog = page.getByRole('dialog', { name: 'Add as number' })
-  await expect(dialog.getByRole('radio', { name: '88.5 ± 0.3' })).toHaveAttribute('aria-checked', 'true')
+  const chosenChip = dialog.getByRole('radio', { name: '88.5 ± 0.3' })
+  await expect(chosenChip).toHaveAttribute('aria-checked', 'true')
+  await expect(chosenChip.locator('svg.lucide-check')).toBeVisible()
   await expect(dialog.getByRole('textbox', { name: 'Value' })).toHaveValue('88.5')
   await expect(dialog.getByRole('textbox', { name: '± error' })).toHaveValue('0.3')
   await expect(dialog.getByRole('textbox', { name: 'Unit' })).toHaveValue('F1')

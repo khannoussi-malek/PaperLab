@@ -1,3 +1,4 @@
+import { Check } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { api, type NumberCandidate } from '@/api/client'
 import { useDatasetMutations } from '@/api/queries'
@@ -26,11 +27,12 @@ function CandidateChip({ candidate, chosen, onChoose }: { candidate: NumberCandi
       aria-checked={chosen}
       onClick={onChoose}
       className={cn(
-        'inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium tabular-nums ring-1 transition-[color,background-color,box-shadow,scale] duration-150 outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
+        'inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium tabular-nums ring-1 transition-[color,background-color,box-shadow,scale] duration-150 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 [&_svg]:size-3.5',
         pressable,
         chosen ? 'bg-secondary text-foreground ring-input' : 'text-muted-foreground ring-border ring-inset hover:bg-muted hover:text-foreground',
       )}
     >
+      {chosen && <Check aria-hidden />}
       {candidate.raw}
     </button>
   )
