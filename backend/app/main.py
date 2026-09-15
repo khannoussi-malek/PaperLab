@@ -5,7 +5,7 @@ from arq.connections import RedisSettings
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from app.api import chat, datasets, health, notes, papers, workspaces
+from app.api import charts, chat, datasets, health, notes, papers, workspaces
 from app.config import settings
 from app.core.errors import Conflict, DomainError, InvalidInput, NotFound
 
@@ -27,6 +27,7 @@ def create_app() -> FastAPI:
     app.include_router(chat.router)
     app.include_router(workspaces.router)
     app.include_router(datasets.router)
+    app.include_router(charts.router)
 
     @app.exception_handler(DomainError)
     async def domain_error(_: Request, exc: DomainError) -> JSONResponse:

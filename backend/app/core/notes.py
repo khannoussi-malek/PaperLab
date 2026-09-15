@@ -5,20 +5,23 @@
 - Editing an 'llm' note flips it to 'llm_edited'.                          (here)
 - Changing a note's colour never changes its provenance.                     (here)
 - Notes created through MCP get provenance='llm'.                          (M6)
+- Showing a chart in a note never changes its provenance, and a note made from a chart is the owner's
+  ('human'): a chart holds no generated text, only the owner's choice of data.  (here)
 """
 
 import re
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
 from sqlalchemy import delete, func, insert, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.chunking import join_lines
 from app.core.errors import InvalidInput, NotFound
 from app.core.papers import get_paper
-from app.models import Chunk, LLMOutput, Note, Provenance, note_anchors
+from app.models import Chart, Chunk, LLMOutput, Note, Provenance, note_anchors, note_charts
 
 Rect = tuple[float, float, float, float]
 
@@ -35,6 +38,12 @@ class Anchor:
 
 
 @dataclass(frozen=True)
+class ChartRef:
+    id: uuid.UUID
+    title: str
+
+
+@dataclass(frozen=True)
 class NoteView:
     id: uuid.UUID
     body: str
@@ -44,6 +53,7 @@ class NoteView:
     created_at: datetime
     updated_at: datetime
     anchors: list[Anchor]
+    charts: list[ChartRef] = field(default_factory=list)
 
 
 def edited_provenance(current: str) -> str:
@@ -84,6 +94,15 @@ async def _with_anchors(session: AsyncSession, notes: list[Note]) -> list[NoteVi
             quoted_text=row.quoted_text or "",
         )
         anchors.setdefault(row.note_id, []).append(anchor)
+    shown = await session.execute(
+        select(note_charts.c.note_id, Chart.id, Chart.title)
+        .join(Chart, Chart.id == note_charts.c.chart_id)
+        .where(note_charts.c.note_id.in_([n.id for n in notes]))
+        .order_by(Chart.title)
+    )
+    charts: dict[uuid.UUID, list[ChartRef]] = {}
+    for note_id, chart_id, title in shown:
+        charts.setdefault(note_id, []).append(ChartRef(chart_id, title))
     return [
         NoteView(
             id=n.id,
@@ -94,6 +113,7 @@ async def _with_anchors(session: AsyncSession, notes: list[Note]) -> list[NoteVi
             created_at=n.created_at,
             updated_at=n.updated_at,
             anchors=anchors.get(n.id, []),
+            charts=charts.get(n.id, []),
         )
         for n in notes
     ]
@@ -203,3 +223,58 @@ async def promote_llm_fragment(
     await session.commit()
     await session.refresh(note)
     return (await _with_anchors(session, [note]))[0]
+
+
+async def _get_chart(session: AsyncSession, chart_id: uuid.UUID) -> Chart:
+    chart = await session.get(Chart, chart_id)
+    if chart is None:
+        raise NotFound(f"chart {chart_id} not found")
+    return chart
+
+
+async def _view(session: AsyncSession, note: Note) -> NoteView:
+    await session.refresh(note)
+    return (await _with_anchors(session, [note]))[0]
+
+
+async def attach_chart(session: AsyncSession, note_id: uuid.UUID, chart_id: uuid.UUID) -> NoteView:
+    """Shows a chart in a note. Attaching twice is a no-op."""
+    note = await _get_note(session, note_id)
+    await _get_chart(session, chart_id)
+    await session.execute(pg_insert(note_charts).values(note_id=note_id, chart_id=chart_id).on_conflict_do_nothing())
+    await session.execute(update(Note).where(Note.id == note_id).values(updated_at=func.now()))
+    await session.commit()
+    return await _view(session, note)
+
+
+async def detach_chart(session: AsyncSession, note_id: uuid.UUID, chart_id: uuid.UUID) -> NoteView:
+    """Stops showing a chart in a note. Detaching a chart the note doesn't show is a no-op."""
+    note = await _get_note(session, note_id)
+    removed = await session.execute(
+        delete(note_charts).where(note_charts.c.note_id == note_id, note_charts.c.chart_id == chart_id)
+    )
+    if removed.rowcount:
+        await session.execute(update(Note).where(Note.id == note_id).values(updated_at=func.now()))
+    await session.commit()
+    return await _view(session, note)
+
+
+async def create_chart_note(session: AsyncSession, chart_id: uuid.UUID, anchors: list[Anchor]) -> NoteView:
+    """An empty 'human' note showing the chart, anchored where its data sits in each paper, so it appears in every
+    source paper's notes. The anchors come from core/charts.py's chart_anchors."""
+    await _get_chart(session, chart_id)
+    if not anchors:
+        raise InvalidInput("a note needs at least one anchor")
+    note = Note(body="", provenance=Provenance.HUMAN)
+    session.add(note)
+    await session.flush()
+    # note_anchors' PK is (note_id, paper_id, page, bbox): one anchor per spot.
+    rows: dict[tuple, dict] = {}
+    for a in anchors:
+        key = (a.paper_id, a.page, tuple(tuple(r) for r in a.bbox))
+        rows.setdefault(key, {"note_id": note.id, "paper_id": a.paper_id, "page": a.page,
+                              "bbox": [list(r) for r in a.bbox], "quoted_text": a.quoted_text})  # fmt: skip
+    await session.execute(insert(note_anchors), list(rows.values()))
+    await session.execute(insert(note_charts).values(note_id=note.id, chart_id=chart_id))
+    await session.commit()
+    return await _view(session, note)
