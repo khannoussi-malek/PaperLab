@@ -28,3 +28,15 @@ export function updateBody(form: ConnectionForm) {
   if (form.keyChange === 'remove') body.api_key = null
   return body
 }
+
+const ANTHROPIC_HOST = 'api.anthropic.com'
+
+/** The host shown for a connection: Anthropic's own, or the base URL's host (the raw string if it doesn't parse). */
+export function hostOf(kind: string, baseUrl: string | null): string {
+  if (kind === 'anthropic' || baseUrl === null) return ANTHROPIC_HOST
+  try {
+    return new URL(baseUrl).hostname || baseUrl
+  } catch {
+    return baseUrl
+  }
+}
