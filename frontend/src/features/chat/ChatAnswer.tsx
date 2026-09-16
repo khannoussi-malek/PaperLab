@@ -1,5 +1,5 @@
 import { CornerDownRight, Sparkles } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { createElement, Fragment, useMemo, type ReactNode } from 'react'
 import type { ChatSource, NoteSource } from '@/api/client'
 import { pressable, slideUpIn } from '@/components/motion'
 import { Badge } from '@/components/ui/badge'
@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { aiMark } from './aiMark'
-import { describeSource, type Segment } from './citations'
+import { describeSource, splitCitations, type Segment } from './citations'
+import { markdownPieces, type Piece, type Tag } from './markdown'
 
 type Props = {
   question: string
@@ -52,6 +53,9 @@ export function ChatAnswer(props: Props) {
   const sourceFor = (label: string) => [...(sources ?? []), ...notes].find((source) => source?.label === label)
   const describe = (source: Cited) => describeSource(source, paperLabel?.(source.paper_id))
   const waiting = pending && segments.length === 0
+  const content = segments.map((segment) => (segment.kind === 'text' ? segment.text : `[${segment.label}]`)).join('')
+  const pieces = useMemo(() => markdownPieces(content), [content])
+  const known = new Set([...(sources ?? []), ...notes].flatMap((source) => (source ? [source.label] : [])))
   return (
     <article
       className={cn('chat-answer flex flex-col gap-2', reply && 'ml-3 border-l border-glass-border pl-3', animate && slideUpIn)}
@@ -71,27 +75,30 @@ export function ChatAnswer(props: Props) {
             {waiting ? (
               <TypingIndicator label={sources === null ? 'Finding sources…' : 'Writing the answer…'} />
             ) : (
-              // The text content is exactly the answer, markers included: promote.ts counts offsets in it.
-              <p className="chat-answer-text text-sm leading-relaxed whitespace-pre-wrap">
-                {segments.map((segment, i) => {
-                  const source = segment.kind === 'cite' ? sourceFor(segment.label) : undefined
-                  // The tooltip renders in a portal, so the paragraph's text (which promote.ts counts) is unchanged.
-                  return source ? (
-                    <Hint key={i} label={describe(source)} detail={hintFor(source)}>
-                      <button
-                        type="button"
-                        className="chat-cite rounded-xs font-medium text-primary underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
-                        aria-label={describe(source)}
-                        onClick={() => onCite(source)}
-                      >
-                        [{source.label}]
-                      </button>
-                    </Hint>
-                  ) : (
-                    <span key={i}>{segment.kind === 'text' ? segment.text : `[${segment.label}]`}</span>
-                  )
-                })}
-              </p>
+              // The text content is exactly the answer, markers and hidden markdown syntax included: promote.ts counts
+              // offsets in it.
+              <div className="chat-answer-text space-y-2 text-sm leading-relaxed whitespace-pre-line">
+                {renderPieces(pieces, (text) =>
+                  splitCitations(text, known).map((segment, i) => {
+                    const source = segment.kind === 'cite' ? sourceFor(segment.label) : undefined
+                    // The tooltip renders in a portal, so the answer's text (which promote.ts counts) is unchanged.
+                    return source ? (
+                      <Hint key={i} label={describe(source)} detail={hintFor(source)}>
+                        <button
+                          type="button"
+                          className="chat-cite rounded-xs font-medium text-primary underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+                          aria-label={describe(source)}
+                          onClick={() => onCite(source)}
+                        >
+                          [{source.label}]
+                        </button>
+                      </Hint>
+                    ) : (
+                      <span key={i}>{segment.kind === 'text' ? segment.text : `[${segment.label}]`}</span>
+                    )
+                  }),
+                )}
+              </div>
             )}
 
             {(footer || sources !== null) && (
@@ -116,6 +123,42 @@ export function ChatAnswer(props: Props) {
       {children}
     </article>
   )
+}
+
+/** How each markdown element looks inside an answer; the answer's own size and leading come from its container. */
+const MARKDOWN_CLASS: Partial<Record<Tag, string>> = {
+  h1: 'text-base font-semibold',
+  h2: 'text-base font-semibold',
+  h3: 'font-semibold',
+  h4: 'font-semibold',
+  h5: 'font-semibold',
+  h6: 'font-semibold',
+  strong: 'font-semibold',
+  ul: 'list-disc space-y-1 pl-5',
+  ol: 'list-decimal space-y-1 pl-5',
+  li: 'space-y-1 marker:text-muted-foreground',
+  blockquote: 'border-l-2 border-glass-border pl-3 text-muted-foreground',
+  pre: 'overflow-x-auto rounded-lg bg-background/70 p-2.5 text-xs whitespace-pre [&>code]:bg-transparent [&>code]:p-0',
+  code: 'rounded bg-background/70 px-1 py-0.5 font-mono text-[0.9em]',
+  a: 'text-primary underline underline-offset-2',
+  table: 'w-full border-collapse text-xs',
+  th: 'border-b border-glass-border px-2 py-1 text-left font-semibold',
+  td: 'border-b border-glass-border px-2 py-1 align-top',
+  hr: 'border-glass-border',
+}
+
+/** Markdown pieces as elements. Syntax stays in the DOM, `hidden`, so the answer's text keeps every character. */
+function renderPieces(pieces: Piece[], renderText: (text: string) => ReactNode): ReactNode[] {
+  return pieces.map((piece, i) => {
+    if (piece.kind !== 'element') {
+      return piece.kind === 'hidden' ? <span key={i} hidden>{piece.text}</span> : <Fragment key={i}>{renderText(piece.text)}</Fragment>
+    }
+    const { tag, href, start, children } = piece
+    const props = { key: i, className: MARKDOWN_CLASS[tag], href, start, target: href && '_blank', rel: href && 'noreferrer' }
+    // A void element like <hr> must get no children at all, not even an empty list.
+    const element = createElement(tag, props, ...(children.length ? [renderPieces(children, renderText)] : []))
+    return tag === 'table' ? <div key={i} className="overflow-x-auto">{element}</div> : element
+  })
 }
 
 /** Three pulsing dots while nothing has streamed yet; screen readers hear the label instead. */
