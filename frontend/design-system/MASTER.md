@@ -91,10 +91,11 @@ Fonts: body `Atkinson Hyperlegible Next Variable` (`font-sans`), headings `Crims
 - **Stable test hooks.** Keep the class names and accessible names the Playwright specs use
   (`.paper-row`, `.status`, `.paper-preview`, `.pdf-page`, `.pdf-overlay`, `.highlight`, `.draft`, `.zoom-level`,
   `article.note`, `.provenance-badge`, `.note-hover-card`, `.reader-panel`, `article.chat-answer`, `.chat-question`,
-  `.chat-sources`, `.chat-answer-text`, `.chat-cite`, `.chat-answer-footer`, `.chunk-flash`, `.save-as-note`,
+  `.chat-sources`, `.chat-answer-text`, `.chat-cite`, `.chat-answer-footer`, `.chat-following`,
+  `article.chat-answer[data-parent-id]`, `.chunk-flash`, `.save-as-note`,
   `.retraction-banner`, `.reader`, `.highlight.active`, `a.workspace-note`, `section[data-paper-id]`, `.chat-scope`,
   `[data-paper-id]` on "Add papers" options, the "Note" / "Save note" / "Zoom in" / "Toggle theme" / "Question" / "Ask" /
-  "Save as note" / "Retry" / "Re-index" / "Resize panel" / "Edit details" / "Save" / "Cancel" names, the "Ask this paper"
+  "Save as note" / "Retry" / "Re-index" / "Follow up" / "Stop following" / "Resize panel" / "Edit details" / "Save" / "Cancel" names, the "Ask this paper"
   and "Ask this workspace" headings and "Suggested questions" list, the "Edit details" dialog with its "Title" /
   "Authors" / "Year" / "Venue" /
   "DOI" fields and "Retracted" checkbox, the "Workspaces" navigation with "New workspace" / "Workspace name" /
@@ -397,6 +398,10 @@ before deleting; `search.py "progress bar long running download status" --domain
 - **Chat panel details:** `.chat-cite` has `outline-none focus-visible:ring-2 focus-visible:ring-ring`. While an
   answer streams, the list stays at its bottom if it was there. "Save as note" stays inside the panel
   (`saveButtonPosition`) and re-measures when the panel changes size or is shown again.
+- **Follow up:** a saved paper answer's meta row ends with a ghost `xs` **Follow up** (`CornerDownRight`). Its chip
+  sits just above the question box: `Following: <question>` (`text-xs text-muted-foreground`, truncated, full text
+  in `title`) and an `icon-xs` ghost × named Stop following. Follow-ups are indented one level under their thread's
+  first question (`ml-3 border-l border-glass-border pl-3`); workspace chat has no Follow up.
 
 ## Pre-delivery check (from ui-ux-pro-max Quick Reference §1–§3)
 

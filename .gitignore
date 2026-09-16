@@ -11,3 +11,4 @@ docs/
 frontend/design-system/
 .DS_Store
 .gstack/
+backend/evals/results/

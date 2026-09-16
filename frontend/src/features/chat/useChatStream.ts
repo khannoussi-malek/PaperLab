@@ -19,9 +19,11 @@ import { readSse } from './sse'
 export type ChatStream = {
   status: 'idle' | 'sources' | 'streaming' | 'done' | 'error'
   question: string
+  /** The saved answer this question follows up; null for a question asked on its own. */
+  parentId: string | null
   sources: ChatSource[] | null
   wholePaper: boolean
-  /** Workspace chat only: the notes the answer can cite, and how many of the workspace's notes fit the prompt. */
+  /** The notes the answer can cite, and how many of the paper's or workspace's notes fit the prompt. */
   notes: NoteSource[]
   notesUsed: number | null
   notesTotal: number | null
@@ -33,6 +35,7 @@ export type ChatStream = {
 const IDLE: ChatStream = {
   status: 'idle',
   question: '',
+  parentId: null,
   sources: null,
   wholePaper: false,
   notes: [],
@@ -49,8 +52,15 @@ const STOPPED: ChatProblem = { message: 'The answer stopped before it finished.'
  * Asks one question with the model `modelId` (null: the default) and follows its SSE stream:
  * idle → sources → streaming → done | error. Unmounting stops updating the panel but lets the answer finish; the
  * server saves it. Asking again while one streams cancels the one before it.
+ *
+ * `onThreadMove(parentId, next)`: a follow-up to `parentId` was saved as `next`, or refused because that answer is
+ * gone (`next` null), so the panel can move or drop the thread it follows.
  */
-export function useChatStream(scope: ChatScope, modelId: string | null) {
+export function useChatStream(
+  scope: ChatScope,
+  modelId: string | null,
+  onThreadMove?: (parentId: string, next: string | null) => void,
+) {
   const [stream, setStream] = useState<ChatStream>(IDLE)
   const invalidateHistory = useInvalidateChatHistory(scope)
   const invalidateModels = useInvalidateModels()
@@ -58,6 +68,11 @@ export function useChatStream(scope: ChatScope, modelId: string | null) {
   // Starts false, set true by the effect: React (StrictMode) mounts, cleans up and remounts every component once,
   // so only the effect body -- not the initial ref value -- sees the real, final mount.
   const mounted = useRef(false)
+  // The freshest callback, without restarting a stream that is already reading when the panel re-renders.
+  const onThreadMoveRef = useRef(onThreadMove)
+  useEffect(() => {
+    onThreadMoveRef.current = onThreadMove
+  })
 
   useEffect(() => {
     mounted.current = true
@@ -66,25 +81,29 @@ export function useChatStream(scope: ChatScope, modelId: string | null) {
     }
   }, [])
 
-  async function ask(question: string) {
+  async function ask(question: string, parentId: string | null = null) {
     controller.current?.abort() // a newer question replaces whatever this panel was still asking
     const current = new AbortController()
     controller.current = current
     // Also guards against a superseded question's events that were already parsed out of a chunk its reader had
     // buffered before the abort took effect: without the aborted check here, those still reach `setStream`, since
     // draining an async generator's already-yielded backlog doesn't itself touch the (now rejecting) reader again.
-    const set = (updater: (s: ChatStream) => ChatStream) => mounted.current && !current.signal.aborted && setStream(updater)
+    const live = () => mounted.current && !current.signal.aborted
+    const set = (updater: (s: ChatStream) => ChatStream) => live() && setStream(updater)
+    const moveThread = (next: string | null) => parentId !== null && live() && onThreadMoveRef.current?.(parentId, next)
 
-    set(() => ({ ...IDLE, status: 'sources', question }))
+    set(() => ({ ...IDLE, status: 'sources', question, parentId }))
     const fail = (problem: ChatProblem, tail: Segment[] = []) =>
       set((s) => ({ ...s, status: 'error', problem, segments: appendSegments(s.segments, tail) }))
 
-    const response = await api.askChat(scope, question, modelId, current.signal).catch(() => null)
+    const response = await api.askChat(scope, question, modelId, parentId, current.signal).catch(() => null)
     if (!response) return fail({ message: "Can't reach the PaperLab API.", retryable: true, reindex: false })
     if (!response.ok || !response.body) {
       // A removed model or a missing default: the dropdown refetches and falls back.
       void invalidateModels()
-      return fail(refusal(response.status, await errorDetail(response)))
+      const problem = refusal(response.status, await errorDetail(response))
+      if (problem.endsThread) moveThread(null)
+      return fail(problem)
     }
 
     let splitter = citationSplitter(new Set())
@@ -108,6 +127,7 @@ export function useChatStream(scope: ChatScope, modelId: string | null) {
           const done = JSON.parse(data) as ChatDoneEvent
           const tail = splitter.flush()
           set((s) => ({ ...s, status: 'done', done, segments: appendSegments(s.segments, tail) }))
+          moveThread(done.output_id)
           return void invalidateHistory()
         } else if (event === 'error') {
           const { message, retryable } = JSON.parse(data) as ChatErrorEvent
@@ -121,5 +141,5 @@ export function useChatStream(scope: ChatScope, modelId: string | null) {
     fail(STOPPED, splitter.flush())
   }
 
-  return { stream, ask, retry: () => ask(stream.question) }
+  return { stream, ask, retry: () => ask(stream.question, stream.parentId) }
 }

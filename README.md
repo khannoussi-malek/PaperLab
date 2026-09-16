@@ -87,6 +87,11 @@ models are tagged "Cloud". Each answer keeps the model and connection that wrote
 - Answers cite the passages they use, like `[C1]`. Hover a citation to see its page and section, and click it to
 scroll the paper to that passage and flash it.
 - A short paper is sent to the model whole. A long one is searched first, and only the most relevant passages are sent.
+- Your notes on the paper go to the model with its passages, marked You or AI, and answers can cite them like `[N1]`.
+Click one to jump to that note.
+- Press **Follow up** under an answer to ask about it. The model gets your earlier questions and the passages they
+used, never its own earlier answers. Follow-ups stay under the first question, and your next questions keep following
+the newest answer until you press ×.
 - Select part of an answer and click **Save as note**. The note is anchored on the passage it cites and marked AI.
 
 
@@ -216,6 +221,10 @@ gives the same answer: start the API with `LLM_PROVIDER=fake docker compose up -
 with `docker compose up -d api`.
 - **Retrieval eval:** `docker compose exec api python -m evals.run` prints recall@k for the questions in
 `backend/evals/questions.yaml`. Run it twice after a re-ingest before comparing results.
+- **Answer eval:** `docker compose exec api python -m evals.answers --label <name>` asks the default model the
+questions in `backend/evals/answers.yaml` (facts, summaries, follow-ups, notes, questions a paper can't answer) and
+scores each answer. `--summarize` compares saved runs in `backend/evals/results/`. It takes a while on a local model:
+don't restart the API while it runs.
 - **UI changes** follow `frontend/design-system/MASTER.md`: shadcn/ui components, Tailwind tokens, both themes, and the  
 stable test hooks listed there.
 

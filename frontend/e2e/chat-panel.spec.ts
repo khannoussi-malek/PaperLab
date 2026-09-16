@@ -2,7 +2,8 @@ import type { Page } from '@playwright/test'
 import { ask, expect, pickChatModel, test } from './fixtures'
 
 const FAKE_ANSWER = 'Fake answer: the method is described here [C1].'
-const NO_NOTES = { notes: [], notes_used: null, notes_total: null }
+/** Faked responses follow the API for a paper without notes. */
+const NO_NOTES = { notes: [], notes_used: 0, notes_total: 0 }
 
 test.beforeEach(async ({ page, llmConnection }) => {
   await pickChatModel(page, llmConnection.modelId)
@@ -51,7 +52,7 @@ async function installFakeChatStream(page: Page, script: ChatStreamScript) {
         async pull(c) {
           if (!sentSources) {
             sentSources = true
-            return c.enqueue(event('sources', { whole_paper: true, sources: [], notes: [], notes_used: null, notes_total: null }))
+            return c.enqueue(event('sources', { whole_paper: true, sources: [], notes: [], notes_used: 0, notes_total: 0 }))
           }
           if (sent < cfg.lines.length) {
             await new Promise((resolve) => setTimeout(resolve, cfg.delayMs))
@@ -290,4 +291,50 @@ test("a refused promote shows the server's own 422 text", async ({ page, paperId
   await page.keyboard.press('ArrowLeft')
   await expect.poll(async () => (await save.boundingBox())?.x).not.toBe(before?.x)
   await expect(alert).toHaveText('Check these fields: body.')
+})
+
+test('a markdown answer shows as a list with bold text, and a selection in it still saves the answer verbatim', async ({ page, paperId }) => {
+  const content = 'Key findings:\n\n1. **Code-Level Metrics**: AI code is similar [C1].\n2. **Security**: fewer alerts.'
+  const chunkId = '00000000-0000-4000-8000-000000000303'
+  const saved = {
+    ...NO_NOTES,
+    id: '00000000-0000-4000-8000-000000000302',
+    question: 'Findings?',
+    model: 'fake',
+    connection_name: null,
+    content,
+    prompt_version: 1,
+    created_at: '2026-09-15T00:00:00Z',
+    whole_paper: false,
+    sources: [{ label: 'C1', chunk_id: chunkId, paper_id: paperId, page: 1, section: null, bbox: [] }],
+  }
+  await page.route('**/chat', (route) => (route.request().method() === 'GET' ? route.fulfill({ json: [saved] }) : route.fallback()))
+  await openChat(page, paperId)
+
+  const text = page.locator('article.chat-answer .chat-answer-text')
+  await expect(text.locator('ol > li')).toHaveCount(2)
+  await expect(text.locator('strong')).toHaveText(['Code-Level Metrics', 'Security'], { useInnerText: true })
+  expect(await text.innerText()).not.toContain('**')
+  // The syntax is only hidden, so selection offsets in the element are still offsets into the saved answer.
+  expect(await text.evaluate((node) => node.textContent)).toBe(content)
+
+  // From inside the bold words to the end of "[C1]".
+  await text.evaluate((root) => {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+    const nodes: Text[] = []
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) nodes.push(node as Text)
+    const start = nodes.find((node) => node.data.includes('Metrics'))!
+    const cite = nodes.find((node) => node.data === ']')!
+    const range = document.createRange()
+    range.setStart(start, start.data.indexOf('Metrics'))
+    range.setEnd(cite, cite.data.length)
+    window.getSelection()!.removeAllRanges()
+    window.getSelection()!.addRange(range)
+  })
+  await text.dispatchEvent('mouseup')
+
+  await page.route('**/api/notes/promote', (route) => route.fulfill({ status: 422, json: { detail: 'not saved in this test' } }))
+  const promote = page.waitForRequest('**/api/notes/promote')
+  await page.getByRole('button', { name: 'Save as note' }).click()
+  expect((await promote).postDataJSON()).toEqual({ output_id: saved.id, body: 'Metrics**: AI code is similar [C1]', chunk_ids: [chunkId] })
 })

@@ -12,13 +12,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core import embedding_index, prompts, workspaces
-from app.core.errors import Conflict
-from app.core.notes import Anchor, NoteView, _with_anchors
+from app.core.errors import Conflict, NotFound
+from app.core.notes import Anchor, NoteView, _with_anchors, list_notes_for_paper
 from app.core.papers import get_paper
 from app.core.retrieval import RetrievedChunk, _to_chunk, retrieve
 from app.models import Chunk, LLMOutput, Note, Paper, PaperStatus, Provenance
 
-CHAT_PROMPT_VERSION = 1
+CHAT_PROMPT_VERSION = 2  # v2: the paper's notes follow its passages; a follow-up adds the earlier questions
 WORKSPACE_PROMPT_VERSION = 1
 # Each file holds the system prompt, then the user prompt template after the marker line.
 SYSTEM_PROMPT, PROMPT_TEMPLATE = prompts.load("chat", CHAT_PROMPT_VERSION).split("\n<!-- prompt -->\n")
@@ -28,8 +28,12 @@ WORKSPACE_SYSTEM_PROMPT, WORKSPACE_PROMPT_TEMPLATE = prompts.load("chat_workspac
 # ponytail: characters stand in for tokens. Revisit with the eval numbers or a model's real context size.
 SMALL_PAPER_CHARS = 24_000
 RETRIEVE_K = 8
-# Workspace notes. With OLLAMA_NUM_CTX = 16_384: ~0.5k tokens of instructions, ~3k for 8 passages, ~4k for
-# notes, about 7.5k of the 16k context, leaving ~9k for the answer.
+# A follow-up's earlier passages plus fresh ones: ~4.5k tokens, so with notes it still fits OLLAMA_NUM_CTX.
+FOLLOW_UP_SOURCES = 12
+# A follow-up carries its parent answer's question and passages, and those of at most four answers before it.
+MAX_THREAD_ANSWERS = 5
+# Notes, in both chats. With OLLAMA_NUM_CTX = 16_384: ~0.5k tokens of instructions, ~3k for 8 passages, ~4k for
+# notes, about 7.5k of the 16k context, leaving ~9k for the answer. A whole small paper (~6k) still leaves ~5.5k.
 NOTE_QUOTE_CHARS = 160
 NOTE_BODY_CHARS = 400
 # ponytail: newest-first is a guess at relevance; rank by similarity to the question if users hit the budget.
@@ -70,12 +74,23 @@ class Prepared:
     prompt: str
     whole_paper: bool
     prompt_version: int = CHAT_PROMPT_VERSION
-    notes: list[NoteSource] = field(default_factory=list)  # N{i} is notes[i-1]; workspace chat only
-    notes_total: int | None = None  # every note in the workspace; None outside workspace chat
+    notes: list[NoteSource] = field(default_factory=list)  # N{i} is notes[i-1]
+    notes_total: int | None = None  # every note in the paper or workspace
 
     @property
     def notes_used(self) -> int | None:
         return None if self.notes_total is None else len(self.notes)
+
+
+@dataclass(frozen=True)
+class Thread:
+    """What a follow-up carries from the questions before it, oldest first: the questions and their passages.
+
+    Never their answers: the model reads the paper's evidence again instead of building on its own earlier text.
+    """
+
+    questions: list[str]
+    source_ids: list[uuid.UUID]  # most relevant first: past FOLLOW_UP_SOURCES, the last ones are dropped
 
 
 @dataclass(frozen=True)
@@ -94,6 +109,62 @@ async def _size(session: AsyncSession, paper_id: uuid.UUID) -> tuple[int, int]:
     """(characters of chunk text, chunks that have an embedding)."""
     query = select(func.coalesce(func.sum(func.length(Chunk.text)), 0), func.count(Chunk.embedding))
     return tuple((await session.execute(query.where(Chunk.paper_id == paper_id))).one())
+
+
+def follow_up_sources(
+    earlier: list[RetrievedChunk], fresh: list[RetrievedChunk], limit: int = FOLLOW_UP_SOURCES
+) -> list[RetrievedChunk]:
+    """Earlier passages first, then fresh ones, each once. Every fresh passage stays; earlier passages that aren't
+    also fresh fill what's left of `limit` in their given order, best first."""
+    unique = list({chunk.id: chunk for chunk in earlier}.values())  # a dict keeps each passage's first position
+    earlier_ids, fresh_ids = {chunk.id for chunk in unique}, {chunk.id for chunk in fresh}
+    fresh_only = [chunk for chunk in fresh if chunk.id not in earlier_ids]
+    room = limit - len(fresh_only) - len(earlier_ids & fresh_ids)
+    earlier_only = [chunk for chunk in unique if chunk.id not in fresh_ids][: max(room, 0)]
+    kept = fresh_ids | {chunk.id for chunk in earlier_only}
+    return [chunk for chunk in unique if chunk.id in kept] + fresh_only
+
+
+async def load_thread(session: AsyncSession, paper_id: uuid.UUID, parent_id: uuid.UUID) -> Thread:
+    """What a follow-up to `parent_id` carries: that answer and up to MAX_THREAD_ANSWERS - 1 before it, on `paper_id`.
+
+    Raises NotFound (an unknown paper, or "parent_not_found"), or Conflict("parent_scope") when the answer belongs
+    to another paper or a workspace.
+    """
+    await get_paper(session, paper_id)
+    parent = await session.get(LLMOutput, parent_id)
+    if parent is None or parent.kind != "chat":
+        raise NotFound("parent_not_found")
+    if parent.paper_id != paper_id:
+        raise Conflict("parent_scope")
+    # A parent_id is only ever saved on the same paper's answers, and the FK nulls it when that answer is deleted.
+    chain = [parent]
+    while chain[-1].parent_id is not None and len(chain) < MAX_THREAD_ANSWERS:
+        chain.append(await session.get(LLMOutput, chain[-1].parent_id))
+    # A follow-up saves the passages it carried ahead of the ones it found, so each answer's own finds come first,
+    # newest answer first: otherwise a long thread keeps carrying its first question's passages and drops the last.
+    own = [
+        [chunk_id for chunk_id in output.source_chunks if older is None or chunk_id not in older.source_chunks]
+        for output, older in zip(chain, [*chain[1:], None])
+    ]
+    source_ids = [*(chunk_id for ids in own for chunk_id in ids), *(i for o in chain for i in o.source_chunks)]
+    return Thread(
+        questions=[output.question for output in reversed(chain)], source_ids=list(dict.fromkeys(source_ids))
+    )
+
+
+async def _earlier_sources(session: AsyncSession, thread: Thread, paper_id: uuid.UUID) -> list[RetrievedChunk]:
+    """The thread's passages still on this paper, in thread order; a re-ingest may have replaced some."""
+    where = (Chunk.id.in_(thread.source_ids), Chunk.paper_id == paper_id)
+    found = {chunk.id: chunk for chunk in await _chunk_sources(session, *where)}
+    return [found[i] for i in dict.fromkeys(thread.source_ids) if i in found]
+
+
+def _earlier_block(thread: Thread | None) -> str:
+    if thread is None or not thread.questions:
+        return ""
+    questions = "".join(f"- {question}\n" for question in thread.questions)
+    return f"Earlier questions in this conversation, oldest first:\n{questions}\n"
 
 
 def source_label(paper: Paper) -> str:
@@ -181,14 +252,20 @@ async def _prepare_workspace(session: AsyncSession, workspace_id: uuid.UUID, que
     )
 
 
-async def prepare(session: AsyncSession, paper_id: uuid.UUID | Scope, question: str, embedder=None) -> Prepared:
+async def prepare(
+    session: AsyncSession, paper_id: uuid.UUID | Scope, question: str, embedder=None, thread: Thread | None = None
+) -> Prepared:
     """A workspace scope goes to _prepare_workspace. For a paper: small papers go whole, in reading order;
-    larger ones send the RETRIEVE_K nearest chunks.
+    larger ones send the RETRIEVE_K nearest chunks. The paper's notes follow, newest first, as in workspace chat.
+    A follow-up (`thread`) adds the earlier questions, and a large paper's earlier passages ahead of the fresh ones.
 
     Raises NotFound, or Conflict("paper_not_ready" | "paper_not_indexed" | "embedding_model_changed").
     """
     scope = _scope(paper_id)
     if scope.workspace_id is not None:
+        if thread is not None:
+            # ponytail: follow-ups are measured on paper chat first; workspace chat gets them if they earn their keep.
+            raise ValueError("follow-ups are paper chat only for now")
         return await _prepare_workspace(session, scope.workspace_id, question, embedder)
     paper_id = scope.paper_id
     paper = await get_paper(session, paper_id)
@@ -203,8 +280,17 @@ async def prepare(session: AsyncSession, paper_id: uuid.UUID | Scope, question: 
     else:
         await embedding_index.check_model(session, settings.embed_model, [paper_id])
         sources = await retrieve(session, question, paper_ids=[paper_id], k=RETRIEVE_K, embedder=embedder)
-    prompt = PROMPT_TEMPLATE.format(context=format_context(paper, sources), question=question)
-    return Prepared(sources=sources, system=SYSTEM_PROMPT, prompt=prompt, whole_paper=whole_paper)
+        if thread is not None:
+            sources = follow_up_sources(await _earlier_sources(session, thread, paper_id), sources)
+    every_note = await list_notes_for_paper(session, paper_id)
+    block, used = format_notes_block(every_note, {paper_id: paper})
+    context = format_context(paper, sources)
+    earlier = _earlier_block(thread)
+    prompt = PROMPT_TEMPLATE.format(context=context, notes=block or "(none)", earlier=earlier, question=question)
+    return Prepared(
+        sources=sources, system=SYSTEM_PROMPT, prompt=prompt, whole_paper=whole_paper, notes=used,
+        notes_total=len(every_note),
+    )
 
 
 def parse_citations(text: str, n: int, kind: str = "C") -> list[int]:
@@ -221,6 +307,7 @@ async def save_answer(
     content: str,
     model: str,
     connection_name: str,
+    parent_id: uuid.UUID | None = None,
 ) -> uuid.UUID:
     """Note citations aren't stored separately: they follow from content and source_notes. The model and connection
     names are copied, so renaming or deleting the connection later never changes the answer."""
@@ -241,6 +328,7 @@ async def save_answer(
         connection_name=connection_name,
         prompt_version=prepared.prompt_version,
         whole_paper=prepared.whole_paper,
+        parent_id=parent_id,
     )
     session.add(output)
     await session.commit()
