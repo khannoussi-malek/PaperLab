@@ -28,21 +28,24 @@ export function ConnectionCard({ connection }: { connection: LLMConnection }) {
   const radioLabelId = `default-model-${connection.id}`
   const isOllama = connection.kind === 'ollama'
 
-  function deleteConnection() {
-    const question = `Delete "${connection.label}" and its models? Saved answers keep their model names.`
-    if (window.confirm(question)) remove.mutate(connection.id)
+  // Every action on the card reports into one status line, so starting any of them clears the others' stale
+  // result first. A failure is never silent: the test route can 500, and any of the writes can 404 once the
+  // connection or model is gone (deleted in another tab).
+  const actions = [test, remove, removeModel, setDefault, deleteInstalled]
+  const actionError = actions.map((action) => action.error).find((error) => error !== null) ?? null
+  function start(run: () => void) {
+    for (const action of actions) action.reset()
+    run()
   }
 
-  // The two share one status line, so starting either clears the other's stale result first.
-  function runTest() {
-    deleteInstalled.reset()
-    test.mutate(connection.id)
+  function deleteConnection() {
+    const question = `Delete "${connection.label}" and its models? Saved answers keep their model names.`
+    if (window.confirm(question)) start(() => remove.mutate(connection.id))
   }
 
   function deleteFromDisk(name: string) {
     if (window.confirm(`Delete ${name} from Ollama? It is removed from this computer's disk.`)) {
-      test.reset()
-      deleteInstalled.mutate({ connectionId: connection.id, name })
+      start(() => deleteInstalled.mutate({ connectionId: connection.id, name }))
     }
   }
 
@@ -79,7 +82,12 @@ export function ConnectionCard({ connection }: { connection: LLMConnection }) {
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          <Button variant="outline" size="sm" onClick={runTest} disabled={test.isPending}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => start(() => test.mutate(connection.id))}
+            disabled={test.isPending}
+          >
             <PlugZap aria-hidden />
             {test.isPending ? 'Testing…' : 'Test'}
           </Button>
@@ -98,14 +106,14 @@ export function ConnectionCard({ connection }: { connection: LLMConnection }) {
         </div>
       </div>
 
-      {(deleteInstalled.error || test.data) && (
-        <p role="status" className={cn('test-result flex items-center gap-1.5 text-sm', (deleteInstalled.error || !test.data?.ok) && 'text-destructive')}>
-          {deleteInstalled.error || !test.data?.ok ? (
+      {(actionError || test.data) && (
+        <p role="status" className={cn('test-result flex items-center gap-1.5 text-sm', (actionError || !test.data?.ok) && 'text-destructive')}>
+          {actionError || !test.data?.ok ? (
             <CircleAlert aria-hidden className="size-4 shrink-0" />
           ) : (
             <CircleCheck aria-hidden className="size-4 shrink-0" />
           )}
-          {deleteInstalled.error ? deleteInstalled.error.message : test.data?.message}
+          {actionError ? actionError.message : test.data?.message}
         </p>
       )}
 
@@ -132,44 +140,48 @@ export function ConnectionCard({ connection }: { connection: LLMConnection }) {
         {connection.models.length === 0 ? (
           <p className="mt-1 text-sm text-muted-foreground">No models in chat yet.</p>
         ) : (
+          /* `asChild`: the rows are list items, so the group itself has to be the <ul> that may hold them. */
           <RadioGroup
+            asChild
             aria-labelledby={radioLabelId}
             value={defaultModel?.id ?? ''}
-            onValueChange={(id) => setDefault.mutate(id)}
+            onValueChange={(id) => start(() => setDefault.mutate(id))}
             className="mt-2 gap-1"
           >
-            {connection.models.map((model) => (
-              <li
-                key={model.id}
-                className="model-row group/row flex items-center gap-2 rounded-md px-1 py-1"
-                data-model-id={model.id}
-              >
-                <RadioGroupItem value={model.id} aria-label={model.name} />
-                <span className="min-w-0 flex-1 truncate font-mono text-sm" title={model.name}>
-                  {model.name}
-                </span>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label={`Remove ${model.name} from chat`}
-                  className="text-muted-foreground group-hover/row:text-destructive group-focus-within/row:text-destructive hover:bg-destructive/10"
-                  onClick={() => removeModel.mutate(model.id)}
+            <ul>
+              {connection.models.map((model) => (
+                <li
+                  key={model.id}
+                  className="model-row group/row flex items-center gap-2 rounded-md px-1 py-1"
+                  data-model-id={model.id}
                 >
-                  <X aria-hidden />
-                </Button>
-                {isOllama && (
+                  <RadioGroupItem value={model.id} aria-label={model.name} />
+                  <span className="min-w-0 flex-1 truncate font-mono text-sm" title={model.name}>
+                    {model.name}
+                  </span>
                   <Button
                     variant="ghost"
                     size="icon-xs"
-                    aria-label={`Delete ${model.name} from disk`}
+                    aria-label={`Remove ${model.name} from chat`}
                     className="text-muted-foreground group-hover/row:text-destructive group-focus-within/row:text-destructive hover:bg-destructive/10"
-                    onClick={() => deleteFromDisk(model.name)}
+                    onClick={() => start(() => removeModel.mutate(model.id))}
                   >
-                    <Trash2 aria-hidden />
+                    <X aria-hidden />
                   </Button>
-                )}
-              </li>
-            ))}
+                  {isOllama && (
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label={`Delete ${model.name} from disk`}
+                      className="text-muted-foreground group-hover/row:text-destructive group-focus-within/row:text-destructive hover:bg-destructive/10"
+                      onClick={() => deleteFromDisk(model.name)}
+                    >
+                      <Trash2 aria-hidden />
+                    </Button>
+                  )}
+                </li>
+              ))}
+            </ul>
           </RadioGroup>
         )}
 
