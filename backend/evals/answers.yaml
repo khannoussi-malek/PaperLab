@@ -1,0 +1,567 @@
+# Answer eval cases. Run: python -m evals.answers (see answers.py).
+# paper: a case-insensitive title prefix that must match exactly one paper.
+# points: an answer hits a point when it says any of its phrasings as whole words (case, spacing and thousands
+#   separators ignored); it's correct when it hits `need` points, or all of them when `need` is omitted.
+# evidence: a passage the answer cites must be on that page and hold that phrase (checked before any question).
+#   On a summary it checks that citations land on a passage behind a key point, not on a wrong label.
+# kind: fact | overview | followup (`before` is the question it follows) | notes (`note` is saved, then rolled back)
+#   | refusal (the paper doesn't answer it: correct when the answer says so; `points` default to answers.REFUSALS).
+# paper_notes: a reader's notes, saved on their paper before every question when run with --with-paper-notes.
+# Attention and BERT predate the model, so the `none` config shows which of their answers it already knows.
+cases:
+  # Attention Is All You Need (Vaswani et al., 2017): the retrieval questions from questions.yaml, now answered.
+  - id: att-encoder-layers
+    kind: fact
+    paper: Attention Is All You Need
+    question: How many identical layers make up the encoder?
+    points: [["6 identical layers", "6 layers", "six layers", "six identical layers", "n = 6", "stack of 6", "stack of six"]]
+    evidence: [{page: 3, contains: "composed of a stack of N = 6 identical layers"}]
+  - id: att-dot-product
+    kind: fact
+    paper: Attention Is All You Need
+    question: How is scaled dot-product attention computed from queries and keys?
+    points:
+      - ["dot product", "dot products", "dot-product", "dot-products"]
+      - ["divide", "divided", "dividing", "square root", "sqrt", "scaled", "scaling", "scale"]
+      - ["softmax", "soft-max"]
+    evidence: [{page: 4, contains: "We compute the dot products of the query with all keys"}]
+  - id: att-multi-head
+    kind: fact
+    paper: Attention Is All You Need
+    question: What does multi-head attention give the model that a single attention head does not?
+    points: [["subspaces", "subspace"]]
+    evidence: [{page: 5, contains: "jointly attend to information from different representation subspaces"}]
+  - id: att-feed-forward
+    kind: fact
+    paper: Attention Is All You Need
+    question: What is inside the position-wise feed-forward network?
+    points: [["two linear", "2 linear"], ["relu"]]
+    evidence: [{page: 5, contains: "two linear transformations with a ReLU activation in between"}]
+  - id: att-token-order
+    kind: fact
+    paper: Attention Is All You Need
+    question: Without recurrence or convolution, how does the model know the order of tokens?
+    points: [["positional encoding", "positional encodings", "position encoding", "position encodings", "positional embedding", "positional embeddings"]]
+    evidence: [{page: 6, contains: "inject some information about the relative or absolute position"}]
+  - id: att-faster-than-rnn
+    kind: fact
+    paper: Attention Is All You Need
+    question: When are self-attention layers computationally faster than recurrent layers?
+    points: [["sequence length"], ["smaller than", "shorter than", "less than"]]
+    evidence: [{page: 6, contains: "self-attention layers are faster than recurrent layers"}]
+  - id: att-en-de-dataset
+    kind: fact
+    paper: Attention Is All You Need
+    question: Which dataset was used to train the English-German model, and how large is it?
+    points: [["wmt 2014", "wmt14", "wmt", "wmt'14"], ["4.5 million", "4.5m", "4.5 m"]]
+    evidence: [{page: 7, contains: "WMT 2014 English-German dataset consisting of about 4.5 million sentence pairs"}]
+  - id: att-hardware
+    kind: fact
+    paper: Attention Is All You Need
+    question: What hardware were the models trained on?
+    points: [["p100", "p100s"], ["8", "eight"]]
+    evidence: [{page: 7, contains: "one machine with 8 NVIDIA P100 GPUs"}]
+  - id: att-bleu
+    kind: fact
+    paper: Attention Is All You Need
+    question: What BLEU score did the big Transformer reach on English-to-German translation?
+    points: [["28.4"]]
+    evidence: [{page: 8, contains: "new state-of-the-art BLEU score of 28.4"}]
+  - id: att-generalizes
+    kind: fact
+    paper: Attention Is All You Need
+    question: Does the Transformer generalize to tasks other than translation?
+    points: [["constituency parsing", "parsing"]]
+    evidence: [{page: 9, contains: "experiments on English constituency parsing"}]
+  - id: att-summary
+    kind: overview
+    paper: Attention Is All You Need
+    question: Summarise the main contribution of this paper.
+    evidence:
+      - {page: 1, contains: "based solely on attention mechanisms"}
+      - {page: 10, contains: "the first sequence transduction model based entirely on attention"}
+    need: 3
+    points:
+      - ["transformer"]
+      - ["solely on attention", "entirely on attention", "only attention", "only on attention", "attention alone", "without recurrence", "no recurrence", "recurrence"]
+      - ["bleu", "translation"]
+      - ["parallel", "parallelizable", "parallelization", "training time", "less time", "faster"]
+  - id: att-future-work
+    kind: overview
+    paper: Attention Is All You Need
+    question: What future work do the authors plan?
+    evidence:
+      - {page: 10, contains: "local, restricted attention mechanisms to efficiently handle large inputs and outputs"}
+    need: 3
+    points:
+      - ["modalities", "images", "audio", "video"]
+      - ["local", "restricted"]
+      - ["less sequential", "sequential"]
+      - ["other tasks"]
+
+  # BERT (Devlin et al., 2019)
+  - id: bert-name
+    kind: fact
+    paper: "BERT: Pre-training"
+    question: What does the name BERT stand for?
+    points: [["bidirectional encoder representations from transformers"]]
+    evidence: [{page: 1, contains: "Bidirectional Encoder Representations from Transformers"}]
+  - id: bert-large-size
+    kind: fact
+    paper: "BERT: Pre-training"
+    question: How many layers, hidden units and parameters does BERT-large have?
+    points: [["24"], ["1024"], ["340m", "340 million"]]
+    evidence: [{page: 3, contains: "BERTLARGE (L=24, H=1024, A=16, Total Parameters=340M)"}]
+  - id: bert-masked-lm
+    kind: fact
+    paper: "BERT: Pre-training"
+    question: How does the masked language model objective work?
+    need: 2
+    points: [["mask", "masks", "masked", "masking"], ["random", "randomly"], ["15%", "15 %", "15 percent"]]
+    evidence: [{page: 4, contains: "mask some percentage of the input tokens at random"}]
+  - id: bert-nsp-why
+    kind: fact
+    paper: "BERT: Pre-training"
+    question: Why does BERT pre-train on next sentence prediction?
+    points: [["relationship between two sentences", "relationship between sentences", "relationships between sentences", "sentence relationships", "sentence relationship"]]
+    evidence: [{page: 4, contains: "understanding the relationship between two sentences"}]
+  - id: bert-input-embeddings
+    kind: fact
+    paper: "BERT: Pre-training"
+    question: How is the input representation of a token built?
+    points:
+      - ["token embedding", "token embeddings"]
+      - ["segment embedding", "segment embeddings", "segmentation embedding", "segmentation embeddings"]
+      - ["position embedding", "position embeddings", "positional embedding", "positional embeddings"]
+    evidence: [{page: 5, contains: "sum of the token embeddings, the segmentation embeddings and the position embeddings"}]
+  - id: bert-fine-tuning-cost
+    kind: fact
+    paper: "BERT: Pre-training"
+    question: How expensive is fine-tuning compared with pre-training?
+    points: [["1 hour", "one hour", "an hour"]]
+    evidence: [{page: 5, contains: "at most 1 hour on a single Cloud TPU"}]
+  - id: bert-glue-gain
+    kind: fact
+    paper: "BERT: Pre-training"
+    question: By how much did BERT improve the average GLUE accuracy?
+    points: [["4.5%", "4.5"], ["7.0%", "7.0", "7%"]]
+    evidence: [{page: 6, contains: "4.5% and 7.0% respective average accuracy improvement"}]
+  - id: bert-squad2-no-answer
+    kind: fact
+    paper: "BERT: Pre-training"
+    question: How does BERT handle SQuAD 2.0 questions that have no answer?
+    points: [["cls"]]
+    evidence: [{page: 7, contains: "answer span with start and end at the [CLS] token"}]
+  - id: bert-pretraining-time
+    kind: fact
+    paper: "BERT: Pre-training"
+    question: How long did pre-training take and on what hardware?
+    points: [["4 days", "four days"], ["tpu", "tpus", "cloud tpu", "cloud tpus"]]
+    evidence: [{page: 13, contains: "Each pretraining took 4 days to complete"}]
+  - id: bert-learning-rates
+    kind: fact
+    paper: "BERT: Pre-training"
+    question: Which learning rates are recommended for fine-tuning?
+    points: [["5e-5"], ["3e-5"], ["2e-5"]]
+    evidence: [{page: 14, contains: "Learning rate (Adam): 5e-5, 3e-5, 2e-5"}]
+  - id: bert-summary
+    kind: overview
+    paper: "BERT: Pre-training"
+    question: Summarise the main contribution of this paper.
+    evidence:
+      - {page: 1, contains: "Bidirectional Encoder Representations from Transformers"}
+      - {page: 4, contains: "mask some percentage of the input tokens at random"}
+      - {page: 4, contains: "understanding the relationship between two sentences"}
+    need: 3
+    points:
+      - ["bidirectional"]
+      - ["masked language model", "masked lm", "mlm", "masking", "masked"]
+      - ["next sentence prediction", "nsp", "next sentence"]
+      - ["fine-tuning", "fine-tuned", "fine tuning", "eleven", "11"]
+  - id: bert-ablation
+    kind: overview
+    paper: "BERT: Pre-training"
+    question: What does the ablation study show?
+    evidence:
+      - {page: 8, contains: "larger models lead to a strict accuracy improvement across all four datasets"}
+      - {page: 8, contains: "LTR & No NSP: A left-context-only model"}
+    need: 3
+    points:
+      - ["next sentence prediction", "nsp"]
+      - ["left-to-right", "ltr", "left to right"]
+      - ["larger models", "larger model", "model size", "bigger models"]
+      - ["feature-based", "feature based"]
+
+  # How Coding Agents Fail Their Users (May 2026), arXiv 2605.29442
+  - id: fail-scale
+    kind: fact
+    paper: How Coding Agents Fail
+    question: How many coding-agent sessions and repositories does this study analyze?
+    points: [["20,574"], ["1,639"]]
+    evidence: [{page: 1, contains: "observational study of 20,574 coding-agent sessions from 1,639 repositories"}]
+  - id: fail-pipeline-model
+    kind: fact
+    paper: How Coding Agents Fail
+    question: Which model runs the extraction, validation and annotation pipeline, and at what temperature?
+    points:
+      - ["gpt-5.4", "gpt 5.4", "gpt5.4"]
+      - ["temperature 0", "temperature of 0", "temperature 0.0", "temperature = 0", "temperature=0", "temperature zero", "temperature of zero", "zero temperature"]
+    evidence: [{page: 3, contains: "use GPT-5.4 with temperature 0"}]
+  - id: fail-top-symptom
+    kind: fact
+    paper: How Coding Agents Fail
+    question: What is the most prevalent misalignment symptom, and what share of episodes shows it?
+    points: [["constraint violation", "constraint violations"], ["38.33"]]
+    evidence: [{page: 5, contains: "Developer Constraint Violation (S3, 38.33%)"}]
+  - id: fail-validation-kept
+    kind: fact
+    paper: How Coding Agents Fail
+    question: How many extracted episodes did post-validation keep, and out of how many?
+    points: [["16,118"], ["29,896"]]
+    evidence: [{page: 4, contains: "validation retained 16,118 of 29,896 episodes"}]
+  - id: fail-per-turn-rate
+    kind: fact
+    paper: How Coding Agents Fail
+    question: What is the per-turn misalignment rate in IDE sessions compared with CLI sessions?
+    points: [["0.132"], ["0.051"]]
+    evidence: [{page: 7, contains: "higher per-turn misalignment (0.132 vs. 0.051)"}]
+  - id: fail-summary
+    kind: overview
+    paper: How Coding Agents Fail
+    question: Summarise the main contribution of this paper.
+    evidence:
+      - {page: 1, contains: "observational study of 20,574 coding-agent sessions from 1,639 repositories"}
+      - {page: 1, contains: "We identify seven recurring forms"}
+      - {page: 9, contains: "We present the first large-scale analysis of"}
+    need: 3
+    points:
+      - ["20,574"]
+      - ["seven"]
+      - ["effort and trust", "effort or trust", "effort/trust", "trust costs", "trust cost"]
+      - ["pushback", "push back", "push-back", "explicit correction", "developer correction", "user correction"]
+  - id: fail-limitations
+    kind: overview
+    paper: How Coding Agents Fail
+    question: What are the limitations of this study?
+    evidence:
+      - {page: 9, contains: "introducing selection bias toward early adopters"}
+      - {page: 10, contains: "Cases silently worked around by developers fall outside this scope"}
+    need: 3
+    points:
+      - ["selection bias", "early adopters", "opt in", "opt into", "opted in", "opt-in"]
+      - ["silently", "worked around", "work around", "not visible", "invisible"]
+      - ["agent identity", "task composition", "causal", "confound", "confounded", "confounders", "confounding"]
+      - ["misclassification", "llm judgments", "llm judgment", "llm-based", "llm judge", "llm judges"]
+  - id: fail-ide-vs-cli
+    kind: overview
+    paper: How Coding Agents Fail
+    question: How does misalignment differ between IDE and CLI sessions?
+    evidence:
+      - {page: 8, contains: "S3 (Developer Constraint Violation) is substantially more prevalent in CLI sessions"}
+      - {page: 7, contains: "higher per-turn misalignment (0.132 vs. 0.051)"}
+    need: 3
+    points:
+      - ["constraint violation", "constraint violations"]
+      - ["faulty implementation", "faulty implementations", "implementation errors"]
+      - ["project state", "external state"]
+      - ["per-turn", "per turn", "more user turns", "more turns"]
+  - id: fail-followup-cause
+    kind: followup
+    paper: How Coding Agents Fail
+    before: What does the Wrong Project Diagnosis symptom mean in this paper?
+    question: What is its most common cause?
+    points: [["premature action"]]
+    evidence: [{page: 6, contains: "Its most common cause is Premature Action (C3, 41.01%)"}]
+  - id: fail-followup-dataset
+    kind: followup
+    paper: How Coding Agents Fail
+    before: How many sessions came from the SWE-chat dataset?
+    question: And how many came from the other dataset?
+    points: [["14,789"]]
+    evidence: [{page: 3, contains: "This yielded 14,789 sessions (2,588 CLI) across 1,441 repositories"}]
+  - id: fail-note
+    kind: notes
+    paper: How Coding Agents Fail
+    question: Which internal tool did our team use for the replication, according to my note?
+    points: [["kestrel-log", "kestrel log", "kestrel"]]
+    note:
+      page: 1
+      quote: "observational study of 20,574 coding-agent sessions from 1,639 repositories"
+      body: "We replicated this on our team's own logs using the internal tool Kestrel-Log."
+
+  # A Large-Scale Comprehensive Measurement of AI-Generated Code in Real-World Repositories (Mar 2026), arXiv 2603.27130
+  - id: code-dataset-size
+    kind: fact
+    paper: A Large-Scale Comprehensive Measurement
+    question: How many AI-involved code files and commits are in the final dataset?
+    points: [["19,816"], ["12,749"]]
+    evidence: [{page: 3, contains: "Our final dataset contains 19,816 AI-involved code files related to 12,749 commits"}]
+  - id: code-chatgpt-share
+    kind: fact
+    paper: A Large-Scale Comprehensive Measurement
+    question: What share of the AI-generated code records come from ChatGPT?
+    points: [["83.3"]]
+    evidence: [{page: 4, contains: "ChatGPT (83.3%)"}]
+  - id: code-alert-density
+    kind: fact
+    paper: A Large-Scale Comprehensive Measurement
+    question: How many CodeQL alerts per KLOC do AI-generated and human-written code trigger?
+    points: [["10.04"], ["13.56"]]
+    evidence: [{page: 8, contains: "10.04 vs. 13.56 per KLOC"}]
+  - id: code-duplication
+    kind: fact
+    paper: A Large-Scale Comprehensive Measurement
+    question: What share of lines is duplicated in human-written code versus AI-generated code?
+    points: [["27.57"], ["14.29"]]
+    evidence: [{page: 7, contains: "duplicated lines: 27.57% vs. 14.29%"}]
+  - id: code-handoff
+    kind: fact
+    paper: A Large-Scale Comprehensive Measurement
+    question: What is the handoff latency of AI-involved commits compared with human-written ones?
+    points: [["28.28"], ["11.23"]]
+    evidence: [{page: 10, contains: "longer handoff latency (28.28 vs. 11.23 days)"}]
+  - id: code-summary
+    kind: overview
+    paper: A Large-Scale Comprehensive Measurement
+    question: Summarise the main findings of this paper.
+    evidence:
+      - {page: 10, contains: "similar to humanwritten code in structural metrics"}
+      - {page: 6, contains: "Insight 1: AI-generated code is structurally similar to human code"}
+    need: 3
+    points:
+      - ["structurally similar", "structural metrics", "structural complexity", "small effect", "small effects", "small differences", "largely similar"]
+      - ["more comments", "comment-heavy", "comment heavy", "comment ratio", "higher comment"]
+      - ["cross-file", "duplication"]
+      - ["smaller commits", "more localized", "localized", "fewer files", "smaller in scope"]
+      - ["follow-up", "follow up", "stabilization", "maintenance"]
+  - id: code-identification
+    kind: overview
+    paper: A Large-Scale Comprehensive Measurement
+    question: How did the authors identify AI-generated code in real repositories?
+    evidence:
+      - {page: 1, contains: "we develop a multistage rule-based comment filter and LLM-assisted classifier"}
+    need: 3
+    points:
+      - ["comment", "comments"]
+      - ["rule-based", "filter", "filtering", "filters"]
+      - ["classifier", "llm-assisted", "llm-based"]
+      - ["control", "controls", "matched", "matching"]
+  - id: code-implications
+    kind: overview
+    paper: A Large-Scale Comprehensive Measurement
+    question: What are the implications for developers and AI tool vendors?
+    evidence:
+      - {page: 10, contains: "AI assistance reshapes development effort rather than simply reducing it"}
+      - {page: 10, contains: "generationtime assistance should be complemented with stronger postgeneration support"}
+    need: 3
+    points:
+      - ["validation", "maintenance", "downstream"]
+      - ["review", "testing"]
+      - ["cross-file consistency", "cross-file"]
+      - ["language-aware", "language-dependent", "language-specific"]
+  - id: code-followup-language
+    kind: followup
+    paper: A Large-Scale Comprehensive Measurement
+    before: Which programming language has the most AI-generated code in the dataset?
+    question: And which language comes second?
+    points: [["javascript"]]
+    evidence: [{page: 4, contains: "JavaScript (15.4%)"}]
+  - id: code-followup-snapshots
+    kind: followup
+    paper: A Large-Scale Comprehensive Measurement
+    before: How many likely AI-generated sub-file code units were matched with human controls?
+    question: And how many file snapshots?
+    points: [["7,471"]]
+    evidence: [{page: 5, contains: "7,471 file snapshots are successfully aligned"}]
+  - id: code-note
+    kind: notes
+    paper: A Large-Scale Comprehensive Measurement
+    question: What is the codename of the monorepo I want to rerun their pipeline on?
+    points: [["harbourline"]]
+    note:
+      page: 3
+      quote: "Our final dataset contains 19,816 AI-involved code files"
+      body: "Plan: rerun their pipeline on our monorepo codenamed Harbourline before the Q3 review."
+
+  # Rethinking the Value of Agent-Generated Tests for LLM-Based Software Engineering Agents (Feb 2026), arXiv 2602.07900
+  - id: tests-claude-rate
+    kind: fact
+    paper: Rethinking the Value
+    question: What resolution rate does Claude Opus 4.5 reach, and in what share of tasks does it write new tests?
+    points: [["74.4"], ["83%", "83 %", "83 percent", "83.0"]]
+    evidence: [{page: 2, contains: "74.4% resolution) generates at least one new test artifact in about 83% of tasks"}]
+  - id: tests-gpt-writes
+    kind: fact
+    paper: Rethinking the Value
+    question: In how many tasks does GPT-5.2 write tests?
+    points: [["3/500", "3 of 500", "3 out of 500", "three of 500", "three out of 500", "0.6%", "0.6 %"]]
+    evidence:
+      - {page: 4, contains: "GPT-5.2 almost never writes tests (3/500 tasks)"}
+      - {page: 2, contains: "only in 0.6% of tasks"}
+  - id: tests-api-cost
+    kind: fact
+    paper: Rethinking the Value
+    question: What was the total LLM API cost of the experiments?
+    points: [["1,600"]]
+    evidence: [{page: 4, contains: "the total LLM API cost is approximately USD 1,600"}]
+  - id: tests-setup
+    kind: fact
+    paper: Rethinking the Value
+    question: Which benchmark and which agent scaffold does the study use?
+    points:
+      - ["swe-bench verified", "swe bench verified", "swebench verified"]
+      - ["mini-swe-agent", "mini swe-agent", "mini-swe agent", "mini swe agent"]
+    evidence:
+      - {page: 3, contains: "We use SWE-bench Verified as our benchmark"}
+      - {page: 2, contains: "using mini-SWE-agent"}
+  - id: tests-kimi-tokens
+    kind: fact
+    paper: Rethinking the Value
+    question: When test writing was discouraged, by how much did Kimi K2 Thinking's input tokens drop?
+    points: [["49.0%", "49%", "49.0 %", "49 %"]]
+    evidence: [{page: 9, contains: "input tokens drop by 49.0% and 32.9%"}]
+  - id: tests-summary
+    kind: overview
+    paper: Rethinking the Value
+    question: Summarise the main contribution of this paper.
+    evidence:
+      - {page: 1, contains: "current agent-written testing practices reshape process and cost more than final task outcomes"}
+    need: 3
+    points:
+      - ["weakly", "weak", "model-dependent", "process style"]
+      - ["print", "prints", "print statements"]
+      - ["prompt", "prompts", "intervention", "interventions"]
+      - ["cost", "costs", "efficiency", "tokens", "api calls"]
+  - id: tests-implications
+    kind: overview
+    paper: Rethinking the Value
+    question: What are the practical implications of this study?
+    evidence:
+      - {page: 9, contains: "make testing more targeted and budget-aware"}
+    need: 3
+    points:
+      - ["targeted", "budget-aware", "budget aware", "budget"]
+      - ["subagent", "subagents", "skill", "skills"]
+      - ["log", "logging", "logs", "trace", "tracing", "observability"]
+      - ["coarse", "process-sensitive", "process metrics", "solve rates"]
+  - id: tests-research-questions
+    kind: overview
+    paper: Rethinking the Value
+    question: What are the research questions of this study?
+    evidence:
+      - {page: 3, contains: "RQ1: What Testing Behaviors Emerge Under a Light Agent Scaffold?"}
+    points:
+      - ["testing behaviors", "testing behaviours", "testing behavior", "testing behaviour", "test-writing behavior"]
+      - ["feedback signal", "feedback signals", "feedback"]
+      - ["outcomes", "outcome", "costs", "cost"]
+  - id: tests-followup-rate
+    kind: followup
+    paper: Rethinking the Value
+    before: Which model almost never writes tests?
+    question: What resolution rate does it still achieve?
+    points: [["71.8"]]
+    evidence: [{page: 2, contains: "GPT-5.2 achieves a comparable resolution rate (71.8%)"}]
+  - id: tests-followup-rarest
+    kind: followup
+    paper: Rethinking the Value
+    before: What are the four assertion categories used in this paper?
+    question: Which one is the rarest?
+    points: [["relational", "c3"]]
+    evidence: [{page: 6, contains: "C3 Relational is rare"}]
+  - id: tests-note
+    kind: notes
+    paper: Rethinking the Value
+    question: What is the nickname of our lab's harness in my note?
+    points: [["tidewater"]]
+    note:
+      page: 3
+      quote: "We use SWE-bench Verified as our benchmark"
+      body: "Our lab reran this with the harness nicknamed Tidewater on 250 tasks."
+
+  # Follow-ups worded the way a reader points at the answer they just read ("that", "the second one", "it"). The
+  # follow-up never receives that answer, only the earlier question and its passages.
+  - id: tests-followup-second-one
+    kind: followup
+    paper: Rethinking the Value
+    before: What are the research questions of this study?
+    question: What did the study find for the second one?
+    points: [["print", "prints", "print statements", "observational"]]
+    evidence: [{page: 6, contains: "value-revealing prints consistently outnumber assertions"}]
+  - id: code-followup-simpler
+    kind: followup
+    paper: A Large-Scale Comprehensive Measurement
+    before: What is Insight 8 in this paper?
+    question: Explain that in simpler words.
+    need: 2
+    points:
+      - ["follow-up", "follow up", "modified", "modifications", "changes", "fixes", "maintenance"]
+      - ["later", "over time", "longer", "90 days", "months", "long run", "long term", "long-term"]
+    evidence: [{page: 10, contains: "Insight 8: Delayed but Concentrated Maintenance"}]
+  - id: fail-followup-example
+    kind: followup
+    paper: How Coding Agents Fail
+    before: What does the paper say about DS3 damage?
+    question: Give me one example of it.
+    points: [["git history", "uncommitted work", "release without confirmation", "finalizing a release", "core packages", "cognito", "user pool", "terraform"]]
+    evidence: [{page: 7, contains: "rewriting Git history and deleting uncommitted work"}]
+  - id: fail-followup-why
+    kind: followup
+    paper: How Coding Agents Fail
+    before: What is the most prevalent misalignment symptom?
+    question: Why does that happen so often?
+    points: [["instruction-following failure", "instruction following failure", "instruction-following failures", "fails to follow", "failure to follow"]]
+    evidence: [{page: 5, contains: "73.68% of S3 episodes are attributed to C6 (Instruction-Following Failure)"}]
+
+  # Questions the paper doesn't answer: the right answer says so instead of inventing one.
+  - id: att-refuse-japanese
+    kind: refusal
+    paper: Attention Is All You Need
+    question: What BLEU score did the Transformer reach on English-to-Japanese translation?
+  - id: bert-refuse-carbon
+    kind: refusal
+    paper: "BERT: Pre-training"
+    question: How much carbon dioxide did pre-training BERT emit?
+  - id: fail-refuse-duration
+    kind: refusal
+    paper: How Coding Agents Fail
+    question: What was the median length of a coding-agent session in minutes?
+  - id: code-refuse-commit-message
+    kind: refusal
+    paper: A Large-Scale Comprehensive Measurement
+    question: What is the average commit message length, in words, of AI-involved commits?
+  - id: code-refuse-interviews
+    kind: refusal
+    paper: A Large-Scale Comprehensive Measurement
+    question: How many developers did the authors interview about their AI usage?
+  - id: tests-refuse-wall-clock
+    kind: refusal
+    paper: Rethinking the Value
+    question: What was the average wall-clock time per task, in minutes?
+
+# A reader's notes as a real library holds them: remarks, questions to self, and a note saved from an AI answer.
+paper_notes:
+  - paper: Attention Is All You Need
+    notes:
+      - {page: 3, quote: "composed of a stack of N = 6 identical layers", body: "Encoder and decoder stacks: compare with BERT, which keeps only the encoder."}
+      - {page: 8, quote: "new state-of-the-art BLEU score of 28.4", body: "Check whether later papers beat this on WMT14."}
+      - {page: 10, quote: "the first sequence transduction model based entirely on attention", body: "The Transformer replaces recurrence with self-attention and trains faster.", provenance: llm}
+  - paper: "BERT: Pre-training"
+    notes:
+      - {page: 4, quote: "mask some percentage of the input tokens at random", body: "Masking works like a cloze test; our dataset might need a different ratio."}
+      - {page: 6, quote: "4.5% and 7.0% respective average accuracy improvement", body: "Big gains, but GLUE only. Nothing on low-resource languages."}
+      - {page: 1, quote: "Bidirectional Encoder Representations from Transformers", body: "BERT pre-trains deep bidirectional representations and is fine-tuned per task.", provenance: llm}
+  - paper: How Coding Agents Fail
+    notes:
+      - {page: 5, quote: "Developer Constraint Violation (S3, 38.33%)", body: "Matches what we see: our agents ignore 'don't run migrations'."}
+      - {page: 3, quote: "use GPT-5.4 with temperature 0", body: "They rely on an LLM judge. Check its accuracy before citing numbers."}
+      - {page: 9, quote: "We present the first large-scale analysis of", body: "Most misalignment costs developer effort and trust rather than breaking the system.", provenance: llm}
+  - paper: A Large-Scale Comprehensive Measurement
+    notes:
+      - {page: 4, quote: "ChatGPT (83.3%)", body: "Dataset is mostly ChatGPT; results may not transfer to agentic tools."}
+      - {page: 8, quote: "10.04 vs. 13.56 per KLOC", body: "Surprising: fewer CodeQL alerts in AI code. Selection bias from self-admitted comments?"}
+      - {page: 10, quote: "AI assistance reshapes development effort rather than simply reducing it", body: "AI-involved commits are smaller but need more follow-up changes over 90 days.", provenance: llm}
+  - paper: Rethinking the Value
+    notes:
+      - {page: 2, quote: "74.4% resolution) generates at least one new test artifact in about 83% of tasks", body: "Claude writes tests a lot and GPT-5.2 almost never, yet their results are close."}
+      - {page: 4, quote: "the total LLM API cost is approximately USD 1,600", body: "Cheap enough that we could replicate it with our own agent."}
+      - {page: 9, quote: "input tokens drop by 49.0% and 32.9%", body: "Discouraging tests saves many tokens with only a small drop in solved tasks.", provenance: llm}
