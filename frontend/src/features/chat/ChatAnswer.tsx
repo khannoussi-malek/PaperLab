@@ -1,4 +1,4 @@
-import { Sparkles } from 'lucide-react'
+import { CornerDownRight, Sparkles } from 'lucide-react'
 import type { ReactNode } from 'react'
 import type { ChatSource, NoteSource } from '@/api/client'
 import { pressable, slideUpIn } from '@/components/motion'
@@ -24,6 +24,11 @@ type Props = {
   footer: { model: string; connectionName: string | null; promptVersion: number } | null
   /** The saved answer's `llm_outputs` id; absent while it streams. */
   outputId?: string
+  /** The answer this one follows up. `reply` indents it under the first question of its thread. */
+  parentId?: string | null
+  reply?: boolean
+  /** Offered on a saved paper answer: asks the next question as a follow-up to this one. */
+  followUp?: { onClick: () => void; disabled: boolean }
   pending?: boolean
   /** Fade up on mount: only the answer being asked now, never ones loaded from history. */
   animate?: boolean
@@ -43,12 +48,16 @@ const hintFor = (source: Cited) => ('note_id' in source ? NOTE_HINT : CITE_HINT)
 
 export function ChatAnswer(props: Props) {
   const { question, wholePaper, sources, notes, notesUsed, notesTotal, segments, footer, outputId, pending } = props
-  const { animate, paperLabel, onCite, children } = props
+  const { animate, paperLabel, onCite, children, parentId, reply, followUp } = props
   const sourceFor = (label: string) => [...(sources ?? []), ...notes].find((source) => source?.label === label)
   const describe = (source: Cited) => describeSource(source, paperLabel?.(source.paper_id))
   const waiting = pending && segments.length === 0
   return (
-    <article className={cn('chat-answer flex flex-col gap-2', animate && slideUpIn)} data-output-id={outputId}>
+    <article
+      className={cn('chat-answer flex flex-col gap-2', reply && 'ml-3 border-l border-glass-border pl-3', animate && slideUpIn)}
+      data-output-id={outputId}
+      data-parent-id={parentId ?? undefined}
+    >
       <p className="chat-question max-w-[85%] self-end rounded-2xl rounded-br-sm bg-glass-strong px-3 py-2 text-sm whitespace-pre-wrap ring-1 ring-glass-border">
         {question}
       </p>
@@ -93,6 +102,7 @@ export function ChatAnswer(props: Props) {
                 wholePaper={wholePaper}
                 describe={describe}
                 onCite={onCite}
+                followUp={followUp}
               />
             )}
             {notesUsed !== null && notesTotal !== null && notesUsed < notesTotal && (
@@ -120,7 +130,7 @@ function TypingIndicator({ label }: { label: string }) {
   )
 }
 
-type MetaProps = Pick<Props, 'footer' | 'sources' | 'notes' | 'wholePaper' | 'onCite'> & {
+type MetaProps = Pick<Props, 'footer' | 'sources' | 'notes' | 'wholePaper' | 'onCite' | 'followUp'> & {
   describe: (source: Cited) => string
 }
 
@@ -128,7 +138,7 @@ type MetaProps = Pick<Props, 'footer' | 'sources' | 'notes' | 'wholePaper' | 'on
  * One quiet row: the AI mark, then a pill per source. Everything longer (the model, each passage's page and section)
  * waits in a tooltip, so a thread of answers doesn't repeat the same line under each one.
  */
-function AnswerMeta({ footer, sources, notes, wholePaper, describe, onCite }: MetaProps) {
+function AnswerMeta({ footer, sources, notes, wholePaper, describe, onCite, followUp }: MetaProps) {
   const aiLabel = footer ? aiMark(footer.model, footer.connectionName, footer.promptVersion) : 'AI'
   const pill = (source: Cited | null) =>
     source && (
@@ -173,6 +183,18 @@ function AnswerMeta({ footer, sources, notes, wholePaper, describe, onCite }: Me
           )}
           {notes.map(pill)}
         </ul>
+      )}
+      {followUp && (
+        <Button
+          variant="ghost"
+          size="xs"
+          className={cn('ml-auto shrink-0 text-muted-foreground', pressable)}
+          disabled={followUp.disabled}
+          onClick={followUp.onClick}
+        >
+          <CornerDownRight aria-hidden />
+          Follow up
+        </Button>
       )}
     </div>
   )

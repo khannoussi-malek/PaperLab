@@ -1,5 +1,5 @@
-import { ArrowUp, MessageSquareText, Settings2 } from 'lucide-react'
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { ArrowUp, CornerDownRight, MessageSquareText, Settings2, X } from 'lucide-react'
+import { Fragment, useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { ChatScope, ChatSource, Note, NoteSource, ChatAnswer as SavedAnswer } from '@/api/client'
 import { useChatHistory, useChatModels, usePromoteNote, useReindexPaper } from '@/api/queries'
 import { pressable } from '@/components/motion'
@@ -18,6 +18,7 @@ import { promoteErrorMessage, promoteSelection, type PromoteDraft } from './prom
 import type { ChatProblem } from './refusals'
 import { saveButtonPosition } from './saveButton'
 import { SaveAsNoteButton } from './SaveAsNoteButton'
+import { threadOrder } from './threads'
 import { useChatStream } from './useChatStream'
 
 const MAX_QUESTION = 2000 // the API's limit (spec §3.10)
@@ -64,7 +65,12 @@ export function ChatPanel({ scope, unavailable, paperLabel, onCite, onPromoted }
       ? pick
       : loadChatModel(browserStorage(), chatModels.data)
     : null
-  const { stream, ask, retry } = useChatStream(scope, modelId)
+  // The saved answer the next question follows up (paper chat only); null asks it on its own.
+  const [followingId, setFollowingId] = useState<string | null>(null)
+  const { stream, ask, retry } = useChatStream(scope, modelId, (parentId, next) =>
+    // Only while the chip still names the answer that question followed: × pressed mid-stream stays pressed.
+    setFollowingId((current) => (current === parentId ? next : current)),
+  )
   const [question, setQuestion] = useState('')
   const [promote, setPromote] = useState<Promote | null>(null)
   const [promoteError, setPromoteError] = useState<string | null>(null)
@@ -85,6 +91,13 @@ export function ChatPanel({ scope, unavailable, paperLabel, onCite, onPromoted }
   const closed = busy || unavailable !== undefined || noModels || chatModels.isPending
   // A saved answer comes back in the history, so the live copy hides instead of showing twice.
   const showLive = stream.status !== 'idle' && !answers.some((answer) => answer.id === stream.done?.output_id)
+  const { placed, liveAt, liveReply } = threadOrder(answers, showLive ? stream.parentId : null)
+  // The chip names the followed answer; a just-saved one isn't in the refetched history for a moment yet.
+  const followingQuestion =
+    followingId === null
+      ? null
+      : (answers.find((answer) => answer.id === followingId)?.question ??
+        (stream.done?.output_id === followingId ? stream.question : null))
 
   function pickModel(id: string) {
     setPick(id)
@@ -93,11 +106,14 @@ export function ChatPanel({ scope, unavailable, paperLabel, onCite, onPromoted }
 
   // Follows a streaming answer down as its tokens arrive, but only while the list was already at the bottom: a
   // question just asked (`sources`) always scrolls, since that's the moment the reader expects to see it appear.
+  // A follow-up to an older thread appears inside that thread, so it scrolls into view rather than to the bottom.
   useEffect(() => {
-    if (followRef.current || stream.status === 'sources') {
+    if (stream.status === 'sources' && stream.parentId !== null) {
+      listRef.current?.querySelector('article.chat-answer:not([data-output-id])')?.scrollIntoView({ block: 'nearest' })
+    } else if (followRef.current || stream.status === 'sources') {
       listRef.current?.scrollTo({ top: listRef.current.scrollHeight })
     }
-  }, [answers.length, stream.status, stream.segments])
+  }, [answers.length, stream.status, stream.segments, stream.parentId])
 
   // Enter disables the Textarea while busy, so the browser blurs it to <body>; bring focus back once it clears.
   useEffect(() => {
@@ -164,8 +180,38 @@ export function ChatPanel({ scope, unavailable, paperLabel, onCite, onPromoted }
     const text = question.trim()
     if (!text || closed) return
     setQuestion('')
-    void ask(text)
+    void ask(text, followingId)
   }
+
+  function followUp(answerId: string) {
+    setFollowingId(answerId)
+    textareaRef.current?.focus()
+  }
+
+  // The answer being asked now: at the end of the thread it follows up, or last, until its saved copy is listed.
+  const liveAnswer = () =>
+    showLive && (
+      <ChatAnswer
+        question={stream.question}
+        parentId={stream.parentId}
+        reply={liveReply}
+        wholePaper={stream.wholePaper}
+        sources={stream.sources}
+        notes={stream.notes}
+        notesUsed={stream.notesUsed}
+        notesTotal={stream.notesTotal}
+        segments={stream.segments}
+        footer={
+          stream.done && { model: stream.done.model, connectionName: stream.done.connection_name, promptVersion: stream.done.prompt_version }
+        }
+        pending={busy}
+        animate
+        paperLabel={paperLabel}
+        onCite={onCite}
+      >
+        {stream.problem && <ProblemAlert scope={scope} problem={stream.problem} onRetry={retry} />}
+      </ChatAnswer>
+    )
 
   return (
     <div ref={rootRef} className="relative flex min-h-0 flex-1 flex-col">
@@ -189,42 +235,28 @@ export function ChatPanel({ scope, unavailable, paperLabel, onCite, onPromoted }
         {answers.length === 0 && !showLive && !history.isPending && (
           <EmptyChat kind={scope.kind} disabled={closed} onAsk={(text) => void ask(text)} />
         )}
-        {answers.map((answer) => (
-          <ChatAnswer
-            key={answer.id}
-            outputId={answer.id}
-            question={answer.question}
-            wholePaper={answer.whole_paper}
-            sources={answer.sources}
-            notes={answer.notes}
-            notesUsed={answer.notes_used}
-            notesTotal={answer.notes_total}
-            segments={splitCitations(answer.content, knownLabels(answer))}
-            footer={{ model: answer.model, connectionName: answer.connection_name, promptVersion: answer.prompt_version }}
-            paperLabel={paperLabel}
-            onCite={onCite}
-          />
+        {placed.map(({ answer, reply }, index) => (
+          <Fragment key={answer.id}>
+            {index === liveAt && liveAnswer()}
+            <ChatAnswer
+              outputId={answer.id}
+              parentId={answer.parent_id}
+              reply={reply}
+              question={answer.question}
+              wholePaper={answer.whole_paper}
+              sources={answer.sources}
+              notes={answer.notes}
+              notesUsed={answer.notes_used}
+              notesTotal={answer.notes_total}
+              segments={splitCitations(answer.content, knownLabels(answer))}
+              footer={{ model: answer.model, connectionName: answer.connection_name, promptVersion: answer.prompt_version }}
+              paperLabel={paperLabel}
+              onCite={onCite}
+              followUp={scope.kind === 'paper' ? { onClick: () => followUp(answer.id), disabled: closed } : undefined}
+            />
+          </Fragment>
         ))}
-        {showLive && (
-          <ChatAnswer
-            question={stream.question}
-            wholePaper={stream.wholePaper}
-            sources={stream.sources}
-            notes={stream.notes}
-            notesUsed={stream.notesUsed}
-            notesTotal={stream.notesTotal}
-            segments={stream.segments}
-            footer={
-              stream.done && { model: stream.done.model, connectionName: stream.done.connection_name, promptVersion: stream.done.prompt_version }
-            }
-            pending={busy}
-            animate
-            paperLabel={paperLabel}
-            onCite={onCite}
-          >
-            {stream.problem && <ProblemAlert scope={scope} problem={stream.problem} onRetry={retry} />}
-          </ChatAnswer>
-        )}
+        {liveAt === placed.length && liveAnswer()}
       </div>
 
       {/* Outside the list, so pressing it doesn't re-run the list's mouseup selection check. */}
@@ -245,6 +277,24 @@ export function ChatPanel({ scope, unavailable, paperLabel, onCite, onPromoted }
           submit()
         }}
       >
+        {followingQuestion !== null && (
+          <p className="chat-following flex min-w-0 items-center gap-1.5 px-1 text-xs text-muted-foreground">
+            <CornerDownRight aria-hidden className="size-3.5 shrink-0" />
+            <span className="min-w-0 truncate" title={followingQuestion}>
+              Following: {followingQuestion}
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              className={cn('ml-auto', pressable)}
+              aria-label="Stop following"
+              onClick={() => setFollowingId(null)}
+            >
+              <X aria-hidden />
+            </Button>
+          </p>
+        )}
         {/* One field-looking box: the ring moves from the textarea to the box so the send button sits inside it. */}
         <div className="flex items-end gap-2 rounded-xl border border-input bg-glass-strong p-1.5 pl-3 transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50">
           <Textarea
