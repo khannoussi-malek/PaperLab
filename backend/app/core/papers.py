@@ -1,6 +1,7 @@
 import asyncio
 import uuid
 from pathlib import Path
+from typing import Any
 
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,7 +14,10 @@ from app.models import Chunk, Paper, PaperStatus
 PDF_MAGIC = b"%PDF-"
 
 
-async def create_paper(session: AsyncSession, filename: str, data: bytes, pdf_dir: Path) -> Paper:
+async def create_paper(
+    session: AsyncSession, filename: str, data: bytes, pdf_dir: Path, *, prefill: dict[str, Any] | None = None
+) -> Paper:
+    """`prefill`: columns already known, e.g. a found paper's title and IDs. They win over the placeholder title."""
     if not data.startswith(PDF_MAGIC):
         raise InvalidInput(f"{filename!r} is not a PDF")
 
@@ -22,7 +26,7 @@ async def create_paper(session: AsyncSession, filename: str, data: bytes, pdf_di
     pdf_dir.mkdir(parents=True, exist_ok=True)
     await asyncio.to_thread(path.write_bytes, data)
     # Title is a placeholder until extraction (and later enrichment) finds a real one.
-    paper = Paper(id=paper_id, title=Path(filename).stem or "untitled", file_path=str(path))
+    paper = Paper(id=paper_id, file_path=str(path), **{"title": Path(filename).stem or "untitled", **(prefill or {})})
     session.add(paper)
     try:
         await session.commit()

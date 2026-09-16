@@ -10,12 +10,14 @@ import logging
 import re
 import uuid
 from dataclasses import dataclass, field, replace
+from pathlib import Path
 from typing import Any
 
 import httpx
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import papers
 from app.core.enrichment import ARXIV_DOI_PREFIX, short_id
 from app.core.errors import Conflict
 from app.models import Paper
@@ -25,12 +27,15 @@ logger = logging.getLogger(__name__)
 
 SEARCH_LIMIT = 10
 SIMILAR_LIMIT = 10
+MAX_PDF_BYTES = 100 * 1024 * 1024
 PDF_TIMEOUT = httpx.Timeout(10.0, read=30.0)
 
 OPENALEX_OFF = "OpenAlex is off. Set OPENALEX_MAILTO in .env to search by title or DOI."
 OPENALEX_BUSY = "OpenAlex is busy or unreachable. Try again in a minute."
 S2_BUSY = "Semantic Scholar is busy or unreachable. Try again in a minute."
 S2_UNKNOWN = "Semantic Scholar doesn't know this paper, so it has no suggestions."
+ALREADY_IN_LIBRARY = "This paper is already in your library."
+NO_FREE_PDF = "No free PDF was found for this paper. Open its page, download the PDF and use Upload PDFs."
 
 _ARXIV_ID = r"\d{4}\.\d{4,5}|[a-z-]+(?:\.[a-z]{2})?/\d{7}"
 _ARXIV_QUERY = re.compile(
@@ -248,3 +253,63 @@ async def similar(
     own = _same_paper_keys(paper.title, doi, arxiv_id, paper.openalex_id)
     candidates = [c for c in map(from_s2, found) if not own & _same_paper_keys(c.title, c.doi, c.arxiv_id)]
     return await mark_in_library(session, candidates[:limit])
+
+
+async def _fetch_pdf(http: httpx.AsyncClient, url: str) -> bytes | None:
+    async with http.stream("GET", url) as response:
+        if response.status_code != 200:
+            logger.info("no PDF at %s: HTTP %d", url, response.status_code)
+            return None
+        body = bytearray()
+        async for chunk in response.aiter_bytes():
+            body += chunk
+            if len(body) > MAX_PDF_BYTES:
+                logger.info("no PDF at %s: over %d bytes", url, MAX_PDF_BYTES)
+                return None
+    if not body.startswith(papers.PDF_MAGIC):
+        logger.info("no PDF at %s: the body is not a PDF", url)
+        return None
+    return bytes(body)
+
+
+async def download_pdf(http: httpx.AsyncClient, urls: list[str]) -> bytes | None:
+    """The first URL whose body is a PDF, in order. A failing URL moves on to the next."""
+    for url in urls:
+        try:
+            if (data := await _fetch_pdf(http, url)) is not None:
+                return data
+        except httpx.HTTPError as exc:
+            logger.info("no PDF at %s: %s", url, exc)
+    return None
+
+
+def _prefill(candidate: Candidate) -> dict[str, Any]:
+    """Enrichment trusts a stored openalex_id, and a DOI only when it's locked (D69)."""
+    doi = next(iter(_library_dois(candidate)), None)
+    fields = {
+        "title": candidate.title,
+        "authors": candidate.authors,
+        "year": candidate.year,
+        "venue": candidate.venue,
+        "cited_by_count": candidate.cited_by_count,
+        "doi": doi,
+        "openalex_id": candidate.openalex_id,
+    }
+    return fields | {"manual_fields": ["doi"]} if doi and not candidate.openalex_id else fields
+
+
+def _filename(title: str) -> str:
+    return f"{re.sub(r'[^\w\- ]+', '', title).strip()[:80] or 'paper'}.pdf"
+
+
+async def add(session: AsyncSession, providers: Providers, candidate: Candidate, pdf_dir: Path) -> Paper:
+    """Downloads the candidate's first free PDF and creates the paper. The caller enqueues ingest."""
+    [marked] = await mark_in_library(session, [candidate])
+    if marked.paper_id is not None:
+        raise Conflict(ALREADY_IN_LIBRARY)
+    data = await download_pdf(providers.pdf, candidate.pdf_urls)
+    if data is None:
+        raise Conflict(NO_FREE_PDF)
+    # ponytail: two adds of one paper racing past the check above hit papers' UNIQUE doi and 500. The buttons disable
+    # while adding; catch IntegrityError here if it ever happens.
+    return await papers.create_paper(session, _filename(candidate.title), data, pdf_dir, prefill=_prefill(candidate))
