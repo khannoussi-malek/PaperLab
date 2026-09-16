@@ -32,4 +32,6 @@ class LLMOutput(Base):
     # never changes it. NULL for answers written before connections existed.
     connection_name: Mapped[str | None] = mapped_column(Text)
     prompt_version: Mapped[int]
+    # The answer this one follows up (paper chat). Deleting it (SET NULL) makes this the start of its own thread.
+    parent_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("llm_outputs.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()"))
