@@ -417,6 +417,9 @@ OpenAlex search costs 10 of 1,000 free daily credits, so search runs on submit.
   otherwise. Then small buttons: Add (`Plus`; "Adding…" with a spinning `LoaderCircle`, disabled while it runs) or an
   outline "In library" link to the reader, and a ghost "Open page" link (`ExternalLink`, new tab). A failed add shows an
   `ErrorAlert` under its row, and the row keeps its Add button.
+- **Similar tab:** the reader's fourth tab, after Data. An `aside` labelled "Similar papers": a muted one-line
+  explanation, the candidate rows, and `LoadError` with Retry when Semantic Scholar refuses. It asks only once the tab
+  has been opened; suggestions stay fresh for an hour.
 
 ## Pre-delivery check (from ui-ux-pro-max Quick Reference §1–§3)
 
