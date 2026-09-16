@@ -1,5 +1,5 @@
 import type { APIRequestContext, Locator, Page } from '@playwright/test'
-import { expect, removePaperAndNotes, test } from './fixtures'
+import { expect, openReader, removePaperAndNotes, test } from './fixtures'
 
 // The API runs with DISCOVERY_PROVIDER=fake (backend/app/providers/discovery_fake.py): every search and every
 // suggestion answers these three papers, and nothing reaches OpenAlex or Semantic Scholar.
@@ -94,4 +94,21 @@ test('a paper found from a workspace joins that workspace', async ({ page, reque
   const members: { id: string }[] = await (await request.get(`/api/workspaces/${workspaceId}/papers`)).json()
   expect(members.map((paper) => paper.id)).toContain(paperId)
   await waitUntilReady(request, paperId)
+})
+
+test('the Similar tab asks for suggestions only once opened, and adds one', async ({ page, request, paperId }) => {
+  const asked: string[] = []
+  page.on('request', (r) => {
+    if (r.url().includes('/similar')) asked.push(r.url())
+  })
+  await openReader(page, paperId)
+  expect(asked).toEqual([])
+
+  await page.getByRole('tab', { name: 'Similar' }).click()
+  const panel = page.getByRole('complementary', { name: 'Similar papers' })
+  await expect(panel.locator('.candidate-row')).toHaveCount(3)
+  expect(asked).toHaveLength(1)
+  await expect(page).toHaveURL(new RegExp(`#/papers/${paperId}\\?tab=similar$`))
+
+  await waitUntilReady(request, await addFrom(rowOf(panel, FREE)))
 })
