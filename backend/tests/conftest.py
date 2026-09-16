@@ -4,6 +4,7 @@ import os
 import random
 import re
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from pathlib import Path
 
 import httpx
@@ -18,10 +19,11 @@ from sqlalchemy.pool import NullPool
 from app.api import chat as chat_api
 from app.api.deps import get_transport, resolve_llm
 from app.config import settings
+from app.core import discovery
 from app.db import get_session
 from app.main import create_app
 from app.models import Author, Paper
-from app.providers import embedding, openalex
+from app.providers import embedding, openalex, semantic_scholar
 from app.providers.llm import FakeLLM
 
 # The compose Postgres, published on the host. Every test runs inside a transaction that is
@@ -276,6 +278,29 @@ def provider(app):
     fake = FakeProvider()
     app.dependency_overrides[get_transport] = lambda: fake.transport
     return fake
+
+
+@dataclass
+class DiscoveryFakes:
+    openalex: FakeOpenAlex
+    s2: FakeProvider
+    pdf_host: FakeProvider
+    providers: discovery.Providers
+
+
+@pytest.fixture
+async def discovery_fakes(fake_openalex):
+    """OpenAlex (routed like fake_openalex), Semantic Scholar and a PDF host, all behind MockTransport, as the
+    Providers one request uses. Semantic Scholar and the PDF host are FakeProviders: routed by path, unrouted fails."""
+    s2, pdf_host = FakeProvider(), FakeProvider()
+    providers = discovery.Providers(
+        openalex=fake_openalex.client,
+        s2=semantic_scholar.new_client("", transport=s2.transport),
+        pdf=httpx.AsyncClient(transport=pdf_host.transport, follow_redirects=True),
+    )
+    yield DiscoveryFakes(fake_openalex, s2, pdf_host, providers)
+    await providers.s2.aclose()
+    await providers.pdf.aclose()
 
 
 @pytest.fixture(autouse=True)
