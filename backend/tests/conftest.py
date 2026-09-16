@@ -16,12 +16,13 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from app.api import chat as chat_api
+from app.api.deps import get_transport, resolve_llm
 from app.config import settings
 from app.db import get_session
 from app.main import create_app
 from app.models import Author, Paper
 from app.providers import embedding, openalex
-from app.providers.llm import FakeLLM, get_llm
+from app.providers.llm import FakeLLM
 
 # The compose Postgres, published on the host. Every test runs inside a transaction that is
 # rolled back afterwards, so tests can share the dev database without leaving rows behind.
@@ -68,7 +69,7 @@ def database_url():
 
 @pytest.fixture
 async def session():
-    engine = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)
+    engine = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool, hide_parameters=True)
     async with engine.connect() as connection:
         transaction = await connection.begin()
         # create_savepoint: a service's session.commit() only releases a savepoint.
@@ -216,17 +217,70 @@ def parse_sse(raw: str) -> list[tuple[str, dict]]:
 
 
 @pytest.fixture
-def fake_llm(app, session, monkeypatch):
-    fake = FakeLLM()
-    app.dependency_overrides[get_llm] = lambda: fake
+def answers_in_test_transaction(session, monkeypatch):
+    """The answer is saved in a fresh session after the stream; keep it inside the test transaction."""
 
     @asynccontextmanager
     async def test_session():
         yield session
 
-    # The answer is saved in a fresh session after the stream; keep it inside the test transaction.
     monkeypatch.setattr(chat_api, "SessionLocal", test_session)
+
+
+@pytest.fixture
+def fake_llm(app, answers_in_test_transaction):
+    """Every chat question answered by this FakeLLM, whatever model it names."""
+    fake = FakeLLM()
+    app.dependency_overrides[resolve_llm] = lambda: fake
     return fake
+
+
+class FakeProvider:
+    """Model providers (Ollama, OpenAI-compatible servers) behind httpx.MockTransport, for routes that call one.
+
+    `reply(path, status, **response_kwargs)` answers every request to that path; `refuse(path)` raises ConnectError
+    like a server that isn't running. An unrouted request fails loudly. Every request is recorded.
+    """
+
+    def __init__(self):
+        self.replies: dict[str, tuple[int, dict] | None] = {}
+        self.requests: list[httpx.Request] = []
+        self.transport = httpx.MockTransport(self._handle)
+
+    def reply(self, path: str, status: int, **response_kwargs) -> None:
+        self.replies[path] = (status, response_kwargs)
+
+    def refuse(self, path: str) -> None:
+        self.replies[path] = None
+
+    def _handle(self, request: httpx.Request) -> httpx.Response:
+        self.requests.append(request)
+        if request.url.path not in self.replies:
+            raise AssertionError(f"unrouted provider request: {request.method} {request.url}")
+        reply = self.replies[request.url.path]
+        if reply is None:
+            raise httpx.ConnectError("connection refused", request=request)
+        status, kwargs = reply
+        return httpx.Response(status, **kwargs)
+
+
+@pytest.fixture
+def provider(app):
+    fake = FakeProvider()
+    app.dependency_overrides[get_transport] = lambda: fake.transport
+    return fake
+
+
+@pytest.fixture(autouse=True)
+def _real_providers(monkeypatch):
+    # A shell that exported LLM_PROVIDER=fake for the E2E stack must not turn provider tests into fake ones.
+    monkeypatch.setattr(settings, "llm_provider", "ollama")
+
+
+@pytest.fixture(autouse=True)
+def _test_embed_model(monkeypatch):
+    # Test chunks record embed_model "test", and chat refuses papers whose vectors came from another model.
+    monkeypatch.setattr(settings, "embed_model", "test")
 
 
 def _write_pdf(path: Path, pages: list[list[tuple]], metadata: dict[str, str] | None = None) -> Path:

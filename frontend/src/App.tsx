@@ -4,6 +4,7 @@ import { ChartsPage } from './features/charts/ChartsPage'
 import { DatasetPage } from './features/data/DatasetPage'
 import { LibraryPage } from './features/library/LibraryPage'
 import { ReaderPage } from './features/reader/ReaderPage'
+import { SettingsPage } from './features/settings/SettingsPage'
 import { WorkspacePage } from './features/workspaces/WorkspacePage'
 import { useRoute } from './lib/route'
 
@@ -30,6 +31,9 @@ export default function App() {
   }
   if (route.name === 'dataset') {
     return <DatasetPage key={route.datasetId} datasetId={route.datasetId} focus={route.focus} />
+  }
+  if (route.name === 'settings') {
+    return <SettingsPage />
   }
   return <LibraryPage />
 }

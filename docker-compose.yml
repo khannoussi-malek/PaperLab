@@ -20,7 +20,7 @@ services:
       POSTGRES_USER: paperlab
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-paperlab}
       POSTGRES_DB: paperlab
-    ports: ["5433:5432"]
+    ports: ["127.0.0.1:5433:5432"]
     volumes: [pgdata:/var/lib/postgresql/data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U paperlab"]
@@ -40,7 +40,7 @@ services:
     environment:
       LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
-    ports: ["8000:8000"]
+    ports: ["127.0.0.1:8000:8000"]
 
   worker:
     <<: *backend
@@ -51,7 +51,7 @@ services:
     build: ./frontend
     environment:
       API_URL: http://api:8000
-    ports: ["5180:5173"]
+    ports: ["127.0.0.1:5180:5173"]
     volumes:
       - ./frontend:/app
       - /app/node_modules

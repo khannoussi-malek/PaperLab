@@ -34,6 +34,17 @@ export type SeriesSpec = components['schemas']['Series']
 export type ResolvedData = components['schemas']['ResolvedDataOut']
 export type ResolvedDataset = components['schemas']['ResolvedDatasetOut']
 export type ResolvedCell = components['schemas']['ResolvedCellOut']
+export type ChatModel = components['schemas']['ChatModelOut']
+export type LLMConnection = components['schemas']['ConnectionOut']
+export type LLMConnectionCreate = components['schemas']['ConnectionCreate']
+export type LLMConnectionUpdate = components['schemas']['ConnectionUpdate']
+export type LLMModel = components['schemas']['ModelOut']
+export type ConnectionCheck = components['schemas']['ConnectionCheckOut']
+export type AvailableModels = components['schemas']['AvailableModelsOut']
+export type PullProgressEvent = components['schemas']['PullProgressEvent']
+export type PullDoneEvent = components['schemas']['PullDoneEvent']
+export type PullErrorEvent = components['schemas']['PullErrorEvent']
+export type EmbeddingStatus = components['schemas']['EmbeddingStatusOut']
 
 /** Where a chat lives: the reader's paper, or a workspace. */
 export type ChatScope = { kind: 'paper' | 'workspace'; id: string }
@@ -141,6 +152,27 @@ export const api = {
     request<void>(`/api/notes/${noteId}/charts/${chartId}`, { method: 'PUT' }),
   detachChart: (noteId: string, chartId: string) =>
     request<void>(`/api/notes/${noteId}/charts/${chartId}`, { method: 'DELETE' }),
-  /** The raw response: on success its body is the SSE stream that `useChatStream` reads. */
-  askChat: (scope: ChatScope, question: string) => fetch(chatUrl(scope), sendJson('POST', { question })),
+  /** The raw response: on success its body is the SSE stream that `useChatStream` reads. `modelId` null: the default. */
+  askChat: (scope: ChatScope, question: string, modelId: string | null = null, signal?: AbortSignal) =>
+    fetch(chatUrl(scope), { ...sendJson('POST', { question, model_id: modelId }), signal }),
+  listChatModels: () => request<ChatModel[]>('/api/llm/models'),
+  listConnections: () => request<LLMConnection[]>('/api/llm/connections'),
+  createConnection: (body: LLMConnectionCreate) => request<LLMConnection>('/api/llm/connections', sendJson('POST', body)),
+  updateConnection: (id: string, body: LLMConnectionUpdate) =>
+    request<LLMConnection>(`/api/llm/connections/${id}`, sendJson('PATCH', body)),
+  deleteConnection: (id: string) => request<void>(`/api/llm/connections/${id}`, { method: 'DELETE' }),
+  testConnection: (id: string) => request<ConnectionCheck>(`/api/llm/connections/${id}/test`, { method: 'POST' }),
+  availableModels: (id: string) => request<AvailableModels>(`/api/llm/connections/${id}/available`),
+  addModel: (connectionId: string, name: string) =>
+    request<LLMModel>(`/api/llm/connections/${connectionId}/models`, sendJson('POST', { name })),
+  removeModel: (id: string) => request<void>(`/api/llm/models/${id}`, { method: 'DELETE' }),
+  setDefaultModel: (modelId: string) => request<LLMModel>('/api/llm/default', sendJson('PUT', { model_id: modelId })),
+  /** The raw response: on success its body is the pull's SSE stream (progress…, then done or error). */
+  pullModel: (connectionId: string, name: string, signal?: AbortSignal) =>
+    fetch(`/api/llm/connections/${connectionId}/pull`, { ...sendJson('POST', { name }), signal }),
+  /** `name` goes in the query: Ollama names can contain `/`. */
+  deleteInstalledModel: (connectionId: string, name: string) =>
+    request<void>(`/api/llm/connections/${connectionId}/installed?name=${encodeURIComponent(name)}`, { method: 'DELETE' }),
+  embeddingStatus: () => request<EmbeddingStatus>('/api/embedding'),
+  reindexLibrary: () => request<{ papers: number }>('/api/embedding/reindex', sendJson('POST', { confirm: true })),
 }

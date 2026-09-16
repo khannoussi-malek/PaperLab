@@ -42,4 +42,19 @@ describe('refusal', () => {
     // errorDetail has already turned a validation list into this line.
     expect(refusal(422, 'Check these fields: question.')).toMatchObject({ retryable: false })
   })
+
+  it('words a removed model as retryable, and a missing model or a changed embedding model as fixed in Settings', () => {
+    expect(refusal(404, 'model_not_found')).toEqual({
+      message: 'The model you picked was removed. Ask again to use the default model.',
+      retryable: true,
+      reindex: false,
+    })
+    expect(refusal(409, 'no_model')).toEqual({
+      message: 'No model is set up for chat yet.',
+      retryable: false,
+      reindex: false,
+      settings: true,
+    })
+    expect(refusal(409, 'embedding_model_changed')).toMatchObject({ retryable: false, settings: true })
+  })
 })

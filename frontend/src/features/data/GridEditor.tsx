@@ -167,8 +167,8 @@ export function GridEditor({ grid, onChange, focus = null }: Props) {
   }, [focus, grid])
 
   return (
-    <div className="flex flex-col gap-2">
-      <div ref={containerRef} className="overflow-auto rounded-lg ring-1 ring-glass-border">
+    <div className="flex min-h-0 flex-col gap-2">
+      <div ref={containerRef} className="min-h-0 overflow-auto rounded-lg ring-1 ring-glass-border">
         <Table>
           <TableHeader>
             <TableRow>
@@ -212,11 +212,12 @@ export function GridEditor({ grid, onChange, focus = null }: Props) {
         </Table>
       </div>
       <div className="flex gap-2">
-        <Button variant="ghost" size="sm" onClick={() => onChange(insertRow(grid, grid.rows.length))}>
+        {/* type="button": the grid sits inside the capture dialog's form, where a plain button would submit it. */}
+        <Button type="button" variant="ghost" size="sm" onClick={() => onChange(insertRow(grid, grid.rows.length))}>
           <Plus aria-hidden />
           Add row
         </Button>
-        <Button variant="ghost" size="sm" onClick={() => onChange(insertColumn(grid, grid.columns.length))}>
+        <Button type="button" variant="ghost" size="sm" onClick={() => onChange(insertColumn(grid, grid.columns.length))}>
           <Plus aria-hidden />
           Add column
         </Button>

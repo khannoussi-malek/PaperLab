@@ -28,5 +28,8 @@ class LLMOutput(Base):
     notes_total: Mapped[int | None]
     whole_paper: Mapped[bool] = mapped_column(server_default=text("false"))
     model: Mapped[str] = mapped_column(Text)
+    # The connection's label when the answer was written, copied (no FK): renaming or deleting the connection
+    # never changes it. NULL for answers written before connections existed.
+    connection_name: Mapped[str | None] = mapped_column(Text)
     prompt_version: Mapped[int]
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()"))

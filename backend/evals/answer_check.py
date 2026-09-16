@@ -1,10 +1,10 @@
-"""Answer-level check with the configured real LLM. recall@k can't see prompt truncation or a model that ignores
-the citation rules; this can. Manual, never in CI:
+"""Answer-level check with the default model (chosen in Settings). recall@k can't see prompt truncation or a model
+that ignores the citation rules; this can. Manual, never in CI:
 
     docker compose exec api python -m evals.answer_check --paper "Attention Is All You Need" --workspace "Thesis"
 
-Asks one question about a small paper and one about a workspace, prints each answer, and says whether its
-citations are valid: at least one [C…], and no [C…]/[N…] label beyond the sources the prompt had.
+Asks the default model one question about a small paper and one about a workspace, prints each answer, and
+says whether its citations are valid: at least one [C…], and no [C…]/[N…] label beyond the sources the prompt had.
 Exits 0 when both are valid, 1 when one isn't (or the LLM failed), 2 for an unknown paper or workspace.
 """
 
@@ -16,17 +16,17 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.config import settings
-from app.core import chat
+from app.core import chat, llm_connections
 from app.core.errors import DomainError
 from app.models import Paper, Workspace
 from app.providers.base import LLMError, LLMUnavailable
-from app.providers.llm import get_llm
+from app.providers.llm import build_llm
 
 DEFAULT_QUESTION = "What method does this work propose, and what does it improve on? Cite your sources."
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Ask the configured LLM a question on a paper and on a workspace.")
+    parser = argparse.ArgumentParser(description="Ask the default model a question on a paper and on a workspace.")
     parser.add_argument("--paper", required=True, help="title prefix matching exactly one small, ready paper")
     parser.add_argument("--workspace", required=True, help="exact workspace name")
     parser.add_argument("--question", default=DEFAULT_QUESTION)
@@ -42,12 +42,14 @@ def citation_problems(content: str, prepared: chat.Prepared) -> list[str]:
 
 
 async def ask(session: AsyncSession, scope: chat.Scope, name: str, question: str) -> bool:
-    llm = get_llm()
+    connection, model = await llm_connections.resolve(session, None)
+    llm = build_llm(connection, model.name)
     prepared = await chat.prepare(session, scope, question)
     await session.commit()
     content = "".join([text async for text in llm.stream(prepared.system, prepared.prompt)])
     problems = citation_problems(content, prepared)
-    print(f"== {name}: {llm.model}, {len(prepared.sources)} passages, {len(prepared.notes)} notes\n{content}")
+    print(f"== {name}: {llm.model} on {llm.connection_name}, {len(prepared.sources)} passages, "
+          f"{len(prepared.notes)} notes\n{content}")
     print(f"-> {'; '.join(problems) or 'citations valid'}\n")
     return not problems
 

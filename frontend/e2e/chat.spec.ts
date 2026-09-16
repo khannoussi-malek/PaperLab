@@ -1,10 +1,15 @@
 import type { Locator, Page } from '@playwright/test'
-import { ask, expect, openReader, selectAllOf, selectText, test, type Rect } from './fixtures'
+import { ask, expect, openReader, pickChatModel, selectAllOf, selectText, test, type Rect } from './fixtures'
 
 /** What `FakeLLM` always answers (backend `LLM_PROVIDER=fake`). */
 const FAKE_ANSWER = 'Fake answer: the method is described here [C1].'
 /** Faked responses follow the API: single-paper chat sends no notes. */
 const NO_NOTES = { notes: [], notes_used: null, notes_total: null }
+
+// Every answer here comes from this test's own connection, whatever the owner's default is.
+test.beforeEach(async ({ page, llmConnection }) => {
+  await pickChatModel(page, llmConnection.modelId)
+})
 
 /** Opens the reader on the Chat tab. */
 async function openChat(page: Page, paperId: string) {
@@ -65,7 +70,7 @@ test('the question box regains focus once the answer is saved', async ({ page, p
   await expect(question).toBeFocused()
 })
 
-test('an answer streams in after its sources are shown, and is saved', async ({ page, request, paperId }) => {
+test('an answer streams in after its sources are shown, and is saved', async ({ page, request, paperId, llmConnection }) => {
   await openChat(page, paperId)
   // At every DOM change, note whether the answer has text yet and whether its sources were already on screen.
   await page.evaluate(() => {
@@ -93,7 +98,7 @@ test('an answer streams in after its sources are shown, and is saved', async ({ 
   // FakeLLM's fixed answer, streamed with the marker split into "[C" and "1]".
   await expect(answer.locator('.chat-answer-text')).toHaveText(FAKE_ANSWER)
   await expect(answer.locator('.chat-cite')).toHaveText(['[C1]'])
-  await expect(answer.locator('.chat-answer-footer')).toHaveText('AI · fake · prompt v1')
+  await expect(answer.locator('.chat-answer-footer')).toHaveText(`AI · fake:e2e-model · ${llmConnection.label} · prompt v1`)
   const saved = await (await request.get(`/api/papers/${paperId}/chat`)).json()
   expect(saved.map((a: { content: string }) => a.content)).toEqual([FAKE_ANSWER])
 })
@@ -140,7 +145,7 @@ test("an answer's sources are small pills under its text, and its details wait b
           body:
             `event: sources\ndata: ${JSON.stringify({ whole_paper: false, sources, ...NO_NOTES })}\n\n` +
             'event: token\ndata: {"text":"Two passages [C1] and [C2]."}\n\n' +
-            `event: done\ndata: ${JSON.stringify({ output_id: '00000000-0000-4000-8000-000000000002', model: 'fake', prompt_version: 1 })}\n\n`,
+            `event: done\ndata: ${JSON.stringify({ output_id: '00000000-0000-4000-8000-000000000002', model: 'fake', connection_name: null, prompt_version: 1 })}\n\n`,
         })
       : route.fallback(),
   )
@@ -207,7 +212,7 @@ test('a refused question offers Re-index, and a broken stream keeps its text and
   await openChat(page, paperId)
   const question = page.getByRole('textbox', { name: 'Question' })
 
-  // A paper ingested before M4 has no embeddings: the API refuses before streaming (409 paper_not_indexed).
+  // A paper ingested before chat existed has no embeddings: the API refuses before streaming (409 paper_not_indexed).
   // The real stack only has indexed papers, so this one response is faked.
   await page.route('**/chat', (route) =>
     route.request().method() === 'POST'
@@ -352,6 +357,7 @@ test('a chat history taller than the panel scrolls inside the panel, never the w
     question: `Question ${i}?`,
     content: 'An answer long enough to take a few lines in the side panel, so that twelve of them overflow it.',
     model: 'fake',
+    connection_name: null,
     prompt_version: 1,
     created_at: '2026-09-14T00:00:00Z',
     whole_paper: true,
@@ -379,6 +385,7 @@ test('a passage with no citation nearby cannot be saved, and the button says why
               question: 'Uncited?',
               content: 'An answer that cites nothing.',
               model: 'fake',
+              connection_name: null,
               prompt_version: 1,
               created_at: '2026-09-13T00:00:00Z',
               whole_paper: true,

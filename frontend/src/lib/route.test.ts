@@ -10,6 +10,7 @@ import {
   parseRoute,
   readerHref,
   regionHref,
+  settingsHref,
   workspaceHref,
 } from './route'
 
@@ -124,5 +125,11 @@ describe('parseRoute', () => {
     expect(parseRoute(datasetHref(other, focus))).toEqual({ name: 'dataset', datasetId: other, focus })
     expect(parseRoute(`#/datasets/${other}?row=${id}`)).toEqual({ name: 'dataset', datasetId: other, focus: null })
     expect(parseRoute(`#/datasets/${other}?row=nope&column=${other}`)).toEqual({ name: 'dataset', datasetId: other, focus: null })
+  })
+
+  it('opens the settings page, and nothing under it', () => {
+    expect(settingsHref).toBe('#/settings')
+    expect(parseRoute(settingsHref)).toEqual({ name: 'settings' })
+    expect(parseRoute('#/settings/models')).toEqual({ name: 'library' })
   })
 })

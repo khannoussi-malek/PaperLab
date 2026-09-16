@@ -107,7 +107,13 @@ Fonts: body `Atkinson Hyperlegible Next Variable` (`font-sans`), headings `Crims
   found" / "Value" / "± error" / "Unit" / "Add number" / "Charts" / "New dataset" / "New chart" / "Chart actions" /
   "Chart title" / "Dataset name" / "Pasted data" / "CSV file" / "Create dataset" / "Charts use this data" / "Save
   anyway" / "View data table" / "Chart data" / "Add series" / "Choose data" / "Save chart" / "Save changes" / "Save
-  as copy" / "Attach chart" / "Search charts" / "Remove chart" / "Add to note…" / "Quick chart" / "Open".
+  as copy" / "Attach chart" / "Search charts" / "Remove chart" / "Add to note…" / "Quick chart" / "Open". Also
+  `article.connection-card`, `.cloud-tag`, `.key-hint`, `.test-result`, `li.model-row`, `.embedding-indexed`, and
+  the names "Settings" / "Add connection" / "Test" / "Edit connection" / "Delete connection" / "Add model" / "Add a
+  model" / "Search or type a model name" / "Default model" / "Remove <name> from chat" / "Delete <name> from disk" /
+  "Model to pull" / "Pull" / "Pulling <name>" / "Kind" / "Preset" / "Name" / "Base URL" / "API key" / "Replace key" /
+  "Remove key" / "Save connection" / "Model" / "Manage models…" / "Set up a model" / "Open settings" / "Embedding
+  model" / "Re-index library" / "Re-index the library?" / "Re-index".
   Style with utility classes next to them.
 - **Notes filter.** The top of the Notes tab has two filter chips in a `role="group"` "Show notes from": `aria-pressed`
   rounded-full buttons "You" and "AI", each with a count (`tabular-nums`). On: filled in the provenance badge's colours
@@ -324,6 +330,73 @@ shadcn `Select`, never a native select) and the dataviz skill (below).
 - **Colours:** the series palette and blue ramp in Global Constraints (validated with the dataviz checker on `card`
   surfaces). Several series colours are under 3:1 on the surface, so every chart keeps its legend (2+ series) and its
   data table view.
+
+## Model connections
+
+Patterns from ui-ux-pro-max (`search.py "form password input masked secret test connection feedback" --domain ux`:
+loading then success or error on submit; `search.py "destructive confirmation delete dialog" --domain ux`: confirm
+before deleting; `search.py "progress bar long running download status" --domain ux`: a progress bar for long work;
+`search.py "dropdown select model picker empty state" --domain ux`: an empty state names the fix and links to it;
+`--stack shadcn "select dialog form password input radio group"`: shadcn `Select` and `Dialog`, never native ones).
+- **Settings page (`#/settings`):** the library's page shell in a `max-w-3xl` column: a ghost "Library" link
+  (`ArrowLeft`), the `font-heading` h1 "Settings", then two `section`s labelled by their h2: "Model connections" and
+  "Embedding model". The library header gains an outline icon link "Settings" (`Settings` icon) before the theme toggle.
+- **Model connections:** the h2 row ends with the view's one primary button, "Add connection" (`Plus`). With none, a
+  dashed box says "No model connections yet. Add Ollama, Anthropic or any OpenAI-compatible server." Each connection is
+  an `article.connection-card[data-connection-id]` on glass (`glass`, `ring-1 ring-glass-border`, `rounded-xl p-4`):
+  the h3 label (truncated, full text in `title`); a muted line "OpenAI-compatible · openrouter.ai" (kind, then host;
+  Anthropic shows api.anthropic.com); a `.cloud-tag` outline `Badge` "Cloud" (`Cloud` icon) or "Local" (`HardDrive`
+  icon), so it never rests on colour; and, except for Ollama, `.key-hint` "•••• T123" (`font-mono tabular-nums`) or
+  "No key". On the right: outline "Test" (`PlugZap`, "Testing…" while it runs) and icon buttons "Edit connection"
+  (`Pencil`) and "Delete connection" (`Trash2`, muted until hovered, asks with `window.confirm`: "Delete "<label>" and
+  its models? Saved answers keep their model names."). The test result is a `role="status"` `.test-result` line under
+  the header: `CircleCheck` + "Connected · 12 models", or `CircleAlert` in `text-destructive` + the reason. Every
+  other action on the card (default, remove, delete, delete from disk) reports its own refusal on that same line,
+  clearing whatever was there before. A cloud
+  connection shows "Passages and notes from your library are sent to <host>" (`Info` icon, `text-xs text-muted-foreground`).
+- **Models on a card:** a shadcn `RadioGroup` "Default model" (`asChild` over the `ul`, so the rows are really in a
+  list) whose rows are `li.model-row[data-model-id]`: the radio
+  (named by the model name), the name (`font-mono text-sm`, truncated), an icon button "Remove <name> from chat" (`X`)
+  and, on Ollama, "Delete <name> from disk" (`Trash2`, asks first). None yet: "No models in chat yet." A ghost "Add
+  model" (`Plus`) opens the "Add a model" `Dialog`: a `Command` with the input "Search or type a model name" over the
+  provider's own list (fetched when the dialog opens: "Loading models…", or a destructive `Alert` with the reason),
+  models already in chat left out, and last an item `Add "<typed>"` whenever the typed name isn't listed. When the
+  server has no list, a muted line says "No model list here; type model names by hand" and only that item shows.
+- **Ollama pull:** under an Ollama card's models, an inline form: `Input` "Model to pull" (placeholder `qwen3:8b`) and
+  outline "Pull" (`Download`), disabled while a pull runs. While pulling: shadcn `Progress` with
+  `aria-label="Pulling <name>"` (its value from `describePull`; indeterminate until Ollama reports sizes) and the status
+  line under it (`text-xs tabular-nums`). Done: the model is in the list and the line says "Added <name> to chat". An
+  error shows in a destructive `Alert`.
+- **Connection dialog:** a shadcn `Dialog` on strong glass titled "Add connection" or "Edit connection". Each field has
+  a visible `Label`: "Kind" `Select` (Ollama, Anthropic, OpenAI-compatible; disabled when editing); for
+  OpenAI-compatible a "Preset" `Select` (OpenAI, OpenRouter, Groq, Mistral, DeepSeek, Gemini, LM Studio, Custom) that
+  fills Name and Base URL; "Name"; "Base URL" (`type="url"`, hidden for Anthropic, Ollama starts at
+  `http://host.docker.internal:11434`); "API key" (`type="password"`, `autoComplete="off"`, hidden for Ollama). Editing
+  a keyed connection shows "•••• T123" with outline "Replace key" (shows the empty key field) and ghost destructive
+  "Remove key" (the line then reads "The key will be removed"). A stored key is never put in a field. Footer: Cancel and
+  primary "Save connection" ("Saving…"). A refusal shows the server's message in a destructive `Alert`; the dialog stays open.
+  Moving a keyed connection to a different host warns "Changing the address removes the saved key." near the key field
+  (the owner can type a new key in the same save to keep the connection working): the server drops a stored key on any
+  PATCH that moves the address to a new host unless a fresh key comes with it.
+- **Chat model picker:** in `ChatPanel`'s composer, in the row under the question box and before the hint: a small
+  shadcn `Select` (`size="sm"`, `aria-label="Model"`, at most `14rem`, truncating) whose items read `name · connection`,
+  with a `.cloud-tag` "Cloud" badge on non-local ones, then a separator and "Manage models…" (opens `#/settings`).
+  With no models at all, the row shows the link "Set up a model" (`Settings2`) instead, and the question box is
+  disabled with the hint "Set up a model to chat." When the list can't be loaded at all, asking stays open (the
+  server's own default answers) and a muted line says "Couldn't load your models; using the default."
+- **AI mark:** its tooltip and screen-reader label read `AI · <model> · <connection> · prompt v<N>` (`aiMark`);
+  answers saved before connections read `AI · <model> · prompt v<N>`.
+- **Refusals:** `no_model` and `embedding_model_changed` alerts carry an outline "Open settings" link in `AlertAction`;
+  `model_not_found` offers Retry, which asks with the dropdown's fallback.
+- **Embedding model:** a shadcn `Select` "Embedding model" showing the configured model. Always disabled, since there
+  is nothing to switch to yet, and a `Lock` icon joins its label once chunks exist; `.embedding-indexed` "indexed with nomic-ai/nomic-embed-text-v1.5 · 12,400 chunks"
+  (`tabular-nums`). When some chunks came from another model, a destructive `Alert`: "N chunks were indexed with another
+  model. Chat on those papers is refused until you re-index." An outline "Re-index library" (`RefreshCw`) opens the
+  `Dialog` "Re-index the library?" ("Every paper's passages are embedded again with <model>, in the background."),
+  with Cancel and destructive "Re-index"; then a `role="status"` line "Re-indexing N papers in the background."
+- **Chat panel details:** `.chat-cite` has `outline-none focus-visible:ring-2 focus-visible:ring-ring`. While an
+  answer streams, the list stays at its bottom if it was there. "Save as note" stays inside the panel
+  (`saveButtonPosition`) and re-measures when the panel changes size or is shown again.
 
 ## Pre-delivery check (from ui-ux-pro-max Quick Reference §1–§3)
 

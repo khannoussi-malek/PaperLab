@@ -1,0 +1,82 @@
+import { readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+/** The label every connection an E2E run makes starts with, so its litter is recognisable afterwards. */
+export const E2E_CONNECTION_PREFIX = 'E2E connection '
+
+/** The dev server proxies /api to the API, so one base URL covers both. */
+const BASE = process.env.E2E_BASE_URL ?? 'http://localhost:5180'
+
+/**
+ * Where the owner's default model id waits for the teardown below. A fixed path, not a per-run one: a run that
+ * never reaches teardown -- a killed worker, a crashed browser, a SIGKILL, a test that times out again while
+ * cleaning up -- leaves the file behind, and the next run finds it and puts the owner's default back.
+ */
+export const OWNERS_DEFAULT_FILE = join(tmpdir(), 'paperlab-e2e-owners-default-model')
+
+type Model = { id: string; is_default: boolean }
+type Connection = { id: string; label: string }
+
+async function get<T>(path: string): Promise<T> {
+  const response = await fetch(`${BASE}${path}`)
+  if (!response.ok) throw new Error(`GET ${path} answered ${response.status}: bring the stack up before the E2E run`)
+  return (await response.json()) as T
+}
+
+/** The recorded id, or '' when there is no record. */
+export async function readOwnersDefault(): Promise<string> {
+  return readFile(OWNERS_DEFAULT_FILE, 'utf8').then(
+    (text) => text.trim(),
+    () => '',
+  )
+}
+
+/** The id of the model chat uses when none is picked, or null. */
+export async function defaultModelId(): Promise<string | null> {
+  return (await get<Model[]>('/api/llm/models')).find((model) => model.is_default)?.id ?? null
+}
+
+/** Puts the owner's default back. Throws with the status and the file path: a failed restore is never silent. */
+export async function restoreOwnersDefault(modelId: string) {
+  const response = await fetch(`${BASE}/api/llm/default`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model_id: modelId }),
+  })
+  if (response.status !== 200) {
+    throw new Error(
+      `Could not put the default model back: PUT /api/llm/default answered ${response.status} for ${modelId}. ` +
+        `The id is in ${OWNERS_DEFAULT_FILE}; set that model as the default in Settings, then delete the file.`,
+    )
+  }
+}
+
+/** Deletes every connection an E2E run left behind, with its models. Throws on a refused delete. */
+export async function sweepE2EConnections() {
+  for (const connection of await get<Connection[]>('/api/llm/connections')) {
+    if (!connection.label.startsWith(E2E_CONNECTION_PREFIX)) continue
+    const deleted = await fetch(`${BASE}/api/llm/connections/${connection.id}`, { method: 'DELETE' })
+    if (deleted.status !== 204) throw new Error(`Could not delete "${connection.label}": ${deleted.status}`)
+  }
+}
+
+/**
+ * Records the owner's default model, and clears what an earlier run left behind. E2E runs on the owner's own
+ * database, so every run has to hand it back exactly as it found it.
+ */
+export default async function globalSetup() {
+  const left = await readOwnersDefault()
+  // A record already here means an earlier run died before its teardown: its id, not whatever the default is
+  // now (that run's own last pick), is the owner's. Putting it back first also keeps this run from recording
+  // the wrong one. A leftover connection can hold the current default, so restore before sweeping.
+  if (left !== '') await restoreOwnersDefault(left)
+  const ownersDefault = left !== '' ? left : await defaultModelId()
+  if (ownersDefault === null) {
+    await rm(OWNERS_DEFAULT_FILE, { force: true })
+    console.warn('No default model to put back afterwards: this run leaves whichever one it sets.')
+  } else {
+    await writeFile(OWNERS_DEFAULT_FILE, ownersDefault)
+  }
+  await sweepE2EConnections()
+}

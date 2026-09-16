@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { test as base, expect, type APIRequestContext, type Locator, type Page } from '@playwright/test'
+import { E2E_CONNECTION_PREFIX } from './globalSetup'
 
 export { expect }
 
@@ -127,6 +128,54 @@ export async function clickBar(page: Page, index: number) {
   await page.mouse.click(box.x + box.width / 2, box.y + box.height - 4)
 }
 
+/** The chat dropdown's remembered pick (`features/chat/chatModel.ts`). */
+export const CHAT_MODEL_KEY = 'paperlab-chat-model'
+/** The one key `LLM_PROVIDER=fake` rejects when a connection is tested. */
+export const FAKE_BAD_KEY = 'bad-key'
+
+export type LlmConnection = { id: string; label: string; modelId: string; modelName: string }
+
+/** A connection on the fake stack (no network), with one model listed in chat. OpenAI-compatible unless `fields` say. */
+export async function addLlmConnection(
+  request: APIRequestContext,
+  label: string,
+  modelName = 'e2e-model',
+  fields: Record<string, unknown> = {},
+): Promise<LlmConnection> {
+  const created = await request.post('/api/llm/connections', {
+    data: { kind: 'openai_compatible', label, base_url: 'http://fake-provider.test/v1', ...fields },
+  })
+  expect(created.status()).toBe(201)
+  const { id } = await created.json()
+  const model = await request.post(`/api/llm/connections/${id}/models`, { data: { name: modelName } })
+  expect(model.status()).toBe(201)
+  return { id, label, modelId: (await model.json()).id, modelName }
+}
+
+/** The id of the model chat uses when none is picked, or null. */
+export async function defaultModelId(request: APIRequestContext): Promise<string | null> {
+  const listed = await request.get('/api/llm/models')
+  expect(listed.status(), 'the owner’s default model has to be readable before a test moves it').toBe(200)
+  const models: { id: string; is_default: boolean }[] = await listed.json()
+  return models.find((model) => model.is_default)?.id ?? null
+}
+
+/** Deletes every connection whose label starts with `prefix`, with its models. A refused delete fails the test. */
+export async function removeConnectionsNamed(request: APIRequestContext, prefix: string) {
+  const connections = await request.get('/api/llm/connections')
+  expect(connections.status(), 'the test’s connections have to be listable to be cleaned up').toBe(200)
+  for (const connection of await connections.json()) {
+    if (!connection.label.startsWith(prefix)) continue
+    const deleted = await request.delete(`/api/llm/connections/${connection.id}`)
+    expect(deleted.status(), `left "${connection.label}" behind on the owner's database`).toBe(204)
+  }
+}
+
+/** Starts the chat dropdown on `modelId`, as a remembered pick would, on every page load of this test. */
+export async function pickChatModel(page: Page, modelId: string) {
+  await page.addInitScript(([key, id]) => window.localStorage.setItem(key, id), [CHAT_MODEL_KEY, modelId] as const)
+}
+
 type Fixtures = {
   /** A freshly ingested copy of the fixture paper, removed after the test even if it fails. */
   paperId: string
@@ -140,6 +189,13 @@ type Fixtures = {
   workspaceId: string
   /** A unique prefix for chart titles and dataset names. Every chart and dataset starting with it is deleted after the test. */
   dataName: string
+  /**
+   * A unique prefix for connection labels. After the test the owner's default model is put back if the test moved it,
+   * and then every connection starting with it is deleted: E2E runs on the owner's database.
+   */
+  llmName: string
+  /** A connection named `llmName` with one model, `e2e-model`. */
+  llmConnection: LlmConnection
 }
 
 export const test = base.extend<Fixtures>({
@@ -173,6 +229,22 @@ export const test = base.extend<Fixtures>({
     const name = `E2E data ${randomUUID().slice(0, 8)}`
     await use(name)
     await removeChartsAndDataNamed(request, name)
+  },
+  llmName: async ({ request }, use) => {
+    const name = `${E2E_CONNECTION_PREFIX}${randomUUID().slice(0, 8)}`
+    const ownersDefault = await defaultModelId(request)
+    await use(name)
+    // Unconditional: a "restore only if it looks different" check can read a stale value (the test's own change
+    // still in flight, or a slow request under load) and wrongly skip the restore. Always put it back; a no-op PUT
+    // when nothing moved is harmless. A null ownersDefault means the owner had no default to restore.
+    const restored = ownersDefault === null ? null : await request.put('/api/llm/default', { data: { model_id: ownersDefault } })
+    // Sweep before checking the restore, so the connections go even when the restore failed -- and then say so.
+    await removeConnectionsNamed(request, name)
+    if (restored !== null) expect(restored.status(), `could not put the owner's default model (${ownersDefault}) back`).toBe(200)
+  },
+  // No teardown of its own: `llmName` deletes it.
+  llmConnection: async ({ request, llmName }, use) => {
+    await use(await addLlmConnection(request, llmName))
   },
 })
 

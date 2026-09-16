@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ChatSource } from '@/api/client'
-import { promoteSelection } from './promote'
+import { promoteErrorMessage, promoteSelection } from './promote'
 
 const source = (label: string): ChatSource => ({
   label,
@@ -88,5 +88,18 @@ describe('promoteSelection', () => {
       body: 'A second paragraph',
       chunkIds: ['chunk-C2'],
     })
+  })
+})
+
+describe('promoteErrorMessage', () => {
+  it("words the API's stale-selection code, and shows any other refusal's own text", () => {
+    expect(promoteErrorMessage(new Error('body_not_in_output'))).toBe("This selection doesn't match the saved answer. Select the text again.")
+    expect(promoteErrorMessage(new Error('Check these fields: body.'))).toBe('Check these fields: body.')
+  })
+
+  it('says to try again when the request never got an answer', () => {
+    expect(promoteErrorMessage(new TypeError('Failed to fetch'))).toBe("Couldn't save the note. Try again.")
+    expect(promoteErrorMessage('boom')).toBe("Couldn't save the note. Try again.")
+    expect(promoteErrorMessage(new Error(''))).toBe("Couldn't save the note. Try again.")
   })
 })
