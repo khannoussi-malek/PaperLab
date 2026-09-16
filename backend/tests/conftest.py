@@ -35,6 +35,8 @@ _RECORDINGS = "".join(path.read_text() for path in OPENALEX_FIXTURES.glob("*.jso
 RECORDED_IDS = sorted(set(re.findall(r"openalex\.org/([WA]\d+)", _RECORDINGS)))
 RECORDED_DOIS = sorted({doi.lower() for doi in re.findall(r"doi\.org/(10\.[^\"]+)", _RECORDINGS)})
 
+DISCOVERY_FIXTURES = Path(__file__).parent / "fixtures" / "discovery"
+
 BODY_TEXT = "The quick brown fox jumps over the lazy dog near the river bank today. " * 3
 
 
@@ -127,6 +129,11 @@ def embedder():
 def recorded(name: str) -> dict:
     """A response body recorded from OpenAlex by tests/fixtures/openalex/record.py."""
     return json.loads((OPENALEX_FIXTURES / f"{name}.json").read_text())
+
+
+def recorded_discovery(name: str):
+    """A body recorded by tests/fixtures/discovery/record.py."""
+    return json.loads((DISCOVERY_FIXTURES / f"{name}.json").read_text())
 
 
 class FakeOpenAlex:
