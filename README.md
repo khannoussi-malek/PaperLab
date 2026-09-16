@@ -22,6 +22,11 @@ always marked as AI in the interface.
 </picture>
 
 - Upload PDFs. A background worker extracts the text, splits it into sections and chunks, and indexes it for search.
+- Find papers by title, DOI or arXiv ID with **Find papers**, and add one in a click when a free PDF exists (arXiv,
+a repository or an open-access publisher). A paper with no free copy links to its page, so you can download it
+yourself. Nothing gets past a paywall.
+- Open a paper's **Similar** tab for papers like it, suggested by [Semantic Scholar](https://www.semanticscholar.org/),
+and add them the same way.
 - Hover a paper in the list to preview its first page and details.
 - Optionally fill in each paper's title, authors, year, venue and topics from [OpenAlex](https://openalex.org/), and
 correct any of them by hand with **Edit details**. Your corrections are kept when a paper is processed again.
@@ -102,6 +107,9 @@ the newest answer until you press ×.
 database. With a local model (Ollama, LM Studio and other servers on your machine), the text of your papers and
 notes never leaves your computer; a model tagged "Cloud" receives the passages and notes sent with each question.
 Metadata lookups on OpenAlex are off unless you turn them on, and they send a paper's DOI or title, never its text.
+Find papers sends what you type to OpenAlex (an arXiv ID to Semantic Scholar) and the results' DOIs to Semantic
+Scholar; the Similar tab sends the paper's DOI, or its title when it has none. Adding a paper downloads its PDF from
+the free link found. None of them send a paper's text.
 - **AI is always labelled.** AI text is stored separately from yours, keeps the model and prompt version that
 produced it, and shows an AI badge. Editing an AI note marks it "AI · edited", never "You".
 - **Answers show their sources.** Chat answers cite passages you can click, so you can check every claim against the paper.
@@ -144,6 +152,7 @@ creates one at startup from `LLM_PROVIDER` / `LLM_MODEL` in `.env`; after that, 
 
 Metadata enrichment (fetching paper details from OpenAlex) is optional and off by default. Set `OPENALEX_MAILTO`
 in `.env` to turn it on; the value is sent to api.openalex.org as a `mailto` parameter on every request.
+Searching by title or DOI in **Find papers** needs it too.
 
 ### Configuration
 
@@ -158,6 +167,8 @@ Settings live in `.env`.
 | `ANTHROPIC_API_KEY`                                         | none                                | Seeds an Anthropic connection when `LLM_PROVIDER=anthropic`; add keys in Settings afterwards                                        |
 | `ANTHROPIC_MAX_TOKENS`                                      | `64000`                             | The longest answer an Anthropic model may write                                                                                     |
 | `OPENALEX_MAILTO`                                           | empty (off)                         | Your email. Setting it turns on OpenAlex metadata; OpenAlex receives it with every request                                          |
+| `SEMANTIC_SCHOLAR_API_KEY`                                  | empty                               | Optional. A Semantic Scholar key for Similar papers and free PDF links; without one its shared pool is sometimes busy               |
+| `DISCOVERY_PROVIDER`                                        | `live`                              | `fake` answers Find papers and Similar with three fixed papers and no network (for tests)                                           |
 | `POSTGRES_PASSWORD`, `DATABASE_URL`, `REDIS_URL`, `PDF_DIR` | see `.env.example`                  | Database, queue and PDF storage                                                                                                     |
 
 
