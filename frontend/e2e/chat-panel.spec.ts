@@ -108,6 +108,8 @@ test('the list follows a streaming answer down as its tokens arrive', async ({ p
   await expect(live.locator('.chat-answer-text')).toContainText('Line 39 of a long answer.')
 
   const list = live.locator('..')
+  // Without this the distance below is 0 on a list that doesn't scroll at all, and the poll passes whatever the app does.
+  expect(await list.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true)
   await expect.poll(() => list.evaluate((element) => element.scrollHeight - element.scrollTop - element.clientHeight)).toBeLessThan(2)
 })
 
@@ -184,6 +186,8 @@ test('a citation reached with the keyboard shows a focus ring', async ({ page, p
   await openChat(page, paperId)
   const answer = await ask(page, 'Where is the ring?')
   const cite = answer.locator('.chat-cite')
+  // Unfocused first, so the poll below can only pass on a ring the focus itself put there.
+  expect(await cite.evaluate((element) => getComputedStyle(element).boxShadow)).toBe('none')
 
   await cite.focus() // after typing the question, so the browser treats this focus as keyboard focus
 

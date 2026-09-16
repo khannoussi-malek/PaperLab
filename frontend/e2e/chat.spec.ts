@@ -212,7 +212,7 @@ test('a refused question offers Re-index, and a broken stream keeps its text and
   await openChat(page, paperId)
   const question = page.getByRole('textbox', { name: 'Question' })
 
-  // A paper ingested before M4 has no embeddings: the API refuses before streaming (409 paper_not_indexed).
+  // A paper ingested before chat existed has no embeddings: the API refuses before streaming (409 paper_not_indexed).
   // The real stack only has indexed papers, so this one response is faked.
   await page.route('**/chat', (route) =>
     route.request().method() === 'POST'

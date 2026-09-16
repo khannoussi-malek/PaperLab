@@ -131,8 +131,8 @@ Hugging Face gives up on a download after 10 seconds without data. On a slow con
 HF_HUB_DOWNLOAD_TIMEOUT=60
 ```
 
-Real chats also need a model: `ollama pull qwen3:8b` on the host. On first start the API creates one connection
-from `LLM_PROVIDER` / `LLM_MODEL` in `.env`; after that, add and switch models in **Settings**.
+Real chats also need a model: `ollama pull qwen3:8b` on the host. While there are no model connections, the API
+creates one at startup from `LLM_PROVIDER` / `LLM_MODEL` in `.env`; after that, add and switch models in **Settings**.
 
 Metadata enrichment (fetching paper details from OpenAlex) is optional and off by default. Set `OPENALEX_MAILTO`
 in `.env` to turn it on; the value is sent to api.openalex.org as a `mailto` parameter on every request.
@@ -146,7 +146,7 @@ Settings live in `.env`.
 | ----------------------------------------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `LLM_PROVIDER`                                              | `ollama`                            | Seeds the first model connection: `ollama` or `anthropic`. `fake` answers every model with fixed text (for tests) and seeds nothing |
 | `LLM_MODEL`                                                 | `qwen3:8b`                          | The first connection's default model                                                                                                |
-| `OLLAMA_URL`                                                | `http://host.docker.internal:11434` | Where Ollama runs: on the host, not in Compose                                                                                      |
+| `OLLAMA_URL`                                                | `http://host.docker.internal:11434` | Seeds the first Ollama connection's address (the host, not Compose); change it in Settings afterwards                               |
 | `ANTHROPIC_API_KEY`                                         | none                                | Seeds an Anthropic connection when `LLM_PROVIDER=anthropic`; add keys in Settings afterwards                                        |
 | `ANTHROPIC_MAX_TOKENS`                                      | `64000`                             | The longest answer an Anthropic model may write                                                                                     |
 | `OPENALEX_MAILTO`                                           | empty (off)                         | Your email. Setting it turns on OpenAlex metadata; OpenAlex receives it with every request                                          |
