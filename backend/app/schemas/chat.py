@@ -10,6 +10,7 @@ from app.schemas.papers import Rect
 class ChatRequest(BaseModel):
     question: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
     model_id: uuid.UUID | None = None  # a model from GET /api/llm/models; None asks the default
+    parent_id: uuid.UUID | None = None  # the answer this question follows up; paper chat only
 
 
 class ChatSource(BaseModel):
@@ -33,9 +34,9 @@ class NoteSource(BaseModel):
 class SourcesEvent(BaseModel):
     whole_paper: bool  # the paper was small enough to send whole, so retrieval was skipped
     sources: list[ChatSource]
-    notes: list[NoteSource]  # workspace chat only; [] for a paper
-    notes_used: int | None  # notes that fit the prompt; null for a paper
-    notes_total: int | None  # every note in the workspace; null for a paper
+    notes: list[NoteSource]
+    notes_used: int | None  # notes that fit the prompt
+    notes_total: int | None  # every note in the paper or workspace
 
 
 class TokenEvent(BaseModel):
@@ -70,6 +71,7 @@ class ChatAnswer(BaseModel):
     notes: list[NoteSource | None]
     notes_used: int | None
     notes_total: int | None
+    parent_id: uuid.UUID | None  # the answer this one follows up; null for a question asked on its own
 
 
 class PromoteRequest(BaseModel):

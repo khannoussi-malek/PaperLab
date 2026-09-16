@@ -22,9 +22,9 @@ class LLMOutput(Base):
     cited_chunks: Mapped[list[uuid.UUID]] = mapped_column(ARRAY(UUID(as_uuid=True)), server_default=text("'{}'"))
     # A chat answer has exactly one of paper_id / workspace_id (CHECK llm_outputs_chat_scope).
     workspace_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"))
-    # N{i} is source_notes[i-1]; workspace chat only. No FK on array elements: a deleted note renders as plain text.
+    # N{i} is source_notes[i-1]. No FK on array elements: a deleted note renders as plain text.
     source_notes: Mapped[list[uuid.UUID]] = mapped_column(ARRAY(UUID(as_uuid=True)), server_default=text("'{}'"))
-    notes_used: Mapped[int | None]  # notes that fit the budget; NULL outside workspace chat
+    notes_used: Mapped[int | None]  # notes that fit the budget; NULL on paper answers from before prompt v2
     notes_total: Mapped[int | None]
     whole_paper: Mapped[bool] = mapped_column(server_default=text("false"))
     model: Mapped[str] = mapped_column(Text)
@@ -32,4 +32,6 @@ class LLMOutput(Base):
     # never changes it. NULL for answers written before connections existed.
     connection_name: Mapped[str | None] = mapped_column(Text)
     prompt_version: Mapped[int]
+    # The answer this one follows up (paper chat). Deleting it (SET NULL) makes this the start of its own thread.
+    parent_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("llm_outputs.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()"))

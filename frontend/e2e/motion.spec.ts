@@ -14,8 +14,8 @@ async function saveNote(page: Page, line: Locator, body: string) {
   return card
 }
 
-/** Faked chat responses follow the API: single-paper chat sends no notes. */
-const NO_NOTES = { notes: [], notes_used: null, notes_total: null }
+/** Faked chat responses follow the API for a paper without notes. */
+const NO_NOTES = { notes: [], notes_used: 0, notes_total: 0 }
 
 /** A chat stream that stops after its first words, so the live answer stays on screen (nothing gets saved). */
 const unfinishedStream = (paperId: string) => (route: Parameters<Parameters<Page['route']>[1]>[0]) =>

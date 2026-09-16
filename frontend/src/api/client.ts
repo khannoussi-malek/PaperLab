@@ -152,9 +152,12 @@ export const api = {
     request<void>(`/api/notes/${noteId}/charts/${chartId}`, { method: 'PUT' }),
   detachChart: (noteId: string, chartId: string) =>
     request<void>(`/api/notes/${noteId}/charts/${chartId}`, { method: 'DELETE' }),
-  /** The raw response: on success its body is the SSE stream that `useChatStream` reads. `modelId` null: the default. */
-  askChat: (scope: ChatScope, question: string, modelId: string | null = null, signal?: AbortSignal) =>
-    fetch(chatUrl(scope), { ...sendJson('POST', { question, model_id: modelId }), signal }),
+  /**
+   * The raw response: on success its body is the SSE stream that `useChatStream` reads. `modelId` null: the default.
+   * `parentId`: the saved answer this question follows up (paper chat only); null for a question on its own.
+   */
+  askChat: (scope: ChatScope, question: string, modelId: string | null, parentId: string | null, signal?: AbortSignal) =>
+    fetch(chatUrl(scope), { ...sendJson('POST', { question, model_id: modelId, parent_id: parentId }), signal }),
   listChatModels: () => request<ChatModel[]>('/api/llm/models'),
   listConnections: () => request<LLMConnection[]>('/api/llm/connections'),
   createConnection: (body: LLMConnectionCreate) => request<LLMConnection>('/api/llm/connections', sendJson('POST', body)),

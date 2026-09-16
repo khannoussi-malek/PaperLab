@@ -199,7 +199,8 @@ export interface paths {
         put?: never;
         /**
          * Ask
-         * @description Checked before streaming, in parameter order: 404/409 for the model (llm), then 404/409/422 for the paper.
+         * @description Checked before streaming, in parameter order: 404/409 for the model (llm), then 404 for the paper, 404
+         *     parent_not_found or 409 parent_scope for a follow-up, then 409/422 for the paper.
          */
         post: operations["ask_api_papers__paper_id__chat_post"];
         delete?: never;
@@ -220,8 +221,8 @@ export interface paths {
         put?: never;
         /**
          * Ask Workspace
-         * @description Checked before streaming, in parameter order: 404 model_not_found or 409 no_model, then 404, 409
-         *     workspace_empty or workspace_not_indexed, 422.
+         * @description Checked before streaming, in parameter order: 404 model_not_found or 409 no_model, then 409
+         *     follow_ups_paper_only, 404, 409 workspace_empty or workspace_not_indexed, 422.
          */
         post: operations["ask_workspace_api_workspaces__workspace_id__chat_post"];
         delete?: never;
@@ -1025,6 +1026,8 @@ export interface components {
             notes_used: number | null;
             /** Notes Total */
             notes_total: number | null;
+            /** Parent Id */
+            parent_id: string | null;
         };
         /** ChatModelOut */
         ChatModelOut: {
@@ -1048,6 +1051,8 @@ export interface components {
             question: string;
             /** Model Id */
             model_id?: string | null;
+            /** Parent Id */
+            parent_id?: string | null;
         };
         /** ChatSource */
         ChatSource: {
