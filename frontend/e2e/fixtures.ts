@@ -228,9 +228,10 @@ export const test = base.extend<Fixtures>({
     const name = `E2E connection ${randomUUID().slice(0, 8)}`
     const ownersDefault = await defaultModelId(request)
     await use(name)
-    // Before deleting: deleting the connection that holds the default would leave the owner with none. A 404 means
-    // the owner's model is gone meanwhile, and there is nothing to put back.
-    if (ownersDefault !== null && (await defaultModelId(request)) !== ownersDefault) {
+    // Unconditional: a "restore only if it looks different" check can read a stale value (the test's own change
+    // still in flight, or a slow request under load) and wrongly skip the restore. Always put it back; a no-op PUT
+    // when nothing moved is harmless. A null ownersDefault means the owner had no default to restore.
+    if (ownersDefault !== null) {
       await request.put('/api/llm/default', { data: { model_id: ownersDefault } })
     }
     await removeConnectionsNamed(request, name)
