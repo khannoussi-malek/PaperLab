@@ -350,9 +350,12 @@ before deleting; `search.py "progress bar long running download status" --domain
   "No key". On the right: outline "Test" (`PlugZap`, "Testing…" while it runs) and icon buttons "Edit connection"
   (`Pencil`) and "Delete connection" (`Trash2`, muted until hovered, asks with `window.confirm`: "Delete "<label>" and
   its models? Saved answers keep their model names."). The test result is a `role="status"` `.test-result` line under
-  the header: `CircleCheck` + "Connected · 12 models", or `CircleAlert` in `text-destructive` + the reason. A cloud
+  the header: `CircleCheck` + "Connected · 12 models", or `CircleAlert` in `text-destructive` + the reason. Every
+  other action on the card (default, remove, delete, delete from disk) reports its own refusal on that same line,
+  clearing whatever was there before. A cloud
   connection shows "Passages and notes from your library are sent to <host>" (`Info` icon, `text-xs text-muted-foreground`).
-- **Models on a card:** a shadcn `RadioGroup` "Default model" whose rows are `li.model-row[data-model-id]`: the radio
+- **Models on a card:** a shadcn `RadioGroup` "Default model" (`asChild` over the `ul`, so the rows are really in a
+  list) whose rows are `li.model-row[data-model-id]`: the radio
   (named by the model name), the name (`font-mono text-sm`, truncated), an icon button "Remove <name> from chat" (`X`)
   and, on Ollama, "Delete <name> from disk" (`Trash2`, asks first). None yet: "No models in chat yet." A ghost "Add
   model" (`Plus`) opens the "Add a model" `Dialog`: a `Command` with the input "Search or type a model name" over the
@@ -379,13 +382,14 @@ before deleting; `search.py "progress bar long running download status" --domain
   shadcn `Select` (`size="sm"`, `aria-label="Model"`, at most `14rem`, truncating) whose items read `name · connection`,
   with a `.cloud-tag` "Cloud" badge on non-local ones, then a separator and "Manage models…" (opens `#/settings`).
   With no models at all, the row shows the link "Set up a model" (`Settings2`) instead, and the question box is
-  disabled with the hint "Set up a model to chat."
+  disabled with the hint "Set up a model to chat." When the list can't be loaded at all, asking stays open (the
+  server's own default answers) and a muted line says "Couldn't load your models; using the default."
 - **AI mark:** its tooltip and screen-reader label read `AI · <model> · <connection> · prompt v<N>` (`aiMark`);
   answers saved before connections read `AI · <model> · prompt v<N>`.
 - **Refusals:** `no_model` and `embedding_model_changed` alerts carry an outline "Open settings" link in `AlertAction`;
   `model_not_found` offers Retry, which asks with the dropdown's fallback.
-- **Embedding model:** a shadcn `Select` "Embedding model" showing the configured model, disabled (a `Lock` icon in its
-  label) once chunks exist; `.embedding-indexed` "indexed with nomic-ai/nomic-embed-text-v1.5 · 12,400 chunks"
+- **Embedding model:** a shadcn `Select` "Embedding model" showing the configured model. Always disabled, since there
+  is nothing to switch to yet, and a `Lock` icon joins its label once chunks exist; `.embedding-indexed` "indexed with nomic-ai/nomic-embed-text-v1.5 · 12,400 chunks"
   (`tabular-nums`). When some chunks came from another model, a destructive `Alert`: "N chunks were indexed with another
   model. Chat on those papers is refused until you re-index." An outline "Re-index library" (`RefreshCw`) opens the
   `Dialog` "Re-index the library?" ("Every paper's passages are embedded again with <model>, in the background."),
