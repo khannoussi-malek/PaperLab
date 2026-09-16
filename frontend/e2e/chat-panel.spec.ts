@@ -2,7 +2,8 @@ import type { Page } from '@playwright/test'
 import { ask, expect, pickChatModel, test } from './fixtures'
 
 const FAKE_ANSWER = 'Fake answer: the method is described here [C1].'
-const NO_NOTES = { notes: [], notes_used: null, notes_total: null }
+/** Faked responses follow the API for a paper without notes. */
+const NO_NOTES = { notes: [], notes_used: 0, notes_total: 0 }
 
 test.beforeEach(async ({ page, llmConnection }) => {
   await pickChatModel(page, llmConnection.modelId)
@@ -51,7 +52,7 @@ async function installFakeChatStream(page: Page, script: ChatStreamScript) {
         async pull(c) {
           if (!sentSources) {
             sentSources = true
-            return c.enqueue(event('sources', { whole_paper: true, sources: [], notes: [], notes_used: null, notes_total: null }))
+            return c.enqueue(event('sources', { whole_paper: true, sources: [], notes: [], notes_used: 0, notes_total: 0 }))
           }
           if (sent < cfg.lines.length) {
             await new Promise((resolve) => setTimeout(resolve, cfg.delayMs))

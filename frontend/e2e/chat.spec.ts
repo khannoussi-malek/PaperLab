@@ -1,10 +1,10 @@
 import type { Locator, Page } from '@playwright/test'
-import { ask, expect, openReader, pickChatModel, selectAllOf, selectText, test, type Rect } from './fixtures'
+import { addNote, ask, expect, openReader, pickChatModel, selectAllOf, selectText, test, type Rect } from './fixtures'
 
 /** What `FakeLLM` always answers (backend `LLM_PROVIDER=fake`). */
 const FAKE_ANSWER = 'Fake answer: the method is described here [C1].'
-/** Faked responses follow the API: single-paper chat sends no notes. */
-const NO_NOTES = { notes: [], notes_used: null, notes_total: null }
+/** Faked responses follow the API for a paper without notes. */
+const NO_NOTES = { notes: [], notes_used: 0, notes_total: 0 }
 
 // Every answer here comes from this test's own connection, whatever the owner's default is.
 test.beforeEach(async ({ page, llmConnection }) => {
@@ -98,7 +98,7 @@ test('an answer streams in after its sources are shown, and is saved', async ({ 
   // FakeLLM's fixed answer, streamed with the marker split into "[C" and "1]".
   await expect(answer.locator('.chat-answer-text')).toHaveText(FAKE_ANSWER)
   await expect(answer.locator('.chat-cite')).toHaveText(['[C1]'])
-  await expect(answer.locator('.chat-answer-footer')).toHaveText(`AI · fake:e2e-model · ${llmConnection.label} · prompt v1`)
+  await expect(answer.locator('.chat-answer-footer')).toHaveText(`AI · fake:e2e-model · ${llmConnection.label} · prompt v2`)
   const saved = await (await request.get(`/api/papers/${paperId}/chat`)).json()
   expect(saved.map((a: { content: string }) => a.content)).toEqual([FAKE_ANSWER])
 })
@@ -302,6 +302,35 @@ test('clicking [C1] scrolls the paper to the cited chunk and flashes its rects',
     .toBeLessThan(2)
   await expect(flash).toHaveCount(chunk.bbox.length)
   await expect(flash).toHaveCount(0, { timeout: 3_000 }) // it fades after about 1.5 s
+})
+
+test("clicking [N1] focuses the paper's note that the answer cites", async ({ page, request, paperId }) => {
+  const note = await addNote(request, paperId, 1, 'My note for chat')
+  // FakeLLM's paper answer cites only passages, so a stream citing the note is faked.
+  const notes = [{ label: 'N1', note_id: note.id, paper_id: paperId, page: 1, provenance: 'human' }]
+  await page.route('**/chat', (route) =>
+    route.request().method() === 'POST'
+      ? route.fulfill({
+          status: 200,
+          contentType: 'text/event-stream',
+          body:
+            `event: sources\ndata: ${JSON.stringify({ whole_paper: true, sources: [], notes, notes_used: 1, notes_total: 1 })}\n\n` +
+            'event: token\ndata: {"text":"As your note says [N1]."}\n\n' +
+            `event: done\ndata: ${JSON.stringify({ output_id: '00000000-0000-4000-8000-000000000009', model: 'fake', connection_name: null, prompt_version: 2 })}\n\n`,
+        })
+      : route.fallback(),
+  )
+  await openChat(page, paperId)
+  await page.locator('section:has(> .pdf-page)').evaluate((pane) => pane.scrollTo({ top: pane.scrollHeight }))
+  await page.getByRole('textbox', { name: 'Question' }).fill('What did I note?')
+  await page.getByRole('textbox', { name: 'Question' }).press('Enter')
+
+  const answer = page.locator('article.chat-answer', { hasText: 'What did I note?' })
+  await expect(answer.locator('.chat-sources').getByRole('button', { name: /^N1 · You/ })).toBeVisible()
+  const highlight = page.locator(`.highlight[data-note-id="${note.id}"]`)
+  await expect(highlight).not.toBeInViewport()
+  await answer.locator('.chat-cite', { hasText: '[N1]' }).click()
+  await expect(page.locator(`.highlight.active[data-note-id="${note.id}"]`)).toBeInViewport()
 })
 
 test('saving a passage of an answer makes an AI note on its cited chunk, and editing it marks it edited', async ({

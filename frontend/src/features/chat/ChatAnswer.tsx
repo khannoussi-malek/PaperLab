@@ -14,9 +14,9 @@ type Props = {
   wholePaper: boolean
   /** In label order (C1, C2, …). An entry is null when a re-ingest replaced its chunk; the list is null until known. */
   sources: (ChatSource | null)[] | null
-  /** Workspace chat: the notes it could cite, in label order (N1, N2, …), null once deleted. Empty in the reader. */
+  /** The notes it could cite, in label order (N1, N2, …), null once deleted. */
   notes: (NoteSource | null)[]
-  /** How many of the workspace's notes fit the prompt, of how many; null in the reader. */
+  /** How many notes fit the prompt, of how many; null on paper answers saved before notes were sent. */
   notesUsed: number | null
   notesTotal: number | null
   segments: Segment[]
