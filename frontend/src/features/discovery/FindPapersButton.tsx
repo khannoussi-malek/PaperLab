@@ -51,17 +51,16 @@ export function FindPapersButton({ workspaceId }: { workspaceId?: string }) {
           </Button>
         </form>
         {query !== null && (
-          <div className="max-h-[60vh] min-h-0 overflow-y-auto">
-            {results.isError ? (
-              <ErrorAlert message={results.error.message} />
-            ) : results.data === undefined ? (
-              <p className="text-muted-foreground">Searching…</p>
-            ) : (
+          <div className="flex max-h-[60vh] min-h-0 flex-col gap-3 overflow-y-auto">
+            {results.isError && <ErrorAlert message={results.error.message} />}
+            {results.data !== undefined ? (
               <CandidateList
                 candidates={results.data}
                 empty="No papers found. Try the exact title, a DOI or an arXiv ID."
                 workspaceId={workspaceId}
               />
+            ) : (
+              !results.isError && <p className="text-muted-foreground">Searching…</p>
             )}
           </div>
         )}

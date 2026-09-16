@@ -9,12 +9,11 @@ export function SimilarTab({ paperId, active }: { paperId: string; active: boole
     // RightPanel draws the glass and the border, as for Notes and Data.
     <aside className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-4" aria-label="Similar papers">
       <p className="text-sm text-muted-foreground">Papers like this one, suggested by Semantic Scholar.</p>
-      {similar.isError ? (
-        <LoadError message={similar.error.message} onRetry={() => void similar.refetch()} />
-      ) : similar.data === undefined ? (
-        <p className="text-muted-foreground">Finding similar papers…</p>
-      ) : (
+      {similar.isError && <LoadError message={similar.error.message} onRetry={() => void similar.refetch()} />}
+      {similar.data !== undefined ? (
         <CandidateList candidates={similar.data} empty="Semantic Scholar has no suggestions for this paper." />
+      ) : (
+        !similar.isError && <p className="text-muted-foreground">Finding similar papers…</p>
       )}
     </aside>
   )

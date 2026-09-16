@@ -1,4 +1,5 @@
 import { QueryClient, keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { sameCandidate } from '@/features/discovery/candidateMeta'
 import {
   api,
   type Candidate,
@@ -154,22 +155,28 @@ export function useDeletePaper() {
 const SEARCH_STALE_MS = 10 * 60_000
 const SIMILAR_STALE_MS = 60 * 60_000
 
-/** Searches once per submitted query; `query` is null until the first submit. */
+/** Searches once per submitted query; `query` is null until the first submit. No refetch on focus/reconnect: a
+ * search costs OpenAlex credits and isn't worth spending again just because the tab regained focus. */
 export const useSearchPapers = (query: string | null) =>
   useQuery({
     queryKey: keys.search(query ?? ''),
     queryFn: () => api.searchPapers(query!),
     enabled: query !== null,
     staleTime: SEARCH_STALE_MS,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   })
 
-/** Semantic Scholar's suggestions for a paper, fetched only once `enabled` (the Similar tab is open). */
+/** Semantic Scholar's suggestions for a paper, fetched only once `enabled` (the Similar tab is open). No refetch on
+ * focus/reconnect: same reasoning as useSearchPapers. */
 export const useSimilarPapers = (paperId: string, enabled: boolean) =>
   useQuery({
     queryKey: keys.similar(paperId),
     queryFn: () => api.similarPapers(paperId),
     enabled,
     staleTime: SIMILAR_STALE_MS,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   })
 
 /** Adds one found paper. Each row owns one, so its "In library" state stays with it. */
@@ -177,13 +184,22 @@ export function useAddCandidate(workspaceId?: string) {
   const client = useQueryClient()
   return useMutation({
     mutationFn: (candidate: Candidate) => api.addCandidate(candidate, workspaceId),
-    onSuccess: () =>
-      Promise.all([
+    onSuccess: (paper, candidate) => {
+      // So a row still shows "In library" after the dialog (or the Similar tab) is closed and reopened, even though
+      // that only rereads the cache: the rows themselves unmount, and the cached candidate otherwise still lacks
+      // paper_id until the next real search. New arrays and objects throughout: never mutate cached query data.
+      client.setQueriesData<Candidate[]>({ queryKey: keys.discovery }, (candidates) =>
+        candidates?.map((existing) =>
+          sameCandidate(existing, candidate) ? { ...existing, paper_id: paper.id } : existing,
+        ),
+      )
+      return Promise.all([
         client.invalidateQueries({ queryKey: keys.papers, exact: true }),
         client.invalidateQueries({ queryKey: keys.workspaces }),
         // Stale, not refetched: an open search keeps its rows, and the next one asks again with the paper added.
         client.invalidateQueries({ queryKey: keys.discovery, refetchType: 'none' }),
-      ]),
+      ])
+    },
   })
 }
 

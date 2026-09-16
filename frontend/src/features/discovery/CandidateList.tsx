@@ -37,7 +37,12 @@ function CandidateRow({ candidate, workspaceId }: RowProps) {
           </Button>
         ) : (
           hasPdf && (
-            <Button size="sm" disabled={add.isPending} onClick={() => add.mutate(candidate)}>
+            <Button
+              size="sm"
+              aria-label={`Add ${candidate.title}`}
+              disabled={add.isPending}
+              onClick={() => add.mutate(candidate)}
+            >
               {add.isPending ? <LoaderCircle aria-hidden className="motion-safe:animate-spin" /> : <Plus aria-hidden />}
               {add.isPending ? 'Adding…' : 'Add'}
             </Button>
