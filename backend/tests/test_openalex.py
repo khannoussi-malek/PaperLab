@@ -105,3 +105,16 @@ async def test_authors_are_fetched_fifty_ids_per_request(fake_openalex):
     assert first.url.params["filter"] == "openalex_id:" + "|".join(ids[:50])
     assert first.url.params["per-page"] == "50"
     assert second.url.params["filter"] == "openalex_id:A50"
+
+
+async def test_search_works_asks_for_as_many_results_as_the_caller_wants(fake_openalex):
+    fake_openalex.route("/works", recorded("search_bert"))
+
+    await openalex.search_works(fake_openalex.client, "BERT", per_page=10)
+    await openalex.search_works(fake_openalex.client, "BERT")
+
+    assert [r.url.params["per-page"] for r in fake_openalex.requests] == ["10", str(openalex.SEARCH_RESULTS)]
+
+
+def test_works_are_fetched_with_their_locations_for_discovery():
+    assert "locations" in openalex.WORK_FIELDS.split(",")
