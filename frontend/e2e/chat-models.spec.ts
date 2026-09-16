@@ -78,11 +78,11 @@ test('with no models at all, the chat panel links to settings instead of a dropd
   await expect(page).toHaveURL(/#\/settings$/)
 })
 
-test('a model added by name and made the default answers the next question, and its footer survives a reload', async ({
-  page,
-  llmConnection,
-  paperId,
-}) => {
+// `@moves-default`: this one marks a model default, moving the row every other spec snapshots. The tag puts it
+// in the single-worker project that runs last (playwright.config.ts), so nothing else is mid-test while it moves.
+test('a model added by name and made the default answers the next question, and its footer survives a reload', {
+  tag: '@moves-default',
+}, async ({ page, llmConnection, paperId }) => {
   const name = `e2e-default-${llmConnection.label.slice(-8)}`
   await page.goto('/#/settings')
   const card = page.locator(`article.connection-card[data-connection-id="${llmConnection.id}"]`)

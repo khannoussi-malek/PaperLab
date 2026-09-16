@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { test as base, expect, type APIRequestContext, type Locator, type Page } from '@playwright/test'
+import { E2E_CONNECTION_PREFIX } from './globalSetup'
 
 export { expect }
 
@@ -153,15 +154,20 @@ export async function addLlmConnection(
 
 /** The id of the model chat uses when none is picked, or null. */
 export async function defaultModelId(request: APIRequestContext): Promise<string | null> {
-  const models: { id: string; is_default: boolean }[] = await (await request.get('/api/llm/models')).json()
+  const listed = await request.get('/api/llm/models')
+  expect(listed.status(), 'the owner’s default model has to be readable before a test moves it').toBe(200)
+  const models: { id: string; is_default: boolean }[] = await listed.json()
   return models.find((model) => model.is_default)?.id ?? null
 }
 
-/** Deletes every connection whose label starts with `prefix`, with its models. */
+/** Deletes every connection whose label starts with `prefix`, with its models. A refused delete fails the test. */
 export async function removeConnectionsNamed(request: APIRequestContext, prefix: string) {
   const connections = await request.get('/api/llm/connections')
-  for (const connection of connections.ok() ? await connections.json() : []) {
-    if (connection.label.startsWith(prefix)) await request.delete(`/api/llm/connections/${connection.id}`)
+  expect(connections.status(), 'the test’s connections have to be listable to be cleaned up').toBe(200)
+  for (const connection of await connections.json()) {
+    if (!connection.label.startsWith(prefix)) continue
+    const deleted = await request.delete(`/api/llm/connections/${connection.id}`)
+    expect(deleted.status(), `left "${connection.label}" behind on the owner's database`).toBe(204)
   }
 }
 
@@ -225,16 +231,16 @@ export const test = base.extend<Fixtures>({
     await removeChartsAndDataNamed(request, name)
   },
   llmName: async ({ request }, use) => {
-    const name = `E2E connection ${randomUUID().slice(0, 8)}`
+    const name = `${E2E_CONNECTION_PREFIX}${randomUUID().slice(0, 8)}`
     const ownersDefault = await defaultModelId(request)
     await use(name)
     // Unconditional: a "restore only if it looks different" check can read a stale value (the test's own change
     // still in flight, or a slow request under load) and wrongly skip the restore. Always put it back; a no-op PUT
     // when nothing moved is harmless. A null ownersDefault means the owner had no default to restore.
-    if (ownersDefault !== null) {
-      await request.put('/api/llm/default', { data: { model_id: ownersDefault } })
-    }
+    const restored = ownersDefault === null ? null : await request.put('/api/llm/default', { data: { model_id: ownersDefault } })
+    // Sweep before checking the restore, so the connections go even when the restore failed -- and then say so.
     await removeConnectionsNamed(request, name)
+    if (restored !== null) expect(restored.status(), `could not put the owner's default model (${ownersDefault}) back`).toBe(200)
   },
   // No teardown of its own: `llmName` deletes it.
   llmConnection: async ({ request, llmName }, use) => {
