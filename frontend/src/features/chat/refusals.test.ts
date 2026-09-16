@@ -2,6 +2,17 @@ import { describe, expect, it } from 'vitest'
 import { refusal } from './refusals'
 
 describe('refusal', () => {
+  it('words a follow-up whose answer is gone, ends its thread, and offers no Retry', () => {
+    const gone = {
+      message: 'The answer you were following is gone. Ask again to start a new question.',
+      retryable: false,
+      reindex: false,
+      endsThread: true,
+    }
+    expect(refusal(404, 'parent_not_found')).toEqual(gone)
+    expect(refusal(409, 'parent_scope')).toEqual(gone)
+  })
+
   it("words a paper that isn't ready as retryable, and one without an index as needing a re-index", () => {
     expect(refusal(409, 'paper_not_ready')).toEqual({
       message: 'This paper is still being processed. Ask again once it is ready.',
