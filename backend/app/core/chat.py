@@ -141,9 +141,15 @@ async def load_thread(session: AsyncSession, paper_id: uuid.UUID, parent_id: uui
     chain = [parent]
     while chain[-1].parent_id is not None and len(chain) < MAX_THREAD_ANSWERS:
         chain.append(await session.get(LLMOutput, chain[-1].parent_id))
+    # A follow-up saves the passages it carried ahead of the ones it found, so each answer's own finds come first,
+    # newest answer first: otherwise a long thread keeps carrying its first question's passages and drops the last.
+    own = [
+        [chunk_id for chunk_id in output.source_chunks if older is None or chunk_id not in older.source_chunks]
+        for output, older in zip(chain, [*chain[1:], None])
+    ]
+    source_ids = [*(chunk_id for ids in own for chunk_id in ids), *(i for o in chain for i in o.source_chunks)]
     return Thread(
-        questions=[output.question for output in reversed(chain)],
-        source_ids=[chunk_id for output in chain for chunk_id in output.source_chunks],
+        questions=[output.question for output in reversed(chain)], source_ids=list(dict.fromkeys(source_ids))
     )
 
 
