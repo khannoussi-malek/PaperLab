@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core import embedding_index, prompts, workspaces
-from app.core.errors import Conflict
+from app.core.errors import Conflict, NotFound
 from app.core.notes import Anchor, NoteView, _with_anchors, list_notes_for_paper
 from app.core.papers import get_paper
 from app.core.retrieval import RetrievedChunk, _to_chunk, retrieve
@@ -30,6 +30,8 @@ SMALL_PAPER_CHARS = 24_000
 RETRIEVE_K = 8
 # A follow-up's earlier passages plus fresh ones: ~4.5k tokens, so with notes it still fits OLLAMA_NUM_CTX.
 FOLLOW_UP_SOURCES = 12
+# A follow-up carries its parent answer's question and passages, and those of at most four answers before it.
+MAX_THREAD_ANSWERS = 5
 # Notes, in both chats. With OLLAMA_NUM_CTX = 16_384: ~0.5k tokens of instructions, ~3k for 8 passages, ~4k for
 # notes, about 7.5k of the 16k context, leaving ~9k for the answer. A whole small paper (~6k) still leaves ~5.5k.
 NOTE_QUOTE_CHARS = 160
@@ -121,6 +123,28 @@ def follow_up_sources(
     earlier_only = [chunk for chunk in unique if chunk.id not in fresh_ids][: max(room, 0)]
     kept = fresh_ids | {chunk.id for chunk in earlier_only}
     return [chunk for chunk in unique if chunk.id in kept] + fresh_only
+
+
+async def load_thread(session: AsyncSession, paper_id: uuid.UUID, parent_id: uuid.UUID) -> Thread:
+    """What a follow-up to `parent_id` carries: that answer and up to MAX_THREAD_ANSWERS - 1 before it, on `paper_id`.
+
+    Raises NotFound (an unknown paper, or "parent_not_found"), or Conflict("parent_scope") when the answer belongs
+    to another paper or a workspace.
+    """
+    await get_paper(session, paper_id)
+    parent = await session.get(LLMOutput, parent_id)
+    if parent is None or parent.kind != "chat":
+        raise NotFound("parent_not_found")
+    if parent.paper_id != paper_id:
+        raise Conflict("parent_scope")
+    # A parent_id is only ever saved on the same paper's answers, and the FK nulls it when that answer is deleted.
+    chain = [parent]
+    while chain[-1].parent_id is not None and len(chain) < MAX_THREAD_ANSWERS:
+        chain.append(await session.get(LLMOutput, chain[-1].parent_id))
+    return Thread(
+        questions=[output.question for output in reversed(chain)],
+        source_ids=[chunk_id for output in chain for chunk_id in output.source_chunks],
+    )
 
 
 async def _earlier_sources(session: AsyncSession, thread: Thread, paper_id: uuid.UUID) -> list[RetrievedChunk]:
@@ -277,6 +301,7 @@ async def save_answer(
     content: str,
     model: str,
     connection_name: str,
+    parent_id: uuid.UUID | None = None,
 ) -> uuid.UUID:
     """Note citations aren't stored separately: they follow from content and source_notes. The model and connection
     names are copied, so renaming or deleting the connection later never changes the answer."""
@@ -297,6 +322,7 @@ async def save_answer(
         connection_name=connection_name,
         prompt_version=prepared.prompt_version,
         whole_paper=prepared.whole_paper,
+        parent_id=parent_id,
     )
     session.add(output)
     await session.commit()
