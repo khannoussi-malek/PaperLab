@@ -1,4 +1,7 @@
-![PaperLab: read deeper, keep every thought, see what you missed. A paper's highlights lead to a note, a cited AI answer, and a new connection across your library.](.github/assets/paperlab-banner.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/paperlab-banner-dark.png">
+  <img alt="PaperLab: read deeper, keep every thought, see what you missed. A paper's highlights lead to a note, a cited AI answer, and a new connection across your library." src=".github/assets/paperlab-banner.png">
+</picture>
 
 # PaperLab
 
