@@ -49,6 +49,10 @@ describe('markdownPieces', () => {
     expect(visible(markdownPieces(SAMPLES[4]))).toBe('print("x")After the code.')
   })
 
+  it('hides the backticks around inline code', () => {
+    expect(visible(markdownPieces('with `small` effect\nsizes'))).toBe('with small effect\nsizes')
+  })
+
   it('keeps an ordered list starting past 1 numbered from there', () => {
     expect(find(markdownPieces('3. third\n4. fourth'), 'ol')?.start).toBe(3)
   })

@@ -26,7 +26,7 @@ const SAFE_URL = /^(https?:|mailto:)/i
 
 export function markdownPieces(content: string): Piece[] {
   // A citation marker must never parse as a link or a definition: swap its brackets for same-length inert characters.
-  const masked = content.replace(MARKER, (marker) => `${marker.slice(1, -1)}`)
+  const masked = content.replace(MARKER, (marker) => `\uE000${marker.slice(1, -1)}\uE001`)
   const root = fromMarkdown(masked, { extensions: [gfm()], mdastExtensions: [gfmFromMarkdown()] })
 
   const slice = (kind: 'text' | 'hidden', from: number, to: number): Piece[] =>
@@ -34,6 +34,10 @@ export function markdownPieces(content: string): Piece[] {
   const element = (tag: Tag, children: Piece[], extra?: { href?: string; start?: number }): Piece => ({
     kind: 'element', tag, children, ...extra,
   })
+  /** Shows `start`..`end` and hides what surrounds it up to `from`..`to`. */
+  const shown = (from: number, start: number, end: number, to: number): Piece[] => [
+    ...slice('hidden', from, start), ...slice('text', start, end), ...slice('hidden', end, to),
+  ]
   const startOf = (node: Nodes) => node.position!.start.offset!
   const endOf = (node: Nodes) => node.position!.end.offset!
 
@@ -46,14 +50,13 @@ export function markdownPieces(content: string): Piece[] {
         )
 
   /** Code shows its value and hides the backticks or fences around it; if the value isn't there verbatim, all of it. */
-  const code = (value: string, from: number, to: number, start: number, end: number): Piece[] => {
+  const code = (value: string, block: boolean, from: number, to: number, start: number, end: number): Piece[] => {
     const lineEnd = content.indexOf('\n', start)
     // A fence's code starts on the next line, so a value that repeats the info string isn't found in it.
-    const searchFrom = /[`~]/.test(content[start]) ? (lineEnd === -1 ? end : lineEnd + 1) : start
+    const searchFrom = block && /[`~]/.test(content[start]) ? (lineEnd === -1 ? end : lineEnd + 1) : start
     const at = content.indexOf(value, searchFrom)
     // ponytail: multi-line code indented inside a list loses its indent in `value`, so it shows raw with its fences.
-    if (at === -1 || at + value.length > end) return [...slice('hidden', from, start), ...slice('text', start, end), ...slice('hidden', end, to)]
-    return [...slice('hidden', from, at), ...slice('text', at, at + value.length), ...slice('hidden', at + value.length, to)]
+    return at === -1 || at + value.length > end ? shown(from, start, end, to) : shown(from, at, at + value.length, to)
   }
 
   /** `from`..`to` is the node's own span plus the syntax and whitespace around it that its parent handed down. */
@@ -62,11 +65,11 @@ export function markdownPieces(content: string): Piece[] {
     const end = endOf(node)
     switch (node.type) {
       case 'text':
-        return [...slice('hidden', from, start), ...slice('text', start, end), ...slice('hidden', end, to)]
+        return shown(from, start, end, to)
       case 'inlineCode':
-        return [element('code', code(node.value, from, to, start, end))]
+        return [element('code', code(node.value, false, from, to, start, end))]
       case 'code':
-        return [element('pre', [element('code', code(node.value, from, to, start, end))])]
+        return [element('pre', [element('code', code(node.value, true, from, to, start, end))])]
       case 'thematicBreak':
         return [...slice('hidden', from, to), element('hr', [])]
       case 'heading':
@@ -83,7 +86,7 @@ export function markdownPieces(content: string): Piece[] {
     }
     const tag = TAGS[node.type]
     // Anything else (raw HTML, a hard break, an image, a footnote) shows as the text it was written as.
-    if (!tag || !('children' in node)) return [...slice('hidden', from, start), ...slice('text', start, end), ...slice('hidden', end, to)]
+    if (!tag || !('children' in node)) return shown(from, start, end, to)
     return [element(tag, childrenOf(node, from, to))]
   }
 
