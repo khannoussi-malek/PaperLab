@@ -23,7 +23,8 @@ test.beforeEach(async ({ request }) => {
   await removeFoundPapers(request) // a killed run's leftovers would show as "In library"
   const found = await request.get('/api/discovery/search?q=fixture')
   const titles = found.ok() ? (await found.json()).map((c: { title: string }) => c.title) : []
-  expect(titles, 'start the API with DISCOVERY_PROVIDER=fake (see the roadmap Commands)').toEqual([FREE, LANDING, CLOSED])
+  const hint = 'start the API with DISCOVERY_PROVIDER=fake (see the api service comment in docker-compose.yml)'
+  expect(titles, hint).toEqual([FREE, LANDING, CLOSED])
 })
 
 test.afterEach(async ({ request }) => {
@@ -73,6 +74,31 @@ test('find a paper from the library, add its free PDF, and see it in the library
   await page.keyboard.press('Escape')
   const libraryRow = page.locator('.paper-row').filter({ has: page.locator(`a[href="#/papers/${paperId}"]`) })
   await expect(libraryRow).toContainText(FREE)
+
+  // Reopening keeps the row's "In library" state: the dialog keeps its query, so no second search is needed.
+  await page.getByRole('button', { name: 'Find papers' }).click()
+  const reopened = page.getByRole('dialog', { name: 'Find papers' })
+  await expect(rowOf(reopened, FREE).getByRole('link', { name: 'In library' })).toHaveAttribute(
+    'href',
+    `#/papers/${paperId}`,
+  )
+})
+
+test('regaining window focus does not repeat a search or drop its results for a busy error', async ({ page }) => {
+  await page.goto('/')
+  const dialog = await searchFromHere(page)
+  await addFrom(rowOf(dialog, FREE)) // marks discovery stale (D-fix 1)
+
+  const asked: string[] = []
+  page.on('request', (r) => {
+    if (r.url().includes('/api/discovery/search')) asked.push(r.url())
+  })
+  // React Query v5's focusManager listens for `visibilitychange` on `window` (not `document`, despite MDN).
+  await page.evaluate(() => window.dispatchEvent(new Event('visibilitychange')))
+  await page.waitForTimeout(300)
+
+  expect(asked).toEqual([])
+  await expect(dialog.locator('.candidate-row')).toHaveCount(3) // the stale results are still shown, not an error
 })
 
 test('a paper whose PDF link is a web page says no free PDF was found', async ({ page }) => {

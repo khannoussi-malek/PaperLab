@@ -16,3 +16,11 @@ export function pageLink(candidate: Pick<Candidate, 'doi' | 'arxiv_id' | 'openal
 /** A React key that survives a refetch: the first identifier the candidate has, else its position. */
 export const candidateKey = (candidate: Candidate, index: number): string =>
   candidate.openalex_id ?? candidate.s2_id ?? candidate.doi ?? `row-${index}`
+
+/** Whether `candidate` is the paper `added` names: by openalex_id, else doi (any case), else s2_id. */
+export function sameCandidate(candidate: Candidate, added: Candidate): boolean {
+  if (added.openalex_id) return candidate.openalex_id === added.openalex_id
+  if (added.doi) return candidate.doi?.toLowerCase() === added.doi.toLowerCase()
+  if (added.s2_id) return candidate.s2_id === added.s2_id
+  return false
+}

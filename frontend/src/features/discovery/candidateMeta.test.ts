@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Candidate } from '@/api/client'
-import { candidateKey, citationsLabel, pageLink } from './candidateMeta'
+import { candidateKey, citationsLabel, pageLink, sameCandidate } from './candidateMeta'
 
 const ids = { doi: null, arxiv_id: null, openalex_id: null, s2_id: null }
 
@@ -36,5 +36,22 @@ describe('candidateKey', () => {
     expect(candidateKey(candidate({ openalex_id: 'W1', doi: '10.1/x' }), 0)).toBe('W1')
     expect(candidateKey(candidate({ doi: '10.1/x' }), 0)).toBe('10.1/x')
     expect(candidateKey(candidate({}), 3)).toBe('row-3')
+  })
+})
+
+describe('sameCandidate', () => {
+  const candidate = (fields: Partial<Candidate>) => ({ ...ids, title: 'T', ...fields }) as Candidate
+
+  it('matches by openalex_id, else doi in any case, else s2_id', () => {
+    expect(sameCandidate(candidate({ openalex_id: 'W1' }), candidate({ openalex_id: 'W1', doi: '10.1/other' }))).toBe(
+      true,
+    )
+    expect(sameCandidate(candidate({ openalex_id: 'W2' }), candidate({ openalex_id: 'W1' }))).toBe(false)
+    expect(sameCandidate(candidate({ doi: '10.1/X' }), candidate({ doi: '10.1/x' }))).toBe(true)
+    expect(sameCandidate(candidate({ s2_id: 'a'.repeat(40) }), candidate({ s2_id: 'a'.repeat(40) }))).toBe(true)
+  })
+
+  it('is false when the added candidate has no identifier to match on', () => {
+    expect(sameCandidate(candidate({ openalex_id: 'W1' }), candidate({}))).toBe(false)
   })
 })
