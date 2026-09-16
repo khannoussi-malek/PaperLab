@@ -1,7 +1,8 @@
 import pytest
 from conftest import recorded_discovery
 
-from app.core.discovery import Candidate, classify_query, from_s2, from_work, with_s2
+from app.core.discovery import MAX_AUTHORS, MAX_PDF_URLS, Candidate, classify_query, from_s2, from_work, with_s2
+from app.schemas.discovery import CandidateIn, CandidateOut
 
 
 @pytest.mark.parametrize(
@@ -120,3 +121,61 @@ def test_no_semantic_scholar_record_leaves_the_candidate_as_it_is():
     bert = from_work(recorded_discovery("openalex_search_bert")["results"][0])
 
     assert with_s2(bert, None) is bert
+
+
+# --- MAX_PDF_URLS / MAX_AUTHORS caps (the API's Add rejects a candidate over either) ---
+
+
+def test_more_than_ten_pdf_locations_cap_at_ten_in_d68_order():
+    work = {
+        "id": "https://openalex.org/W1",
+        "title": "A widely deposited paper",
+        "locations": [{"pdf_url": f"https://repo.example/{i}.pdf"} for i in range(15)],
+    }
+
+    candidate = from_work(work)
+
+    assert candidate.pdf_urls == [f"https://repo.example/{i}.pdf" for i in range(MAX_PDF_URLS)]
+
+
+def test_more_than_500_authors_from_openalex_cap_at_500():
+    work = {
+        "id": "https://openalex.org/W1",
+        "title": "A large collaboration",
+        "authorships": [{"author": {"display_name": f"Author {i}"}} for i in range(600)],
+    }
+
+    candidate = from_work(work)
+
+    assert len(candidate.authors) == MAX_AUTHORS
+    assert candidate.authors[0] == "Author 0"
+    assert candidate.authors[-1] == f"Author {MAX_AUTHORS - 1}"
+
+
+def test_more_than_500_authors_from_semantic_scholar_cap_at_500():
+    paper = {"paperId": "a" * 40, "title": "T", "authors": [{"name": f"Author {i}"} for i in range(600)]}
+
+    candidate = from_s2(paper)
+
+    assert len(candidate.authors) == MAX_AUTHORS
+
+
+def _recorded_openalex_works():
+    yield from recorded_discovery("openalex_search_bert")["results"]
+    yield recorded_discovery("openalex_work_arxiv_preprint")
+
+
+def _recorded_s2_papers():
+    yield from (paper for paper in recorded_discovery("s2_batch_bert") if paper)
+    yield recorded_discovery("s2_paper_arxiv_bert")
+    yield from recorded_discovery("s2_recommend_bert")["recommendedPapers"]
+
+
+@pytest.mark.parametrize(
+    "candidate",
+    [from_work(work) for work in _recorded_openalex_works()] + [from_s2(paper) for paper in _recorded_s2_papers()],
+)
+def test_every_recorded_candidate_round_trips_through_the_api_schemas(candidate):
+    dumped = CandidateOut.model_validate(candidate, from_attributes=True).model_dump(mode="json")
+
+    CandidateIn.model_validate(dumped)

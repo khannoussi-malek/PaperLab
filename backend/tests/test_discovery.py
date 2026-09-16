@@ -24,6 +24,18 @@ async def add_paper(session, **fields) -> Paper:
     return paper
 
 
+# --- build_providers ---
+
+
+def test_the_pdf_client_never_sends_the_owners_email():
+    providers = discovery.build_providers("me@example.com", "")
+
+    agent = providers.pdf.headers["User-Agent"]
+
+    assert agent == "PaperLab"
+    assert "@" not in agent
+
+
 # --- mark_in_library ---
 
 
