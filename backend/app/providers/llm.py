@@ -164,11 +164,14 @@ class AnthropicLLM:
         self.connection_name = connection_name
         self._api_key = api_key
         # http_client: tests pass an httpx2.AsyncClient with httpx2.MockTransport (SDK 1.x runs on httpx2).
-        self._client = anthropic.AsyncAnthropic(api_key=api_key, http_client=http_client)
+        self._http_client = http_client
 
     async def stream(self, system: str, prompt: str) -> AsyncIterator[str]:
+        # The client is built and closed here, like the httpx clients above: an SDK client left open keeps a
+        # connection pool alive for every question ever asked.
+        client = anthropic.AsyncAnthropic(api_key=self._api_key, http_client=self._http_client)
         try:
-            async with self._client.messages.stream(
+            async with client, client.messages.stream(
                 model=self.model,
                 max_tokens=settings.anthropic_max_tokens,
                 system=system,
@@ -283,7 +286,8 @@ async def _anthropic_models(connection, http_client) -> list[str] | None:
     # No retries: Test connection should answer at once, and the owner can press it again.
     client = anthropic.AsyncAnthropic(api_key=connection.api_key, http_client=http_client, max_retries=0)
     try:
-        return sorted([model.id async for model in client.models.list()])
+        async with client:
+            return sorted([model.id async for model in client.models.list()])
     except anthropic.NotFoundError:
         return None
     except (anthropic.AuthenticationError, anthropic.PermissionDeniedError) as exc:

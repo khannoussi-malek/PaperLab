@@ -7,6 +7,7 @@ from sqlalchemy.exc import DBAPIError, IntegrityError
 
 from app.core import llm_connections as connections
 from app.core.errors import Conflict, InvalidInput, NotFound
+from app.db import engine
 from app.models import LLMConnection, LLMModel
 
 pytestmark = pytest.mark.anyio
@@ -61,6 +62,8 @@ async def test_each_kind_is_created_with_its_address_and_key_rules(session):
         ("openai_compatible", "https://", None, "http:// or https://"),
         ("openai_compatible", "http://[::1", None, "http:// or https://"),
         ("openai_compatible", "http://example.com:port", None, "http:// or https://"),
+        ("openai_compatible", "https://api.example.com/v1?key=abc", None, "http:// or https://"),
+        ("openai_compatible", f"https://user:{KEY}@api.example.com/v1", None, "http:// or https://"),
         ("openai_compatible", "https://api.example.com", "", "can't be empty"),
         ("openai_compatible", "https://api.example.com", "   ", "can't be empty"),
     ],
@@ -85,6 +88,8 @@ async def test_a_db_error_on_a_key_bearing_write_masks_the_key_in_the_exception_
 
     assert KEY not in str(excinfo.value)
     assert KEY not in caplog.text
+    # The test engine sets hide_parameters itself, so the app's own engine needs this guard to stay honest.
+    assert engine.sync_engine.hide_parameters is True
 
 
 @pytest.mark.parametrize(("api_key", "hint"), [(KEY, "T123"), ("12345678", "5678"), ("1234567", None), (None, None)])
