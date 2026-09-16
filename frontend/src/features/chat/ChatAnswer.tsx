@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { aiMark } from './aiMark'
 import { describeSource, type Segment } from './citations'
 
 type Props = {
@@ -20,7 +21,7 @@ type Props = {
   notesTotal: number | null
   segments: Segment[]
   /** Set once the answer is saved: the model label is only known then. */
-  footer: { model: string; promptVersion: number } | null
+  footer: { model: string; connectionName: string | null; promptVersion: number } | null
   /** The saved answer's `llm_outputs` id; absent while it streams. */
   outputId?: string
   pending?: boolean
@@ -70,7 +71,7 @@ export function ChatAnswer(props: Props) {
                     <Hint key={i} label={describe(source)} detail={hintFor(source)}>
                       <button
                         type="button"
-                        className="chat-cite rounded-xs font-medium text-primary underline-offset-2 hover:underline"
+                        className="chat-cite rounded-xs font-medium text-primary underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
                         aria-label={describe(source)}
                         onClick={() => onCite(source)}
                       >
@@ -128,7 +129,7 @@ type MetaProps = Pick<Props, 'footer' | 'sources' | 'notes' | 'wholePaper' | 'on
  * waits in a tooltip, so a thread of answers doesn't repeat the same line under each one.
  */
 function AnswerMeta({ footer, sources, notes, wholePaper, describe, onCite }: MetaProps) {
-  const aiLabel = footer ? `AI · ${footer.model} · prompt v${footer.promptVersion}` : 'AI'
+  const aiLabel = footer ? aiMark(footer.model, footer.connectionName, footer.promptVersion) : 'AI'
   const pill = (source: Cited | null) =>
     source && (
       <li key={source.label}>

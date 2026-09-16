@@ -197,7 +197,10 @@ export interface paths {
         /** History */
         get: operations["history_api_papers__paper_id__chat_get"];
         put?: never;
-        /** Ask */
+        /**
+         * Ask
+         * @description Checked before streaming, in parameter order: 404/409 for the model (llm), then 404/409/422 for the paper.
+         */
         post: operations["ask_api_papers__paper_id__chat_post"];
         delete?: never;
         options?: never;
@@ -217,7 +220,8 @@ export interface paths {
         put?: never;
         /**
          * Ask Workspace
-         * @description Checked in the dependency first: 404, 409 workspace_empty or workspace_not_indexed, 422.
+         * @description Checked before streaming, in parameter order: 404 model_not_found or 409 no_model, then 404, 409
+         *     workspace_empty or workspace_not_indexed, 422.
          */
         post: operations["ask_workspace_api_workspaces__workspace_id__chat_post"];
         delete?: never;
@@ -548,6 +552,228 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/llm/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Chat Models */
+        get: operations["list_chat_models_api_llm_models_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llm/connections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Connections */
+        get: operations["list_connections_api_llm_connections_get"];
+        put?: never;
+        /** Create Connection */
+        post: operations["create_connection_api_llm_connections_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llm/connections/{connection_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Connection */
+        delete: operations["delete_connection_api_llm_connections__connection_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Connection */
+        patch: operations["update_connection_api_llm_connections__connection_id__patch"];
+        trace?: never;
+    };
+    "/api/llm/connections/{connection_id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test Connection
+         * @description Lists the provider's models. A failure is a 200 with ok false and the reason, since the check itself worked.
+         */
+        post: operations["test_connection_api_llm_connections__connection_id__test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llm/connections/{connection_id}/available": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Available Models
+         * @description The provider's model list (Ollama: its installed models). 502 with the reason when the provider fails.
+         */
+        get: operations["available_models_api_llm_connections__connection_id__available_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llm/connections/{connection_id}/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Model */
+        post: operations["add_model_api_llm_connections__connection_id__models_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llm/models/{model_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove Model */
+        delete: operations["remove_model_api_llm_models__model_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llm/default": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set Default */
+        put: operations["set_default_api_llm_default_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llm/connections/{connection_id}/pull": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pull Model
+         * @description Events: progress (repeated), then done with the model, now listed in chat. error replaces done, also when
+         *     Ollama can't be reached, and then nothing is added.
+         */
+        post: operations["pull_model_api_llm_connections__connection_id__pull_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llm/connections/{connection_id}/installed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Installed
+         * @description Deletes the model from Ollama's disk and from chat. `name` is a query parameter: Ollama names can hold `/`.
+         */
+        delete: operations["delete_installed_api_llm_connections__connection_id__installed_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/embedding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Embedding Status */
+        get: operations["embedding_status_api_embedding_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/embedding/reindex": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reindex Library
+         * @description Queues one re-embed per paper with chunks. Chunk ids stay, so answers and notes keep their sources.
+         */
+        post: operations["reindex_library_api_embedding_reindex_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -589,6 +815,11 @@ export interface components {
             ][];
             /** Quoted Text */
             quoted_text: string;
+        };
+        /** AvailableModelsOut */
+        AvailableModelsOut: {
+            /** Models */
+            models: string[] | null;
         };
         /** Axes */
         Axes: {
@@ -775,6 +1006,8 @@ export interface components {
             content: string;
             /** Model */
             model: string;
+            /** Connection Name */
+            connection_name: string | null;
             /** Prompt Version */
             prompt_version: number;
             /**
@@ -793,10 +1026,28 @@ export interface components {
             /** Notes Total */
             notes_total: number | null;
         };
+        /** ChatModelOut */
+        ChatModelOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Connection Label */
+            connection_label: string;
+            /** Is Local */
+            is_local: boolean;
+            /** Is Default */
+            is_default: boolean;
+        };
         /** ChatRequest */
         ChatRequest: {
             /** Question */
             question: string;
+            /** Model Id */
+            model_id?: string | null;
         };
         /** ChatSource */
         ChatSource: {
@@ -874,6 +1125,66 @@ export interface components {
             name: string;
             /** Unit */
             unit: string | null;
+        };
+        /** ConnectionCheckOut */
+        ConnectionCheckOut: {
+            /** Ok */
+            ok: boolean;
+            /** Model Count */
+            model_count: number | null;
+            /** Message */
+            message: string;
+        };
+        /** ConnectionCreate */
+        ConnectionCreate: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "ollama" | "anthropic" | "openai_compatible";
+            /** Label */
+            label: string;
+            /** Base Url */
+            base_url?: string | null;
+            /** Api Key */
+            api_key?: string | null;
+        };
+        /**
+         * ConnectionOut
+         * @description Never a key: `has_key`, and `key_hint` (last 4 characters; null for keys under 8).
+         */
+        ConnectionOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+            /** Base Url */
+            base_url: string | null;
+            /** Has Key */
+            has_key: boolean;
+            /** Key Hint */
+            key_hint: string | null;
+            /** Is Local */
+            is_local: boolean;
+            /** Models */
+            models: components["schemas"]["ModelOut"][];
+        };
+        /**
+         * ConnectionUpdate
+         * @description Only the fields sent change: a missing api_key keeps the key, null clears it. `kind` can't be sent.
+         */
+        ConnectionUpdate: {
+            /** Label */
+            label?: string;
+            /** Base Url */
+            base_url?: string | null;
+            /** Api Key */
+            api_key?: string | null;
         };
         /** DatasetCreate */
         DatasetCreate: {
@@ -992,6 +1303,14 @@ export interface components {
              */
             updated_at: string;
         };
+        /** DefaultModelIn */
+        DefaultModelIn: {
+            /**
+             * Model Id
+             * Format: uuid
+             */
+            model_id: string;
+        };
         /** DoneEvent */
         DoneEvent: {
             /**
@@ -1001,10 +1320,21 @@ export interface components {
             output_id: string;
             /** Model */
             model: string;
+            /** Connection Name */
+            connection_name: string;
             /** Prompt Version */
             prompt_version: number;
             /** Cited */
             cited: string[];
+        };
+        /** EmbeddingStatusOut */
+        EmbeddingStatusOut: {
+            /** Model */
+            model: string;
+            /** Chunks */
+            chunks: number;
+            /** Indexed With */
+            indexed_with: components["schemas"]["IndexedModelOut"][];
         };
         /** ErrorEvent */
         ErrorEvent: {
@@ -1056,6 +1386,13 @@ export interface components {
             /** Columns */
             columns: string[];
         };
+        /** IndexedModelOut */
+        IndexedModelOut: {
+            /** Model */
+            model: string;
+            /** Chunks */
+            chunks: number;
+        };
         /** Layout */
         Layout: {
             /**
@@ -1088,6 +1425,23 @@ export interface components {
              * Format: uuid
              */
             id: string;
+        };
+        /** ModelCreate */
+        ModelCreate: {
+            /** Name */
+            name: string;
+        };
+        /** ModelOut */
+        ModelOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Is Default */
+            is_default: boolean;
         };
         /** NoteCreate */
         NoteCreate: {
@@ -1320,6 +1674,42 @@ export interface components {
             body: string;
             /** Chunk Ids */
             chunk_ids: string[];
+        };
+        /** PullDoneEvent */
+        PullDoneEvent: {
+            model: components["schemas"]["ModelOut"];
+        };
+        /** PullErrorEvent */
+        PullErrorEvent: {
+            /** Message */
+            message: string;
+        };
+        /** PullProgressEvent */
+        PullProgressEvent: {
+            /** Status */
+            status: string;
+            /** Total */
+            total?: number | null;
+            /** Completed */
+            completed?: number | null;
+        };
+        /** PullRequest */
+        PullRequest: {
+            /** Name */
+            name: string;
+        };
+        /** ReindexOut */
+        ReindexOut: {
+            /** Papers */
+            papers: number;
+        };
+        /** ReindexRequest */
+        ReindexRequest: {
+            /**
+             * Confirm
+             * @constant
+             */
+            confirm: true;
         };
         /** ResolveRequest */
         ResolveRequest: {
@@ -3046,6 +3436,421 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_chat_models_api_llm_models_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatModelOut"][];
+                };
+            };
+        };
+    };
+    list_connections_api_llm_connections_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectionOut"][];
+                };
+            };
+        };
+    };
+    create_connection_api_llm_connections_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectionCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_connection_api_llm_connections__connection_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_connection_api_llm_connections__connection_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectionUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    test_connection_api_llm_connections__connection_id__test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectionCheckOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    available_models_api_llm_connections__connection_id__available_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AvailableModelsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_model_api_llm_connections__connection_id__models_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_model_api_llm_models__model_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                model_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_default_api_llm_default_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DefaultModelIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pull_model_api_llm_connections__connection_id__pull_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PullRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": components["schemas"]["PullProgressEvent"] | components["schemas"]["PullDoneEvent"] | components["schemas"]["PullErrorEvent"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_installed_api_llm_connections__connection_id__installed_delete: {
+        parameters: {
+            query: {
+                name: string;
+            };
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    embedding_status_api_embedding_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmbeddingStatusOut"];
+                };
+            };
+        };
+    };
+    reindex_library_api_embedding_reindex_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReindexRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReindexOut"];
+                };
             };
             /** @description Validation Error */
             422: {

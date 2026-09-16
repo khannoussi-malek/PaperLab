@@ -53,3 +53,10 @@ export function promoteSelection(
   const inParagraph = markers.filter((m) => m.start >= paragraphStart && m.end <= paragraphEnd)
   return { body, chunkIds: chunkIdsOf(inParagraph, sources) }
 }
+
+/** A failed promote in words. The API's code for a stale selection gets a sentence; any other refusal already reads
+ * as one (a 422's own text), so it shows as sent. A dropped connection (fetch's TypeError) says nothing useful. */
+export function promoteErrorMessage(error: unknown): string {
+  if (!(error instanceof Error) || error instanceof TypeError || !error.message) return "Couldn't save the note. Try again."
+  return error.message === 'body_not_in_output' ? "This selection doesn't match the saved answer. Select the text again." : error.message
+}

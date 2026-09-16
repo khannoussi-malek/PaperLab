@@ -121,7 +121,7 @@ async def test_save_answer_fills_every_column_and_inserts_no_note(session):
 
     answer = "Because [C3] and [C1][C3]."
 
-    output_id = await chat.save_answer(session, paper.id, "why?", prepared, answer, "qwen3:8b")
+    output_id = await chat.save_answer(session, paper.id, "why?", prepared, answer, "qwen3:8b", "Ollama")
 
     row = await session.get(LLMOutput, output_id)
     ids = [s.id for s in prepared.sources]

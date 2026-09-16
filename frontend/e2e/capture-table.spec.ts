@@ -60,3 +60,34 @@ test('Escape in the middle of a drag leaves the mode and removes the box', async
   await expect(toggle).toHaveAttribute('aria-pressed', 'false')
   await expect(page.locator('.capture-box')).toHaveCount(0)
 })
+
+test('adding rows and columns in the capture dialog grows the grid without saving it', async ({ page, request, tablePaperId }) => {
+  await openReader(page, tablePaperId, TABLE_LINE)
+  await page.getByRole('button', { name: 'Capture table' }).click()
+  await dragBox(page, 1, [60, 145, 420, 200])
+  const dialog = page.getByRole('dialog', { name: 'Capture table' })
+  await expect(dialog.getByRole('textbox', { name: 'Row 2, column 2' })).toHaveValue('88.5')
+
+  await dialog.getByRole('button', { name: 'Add row' }).click()
+  await dialog.getByRole('button', { name: 'Add column' }).click()
+  await expect(dialog.getByRole('textbox', { name: 'Row 3, column 4' })).toHaveValue('')
+  expect(await (await request.get(`/api/datasets?paper_id=${tablePaperId}`)).json()).toEqual([])
+})
+
+test('a long table scrolls inside its grid, keeping the crop, name and Save button in view', async ({ page, tablePaperId }) => {
+  await page.setViewportSize({ width: 1280, height: 720 })
+  await openReader(page, tablePaperId, TABLE_LINE)
+  await page.getByRole('button', { name: 'Capture table' }).click()
+  await dragBox(page, 1, [60, 145, 420, 200])
+  const dialog = page.getByRole('dialog', { name: 'Capture table' })
+  await expect(dialog.getByRole('textbox', { name: 'Row 2, column 2' })).toHaveValue('88.5')
+  for (let i = 0; i < 13; i++) await dialog.getByRole('button', { name: 'Add row' }).click()
+  await expect(dialog.getByRole('textbox', { name: 'Row 15, column 1' })).toBeAttached()
+
+  expect(await dialog.evaluate((el) => el.scrollHeight - el.clientHeight)).toBe(0)
+  for (const target of [dialog.getByRole('heading', { name: 'Capture table' }), dialog.locator('canvas.capture-crop'),
+    dialog.getByRole('textbox', { name: 'Table name' }), dialog.getByRole('button', { name: 'Add row' }),
+    dialog.getByRole('button', { name: 'Save table' })]) {
+    await expect(target).toBeInViewport({ ratio: 1 })
+  }
+})

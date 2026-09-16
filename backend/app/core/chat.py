@@ -10,7 +10,8 @@ from dataclasses import dataclass, field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core import prompts, workspaces
+from app.config import settings
+from app.core import embedding_index, prompts, workspaces
 from app.core.errors import Conflict
 from app.core.notes import Anchor, NoteView, _with_anchors
 from app.core.papers import get_paper
@@ -154,7 +155,7 @@ def format_notes_block(notes: list[NoteView], papers: dict[uuid.UUID, Paper]) ->
 async def _prepare_workspace(session: AsyncSession, workspace_id: uuid.UUID, question: str, embedder) -> Prepared:
     """Retrieved passages across the workspace's papers plus all its notes, trimmed. No whole-paper skip.
 
-    Raises NotFound, or Conflict("workspace_empty" | "workspace_not_indexed").
+    Raises NotFound, or Conflict("workspace_empty" | "workspace_not_indexed" | "embedding_model_changed").
     """
     members = {p.id: p for p in await workspaces.papers(session, workspace_id)}
     if not members:
@@ -162,6 +163,7 @@ async def _prepare_workspace(session: AsyncSession, workspace_id: uuid.UUID, que
     ready = [paper_id for paper_id, paper in members.items() if paper.status == PaperStatus.READY]
     if not await session.scalar(select(func.count(Chunk.embedding)).where(Chunk.paper_id.in_(ready))):
         raise Conflict("workspace_not_indexed")
+    await embedding_index.check_model(session, settings.embed_model, ready)
     sources = await retrieve(session, question, paper_ids=ready, k=RETRIEVE_K, embedder=embedder)
     every_note = await workspaces.notes(session, workspace_id)
     block, used = format_notes_block(every_note, members)
@@ -183,7 +185,7 @@ async def prepare(session: AsyncSession, paper_id: uuid.UUID | Scope, question: 
     """A workspace scope goes to _prepare_workspace. For a paper: small papers go whole, in reading order;
     larger ones send the RETRIEVE_K nearest chunks.
 
-    Raises NotFound, or Conflict("paper_not_ready" | "paper_not_indexed").
+    Raises NotFound, or Conflict("paper_not_ready" | "paper_not_indexed" | "embedding_model_changed").
     """
     scope = _scope(paper_id)
     if scope.workspace_id is not None:
@@ -199,6 +201,7 @@ async def prepare(session: AsyncSession, paper_id: uuid.UUID | Scope, question: 
     if whole_paper:
         sources = await _chunk_sources(session, Chunk.paper_id == paper_id)
     else:
+        await embedding_index.check_model(session, settings.embed_model, [paper_id])
         sources = await retrieve(session, question, paper_ids=[paper_id], k=RETRIEVE_K, embedder=embedder)
     prompt = PROMPT_TEMPLATE.format(context=format_context(paper, sources), question=question)
     return Prepared(sources=sources, system=SYSTEM_PROMPT, prompt=prompt, whole_paper=whole_paper)
@@ -211,9 +214,16 @@ def parse_citations(text: str, n: int, kind: str = "C") -> list[int]:
 
 
 async def save_answer(
-    session: AsyncSession, paper_id: uuid.UUID | Scope, question: str, prepared: Prepared, content: str, model: str
+    session: AsyncSession,
+    paper_id: uuid.UUID | Scope,
+    question: str,
+    prepared: Prepared,
+    content: str,
+    model: str,
+    connection_name: str,
 ) -> uuid.UUID:
-    """Note citations aren't stored separately: they follow from content and source_notes."""
+    """Note citations aren't stored separately: they follow from content and source_notes. The model and connection
+    names are copied, so renaming or deleting the connection later never changes the answer."""
     scope = _scope(paper_id)
     source_ids = [s.id for s in prepared.sources]
     output = LLMOutput(
@@ -228,6 +238,7 @@ async def save_answer(
         notes_used=prepared.notes_used,
         notes_total=prepared.notes_total,
         model=model,
+        connection_name=connection_name,
         prompt_version=prepared.prompt_version,
         whole_paper=prepared.whole_paper,
     )

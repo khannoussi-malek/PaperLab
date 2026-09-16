@@ -4,7 +4,7 @@ export type SseRecord = { event: string; data: string }
 /**
  * Returns a push parser for a `text/event-stream` body read in arbitrary chunks. Each call takes the next chunk
  * and returns the events it completed; an event split across chunks, even mid-character, waits for its blank line.
- * `EventSource` can't be used: it only does GET, and chat is a POST (spec U5).
+ * `EventSource` can't be used: it only does GET, and chat is a POST.
  */
 export function sseParser(): (chunk: Uint8Array) => SseRecord[] {
   const decoder = new TextDecoder()
@@ -34,9 +34,15 @@ export function sseParser(): (chunk: Uint8Array) => SseRecord[] {
 export async function* readSse(body: ReadableStream<Uint8Array>): AsyncGenerator<SseRecord> {
   const parse = sseParser()
   const reader = body.getReader()
-  for (;;) {
-    const { done, value } = await reader.read()
-    if (done) return
-    yield* parse(value)
+  // A caller that stops consuming (or throws) leaves the reader holding the stream's only lock, so the body can
+  // never be read again. Two callers read streams now, so release it whichever way this generator ends.
+  try {
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) return
+      yield* parse(value)
+    }
+  } finally {
+    void reader.cancel()
   }
 }

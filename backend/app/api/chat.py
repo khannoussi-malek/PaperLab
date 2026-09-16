@@ -7,12 +7,11 @@ from fastapi import APIRouter, Depends
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import SessionDep
+from app.api.deps import LLMDep, SessionDep
 from app.core import chat
 from app.core.retrieval import RetrievedChunk
 from app.db import SessionLocal
 from app.providers.base import LLM, LLMError, LLMUnavailable
-from app.providers.llm import get_llm
 from app.schemas.chat import (
     ChatAnswer,
     ChatRequest,
@@ -27,8 +26,6 @@ from app.schemas.chat import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["chat"])
-
-LLMDep = Annotated[LLM, Depends(get_llm)]
 
 
 async def _prepare(session: AsyncSession, scope: chat.Scope, question: str) -> chat.Prepared:
@@ -98,13 +95,21 @@ async def answer_events(
             parts.append(text)
             yield ServerSentEvent(event="token", data=TokenEvent(text=text))
     except (LLMUnavailable, LLMError) as exc:
+        # The message names the connection and host, never the key (providers mask it).
+        logger.warning("chat answer on %s (%s) failed: %s", llm.connection_name, llm.host, exc)
         yield error_event(str(exc))
+        return
+    except Exception:
+        logger.exception("chat answer on %s (%s) failed unexpectedly", llm.connection_name, llm.host)
+        yield error_event("The answer stopped because of an unexpected error")
         return
 
     content = "".join(parts)
     try:
         async with SessionLocal() as session:
-            output_id = await chat.save_answer(session, scope, question, prepared, content, llm.model)
+            output_id = await chat.save_answer(
+                session, scope, question, prepared, content, llm.model, llm.connection_name
+            )
     except Exception:
         logger.exception("saving a chat answer for %s failed", scope)
         yield error_event("The answer couldn't be saved")
@@ -112,23 +117,31 @@ async def answer_events(
 
     cited = [f"C{i}" for i in chat.parse_citations(content, len(prepared.sources))]
     cited += [f"N{i}" for i in chat.parse_citations(content, len(prepared.notes), "N")]
-    done = DoneEvent(output_id=output_id, model=llm.model, prompt_version=prepared.prompt_version, cited=cited)
+    done = DoneEvent(
+        output_id=output_id,
+        model=llm.model,
+        connection_name=llm.connection_name,
+        prompt_version=prepared.prompt_version,
+        cited=cited,
+    )
     yield ServerSentEvent(event="done", data=done)
 
 
 @router.post("/api/papers/{paper_id}/chat", response_class=EventSourceResponse, responses=STREAM_RESPONSES)
 async def ask(
-    paper_id: uuid.UUID, payload: ChatRequest, prepared: PreparedDep, llm: LLMDep
+    paper_id: uuid.UUID, payload: ChatRequest, llm: LLMDep, prepared: PreparedDep
 ) -> AsyncIterable[ServerSentEvent]:
+    """Checked before streaming, in parameter order: 404/409 for the model (llm), then 404/409/422 for the paper."""
     async for event in answer_events(chat.Scope(paper_id=paper_id), payload.question, prepared, llm):
         yield event
 
 
 @router.post("/api/workspaces/{workspace_id}/chat", response_class=EventSourceResponse, responses=STREAM_RESPONSES)
 async def ask_workspace(
-    workspace_id: uuid.UUID, payload: ChatRequest, prepared: WorkspacePreparedDep, llm: LLMDep
+    workspace_id: uuid.UUID, payload: ChatRequest, llm: LLMDep, prepared: WorkspacePreparedDep
 ) -> AsyncIterable[ServerSentEvent]:
-    """Checked in the dependency first: 404, 409 workspace_empty or workspace_not_indexed, 422."""
+    """Checked before streaming, in parameter order: 404 model_not_found or 409 no_model, then 404, 409
+    workspace_empty or workspace_not_indexed, 422."""
     async for event in answer_events(chat.Scope(workspace_id=workspace_id), payload.question, prepared, llm):
         yield event
 
@@ -140,6 +153,7 @@ def to_answer(answer: chat.Answer) -> ChatAnswer:
         question=output.question,
         content=output.content,
         model=output.model,
+        connection_name=output.connection_name,
         prompt_version=output.prompt_version,
         created_at=output.created_at,
         whole_paper=output.whole_paper,
