@@ -6,12 +6,31 @@
 - A download counts only when the body starts with %PDF. No paywall workaround (D68).
 """
 
+import logging
 import re
 import uuid
 from dataclasses import dataclass, field, replace
 from typing import Any
 
+import httpx
+from sqlalchemy import func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.enrichment import ARXIV_DOI_PREFIX, short_id
+from app.core.errors import Conflict
+from app.models import Paper
+from app.providers import openalex, semantic_scholar
+
+logger = logging.getLogger(__name__)
+
+SEARCH_LIMIT = 10
+SIMILAR_LIMIT = 10
+PDF_TIMEOUT = httpx.Timeout(10.0, read=30.0)
+
+OPENALEX_OFF = "OpenAlex is off. Set OPENALEX_MAILTO in .env to search by title or DOI."
+OPENALEX_BUSY = "OpenAlex is busy or unreachable. Try again in a minute."
+S2_BUSY = "Semantic Scholar is busy or unreachable. Try again in a minute."
+S2_UNKNOWN = "Semantic Scholar doesn't know this paper, so it has no suggestions."
 
 _ARXIV_ID = r"\d{4}\.\d{4,5}|[a-z-]+(?:\.[a-z]{2})?/\d{7}"
 _ARXIV_QUERY = re.compile(
@@ -37,6 +56,31 @@ class Candidate:
     cited_by_count: int | None = None
     pdf_urls: list[str] = field(default_factory=list)
     paper_id: uuid.UUID | None = None
+
+
+@dataclass(frozen=True)
+class Providers:
+    """The clients one request uses. `openalex` is None when OPENALEX_MAILTO is empty."""
+
+    openalex: httpx.AsyncClient | None
+    s2: httpx.AsyncClient
+    pdf: httpx.AsyncClient
+
+    async def aclose(self) -> None:
+        for client in (self.openalex, self.s2, self.pdf):
+            if client is not None:
+                await client.aclose()
+
+
+def build_providers(mailto: str, s2_api_key: str, transport: httpx.AsyncBaseTransport | None = None) -> Providers:
+    agent = f"PaperLab (mailto:{mailto})" if mailto else "PaperLab"
+    return Providers(
+        openalex=openalex.new_client(mailto, transport) if mailto else None,
+        s2=semantic_scholar.new_client(s2_api_key, transport),
+        pdf=httpx.AsyncClient(
+            timeout=PDF_TIMEOUT, follow_redirects=True, headers={"User-Agent": agent}, transport=transport
+        ),
+    )
 
 
 def classify_query(query: str) -> tuple[str, str]:
@@ -120,3 +164,87 @@ def with_s2(candidate: Candidate, paper: dict[str, Any] | None) -> Candidate:
         s2_id=found.s2_id,
         pdf_urls=_pdf_urls(arxiv_id, *found.pdf_urls, *candidate.pdf_urls),
     )
+
+
+def _library_dois(candidate: Candidate) -> list[str]:
+    """Lowercase: a candidate the API received may spell its DOI in any case."""
+    arxiv_doi = candidate.arxiv_id and f"{ARXIV_DOI_PREFIX}{candidate.arxiv_id}"
+    return [doi.lower() for doi in (candidate.doi, arxiv_doi) if doi]
+
+
+async def mark_in_library(session: AsyncSession, candidates: list[Candidate]) -> list[Candidate]:
+    """New candidates with `paper_id` set where the library holds the paper, by OpenAlex ID or DOI (any case)."""
+    ids = [c.openalex_id for c in candidates if c.openalex_id]
+    dois = [doi for c in candidates for doi in _library_dois(c)]
+    rows = (
+        await session.execute(
+            select(Paper.id, func.lower(Paper.doi), Paper.openalex_id).where(
+                or_(Paper.openalex_id.in_(ids), func.lower(Paper.doi).in_(dois))
+            )
+        )
+    ).all()
+    library = {key: paper_id for paper_id, doi, openalex_id in rows for key in (doi, openalex_id) if key}
+    return [
+        replace(c, paper_id=next((library[k] for k in (c.openalex_id, *_library_dois(c)) if k in library), None))
+        for c in candidates
+    ]
+
+
+async def search(session: AsyncSession, providers: Providers, query: str, limit: int = SEARCH_LIMIT) -> list[Candidate]:
+    kind, value = classify_query(query)
+    if kind == "arxiv":
+        # OpenAlex's arXiv location filter returned a wrongly merged record for BERT; Semantic Scholar's lookup didn't.
+        try:
+            paper = await semantic_scholar.get_paper(providers.s2, f"arXiv:{value}")
+        except httpx.HTTPError as exc:
+            raise Conflict(S2_BUSY) from exc
+        return await mark_in_library(session, [from_s2(paper)] if paper else [])
+    if providers.openalex is None:
+        raise Conflict(OPENALEX_OFF)
+    try:
+        if kind == "title":
+            works = await openalex.search_works(providers.openalex, value, per_page=limit)
+        else:
+            work = await openalex.get_work(providers.openalex, f"doi:{value}" if kind == "doi" else value)
+            works = [work] if work else []
+    except httpx.HTTPError as exc:
+        raise Conflict(OPENALEX_BUSY) from exc
+    return await mark_in_library(session, await _add_s2_links(providers.s2, [from_work(w) for w in works]))
+
+
+async def _add_s2_links(http: httpx.AsyncClient, candidates: list[Candidate]) -> list[Candidate]:
+    """One batch request. Never fatal: when Semantic Scholar fails, OpenAlex's results show as they are."""
+    with_doi = [c for c in candidates if c.doi]
+    try:
+        found = await semantic_scholar.get_papers(http, [f"DOI:{c.doi}" for c in with_doi])
+    except httpx.HTTPError as exc:
+        logger.info("no Semantic Scholar links for this search: %s", exc)
+        return candidates
+    by_doi = {c.doi: paper for c, paper in zip(with_doi, found)}
+    return [with_s2(c, by_doi.get(c.doi)) for c in candidates]
+
+
+def _same_paper_keys(title: str, *ids: str | None) -> set[str]:
+    return {i.lower() for i in ids if i} | {re.sub(r"\W+", " ", title).strip().casefold()}
+
+
+async def similar(
+    session: AsyncSession, providers: Providers, paper: Paper, limit: int = SIMILAR_LIMIT
+) -> list[Candidate]:
+    doi = (paper.doi or "").lower()
+    arxiv_id = _arxiv_from_doi(doi)
+    try:
+        if arxiv_id:
+            key = f"arXiv:{arxiv_id}"
+        elif doi:
+            key = f"DOI:{doi}"
+        else:
+            key = await semantic_scholar.match_title(providers.s2, paper.title)
+        found = await semantic_scholar.recommend(providers.s2, key, limit + 1) if key else None
+    except httpx.HTTPError as exc:
+        raise Conflict(S2_BUSY) from exc
+    if found is None:
+        raise Conflict(S2_UNKNOWN)
+    own = _same_paper_keys(paper.title, doi, arxiv_id, paper.openalex_id)
+    candidates = [c for c in map(from_s2, found) if not own & _same_paper_keys(c.title, c.doi, c.arxiv_id)]
+    return await mark_in_library(session, candidates[:limit])
