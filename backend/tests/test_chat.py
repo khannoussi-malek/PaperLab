@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from conftest import unit_vector
 from sqlalchemy import delete, func, select
+from test_chat_workspace import NOW, add_note
 
 from app.core import chat, prompts
 from app.core.errors import Conflict, NotFound
@@ -127,8 +128,80 @@ async def test_save_answer_fills_every_column_and_inserts_no_note(session):
     ids = [s.id for s in prepared.sources]
     assert (row.paper_id, row.kind, row.question, row.content) == (paper.id, "chat", "why?", answer)
     assert (row.source_chunks, row.cited_chunks) == (ids, [ids[2], ids[0]])
-    assert (row.model, row.prompt_version, row.whole_paper) == ("qwen3:8b", 1, True)
+    assert (row.model, row.prompt_version, row.whole_paper) == ("qwen3:8b", 2, True)
     assert await session.scalar(select(func.count()).select_from(Note)) == notes_before
+
+
+async def test_prepare_gives_a_paper_its_own_notes_newest_first_after_the_passages(session):
+    paper = await make_paper(session, ["one", "two"], authors=["Jacob Devlin"], year=2019)
+    other = await make_paper(session, ["elsewhere"])
+    older = await add_note(session, paper, "Masked LM.", page=2, updated_at=NOW - timedelta(days=1))
+    newer = await add_note(session, paper, "Uses NSP.", provenance="llm")
+    await add_note(session, other, "Not this paper.")
+
+    prepared = await chat.prepare(session, paper.id, "What do my notes say?")
+
+    assert (prepared.system, prepared.prompt_version) == (chat.SYSTEM_PROMPT, 2)
+    assert "[N1]" in prepared.system
+    notes_block = '[N1] (AI · Devlin 2019 p.1) "quote Uses NSP." — Uses NSP.\n[N2] (You · Devlin 2019 p.2)'
+    assert notes_block in prepared.prompt and "Not this paper" not in prepared.prompt
+    assert [n.id for n in prepared.notes] == [newer.id, older.id]
+    assert (prepared.notes_used, prepared.notes_total) == (2, 2)
+    order = [prepared.prompt.index(part) for part in ("[C1]", notes_block, "Question: What do my notes say?")]
+    assert order == sorted(order)
+
+
+async def test_prepare_on_a_paper_without_notes_says_so(session):
+    paper = await make_paper(session, ["one"])
+
+    prepared = await chat.prepare(session, paper.id, "why?")
+
+    assert "Notes (newest first):\n\n(none)\n\nQuestion: why?" in prepared.prompt  # no earlier-questions block
+    assert (prepared.notes, prepared.notes_used, prepared.notes_total) == ([], 0, 0)
+
+
+def test_follow_up_sources_keep_every_fresh_passage_and_the_best_earlier_ones_that_fit():
+    earlier = [source(text=f"earlier {i}") for i in range(8)]  # best match first
+    fresh = [earlier[0], *(source(text=f"fresh {i}") for i in range(7))]  # the best earlier passage matches again
+
+    # 12 places: 7 fresh-only passages, the shared one, and the 4 best earlier ones. Earlier passages come first.
+    assert chat.follow_up_sources(earlier, fresh, limit=12) == earlier[:5] + fresh[1:]
+    assert chat.follow_up_sources(earlier, [earlier[7], fresh[1]], limit=3) == [earlier[0], earlier[7], fresh[1]]
+    assert chat.follow_up_sources([], fresh) == fresh
+
+
+async def test_follow_up_asks_with_the_earlier_questions_and_their_passages_first(session, embedder):
+    run = uuid.uuid4().hex  # unique vectors: dead HNSW entries from earlier runs never crowd this query
+    texts = [f"{run} part {i} " + "x" * 3_000 for i in range(10)]  # over SMALL_PAPER_CHARS, so it retrieves
+    paper = await make_paper(session, texts)
+    chunks = await chunks_of(session, paper.id)
+    embedder.vectors["search_query: And its cause?"] = unit_vector(texts[4])
+    replaced = uuid.uuid4()  # a passage a re-ingest has since removed
+    thread = chat.Thread(questions=["What is S1?", "Is it common?"], source_ids=[chunks[7].id, replaced, chunks[2].id])
+
+    prepared = await chat.prepare(session, paper.id, "And its cause?", embedder, thread=thread)
+
+    ids = [s.id for s in prepared.sources]
+    assert ids[:3] == [chunks[7].id, chunks[2].id, chunks[4].id]
+    assert len(ids) == len(set(ids)) <= chat.FOLLOW_UP_SOURCES and not prepared.whole_paper
+    earlier = "Earlier questions in this conversation, oldest first:\n- What is S1?\n- Is it common?\n\n"
+    assert prepared.prompt.endswith(earlier + "Question: And its cause?\n")
+
+
+async def test_a_follow_up_on_a_small_paper_still_reads_it_whole(session):
+    paper = await make_paper(session, ["one", "two"])
+    thread = chat.Thread(questions=["What first?"], source_ids=[uuid.uuid4()])
+
+    prepared = await chat.prepare(session, paper.id, "And then?", thread=thread)
+
+    assert prepared.whole_paper and [s.text for s in prepared.sources] == ["one", "two"]
+    assert "- What first?\n\nQuestion: And then?" in prepared.prompt
+
+
+async def test_follow_ups_are_paper_chat_only_for_now(session):
+    workspace = chat.Scope(workspace_id=uuid.uuid4())
+    with pytest.raises(ValueError, match="paper chat"):
+        await chat.prepare(session, workspace, "q", thread=chat.Thread(questions=["p"], source_ids=[]))
 
 
 async def test_list_answers_oldest_first_with_replaced_chunks_as_none(session):

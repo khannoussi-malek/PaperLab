@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from conftest import parse_sse
 from sqlalchemy import delete, func, select
+from test_chat_workspace import add_note
 
 from app.core import chat
 from app.main import create_app
@@ -53,15 +54,15 @@ async def test_chat_streams_sources_then_tokens_then_done_and_saves_one_output(c
             {"label": "C2", "chunk_id": str(chunks[1].id), "paper_id": paper_id, "page": 2, "section": "Method",
              "bbox": rect},
         ],
-        "notes": [],  # notes and their counts belong to workspace chat
-        "notes_used": None,
-        "notes_total": None,
+        "notes": [],
+        "notes_used": 0,
+        "notes_total": 0,
     }
     assert "".join(data["text"] for name, data in events if name == "token") == FAKE_ANSWER
 
     [output] = await outputs_for(session, paper.id)
     assert events[-1][1] == {
-        "output_id": str(output.id), "model": "fake", "connection_name": "Fake", "prompt_version": 1, "cited": ["C1"]
+        "output_id": str(output.id), "model": "fake", "connection_name": "Fake", "prompt_version": 2, "cited": ["C1"]
     }
     assert (output.question, output.content, output.model, output.connection_name) == (
         "What is the method?", FAKE_ANSWER, "fake", "Fake"
@@ -69,6 +70,22 @@ async def test_chat_streams_sources_then_tokens_then_done_and_saves_one_output(c
     assert (output.source_chunks, output.cited_chunks) == ([c.id for c in chunks], [chunks[0].id])
     assert fake_llm.calls[0][1].rstrip().endswith("Question: What is the method?")
     assert await session.scalar(select(func.count()).select_from(Note)) == notes_before
+
+
+async def test_paper_chat_sends_the_papers_notes_and_saves_them_with_the_answer(client, session, fake_llm):
+    paper, _ = await make_paper(session, ["Intro text.", "Method text."])
+    note = await add_note(session, paper, "Compare with ELMo.", page=2)
+
+    response = await client.post(f"/api/papers/{paper.id}/chat", json={"question": "What did I note?"})
+
+    sources = parse_sse(response.text)[0][1]
+    assert sources["notes"] == [
+        {"label": "N1", "note_id": str(note.id), "paper_id": str(paper.id), "page": 2, "provenance": "human"}
+    ]
+    assert (sources["notes_used"], sources["notes_total"]) == (1, 1)
+    assert '[N1] (You · Chat paper p.2) "quote Compare with ELMo." — Compare with ELMo.' in fake_llm.calls[0][1]
+    [output] = await outputs_for(session, paper.id)
+    assert (output.source_notes, output.notes_used, output.notes_total) == ([note.id], 1, 1)
 
 
 async def test_llm_error_mid_stream_sends_an_error_event_and_saves_nothing(client, session, fake_llm):

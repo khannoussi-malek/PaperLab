@@ -224,7 +224,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
     await attempt(() => mutations.remove.mutateAsync(note.id))
   }
 
-  function focusNote(note: Note) {
+  function focusNote(note: Pick<Note, 'id'>) {
     setActiveNoteId(note.id)
     scrollToElement(`.highlight[data-note-id="${note.id}"]`, 'center')
   }
@@ -426,8 +426,8 @@ export function ReaderPage({ paperId, tab, target }: Props) {
         chat={
           <ChatPanel
             scope={{ kind: 'paper', id: paperId }}
-            // Single-paper answers cite only passages ('bbox' in source); their notes list is always empty.
-            onCite={(source) => 'bbox' in source && flashChunk(source.page, source.bbox)}
+            // A cited passage flashes on its page; a cited note is focused as if picked in the Notes tab.
+            onCite={(source) => ('bbox' in source ? flashChunk(source.page, source.bbox) : focusNote({ id: source.note_id }))}
             onPromoted={showPromotedNote}
           />
         }
