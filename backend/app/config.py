@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     anthropic_max_tokens: int = 64_000
     # Sent as `mailto` on every OpenAlex request. Empty turns OpenAlex off: enrichment then uses only the PDF.
     openalex_mailto: str = ""
+    # Sent as `x-api-key` to Semantic Scholar (Similar papers, arXiv lookups, free PDF links). Empty uses its shared,
+    # often busy pool.
+    semantic_scholar_api_key: str = ""
+    # `fake` serves Find papers and Similar from three offline papers (the E2E stack), as LLM_PROVIDER=fake does chat.
+    discovery_provider: Literal["live", "fake"] = "live"
 
 
 settings = Settings()

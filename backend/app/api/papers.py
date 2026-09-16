@@ -4,10 +4,11 @@ from typing import Annotated
 from fastapi import APIRouter, Form, Request, Response, UploadFile
 from fastapi.responses import FileResponse
 
-from app.api.deps import SessionDep
+from app.api.deps import DiscoveryDep, SessionDep
 from app.config import settings
-from app.core import enrichment, papers, workspaces
+from app.core import discovery, enrichment, papers, workspaces
 from app.models import PaperStatus
+from app.schemas.discovery import CandidateOut
 from app.schemas.papers import ChunkOut, PaperOut, PaperUpdate
 
 router = APIRouter(prefix="/api/papers", tags=["papers"])
@@ -58,6 +59,12 @@ async def delete_paper(paper_id: uuid.UUID, session: SessionDep) -> Response:
 @router.get("/{paper_id}/file", response_class=FileResponse)
 async def get_paper_file(paper_id: uuid.UUID, session: SessionDep) -> FileResponse:
     return FileResponse(await papers.get_paper_file(session, paper_id), media_type="application/pdf")
+
+
+@router.get("/{paper_id}/similar")
+async def similar_papers(paper_id: uuid.UUID, session: SessionDep, providers: DiscoveryDep) -> list[CandidateOut]:
+    """Papers like this one, from Semantic Scholar. 409 when it doesn't know the paper or is busy."""
+    return await discovery.similar(session, providers, await papers.get_paper(session, paper_id))
 
 
 @router.get("/{paper_id}/chunks")

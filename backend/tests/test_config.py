@@ -13,3 +13,12 @@ def test_anthropic_max_tokens_is_read_from_the_environment(monkeypatch):
 
     assert Settings().anthropic_max_tokens == 8192
     assert Settings.model_fields["anthropic_max_tokens"].default == 64_000
+
+
+def test_discovery_settings_are_read_from_the_environment(monkeypatch):
+    monkeypatch.setenv("DISCOVERY_PROVIDER", "fake")
+    monkeypatch.setenv("SEMANTIC_SCHOLAR_API_KEY", "secret-key")
+
+    assert (Settings().discovery_provider, Settings().semantic_scholar_api_key) == ("fake", "secret-key")
+    assert Settings.model_fields["discovery_provider"].default == "live"
+    assert Settings.model_fields["semantic_scholar_api_key"].default == ""

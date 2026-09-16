@@ -36,9 +36,11 @@ services:
 
   api:
     <<: *backend
-    # Shell > .env > default. E2E: `LLM_PROVIDER=fake docker compose up -d api`, then `docker compose up -d api`.
+    # Shell > .env > default. E2E: `LLM_PROVIDER=fake DISCOVERY_PROVIDER=fake docker compose up -d api`, then
+    # `docker compose up -d api`.
     environment:
       LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      DISCOVERY_PROVIDER: ${DISCOVERY_PROVIDER:-live}
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     ports: ["127.0.0.1:8000:8000"]
 
