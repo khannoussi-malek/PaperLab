@@ -242,8 +242,6 @@ async def test_fake_llm_can_fail_mid_stream():
     assert len(tokens) == 2
 
 
-
-
 async def test_anthropic_max_tokens_comes_from_settings(monkeypatch):
     monkeypatch.setattr(settings, "anthropic_max_tokens", 1234)
     requests = []
@@ -481,6 +479,23 @@ async def test_list_models_for_anthropic():
     broken = {"type": "error", "error": {"type": "api_error", "message": f"boom {KEY}"}}
     with pytest.raises(LLMError, match="^Claude returned 500: boom ••••$"):
         await anthropic_listing(lambda request: httpx2.Response(500, json=broken))
+
+
+async def test_anthropic_closes_its_client_after_a_stream_and_after_a_model_list():
+    page = {"data": [], "has_more": False, "first_id": None, "last_id": None}
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        if request.url.path.endswith("/models"):
+            return httpx2.Response(200, json=page)
+        return httpx2.Response(200, text=anthropic_body(["ok"]), headers={"content-type": "text/event-stream"})
+
+    streaming = httpx2.AsyncClient(transport=httpx2.MockTransport(handler))
+    listing = httpx2.AsyncClient(transport=httpx2.MockTransport(handler))
+
+    await collect(llm.AnthropicLLM("claude-sonnet-5", KEY, "Claude", http_client=streaming), [])
+    await llm.list_models(Row("anthropic", "Claude", None, KEY), http_client=listing)
+
+    assert (streaming.is_closed, listing.is_closed) == (True, True)
 
 
 async def test_list_models_in_fake_mode_is_a_fixed_list_and_rejects_bad_key(monkeypatch):

@@ -81,7 +81,11 @@ def is_local(kind: str, base_url: str | None) -> bool:
 
 
 def _check_url(kind: str, base_url: str | None) -> str | None:
-    """The address without a trailing slash. Required (http or https) except for anthropic, where it must be empty."""
+    """The address without a trailing slash. Required (http or https) except for anthropic, where it must be empty.
+
+    A query string or userinfo is refused: a key belongs in api_key, where it is masked, not in an address every
+    response echoes back.
+    """
     if kind == "anthropic":
         if base_url is not None:
             raise InvalidInput("an Anthropic connection uses Anthropic's own address, so base_url must be empty")
@@ -89,7 +93,13 @@ def _check_url(kind: str, base_url: str | None) -> str | None:
     url = (base_url or "").strip().rstrip("/")
     try:
         parts = urlsplit(url)
-        valid = parts.scheme in ("http", "https") and bool(parts.hostname) and (parts.port or 0) >= 0
+        valid = (
+            parts.scheme in ("http", "https")
+            and bool(parts.hostname)
+            and (parts.port or 0) >= 0
+            and not parts.query
+            and not parts.username
+        )
     except ValueError:  # a malformed IPv6 host or a port that isn't a number
         valid = False
     if not valid:
