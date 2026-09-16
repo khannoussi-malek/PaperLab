@@ -403,6 +403,21 @@ before deleting; `search.py "progress bar long running download status" --domain
   in `title`) and an `icon-xs` ghost × named Stop following. Follow-ups are indented one level under their thread's
   first question (`ml-3 border-l border-glass-border pl-3`); workspace chat has no Follow up.
 
+## Find papers
+
+Pattern from ui-ux-pro-max (`search.py "search results list with add button in modal dialog" --domain ux`): an empty
+result suggests what to try next (severity Medium). Its "autocomplete as you type" advice is declined on purpose: each
+OpenAlex search costs 10 of 1,000 free daily credits, so search runs on submit.
+- **Find papers:** an outline button (`Search`) beside Upload PDFs, in the library header and a workspace's Papers tab,
+  opens a shadcn `Dialog` (`sm:max-w-2xl`, glass like Add papers). One `Input` labelled "Title, DOI, arXiv ID or
+  OpenAlex ID" and a Search submit button, disabled and reading "Searching…" while a search runs. Results scroll inside
+  the dialog (`max-h-[60vh]`).
+- **Candidate rows** (`CandidateList`, shared with the reader's Similar tab): the title (two lines, full text in
+  `title`), byline · citations, and a `Badge`: secondary "PDF" when a free PDF is listed, outline "No free PDF"
+  otherwise. Then small buttons: Add (`Plus`; "Adding…" with a spinning `LoaderCircle`, disabled while it runs) or an
+  outline "In library" link to the reader, and a ghost "Open page" link (`ExternalLink`, new tab). A failed add shows an
+  `ErrorAlert` under its row, and the row keeps its Add button.
+
 ## Pre-delivery check (from ui-ux-pro-max Quick Reference §1–§3)
 
 Run through this before finishing any UI task, in **both** themes:

@@ -2,6 +2,7 @@ import { FileText, Plus } from 'lucide-react'
 import { useState } from 'react'
 import { useUploadPapers, useWorkspacePapers } from '@/api/queries'
 import { Button } from '@/components/ui/button'
+import { FindPapersButton } from '@/features/discovery/FindPapersButton'
 import { ErrorAlert, LoadError } from '@/features/library/ErrorAlert'
 import { PaperList } from '@/features/library/PaperList'
 import { UploadPdfsButton } from '@/features/library/UploadPdfsButton'
@@ -22,6 +23,7 @@ export function WorkspacePapers({ workspaceId }: { workspaceId: string }) {
           Add papers
         </Button>
         <UploadPdfsButton variant="outline" isPending={upload.isPending} onUpload={(files) => upload.mutate(files)} />
+        <FindPapersButton workspaceId={workspaceId} />
       </div>
 
       {upload.error && <ErrorAlert message={upload.error.message} />}
