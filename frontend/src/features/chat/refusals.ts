@@ -1,5 +1,15 @@
-/** Why an answer failed, in words, and what the user can do about it. `settings`: the fix is on the settings page. */
-export type ChatProblem = { message: string; retryable: boolean; reindex: boolean; settings?: boolean }
+/**
+ * Why an answer failed, in words, and what the user can do about it. `settings`: the fix is on the settings page.
+ * `endsThread`: the answer a follow-up continued is gone, so the panel stops following it.
+ */
+export type ChatProblem = { message: string; retryable: boolean; reindex: boolean; settings?: boolean; endsThread?: boolean }
+
+const FOLLOWED_ANSWER_GONE: ChatProblem = {
+  message: 'The answer you were following is gone. Ask again to start a new question.',
+  retryable: false,
+  reindex: false,
+  endsThread: true,
+}
 
 // The 404s and 409s a chat POST answers before streaming, for a paper or a workspace, in words.
 const REFUSALS: Record<string, ChatProblem> = {
@@ -26,6 +36,8 @@ const REFUSALS: Record<string, ChatProblem> = {
     reindex: false,
   },
   no_model: { message: 'No model is set up for chat yet.', retryable: false, reindex: false, settings: true },
+  parent_not_found: FOLLOWED_ANSWER_GONE,
+  parent_scope: FOLLOWED_ANSWER_GONE,
   embedding_model_changed: {
     message: 'Your library was indexed with a different embedding model. Re-index it to chat again.',
     retryable: false,
