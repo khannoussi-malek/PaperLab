@@ -3,7 +3,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
-from app.core.discovery import Candidate
+from app.core.discovery import MAX_AUTHORS, MAX_PDF_URLS, Candidate
 
 AuthorName = Annotated[str, Field(min_length=1, max_length=300)]
 
@@ -31,7 +31,7 @@ class CandidateIn(BaseModel):
     is checked again."""
 
     title: str = Field(min_length=1, max_length=1000)
-    authors: list[AuthorName] = Field(default_factory=list, max_length=500)
+    authors: list[AuthorName] = Field(default_factory=list, max_length=MAX_AUTHORS)
     year: int | None = Field(default=None, ge=1000, le=2100)
     venue: str | None = Field(default=None, max_length=1000)
     doi: str | None = Field(default=None, pattern=r"^10\.\d{4,9}/\S+$", max_length=300)
@@ -39,7 +39,7 @@ class CandidateIn(BaseModel):
     openalex_id: str | None = Field(default=None, pattern=r"^W\d+$", max_length=20)
     s2_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     cited_by_count: int | None = Field(default=None, ge=0)
-    pdf_urls: list[HttpUrl] = Field(default_factory=list, max_length=10)
+    pdf_urls: list[HttpUrl] = Field(default_factory=list, max_length=MAX_PDF_URLS)
 
     def to_candidate(self) -> Candidate:
         return Candidate(**self.model_dump(exclude={"pdf_urls"}), pdf_urls=[str(url) for url in self.pdf_urls])

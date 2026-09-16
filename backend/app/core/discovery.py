@@ -29,6 +29,10 @@ SEARCH_LIMIT = 10
 SIMILAR_LIMIT = 10
 MAX_PDF_BYTES = 100 * 1024 * 1024
 PDF_TIMEOUT = httpx.Timeout(10.0, read=30.0)
+# CandidateIn (app/schemas/discovery.py) rejects a candidate over either limit with 422; capping here first means
+# the Add button never shows for a candidate its own endpoint would then refuse.
+MAX_PDF_URLS = 10
+MAX_AUTHORS = 500
 
 OPENALEX_OFF = "OpenAlex is off. Set OPENALEX_MAILTO in .env to search by title or DOI."
 OPENALEX_BUSY = "OpenAlex is busy or unreachable. Try again in a minute."
@@ -78,12 +82,13 @@ class Providers:
 
 
 def build_providers(mailto: str, s2_api_key: str, transport: httpx.AsyncBaseTransport | None = None) -> Providers:
-    agent = f"PaperLab (mailto:{mailto})" if mailto else "PaperLab"
     return Providers(
         openalex=openalex.new_client(mailto, transport) if mailto else None,
         s2=semantic_scholar.new_client(s2_api_key, transport),
+        # No mailto: unlike OpenAlex, a PDF host (arxiv.org, a publisher, a repository, or a redirect target) never
+        # agreed to receive the owner's email.
         pdf=httpx.AsyncClient(
-            timeout=PDF_TIMEOUT, follow_redirects=True, headers={"User-Agent": agent}, transport=transport
+            timeout=PDF_TIMEOUT, follow_redirects=True, headers={"User-Agent": "PaperLab"}, transport=transport
         ),
     )
 
@@ -113,9 +118,10 @@ def _arxiv_from_url(url: str | None) -> str | None:
 
 
 def _pdf_urls(arxiv_id: str | None, *links: str | None) -> list[str]:
-    """arXiv first, then `links` in order: deduplicated, http(s) only (D68)."""
+    """arXiv first, then `links` in order: deduplicated, http(s) only, capped at MAX_PDF_URLS (D68)."""
     urls = [f"https://arxiv.org/pdf/{arxiv_id}" if arxiv_id else None, *links]
-    return list(dict.fromkeys(url for url in urls if url and url.startswith(("http://", "https://"))))
+    deduped = dict.fromkeys(url for url in urls if url and url.startswith(("http://", "https://")))
+    return list(deduped)[:MAX_PDF_URLS]
 
 
 def from_work(work: dict[str, Any]) -> Candidate:
@@ -129,7 +135,9 @@ def from_work(work: dict[str, Any]) -> Candidate:
     source = (work.get("primary_location") or {}).get("source") or {}
     return Candidate(
         title=work.get("title") or "Untitled",
-        authors=[a["author"]["display_name"] for a in work.get("authorships") or [] if a.get("author")],
+        authors=[a["author"]["display_name"] for a in work.get("authorships") or [] if a.get("author")][
+            :MAX_AUTHORS
+        ],
         year=work.get("publication_year"),
         venue=source.get("display_name"),
         doi=doi,
@@ -146,7 +154,7 @@ def from_s2(paper: dict[str, Any]) -> Candidate:
     arxiv_id = (ids.get("ArXiv") or "").lower() or _arxiv_from_doi(doi)
     return Candidate(
         title=paper.get("title") or "Untitled",
-        authors=[a["name"] for a in paper.get("authors") or [] if a.get("name")],
+        authors=[a["name"] for a in paper.get("authors") or [] if a.get("name")][:MAX_AUTHORS],
         year=paper.get("year"),
         venue=paper.get("venue") or None,
         doi=doi,
@@ -307,6 +315,8 @@ async def add(session: AsyncSession, providers: Providers, candidate: Candidate,
     [marked] = await mark_in_library(session, [candidate])
     if marked.paper_id is not None:
         raise Conflict(ALREADY_IN_LIBRARY)
+    # Release the connection (and its transaction) before a download that can take up to several 30s reads.
+    await session.commit()
     data = await download_pdf(providers.pdf, candidate.pdf_urls)
     if data is None:
         raise Conflict(NO_FREE_PDF)
