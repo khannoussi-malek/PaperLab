@@ -10,6 +10,7 @@ from sqlalchemy import select
 from app import main
 from app.api import llm as llm_api
 from app.config import settings
+from app.core.errors import NotFound
 from app.models import LLMModel
 from app.providers import ollama_admin
 
@@ -283,6 +284,53 @@ async def test_pull_when_ollama_is_not_running_is_an_error_event(client, provide
     assert parse_sse((await pull(client, connection["id"])).text) == [
         ("error", {"message": "Can't reach ollama.test"})
     ]
+
+
+async def test_the_transaction_ends_before_the_download_streams(
+    client, provider, session, pulls_in_test_transaction, monkeypatch
+):
+    """ollama_connection commits in the dependency, so a download of minutes holds no pooled connection."""
+    connection = await ollama(client)
+    provider.reply("/api/pull", 200, text=json.dumps({"status": "success"}) + "\n")
+    commits = []
+    real_commit = session.commit
+
+    async def spy_commit():
+        commits.append(len(provider.requests))  # how many pull requests had gone out when this commit ran
+        await real_commit()
+
+    monkeypatch.setattr(session, "commit", spy_commit)
+
+    events = parse_sse((await pull(client, connection["id"])).text)
+
+    assert [name for name, _ in events] == ["progress", "done"]
+    assert commits == [0, 1]  # the dependency's commit before the download, then add_model's
+
+
+async def test_a_progress_line_without_a_status_is_an_error_event_and_adds_nothing(client, provider, session):
+    connection = await ollama(client)
+    provider.reply("/api/pull", 200, text=json.dumps({"total": 100, "completed": 20}) + "\n")
+
+    events = parse_sse((await pull(client, connection["id"], "nope")).text)
+
+    assert events == [("error", {"message": "The download stopped because of an unexpected error"})]
+    assert list(await session.scalars(select(LLMModel).where(LLMModel.name == "nope"))) == []
+
+
+async def test_a_failure_after_the_download_is_an_error_event(client, provider, session, monkeypatch):
+    """The connection deleted while the download ran: the progress bar is told instead of hanging on no event."""
+    connection = await ollama(client)
+    provider.reply("/api/pull", 200, text=json.dumps({"status": "success"}) + "\n")
+
+    async def deleted_meanwhile(*args, **kwargs):
+        raise NotFound("connection_not_found")
+
+    monkeypatch.setattr(llm_api.llm_connections, "add_model", deleted_meanwhile)
+
+    events = parse_sse((await pull(client, connection["id"], "nope")).text)
+
+    assert [name for name, _ in events] == ["progress", "error"]
+    assert events[-1][1] == {"message": "The model was downloaded but couldn't be added to chat"}
 
 
 async def test_pull_refusals_before_the_stream(client):
