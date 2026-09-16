@@ -48,6 +48,31 @@ test('Test connection says when the key is rejected, and counts the models when 
   await expect(good.getByRole('status')).toHaveText('Connected · 2 models')
 })
 
+test('a Test that fails outright shows the reason instead of quietly going back to Test', async ({ page, request, llmName }) => {
+  const connection = await addLlmConnection(request, llmName)
+  // The API itself breaking (or being gone) answers the test route with a 500, not an `ok: false` body.
+  await page.route('**/api/llm/connections/*/test', (route) =>
+    route.fulfill({ status: 500, json: { detail: 'The PaperLab API broke while testing.' } }),
+  )
+  await page.goto('/#/settings')
+  const card = page.locator(`article.connection-card[data-connection-id="${connection.id}"]`)
+
+  await card.getByRole('button', { name: 'Test' }).click()
+  await expect(card.getByRole('status')).toHaveText('The PaperLab API broke while testing.')
+  await expect(card.getByRole('button', { name: 'Test' })).toBeEnabled()
+})
+
+test('a default the server refuses says so instead of silently snapping back', async ({ page, llmConnection }) => {
+  // Mocked, so the owner's real default never moves: the reply is the API's own code for a model that is gone.
+  await page.route('**/api/llm/default', (route) => route.fulfill({ status: 404, json: { detail: 'model_not_found' } }))
+  await page.goto('/#/settings')
+  const card = page.locator(`article.connection-card[data-connection-id="${llmConnection.id}"]`)
+
+  await card.getByRole('radiogroup', { name: 'Default model' }).getByRole('radio', { name: llmConnection.modelName }).click()
+  await expect(card.getByRole('status')).toHaveText('model_not_found')
+  await expect(card.getByRole('radio', { name: llmConnection.modelName })).not.toBeChecked()
+})
+
 test('editing a connection renames it and removes its key, and deleting it asks first', async ({ page, request, llmName }) => {
   const connection = await addLlmConnection(request, llmName, 'e2e-model', { api_key: KEY })
   await page.goto('/#/settings')
