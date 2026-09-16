@@ -79,8 +79,9 @@ export function ChatPanel({ scope, unavailable, paperLabel, onCite, onPromoted }
   const answers = history.data ?? []
   const busy = stream.status === 'sources' || stream.status === 'streaming'
   const noModels = chatModels.data?.length === 0
-  // `isPending`: the first models fetch hasn't settled yet, so modelId is still null. Once it errors, isPending
-  // clears and asking stays open (the server's own default answers) per the models-request-failed rule below.
+  // `isPending`: the first models fetch hasn't settled yet, so modelId is still null. Once it fails, isPending
+  // clears and asking stays open with no model id, which the API answers with the owner's default; the composer
+  // says so instead of leaving an empty gap where the dropdown was.
   const closed = busy || unavailable !== undefined || noModels || chatModels.isPending
   // A saved answer comes back in the history, so the live copy hides instead of showing twice.
   const showLive = stream.status !== 'idle' && !answers.some((answer) => answer.id === stream.done?.output_id)
@@ -273,6 +274,7 @@ export function ChatPanel({ scope, unavailable, paperLabel, onCite, onPromoted }
             <ModelPicker models={chatModels.data} value={modelId} onChange={pickModel} />
           </div>
         )}
+        {chatModels.isError && <p className="px-1 text-xs text-muted-foreground">Couldn’t load your models; using the default.</p>}
         {noModels && (
           <a href={settingsHref} className="inline-flex w-fit items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
             <Settings2 aria-hidden className="size-3.5" />

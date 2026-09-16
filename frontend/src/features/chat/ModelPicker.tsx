@@ -20,8 +20,9 @@ export function ModelPicker({ models, value, onChange }: Props) {
   }
   const selected = models.find((model) => model.id === value)
 
+  // `''`, never undefined: an undefined value makes Radix uncontrolled, so a removed model would stay shown.
   return (
-    <Select value={value ?? undefined} onValueChange={handleChange}>
+    <Select value={value ?? ''} onValueChange={handleChange}>
       <SelectTrigger size="sm" aria-label="Model" className="max-w-56">
         {/* Explicit children, no badge: without this Radix portals the whole selected item (Cloud badge included)
             into the closed trigger, which breaks truncation for a cloud model. */}

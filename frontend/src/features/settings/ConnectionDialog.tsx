@@ -88,10 +88,11 @@ export function ConnectionDialog({ open, onOpenChange, connection }: Props) {
     if (next) {
       setForm(initialForm(connection))
       setPreset('Custom')
+    } else {
+      // A typed key is never left sitting in the field, nor in the mutation's own `variables`.
+      set({ apiKey: '' })
       create.reset()
       update.reset()
-    } else {
-      set({ apiKey: '' }) // a stored key is never left sitting in the field
     }
     onOpenChange(next)
   }
