@@ -1,6 +1,7 @@
 import { QueryClient, keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   api,
+  type Candidate,
   type ChartSpec,
   type ChatScope,
   type DatasetCreate,
@@ -45,6 +46,10 @@ const keys = {
   connections: ['llm', 'connections'] as const,
   available: (connectionId: string) => ['llm', 'connections', connectionId, 'available'] as const,
   embedding: ['embedding'] as const,
+  // Outside the papers key on purpose: refreshing the library must not re-ask OpenAlex or Semantic Scholar.
+  discovery: ['discovery'] as const,
+  search: (query: string) => ['discovery', 'search', query] as const,
+  similar: (paperId: string) => ['discovery', 'similar', paperId] as const,
 }
 
 /** Poll the library only while a paper is still ingesting. */
@@ -141,6 +146,43 @@ export function useDeletePaper() {
       Promise.all([
         client.invalidateQueries({ queryKey: keys.papers }),
         client.invalidateQueries({ queryKey: keys.workspaces }),
+      ]),
+  })
+}
+
+// Each OpenAlex search costs 10 of its 1,000 free daily credits; suggestions change slowly.
+const SEARCH_STALE_MS = 10 * 60_000
+const SIMILAR_STALE_MS = 60 * 60_000
+
+/** Searches once per submitted query; `query` is null until the first submit. */
+export const useSearchPapers = (query: string | null) =>
+  useQuery({
+    queryKey: keys.search(query ?? ''),
+    queryFn: () => api.searchPapers(query!),
+    enabled: query !== null,
+    staleTime: SEARCH_STALE_MS,
+  })
+
+/** Semantic Scholar's suggestions for a paper, fetched only once `enabled` (the Similar tab is open). */
+export const useSimilarPapers = (paperId: string, enabled: boolean) =>
+  useQuery({
+    queryKey: keys.similar(paperId),
+    queryFn: () => api.similarPapers(paperId),
+    enabled,
+    staleTime: SIMILAR_STALE_MS,
+  })
+
+/** Adds one found paper. Each row owns one, so its "In library" state stays with it. */
+export function useAddCandidate(workspaceId?: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (candidate: Candidate) => api.addCandidate(candidate, workspaceId),
+    onSuccess: () =>
+      Promise.all([
+        client.invalidateQueries({ queryKey: keys.papers, exact: true }),
+        client.invalidateQueries({ queryKey: keys.workspaces }),
+        // Stale, not refetched: an open search keeps its rows, and the next one asks again with the paper added.
+        client.invalidateQueries({ queryKey: keys.discovery, refetchType: 'none' }),
       ]),
   })
 }

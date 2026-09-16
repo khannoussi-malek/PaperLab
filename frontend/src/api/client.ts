@@ -45,6 +45,7 @@ export type PullProgressEvent = components['schemas']['PullProgressEvent']
 export type PullDoneEvent = components['schemas']['PullDoneEvent']
 export type PullErrorEvent = components['schemas']['PullErrorEvent']
 export type EmbeddingStatus = components['schemas']['EmbeddingStatusOut']
+export type Candidate = components['schemas']['CandidateOut']
 
 /** Where a chat lives: the reader's paper, or a workspace. */
 export type ChatScope = { kind: 'paper' | 'workspace'; id: string }
@@ -97,6 +98,12 @@ export const api = {
   deletePaper: (id: string) => request<void>(`/api/papers/${id}`, { method: 'DELETE' }),
   reingestPaper: (id: string) => request<Paper>(`/api/papers/${id}/reingest`, { method: 'POST' }),
   paperFileUrl: (id: string) => `/api/papers/${id}/file`,
+  /** Papers outside the library for a title, DOI, arXiv ID or OpenAlex ID. */
+  searchPapers: (query: string) => request<Candidate[]>(`/api/discovery/search?q=${encodeURIComponent(query)}`),
+  similarPapers: (paperId: string) => request<Candidate[]>(`/api/papers/${paperId}/similar`),
+  /** Downloads a found paper's free PDF into the library; with a `workspaceId` it also joins that workspace. */
+  addCandidate: (candidate: Candidate, workspaceId?: string) =>
+    request<Paper>('/api/discovery/add', sendJson('POST', { candidate, workspace_id: workspaceId ?? null })),
   listChunks: (paperId: string, page: number) => request<Chunk[]>(`/api/papers/${paperId}/chunks?page=${page}`),
   listNotes: (paperId: string) => request<Note[]>(`/api/papers/${paperId}/notes`),
   createNote: (note: NoteCreate) => request<Note>('/api/notes', sendJson('POST', note)),

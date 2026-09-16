@@ -84,6 +84,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/papers/{paper_id}/similar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Similar Papers
+         * @description Papers like this one, from Semantic Scholar. 409 when it doesn't know the paper or is busy.
+         */
+        get: operations["similar_papers_api_papers__paper_id__similar_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/papers/{paper_id}/chunks": {
         parameters: {
             query?: never;
@@ -775,10 +795,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/discovery/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search Papers
+         * @description Papers for a title, DOI, arXiv ID or OpenAlex ID, each marked when the library already holds it.
+         *     409 when OpenAlex is off (title and DOI only) or a service is busy.
+         */
+        get: operations["search_papers_api_discovery_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/discovery/add": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Paper
+         * @description Downloads the paper's first free PDF and ingests it like an upload. 404 for an unknown workspace (before any
+         *     download); 409 when the paper is already in the library or no free PDF is found.
+         */
+        post: operations["add_paper_api_discovery_add_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AddPaperRequest */
+        AddPaperRequest: {
+            candidate: components["schemas"]["CandidateIn"];
+            /** Workspace Id */
+            workspace_id?: string | null;
+        };
         /** AnchorIn */
         AnchorIn: {
             /**
@@ -855,6 +923,61 @@ export interface components {
             file: string;
             /** Workspace Id */
             workspace_id?: string | null;
+        };
+        /**
+         * CandidateIn
+         * @description A search result or suggestion sent back to be added. Extra fields (its `paper_id`) are ignored: the library
+         *     is checked again.
+         */
+        CandidateIn: {
+            /** Title */
+            title: string;
+            /** Authors */
+            authors?: string[];
+            /** Year */
+            year?: number | null;
+            /** Venue */
+            venue?: string | null;
+            /** Doi */
+            doi?: string | null;
+            /** Arxiv Id */
+            arxiv_id?: string | null;
+            /** Openalex Id */
+            openalex_id?: string | null;
+            /** S2 Id */
+            s2_id?: string | null;
+            /** Cited By Count */
+            cited_by_count?: number | null;
+            /** Pdf Urls */
+            pdf_urls?: string[];
+        };
+        /**
+         * CandidateOut
+         * @description A paper found outside the library. `paper_id` is set when the library already holds it.
+         */
+        CandidateOut: {
+            /** Title */
+            title: string;
+            /** Authors */
+            authors: string[];
+            /** Year */
+            year: number | null;
+            /** Venue */
+            venue: string | null;
+            /** Doi */
+            doi: string | null;
+            /** Arxiv Id */
+            arxiv_id: string | null;
+            /** Openalex Id */
+            openalex_id: string | null;
+            /** S2 Id */
+            s2_id: string | null;
+            /** Cited By Count */
+            cited_by_count: number | null;
+            /** Pdf Urls */
+            pdf_urls: string[];
+            /** Paper Id */
+            paper_id: string | null;
         };
         /** CellIn */
         CellIn: {
@@ -2208,6 +2331,37 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    similar_papers_api_papers__paper_id__similar_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                paper_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CandidateOut"][];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -3855,6 +4009,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReindexOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_papers_api_discovery_search_get: {
+        parameters: {
+            query: {
+                q: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CandidateOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_paper_api_discovery_add_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddPaperRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaperOut"];
                 };
             };
             /** @description Validation Error */
