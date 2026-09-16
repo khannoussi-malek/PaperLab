@@ -157,6 +157,17 @@ async def test_the_transaction_ends_before_the_llm_streams(client, session, fake
     assert commits == [0, 1]  # the dependency's commit before streaming, then save_answer's
 
 
+async def test_workspace_chat_refuses_a_follow_up_for_now(client, session, fake_llm):
+    workspace = await make_workspace(session, [await make_paper(session, "DPR")])
+
+    response = await client.post(
+        f"/api/workspaces/{workspace.id}/chat", json={"question": "And then?", "parent_id": str(uuid.uuid4())}
+    )
+
+    assert (response.status_code, response.json()) == (409, {"detail": "follow_ups_paper_only"})
+    assert fake_llm.calls == []
+
+
 def test_workspace_schemas_are_in_openapi():
     schemas = create_app().openapi()["components"]["schemas"]
 

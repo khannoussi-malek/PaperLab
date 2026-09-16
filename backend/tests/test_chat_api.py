@@ -165,6 +165,43 @@ async def test_history_lists_answers_oldest_first_with_replaced_chunks_as_null(c
     assert (await client.get(f"/api/papers/{uuid.uuid4()}/chat")).status_code == 404
 
 
+async def test_a_follow_up_carries_the_earlier_question_and_is_saved_with_its_parent(client, session, fake_llm):
+    paper, _ = await make_paper(session, ["Intro text.", "Method text."])
+    await client.post(f"/api/papers/{paper.id}/chat", json={"question": "What is the method?"})
+    [first] = await outputs_for(session, paper.id)
+
+    response = await client.post(
+        f"/api/papers/{paper.id}/chat", json={"question": "And why?", "parent_id": str(first.id)}
+    )
+
+    assert parse_sse(response.text)[-1][0] == "done"
+    earlier = "Earlier questions in this conversation, oldest first:\n- What is the method?\n\n"
+    assert fake_llm.calls[-1][1].endswith(earlier + "Question: And why?\n")
+    [follow_up] = [output for output in await outputs_for(session, paper.id) if output.id != first.id]
+    assert follow_up.parent_id == first.id
+    history = (await client.get(f"/api/papers/{paper.id}/chat")).json()
+    # One test transaction: both answers share created_at, so their order isn't checked here.
+    assert {(a["question"], a["parent_id"]) for a in history} == {
+        ("What is the method?", None), ("And why?", str(first.id))
+    }
+
+
+async def test_a_follow_up_to_a_missing_or_foreign_answer_is_refused_before_streaming(client, session, fake_llm):
+    paper, _ = await make_paper(session, ["Intro text."])
+    other, _ = await make_paper(session, ["Other text."])
+    await client.post(f"/api/papers/{other.id}/chat", json={"question": "Elsewhere?"})
+    [foreign] = await outputs_for(session, other.id)
+
+    ask = lambda parent_id: client.post(  # noqa: E731
+        f"/api/papers/{paper.id}/chat", json={"question": "And then?", "parent_id": str(parent_id)}
+    )
+    missing, wrong = await ask(uuid.uuid4()), await ask(foreign.id)
+
+    assert (missing.status_code, missing.json()) == (404, {"detail": "parent_not_found"})
+    assert (wrong.status_code, wrong.json()) == (409, {"detail": "parent_scope"})
+    assert await outputs_for(session, paper.id) == [] and len(fake_llm.calls) == 1  # only "Elsewhere?" was asked
+
+
 def test_stream_event_schemas_are_in_openapi():
     """openapi-typescript only generates types for schemas listed in components."""
     schemas = create_app().openapi()["components"]["schemas"]

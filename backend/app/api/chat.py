@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import LLMDep, SessionDep
 from app.core import chat
+from app.core.errors import Conflict
 from app.core.retrieval import RetrievedChunk
 from app.db import SessionLocal
 from app.providers.base import LLM, LLMError, LLMUnavailable
@@ -28,21 +29,26 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["chat"])
 
 
-async def _prepare(session: AsyncSession, scope: chat.Scope, question: str) -> chat.Prepared:
+async def _prepare(
+    session: AsyncSession, scope: chat.Scope, question: str, thread: chat.Thread | None = None
+) -> chat.Prepared:
     """Runs before the stream starts: once an SSE response has begun, an exception only drops the connection."""
-    prepared = await chat.prepare(session, scope, question)
+    prepared = await chat.prepare(session, scope, question, thread=thread)
     # End the transaction now. The LLM stream can take minutes and must not hold a pooled connection.
     await session.commit()
     return prepared
 
 
 async def prepare_answer(paper_id: uuid.UUID, payload: ChatRequest, session: SessionDep) -> chat.Prepared:
-    return await _prepare(session, chat.Scope(paper_id=paper_id), payload.question)
+    thread = None if payload.parent_id is None else await chat.load_thread(session, paper_id, payload.parent_id)
+    return await _prepare(session, chat.Scope(paper_id=paper_id), payload.question, thread)
 
 
 async def prepare_workspace_answer(
     workspace_id: uuid.UUID, payload: ChatRequest, session: SessionDep
 ) -> chat.Prepared:
+    if payload.parent_id is not None:
+        raise Conflict("follow_ups_paper_only")  # D62: until workspace follow-ups are measured
     return await _prepare(session, chat.Scope(workspace_id=workspace_id), payload.question)
 
 
@@ -78,7 +84,7 @@ STREAM_RESPONSES = {200: {"model": SourcesEvent | TokenEvent | DoneEvent | Error
 
 
 async def answer_events(
-    scope: chat.Scope, question: str, prepared: chat.Prepared, llm: LLM
+    scope: chat.Scope, question: str, prepared: chat.Prepared, llm: LLM, parent_id: uuid.UUID | None = None
 ) -> AsyncIterable[ServerSentEvent]:
     """Events: sources, token (repeated), then done. error replaces done, and then nothing is saved."""
     sources = SourcesEvent(
@@ -108,7 +114,7 @@ async def answer_events(
     try:
         async with SessionLocal() as session:
             output_id = await chat.save_answer(
-                session, scope, question, prepared, content, llm.model, llm.connection_name
+                session, scope, question, prepared, content, llm.model, llm.connection_name, parent_id
             )
     except Exception:
         logger.exception("saving a chat answer for %s failed", scope)
@@ -131,8 +137,9 @@ async def answer_events(
 async def ask(
     paper_id: uuid.UUID, payload: ChatRequest, llm: LLMDep, prepared: PreparedDep
 ) -> AsyncIterable[ServerSentEvent]:
-    """Checked before streaming, in parameter order: 404/409 for the model (llm), then 404/409/422 for the paper."""
-    async for event in answer_events(chat.Scope(paper_id=paper_id), payload.question, prepared, llm):
+    """Checked before streaming, in parameter order: 404/409 for the model (llm), then 404 for the paper, 404
+    parent_not_found or 409 parent_scope for a follow-up, then 409/422 for the paper."""
+    async for event in answer_events(chat.Scope(paper_id=paper_id), payload.question, prepared, llm, payload.parent_id):
         yield event
 
 
@@ -140,8 +147,8 @@ async def ask(
 async def ask_workspace(
     workspace_id: uuid.UUID, payload: ChatRequest, llm: LLMDep, prepared: WorkspacePreparedDep
 ) -> AsyncIterable[ServerSentEvent]:
-    """Checked before streaming, in parameter order: 404 model_not_found or 409 no_model, then 404, 409
-    workspace_empty or workspace_not_indexed, 422."""
+    """Checked before streaming, in parameter order: 404 model_not_found or 409 no_model, then 409
+    follow_ups_paper_only, 404, 409 workspace_empty or workspace_not_indexed, 422."""
     async for event in answer_events(chat.Scope(workspace_id=workspace_id), payload.question, prepared, llm):
         yield event
 
@@ -161,6 +168,7 @@ def to_answer(answer: chat.Answer) -> ChatAnswer:
         notes=to_notes(answer.notes),
         notes_used=output.notes_used,
         notes_total=output.notes_total,
+        parent_id=output.parent_id,
     )
 
 
