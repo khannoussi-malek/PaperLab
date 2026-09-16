@@ -1,5 +1,4 @@
-/** What GET /api/embedding answers. */
-export type EmbeddingStatus = { model: string; chunks: number; indexed_with: { model: string; chunks: number }[] }
+import type { EmbeddingStatus } from '@/api/client'
 
 const chunksText = (n: number) => `${n.toLocaleString('en-US')} ${n === 1 ? 'chunk' : 'chunks'}`
 

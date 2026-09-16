@@ -9,7 +9,10 @@ export type PullState =
   | { status: 'done'; name: string }
   | { status: 'error'; name: string; message: string }
 
-/** Pulls a model on an Ollama connection and follows its progress events. Leaving the page stops following. */
+/**
+ * Pulls a model on an Ollama connection and follows its progress events. Leaving the page aborts the request,
+ * which stops the download itself, not just the following: coming back needs a new Pull.
+ */
 export function usePullModel(connectionId: string) {
   const [state, setState] = useState<PullState>({ status: 'idle' })
   const invalidateModels = useInvalidateModels()

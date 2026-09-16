@@ -56,8 +56,9 @@ export function EmbeddingSettings() {
               {status.data.chunks > 0 && <Lock aria-hidden className="size-3.5" />}
               Embedding model
             </Label>
-            <Select value={status.data.model} disabled={status.data.chunks > 0}>
-              <SelectTrigger id="embedding-model" aria-label="Embedding model" disabled={status.data.chunks > 0} className="w-full">
+            {/* Always disabled: the app embeds with one configured model, so there is nothing yet to switch to. */}
+            <Select value={status.data.model} disabled>
+              <SelectTrigger id="embedding-model" aria-label="Embedding model" disabled className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

@@ -32,9 +32,9 @@ export function AddModelDialog({ connection, open, onOpenChange }: Props) {
     onOpenChange(false)
   }
 
-  async function add(name: string) {
-    await addModel.mutateAsync({ connectionId: connection.id, name })
-    close()
+  /** A refusal leaves the dialog open with the reason below; `mutate` reports it there instead of rejecting. */
+  function add(name: string) {
+    addModel.mutate({ connectionId: connection.id, name }, { onSuccess: close })
   }
 
   return (
@@ -55,12 +55,12 @@ export function AddModelDialog({ connection, open, onOpenChange }: Props) {
             <CommandEmpty>{available.isPending ? 'Loading models…' : noList ? 'Type a name above to add it.' : 'No matching models.'}</CommandEmpty>
             {!available.isPending &&
               visibleCandidates.map((name) => (
-                <CommandItem key={name} value={name} onSelect={() => void add(name)}>
+                <CommandItem key={name} value={name} onSelect={() => add(name)}>
                   {name}
                 </CommandItem>
               ))}
             {offerTyped && (
-              <CommandItem value={`add:${typed}`} onSelect={() => void add(typed)}>
+              <CommandItem value={`add:${typed}`} onSelect={() => add(typed)}>
                 Add “{typed}”
               </CommandItem>
             )}
