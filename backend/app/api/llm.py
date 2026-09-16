@@ -48,6 +48,9 @@ async def ollama_connection(connection_id: uuid.UUID, session: SessionDep) -> LL
     connection = await llm_connections.get_connection_row(session, connection_id)
     if connection.kind != "ollama":
         raise InvalidInput("not_an_ollama_connection")
+    # End the transaction now. A download can take minutes and must not hold a pooled connection; the pull route
+    # reads the row's values into locals before the first event.
+    await session.commit()
     return connection
 
 
@@ -132,6 +135,10 @@ async def set_default(payload: DefaultModelIn, session: SessionDep) -> ModelOut:
 PULL_RESPONSES = {200: {"model": PullProgressEvent | PullDoneEvent | PullErrorEvent}}
 
 
+def pull_error(message: str) -> ServerSentEvent:
+    return ServerSentEvent(event="error", data=PullErrorEvent(message=message))
+
+
 @router.post("/connections/{connection_id}/pull", response_class=EventSourceResponse, responses=PULL_RESPONSES)
 async def pull_model(
     payload: PullRequest, connection: OllamaDep, transport: TransportDep
@@ -145,10 +152,22 @@ async def pull_model(
             yield ServerSentEvent(event="progress", data=progress)
     except (LLMUnavailable, LLMError) as exc:
         logger.warning("pulling %s on %s (%s): %s", payload.name, label, llm.host_of(base_url), exc)
-        yield ServerSentEvent(event="error", data=PullErrorEvent(message=str(exc)))
+        yield pull_error(str(exc))
         return
-    async with SessionLocal() as session:
-        model = await llm_connections.add_model(session, connection_id, payload.name, exist_ok=True)
+    except Exception:
+        logger.exception("pulling %s on %s (%s) failed unexpectedly", payload.name, label, llm.host_of(base_url))
+        yield pull_error("The download stopped because of an unexpected error")
+        return
+
+    try:
+        async with SessionLocal() as session:
+            model = await llm_connections.add_model(session, connection_id, payload.name, exist_ok=True)
+    except Exception:
+        # The connection can be deleted while the download runs; without this the client waits on an event
+        # that never comes.
+        logger.exception("adding %s to %s after its download failed", payload.name, label)
+        yield pull_error("The model was downloaded but couldn't be added to chat")
+        return
     yield ServerSentEvent(event="done", data=PullDoneEvent(model=model))
 
 
