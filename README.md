@@ -23,6 +23,9 @@ always marked as AI in the interface.
 - Optionally fill in each paper's title, authors, year, venue and topics from [OpenAlex](https://openalex.org/), and
 correct any of them by hand with **Edit details**. Your corrections are kept when a paper is processed again.
 - A retracted paper shows a banner at the top of the reader that can't be dismissed.
+- Manage models in **Settings**: add connections and keys, test them, choose which models chat lists and the
+default, pull and delete Ollama models with live progress. Keys stay in your local database and are never sent
+back to the browser.
 
 **Group papers into workspaces**
 
@@ -75,6 +78,9 @@ CSV, and chart them side by side. Click any point on a chart to open its page in
 </picture>
 
 - Chat with one paper at a time. Answers stream in as they are written.
+- Pick the model for each question from the chat panel: a local Ollama model, Anthropic with your own key, or any
+OpenAI-compatible server (OpenAI, OpenRouter, Groq, Mistral, DeepSeek, Gemini, LM Studio, vLLM, llama.cpp). Cloud
+models are tagged "Cloud". Each answer keeps the model and connection that wrote it.
 - Answers cite the passages they use, like `[C1]`. Hover a citation to see its page and section, and click it to
 scroll the paper to that passage and flash it.
 - A short paper is sent to the model whole. A long one is searched first, and only the most relevant passages are sent.
@@ -85,8 +91,9 @@ scroll the paper to that passage and flash it.
 ## Principles
 
 - **Local first.** One user, one machine, no accounts. Your PDFs, notes and search index live in a local Postgres
-database. With the default Ollama model, the text of your papers never leaves your computer. Metadata lookups on
-OpenAlex are off unless you turn them on, and they send a paper's DOI or title, never its text.
+database. With a local model (Ollama, LM Studio and other servers on your machine), the text of your papers and
+notes never leaves your computer; a model tagged "Cloud" receives the passages and notes sent with each question.
+Metadata lookups on OpenAlex are off unless you turn them on, and they send a paper's DOI or title, never its text.
 - **AI is always labelled.** AI text is stored separately from yours, keeps the model and prompt version that
 produced it, and shows an AI badge. Editing an AI note marks it "AI · edited", never "You".
 - **Answers show their sources.** Chat answers cite passages you can click, so you can check every claim against the paper.
@@ -124,8 +131,8 @@ Hugging Face gives up on a download after 10 seconds without data. On a slow con
 HF_HUB_DOWNLOAD_TIMEOUT=60
 ```
 
-Real chats also need the model: `ollama pull qwen3:8b` on the host, or set `LLM_PROVIDER` / `LLM_MODEL` in `.env`
-to choose a different provider and model.
+Real chats also need a model: `ollama pull qwen3:8b` on the host. On first start the API creates one connection
+from `LLM_PROVIDER` / `LLM_MODEL` in `.env`; after that, add and switch models in **Settings**.
 
 Metadata enrichment (fetching paper details from OpenAlex) is optional and off by default. Set `OPENALEX_MAILTO`
 in `.env` to turn it on; the value is sent to api.openalex.org as a `mailto` parameter on every request.
@@ -135,14 +142,15 @@ in `.env` to turn it on; the value is sent to api.openalex.org as a `mailto` par
 Settings live in `.env`.
 
 
-| Variable                                                    | Default                             | What it does                                                                                      |
-| ----------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `LLM_PROVIDER`                                              | `ollama`                            | `ollama` (local), `anthropic`, or `fake` (fixed answers, for tests)                               |
-| `LLM_MODEL`                                                 | `qwen3:8b`                          | The chat model to use                                                                             |
-| `OLLAMA_URL`                                                | `http://host.docker.internal:11434` | Where Ollama runs: on the host, not in Compose                                                    |
-| `ANTHROPIC_API_KEY`                                         | none                                | Required when `LLM_PROVIDER=anthropic`. The passages sent with each question then go to Anthropic |
-| `OPENALEX_MAILTO`                                           | empty (off)                         | Your email. Setting it turns on OpenAlex metadata; OpenAlex receives it with every request        |
-| `POSTGRES_PASSWORD`, `DATABASE_URL`, `REDIS_URL`, `PDF_DIR` | see `.env.example`                  | Database, queue and PDF storage                                                                   |
+| Variable                                                    | Default                             | What it does                                                                                                                        |
+| ----------------------------------------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `LLM_PROVIDER`                                              | `ollama`                            | Seeds the first model connection: `ollama` or `anthropic`. `fake` answers every model with fixed text (for tests) and seeds nothing |
+| `LLM_MODEL`                                                 | `qwen3:8b`                          | The first connection's default model                                                                                                |
+| `OLLAMA_URL`                                                | `http://host.docker.internal:11434` | Where Ollama runs: on the host, not in Compose                                                                                      |
+| `ANTHROPIC_API_KEY`                                         | none                                | Seeds an Anthropic connection when `LLM_PROVIDER=anthropic`; add keys in Settings afterwards                                        |
+| `ANTHROPIC_MAX_TOKENS`                                      | `64000`                             | The longest answer an Anthropic model may write                                                                                     |
+| `OPENALEX_MAILTO`                                           | empty (off)                         | Your email. Setting it turns on OpenAlex metadata; OpenAlex receives it with every request                                          |
+| `POSTGRES_PASSWORD`, `DATABASE_URL`, `REDIS_URL`, `PDF_DIR` | see `.env.example`                  | Database, queue and PDF storage                                                                                                     |
 
 
 
@@ -155,7 +163,7 @@ flowchart LR
   API --> DB[("Postgres 16<br/>+ pgvector")]
   API -- "ingest job" --> Q[(Redis)] --> W["Worker (ARQ)<br/>PyMuPDF · sentence-transformers"]
   W --> DB
-  API -- "chat" --> LLM["Ollama on the host<br/>or Anthropic"]
+  API -- "chat" --> LLM["Ollama on the host, Anthropic<br/>or an OpenAI-compatible server"]
 ```
 
 
@@ -172,14 +180,14 @@ versioned files in `backend/prompts/`.
 
 ```text
 backend/
-  app/api/         HTTP routes: papers, notes, chat, health
+  app/api/         HTTP routes: papers, notes, chat, health, llm, embedding
   app/core/        domain logic: chunking, retrieval, chat, note provenance rules
-  app/providers/   PDF extraction, embeddings, OpenAlex, LLM adapters (Ollama, Anthropic, fake)
+  app/providers/   PDF extraction, embeddings, OpenAlex, LLM adapters (Ollama, Anthropic, OpenAI-compatible, fake), Ollama pull/delete
   app/workers/     the ARQ ingestion job
   prompts/         versioned prompts
   evals/           retrieval eval: recall@k over questions.yaml
 frontend/
-  src/features/    library, reader, notes, chat
+  src/features/    library, reader, notes, chat, settings
   design-system/   MASTER.md: design tokens and UI rules
   e2e/             Playwright specs against the real stack
 ```
