@@ -5,6 +5,7 @@ import { useChunksOnPage, useDataset, useNoteMutations, useNotes, usePaper, useP
 import { glass } from '@/components/glass'
 import { fadeIn } from '@/components/motion'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { copyText } from '@/lib/clipboard'
 import { readerHref, type ReaderTab, type ReaderTarget } from '@/lib/route'
 import { cn } from '@/lib/utils'
 import { ChatPanel } from '../chat/ChatPanel'
@@ -250,9 +251,8 @@ export function ReaderPage({ paperId, tab, target }: Props) {
     )
   }
 
-  function copyText(text: string) {
-    if (!navigator.clipboard) return setError('Copying needs clipboard access, which this browser blocks here.')
-    navigator.clipboard.writeText(text).catch(() => setError('Could not copy: the browser blocked clipboard access.'))
+  function copyToClipboard(text: string) {
+    copyText(text).catch((reason: Error) => setError(reason.message))
   }
 
   function focusComposer() {
@@ -473,7 +473,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
         onAddNote={focusComposer}
         onAddNumber={addNumberFromDraft}
         onCancelDraft={() => setDraft(null)}
-        onCopy={copyText}
+        onCopy={copyToClipboard}
       />
     </div>
   )
