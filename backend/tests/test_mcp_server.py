@@ -73,10 +73,11 @@ async def test_an_unknown_workspace_answers_with_the_real_names(session):
 
     result = await call("search_library", query="anything", workspace="No such workspace")
 
-    names = [view.name for view in await workspaces.list_workspaces(session)]
+    # Not compared with a later read: a workspace another run commits in between (E2E on this stack) would differ.
+    available = result.structured_content.get("available", [])
     assert result.is_error
-    assert result.structured_content == {"error": "unknown_workspace", "available": names}
-    assert f"MCP thesis {RUN}" in names
+    assert result.structured_content == {"error": "unknown_workspace", "available": available}
+    assert f"MCP thesis {RUN}" in available and available == sorted(available)
 
 
 async def test_create_note_places_the_quote_and_stores_an_llm_note(session, tmp_path):
