@@ -1,15 +1,17 @@
 import { useMemo, useState } from 'react'
-import { useLibraryGraph, useWorkspaces } from '@/api/queries'
+import type { GraphLink } from '@/api/client'
+import { useLibraryGraph, usePaperLinkMutations, useWorkspaces } from '@/api/queries'
 import { glass } from '@/components/glass'
 import { fadeIn } from '@/components/motion'
 import { ModeToggle } from '@/components/mode-toggle'
 import { Button } from '@/components/ui/button'
 import { useChartTheme } from '@/features/charts/useChartTheme'
-import { LoadError } from '@/features/library/ErrorAlert'
+import { ErrorAlert, LoadError } from '@/features/library/ErrorAlert'
 import { cn } from '@/lib/utils'
 import { GraphCanvas } from './GraphCanvas'
 import { GraphControls } from './GraphControls'
 import { GraphPanel } from './GraphPanel'
+import { LinkDialog, type LinkDraft } from './LinkDialog'
 import { countsLine, DEFAULT_LAYERS, focusedIds, layerCounts, visibleLinks, workspaceColors, type LinkKind } from './graphModel'
 
 const EMPTY =
@@ -20,9 +22,11 @@ export function GraphPage() {
   const [layers, setLayers] = useState<LinkKind[]>(DEFAULT_LAYERS)
   const [focusId, setFocusId] = useState<string | null>(null)
   const [hops, setHops] = useState(1)
+  const [dialog, setDialog] = useState<{ editing: GraphLink | null } | null>(null)
   const theme = useChartTheme()
   const graph = useLibraryGraph(workspaceId)
   const workspaces = useWorkspaces()
+  const links = usePaperLinkMutations()
 
   const nodes = useMemo(() => graph.data?.nodes ?? [], [graph.data])
   const allLinks = useMemo(() => graph.data?.links ?? [], [graph.data])
@@ -38,7 +42,31 @@ export function GraphPage() {
   const toggleLayer = (kind: LinkKind) =>
     setLayers((current) => (current.includes(kind) ? current.filter((k) => k !== kind) : [...current, kind]))
 
+  function save(draft: LinkDraft) {
+    const editing = dialog?.editing
+    const done = {
+      onSuccess: () => {
+        setDialog(null)
+        // Show what was just drawn: Your links is off by default (P5), and a link the owner can't see is confusing.
+        setLayers((current) => (current.includes('manual') ? current : [...current, 'manual']))
+      },
+    }
+    if (editing?.id) links.rename.mutate({ id: editing.id, label: draft.label }, done)
+    else if (focused) links.create.mutate({ from: focused.id, to: draft.toPaper, label: draft.label }, done)
+  }
+
+  function remove(link: GraphLink) {
+    const other = nodes.find((node) => node.id === (link.source === focusId ? link.target : link.source))
+    if (!link.id) return
+    if (!window.confirm(`Remove your link to "${other?.title ?? 'this paper'}"?`)) return
+    links.remove.mutate(link.id)
+  }
+
   const counted = countsLine(nodes.length, shown.length)
+  const editing = dialog?.editing ?? null
+  const editingOther = editing
+    ? nodes.find((node) => node.id === (editing.source === focusId ? editing.target : editing.source))
+    : undefined
 
   return (
     <main className={cn('mx-auto flex h-dvh max-w-7xl flex-col gap-4 px-4 py-6', fadeIn)}>
@@ -102,17 +130,33 @@ export function GraphPage() {
           </div>
 
           <div className={cn('flex min-h-0 flex-col gap-3 rounded-xl border border-glass-border p-4', glass)}>
+            {links.error && <ErrorAlert message={links.error} />}
             <GraphPanel
               nodes={nodes}
               links={shown}
               focused={focused}
               onFocus={setFocusId}
               onClear={() => setFocusId(null)}
+              onAddLink={() => setDialog({ editing: null })}
+              onEditLink={(link) => setDialog({ editing: link })}
+              onRemoveLink={remove}
             />
           </div>
         </div>
       )}
 
+      {dialog !== null && focused !== null && (
+        <LinkDialog
+          open
+          onOpenChange={(open) => !open && setDialog(null)}
+          fromTitle={focused.title}
+          choices={nodes.filter((node) => node.id !== focused.id)}
+          editing={editing?.label ? { label: editing.label, toTitle: editingOther?.title ?? '' } : null}
+          pending={links.create.isPending || links.rename.isPending}
+          error={links.error}
+          onSubmit={save}
+        />
+      )}
     </main>
   )
 }

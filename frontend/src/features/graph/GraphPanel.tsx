@@ -1,3 +1,4 @@
+import { Link2, Pencil, Trash2 } from 'lucide-react'
 import type { GraphLink, GraphNode } from '@/api/client'
 import { Button } from '@/components/ui/button'
 import { readerHref } from '@/lib/route'
@@ -10,10 +11,13 @@ type Props = {
   focused: GraphNode | null
   onFocus: (paperId: string) => void
   onClear: () => void
+  onAddLink: () => void
+  onEditLink: (link: GraphLink) => void
+  onRemoveLink: (link: GraphLink) => void
 }
 
 /** A paper's connections by kind, plus the papers list. D108: the canvas is hidden, so this is the interface. */
-export function GraphPanel({ nodes, links, focused, onFocus, onClear }: Props) {
+export function GraphPanel({ nodes, links, focused, onFocus, onClear, onAddLink, onEditLink, onRemoveLink }: Props) {
   const byId = new Map(nodes.map((node) => [node.id, node]))
   const degree = new Map<string, number>()
   for (const link of links) {
@@ -70,6 +74,11 @@ export function GraphPanel({ nodes, links, focused, onFocus, onClear }: Props) {
         </Button>
       </div>
 
+      <Button variant="outline" size="sm" className="self-start" onClick={onAddLink}>
+        <Link2 aria-hidden />
+        Link to another paper…
+      </Button>
+
       <div className="flex min-h-0 flex-col gap-4 overflow-y-auto">
         {connections.length === 0 && (
           <p className="text-sm text-muted-foreground">No links in the layers you have on.</p>
@@ -97,6 +106,26 @@ export function GraphPanel({ nodes, links, focused, onFocus, onClear }: Props) {
                         {paper.title}
                         {link.label && <span className="text-muted-foreground"> — {link.label}</span>}
                       </a>
+                      {kind === 'manual' && (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`Edit label for ${paper.title}`}
+                            onClick={() => onEditLink(link)}
+                          >
+                            <Pencil aria-hidden />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`Remove link to ${paper.title}`}
+                            onClick={() => onRemoveLink(link)}
+                          >
+                            <Trash2 aria-hidden />
+                          </Button>
+                        </>
+                      )}
                     </li>
                   )
                 })}
