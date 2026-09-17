@@ -1,9 +1,9 @@
-import { ChartColumn, FileText, Plug, Settings } from 'lucide-react'
+import { ChartColumn, FileText, Plug, Settings, Share2 } from 'lucide-react'
 import { usePapers, useUploadPapers } from '@/api/queries'
 import { ModeToggle } from '@/components/mode-toggle'
 import { fadeIn } from '@/components/motion'
 import { Button } from '@/components/ui/button'
-import { chartsHref, connectClaudeHref, settingsHref } from '@/lib/route'
+import { chartsHref, connectClaudeHref, graphHref, settingsHref } from '@/lib/route'
 import { cn } from '@/lib/utils'
 import { FindPapersButton } from '../discovery/FindPapersButton'
 import { WorkspaceSidebar } from '../workspaces/WorkspaceSidebar'
@@ -32,6 +32,12 @@ export function LibraryPage() {
             <a href={chartsHref}>
               <ChartColumn aria-hidden />
               Charts
+            </a>
+          </Button>
+          <Button variant="outline" asChild>
+            <a href={graphHref}>
+              <Share2 aria-hidden />
+              Graph
             </a>
           </Button>
           <FindPapersButton />
