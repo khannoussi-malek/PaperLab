@@ -29,6 +29,9 @@ click when a free PDF exists (arXiv, a repository or an open-access publisher). 
 page, so you can download it yourself. Nothing gets past a paywall.
 - Open a paper's **Similar** tab for papers like it, suggested by [Semantic Scholar](https://www.semanticscholar.org/),
 and add them the same way.
+- Open a paper's **References** tab to see what it cites and what has cited it since, ranked for your library:
+references several of your papers cite come first, then ones close to what you write notes about, then ones with a
+free PDF. Import a reference in a click when a free PDF exists.
 - Hover a paper in the list to preview its first page and details.
 - With OpenAlex ticked in Settings, fill in each paper's title, authors, year, venue and topics from
 [OpenAlex](https://openalex.org/), and correct any of them by hand with **Edit details**. Your corrections are kept when
@@ -119,8 +122,7 @@ database. With a local model (Ollama, LM Studio and other servers on your machin
 notes never leaves your computer; a model tagged "Cloud" receives the passages and notes sent with each question.
 Metadata lookups on OpenAlex are off unless you tick OpenAlex, and they send a paper's DOI or title, never its text.
 Find papers sends what you type to every paper source that is on and can answer it, then the results' DOIs to Semantic
-Scholar and, for results without a free PDF, to Unpaywall. The Similar tab sends the paper's DOI, or its title when it
-has none. Your contact email goes to Crossref, Unpaywall and OpenAlex (when on), never to the others or to PDF hosts.
+Scholar and, for results without a free PDF, to Unpaywall. The Similar and References tabs send the paper's DOI, or its title when it has none, to Semantic Scholar (and References to OpenAlex when it's on). Your contact email goes to Crossref, Unpaywall and OpenAlex (when on), never to the others or to PDF hosts.
 API keys stay in your local database and are never sent back to the browser. Adding a paper downloads its PDF from the
 free link found. None of them send a paper's text.
 An MCP client you connect, such as Claude Desktop, receives what its tools return: passages from your papers, paper
@@ -280,8 +282,8 @@ docker compose exec api python -m evals.answer_check --paper "<title prefix>" --
 ```
 
 - **End-to-end tests** run against the real stack, with no mocked backend. They expect the fake model, which always
-gives the same answer: start the API with `LLM_PROVIDER=fake docker compose up -d api`, run the tests, then go back
-with `docker compose up -d api`.
+gives the same answer: start the API and the worker with `LLM_PROVIDER=fake DISCOVERY_PROVIDER=fake docker compose up -d api worker`, run the
+tests, then go back with `docker compose up -d api worker`.
 - **Retrieval eval:** `docker compose exec api python -m evals.run` prints recall@k for the questions in
 `backend/evals/questions.yaml`. Run it twice after a re-ingest before comparing results.
 - **Answer eval:** `docker compose exec api python -m evals.answers --label <name>` asks the default model the
