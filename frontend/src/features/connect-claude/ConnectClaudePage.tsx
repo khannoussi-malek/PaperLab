@@ -129,6 +129,7 @@ export function ConnectClaudePage() {
           {!ready && (
             <p id="paperlab-folder-help" className="text-xs text-muted-foreground">
               Paste the full path of your PaperLab folder.{os === 'windows' && ' For example C:\\Users\\you\\PaperLab.'}
+              {os === 'wsl' && ' For example /home/you/PaperLab, the path inside WSL.'}
             </p>
           )}
         </div>
@@ -149,7 +150,7 @@ export function ConnectClaudePage() {
           </li>
           <li>
             Add the <code className={code}>paperlab</code> entry inside <code className={code}>mcpServers</code>, keeping
-            any servers already there.
+            any servers already there. If the file already has servers, copy just the "paperlab" block.
           </li>
           <li>Quit Claude Desktop completely and reopen it.</li>
         </ol>
@@ -170,11 +171,13 @@ export function ConnectClaudePage() {
         ) : (
           <p className="text-sm text-muted-foreground">The command appears here once the PaperLab folder is filled in.</p>
         )}
+        <p className="text-sm text-muted-foreground">This registers PaperLab for every project you use Claude Code in.</p>
       </Section>
 
       <Section id="check-server-heading" title="Check PaperLab's side">
         <p className="text-sm text-muted-foreground">
-          This starts PaperLab's MCP server and reads your library through it. It checks PaperLab, not Claude's config.
+          This starts PaperLab's MCP server and reads your library through it. It checks PaperLab, not the launcher or
+          Claude's config.
         </p>
         <Button
           className="self-start"
@@ -199,6 +202,12 @@ export function ConnectClaudePage() {
       <Section id="not-working-heading" title="If it doesn't work">
         <ul className="list-disc space-y-1 pl-5 text-sm">
           <li>
+            Claude Desktop writes what the launcher says to its own log: on macOS{' '}
+            <code className={code}>~/Library/Logs/Claude/mcp-server-paperlab.log</code>, on Windows{' '}
+            <code className={code}>%APPDATA%\Claude\logs\mcp-server-paperlab.log</code>, and on Linux in Claude
+            Desktop's logs folder. Open it to see why the server didn't start.
+          </li>
+          <li>
             PaperLab must be running: <code className={code}>docker compose up -d</code> in the PaperLab folder.
           </li>
           <li>After restarting PaperLab's api, restart Claude Desktop too: the connection ends with it.</li>
@@ -211,7 +220,8 @@ export function ConnectClaudePage() {
           <li>
             macOS and Linux: if docker is installed somewhere unusual, add{' '}
             <code className={code}>{'"env": { "PAPERLAB_DOCKER": "/full/path/to/docker" }'}</code> beside{' '}
-            <code className={code}>command</code>.
+            <code className={code}>command</code>. Inside WSL, export it in ~/.profile: a value set in Claude
+            Desktop's config doesn't reach the distro.
           </li>
           <li>Connect Claude has been tested on macOS.</li>
         </ul>

@@ -31,9 +31,9 @@ export function desktopConfig(folder: string, os: SetupOs): string {
 export function claudeCodeCommand(folder: string, os: SetupOs): string {
   const root = trimmed(folder)
   if (os === 'windows') {
-    return `claude mcp add paperlab -- docker compose -f "${root}\\docker-compose.yml" ${COMPOSE_EXEC.join(' ')}`
+    return `claude mcp add -s user paperlab -- docker compose -f "${root}\\docker-compose.yml" ${COMPOSE_EXEC.join(' ')}`
   }
-  return `claude mcp add paperlab -- '${`${root}/scripts/paperlab-mcp`.replaceAll("'", "'\\''")}'`
+  return `claude mcp add -s user paperlab -- '${`${root}/scripts/paperlab-mcp`.replaceAll("'", "'\\''")}'`
 }
 
 /** Where Claude Desktop keeps its config on each system. */
