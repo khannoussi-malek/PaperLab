@@ -13,6 +13,7 @@ import asyncio
 import re
 import unicodedata
 import uuid
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -331,21 +332,26 @@ async def locate_quote(session: AsyncSession, paper_id: uuid.UUID, quoted_text: 
         raise Conflict("paper_not_ready")
     # ponytail: a quote that crosses from one chunk into the next isn't found; the hint asks for one passage. Join
     # neighbouring chunks on a page if models keep quoting across them.
-    hits = [(chunk, blocks) for chunk in chunks for blocks in quote_hits(chunk.text, quote)]
-    if not hits:
+    # A place is a page and the paragraphs a hit touches. Chunks of a paper without headings repeat a paragraph at
+    # the start of the next chunk, so one place can be hit from two chunks: each place counts as often as the one
+    # chunk that hits it most (Counter's | keeps the larger count), so a sentence twice in one paragraph is still two.
+    places: Counter[tuple[int, tuple[Rect, ...]]] = Counter()
+    for chunk in chunks:
+        hits = quote_hits(chunk.text, quote)
+        places |= Counter((chunk.page, tuple(tuple(chunk.bbox[i]) for i in blocks)) for blocks in hits)
+    if not places:
         raise InvalidInput("quote_not_found", hint=QUOTE_NOT_FOUND_HINT)
-    if len(hits) > 1:
-        pages = sorted({chunk.page for chunk, _ in hits})
-        raise InvalidInput("quote_ambiguous", pages=pages, hint=QUOTE_AMBIGUOUS_HINT)
-    chunk, blocks = hits[0]
-    paragraphs = [tuple(chunk.bbox[i]) for i in blocks]
+    if places.total() > 1:
+        raise InvalidInput("quote_ambiguous", pages=sorted({page for page, _ in places}), hint=QUOTE_AMBIGUOUS_HINT)
+    [(page, rects)] = places
+    paragraphs = list(rects)
     try:
         path = await get_paper_file(session, paper_id)
     except NotFound:  # the PDF isn't on this machine: the paragraphs will do
         lines = []
     else:
-        lines = await asyncio.to_thread(quote_rects, path, chunk.page, paragraphs, quoted_text)
-    return Anchor(paper_id, chunk.page, lines or paragraphs, normalize_quote(quoted_text))
+        lines = await asyncio.to_thread(quote_rects, path, page, paragraphs, quoted_text)
+    return Anchor(paper_id, page, lines or paragraphs, normalize_quote(quoted_text))
 
 
 async def create_llm_note(session: AsyncSession, paper_id: uuid.UUID, body: str, quoted_text: str) -> NoteView:
