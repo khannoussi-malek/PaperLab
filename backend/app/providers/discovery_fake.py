@@ -1,8 +1,10 @@
 """Find papers and Similar without the network, for the E2E stack (DISCOVERY_PROVIDER=fake).
 
-Every search, lookup and suggestion answers the same three papers: one with a free PDF, one whose "PDF" link is a web
-page, and one with no free copy. They have DOIs under the 10.5555 test prefix and no OpenAlex IDs, so adding one never
-collides with a real paper's OpenAlex ID.
+Three papers: one with a free PDF, one whose "PDF" link is a web page, and one with no free copy. They have DOIs under
+the 10.5555 test prefix and no OpenAlex IDs, so adding one never collides with a real paper's OpenAlex ID.
+OpenAlex, Crossref and Semantic Scholar answer all three. arXiv and CORE answer only the free paper: an arXiv ID would
+give the closed paper a PDF link. Unpaywall lists the free and landing papers' links, so with OpenAlex off (the default,
+and the E2E stack's setting) the badges match M19's. arxiv.org serves no PDF, so Add falls through to the fixture host.
 """
 
 import json
@@ -14,6 +16,7 @@ import pymupdf
 MAILTO = "e2e@paperlab.test"
 PDF_HOST = "https://pdf.paperlab.test"
 FREE_TITLE = "PaperLab Find Papers Fixture"
+FREE_ARXIV_ID = "2609.00001"
 LANDING_TITLE = "PaperLab Landing Page Fixture"
 CLOSED_TITLE = "PaperLab Closed Access Fixture"
 DOI_PREFIX = "10.5555/paperlab-e2e-"
@@ -64,6 +67,38 @@ def _s2_paper(index: int, title: str, doi: str, pdf_url: str | None) -> dict:
     }
 
 
+def _crossref_item(title: str, doi: str, pdf_url: str | None) -> dict:
+    return {
+        "DOI": doi,
+        "type": "journal-article",
+        "title": [title],
+        "author": [{"given": "Ada", "family": "Fixture"}],
+        "issued": {"date-parts": [[2026]]},
+        "container-title": ["Journal of Fixtures"],
+        "is-referenced-by-count": 3,
+    }
+
+
+def _arxiv_feed() -> str:
+    title, doi, _ = PAPERS[0]
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:arxiv="http://arxiv.org/schemas/atom">
+  <entry>
+    <id>http://arxiv.org/abs/{FREE_ARXIV_ID}v1</id>
+    <published>2026-01-05T00:00:00Z</published>
+    <title>{title}</title>
+    <author><name>Ada Fixture</name></author>
+    <arxiv:doi>{doi}</arxiv:doi>
+  </entry>
+</feed>"""
+
+
+def _core_work() -> dict:
+    title, doi, pdf_url = PAPERS[0]
+    return {"id": 900001, "title": title, "authors": [{"name": "Fixture, Ada"}], "yearPublished": 2026, "doi": doi,
+            "arxivId": None, "downloadUrl": pdf_url}  # fmt: skip
+
+
 def _handle(request: httpx.Request) -> httpx.Response:
     host, path = request.url.host, request.url.path
     s2_papers = [_s2_paper(i, *paper) for i, paper in enumerate(PAPERS)]
@@ -80,6 +115,18 @@ def _handle(request: httpx.Request) -> httpx.Response:
             return httpx.Response(200, json=[None] * len(json.loads(request.read())["ids"]))
         if path.startswith("/graph/v1/paper/"):
             return httpx.Response(200, json=s2_papers[0])
+    if host == "api.crossref.org" and path == "/works":
+        return httpx.Response(200, json={"message": {"items": [_crossref_item(*paper) for paper in PAPERS]}})
+    if host == "api.crossref.org" and path.startswith("/works/"):
+        return httpx.Response(200, json={"message": _crossref_item(*PAPERS[0])})
+    if host == "export.arxiv.org" and path == "/api/query":
+        return httpx.Response(200, text=_arxiv_feed(), headers={"content-type": "application/atom+xml"})
+    if host == "api.core.ac.uk" and path == "/v3/search/works/":
+        return httpx.Response(200, json={"results": [_core_work()]})
+    if host == "api.unpaywall.org":
+        pdf_url = next((url for _, doi, url in PAPERS if path == f"/v2/{doi}"), None)
+        if pdf_url:
+            return httpx.Response(200, json={"best_oa_location": {"url_for_pdf": pdf_url}, "oa_locations": []})
     if host == "pdf.paperlab.test" and path == "/paper.pdf":
         return httpx.Response(200, content=pdf_bytes(), headers={"content-type": "application/pdf"})
     if host == "pdf.paperlab.test" and path == "/page.html":
