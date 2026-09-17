@@ -9,9 +9,15 @@ say() {
 cd "$(dirname "$0")/.." || exit 1
 
 # Apps like Claude Desktop don't get a terminal's PATH on macOS, hence the fixed places after `command -v`.
+# PAPERLAB_DOCKER_PATHS allows testing: space-separated paths to try; empty string disables fallbacks.
 docker=
-for candidate in "${PAPERLAB_DOCKER:-}" "$(command -v docker)" /usr/local/bin/docker /opt/homebrew/bin/docker \
-  /usr/bin/docker "${HOME:-}/.orbstack/bin/docker" /Applications/Docker.app/Contents/Resources/bin/docker; do
+if [ -z "${PAPERLAB_DOCKER_PATHS+x}" ]; then
+  # Default fallback paths for macOS and Linux
+  fallback_paths="/usr/local/bin/docker /opt/homebrew/bin/docker /usr/bin/docker ${HOME:-}/.orbstack/bin/docker /Applications/Docker.app/Contents/Resources/bin/docker"
+else
+  fallback_paths="${PAPERLAB_DOCKER_PATHS}"
+fi
+for candidate in "${PAPERLAB_DOCKER:-}" "$(command -v docker)" $fallback_paths; do
   if [ -n "$candidate" ] && [ -f "$candidate" ] && [ -x "$candidate" ]; then
     docker=$candidate
     break
