@@ -64,6 +64,27 @@ def test_when_docker_refuses_access_it_names_the_docker_group(tmp_path):
     )
 
 
+def test_when_docker_is_not_found_it_says_how_to_install_it(tmp_path):
+    result = subprocess.run(
+        ["sh", str(SCRIPT)],
+        cwd=tmp_path,
+        env={
+            "HOME": str(tmp_path),
+            "PATH": "/usr/bin:/bin",  # Keep sh but no docker
+            "PAPERLAB_DOCKER_PATHS": "",  # Disable the fallback paths
+        },
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert (result.returncode, result.stdout) == (1, "")
+    assert result.stderr == (
+        "paperlab-mcp: docker was not found. Install Docker, or set PAPERLAB_DOCKER to its full path.\n"
+    )
+
+
 def test_the_script_is_executable_and_checked_out_with_lf_line_endings():
     assert SCRIPT.stat().st_mode & stat.S_IXUSR
     assert b"\r" not in SCRIPT.read_bytes()
