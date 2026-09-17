@@ -3,7 +3,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
-from app.core.discovery import MAX_AUTHORS, MAX_PDF_URLS, Candidate
+from app.core.candidates import MAX_AUTHORS, MAX_PDF_URLS, Candidate
 
 AuthorName = Annotated[str, Field(min_length=1, max_length=300)]
 

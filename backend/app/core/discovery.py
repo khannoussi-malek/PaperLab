@@ -8,8 +8,7 @@
 
 import logging
 import re
-import uuid
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -18,7 +17,8 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import papers
-from app.core.enrichment import ARXIV_DOI_PREFIX, short_id
+from app.core.candidates import ARXIV_ID, Candidate, arxiv_from_doi, from_s2, from_work, normal_title, with_s2
+from app.core.enrichment import ARXIV_DOI_PREFIX
 from app.core.errors import Conflict
 from app.models import Paper
 from app.providers import openalex, semantic_scholar
@@ -29,10 +29,6 @@ SEARCH_LIMIT = 10
 SIMILAR_LIMIT = 10
 MAX_PDF_BYTES = 100 * 1024 * 1024
 PDF_TIMEOUT = httpx.Timeout(10.0, read=30.0)
-# CandidateIn (app/schemas/discovery.py) rejects a candidate over either limit with 422; capping here first means
-# the Add button never shows for a candidate its own endpoint would then refuse.
-MAX_PDF_URLS = 10
-MAX_AUTHORS = 500
 
 OPENALEX_OFF = "OpenAlex is off. Set OPENALEX_MAILTO in .env to search by title or DOI."
 OPENALEX_BUSY = "OpenAlex is busy or unreachable. Try again in a minute."
@@ -41,30 +37,11 @@ S2_UNKNOWN = "Semantic Scholar doesn't know this paper, so it has no suggestions
 ALREADY_IN_LIBRARY = "This paper is already in your library."
 NO_FREE_PDF = "No free PDF was found for this paper. Open its page, download the PDF and use Upload PDFs."
 
-_ARXIV_ID = r"\d{4}\.\d{4,5}|[a-z-]+(?:\.[a-z]{2})?/\d{7}"
 _ARXIV_QUERY = re.compile(
-    rf"^(?:arxiv:|https?://(?:www\.)?arxiv\.org/(?:abs|pdf)/)?({_ARXIV_ID})(?:v\d+)?(?:\.pdf)?$", re.IGNORECASE
+    rf"^(?:arxiv:|https?://(?:www\.)?arxiv\.org/(?:abs|pdf)/)?({ARXIV_ID})(?:v\d+)?(?:\.pdf)?$", re.IGNORECASE
 )
-_ARXIV_URL = re.compile(rf"arxiv\.org/(?:abs|pdf)/({_ARXIV_ID})", re.IGNORECASE)
 _DOI = re.compile(r"\b(10\.\d{4,9}/\S+)")
 _OPENALEX_QUERY = re.compile(r"^(?:https?://(?:api\.)?openalex\.org/(?:works/)?)?(W\d+)$", re.IGNORECASE)
-
-
-@dataclass(frozen=True)
-class Candidate:
-    """A paper found outside the library. `paper_id` is set when the library already holds it."""
-
-    title: str
-    authors: list[str] = field(default_factory=list)
-    year: int | None = None
-    venue: str | None = None
-    doi: str | None = None
-    arxiv_id: str | None = None
-    openalex_id: str | None = None
-    s2_id: str | None = None
-    cited_by_count: int | None = None
-    pdf_urls: list[str] = field(default_factory=list)
-    paper_id: uuid.UUID | None = None
 
 
 @dataclass(frozen=True)
@@ -106,77 +83,6 @@ def classify_query(query: str) -> tuple[str, str]:
             return "arxiv", value.removeprefix(ARXIV_DOI_PREFIX)
         return "doi", value
     return "title", text
-
-
-def _arxiv_from_doi(doi: str | None) -> str | None:
-    return doi.removeprefix(ARXIV_DOI_PREFIX) if doi and doi.startswith(ARXIV_DOI_PREFIX) else None
-
-
-def _arxiv_from_url(url: str | None) -> str | None:
-    match = _ARXIV_URL.search(url or "")
-    return match.group(1).lower() if match else None
-
-
-def _pdf_urls(arxiv_id: str | None, *links: str | None) -> list[str]:
-    """arXiv first, then `links` in order: deduplicated, http(s) only, capped at MAX_PDF_URLS (D68)."""
-    urls = [f"https://arxiv.org/pdf/{arxiv_id}" if arxiv_id else None, *links]
-    deduped = dict.fromkeys(url for url in urls if url and url.startswith(("http://", "https://")))
-    return list(deduped)[:MAX_PDF_URLS]
-
-
-def from_work(work: dict[str, Any]) -> Candidate:
-    doi = (work.get("doi") or "").removeprefix("https://doi.org/").lower() or None
-    best = work.get("best_oa_location") or {}
-    locations = work.get("locations") or []
-    location_urls = [
-        url for place in [best, *locations] for url in (place.get("landing_page_url"), place.get("pdf_url"))
-    ]
-    arxiv_id = _arxiv_from_doi(doi) or next(filter(None, map(_arxiv_from_url, location_urls)), None)
-    source = (work.get("primary_location") or {}).get("source") or {}
-    return Candidate(
-        title=work.get("title") or "Untitled",
-        authors=[a["author"]["display_name"] for a in work.get("authorships") or [] if a.get("author")][
-            :MAX_AUTHORS
-        ],
-        year=work.get("publication_year"),
-        venue=source.get("display_name"),
-        doi=doi,
-        arxiv_id=arxiv_id,
-        openalex_id=short_id(work.get("id")),
-        cited_by_count=work.get("cited_by_count"),
-        pdf_urls=_pdf_urls(arxiv_id, best.get("pdf_url"), *(place.get("pdf_url") for place in locations)),
-    )
-
-
-def from_s2(paper: dict[str, Any]) -> Candidate:
-    ids = paper.get("externalIds") or {}
-    doi = (ids.get("DOI") or "").lower() or None
-    arxiv_id = (ids.get("ArXiv") or "").lower() or _arxiv_from_doi(doi)
-    return Candidate(
-        title=paper.get("title") or "Untitled",
-        authors=[a["name"] for a in paper.get("authors") or [] if a.get("name")][:MAX_AUTHORS],
-        year=paper.get("year"),
-        venue=paper.get("venue") or None,
-        doi=doi,
-        arxiv_id=arxiv_id,
-        s2_id=paper.get("paperId"),
-        cited_by_count=paper.get("citationCount"),
-        pdf_urls=_pdf_urls(arxiv_id, (paper.get("openAccessPdf") or {}).get("url")),
-    )
-
-
-def with_s2(candidate: Candidate, paper: dict[str, Any] | None) -> Candidate:
-    """An OpenAlex candidate with Semantic Scholar's arXiv ID and free PDF link added (D70)."""
-    if paper is None:
-        return candidate
-    found = from_s2(paper)
-    arxiv_id = candidate.arxiv_id or found.arxiv_id
-    return replace(
-        candidate,
-        arxiv_id=arxiv_id,
-        s2_id=found.s2_id,
-        pdf_urls=_pdf_urls(arxiv_id, *found.pdf_urls, *candidate.pdf_urls),
-    )
 
 
 def _library_dois(candidate: Candidate) -> list[str]:
@@ -238,14 +144,14 @@ async def _add_s2_links(http: httpx.AsyncClient, candidates: list[Candidate]) ->
 
 
 def _same_paper_keys(title: str, *ids: str | None) -> set[str]:
-    return {i.lower() for i in ids if i} | {re.sub(r"\W+", " ", title).strip().casefold()}
+    return {i.lower() for i in ids if i} | {normal_title(title)}
 
 
 async def similar(
     session: AsyncSession, providers: Providers, paper: Paper, limit: int = SIMILAR_LIMIT
 ) -> list[Candidate]:
     doi = (paper.doi or "").lower()
-    arxiv_id = _arxiv_from_doi(doi)
+    arxiv_id = arxiv_from_doi(doi)
     try:
         if arxiv_id:
             key = f"arXiv:{arxiv_id}"
