@@ -70,9 +70,15 @@ async def test_migrations_upgrade_downgrade_upgrade(scratch_url):
 
     scratch = create_async_engine(scratch_url)
     async with scratch.connect() as conn:
-        tables = (await conn.execute(text("SELECT to_regclass('chunks'), to_regclass('edges')"))).one()
+        chunks, links, edges = (
+            await conn.execute(
+                text("SELECT to_regclass('chunks'), to_regclass('paper_links'), to_regclass('edges')")
+            )
+        ).one()
     await scratch.dispose()
-    assert all(tables)
+    assert chunks and links
+    # 0011 drops the empty table 0001 created (D110).
+    assert edges is None
 
 
 @pytest.mark.anyio
