@@ -1,4 +1,5 @@
 from collections.abc import AsyncIterator
+from dataclasses import replace
 from typing import Annotated
 
 import httpx
@@ -6,7 +7,7 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.core import discovery, llm_connections
+from app.core import discovery, llm_connections, paper_sources
 from app.db import get_session
 from app.providers import discovery_fake
 from app.providers.base import LLM
@@ -34,12 +35,16 @@ async def resolve_llm(payload: ChatRequest, session: SessionDep, transport: Tran
 LLMDep = Annotated[LLM, Depends(resolve_llm)]
 
 
-async def get_discovery() -> AsyncIterator[discovery.Providers]:
-    """Find papers' and Similar's clients for one request, closed after it. Tests override this with fakes."""
-    fake = settings.discovery_provider == "fake"
-    mailto = settings.openalex_mailto or (discovery_fake.MAILTO if fake else "")
-    transport = discovery_fake.transport() if fake else None
-    providers = discovery.build_providers(mailto, settings.semantic_scholar_api_key, transport)
+async def get_discovery(session: SessionDep) -> AsyncIterator[discovery.Providers]:
+    """Find papers' and Similar's clients for one request, from Settings → Paper sources, closed after it. Tests
+    override this with fakes."""
+    sources = await paper_sources.get(session)
+    transport = None
+    if settings.discovery_provider == "fake":
+        transport = discovery_fake.transport()
+        # The fake answers Unpaywall offline, so its placeholder can stand in for the email Unpaywall needs.
+        sources = replace(sources, contact_email=sources.contact_email or discovery_fake.MAILTO)
+    providers = discovery.build_providers(sources, transport)
     try:
         yield providers
     finally:

@@ -4,10 +4,12 @@ from dataclasses import replace
 
 import pytest
 from conftest import recorded_discovery
+from sqlalchemy import delete
 
 from app.api.deps import get_discovery
 from app.config import settings
-from app.models import Paper
+from app.core import discovery, paper_sources
+from app.models import Paper, PaperSources
 from app.providers import discovery_fake
 
 pytestmark = pytest.mark.anyio
@@ -32,7 +34,9 @@ async def test_search_returns_candidates(client, discovery_api):
     response = await client.get("/api/discovery/search", params={"q": "BERT"})
 
     assert response.status_code == 200
-    bert = response.json()[0]
+    assert response.json()["notices"] == []
+    bert = response.json()["results"][0]
+    assert bert["sources"] == ["openalex"]
     assert (bert["openalex_id"], bert["arxiv_id"], bert["paper_id"]) == ("W2963341956", "1810.04805", None)
     assert bert["pdf_urls"][0] == "https://arxiv.org/pdf/1810.04805"
 
@@ -45,13 +49,24 @@ async def test_search_rejects_a_blank_or_huge_query(client, discovery_api, q, st
     assert discovery_api.openalex.requests == []
 
 
-async def test_search_says_openalex_is_off(app, client, discovery_api):
+async def test_search_says_no_source_that_is_on_can_answer(app, client, discovery_api):
     app.dependency_overrides[get_discovery] = lambda: replace(discovery_api.providers, openalex=None)
 
     response = await client.get("/api/discovery/search", params={"q": "BERT"})
 
     assert response.status_code == 409
-    assert response.json()["detail"].startswith("OpenAlex is off")
+    assert response.json()["detail"].startswith("No paper source that can look this up is on")
+
+
+async def test_similar_says_semantic_scholar_is_off(app, client, discovery_api, session):
+    paper = Paper(title="BERT", file_path="/nonexistent.pdf", doi="10.18653/v1/n19-1423")
+    session.add(paper)
+    await session.flush()
+    app.dependency_overrides[get_discovery] = lambda: replace(discovery_api.providers, s2=None)
+
+    response = await client.get(f"/api/papers/{paper.id}/similar")
+
+    assert (response.status_code, response.json()["detail"]) == (409, discovery.S2_OFF)
 
 
 async def test_similar_lists_suggestions_for_a_library_paper(client, discovery_api, session):
@@ -156,22 +171,32 @@ async def test_add_rejects_a_malformed_candidate(client, discovery_api, candidat
     assert discovery_api.pdf_host.requests == []
 
 
-async def test_the_discovery_dependency_serves_the_fake_offline_and_closes_its_clients(monkeypatch):
-    monkeypatch.setattr(settings, "discovery_provider", "fake")
-    monkeypatch.setattr(settings, "semantic_scholar_api_key", "secret-key")
+@pytest.fixture
+async def no_sources_row(session):
+    # The dev database (D15) holds the owner's own row; hide it inside the test's rolled-back transaction.
+    await session.execute(delete(PaperSources))
+    return session
 
-    async with aclosing(get_discovery()) as dependency:
+
+async def test_the_discovery_dependency_serves_the_fake_offline_and_closes_its_clients(monkeypatch, no_sources_row):
+    monkeypatch.setattr(settings, "discovery_provider", "fake")
+    await paper_sources.update(no_sources_row, {"api_keys": {"semantic_scholar": "secret-key"}})
+
+    async with aclosing(get_discovery(no_sources_row)) as dependency:
         providers = await anext(dependency)
-        assert providers.openalex is not None  # the fake stands in for OpenAlex even without OPENALEX_MAILTO
+        assert providers.openalex is None  # off by default, fake or not
         assert providers.s2.headers["x-api-key"] == "secret-key"
+        assert providers.unpaywall.params["email"] == discovery_fake.MAILTO  # the fake stands in for the email
         assert (await providers.pdf.get(f"{discovery_fake.PDF_HOST}/paper.pdf")).content.startswith(b"%PDF")
 
-    assert providers.s2.is_closed and providers.pdf.is_closed and providers.openalex.is_closed
+    assert providers.s2.is_closed and providers.pdf.is_closed and providers.unpaywall.is_closed
 
 
-async def test_the_live_discovery_dependency_has_no_openalex_without_a_mailto():
-    # conftest's _openalex_off leaves OPENALEX_MAILTO empty.
-    async with aclosing(get_discovery()) as dependency:
+async def test_the_live_discovery_dependency_follows_settings(no_sources_row):
+    await paper_sources.update(no_sources_row, {"contact_email": "me@example.org", "enabled": {"crossref": False}})
+
+    async with aclosing(get_discovery(no_sources_row)) as dependency:
         providers = await anext(dependency)
-        assert providers.openalex is None
+        assert (providers.openalex, providers.crossref) == (None, None)
+        assert providers.unpaywall.params["email"] == "me@example.org"
         assert "x-api-key" not in providers.s2.headers

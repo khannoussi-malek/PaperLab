@@ -4,7 +4,7 @@ import os
 import random
 import re
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import httpx
@@ -23,7 +23,7 @@ from app.core import discovery
 from app.db import get_session
 from app.main import create_app
 from app.models import Author, Paper
-from app.providers import embedding, openalex, semantic_scholar
+from app.providers import arxiv, core_ac, crossref, embedding, openalex, semantic_scholar, unpaywall
 from app.providers.llm import FakeLLM
 
 # The compose Postgres, published on the host. Every test runs inside a transaction that is
@@ -285,22 +285,40 @@ class DiscoveryFakes:
     openalex: FakeOpenAlex
     s2: FakeProvider
     pdf_host: FakeProvider
-    providers: discovery.Providers
+    crossref: FakeProvider
+    arxiv: FakeProvider
+    core: FakeProvider
+    unpaywall: FakeProvider
+    providers: discovery.Providers  # OpenAlex, Semantic Scholar and the PDF host; the other sources off
+    clients: dict[str, httpx.AsyncClient]
+
+    def turned_on(self, *sources: str) -> discovery.Providers:
+        """`providers` with these sources on too: "crossref", "arxiv", "core", "unpaywall"."""
+        return replace(self.providers, **{source: self.clients[source] for source in sources})
 
 
 @pytest.fixture
 async def discovery_fakes(fake_openalex):
-    """OpenAlex (routed like fake_openalex), Semantic Scholar and a PDF host, all behind MockTransport, as the
-    Providers one request uses. Semantic Scholar and the PDF host are FakeProviders: routed by path, unrouted fails."""
-    s2, pdf_host = FakeProvider(), FakeProvider()
+    """Every paper source and a PDF host behind MockTransport, as the Providers one request uses: OpenAlex routed like
+    fake_openalex, the rest FakeProviders (routed by path; an unrouted request fails). `providers` has only OpenAlex,
+    Semantic Scholar and the PDF host on, so a test asks exactly the sources it routes; `turned_on` adds others."""
+    s2, pdf_host, crossref_host, arxiv_host, core_host, unpaywall_host = (FakeProvider() for _ in range(6))
+    clients = {
+        "crossref": crossref.new_client(FakeOpenAlex.MAILTO, crossref_host.transport),
+        "arxiv": arxiv.new_client(arxiv_host.transport),
+        "core": core_ac.new_client(None, core_host.transport),
+        "unpaywall": unpaywall.new_client(FakeOpenAlex.MAILTO, unpaywall_host.transport),
+    }
     providers = discovery.Providers(
         openalex=fake_openalex.client,
-        s2=semantic_scholar.new_client("", transport=s2.transport),
+        s2=semantic_scholar.new_client(None, transport=s2.transport),
         pdf=httpx.AsyncClient(transport=pdf_host.transport, follow_redirects=True),
     )
-    yield DiscoveryFakes(fake_openalex, s2, pdf_host, providers)
-    await providers.s2.aclose()
-    await providers.pdf.aclose()
+    yield DiscoveryFakes(
+        fake_openalex, s2, pdf_host, crossref_host, arxiv_host, core_host, unpaywall_host, providers, clients
+    )
+    for client in (providers.s2, providers.pdf, *clients.values()):
+        await client.aclose()
 
 
 @pytest.fixture(autouse=True)

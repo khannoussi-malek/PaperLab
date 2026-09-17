@@ -4,12 +4,14 @@ from typing import Annotated
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
 from app.core.candidates import MAX_AUTHORS, MAX_PDF_URLS, Candidate
+from app.schemas.paper_sources import SourceId
 
 AuthorName = Annotated[str, Field(min_length=1, max_length=300)]
 
 
 class CandidateOut(BaseModel):
-    """A paper found outside the library. `paper_id` is set when the library already holds it."""
+    """A paper found outside the library. `sources` found it, most trusted first; `paper_id` is set when the library
+    already holds it."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -21,14 +23,25 @@ class CandidateOut(BaseModel):
     arxiv_id: str | None
     openalex_id: str | None
     s2_id: str | None
+    core_id: str | None
     cited_by_count: int | None
     pdf_urls: list[str]
+    sources: list[SourceId]
     paper_id: uuid.UUID | None
 
 
+class SearchOut(BaseModel):
+    """`notices` name the sources that failed, whose results are missing."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    results: list[CandidateOut]
+    notices: list[str]
+
+
 class CandidateIn(BaseModel):
-    """A search result or suggestion sent back to be added. Extra fields (its `paper_id`) are ignored: the library
-    is checked again."""
+    """A search result or suggestion sent back to be added. Extra fields (its `paper_id`, its `sources`) are ignored:
+    the library is checked again."""
 
     title: str = Field(min_length=1, max_length=1000)
     authors: list[AuthorName] = Field(default_factory=list, max_length=MAX_AUTHORS)
@@ -38,6 +51,7 @@ class CandidateIn(BaseModel):
     arxiv_id: str | None = Field(default=None, pattern=r"^(\d{4}\.\d{4,5}|[A-Za-z-]+(\.[A-Za-z]{2})?/\d{7})$")
     openalex_id: str | None = Field(default=None, pattern=r"^W\d+$", max_length=20)
     s2_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    core_id: str | None = Field(default=None, pattern=r"^\d{1,20}$")
     cited_by_count: int | None = Field(default=None, ge=0)
     pdf_urls: list[HttpUrl] = Field(default_factory=list, max_length=MAX_PDF_URLS)
 
