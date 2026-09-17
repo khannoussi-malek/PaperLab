@@ -106,3 +106,44 @@ test('the upload action is a keyboard-reachable button', async ({ page }) => {
   await upload.focus()
   await expect(upload).toBeFocused()
 })
+
+test('the search box narrows the list to matching papers, and Esc brings them all back', async ({ page, paperId }) => {
+  await page.goto('/')
+  const search = page.getByRole('searchbox', { name: 'Search papers' })
+  const row = paperRow(page, paperId)
+  await expect(row).toBeVisible()
+  const count = page.locator('.search-count')
+  await expect(count).toHaveText('')
+
+  await search.fill('no paper is called this')
+  await expect(row).toHaveCount(0)
+  await expect(page.getByText('No papers match “no paper is called this”')).toBeVisible()
+  await expect(count).toHaveRole('status')
+  await expect(count).toHaveText(/^0 of \d+ papers$/)
+  // The preview only ever shows a paper that matches.
+  await expect(page.locator('.paper-preview')).toHaveCount(0)
+
+  // Chromium clears a search field on Esc by itself; the field's own Esc handler is for browsers that don't.
+  await search.press('Escape')
+  await expect(search).toHaveValue('')
+  await expect(row).toBeVisible()
+
+  // Words in any order, any case.
+  await search.fill('fixture PAPERLAB')
+  await expect(row).toBeVisible()
+  await page.getByRole('group').getByRole('button', { name: 'Clear search' }).click()
+  await expect(search).toHaveValue('')
+  // The button disappears with the query; the cursor goes back to the field instead of the page.
+  await expect(search).toBeFocused()
+})
+
+test("the no-match card's Clear search empties the box and puts the cursor back in it", async ({ page, paperId }) => {
+  await page.goto('/')
+  const search = page.getByRole('searchbox', { name: 'Search papers' })
+  await search.fill('no paper is called this')
+  await page.locator('.no-matches').getByRole('button', { name: 'Clear search' }).click()
+
+  await expect(search).toHaveValue('')
+  await expect(search).toBeFocused()
+  await expect(paperRow(page, paperId)).toBeVisible()
+})
