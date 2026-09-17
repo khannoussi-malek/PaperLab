@@ -82,3 +82,17 @@ test('shows why a refresh failed', { tag }, async ({ page, paperId }) => {
   await expect(panel.getByText('Refreshing failed for this test.')).toBeVisible()
   await page.unroute('**/api/papers/*/references/refresh')
 })
+
+test('shows why the first fetch could not be queued, with Try again', { tag }, async ({ page, paperId }) => {
+  // Routed before the tab opens: the request the tab sends on its own is the one that fails.
+  await page.route('**/api/papers/*/references/refresh', (route) =>
+    route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ detail: 'Queuing the fetch failed for this test.' }) }),
+  )
+  await openReader(page, paperId)
+  await page.getByRole('tab', { name: 'References' }).click()
+
+  const panel = page.getByRole('complementary', { name: 'References' })
+  await expect(panel.getByText('Queuing the fetch failed for this test.')).toBeVisible()
+  await expect(panel.getByRole('button', { name: 'Try again' })).toBeVisible()
+  await page.unroute('**/api/papers/*/references/refresh')
+})

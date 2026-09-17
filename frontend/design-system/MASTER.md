@@ -462,10 +462,13 @@ submit.
   its row, same as Find papers.
 - **States:** `none` and `fetching` both show the same `role="status"` "Fetching references…" line over three
   `animate-pulse` skeleton rows (plain divs — no new dependency, no bespoke skeleton component): opening the tab on a
-  never-fetched paper queues the fetch immediately, so there is nothing to click while it queues. `failed` → the
-  stored error in an `ErrorAlert` with outline **Try again** (queues another fetch; distinct label from the
-  query-level `LoadError`'s "Retry", which covers a transport/500 failure instead). `ready` with no rows → "This
-  paper's sources list no references."
+  never-fetched paper queues the fetch immediately, so there is nothing to click while it queues. A failed first
+  fetch request (the one that queues it) shows its error in an `ErrorAlert` with outline **Try again** in place of
+  the status line and skeletons, since nothing is fetching. `failed` → the stored error in an `ErrorAlert` with
+  outline **Try again** (queues another fetch; distinct label from the query-level `LoadError`'s "Retry", which
+  covers a transport/500 failure instead); a fetch still `fetching` after 10 minutes (the worker lost it) is listed
+  as `failed` with "Fetching references failed. Try again." `ready` with no rows → "This paper's sources list no
+  references."
 - **Refresh:** once `ready`, a small ghost **Refresh** button (`RefreshCw`, disabled while its own fetch runs) sits
   beside the summary line (`ml-auto` in the same flex row, so it stays put whether or not a summary is shown). A
   failed refresh request shows its error in an ErrorAlert.

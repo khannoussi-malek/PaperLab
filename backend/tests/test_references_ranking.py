@@ -81,6 +81,21 @@ async def test_a_second_request_while_fetching_queues_nothing_until_it_goes_stal
         await references.request_fetch(library, uuid.uuid4())
 
 
+async def test_a_fetch_the_worker_never_finished_is_listed_as_failed_without_writing_it(library):
+    now = datetime.now(timezone.utc)
+    running = await add_paper(library, doi=READER_DOI, references_state="fetching", references_requested_at=now)
+    stale = now - references.FETCH_STALE * 2
+    lost = await add_paper(library, doi="10.5555/m75-lost", references_state="fetching", references_requested_at=stale)
+
+    listed = [await references.listing(library, paper.id, "cites") for paper in (running, lost)]
+
+    assert [(listing.state, listing.error) for listing in listed] == [
+        ("fetching", None), ("failed", references.FETCH_FAILED)
+    ]  # fmt: skip
+    stored = await library.scalar(select(Paper.references_state).where(Paper.id == lost.id))
+    assert stored == "fetching"
+
+
 # --- embeddings --------------------------------------------------------------------------------------------------
 
 
