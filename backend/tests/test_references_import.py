@@ -87,3 +87,27 @@ async def test_a_reference_without_a_free_pdf_or_unknown_cannot_be_imported(libr
         await references.import_reference(library, discovery_fakes.providers, closed.id, pdf_dir)
     with pytest.raises(NotFound):
         await references.import_reference(library, discovery_fakes.providers, uuid.uuid4(), pdf_dir)
+
+
+async def test_importing_marks_every_stored_row_for_the_same_paper(library, discovery_fakes, pdf_dir):
+    """An import sets `imported_as` on every row for that paper (spec §8 item 5)."""
+    # Two unfolded ExternalRef rows for the same paper: one with DOI, one with matching arXiv
+    shared_doi = f"10.5555/m75-{uuid.uuid4().hex[:8]}"
+    shared_arxiv = f"2401.{uuid.uuid4().hex[:5]}"
+
+    by_doi = ExternalRef(title="By DOI", doi=shared_doi, pdf_urls=["https://pdf.example/by-doi.pdf"])
+    # Same DOI; would fold in fetch, but here they're unfolded (testing import marks all rows)
+    by_arxiv = ExternalRef(title="By arXiv", arxiv_id=shared_arxiv, doi=shared_doi)
+
+    library.add_all([by_doi, by_arxiv])
+    await library.flush()
+    discovery_fakes.pdf_host.reply("/by-doi.pdf", 200, content=PDF)
+
+    # Import the first row
+    paper = await references.import_reference(library, discovery_fakes.providers, by_doi.id, pdf_dir)
+
+    # Both rows now have imported_as set to the paper's id
+    await library.refresh(by_doi)
+    await library.refresh(by_arxiv)
+    assert by_doi.imported_as == paper.id
+    assert by_arxiv.imported_as == paper.id
