@@ -11,7 +11,9 @@ from app.core import references
 from app.core.errors import NotFound
 from app.models import ExternalRef, Note, NoteEmbedding, Paper, paper_references
 
-pytestmark = pytest.mark.anyio
+# Fetches and embeds take one advisory lock (core/references.py); in a test it lasts until the rollback, so these
+# files share one xdist worker, or two of them deadlock on the same stored reference.
+pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("references")]
 
 READER_DOI = "10.5555/m75-reader"
 REFS = f"/graph/v1/paper/DOI:{READER_DOI}/references"
