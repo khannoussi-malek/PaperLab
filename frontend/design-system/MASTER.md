@@ -423,17 +423,21 @@ before deleting; `search.py "progress bar long running download status" --domain
 ## Find papers
 
 Pattern from ui-ux-pro-max (`search.py "search results list with add button in modal dialog" --domain ux`): an empty
-result suggests what to try next (severity Medium). Its "autocomplete as you type" advice is declined on purpose: each
-OpenAlex search costs 10 of 1,000 free daily credits, so search runs on submit.
+result suggests what to try next (severity Medium). Its "autocomplete as you type" advice is declined on purpose: a
+search asks every paper source that is on, and OpenAlex costs money past a small daily allowance, so search runs on
+submit.
 - **Find papers:** an outline button (`Search`) beside Upload PDFs, in the library header and a workspace's Papers tab,
   opens a shadcn `Dialog` (`sm:max-w-2xl`, glass like Add papers). One `Input` labelled "Title, DOI, arXiv ID or
   OpenAlex ID" and a Search submit button, disabled and reading "Searching…" while a search runs. Results scroll inside
-  the dialog (`max-h-[60vh]`).
+  the dialog (`max-h-[60vh]`). Sources that failed while others answered show above the results in a non-destructive
+  glass `Alert` (`Info`, `role="status"`, `.search-notices`). An error that stops the search altogether is an
+  `ErrorAlert`.
 - **Candidate rows** (`CandidateList`, shared with the reader's Similar tab): the title (two lines, full text in
-  `title`), byline · citations, and a `Badge`: secondary "PDF" when a free PDF is listed, outline "No free PDF"
-  otherwise. Then small buttons: Add (`Plus`; "Adding…" with a spinning `LoaderCircle`, disabled while it runs) or an
-  outline "In library" link to the reader, and a ghost "Open page" link (`ExternalLink`, new tab). A failed add shows an
-  `ErrorAlert` under its row, and the row keeps its Add button.
+  `title`), byline · citations, then the names of the sources that found it as small muted outline badges
+  (`ul.candidate-sources`, labelled "Found by"), and a `Badge`: secondary "PDF" when a free PDF is listed, outline "No
+  free PDF" otherwise. Then small buttons: Add (`Plus`; "Adding…" with a spinning `LoaderCircle`, disabled while it
+  runs) or an outline "In library" link to the reader, and a ghost "Open page" link (`ExternalLink`, new tab). A failed
+  add shows an `ErrorAlert` under its row, and the row keeps its Add button.
 - **Similar tab:** the reader's fourth tab, after Data. An `aside` labelled "Similar papers": a muted one-line
   explanation, the candidate rows, and `LoadError` with Retry when Semantic Scholar refuses. It asks only once the tab
   has been opened; suggestions stay fresh for an hour.

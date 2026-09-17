@@ -6,11 +6,11 @@ import { Button } from '@/components/ui/button'
 import { ErrorAlert } from '@/features/library/ErrorAlert'
 import { byline } from '@/features/library/paperMeta'
 import { readerHref } from '@/lib/route'
-import { candidateKey, citationsLabel, pageLink } from './candidateMeta'
+import { candidateKey, citationsLabel, pageLink, SOURCE_NAMES } from './candidateMeta'
 
 type RowProps = { candidate: Candidate; workspaceId?: string }
 
-/** One found paper: what it is, whether a free PDF is listed, and Add, In library or Open page. */
+/** One found paper: what it is, its sources, whether a free PDF is listed, and Add, In library or Open page. */
 function CandidateRow({ candidate, workspaceId }: RowProps) {
   const add = useAddCandidate(workspaceId)
   const paperId = add.data?.id ?? candidate.paper_id
@@ -25,6 +25,17 @@ function CandidateRow({ candidate, workspaceId }: RowProps) {
             {candidate.title}
           </p>
           {meta && <p className="mt-0.5 truncate text-sm text-muted-foreground">{meta}</p>}
+          {candidate.sources.length > 0 && (
+            <ul aria-label="Found by" className="candidate-sources mt-1.5 flex flex-wrap gap-1">
+              {candidate.sources.map((source) => (
+                <li key={source}>
+                  <Badge variant="outline" className="font-normal text-muted-foreground">
+                    {SOURCE_NAMES[source]}
+                  </Badge>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
         <Badge variant={hasPdf ? 'secondary' : 'outline'} className="mt-0.5">
           {hasPdf ? 'PDF' : 'No free PDF'}

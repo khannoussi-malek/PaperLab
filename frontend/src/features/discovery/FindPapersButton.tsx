@@ -1,7 +1,8 @@
-import { Search } from 'lucide-react'
+import { Info, Search } from 'lucide-react'
 import { type FormEvent, useState } from 'react'
 import { useSearchPapers } from '@/api/queries'
 import { glass } from '@/components/glass'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -53,9 +54,16 @@ export function FindPapersButton({ workspaceId }: { workspaceId?: string }) {
         {query !== null && (
           <div className="flex max-h-[60vh] min-h-0 flex-col gap-3 overflow-y-auto">
             {results.isError && <ErrorAlert message={results.error.message} />}
+            {/* Sources that failed while others answered: worth knowing, not an error. */}
+            {results.data !== undefined && results.data.notices.length > 0 && (
+              <Alert role="status" className={cn('search-notices border-glass-border', glass)}>
+                <Info aria-hidden />
+                <AlertDescription>{results.data.notices.join(' ')}</AlertDescription>
+              </Alert>
+            )}
             {results.data !== undefined ? (
               <CandidateList
-                candidates={results.data}
+                candidates={results.data.results}
                 empty="No papers found. Try the exact title, a DOI or an arXiv ID."
                 workspaceId={workspaceId}
               />
