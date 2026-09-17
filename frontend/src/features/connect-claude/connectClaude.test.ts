@@ -60,7 +60,7 @@ describe('desktopConfig', () => {
 
 describe('claudeCodeCommand', () => {
   it('quotes the launcher script on macOS, Linux and WSL', () => {
-    const expected = "claude mcp add paperlab -- '/Users/me/research-note/scripts/paperlab-mcp'"
+    const expected = "claude mcp add -s user paperlab -- '/Users/me/research-note/scripts/paperlab-mcp'"
     expect((['macos', 'linux', 'wsl'] as const).map((os) => claudeCodeCommand(`${MAC}/`, os))).toEqual([
       expected,
       expected,
@@ -70,13 +70,13 @@ describe('claudeCodeCommand', () => {
 
   it("keeps a folder with spaces and a ' in it as one argument", () => {
     expect(claudeCodeCommand("/Users/me/Bob's papers/Paper Lab", 'macos')).toBe(
-      "claude mcp add paperlab -- '/Users/me/Bob'\\''s papers/Paper Lab/scripts/paperlab-mcp'",
+      "claude mcp add -s user paperlab -- '/Users/me/Bob'\\''s papers/Paper Lab/scripts/paperlab-mcp'",
     )
   })
 
   it('calls docker compose directly on Windows', () => {
     expect(claudeCodeCommand(`${WINDOWS}\\`, 'windows')).toBe(
-      'claude mcp add paperlab -- docker compose -f "C:\\Users\\me\\PaperLab\\docker-compose.yml" exec -T api python -m mcp_server',
+      'claude mcp add -s user paperlab -- docker compose -f "C:\\Users\\me\\PaperLab\\docker-compose.yml" exec -T api python -m mcp_server',
     )
   })
 })
