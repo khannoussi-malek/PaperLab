@@ -403,6 +403,23 @@ before deleting; `search.py "progress bar long running download status" --domain
   in `title`) and an `icon-xs` ghost × named Stop following. Follow-ups are indented one level under their thread's
   first question (`ml-3 border-l border-glass-border pl-3`); workspace chat has no Follow up.
 
+## Paper sources
+
+- **Section:** "Paper sources" in Settings, between Model connections and Embedding model. It holds a muted intro line,
+  then the contact email, then one glass list (`divide-y divide-glass-border`, `ring-1 ring-glass-border`).
+- **Contact email:** a labelled `Input` with an outline Save, disabled while blank, unchanged or saving, and a ghost
+  Remove once an email is saved. It is checked on submit (`noValidate`), and the server's own message shows under the
+  field (`role="alert"`, `text-destructive`). Muted help says which sources receive it.
+- **Source row** (`.paper-source-row[data-source-id]`): a shadcn `Checkbox` linked to the source's name
+  (`font-heading`), which saves on change and is disabled while saving. Under it, indented past the checkbox: a muted
+  description; for OpenAlex, an outline "May cost money" badge (`CircleDollarSign`) and its price note; for Unpaywall
+  without an email, a muted `Info` note.
+- **API keys** (OpenAlex, Semantic Scholar, CORE): a password `Input` whose accessible name is "<Source> API key",
+  with an outline Save key. Once a key is saved, the row shows `Key ending in 1234` (`.key-hint`) and a ghost
+  destructive "Remove key" that asks first. A key is never shown back, and the field clears after saving.
+- **Errors:** a destructive `Alert` under the row or field whose save failed. Loading failures get Retry, as in
+  Embedding model.
+
 ## Find papers
 
 Pattern from ui-ux-pro-max (`search.py "search results list with add button in modal dialog" --domain ux`): an empty
