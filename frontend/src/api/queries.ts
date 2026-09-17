@@ -156,7 +156,7 @@ export function useDeletePaper() {
   })
 }
 
-// A search asks every source that is on, and OpenAlex's cost money past a small daily allowance; suggestions change
+// A search asks every source that is on, and OpenAlex costs money past a small daily allowance; suggestions change
 // slowly.
 const SEARCH_STALE_MS = 10 * 60_000
 const SIMILAR_STALE_MS = 60 * 60_000

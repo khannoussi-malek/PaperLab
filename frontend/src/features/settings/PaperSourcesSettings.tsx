@@ -41,7 +41,9 @@ function ContactEmail({ saved }: { saved: string | null }) {
           className="max-w-sm"
           value={draft}
           aria-invalid={problem !== null}
-          aria-describedby="paper-sources-email-problem paper-sources-email-help"
+          aria-describedby={
+            problem ? 'paper-sources-email-problem paper-sources-email-help' : 'paper-sources-email-help'
+          }
           onChange={(event) => {
             setDraft(event.target.value)
             setProblem(null)
