@@ -61,6 +61,27 @@ test('a failed check shows why', async ({ page }) => {
   await expect(section.getByRole('status')).toHaveCount(0)
 })
 
+test('a second check clears the previous error while it runs', async ({ page }) => {
+  const detail = "The MCP server couldn't start. Check the api logs: docker compose logs api."
+  let calls = 0
+  await page.route('**/api/mcp/check', async (route) => {
+    calls += 1
+    if (calls === 2) await new Promise((resolve) => setTimeout(resolve, 500))
+    await route.fulfill({ json: { ok: false, tools: [], detail } })
+  })
+  await page.goto('/#/connect-claude')
+  const section = page.getByRole('region', { name: "Check PaperLab's side" })
+  const button = section.getByRole('button', { name: 'Check the server' })
+
+  await button.click()
+  await expect(section.getByRole('alert')).toHaveText(detail)
+
+  await button.click()
+
+  await expect(section.getByRole('button', { name: 'Checking…' })).toBeVisible()
+  await expect(section.getByRole('alert')).toHaveCount(0)
+})
+
 test('Settings links to Connect Claude', async ({ page }) => {
   await page.goto('/#/settings')
 

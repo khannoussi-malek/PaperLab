@@ -176,7 +176,14 @@ export function ConnectClaudePage() {
         <p className="text-sm text-muted-foreground">
           This starts PaperLab's MCP server and reads your library through it. It checks PaperLab, not Claude's config.
         </p>
-        <Button className="self-start" disabled={check.isPending} onClick={() => check.mutate()}>
+        <Button
+          className="self-start"
+          disabled={check.isPending}
+          onClick={() => {
+            check.reset()
+            check.mutate()
+          }}
+        >
           {check.isPending ? 'Checking…' : 'Check the server'}
         </Button>
         {check.data?.ok && (
