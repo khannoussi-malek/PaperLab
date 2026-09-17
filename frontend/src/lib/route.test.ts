@@ -6,6 +6,7 @@ import {
   connectClaudeHref,
   datasetHref,
   editChartHref,
+  graphHref,
   newChartHref,
   noteHref,
   parseRoute,
@@ -145,5 +146,11 @@ describe('parseRoute', () => {
     expect(connectClaudeHref).toBe('#/connect-claude')
     expect(parseRoute(connectClaudeHref)).toEqual({ name: 'connect-claude' })
     expect(parseRoute('#/connect-claude/macos')).toEqual({ name: 'library' })
+  })
+
+  it('opens the graph page, and nothing under it', () => {
+    expect(graphHref).toBe('#/graph')
+    expect(parseRoute(graphHref)).toEqual({ name: 'graph' })
+    expect(parseRoute('#/graph/focus')).toEqual({ name: 'library' })
   })
 })

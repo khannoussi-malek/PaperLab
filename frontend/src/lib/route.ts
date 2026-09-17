@@ -21,6 +21,7 @@ export type Route =
   | { name: 'dataset'; datasetId: string; focus: CellFocus | null }
   | { name: 'settings' }
   | { name: 'connect-claude' }
+  | { name: 'graph' }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const HASH = /^#\/(papers|workspaces)\/([0-9a-f-]{36})(?:\?(.*))?$/i
@@ -28,6 +29,7 @@ const CHARTS_HASH = /^#\/charts(?:\/(new|[0-9a-f-]{36})(\/edit)?)?(?:\?(.*))?$/i
 const DATASET_HASH = /^#\/datasets\/([0-9a-f-]{36})(?:\?(.*))?$/i
 const SETTINGS_HASH = '#/settings'
 const CONNECT_CLAUDE_HASH = '#/connect-claude'
+const GRAPH_HASH = '#/graph'
 
 function pageOf(params: URLSearchParams): number | null {
   const page = Number(params.get('page'))
@@ -64,6 +66,7 @@ function chartsRoute(match: RegExpExecArray): Route {
 export function parseRoute(hash: string): Route {
   if (hash === SETTINGS_HASH) return { name: 'settings' }
   if (hash === CONNECT_CLAUDE_HASH) return { name: 'connect-claude' }
+  if (hash === GRAPH_HASH) return { name: 'graph' }
   const charts = CHARTS_HASH.exec(hash)
   if (charts) return chartsRoute(charts)
   const dataset = DATASET_HASH.exec(hash)
@@ -103,6 +106,7 @@ export const workspaceHref = (workspaceId: string, tab: WorkspaceTab = 'papers')
 
 export const settingsHref = SETTINGS_HASH
 export const connectClaudeHref = CONNECT_CLAUDE_HASH
+export const graphHref = GRAPH_HASH
 export const chartsHref = '#/charts'
 export const chartHref = (chartId: string) => `#/charts/${chartId}`
 export const editChartHref = (chartId: string) => `#/charts/${chartId}/edit`
