@@ -15,6 +15,7 @@ from pathlib import Path
 
 import httpx
 from sqlalchemy import delete, func, insert, or_, select, text, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -119,21 +120,24 @@ async def fetch(session: AsyncSession, providers: discovery.Providers, paper: Pa
     if not found:
         raise Conflict(" ".join(notices) if notices else REFERENCES_UNKNOWN if unknown else FETCH_FAILED)
     for direction, cap in (("cites", REFS_CAP), ("cited_by", CITING_CAP)):
-        merged = merge({source: lists[direction] for source, lists in found.items()}, cap)
+        # A record with no id at all (Semantic Scholar lists some) can't be matched, imported or co-cited: not stored.
+        identified = {
+            source: [c for c in lists[direction] if _same_reference(c.s2_id, c.openalex_id, c.doi, c.arxiv_id)]
+            for source, lists in found.items()
+        }
+        merged = merge(identified, cap)
         if direction == "cited_by":  # newest first, as the reverse direction is read (addendum §3d)
             merged = sorted(merged, key=lambda c: -(c.year or 0))
-        ids = [await _upsert(session, candidate) for candidate in merged]
         await session.execute(
             delete(paper_references).where(
                 paper_references.c.paper_id == paper.id, paper_references.c.direction == direction
             )
         )
-        rows = [
-            {"paper_id": paper.id, "ref_id": ref_id, "direction": direction, "position": position}
-            for position, ref_id in enumerate(dict.fromkeys(ids))
-        ]
-        if rows:
-            await session.execute(insert(paper_references), rows)
+        for position, candidate in enumerate(merged):
+            # Linked right after its row is stored, so a later candidate that folds this row moves the link with it.
+            ref_id = await _upsert(session, candidate)
+            link = {"paper_id": paper.id, "ref_id": ref_id, "direction": direction, "position": position}
+            await session.execute(pg_insert(paper_references).values(**link).on_conflict_do_nothing())
     await session.commit()
     return notices
 
@@ -142,13 +146,15 @@ async def _upsert(session: AsyncSession, candidate: Candidate) -> uuid.UUID:
     """The stored reference for `candidate`, created or refreshed. Rows that turn out to be the same paper (one known
     by its Semantic Scholar id, another by its DOI) fold into the oldest, and an imported row always wins."""
     matches = _same_reference(candidate.s2_id, candidate.openalex_id, candidate.doi, candidate.arxiv_id)
-    existing = list(
-        await session.scalars(
-            select(ExternalRef)
-            .where(or_(*matches))
-            .order_by(ExternalRef.imported_as.is_(None), ExternalRef.fetched_at, ExternalRef.id)
+    existing = []
+    if matches:  # or_() of nothing compiles to no WHERE, which would fold every stored reference into this one
+        existing = list(
+            await session.scalars(
+                select(ExternalRef)
+                .where(or_(*matches))
+                .order_by(ExternalRef.imported_as.is_(None), ExternalRef.fetched_at, ExternalRef.id)
+            )
         )
-    )
     fields = {
         "title": candidate.title,
         "authors": candidate.authors,
@@ -184,8 +190,7 @@ async def _upsert(session: AsyncSession, candidate: Candidate) -> uuid.UUID:
 
 
 def _same_reference(s2_id: str | None, openalex_id: str | None, doi: str | None, arxiv_id: str | None) -> list:
-    """Conditions matching any stored reference that shares an id. Every candidate has at least one id: Semantic
-    Scholar records carry a paperId and OpenAlex records a work id."""
+    """Conditions matching any stored reference that shares an id; [] when there is no id to match on."""
     conditions = []
     if s2_id:
         conditions.append(ExternalRef.s2_id == s2_id)
