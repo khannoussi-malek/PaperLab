@@ -6,13 +6,13 @@ from datetime import datetime, timedelta, timezone
 
 import httpx
 import pytest
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, text
 from test_references_providers import PagedS2, recorded_references
 
 from app.core import references
 from app.core.errors import Conflict
 from app.models import ExternalRef, Note, NoteEmbedding, Paper, paper_references
-from app.providers import semantic_scholar
+from app.providers import embedding, semantic_scholar
 
 pytestmark = pytest.mark.anyio
 
@@ -312,3 +312,41 @@ async def test_a_row_stored_earlier_in_the_same_fetch_can_fold_into_an_older_one
     [row] = await library.scalars(select(ExternalRef))
     assert (row.id, row.doi) == (older.id, "10.5555/m75-shared")
     assert await stored(library, reader.id) == ["Beta"]
+
+
+# --- one writer at a time ----------------------------------------------------------------------------------------
+
+HOLDS_AN_ADVISORY_LOCK = text(
+    "SELECT count(*) > 0 FROM pg_locks WHERE locktype = 'advisory' AND pid = pg_backend_pid() AND granted"
+)
+
+
+async def test_references_are_stored_under_the_references_lock(library, discovery_fakes, monkeypatch):
+    reader = await add_paper(library, doi=READER_DOI)
+    discovery_fakes.s2.reply(REFS, 200, json=page("citedPaper", s2("A reference")))
+    discovery_fakes.s2.reply(CITING, 200, json=page("citingPaper"))
+    upsert, locked = references._upsert, []
+
+    async def upsert_noting_the_lock(session, candidate):
+        locked.append(await session.scalar(HOLDS_AN_ADVISORY_LOCK))
+        return await upsert(session, candidate)
+
+    monkeypatch.setattr(references, "_upsert", upsert_noting_the_lock)
+    await references.fetch(library, discovery_fakes.providers, reader)
+
+    assert locked == [True]
+
+
+async def test_vectors_are_written_under_the_references_lock(library, embedder, monkeypatch):
+    library.add(ExternalRef(title="Needs a vector"))
+    await library.flush()
+    embed, locked = embedding.embed_documents, []
+
+    async def embed_noting_the_lock(model, texts):
+        locked.append(await library.scalar(HOLDS_AN_ADVISORY_LOCK))
+        return await embed(model, texts)
+
+    monkeypatch.setattr(embedding, "embed_documents", embed_noting_the_lock)
+    await references.embed_new(library, embedder)
+
+    assert locked == [True]
