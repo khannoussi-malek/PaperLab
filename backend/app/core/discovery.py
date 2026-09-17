@@ -37,7 +37,7 @@ from app.core.candidates import (
 )
 from app.core.enrichment import ARXIV_DOI_PREFIX
 from app.core.errors import Conflict
-from app.core.paper_sources import NAMES, SourceSettings
+from app.core.paper_sources import KEYED, NAMES, SourceSettings
 from app.models import Paper
 from app.providers import arxiv, core_ac, crossref, openalex, semantic_scholar, unpaywall
 
@@ -165,7 +165,10 @@ ASKS: dict[str, dict[str, Ask]] = {
 
 
 def _notice(source: str, error: httpx.HTTPError) -> str:
-    refused = isinstance(error, httpx.HTTPStatusError) and error.response.status_code in (401, 403)
+    # A source that takes no key (e.g. Crossref) can't have refused one, whatever status it answered with.
+    refused = (
+        source in KEYED and isinstance(error, httpx.HTTPStatusError) and error.response.status_code in (401, 403)
+    )
     return (KEY_REFUSED if refused else SOURCE_BUSY).format(name=NAMES[source])
 
 
@@ -239,13 +242,21 @@ async def _add_unpaywall_links(http: httpx.AsyncClient | None, candidates: list[
     if http is None:
         return candidates
     limit = asyncio.Semaphore(UNPAYWALL_CONCURRENCY)
+    unreachable = False  # set on the first connect error or timeout; a 4xx/5xx for one DOI doesn't set it
 
     async def with_links(candidate: Candidate) -> Candidate:
-        if not candidate.doi or candidate.pdf_urls:
+        nonlocal unreachable
+        if not candidate.doi or candidate.pdf_urls or unreachable:
             return candidate
         try:
             async with limit:
+                if unreachable:
+                    return candidate
                 urls = await unpaywall.pdf_urls(http, candidate.doi)
+        except httpx.TransportError as exc:
+            logger.info("Unpaywall is unreachable, skipping the rest of this search: %s", exc)
+            unreachable = True
+            return candidate
         except httpx.HTTPError as exc:
             logger.info("no Unpaywall links for %s: %s", candidate.doi, exc)
             return candidate
@@ -274,6 +285,8 @@ async def similar(
             key = await semantic_scholar.match_title(providers.s2, paper.title)
         found = await semantic_scholar.recommend(providers.s2, key, limit + 1) if key else None
     except httpx.HTTPError as exc:
+        if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code in (401, 403):
+            raise Conflict(KEY_REFUSED.format(name=NAMES["semantic_scholar"])) from exc
         raise Conflict(S2_BUSY) from exc
     if found is None:
         raise Conflict(S2_UNKNOWN)

@@ -25,5 +25,5 @@ async def update_paper_sources(payload: PaperSourcesUpdate, session: SessionDep)
         changes["enabled"] = {source: getattr(payload.enabled, source) for source in payload.enabled.model_fields_set}
     if payload.api_keys is not None:
         keys = {source: getattr(payload.api_keys, source) for source in payload.api_keys.model_fields_set}
-        changes["api_keys"] = {source: key and key.get_secret_value() for source, key in keys.items()}
+        changes["api_keys"] = {source: None if key is None else key.get_secret_value() for source, key in keys.items()}
     return paper_sources.view(await paper_sources.update(session, changes))

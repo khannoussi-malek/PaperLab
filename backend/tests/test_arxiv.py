@@ -92,6 +92,21 @@ async def test_an_old_style_id_whitespace_in_the_title_and_the_doi_are_normalise
     }
 
 
+async def test_an_empty_author_name_is_dropped(arxiv_api):
+    entry = """<entry>
+      <id>http://arxiv.org/abs/1810.04805v2</id>
+      <title>BERT</title>
+      <published>2018-10-11T00:00:00Z</published>
+      <author><name/></author>
+      <author><name>Jacob Devlin</name></author>
+    </entry>"""
+    arxiv_api.reply("/api/query", 200, text=ATOM.format(entry))
+
+    entry = await arxiv.get(arxiv_api.client, "1810.04805")
+
+    assert entry["authors"] == ["Jacob Devlin"]
+
+
 async def test_an_id_arxiv_does_not_have_is_none(arxiv_api):
     # A well-formed unknown ID is an empty feed.
     arxiv_api.reply("/api/query", 200, text=recorded_feed("arxiv_get_missing"))

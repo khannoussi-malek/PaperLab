@@ -127,6 +127,16 @@ async def test_a_failing_source_is_a_notice_and_the_others_still_answer(session,
     ]
 
 
+async def test_a_403_from_a_keyless_source_is_busy_not_a_key_refusal(session, discovery_fakes):
+    discovery_fakes.openalex.route("/works", {"results": [work(BERT, BERT_DOI)]})
+    discovery_fakes.crossref.reply("/works", 403, json={"message": "Forbidden"})
+    discovery_fakes.s2.reply(BATCH, 200, json=[None])
+
+    found = await discovery.search(session, discovery_fakes.turned_on("crossref"), "BERT")
+
+    assert found.notices == ["Crossref is busy or unreachable."]
+
+
 async def test_a_refused_semantic_scholar_key_is_a_notice_beside_arxiv_results(session, discovery_fakes):
     discovery_fakes.s2.reply("/graph/v1/paper/arXiv:1810.04805", 403, json={"message": "Forbidden"})
     discovery_fakes.arxiv.reply("/api/query", 200, text=atom(("1810.04805v2", BERT, "Jacob Devlin")))
@@ -181,6 +191,23 @@ async def test_a_failing_unpaywall_lookup_leaves_its_result_as_it_is(session, di
     assert ([r.pdf_urls for r in found.results], found.notices) == ([[]], [])
 
 
+async def test_an_unreachable_unpaywall_stops_asking_after_the_first_refusal(session, discovery_fakes):
+    discovery_fakes.openalex.route("/works", {"results": [
+        work("Paper One", "10.5555/one"), work("Paper Two", "10.5555/two"), work("Paper Three", "10.5555/three"),
+    ]})  # fmt: skip
+    discovery_fakes.s2.reply(BATCH, 200, json=[None, None, None])
+    for doi in ("10.5555/one", "10.5555/two", "10.5555/three"):
+        discovery_fakes.unpaywall.refuse(f"/v2/{doi}")
+
+    found = await discovery.search(session, discovery_fakes.turned_on("unpaywall"), "paper")
+
+    assert [r.pdf_urls for r in found.results] == [[], [], []]
+    assert found.notices == []
+    # Concurrency 5 lets all three take the semaphore before any of them raises, so the flag can't stop every
+    # follow-up request; it only guarantees fewer than one per candidate.
+    assert len(discovery_fakes.unpaywall.requests) < 3
+
+
 async def test_without_semantic_scholar_no_batch_is_sent(session, discovery_fakes):
     discovery_fakes.openalex.route("/works", {"results": [work(BERT, BERT_DOI)]})
 
@@ -207,6 +234,13 @@ async def test_suggestions_without_a_pdf_get_unpaywall_links(session, discovery_
     [result] = await discovery.similar(session, discovery_fakes.turned_on("unpaywall"), Paper(title=BERT, doi=BERT_DOI))
 
     assert result.pdf_urls == ["https://example.org/r.pdf"]
+
+
+async def test_a_refused_semantic_scholar_key_is_a_conflict_for_similar(session, discovery_fakes):
+    discovery_fakes.s2.reply(f"/recommendations/v1/papers/forpaper/DOI:{BERT_DOI}", 403, json={"message": "Forbidden"})
+
+    with pytest.raises(Conflict, match="Semantic Scholar refused its API key. Check it in Settings → Paper sources."):
+        await discovery.similar(session, discovery_fakes.turned_on(), Paper(title=BERT, doi=BERT_DOI))
 
 
 async def test_each_source_that_is_on_gets_a_client_and_keys_travel_in_headers():

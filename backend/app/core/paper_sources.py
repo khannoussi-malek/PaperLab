@@ -32,6 +32,7 @@ _EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 BAD_EMAIL = "Enter an email address like name@example.org."
 EMPTY_KEY = "an API key can't be empty; send null to remove it"
+NOT_PLAIN_KEY = "an API key can only contain plain ASCII characters"
 
 
 @dataclass(frozen=True)
@@ -95,7 +96,11 @@ def view(sources: SourceSettings) -> SourcesView:
 async def seed_from_env(session: AsyncSession, mailto: str, s2_api_key: str) -> bool:
     """Creates the row from .env, only while there is none, so an OPENALEX_MAILTO that already turned OpenAlex on
     keeps it on. Returns whether it seeded."""
-    email = mailto.strip() or None
+    try:
+        email = _check_email(mailto.strip() or None)
+    except InvalidInput:
+        logger.warning("OPENALEX_MAILTO isn't a usable email address; leaving OpenAlex off (see .env.example)")
+        email = None
     seeded = await session.scalar(
         insert(PaperSources)
         .values(
@@ -126,9 +131,13 @@ def _check_key(api_key: str | None) -> str | None:
     """The key without surrounding whitespace. The message never includes it."""
     if api_key is None:
         return None
-    if not api_key.strip():
+    api_key = api_key.strip()
+    if not api_key:
         raise InvalidInput(EMPTY_KEY)
-    return api_key.strip()
+    # str.strip() leaves U+200B and similar characters in place; httpx's header encoder can't send them (D74).
+    if not (api_key.isascii() and api_key.isprintable()):
+        raise InvalidInput(NOT_PLAIN_KEY)
+    return api_key
 
 
 async def update(session: AsyncSession, changes: Mapping[str, Any]) -> SourceSettings:
