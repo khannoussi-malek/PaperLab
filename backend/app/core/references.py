@@ -323,9 +323,14 @@ async def listing(session: AsyncSession, paper_id: uuid.UUID, direction: str) ->
         ReferenceRow(**{key: value for key, value in row._mapping.items() if key != "note_similarity"})
         for row in await session.execute(_LISTING, {"paper_id": paper_id, "direction": direction})
     ]
+    state, error = paper.references_state, paper.references_error
+    requested_at = paper.references_requested_at
+    if state == "fetching" and (requested_at is None or requested_at < datetime.now(timezone.utc) - FETCH_STALE):
+        # The job was lost (a worker restart mid-fetch): shown as failed, so Try again claims it as request_fetch does.
+        state, error = "failed", FETCH_FAILED
     return Listing(
-        state=paper.references_state,
-        error=paper.references_error,
+        state=state,
+        error=error,
         direction=direction,
         summary=summarize(rows),
         rows=rows,

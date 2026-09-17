@@ -47,18 +47,27 @@ export function ReferencesTab({ paperId, active, workspaceId }: { paperId: strin
 
       {!data && !references.isError && <p className="text-muted-foreground">Loading references…</p>}
 
-      {(data?.state === 'none' || data?.state === 'fetching') && (
-        <>
-          <p role="status" className="text-muted-foreground">
-            Fetching references…
-          </p>
-          <div aria-hidden className="flex flex-col gap-2">
-            {Array.from({ length: SKELETON_ROWS }, (_, i) => (
-              <div key={i} className="h-16 animate-pulse rounded-xl bg-muted" />
-            ))}
-          </div>
-        </>
-      )}
+      {(data?.state === 'none' || data?.state === 'fetching') &&
+        (refresh.error ? (
+          // The request that queues the fetch failed, so nothing is fetching: say why instead of waiting forever.
+          <>
+            <ErrorAlert message={refresh.error.message} />
+            <Button variant="outline" className="self-start" disabled={refresh.isPending} onClick={() => refresh.mutate()}>
+              Try again
+            </Button>
+          </>
+        ) : (
+          <>
+            <p role="status" className="text-muted-foreground">
+              Fetching references…
+            </p>
+            <div aria-hidden className="flex flex-col gap-2">
+              {Array.from({ length: SKELETON_ROWS }, (_, i) => (
+                <div key={i} className="h-16 animate-pulse rounded-xl bg-muted" />
+              ))}
+            </div>
+          </>
+        ))}
 
       {data?.state === 'failed' && (
         <>
