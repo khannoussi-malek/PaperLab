@@ -122,11 +122,15 @@ database. With a local model (Ollama, LM Studio and other servers on your machin
 notes never leaves your computer; a model tagged "Cloud" receives the passages and notes sent with each question.
 Metadata lookups on OpenAlex are off unless you tick OpenAlex, and they send a paper's DOI or title, never its text.
 Find papers sends what you type to every paper source that is on and can answer it, then the results' DOIs to Semantic
-Scholar and, for results without a free PDF, to Unpaywall. The Similar and References tabs send the paper's DOI, or its title when it has none, to Semantic Scholar (and References to OpenAlex when it's on). Your contact email goes to Crossref, Unpaywall and OpenAlex (when on), never to the others or to PDF hosts.
+Scholar and, for results without a free PDF, to Unpaywall. The Similar and References tabs send Semantic Scholar the
+paper's DOI (its arXiv ID when the DOI is an arXiv one), or its title when it has none. With OpenAlex ticked, the
+References tab also sends OpenAlex the paper's OpenAlex ID and the OpenAlex IDs of the works it cites. Your contact
+email goes to Crossref, Unpaywall and OpenAlex (when on), never to the others or to PDF hosts.
 API keys stay in your local database and are never sent back to the browser. Adding a paper downloads its PDF from the
 free link found. None of them send a paper's text.
 An MCP client you connect, such as Claude Desktop, receives what its tools return: passages from your papers, paper
-details, and every note on a paper marked as yours or AI. With a cloud model, that text leaves your computer.
+details and workspace names, and every note on a paper marked as yours or AI. Claude Desktop and Claude Code send what
+the tools return to Anthropic.
 - **AI is always labelled.** AI text is stored separately from yours, keeps the model and prompt version that
 produced it, and shows an AI badge. Editing an AI note marks it "AI · edited", never "You".
 - **Answers show their sources.** Chat answers cite passages you can click, so you can check every claim against the paper.
@@ -175,8 +179,8 @@ first start, `OPENALEX_MAILTO` and `SEMANTIC_SCHOLAR_API_KEY` from `.env` fill t
 ### Use PaperLab from Claude Desktop
 
 PaperLab includes an MCP server. Claude Desktop starts it inside the running `api` container, where it can read your
-PDFs, so the stack must be up (`docker compose up -d`). Restarting `api` disconnects it until Claude Desktop
-reconnects. In Claude Desktop, open **Settings → Developer → Edit Config** and add, with your own paths:
+PDFs, so the stack must be up (`docker compose up -d`). Restarting `api` ends the connection, and Claude Desktop needs
+a restart to connect again. In Claude Desktop, open **Settings → Developer → Edit Config** and add, with your own paths:
 
 ```json
 {
@@ -255,7 +259,7 @@ backend/
   app/api/         HTTP routes: papers, notes, chat, health, llm, embedding
   app/core/        domain logic: chunking, retrieval, chat, note provenance rules
   app/providers/   PDF extraction, embeddings, OpenAlex, LLM adapters (Ollama, Anthropic, OpenAI-compatible, fake), Ollama pull/delete
-  app/workers/     the ARQ ingestion job
+  app/workers/     the ARQ jobs: ingestion and the references fetch
   mcp_server/      the MCP server Claude Desktop starts: search, papers, related papers, notes
   prompts/         versioned prompts
   evals/           retrieval eval: recall@k over questions.yaml
@@ -282,8 +286,9 @@ docker compose exec api python -m evals.answer_check --paper "<title prefix>" --
 ```
 
 - **End-to-end tests** run against the real stack, with no mocked backend. They expect the fake model, which always
-gives the same answer: start the API and the worker with `LLM_PROVIDER=fake DISCOVERY_PROVIDER=fake docker compose up -d api worker`, run the
-tests, then go back with `docker compose up -d api worker`.
+gives the same answer: start the API and the worker with
+`LLM_PROVIDER=fake DISCOVERY_PROVIDER=fake docker compose up -d api worker`, run the tests, then go back with
+`docker compose up -d api worker`.
 - **Retrieval eval:** `docker compose exec api python -m evals.run` prints recall@k for the questions in
 `backend/evals/questions.yaml`. Run it twice after a re-ingest before comparing results.
 - **Answer eval:** `docker compose exec api python -m evals.answers --label <name>` asks the default model the

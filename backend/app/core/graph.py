@@ -25,7 +25,9 @@ MAX_HOPS = 3
 # instead of enumerating paths. Each paper is then reported at its nearest distance, with the kinds that reached it
 # there.
 # ponytail: every call derives every link in the library (~50 ms at 60 papers with 600 references each); store edges or
-# walk from the asked paper outward if a real library makes it slow.
+# walk from the asked paper outward if a real library makes it slow. shares_topic counts every stored label, OpenAlex's
+# broad concepts ("Computer science") included, so it can link most of a library; filter by score (a threshold on
+# paper_topics.score) or by topic type if that makes related_papers noisy.
 _RELATED = text(
     """
     WITH RECURSIVE in_library(ref_id, paper_id) AS (
