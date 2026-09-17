@@ -1,0 +1,38 @@
+name: Bug report
+description: Something went wrong while reading, highlighting, searching or asking
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If a specific paper triggered it, the DOI or link is the most useful thing you can give us —
+        extraction and highlight anchoring break on real documents in ways we can't guess.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what you got instead.
+    validations:
+      required: true
+  - type: input
+    id: paper
+    attributes:
+      label: Which paper
+      description: DOI, arXiv ID or link. Leave blank if the paper isn't involved.
+  - type: textarea
+    id: env
+    attributes:
+      label: Your setup
+      value: |
+        - OS:
+        - Model (Ollama / LM Studio / cloud, which one):
+        - Browser:
+        - `git rev-parse --short HEAD`:
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: "`docker compose logs api worker --tail 100`, if it's a server-side failure."
+      render: text
