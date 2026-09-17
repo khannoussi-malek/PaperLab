@@ -3,6 +3,7 @@ import {
   chartHref,
   chartsHref,
   chunkHref,
+  connectClaudeHref,
   datasetHref,
   editChartHref,
   newChartHref,
@@ -138,5 +139,11 @@ describe('parseRoute', () => {
     expect(settingsHref).toBe('#/settings')
     expect(parseRoute(settingsHref)).toEqual({ name: 'settings' })
     expect(parseRoute('#/settings/models')).toEqual({ name: 'library' })
+  })
+
+  it('opens the Connect Claude page, and nothing under it', () => {
+    expect(connectClaudeHref).toBe('#/connect-claude')
+    expect(parseRoute(connectClaudeHref)).toEqual({ name: 'connect-claude' })
+    expect(parseRoute('#/connect-claude/macos')).toEqual({ name: 'library' })
   })
 })
