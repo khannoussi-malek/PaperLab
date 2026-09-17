@@ -152,7 +152,9 @@ class FakeOpenAlex:
     def __init__(self):
         self.routes: dict[str, list] = {}
         self.requests: list[httpx.Request] = []
-        self.client = openalex.new_client(self.MAILTO, transport=httpx.MockTransport(self._handle))
+        # The worker opens its own client per ingest (D74): tests hand it this transport in ctx["transport"].
+        self.transport = httpx.MockTransport(self._handle)
+        self.client = openalex.new_client(self.MAILTO, transport=self.transport)
 
     def route(self, key: str, *replies) -> None:
         self.routes[key] = [
