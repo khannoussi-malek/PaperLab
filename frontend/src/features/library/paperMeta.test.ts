@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { byline, pageCountLabel, paperLabel, shortAuthors } from './paperMeta'
+import { byline, matchesPaper, pageCountLabel, paperLabel, shortAuthors } from './paperMeta'
 
 describe('shortAuthors', () => {
   it('lists up to two names, then "et al."', () => {
@@ -42,5 +42,36 @@ describe('paperLabel', () => {
     expect(paperLabel({ title: 'PaperLab E2E Fixture With A Long Title', authors: ['  '], year: 2026 })).toBe(
       'PaperLab E2E Fixture Wi…',
     )
+  })
+})
+
+describe('matchesPaper', () => {
+  const paper = { title: 'Attention Is All You Need', authors: ['Ashish Vaswani', 'Jörg Müller'], year: 2017, venue: 'NeurIPS' }
+
+  it('matches any word of the title, an author, the year or the venue, ignoring case and accents', () => {
+    expect(matchesPaper(paper, 'attention')).toBe(true)
+    expect(matchesPaper(paper, 'VASWANI')).toBe(true)
+    expect(matchesPaper(paper, 'muller')).toBe(true)
+    expect(matchesPaper(paper, '2017')).toBe(true)
+    expect(matchesPaper(paper, 'neurips')).toBe(true)
+    expect(matchesPaper(paper, 'transformer')).toBe(false)
+  })
+
+  it('needs every word of the query to match somewhere', () => {
+    expect(matchesPaper(paper, 'vaswani 2017')).toBe(true)
+    expect(matchesPaper(paper, 'vaswani 2018')).toBe(false)
+  })
+
+  it('matches the start of a word, not its middle, so a short query stays useful', () => {
+    const bert = { title: 'BERT: Pre-training of Deep Bidirectional Transformers', authors: [], year: 2019, venue: null }
+    expect(matchesPaper(bert, 'ai')).toBe(false)
+    expect(matchesPaper(bert, 'train')).toBe(true)
+    expect(matchesPaper(bert, 'pre-training')).toBe(true)
+    expect(matchesPaper({ title: 'AI-Generated Code in the Wild', authors: [], year: null, venue: null }, 'ai')).toBe(true)
+  })
+
+  it('matches everything on a blank query, and a paper missing year and venue still matches its title', () => {
+    expect(matchesPaper(paper, '   ')).toBe(true)
+    expect(matchesPaper({ title: 'Untitled draft', authors: [], year: null, venue: null }, 'draft')).toBe(true)
   })
 })

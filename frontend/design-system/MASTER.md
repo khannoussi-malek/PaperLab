@@ -89,7 +89,7 @@ Fonts: body `Atkinson Hyperlegible Next Variable` (`font-sans`), headings `Crims
 - **The PDF page stays white in both themes.** It is the paper. Highlights use `mix-blend-multiply`.
 - **Nothing that shifts selection coordinates** goes on `.pdf-page`: no border, no padding.
 - **Stable test hooks.** Keep the class names and accessible names the Playwright specs use
-  (`.paper-row`, `.status`, `.paper-preview`, `.pdf-page`, `.pdf-overlay`, `.highlight`, `.draft`, `.zoom-level`,
+  (`.paper-row`, `.status`, `.paper-preview`, `.search-count`, `.no-matches`, "Clear search", `.pdf-page`, `.pdf-overlay`, `.highlight`, `.draft`, `.zoom-level`,
   `article.note`, `.provenance-badge`, `.note-hover-card`, `.reader-panel`, `article.chat-answer`, `.chat-question`,
   `.chat-sources`, `.chat-answer-text`, `.chat-cite`, `.chat-answer-footer`, `.chat-following`,
   `article.chat-answer[data-parent-id]`, `.chunk-flash`, `.save-as-note`,
@@ -208,6 +208,10 @@ one-off animation classes.
 - **`slideUpIn`** (fade up 8 px, 300 ms) for a new list item, once: a note card created in the last few seconds
   (`isFresh(created_at)`), in the reader or on a workspace's Notes tab, and the chat answer being asked now. Items loaded
   from the server, or re-shown by a filter, stay still.
+- **Paper search** (the one exception to "re-shown by a filter stay still", asked for 2026-09-17): a row the search brings
+  back plays `fadeIn`, 40 ms after the row above it (at most 240 ms), with `fill-mode-backwards`, then drops the class
+  so a tab panel shown again doesn't replay it. Rows from the server (first load, an upload) and rows still on screen
+  while the query changes stay still. The count and clear button and the no-match card use `popIn`.
 - **`fadeIn`** (300 ms) for the library, workspace and reader pages, the reader's Notes / Chat panels and the workspace
   home's Papers / Notes / Chat panels (it replays each time a panel is shown).
 - **The PDF canvas** fades in (300 ms) once it has drawn, instead of flashing from blank.
@@ -237,6 +241,16 @@ Input with a custom dropdown; Dialog for modal content, High).
 - **Paper rows:** one row component everywhere (`PaperList`). Its `EllipsisVertical` "Paper actions" menu holds the
   "Add to workspace…" submenu (`DropdownMenuCheckboxItem`s that stay open while ticking) and, on a workspace home,
   "Remove from workspace".
+- **Paper search:** `PaperList` opens with a search bar (`PaperSearch`), so the library and every workspace's Papers tab
+  get it. A shadcn `InputGroup` on glass (`h-10 rounded-xl border-glass-border`): a `Search` icon that turns `primary` while
+  the field has focus, the `type="search"` field "Search papers" (placeholder "Search by title, author, year or venue";
+  the browser's own clear icon hidden), then a `role="status"` `.search-count` ("4 of 18", `text-xs tabular-nums`, " papers" for
+  screen readers; no `aria-label`, which some would read instead) and a ghost `X` "Clear search" while a search is on. Both
+  clear buttons put the cursor back in the field. Esc clears. Each word typed must start a word of the title,
+  an author, the year or the venue, ignoring case and accents (`matchesPaper`). Nothing matching swaps the rows for
+  `.no-matches`: the library's dashed empty-state card with `SearchX`, "No papers match “…”", "Check the spelling, or try
+  an author's surname or a year." and an outline "Clear search". The preview
+  hides until something matches.
 - **Workspace home:** the header is the workspace name (Crimson Pro, `text-3xl`) over "N papers · M notes". Tabs are
   shadcn `Tabs` kept in the hash (`?tab=notes|chat`, `location.replace`), all `forceMount`ed. Papers: "Add papers" is
   the view's primary button, "Upload PDFs" is outline.
