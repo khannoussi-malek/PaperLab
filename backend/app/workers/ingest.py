@@ -2,21 +2,29 @@ import asyncio
 import logging
 import uuid
 
-from app.core import enrichment, papers
+from app.core import enrichment, paper_sources, papers
 from app.core.chunking import chunk_blocks
 from app.db import SessionLocal
 from app.models import PaperStatus
-from app.providers import embedding
+from app.providers import embedding, openalex
 from app.providers.extraction import ExtractedDoc, extract
 
 logger = logging.getLogger(__name__)
 
 
-async def _enrich(session, http, paper_id: uuid.UUID, doc: ExtractedDoc) -> None:
-    """Never fatal (addendum §6d): on any error the paper keeps whatever was saved before the error and still
-    reaches ready."""
+async def _enrich(session, transport, paper_id: uuid.UUID, doc: ExtractedDoc) -> None:
+    """Asks OpenAlex only while it is on in Settings → Paper sources, read here so a change applies to the next ingest
+    without a restart (P5). Never fatal (addendum §6d): on any error the paper keeps whatever was saved before the
+    error and still reaches ready."""
     try:
-        await enrichment.enrich_paper(session, http, paper_id, enrichment.pdf_hints(doc.first_page_text, doc.metadata))
+        hints = enrichment.pdf_hints(doc.first_page_text, doc.metadata)
+        sources = await paper_sources.get(session)
+        if not sources.enabled["openalex"]:
+            await enrichment.enrich_paper(session, None, paper_id, hints)
+            return
+        key = sources.api_keys["openalex"]
+        async with openalex.new_client(sources.contact_email, transport, api_key=key) as http:
+            await enrichment.enrich_paper(session, http, paper_id, hints)
     except Exception:
         logger.exception("enrichment failed for %s; the paper stays usable", paper_id)
         await session.rollback()
@@ -26,7 +34,7 @@ async def ingest_paper(ctx: dict, paper_id: str) -> None:
     """uploaded -> extracting -> chunking -> embedding -> enriching -> ready, or failed with status_error.
 
     Idempotent: chunks, vectors, authorships and topics are replaced wholesale, so re-run it freely.
-    ctx["embedder"] is the model WorkerSettings.on_startup loaded; ctx["openalex"] its OpenAlex client, or None.
+    ctx["embedder"] is the model WorkerSettings.on_startup loaded. Tests put an httpx transport in ctx["transport"].
     """
     pid = uuid.UUID(paper_id)
     async with SessionLocal() as session:
@@ -50,7 +58,7 @@ async def ingest_paper(ctx: dict, paper_id: str) -> None:
             await papers.set_embeddings(session, [c.id for c in chunks], vectors)
 
             await papers.set_status(session, pid, PaperStatus.ENRICHING)
-            await _enrich(session, ctx.get("openalex"), pid, doc)
+            await _enrich(session, ctx.get("transport"), pid, doc)
             # Don't read paper's ORM attributes past this point: _enrich's rollback (on the failure path) expires
             # them, and an async lazy load outside an awaited call raises MissingGreenlet, not a clean re-fetch.
 

@@ -5,13 +5,12 @@ from pathlib import Path
 import httpx
 import numpy as np
 import pytest
-from conftest import recorded, unit_vector
-from sqlalchemy import func, select
+from conftest import FakeOpenAlex, recorded, unit_vector
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
-from app.core import enrichment, papers
-from app.models import Author, Chunk, Paper, paper_authors, paper_topics
+from app.core import enrichment, paper_sources, papers
+from app.models import Author, Chunk, Paper, PaperSources, paper_authors, paper_topics
 from app.providers import embedding
 from app.workers import ingest
 from app.workers.settings import WorkerSettings
@@ -20,8 +19,10 @@ pytestmark = pytest.mark.anyio
 
 
 @pytest.fixture
-def worker_session(session, monkeypatch):
-    """Point the worker at the rolled-back test session instead of its own SessionLocal."""
+async def worker_session(session, monkeypatch):
+    """Point the worker at the rolled-back test session instead of its own SessionLocal. The owner's paper sources row
+    (D15 shares the dev database) is hidden, so OpenAlex is off unless a test turns it on."""
+    await session.execute(delete(PaperSources))
 
     @asynccontextmanager
     async def shared_session():
@@ -35,6 +36,13 @@ def worker_session(session, monkeypatch):
 def ctx(embedder):
     """What WorkerSettings.on_startup leaves in the ARQ context, with the fake model."""
     return {"embedder": embedder}
+
+
+@pytest.fixture
+async def openalex_on(worker_session, ctx, fake_openalex):
+    """The ARQ context with OpenAlex ticked in Settings → Paper sources, its requests answered by fake_openalex."""
+    await paper_sources.update(worker_session, {"contact_email": FakeOpenAlex.MAILTO, "enabled": {"openalex": True}})
+    return {**ctx, "transport": fake_openalex.transport}
 
 
 async def add_paper(session, path, **fields) -> Paper:
@@ -180,12 +188,14 @@ async def count(session, table, paper_id) -> int:
     return await session.scalar(select(func.count()).select_from(table).where(table.c.paper_id == paper_id))
 
 
-async def test_a_doi_paper_is_enriched_on_its_way_to_ready(worker_session, doi_pdf, ctx, fake_openalex, statuses):
+async def test_a_doi_paper_is_enriched_on_its_way_to_ready(
+    worker_session, doi_pdf, openalex_on, fake_openalex, statuses
+):
     fake_openalex.route(BERT_WORK, recorded("work_bert"))
     fake_openalex.route("/authors", recorded("authors_bert"))
     paper = await add_paper(worker_session, doi_pdf)
 
-    await ingest.ingest_paper({**ctx, "openalex": fake_openalex.client}, str(paper.id))
+    await ingest.ingest_paper(openalex_on, str(paper.id))
     await worker_session.refresh(paper)
 
     assert statuses == ["extracting", "chunking", "embedding", "enriching", "ready"]
@@ -196,7 +206,9 @@ async def test_a_doi_paper_is_enriched_on_its_way_to_ready(worker_session, doi_p
     assert await count(worker_session, paper_topics, paper.id) == 11  # 9 from OpenAlex, 2 embedded keywords
 
 
-async def test_a_reingest_keeps_one_row_per_author_and_topic(worker_session, doi_pdf, ctx, fake_openalex, caplog):
+async def test_a_reingest_keeps_one_row_per_author_and_topic(
+    worker_session, doi_pdf, openalex_on, fake_openalex, caplog
+):
     fake_openalex.route(BERT_WORK, recorded("work_bert"))
     fake_openalex.route("/works/W2963341956", recorded("work_bert"))  # the re-run looks up the now-stored id
     fake_openalex.route("/authors", recorded("authors_bert"))
@@ -204,10 +216,9 @@ async def test_a_reingest_keeps_one_row_per_author_and_topic(worker_session, doi
     # Captured once: a failed re-enrichment rolls back inside _enrich, which expires `paper`, and a bare attribute
     # read after that raises MissingGreenlet instead of a clean assertion failure (see ingest.py's _enrich comment).
     paper_id = paper.id
-    enriching = {**ctx, "openalex": fake_openalex.client}
 
-    await ingest.ingest_paper(enriching, str(paper_id))
-    await ingest.ingest_paper(enriching, str(paper_id))
+    await ingest.ingest_paper(openalex_on, str(paper_id))
+    await ingest.ingest_paper(openalex_on, str(paper_id))
 
     assert await count(worker_session, paper_authors, paper_id) == 4
     assert await count(worker_session, paper_topics, paper_id) == 11
@@ -228,14 +239,14 @@ async def test_a_reingest_keeps_one_row_per_author_and_topic(worker_session, doi
     ids=["no match", "network error", "timeout", "rate limited"],
 )
 async def test_without_openalex_the_paper_still_reaches_ready_with_pdf_metadata(
-    worker_session, doi_pdf, ctx, fake_openalex, failure
+    worker_session, doi_pdf, openalex_on, fake_openalex, failure
 ):
     fake_openalex.route("/works", recorded("search_no_match"))
     # "no match": OpenAlex has no such DOI, a clean 404 rather than leaving the request unrouted.
     fake_openalex.route(BERT_WORK, failure if failure is not None else httpx.Response(404))
     paper = await add_paper(worker_session, doi_pdf)
 
-    await ingest.ingest_paper({**ctx, "openalex": fake_openalex.client}, str(paper.id))
+    await ingest.ingest_paper(openalex_on, str(paper.id))
     await worker_session.refresh(paper)
 
     assert (paper.status, paper.status_error, paper.openalex_id) == ("ready", None, None)
@@ -243,7 +254,7 @@ async def test_without_openalex_the_paper_still_reaches_ready_with_pdf_metadata(
 
 
 async def test_a_second_copy_of_a_matched_paper_still_reaches_ready(
-    worker_session, doi_pdf, ctx, fake_openalex, caplog
+    worker_session, doi_pdf, openalex_on, fake_openalex, caplog
 ):
     fake_openalex.route(BERT_WORK, recorded("work_bert"))
     # A malformed /authors reply (no "display_name") makes refresh_authors raise a realistic KeyError -- not an
@@ -253,7 +264,7 @@ async def test_a_second_copy_of_a_matched_paper_still_reaches_ready(
     await add_paper(worker_session, "/first-copy.pdf", doi="10.18653/v1/n19-1423")
     copy = await add_paper(worker_session, doi_pdf)
 
-    await ingest.ingest_paper({**ctx, "openalex": fake_openalex.client}, str(copy.id))
+    await ingest.ingest_paper(openalex_on, str(copy.id))
     await worker_session.refresh(copy)
 
     # papers.doi is UNIQUE: doi is dropped instead of raising (core/enrichment.py's _taken), the rest of the match
@@ -302,29 +313,37 @@ async def test_a_title_correction_made_mid_extraction_survives_ingestion(worker_
 
 
 @pytest.mark.parametrize("pdf", sorted(E2E_FIXTURES.glob("*.pdf")), ids=lambda p: p.name)
-async def test_the_e2e_fixture_paper_sends_no_openalex_request(worker_session, ctx, fake_openalex, pdf):
+async def test_the_e2e_fixture_paper_sends_no_openalex_request(worker_session, openalex_on, fake_openalex, pdf):
     # No DOI, no arXiv ID and no creation date: nothing to look up and no year to confirm a title search.
-    # This keeps the Playwright stack off the network even with OPENALEX_MAILTO set. Loops over every fixture PDF
+    # This keeps the Playwright stack off the network even with OpenAlex on. Loops over every fixture PDF
     # in the directory (M10), in case another spec adds a second one later.
     paper = await add_paper(worker_session, pdf)
 
-    await ingest.ingest_paper({**ctx, "openalex": fake_openalex.client}, str(paper.id))
+    await ingest.ingest_paper(openalex_on, str(paper.id))
     await worker_session.refresh(paper)
 
     assert (paper.status, fake_openalex.requests) == ("ready", [])
 
 
-async def test_the_worker_opens_an_openalex_client_only_with_a_mailto(embedder, monkeypatch):
-    monkeypatch.setattr(embedding, "load", lambda: embedder)
-    monkeypatch.setattr(settings, "openalex_mailto", "")
-    off = {}
-    await WorkerSettings.on_startup(off)
-    assert off["openalex"] is None
-    await WorkerSettings.on_shutdown(off)
+async def test_the_worker_asks_openalex_nothing_while_it_is_off(worker_session, doi_pdf, ctx, fake_openalex):
+    paper = await add_paper(worker_session, doi_pdf)
 
-    monkeypatch.setattr(settings, "openalex_mailto", "me@example.com")
-    on = {}
-    await WorkerSettings.on_startup(on)
-    assert on["openalex"].params["mailto"] == "me@example.com"
-    await WorkerSettings.on_shutdown(on)
-    assert on["openalex"].is_closed
+    await ingest.ingest_paper({**ctx, "transport": fake_openalex.transport}, str(paper.id))
+    await worker_session.refresh(paper)
+
+    assert (paper.status, paper.openalex_id, fake_openalex.requests) == ("ready", None, [])
+
+
+async def test_the_worker_sends_the_openalex_key_in_a_header_never_in_a_url(
+    worker_session, doi_pdf, openalex_on, fake_openalex
+):
+    fake_openalex.route(BERT_WORK, recorded("work_bert"))
+    fake_openalex.route("/authors", recorded("authors_bert"))
+    await paper_sources.update(worker_session, {"api_keys": {"openalex": "oa-key-0123456789"}})
+    paper = await add_paper(worker_session, doi_pdf)
+
+    await ingest.ingest_paper(openalex_on, str(paper.id))
+
+    assert fake_openalex.requests
+    assert all(r.headers["Authorization"] == "Bearer oa-key-0123456789" for r in fake_openalex.requests)
+    assert not any("oa-key" in str(r.url) for r in fake_openalex.requests)
