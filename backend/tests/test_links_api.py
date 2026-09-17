@@ -60,6 +60,23 @@ async def test_every_refusal_carries_its_status_and_message(session, client):
     assert long.json()["detail"] == paper_links.LABEL_TOO_LONG
 
 
+async def test_empty_label_returns_empty_label_message(session, client):
+    """Verify that an empty label ("") bypasses Pydantic validation and gets the core's EMPTY_LABEL message."""
+    left, right = await add_papers(session)
+
+    post = await client.post(
+        "/api/links", json={"from_paper": str(left.id), "to_paper": str(right.id), "label": ""}
+    )
+    assert post.status_code == 422
+    assert post.json()["detail"] == paper_links.EMPTY_LABEL
+
+    # Create a valid link to test PATCH.
+    link = await paper_links.create(session, left.id, right.id, "builds on")
+    patch = await client.patch(f"/api/links/{link.id}", json={"label": ""})
+    assert patch.status_code == 422
+    assert patch.json()["detail"] == paper_links.EMPTY_LABEL
+
+
 async def test_patch_changes_only_the_label_and_delete_returns_204(session, client):
     left, right = await add_papers(session)
     link = await paper_links.create(session, left.id, right.id, "builds on")

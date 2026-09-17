@@ -82,3 +82,34 @@ async def test_deleting_a_paper_removes_its_links(session):
     await session.commit()
 
     assert await session.scalar(select(PaperLink.id).where(PaperLink.id == link.id)) is None
+
+
+async def test_a_race_condition_on_double_submit_raises_conflict(session, monkeypatch):
+    """When two concurrent requests bypass the pre-check and both try to insert, the second's commit raises
+    IntegrityError on the unique index. The exception handler must catch it, roll back, and raise Conflict."""
+    left, right = await add_papers(session)
+
+    # Insert a link manually to set up the race condition state.
+    link = PaperLink(from_paper=left.id, to_paper=right.id, label="builds on")
+    session.add(link)
+    await session.commit()
+    link_id = link.id  # Store the ID before any potential expiry
+
+    # Monkeypatch the select call in paper_links to return a query that will always return None,
+    # simulating a race where the pre-check is bypassed.
+    original_select = paper_links.select
+
+    def mock_select(*args, **kwargs):
+        # Return a query that when scalar()'d will return None
+        return select(None).select_from(PaperLink).where(False)
+
+    monkeypatch.setattr("app.core.paper_links.select", mock_select)
+
+    # Now call create() for the same pair the other way round. The pre-check will return None,
+    # but the commit will fail on IntegrityError, which should be caught and re-raised as Conflict.
+    with pytest.raises(Conflict, match=paper_links.ALREADY_LINKED):
+        await paper_links.create(session, right.id, left.id, "builds on")
+
+    # Verify the session is still usable after the rollback and the original link is still there.
+    result = await session.scalar(original_select(PaperLink.id).where(PaperLink.id == link_id))
+    assert result is not None

@@ -7,6 +7,7 @@ drawn, enforced by the unique index on (least, greatest) as well as here.
 import uuid
 
 from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import Conflict, InvalidInput, NotFound
@@ -53,7 +54,11 @@ async def create(session: AsyncSession, from_paper: uuid.UUID, to_paper: uuid.UU
         raise Conflict(ALREADY_LINKED)
     link = PaperLink(from_paper=from_paper, to_paper=to_paper, label=cleaned)
     session.add(link)
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()
+        raise Conflict(ALREADY_LINKED)
     return link
 
 
