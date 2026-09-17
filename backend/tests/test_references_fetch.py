@@ -7,10 +7,12 @@ from datetime import datetime, timedelta, timezone
 import httpx
 import pytest
 from sqlalchemy import delete, func, select
+from test_references_providers import PagedS2, recorded_references
 
 from app.core import references
 from app.core.errors import Conflict
 from app.models import ExternalRef, Note, NoteEmbedding, Paper, paper_references
+from app.providers import semantic_scholar
 
 pytestmark = pytest.mark.anyio
 
@@ -18,6 +20,9 @@ READER_DOI = "10.5555/m75-reader"
 REFS = f"/graph/v1/paper/DOI:{READER_DOI}/references"
 CITING = f"/graph/v1/paper/DOI:{READER_DOI}/citations"
 PDF = b"%PDF-1.7\n%a reference\n"
+# How Semantic Scholar lists a reference it knows nothing about (the recorded BERT page 2 has four).
+NO_IDS = {"paperId": None, "title": "Corpus of linguistic acceptability", "year": 2018, "venue": "", "authors": [],
+          "externalIds": None, "openAccessPdf": None, "citationCount": None}  # fmt: skip
 
 
 @pytest.fixture
@@ -250,3 +255,60 @@ async def test_imported_row_wins_fold_and_keeps_imported_as(library, discovery_f
     assert row.imported_as == imported_paper.id
     assert row.s2_id == "c" * 40  # merged from older row
     assert row.openalex_id == "W9999999"  # from newer row
+
+
+async def test_recorded_references_with_no_id_are_skipped_and_every_other_one_is_stored(library, discovery_fakes):
+    reader = await add_paper(library, doi=READER_DOI)
+    pages = [recorded_references("s2_references_bert_page1"), recorded_references("s2_references_bert_page2")]
+    fake = PagedS2()
+    fake.page(REFS, 0, pages[0])
+    fake.page(REFS, 40, pages[1])
+    fake.page(CITING, 0, page("citingPaper"))
+    records = [item["citedPaper"] for body in pages for item in body["data"]]
+    with_an_id = [record["title"] for record in records if record["paperId"]]
+
+    async with semantic_scholar.new_client(None, transport=fake.transport) as client:
+        providers = replace(discovery_fakes.providers, s2=client, openalex=None)
+        notices = await references.fetch(library, providers, reader)
+
+    assert (notices, len(records), len(with_an_id)) == ([], 63, 59)
+    assert await stored(library, reader.id) == with_an_id
+
+
+async def test_a_record_with_no_id_leaves_other_papers_references_alone(library, discovery_fakes):
+    other = await add_paper(library, doi="10.5555/m75-other")
+    theirs = [ExternalRef(s2_id=c * 40, title=f"Their reference {c}") for c in "de"]
+    library.add_all(theirs)
+    await library.flush()
+    await library.execute(
+        paper_references.insert(),
+        [{"paper_id": other.id, "ref_id": r.id, "direction": "cites", "position": i} for i, r in enumerate(theirs)],
+    )
+    reader = await add_paper(library, doi=READER_DOI)
+    discovery_fakes.s2.reply(REFS, 200, json=page("citedPaper", NO_IDS, s2("Known", paper_id="c" * 40)))
+    discovery_fakes.s2.reply(CITING, 200, json=page("citingPaper", NO_IDS))
+
+    await references.fetch(library, discovery_fakes.providers, reader)
+
+    assert await stored(library, other.id) == ["Their reference d", "Their reference e"]
+    assert (await stored(library, reader.id), await stored(library, reader.id, "cited_by")) == (["Known"], [])
+    assert await library.scalar(select(func.count()).select_from(ExternalRef)) == 3
+
+
+async def test_a_row_stored_earlier_in_the_same_fetch_can_fold_into_an_older_one(library, discovery_fakes):
+    reader = await add_paper(library, doi=READER_DOI)
+    older = ExternalRef(s2_id="y" * 40, title="Beta", fetched_at=datetime.now(timezone.utc) - timedelta(days=1))
+    library.add(older)
+    await library.flush()
+    # The two Alpha records (same title and author) merge into one candidate, stored first as a new row with the DOI.
+    # Beta shares that DOI, so storing Beta folds the new Alpha row into the older Beta row, after Alpha's link.
+    beta = s2("Beta", "10.5555/m75-shared", paper_id="y" * 40) | {"authors": [{"name": "Grace Hopper"}]}
+    alpha, alpha_with_doi = s2("Alpha", paper_id="x" * 40), s2("Alpha", "10.5555/m75-shared", paper_id="z" * 40)
+    discovery_fakes.s2.reply(REFS, 200, json=page("citedPaper", alpha, beta, alpha_with_doi))
+    discovery_fakes.s2.reply(CITING, 200, json=page("citingPaper"))
+
+    await references.fetch(library, discovery_fakes.providers, reader)
+
+    [row] = await library.scalars(select(ExternalRef))
+    assert (row.id, row.doi) == (older.id, "10.5555/m75-shared")
+    assert await stored(library, reader.id) == ["Beta"]
