@@ -41,6 +41,9 @@ services:
     environment:
       LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
       DISCOVERY_PROVIDER: ${DISCOVERY_PROVIDER:-live}
+      # The folder `docker compose up` ran in, for the Connect Claude page (Compose uses its own working directory
+      # when the shell exports no PWD).
+      PAPERLAB_DIR: ${PWD:-}
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     ports: ["127.0.0.1:8000:8000"]
 
