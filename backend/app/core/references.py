@@ -312,7 +312,7 @@ _LISTING = text(
              SELECT p.id FROM papers p
               WHERE p.openalex_id = r.openalex_id
                  OR lower(p.doi) = lower(r.doi)
-                 OR lower(p.doi) = '10.48550/arxiv.' || r.arxiv_id
+                 OR lower(p.doi) = '10.48550/arxiv.' || lower(r.arxiv_id)
               LIMIT 1)) AS paper_id,
            pr.position
       FROM paper_references pr

@@ -28,7 +28,7 @@ export function ReferencesTab({ paperId, active, workspaceId }: { paperId: strin
     }
   }, [active, data?.state, refresh])
 
-  const summary = data?.state === 'ready' ? summaryLine(data.summary) : null
+  const summary = data?.state === 'ready' ? summaryLine(data.summary, data.direction) : null
 
   return (
     // RightPanel draws the glass and the border, as for Notes, Data and Similar.
@@ -94,7 +94,13 @@ export function ReferencesTab({ paperId, active, workspaceId }: { paperId: strin
           ) : (
             <ul className="reference-list divide-y divide-glass-border rounded-xl border border-glass-border">
               {data.rows.map((row) => (
-                <ReferenceRow key={row.id} paperId={paperId} reference={row} workspaceId={workspaceId} />
+                <ReferenceRow
+                  key={row.id}
+                  paperId={paperId}
+                  reference={row}
+                  direction={data.direction}
+                  workspaceId={workspaceId}
+                />
               ))}
             </ul>
           )}
