@@ -180,14 +180,17 @@ first start, `OPENALEX_MAILTO` and `SEMANTIC_SCHOLAR_API_KEY` from `.env` fill t
 
 PaperLab includes an MCP server. Claude Desktop, Claude Code or another MCP client starts it inside the running `api`
 container, where it can read your PDFs, so the stack must be up (`docker compose up -d`, in the PaperLab folder).
-Restarting `api` ends the connection, and Claude Desktop needs a restart to connect again.
+Restarting `api` ends the connection, and Claude Desktop needs a restart to connect again. If the server doesn't
+start, Claude Desktop writes what the launcher says to its own log: macOS `~/Library/Logs/Claude/mcp-server-paperlab.log`,
+Windows `%APPDATA%\Claude\logs\mcp-server-paperlab.log`, Linux in Claude Desktop's logs folder.
 
 Open PaperLab and click **Connect Claude** ([localhost:5180/#/connect-claude](http://localhost:5180/#/connect-claude)).
 It fills in the config or command for your system, and checks that PaperLab's side answers.
 
 Without the app, use the full path of your PaperLab folder:
 - **macOS and Linux:** in Claude Desktop (**Settings → Developer → Edit Config**), give `mcpServers.paperlab` the
-  `"command": "<folder>/scripts/paperlab-mcp"`. For Claude Code: `claude mcp add paperlab -- '<folder>/scripts/paperlab-mcp'`.
+  `"command": "<folder>/scripts/paperlab-mcp"`. For Claude Code: `claude mcp add -s user paperlab -- '<folder>/scripts/paperlab-mcp'`.
+  Don't use `mcp install`: the entry it writes runs the server outside the container.
   The script finds docker even where Claude Desktop can't see your shell's `PATH`; if yours is installed somewhere
   else, set `PAPERLAB_DOCKER` to its full path.
 - **Windows:** give `mcpServers.paperlab` the `"command": "docker"` and the
