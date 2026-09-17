@@ -72,6 +72,18 @@ async def list_workspaces(session: AsyncSession) -> list[WorkspaceView]:
     return await _views(session)
 
 
+async def by_name(session: AsyncSession, name: str) -> uuid.UUID:
+    """The id of the workspace with exactly this name (trimmed), for callers that know workspaces by name (MCP).
+
+    Raises NotFound("unknown_workspace", available=[every name, alphabetical]).
+    """
+    views = await list_workspaces(session)
+    match = next((view.id for view in views if view.name == name.strip()), None)
+    if match is None:
+        raise NotFound("unknown_workspace", available=[view.name for view in views])
+    return match
+
+
 async def create(session: AsyncSession, name: str) -> WorkspaceView:
     """Raises InvalidInput (blank or over 80 characters) or Conflict("workspace_name_taken")."""
     name = _clean_name(name)
