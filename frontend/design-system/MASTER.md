@@ -454,8 +454,9 @@ submit.
 - **Rows** (`.reference-row`, in a `.reference-list`): reuses `CandidateList`'s row shape — title (two lines, full
   text in `title`), byline · year · citations, a **Cited by N of your papers** outline badge once 2 or more of the
   reader's own papers cite it (never at 0 or 1: the paper being read always "cites" its own references, so 1 means
-  no co-citation yet), and the same secondary "PDF" / outline "No free PDF" badge as Find papers. Actions: primary
-  **Import** (`Plus`; "Importing…" with a spinning `LoaderCircle`, disabled while it runs), or an outline
+  no co-citation yet); in **Citing**, where the count is the library papers a citing work cites, the badge reads
+  **Cites N of your papers**. Then the same secondary "PDF" / outline "No free PDF" badge as Find papers. Actions:
+  primary **Import** (`Plus`; "Importing…" with a spinning `LoaderCircle`, disabled while it runs), or an outline
   **In library** link to the reader once it is; a ghost **Open page** link (`ExternalLink`, new tab) whenever the
   reference has an identifier to link to (`pageLink`, reused from Find papers), shown alongside either action —
   independent of it, exactly as Find papers shows Open page beside Add. A failed import shows an `ErrorAlert` under
@@ -472,8 +473,9 @@ submit.
 - **Refresh:** once `ready`, a small ghost **Refresh** button (`RefreshCw`, disabled while its own fetch runs) sits
   beside the summary line (`ml-auto` in the same flex row, so it stays put whether or not a summary is shown). A
   failed refresh request shows its error in an ErrorAlert.
-- **Summary line:** `{refs} cited by 3+ of your papers, {pdfs} have PDFs`, built by `referencesMeta.ts`'s
-  `summaryLine`. Either half drops when its count is zero; the whole line is left out when both are.
+- **Summary line:** `{refs} cited by 3+ of your papers, {pdfs} have PDFs` in **Cited**, and `{refs} cite 3+ of your
+  papers, {pdfs} have PDFs` in **Citing**, built by `referencesMeta.ts`'s `summaryLine`. Either half drops when its
+  count is zero; the whole line is left out when both are.
 - The switch keeps whichever direction the reader was viewing; both directions share one fetch state (the worker
   fills `cites` and `cited_by` together), so switching mid-fetch or mid-failure shows the same state either way.
 

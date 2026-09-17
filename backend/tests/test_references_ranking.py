@@ -190,3 +190,17 @@ async def test_a_reference_uploaded_after_the_fetch_still_shows_in_library(libra
     [row] = (await references.listing(library, reader.id, "cites")).rows
 
     assert row.paper_id == uploaded.id
+
+
+async def test_a_reference_with_an_uppercase_arxiv_id_is_in_library_under_its_lowercase_arxiv_doi(library):
+    reader = await add_paper(library, doi=READER_DOI)
+    arxiv_id = f"cs.CL/{uuid.uuid4().hex[:8]}"  # old-style arXiv IDs carry the archive's capitals
+    ref = ExternalRef(title="An old arXiv paper", arxiv_id=arxiv_id)
+    library.add(ref)
+    await library.flush()
+    await link(library, reader, ref)
+    uploaded = await add_paper(library, doi=f"10.48550/arxiv.{arxiv_id.lower()}")
+
+    [row] = (await references.listing(library, reader.id, "cites")).rows
+
+    assert row.paper_id == uploaded.id

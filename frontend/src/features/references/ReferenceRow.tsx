@@ -1,5 +1,5 @@
 import { ExternalLink, LoaderCircle, Plus } from 'lucide-react'
-import type { Reference } from '@/api/client'
+import type { Reference, ReferencesDirection } from '@/api/client'
 import { useImportReference } from '@/api/queries'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -9,16 +9,16 @@ import { byline } from '@/features/library/paperMeta'
 import { readerHref } from '@/lib/route'
 import { cocitationBadge, rowAction } from './referencesMeta'
 
-type Props = { paperId: string; reference: Reference; workspaceId?: string }
+type Props = { paperId: string; reference: Reference; direction: ReferencesDirection; workspaceId?: string }
 
 /** One reference or citing work: what it is, ranking badges, and Import, In library or Open page. */
-export function ReferenceRow({ paperId, reference, workspaceId }: Props) {
+export function ReferenceRow({ paperId, reference, direction, workspaceId }: Props) {
   const importRef = useImportReference(paperId)
   const inLibraryId = importRef.data?.id ?? reference.paper_id
   const action = rowAction({ ...reference, paper_id: inLibraryId })
   const link = pageLink({ ...reference, core_id: null })
   const meta = [byline(reference), citationsLabel(reference.cited_by_count)].filter(Boolean).join(' · ')
-  const badge = cocitationBadge(reference.cocitation)
+  const badge = cocitationBadge(reference.cocitation, direction)
   return (
     <li className="reference-row flex flex-col gap-2 px-4 py-3">
       <div className="flex items-start gap-3">

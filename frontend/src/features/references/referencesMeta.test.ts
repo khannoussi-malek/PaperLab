@@ -4,31 +4,39 @@ import { cocitationBadge, rowAction, summaryLine } from './referencesMeta'
 
 describe('summaryLine', () => {
   it('joins both halves when both counts are positive', () => {
-    expect(summaryLine({ cited_by_3plus: 5, with_pdf: 3 })).toBe('5 cited by 3+ of your papers, 3 have PDFs')
+    expect(summaryLine({ cited_by_3plus: 5, with_pdf: 3 }, 'cites')).toBe('5 cited by 3+ of your papers, 3 have PDFs')
+  })
+
+  it('says the citing works cite 3+ of your papers, since that is what their count means', () => {
+    expect(summaryLine({ cited_by_3plus: 5, with_pdf: 3 }, 'cited_by')).toBe('5 cite 3+ of your papers, 3 have PDFs')
   })
 
   it('drops the cited-by half when its count is zero', () => {
-    expect(summaryLine({ cited_by_3plus: 0, with_pdf: 3 })).toBe('3 have PDFs')
+    expect(summaryLine({ cited_by_3plus: 0, with_pdf: 3 }, 'cites')).toBe('3 have PDFs')
   })
 
   it('drops the PDF half when its count is zero', () => {
-    expect(summaryLine({ cited_by_3plus: 5, with_pdf: 0 })).toBe('5 cited by 3+ of your papers')
+    expect(summaryLine({ cited_by_3plus: 5, with_pdf: 0 }, 'cites')).toBe('5 cited by 3+ of your papers')
   })
 
   it('is null when both counts are zero', () => {
-    expect(summaryLine({ cited_by_3plus: 0, with_pdf: 0 })).toBeNull()
+    expect(summaryLine({ cited_by_3plus: 0, with_pdf: 0 }, 'cited_by')).toBeNull()
   })
 })
 
 describe('cocitationBadge', () => {
   it('is null at 0 or 1 (only the paper being read cites it)', () => {
-    expect(cocitationBadge(0)).toBeNull()
-    expect(cocitationBadge(1)).toBeNull()
+    expect(cocitationBadge(0, 'cites')).toBeNull()
+    expect(cocitationBadge(1, 'cited_by')).toBeNull()
   })
 
   it('names the count once 2 or more library papers cite it', () => {
-    expect(cocitationBadge(2)).toBe('Cited by 2 of your papers')
-    expect(cocitationBadge(7)).toBe('Cited by 7 of your papers')
+    expect(cocitationBadge(2, 'cites')).toBe('Cited by 2 of your papers')
+    expect(cocitationBadge(7, 'cites')).toBe('Cited by 7 of your papers')
+  })
+
+  it('names the library papers a citing work cites', () => {
+    expect(cocitationBadge(3, 'cited_by')).toBe('Cites 3 of your papers')
   })
 })
 
