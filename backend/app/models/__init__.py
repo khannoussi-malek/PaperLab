@@ -5,6 +5,7 @@ from app.models.llm_connection import LLMConnection, LLMModel
 from app.models.llm_output import LLMOutput
 from app.models.note import Note, Provenance, note_anchors
 from app.models.paper import Chunk, Paper, PaperStatus
+from app.models.paper_sources import PaperSources
 from app.models.workspace import Workspace, workspace_papers
 
 __all__ = [
@@ -20,6 +21,7 @@ __all__ = [
     "LLMOutput",
     "Note",
     "Paper",
+    "PaperSources",
     "PaperStatus",
     "Provenance",
     "Workspace",

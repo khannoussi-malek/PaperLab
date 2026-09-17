@@ -455,8 +455,12 @@ async def test_the_api_seeds_the_first_connection_from_env_at_startup(monkeypatc
         seeded.append(values)
         return False
 
+    async def no_paper_sources_seed(*_):
+        return False
+
     monkeypatch.setattr(main, "create_pool", create_pool)
     monkeypatch.setattr(main.llm_connections, "seed_from_env", seed)
+    monkeypatch.setattr(main.paper_sources, "seed_from_env", no_paper_sources_seed)
 
     async with main.lifespan(main.create_app()):
         pass
