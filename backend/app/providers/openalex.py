@@ -86,3 +86,39 @@ async def get_authors(http: httpx.AsyncClient, openalex_ids: list[str]) -> list[
         response = await http.get("/authors", params=params)
         records += json_body(response.raise_for_status())["results"]
     return records
+
+
+async def referenced_works(http: httpx.AsyncClient, work_id: str) -> list[str]:
+    """The short OpenAlex IDs ("W...") `work_id` lists as its references, no metadata (M7.5 §1). [] when OpenAlex
+    has no such work (404)."""
+    response = await http.get(f"/works/{quote(work_id, safe='/:')}", params={"select": "referenced_works"})
+    if response.status_code == 404:
+        return []
+    body = json_body(response.raise_for_status())
+    # "https://openalex.org/W123" -> "W123"; enrichment.short_id does the same, kept local to avoid an
+    # app.providers -> app.core import cycle (enrichment already imports this module).
+    return [url.rsplit("/", 1)[-1] for url in body.get("referenced_works") or []]
+
+
+async def works_by_ids(http: httpx.AsyncClient, ids: list[str]) -> list[dict]:
+    """Works by short OpenAlex ID, one request per 50 (mirrors get_authors). OpenAlex's own order, not `ids`'."""
+    records: list[dict] = []
+    for start in range(0, len(ids), AUTHOR_BATCH):
+        batch = "|".join(ids[start : start + AUTHOR_BATCH])
+        params = {"filter": f"openalex_id:{batch}", "per-page": AUTHOR_BATCH, "select": WORK_FIELDS}
+        response = await http.get("/works", params=params)
+        records += json_body(response.raise_for_status())["results"]
+    return records
+
+
+async def citing_works(http: httpx.AsyncClient, work_id: str, limit: int) -> list[dict]:
+    """One page of up to `limit` works citing `work_id`, newest first (OpenAlex sorts; D79 caps this direction so
+    it is never paged to the end)."""
+    params = {
+        "filter": f"cites:{work_id}",
+        "sort": "publication_date:desc",
+        "per-page": min(limit, 200),
+        "select": WORK_FIELDS,
+    }
+    response = await http.get("/works", params=params)
+    return json_body(response.raise_for_status())["results"]
