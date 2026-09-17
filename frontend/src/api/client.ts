@@ -55,6 +55,8 @@ export type References = components['schemas']['ReferencesOut']
 export type Reference = components['schemas']['ReferenceOut']
 export type ReferencesDirection = References['direction']
 export type RefreshOut = components['schemas']['RefreshOut']
+export type McpSetup = components['schemas']['McpSetupOut']
+export type McpCheck = components['schemas']['McpCheckOut']
 
 /** Where a chat lives: the reader's paper, or a workspace. */
 export type ChatScope = { kind: 'paper' | 'workspace'; id: string }
@@ -207,4 +209,8 @@ export const api = {
   /** Downloads a reference's free PDF into the library; with a `workspaceId` it also joins that workspace. */
   importReference: (refId: string, workspaceId?: string) =>
     request<Paper>(`/api/references/${refId}/import`, sendJson('POST', { workspace_id: workspaceId ?? null })),
+  /** The folder `docker compose up` ran in, to prefill Connect Claude; null outside Compose. */
+  mcpSetup: () => request<McpSetup>('/api/mcp/setup'),
+  /** Starts the MCP server as a client would and reads the library through it. Takes up to 30 s. */
+  checkMcpServer: () => request<McpCheck>('/api/mcp/check', { method: 'POST' }),
 }

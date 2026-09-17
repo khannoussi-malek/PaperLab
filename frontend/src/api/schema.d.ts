@@ -920,6 +920,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/mcp/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Mcp Setup */
+        get: operations["mcp_setup_api_mcp_setup_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check Mcp Server
+         * @description Starts the MCP server as a client would and reads the library through it. Up to 30 seconds.
+         */
+        post: operations["check_mcp_server_api_mcp_check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1635,6 +1672,20 @@ export interface components {
              * @default 2
              */
             facet_columns: number;
+        };
+        /** McpCheckOut */
+        McpCheckOut: {
+            /** Ok */
+            ok: boolean;
+            /** Tools */
+            tools: string[];
+            /** Detail */
+            detail: string | null;
+        };
+        /** McpSetupOut */
+        McpSetupOut: {
+            /** Folder */
+            folder: string | null;
         };
         /** MissingOut */
         MissingOut: {
@@ -4477,6 +4528,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mcp_setup_api_mcp_setup_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpSetupOut"];
+                };
+            };
+        };
+    };
+    check_mcp_server_api_mcp_check_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpCheckOut"];
                 };
             };
         };

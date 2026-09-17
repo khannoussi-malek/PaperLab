@@ -62,6 +62,7 @@ const keys = {
   references: (paperId: string) => ['references', paperId] as const,
   referencesDirection: (paperId: string, direction: ReferencesDirection) =>
     ['references', paperId, direction] as const,
+  mcpSetup: ['mcp', 'setup'] as const,
 }
 
 /** Poll the library only while a paper is still ingesting. */
@@ -488,3 +489,9 @@ export function useImportReference(paperId: string) {
     },
   })
 }
+
+/** The folder Connect Claude prefills. */
+export const useMcpSetup = () => useQuery({ queryKey: keys.mcpSetup, queryFn: api.mcpSetup })
+
+/** Connect Claude's server check. Nothing is cached: each click checks again. */
+export const useCheckMcpServer = () => useMutation({ mutationFn: api.checkMcpServer })
