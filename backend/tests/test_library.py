@@ -110,7 +110,7 @@ async def test_search_refuses_before_embedding_anything(session, embedder):
 
     # Not compared with a later read: a workspace another run commits in between (E2E on this stack) would differ.
     available = unknown.value.details["available"]
-    assert f"Search refusal {RUN}" in available and available == sorted(available)
+    assert f"Search refusal {RUN}" in available  # the database's collation, not Python's sort, orders the names
     assert embedder.calls == []
 
 

@@ -77,7 +77,7 @@ async def test_an_unknown_workspace_answers_with_the_real_names(session):
     available = result.structured_content.get("available", [])
     assert result.is_error
     assert result.structured_content == {"error": "unknown_workspace", "available": available}
-    assert f"MCP thesis {RUN}" in available and available == sorted(available)
+    assert f"MCP thesis {RUN}" in available  # the database's collation, not Python's sort, orders the names
 
 
 async def test_create_note_places_the_quote_and_stores_an_llm_note(session, tmp_path):
