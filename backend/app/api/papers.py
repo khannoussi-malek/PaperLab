@@ -63,7 +63,7 @@ async def get_paper_file(paper_id: uuid.UUID, session: SessionDep) -> FileRespon
 
 @router.get("/{paper_id}/similar")
 async def similar_papers(paper_id: uuid.UUID, session: SessionDep, providers: DiscoveryDep) -> list[CandidateOut]:
-    """Papers like this one, from Semantic Scholar. 409 when it doesn't know the paper or is busy."""
+    """Papers like this one, from Semantic Scholar. 409 when it's off in Settings, doesn't know the paper or is busy."""
     return await discovery.similar(session, providers, await papers.get_paper(session, paper_id))
 
 

@@ -8,6 +8,7 @@ from conftest import recorded_discovery
 from app.core import discovery
 from app.core.discovery import Candidate
 from app.core.errors import Conflict
+from app.core.paper_sources import SourceSettings
 from app.models import Paper
 
 pytestmark = pytest.mark.anyio
@@ -28,7 +29,7 @@ async def add_paper(session, **fields) -> Paper:
 
 
 def test_the_pdf_client_never_sends_the_owners_email():
-    providers = discovery.build_providers("me@example.com", "")
+    providers = discovery.build_providers(SourceSettings(contact_email="me@example.com"))
 
     agent = providers.pdf.headers["User-Agent"]
 
@@ -63,7 +64,7 @@ async def test_a_title_search_asks_openalex_then_one_semantic_scholar_batch(sess
     discovery_fakes.openalex.route("/works", recorded_discovery("openalex_search_bert"))
     discovery_fakes.s2.reply(BATCH, 200, json=recorded_discovery("s2_batch_bert")[:1])
 
-    results = await discovery.search(session, discovery_fakes.providers, "BERT pre-training")
+    results = (await discovery.search(session, discovery_fakes.providers, "BERT pre-training")).results
 
     [openalex_request] = discovery_fakes.openalex.requests
     assert openalex_request.url.params["filter"] == "title.search:BERT pre-training"
@@ -80,7 +81,9 @@ async def test_a_doi_is_looked_up_not_searched(session, discovery_fakes):
     discovery_fakes.openalex.route(f"/works/doi:{BERT_DOI}", bert)
     discovery_fakes.s2.reply(BATCH, 200, json=[None])
 
-    [result] = await discovery.search(session, discovery_fakes.providers, f"https://doi.org/{BERT_DOI.upper()}")
+    [result] = (
+        await discovery.search(session, discovery_fakes.providers, f"https://doi.org/{BERT_DOI.upper()}")
+    ).results
 
     assert result.openalex_id == "W2963341956"
     assert [r.url.path for r in discovery_fakes.openalex.requests] == [f"/works/doi:{BERT_DOI}"]
@@ -89,7 +92,7 @@ async def test_a_doi_is_looked_up_not_searched(session, discovery_fakes):
 async def test_an_unknown_doi_finds_nothing(session, discovery_fakes):
     discovery_fakes.openalex.route("/works/doi:10.5555/m19-missing", httpx.Response(404, text="<!doctype html>"))
 
-    assert await discovery.search(session, discovery_fakes.providers, "10.5555/m19-missing") == []
+    assert (await discovery.search(session, discovery_fakes.providers, "10.5555/m19-missing")).results == []
     assert discovery_fakes.s2.requests == []  # no DOIs, no batch
 
 
@@ -97,7 +100,7 @@ async def test_an_arxiv_id_is_looked_up_on_semantic_scholar_even_with_openalex_o
     providers = replace(discovery_fakes.providers, openalex=None)
     discovery_fakes.s2.reply("/graph/v1/paper/arXiv:1810.04805", 200, json=recorded_discovery("s2_paper_arxiv_bert"))
 
-    [result] = await discovery.search(session, providers, "arXiv:1810.04805v2")
+    [result] = (await discovery.search(session, providers, "arXiv:1810.04805v2")).results
 
     assert (result.doi, result.arxiv_id, result.s2_id) == (BERT_DOI, "1810.04805", BERT_S2_ID)
     assert result.pdf_urls[0] == "https://arxiv.org/pdf/1810.04805"
@@ -107,14 +110,14 @@ async def test_an_arxiv_id_is_looked_up_on_semantic_scholar_even_with_openalex_o
 async def test_an_arxiv_id_semantic_scholar_does_not_know_finds_nothing(session, discovery_fakes):
     discovery_fakes.s2.reply("/graph/v1/paper/arXiv:9999.99999", 404, json={"error": "not found"})
 
-    assert await discovery.search(session, discovery_fakes.providers, "9999.99999") == []
+    assert (await discovery.search(session, discovery_fakes.providers, "9999.99999")).results == []
 
 
-async def test_a_title_or_doi_search_needs_openalex(session, discovery_fakes):
-    providers = replace(discovery_fakes.providers, openalex=None)
+async def test_a_query_no_source_that_is_on_can_answer_says_so(session, discovery_fakes):
+    providers = replace(discovery_fakes.providers, openalex=None)  # and Crossref, arXiv and CORE are off too
 
-    for query in ("BERT", BERT_DOI):
-        with pytest.raises(Conflict, match="OpenAlex is off"):
+    for query in ("BERT", BERT_DOI, "W2963341956"):
+        with pytest.raises(Conflict, match="No paper source that can look this up is on"):
             await discovery.search(session, providers, query)
     assert discovery_fakes.s2.requests == []
 
@@ -133,7 +136,7 @@ async def test_a_failing_batch_leaves_openalex_results_as_they_are(session, disc
     discovery_fakes.openalex.route("/works", recorded_discovery("openalex_search_bert"))
     discovery_fakes.s2.refuse(BATCH)
 
-    results = await discovery.search(session, discovery_fakes.providers, "BERT")
+    results = (await discovery.search(session, discovery_fakes.providers, "BERT")).results
 
     assert results[0].doi == BERT_DOI
     assert results[0].pdf_urls == []
@@ -144,7 +147,7 @@ async def test_search_results_already_in_the_library_are_marked(session, discove
     discovery_fakes.openalex.route("/works", recorded_discovery("openalex_search_bert"))
     discovery_fakes.s2.reply(BATCH, 200, json=[None])
 
-    results = await discovery.search(session, discovery_fakes.providers, "BERT")
+    results = (await discovery.search(session, discovery_fakes.providers, "BERT")).results
 
     assert [r.paper_id for r in results] == [paper.id, None]
 

@@ -6,7 +6,7 @@ from app.api.deps import DiscoveryDep, SessionDep
 from app.config import settings
 from app.core import discovery, workspaces
 from app.core.errors import InvalidInput
-from app.schemas.discovery import AddPaperRequest, CandidateOut
+from app.schemas.discovery import AddPaperRequest, SearchOut
 from app.schemas.papers import PaperOut
 
 router = APIRouter(prefix="/api/discovery", tags=["discovery"])
@@ -15,9 +15,10 @@ router = APIRouter(prefix="/api/discovery", tags=["discovery"])
 @router.get("/search")
 async def search_papers(
     q: Annotated[str, Query(max_length=500)], session: SessionDep, providers: DiscoveryDep
-) -> list[CandidateOut]:
-    """Papers for a title, DOI, arXiv ID or OpenAlex ID, each marked when the library already holds it.
-    409 when OpenAlex is off (title and DOI only) or a service is busy."""
+) -> SearchOut:
+    """Papers for a title, DOI, arXiv ID or OpenAlex ID from every paper source that is on, merged, each marked when
+    the library already holds it; `notices` name the sources that failed. 409 when no source that is on can look the
+    query up, or when every one that was asked failed."""
     if not q.strip():
         raise InvalidInput("Type a title, DOI, arXiv ID or OpenAlex ID.")
     return await discovery.search(session, providers, q)
