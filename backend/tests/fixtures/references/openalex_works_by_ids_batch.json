@@ -1,0 +1,67 @@
+{
+  "results": [
+    {
+      "id": "https://openalex.org/W131533222",
+      "doi": null,
+      "title": "Automatically Constructing a Corpus of Sentential Paraphrases.",
+      "publication_year": 2005,
+      "cited_by_count": 1110,
+      "authorships": [
+        {
+          "author": {
+            "display_name": "William B. Dolan"
+          }
+        },
+        {
+          "author": {
+            "display_name": "Chris Brockett"
+          }
+        }
+      ]
+    },
+    {
+      "id": "https://openalex.org/W1486649854",
+      "doi": "https://doi.org/10.48550/arxiv.1506.06726",
+      "title": "Skip-Thought Vectors",
+      "publication_year": 2015,
+      "cited_by_count": 722,
+      "authorships": [
+        {
+          "author": {
+            "display_name": "Ryan Kiros"
+          }
+        },
+        {
+          "author": {
+            "display_name": "Yukun Zhu"
+          }
+        },
+        {
+          "author": {
+            "display_name": "Ruslan Salakhutdinov"
+          }
+        },
+        {
+          "author": {
+            "display_name": "Richard S. Zemel"
+          }
+        },
+        {
+          "author": {
+            "display_name": "Antonio Torralba"
+          }
+        },
+        {
+          "author": {
+            "display_name": "Raquel Urtasun"
+          }
+        },
+        {
+          "author": {
+            "display_name": "Sanja Fidler"
+          }
+        }
+      ]
+    }
+  ]
+}

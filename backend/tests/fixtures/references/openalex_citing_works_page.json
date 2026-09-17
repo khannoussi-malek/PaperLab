@@ -1,0 +1,144 @@
+{
+  "results": [
+    {
+      "id": "https://openalex.org/W7106209095",
+      "doi": "https://doi.org/10.1007/s11370-026-00729-y",
+      "title": "C2f-space: coarse-to-fine space grounding for spatial instructions using vision-language models",
+      "publication_year": 2026,
+      "cited_by_count": 0,
+      "authorships": [
+        {
+          "author": {
+            "display_name": "Nayoung Oh"
+          }
+        },
+        {
+          "author": {
+            "display_name": "Dohyun Kim"
+          }
+        },
+        {
+          "author": {
+            "display_name": "Junhyeong Bang"
+          }
+        },
+        {
+          "author": {
+            "display_name": "Rohan Paul"
+          }
+        },
+        {
+          "author": {
+            "display_name": "Daehyung Park"
+          }
+        }
+      ]
+    },
+    {
+      "id": "https://openalex.org/W7213243955",
+      "doi": "https://doi.org/10.1007/978-3-032-38410-2_57",
+      "title": "Context-Aware Intent Retrieval and Classification Based on Graph Convolutional Networks",
+      "publication_year": 2026,
+      "cited_by_count": 0,
+      "authorships": [
+        {
+          "author": {
+            "display_name": "Vinicius Atsushi Sato Kawai"
+          }
+        },
+        {
+          "author": {
+            "display_name": "Gustavo Rosseto Letício"
+          }
+        },
+        {
+          "author": {
+            "display_name": "Manuel Esteban Ramírez Carrillo"
+          }
+        },
+        {
+          "author": {
+            "display_name": "André Freitas"
+          }
+        },
+        {
+          "author": {
+            "display_name": "Daniel Carlos Guimarães Pedronette"
+          }
+        }
+      ]
+    },
+    {
+      "id": "https://openalex.org/W7213246356",
+      "doi": "https://doi.org/10.3390/s26185862",
+      "title": "The Evolving Security of the Internet of Vehicles: A Survey from Classical Machine Learning to Large Language Models, Adversarial Robustness, and Explainable AI",
+      "publication_year": 2026,
+      "cited_by_count": 0,
+      "authorships": [
+        {
+          "author": {
+            "display_name": "Meisam Sharifi Sani"
+          }
+        },
+        {
+          "author": {
+            "display_name": "Saeid Iranmanesh"
+          }
+        },
+        {
+          "author": {
+            "display_name": "Raad Raad"
+          }
+        }
+      ]
+    },
+    {
+      "id": "https://openalex.org/W7213264332",
+      "doi": "https://doi.org/10.1016/j.ipm.2026.105159",
+      "title": "ACOPI-QGen: Implicitness-aware joint quintuple extraction for aspect-based sentiment analysis via contrastive and graph-based modeling",
+      "publication_year": 2026,
+      "cited_by_count": 0,
+      "authorships": [
+        {
+          "author": {
+            "display_name": "Lipika Dewangan"
+          }
+        },
+        {
+          "author": {
+            "display_name": "Chandresh Kumar Maurya"
+          }
+        }
+      ]
+    },
+    {
+      "id": "https://openalex.org/W7213284129",
+      "doi": "https://doi.org/10.1186/s43067-026-00399-x",
+      "title": "Sentiment classification of stock forum text based on a parameter-decoupled ERNIE-Transformer architecture",
+      "publication_year": 2026,
+      "cited_by_count": 0,
+      "authorships": [
+        {
+          "author": {
+            "display_name": "Xiumei Li"
+          }
+        },
+        {
+          "author": {
+            "display_name": "Chen Fei"
+          }
+        },
+        {
+          "author": {
+            "display_name": "Ling Wenchao"
+          }
+        },
+        {
+          "author": {
+            "display_name": "Kun Chen"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,1423 @@
+{
+  "offset": 0,
+  "data": [
+    {
+      "citedPaper": {
+        "paperId": "26b47e35fe6e4260fdf7b7cc98f279a73c277494",
+        "title": "Multi-Granularity Hierarchical Attention Fusion Networks for Reading Comprehension and Question Answering",
+        "year": 2018,
+        "venue": "Annual Meeting of the Association for Computational Linguistics",
+        "authors": [
+          {
+            "name": "Wei Wang"
+          },
+          {
+            "name": "Chen Wu"
+          },
+          {
+            "name": "Ming Yan"
+          }
+        ],
+        "externalIds": {
+          "MAG": "2952389302",
+          "ACL": "P18-1158",
+          "DBLP": "journals/corr/abs-1811-11934",
+          "ArXiv": "1811.11934",
+          "DOI": "10.18653/v1/P18-1158",
+          "CorpusId": 51867574
+        },
+        "openAccessPdf": {
+          "url": "https://www.aclweb.org/anthology/P18-1158.pdf"
+        },
+        "citationCount": 179
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "27e98e09cf09bc13c913d01676e5f32624011050",
+        "title": "U-Net: Machine Reading Comprehension with Unanswerable Questions",
+        "year": 2018,
+        "venue": "arXiv.org",
+        "authors": [
+          {
+            "name": "Fu Sun"
+          },
+          {
+            "name": "Linyang Li"
+          },
+          {
+            "name": "Xipeng Qiu"
+          },
+          {
+            "name": "Yang Liu"
+          }
+        ],
+        "externalIds": {
+          "DBLP": "journals/corr/abs-1810-06638",
+          "ArXiv": "1810.06638",
+          "MAG": "2897076808",
+          "CorpusId": 53116060
+        },
+        "openAccessPdf": {
+          "url": ""
+        },
+        "citationCount": 49
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "0c47cad9729c38d9db1f75491b1ee4bd883a5d4e",
+        "title": "Semi-Supervised Sequence Modeling with Cross-View Training",
+        "year": 2018,
+        "venue": "Conference on Empirical Methods in Natural Language Processing",
+        "authors": [
+          {
+            "name": "Kevin Clark"
+          },
+          {
+            "name": "Minh-Thang Luong"
+          },
+          {
+            "name": "Christopher D. Manning"
+          },
+          {
+            "name": "Quoc V. Le"
+          }
+        ],
+        "externalIds": {
+          "DBLP": "conf/emnlp/ClarkLML18",
+          "ACL": "D18-1217",
+          "ArXiv": "1809.08370",
+          "MAG": "2891602716",
+          "DOI": "10.18653/v1/D18-1217",
+          "CorpusId": 52811641
+        },
+        "openAccessPdf": {
+          "url": "https://www.aclweb.org/anthology/D18-1217.pdf"
+        },
+        "citationCount": 344
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "ac11062f1f368d97f4c826c317bf50dcc13fdb59",
+        "title": "Dissecting Contextual Word Embeddings: Architecture and Representation",
+        "year": 2018,
+        "venue": "Conference on Empirical Methods in Natural Language Processing",
+        "authors": [
+          {
+            "name": "Matthew E. Peters"
+          },
+          {
+            "name": "Mark Neumann"
+          },
+          {
+            "name": "Luke Zettlemoyer"
+          },
+          {
+            "name": "Wen-tau Yih"
+          }
+        ],
+        "externalIds": {
+          "DBLP": "conf/emnlp/PetersNZY18",
+          "MAG": "2950405925",
+          "ACL": "D18-1179",
+          "ArXiv": "1808.08949",
+          "DOI": "10.18653/v1/D18-1179",
+          "CorpusId": 52098907
+        },
+        "openAccessPdf": {
+          "url": "https://www.aclweb.org/anthology/D18-1179.pdf"
+        },
+        "citationCount": 501
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "af5c4b80fbf847f69a202ba5a780a3dd18c1a027",
+        "title": "SWAG: A Large-Scale Adversarial Dataset for Grounded Commonsense Inference",
+        "year": 2018,
+        "venue": "Conference on Empirical Methods in Natural Language Processing",
+        "authors": [
+          {
+            "name": "Rowan Zellers"
+          },
+          {
+            "name": "Yonatan Bisk"
+          },
+          {
+            "name": "Roy Schwartz"
+          },
+          {
+            "name": "Yejin Choi"
+          }
+        ],
+        "externalIds": {
+          "DBLP": "journals/corr/abs-1808-05326",
+          "ArXiv": "1808.05326",
+          "ACL": "D18-1009",
+          "MAG": "2952007233",
+          "DOI": "10.18653/v1/D18-1009",
+          "CorpusId": 52019251
+        },
+        "openAccessPdf": {
+          "url": "https://www.aclweb.org/anthology/D18-1009.pdf"
+        },
+        "citationCount": 797
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "b9de9599d7241459db9213b5cdd7059696f5ef8d",
+        "title": "Character-Level Language Modeling with Deeper Self-Attention",
+        "year": 2018,
+        "venue": "AAAI Conference on Artificial Intelligence",
+        "authors": [
+          {
+            "name": "Rami Al-Rfou"
+          },
+          {
+            "name": "Dokook Choe"
+          },
+          {
+            "name": "Noah Constant"
+          },
+          {
+            "name": "Mandy Guo"
+          },
+          {
+            "name": "Llion Jones"
+          }
+        ],
+        "externalIds": {
+          "MAG": "2886490473",
+          "DBLP": "conf/aaai/Al-RfouCCGJ19",
+          "ArXiv": "1808.04444",
+          "DOI": "10.1609/aaai.v33i01.33013159",
+          "CorpusId": 52004855
+        },
+        "openAccessPdf": {
+          "url": "https://doi.org/10.1609/aaai.v33i01.33013159"
+        },
+        "citationCount": 426
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "421fc2556836a6b441de806d7b393a35b6eaea58",
+        "title": "Contextual String Embeddings for Sequence Labeling",
+        "year": 2018,
+        "venue": "International Conference on Computational Linguistics",
+        "authors": [
+          {
+            "name": "A. Akbik"
+          },
+          {
+            "name": "Duncan A. J. Blythe"
+          },
+          {
+            "name": "Roland Vollgraf"
+          }
+        ],
+        "externalIds": {
+          "MAG": "2880875857",
+          "DBLP": "conf/coling/AkbikBV18",
+          "ACL": "C18-1139",
+          "CorpusId": 52010710
+        },
+        "openAccessPdf": {
+          "url": ""
+        },
+        "citationCount": 1389
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "cb0f3ee1e98faf92429d601cdcd76c69c1e484eb",
+        "title": "Neural Network Acceptability Judgments",
+        "year": 2018,
+        "venue": "Transactions of the Association for Computational Linguistics",
+        "authors": [
+          {
+            "name": "Alex Warstadt"
+          },
+          {
+            "name": "Amanpreet Singh"
+          },
+          {
+            "name": "Samuel R. Bowman"
+          }
+        ],
+        "externalIds": {
+          "DBLP": "journals/tacl/WarstadtSB19",
+          "ArXiv": "1805.12471",
+          "MAG": "2978670439",
+          "DOI": "10.1162/tacl_a_00290",
+          "CorpusId": 44072099
+        },
+        "openAccessPdf": {
+          "url": "https://doi.org/10.1162/tacl_a_00290"
+        },
+        "citationCount": 1695
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "451d4a16e425ecbf38c4b1cca0dcf5d9bec8255c",
+        "title": "GLUE: A Multi-Task Benchmark and Analysis Platform for Natural Language Understanding",
+        "year": 2018,
+        "venue": "BlackboxNLP@EMNLP",
+        "authors": [
+          {
+            "name": "Alex Wang"
+          },
+          {
+            "name": "Amanpreet Singh"
+          },
+          {
+            "name": "Julian Michael"
+          },
+          {
+            "name": "Felix Hill"
+          },
+          {
+            "name": "Omer Levy"
+          },
+          {
+            "name": "Samuel R. Bowman"
+          }
+        ],
+        "externalIds": {
+          "MAG": "2963310665",
+          "DBLP": "conf/emnlp/WangSMHLB18",
+          "ACL": "W18-5446",
+          "ArXiv": "1804.07461",
+          "DOI": "10.18653/v1/W18-5446",
+          "CorpusId": 5034059
+        },
+        "openAccessPdf": {
+          "url": "https://www.aclweb.org/anthology/W18-5446.pdf"
+        },
+        "citationCount": 8949
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "3febb2bed8865945e7fddc99efd791887bb7e14f",
+        "title": "Deep Contextualized Word Representations",
+        "year": 2018,
+        "venue": "North American Chapter of the Association for Computational Linguistics",
+        "authors": [
+          {
+            "name": "Matthew E. Peters"
+          },
+          {
+            "name": "Mark Neumann"
+          },
+          {
+            "name": "Mohit Iyyer"
+          },
+          {
+            "name": "Matt Gardner"
+          },
+          {
+            "name": "Christopher Clark"
+          },
+          {
+            "name": "Kenton Lee"
+          },
+          {
+            "name": "Luke Zettlemoyer"
+          }
+        ],
+        "externalIds": {
+          "DBLP": "journals/corr/abs-1802-05365",
+          "MAG": "2949856395",
+          "ArXiv": "1802.05365",
+          "ACL": "N18-1202",
+          "DOI": "10.18653/v1/N18-1202",
+          "CorpusId": 3626819
+        },
+        "openAccessPdf": {
+          "url": "https://www.aclweb.org/anthology/N18-1202.pdf"
+        },
+        "citationCount": 12272
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "ad31866da7f14ae21bd38df0a3b1ffd1a1438122",
+        "title": "An efficient framework for learning sentence representations",
+        "year": 2018,
+        "venue": "International Conference on Learning Representations",
+        "authors": [
+          {
+            "name": "L. Logeswaran"
+          },
+          {
+            "name": "Honglak Lee"
+          }
+        ],
+        "externalIds": {
+          "ArXiv": "1803.02893",
+          "MAG": "2963644595",
+          "DBLP": "journals/corr/abs-1803-02893",
+          "CorpusId": 3525802
+        },
+        "openAccessPdf": {
+          "url": ""
+        },
+        "citationCount": 577
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "8c1b00128e74f1cd92aede3959690615695d5101",
+        "title": "QANet: Combining Local Convolution with Global Self-Attention for Reading Comprehension",
+        "year": 2018,
+        "venue": "International Conference on Learning Representations",
+        "authors": [
+          {
+            "name": "Adams Wei Yu"
+          },
+          {
+            "name": "David Dohan"
+          },
+          {
+            "name": "Minh-Thang Luong"
+          },
+          {
+            "name": "Rui Zhao"
+          },
+          {
+            "name": "Kai Chen"
+          },
+          {
+            "name": "Mohammad Norouzi"
+          },
+          {
+            "name": "Quoc V. Le"
+          }
+        ],
+        "externalIds": {
+          "MAG": "2963564796",
+          "DBLP": "conf/iclr/YuDLZ00L18",
+          "ArXiv": "1804.09541",
+          "CorpusId": 4842909
+        },
+        "openAccessPdf": {
+          "url": ""
+        },
+        "citationCount": 1134
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "7f4afc1bf3272ae6ec00b46e27efc4a4f6b0826d",
+        "title": "MaskGAN: Better Text Generation via Filling in the ______",
+        "year": 2018,
+        "venue": "International Conference on Learning Representations",
+        "authors": [
+          {
+            "name": "W. Fedus"
+          },
+          {
+            "name": "I. Goodfellow"
+          },
+          {
+            "name": "Andrew M. Dai"
+          }
+        ],
+        "externalIds": {
+          "ArXiv": "1801.07736",
+          "DBLP": "journals/corr/abs-1801-07736",
+          "MAG": "2951433039",
+          "CorpusId": 3655946
+        },
+        "openAccessPdf": {
+          "url": ""
+        },
+        "citationCount": 490
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "1e077413b25c4d34945cc2707e17e46ed4fe784a",
+        "title": "Universal Language Model Fine-tuning for Text Classification",
+        "year": 2018,
+        "venue": "Annual Meeting of the Association for Computational Linguistics",
+        "authors": [
+          {
+            "name": "Jeremy Howard"
+          },
+          {
+            "name": "Sebastian Ruder"
+          }
+        ],
+        "externalIds": {
+          "ACL": "P18-1031",
+          "MAG": "2952772027",
+          "DBLP": "conf/acl/RuderH18",
+          "DOI": "10.18653/v1/P18-1031",
+          "CorpusId": 40100965
+        },
+        "openAccessPdf": {
+          "url": "https://www.aclweb.org/anthology/P18-1031.pdf"
+        },
+        "citationCount": 4296
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "3c78c6df5eb1695b6a399e346dde880af27d1016",
+        "title": "Simple and Effective Multi-Paragraph Reading Comprehension",
+        "year": 2017,
+        "venue": "Annual Meeting of the Association for Computational Linguistics",
+        "authors": [
+          {
+            "name": "Christopher Clark"
+          },
+          {
+            "name": "Matt Gardner"
+          }
+        ],
+        "externalIds": {
+          "MAG": "2765390718",
+          "ACL": "P18-1078",
+          "ArXiv": "1710.10723",
+          "DBLP": "conf/acl/GardnerC18",
+          "DOI": "10.18653/v1/P18-1078",
+          "CorpusId": 223637
+        },
+        "openAccessPdf": {
+          "url": "https://www.aclweb.org/anthology/P18-1078.pdf"
+        },
+        "citationCount": 486
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "bc8fa64625d9189f5801837e7b133e7fe3c581f7",
+        "title": "Learned in Translation: Contextualized Word Vectors",
+        "year": 2017,
+        "venue": "Neural Information Processing Systems",
+        "authors": [
+          {
+            "name": "Bryan McCann"
+          },
+          {
+            "name": "James Bradbury"
+          },
+          {
+            "name": "Caiming Xiong"
+          },
+          {
+            "name": "R. Socher"
+          }
+        ],
+        "externalIds": {
+          "ArXiv": "1708.00107",
+          "DBLP": "conf/nips/McCannBXS17",
+          "MAG": "2949553999",
+          "CorpusId": 9447219
+        },
+        "openAccessPdf": {
+          "url": ""
+        },
+        "citationCount": 945
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "a23fa96e7217ba0e9405d9e1fe3cdedd57b6e096",
+        "title": "SemEval-2017 Task 1: Semantic Textual Similarity Multilingual and Crosslingual Focused Evaluation",
+        "year": 2017,
+        "venue": "International Workshop on Semantic Evaluation",
+        "authors": [
+          {
+            "name": "Daniel Matthew Cer"
+          },
+          {
+            "name": "Mona T. Diab"
+          },
+          {
+            "name": "Eneko Agirre"
+          },
+          {
+            "name": "Iñigo Lopez-Gazpio"
+          },
+          {
+            "name": "Lucia Specia"
+          }
+        ],
+        "externalIds": {
+          "DBLP": "journals/corr/abs-1708-00055",
+          "ACL": "S17-2001",
+          "MAG": "3104033643",
+          "ArXiv": "1708.00055",
+          "DOI": "10.18653/v1/S17-2001",
+          "CorpusId": 4421747
+        },
+        "openAccessPdf": {
+          "url": "https://www.aclweb.org/anthology/S17-2001.pdf"
+        },
+        "citationCount": 2171
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "204e3073870fae3d05bcbc2f6a8e263d9b72e776",
+        "title": "Attention is All you Need",
+        "year": 2017,
+        "venue": "Neural Information Processing Systems",
+        "authors": [
+          {
+            "name": "Ashish Vaswani"
+          },
+          {
+            "name": "Noam Shazeer"
+          },
+          {
+            "name": "Niki Parmar"
+          },
+          {
+            "name": "Jakob Uszkoreit"
+          },
+          {
+            "name": "Llion Jones"
+          },
+          {
+            "name": "Aidan N. Gomez"
+          },
+          {
+            "name": "Lukasz Kaiser"
+          },
+          {
+            "name": "I. Polosukhin"
+          }
+        ],
+        "externalIds": {
+          "MAG": "2963403868",
+          "DBLP": "journals/corr/VaswaniSPUJGKP17",
+          "ArXiv": "1706.03762",
+          "CorpusId": 13756489
+        },
+        "openAccessPdf": {
+          "url": ""
+        },
+        "citationCount": 192707
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "e0222a1ae6874f7fff128c3da8769ab95963da04",
+        "title": "Reinforced Mnemonic Reader for Machine Reading Comprehension",
+        "year": 2017,
+        "venue": "International Joint Conference on Artificial Intelligence",
+        "authors": [
+          {
+            "name": "Minghao Hu"
+          },
+          {
+            "name": "Yuxing Peng"
+          },
+          {
+            "name": "Zhen Huang"
+          },
+          {
+            "name": "Xipeng Qiu"
+          },
+          {
+            "name": "Furu Wei"
+          },
+          {
+            "name": "M. Zhou"
+          }
+        ],
+        "externalIds": {
+          "MAG": "2962808855",
+          "DBLP": "conf/ijcai/HuPHQW018",
+          "DOI": "10.24963/ijcai.2018/570",
+          "CorpusId": 13559921
+        },
+        "openAccessPdf": {
+          "url": "https://www.ijcai.org/proceedings/2018/0570.pdf"
+        },
+        "citationCount": 216
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "ee7b883e35d754ae4f71c21bb71f9f03e4ffbb2c",
+        "title": "Supervised Learning of Universal Sentence Representations from Natural Language Inference Data",
+        "year": 2017,
+        "venue": "Conference on Empirical Methods in Natural Language Processing",
+        "authors": [
+          {
+            "name": "Alexis Conneau"
+          },
+          {
+            "name": "Douwe Kiela"
+          },
+          {
+            "name": "Holger Schwenk"
+          },
+          {
+            "name": "Loïc Barrault"
+          },
+          {
+            "name": "Antoine Bordes"
+          }
+        ],
+        "externalIds": {
+          "ArXiv": "1705.02364",
+          "DBLP": "conf/emnlp/ConneauKSBB17",
+          "MAG": "2612953412",
+          "ACL": "D17-1070",
+          "DOI": "10.18653/v1/D17-1070",
+          "CorpusId": 28971531
+        },
+        "openAccessPdf": {
+          "url": "https://www.aclweb.org/anthology/D17-1070.pdf"
+        },
+        "citationCount": 2235
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "f010affab57b5fcf1cd6be23df79d8ec98c7289c",
+        "title": "TriviaQA: A Large Scale Distantly Supervised Challenge Dataset for Reading Comprehension",
+        "year": 2017,
+        "venue": "Annual Meeting of the Association for Computational Linguistics",
+        "authors": [
+          {
+            "name": "Mandar Joshi"
+          },
+          {
+            "name": "Eunsol Choi"
+          },
+          {
+            "name": "Daniel S. Weld"
+          },
+          {
+            "name": "Luke Zettlemoyer"
+          }
+        ],
+        "externalIds": {
+          "MAG": "2612431505",
+          "ArXiv": "1705.03551",
+          "ACL": "P17-1147",
+          "DBLP": "journals/corr/JoshiCWZ17",
+          "DOI": "10.18653/v1/P17-1147",
+          "CorpusId": 26501419
+        },
+        "openAccessPdf": {
+          "url": "https://www.aclweb.org/anthology/P17-1147.pdf"
+        },
+        "citationCount": 4244
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "a97dc52807d80454e78d255f9fbd7b0fab56bd03",
+        "title": "Discourse-Based Objectives for Fast Unsupervised Sentence Representation Learning",
+        "year": 2017,
+        "venue": "arXiv.org",
+        "authors": [
+          {
+            "name": "Yacine Jernite"
+          },
+          {
+            "name": "Samuel R. Bowman"
+          },
+          {
+            "name": "D. Sontag"
+          }
+        ],
+        "externalIds": {
+          "ArXiv": "1705.00557",
+          "MAG": "2610858497",
+          "DBLP": "journals/corr/JerniteBS17",
+          "CorpusId": 6694822
+        },
+        "openAccessPdf": {
+          "url": ""
+        },
+        "citationCount": 111
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "5ded2b8c64491b4a67f6d39ce473d4b9347a672e",
+        "title": "A Broad-Coverage Challenge Corpus for Sentence Understanding through Inference",
+        "year": 2017,
+        "venue": "North American Chapter of the Association for Computational Linguistics",
+        "authors": [
+          {
+            "name": "Adina Williams"
+          },
+          {
+            "name": "Nikita Nangia"
+          },
+          {
+            "name": "Samuel R. Bowman"
+          }
+        ],
+        "externalIds": {
+          "DBLP": "journals/corr/WilliamsNB17",
+          "MAG": "2963846996",
+          "ArXiv": "1704.05426",
+          "ACL": "N18-1101",
+          "DOI": "10.18653/v1/N18-1101",
+          "CorpusId": 3432876
+        },
+        "openAccessPdf": {
+          "url": "https://www.aclweb.org/anthology/N18-1101.pdf"
+        },
+        "citationCount": 5229
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "0bb4cadc80c0afaf29c57518dc9c06f8fcfa5f38",
+        "title": "Semi-supervised sequence tagging with bidirectional language models",
+        "year": 2017,
+        "venue": "Annual Meeting of the Association for Computational Linguistics",
+        "authors": [
+          {
+            "name": "Matthew E. Peters"
+          },
+          {
+            "name": "Bridger Waleed Ammar"
+          },
+          {
+            "name": "Chandra Bhagavatula"
+          },
+          {
+            "name": "R. Power"
+          }
+        ],
+        "externalIds": {
+          "MAG": "2963563735",
+          "DBLP": "journals/corr/PetersABP17",
+          "ACL": "P17-1161",
+          "ArXiv": "1705.00108",
+          "DOI": "10.18653/v1/P17-1161",
+          "CorpusId": 7197241
+        },
+        "openAccessPdf": {
+          "url": "https://www.aclweb.org/anthology/P17-1161.pdf"
+        },
+        "citationCount": 668
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "3a7b63b50c64f4ec3358477790e84cbd6be2a0b4",
+        "title": "Bidirectional Attention Flow for Machine Comprehension",
+        "year": 2016,
+        "venue": "International Conference on Learning Representations",
+        "authors": [
+          {
+            "name": "Minjoon Seo"
+          },
+          {
+            "name": "Aniruddha Kembhavi"
+          },
+          {
+            "name": "Ali Farhadi"
+          },
+          {
+            "name": "Hannaneh Hajishirzi"
+          }
+        ],
+        "externalIds": {
+          "DBLP": "conf/iclr/SeoKFH17",
+          "MAG": "2551396370",
+          "ArXiv": "1611.01603",
+          "CorpusId": 8535316
+        },
+        "openAccessPdf": {
+          "url": ""
+        },
+        "citationCount": 2146
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "c6850869aa5e78a107c378d2e8bfa39633158c0c",
+        "title": "Google's Neural Machine Translation System: Bridging the Gap between Human and Machine Translation",
+        "year": 2016,
+        "venue": "arXiv.org",
+        "authors": [
+          {
+            "name": "Yonghui Wu"
+          },
+          {
+            "name": "Mike Schuster"
+          },
+          {
+            "name": "Z. Chen"
+          },
+          {
+            "name": "Quoc V. Le"
+          },
+          {
+            "name": "Mohammad Norouzi"
+          },
+          {
+            "name": "Wolfgang Macherey"
+          },
+          {
+            "name": "M. Krikun"
+          },
+          {
+            "name": "Yuan Cao"
+          },
+          {
+            "name": "Qin Gao"
+          },
+          {
+            "name": "Klaus Macherey"
+          },
+          {
+            "name": "J. Klingner"
+          },
+          {
+            "name": "Apurva Shah"
+          },
+          {
+            "name": "Melvin Johnson"
+          },
+          {
+            "name": "Xiaobing Liu"
+          },
+          {
+            "name": "Lukasz Kaiser"
+          },
+          {
+            "name": "Stephan Gouws"
+          },
+          {
+            "name": "Yoshikiyo Kato"
+          },
+          {
+            "name": "Taku Kudo"
+          },
+          {
+            "name": "H. Kazawa"
+          },
+          {
+            "name": "K. Stevens"
+          },
+          {
+            "name": "George Kurian"
+          },
+          {
+            "name": "Nishant Patil"
+          },
+          {
+            "name": "Wei Wang"
+          },
+          {
+            "name": "C. Young"
+          },
+          {
+            "name": "Jason R. Smith"
+          },
+          {
+            "name": "Jason Riesa"
+          },
+          {
+            "name": "Alex Rudnick"
+          },
+          {
+            "name": "O. Vinyals"
+          },
+          {
+            "name": "G. Corrado"
+          },
+          {
+            "name": "Macduff Hughes"
+          },
+          {
+            "name": "J. Dean"
+          }
+        ],
+        "externalIds": {
+          "ArXiv": "1609.08144",
+          "MAG": "2525778437",
+          "DBLP": "journals/corr/WuSCLNMKCGMKSJL16",
+          "CorpusId": 3603249
+        },
+        "openAccessPdf": {
+          "url": ""
+        },
+        "citationCount": 7387
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "59761abc736397539bdd01ad7f9d91c8607c0457",
+        "title": "context2vec: Learning Generic Context Embedding with Bidirectional LSTM",
+        "year": 2016,
+        "venue": "Conference on Computational Natural Language Learning",
+        "authors": [
+          {
+            "name": "Oren Melamud"
+          },
+          {
+            "name": "J. Goldberger"
+          },
+          {
+            "name": "Ido Dagan"
+          }
+        ],
+        "externalIds": {
+          "ACL": "K16-1006",
+          "MAG": "2507974895",
+          "DBLP": "conf/conll/MelamudGD16",
+          "DOI": "10.18653/v1/K16-1006",
+          "CorpusId": 7890036
+        },
+        "openAccessPdf": {
+          "url": "https://www.aclweb.org/anthology/K16-1006.pdf"
+        },
+        "citationCount": 515
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "4361e64f2d12d63476fdc88faf72a0f70d9a2ffb",
+        "title": "Bridging Nonlinearities and Stochastic Regularizers with Gaussian Error Linear Units",
+        "year": 2016,
+        "venue": "arXiv.org",
+        "authors": [
+          {
+            "name": "Dan Hendrycks"
+          },
+          {
+            "name": "Kevin Gimpel"
+          }
+        ],
+        "externalIds": {
+          "DBLP": "journals/corr/HendrycksG16",
+          "MAG": "2462831000",
+          "CorpusId": 2359786
+        },
+        "openAccessPdf": {
+          "url": ""
+        },
+        "citationCount": 832
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "05dd7254b632376973f3a1b4d39485da17814df5",
+        "title": "SQuAD: 100,000+ Questions for Machine Comprehension of Text",
+        "year": 2016,
+        "venue": "Conference on Empirical Methods in Natural Language Processing",
+        "authors": [
+          {
+            "name": "Pranav Rajpurkar"
+          },
+          {
+            "name": "Jian Zhang"
+          },
+          {
+            "name": "Konstantin Lopyrev"
+          },
+          {
+            "name": "Percy Liang"
+          }
+        ],
+        "externalIds": {
+          "DBLP": "journals/corr/RajpurkarZLL16",
+          "MAG": "2963748441",
+          "ACL": "D16-1264",
+          "ArXiv": "1606.05250",
+          "DOI": "10.18653/v1/D16-1264",
+          "CorpusId": 11816014
+        },
+        "openAccessPdf": {
+          "url": "https://aclanthology.org/D16-1264.pdf"
+        },
+        "citationCount": 9767
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "2cd8e8f510c89c7c18268e8ad51c061e459ad321",
+        "title": "A Decomposable Attention Model for Natural Language Inference",
+        "year": 2016,
+        "venue": "Conference on Empirical Methods in Natural Language Processing",
+        "authors": [
+          {
+            "name": "Ankur P. Parikh"
+          },
+          {
+            "name": "Oscar Täckström"
+          },
+          {
+            "name": "Dipanjan Das"
+          },
+          {
+            "name": "Jakob Uszkoreit"
+          }
+        ],
+        "externalIds": {
+          "DBLP": "journals/corr/ParikhT0U16",
+          "ACL": "D16-1244",
+          "MAG": "2413794162",
+          "ArXiv": "1606.01933",
+          "DOI": "10.18653/v1/D16-1244",
+          "CorpusId": 8495258
+        },
+        "openAccessPdf": {
+          "url": "https://www.aclweb.org/anthology/D16-1244.pdf"
+        },
+        "citationCount": 1426
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "26e743d5bd465f49b9538deaf116c15e61b7951f",
+        "title": "Learning Distributed Representations of Sentences from Unlabelled Data",
+        "year": 2016,
+        "venue": "North American Chapter of the Association for Computational Linguistics",
+        "authors": [
+          {
+            "name": "Felix Hill"
+          },
+          {
+            "name": "Kyunghyun Cho"
+          },
+          {
+            "name": "A. Korhonen"
+          }
+        ],
+        "externalIds": {
+          "MAG": "2951416398",
+          "ArXiv": "1602.03483",
+          "DBLP": "conf/naacl/HillCK16",
+          "ACL": "N16-1162",
+          "DOI": "10.18653/v1/N16-1162",
+          "CorpusId": 2937095
+        },
+        "openAccessPdf": {
+          "url": "https://doi.org/10.18653/v1/n16-1162"
+        },
+        "citationCount": 593
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "4aa9f5150b46320f534de4747a2dd0cd7f3fe292",
+        "title": "Semi-supervised Sequence Learning",
+        "year": 2015,
+        "venue": "Neural Information Processing Systems",
+        "authors": [
+          {
+            "name": "Andrew M. Dai"
+          },
+          {
+            "name": "Quoc V. Le"
+          }
+        ],
+        "externalIds": {
+          "ArXiv": "1511.01432",
+          "MAG": "2952729433",
+          "DBLP": "conf/nips/DaiL15",
+          "CorpusId": 7138078
+        },
+        "openAccessPdf": {
+          "url": ""
+        },
+        "citationCount": 1301
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "f04df4e20a18358ea2f689b4c129781628ef7fc1",
+        "title": "A large annotated corpus for learning natural language inference",
+        "year": 2015,
+        "venue": "Conference on Empirical Methods in Natural Language Processing",
+        "authors": [
+          {
+            "name": "Samuel R. Bowman"
+          },
+          {
+            "name": "Gabor Angeli"
+          },
+          {
+            "name": "Christopher Potts"
+          },
+          {
+            "name": "Christopher D. Manning"
+          }
+        ],
+        "externalIds": {
+          "MAG": "2953084091",
+          "ACL": "D15-1075",
+          "DBLP": "conf/emnlp/BowmanAPM15",
+          "ArXiv": "1508.05326",
+          "DOI": "10.18653/v1/D15-1075",
+          "CorpusId": 14604520
+        },
+        "openAccessPdf": {
+          "url": "https://aclanthology.org/D15-1075.pdf"
+        },
+        "citationCount": 4809
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "6e795c6e9916174ae12349f5dc3f516570c17ce8",
+        "title": "Skip-Thought Vectors",
+        "year": 2015,
+        "venue": "Neural Information Processing Systems",
+        "authors": [
+          {
+            "name": "Ryan Kiros"
+          },
+          {
+            "name": "Yukun Zhu"
+          },
+          {
+            "name": "R. Salakhutdinov"
+          },
+          {
+            "name": "R. Zemel"
+          },
+          {
+            "name": "A. Torralba"
+          },
+          {
+            "name": "R. Urtasun"
+          },
+          {
+            "name": "S. Fidler"
+          }
+        ],
+        "externalIds": {
+          "MAG": "1486649854",
+          "ArXiv": "1506.06726",
+          "DBLP": "conf/nips/KirosZSZUTF15",
+          "CorpusId": 9126867
+        },
+        "openAccessPdf": {
+          "url": ""
+        },
+        "citationCount": 2488
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "0e6824e137847be0599bb0032e37042ed2ef5045",
+        "title": "Aligning Books and Movies: Towards Story-Like Visual Explanations by Watching Movies and Reading Books",
+        "year": 2015,
+        "venue": "IEEE International Conference on Computer Vision",
+        "authors": [
+          {
+            "name": "Yukun Zhu"
+          },
+          {
+            "name": "Ryan Kiros"
+          },
+          {
+            "name": "Rich Zemel"
+          },
+          {
+            "name": "R. Salakhutdinov"
+          },
+          {
+            "name": "R. Urtasun"
+          },
+          {
+            "name": "A. Torralba"
+          },
+          {
+            "name": "S. Fidler"
+          }
+        ],
+        "externalIds": {
+          "ArXiv": "1506.06724",
+          "MAG": "2949433733",
+          "DBLP": "journals/corr/ZhuKZSUTF15",
+          "DOI": "10.1109/ICCV.2015.11",
+          "CorpusId": 6866988
+        },
+        "openAccessPdf": {
+          "url": "http://hdl.handle.net/1721.1/112996"
+        },
+        "citationCount": 2775
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "081651b38ff7533550a3adfc1c00da333a8fe86c",
+        "title": "How transferable are features in deep neural networks?",
+        "year": 2014,
+        "venue": "Neural Information Processing Systems",
+        "authors": [
+          {
+            "name": "J. Yosinski"
+          },
+          {
+            "name": "J. Clune"
+          },
+          {
+            "name": "Yoshua Bengio"
+          },
+          {
+            "name": "Hod Lipson"
+          }
+        ],
+        "externalIds": {
+          "DBLP": "conf/nips/YosinskiCBL14",
+          "ArXiv": "1411.1792",
+          "MAG": "2149933564",
+          "CorpusId": 362467
+        },
+        "openAccessPdf": {
+          "url": ""
+        },
+        "citationCount": 9504
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "f37e1b62a767a307c046404ca96bc140b3e68cb5",
+        "title": "GloVe: Global Vectors for Word Representation",
+        "year": 2014,
+        "venue": "Conference on Empirical Methods in Natural Language Processing",
+        "authors": [
+          {
+            "name": "Jeffrey Pennington"
+          },
+          {
+            "name": "R. Socher"
+          },
+          {
+            "name": "Christopher D. Manning"
+          }
+        ],
+        "externalIds": {
+          "DBLP": "conf/emnlp/PenningtonSM14",
+          "ACL": "D14-1162",
+          "MAG": "2250539671",
+          "DOI": "10.3115/v1/D14-1162",
+          "CorpusId": 1957433
+        },
+        "openAccessPdf": {
+          "url": "https://doi.org/10.3115/v1/d14-1162"
+        },
+        "citationCount": 35076
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "f3de86aeb442216a8391befcacb49e58b478f512",
+        "title": "Distributed Representations of Sentences and Documents",
+        "year": 2014,
+        "venue": "International Conference on Machine Learning",
+        "authors": [
+          {
+            "name": "Quoc V. Le"
+          },
+          {
+            "name": "Tomas Mikolov"
+          }
+        ],
+        "externalIds": {
+          "DBLP": "conf/icml/LeM14",
+          "ArXiv": "1405.4053",
+          "MAG": "2949547296",
+          "CorpusId": 2407601
+        },
+        "openAccessPdf": {
+          "url": ""
+        },
+        "citationCount": 9822
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "5d833331b0e22ff359db05c62a8bca18c4f04b68",
+        "title": "One billion word benchmark for measuring progress in statistical language modeling",
+        "year": 2013,
+        "venue": "Interspeech",
+        "authors": [
+          {
+            "name": "Ciprian Chelba"
+          },
+          {
+            "name": "Tomas Mikolov"
+          },
+          {
+            "name": "Mike Schuster"
+          },
+          {
+            "name": "Qi Ge"
+          },
+          {
+            "name": "T. Brants"
+          },
+          {
+            "name": "P. Koehn"
+          },
+          {
+            "name": "T. Robinson"
+          }
+        ],
+        "externalIds": {
+          "ArXiv": "1312.3005",
+          "DBLP": "journals/corr/ChelbaMSGBK13",
+          "MAG": "2611669587",
+          "DOI": "10.21437/Interspeech.2014-564",
+          "CorpusId": 14136307
+        },
+        "openAccessPdf": {
+          "url": "https://arxiv.org/pdf/1312.3005"
+        },
+        "citationCount": 1216
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "87f40e6f3022adbc1f1905e3e506abad05a9964f",
+        "title": "Distributed Representations of Words and Phrases and their Compositionality",
+        "year": 2013,
+        "venue": "Neural Information Processing Systems",
+        "authors": [
+          {
+            "name": "Tomas Mikolov"
+          },
+          {
+            "name": "I. Sutskever"
+          },
+          {
+            "name": "Kai Chen"
+          },
+          {
+            "name": "G. Corrado"
+          },
+          {
+            "name": "J. Dean"
+          }
+        ],
+        "externalIds": {
+          "ArXiv": "1310.4546",
+          "MAG": "2950133940",
+          "DBLP": "conf/nips/MikolovSCCD13",
+          "CorpusId": 16447573
+        },
+        "openAccessPdf": {
+          "url": ""
+        },
+        "citationCount": 35653
+      }
+    }
+  ],
+  "next": 40
+}

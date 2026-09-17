@@ -15,6 +15,7 @@ TIMEOUT = httpx.Timeout(10.0)
 PAPER_FIELDS = "title,year,venue,authors,externalIds,openAccessPdf,citationCount"
 # The default pool is recent papers only, and its picks for BERT were weak. all-cs also served a biology DOI.
 RECOMMENDATION_POOL = "all-cs"
+PAGE = 100  # references/citations page size (M7.5 D79)
 
 
 def new_client(api_key: str | None, transport: httpx.AsyncBaseTransport | None = None) -> httpx.AsyncClient:
@@ -62,3 +63,36 @@ async def get_papers(http: httpx.AsyncClient, keys: list[str]) -> list[dict | No
     if not isinstance(papers, list):
         raise httpx.DecodingError("Semantic Scholar's batch answer is not a list", request=response.request)
     return papers
+
+
+async def _edge(http: httpx.AsyncClient, key: str, edge: str, inner_field: str, cap: int) -> list[dict] | None:
+    """Pages `edge` ("references" or "citations") `PAGE` at a time, collecting `inner_field` (citedPaper /
+    citingPaper) until `cap` records are collected or a page has no `next`. None when S2 doesn't know `key` (404),
+    like get_paper. An item with no inner record (a paper S2 lists but can't describe) is skipped, not a crash."""
+    records: list[dict] = []
+    offset = 0
+    while len(records) < cap:
+        response = await http.get(
+            f"/graph/v1/paper/{quote(key, safe='/:')}/{edge}",
+            params={"fields": PAPER_FIELDS, "limit": PAGE, "offset": offset},
+        )
+        if response.status_code == 404:
+            return None
+        body = json_body(response.raise_for_status())
+        records += [record for item in body.get("data") or [] if (record := item.get(inner_field))]
+        next_offset = body.get("next")
+        if next_offset is None:
+            break
+        offset = next_offset
+    return records[:cap]
+
+
+async def references(http: httpx.AsyncClient, key: str, cap: int) -> list[dict] | None:
+    """The papers `key` cites (cited-paper records, in the API's order), capped at `cap`. None when unknown."""
+    return await _edge(http, key, "references", "citedPaper", cap)
+
+
+async def citations(http: httpx.AsyncClient, key: str, cap: int) -> list[dict] | None:
+    """The papers citing `key` (citing-paper records, in the API's own, unsorted order), capped at `cap` (D79: this
+    direction is not paged to the end). None when unknown."""
+    return await _edge(http, key, "citations", "citingPaper", cap)
