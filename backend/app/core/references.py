@@ -14,7 +14,7 @@ from sqlalchemy import delete, func, insert, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import discovery
-from app.core.candidates import Candidate, from_s2, from_work, merge
+from app.core.candidates import Candidate, from_s2, from_work, merge, ordered_pdf_urls
 from app.core.errors import Conflict
 from app.models import ExternalRef, Paper, paper_references
 from app.providers import openalex, semantic_scholar
@@ -114,12 +114,13 @@ async def _upsert(session: AsyncSession, candidate: Candidate) -> uuid.UUID:
         "year": candidate.year,
         "venue": candidate.venue,
         "cited_by_count": candidate.cited_by_count,
-        "pdf_urls": candidate.pdf_urls,
     }
     ids = {"s2_id": candidate.s2_id, "openalex_id": candidate.openalex_id, "doi": candidate.doi,
            "arxiv_id": candidate.arxiv_id}  # fmt: skip
     if not existing:
-        return await session.scalar(insert(ExternalRef).values(**fields, **ids).returning(ExternalRef.id))
+        return await session.scalar(
+            insert(ExternalRef).values(**fields, pdf_urls=candidate.pdf_urls, **ids).returning(ExternalRef.id)
+        )
     keeper, *duplicates = existing
     for duplicate in duplicates:
         for name in ids:
@@ -131,6 +132,12 @@ async def _upsert(session: AsyncSession, candidate: Candidate) -> uuid.UUID:
         ids[name] = value or getattr(keeper, name)
     if candidate.title != keeper.title:  # a new title needs a new vector
         fields |= {"title_embedding": None, "title_embed_model": None}
+    # Preserve PDF URLs from candidate, duplicates, and keeper when folding
+    fields["pdf_urls"] = ordered_pdf_urls(
+        ids["arxiv_id"],
+        *candidate.pdf_urls,
+        *(url for row in [*duplicates, keeper] for url in row.pdf_urls),
+    )
     await session.execute(update(ExternalRef).where(ExternalRef.id == keeper.id).values(**fields, **ids))
     return keeper.id
 

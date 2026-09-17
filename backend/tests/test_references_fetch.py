@@ -177,3 +177,76 @@ async def test_two_stored_rows_found_to_be_one_paper_fold_into_the_oldest(librar
     [row] = await library.scalars(select(ExternalRef))
     assert (row.id, row.s2_id, row.doi) == (by_s2.id, "a" * 40, "10.5555/fold")
     assert await stored(library, other.id) == ["One paper"]  # the other paper's link moved to the kept row
+
+
+async def test_duplicate_fold_preserves_pdf_urls_from_all_rows(library, discovery_fakes):
+    """When two stored rows fold, the surviving row keeps PDF URLs from both the keeper and duplicates."""
+    reader = await add_paper(library, doi=READER_DOI)
+    # One row known by s2_id, holds a PDF URL
+    by_s2 = ExternalRef(
+        s2_id="b" * 40,
+        doi="10.5555/m75-pdf-keep",
+        title="Known by id with URL",
+        pdf_urls=["https://example.org/kept.pdf"],
+        fetched_at=datetime.now(timezone.utc) - timedelta(days=1),
+    )
+    # Another row known by doi, no URLs
+    by_doi = ExternalRef(doi="10.5555/m75-pdf-keep", title="Known by DOI no URLs", pdf_urls=[])
+    library.add_all([by_s2, by_doi])
+    await library.flush()
+    # Fetch returns a candidate with both IDs but no PDF URL
+    discovery_fakes.s2.reply(
+        REFS, 200, json=page("citedPaper", s2("Merged paper", "10.5555/m75-pdf-keep", paper_id="b" * 40, pdf=""))
+    )
+    discovery_fakes.s2.reply(CITING, 200, json=page("citingPaper"))
+
+    await references.fetch(library, discovery_fakes.providers, reader)
+
+    # After folding, exactly one row remains, and it still has the PDF URL
+    [row] = await library.scalars(select(ExternalRef))
+    assert row.s2_id == "b" * 40
+    assert row.doi == "10.5555/m75-pdf-keep"
+    assert "https://example.org/kept.pdf" in row.pdf_urls
+
+
+async def test_imported_row_wins_fold_and_keeps_imported_as(library, discovery_fakes):
+    """When folding duplicates, an imported row (one with imported_as set) wins over non-imported rows."""
+    reader = await add_paper(library, doi=READER_DOI)
+    imported_paper = await add_paper(library, doi="10.5555/m75-imported-winner")
+    # Older row without import
+    older_unimported = ExternalRef(
+        s2_id="c" * 40,
+        doi="10.5555/m75-same-paper",
+        title="Older, not imported",
+        fetched_at=datetime.now(timezone.utc) - timedelta(days=2),
+    )
+    # Newer row with import (should win despite being newer due to import status)
+    newer_imported = ExternalRef(
+        s2_id=None,
+        openalex_id="W9999999",
+        doi="10.5555/m75-same-paper",
+        title="Newer, imported",
+        imported_as=imported_paper.id,
+        fetched_at=datetime.now(timezone.utc) - timedelta(days=1),
+    )
+    library.add_all([older_unimported, newer_imported])
+    await library.flush()
+    # Fetch returns a candidate with the s2_id, DOI, and openalex_id
+    discovery_fakes.s2.reply(
+        REFS,
+        200,
+        json=page(
+            "citedPaper",
+            s2("Merged paper", "10.5555/m75-same-paper", paper_id="c" * 40, openalex_id="W9999999"),
+        ),
+    )
+    discovery_fakes.s2.reply(CITING, 200, json=page("citingPaper"))
+
+    await references.fetch(library, discovery_fakes.providers, reader)
+
+    # After folding, exactly one row remains: the imported one
+    [row] = await library.scalars(select(ExternalRef))
+    assert row.id == newer_imported.id
+    assert row.imported_as == imported_paper.id
+    assert row.s2_id == "c" * 40  # merged from older row
+    assert row.openalex_id == "W9999999"  # from newer row
