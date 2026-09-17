@@ -1,7 +1,7 @@
 import uuid
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 LinkKind = Literal["cites", "same_workspace", "co_anchored", "co_authored", "shares_topic", "similar", "manual"]
 
@@ -51,8 +51,8 @@ class LinkOut(BaseModel):
 class LinkIn(BaseModel):
     from_paper: uuid.UUID
     to_paper: uuid.UUID
-    label: str = Field(min_length=1)
+    label: str
 
 
 class LinkUpdate(BaseModel):
-    label: str = Field(min_length=1)
+    label: str
