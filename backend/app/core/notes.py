@@ -4,12 +4,14 @@
 - Promoting an LLM fragment creates a note with provenance='llm' + source_id. (here)
 - Editing an 'llm' note flips it to 'llm_edited'.                          (here)
 - Changing a note's colour never changes its provenance.                     (here)
-- Notes created through MCP get provenance='llm'.                          (M6)
+- Notes created through MCP get provenance='llm' and source_id = an llm_outputs row of kind 'mcp'.  (here)
 - Showing a chart in a note never changes its provenance, and a note made from a chart is the owner's
   ('human'): a chart holds no generated text, only the owner's choice of data.  (here)
 """
 
+import asyncio
 import re
+import unicodedata
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -19,14 +21,22 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.chunking import join_lines
-from app.core.errors import InvalidInput, NotFound
-from app.core.papers import get_paper
+from app.core.errors import Conflict, InvalidInput, NotFound
+from app.core.papers import get_paper, get_paper_file, list_chunks
 from app.models import Chart, Chunk, LLMOutput, Note, Provenance, note_anchors, note_charts
+from app.providers.extraction import quote_rects
 
 Rect = tuple[float, float, float, float]
 
 DEFAULT_COLOR = "#facc15"
 _HEX_COLOR = re.compile(r"#[0-9a-f]{6}")
+# What an MCP client's quote and a chunk's text are compared as: typographic quotes and dashes made plain, soft
+# hyphens dropped (then NFKC, collapsed whitespace, casefold).
+_PLAIN = str.maketrans({"‘": "'", "’": "'", "“": '"', "”": '"', "–": "-", "—": "-",
+                        "­": None})  # fmt: skip
+MCP_OUTPUT_KIND = "mcp"
+QUOTE_NOT_FOUND_HINT = "Copy quoted_text exactly from one passage of this paper, as search_library returned it."
+QUOTE_AMBIGUOUS_HINT = "This text appears more than once in the paper. Quote a longer stretch around it."
 
 
 @dataclass(frozen=True)
@@ -276,5 +286,93 @@ async def create_chart_note(session: AsyncSession, chart_id: uuid.UUID, anchors:
                               "bbox": [list(r) for r in a.bbox], "quoted_text": a.quoted_text})  # fmt: skip
     await session.execute(insert(note_anchors), list(rows.values()))
     await session.execute(insert(note_charts).values(note_id=note.id, chart_id=chart_id))
+    await session.commit()
+    return await _view(session, note)
+
+
+def fold(text: str) -> str:
+    """Text as a quote is matched: NFKC, plain quotes and dashes, no soft hyphens, collapsed whitespace, casefolded."""
+    return " ".join(unicodedata.normalize("NFKC", text).translate(_PLAIN).split()).casefold()
+
+
+def quote_hits(chunk_text: str, quote: str) -> list[list[int]]:
+    """Every occurrence of a folded quote in a chunk, as the indexes of the blocks it touches.
+
+    A chunk's text is its blocks joined by a blank line and its bbox holds one rect per block (core/chunking.py), so
+    block i of the text is rect i of the bbox.
+    """
+    blocks = [fold(block) for block in chunk_text.split("\n\n")]
+    spans, start = [], 0
+    for block in blocks:
+        spans.append((start, start + len(block)))
+        start += len(block) + 1
+    joined, hits = " ".join(blocks), []
+    at = joined.find(quote)
+    while at != -1:
+        end = at + len(quote)
+        hits.append([i for i, (first, last) in enumerate(spans) if first < end and at < last])
+        at = joined.find(quote, at + 1)
+    return hits
+
+
+async def locate_quote(session: AsyncSession, paper_id: uuid.UUID, quoted_text: str) -> Anchor:
+    """Where a quote sits in a paper: its page and rects, for a caller that knows only the words (MCP, Q1).
+
+    The quote must occur exactly once in the paper's chunks. Its rects are the quoted lines when the PDF is on this
+    machine, else the paragraphs they're in. Raises NotFound (the paper), InvalidInput("empty_quote" |
+    "quote_not_found" with a hint | "quote_ambiguous" with pages and a hint), Conflict("paper_not_ready") when the
+    paper has no chunks yet.
+    """
+    chunks = await list_chunks(session, paper_id)
+    quote = fold(quoted_text)
+    if not quote:
+        raise InvalidInput("empty_quote")
+    if not chunks:
+        raise Conflict("paper_not_ready")
+    # ponytail: a quote that crosses from one chunk into the next isn't found; the hint asks for one passage. Join
+    # neighbouring chunks on a page if models keep quoting across them.
+    hits = [(chunk, blocks) for chunk in chunks for blocks in quote_hits(chunk.text, quote)]
+    if not hits:
+        raise InvalidInput("quote_not_found", hint=QUOTE_NOT_FOUND_HINT)
+    if len(hits) > 1:
+        pages = sorted({chunk.page for chunk, _ in hits})
+        raise InvalidInput("quote_ambiguous", pages=pages, hint=QUOTE_AMBIGUOUS_HINT)
+    chunk, blocks = hits[0]
+    paragraphs = [tuple(chunk.bbox[i]) for i in blocks]
+    try:
+        path = await get_paper_file(session, paper_id)
+    except NotFound:  # the PDF isn't on this machine: the paragraphs will do
+        lines = []
+    else:
+        lines = await asyncio.to_thread(quote_rects, path, chunk.page, paragraphs, quoted_text)
+    return Anchor(paper_id, chunk.page, lines or paragraphs, normalize_quote(quoted_text))
+
+
+async def create_llm_note(session: AsyncSession, paper_id: uuid.UUID, body: str, quoted_text: str) -> NoteView:
+    """A note an MCP client wrote, anchored on `quoted_text`: provenance='llm', with its text also kept as an
+    llm_outputs row (kind 'mcp') the note's source_id points at, so the model's words survive an edit (D91).
+
+    Raises InvalidInput("empty_body"), and whatever locate_quote raises.
+    """
+    text = body.strip()
+    if not text:
+        raise InvalidInput("empty_body")
+    anchor = await locate_quote(session, paper_id, quoted_text)
+    # ponytail: model and prompt_version are NOT NULL, but an MCP client names no PaperLab model and uses no prompt.
+    output = LLMOutput(paper_id=paper_id, kind=MCP_OUTPUT_KIND, content=text, model="mcp", prompt_version=0)
+    session.add(output)
+    await session.flush()
+    note = Note(body=text, provenance=Provenance.LLM, source_id=output.id)
+    session.add(note)
+    await session.flush()
+    await session.execute(
+        insert(note_anchors).values(
+            note_id=note.id,
+            paper_id=paper_id,
+            page=anchor.page,
+            bbox=[list(rect) for rect in anchor.bbox],
+            quoted_text=anchor.quoted_text,
+        )
+    )
     await session.commit()
     return await _view(session, note)
