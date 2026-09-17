@@ -8,12 +8,14 @@ say() {
 
 cd "$(dirname "$0")/.." || exit 1
 
-# Apps like Claude Desktop don't get a terminal's PATH on macOS, hence the fixed places after `command -v`.
+# Apps like Claude Desktop don't get a terminal's PATH on macOS, hence the fixed places after `command -v`. The last
+# one is for WSL: `wsl -e` is neither a login nor an interactive shell, so Docker Desktop's WSL integration never
+# lands on PATH there either, and `PAPERLAB_DOCKER` set in Claude Desktop's config doesn't reach the distro.
 # PAPERLAB_DOCKER_PATHS allows testing: space-separated paths to try; empty string disables fallbacks.
 docker=
 if [ -z "${PAPERLAB_DOCKER_PATHS+x}" ]; then
   # Default fallback paths for macOS and Linux
-  fallback_paths="/usr/local/bin/docker /opt/homebrew/bin/docker /usr/bin/docker ${HOME:-}/.orbstack/bin/docker /Applications/Docker.app/Contents/Resources/bin/docker"
+  fallback_paths="/usr/local/bin/docker /opt/homebrew/bin/docker /usr/bin/docker ${HOME:-}/.orbstack/bin/docker /Applications/Docker.app/Contents/Resources/bin/docker /mnt/wsl/docker-desktop/cli-tools/usr/bin/docker"
 else
   fallback_paths="${PAPERLAB_DOCKER_PATHS}"
 fi
