@@ -107,6 +107,11 @@ def _handle(request: httpx.Request) -> httpx.Response:
     if host == "api.openalex.org" and path.startswith("/works/"):
         return httpx.Response(200, json=_work(*PAPERS[0]))
     if host == "api.semanticscholar.org":
+        # References (M7.5): any library paper cites the three papers and is cited by the free one.
+        if path.endswith("/references"):
+            return httpx.Response(200, json={"offset": 0, "data": [{"citedPaper": p} for p in s2_papers]})
+        if path.endswith("/citations"):
+            return httpx.Response(200, json={"offset": 0, "data": [{"citingPaper": s2_papers[0]}]})
         if path.startswith("/recommendations/"):
             return httpx.Response(200, json={"recommendedPapers": s2_papers})
         if path == "/graph/v1/paper/search/match":

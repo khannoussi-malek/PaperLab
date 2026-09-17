@@ -114,7 +114,11 @@ Fonts: body `Atkinson Hyperlegible Next Variable` (`font-sans`), headings `Crims
   model" / "Search or type a model name" / "Default model" / "Remove <name> from chat" / "Delete <name> from disk" /
   "Model to pull" / "Pull" / "Pulling <name>" / "Kind" / "Preset" / "Name" / "Base URL" / "API key" / "Replace key" /
   "Remove key" / "Save connection" / "Model" / "Manage models…" / "Set up a model" / "Open settings" / "Embedding
-  model" / "Re-index library" / "Re-index the library?" / "Re-index".
+  model" / "Re-index library" / "Re-index the library?" / "Re-index". Also `.reference-row`, `.references-summary`
+  and `.reference-list`.
+  Also the names "Connect Claude" / "Open Connect Claude" / "Your system" (tabs "macOS" / "Windows" / "Windows + WSL" /
+  "Linux") / "PaperLab folder" / "Copy" / "Copied" / "Check the server", and the regions "Claude Desktop" / "Claude
+  Code" / "Check PaperLab's side".
   Style with utility classes next to them.
 - **Notes filter.** The top of the Notes tab has two filter chips in a `role="group"` "Show notes from": `aria-pressed`
   rounded-full buttons "You" and "AI", each with a count (`tabular-nums`). On: filled in the provenance badge's colours
@@ -455,6 +459,73 @@ submit.
 - **Similar tab:** the reader's fourth tab, after Data. An `aside` labelled "Similar papers": a muted one-line
   explanation, the candidate rows, and `LoadError` with Retry when Semantic Scholar refuses. It asks only once the tab
   has been opened; suggestions stay fresh for an hour.
+
+## References
+
+- **References:** the reader's fifth tab, after Similar. An `aside` labelled "References": a muted one-line
+  explanation ("What this paper cites, and what has cited it since — ranked for your library."), a compact **Cited** /
+  **Citing** switch (shadcn `Tabs`, default variant — already compact at `h-8`, no separate size needed), the
+  summary line (`.references-summary`), then the rows. It asks Semantic Scholar (and OpenAlex, when on) only once the
+  tab has been opened, like Similar — and opening it for the first time also queues the fetch (D78): a paper that has
+  never been fetched goes straight to the `fetching` state, no button to click.
+- **Rows** (`.reference-row`, in a `.reference-list`): reuses `CandidateList`'s row shape — title (two lines, full
+  text in `title`), byline · year · citations, a **Cited by N of your papers** outline badge once 2 or more of the
+  reader's own papers cite it (never at 0 or 1: the paper being read always "cites" its own references, so 1 means
+  no co-citation yet); in **Citing**, where the count is the library papers a citing work cites, the badge reads
+  **Cites N of your papers**. Then the same secondary "PDF" / outline "No free PDF" badge as Find papers. Actions:
+  primary **Import** (`Plus`; "Importing…" with a spinning `LoaderCircle`, disabled while it runs), or an outline
+  **In library** link to the reader once it is; a ghost **Open page** link (`ExternalLink`, new tab) whenever the
+  reference has an identifier to link to (`pageLink`, reused from Find papers), shown alongside either action —
+  independent of it, exactly as Find papers shows Open page beside Add. A failed import shows an `ErrorAlert` under
+  its row, same as Find papers.
+- **States:** `none` and `fetching` both show the same `role="status"` "Fetching references…" line over three
+  `animate-pulse` skeleton rows (plain divs — no new dependency, no bespoke skeleton component): opening the tab on a
+  never-fetched paper queues the fetch immediately, so there is nothing to click while it queues. A failed first
+  fetch request (the one that queues it) shows its error in an `ErrorAlert` with outline **Try again** in place of
+  the status line and skeletons, since nothing is fetching. `failed` → the stored error in an `ErrorAlert` with
+  outline **Try again** (queues another fetch; distinct label from the query-level `LoadError`'s "Retry", which
+  covers a transport/500 failure instead); a fetch still `fetching` after 10 minutes (the worker lost it) is listed
+  as `failed` with "Fetching references failed. Try again." `ready` with no rows → "This paper's sources list no
+  references."
+- **Refresh:** once `ready`, a small ghost **Refresh** button (`RefreshCw`, disabled while its own fetch runs) sits
+  beside the summary line (`ml-auto` in the same flex row, so it stays put whether or not a summary is shown). A
+  failed refresh request shows its error in an ErrorAlert.
+- **Summary line:** `{refs} cited by 3+ of your papers, {pdfs} have PDFs` in **Cited**, and `{refs} cite 3+ of your
+  papers, {pdfs} have PDFs` in **Citing**, built by `referencesMeta.ts`'s `summaryLine`. Either half drops when its
+  count is zero; the whole line is left out when both are.
+- The switch keeps whichever direction the reader was viewing; both directions share one fetch state (the worker
+  fills `cites` and `cited_by` together), so switching mid-fetch or mid-failure shows the same state either way.
+
+## Connect Claude
+
+Patterns from ui-ux-pro-max (2026-09-17): `search.py "submit button loading state disabled" --domain ux` (loading, then
+success or error, High); `"success feedback confirmation message after action"` (a brief success message, Medium);
+`"input placeholder label helper text"` (a visible label, never only a placeholder, High); `"long text overflow code
+horizontal scroll"` (wide content scrolls inside its own box, High); `--stack shadcn "tabs code block"` (shadcn `Tabs`
+with a set value). The onboarding, copy-button and OS-tab queries returned nothing specific.
+- **Page (`#/connect-claude`):** Settings' page shell (`max-w-3xl`, ghost "Library" back link, `font-heading` h1
+  "Connect Claude"), then `section`s labelled by their h2, in order: What Claude can do, What Claude receives, Your
+  system, PaperLab folder, Claude Desktop, Claude Code, Check PaperLab's side, If it doesn't work. Body copy is
+  `text-sm`; notes and help are `text-muted-foreground`.
+- **Your system:** a shadcn `Tabs` whose `TabsList` is labelled "Your system": macOS, Windows, Windows + WSL, Linux.
+  Preselected from `navigator.userAgentData.platform` or `navigator.platform` (`detectOs`); never guesses WSL. The tabs
+  switch what the sections below show, so there are no `TabsContent` panels (as in References' Cited / Citing).
+- **PaperLab folder:** an `Input` (`font-mono`, no spellcheck) named by its section heading (`aria-labelledby`), prefilled
+  from `GET /api/mcp/setup`. While blank: `text-xs` muted help "Paste the full path of your PaperLab folder." (Windows adds
+  "For example C:\Users\you\PaperLab."), and Claude Desktop and Claude Code say "The config appears here once the
+  PaperLab folder is filled in." / "The command appears here once …". A failed load shows `LoadError` with Retry.
+- **Code blocks:** a `pre` on `bg-muted`, `rounded-lg p-3 pr-24 font-mono text-xs leading-relaxed overflow-x-auto`, with
+  an outline `sm` "Copy" button (`Copy` icon) at its top right that reads "Copied" (`Check` icon) for 2 s. A refused copy
+  shows the reader's message in an `ErrorAlert` under the block. Inline paths and commands are `code` with
+  `rounded bg-muted px-1 py-0.5 font-mono text-[0.9em]`.
+- **Claude Desktop:** "Edit Claude Desktop's config file:", then three numbered steps. Step 1 names the file
+  (`configFileHint`) except on Linux, where the hint is the whole step. The config block follows; Linux adds a muted
+  line that Claude Desktop on Linux is a beta for Ubuntu 22.04+ and Debian 12+.
+- **Check PaperLab's side:** a muted line that this checks PaperLab, not Claude's config; "Check the server" is the
+  view's one primary button ("Checking…" and disabled while it runs). Success is a `role="status"` line with a
+  `CircleCheck` in `text-primary`; a failure is an `ErrorAlert` with the server's `detail`.
+- **Entry points:** an outline "Connect Claude" button (`Plug`) in the library header, before the Settings icon; and
+  Settings' last section, "Connect Claude", with one muted sentence and an outline "Open Connect Claude" link (`Plug`).
 
 ## Pre-delivery check (from ui-ux-pro-max Quick Reference §1–§3)
 

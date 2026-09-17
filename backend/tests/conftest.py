@@ -22,9 +22,10 @@ from app.config import settings
 from app.core import discovery
 from app.db import get_session
 from app.main import create_app
-from app.models import Author, Paper
+from app.models import Author, Paper, PaperSources
 from app.providers import arxiv, core_ac, crossref, embedding, openalex, semantic_scholar, unpaywall
 from app.providers.llm import FakeLLM
+from app.workers import ingest
 
 # The compose Postgres, published on the host. Every test runs inside a transaction that is
 # rolled back afterwards, so tests can share the dev database without leaving rows behind.
@@ -126,6 +127,26 @@ class FakeEmbedder:
 @pytest.fixture
 def embedder():
     return FakeEmbedder()
+
+
+@pytest.fixture
+async def worker_session(session, monkeypatch):
+    """Point the worker at the rolled-back test session instead of its own SessionLocal. The owner's paper sources
+    row (D15 shares the dev database) is hidden, so OpenAlex is off unless a test turns it on."""
+    await session.execute(delete(PaperSources))
+
+    @asynccontextmanager
+    async def shared_session():
+        yield session
+
+    monkeypatch.setattr(ingest, "SessionLocal", shared_session)
+    return session
+
+
+@pytest.fixture
+def ctx(embedder):
+    """What WorkerSettings.on_startup leaves in the ARQ context, with the fake model."""
+    return {"embedder": embedder}
 
 
 def recorded(name: str) -> dict:

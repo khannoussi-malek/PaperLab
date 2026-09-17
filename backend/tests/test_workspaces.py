@@ -156,3 +156,22 @@ async def test_notes_appear_once_by_paper_title_then_reading_order(session):
 
     assert [n.id for n in listed] == [shared.id, attention_p1_low.id, attention_p2.id, bert_p1.id]
     assert {a.paper_id for a in listed[0].anchors} == {bert.id, attention.id}
+
+
+async def test_by_name_finds_the_workspace_with_exactly_that_name(session):
+    thesis = await workspaces.create(session, f"Thesis {RUN}")
+    await workspaces.create(session, f"thesis {RUN}")
+
+    assert await workspaces.by_name(session, f"  Thesis {RUN} ") == thesis.id
+
+
+async def test_by_name_for_an_unknown_name_lists_every_name(session):
+    await workspaces.create(session, f"Alpha review {RUN}")
+
+    with pytest.raises(NotFound, match="^unknown_workspace$") as unknown:
+        await workspaces.by_name(session, f"No such workspace {RUN}")
+
+    # Not compared with a later read: a workspace another run commits in between (E2E on this stack) would differ.
+    available = unknown.value.details["available"]
+    assert unknown.value.details == {"available": available}
+    assert f"Alpha review {RUN}" in available  # the database's collation, not Python's sort, orders the names

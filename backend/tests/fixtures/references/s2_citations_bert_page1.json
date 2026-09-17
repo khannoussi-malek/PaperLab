@@ -1,0 +1,166 @@
+{
+  "offset": 0,
+  "data": [
+    {
+      "citingPaper": {
+        "paperId": "80a31d1a72637b500eb24f663f81bbb1dc959765",
+        "title": "Simultaneous approximation of the score function and its derivatives by deep neural networks",
+        "year": 2026,
+        "venue": "Journal of Complexity",
+        "authors": [
+          {
+            "name": "Konstantin Yakovlev"
+          },
+          {
+            "name": "Nikita Puchkin"
+          }
+        ],
+        "externalIds": {
+          "DBLP": "journals/jc/YakovlevP26",
+          "DOI": "10.1016/j.jco.2026.102070",
+          "CorpusId": 290735006
+        },
+        "openAccessPdf": {
+          "url": ""
+        },
+        "citationCount": 0
+      }
+    },
+    {
+      "citingPaper": {
+        "paperId": "12f7f72020403f2a20220bb05f67d1ee9e72c20c",
+        "title": "Coordination of city-level connected automated vehicle industrial policies in China: A policy design perspective",
+        "year": 2026,
+        "venue": "Research in Transportation Business &amp; Management",
+        "authors": [
+          {
+            "name": "Y.-Q. Qiu"
+          },
+          {
+            "name": "Qun-Yi Zheng"
+          },
+          {
+            "name": "P. Zhou"
+          },
+          {
+            "name": "W. Wen"
+          }
+        ],
+        "externalIds": {
+          "DOI": "10.1016/j.rtbm.2026.101870",
+          "CorpusId": 291633537
+        },
+        "openAccessPdf": {
+          "url": "https://doi.org/10.1016/j.rtbm.2026.101870"
+        },
+        "citationCount": 0
+      }
+    },
+    {
+      "citingPaper": {
+        "paperId": "22cb05b976312060a02dd5280d6fb26d2665b654",
+        "title": "MDHNet: Fusing global trends and local fluctuations via multi-scale decomposition for ultra-short-term wind power forecasting",
+        "year": 2026,
+        "venue": "Applied Energy",
+        "authors": [
+          {
+            "name": "Jing Teng"
+          },
+          {
+            "name": "Zhi-Bo Zhu"
+          },
+          {
+            "name": "Mengyang Pu"
+          },
+          {
+            "name": "Rui-Feng Shi"
+          },
+          {
+            "name": "You Lv"
+          },
+          {
+            "name": "Yong-Jie Zhai"
+          },
+          {
+            "name": "Tian Wang"
+          },
+          {
+            "name": "Xinhua Zeng"
+          },
+          {
+            "name": "Guo-Qing Jing"
+          },
+          {
+            "name": "H. Snoussi"
+          }
+        ],
+        "externalIds": {
+          "DOI": "10.1016/j.apenergy.2026.128732",
+          "CorpusId": 291656596
+        },
+        "openAccessPdf": {
+          "url": ""
+        },
+        "citationCount": 0
+      }
+    },
+    {
+      "citingPaper": {
+        "paperId": "03c9d8f40f21c9e5f2e2ab72c0c56cd26b1c8947",
+        "title": "Temporal knowledge graph query model fusing fuzzy information modeling and dynamic path memory network",
+        "year": 2026,
+        "venue": "Neurocomputing",
+        "authors": [
+          {
+            "name": "Lin Zhu"
+          },
+          {
+            "name": "Shuai Xu"
+          },
+          {
+            "name": "Lu-Yi Bai"
+          }
+        ],
+        "externalIds": {
+          "DOI": "10.1016/j.neucom.2026.134983",
+          "CorpusId": 291707552
+        },
+        "openAccessPdf": {
+          "url": ""
+        },
+        "citationCount": 0
+      }
+    },
+    {
+      "citingPaper": {
+        "paperId": "684ab6ff899ea60ed9343cb5b77014fc47bf37e7",
+        "title": "Computational taxonomy development for digital passports using semantic topic modelling to advance circular construction",
+        "year": 2026,
+        "venue": "Automation in Construction",
+        "authors": [
+          {
+            "name": "S. Vangelova"
+          },
+          {
+            "name": "K. Forth"
+          },
+          {
+            "name": "Jakob Beetz"
+          },
+          {
+            "name": "C. De Wolf"
+          }
+        ],
+        "externalIds": {
+          "DOI": "10.1016/j.autcon.2026.107220",
+          "CorpusId": 291796287
+        },
+        "openAccessPdf": {
+          "url": "https://www.sciencedirect.com/science/article/pii/S0926580526004619/pdf"
+        },
+        "citationCount": 0
+      }
+    }
+  ],
+  "next": 5
+}

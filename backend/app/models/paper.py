@@ -4,7 +4,7 @@ from enum import StrEnum
 from typing import Any
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import ForeignKey, Text, func, select, text
+from sqlalchemy import DateTime, ForeignKey, Text, func, select, text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, aggregate_order_by
 from sqlalchemy.orm import Mapped, column_property, mapped_column
 
@@ -50,6 +50,10 @@ class Paper(Base):
     page_count: Mapped[int | None]
     status: Mapped[str] = mapped_column(Text, server_default=PaperStatus.UPLOADED)
     status_error: Mapped[str | None] = mapped_column(Text)
+    # M7.5: the reference fetch's own state, separate from ingest. requested_at lets a stuck "fetching" be retried.
+    references_state: Mapped[str] = mapped_column(Text, server_default=text("'none'"))
+    references_error: Mapped[str | None] = mapped_column(Text)
+    references_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
     # Loaded with every paper, so paper cards can tick their workspaces. Oldest membership first.
     workspace_ids: Mapped[list[uuid.UUID]] = column_property(

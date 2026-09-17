@@ -15,6 +15,8 @@ import {
   type PaperSourcesUpdate,
   type PaperUpdate,
   type PromoteRequest,
+  type References,
+  type ReferencesDirection,
   type SearchResult,
 } from './client'
 
@@ -56,6 +58,11 @@ const keys = {
   search: (query: string) => ['discovery', 'search', query] as const,
   suggestions: ['discovery', 'similar'] as const,
   similar: (paperId: string) => ['discovery', 'similar', paperId] as const,
+  // Outside the papers key on purpose, like discovery: References has its own tab and its own poll.
+  references: (paperId: string) => ['references', paperId] as const,
+  referencesDirection: (paperId: string, direction: ReferencesDirection) =>
+    ['references', paperId, direction] as const,
+  mcpSetup: ['mcp', 'setup'] as const,
 }
 
 /** Poll the library only while a paper is still ingesting. */
@@ -440,3 +447,51 @@ export function useReindexLibrary() {
   const client = useQueryClient()
   return useMutation({ mutationFn: api.reindexLibrary, onSettled: () => client.invalidateQueries({ queryKey: keys.embedding }) })
 }
+
+/** One direction of a paper's references, fetched only once `enabled` (the References tab is open). Polls while the
+ * fetch is still running, like the library polls ingest. */
+export const useReferences = (paperId: string, direction: ReferencesDirection, enabled: boolean) =>
+  useQuery({
+    queryKey: keys.referencesDirection(paperId, direction),
+    queryFn: () => api.references(paperId, direction),
+    enabled,
+    refetchInterval: (query) => (query.state.data?.state === 'fetching' ? PAPERS_POLL_MS : false),
+  })
+
+/** Queues a fetch of both directions. A second call while already fetching is harmless on the server too. */
+export function useRefreshReferences(paperId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: () => api.refreshReferences(paperId),
+    onSuccess: () => client.invalidateQueries({ queryKey: keys.references(paperId) }),
+  })
+}
+
+/** Imports one reference. Each row owns its own mutation, so only that row shows "Importing…". */
+export function useImportReference(paperId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ refId, workspaceId }: { refId: string; workspaceId?: string }) =>
+      api.importReference(refId, workspaceId),
+    onSuccess: (paper, { refId }) => {
+      // So the row still shows "In library" after the tab is closed and reopened, even though that only rereads the
+      // cache. New arrays and objects throughout: never mutate cached query data. Matches both directions' caches,
+      // since keys.references(paperId) is a prefix of each direction's own query key.
+      const marked = (data: References | undefined) =>
+        data
+          ? { ...data, rows: data.rows.map((row) => (row.id === refId ? { ...row, paper_id: paper.id } : row)) }
+          : data
+      client.setQueriesData<References>({ queryKey: keys.references(paperId) }, marked)
+      return Promise.all([
+        client.invalidateQueries({ queryKey: keys.papers, exact: true }),
+        client.invalidateQueries({ queryKey: keys.workspaces }),
+      ])
+    },
+  })
+}
+
+/** The folder Connect Claude prefills. */
+export const useMcpSetup = () => useQuery({ queryKey: keys.mcpSetup, queryFn: api.mcpSetup })
+
+/** Connect Claude's server check. Nothing is cached: each click checks again. */
+export const useCheckMcpServer = () => useMutation({ mutationFn: api.checkMcpServer })

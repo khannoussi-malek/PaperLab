@@ -1,5 +1,6 @@
 """Architecture rules and migrations, checked on every test run instead of by memory."""
 
+import ast
 import os
 import subprocess
 import sys
@@ -18,6 +19,19 @@ def test_core_never_imports_fastapi():
     # Keeps app.core reusable by the MCP server (brief: enforced invariant).
     offenders = [p.name for p in (BACKEND / "app/core").rglob("*.py") if "fastapi" in p.read_text()]
     assert offenders == []
+
+
+def test_mcp_server_has_no_sql_and_imports_only_core_services():
+    """Tool bodies stay thin (roadmap M6): any logic, and every query, belongs in app.core."""
+    source = (BACKEND / "mcp_server/server.py").read_text()
+    tree = ast.parse(source)
+    imported = {node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)}
+    imported |= {alias.name for node in ast.walk(tree) if isinstance(node, ast.Import) for alias in node.names}
+    ours = {name for name in imported if name.split(".")[0] == "app"}
+    others = {name.split(".")[0] for name in imported - ours} - set(sys.stdlib_module_names)
+    assert ours and all(name == "app.db" or name.split(".")[:2] == ["app", "core"] for name in ours), ours
+    assert others == {"mcp"}
+    assert [word for word in ("sqlalchemy", "select(", "text(", "execute(") if word in source] == []
 
 
 def alembic(database_url: str, *args: str) -> None:

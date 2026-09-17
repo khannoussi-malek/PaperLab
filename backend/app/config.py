@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     semantic_scholar_api_key: str = ""
     # `fake` serves Find papers and Similar from three offline papers (the E2E stack), as LLM_PROVIDER=fake does chat.
     discovery_provider: Literal["live", "fake"] = "live"
+    # The folder `docker compose up` ran in, from `PAPERLAB_DIR: ${PWD:-}` in docker-compose.yml (Compose uses its own
+    # working directory when the shell exports no PWD). Empty outside Compose. Connect Claude prefills with it.
+    paperlab_dir: str = ""
 
 
 settings = Settings()

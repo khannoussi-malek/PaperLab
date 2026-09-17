@@ -8,7 +8,9 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.api import charts, chat, datasets, discovery, embedding, health, llm, notes, papers, workspaces
+from app.api import mcp as mcp_api
 from app.api import paper_sources as paper_sources_api
+from app.api import references as references_api
 from app.config import settings
 from app.core import llm_connections, paper_sources
 from app.core.errors import Conflict, DomainError, InvalidInput, NotFound
@@ -42,6 +44,8 @@ def create_app() -> FastAPI:
     app.include_router(embedding.router)
     app.include_router(discovery.router)
     app.include_router(paper_sources_api.router)
+    app.include_router(references_api.router)
+    app.include_router(mcp_api.router)
 
     @app.exception_handler(DomainError)
     async def domain_error(_: Request, exc: DomainError) -> JSONResponse:

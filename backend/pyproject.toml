@@ -9,6 +9,7 @@ dependencies = [
     "asyncpg>=0.30",
     "fastapi>=0.115",
     "httpx>=0.28",
+    "mcp>=2.2,<3",
     "pgvector>=0.3",
     "pydantic-settings>=2.6",
     "pymupdf>=1.25",
@@ -39,7 +40,7 @@ addopts = "-n 4 --dist loadgroup"
 
 # Only applies when coverage runs (`uv run pytest --cov`), so single-file test runs aren't gated.
 [tool.coverage.run]
-source = ["app"]
+source = ["app", "mcp_server"]
 # The default C tracer loses route lines after an SQLAlchemy greenlet switch; sys.monitoring doesn't.
 core = "sysmon"
 
