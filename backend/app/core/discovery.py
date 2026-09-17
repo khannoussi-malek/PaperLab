@@ -330,7 +330,9 @@ async def download_pdf(http: httpx.AsyncClient, urls: list[str]) -> bytes | None
 
 
 def _prefill(candidate: Candidate) -> dict[str, Any]:
-    """Enrichment trusts a stored openalex_id, and a DOI only when it's locked (D69)."""
+    """Enrichment trusts a stored openalex_id, and a DOI only when it's locked (D69). The title is always locked:
+    ingest's PDF-font heuristic and enrichment's metadata are both worse than the title the source already gave us,
+    so it must survive both (M7.5)."""
     doi = next(iter(_library_dois(candidate)), None)
     fields = {
         "title": candidate.title,
@@ -341,7 +343,8 @@ def _prefill(candidate: Candidate) -> dict[str, Any]:
         "doi": doi,
         "openalex_id": candidate.openalex_id,
     }
-    return fields | {"manual_fields": ["doi"]} if doi and not candidate.openalex_id else fields
+    locked = ["doi", "title"] if doi and not candidate.openalex_id else ["title"]
+    return fields | {"manual_fields": locked}
 
 
 def _filename(title: str) -> str:
