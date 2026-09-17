@@ -116,6 +116,9 @@ Fonts: body `Atkinson Hyperlegible Next Variable` (`font-sans`), headings `Crims
   "Remove key" / "Save connection" / "Model" / "Manage models…" / "Set up a model" / "Open settings" / "Embedding
   model" / "Re-index library" / "Re-index the library?" / "Re-index". Also `.reference-row`, `.references-summary`
   and `.reference-list`.
+  Also the names "Connect Claude" / "Open Connect Claude" / "Your system" (tabs "macOS" / "Windows" / "Windows + WSL" /
+  "Linux") / "PaperLab folder" / "Copy" / "Copied" / "Check the server", and the regions "Claude Desktop" / "Claude
+  Code" / "Check PaperLab's side".
   Style with utility classes next to them.
 - **Notes filter.** The top of the Notes tab has two filter chips in a `role="group"` "Show notes from": `aria-pressed`
   rounded-full buttons "You" and "AI", each with a count (`tabular-nums`). On: filled in the provenance badge's colours
@@ -492,6 +495,37 @@ submit.
   count is zero; the whole line is left out when both are.
 - The switch keeps whichever direction the reader was viewing; both directions share one fetch state (the worker
   fills `cites` and `cited_by` together), so switching mid-fetch or mid-failure shows the same state either way.
+
+## Connect Claude
+
+Patterns from ui-ux-pro-max (2026-09-17): `search.py "submit button loading state disabled" --domain ux` (loading, then
+success or error, High); `"success feedback confirmation message after action"` (a brief success message, Medium);
+`"input placeholder label helper text"` (a visible label, never only a placeholder, High); `"long text overflow code
+horizontal scroll"` (wide content scrolls inside its own box, High); `--stack shadcn "tabs code block"` (shadcn `Tabs`
+with a set value). The onboarding, copy-button and OS-tab queries returned nothing specific.
+- **Page (`#/connect-claude`):** Settings' page shell (`max-w-3xl`, ghost "Library" back link, `font-heading` h1
+  "Connect Claude"), then `section`s labelled by their h2, in order: What Claude can do, What Claude receives, Your
+  system, PaperLab folder, Claude Desktop, Claude Code, Check PaperLab's side, If it doesn't work. Body copy is
+  `text-sm`; notes and help are `text-muted-foreground`.
+- **Your system:** a shadcn `Tabs` whose `TabsList` is labelled "Your system": macOS, Windows, Windows + WSL, Linux.
+  Preselected from `navigator.userAgentData.platform` or `navigator.platform` (`detectOs`); never guesses WSL. The tabs
+  switch what the sections below show, so there are no `TabsContent` panels (as in References' Cited / Citing).
+- **PaperLab folder:** an `Input` (`font-mono`, no spellcheck) named by its section heading (`aria-labelledby`), prefilled
+  from `GET /api/mcp/setup`. While blank: `text-xs` muted help "Paste the full path of your PaperLab folder." (Windows adds
+  "For example C:\Users\you\PaperLab."), and Claude Desktop and Claude Code say "The config appears here once the
+  PaperLab folder is filled in." / "The command appears here once …". A failed load shows `LoadError` with Retry.
+- **Code blocks:** a `pre` on `bg-muted`, `rounded-lg p-3 pr-24 font-mono text-xs leading-relaxed overflow-x-auto`, with
+  an outline `sm` "Copy" button (`Copy` icon) at its top right that reads "Copied" (`Check` icon) for 2 s. A refused copy
+  shows the reader's message in an `ErrorAlert` under the block. Inline paths and commands are `code` with
+  `rounded bg-muted px-1 py-0.5 font-mono text-[0.9em]`.
+- **Claude Desktop:** "Edit Claude Desktop's config file:", then three numbered steps. Step 1 names the file
+  (`configFileHint`) except on Linux, where the hint is the whole step. The config block follows; Linux adds a muted
+  line that Claude Desktop on Linux is a beta for Ubuntu 22.04+ and Debian 12+.
+- **Check PaperLab's side:** a muted line that this checks PaperLab, not Claude's config; "Check the server" is the
+  view's one primary button ("Checking…" and disabled while it runs). Success is a `role="status"` line with a
+  `CircleCheck` in `text-primary`; a failure is an `ErrorAlert` with the server's `detail`.
+- **Entry points:** an outline "Connect Claude" button (`Plug`) in the library header, before the Settings icon; and
+  Settings' last section, "Connect Claude", with one muted sentence and an outline "Open Connect Claude" link (`Plug`).
 
 ## Pre-delivery check (from ui-ux-pro-max Quick Reference §1–§3)
 

@@ -1,9 +1,9 @@
-import { ChartColumn, FileText, Settings } from 'lucide-react'
+import { ChartColumn, FileText, Plug, Settings } from 'lucide-react'
 import { usePapers, useUploadPapers } from '@/api/queries'
 import { ModeToggle } from '@/components/mode-toggle'
 import { fadeIn } from '@/components/motion'
 import { Button } from '@/components/ui/button'
-import { chartsHref, settingsHref } from '@/lib/route'
+import { chartsHref, connectClaudeHref, settingsHref } from '@/lib/route'
 import { cn } from '@/lib/utils'
 import { FindPapersButton } from '../discovery/FindPapersButton'
 import { WorkspaceSidebar } from '../workspaces/WorkspaceSidebar'
@@ -36,6 +36,12 @@ export function LibraryPage() {
           </Button>
           <FindPapersButton />
           <UploadPdfsButton isPending={upload.isPending} onUpload={(files) => upload.mutate(files)} />
+          <Button variant="outline" asChild>
+            <a href={connectClaudeHref}>
+              <Plug aria-hidden />
+              Connect Claude
+            </a>
+          </Button>
           <Button variant="outline" size="icon" asChild>
             <a href={settingsHref} aria-label="Settings">
               <Settings aria-hidden />
