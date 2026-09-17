@@ -1,0 +1,616 @@
+{
+  "offset": 40,
+  "data": [
+    {
+      "citedPaper": {
+        "paperId": "687bac2d3320083eb4530bf18bb8f8f721477600",
+        "title": "Recursive Deep Models for Semantic Compositionality Over a Sentiment Treebank",
+        "year": 2013,
+        "venue": "Conference on Empirical Methods in Natural Language Processing",
+        "authors": [
+          {
+            "name": "R. Socher"
+          },
+          {
+            "name": "Alex Perelygin"
+          },
+          {
+            "name": "Jean Wu"
+          },
+          {
+            "name": "Jason Chuang"
+          },
+          {
+            "name": "Christopher D. Manning"
+          },
+          {
+            "name": "A. Ng"
+          },
+          {
+            "name": "Christopher Potts"
+          }
+        ],
+        "externalIds": {
+          "ACL": "D13-1170",
+          "DBLP": "conf/emnlp/SocherPWCMNP13",
+          "MAG": "2251939518",
+          "DOI": "10.18653/v1/d13-1170",
+          "CorpusId": 990233
+        },
+        "openAccessPdf": {
+          "url": "https://aclanthology.org/D13-1170.pdf"
+        },
+        "citationCount": 9709
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "128cb6b891aee1b5df099acb48e2efecfcff689f",
+        "title": "The Winograd Schema Challenge",
+        "year": 2011,
+        "venue": "AAAI Spring Symposium: Logical Formalizations of Commonsense Reasoning",
+        "authors": [
+          {
+            "name": "H. Levesque"
+          },
+          {
+            "name": "E. Davis"
+          },
+          {
+            "name": "L. Morgenstern"
+          }
+        ],
+        "externalIds": {
+          "DBLP": "conf/aaaiss/Levesque11",
+          "MAG": "2267020232",
+          "CorpusId": 15710851
+        },
+        "openAccessPdf": {
+          "url": ""
+        },
+        "citationCount": 1594
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "8492070dc4031ed825e95e4803781752bb5e909f",
+        "title": "Word Representations: A Simple and General Method for Semi-Supervised Learning",
+        "year": 2010,
+        "venue": "Annual Meeting of the Association for Computational Linguistics",
+        "authors": [
+          {
+            "name": "Joseph P. Turian"
+          },
+          {
+            "name": "Lev-Arie Ratinov"
+          },
+          {
+            "name": "Yoshua Bengio"
+          }
+        ],
+        "externalIds": {
+          "ACL": "P10-1040",
+          "MAG": "2158139315",
+          "DBLP": "conf/acl/TurianRB10",
+          "CorpusId": 629094
+        },
+        "openAccessPdf": {
+          "url": ""
+        },
+        "citationCount": 2349
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "7be3afdb7b7894321027ec90ea0a990aa7a0f266",
+        "title": "Natural Language Understanding",
+        "year": 2009,
+        "venue": "New Trends in Software Methodologies, Tools and Techniques",
+        "authors": [
+          {
+            "name": "A. D. Di Sciullo"
+          }
+        ],
+        "externalIds": {
+          "MAG": "75593468",
+          "DBLP": "conf/somet/Sciullo09",
+          "DOI": "10.3233/978-1-60750-049-0-551",
+          "CorpusId": 28817116
+        },
+        "openAccessPdf": {
+          "url": ""
+        },
+        "citationCount": 578
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "d2c733e34d48784a37d717fe43d9e93277a8c53e",
+        "title": "ImageNet: A large-scale hierarchical image database",
+        "year": 2009,
+        "venue": "2009 IEEE Conference on Computer Vision and Pattern Recognition",
+        "authors": [
+          {
+            "name": "Jia Deng"
+          },
+          {
+            "name": "Wei Dong"
+          },
+          {
+            "name": "R. Socher"
+          },
+          {
+            "name": "Li-Jia Li"
+          },
+          {
+            "name": "K. Li"
+          },
+          {
+            "name": "Li Fei-Fei"
+          }
+        ],
+        "externalIds": {
+          "DBLP": "conf/cvpr/DengDSLL009",
+          "MAG": "2108598243",
+          "DOI": "10.1109/CVPR.2009.5206848",
+          "CorpusId": 57246310
+        },
+        "openAccessPdf": {
+          "url": "http://www.image-net.org/papers/imagenet_cvpr09.pdf"
+        },
+        "citationCount": 75992
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "a9fc84f8abe740cdc7ee82e69444d1d00dbe0ceb",
+        "title": "A Scalable Hierarchical Distributed Language Model",
+        "year": 2008,
+        "venue": "Neural Information Processing Systems",
+        "authors": [
+          {
+            "name": "A. Mnih"
+          },
+          {
+            "name": "Geoffrey E. Hinton"
+          }
+        ],
+        "externalIds": {
+          "DBLP": "conf/nips/MnihH08",
+          "MAG": "2131462252",
+          "CorpusId": 10097073
+        },
+        "openAccessPdf": {
+          "url": ""
+        },
+        "citationCount": 1026
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "57458bc1cffe5caa45a885af986d70f723f406b4",
+        "title": "A unified architecture for natural language processing: deep neural networks with multitask learning",
+        "year": 2008,
+        "venue": "International Conference on Machine Learning",
+        "authors": [
+          {
+            "name": "R. Collobert"
+          },
+          {
+            "name": "J. Weston"
+          }
+        ],
+        "externalIds": {
+          "MAG": "2117130368",
+          "DBLP": "conf/icml/CollobertW08",
+          "DOI": "10.1145/1390156.1390177",
+          "CorpusId": 2617020
+        },
+        "openAccessPdf": {
+          "url": ""
+        },
+        "citationCount": 6031
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "843959ffdccf31c6694d135fad07425924f785b1",
+        "title": "Extracting and composing robust features with denoising autoencoders",
+        "year": 2008,
+        "venue": "International Conference on Machine Learning",
+        "authors": [
+          {
+            "name": "Pascal Vincent"
+          },
+          {
+            "name": "H. Larochelle"
+          },
+          {
+            "name": "Yoshua Bengio"
+          },
+          {
+            "name": "Pierre-Antoine Manzagol"
+          }
+        ],
+        "externalIds": {
+          "MAG": "2025768430",
+          "DBLP": "conf/icml/VincentLBM08",
+          "DOI": "10.1145/1390156.1390294",
+          "CorpusId": 207168299
+        },
+        "openAccessPdf": {
+          "url": "http://www.iro.umontreal.ca/~vincentp/Publications/denoising_autoencoders_tr1316.pdf"
+        },
+        "citationCount": 8313
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "9fa8d73e572c3ca824a04a5f551b602a17831bc5",
+        "title": "Domain Adaptation with Structural Correspondence Learning",
+        "year": 2006,
+        "venue": "Conference on Empirical Methods in Natural Language Processing",
+        "authors": [
+          {
+            "name": "John Blitzer"
+          },
+          {
+            "name": "Ryan T. McDonald"
+          },
+          {
+            "name": "Fernando C Pereira"
+          }
+        ],
+        "externalIds": {
+          "DBLP": "conf/emnlp/BlitzerMP06",
+          "MAG": "2158108973",
+          "ACL": "W06-1615",
+          "DOI": "10.3115/1610075.1610094",
+          "CorpusId": 15978939
+        },
+        "openAccessPdf": {
+          "url": "https://dl.acm.org/doi/pdf/10.5555/1610075.1610094"
+        },
+        "citationCount": 1733
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "2c5135a0531bc5ad7dd890f018e67a40529f5bcb",
+        "title": "A Framework for Learning Predictive Structures from Multiple Tasks and Unlabeled Data",
+        "year": 2005,
+        "venue": "Journal of machine learning research",
+        "authors": [
+          {
+            "name": "R. Ando"
+          },
+          {
+            "name": "Tong Zhang"
+          }
+        ],
+        "externalIds": {
+          "DBLP": "journals/jmlr/AndoZ05",
+          "MAG": "2130903752",
+          "CorpusId": 13650160
+        },
+        "openAccessPdf": {
+          "url": ""
+        },
+        "citationCount": 1717
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "10f97f1fb4f5c2c8e6c44d4a33da46d331dd4aeb",
+        "title": "Introduction to the CoNLL-2003 Shared Task: Language-Independent Named Entity Recognition",
+        "year": 2003,
+        "venue": "Conference on Computational Natural Language Learning",
+        "authors": [
+          {
+            "name": "E. Tjong Kim Sang"
+          },
+          {
+            "name": "F. D. Meulder"
+          }
+        ],
+        "externalIds": {
+          "DBLP": "journals/corr/cs-CL-0306050",
+          "MAG": "2144578941",
+          "ACL": "W03-0419",
+          "ArXiv": "cs/0306050",
+          "DOI": "10.3115/1119176.1119195",
+          "CorpusId": 2470716
+        },
+        "openAccessPdf": {
+          "url": "https://dl.acm.org/doi/pdf/10.3115/1119176.1119195"
+        },
+        "citationCount": 4779
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "3de5d40b60742e3dfa86b19e7f660962298492af",
+        "title": "Class-Based n-gram Models of Natural Language",
+        "year": 1992,
+        "venue": "International Conference on Computational Logic",
+        "authors": [
+          {
+            "name": "P. Brown"
+          },
+          {
+            "name": "V. D. Della Pietra"
+          },
+          {
+            "name": "P. DeSouza"
+          },
+          {
+            "name": "Jenifer C. Lai"
+          },
+          {
+            "name": "R. Mercer"
+          }
+        ],
+        "externalIds": {
+          "ACL": "J92-4003",
+          "MAG": "2121227244",
+          "DBLP": "journals/coling/BrownPdLM92",
+          "CorpusId": 10986188
+        },
+        "openAccessPdf": {
+          "url": ""
+        },
+        "citationCount": 3684
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "766ce989b8b8b984f7a4691fd8c9af4bdb2b74cd",
+        "title": "“Cloze Procedure”: A New Tool for Measuring Readability",
+        "year": 1953,
+        "venue": "",
+        "authors": [
+          {
+            "name": "W. L. Taylor"
+          }
+        ],
+        "externalIds": {
+          "MAG": "2270070752",
+          "DOI": "10.1177/107769905303000401",
+          "CorpusId": 206666846
+        },
+        "openAccessPdf": {
+          "url": ""
+        },
+        "citationCount": 2650
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": null,
+        "title": "Improving language understanding with unsupervised learning",
+        "year": 2018,
+        "venue": "Technical report, OpenAI.",
+        "authors": [],
+        "externalIds": null,
+        "openAccessPdf": null,
+        "citationCount": null
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": null,
+        "title": "Corpus of linguistic acceptability",
+        "year": 2018,
+        "venue": "",
+        "authors": [],
+        "externalIds": null,
+        "openAccessPdf": null,
+        "citationCount": null
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "8ff46c88964a36985f2b45933a3d47b81bd87bd0",
+        "title": "Quora Question Pairs",
+        "year": 2017,
+        "venue": "",
+        "authors": [
+          {
+            "name": "Zihang Chen"
+          },
+          {
+            "name": "Hongbo Zhang"
+          },
+          {
+            "name": "Xiaoji Zhang"
+          },
+          {
+            "name": "Le Zhao"
+          }
+        ],
+        "externalIds": {
+          "CorpusId": 233225749
+        },
+        "openAccessPdf": {
+          "url": ""
+        },
+        "citationCount": 277
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": null,
+        "title": "2016) rather than the standard relu, following OpenAI GPT. The training loss is the sum of the mean masked LM likelihood and the mean next sentence prediction likelihood",
+        "year": 2016,
+        "venue": "",
+        "authors": [],
+        "externalIds": null,
+        "openAccessPdf": null,
+        "citationCount": null
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "0f8468de03ee9f12d693237bec87916311bf1c24",
+        "title": "The Seventh PASCAL Recognizing Textual Entailment Challenge",
+        "year": 2011,
+        "venue": "Text Analysis Conference",
+        "authors": [
+          {
+            "name": "L. Bentivogli"
+          },
+          {
+            "name": "Peter Clark"
+          },
+          {
+            "name": "Ido Dagan"
+          },
+          {
+            "name": "Danilo Giampiccolo"
+          }
+        ],
+        "externalIds": {
+          "MAG": "2396767181",
+          "DBLP": "conf/tac/BentivogliCDG11",
+          "CorpusId": 5791809
+        },
+        "openAccessPdf": {
+          "url": ""
+        },
+        "citationCount": 424
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "db8885a0037fe47d973ade79d696586453710233",
+        "title": "The Sixth PASCAL Recognizing Textual Entailment Challenge",
+        "year": 2009,
+        "venue": "Text Analysis Conference",
+        "authors": [
+          {
+            "name": "L. Bentivogli"
+          },
+          {
+            "name": "Peter Clark"
+          },
+          {
+            "name": "Ido Dagan"
+          },
+          {
+            "name": "Danilo Giampiccolo"
+          }
+        ],
+        "externalIds": {
+          "DBLP": "conf/tac/BentivogliCDG10",
+          "CorpusId": 858065
+        },
+        "openAccessPdf": {
+          "url": ""
+        },
+        "citationCount": 908
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "351ec42df2b60c6042addf96e6b98673bbaf4dfd",
+        "title": "The Fourth PASCAL Recognizing Textual Entailment Challenge",
+        "year": 2008,
+        "venue": "Text Analysis Conference",
+        "authors": [
+          {
+            "name": "Danilo Giampiccolo"
+          },
+          {
+            "name": "H. Dang"
+          },
+          {
+            "name": "B. Magnini"
+          },
+          {
+            "name": "Ido Dagan"
+          },
+          {
+            "name": "Elena Cabrio"
+          },
+          {
+            "name": "W. Dolan"
+          }
+        ],
+        "externalIds": {
+          "DBLP": "conf/tac/GiampiccoloDMDC08",
+          "CorpusId": 12381965
+        },
+        "openAccessPdf": {
+          "url": ""
+        },
+        "citationCount": 491
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "475354f10798f110d34792b6d88f31d6d5cb099e",
+        "title": "Automatically Constructing a Corpus of Sentential Paraphrases",
+        "year": 2005,
+        "venue": "International Joint Conference on Natural Language Processing",
+        "authors": [
+          {
+            "name": "W. Dolan"
+          },
+          {
+            "name": "Chris Brockett"
+          }
+        ],
+        "externalIds": {
+          "ACL": "I05-5002",
+          "DBLP": "conf/acl-iwp/DolanB05",
+          "MAG": "131533222",
+          "CorpusId": 16639476
+        },
+        "openAccessPdf": {
+          "url": ""
+        },
+        "citationCount": 2059
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": "e808f28d411a958c5db81ceb111beb2638698f47",
+        "title": "The PASCAL Recognising Textual Entailment Challenge",
+        "year": 2005,
+        "venue": "Machine Learning Challenges Workshop",
+        "authors": [
+          {
+            "name": "Ido Dagan"
+          },
+          {
+            "name": "Oren Glickman"
+          },
+          {
+            "name": "B. Magnini"
+          }
+        ],
+        "externalIds": {
+          "MAG": "111307969",
+          "DBLP": "conf/mlcw/DaganGM05",
+          "CorpusId": 8587959
+        },
+        "openAccessPdf": {
+          "url": ""
+        },
+        "citationCount": 2695
+      }
+    },
+    {
+      "citedPaper": {
+        "paperId": null,
+        "title": "We provide examples of the pre-training tasks in the following",
+        "year": null,
+        "venue": "",
+        "authors": [],
+        "externalIds": null,
+        "openAccessPdf": null,
+        "citationCount": null
+      }
+    }
+  ]
+}
