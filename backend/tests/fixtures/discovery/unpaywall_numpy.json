@@ -1,0 +1,25 @@
+{
+  "best_oa_location": {
+    "url_for_pdf": "https://www.nature.com/articles/s41586-020-2649-2.pdf"
+  },
+  "oa_locations": [
+    {
+      "url_for_pdf": "https://www.nature.com/articles/s41586-020-2649-2.pdf"
+    },
+    {
+      "url_for_pdf": null
+    },
+    {
+      "url_for_pdf": "https://arxiv.org/pdf/2006.10256"
+    },
+    {
+      "url_for_pdf": null
+    },
+    {
+      "url_for_pdf": null
+    },
+    {
+      "url_for_pdf": null
+    }
+  ]
+}

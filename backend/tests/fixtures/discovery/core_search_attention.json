@@ -1,0 +1,148 @@
+{
+  "results": [
+    {
+      "id": 42873602,
+      "title": "Attention Is All You Need",
+      "authors": [
+        {
+          "name": "Uszkoreit, Jakob"
+        },
+        {
+          "name": "Parmar, Niki"
+        },
+        {
+          "name": "Polosukhin, Illia"
+        },
+        {
+          "name": "Jones, Llion"
+        },
+        {
+          "name": "Vaswani, Ashish"
+        },
+        {
+          "name": "Shazeer, Noam"
+        },
+        {
+          "name": "Gomez, Aidan N."
+        },
+        {
+          "name": "Kaiser, Lukasz"
+        }
+      ],
+      "yearPublished": 2023,
+      "doi": null,
+      "arxivId": null,
+      "downloadUrl": "https://core.ac.uk/download/83868954.pdf",
+      "sourceFulltextUrls": [
+        "https://core.ac.uk/download/83868954.pdf"
+      ],
+      "citationCount": 0
+    },
+    {
+      "id": 144975462,
+      "title": "Attention Is All You Need",
+      "authors": [
+        {
+          "name": "Krönke, Christoph"
+        }
+      ],
+      "yearPublished": 2023,
+      "doi": "10.17176/20230414-190229-0",
+      "arxivId": null,
+      "downloadUrl": "",
+      "sourceFulltextUrls": [],
+      "citationCount": 0
+    },
+    {
+      "id": 391275825,
+      "title": "Attention Is All You Need",
+      "authors": [
+        {
+          "name": "Uszkoreit, Jakob"
+        },
+        {
+          "name": "Parmar, Niki"
+        },
+        {
+          "name": "Polosukhin, Illia"
+        },
+        {
+          "name": "Jones, Llion"
+        },
+        {
+          "name": "Vaswani, Ashish"
+        },
+        {
+          "name": "Shazeer, Noam"
+        },
+        {
+          "name": "Gomez, Aidan N."
+        },
+        {
+          "name": "Kaiser, Lukasz"
+        }
+      ],
+      "yearPublished": 2023,
+      "doi": null,
+      "arxivId": null,
+      "downloadUrl": "https://core.ac.uk/download/83868954.pdf",
+      "sourceFulltextUrls": [
+        "https://core.ac.uk/download/83868954.pdf"
+      ],
+      "citationCount": 0
+    },
+    {
+      "id": 375652236,
+      "title": "Attention is all you need",
+      "authors": [
+        {
+          "name": "Uszkoreit, Jakob"
+        },
+        {
+          "name": "Parmar, Niki"
+        },
+        {
+          "name": "Polosukhin, Illia"
+        },
+        {
+          "name": "Jones, Llion"
+        },
+        {
+          "name": "Vaswani, Ashish"
+        },
+        {
+          "name": "Shazeer, Noam"
+        },
+        {
+          "name": "Gomez, Aidan N."
+        },
+        {
+          "name": "Kaiser, Łukasz"
+        }
+      ],
+      "yearPublished": 2023,
+      "doi": null,
+      "arxivId": null,
+      "downloadUrl": "",
+      "sourceFulltextUrls": [],
+      "citationCount": 0
+    },
+    {
+      "id": 400983340,
+      "title": "Attention is All You Need Until You Need Retention",
+      "authors": [
+        {
+          "name": "Yaslioglu, M. Murat"
+        }
+      ],
+      "yearPublished": 2025,
+      "doi": null,
+      "arxivId": null,
+      "downloadUrl": "https://core.ac.uk/download/735829251.pdf",
+      "sourceFulltextUrls": [
+        "https://core.ac.uk/download/735829251.pdf"
+      ],
+      "citationCount": 0
+    }
+  ]
+}
