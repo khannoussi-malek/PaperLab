@@ -36,6 +36,11 @@ FETCH_STALE = timedelta(minutes=10)
 FETCH_FAILED = "Fetching references failed. Try again."
 REFERENCES_OFF = "Semantic Scholar is off. Turn it on in Settings → Paper sources to see references."
 REFERENCES_UNKNOWN = "Semantic Scholar doesn't know this paper, so it can't list its references."
+# Two papers' fetches can store the same new reference, or embed the same notes, at once: a unique violation or a
+# deadlock fails one of them. Storing and embedding take this transaction-scoped advisory lock first.
+# ponytail: one references write at a time across the library; per-reference locks if that ever matters.
+REFERENCES_LOCK = 7_500_001
+_TAKE_LOCK = text("SELECT pg_advisory_xact_lock(:key)")
 
 
 @dataclass(frozen=True)
@@ -119,6 +124,7 @@ async def fetch(session: AsyncSession, providers: discovery.Providers, paper: Pa
             found[source] = answer
     if not found:
         raise Conflict(" ".join(notices) if notices else REFERENCES_UNKNOWN if unknown else FETCH_FAILED)
+    await session.execute(_TAKE_LOCK, {"key": REFERENCES_LOCK})  # after the network calls: held until the commit
     for direction, cap in (("cites", REFS_CAP), ("cited_by", CITING_CAP)):
         # A record with no id at all (Semantic Scholar lists some) can't be matched, imported or co-cited: not stored.
         identified = {
@@ -250,6 +256,7 @@ async def set_state(session: AsyncSession, paper_id: uuid.UUID, state: str, erro
 
 async def embed_new(session: AsyncSession, embedder) -> None:
     """Vectors for reference titles and notes that have none, or were made by another model or before an edit."""
+    await session.execute(_TAKE_LOCK, {"key": REFERENCES_LOCK})
     model_name = settings.embed_model
     refs = (
         await session.execute(
