@@ -12,6 +12,7 @@ import {
   type NumberCreate,
   type NoteUpdate,
   type Paper,
+  type PaperSourcesUpdate,
   type PaperUpdate,
   type PromoteRequest,
 } from './client'
@@ -47,6 +48,7 @@ const keys = {
   connections: ['llm', 'connections'] as const,
   available: (connectionId: string) => ['llm', 'connections', connectionId, 'available'] as const,
   embedding: ['embedding'] as const,
+  paperSources: ['paper-sources'] as const,
   // Outside the papers key on purpose: refreshing the library must not re-ask OpenAlex or Semantic Scholar.
   discovery: ['discovery'] as const,
   search: (query: string) => ['discovery', 'search', query] as const,
@@ -408,6 +410,21 @@ export function useConnectionMutations() {
       onSuccess,
     }),
   }
+}
+
+export const usePaperSources = () => useQuery({ queryKey: keys.paperSources, queryFn: api.paperSources })
+
+/** Saves a switch, a key or the contact email. Which sources answer changes, so searches and suggestions ask again. */
+export function useUpdatePaperSources() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (patch: PaperSourcesUpdate) => api.updatePaperSources(patch),
+    onSuccess: () =>
+      Promise.all([
+        client.invalidateQueries({ queryKey: keys.paperSources }),
+        client.invalidateQueries({ queryKey: keys.discovery }),
+      ]),
+  })
 }
 
 /** Queues a re-embed of every paper; the status line refetches once it's queued. */

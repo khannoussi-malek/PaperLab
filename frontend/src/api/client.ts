@@ -46,6 +46,10 @@ export type PullDoneEvent = components['schemas']['PullDoneEvent']
 export type PullErrorEvent = components['schemas']['PullErrorEvent']
 export type EmbeddingStatus = components['schemas']['EmbeddingStatusOut']
 export type Candidate = components['schemas']['CandidateOut']
+export type PaperSources = components['schemas']['PaperSourcesOut']
+export type PaperSource = components['schemas']['PaperSourceOut']
+export type PaperSourceId = PaperSource['id']
+export type PaperSourcesUpdate = components['schemas']['PaperSourcesUpdate']
 
 /** Where a chat lives: the reader's paper, or a workspace. */
 export type ChatScope = { kind: 'paper' | 'workspace'; id: string }
@@ -185,4 +189,8 @@ export const api = {
     request<void>(`/api/llm/connections/${connectionId}/installed?name=${encodeURIComponent(name)}`, { method: 'DELETE' }),
   embeddingStatus: () => request<EmbeddingStatus>('/api/embedding'),
   reindexLibrary: () => request<{ papers: number }>('/api/embedding/reindex', sendJson('POST', { confirm: true })),
+  paperSources: () => request<PaperSources>('/api/paper-sources'),
+  /** Only what `patch` holds changes: a key left out is kept, a null key is removed. */
+  updatePaperSources: (patch: PaperSourcesUpdate) =>
+    request<PaperSources>('/api/paper-sources', sendJson('PATCH', patch)),
 }
