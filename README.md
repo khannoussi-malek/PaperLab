@@ -178,30 +178,20 @@ first start, `OPENALEX_MAILTO` and `SEMANTIC_SCHOLAR_API_KEY` from `.env` fill t
 
 ### Use PaperLab from Claude Desktop
 
-PaperLab includes an MCP server. Claude Desktop starts it inside the running `api` container, where it can read your
-PDFs, so the stack must be up (`docker compose up -d`). Restarting `api` ends the connection, and Claude Desktop needs
-a restart to connect again. In Claude Desktop, open **Settings → Developer → Edit Config** and add, with your own paths:
+PaperLab includes an MCP server. Claude Desktop, Claude Code or another MCP client starts it inside the running `api`
+container, where it can read your PDFs, so the stack must be up (`docker compose up -d`, in the PaperLab folder).
+Restarting `api` ends the connection, and Claude Desktop needs a restart to connect again.
 
-```json
-{
-  "mcpServers": {
-    "paperlab": {
-      "command": "/usr/local/bin/docker",
-      "args": ["compose", "-f", "/path/to/research-note/docker-compose.yml", "exec", "-T", "api", "python", "-m", "mcp_server"]
-    }
-  }
-}
-```
+Open PaperLab and click **Connect Claude** ([localhost:5180/#/connect-claude](http://localhost:5180/#/connect-claude)).
+It fills in the config or command for your system, and checks that PaperLab's side answers.
 
-Use the path `which docker` prints: Claude Desktop doesn't read your shell's `PATH`. For Claude Code, from the
-repository folder:
-
-```sh
-claude mcp add paperlab -- "$(which docker)" compose -f "$PWD/docker-compose.yml" exec -T api python -m mcp_server
-```
-
-Don't use `mcp install`: the entry it writes runs the server outside the container. After pulling changes, rebuild with
-`docker compose up -d --build` so the container has the server's dependencies.
+Without the app, use the full path of your PaperLab folder:
+- **macOS and Linux:** in Claude Desktop (**Settings → Developer → Edit Config**), give `mcpServers.paperlab` the
+  `"command": "<folder>/scripts/paperlab-mcp"`. For Claude Code: `claude mcp add paperlab -- '<folder>/scripts/paperlab-mcp'`.
+  The script finds docker even where Claude Desktop can't see your shell's `PATH`; if yours is installed somewhere
+  else, set `PAPERLAB_DOCKER` to its full path.
+- **Windows:** give `mcpServers.paperlab` the `"command": "docker"` and the
+  `"args": ["compose", "-f", "<folder>\\docker-compose.yml", "exec", "-T", "api", "python", "-m", "mcp_server"]`.
 
 The server has four tools:
 - `search_library`: passages closest to a question, in the whole library or one workspace;
@@ -209,7 +199,7 @@ The server has four tools:
 - `related_papers`: library papers connected to one, up to three links away;
 - `create_note`: a note on a passage it quotes exactly.
 
-The first search takes a few seconds while the embedding model loads.
+The first search takes about 30 seconds while the embedding model loads.
 
 ### Configuration
 
