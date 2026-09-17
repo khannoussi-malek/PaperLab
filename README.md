@@ -22,9 +22,17 @@ always marked as AI in the interface.
 </picture>
 
 - Upload PDFs. A background worker extracts the text, splits it into sections and chunks, and indexes it for search.
+- Find papers by title, DOI or arXiv ID with **Find papers**. It asks every paper source you turn on in
+**Settings → Paper sources** at once (arXiv, Crossref, CORE, Unpaywall and Semantic Scholar are free; OpenAlex can
+cost money and stays off until you tick it), shows one list with the sources that found each paper, and adds one in a
+click when a free PDF exists (arXiv, a repository or an open-access publisher). A paper with no free copy links to its
+page, so you can download it yourself. Nothing gets past a paywall.
+- Open a paper's **Similar** tab for papers like it, suggested by [Semantic Scholar](https://www.semanticscholar.org/),
+and add them the same way.
 - Hover a paper in the list to preview its first page and details.
-- Optionally fill in each paper's title, authors, year, venue and topics from [OpenAlex](https://openalex.org/), and
-correct any of them by hand with **Edit details**. Your corrections are kept when a paper is processed again.
+- With OpenAlex ticked in Settings, fill in each paper's title, authors, year, venue and topics from
+[OpenAlex](https://openalex.org/), and correct any of them by hand with **Edit details**. Your corrections are kept when
+a paper is processed again.
 - A retracted paper shows a banner at the top of the reader that can't be dismissed.
 - Manage models in **Settings**: add connections and keys, test them, choose which models chat lists and the
 default, pull and delete Ollama models with live progress. Keys stay in your local database and are never sent
@@ -101,7 +109,12 @@ the newest answer until you press ×.
 - **Local first.** One user, one machine, no accounts. Your PDFs, notes and search index live in a local Postgres
 database. With a local model (Ollama, LM Studio and other servers on your machine), the text of your papers and
 notes never leaves your computer; a model tagged "Cloud" receives the passages and notes sent with each question.
-Metadata lookups on OpenAlex are off unless you turn them on, and they send a paper's DOI or title, never its text.
+Metadata lookups on OpenAlex are off unless you tick OpenAlex, and they send a paper's DOI or title, never its text.
+Find papers sends what you type to every paper source that is on and can answer it, then the results' DOIs to Semantic
+Scholar and, for results without a free PDF, to Unpaywall. The Similar tab sends the paper's DOI, or its title when it
+has none. Your contact email goes to Crossref, Unpaywall and OpenAlex (when on), never to the others or to PDF hosts.
+API keys stay in your local database and are never sent back to the browser. Adding a paper downloads its PDF from the
+free link found. None of them send a paper's text.
 - **AI is always labelled.** AI text is stored separately from yours, keeps the model and prompt version that
 produced it, and shows an AI badge. Editing an AI note marks it "AI · edited", never "You".
 - **Answers show their sources.** Chat answers cite passages you can click, so you can check every claim against the paper.
@@ -142,8 +155,10 @@ HF_HUB_DOWNLOAD_TIMEOUT=60
 Real chats also need a model: `ollama pull qwen3:8b` on the host. While there are no model connections, the API
 creates one at startup from `LLM_PROVIDER` / `LLM_MODEL` in `.env`; after that, add and switch models in **Settings**.
 
-Metadata enrichment (fetching paper details from OpenAlex) is optional and off by default. Set `OPENALEX_MAILTO`
-in `.env` to turn it on; the value is sent to api.openalex.org as a `mailto` parameter on every request.
+Choose where Find papers looks in **Settings → Paper sources**: tick sources, add optional API keys and a contact
+email (Unpaywall needs one). OpenAlex, which also fills in paper details, is off until you tick it: it is free up to
+$0.10 of use a day without a key, or $1 a day with a free key from openalex.org, and more needs a paid plan there. On
+first start, `OPENALEX_MAILTO` and `SEMANTIC_SCHOLAR_API_KEY` from `.env` fill these settings in once.
 
 ### Configuration
 
@@ -157,7 +172,9 @@ Settings live in `.env`.
 | `OLLAMA_URL`                                                | `http://host.docker.internal:11434` | Seeds the first Ollama connection's address (the host, not Compose); change it in Settings afterwards                               |
 | `ANTHROPIC_API_KEY`                                         | none                                | Seeds an Anthropic connection when `LLM_PROVIDER=anthropic`; add keys in Settings afterwards                                        |
 | `ANTHROPIC_MAX_TOKENS`                                      | `64000`                             | The longest answer an Anthropic model may write                                                                                     |
-| `OPENALEX_MAILTO`                                           | empty (off)                         | Your email. Setting it turns on OpenAlex metadata; OpenAlex receives it with every request                                          |
+| `OPENALEX_MAILTO`                                           | empty (off)                         | Seeds Settings → Paper sources once, on first start: your contact email, with OpenAlex ticked. Change it in Settings afterwards     |
+| `SEMANTIC_SCHOLAR_API_KEY`                                  | empty                               | Seeds the Semantic Scholar key in Settings → Paper sources once, on first start. Change it in Settings afterwards                   |
+| `DISCOVERY_PROVIDER`                                        | `live`                              | `fake` answers Find papers and Similar with three fixed papers and no network (for tests)                                           |
 | `POSTGRES_PASSWORD`, `DATABASE_URL`, `REDIS_URL`, `PDF_DIR` | see `.env.example`                  | Database, queue and PDF storage                                                                                                     |
 
 

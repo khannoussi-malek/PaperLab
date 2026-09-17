@@ -5,6 +5,7 @@ import { fadeIn } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { chartsHref, settingsHref } from '@/lib/route'
 import { cn } from '@/lib/utils'
+import { FindPapersButton } from '../discovery/FindPapersButton'
 import { WorkspaceSidebar } from '../workspaces/WorkspaceSidebar'
 import { ErrorAlert, LoadError } from './ErrorAlert'
 import { PaperList } from './PaperList'
@@ -33,6 +34,7 @@ export function LibraryPage() {
               Charts
             </a>
           </Button>
+          <FindPapersButton />
           <UploadPdfsButton isPending={upload.isPending} onUpload={(files) => upload.mutate(files)} />
           <Button variant="outline" size="icon" asChild>
             <a href={settingsHref} aria-label="Settings">

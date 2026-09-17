@@ -403,6 +403,45 @@ before deleting; `search.py "progress bar long running download status" --domain
   in `title`) and an `icon-xs` ghost × named Stop following. Follow-ups are indented one level under their thread's
   first question (`ml-3 border-l border-glass-border pl-3`); workspace chat has no Follow up.
 
+## Paper sources
+
+- **Section:** "Paper sources" in Settings, between Model connections and Embedding model. It holds a muted intro line,
+  then the contact email, then one glass list (`divide-y divide-glass-border`, `ring-1 ring-glass-border`).
+- **Contact email:** a labelled `Input` with an outline Save, disabled while blank, unchanged or saving, and a ghost
+  Remove once an email is saved. It is checked on submit (`noValidate`), and the server's own message shows under the
+  field (`role="alert"`, `text-destructive`). Muted help says which sources receive it.
+- **Source row** (`.paper-source-row[data-source-id]`): a shadcn `Checkbox` linked to the source's name
+  (`font-heading`), which saves on change and is disabled while saving. Under it, indented past the checkbox: a muted
+  description; for OpenAlex, an outline "May cost money" badge (`CircleDollarSign`) and its price note; for Unpaywall
+  without an email, a muted `Info` note.
+- **API keys** (OpenAlex, Semantic Scholar, CORE): a password `Input` whose accessible name is "<Source> API key",
+  with an outline Save key. Once a key is saved, the row shows `Key ending in 1234` (`.key-hint`) and a ghost
+  destructive "Remove key" that asks first. A key is never shown back, and the field clears after saving.
+- **Errors:** a destructive `Alert` under the row or field whose save failed. Loading failures get Retry, as in
+  Embedding model.
+
+## Find papers
+
+Pattern from ui-ux-pro-max (`search.py "search results list with add button in modal dialog" --domain ux`): an empty
+result suggests what to try next (severity Medium). Its "autocomplete as you type" advice is declined on purpose: a
+search asks every paper source that is on, and OpenAlex costs money past a small daily allowance, so search runs on
+submit.
+- **Find papers:** an outline button (`Search`) beside Upload PDFs, in the library header and a workspace's Papers tab,
+  opens a shadcn `Dialog` (`sm:max-w-2xl`, glass like Add papers). One `Input` labelled "Title, DOI, arXiv ID or
+  OpenAlex ID" and a Search submit button, disabled and reading "Searching…" while a search runs. Results scroll inside
+  the dialog (`max-h-[60vh]`). Sources that failed while others answered show above the results in a non-destructive
+  glass `Alert` (`Info`, `role="status"`, `.search-notices`). An error that stops the search altogether is an
+  `ErrorAlert`.
+- **Candidate rows** (`CandidateList`, shared with the reader's Similar tab): the title (two lines, full text in
+  `title`), byline · citations, then the names of the sources that found it as small muted outline badges
+  (`ul.candidate-sources`, labelled "Found by"), and a `Badge`: secondary "PDF" when a free PDF is listed, outline "No
+  free PDF" otherwise. Then small buttons: Add (`Plus`; "Adding…" with a spinning `LoaderCircle`, disabled while it
+  runs) or an outline "In library" link to the reader, and a ghost "Open page" link (`ExternalLink`, new tab). A failed
+  add shows an `ErrorAlert` under its row, and the row keeps its Add button.
+- **Similar tab:** the reader's fourth tab, after Data. An `aside` labelled "Similar papers": a muted one-line
+  explanation, the candidate rows, and `LoadError` with Retry when Semantic Scholar refuses. It asks only once the tab
+  has been opened; suggestions stay fresh for an hour.
+
 ## Pre-delivery check (from ui-ux-pro-max Quick Reference §1–§3)
 
 Run through this before finishing any UI task, in **both** themes:

@@ -84,6 +84,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/papers/{paper_id}/similar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Similar Papers
+         * @description Papers like this one, from Semantic Scholar. 409 when it's off in Settings, doesn't know the paper or is busy.
+         */
+        get: operations["similar_papers_api_papers__paper_id__similar_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/papers/{paper_id}/chunks": {
         parameters: {
             query?: never;
@@ -775,10 +795,80 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/discovery/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search Papers
+         * @description Papers for a title, DOI, arXiv ID or OpenAlex ID from every paper source that is on, merged, each marked when
+         *     the library already holds it; `notices` name the sources that failed. 409 when no source that is on can look the
+         *     query up, or when every one that was asked failed.
+         */
+        get: operations["search_papers_api_discovery_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/discovery/add": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Paper
+         * @description Downloads the paper's first free PDF and ingests it like an upload. 404 for an unknown workspace (before any
+         *     download); 409 when the paper is already in the library or no free PDF is found.
+         */
+        post: operations["add_paper_api_discovery_add_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/paper-sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Paper Sources */
+        get: operations["get_paper_sources_api_paper_sources_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Paper Sources
+         * @description Only what's sent changes. 422 for a malformed email, an empty key, or a key for a source that takes none.
+         */
+        patch: operations["update_paper_sources_api_paper_sources_patch"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AddPaperRequest */
+        AddPaperRequest: {
+            candidate: components["schemas"]["CandidateIn"];
+            /** Workspace Id */
+            workspace_id?: string | null;
+        };
         /** AnchorIn */
         AnchorIn: {
             /**
@@ -855,6 +945,68 @@ export interface components {
             file: string;
             /** Workspace Id */
             workspace_id?: string | null;
+        };
+        /**
+         * CandidateIn
+         * @description A search result or suggestion sent back to be added. Extra fields (its `paper_id`, its `sources`) are ignored:
+         *     the library is checked again.
+         */
+        CandidateIn: {
+            /** Title */
+            title: string;
+            /** Authors */
+            authors?: string[];
+            /** Year */
+            year?: number | null;
+            /** Venue */
+            venue?: string | null;
+            /** Doi */
+            doi?: string | null;
+            /** Arxiv Id */
+            arxiv_id?: string | null;
+            /** Openalex Id */
+            openalex_id?: string | null;
+            /** S2 Id */
+            s2_id?: string | null;
+            /** Core Id */
+            core_id?: string | null;
+            /** Cited By Count */
+            cited_by_count?: number | null;
+            /** Pdf Urls */
+            pdf_urls?: string[];
+        };
+        /**
+         * CandidateOut
+         * @description A paper found outside the library. `sources` found it, most trusted first; `paper_id` is set when the library
+         *     already holds it.
+         */
+        CandidateOut: {
+            /** Title */
+            title: string;
+            /** Authors */
+            authors: string[];
+            /** Year */
+            year: number | null;
+            /** Venue */
+            venue: string | null;
+            /** Doi */
+            doi: string | null;
+            /** Arxiv Id */
+            arxiv_id: string | null;
+            /** Openalex Id */
+            openalex_id: string | null;
+            /** S2 Id */
+            s2_id: string | null;
+            /** Core Id */
+            core_id: string | null;
+            /** Cited By Count */
+            cited_by_count: number | null;
+            /** Pdf Urls */
+            pdf_urls: string[];
+            /** Sources */
+            sources: ("openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core" | "unpaywall")[];
+            /** Paper Id */
+            paper_id: string | null;
         };
         /** CellIn */
         CellIn: {
@@ -1624,6 +1776,42 @@ export interface components {
             workspace_ids: string[];
         };
         /**
+         * PaperSourceOut
+         * @description Never a key: `has_key` (null for a source that takes none) and `key_hint` (last 4 characters; null under 8).
+         */
+        PaperSourceOut: {
+            /**
+             * Id
+             * @enum {string}
+             */
+            id: "openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core" | "unpaywall";
+            /** Name */
+            name: string;
+            /** Enabled */
+            enabled: boolean;
+            /** Has Key */
+            has_key: boolean | null;
+            /** Key Hint */
+            key_hint: string | null;
+        };
+        /** PaperSourcesOut */
+        PaperSourcesOut: {
+            /** Contact Email */
+            contact_email: string | null;
+            /** Sources */
+            sources: components["schemas"]["PaperSourceOut"][];
+        };
+        /**
+         * PaperSourcesUpdate
+         * @description Only the fields sent change: a missing contact_email keeps it, null removes it.
+         */
+        PaperSourcesUpdate: {
+            /** Contact Email */
+            contact_email?: string | null;
+            enabled?: components["schemas"]["SourceSwitches"];
+            api_keys?: components["schemas"]["SourceKeys"];
+        };
+        /**
          * PaperUpdate
          * @description A manual correction. Only the fields sent change; null clears venue, doi, abstract or year.
          */
@@ -1831,6 +2019,16 @@ export interface components {
             cells: components["schemas"]["CellOut"][];
         };
         /**
+         * SearchOut
+         * @description `notices` name the sources that failed, whose results are missing.
+         */
+        SearchOut: {
+            /** Results */
+            results: components["schemas"]["CandidateOut"][];
+            /** Notices */
+            notices: string[];
+        };
+        /**
          * Series
          * @description One series: a y column (and x, z, error columns) from one dataset, optionally only some of its rows.
          */
@@ -1894,6 +2092,37 @@ export interface components {
             type: "bar" | "box" | "line" | "scatter" | "scatter3d";
             /** Series */
             series: components["schemas"]["Series"][];
+        };
+        /**
+         * SourceKeys
+         * @description A missing source keeps its key, null removes it. SecretStr keeps keys out of reprs and tracebacks; the key rules
+         *     are checked in core, whose messages never quote a key.
+         */
+        SourceKeys: {
+            /** Openalex */
+            openalex?: string | null;
+            /** Semantic Scholar */
+            semantic_scholar?: string | null;
+            /** Core */
+            core?: string | null;
+        };
+        /**
+         * SourceSwitches
+         * @description Only the sources sent change.
+         */
+        SourceSwitches: {
+            /** Openalex */
+            openalex?: boolean;
+            /** Crossref */
+            crossref?: boolean;
+            /** Semantic Scholar */
+            semantic_scholar?: boolean;
+            /** Arxiv */
+            arxiv?: boolean;
+            /** Core */
+            core?: boolean;
+            /** Unpaywall */
+            unpaywall?: boolean;
         };
         /** SourcesEvent */
         SourcesEvent: {
@@ -2208,6 +2437,37 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    similar_papers_api_papers__paper_id__similar_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                paper_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CandidateOut"][];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -3855,6 +4115,123 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReindexOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_papers_api_discovery_search_get: {
+        parameters: {
+            query: {
+                q: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_paper_api_discovery_add_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddPaperRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaperOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_paper_sources_api_paper_sources_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaperSourcesOut"];
+                };
+            };
+        };
+    };
+    update_paper_sources_api_paper_sources_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PaperSourcesUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaperSourcesOut"];
                 };
             };
             /** @description Validation Error */

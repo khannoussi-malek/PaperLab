@@ -74,3 +74,15 @@ async def test_set_status_records_error_and_fields(session, tmp_path):
     await session.refresh(paper)
 
     assert (paper.status, paper.status_error, paper.page_count) == ("failed", "boom", 7)
+
+
+async def test_create_paper_prefills_known_columns_over_the_placeholder_title(session, tmp_path):
+    paper = await papers.create_paper(
+        session,
+        "file-name.pdf",
+        PDF_BYTES,
+        tmp_path,
+        prefill={"title": "Real Title", "doi": "10.5555/m19-prefill", "year": 2020},
+    )
+
+    assert (paper.title, paper.doi, paper.year) == ("Real Title", "10.5555/m19-prefill", 2020)

@@ -7,9 +7,10 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from app.api import charts, chat, datasets, embedding, health, llm, notes, papers, workspaces
+from app.api import charts, chat, datasets, discovery, embedding, health, llm, notes, papers, workspaces
+from app.api import paper_sources as paper_sources_api
 from app.config import settings
-from app.core import llm_connections
+from app.core import llm_connections, paper_sources
 from app.core.errors import Conflict, DomainError, InvalidInput, NotFound
 from app.db import SessionLocal
 
@@ -23,6 +24,7 @@ async def lifespan(app: FastAPI):
         await llm_connections.seed_from_env(
             session, settings.llm_provider, settings.llm_model, settings.ollama_url, settings.anthropic_api_key
         )
+        await paper_sources.seed_from_env(session, settings.openalex_mailto, settings.semantic_scholar_api_key)
     yield
     await app.state.arq.aclose()
 
@@ -38,6 +40,8 @@ def create_app() -> FastAPI:
     app.include_router(charts.router)
     app.include_router(llm.router)
     app.include_router(embedding.router)
+    app.include_router(discovery.router)
+    app.include_router(paper_sources_api.router)
 
     @app.exception_handler(DomainError)
     async def domain_error(_: Request, exc: DomainError) -> JSONResponse:
