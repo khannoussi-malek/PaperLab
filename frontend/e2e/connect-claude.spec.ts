@@ -35,7 +35,7 @@ test('the Windows tab calls docker compose directly', async ({ page }) => {
 
   await expect(page.getByRole('region', { name: 'Claude Desktop' }).locator('pre')).toContainText('"command": "docker"')
   await expect(page.getByRole('region', { name: 'Claude Code' }).locator('pre')).toHaveText(
-    'claude mcp add paperlab -- docker compose -f "C:\\Users\\you\\PaperLab\\docker-compose.yml" exec -T api python -m mcp_server',
+    'claude mcp add -s user paperlab -- docker compose -f "C:\\Users\\you\\PaperLab\\docker-compose.yml" exec -T api python -m mcp_server',
   )
 })
 
@@ -45,8 +45,9 @@ test('Check the server starts the MCP server and lists its four tools', async ({
 
   await section.getByRole('button', { name: 'Check the server' }).click()
 
-  // A real `python -m mcp_server` in the api container: a second or two, more under a parallel run.
-  await expect(section.getByRole('status')).toHaveText(FOUR_TOOLS, { timeout: 30_000 })
+  // A real `python -m mcp_server` in the api container: a second or two, more under a parallel run. A cold check
+  // measured 29 s once, and the first run after a container recreate is a coin flip.
+  await expect(section.getByRole('status')).toHaveText(FOUR_TOOLS, { timeout: 45_000 })
 })
 
 test('a failed check shows why', async ({ page }) => {
