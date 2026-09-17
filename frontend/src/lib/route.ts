@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 
-export type ReaderTab = 'notes' | 'chat' | 'data' | 'similar'
+export type ReaderTab = 'notes' | 'chat' | 'data' | 'similar' | 'references'
 export type WorkspaceTab = 'papers' | 'notes' | 'chat'
 export type Rect = [number, number, number, number]
 /** A grid cell to scroll to and focus once, when a chart point of data typed in is opened. */
@@ -78,7 +78,7 @@ export function parseRoute(hash: string): Route {
   if (match[1] === 'workspaces') {
     return { name: 'workspace', workspaceId: match[2], tab: tab === 'notes' || tab === 'chat' ? tab : 'papers' }
   }
-  const readerTab = tab === 'chat' || tab === 'data' || tab === 'similar' ? tab : 'notes'
+  const readerTab = tab === 'chat' || tab === 'data' || tab === 'similar' || tab === 'references' ? tab : 'notes'
   return { name: 'reader', paperId: match[2], tab: readerTab, target: readerTarget(params) }
 }
 

@@ -27,9 +27,11 @@ describe('parseRoute', () => {
     expect(parseRoute(readerHref(id, 'chat'))).toEqual({ name: 'reader', paperId: id, tab: 'chat', target: null })
   })
 
-  it('keeps the Similar tab in the hash', () => {
+  it('keeps the Similar and References tabs in the hash', () => {
     expect(readerHref(id, 'similar')).toBe(`#/papers/${id}?tab=similar`)
     expect(parseRoute(readerHref(id, 'similar'))).toEqual({ name: 'reader', paperId: id, tab: 'similar', target: null })
+    expect(readerHref(id, 'references')).toBe(`#/papers/${id}?tab=references`)
+    expect(parseRoute(readerHref(id, 'references'))).toEqual({ name: 'reader', paperId: id, tab: 'references', target: null })
   })
 
   it('treats an unknown tab as Notes', () => {
