@@ -15,8 +15,8 @@ pytestmark = pytest.mark.anyio
 async def fake_providers(session):
     # An E2E run killed mid-test can leave the fake's papers in the shared dev database (D15); hide them here.
     await session.execute(delete(Paper).where(Paper.doi.like(f"{discovery_fake.DOI_PREFIX}%")))
-    m19_sources = SourceSettings(enabled={source: source in ("openalex", "semantic_scholar") for source in SOURCES})
-    providers = discovery.build_providers(m19_sources, discovery_fake.transport())
+    every_source = SourceSettings(contact_email=discovery_fake.MAILTO, enabled=dict.fromkeys(SOURCES, True))
+    providers = discovery.build_providers(every_source, discovery_fake.transport())
     yield providers
     await providers.aclose()
 
@@ -26,9 +26,23 @@ async def test_the_e2e_fake_finds_three_papers_and_suggests_the_same_three(sessi
     suggested = await discovery.similar(session, fake_providers, Paper(title="A reader's paper", file_path="/x.pdf"))
 
     titles = [discovery_fake.FREE_TITLE, discovery_fake.LANDING_TITLE, discovery_fake.CLOSED_TITLE]
-    assert [c.title for c in found.results] == titles
+    assert ([c.title for c in found.results], found.notices) == (titles, [])
     assert [c.title for c in suggested] == titles
+    assert [c.sources for c in found.results] == [
+        ("openalex", "crossref", "arxiv", "core"), ("openalex", "crossref"), ("openalex", "crossref")
+    ]  # fmt: skip
     assert [bool(c.pdf_urls) for c in found.results] == [True, True, False]
+
+
+async def test_with_openalex_off_as_on_the_e2e_stack_the_badges_are_m19s(session):
+    defaults = SourceSettings(contact_email=discovery_fake.MAILTO)
+    providers = discovery.build_providers(defaults, discovery_fake.transport())
+
+    found = await discovery.search(session, providers, "anything")
+    await providers.aclose()
+
+    assert [c.sources for c in found.results] == [("crossref", "arxiv", "core"), ("crossref",), ("crossref",)]
+    assert [bool(c.pdf_urls) for c in found.results] == [True, True, False]  # the landing page's link from Unpaywall
 
 
 async def test_the_e2e_fakes_free_paper_downloads_a_pdf_extraction_can_title(session, fake_providers, pdf_dir):
