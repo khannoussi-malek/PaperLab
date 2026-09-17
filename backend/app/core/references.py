@@ -11,6 +11,7 @@ import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import httpx
 from sqlalchemy import delete, func, insert, or_, select, text, update
@@ -19,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.core import discovery, papers
 from app.core.candidates import Candidate, from_s2, from_work, merge, ordered_pdf_urls
-from app.core.errors import Conflict
+from app.core.errors import Conflict, NotFound
 from app.models import ExternalRef, Note, NoteEmbedding, Paper, paper_references
 from app.providers import embedding, openalex, semantic_scholar
 
@@ -331,3 +332,27 @@ def summarize(rows: Sequence[ReferenceRow]) -> Summary:
         cited_by_3plus=sum(row.cocitation >= CO_CITATION_SUMMARY for row in rows),
         with_pdf=sum(row.has_pdf for row in rows),
     )
+
+
+# --- import ------------------------------------------------------------------------------------------------------
+
+
+async def import_reference(
+    session: AsyncSession, providers: discovery.Providers, ref_id: uuid.UUID, pdf_dir: Path
+) -> Paper:
+    """Downloads the reference's first free PDF and creates the paper, as Find papers' Add does (D84). The caller
+    enqueues ingest. The new paper's own references are not fetched (P5)."""
+    ref = await session.get(ExternalRef, ref_id)
+    if ref is None:
+        raise NotFound(f"reference {ref_id} not found")
+    if ref.imported_as is not None:
+        raise Conflict(discovery.ALREADY_IN_LIBRARY)
+    candidate = Candidate(
+        title=ref.title, authors=ref.authors, year=ref.year, venue=ref.venue, doi=ref.doi, arxiv_id=ref.arxiv_id,
+        openalex_id=ref.openalex_id, s2_id=ref.s2_id, cited_by_count=ref.cited_by_count, pdf_urls=ref.pdf_urls,
+    )  # fmt: skip
+    paper = await discovery.add(session, providers, candidate, pdf_dir)
+    same_paper = [ExternalRef.id == ref_id, *_same_reference(None, None, ref.doi, ref.arxiv_id)]
+    await session.execute(update(ExternalRef).where(or_(*same_paper)).values(imported_as=paper.id))
+    await session.commit()
+    return paper
