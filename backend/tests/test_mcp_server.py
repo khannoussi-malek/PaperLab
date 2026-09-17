@@ -1,0 +1,160 @@
+"""The MCP tools through an in-process client, against the real database in the test's transaction (roadmap M6)."""
+
+import uuid
+from contextlib import asynccontextmanager
+
+import pytest
+from mcp import Client
+from pdf_papers import TWO_LINE_QUOTE, chunked_paper
+
+from app.core import workspaces
+from app.models import LLMOutput, Note
+from app.providers import embedding
+from mcp_server import server
+
+pytestmark = pytest.mark.anyio
+
+RUN = uuid.uuid4().hex[:8]  # the owner's workspaces share the dev database (D37)
+
+
+@pytest.fixture(autouse=True)
+def tools_use_the_test_session(session, embedder, monkeypatch):
+    """Each tool opens `server.sessions()`: give it this test's rolled-back session, and a fake query embedder."""
+
+    @asynccontextmanager
+    async def test_session():
+        yield session
+
+    monkeypatch.setattr(server, "sessions", test_session)
+    monkeypatch.setattr(embedding, "get_model", lambda: embedder)
+
+
+async def call(tool: str, **arguments):
+    async with Client(server.mcp) as client:
+        return await client.call_tool(tool, arguments)
+
+
+async def test_the_four_tools_and_which_of_them_only_read():
+    async with Client(server.mcp) as client:
+        tools = {tool.name: tool for tool in (await client.list_tools()).tools}
+
+    assert sorted(tools) == ["create_note", "get_paper", "related_papers", "search_library"]
+    assert {name: tool.annotations and tool.annotations.read_only_hint for name, tool in tools.items()} == {
+        "search_library": True, "get_paper": True, "related_papers": True, "create_note": None
+    }
+    assert all(tool.output_schema for tool in tools.values())
+
+
+async def test_search_library_returns_ids_and_structure_not_prose(session, tmp_path, embedder):
+    paper, chunks, vectors = await chunked_paper(session, tmp_path, title="Searched paper")
+    workspace = await workspaces.create(session, f"MCP search {RUN}")
+    await workspaces.add_paper(session, workspace.id, paper.id)
+    embedder.vectors["search_query: how are notes anchored?"] = vectors[0]
+
+    result = await call("search_library", query="how are notes anchored?", workspace=f"MCP search {RUN}")
+
+    assert not result.is_error, result.content
+    passages = result.structured_content["result"]
+    assert [p["chunk_id"] for p in passages] == [str(chunks[0].id), str(chunks[1].id)]
+    assert passages[0] == {
+        "chunk_id": str(chunks[0].id),
+        "paper_id": str(paper.id),
+        "paper_title": "Searched paper",
+        "year": None,
+        "page": 1,
+        "section": "1 Introduction",
+        "text": chunks[0].text,
+        "distance": 0.0,
+    }
+
+
+async def test_an_unknown_workspace_answers_with_the_real_names(session):
+    await workspaces.create(session, f"MCP thesis {RUN}")
+
+    result = await call("search_library", query="anything", workspace="No such workspace")
+
+    names = [view.name for view in await workspaces.list_workspaces(session)]
+    assert result.is_error
+    assert result.structured_content == {"error": "unknown_workspace", "available": names}
+    assert f"MCP thesis {RUN}" in names
+
+
+async def test_create_note_places_the_quote_and_stores_an_llm_note(session, tmp_path):
+    paper, chunks, _ = await chunked_paper(session, tmp_path)
+
+    result = await call(
+        "create_note", body="Claims can be checked.", paper_id=str(paper.id), quoted_text=TWO_LINE_QUOTE
+    )
+
+    assert not result.is_error, result.content
+    note = result.structured_content
+    [anchor] = note["anchors"]
+    assert (note["provenance"], anchor["page"], anchor["quoted_text"]) == ("llm", 1, TWO_LINE_QUOTE)
+    assert len(anchor["bbox"]) == 2 and anchor["bbox"][0] != chunks[0].bbox[1]  # the quoted lines, not the paragraph
+    stored = await session.get(Note, uuid.UUID(note["id"]))
+    output = await session.get(LLMOutput, stored.source_id)
+    assert (stored.provenance, output.kind, output.content) == ("llm", "mcp", "Claims can be checked.")
+
+
+async def test_a_quote_that_is_not_in_the_paper_is_a_recoverable_error(session, tmp_path):
+    paper, _, _ = await chunked_paper(session, tmp_path)
+
+    result = await call("create_note", body="n", paper_id=str(paper.id), quoted_text="Words this paper never uses.")
+
+    assert result.is_error
+    assert result.structured_content["error"] == "quote_not_found"
+    assert result.structured_content["hint"]
+    assert '"quote_not_found"' in result.content[0].text  # clients that only read text see the same error
+
+
+@pytest.mark.parametrize(
+    ("tool", "arguments"),
+    [
+        ("get_paper", {}),
+        ("related_papers", {"hops": 2}),
+        ("create_note", {"body": "b", "quoted_text": "q"}),
+    ],
+)
+async def test_unknown_paper_ids_are_recoverable_errors(tool, arguments):
+    unknown = uuid.uuid4()
+
+    result = await call(tool, paper_id=str(unknown), **arguments)
+
+    assert result.is_error
+    assert result.structured_content == {"error": "not_found", "detail": f"paper {unknown} not found"}
+
+
+async def test_a_malformed_paper_id_is_refused_by_argument_validation():
+    result = await call("get_paper", paper_id="not-a-uuid")
+
+    assert result.is_error and "paper_id" in result.content[0].text
+
+
+async def test_get_paper_sends_every_note_with_its_provenance(session, tmp_path):
+    paper, _, _ = await chunked_paper(session, tmp_path, title="Carded paper")
+    await call("create_note", body="Claims can be checked.", paper_id=str(paper.id), quoted_text=TWO_LINE_QUOTE)
+
+    card = (await call("get_paper", paper_id=str(paper.id))).structured_content
+
+    assert (card["title"], [s["title"] for s in card["sections"]]) == ("Carded paper", ["1 Introduction", "2 Method"])
+    assert [(n["provenance"], n["body"], n["page"]) for n in card["notes"]] == [("llm", "Claims can be checked.", 1)]
+
+
+async def test_related_papers_respects_hops(session, tmp_path):
+    first, _, _ = await chunked_paper(session, tmp_path / "a", title="First")
+    second, _, _ = await chunked_paper(session, tmp_path / "b", title="Second")
+    third, _, _ = await chunked_paper(session, tmp_path / "c", title="Third")
+    for name, pair in [(f"MCP ab {RUN}", (first, second)), (f"MCP bc {RUN}", (second, third))]:
+        workspace = await workspaces.create(session, name)
+        for paper in pair:
+            await workspaces.add_paper(session, workspace.id, paper.id)
+
+    one = await call("related_papers", paper_id=str(first.id), hops=1)
+    two = await call("related_papers", paper_id=str(first.id), hops=2)
+    too_far = await call("related_papers", paper_id=str(first.id), hops=4)
+
+    assert [(r["title"], r["hops"], r["via"]) for r in one.structured_content["result"]] == [
+        ("Second", 1, ["same_workspace"])
+    ]
+    assert [(r["title"], r["hops"]) for r in two.structured_content["result"]] == [("Second", 1), ("Third", 2)]
+    assert too_far.is_error and too_far.structured_content == {"error": "hops_out_of_range", "allowed": [1, 3]}
