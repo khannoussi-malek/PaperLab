@@ -102,6 +102,14 @@ used, never its own earlier answers. Follow-ups stay under the first question, a
 the newest answer until you press ×.
 - Select part of an answer and click **Save as note**. The note is anchored on the passage it cites and marked AI.
 
+**Use your library from Claude Desktop**
+
+- Connect Claude Desktop, Claude Code or another MCP client to PaperLab
+([how](#use-paperlab-from-claude-desktop)). It can search your papers, read a paper's details, outline and notes, find
+the papers in your library connected to one (a shared workspace, note, author or topic, or a citation), and save a note
+on a passage it quotes.
+- A note it saves is marked AI, like a note saved from chat, and is highlighted on the lines it quoted.
+
 
 
 ## Principles
@@ -115,6 +123,8 @@ Scholar and, for results without a free PDF, to Unpaywall. The Similar tab sends
 has none. Your contact email goes to Crossref, Unpaywall and OpenAlex (when on), never to the others or to PDF hosts.
 API keys stay in your local database and are never sent back to the browser. Adding a paper downloads its PDF from the
 free link found. None of them send a paper's text.
+An MCP client you connect, such as Claude Desktop, receives what its tools return: passages from your papers, paper
+details, and every note on a paper marked as yours or AI. With a cloud model, that text leaves your computer.
 - **AI is always labelled.** AI text is stored separately from yours, keeps the model and prompt version that
 produced it, and shows an AI badge. Editing an AI note marks it "AI · edited", never "You".
 - **Answers show their sources.** Chat answers cite passages you can click, so you can check every claim against the paper.
@@ -159,6 +169,41 @@ Choose where Find papers looks in **Settings → Paper sources**: tick sources, 
 email (Unpaywall needs one). OpenAlex, which also fills in paper details, is off until you tick it: it is free up to
 $0.10 of use a day without a key, or $1 a day with a free key from openalex.org, and more needs a paid plan there. On
 first start, `OPENALEX_MAILTO` and `SEMANTIC_SCHOLAR_API_KEY` from `.env` fill these settings in once.
+
+### Use PaperLab from Claude Desktop
+
+PaperLab includes an MCP server. Claude Desktop starts it inside the running `api` container, where it can read your
+PDFs, so the stack must be up (`docker compose up -d`). Restarting `api` disconnects it until Claude Desktop
+reconnects. In Claude Desktop, open **Settings → Developer → Edit Config** and add, with your own paths:
+
+```json
+{
+  "mcpServers": {
+    "paperlab": {
+      "command": "/usr/local/bin/docker",
+      "args": ["compose", "-f", "/path/to/research-note/docker-compose.yml", "exec", "-T", "api", "python", "-m", "mcp_server"]
+    }
+  }
+}
+```
+
+Use the path `which docker` prints: Claude Desktop doesn't read your shell's `PATH`. For Claude Code, from the
+repository folder:
+
+```sh
+claude mcp add paperlab -- "$(which docker)" compose -f "$PWD/docker-compose.yml" exec -T api python -m mcp_server
+```
+
+Don't use `mcp install`: the entry it writes runs the server outside the container. After pulling changes, rebuild with
+`docker compose up -d --build` so the container has the server's dependencies.
+
+The server has four tools:
+- `search_library`: passages closest to a question, in the whole library or one workspace;
+- `get_paper`: a paper's details, section outline, workspaces and every note with who wrote it;
+- `related_papers`: library papers connected to one, up to three links away;
+- `create_note`: a note on a passage it quotes exactly.
+
+The first search takes a few seconds while the embedding model loads.
 
 ### Configuration
 
@@ -209,6 +254,7 @@ backend/
   app/core/        domain logic: chunking, retrieval, chat, note provenance rules
   app/providers/   PDF extraction, embeddings, OpenAlex, LLM adapters (Ollama, Anthropic, OpenAI-compatible, fake), Ollama pull/delete
   app/workers/     the ARQ ingestion job
+  mcp_server/      the MCP server Claude Desktop starts: search, papers, related papers, notes
   prompts/         versioned prompts
   evals/           retrieval eval: recall@k over questions.yaml
 frontend/
