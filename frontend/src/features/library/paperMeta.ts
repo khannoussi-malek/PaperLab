@@ -15,6 +15,19 @@ export const pageCountLabel = (count: number | null): string =>
 export const byline = (paper: Pick<Paper, 'authors' | 'year' | 'venue'>): string =>
   [shortAuthors(paper.authors), paper.year, paper.venue].filter(Boolean).join(' · ')
 
+/** Lower-case words with accents and punctuation dropped, so "muller" finds "Müller" and "pre-training" is two words. */
+const wordsOf = (text: string): string[] =>
+  text.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean)
+
+/**
+ * True when every word of `query` starts a word of the title, an author, the year or the venue: "train" finds
+ * "training", but "ai" doesn't. A blank query matches all.
+ */
+export function matchesPaper(paper: Pick<Paper, 'title' | 'authors' | 'year' | 'venue'>, query: string): boolean {
+  const words = wordsOf([paper.title, ...paper.authors, paper.year, paper.venue].join(' '))
+  return wordsOf(query).every((part) => words.some((word) => word.startsWith(part)))
+}
+
 /**
  * A paper's short name where an answer cites several papers, by the backend's source_label rule, so it matches the
  * prompt the model saw: "Karpukhin 2020", "Karpukhin" without a year, or the title cut to 24 characters when no author

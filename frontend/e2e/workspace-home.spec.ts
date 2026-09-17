@@ -12,6 +12,21 @@ test('a failed load of the workspace Papers tab can be retried', async ({ page, 
   await expect(page.getByText(EMPTY)).toBeVisible()
 })
 
+test('the search box on the Papers tab narrows the workspace list', async ({ page, request, paperId, workspaceId }) => {
+  expect((await request.put(`/api/workspaces/${workspaceId}/papers/${paperId}`)).ok()).toBe(true)
+  await page.goto(`/#/workspaces/${workspaceId}`)
+  const row = page.locator(`.paper-row a[href="#/papers/${paperId}"]`)
+  await expect(row).toBeVisible()
+
+  const search = page.getByRole('searchbox', { name: 'Search papers' })
+  await search.fill('no paper is called this')
+  await expect(row).toHaveCount(0)
+  await expect(page.getByText('No papers match “no paper is called this”')).toBeVisible()
+
+  await search.fill('e2e fixture')
+  await expect(row).toBeVisible()
+})
+
 test("add two library papers to a workspace, see both papers' notes, and open one focused in the reader", async ({
   page,
   request,
