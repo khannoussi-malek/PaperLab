@@ -93,7 +93,7 @@ export function PaperSourceRow({ source, hasEmail }: Props) {
               <Input
                 id={keyId}
                 type="password"
-                autoComplete="off"
+                autoComplete="new-password"
                 placeholder="Optional"
                 className="max-w-xs"
                 value={key}
