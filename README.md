@@ -291,3 +291,18 @@ don't restart the API while it runs.
 - **UI changes** follow `frontend/design-system/MASTER.md`: shadcn/ui components, Tailwind tokens, both themes, and the  
 stable test hooks listed there.
 
+
+
+## Contributing
+
+PaperLab is [Apache-2.0](LICENSE) and open to contributions.
+
+The most useful ten minutes you can spend needs no application code: add a question from your field to
+`backend/evals/questions.yaml`. The retrieval eval currently covers two machine-learning papers, so it says nothing
+about how PaperLab behaves on a clinical trial, a legal corpus, or an economics paper with three tables and no
+abstract. One entry changes that, and every later change to chunking or retrieval gets checked against your field.
+
+[CONTRIBUTING.md](CONTRIBUTING.md) has the rest: how to run the stack, which tests to run, and the four rules a pull
+request can't break. Issues labelled
+[`good first issue`](https://github.com/khannoussi-malek/PaperLab/labels/good%20first%20issue) and
+[`paper-source`](https://github.com/khannoussi-malek/PaperLab/labels/paper-source) are where to start.
