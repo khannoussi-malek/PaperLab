@@ -66,6 +66,7 @@ export function ReferencesTab({ paperId, active, workspaceId }: { paperId: strin
           <Button variant="outline" className="self-start" disabled={refresh.isPending} onClick={() => refresh.mutate()}>
             Try again
           </Button>
+          {refresh.error && <ErrorAlert message={refresh.error.message} />}
         </>
       )}
 
@@ -78,6 +79,7 @@ export function ReferencesTab({ paperId, active, workspaceId }: { paperId: strin
               Refresh
             </Button>
           </div>
+          {refresh.error && <ErrorAlert message={refresh.error.message} />}
           {data.rows.length === 0 ? (
             <p className="text-muted-foreground">This paper's sources list no references.</p>
           ) : (

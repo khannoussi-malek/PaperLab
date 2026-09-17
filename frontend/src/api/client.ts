@@ -54,6 +54,7 @@ export type PaperSourcesUpdate = components['schemas']['PaperSourcesUpdate']
 export type References = components['schemas']['ReferencesOut']
 export type Reference = components['schemas']['ReferenceOut']
 export type ReferencesDirection = References['direction']
+export type RefreshOut = components['schemas']['RefreshOut']
 
 /** Where a chat lives: the reader's paper, or a workspace. */
 export type ChatScope = { kind: 'paper' | 'workspace'; id: string }
@@ -202,7 +203,7 @@ export const api = {
     request<References>(`/api/papers/${paperId}/references?direction=${direction}`),
   /** Queues a fetch of both directions; a second call while already fetching is a no-op. */
   refreshReferences: (paperId: string) =>
-    request<{ state: References['state'] }>(`/api/papers/${paperId}/references/refresh`, { method: 'POST' }),
+    request<RefreshOut>(`/api/papers/${paperId}/references/refresh`, { method: 'POST' }),
   /** Downloads a reference's free PDF into the library; with a `workspaceId` it also joins that workspace. */
   importReference: (refId: string, workspaceId?: string) =>
     request<Paper>(`/api/references/${refId}/import`, sendJson('POST', { workspace_id: workspaceId ?? null })),

@@ -114,7 +114,8 @@ Fonts: body `Atkinson Hyperlegible Next Variable` (`font-sans`), headings `Crims
   model" / "Search or type a model name" / "Default model" / "Remove <name> from chat" / "Delete <name> from disk" /
   "Model to pull" / "Pull" / "Pulling <name>" / "Kind" / "Preset" / "Name" / "Base URL" / "API key" / "Replace key" /
   "Remove key" / "Save connection" / "Model" / "Manage models…" / "Set up a model" / "Open settings" / "Embedding
-  model" / "Re-index library" / "Re-index the library?" / "Re-index".
+  model" / "Re-index library" / "Re-index the library?" / "Re-index". Also `.reference-row`, `.references-summary`
+  and `.reference-list`.
   Style with utility classes next to them.
 - **Notes filter.** The top of the Notes tab has two filter chips in a `role="group"` "Show notes from": `aria-pressed`
   rounded-full buttons "You" and "AI", each with a count (`tabular-nums`). On: filled in the provenance badge's colours
@@ -441,6 +442,37 @@ submit.
 - **Similar tab:** the reader's fourth tab, after Data. An `aside` labelled "Similar papers": a muted one-line
   explanation, the candidate rows, and `LoadError` with Retry when Semantic Scholar refuses. It asks only once the tab
   has been opened; suggestions stay fresh for an hour.
+
+## References
+
+- **References:** the reader's fifth tab, after Similar. An `aside` labelled "References": a muted one-line
+  explanation ("What this paper cites, and what has cited it since — ranked for your library."), a compact **Cited** /
+  **Citing** switch (shadcn `Tabs`, default variant — already compact at `h-8`, no separate size needed), the
+  summary line (`.references-summary`), then the rows. It asks Semantic Scholar (and OpenAlex, when on) only once the
+  tab has been opened, like Similar — and opening it for the first time also queues the fetch (D78): a paper that has
+  never been fetched goes straight to the `fetching` state, no button to click.
+- **Rows** (`.reference-row`, in a `.reference-list`): reuses `CandidateList`'s row shape — title (two lines, full
+  text in `title`), byline · year · citations, a **Cited by N of your papers** outline badge once 2 or more of the
+  reader's own papers cite it (never at 0 or 1: the paper being read always "cites" its own references, so 1 means
+  no co-citation yet), and the same secondary "PDF" / outline "No free PDF" badge as Find papers. Actions: primary
+  **Import** (`Plus`; "Importing…" with a spinning `LoaderCircle`, disabled while it runs), or an outline
+  **In library** link to the reader once it is; a ghost **Open page** link (`ExternalLink`, new tab) whenever the
+  reference has an identifier to link to (`pageLink`, reused from Find papers), shown alongside either action —
+  independent of it, exactly as Find papers shows Open page beside Add. A failed import shows an `ErrorAlert` under
+  its row, same as Find papers.
+- **States:** `none` and `fetching` both show the same `role="status"` "Fetching references…" line over three
+  `animate-pulse` skeleton rows (plain divs — no new dependency, no bespoke skeleton component): opening the tab on a
+  never-fetched paper queues the fetch immediately, so there is nothing to click while it queues. `failed` → the
+  stored error in an `ErrorAlert` with outline **Try again** (queues another fetch; distinct label from the
+  query-level `LoadError`'s "Retry", which covers a transport/500 failure instead). `ready` with no rows → "This
+  paper's sources list no references."
+- **Refresh:** once `ready`, a small ghost **Refresh** button (`RefreshCw`, disabled while its own fetch runs) sits
+  beside the summary line (`ml-auto` in the same flex row, so it stays put whether or not a summary is shown). A
+  failed refresh request shows its error in an ErrorAlert.
+- **Summary line:** `{refs} cited by 3+ of your papers, {pdfs} have PDFs`, built by `referencesMeta.ts`'s
+  `summaryLine`. Either half drops when its count is zero; the whole line is left out when both are.
+- The switch keeps whichever direction the reader was viewing; both directions share one fetch state (the worker
+  fills `cites` and `cited_by` together), so switching mid-fetch or mid-failure shows the same state either way.
 
 ## Pre-delivery check (from ui-ux-pro-max Quick Reference §1–§3)
 
