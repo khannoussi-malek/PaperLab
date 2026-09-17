@@ -1,0 +1,25 @@
+name: Feature request
+description: Suggest something PaperLab should do
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do
+      description: Describe the reading or writing task, not the feature. What do you do today instead?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you have in mind
+      description: Optional. A rough idea is fine.
+  - type: checkboxes
+    id: principles
+    attributes:
+      label: Does it fit the principles
+      description: See [Principles](../../README.md#principles). Tick what applies.
+      options:
+        - label: It works with no network, or the network call is off until the user turns it on
+        - label: It doesn't get past a paywall
+        - label: It keeps what I wrote separate from what a model wrote
