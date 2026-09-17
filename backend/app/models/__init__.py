@@ -6,6 +6,7 @@ from app.models.llm_output import LLMOutput
 from app.models.note import Note, Provenance, note_anchors
 from app.models.paper import Chunk, Paper, PaperStatus
 from app.models.paper_sources import PaperSources
+from app.models.references import ExternalRef, NoteEmbedding, paper_references
 from app.models.workspace import Workspace, workspace_papers
 
 __all__ = [
@@ -16,10 +17,12 @@ __all__ = [
     "Dataset",
     "DatasetColumn",
     "DatasetRow",
+    "ExternalRef",
     "LLMConnection",
     "LLMModel",
     "LLMOutput",
     "Note",
+    "NoteEmbedding",
     "Paper",
     "PaperSources",
     "PaperStatus",
@@ -29,6 +32,7 @@ __all__ = [
     "chart_datasets",
     "note_anchors",
     "note_charts",
+    "paper_references",
     "paper_authors",
     "paper_topics",
     "workspace_papers",
