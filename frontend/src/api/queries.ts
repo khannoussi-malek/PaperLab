@@ -63,6 +63,9 @@ const keys = {
   referencesDirection: (paperId: string, direction: ReferencesDirection) =>
     ['references', paperId, direction] as const,
   mcpSetup: ['mcp', 'setup'] as const,
+  // Its own key: the graph is one payload, refetched when the owner's own links change, not when the library polls.
+  graph: ['graph'] as const,
+  libraryGraph: (workspaceId: string | null) => ['graph', workspaceId ?? 'library'] as const,
 }
 
 /** Poll the library only while a paper is still ingesting. */
@@ -495,3 +498,25 @@ export const useMcpSetup = () => useQuery({ queryKey: keys.mcpSetup, queryFn: ap
 
 /** Connect Claude's server check. Nothing is cached: each click checks again. */
 export const useCheckMcpServer = () => useMutation({ mutationFn: api.checkMcpServer })
+
+/** Every library paper and the links between them, in one request (D109): layers and focus need no further calls. */
+export const useLibraryGraph = (workspaceId: string | null) =>
+  useQuery({ queryKey: keys.libraryGraph(workspaceId), queryFn: () => api.libraryGraph(workspaceId) })
+
+/** The owner's own links. Each write refetches the graph, which carries them. One `error` for whichever ran. */
+export function usePaperLinkMutations() {
+  const client = useQueryClient()
+  const onSuccess = () => client.invalidateQueries({ queryKey: keys.graph })
+  const create = useMutation({
+    mutationFn: ({ from, to, label }: { from: string; to: string; label: string }) =>
+      api.createPaperLink(from, to, label),
+    onSuccess,
+  })
+  const rename = useMutation({
+    mutationFn: ({ id, label }: { id: string; label: string }) => api.renamePaperLink(id, label),
+    onSuccess,
+  })
+  const remove = useMutation({ mutationFn: api.deletePaperLink, onSuccess })
+  const failed = [create, rename, remove].find((mutation) => mutation.error !== null)
+  return { create, rename, remove, error: failed?.error?.message ?? null }
+}

@@ -57,6 +57,10 @@ export type ReferencesDirection = References['direction']
 export type RefreshOut = components['schemas']['RefreshOut']
 export type McpSetup = components['schemas']['McpSetupOut']
 export type McpCheck = components['schemas']['McpCheckOut']
+export type GraphNode = components['schemas']['GraphNode']
+export type GraphLink = components['schemas']['GraphLink']
+export type LibraryGraph = components['schemas']['GraphOut']
+export type PaperLinkOut = components['schemas']['LinkOut']
 
 /** Where a chat lives: the reader's paper, or a workspace. */
 export type ChatScope = { kind: 'paper' | 'workspace'; id: string }
@@ -213,4 +217,12 @@ export const api = {
   mcpSetup: () => request<McpSetup>('/api/mcp/setup'),
   /** Starts the MCP server as a client would and reads the library through it. Takes up to 30 s. */
   checkMcpServer: () => request<McpCheck>('/api/mcp/check', { method: 'POST' }),
+  /** Every library paper and the links between them, or one workspace's. Capped at 2000 links. */
+  libraryGraph: (workspaceId: string | null) =>
+    request<LibraryGraph>(workspaceId ? `/api/graph?workspace=${workspaceId}` : '/api/graph'),
+  createPaperLink: (fromPaper: string, toPaper: string, label: string) =>
+    request<PaperLinkOut>('/api/links', sendJson('POST', { from_paper: fromPaper, to_paper: toPaper, label })),
+  renamePaperLink: (id: string, label: string) =>
+    request<PaperLinkOut>(`/api/links/${id}`, sendJson('PATCH', { label })),
+  deletePaperLink: (id: string) => request<void>(`/api/links/${id}`, { method: 'DELETE' }),
 }
