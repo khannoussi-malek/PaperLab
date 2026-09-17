@@ -1,41 +1,20 @@
 import asyncio
-from contextlib import asynccontextmanager
 from pathlib import Path
 
 import httpx
 import numpy as np
 import pytest
 from conftest import FakeOpenAlex, recorded, unit_vector
-from sqlalchemy import delete, func, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import enrichment, paper_sources, papers
-from app.models import Author, Chunk, Paper, PaperSources, paper_authors, paper_topics
+from app.models import Author, Chunk, Paper, paper_authors, paper_topics
 from app.providers import embedding
 from app.workers import ingest
 from app.workers.settings import WorkerSettings
 
 pytestmark = pytest.mark.anyio
-
-
-@pytest.fixture
-async def worker_session(session, monkeypatch):
-    """Point the worker at the rolled-back test session instead of its own SessionLocal. The owner's paper sources row
-    (D15 shares the dev database) is hidden, so OpenAlex is off unless a test turns it on."""
-    await session.execute(delete(PaperSources))
-
-    @asynccontextmanager
-    async def shared_session():
-        yield session
-
-    monkeypatch.setattr(ingest, "SessionLocal", shared_session)
-    return session
-
-
-@pytest.fixture
-def ctx(embedder):
-    """What WorkerSettings.on_startup leaves in the ARQ context, with the fake model."""
-    return {"embedder": embedder}
 
 
 @pytest.fixture
