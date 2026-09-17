@@ -15,6 +15,7 @@ import {
   type PaperSourcesUpdate,
   type PaperUpdate,
   type PromoteRequest,
+  type SearchResult,
 } from './client'
 
 export const PAPERS_POLL_MS = 2000
@@ -49,9 +50,11 @@ const keys = {
   available: (connectionId: string) => ['llm', 'connections', connectionId, 'available'] as const,
   embedding: ['embedding'] as const,
   paperSources: ['paper-sources'] as const,
-  // Outside the papers key on purpose: refreshing the library must not re-ask OpenAlex or Semantic Scholar.
+  // Outside the papers key on purpose: refreshing the library must not re-ask the paper sources.
   discovery: ['discovery'] as const,
+  searches: ['discovery', 'search'] as const,
   search: (query: string) => ['discovery', 'search', query] as const,
+  suggestions: ['discovery', 'similar'] as const,
   similar: (paperId: string) => ['discovery', 'similar', paperId] as const,
 }
 
@@ -153,7 +156,8 @@ export function useDeletePaper() {
   })
 }
 
-// Each OpenAlex search costs 10 of its 1,000 free daily credits; suggestions change slowly.
+// A search asks every source that is on, and OpenAlex's cost money past a small daily allowance; suggestions change
+// slowly.
 const SEARCH_STALE_MS = 10 * 60_000
 const SIMILAR_STALE_MS = 60 * 60_000
 
@@ -190,11 +194,15 @@ export function useAddCandidate(workspaceId?: string) {
       // So a row still shows "In library" after the dialog (or the Similar tab) is closed and reopened, even though
       // that only rereads the cache: the rows themselves unmount, and the cached candidate otherwise still lacks
       // paper_id until the next real search. New arrays and objects throughout: never mutate cached query data.
-      client.setQueriesData<Candidate[]>({ queryKey: keys.discovery }, (candidates) =>
-        candidates?.map((existing) =>
+      const marked = (candidates: Candidate[]) =>
+        candidates.map((existing) =>
           sameCandidate(existing, candidate) ? { ...existing, paper_id: paper.id } : existing,
-        ),
+        )
+      // Two shapes under discovery: a search holds { results, notices }, suggestions are a plain list.
+      client.setQueriesData<SearchResult>({ queryKey: keys.searches }, (found) =>
+        found ? { ...found, results: marked(found.results) } : found,
       )
+      client.setQueriesData<Candidate[]>({ queryKey: keys.suggestions }, (found) => (found ? marked(found) : found))
       return Promise.all([
         client.invalidateQueries({ queryKey: keys.papers, exact: true }),
         client.invalidateQueries({ queryKey: keys.workspaces }),

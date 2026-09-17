@@ -46,6 +46,7 @@ export type PullDoneEvent = components['schemas']['PullDoneEvent']
 export type PullErrorEvent = components['schemas']['PullErrorEvent']
 export type EmbeddingStatus = components['schemas']['EmbeddingStatusOut']
 export type Candidate = components['schemas']['CandidateOut']
+export type SearchResult = components['schemas']['SearchOut']
 export type PaperSources = components['schemas']['PaperSourcesOut']
 export type PaperSource = components['schemas']['PaperSourceOut']
 export type PaperSourceId = PaperSource['id']
@@ -102,8 +103,8 @@ export const api = {
   deletePaper: (id: string) => request<void>(`/api/papers/${id}`, { method: 'DELETE' }),
   reingestPaper: (id: string) => request<Paper>(`/api/papers/${id}/reingest`, { method: 'POST' }),
   paperFileUrl: (id: string) => `/api/papers/${id}/file`,
-  /** Papers outside the library for a title, DOI, arXiv ID or OpenAlex ID. */
-  searchPapers: (query: string) => request<Candidate[]>(`/api/discovery/search?q=${encodeURIComponent(query)}`),
+  /** Papers outside the library for a title, DOI, arXiv ID or OpenAlex ID, and a notice per source that failed. */
+  searchPapers: (query: string) => request<SearchResult>(`/api/discovery/search?q=${encodeURIComponent(query)}`),
   similarPapers: (paperId: string) => request<Candidate[]>(`/api/papers/${paperId}/similar`),
   /** Downloads a found paper's free PDF into the library; with a `workspaceId` it also joins that workspace. */
   addCandidate: (candidate: Candidate, workspaceId?: string) =>

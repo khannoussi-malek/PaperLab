@@ -1,13 +1,17 @@
 import type { APIRequestContext, Locator, Page } from '@playwright/test'
 import { expect, openReader, removePaperAndNotes, test } from './fixtures'
+import { FREE_SOURCES_ON, MOVES_PAPER_SOURCES, readSourceSettings, setSourceSettings, type SourceSettings } from './paperSources'
 
-// The API runs with DISCOVERY_PROVIDER=fake (backend/app/providers/discovery_fake.py): every search and every
-// suggestion answers these three papers, and nothing reaches OpenAlex or Semantic Scholar.
+// The API runs with DISCOVERY_PROVIDER=fake (backend/app/providers/discovery_fake.py): with every source but OpenAlex
+// on, every search and every suggestion answers these three papers, and nothing reaches a real paper source.
 const FREE = 'PaperLab Find Papers Fixture'
 const LANDING = 'PaperLab Landing Page Fixture'
 const CLOSED = 'PaperLab Closed Access Fixture'
 const FAKE_DOI_PREFIX = '10.5555/paperlab-e2e-'
 const QUERY_LABEL = 'Title, DOI, arXiv ID or OpenAlex ID'
+const NO_SOURCE = 'No paper source that can look this up is on. Turn one on in Settings → Paper sources.'
+// Every test here turns sources on or off: it runs after the parallel specs, one at a time (playwright.config.ts).
+const tag = MOVES_PAPER_SOURCES
 
 // A paper's DOI is unique and the fake's are fixed, so this file's tests take turns; no other spec adds them.
 test.describe.configure({ mode: 'serial' })
@@ -19,16 +23,22 @@ async function removeFoundPapers(request: APIRequestContext) {
   }
 }
 
+// The owner's switches and email, put back after each test (D76).
+let owners: SourceSettings
+
 test.beforeEach(async ({ request }) => {
   await removeFoundPapers(request) // a killed run's leftovers would show as "In library"
+  owners = await readSourceSettings(request)
+  await setSourceSettings(request, { enabled: FREE_SOURCES_ON })
   const found = await request.get('/api/discovery/search?q=fixture')
-  const titles = found.ok() ? (await found.json()).map((c: { title: string }) => c.title) : []
+  const titles = found.ok() ? (await found.json()).results.map((c: { title: string }) => c.title) : []
   const hint = 'start the API with DISCOVERY_PROVIDER=fake (see the api service comment in docker-compose.yml)'
   expect(titles, hint).toEqual([FREE, LANDING, CLOSED])
 })
 
 test.afterEach(async ({ request }) => {
   await removeFoundPapers(request)
+  await setSourceSettings(request, owners)
 })
 
 const rowOf = (scope: Locator, title: string) => scope.locator('.candidate-row').filter({ hasText: title })
@@ -56,7 +66,10 @@ async function waitUntilReady(request: APIRequestContext, paperId: string) {
     .toBe('ready')
 }
 
-test('find a paper from the library, add its free PDF, and see it in the library', async ({ page, request }) => {
+test('find a paper from the library, add its free PDF, and see it in the library', { tag }, async ({
+  page,
+  request,
+}) => {
   await page.goto('/')
   const dialog = await searchFromHere(page)
 
@@ -84,7 +97,9 @@ test('find a paper from the library, add its free PDF, and see it in the library
   )
 })
 
-test('regaining window focus does not repeat a search or drop its results for a busy error', async ({ page }) => {
+test('regaining window focus does not repeat a search or drop its results for a busy error', { tag }, async ({
+  page,
+}) => {
   await page.goto('/')
   const dialog = await searchFromHere(page)
   await addFrom(rowOf(dialog, FREE)) // marks discovery stale (D-fix 1)
@@ -101,7 +116,7 @@ test('regaining window focus does not repeat a search or drop its results for a 
   await expect(dialog.locator('.candidate-row')).toHaveCount(3) // the stale results are still shown, not an error
 })
 
-test('a paper whose PDF link is a web page says no free PDF was found', async ({ page }) => {
+test('a paper whose PDF link is a web page says no free PDF was found', { tag }, async ({ page }) => {
   await page.goto('/')
   const dialog = await searchFromHere(page)
 
@@ -111,7 +126,7 @@ test('a paper whose PDF link is a web page says no free PDF was found', async ({
   await expect(rowOf(dialog, LANDING).getByRole('button', { name: 'Add' })).toBeEnabled()
 })
 
-test('a paper found from a workspace joins that workspace', async ({ page, request, workspaceId }) => {
+test('a paper found from a workspace joins that workspace', { tag }, async ({ page, request, workspaceId }) => {
   await page.goto(`/#/workspaces/${workspaceId}`)
   const dialog = await searchFromHere(page)
 
@@ -122,7 +137,11 @@ test('a paper found from a workspace joins that workspace', async ({ page, reque
   await waitUntilReady(request, paperId)
 })
 
-test('the Similar tab asks for suggestions only once opened, and adds one', async ({ page, request, paperId }) => {
+test('the Similar tab asks for suggestions only once opened, and adds one', { tag }, async ({
+  page,
+  request,
+  paperId,
+}) => {
   const asked: string[] = []
   page.on('request', (r) => {
     if (r.url().includes('/similar')) asked.push(r.url())
@@ -137,4 +156,41 @@ test('the Similar tab asks for suggestions only once opened, and adds one', asyn
   await expect(page).toHaveURL(new RegExp(`#/papers/${paperId}\\?tab=similar$`))
 
   await waitUntilReady(request, await addFrom(rowOf(panel, FREE)))
+})
+
+test('each row shows the sources that found it, and a source turned off in Settings loses its badge', { tag }, async ({
+  page,
+}) => {
+  const sourcesOf = (dialog: Locator, title: string) => rowOf(dialog, title).locator('.candidate-sources li')
+  await page.goto('/')
+  let dialog = await searchFromHere(page)
+  await expect(sourcesOf(dialog, FREE)).toHaveText(['Crossref', 'arXiv', 'CORE'])
+  await expect(sourcesOf(dialog, LANDING)).toHaveText(['Crossref'])
+
+  // In the same page, so the search has to be asked again rather than read from the cache it left behind.
+  await page.keyboard.press('Escape')
+  await page.getByRole('link', { name: 'Settings' }).click()
+  const core = page.getByRole('region', { name: 'Paper sources' }).getByRole('checkbox', { name: 'CORE' })
+  await core.click()
+  await expect(core).not.toBeChecked()
+  await page.getByRole('link', { name: 'Library' }).click()
+
+  dialog = await searchFromHere(page)
+  await expect(sourcesOf(dialog, FREE)).toHaveText(['Crossref', 'arXiv'])
+  await expect(sourcesOf(dialog, LANDING)).toHaveText(['Crossref'])
+})
+
+test('with every source that searches titles off, Find papers says to turn one on', { tag }, async ({
+  page,
+  request,
+}) => {
+  await setSourceSettings(request, { enabled: { crossref: false, arxiv: false, core: false } }) // OpenAlex is off already
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Find papers' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Find papers' })
+  await dialog.getByRole('textbox', { name: QUERY_LABEL }).fill('fixture')
+  await dialog.getByRole('button', { name: 'Search' }).click()
+
+  await expect(dialog.getByRole('alert')).toHaveText(NO_SOURCE)
+  await expect(dialog.locator('.candidate-row')).toHaveCount(0)
 })
