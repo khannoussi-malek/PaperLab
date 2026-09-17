@@ -1,0 +1,117 @@
+{
+  "message": {
+    "items": [
+      {
+        "DOI": "10.1007/978-3-031-84300-6_13",
+        "title": [
+          "Is Attention All You Need?"
+        ],
+        "author": [
+          {
+            "given": "Patrick",
+            "family": "Mineault"
+          }
+        ],
+        "issued": {
+          "date-parts": [
+            [
+              2025
+            ]
+          ]
+        },
+        "container-title": [
+          "From Human Attention to Computational Attention"
+        ],
+        "is-referenced-by-count": 55,
+        "type": "book-chapter"
+      },
+      {
+        "DOI": "10.2139/ssrn.4993784",
+        "title": [
+          "Attention Is All You Need: An Analysis Of The Valuation Of Artificial Intelligence Tokens"
+        ],
+        "author": [
+          {
+            "given": "Mfon",
+            "family": "Akpan"
+          }
+        ],
+        "issued": {
+          "date-parts": [
+            [
+              2024
+            ]
+          ]
+        },
+        "is-referenced-by-count": 0,
+        "type": "posted-content"
+      },
+      {
+        "DOI": "10.2139/ssrn.5967774",
+        "title": [
+          "Attention is All You Need... Unless You Are a CISO: The Inherent Incompatibility Between Transformer Architectures and Zero-Trust Environments"
+        ],
+        "author": [
+          {
+            "given": "Giuseppe",
+            "family": "Canale"
+          }
+        ],
+        "issued": {
+          "date-parts": [
+            [
+              2026
+            ]
+          ]
+        },
+        "is-referenced-by-count": 0,
+        "type": "posted-content"
+      },
+      {
+        "DOI": "10.5040/9781350101272.00000005",
+        "title": [
+          "All You Need Is LSD"
+        ],
+        "author": [
+          {
+            "given": "Leo",
+            "family": "Butler"
+          }
+        ],
+        "issued": {
+          "date-parts": [
+            [
+              2018
+            ]
+          ]
+        },
+        "container-title": [
+          "All You Need Is LSD"
+        ],
+        "is-referenced-by-count": 14,
+        "type": "other"
+      },
+      {
+        "DOI": "10.2139/ssrn.7137418",
+        "title": [
+          "Year 2026: Attention to AI Over-Reliance is All You Need in AI Education!"
+        ],
+        "author": [
+          {
+            "given": "Tee Hui",
+            "family": "Teo"
+          }
+        ],
+        "issued": {
+          "date-parts": [
+            [
+              2026
+            ]
+          ]
+        },
+        "is-referenced-by-count": 0,
+        "type": "posted-content"
+      }
+    ]
+  }
+}

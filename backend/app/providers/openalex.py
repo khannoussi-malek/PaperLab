@@ -1,8 +1,10 @@
 """OpenAlex over HTTP. Network failures, timeouts and error statuses (429 included) raise httpx.HTTPError.
 
-Measured on 2026-09-13 without an API key: a singleton lookup costs 0 credits, a filter list 1 and a `.search`
-filter 10, out of 1,000 free credits a day. Bursts over 10 requests per second get HTTP 429. A missing work answers
-404 with an HTML body.
+Since February 2026 OpenAlex is metered: $0.10 of use a day without an API key, $1 a day with a free key, a paid
+plan beyond that. Measured on 2026-09-13 without a key: a singleton lookup costs 0 credits, a filter list 1 and a
+`.search` filter 10, out of 1,000 free credits ($0.10) a day. Bursts over 10 requests per second get HTTP 429. A
+missing work answers 404 with an HTML body. Probed on 2026-09-17: a bad key, sent either as `api_key` or as
+`Authorization: Bearer`, answers 401.
 """
 
 import re
@@ -31,11 +33,17 @@ AUTHOR_FIELDS = ",".join(
 )  # fmt: skip
 
 
-def new_client(mailto: str, transport: httpx.AsyncBaseTransport | None = None) -> httpx.AsyncClient:
-    # Client-level params are merged into every request, so no call can leave out mailto.
+def new_client(
+    mailto: str | None, transport: httpx.AsyncBaseTransport | None = None, api_key: str | None = None
+) -> httpx.AsyncClient:
+    # Client-level params are merged into every request, so no call can leave out mailto once it's set.
+    params = {"mailto": mailto} if mailto else {}
+    # The key rides in a header, never the query string: httpx puts the URL in its error messages, which enrichment
+    # logs with logger.exception.
+    headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
     # follow_redirects: OpenAlex answers a merged-away work id with a 301 to the record it merged into.
     return httpx.AsyncClient(
-        base_url=BASE_URL, params={"mailto": mailto}, timeout=TIMEOUT, transport=transport, follow_redirects=True
+        base_url=BASE_URL, params=params, headers=headers, timeout=TIMEOUT, transport=transport, follow_redirects=True
     )
 
 

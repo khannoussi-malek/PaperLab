@@ -17,12 +17,12 @@ PAPER_FIELDS = "title,year,venue,authors,externalIds,openAccessPdf,citationCount
 RECOMMENDATION_POOL = "all-cs"
 
 
-def new_client(api_key: str, transport: httpx.AsyncBaseTransport | None = None) -> httpx.AsyncClient:
+def new_client(api_key: str | None, transport: httpx.AsyncBaseTransport | None = None) -> httpx.AsyncClient:
     headers = {"x-api-key": api_key} if api_key else {}
     return httpx.AsyncClient(base_url=BASE_URL, headers=headers, timeout=TIMEOUT, transport=transport)
 
 
-# ponytail: no retry on 429, as in openalex.py. SEMANTIC_SCHOLAR_API_KEY lifts the shared pool's limit.
+# ponytail: no retry on 429, as in openalex.py. A key saved in Settings → Paper sources lifts the shared pool's limit.
 
 
 async def recommend(http: httpx.AsyncClient, key: str, limit: int) -> list[dict] | None:
