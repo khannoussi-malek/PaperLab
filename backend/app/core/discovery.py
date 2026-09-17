@@ -164,7 +164,7 @@ ASKS: dict[str, dict[str, Ask]] = {
 }
 
 
-def _notice(source: str, error: httpx.HTTPError) -> str:
+def notice(source: str, error: httpx.HTTPError) -> str:
     # A source that takes no key (e.g. Crossref) can't have refused one, whatever status it answered with.
     refused = (
         source in KEYED and isinstance(error, httpx.HTTPStatusError) and error.response.status_code in (401, 403)
@@ -209,7 +209,7 @@ async def search(session: AsyncSession, providers: Providers, query: str) -> Sea
     for source, answer in zip(asks, answers):
         if isinstance(answer, httpx.HTTPError):
             logger.info("%s failed for this search: %s", source, answer)
-            notices.append(_notice(source, answer))
+            notices.append(notice(source, answer))
         elif isinstance(answer, BaseException):
             raise answer
         else:
@@ -269,6 +269,17 @@ def _same_paper_keys(title: str, *ids: str | None) -> set[str]:
     return {i.lower() for i in ids if i} | {normal_title(title)}
 
 
+async def s2_key(http: httpx.AsyncClient, paper: Paper) -> str | None:
+    """The key Semantic Scholar knows a library paper by: `arXiv:<id>` for an arXiv DOI, `DOI:<doi>`, else its best
+    title match (one request). None when it has no match. Raises httpx.HTTPError."""
+    doi = (paper.doi or "").lower()
+    if arxiv_id := arxiv_from_doi(doi):
+        return f"arXiv:{arxiv_id}"
+    if doi:
+        return f"DOI:{doi}"
+    return await semantic_scholar.match_title(http, paper.title)
+
+
 async def similar(
     session: AsyncSession, providers: Providers, paper: Paper, limit: int = SIMILAR_LIMIT
 ) -> list[Candidate]:
@@ -277,12 +288,7 @@ async def similar(
     doi = (paper.doi or "").lower()
     arxiv_id = arxiv_from_doi(doi)
     try:
-        if arxiv_id:
-            key = f"arXiv:{arxiv_id}"
-        elif doi:
-            key = f"DOI:{doi}"
-        else:
-            key = await semantic_scholar.match_title(providers.s2, paper.title)
+        key = await s2_key(providers.s2, paper)
         found = await semantic_scholar.recommend(providers.s2, key, limit + 1) if key else None
     except httpx.HTTPError as exc:
         if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code in (401, 403):
@@ -324,7 +330,9 @@ async def download_pdf(http: httpx.AsyncClient, urls: list[str]) -> bytes | None
 
 
 def _prefill(candidate: Candidate) -> dict[str, Any]:
-    """Enrichment trusts a stored openalex_id, and a DOI only when it's locked (D69)."""
+    """Enrichment trusts a stored openalex_id, and a DOI only when it's locked (D69). The title is always locked:
+    ingest's PDF-font heuristic and enrichment's metadata are both worse than the title the source already gave us,
+    so it must survive both (M7.5)."""
     doi = next(iter(_library_dois(candidate)), None)
     fields = {
         "title": candidate.title,
@@ -335,7 +343,8 @@ def _prefill(candidate: Candidate) -> dict[str, Any]:
         "doi": doi,
         "openalex_id": candidate.openalex_id,
     }
-    return fields | {"manual_fields": ["doi"]} if doi and not candidate.openalex_id else fields
+    locked = ["doi", "title"] if doi and not candidate.openalex_id else ["title"]
+    return fields | {"manual_fields": locked}
 
 
 def _filename(title: str) -> str:

@@ -15,13 +15,14 @@ type Props = {
   chat: ReactNode
   data: ReactNode
   similar: ReactNode
+  references: ReactNode
 }
 
 // Both panels stay mounted, so a streaming answer, a note draft and each panel's scroll position survive a
 // tab switch. `text-base` undoes TabsContent's `text-sm`, which would shrink the note cards.
 const panel = cn('flex min-h-0 flex-1 flex-col text-base data-[state=inactive]:hidden', fadeIn)
 
-export function RightPanel({ tab, onTabChange, width, onWidthChange, notes, chat, data, similar }: Props) {
+export function RightPanel({ tab, onTabChange, width, onWidthChange, notes, chat, data, similar, references }: Props) {
   return (
     <Tabs
       value={tab}
@@ -34,6 +35,7 @@ export function RightPanel({ tab, onTabChange, width, onWidthChange, notes, chat
         <TabsTrigger value="chat">Chat</TabsTrigger>
         <TabsTrigger value="data">Data</TabsTrigger>
         <TabsTrigger value="similar">Similar</TabsTrigger>
+        <TabsTrigger value="references">References</TabsTrigger>
       </TabsList>
       <TabsContent value="notes" forceMount className={panel}>
         {notes}
@@ -46,6 +48,9 @@ export function RightPanel({ tab, onTabChange, width, onWidthChange, notes, chat
       </TabsContent>
       <TabsContent value="similar" forceMount className={panel}>
         {similar}
+      </TabsContent>
+      <TabsContent value="references" forceMount className={panel}>
+        {references}
       </TabsContent>
     </Tabs>
   )

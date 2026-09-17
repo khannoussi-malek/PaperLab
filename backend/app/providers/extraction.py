@@ -118,3 +118,19 @@ def read_region(path: str | Path, page_number: int, region: Rect) -> RegionText:
             if b[6] == 0 and b[3] >= top and b[1] <= bottom
         ]
     return RegionText(words=words, blocks=blocks)
+
+
+def quote_rects(path: str | Path, page_number: int, blocks: list[Rect], quote: str) -> list[Rect]:
+    """The quote's line rects on a 1-based page, like a reader's selection, or [] when PyMuPDF doesn't find it there.
+
+    search_for matches loosely (any case, across lines and across paragraphs, anywhere on the page), so only rects
+    inside `blocks`, the paragraphs a caller already matched the quote to, count: a caption or another column repeating
+    the words is not the passage.
+    """
+    with pymupdf.open(path) as doc:
+        if not 1 <= page_number <= doc.page_count:
+            return []
+        # Extraction's flags, so "ﬁ" reads as "fi" here too (search_for's default keeps ligatures), plus search_for's
+        # own dehyphenation.
+        found = doc[page_number - 1].search_for(" ".join(quote.split()), flags=TEXT_FLAGS | pymupdf.TEXT_DEHYPHENATE)
+    return [tuple(round(v, 2) for v in r) for r in found if any(r.intersects(pymupdf.Rect(b)) for b in blocks)]

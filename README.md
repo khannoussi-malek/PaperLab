@@ -29,6 +29,9 @@ click when a free PDF exists (arXiv, a repository or an open-access publisher). 
 page, so you can download it yourself. Nothing gets past a paywall.
 - Open a paper's **Similar** tab for papers like it, suggested by [Semantic Scholar](https://www.semanticscholar.org/),
 and add them the same way.
+- Open a paper's **References** tab to see what it cites and what has cited it since, ranked for your library:
+references several of your papers cite come first, then ones close to what you write notes about, then ones with a
+free PDF. Import a reference in a click when a free PDF exists.
 - Hover a paper in the list to preview its first page and details.
 - With OpenAlex ticked in Settings, fill in each paper's title, authors, year, venue and topics from
 [OpenAlex](https://openalex.org/), and correct any of them by hand with **Edit details**. Your corrections are kept when
@@ -102,6 +105,14 @@ used, never its own earlier answers. Follow-ups stay under the first question, a
 the newest answer until you press ×.
 - Select part of an answer and click **Save as note**. The note is anchored on the passage it cites and marked AI.
 
+**Use your library from Claude Desktop**
+
+- Connect Claude Desktop, Claude Code or another MCP client to PaperLab
+([how](#use-paperlab-from-claude-desktop)). It can search your papers, read a paper's details, outline and notes, find
+the papers in your library connected to one (a shared workspace, note, author or topic, or a citation), and save a note
+on a passage it quotes.
+- A note it saves is marked AI, like a note saved from chat, and is highlighted on the lines it quoted.
+
 
 
 ## Principles
@@ -111,10 +122,15 @@ database. With a local model (Ollama, LM Studio and other servers on your machin
 notes never leaves your computer; a model tagged "Cloud" receives the passages and notes sent with each question.
 Metadata lookups on OpenAlex are off unless you tick OpenAlex, and they send a paper's DOI or title, never its text.
 Find papers sends what you type to every paper source that is on and can answer it, then the results' DOIs to Semantic
-Scholar and, for results without a free PDF, to Unpaywall. The Similar tab sends the paper's DOI, or its title when it
-has none. Your contact email goes to Crossref, Unpaywall and OpenAlex (when on), never to the others or to PDF hosts.
+Scholar and, for results without a free PDF, to Unpaywall. The Similar and References tabs send Semantic Scholar the
+paper's DOI (its arXiv ID when the DOI is an arXiv one), or its title when it has none. With OpenAlex ticked, the
+References tab also sends OpenAlex the paper's OpenAlex ID and the OpenAlex IDs of the works it cites. Your contact
+email goes to Crossref, Unpaywall and OpenAlex (when on), never to the others or to PDF hosts.
 API keys stay in your local database and are never sent back to the browser. Adding a paper downloads its PDF from the
 free link found. None of them send a paper's text.
+An MCP client you connect, such as Claude Desktop, receives what its tools return: passages from your papers, paper
+details and workspace names, and every note on a paper marked as yours or AI. Claude Desktop and Claude Code send what
+the tools return to Anthropic.
 - **AI is always labelled.** AI text is stored separately from yours, keeps the model and prompt version that
 produced it, and shows an AI badge. Editing an AI note marks it "AI · edited", never "You".
 - **Answers show their sources.** Chat answers cite passages you can click, so you can check every claim against the paper.
@@ -159,6 +175,34 @@ Choose where Find papers looks in **Settings → Paper sources**: tick sources, 
 email (Unpaywall needs one). OpenAlex, which also fills in paper details, is off until you tick it: it is free up to
 $0.10 of use a day without a key, or $1 a day with a free key from openalex.org, and more needs a paid plan there. On
 first start, `OPENALEX_MAILTO` and `SEMANTIC_SCHOLAR_API_KEY` from `.env` fill these settings in once.
+
+### Use PaperLab from Claude Desktop
+
+PaperLab includes an MCP server. Claude Desktop, Claude Code or another MCP client starts it inside the running `api`
+container, where it can read your PDFs, so the stack must be up (`docker compose up -d`, in the PaperLab folder).
+Restarting `api` ends the connection, and Claude Desktop needs a restart to connect again. If the server doesn't
+start, Claude Desktop writes what the launcher says to its own log: macOS `~/Library/Logs/Claude/mcp-server-paperlab.log`,
+Windows `%APPDATA%\Claude\logs\mcp-server-paperlab.log`, Linux in Claude Desktop's logs folder.
+
+Open PaperLab and click **Connect Claude** ([localhost:5180/#/connect-claude](http://localhost:5180/#/connect-claude)).
+It fills in the config or command for your system, and checks that PaperLab's side answers.
+
+Without the app, use the full path of your PaperLab folder:
+- **macOS and Linux:** in Claude Desktop (**Settings → Developer → Edit Config**), give `mcpServers.paperlab` the
+  `"command": "<folder>/scripts/paperlab-mcp"`. For Claude Code: `claude mcp add -s user paperlab -- '<folder>/scripts/paperlab-mcp'`.
+  Don't use `mcp install`: the entry it writes runs the server outside the container.
+  The script finds docker even where Claude Desktop can't see your shell's `PATH`; if yours is installed somewhere
+  else, set `PAPERLAB_DOCKER` to its full path.
+- **Windows:** give `mcpServers.paperlab` the `"command": "docker"` and the
+  `"args": ["compose", "-f", "<folder>\\docker-compose.yml", "exec", "-T", "api", "python", "-m", "mcp_server"]`.
+
+The server has four tools:
+- `search_library`: passages closest to a question, in the whole library or one workspace;
+- `get_paper`: a paper's details, section outline, workspaces and every note with who wrote it;
+- `related_papers`: library papers connected to one, up to three links away;
+- `create_note`: a note on a passage it quotes exactly.
+
+The first search takes about 30 seconds while the embedding model loads.
 
 ### Configuration
 
@@ -208,7 +252,8 @@ backend/
   app/api/         HTTP routes: papers, notes, chat, health, llm, embedding
   app/core/        domain logic: chunking, retrieval, chat, note provenance rules
   app/providers/   PDF extraction, embeddings, OpenAlex, LLM adapters (Ollama, Anthropic, OpenAI-compatible, fake), Ollama pull/delete
-  app/workers/     the ARQ ingestion job
+  app/workers/     the ARQ jobs: ingestion and the references fetch
+  mcp_server/      the MCP server Claude Desktop starts: search, papers, related papers, notes
   prompts/         versioned prompts
   evals/           retrieval eval: recall@k over questions.yaml
 frontend/
@@ -234,8 +279,9 @@ docker compose exec api python -m evals.answer_check --paper "<title prefix>" --
 ```
 
 - **End-to-end tests** run against the real stack, with no mocked backend. They expect the fake model, which always
-gives the same answer: start the API with `LLM_PROVIDER=fake docker compose up -d api`, run the tests, then go back
-with `docker compose up -d api`.
+gives the same answer: start the API and the worker with
+`LLM_PROVIDER=fake DISCOVERY_PROVIDER=fake docker compose up -d api worker`, run the tests, then go back with
+`docker compose up -d api worker`.
 - **Retrieval eval:** `docker compose exec api python -m evals.run` prints recall@k for the questions in
 `backend/evals/questions.yaml`. Run it twice after a re-ingest before comparing results.
 - **Answer eval:** `docker compose exec api python -m evals.answers --label <name>` asks the default model the

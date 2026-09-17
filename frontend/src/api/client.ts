@@ -51,6 +51,12 @@ export type PaperSources = components['schemas']['PaperSourcesOut']
 export type PaperSource = components['schemas']['PaperSourceOut']
 export type PaperSourceId = PaperSource['id']
 export type PaperSourcesUpdate = components['schemas']['PaperSourcesUpdate']
+export type References = components['schemas']['ReferencesOut']
+export type Reference = components['schemas']['ReferenceOut']
+export type ReferencesDirection = References['direction']
+export type RefreshOut = components['schemas']['RefreshOut']
+export type McpSetup = components['schemas']['McpSetupOut']
+export type McpCheck = components['schemas']['McpCheckOut']
 
 /** Where a chat lives: the reader's paper, or a workspace. */
 export type ChatScope = { kind: 'paper' | 'workspace'; id: string }
@@ -194,4 +200,17 @@ export const api = {
   /** Only what `patch` holds changes: a key left out is kept, a null key is removed. */
   updatePaperSources: (patch: PaperSourcesUpdate) =>
     request<PaperSources>('/api/paper-sources', sendJson('PATCH', patch)),
+  /** One direction of a paper's references, ranked for this library. */
+  references: (paperId: string, direction: ReferencesDirection) =>
+    request<References>(`/api/papers/${paperId}/references?direction=${direction}`),
+  /** Queues a fetch of both directions; a second call while already fetching is a no-op. */
+  refreshReferences: (paperId: string) =>
+    request<RefreshOut>(`/api/papers/${paperId}/references/refresh`, { method: 'POST' }),
+  /** Downloads a reference's free PDF into the library; with a `workspaceId` it also joins that workspace. */
+  importReference: (refId: string, workspaceId?: string) =>
+    request<Paper>(`/api/references/${refId}/import`, sendJson('POST', { workspace_id: workspaceId ?? null })),
+  /** The folder `docker compose up` ran in, to prefill Connect Claude; null outside Compose. */
+  mcpSetup: () => request<McpSetup>('/api/mcp/setup'),
+  /** Starts the MCP server as a client would and reads the library through it. Takes up to 30 s. */
+  checkMcpServer: () => request<McpCheck>('/api/mcp/check', { method: 'POST' }),
 }

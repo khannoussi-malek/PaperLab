@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 
-export type ReaderTab = 'notes' | 'chat' | 'data' | 'similar'
+export type ReaderTab = 'notes' | 'chat' | 'data' | 'similar' | 'references'
 export type WorkspaceTab = 'papers' | 'notes' | 'chat'
 export type Rect = [number, number, number, number]
 /** A grid cell to scroll to and focus once, when a chart point of data typed in is opened. */
@@ -20,12 +20,14 @@ export type Route =
   | { name: 'chart-builder'; chartId: string | null; datasetId: string | null }
   | { name: 'dataset'; datasetId: string; focus: CellFocus | null }
   | { name: 'settings' }
+  | { name: 'connect-claude' }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const HASH = /^#\/(papers|workspaces)\/([0-9a-f-]{36})(?:\?(.*))?$/i
 const CHARTS_HASH = /^#\/charts(?:\/(new|[0-9a-f-]{36})(\/edit)?)?(?:\?(.*))?$/i
 const DATASET_HASH = /^#\/datasets\/([0-9a-f-]{36})(?:\?(.*))?$/i
 const SETTINGS_HASH = '#/settings'
+const CONNECT_CLAUDE_HASH = '#/connect-claude'
 
 function pageOf(params: URLSearchParams): number | null {
   const page = Number(params.get('page'))
@@ -61,6 +63,7 @@ function chartsRoute(match: RegExpExecArray): Route {
 
 export function parseRoute(hash: string): Route {
   if (hash === SETTINGS_HASH) return { name: 'settings' }
+  if (hash === CONNECT_CLAUDE_HASH) return { name: 'connect-claude' }
   const charts = CHARTS_HASH.exec(hash)
   if (charts) return chartsRoute(charts)
   const dataset = DATASET_HASH.exec(hash)
@@ -78,7 +81,7 @@ export function parseRoute(hash: string): Route {
   if (match[1] === 'workspaces') {
     return { name: 'workspace', workspaceId: match[2], tab: tab === 'notes' || tab === 'chat' ? tab : 'papers' }
   }
-  const readerTab = tab === 'chat' || tab === 'data' || tab === 'similar' ? tab : 'notes'
+  const readerTab = tab === 'chat' || tab === 'data' || tab === 'similar' || tab === 'references' ? tab : 'notes'
   return { name: 'reader', paperId: match[2], tab: readerTab, target: readerTarget(params) }
 }
 
@@ -99,6 +102,7 @@ export const workspaceHref = (workspaceId: string, tab: WorkspaceTab = 'papers')
   tab === 'papers' ? `#/workspaces/${workspaceId}` : `#/workspaces/${workspaceId}?tab=${tab}`
 
 export const settingsHref = SETTINGS_HASH
+export const connectClaudeHref = CONNECT_CLAUDE_HASH
 export const chartsHref = '#/charts'
 export const chartHref = (chartId: string) => `#/charts/${chartId}`
 export const editChartHref = (chartId: string) => `#/charts/${chartId}/edit`
