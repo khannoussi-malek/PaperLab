@@ -8,7 +8,9 @@ from app.models import Paper, paper_references
 from app.providers import discovery_fake
 from app.providers.extraction import extract
 
-pytestmark = pytest.mark.anyio
+# Fetches and embeds take one advisory lock (core/references.py); in a test it lasts until the rollback, so these
+# files share one xdist worker, or two of them deadlock on the same stored reference.
+pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("references")]
 
 
 @pytest.fixture

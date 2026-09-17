@@ -10,7 +10,9 @@ from app.core import references
 from app.models import ExternalRef, Note, NoteEmbedding, Paper, PaperSources, paper_references
 from app.workers import references as references_worker
 
-pytestmark = pytest.mark.anyio
+# Fetches and embeds take one advisory lock (core/references.py); in a test it lasts until the rollback, so these
+# files share one xdist worker, or two of them deadlock on the same stored reference.
+pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("references")]
 
 READER_DOI = "10.5555/m75-api-reader"
 PDF = b"%PDF-1.7\n%an imported reference\n"
