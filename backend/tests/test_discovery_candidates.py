@@ -1,7 +1,8 @@
 import pytest
 from conftest import recorded_discovery
 
-from app.core.discovery import MAX_AUTHORS, MAX_PDF_URLS, Candidate, classify_query, from_s2, from_work, with_s2
+from app.core.candidates import MAX_AUTHORS, MAX_PDF_URLS, Candidate, from_s2, from_work, with_s2
+from app.core.discovery import classify_query
 from app.schemas.discovery import CandidateIn, CandidateOut
 
 
@@ -83,7 +84,7 @@ def test_an_arxiv_location_gives_a_published_paper_its_arxiv_pdf_first():
 def test_a_work_missing_optional_fields_still_maps():
     candidate = from_work({"title": None, "primary_location": {"source": None}})
 
-    assert candidate == Candidate(title="Untitled")
+    assert candidate == Candidate(title="Untitled", sources=("openalex",))
 
 
 def test_semantic_scholar_papers_build_the_arxiv_pdf_even_when_their_pdf_link_is_empty():
