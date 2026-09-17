@@ -18,6 +18,7 @@ import { SimilarTab } from '../discovery/SimilarTab'
 import { browserStorage, highlightFill, loadLastColor, saveLastColor } from '../notes/highlightColors'
 import { NoteHoverCard } from '../notes/NoteHoverCard'
 import { NotesPanel } from '../notes/NotesPanel'
+import { ReferencesTab } from '../references/ReferencesTab'
 import { pdfRectToCss, type PdfRect } from './coords'
 import { MAX_PANEL_SHARE, MIN_PANEL_WIDTH, loadPanelWidth, savePanelWidth } from './panelWidth'
 import { clientPointToPdf, notesAt, rectContains } from './hitTest'
@@ -434,6 +435,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
         }
         data={<DataPanel paperId={paperId} onShowRegion={flashChunk} />}
         similar={<SimilarTab paperId={paperId} active={tab === 'similar'} />}
+        references={<ReferencesTab paperId={paperId} active={tab === 'references'} />}
       />
 
       {numberDraft && (

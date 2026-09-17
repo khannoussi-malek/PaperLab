@@ -859,6 +859,67 @@ export interface paths {
         patch: operations["update_paper_sources_api_paper_sources_patch"];
         trace?: never;
     };
+    "/api/papers/{paper_id}/references": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List References
+         * @description Ranked for this library. `state` is `none` until a fetch is asked for, `fetching` while the worker runs.
+         */
+        get: operations["list_references_api_papers__paper_id__references_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/papers/{paper_id}/references/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refresh References
+         * @description Queues a fetch of both directions. A second call while a recent fetch runs queues nothing. 404 unknown paper.
+         */
+        post: operations["refresh_references_api_papers__paper_id__references_refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/references/{ref_id}/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Reference
+         * @description Downloads the reference's first free PDF and ingests it like an upload (D84). 404 for an unknown reference or
+         *     workspace (before any download); 409 when the library already holds it or no free PDF is found.
+         */
+        post: operations["import_reference_api_references__ref_id__import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1543,6 +1604,11 @@ export interface components {
             /** Columns */
             columns: string[];
         };
+        /** ImportReferenceIn */
+        ImportReferenceIn: {
+            /** Workspace Id */
+            workspace_id?: string | null;
+        };
         /** IndexedModelOut */
         IndexedModelOut: {
             /** Model */
@@ -1890,6 +1956,77 @@ export interface components {
         PullRequest: {
             /** Name */
             name: string;
+        };
+        /**
+         * ReferenceOut
+         * @description A reference or citing work, ranked for this library. `cocitation` counts the library papers linked to it the
+         *     same way; `paper_id` is set when the library holds it. Never a vector.
+         */
+        ReferenceOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Authors */
+            authors: string[];
+            /** Year */
+            year: number | null;
+            /** Venue */
+            venue: string | null;
+            /** Doi */
+            doi: string | null;
+            /** Arxiv Id */
+            arxiv_id: string | null;
+            /** Openalex Id */
+            openalex_id: string | null;
+            /** S2 Id */
+            s2_id: string | null;
+            /** Cited By Count */
+            cited_by_count: number | null;
+            /** Has Pdf */
+            has_pdf: boolean;
+            /** Cocitation */
+            cocitation: number;
+            /** Paper Id */
+            paper_id: string | null;
+            /** Position */
+            position: number;
+        };
+        /** ReferencesOut */
+        ReferencesOut: {
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "none" | "fetching" | "ready" | "failed";
+            /** Error */
+            error: string | null;
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "cites" | "cited_by";
+            summary: components["schemas"]["ReferencesSummary"];
+            /** Rows */
+            rows: components["schemas"]["ReferenceOut"][];
+        };
+        /** ReferencesSummary */
+        ReferencesSummary: {
+            /** Cited By 3Plus */
+            cited_by_3plus: number;
+            /** With Pdf */
+            with_pdf: number;
+        };
+        /** RefreshOut */
+        RefreshOut: {
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "none" | "fetching" | "ready" | "failed";
         };
         /** ReindexOut */
         ReindexOut: {
@@ -4232,6 +4369,105 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PaperSourcesOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_references_api_papers__paper_id__references_get: {
+        parameters: {
+            query?: {
+                direction?: "cites" | "cited_by";
+            };
+            header?: never;
+            path: {
+                paper_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReferencesOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    refresh_references_api_papers__paper_id__references_refresh_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                paper_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefreshOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_reference_api_references__ref_id__import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ref_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportReferenceIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaperOut"];
                 };
             };
             /** @description Validation Error */
