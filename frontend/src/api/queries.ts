@@ -1,6 +1,8 @@
 import { QueryClient, keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { sameCandidate } from '@/features/discovery/candidateMeta'
 import {
   api,
+  type Candidate,
   type ChartSpec,
   type ChatScope,
   type DatasetCreate,
@@ -10,8 +12,10 @@ import {
   type NumberCreate,
   type NoteUpdate,
   type Paper,
+  type PaperSourcesUpdate,
   type PaperUpdate,
   type PromoteRequest,
+  type SearchResult,
 } from './client'
 
 export const PAPERS_POLL_MS = 2000
@@ -45,6 +49,13 @@ const keys = {
   connections: ['llm', 'connections'] as const,
   available: (connectionId: string) => ['llm', 'connections', connectionId, 'available'] as const,
   embedding: ['embedding'] as const,
+  paperSources: ['paper-sources'] as const,
+  // Outside the papers key on purpose: refreshing the library must not re-ask the paper sources.
+  discovery: ['discovery'] as const,
+  searches: ['discovery', 'search'] as const,
+  search: (query: string) => ['discovery', 'search', query] as const,
+  suggestions: ['discovery', 'similar'] as const,
+  similar: (paperId: string) => ['discovery', 'similar', paperId] as const,
 }
 
 /** Poll the library only while a paper is still ingesting. */
@@ -142,6 +153,63 @@ export function useDeletePaper() {
         client.invalidateQueries({ queryKey: keys.papers }),
         client.invalidateQueries({ queryKey: keys.workspaces }),
       ]),
+  })
+}
+
+// A search asks every source that is on, and OpenAlex costs money past a small daily allowance; suggestions change
+// slowly.
+const SEARCH_STALE_MS = 10 * 60_000
+const SIMILAR_STALE_MS = 60 * 60_000
+
+/** Searches once per submitted query; `query` is null until the first submit. No refetch on focus/reconnect: a
+ * search costs OpenAlex credits and isn't worth spending again just because the tab regained focus. */
+export const useSearchPapers = (query: string | null) =>
+  useQuery({
+    queryKey: keys.search(query ?? ''),
+    queryFn: () => api.searchPapers(query!),
+    enabled: query !== null,
+    staleTime: SEARCH_STALE_MS,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  })
+
+/** Semantic Scholar's suggestions for a paper, fetched only once `enabled` (the Similar tab is open). No refetch on
+ * focus/reconnect: same reasoning as useSearchPapers. */
+export const useSimilarPapers = (paperId: string, enabled: boolean) =>
+  useQuery({
+    queryKey: keys.similar(paperId),
+    queryFn: () => api.similarPapers(paperId),
+    enabled,
+    staleTime: SIMILAR_STALE_MS,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  })
+
+/** Adds one found paper. Each row owns one, so its "In library" state stays with it. */
+export function useAddCandidate(workspaceId?: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (candidate: Candidate) => api.addCandidate(candidate, workspaceId),
+    onSuccess: (paper, candidate) => {
+      // So a row still shows "In library" after the dialog (or the Similar tab) is closed and reopened, even though
+      // that only rereads the cache: the rows themselves unmount, and the cached candidate otherwise still lacks
+      // paper_id until the next real search. New arrays and objects throughout: never mutate cached query data.
+      const marked = (candidates: Candidate[]) =>
+        candidates.map((existing) =>
+          sameCandidate(existing, candidate) ? { ...existing, paper_id: paper.id } : existing,
+        )
+      // Two shapes under discovery: a search holds { results, notices }, suggestions are a plain list.
+      client.setQueriesData<SearchResult>({ queryKey: keys.searches }, (found) =>
+        found ? { ...found, results: marked(found.results) } : found,
+      )
+      client.setQueriesData<Candidate[]>({ queryKey: keys.suggestions }, (found) => (found ? marked(found) : found))
+      return Promise.all([
+        client.invalidateQueries({ queryKey: keys.papers, exact: true }),
+        client.invalidateQueries({ queryKey: keys.workspaces }),
+        // Stale, not refetched: an open search keeps its rows, and the next one asks again with the paper added.
+        client.invalidateQueries({ queryKey: keys.discovery, refetchType: 'none' }),
+      ])
+    },
   })
 }
 
@@ -350,6 +418,21 @@ export function useConnectionMutations() {
       onSuccess,
     }),
   }
+}
+
+export const usePaperSources = () => useQuery({ queryKey: keys.paperSources, queryFn: api.paperSources })
+
+/** Saves a switch, a key or the contact email. Which sources answer changes, so searches and suggestions ask again. */
+export function useUpdatePaperSources() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (patch: PaperSourcesUpdate) => api.updatePaperSources(patch),
+    onSuccess: () =>
+      Promise.all([
+        client.invalidateQueries({ queryKey: keys.paperSources }),
+        client.invalidateQueries({ queryKey: keys.discovery }),
+      ]),
+  })
 }
 
 /** Queues a re-embed of every paper; the status line refetches once it's queued. */

@@ -1,0 +1,38 @@
+{
+  "results": [
+    {
+      "id": "https://openalex.org/W2963341956",
+      "doi": "https://doi.org/10.18653/v1/n19-1423",
+      "title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+      "publication_year": 2019,
+      "cited_by_count": 33673,
+      "authorships": [
+        {"author": {"display_name": "Jacob Devlin"}},
+        {"author": {"display_name": "Ming‐Wei Chang"}},
+        {"author": {"display_name": "Kenton Lee"}},
+        {"author": {"display_name": "Kristina Toutanova"}}
+      ],
+      "primary_location": {"source": null},
+      "best_oa_location": {"pdf_url": null, "landing_page_url": "https://doi.org/10.18653/v1/n19-1423"},
+      "locations": [{"pdf_url": null, "landing_page_url": "https://doi.org/10.18653/v1/n19-1423"}],
+      "open_access": {"oa_url": "https://doi.org/10.18653/v1/n19-1423"}
+    },
+    {
+      "id": "https://openalex.org/W3033156098",
+      "doi": null,
+      "title": "5分で分かる!? 有名論文ナナメ読み：Jacob Devlin et al. : BERT : Pre-training of Deep Bidirectional Transformers for Language Understanding",
+      "publication_year": 2020,
+      "cited_by_count": 0,
+      "authorships": [{"author": {"display_name": "柴田 知秀"}}],
+      "primary_location": {"source": {"display_name": "情報処理"}},
+      "best_oa_location": null,
+      "locations": [
+        {
+          "pdf_url": null,
+          "landing_page_url": "https://ipsj.ixsq.nii.ac.jp/ej/index.php?active_action=repository_view_main_item_detail&page_id=13&block_id=8&item_id=203091&item_no=1"
+        }
+      ],
+      "open_access": {"oa_url": null}
+    }
+  ]
+}

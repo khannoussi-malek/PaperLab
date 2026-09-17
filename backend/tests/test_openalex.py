@@ -1,6 +1,6 @@
 import httpx
 import pytest
-from conftest import FakeOpenAlex, recorded
+from conftest import FakeOpenAlex, FakeProvider, recorded
 
 from app.providers import openalex
 
@@ -105,3 +105,42 @@ async def test_authors_are_fetched_fifty_ids_per_request(fake_openalex):
     assert first.url.params["filter"] == "openalex_id:" + "|".join(ids[:50])
     assert first.url.params["per-page"] == "50"
     assert second.url.params["filter"] == "openalex_id:A50"
+
+
+async def test_search_works_asks_for_as_many_results_as_the_caller_wants(fake_openalex):
+    fake_openalex.route("/works", recorded("search_bert"))
+
+    await openalex.search_works(fake_openalex.client, "BERT", per_page=10)
+    await openalex.search_works(fake_openalex.client, "BERT")
+
+    assert [r.url.params["per-page"] for r in fake_openalex.requests] == ["10", str(openalex.SEARCH_RESULTS)]
+
+
+def test_works_are_fetched_with_their_locations_for_discovery():
+    assert "locations" in openalex.WORK_FIELDS.split(",")
+
+
+async def test_without_an_email_no_mailto_is_sent():
+    fake = FakeProvider()
+    fake.reply("/works/W1", 200, json=recorded("work_bert"))
+    async with openalex.new_client(None, transport=fake.transport) as client:
+        await openalex.get_work(client, "W1")
+
+    assert "mailto" not in fake.requests[0].url.params
+    assert "authorization" not in fake.requests[0].headers
+
+
+async def test_an_api_key_travels_only_in_the_bearer_header_never_in_a_url():
+    # httpx puts the URL in its error messages, and enrichment logs those with logger.exception.
+    key = "openalex-secret-key"
+    fake = FakeProvider()
+    fake.reply("/works", 200, json=recorded("search_bert"))
+    fake.reply("/works/W1", 401, json={"error": "Invalid or missing API key"})
+    async with openalex.new_client(FakeOpenAlex.MAILTO, transport=fake.transport, api_key=key) as client:
+        await openalex.search_works(client, "BERT")
+        with pytest.raises(httpx.HTTPStatusError) as caught:
+            await openalex.get_work(client, "W1")
+
+    assert [r.headers["authorization"] for r in fake.requests] == [f"Bearer {key}"] * 2
+    assert not any(key in str(r.url) for r in fake.requests)
+    assert key not in str(caught.value)

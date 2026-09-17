@@ -5,8 +5,9 @@ import { defineConfig } from '@playwright/test'
 // teardown (fixtures.ts); if that snapshot races a concurrent default change, it restores the wrong model. Any
 // such spec carries this tag, which puts it in its own single-worker project running after everything else, so
 // nothing else is ever mid-test while the default moves. A tag, not a filename: a new spec that moves the
-// default says so itself instead of quietly losing the protection.
-const MOVES_DEFAULT = /@moves-default/
+// default says so itself instead of quietly losing the protection. `@moves-paper-sources` is the same for the one
+// paper-sources row: a test that changes the switches or the email must not run beside a search or an ingest.
+const MOVES_DEFAULT = /@moves-default|@moves-paper-sources/
 
 // Runs against the real stack: `docker compose up -d` first. No mocked backend.
 export default defineConfig({

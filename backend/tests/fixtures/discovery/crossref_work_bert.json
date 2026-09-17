@@ -1,0 +1,38 @@
+{
+  "message": {
+    "DOI": "10.18653/v1/n19-1423",
+    "title": [
+      "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding"
+    ],
+    "author": [
+      {
+        "given": "Jacob",
+        "family": "Devlin"
+      },
+      {
+        "given": "Ming-Wei",
+        "family": "Chang"
+      },
+      {
+        "given": "Kenton",
+        "family": "Lee"
+      },
+      {
+        "given": "Kristina",
+        "family": "Toutanova"
+      }
+    ],
+    "issued": {
+      "date-parts": [
+        [
+          2019
+        ]
+      ]
+    },
+    "container-title": [
+      "Proceedings of the 2019 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies, Volume 1 (Long and Short Papers)"
+    ],
+    "is-referenced-by-count": 8811,
+    "type": "proceedings-article"
+  }
+}

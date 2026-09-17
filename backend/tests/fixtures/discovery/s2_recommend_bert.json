@@ -1,0 +1,44 @@
+{
+  "recommendedPapers": [
+    {
+      "paperId": "c79a8fd667f59e6f1ca9d54afc34f792e9079c7e",
+      "title": "TRANS-BLSTM: Transformer with Bidirectional LSTM for Language Understanding",
+      "year": 2020,
+      "venue": "arXiv.org",
+      "authors": [{"name": "Zhiheng Huang"}, {"name": "Peng Xu"}, {"name": "Davis Liang"}, {"name": "Ajay K. Mishra"}, {"name": "Bing Xiang"}],
+      "externalIds": {"DBLP": "journals/corr/abs-2003-07000", "MAG": "3010714856", "ArXiv": "2003.07000", "CorpusId": 212725842},
+      "openAccessPdf": {"url": ""},
+      "citationCount": 35
+    },
+    {
+      "paperId": "d56c1fc337fb07ec004dc846f80582c327af717c",
+      "title": "StructBERT: Incorporating Language Structures into Pre-training for Deep Language Understanding",
+      "year": 2019,
+      "venue": "International Conference on Learning Representations",
+      "authors": [{"name": "Wei Wang"}, {"name": "Bin Bi"}, {"name": "Ming Yan"}, {"name": "Chen Wu"}, {"name": "Zuyi Bao"}, {"name": "Liwei Peng"}, {"name": "Luo Si"}],
+      "externalIds": {"MAG": "2995923603", "DBLP": "conf/iclr/0225BYWXBPS20", "ArXiv": "1908.04577", "CorpusId": 199552081},
+      "openAccessPdf": {"url": ""},
+      "citationCount": 308
+    },
+    {
+      "paperId": "73c8a609b30fb383fd978ac6dd792a15a979f3c2",
+      "title": "Five Shades of BERT: Assessing Performance in Question Answering through Comparative Analysis",
+      "year": 2024,
+      "venue": "2024 4th Asian Conference on Innovation in Technology (ASIANCON)",
+      "authors": [{"name": "Kanishka Raikwar"}, {"name": "Priyansh Rajusth"}, {"name": "S. Prabhu"}, {"name": "Navya Shrivastava"}],
+      "externalIds": {"DOI": "10.1109/ASIANCON62057.2024.10837814", "CorpusId": 275786261},
+      "openAccessPdf": {"url": ""},
+      "citationCount": 1
+    },
+    {
+      "paperId": "4bcd4f6ba12784a17fd6655165a10c437d70fc11",
+      "title": "Can bidirectional encoder become the ultimate winner for downstream applications of foundation models?",
+      "year": 2024,
+      "venue": "2024 2nd International Conference on Foundation and Large Language Models (FLLM)",
+      "authors": [{"name": "Lewen Yang"}, {"name": "Xuanyu Zhou"}, {"name": "Ju Fan"}, {"name": "Xinyi Xie"}, {"name": "Shengxin Zhu"}],
+      "externalIds": {"DBLP": "journals/corr/abs-2411-18021", "ArXiv": "2411.18021", "DOI": "10.1109/FLLM63129.2024.10852511", "CorpusId": 274305758},
+      "openAccessPdf": {"url": "http://arxiv.org/pdf/2411.18021"},
+      "citationCount": 1
+    }
+  ]
+}

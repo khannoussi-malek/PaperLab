@@ -45,6 +45,12 @@ export type PullProgressEvent = components['schemas']['PullProgressEvent']
 export type PullDoneEvent = components['schemas']['PullDoneEvent']
 export type PullErrorEvent = components['schemas']['PullErrorEvent']
 export type EmbeddingStatus = components['schemas']['EmbeddingStatusOut']
+export type Candidate = components['schemas']['CandidateOut']
+export type SearchResult = components['schemas']['SearchOut']
+export type PaperSources = components['schemas']['PaperSourcesOut']
+export type PaperSource = components['schemas']['PaperSourceOut']
+export type PaperSourceId = PaperSource['id']
+export type PaperSourcesUpdate = components['schemas']['PaperSourcesUpdate']
 
 /** Where a chat lives: the reader's paper, or a workspace. */
 export type ChatScope = { kind: 'paper' | 'workspace'; id: string }
@@ -97,6 +103,12 @@ export const api = {
   deletePaper: (id: string) => request<void>(`/api/papers/${id}`, { method: 'DELETE' }),
   reingestPaper: (id: string) => request<Paper>(`/api/papers/${id}/reingest`, { method: 'POST' }),
   paperFileUrl: (id: string) => `/api/papers/${id}/file`,
+  /** Papers outside the library for a title, DOI, arXiv ID or OpenAlex ID, and a notice per source that failed. */
+  searchPapers: (query: string) => request<SearchResult>(`/api/discovery/search?q=${encodeURIComponent(query)}`),
+  similarPapers: (paperId: string) => request<Candidate[]>(`/api/papers/${paperId}/similar`),
+  /** Downloads a found paper's free PDF into the library; with a `workspaceId` it also joins that workspace. */
+  addCandidate: (candidate: Candidate, workspaceId?: string) =>
+    request<Paper>('/api/discovery/add', sendJson('POST', { candidate, workspace_id: workspaceId ?? null })),
   listChunks: (paperId: string, page: number) => request<Chunk[]>(`/api/papers/${paperId}/chunks?page=${page}`),
   listNotes: (paperId: string) => request<Note[]>(`/api/papers/${paperId}/notes`),
   createNote: (note: NoteCreate) => request<Note>('/api/notes', sendJson('POST', note)),
@@ -178,4 +190,8 @@ export const api = {
     request<void>(`/api/llm/connections/${connectionId}/installed?name=${encodeURIComponent(name)}`, { method: 'DELETE' }),
   embeddingStatus: () => request<EmbeddingStatus>('/api/embedding'),
   reindexLibrary: () => request<{ papers: number }>('/api/embedding/reindex', sendJson('POST', { confirm: true })),
+  paperSources: () => request<PaperSources>('/api/paper-sources'),
+  /** Only what `patch` holds changes: a key left out is kept, a null key is removed. */
+  updatePaperSources: (patch: PaperSourcesUpdate) =>
+    request<PaperSources>('/api/paper-sources', sendJson('PATCH', patch)),
 }

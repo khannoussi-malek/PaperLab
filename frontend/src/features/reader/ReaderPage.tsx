@@ -14,6 +14,7 @@ import { DataPanel } from '../data/DataPanel'
 import { NumberMarks } from '../data/NumberMarks'
 import { numberMarks, tableMarkerAt, tableMarks } from '../data/pageMarks'
 import { useCaptureDrag } from '../data/useCaptureDrag'
+import { SimilarTab } from '../discovery/SimilarTab'
 import { browserStorage, highlightFill, loadLastColor, saveLastColor } from '../notes/highlightColors'
 import { NoteHoverCard } from '../notes/NoteHoverCard'
 import { NotesPanel } from '../notes/NotesPanel'
@@ -432,6 +433,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
           />
         }
         data={<DataPanel paperId={paperId} onShowRegion={flashChunk} />}
+        similar={<SimilarTab paperId={paperId} active={tab === 'similar'} />}
       />
 
       {numberDraft && (
