@@ -130,5 +130,7 @@ def quote_rects(path: str | Path, page_number: int, blocks: list[Rect], quote: s
     with pymupdf.open(path) as doc:
         if not 1 <= page_number <= doc.page_count:
             return []
-        found = doc[page_number - 1].search_for(" ".join(quote.split()))
+        # Extraction's flags, so "ﬁ" reads as "fi" here too (search_for's default keeps ligatures), plus search_for's
+        # own dehyphenation.
+        found = doc[page_number - 1].search_for(" ".join(quote.split()), flags=TEXT_FLAGS | pymupdf.TEXT_DEHYPHENATE)
     return [tuple(round(v, 2) for v in r) for r in found if any(r.intersects(pymupdf.Rect(b)) for b in blocks)]

@@ -1,13 +1,16 @@
 import uuid
 from pathlib import Path
 
+import pymupdf
 import pytest
 from pdf_papers import TWICE, TWO_LINE_QUOTE, TWO_PARAGRAPH_QUOTE, chunked_paper
 from sqlalchemy import func, select
 
 from app.core import notes, papers
+from app.core.chunking import ChunkDraft
 from app.core.errors import Conflict, InvalidInput, NotFound
 from app.models import LLMOutput, Note, Paper, Provenance, note_anchors
+from app.providers.extraction import quote_rects
 
 pytestmark = pytest.mark.anyio
 
@@ -184,6 +187,43 @@ async def test_a_quote_that_cannot_be_placed_is_refused(session, tmp_path, quote
         await notes.locate_quote(session, paper.id, quote)
 
     assert refused.value.details == details
+
+
+async def test_a_quote_from_a_block_two_overlapping_chunks_share_is_one_place(session):
+    paper = await make_paper(session, page_count=1)  # its PDF isn't here, so a quote is placed on its paragraph
+    shared = [72.0, 300.0, 540.0, 340.0]
+    closing = "Both chunks repeat this closing paragraph. It says overlap twice, then overlap twice again."
+    # Chunking a paper with no headings carries a chunk's last block into the next (core/chunking.py).
+    await papers.replace_chunks(
+        session,
+        paper.id,
+        [
+            ChunkDraft(0, 1, [[72.0, 100.0, 540.0, 290.0], shared], None, f"The first chunk opens here.\n\n{closing}"),
+            ChunkDraft(1, 1, [shared, [72.0, 350.0, 540.0, 500.0]], None, f"{closing}\n\nThe second chunk goes on."),
+        ],
+    )
+
+    anchor = await notes.locate_quote(session, paper.id, "Both chunks repeat this closing paragraph.")
+
+    assert (anchor.page, anchor.bbox) == (1, [tuple(shared)])
+    with pytest.raises(InvalidInput, match="^quote_ambiguous$"):  # twice in that one paragraph is still twice
+        await notes.locate_quote(session, paper.id, "overlap twice")
+
+
+def test_words_the_pdf_draws_with_ligatures_are_found_on_their_line(tmp_path):
+    doc = pymupdf.open()
+    page = doc.new_page(width=612, height=792)
+    writer = pymupdf.TextWriter(page.rect)
+    # "ﬃ" and "ﬁ" as single glyphs, as typeset papers draw them; extraction reads them as "ffi" and "fi".
+    text = "An e\ufb03cient method is the \ufb01rst one we try, before any other."
+    writer.fill_textbox(pymupdf.Rect(72, 100, 540, 300), text, font=pymupdf.Font("tiro"), fontsize=11)
+    writer.write_text(page)
+    doc.save(tmp_path / "ligatures.pdf")
+    doc.close()
+
+    rects = quote_rects(tmp_path / "ligatures.pdf", 1, [(72, 100, 540, 300)], "An efficient method is the first one")
+
+    assert len(rects) == 1 and 100 <= rects[0][1] < rects[0][3] <= 120  # the first line, not [] (the paragraph)
 
 
 async def test_placing_a_quote_needs_a_known_paper_with_chunks(session):
