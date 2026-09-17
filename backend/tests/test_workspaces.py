@@ -171,6 +171,7 @@ async def test_by_name_for_an_unknown_name_lists_every_name(session):
     with pytest.raises(NotFound, match="^unknown_workspace$") as unknown:
         await workspaces.by_name(session, f"No such workspace {RUN}")
 
-    names = [view.name for view in await workspaces.list_workspaces(session)]
-    assert unknown.value.details == {"available": names}
-    assert f"Alpha review {RUN}" in names
+    # Not compared with a later read: a workspace another run commits in between (E2E on this stack) would differ.
+    available = unknown.value.details["available"]
+    assert unknown.value.details == {"available": available}
+    assert f"Alpha review {RUN}" in available and available == sorted(available)

@@ -102,12 +102,15 @@ async def test_search_in_a_workspace_sees_only_its_papers(session, embedder):
 
 
 async def test_search_refuses_before_embedding_anything(session, embedder):
+    await workspaces.create(session, f"Search refusal {RUN}")
     with pytest.raises(InvalidInput, match="^empty_query$"):
         await library.search(session, "  ", embedder=embedder)
     with pytest.raises(NotFound, match="^unknown_workspace$") as unknown:
         await library.search(session, QUESTION, f"No such workspace {RUN}", embedder=embedder)
 
-    assert unknown.value.details["available"] == [w.name for w in await workspaces.list_workspaces(session)]
+    # Not compared with a later read: a workspace another run commits in between (E2E on this stack) would differ.
+    available = unknown.value.details["available"]
+    assert f"Search refusal {RUN}" in available and available == sorted(available)
     assert embedder.calls == []
 
 
