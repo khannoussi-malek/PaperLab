@@ -1,0 +1,37 @@
+#!/bin/sh
+# Starts PaperLab's MCP server inside the running api container, for Claude Desktop, Claude Code or another MCP
+# client on macOS, Linux or WSL. Stdout carries the protocol, so every message of ours goes to stderr.
+
+say() {
+  printf 'paperlab-mcp: %s\n' "$1" >&2
+}
+
+cd "$(dirname "$0")/.." || exit 1
+
+# Apps like Claude Desktop don't get a terminal's PATH on macOS, hence the fixed places after `command -v`.
+docker=
+for candidate in "${PAPERLAB_DOCKER:-}" "$(command -v docker)" /usr/local/bin/docker /opt/homebrew/bin/docker \
+  /usr/bin/docker "${HOME:-}/.orbstack/bin/docker" /Applications/Docker.app/Contents/Resources/bin/docker; do
+  if [ -n "$candidate" ] && [ -f "$candidate" ] && [ -x "$candidate" ]; then
+    docker=$candidate
+    break
+  fi
+done
+if [ -z "$docker" ]; then
+  say 'docker was not found. Install Docker, or set PAPERLAB_DOCKER to its full path.'
+  exit 1
+fi
+
+services=$("$docker" compose ps --status running --services 2>&1)
+case $services in
+  *'permission denied'*)
+    say 'Docker refused access (permission denied). On Linux, add your user to the docker group: sudo usermod -aG docker $USER, then log out and back in.'
+    exit 1
+    ;;
+esac
+if ! printf '%s\n' "$services" | grep -qx api; then
+  say "PaperLab isn't running. Start it with \"docker compose up -d\" in $(pwd)."
+  exit 1
+fi
+
+exec "$docker" compose exec -T api python -m mcp_server
