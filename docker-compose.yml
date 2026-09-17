@@ -46,6 +46,9 @@ services:
 
   worker:
     <<: *backend
+    # The References fetch runs here, so the E2E stack's fake discovery must reach the worker too.
+    environment:
+      DISCOVERY_PROVIDER: ${DISCOVERY_PROVIDER:-live}
     # Not `arq --watch`: that restarts the worker in-process and never re-imports changed code.
     command: watchfiles --filter python "arq app.workers.settings.WorkerSettings" app
 
