@@ -75,7 +75,11 @@ def _entry(node: ET.Element) -> dict | None:
     return {
         "arxiv_id": match.group(1).lower(),
         "title": " ".join(node.findtext("atom:title", "", NS).split()),
-        "authors": [" ".join((name.text or "").split()) for name in node.iterfind("atom:author/atom:name", NS)],
+        "authors": [
+            joined
+            for name in node.iterfind("atom:author/atom:name", NS)
+            if (joined := " ".join((name.text or "").split()))
+        ],
         "year": int(published[:4]) if published[:4].isdigit() else None,
         "doi": doi.lower() or None,
     }

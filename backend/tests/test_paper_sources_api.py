@@ -71,19 +71,27 @@ async def test_null_removes_a_key_and_the_email(client, no_row):
     [
         {"contact_email": "not an email"},
         {"api_keys": {"core": "   "}},
+        {"api_keys": {"core": ""}},
+        {"api_keys": {"core": "sk-​core-0123456789"}},
         {"api_keys": {"arxiv": KEY}},
         {"enabled": {"dblp": True}},
         {"enabled": {"crossref": None}},
         {"enabled": {"crossref": "yes please"}},
         {"surprise": True},
     ],
-    ids=["bad-email", "blank-key", "keyless-source", "unknown-source", "null-switch", "not-a-bool", "unknown-field"],
+    ids=[
+        "bad-email", "blank-key", "empty-key", "non-ascii-key", "keyless-source", "unknown-source", "null-switch",
+        "not-a-bool", "unknown-field",
+    ],  # fmt: skip
 )
 async def test_a_bad_patch_is_422_and_never_echoes_a_key(client, no_row, body):
     response = await client.patch("/api/paper-sources", json={**body, "enabled": body.get("enabled", {"arxiv": False})})
 
     assert response.status_code == 422
     assert KEY not in response.text
+    for key in body.get("api_keys", {}).values():
+        if key:
+            assert key not in response.text
     assert (await client.get("/api/paper-sources")).json()["sources"][3]["enabled"] is True
 
 

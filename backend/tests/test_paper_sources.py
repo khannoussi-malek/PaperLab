@@ -42,6 +42,17 @@ async def test_an_openalex_mailto_seeds_the_email_and_turns_openalex_on_once(no_
     assert "s2-key-0123456789" not in caplog.text
 
 
+async def test_an_unusable_openalex_mailto_seeds_with_no_email_and_openalex_off(no_row, caplog):
+    caplog.set_level(logging.WARNING)
+    bad_mailto = "m" * 300
+
+    assert await paper_sources.seed_from_env(no_row, bad_mailto, "") is True
+
+    sources = await paper_sources.get(no_row)
+    assert (sources.contact_email, sources.enabled["openalex"]) == (None, False)
+    assert bad_mailto not in caplog.text
+
+
 async def test_an_empty_env_seeds_the_defaults(no_row):
     assert await paper_sources.seed_from_env(no_row, "", "") is True
 
@@ -73,10 +84,14 @@ async def test_null_removes_the_email_or_a_key(no_row):
         ({"contact_email": "me@localhost"}, paper_sources.BAD_EMAIL),
         ({"contact_email": f"{'a' * 250}@example.org"}, paper_sources.BAD_EMAIL),
         ({"api_keys": {"core": "   "}}, paper_sources.EMPTY_KEY),
+        ({"api_keys": {"core": "sk-​core-0123456789"}}, paper_sources.NOT_PLAIN_KEY),
+        ({"api_keys": {"core": "sk-core\n0123456789"}}, paper_sources.NOT_PLAIN_KEY),
         ({"api_keys": {"arxiv": KEY}}, "arxiv doesn't take an API key"),
         ({"enabled": {"dblp": True}}, "unknown paper source: dblp"),
     ],
-    ids=["no-at", "no-dot", "too-long", "blank-key", "keyless-source", "unknown-source"],
+    ids=[
+        "no-at", "no-dot", "too-long", "blank-key", "zero-width-space", "newline", "keyless-source", "unknown-source",
+    ],  # fmt: skip
 )
 async def test_bad_changes_are_refused_and_change_nothing(no_row, changes, message):
     with pytest.raises(InvalidInput, match=message):
