@@ -148,7 +148,7 @@ async def ask_workspace(
     workspace_id: uuid.UUID, payload: ChatRequest, llm: LLMDep, prepared: WorkspacePreparedDep
 ) -> AsyncIterable[ServerSentEvent]:
     """Checked before streaming, in parameter order: 404 model_not_found or 409 no_model, then 409
-    follow_ups_paper_only, 404, 409 workspace_empty or workspace_not_indexed, 422."""
+    follow_ups_paper_only, 404, 409 workspace_empty, search_not_set_up or workspace_not_indexed, 422."""
     async for event in answer_events(chat.Scope(workspace_id=workspace_id), payload.question, prepared, llm):
         yield event
 

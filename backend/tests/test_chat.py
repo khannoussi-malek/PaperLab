@@ -10,6 +10,7 @@ from app.core import chat, prompts
 from app.core.errors import Conflict, NotFound
 from app.core.retrieval import RetrievedChunk
 from app.models import Chunk, LLMOutput, Note, Paper
+from app.providers import embedding
 
 pytestmark = pytest.mark.anyio
 
@@ -241,3 +242,15 @@ async def test_prepare_rejects_unready_unindexed_and_unknown_papers(session, emb
         await chat.prepare(session, uuid.uuid4(), "q", embedder)
     # A small paper is sent whole, so it needs no vectors.
     assert (await chat.prepare(session, small_unindexed.id, "q", embedder)).whole_paper is True
+
+
+async def test_with_no_search_model_a_long_paper_says_so_before_its_index_and_a_short_one_goes_whole(
+    session, monkeypatch
+):
+    monkeypatch.setattr(embedding, "get_model", lambda: None)  # nothing downloaded
+    large_unindexed = await make_paper(session, ["x" * 25_000], embedded=False)
+    small_unindexed = await make_paper(session, ["one"], embedded=False)
+
+    with pytest.raises(Conflict, match="^search_not_set_up$"):
+        await chat.prepare(session, large_unindexed.id, "q")
+    assert (await chat.prepare(session, small_unindexed.id, "q")).whole_paper is True

@@ -8,6 +8,7 @@ from pgvector.sqlalchemy import Vector
 from sqlalchemy import bindparam, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.errors import Conflict
 from app.models import workspace_papers
 from app.providers import embedding
 
@@ -43,6 +44,9 @@ NEAREST_IN_PAPERS = text(_NEAREST.format(scope="AND paper_id = ANY(:paper_ids)")
 # Thousands of dead near-duplicate vectors (re-ingests before autovacuum) can starve it; VACUUM chunks if it shows.
 ITERATIVE_SCAN = text("SET LOCAL hnsw.iterative_scan = relaxed_order")
 
+# D136: what the MCP server passes on with Conflict("search_not_set_up"); the app words it itself (spec §5, §6).
+SEARCH_NOT_SET_UP = "Search isn't set up. Download the search model in Settings to search long papers and workspaces."
+
 
 @dataclass(frozen=True)
 class RetrievedChunk:
@@ -53,6 +57,15 @@ class RetrievedChunk:
     bbox: list[Rect]
     text: str
     distance: float | None = None  # None when chat sends the whole paper instead of retrieving
+
+
+async def query_embedder(embedder=None):
+    """The model that embeds a question: `embedder` when the caller passes one (tests, evals), else this process's own,
+    loaded on first need. Raises Conflict("search_not_set_up") while no search model is downloaded (D136)."""
+    model = embedder if embedder is not None else await asyncio.to_thread(embedding.get_model)
+    if model is None:
+        raise Conflict("search_not_set_up", detail=SEARCH_NOT_SET_UP)
+    return model
 
 
 def _to_chunk(row, distance: float | None = None) -> RetrievedChunk:
@@ -79,7 +92,8 @@ async def retrieve(
     embedder=None,
     per_paper: int | None = None,
 ) -> list[RetrievedChunk]:
-    """The k chunks nearest to the query, closest first. embedder=None uses the process-cached model.
+    """The k chunks nearest to the query, closest first. embedder=None uses the process-cached model, and raises
+    Conflict("search_not_set_up") while there is none (query_embedder).
 
     Scope: paper_ids, workspace_id, or neither (the whole library). A scope that resolves to 2+ papers (a
     workspace with several members, or 2+ paper_ids) keeps at most per_paper (default MAX_PER_PAPER) chunks
@@ -98,7 +112,7 @@ async def retrieve(
     # just one paper, which must be as uncapped as passing that paper's id directly.
     if per_paper is None and paper_ids is not None and len(paper_ids) > 1:
         per_paper = MAX_PER_PAPER
-    model = embedder if embedder is not None else await asyncio.to_thread(embedding.get_model)
+    model = await query_embedder(embedder)
     params = {"q": await embedding.embed_query(model, query), "k": k, "candidates": max(CANDIDATES, k)}
     params["per_paper"] = k if per_paper is None else per_paper
     if paper_ids is None:

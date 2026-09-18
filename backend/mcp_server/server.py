@@ -60,7 +60,8 @@ def recoverable(tool):
 async def search_library(query: str, workspace: str | None = None) -> list[library.Passage]:
     """Passages from the owner's papers closest to `query`, closest first (at most 3 from one paper). Leave out
     `workspace` to search the whole library, or give a workspace's exact name; an unknown name answers with the
-    names that exist."""
+    names that exist. Until the owner downloads the search model, it answers search_not_set_up with a sentence to
+    pass on."""
     async with sessions() as session:
         return await library.search(session, query, workspace)
 
