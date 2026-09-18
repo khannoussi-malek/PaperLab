@@ -7,9 +7,9 @@ import { carryPositions, endId, FADED, sizedNodes, tooltipFor, withAlpha, type S
 import { OUTER_RING, type RingPlace } from './ringsModel'
 import { useBoxSize } from './useBoxSize'
 
-// Loaded on first use, exactly as PlotlyChart loads Plotly: react-force-graph-2d is 189 kB minified (61 kB gzipped)
-// and only this page draws a graph. A failed dynamic import is cached by the browser for the page's lifetime, so the
-// cache is cleared on failure and the error offers a reload.
+// Loaded on first use, exactly as PlotlyChart loads Plotly: react-force-graph-2d is 94.53 kB minified (31.04 kB
+// gzipped) and only this page draws a graph. A failed dynamic import is cached by the browser for the page's
+// lifetime, so the cache is cleared on failure and the error offers a reload.
 let forceGraph: Promise<typeof import('react-force-graph-2d')> | null = null
 function loadForceGraph() {
   if (!forceGraph) {

@@ -574,7 +574,8 @@ sticky cells from covering content) and *ARIA Labels* (High); `"3d visualization
 - **Counts line:** `{n} papers, {m} links` (singulars at 1), with ` · Showing the first 2000 links.` appended when the
   payload is truncated. It counts the *visible* links, so unticking a layer changes it. It is the same in every view.
 - **Views:** shadcn `Tabs` at the top of the middle column, labelled exactly **2D**, **3D**, **Matrix**, **Timeline**,
-  **Rings** (tab list named "Graph view"; arrow keys move between them). Every view takes the same props
+  **Rings** (tab list named "Graph view"; `activationMode="manual"`, so arrow keys move focus between them and Enter
+  or Space activates the one focused — arrowing past 3D never downloads or starts it). Every view takes the same props
   (`ViewProps` in `viewModel.ts`); the page owns layers, workspace, focus, hops, the panel and the dialog, so a switch
   changes none of them. Radix renders only the chosen tab, so a view never picked loads nothing. The choice is
   remembered per browser (`localStorage` `paperlab.graph.view`, 2D when storage is empty, junk or blocked); the URL
@@ -582,8 +583,8 @@ sticky cells from covering content) and *ARIA Labels* (High); `"3d visualization
   `data-view="2d|3d|matrix|timeline|rings"`, and the canvas views `data-ready` once their module has loaded. In every
   view a paper wears `nodeColor`, clicking it focuses it exactly as the panel does, and a focus fades what is outside
   `focusedIds(visible links, focus, hops)` to `FADED` (12%).
-- **2D canvas:** `react-force-graph-2d`, loaded with a dynamic `import()` in `GraphCanvas.tsx` and nowhere else (187 kB,
-  61 kB gzipped, its own chunk — the same rule as Plotly). It carries `aria-hidden` and a visually hidden line beside
+- **2D canvas:** `react-force-graph-2d`, loaded with a dynamic `import()` in `GraphCanvas.tsx` and nowhere else
+  (94.53 kB, 31.04 kB gzipped, its own chunk — the same rule as Plotly). It carries `aria-hidden` and a visually hidden line beside
   it reads `{n} papers, {m} links. Use the papers list to explore connections.` Transparent background, so the glass
   card shows through. A node's radius runs 3–9 px with its share of the links (`sizedNodes`). Never hand force-graph a
   string label: float-tooltip sets a string as innerHTML, and titles come from PDFs and discovery sources. Every label
@@ -594,13 +595,18 @@ sticky cells from covering content) and *ARIA Labels* (High); `"3d visualization
   it was, at rest (`carryPositions`), so the layout isn't thrown again. The dynamic import's failure state
   (`GraphLoadError`: an `ErrorAlert` and a "Reload" button) sits outside the `aria-hidden` wrapper, so a screen reader
   reaches what it can act on.
-- **3D:** `react-force-graph-3d` (it brings three.js), imported dynamically in `Graph3DView.tsx` only, on first pick.
-  Free physics, `controlType="orbit"`: drag to orbit, scroll to zoom, click to focus. Same sizes, colours, fading,
-  2.5-wide `manual` links and arrows as 2D; a `manual` link's label is its hover label (`tooltipFor`), because text
-  along a 3D link would need another dependency. Positions carry across rebuilds in `x`/`y`/`z`. `hasWebGL` accepts
-  **WebGL 2 only** (three.js r163+ creates WebGL 2 contexts only, and throws inside `WebGLRenderer`'s constructor when
-  it gets none); before the canvas mounts the view asks `hasWebGL()`, and without it, outside the `aria-hidden` box, it
-  reads `3D needs WebGL, which this browser has turned off. The other views work without it.` A small error boundary
+- **3D:** `react-force-graph-3d` (it brings three.js), imported dynamically in `Graph3DView.tsx` only, on first pick
+  (1,315.63 kB, 345.21 kB gzipped, loaded only when 3D is picked). Free physics, `controlType="orbit"`: drag to orbit,
+  scroll to zoom, click to focus. The camera fits the graph once per mount, when the layout first settles
+  (`onEngineStop` → `zoomToFit`); a later rebuild never yanks a camera the owner has moved, and a view switch (Radix
+  remounts the view) fits again on return. Same sizes, colours, fading, 2.5-wide `manual` links and arrows as 2D; a
+  `manual` link's label is its hover label (`tooltipFor`), because text along a 3D link would need another
+  dependency. Positions carry across rebuilds in `x`/`y`/`z`. `hasWebGL` accepts **WebGL 2 only** (three.js r163+
+  creates WebGL 2 contexts only, and throws inside `WebGLRenderer`'s constructor when it gets none) and releases the
+  probe context it opens (`loseContext`) before returning, so repeated view switching never walks toward the
+  browser's cap on live WebGL contexts; before the canvas mounts the view asks it once per page load (cached module-
+  level, reused after) and, without it, outside the `aria-hidden` box, it reads `3D needs WebGL, which this browser
+  has turned off. The other views work without it.` A small error boundary
   (`CanvasBoundary`) around the canvas mount catches a start-up failure the probe can't foresee — a lost context, a
   driver crash, too many live contexts — and shows `3D couldn't start in this browser. The other views work without
   it.`, also outside `aria-hidden`; the rest of the page, tabs included, is untouched.
@@ -638,8 +644,10 @@ sticky cells from covering content) and *ARIA Labels* (High); `"3d visualization
   `Select` "Links out" (1–3, while a paper is focused or Rings is shown), a `Select` "Time axis" (Timeline only), and
   the colour legend.
 - **Panel:** it always lists the papers — an h2 "Papers" over buttons (`.graph-paper`), sorted by link count then
-  title, each with its count — so a keyboard user can move from paper to paper. With one focused, a "Connected papers"
-  section sits above that list: the h2, the paper's title under it, a ghost "Clear focus", the outline "Link to
+  title, each with its count — so a keyboard user can move from paper to paper; that list takes what's left of the
+  column (`flex-1 basis-0`), never below a few rows (`min-h-32`). With one focused, a "Connected papers" section sits
+  above that list, capped at 60% of the panel (`max-h-[60%]`, its inner list scrolling within that) so a long Papers
+  list can never starve it: the h2, the paper's title under it, a ghost "Clear focus", the outline "Link to
   another paper…" button, then an h3 per kind (plain blocks, not landmarks) over rows (`.graph-connection`) linking to
   the reader. A row's muted note says which way it points: `this paper cites it` / `it cites this paper`, `your link
   to it` / `your link from it` followed by the owner's label (`your link to it: builds on`). With **Links out** above
