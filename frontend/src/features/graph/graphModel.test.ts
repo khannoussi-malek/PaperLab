@@ -3,6 +3,7 @@ import type { GraphLink, GraphNode } from '@/api/client'
 import {
   countsLine,
   DEFAULT_LAYERS,
+  degrees,
   focusedIds,
   KIND_LABELS,
   labelError,
@@ -122,6 +123,25 @@ describe('colours', () => {
     const colors = workspaceColors(names.map((name) => node(name, [name])), 'dark')
     expect(colors.get('w1')).toBe('#3987e5')
     expect(colors.get('w7')).toBe('#3987e5')
+  })
+})
+
+describe('degrees', () => {
+  it('counts both ends of a link', () => {
+    expect(degrees([link('a', 'b', 'cites')])).toEqual(
+      new Map([
+        ['a', 1],
+        ['b', 1],
+      ])
+    )
+  })
+
+  it('leaves a paper with no links out of the map', () => {
+    expect(degrees([link('a', 'b', 'cites')]).has('lonely')).toBe(false)
+  })
+
+  it('counts a paper twice when two links touch it', () => {
+    expect(degrees([link('a', 'b', 'cites'), link('a', 'c', 'similar')]).get('a')).toBe(2)
   })
 })
 

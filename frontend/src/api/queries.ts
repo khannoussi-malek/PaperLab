@@ -503,7 +503,7 @@ export const useCheckMcpServer = () => useMutation({ mutationFn: api.checkMcpSer
 export const useLibraryGraph = (workspaceId: string | null) =>
   useQuery({ queryKey: keys.libraryGraph(workspaceId), queryFn: () => api.libraryGraph(workspaceId) })
 
-/** The owner's own links. Each write refetches the graph, which carries them. One `error` for whichever ran. */
+/** The owner's own links. Each write refetches the graph, which carries them. Save and remove report separately. */
 export function usePaperLinkMutations() {
   const client = useQueryClient()
   const onSuccess = () => client.invalidateQueries({ queryKey: keys.graph })
@@ -517,6 +517,12 @@ export function usePaperLinkMutations() {
     onSuccess,
   })
   const remove = useMutation({ mutationFn: api.deletePaperLink, onSuccess })
-  const failed = [create, rename, remove].find((mutation) => mutation.error !== null)
-  return { create, rename, remove, error: failed?.error?.message ?? null }
+  return {
+    create,
+    rename,
+    remove,
+    /** The dialog shows these two; the panel shows a failed removal, which has no dialog. */
+    saveError: (create.error ?? rename.error)?.message ?? null,
+    removeError: remove.error?.message ?? null,
+  }
 }

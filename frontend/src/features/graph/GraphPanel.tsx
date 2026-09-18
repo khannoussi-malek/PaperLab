@@ -2,7 +2,7 @@ import { Link2, Pencil, Trash2 } from 'lucide-react'
 import type { GraphLink, GraphNode } from '@/api/client'
 import { Button } from '@/components/ui/button'
 import { readerHref } from '@/lib/route'
-import { KIND_LABELS, KINDS } from './graphModel'
+import { degrees, KIND_LABELS, KINDS } from './graphModel'
 
 type Props = {
   nodes: GraphNode[]
@@ -19,11 +19,7 @@ type Props = {
 /** A paper's connections by kind, plus the papers list. D108: the canvas is hidden, so this is the interface. */
 export function GraphPanel({ nodes, links, focused, onFocus, onClear, onAddLink, onEditLink, onRemoveLink }: Props) {
   const byId = new Map(nodes.map((node) => [node.id, node]))
-  const degree = new Map<string, number>()
-  for (const link of links) {
-    degree.set(link.source, (degree.get(link.source) ?? 0) + 1)
-    degree.set(link.target, (degree.get(link.target) ?? 0) + 1)
-  }
+  const degree = degrees(links)
 
   if (focused === null) {
     const sorted = [...nodes].sort(
@@ -39,7 +35,7 @@ export function GraphPanel({ nodes, links, focused, onFocus, onClear, onAddLink,
             <li key={node.id}>
               <button
                 type="button"
-                className="graph-paper flex w-full items-baseline gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted"
+                className="graph-paper flex w-full items-baseline gap-2 rounded-md px-2 py-1.5 text-left text-sm outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
                 data-paper-id={node.id}
                 onClick={() => onFocus(node.id)}
               >
@@ -99,7 +95,7 @@ export function GraphPanel({ nodes, links, focused, onFocus, onClear, onAddLink,
                     <li key={`${kind}-${link.id ?? other(link)}`} className="graph-connection flex items-center gap-1">
                       <a
                         href={readerHref(paper.id)}
-                        className="min-w-0 flex-1 truncate rounded-md px-2 py-1.5 text-sm hover:bg-muted"
+                        className="min-w-0 flex-1 truncate rounded-md px-2 py-1.5 text-sm outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
                         title={paper.title}
                         data-paper-id={paper.id}
                       >
