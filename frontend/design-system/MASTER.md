@@ -435,7 +435,9 @@ before deleting; `search.py "progress bar long running download status" --domain
 - **AI mark:** its tooltip and screen-reader label read `AI · <model> · <connection> · prompt v<N>` (`aiMark`);
   answers saved before connections read `AI · <model> · prompt v<N>`.
 - **Refusals:** `no_model` and `embedding_model_changed` alerts carry an outline "Open settings" link in `AlertAction`;
-  `model_not_found` offers Retry, which asks with the dropdown's fallback.
+  `model_not_found` offers Retry, which asks with the dropdown's fallback. `search_not_set_up` reads "Search isn't set
+  up, so this can't be searched yet." with the `DownloadSearchModel` block under the message and no Retry (ask again
+  once the status line says ready).
 - **Search:** the section "Search" (h2) opens with the built-in search model: a `.search-model-status` line
   (`text-sm tabular-nums text-muted-foreground`, no live region) reading "Search model: not downloaded", "Search
   model: downloading… 42%" or "Search model: ready" (`statusLine`); while the model is missing, an outline `sm`
@@ -453,6 +455,11 @@ before deleting; `search.py "progress bar long running download status" --domain
   model is downloaded) opens the `Dialog` "Re-index the library?" ("Every paper's passages are embedded again with
   <model>, in the background."), with Cancel and destructive "Re-index"; then a `role="status"` line "Re-indexing N
   papers in the background."
+- **Library notice:** while no search model is downloaded and some ready paper is too long to chat with whole
+  (`showSearchNotice`: `model_present` false and `papers_needing_search > 0`), one `.search-notice` row sits between
+  the library header and the workspace sidebar: the muted line "Search isn't set up: long papers and workspaces can't
+  be searched yet." (`text-sm text-muted-foreground`) and the `DownloadSearchModel` block. Not an `Alert`, not glass:
+  it is information, not an error. It goes away once the model is here.
 - **Chat panel details:** `.chat-cite` has `outline-none focus-visible:ring-2 focus-visible:ring-ring`. While an
   answer streams, the list stays at its bottom if it was there. "Save as note" stays inside the panel
   (`saveButtonPosition`) and re-measures when the panel changes size or is shown again.
