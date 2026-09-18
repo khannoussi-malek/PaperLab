@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { downloadLabel, refusedDownload, showSearchNotice, statusLine } from './searchModel'
+import { downloadAnnouncement, downloadLabel, refusedDownload, showSearchNotice, statusLine } from './searchModel'
 
 describe('statusLine', () => {
   it('says whether the search model is here, and how far a download has got', () => {
@@ -33,6 +33,15 @@ describe('refusedDownload', () => {
       message: 'The search model is already downloading in another window.',
     })
     expect(refusedDownload('Internal Server Error')).toEqual({ status: 'error', message: 'Internal Server Error' })
+  })
+})
+
+describe('downloadAnnouncement', () => {
+  it('says the download finished, and nothing otherwise: errors already announce through their own Alert', () => {
+    expect(downloadAnnouncement({ status: 'done', papersQueued: 3 })).toBe('Search model downloaded.')
+    expect(downloadAnnouncement({ status: 'idle' })).toBe('')
+    expect(downloadAnnouncement({ status: 'downloading', completed: 0, total: 0 })).toBe('')
+    expect(downloadAnnouncement({ status: 'error', message: 'The disk is full.' })).toBe('')
   })
 })
 
