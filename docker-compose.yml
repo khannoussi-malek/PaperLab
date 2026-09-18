@@ -6,7 +6,6 @@ x-backend: &backend
   volumes:
     - ./backend:/src
     - pdfs:/data/pdfs
-    - hfcache:/root/.cache/huggingface
     - models:/models
   depends_on:
     db:
@@ -73,5 +72,4 @@ services:
 volumes:
   pgdata:
   pdfs:
-  hfcache:
   models:
