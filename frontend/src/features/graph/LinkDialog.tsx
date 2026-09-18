@@ -36,6 +36,7 @@ export function LinkDialog({ open, onOpenChange, fromTitle, choices, editing, pe
   function submit(event: FormEvent) {
     event.preventDefault()
     setTouched(true)
+    if (pending) return
     if (invalid || missingPaper) return
     onSubmit({ toPaper, label: label.trim() })
   }
@@ -64,9 +65,8 @@ export function LinkDialog({ open, onOpenChange, fromTitle, choices, editing, pe
         <form className="flex flex-col gap-4" onSubmit={submit}>
           {editing === null && (
             <div className="flex flex-col gap-2">
-              <Label htmlFor="link-search">Paper to link to</Label>
               <Command className="rounded-lg border border-input bg-transparent">
-                <CommandInput id="link-search" placeholder="Search your papers" />
+                <CommandInput aria-label="Paper to link to" placeholder="Search your papers" />
                 <CommandList className="max-h-56">
                   <CommandEmpty>No paper matches.</CommandEmpty>
                   {choices.map((paper) => (

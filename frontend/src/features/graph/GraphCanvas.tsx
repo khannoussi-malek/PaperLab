@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { GraphLink, GraphNode } from '@/api/client'
 import { Button } from '@/components/ui/button'
 import { ErrorAlert } from '@/features/library/ErrorAlert'
-import type { ChartTheme } from '@/features/charts/palette'
-import { nodeColor } from './graphModel'
+import { CHART_INK, type ChartTheme } from '@/features/charts/palette'
+import { degrees, nodeColor } from './graphModel'
 
 // Loaded on first use, exactly as PlotlyChart loads Plotly: react-force-graph-2d is 189 kB minified (61 kB gzipped)
 // and only this page draws a graph. A failed dynamic import is cached by the browser for the page's lifetime, so the
@@ -20,8 +20,13 @@ function loadForceGraph() {
 }
 
 /** react-force-graph mutates the objects it is given (x, y, vx, vy), so it gets its own copies, never cached data. */
-type CanvasNode = GraphNode & { color: string; radius: number; faded: boolean; x?: number; y?: number }
-type CanvasLink = { source: string; target: string; kind: GraphLink['kind']; label: string | null; faded: boolean }
+type CanvasNode = GraphNode & { color: string; radius: number; x?: number; y?: number }
+type CanvasLink = {
+  source: string | { id: string }
+  target: string | { id: string }
+  kind: GraphLink['kind']
+  label: string | null
+}
 
 type Props = {
   nodes: GraphNode[]
@@ -66,40 +71,37 @@ export function GraphCanvas({ nodes, links, theme, colors, focused, onSelect }: 
   }, [])
 
   const data = useMemo(() => {
-    const degree = new Map<string, number>()
-    for (const link of links) {
-      degree.set(link.source, (degree.get(link.source) ?? 0) + 1)
-      degree.set(link.target, (degree.get(link.target) ?? 0) + 1)
-    }
+    const degree = degrees(links)
     const busiest = Math.max(1, ...degree.values())
     const canvasNodes: CanvasNode[] = nodes.map((node) => ({
       ...node,
       color: nodeColor(node, colors, theme),
       radius: MIN_RADIUS + ((MAX_RADIUS - MIN_RADIUS) * (degree.get(node.id) ?? 0)) / busiest,
-      faded: focused !== null && !focused.has(node.id),
     }))
-    const canvasLinks: CanvasLink[] = links.map((link) => ({
+    const canvasLinks = links.map((link) => ({
       source: link.source,
       target: link.target,
       kind: link.kind,
       label: link.label ?? null,
-      faded: focused !== null && !(focused.has(link.source) && focused.has(link.target)),
     }))
     return { nodes: canvasNodes, links: canvasLinks }
-  }, [nodes, links, colors, theme, focused])
+  }, [nodes, links, colors, theme])
 
-  const ink = theme === 'light' ? '#0f172a' : '#f1f5f9'
+  const ink = CHART_INK[theme].text
+
+  if (failed)
+    return (
+      <div className="grid min-h-[28rem] flex-1 place-items-center gap-2 p-6 text-center">
+        <ErrorAlert message="The graph view could not load. Reload the page to try again." />
+        <Button variant="outline" onClick={() => window.location.reload()}>
+          Reload
+        </Button>
+      </div>
+    )
 
   return (
     <div ref={box} aria-hidden className="relative min-h-[28rem] flex-1 overflow-hidden rounded-xl">
-      {failed ? (
-        <div className="grid h-full place-items-center gap-2 p-6 text-center">
-          <ErrorAlert message="The graph view could not load. Reload the page to try again." />
-          <Button variant="outline" onClick={() => window.location.reload()}>
-            Reload
-          </Button>
-        </div>
-      ) : Graph === null || size.width === 0 ? (
+      {Graph === null || size.width === 0 ? (
         <div className="h-full w-full animate-pulse rounded-xl bg-muted" />
       ) : (
         <Graph
@@ -111,12 +113,20 @@ export function GraphCanvas({ nodes, links, theme, colors, focused, onSelect }: 
           nodeLabel={(node: CanvasNode) => node.title}
           nodeRelSize={1}
           nodeVal={(node: CanvasNode) => node.radius * node.radius}
-          nodeColor={(node: CanvasNode) => (node.faded ? withAlpha(node.color, FADED) : node.color)}
-          linkColor={(link: CanvasLink) => withAlpha(link.kind === 'manual' ? ink : '#64748b', link.faded ? FADED : 0.55)}
+          nodeColor={(node: CanvasNode) =>
+            focused !== null && !focused.has(node.id) ? withAlpha(node.color, FADED) : node.color
+          }
+          linkColor={(link: CanvasLink) => {
+            const faded = focused !== null && !(focused.has(endId(link.source)) && focused.has(endId(link.target)))
+            return withAlpha(link.kind === 'manual' ? ink : CHART_INK[theme].muted, faded ? FADED : 0.55)
+          }}
           linkWidth={(link: CanvasLink) => (link.kind === 'manual' ? 2.5 : 1)}
           linkDirectionalArrowLength={(link: CanvasLink) => (link.kind === 'cites' || link.kind === 'manual' ? 4 : 0)}
           linkDirectionalArrowRelPos={1}
-          linkCanvasObjectMode={(link: CanvasLink) => (link.kind === 'manual' && !link.faded ? 'after' : undefined)}
+          linkCanvasObjectMode={(link: CanvasLink) => {
+            const faded = focused !== null && !(focused.has(endId(link.source)) && focused.has(endId(link.target)))
+            return link.kind === 'manual' && !faded ? 'after' : undefined
+          }}
           linkCanvasObject={(link: CanvasLink, ctx: CanvasRenderingContext2D, scale: number) =>
             drawLinkLabel(link, ctx, scale, ink)
           }
@@ -133,6 +143,9 @@ function withAlpha(hex: string, alpha: number): string {
   const value = Number.parseInt(hex.slice(1), 16)
   return `rgba(${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}, ${alpha})`
 }
+
+/** force-graph swaps a link's string ids for node objects once the simulation runs. */
+const endId = (end: string | { id: string }): string => (typeof end === 'string' ? end : end.id)
 
 /** The owner's own label, along its link. Skipped when zoomed far out, where it would be unreadable anyway. */
 function drawLinkLabel(link: CanvasLink, ctx: CanvasRenderingContext2D, scale: number, ink: string) {

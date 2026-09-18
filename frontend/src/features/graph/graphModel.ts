@@ -1,5 +1,5 @@
 import type { GraphLink, GraphNode } from '@/api/client'
-import { SERIES_COLORS, type ChartTheme } from '@/features/charts/palette'
+import { CHART_INK, SERIES_COLORS, type ChartTheme } from '@/features/charts/palette'
 
 export type LinkKind = GraphLink['kind']
 
@@ -70,7 +70,17 @@ export function workspaceColors(nodes: GraphNode[], theme: ChartTheme): Map<stri
 }
 
 export const nodeColor = (node: GraphNode, colors: Map<string, string>, theme: ChartTheme): string =>
-  colors.get(node.workspaces[0] ?? '') ?? (theme === 'light' ? '#94a3b8' : '#64748b')
+  colors.get(node.workspaces[0] ?? '') ?? CHART_INK[theme].muted
+
+/** How many visible links touch each paper: the canvas sizes a node by it, the panel sorts by it. */
+export function degrees(links: GraphLink[]): Map<string, number> {
+  const counts = new Map<string, number>()
+  for (const link of links) {
+    counts.set(link.source, (counts.get(link.source) ?? 0) + 1)
+    counts.set(link.target, (counts.get(link.target) ?? 0) + 1)
+  }
+  return counts
+}
 
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`
 

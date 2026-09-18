@@ -130,7 +130,7 @@ export function GraphPage() {
           </div>
 
           <div className={cn('flex min-h-0 flex-col gap-3 rounded-xl border border-glass-border p-4', glass)}>
-            {links.error && <ErrorAlert message={links.error} />}
+            {links.removeError && <ErrorAlert message={links.removeError} />}
             <GraphPanel
               nodes={nodes}
               links={shown}
@@ -148,12 +148,18 @@ export function GraphPage() {
       {dialog !== null && focused !== null && (
         <LinkDialog
           open
-          onOpenChange={(open) => !open && setDialog(null)}
+          onOpenChange={(open) => {
+            if (!open) {
+              setDialog(null)
+              links.create.reset()
+              links.rename.reset()
+            }
+          }}
           fromTitle={focused.title}
           choices={nodes.filter((node) => node.id !== focused.id)}
-          editing={editing?.label ? { label: editing.label, toTitle: editingOther?.title ?? '' } : null}
+          editing={editing ? { label: editing.label ?? '', toTitle: editingOther?.title ?? '' } : null}
           pending={links.create.isPending || links.rename.isPending}
-          error={links.error}
+          error={links.saveError}
           onSubmit={save}
         />
       )}
