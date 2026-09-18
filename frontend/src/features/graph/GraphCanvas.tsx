@@ -3,11 +3,13 @@ import type { GraphLink, GraphNode } from '@/api/client'
 import { Button } from '@/components/ui/button'
 import { ErrorAlert } from '@/features/library/ErrorAlert'
 import { CHART_INK, type ChartTheme } from '@/features/charts/palette'
-import { degrees, nodeColor, tooltipFor } from './graphModel'
+import { carryPositions, endId, FADED, sizedNodes, tooltipFor, withAlpha, type SizedNode } from './graphModel'
+import { OUTER_RING, type RingPlace } from './ringsModel'
+import { useBoxSize } from './useBoxSize'
 
-// Loaded on first use, exactly as PlotlyChart loads Plotly: react-force-graph-2d is 189 kB minified (61 kB gzipped)
-// and only this page draws a graph. A failed dynamic import is cached by the browser for the page's lifetime, so the
-// cache is cleared on failure and the error offers a reload.
+// Loaded on first use, exactly as PlotlyChart loads Plotly: react-force-graph-2d is 94.53 kB minified (31.04 kB
+// gzipped) and only this page draws a graph. A failed dynamic import is cached by the browser for the page's
+// lifetime, so the cache is cleared on failure and the error offers a reload.
 let forceGraph: Promise<typeof import('react-force-graph-2d')> | null = null
 function loadForceGraph() {
   if (!forceGraph) {
@@ -20,7 +22,7 @@ function loadForceGraph() {
 }
 
 /** react-force-graph mutates the objects it is given (x, y, vx, vy), so it gets its own copies, never cached data. */
-type CanvasNode = GraphNode & { color: string; radius: number; x?: number; y?: number }
+type CanvasNode = SizedNode & { x?: number; y?: number; fx?: number; fy?: number }
 type CanvasLink = {
   source: string | { id: string }
   target: string | { id: string }
@@ -36,17 +38,17 @@ type Props = {
   /** null: nothing focused, so nothing fades. */
   focused: Set<string> | null
   onSelect: (paperId: string) => void
+  /** Rings: every paper pinned to its place, in ring-widths from the centre, with no simulation. */
+  rings?: Map<string, RingPlace>
 }
 
-const FADED = 0.12
-const MIN_RADIUS = 3
-const MAX_RADIUS = 9
-
-export function GraphCanvas({ nodes, links, theme, colors, focused, onSelect }: Props) {
+export function GraphCanvas({ nodes, links, theme, colors, focused, onSelect, rings }: Props) {
   const [Graph, setGraph] = useState<typeof import('react-force-graph-2d').default | null>(null)
   const [failed, setFailed] = useState(false)
-  const box = useRef<HTMLDivElement>(null)
-  const [size, setSize] = useState({ width: 0, height: 0 })
+  const [box, size] = useBoxSize<HTMLDivElement>()
+  // K20: force-graph writes x/y onto the node objects it is given, so the last graph's objects know where every paper
+  // is. A rebuild (a layer, the theme, a saved link) starts from there instead of throwing the layout again.
+  const previous = useRef<CanvasNode[]>([])
 
   useEffect(() => {
     let cancelled = false
@@ -58,26 +60,14 @@ export function GraphCanvas({ nodes, links, theme, colors, focused, onSelect }: 
     }
   }, [])
 
-  // The canvas needs pixel sizes, so it follows its box instead of a CSS size.
-  useEffect(() => {
-    const element = box.current
-    if (!element) return
-    const observer = new ResizeObserver(([entry]) => {
-      const { width, height } = entry.contentRect
-      setSize({ width: Math.round(width), height: Math.round(height) })
-    })
-    observer.observe(element)
-    return () => observer.disconnect()
-  }, [])
+  // Rings fill the box: the outer ring sits half a ring-width inside its shorter side. 0 in 2D, so a resize there
+  // doesn't rebuild the graph.
+  const ringWidth = rings ? Math.min(size.width, size.height) / 2 / (OUTER_RING + 0.5) : 0
 
   const data = useMemo(() => {
-    const degree = degrees(links)
-    const busiest = Math.max(1, ...degree.values())
-    const canvasNodes: CanvasNode[] = nodes.map((node) => ({
-      ...node,
-      color: nodeColor(node, colors, theme),
-      radius: MIN_RADIUS + ((MAX_RADIUS - MIN_RADIUS) * (degree.get(node.id) ?? 0)) / busiest,
-    }))
+    // oxlint-disable-next-line react/refs -- read once per rebuild, for where force-graph left each paper
+    const carried: CanvasNode[] = carryPositions(sizedNodes(nodes, links, colors, theme), previous.current)
+    const canvasNodes = rings ? carried.map((node) => pin(node, rings.get(node.id), ringWidth)) : carried
     const canvasLinks = links.map((link) => ({
       source: link.source,
       target: link.target,
@@ -85,22 +75,24 @@ export function GraphCanvas({ nodes, links, theme, colors, focused, onSelect }: 
       label: link.label ?? null,
     }))
     return { nodes: canvasNodes, links: canvasLinks }
-  }, [nodes, links, colors, theme])
+  }, [nodes, links, colors, theme, rings, ringWidth])
+
+  useEffect(() => {
+    previous.current = data.nodes
+  }, [data])
 
   const ink = CHART_INK[theme].text
 
-  if (failed)
-    return (
-      <div className="grid min-h-[28rem] flex-1 place-items-center gap-2 p-6 text-center">
-        <ErrorAlert message="The graph view could not load. Reload the page to try again." />
-        <Button variant="outline" onClick={() => window.location.reload()}>
-          Reload
-        </Button>
-      </div>
-    )
+  if (failed) return <GraphLoadError />
 
   return (
-    <div ref={box} aria-hidden className="relative min-h-[28rem] flex-1 overflow-hidden rounded-xl">
+    <div
+      ref={box}
+      aria-hidden
+      data-view={rings ? 'rings' : '2d'}
+      data-ready={Graph !== null}
+      className="relative min-h-[28rem] flex-1 overflow-hidden rounded-xl"
+    >
       {Graph === null || size.width === 0 ? (
         <div className="h-full w-full animate-pulse rounded-xl bg-muted" />
       ) : (
@@ -134,21 +126,50 @@ export function GraphCanvas({ nodes, links, theme, colors, focused, onSelect }: 
             drawLinkLabel(link, ctx, scale, ink)
           }
           onNodeClick={(node: CanvasNode) => onSelect(node.id)}
-          cooldownTicks={120}
+          onRenderFramePre={
+            rings
+              ? (ctx: CanvasRenderingContext2D, zoom: number) => drawRings(ctx, zoom, ringWidth, CHART_INK[theme].grid)
+              : undefined
+          }
+          enableNodeDrag={!rings}
+          cooldownTicks={rings ? 0 : 120}
         />
       )}
     </div>
   )
 }
 
-/** A hex colour at an opacity, so one palette serves both the faded and the solid state. */
-function withAlpha(hex: string, alpha: number): string {
-  const value = Number.parseInt(hex.slice(1), 16)
-  return `rgba(${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}, ${alpha})`
+/** A failed dynamic import: the error and a way out, outside any aria-hidden wrapper so a screen reader reaches them. */
+export function GraphLoadError() {
+  return (
+    <div className="grid min-h-[28rem] flex-1 place-items-center gap-2 p-6 text-center">
+      <ErrorAlert message="The graph view could not load. Reload the page to try again." />
+      <Button variant="outline" onClick={() => window.location.reload()}>
+        Reload
+      </Button>
+    </div>
+  )
 }
 
-/** force-graph swaps a link's string ids for node objects once the simulation runs. */
-const endId = (end: string | { id: string }): string => (typeof end === 'string' ? end : end.id)
+/** A Rings paper, fixed at its place: fx/fy hold it there, and x/y put it there before the first frame. */
+function pin(node: CanvasNode, place: RingPlace | undefined, ringWidth: number): CanvasNode {
+  if (!place) return node
+  const [x, y] = [place.x * ringWidth, place.y * ringWidth]
+  return { ...node, x, y, fx: x, fy: y }
+}
+
+/** Faint circles marking the rings, under the graph. */
+function drawRings(ctx: CanvasRenderingContext2D, zoom: number, ringWidth: number, color: string) {
+  ctx.save()
+  ctx.strokeStyle = color
+  ctx.lineWidth = 1 / zoom
+  for (let ring = 1; ring <= OUTER_RING; ring += 1) {
+    ctx.beginPath()
+    ctx.arc(0, 0, ring * ringWidth, 0, 2 * Math.PI)
+    ctx.stroke()
+  }
+  ctx.restore()
+}
 
 /** The owner's own label, along its link. Skipped when zoomed far out, where it would be unreadable anyway. */
 function drawLinkLabel(link: CanvasLink, ctx: CanvasRenderingContext2D, scale: number, ink: string) {

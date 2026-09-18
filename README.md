@@ -35,7 +35,10 @@ free PDF. Import a reference in a click when a free PDF exists.
 - Open the **Graph** page to see how your papers connect: what cites what, papers in the same workspace, a note
 anchored on two of them, a shared author or topic, and papers that simply read alike — each a layer you can switch on
 or off. Similar content comes from the same embeddings search uses. Click a paper to focus it and list its
-connections, and draw your own link between two papers with a label like "builds on".
+connections, and draw your own link between two papers with a label like "builds on". Look at it five ways: the 2D
+map, a 3D one you can turn around when clusters overlap, a **Matrix** of exactly which papers connect and how (a table
+a screen reader can read cell by cell), a **Timeline** of what builds on older work, by year published or date added,
+and **Rings** showing how many links away everything is from one paper.
 - Hover a paper in the list to preview its first page and details.
 - With OpenAlex ticked in Settings, fill in each paper's title, authors, year, venue and topics from
 [OpenAlex](https://openalex.org/), and correct any of them by hand with **Edit details**. Your corrections are kept when

@@ -15,6 +15,7 @@ Link kinds, each read from the table that already holds it:
 
 import uuid
 from dataclasses import dataclass
+from datetime import datetime
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -145,7 +146,7 @@ _GRAPH_LINKS = text(
 
 _GRAPH_NODES = text(
     """
-    SELECT p.id, p.title, p.year, p.status,
+    SELECT p.id, p.title, p.year, p.status, p.created_at AS added_at,
            coalesce((SELECT array_agg(w.name ORDER BY wp.added_at)
                        FROM workspace_papers wp JOIN workspaces w ON w.id = wp.workspace_id
                       WHERE wp.paper_id = p.id), '{}') AS workspaces,
@@ -175,6 +176,7 @@ class Node:
     workspaces: list[str]  # names, oldest membership first; the first one colours the node
     has_notes: bool
     status: str
+    added_at: datetime  # when it came into the library (papers.created_at): the Timeline's Date added axis
 
 
 @dataclass(frozen=True)
@@ -216,7 +218,7 @@ async def library_graph(session: AsyncSession, workspace_id: uuid.UUID | None = 
         await get_workspace(session, workspace_id)
     scope = {"workspace": workspace_id}
     nodes = [
-        Node(row.id, row.title, row.year, list(row.workspaces), row.has_notes, row.status)
+        Node(row.id, row.title, row.year, list(row.workspaces), row.has_notes, row.status, row.added_at)
         for row in await session.execute(_GRAPH_NODES, scope)
     ]
     rows = list(await session.execute(_GRAPH_LINKS, {**scope, **_similarity(), "cap": MAX_LINKS + 1}))

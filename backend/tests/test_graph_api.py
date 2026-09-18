@@ -1,8 +1,10 @@
 """GET /api/graph: the graph page's one request (D109)."""
 
 import uuid
+from datetime import datetime
 
 import pytest
+from sqlalchemy import select
 
 from app.core import paper_links, workspaces
 from app.models import Chunk, Paper
@@ -45,7 +47,10 @@ async def test_the_payload_carries_every_paper_its_links_and_no_vectors(session,
     body = response.json()
     assert body["truncated"] is False
     node = next(n for n in body["nodes"] if n["id"] == str(left.id))
-    assert node == {
+    # The Timeline's Date added axis: when the paper came into the library (papers.created_at).
+    added_at = await session.scalar(select(Paper.created_at).where(Paper.id == left.id))
+    assert datetime.fromisoformat(node["added_at"]) == added_at
+    assert {key: value for key, value in node.items() if key != "added_at"} == {
         "id": str(left.id),
         "title": left.title,
         "year": 2020,
@@ -53,11 +58,7 @@ async def test_the_payload_carries_every_paper_its_links_and_no_vectors(session,
         "has_notes": False,
         "status": "ready",
     }
-    ours = [
-        link
-        for link in body["links"]
-        if {link["source"], link["target"]} == {str(left.id), str(right.id)}
-    ]
+    ours = [link for link in body["links"] if {link["source"], link["target"]} == {str(left.id), str(right.id)}]
     assert [link["kind"] for link in ours] == ["same_workspace"]
     assert ours[0]["id"] is None and ours[0]["label"] is None
     assert "embedding" not in response.text and "vector" not in response.text
