@@ -1,6 +1,8 @@
 import type { ChartSpec, Dataset } from '@/api/client'
+import { delayedIn } from '@/components/motion'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
+import { cn } from '@/lib/utils'
 import { columnInfo, type ColumnInfo } from './builderSpec'
 import { LabelledSelect } from './SeriesEditor'
 
@@ -43,7 +45,7 @@ function ColumnChecklist({ legend, columns, chosen, onChange }: { legend: string
 
 /** The column pickers of a heatmap, surface, contour or parallel coordinates chart. */
 export function GridChartFields({ spec, dataset, onChange }: Props) {
-  if (!dataset) return <p className="text-sm text-muted-foreground">Loading the data…</p>
+  if (!dataset) return <p className={cn('text-sm text-muted-foreground', delayedIn)}>Loading the data…</p>
   const columns = columnInfo(dataset)
   const numbers = columns.filter((c) => c.numeric)
 

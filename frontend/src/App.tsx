@@ -3,6 +3,7 @@ import { ChartPage } from './features/charts/ChartPage'
 import { ChartsPage } from './features/charts/ChartsPage'
 import { ConnectClaudePage } from './features/connect-claude/ConnectClaudePage'
 import { DatasetPage } from './features/data/DatasetPage'
+import { GraphPage } from './features/graph/GraphPage'
 import { LibraryPage } from './features/library/LibraryPage'
 import { ReaderPage } from './features/reader/ReaderPage'
 import { SettingsPage } from './features/settings/SettingsPage'
@@ -38,6 +39,9 @@ export default function App() {
   }
   if (route.name === 'connect-claude') {
     return <ConnectClaudePage />
+  }
+  if (route.name === 'graph') {
+    return <GraphPage />
   }
   return <LibraryPage />
 }

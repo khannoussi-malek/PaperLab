@@ -6,11 +6,13 @@ import {
   connectClaudeHref,
   datasetHref,
   editChartHref,
+  graphHref,
   newChartHref,
   noteHref,
   parseRoute,
   readerHref,
   regionHref,
+  samePage,
   settingsHref,
   workspaceHref,
 } from './route'
@@ -145,5 +147,27 @@ describe('parseRoute', () => {
     expect(connectClaudeHref).toBe('#/connect-claude')
     expect(parseRoute(connectClaudeHref)).toEqual({ name: 'connect-claude' })
     expect(parseRoute('#/connect-claude/macos')).toEqual({ name: 'library' })
+  })
+
+  it('opens the graph page, and nothing under it', () => {
+    expect(graphHref).toBe('#/graph')
+    expect(parseRoute(graphHref)).toEqual({ name: 'graph' })
+    expect(parseRoute('#/graph/focus')).toEqual({ name: 'library' })
+  })
+})
+
+describe('samePage', () => {
+  const at = (hash: string) => `http://localhost:5180/${hash}`
+
+  it('is true when only the tab or a target changes, so the view swaps its panel without a page cross-fade', () => {
+    expect(samePage(at(readerHref(id)), at(readerHref(id, 'chat')))).toBe(true)
+    expect(samePage(at(readerHref(id, 'chat')), at(noteHref(id, other)))).toBe(true)
+    expect(samePage(at(workspaceHref(id)), at(workspaceHref(id, 'notes')))).toBe(true)
+  })
+
+  it('is false for another page, another paper, or a chart opened for editing', () => {
+    expect(samePage(at('#/'), at(readerHref(id)))).toBe(false)
+    expect(samePage(at(readerHref(id)), at(readerHref(other)))).toBe(false)
+    expect(samePage(at(chartHref(id)), at(editChartHref(id)))).toBe(false)
   })
 })

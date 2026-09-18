@@ -1,9 +1,9 @@
-import { ChartColumn, FileText, Plug, Settings } from 'lucide-react'
+import { ChartColumn, FileText, Plug, Settings, Share2 } from 'lucide-react'
 import { usePapers, useUploadPapers } from '@/api/queries'
 import { ModeToggle } from '@/components/mode-toggle'
-import { fadeIn } from '@/components/motion'
+import { delayedIn, fadeIn } from '@/components/motion'
 import { Button } from '@/components/ui/button'
-import { chartsHref, connectClaudeHref, settingsHref } from '@/lib/route'
+import { chartsHref, connectClaudeHref, graphHref, settingsHref } from '@/lib/route'
 import { cn } from '@/lib/utils'
 import { FindPapersButton } from '../discovery/FindPapersButton'
 import { WorkspaceSidebar } from '../workspaces/WorkspaceSidebar'
@@ -34,6 +34,12 @@ export function LibraryPage() {
               Charts
             </a>
           </Button>
+          <Button variant="outline" asChild>
+            <a href={graphHref}>
+              <Share2 aria-hidden />
+              Graph
+            </a>
+          </Button>
           <FindPapersButton />
           <UploadPdfsButton isPending={upload.isPending} onUpload={(files) => upload.mutate(files)} />
           <Button variant="outline" asChild>
@@ -60,7 +66,7 @@ export function LibraryPage() {
             papers.isError ? (
               <LoadError message={papers.error.message} onRetry={() => void papers.refetch()} />
             ) : (
-              <p className="text-muted-foreground">Loading…</p>
+              <p className={cn('text-muted-foreground', delayedIn)}>Loading…</p>
             )
           ) : list.length === 0 ? (
             <div className="grid place-items-center gap-2 rounded-xl border border-dashed border-glass-border px-6 py-16 text-center">

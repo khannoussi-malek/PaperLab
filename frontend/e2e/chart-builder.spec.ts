@@ -105,6 +105,9 @@ test('adding a series keeps the last drawing without data warnings while the new
   await page.getByRole('button', { name: 'Add series' }).click()
   await page.getByRole('dialog', { name: 'Choose data' }).locator(`[data-dataset-id="${first.id}"]`).click()
   await expect(page.locator('.chart-view')).toHaveAttribute('data-series-count', '1')
+  // Wait for the drawing, not just the data: until Plotly has loaded there is no last drawing to keep, and its 4.6 MB
+  // evaluation holds the main thread long enough, under load, to swallow the whole 1.5 s window below.
+  await expect(page.locator('.chart-view .barlayer .point path')).toHaveCount(1)
 
   // Any warning drawn from here on is recorded, however briefly it shows.
   await page.evaluate(() => {

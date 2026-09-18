@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { usePaperSources, useUpdatePaperSources } from '@/api/queries'
 import { glass } from '@/components/glass'
+import { delayedIn } from '@/components/motion'
 import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -101,7 +102,7 @@ export function PaperSourcesSettings() {
             </AlertAction>
           </Alert>
         ) : (
-          <p className="text-muted-foreground">Loading…</p>
+          <p className={cn('text-muted-foreground', delayedIn)}>Loading…</p>
         )
       ) : (
         <>

@@ -7,7 +7,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from app.api import charts, chat, datasets, discovery, embedding, health, llm, notes, papers, workspaces
+from app.api import charts, chat, datasets, discovery, embedding, graph, health, links, llm, notes, papers, workspaces
 from app.api import mcp as mcp_api
 from app.api import paper_sources as paper_sources_api
 from app.api import references as references_api
@@ -43,8 +43,10 @@ def create_app() -> FastAPI:
     app.include_router(llm.router)
     app.include_router(embedding.router)
     app.include_router(discovery.router)
+    app.include_router(graph.router)
     app.include_router(paper_sources_api.router)
     app.include_router(references_api.router)
+    app.include_router(links.router)
     app.include_router(mcp_api.router)
 
     @app.exception_handler(DomainError)

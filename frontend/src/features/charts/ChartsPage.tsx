@@ -1,9 +1,9 @@
 import { Plus } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ChartSummary } from '@/api/client'
 import { useAllDatasets, useCharts, useChartMutations } from '@/api/queries'
 import { glass } from '@/components/glass'
-import { fadeIn } from '@/components/motion'
+import { delayedIn, fadeIn } from '@/components/motion'
 import { ModeToggle } from '@/components/mode-toggle'
 import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -14,6 +14,7 @@ import { datasetMeta } from '../data/datasetMeta'
 import { NewDatasetDialog } from '../data/NewDatasetDialog'
 import { ChartMenu } from './ChartMenu'
 import { InlineTitle } from './InlineTitle'
+import { warmPlotly } from './loadPlotly'
 import { TYPE_ICON } from './typeIcons'
 
 const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
@@ -88,6 +89,8 @@ export function ChartsPage() {
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [newDatasetOpen, setNewDatasetOpen] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
+  // Opening the list means a chart is likely next: load Plotly now, not after the click.
+  useEffect(warmPlotly, [])
 
   const list = charts.data
   const ownDatasets = (datasets.data ?? []).filter((dataset) => dataset.kind === 'user')
@@ -135,7 +138,7 @@ export function ChartsPage() {
         charts.isError ? (
           <p className="text-destructive">{charts.error.message}</p>
         ) : (
-          <p className="text-muted-foreground">Loading…</p>
+          <p className={cn('text-muted-foreground', delayedIn)}>Loading…</p>
         )
       ) : list.length === 0 ? (
         <p className="text-muted-foreground">No charts yet. Build one from any data.</p>
@@ -176,7 +179,7 @@ export function ChartsPage() {
               <li key={dataset.id}>
                 <a
                   href={datasetHref(dataset.id)}
-                  className="own-dataset flex items-baseline gap-2 rounded-md px-2 py-1 hover:bg-foreground/5"
+                  className="own-dataset flex items-baseline gap-2 rounded-md px-2 py-1 transition-colors duration-150 hover:bg-foreground/5"
                 >
                   <span className="truncate font-medium" title={dataset.name}>
                     {dataset.name}

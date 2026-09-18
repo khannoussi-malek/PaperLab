@@ -2,6 +2,7 @@ import { Lock, RefreshCw } from 'lucide-react'
 import { useState } from 'react'
 import { useEmbeddingStatus, useReindexLibrary } from '@/api/queries'
 import { glass } from '@/components/glass'
+import { delayedIn } from '@/components/motion'
 import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -47,7 +48,7 @@ export function EmbeddingSettings() {
             </AlertAction>
           </Alert>
         ) : (
-          <p className="text-muted-foreground">Loading…</p>
+          <p className={cn('text-muted-foreground', delayedIn)}>Loading…</p>
         )
       ) : (
         <div className="flex flex-col gap-3">

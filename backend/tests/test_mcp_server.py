@@ -8,7 +8,7 @@ from mcp import Client
 from pdf_papers import TWO_LINE_QUOTE, chunked_paper
 
 from app.core import workspaces
-from app.models import LLMOutput, Note
+from app.models import LLMOutput, Note, Paper
 from app.providers import embedding
 from mcp_server import server
 
@@ -141,10 +141,13 @@ async def test_get_paper_sends_every_note_with_its_provenance(session, tmp_path)
     assert [(n["provenance"], n["body"], n["page"]) for n in card["notes"]] == [("llm", "Claims can be checked.", 1)]
 
 
-async def test_related_papers_respects_hops(session, tmp_path):
-    first, _, _ = await chunked_paper(session, tmp_path / "a", title="First")
-    second, _, _ = await chunked_paper(session, tmp_path / "b", title="Second")
-    third, _, _ = await chunked_paper(session, tmp_path / "c", title="Third")
+async def test_related_papers_respects_hops(session):
+    # Bare papers, no chunks: since M7 `related()` shares the graph's edge set, where `similar` is a library-wide
+    # top-3 over embeddings. A chunked paper here would also link to whatever else the test database holds, and
+    # `chunked_paper`'s vectors are random per call (D37), so the walk would differ from run to run.
+    first, second, third = (Paper(title=title, file_path="/nonexistent.pdf") for title in ("First", "Second", "Third"))
+    session.add_all([first, second, third])
+    await session.commit()
     for name, pair in [(f"MCP ab {RUN}", (first, second)), (f"MCP bc {RUN}", (second, third))]:
         workspace = await workspaces.create(session, name)
         for paper in pair:
