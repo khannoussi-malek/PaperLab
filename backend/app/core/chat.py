@@ -111,6 +111,19 @@ async def _size(session: AsyncSession, paper_id: uuid.UUID) -> tuple[int, int]:
     return tuple((await session.execute(query.where(Chunk.paper_id == paper_id))).one())
 
 
+async def papers_needing_search(session: AsyncSession) -> int:
+    """Ready papers too long to send whole, so chat on them retrieves: what the library's notice counts while no search
+    model is downloaded (P1)."""
+    long = (
+        select(Chunk.paper_id)
+        .join(Paper, Paper.id == Chunk.paper_id)
+        .where(Paper.status == PaperStatus.READY)
+        .group_by(Chunk.paper_id)
+        .having(func.sum(func.length(Chunk.text)) > SMALL_PAPER_CHARS)
+    )
+    return await session.scalar(select(func.count()).select_from(long.subquery()))
+
+
 def follow_up_sources(
     earlier: list[RetrievedChunk], fresh: list[RetrievedChunk], limit: int = FOLLOW_UP_SOURCES
 ) -> list[RetrievedChunk]:

@@ -52,3 +52,10 @@ async def check_model(session: AsyncSession, model: str, paper_ids: list[uuid.UU
 async def indexed_papers(session: AsyncSession) -> list[uuid.UUID]:
     """Every paper that has chunks: what a library re-index embeds again."""
     return list(await session.scalars(select(Chunk.paper_id).distinct()))
+
+
+async def unembedded_papers(session: AsyncSession) -> list[uuid.UUID]:
+    """Papers with chunks and no vectors: what a finished model download queues for embedding (D137). Whatever their
+    status: a paper mid-ingest when the model landed has chunks and no vectors, and would otherwise never get any."""
+    query = select(Chunk.paper_id).group_by(Chunk.paper_id).having(func.count(Chunk.embedding) == 0)
+    return list(await session.scalars(query))
