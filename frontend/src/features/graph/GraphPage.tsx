@@ -7,10 +7,11 @@ import { ModeToggle } from '@/components/mode-toggle'
 import { Button } from '@/components/ui/button'
 import { useChartTheme } from '@/features/charts/useChartTheme'
 import { ErrorAlert, LoadError } from '@/features/library/ErrorAlert'
+import { browserStorage } from '@/features/notes/highlightColors'
 import { cn } from '@/lib/utils'
-import { GraphCanvas } from './GraphCanvas'
 import { GraphControls } from './GraphControls'
 import { GraphPanel } from './GraphPanel'
+import { GraphViews } from './GraphViews'
 import { LinkDialog, type LinkDraft } from './LinkDialog'
 import {
   countsLine,
@@ -22,6 +23,7 @@ import {
   workspaceColors,
   type LinkKind,
 } from './graphModel'
+import { readView, writeView, type GraphView } from './viewModel'
 
 const EMPTY =
   'No links yet. Import references, add papers to a workspace, or turn on OpenAlex to fill this in.'
@@ -32,6 +34,7 @@ export function GraphPage() {
   const [focusId, setFocusId] = useState<string | null>(null)
   const [hops, setHops] = useState(1)
   const [dialog, setDialog] = useState<{ editing: GraphLink | null } | null>(null)
+  const [view, setView] = useState<GraphView>(() => readView(browserStorage()))
   const theme = useChartTheme()
   const graph = useLibraryGraph(workspaceId)
   const workspaces = useWorkspaces()
@@ -50,6 +53,11 @@ export function GraphPage() {
     () => (focused === null ? null : focusedIds(shown, focused.id, hops)),
     [shown, focused, hops]
   )
+
+  function chooseView(next: GraphView) {
+    setView(next)
+    writeView(browserStorage(), next)
+  }
 
   const toggleLayer = (kind: LinkKind) =>
     setLayers((current) => (current.includes(kind) ? current.filter((k) => k !== kind) : [...current, kind]))
@@ -140,12 +148,16 @@ export function GraphPage() {
             {nodes.length === 0 || allLinks.length === 0 ? (
               <div className="grid flex-1 place-items-center px-6 text-center text-muted-foreground">{EMPTY}</div>
             ) : (
-              <GraphCanvas
+              <GraphViews
+                view={view}
+                onView={chooseView}
                 nodes={nodes}
                 links={shown}
                 theme={theme}
                 colors={colors}
-                focused={inFocus}
+                focusId={focused?.id ?? null}
+                hops={hops}
+                inFocus={inFocus}
                 onSelect={setFocusId}
               />
             )}

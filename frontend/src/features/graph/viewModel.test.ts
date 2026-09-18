@@ -1,0 +1,42 @@
+import { describe, expect, it } from 'vitest'
+import { readView, VIEW_KEY, VIEW_LABELS, VIEWS, writeView } from './viewModel'
+
+const memoryStorage = (initial: Record<string, string> = {}) => {
+  const data = new Map(Object.entries(initial))
+  return {
+    getItem: (key: string) => data.get(key) ?? null,
+    setItem: (key: string, value: string) => void data.set(key, value),
+  }
+}
+
+const blockedStorage = {
+  getItem: (): string | null => {
+    throw new Error('blocked')
+  },
+  setItem: () => {
+    throw new Error('blocked')
+  },
+}
+
+describe('the view switcher', () => {
+  it('offers the five views in the spec’s order and words', () => {
+    expect(VIEWS.map((view) => VIEW_LABELS[view])).toEqual(['2D', '3D', 'Matrix', 'Timeline', 'Rings'])
+  })
+
+  it('remembers the chosen view in this browser, under its own key', () => {
+    const storage = memoryStorage()
+    writeView(storage, 'timeline')
+    expect(VIEW_KEY).toBe('paperlab.graph.view')
+    expect(storage.getItem('paperlab.graph.view')).toBe('timeline')
+    expect(readView(storage)).toBe('timeline')
+  })
+
+  it('opens on 2D with nothing stored, junk stored, no storage, or storage that throws', () => {
+    expect(readView(memoryStorage())).toBe('2d')
+    // 'toString' is on every object's prototype: a view is one of the five, not any key that `in` would accept.
+    expect(readView(memoryStorage({ [VIEW_KEY]: 'toString' }))).toBe('2d')
+    expect(readView(undefined)).toBe('2d')
+    expect(readView(blockedStorage)).toBe('2d')
+    expect(() => writeView(blockedStorage, 'matrix')).not.toThrow()
+  })
+})
