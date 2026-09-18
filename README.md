@@ -155,25 +155,17 @@ docker compose up -d --build          # db (:5433), redis, api (:8000), worker, 
 open http://localhost:5180
 ```
 
-The first upload takes longer: the worker downloads the embedding model once and caches it.
-
 ### First start
 
-The worker loads the embedding model (`nomic-ai/nomic-embed-text-v1.5`, about 523 MB) when it starts, and the API
-loads it on the first question that retrieves: every workspace chat, and large papers. Both read the `hfcache`
-volume. Download the model into it once, before the first `docker compose up`:
+PaperLab works without a search model: upload papers, read them, highlight and take notes, and chat with short ones.
+Chatting with a long paper or a workspace needs the built-in search model, and so does Claude's `search_library`: it
+is `nomic-embed-text-v1.5` running on ONNX Runtime (548 MB). Download it in **Settings → Search**, or with the button
+the library shows while it is missing. It goes into the `models` volume, and the papers you added before are made
+searchable in the background. If Settings → Search then says some chunks were indexed with another model, re-index
+the library there once.
 
-```sh
-docker compose build api
-docker compose run --rm --no-deps api python -c "from app.providers.embedding import load; load()"
-```
-
-Hugging Face gives up on a download after 10 seconds without data. On a slow connection, raise that in `.env`
-(both containers read it):
-
-```sh
-HF_HUB_DOWNLOAD_TIMEOUT=60
-```
+Upgrading from an older PaperLab? It ran the model on torch and kept it in the `hfcache` volume, which nothing uses
+any more: `docker volume rm paperlab_hfcache` frees its space (about 0.5 GB).
 
 Real chats also need a model: `ollama pull qwen3:8b` on the host. While there are no model connections, the API
 creates one at startup from `LLM_PROVIDER` / `LLM_MODEL` in `.env`; after that, add and switch models in **Settings**.
@@ -209,7 +201,7 @@ The server has four tools:
 - `related_papers`: library papers connected to one, up to three links away;
 - `create_note`: a note on a passage it quotes exactly.
 
-The first search takes about 30 seconds while the embedding model loads.
+The first search takes a few seconds while the search model loads. Without it, `search_library` answers that search isn't set up.
 
 ### Configuration
 
@@ -237,7 +229,7 @@ Settings live in `.env`.
 flowchart LR
   UI["Browser<br/>React · PDF.js · shadcn/ui"] -- "REST + SSE" --> API["API<br/>FastAPI"]
   API --> DB[("Postgres 16<br/>+ pgvector")]
-  API -- "ingest job" --> Q[(Redis)] --> W["Worker (ARQ)<br/>PyMuPDF · sentence-transformers"]
+  API -- "ingest job" --> Q[(Redis)] --> W["Worker (ARQ)<br/>PyMuPDF · ONNX Runtime"]
   W --> DB
   API -- "chat" --> LLM["Ollama on the host, Anthropic<br/>or an OpenAI-compatible server"]
 ```
@@ -248,7 +240,8 @@ flowchart LR
 `uploaded → extracting → chunking → embedding → enriching → ready`, or `failed` with the reason. Enrichment never fails
 a paper: with no OpenAlex match, or no network, it is still ready. PyMuPDF extracts the text with
 its coordinates, so highlights and citations can point at exact rectangles on the page. Chunks are embedded with
-`nomic-embed-text-v1.5` into `vector(768)` columns.
+`nomic-embed-text-v1.5` on ONNX Runtime into `vector(768)` columns once the search model is downloaded; until then a
+paper is ready without them.
 - **Chat:** a question retrieves the closest chunks for that paper (or sends the whole paper if it's short), streams the
 model's answer over Server-Sent Events as `sources → token → done`, and saves it with its prompt version. Prompts are
 versioned files in `backend/prompts/`.
@@ -258,7 +251,7 @@ versioned files in `backend/prompts/`.
 backend/
   app/api/         HTTP routes: papers, notes, chat, health, llm, embedding
   app/core/        domain logic: chunking, retrieval, chat, note provenance rules
-  app/providers/   PDF extraction, embeddings, OpenAlex, LLM adapters (Ollama, Anthropic, OpenAI-compatible, fake), Ollama pull/delete
+  app/providers/   PDF extraction, the search model and its download, OpenAlex, LLM adapters (Ollama, Anthropic, OpenAI-compatible, fake), Ollama pull/delete
   app/workers/     the ARQ jobs: ingestion and the references fetch
   mcp_server/      the MCP server Claude Desktop starts: search, papers, related papers, notes
   prompts/         versioned prompts
