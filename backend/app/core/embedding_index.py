@@ -1,6 +1,8 @@
 """The embedding index: which model the stored vectors came from, and never mixing two models' vectors.
 
-There is one embedding model (EMBED_MODEL) and vector(768) is fixed at the column. If EMBED_MODEL changes while
+There is one embedding model and vector(768) is fixed at the column. `settings.embed_model` names it: the model
+vectors are recorded and checked under, and it follows the shipped search model (`search_model.SHIPPED`), which is
+what `load()` actually runs. Setting it by hand would mislabel vectors, not switch models. If it changed anyway while
 chunks exist, a new query vector would be compared with vectors from the old model and retrieval would quietly
 return nonsense. So chat refuses those papers until the library is re-indexed with the new model.
 """
@@ -23,7 +25,7 @@ class IndexedModel:
 
 @dataclass(frozen=True)
 class EmbeddingStatus:
-    model: str  # EMBED_MODEL: what new chunks and questions are embedded with
+    model: str  # settings.embed_model: what new chunks and questions are embedded with
     chunks: int  # chunks that have a vector
     indexed_with: list[IndexedModel]  # the models those vectors came from, most chunks first
 
