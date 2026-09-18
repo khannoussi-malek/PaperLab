@@ -121,11 +121,11 @@ def _open_part(part: Path, resume: bool):
 
 async def _fetch(client: httpx.AsyncClient, file: ModelFile, target: Path) -> AsyncIterator[int]:
     """Writes `file` to its .part, resuming from what the part holds, and renames it to `target` once its sha256
-    matches. Yields how many bytes the part holds, first before any request and then after each write."""
+    matches. Yields how many bytes the part holds: once the response has settled where it really starts from (a
+    server can ignore Range and restart the part), and then after each write, so progress never goes backward."""
     part = _part(target)
     target.parent.mkdir(parents=True, exist_ok=True)
     have = part.stat().st_size if part.is_file() else 0
-    yield have
     if have < file.size:
         headers = {"Range": f"bytes={have}-"} if have else {}
         async with client.stream("GET", url(file), headers=headers) as response:
@@ -133,11 +133,14 @@ async def _fetch(client: httpx.AsyncClient, file: ModelFile, target: Path) -> As
                 raise DownloadError(f"Hugging Face answered {response.status_code}. Try again later.")
             if response.status_code == 200:
                 have = 0  # the whole file came back, not the rest of it: start the part again
+            yield have
             with _open_part(part, resume=have > 0) as out:
                 async for chunk in response.aiter_bytes(CHUNK):
                     out.write(chunk)
                     have += len(chunk)
                     yield have
+    else:
+        yield have
     if have < file.size:  # the body ended early without an error: keep the part, the next try resumes it
         raise DownloadError(NO_NETWORK)
     if have > file.size or await asyncio.to_thread(_sha256, part) != file.sha256:

@@ -98,10 +98,11 @@ async def test_a_server_that_ignores_the_range_sends_the_whole_file_and_the_part
         await fetch(tmp_path, hub)
     hub.ignore_range = True
 
-    await fetch(tmp_path, hub)
+    events = await fetch(tmp_path, hub)
 
     assert hub.ranges()[-1] == "bytes=1024-"
     assert search_model.path(tmp_path, VARIANT.onnx).read_bytes() == ONNX_BYTES
+    assert [e.completed for e in events] == sorted(e.completed for e in events)  # never goes back
 
 
 async def test_a_checksum_mismatch_deletes_the_part_and_says_so(tmp_path, hub):
