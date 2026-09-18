@@ -1,5 +1,5 @@
 import type { Locator, Page } from '@playwright/test'
-import { FIXTURE_FILE, expect, openReader, removePaperAndNotes, selectText, test } from './fixtures'
+import { FIXTURE_FILE, addOwnData, expect, openReader, removePaperAndNotes, selectText, test } from './fixtures'
 
 /** `enter` is tw-animate-css's entrance keyframe; `none` means the element doesn't animate. */
 const animationOf = (locator: Locator) => locator.evaluate((element) => getComputedStyle(element).animationName)
@@ -218,6 +218,24 @@ test.describe('with motion allowed', () => {
     await page.mouse.up()
     await expect.poll(() => chip.evaluate((element) => getComputedStyle(element).scale)).not.toBe('0.97')
   })
+})
+
+test('hover colours ease in over 150 ms instead of snapping, like every other row', async ({
+  page,
+  request,
+  paperId,
+  dataName,
+}) => {
+  const easing = (locator: Locator) =>
+    locator.evaluate((element) => {
+      const style = getComputedStyle(element)
+      return { eases: style.transitionProperty.includes('background-color'), duration: style.transitionDuration }
+    })
+  await addOwnData(request, dataName, 'x,y\n1,2\n')
+  await page.goto('/#/graph')
+  expect(await easing(page.locator(`.graph-paper[data-paper-id="${paperId}"]`))).toEqual({ eases: true, duration: '0.15s' })
+  await page.goto('/#/charts')
+  expect(await easing(page.locator('.own-dataset', { hasText: dataName }))).toEqual({ eases: true, duration: '0.15s' })
 })
 
 test.describe('with the OS set to reduce motion', () => {

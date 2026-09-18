@@ -179,7 +179,7 @@ export function ChartsPage() {
               <li key={dataset.id}>
                 <a
                   href={datasetHref(dataset.id)}
-                  className="own-dataset flex items-baseline gap-2 rounded-md px-2 py-1 hover:bg-foreground/5"
+                  className="own-dataset flex items-baseline gap-2 rounded-md px-2 py-1 transition-colors duration-150 hover:bg-foreground/5"
                 >
                   <span className="truncate font-medium" title={dataset.name}>
                     {dataset.name}

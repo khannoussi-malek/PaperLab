@@ -51,7 +51,7 @@ function PapersList({
                 if (element) buttonRefs.current.set(node.id, element)
                 else buttonRefs.current.delete(node.id)
               }}
-              className="graph-paper flex w-full items-baseline gap-2 rounded-md px-2 py-1.5 text-left text-sm outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="graph-paper flex w-full items-baseline gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors duration-150 outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
               data-paper-id={node.id}
               onClick={() => onFocus(node.id)}
             >
@@ -146,7 +146,7 @@ export function GraphPanel({ nodes, links, focused, onFocus, onClear, onAddLink,
                         >
                           <a
                             href={readerHref(paper.id)}
-                            className="min-w-0 flex-1 truncate rounded-md px-2 py-1.5 text-sm outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
+                            className="min-w-0 flex-1 truncate rounded-md px-2 py-1.5 text-sm transition-colors duration-150 outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
                             title={paper.title}
                             data-paper-id={paper.id}
                           >
