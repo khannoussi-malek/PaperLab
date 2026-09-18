@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readView, VIEW_KEY, VIEW_LABELS, VIEWS, writeView } from './viewModel'
+import { hasWebGL, readView, VIEW_KEY, VIEW_LABELS, VIEWS, WEBGL_OFF, writeView } from './viewModel'
 
 const memoryStorage = (initial: Record<string, string> = {}) => {
   const data = new Map(Object.entries(initial))
@@ -38,5 +38,27 @@ describe('the view switcher', () => {
     expect(readView(undefined)).toBe('2d')
     expect(readView(blockedStorage)).toBe('2d')
     expect(() => writeView(blockedStorage, 'matrix')).not.toThrow()
+  })
+})
+
+describe('the 3D view’s WebGL check', () => {
+  const browserWith = (getContext: (kind: string) => unknown) =>
+    ({ createElement: () => ({ getContext }) }) as unknown as Pick<Document, 'createElement'>
+
+  it('accepts WebGL 2, or WebGL 1 where 2 is missing', () => {
+    expect(hasWebGL(browserWith((kind) => (kind === 'webgl2' ? {} : null)))).toBe(true)
+    expect(hasWebGL(browserWith((kind) => (kind === 'webgl' ? {} : null)))).toBe(true)
+  })
+
+  it('says no, without throwing, when both are off or asking throws', () => {
+    expect(hasWebGL(browserWith(() => null))).toBe(false)
+    expect(
+      hasWebGL(
+        browserWith(() => {
+          throw new Error('blocked')
+        })
+      )
+    ).toBe(false)
+    expect(WEBGL_OFF).toBe('3D needs WebGL, which this browser has turned off. The other views work without it.')
   })
 })
