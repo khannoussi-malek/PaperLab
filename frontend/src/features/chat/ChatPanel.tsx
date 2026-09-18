@@ -7,6 +7,7 @@ import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { browserStorage } from '@/features/notes/highlightColors'
+import { DownloadSearchModel } from '@/features/settings/DownloadSearchModel'
 import { settingsHref } from '@/lib/route'
 import { cn } from '@/lib/utils'
 import { readAnswerSelection } from './answerSelection'
@@ -378,6 +379,11 @@ function ProblemAlert({ scope, problem, onRetry }: { scope: ChatScope; problem: 
   return (
     <Alert variant="destructive" className={cn('chat-error border-glass-border')}>
       <AlertDescription>{message}</AlertDescription>
+      {problem.download && (
+        <div className="mt-1">
+          <DownloadSearchModel />
+        </div>
+      )}
       <AlertAction>
         {problem.retryable && (
           <Button variant="outline" size="xs" onClick={onRetry}>

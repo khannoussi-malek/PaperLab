@@ -1,8 +1,16 @@
 /**
  * Why an answer failed, in words, and what the user can do about it. `settings`: the fix is on the settings page.
- * `endsThread`: the answer a follow-up continued is gone, so the panel stops following it.
+ * `endsThread`: the answer a follow-up continued is gone, so the panel stops following it. `download`: the fix is the
+ * search model's Download button, shown in place.
  */
-export type ChatProblem = { message: string; retryable: boolean; reindex: boolean; settings?: boolean; endsThread?: boolean }
+export type ChatProblem = {
+  message: string
+  retryable: boolean
+  reindex: boolean
+  settings?: boolean
+  endsThread?: boolean
+  download?: boolean
+}
 
 const FOLLOWED_ANSWER_GONE: ChatProblem = {
   message: 'The answer you were following is gone. Ask again to start a new question.',
@@ -22,6 +30,13 @@ const REFUSALS: Record<string, ChatProblem> = {
     message: 'This paper was added before chat existed, so it has no search index yet.',
     retryable: false,
     reindex: true,
+  },
+  // No search model yet (D136): a long paper or a workspace needs search; a short paper is sent whole and never gets here.
+  search_not_set_up: {
+    message: "Search isn't set up, so this can't be searched yet.",
+    retryable: false,
+    reindex: false,
+    download: true,
   },
   workspace_empty: { message: 'Add papers to chat with this workspace.', retryable: false, reindex: false },
   workspace_not_indexed: {
