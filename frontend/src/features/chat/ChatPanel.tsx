@@ -326,7 +326,7 @@ export function ChatPanel({ scope, unavailable, paperLabel, onCite, onPromoted }
         )}
         {chatModels.isError && <p className="px-1 text-xs text-muted-foreground">Couldn’t load your models; using the default.</p>}
         {noModels && (
-          <a href={settingsHref} className="inline-flex w-fit items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+          <a href={settingsHref} className="inline-flex w-fit items-center gap-1.5 text-sm text-muted-foreground transition-colors duration-150 hover:text-foreground">
             <Settings2 aria-hidden className="size-3.5" />
             Set up a model
           </a>
