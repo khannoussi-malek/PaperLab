@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.core.errors import InvalidInput
 from app.core.papers import get_paper
 from app.core.workspaces import get as get_workspace
@@ -26,17 +27,24 @@ from app.core.workspaces import get as get_workspace
 MAX_HOPS = 3
 # D107: a threshold draws a hairball (every pair of the owner's papers scores >= 0.8 cosine); the top 3 are right.
 SIMILAR_NEIGHBOURS = 3
+
 # D109: one payload for the whole library. The owner's 19 papers draw 77 links (13 kB of JSON); a synthetic 300 draw
 # 4,818, capped to 2,000 (300 kB) with every kind still represented.
 MAX_LINKS = 2000
-# The graph draws one link per pair per kind; `cited_by` is the same link as `cites` seen from the other end.
-KINDS = ["cites", "same_workspace", "co_anchored", "co_authored", "shares_topic", "similar", "manual"]
+
+
+def _similarity() -> dict:
+    """`similar`'s parameters. Only the current model's vectors are averaged: search and chat refuse to mix two
+    models' vectors (core/embedding_index.py), and mid-reindex a paper can still hold the old one's."""
+    return {"neighbours": SIMILAR_NEIGHBOURS, "embed_model": settings.embed_model}
+
 
 # The one definition both `related()` and `library_graph()` build on (D106). Directed rows: every undirected kind is
 # emitted both ways so the walk can leave a paper by any link; the graph normalises them back to one row per pair.
-# ponytail: `near` compares every pair of papers (an averaged vector defeats the HNSW index on chunks), so the query
-# is O(papers^2) vector distances: measured at 14-40 ms over the owner's 19 papers and 62 ms over a synthetic 300.
-# Store one vector per paper, and index it, when the library outgrows that.
+# ponytail: `paper_vec` re-averages every chunk vector on each call and `near` compares every pair of papers (an
+# averaged vector defeats the HNSW index on chunks), so each graph load and each related() call costs about 15 us per
+# chunk plus 0.7 us per pair. At the owner's real density (~69 chunks a paper) that is ~0.5 s at 300 papers, ~0.75 s
+# at 500, and tens of seconds at 5,000. Store one vector per paper, and index it, before the library reaches ~300.
 _EDGES = """
 RECURSIVE in_library(ref_id, paper_id) AS (
   SELECT id, imported_as FROM external_refs WHERE imported_as IS NOT NULL
@@ -53,11 +61,12 @@ RECURSIVE in_library(ref_id, paper_id) AS (
   UNION SELECT l.paper_id, pr.paper_id FROM paper_references pr JOIN in_library l ON l.ref_id = pr.ref_id
    WHERE pr.direction = 'cited_by'
 ), paper_vec(paper_id, v) AS (
-  SELECT paper_id, avg(embedding) FROM chunks WHERE embedding IS NOT NULL GROUP BY paper_id
+  SELECT paper_id, avg(embedding) FROM chunks
+   WHERE embedding IS NOT NULL AND embed_model = :embed_model GROUP BY paper_id
 ), near(src, dst) AS (
   SELECT src, dst FROM (
     SELECT a.paper_id AS src, b.paper_id AS dst,
-           row_number() OVER (PARTITION BY a.paper_id ORDER BY a.v <=> b.v) AS nth
+           row_number() OVER (PARTITION BY a.paper_id ORDER BY a.v <=> b.v, b.paper_id) AS nth
       FROM paper_vec a JOIN paper_vec b ON b.paper_id <> a.paper_id
   ) ranked WHERE nth <= :neighbours
 ), edges(src, dst, via) AS (
@@ -189,7 +198,7 @@ async def related(session: AsyncSession, paper_id: uuid.UUID, hops: int = 1) -> 
     if not 1 <= hops <= MAX_HOPS:
         raise InvalidInput("hops_out_of_range", allowed=[1, MAX_HOPS])
     await get_paper(session, paper_id)
-    rows = await session.execute(_RELATED, {"paper_id": paper_id, "hops": hops, "neighbours": SIMILAR_NEIGHBOURS})
+    rows = await session.execute(_RELATED, {"paper_id": paper_id, "hops": hops, **_similarity()})
     return [Related(row.paper_id, row.title, row.year, row.hops, list(row.via)) for row in rows]
 
 
@@ -206,6 +215,13 @@ async def library_graph(session: AsyncSession, workspace_id: uuid.UUID | None = 
         Node(row.id, row.title, row.year, list(row.workspaces), row.has_notes, row.status)
         for row in await session.execute(_GRAPH_NODES, scope)
     ]
-    rows = list(await session.execute(_GRAPH_LINKS, {**scope, "neighbours": SIMILAR_NEIGHBOURS, "cap": MAX_LINKS + 1}))
-    links = [Link(row.source, row.target, row.kind, row.link_id, row.label) for row in rows[:MAX_LINKS]]
+    rows = list(await session.execute(_GRAPH_LINKS, {**scope, **_similarity(), "cap": MAX_LINKS + 1}))
+    # Nodes and links are two statements, so a paper created or deleted between them could leave a link with a missing
+    # end, which the canvas's link force can't draw. Keep only links whose both ends were listed.
+    listed = {node.id for node in nodes}
+    links = [
+        Link(row.source, row.target, row.kind, row.link_id, row.label)
+        for row in rows[:MAX_LINKS]
+        if row.source in listed and row.target in listed
+    ]
     return Graph(nodes=nodes, links=links, truncated=len(rows) > MAX_LINKS)

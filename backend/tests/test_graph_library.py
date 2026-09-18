@@ -220,3 +220,43 @@ async def test_truncated_flips_at_max_links_and_every_kind_survives_the_cap(sess
     assert result.truncated is True
     assert len(result.links) == 6
     assert {link.kind for link in result.links} == {"same_workspace", "cites", "manual"}
+
+
+async def test_similar_never_compares_vectors_from_another_embedding_model(session):
+    # Mid-reindex, one paper's chunks still carry the old model's vectors. `stale` holds exactly the same vector as
+    # the other two, so if models were mixed it would be the nearest paper to both.
+    same, twin, stale = await add_papers(session, *[f"M{n} {RUN}" for n in range(3)])
+    vector = unit_vector(f"{RUN}-model")
+    for paper, model in [(same, "test"), (twin, "test"), (stale, "an-older-model")]:
+        session.add(
+            Chunk(
+                paper_id=paper.id,
+                ordinal=0,
+                page=1,
+                bbox=[[0, 0, 1, 1]],
+                text=paper.title,
+                embedding=vector,
+                embed_model=model,
+                strategy_ver=1,
+            )
+        )
+    await session.commit()
+
+    result = await graph.library_graph(session)
+    similar = {frozenset(pair) for kind, *pair in links_between(result, [same, twin, stale]) if kind == "similar"}
+
+    assert frozenset((same.title, twin.title)) in similar
+    assert not [pair for pair in similar if stale.title in pair]
+
+
+async def test_related_walks_similar_and_manual_links_as_well(session):
+    # related() reads the same edge definition as the graph (D106), so the MCP tool sees these two kinds too.
+    near, close, drawn = await add_papers(session, *[f"R{n} {RUN}" for n in range(3)])
+    for paper in (near, close):
+        await chunked(session, paper, "related")  # the same vector: each is the other's nearest
+    await paper_links.create(session, near.id, drawn.id, f"builds on {RUN}")
+
+    via = {row.title: row.via for row in await graph.related(session, near.id, hops=1)}
+
+    assert "similar" in via[close.title]
+    assert via[drawn.title] == ["manual"]
