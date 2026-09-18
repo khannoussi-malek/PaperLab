@@ -3,7 +3,7 @@ import { Link2, Pencil, Trash2 } from 'lucide-react'
 import type { GraphLink, GraphNode } from '@/api/client'
 import { Button } from '@/components/ui/button'
 import { readerHref } from '@/lib/route'
-import { connectionNote, degrees, hopSections, KIND_LABELS, KINDS } from './graphModel'
+import { connectionKey, connectionNote, degrees, hopSections, KIND_LABELS, KINDS } from './graphModel'
 
 type Props = {
   nodes: GraphNode[]
@@ -166,7 +166,7 @@ export function GraphPanel({
                       if (!paper) return null
                       return (
                         <li
-                          key={`${kind}-${link.id ?? other(link)}`}
+                          key={connectionKey(link)}
                           className="graph-connection flex items-center gap-1"
                         >
                           <a

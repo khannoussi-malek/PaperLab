@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { GraphLink, GraphNode } from '@/api/client'
 import {
   carryPositions,
+  connectionKey,
   connectionNote,
   countsLine,
   DEFAULT_LAYERS,
@@ -295,5 +296,10 @@ describe('the panel', () => {
     ])
     expect(hopSections(nodes, links, 'a', 2).map((section) => section.heading)).toEqual(['2 links away'])
     expect(hopSections(nodes, links, 'a', 1)).toEqual([])
+  })
+
+  it('keys a mutual citation\'s two rows apart, and a manual link by its own id', () => {
+    expect(connectionKey(link('a', 'b', 'cites'))).not.toBe(connectionKey(link('b', 'a', 'cites')))
+    expect(connectionKey({ ...link('a', 'b', 'manual'), id: 'l1' })).toBe('manual-l1')
   })
 })

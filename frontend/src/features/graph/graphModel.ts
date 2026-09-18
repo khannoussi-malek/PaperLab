@@ -89,6 +89,10 @@ export function connectionNote(link: GraphLink, focusId: string): string | null 
   return link.label ? `${direction}: ${link.label}` : direction
 }
 
+/** A connection row's React key: a manual link's own id, else the kind and both ends in order, so the two rows of a
+ * mutual citation never collide. */
+export const connectionKey = (link: GraphLink): string => `${link.kind}-${link.id ?? `${link.source}-${link.target}`}`
+
 export type HopSection = { heading: string; papers: GraphNode[] }
 
 /**
