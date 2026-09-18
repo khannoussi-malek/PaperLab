@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { GraphLink } from '@/api/client'
 import { useLibraryGraph, usePaperLinkMutations, useWorkspaces } from '@/api/queries'
 import { glass } from '@/components/glass'
@@ -60,6 +60,12 @@ export function GraphPage() {
     setView(next)
     writeView(browserStorage(), next)
   }
+
+  // K20: a failed removal belongs to the paper and the workspace it happened in.
+  useEffect(() => {
+    links.remove.reset()
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [focused?.id, workspaceId])
 
   const toggleLayer = (kind: LinkKind) =>
     setLayers((current) => (current.includes(kind) ? current.filter((k) => k !== kind) : [...current, kind]))
@@ -175,6 +181,7 @@ export function GraphPage() {
               nodes={nodes}
               links={shown}
               focused={focused}
+              hops={hops}
               onFocus={setFocusId}
               onClear={() => setFocusId(null)}
               onAddLink={() => setDialog({ editing: null })}
