@@ -42,7 +42,7 @@ function PapersList({
     (a, b) => (degree.get(b.id) ?? 0) - (degree.get(a.id) ?? 0) || a.title.localeCompare(b.title)
   )
   return (
-    <section aria-labelledby="graph-papers" className="flex min-h-0 flex-col gap-2">
+    <section aria-labelledby="graph-papers" className="flex flex-1 basis-0 min-h-32 flex-col gap-2">
       <h2 id="graph-papers" ref={headingRef} tabIndex={-1} className="text-sm font-medium">
         Papers
       </h2>
@@ -128,7 +128,11 @@ export function GraphPanel({
   return (
     <>
       {focused !== null && (
-        <section key="graph-connections" aria-labelledby="graph-connections" className="flex min-h-0 flex-col gap-3">
+        <section
+          key="graph-connections"
+          aria-labelledby="graph-connections"
+          className="flex min-h-0 max-h-[60%] flex-col gap-3"
+        >
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <h2 id="graph-connections" ref={connectionsHeading} tabIndex={-1} className="text-sm font-medium">

@@ -53,7 +53,11 @@ export const WEBGL_FAILED = "3D couldn't start in this browser. The other views 
 export function hasWebGL(doc: Pick<Document, 'createElement'> = document): boolean {
   try {
     const canvas = doc.createElement('canvas')
-    return canvas.getContext('webgl2') !== null
+    const context = canvas.getContext('webgl2')
+    // The probe context is never drawn into, so release it: left alone it counts toward the browser's cap on live
+    // WebGL contexts (~16 in Chrome), and repeated view switching would walk toward it.
+    context?.getExtension?.('WEBGL_lose_context')?.loseContext()
+    return context !== null
   } catch {
     return false
   }

@@ -61,4 +61,13 @@ describe('the 3D view’s WebGL check', () => {
     ).toBe(false)
     expect(WEBGL_OFF).toBe('3D needs WebGL, which this browser has turned off. The other views work without it.')
   })
+
+  it('releases the probe context instead of leaking it toward the browser’s live-context cap', () => {
+    let lost = false
+    const context = {
+      getExtension: (name: string) => (name === 'WEBGL_lose_context' ? { loseContext: () => (lost = true) } : null),
+    }
+    expect(hasWebGL(browserWith((kind) => (kind === 'webgl2' ? context : null)))).toBe(true)
+    expect(lost).toBe(true)
+  })
 })

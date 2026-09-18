@@ -26,6 +26,7 @@ export function GraphViews({ view, onView, axis, ...shared }: Props) {
         if (isGraphView(value)) onView(value)
       }}
       className="min-h-0 flex-1"
+      activationMode="manual"
     >
       <TabsList aria-label="Graph view" className="mx-3 mt-3">
         {VIEWS.map((option) => (
@@ -34,7 +35,7 @@ export function GraphViews({ view, onView, axis, ...shared }: Props) {
           </TabsTrigger>
         ))}
       </TabsList>
-      <TabsContent value="2d" className="flex min-h-0 flex-col">
+      <TabsContent value="2d" className="flex min-h-0 flex-col focus-visible:ring-3 focus-visible:ring-ring/50">
         <GraphCanvas
           nodes={shared.nodes}
           links={shared.links}
@@ -44,16 +45,16 @@ export function GraphViews({ view, onView, axis, ...shared }: Props) {
           onSelect={shared.onSelect}
         />
       </TabsContent>
-      <TabsContent value="3d" className="flex min-h-0 flex-col">
+      <TabsContent value="3d" className="flex min-h-0 flex-col focus-visible:ring-3 focus-visible:ring-ring/50">
         <Graph3DView {...shared} />
       </TabsContent>
-      <TabsContent value="matrix" className="flex min-h-0 flex-col">
+      <TabsContent value="matrix" className="flex min-h-0 flex-col focus-visible:ring-3 focus-visible:ring-ring/50">
         <MatrixView {...shared} />
       </TabsContent>
-      <TabsContent value="timeline" className="flex min-h-0 flex-col">
+      <TabsContent value="timeline" className="flex min-h-0 flex-col focus-visible:ring-3 focus-visible:ring-ring/50">
         <TimelineView {...shared} axis={axis} />
       </TabsContent>
-      <TabsContent value="rings" className="flex min-h-0 flex-col">
+      <TabsContent value="rings" className="flex min-h-0 flex-col focus-visible:ring-3 focus-visible:ring-ring/50">
         <RingsView {...shared} />
       </TabsContent>
     </Tabs>

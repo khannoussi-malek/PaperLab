@@ -39,7 +39,7 @@ export function MatrixView({ nodes, links, theme, colors, inFocus, onSelect }: V
           <tbody>
             {papers.map((row, r) => (
               <tr key={row.id}>
-                <th scope="row" className="sticky left-0 z-10 bg-background p-0 text-left font-normal" style={fade(row.id)}>
+                <th scope="row" className="sticky left-0 z-10 bg-background p-0 text-left font-normal">
                   <button
                     type="button"
                     title={row.title}
@@ -49,9 +49,11 @@ export function MatrixView({ nodes, links, theme, colors, inFocus, onSelect }: V
                     <span
                       aria-hidden
                       className="size-2 shrink-0 rounded-full"
-                      style={{ backgroundColor: nodeColor(row, colors, theme) }}
+                      style={{ backgroundColor: nodeColor(row, colors, theme), ...fade(row.id) }}
                     />
-                    <span className="min-w-0 truncate">{row.title}</span>
+                    <span className="min-w-0 truncate" style={fade(row.id)}>
+                      {row.title}
+                    </span>
                   </button>
                 </th>
                 {cells[r].map((cell, c) => (

@@ -1,4 +1,5 @@
 import { Component, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import type { ForceGraphMethods, LinkObject, NodeObject } from 'react-force-graph-3d'
 import { CHART_INK } from '@/features/charts/palette'
 import { GraphLoadError } from './GraphCanvas'
 import { carryPositions, endId, FADED, sizedNodes, tooltipFor, withAlpha, type SizedNode } from './graphModel'
@@ -18,6 +19,10 @@ function loadForceGraph3d() {
   }
   return forceGraph3d
 }
+
+// Asked once per page load, not once per mount: the probe releases its context (viewModel's hasWebGL), but there's
+// still no reason to ask again on every view switch. Reused for the rest of the page's life.
+let webgl: boolean | undefined
 
 type BoundaryState = { failed: boolean }
 
@@ -61,9 +66,14 @@ export function Graph3DView({ nodes, links, theme, colors, inFocus, onSelect }: 
   const [Graph, setGraph] = useState<typeof import('react-force-graph-3d').default | null>(null)
   const [failed, setFailed] = useState(false)
   // Asked once, before the canvas mounts: without WebGL three.js would throw inside React.
-  const [webgl] = useState(() => hasWebGL())
+  const [webglSupported] = useState(() => (webgl ??= hasWebGL()))
   const [box, size] = useBoxSize<HTMLDivElement>()
   const previous = useRef<Node3D[]>([])
+  const graphRef = useRef<ForceGraphMethods<NodeObject<Node3D>, LinkObject<Node3D, Link3D>> | undefined>(undefined)
+  // Fit once per mount, when the layout first settles: a later rebuild (a layer toggle, a theme change) must never
+  // yank a camera the owner has moved. A view switch remounts this component (Radix drops the unpicked tab), so
+  // returning to 3D fits again.
+  const fitted = useRef(false)
 
   useEffect(() => {
     let cancelled = false
@@ -99,7 +109,7 @@ export function Graph3DView({ nodes, links, theme, colors, inFocus, onSelect }: 
 
   return (
     <div data-view="3d" data-ready={Graph !== null} className="flex min-h-0 flex-1 flex-col">
-      {!webgl ? (
+      {!webglSupported ? (
         <p className="grid min-h-[28rem] flex-1 place-items-center px-6 text-center text-muted-foreground">{WEBGL_OFF}</p>
       ) : (
         <CanvasBoundary>
@@ -108,6 +118,7 @@ export function Graph3DView({ nodes, links, theme, colors, inFocus, onSelect }: 
               <div className="h-full w-full animate-pulse rounded-xl bg-muted" />
             ) : (
               <Graph
+                ref={graphRef}
                 width={size.width}
                 height={size.height}
                 graphData={data}
@@ -134,6 +145,11 @@ export function Graph3DView({ nodes, links, theme, colors, inFocus, onSelect }: 
                 linkDirectionalArrowLength={(link: Link3D) => (link.kind === 'cites' || link.kind === 'manual' ? 4 : 0)}
                 linkDirectionalArrowRelPos={1}
                 onNodeClick={(node: Node3D) => onSelect(node.id)}
+                onEngineStop={() => {
+                  if (fitted.current) return
+                  fitted.current = true
+                  graphRef.current?.zoomToFit(400, 40)
+                }}
                 cooldownTicks={120}
               />
             )}
