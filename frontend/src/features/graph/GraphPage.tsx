@@ -12,7 +12,16 @@ import { GraphCanvas } from './GraphCanvas'
 import { GraphControls } from './GraphControls'
 import { GraphPanel } from './GraphPanel'
 import { LinkDialog, type LinkDraft } from './LinkDialog'
-import { countsLine, DEFAULT_LAYERS, focusedIds, layerCounts, visibleLinks, workspaceColors, type LinkKind } from './graphModel'
+import {
+  countsLine,
+  DEFAULT_LAYERS,
+  focusedIds,
+  layerCounts,
+  legendEntries,
+  visibleLinks,
+  workspaceColors,
+  type LinkKind,
+} from './graphModel'
 
 const EMPTY =
   'No links yet. Import references, add papers to a workspace, or turn on OpenAlex to fill this in.'
@@ -32,7 +41,10 @@ export function GraphPage() {
   const allLinks = useMemo(() => graph.data?.links ?? [], [graph.data])
   const shown = useMemo(() => visibleLinks(allLinks, layers), [allLinks, layers])
   const counts = useMemo(() => layerCounts(allLinks), [allLinks])
-  const colors = useMemo(() => workspaceColors(nodes, theme), [nodes, theme])
+  // K20: from every workspace, not the papers on screen, so the workspace filter never recolours one.
+  const workspaceNames = useMemo(() => (workspaces.data ?? []).map((workspace) => workspace.name), [workspaces.data])
+  const colors = useMemo(() => workspaceColors(workspaceNames, theme), [workspaceNames, theme])
+  const legend = useMemo(() => legendEntries(nodes, colors, theme), [nodes, colors, theme])
   const focused = useMemo(() => nodes.find((node) => node.id === focusId) ?? null, [nodes, focusId])
   const inFocus = useMemo(
     () => (focused === null ? null : focusedIds(shown, focused.id, hops)),
@@ -110,8 +122,7 @@ export function GraphPage() {
                 setWorkspaceId(id)
                 setFocusId(null)
               }}
-              colors={colors}
-              nodes={nodes}
+              legend={legend}
               hops={hops}
               onHops={setHops}
               focused={focused !== null}

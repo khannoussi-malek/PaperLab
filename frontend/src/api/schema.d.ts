@@ -1690,7 +1690,8 @@ export interface components {
         };
         /**
          * GraphNode
-         * @description A library paper. `workspaces` are names, oldest membership first: the first one colours the node.
+         * @description A library paper. `workspaces` are names, oldest membership first: the first one colours the node. `added_at` is
+         *     when it came into the library.
          */
         GraphNode: {
             /**
@@ -1708,6 +1709,11 @@ export interface components {
             has_notes: boolean;
             /** Status */
             status: string;
+            /**
+             * Added At
+             * Format: date-time
+             */
+            added_at: string;
         };
         /** GraphOut */
         GraphOut: {
