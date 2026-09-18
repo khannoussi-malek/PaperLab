@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { withViewTransition } from '@/components/motion'
 
 export type ReaderTab = 'notes' | 'chat' | 'data' | 'similar' | 'references'
 export type WorkspaceTab = 'papers' | 'notes' | 'chat'
@@ -115,9 +116,28 @@ export const newChartHref = (datasetId?: string) => (datasetId ? `#/charts/new?d
 export const datasetHref = (datasetId: string, focus?: CellFocus) =>
   focus ? `#/datasets/${datasetId}?row=${focus.rowId}&column=${focus.columnId}` : `#/datasets/${datasetId}`
 
+/** Whether two URLs show the same page: only the query (a tab, a target) differs, and App keeps the page mounted. */
+export const samePage = (oldURL: string, newURL: string) => new URL(oldURL).hash.split('?')[0] === new URL(newURL).hash.split('?')[0]
+
+// One hashchange listener for every useRoute, so a navigation is one cross-fade however many components read the route.
+// A new page cross-fades; a tab or a target within one swaps at once, since its panel fades in by itself and the page
+// takes no clicks while a transition runs.
+// ponytail: the snapshot reads the live hash, so a render that lands before the transition's update shows the new page
+// early and that navigation skips its fade; hold the hash in the store if that ever shows.
+const listeners = new Set<() => void>()
+function notifyAll(event: HashChangeEvent) {
+  const notify = () => listeners.forEach((listener) => listener())
+  if (samePage(event.oldURL, event.newURL)) notify()
+  else withViewTransition(notify)
+}
+
 function subscribe(onChange: () => void) {
-  window.addEventListener('hashchange', onChange)
-  return () => window.removeEventListener('hashchange', onChange)
+  if (listeners.size === 0) window.addEventListener('hashchange', notifyAll)
+  listeners.add(onChange)
+  return () => {
+    listeners.delete(onChange)
+    if (listeners.size === 0) window.removeEventListener('hashchange', notifyAll)
+  }
 }
 
 // ponytail: hash routing covers these views with a few params; adopt a router once routes nest.
