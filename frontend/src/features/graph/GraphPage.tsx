@@ -23,6 +23,7 @@ import {
   workspaceColors,
   type LinkKind,
 } from './graphModel'
+import type { TimeAxis } from './timelineModel'
 import { readView, writeView, type GraphView } from './viewModel'
 
 const EMPTY =
@@ -35,6 +36,7 @@ export function GraphPage() {
   const [hops, setHops] = useState(1)
   const [dialog, setDialog] = useState<{ editing: GraphLink | null } | null>(null)
   const [view, setView] = useState<GraphView>(() => readView(browserStorage()))
+  const [axis, setAxis] = useState<TimeAxis>('published')
   const theme = useChartTheme()
   const graph = useLibraryGraph(workspaceId)
   const workspaces = useWorkspaces()
@@ -140,6 +142,9 @@ export function GraphPage() {
               hops={hops}
               onHops={setHops}
               focused={focused !== null}
+              view={view}
+              axis={axis}
+              onAxis={setAxis}
             />
           </div>
 
@@ -151,6 +156,7 @@ export function GraphPage() {
               <GraphViews
                 view={view}
                 onView={chooseView}
+                axis={axis}
                 nodes={nodes}
                 links={shown}
                 theme={theme}
