@@ -68,20 +68,31 @@ export function focusedIds(links: GraphLink[], focusId: string, hops: number): S
 }
 
 /**
- * A colour per workspace, from the charts palette (already checked for colour-blind readers on both surfaces).
- * Alphabetical, so a colour doesn't move when a paper joins a workspace. A paper wears its *first* workspace's
- * colour, and one with none stays grey.
+ * A colour per workspace, from the charts palette (already checked for colour-blind readers on both surfaces). Taken
+ * from every workspace, alphabetically — not from the papers on screen — so neither filtering by a workspace nor a
+ * paper joining one moves a colour. A paper wears its *first* workspace's colour, and one with none the muted ink.
  * ponytail: the palette has six colours and cycles past the sixth; a seventh workspace shares a colour, which the
  * legend still names. Add colours to SERIES_COLORS if a library ever has that many workspaces.
  */
-export function workspaceColors(nodes: GraphNode[], theme: ChartTheme): Map<string, string> {
-  const firsts = [...new Set(nodes.map((node) => node.workspaces[0]).filter((name) => name !== undefined))].sort()
+export function workspaceColors(names: readonly string[], theme: ChartTheme): Map<string, string> {
   const palette = SERIES_COLORS[theme]
-  return new Map(firsts.map((name, slot) => [name, palette[slot % palette.length]]))
+  return new Map([...new Set(names)].sort().map((name, slot) => [name, palette[slot % palette.length]]))
 }
 
 export const nodeColor = (node: GraphNode, colors: Map<string, string>, theme: ChartTheme): string =>
   colors.get(node.workspaces[0] ?? '') ?? CHART_INK[theme].muted
+
+export const NO_WORKSPACE = 'No workspace'
+
+export type LegendEntry = { name: string; color: string }
+
+/** The workspaces that colour a paper on screen, in colour order, then No workspace in the colour its papers wear. */
+export function legendEntries(nodes: GraphNode[], colors: Map<string, string>, theme: ChartTheme): LegendEntry[] {
+  const onScreen = new Set(nodes.map((node) => node.workspaces[0]))
+  const named = [...colors].filter(([name]) => onScreen.has(name)).map(([name, color]) => ({ name, color }))
+  const unfiled = nodes.some((node) => node.workspaces.length === 0)
+  return unfiled ? [...named, { name: NO_WORKSPACE, color: CHART_INK[theme].muted }] : named
+}
 
 /** How many visible links touch each paper: the canvas sizes a node by it, the panel sorts by it. */
 export function degrees(links: GraphLink[]): Map<string, number> {

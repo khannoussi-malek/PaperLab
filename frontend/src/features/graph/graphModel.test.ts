@@ -8,6 +8,8 @@ import {
   KIND_LABELS,
   labelError,
   layerCounts,
+  legendEntries,
+  nodeColor,
   tooltipFor,
   visibleLinks,
   workspaceColors,
@@ -28,6 +30,7 @@ const node = (id: string, workspaces: string[] = []): GraphNode => ({
   workspaces,
   has_notes: false,
   status: 'ready',
+  added_at: '2026-09-13T10:00:00Z',
 })
 
 describe('layers', () => {
@@ -104,26 +107,48 @@ describe('focus', () => {
 })
 
 describe('colours', () => {
-  it('gives each workspace its own colour, by the first workspace a paper is in', () => {
-    const colors = workspaceColors([node('a', ['Thesis']), node('b', ['Reading', 'Thesis']), node('c')], 'light')
-    // Alphabetical, and only a paper's *first* workspace counts, so 'Thesis' as b's second does not take a colour twice.
-    expect(colors.get('Reading')).toBe('#2a78d6')
-    expect(colors.get('Thesis')).toBe('#eb6834')
-    expect(colors.size).toBe(2)
-  })
-
-  it('orders workspaces by name, so a colour does not move when a paper is added', () => {
-    const one = workspaceColors([node('a', ['Zeta']), node('b', ['Alpha'])], 'light')
-    const two = workspaceColors([node('b', ['Alpha']), node('a', ['Zeta'])], 'light')
-    expect([...one]).toEqual([...two])
-    expect(one.get('Alpha')).toBe('#2a78d6')
+  it('colours every workspace from the full list, alphabetically, whatever is on screen', () => {
+    const colors = workspaceColors(['Thesis', 'Reading', 'Archive'], 'light')
+    expect([...colors]).toEqual([
+      ['Archive', '#2a78d6'],
+      ['Reading', '#eb6834'],
+      ['Thesis', '#1baf7a'],
+    ])
+    // The page passes every workspace, not the papers' own: filtering to one workspace can't move its colour.
+    expect(workspaceColors(['Reading', 'Archive', 'Thesis'], 'light')).toEqual(colors)
   })
 
   it('uses the dark palette in the dark theme and cycles past the sixth workspace', () => {
-    const names = ['w1', 'w2', 'w3', 'w4', 'w5', 'w6', 'w7']
-    const colors = workspaceColors(names.map((name) => node(name, [name])), 'dark')
+    const colors = workspaceColors(['w1', 'w2', 'w3', 'w4', 'w5', 'w6', 'w7'], 'dark')
     expect(colors.get('w1')).toBe('#3987e5')
     expect(colors.get('w7')).toBe('#3987e5')
+  })
+
+  it('paints a paper by its first workspace, and an unfiled one in the muted ink', () => {
+    const colors = workspaceColors(['Reading', 'Thesis'], 'light')
+    expect(nodeColor(node('a', ['Thesis', 'Reading']), colors, 'light')).toBe('#eb6834')
+    expect(nodeColor(node('b'), colors, 'dark')).toBe('#94a3b8')
+  })
+})
+
+describe('the legend', () => {
+  const colors = workspaceColors(['Archive', 'Reading', 'Thesis'], 'light')
+
+  it('names only the workspaces that colour a paper on screen', () => {
+    // 'Thesis' is only b's second workspace, so it colours nothing here, and no paper here is in 'Archive'.
+    expect(legendEntries([node('a', ['Reading']), node('b', ['Reading', 'Thesis'])], colors, 'light')).toEqual([
+      { name: 'Reading', color: '#eb6834' },
+    ])
+  })
+
+  it('ends with No workspace, in exactly the colour an unfiled paper wears', () => {
+    const entries = legendEntries([node('a', ['Thesis']), node('b')], colors, 'dark')
+    expect(entries.map((entry) => entry.name)).toEqual(['Thesis', 'No workspace'])
+    expect(entries[1].color).toBe(nodeColor(node('b'), colors, 'dark'))
+  })
+
+  it('leaves No workspace out when every paper has one', () => {
+    expect(legendEntries([node('a', ['Thesis'])], colors, 'light').map((entry) => entry.name)).toEqual(['Thesis'])
   })
 })
 
