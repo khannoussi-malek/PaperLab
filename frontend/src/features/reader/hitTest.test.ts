@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { clientPointToPdf, notesAt, rectContains, type NoteRect } from './hitTest'
+import type { PdfRect } from './coords'
+import { citationAt, clientPointToPdf, notesAt, rectContains, type NoteRect } from './hitTest'
 
 const highlights: NoteRect[] = [
   { noteId: 'a', rect: [72, 400, 290, 410] },
@@ -23,6 +24,25 @@ describe('notesAt', () => {
 
   it('returns every overlapping note once, in highlight order', () => {
     expect(notesAt(highlights, [160, 408])).toEqual(['a', 'b'])
+  })
+})
+
+describe('citationAt', () => {
+  const citations: { id: string; rect: PdfRect }[] = [
+    { id: 'c1', rect: [175.9, 108.2, 182, 123.3] }, // the fixture's [1]
+    { id: 'c2', rect: [180, 108.2, 190, 123.3] }, // overlaps c1
+  ]
+
+  it('finds a citation within 1 pt of its link, the first where two overlap', () => {
+    expect(citationAt(citations, [175, 115])?.id).toBe('c1')
+    expect(citationAt(citations, [181, 115])?.id).toBe('c1')
+    expect(citationAt(citations, [191, 124])?.id).toBe('c2')
+  })
+
+  it('misses beyond the padding', () => {
+    expect(citationAt(citations, [174.8, 115])).toBeNull()
+    expect(citationAt(citations, [185, 124.5])).toBeNull()
+    expect(citationAt([], [181, 115])).toBeNull()
   })
 })
 
