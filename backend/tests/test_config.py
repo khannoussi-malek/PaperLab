@@ -1,4 +1,7 @@
+from pathlib import Path
+
 from app.config import Settings
+from app.providers import search_model
 
 
 def test_anthropic_without_a_key_no_longer_stops_the_app(monkeypatch):
@@ -22,3 +25,9 @@ def test_discovery_settings_are_read_from_the_environment(monkeypatch):
     assert (Settings().discovery_provider, Settings().semantic_scholar_api_key) == ("fake", "secret-key")
     assert Settings.model_fields["discovery_provider"].default == "live"
     assert Settings.model_fields["semantic_scholar_api_key"].default == ""
+
+
+def test_the_embedding_model_name_follows_the_shipped_search_model():
+    # D137: chunks record the variant's name; the model itself lives in the models volume.
+    assert Settings.model_fields["embed_model"].default == search_model.SHIPPED.name
+    assert Settings.model_fields["models_dir"].default == Path("/models")

@@ -119,6 +119,17 @@ async def test_only_missing_or_stale_vectors_are_embedded(library, embedder):
     assert reader.id  # the paper itself is untouched
 
 
+async def test_with_no_search_model_nothing_is_embedded(library):
+    """D136: the references tab still ranks, by co-citation, PDFs and citations; note similarity is simply absent."""
+    library.add_all([ExternalRef(title="Needs a vector"), Note(body="a note about attention", provenance="human")])
+    await library.flush()
+
+    await references.embed_new(library, None)
+
+    assert await library.scalar(select(func.count()).select_from(NoteEmbedding)) == 0
+    assert await library.scalar(select(func.count(ExternalRef.title_embedding))) == 0
+
+
 # --- ranking -----------------------------------------------------------------------------------------------------
 
 

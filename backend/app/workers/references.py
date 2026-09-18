@@ -6,6 +6,7 @@ from app.core import discovery, paper_sources, papers, references
 from app.core.errors import Conflict
 from app.db import SessionLocal
 from app.providers import discovery_fake
+from app.workers.ingest import search_embedder
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,7 @@ async def fetch_references(ctx: dict, paper_id: str) -> None:
                 notices = await references.fetch(session, providers, paper)
             finally:
                 await providers.aclose()
-            await references.embed_new(session, ctx["embedder"])
+            await references.embed_new(session, await search_embedder(ctx))
             await references.set_state(session, pid, "ready", " ".join(notices) or None)
         except Conflict as exc:
             await session.rollback()
