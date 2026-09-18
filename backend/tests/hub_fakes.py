@@ -24,6 +24,22 @@ async def _dropped(data: bytes):
     raise httpx.ReadError("connection reset by peer")
 
 
+class _CountedBody:
+    """An async byte stream that counts how much of `data` was actually pulled, in small steps so a caller that
+    stops early doesn't drain the rest first. Proves a fix stopped consuming an oversized body instead of reading it
+    whole."""
+
+    def __init__(self, data: bytes, step: int = 64):
+        self.data = data
+        self.step = step
+        self.pulled = 0
+
+    async def __aiter__(self):
+        for i in range(0, len(self.data), self.step):
+            self.pulled += self.step
+            yield self.data[i : i + self.step]
+
+
 class FakeHub:
     """Serves VARIANT's files the way Hugging Face does: the pinned resolve URL answers 302 to a CDN host, which honours
     `Range: bytes=N-` with a 206. Records every request. `cuts[path] = n` drops that file's next body after n bytes;
@@ -36,6 +52,7 @@ class FakeHub:
         self.files = {VARIANT.onnx.path: ONNX_BYTES, VARIANT.tokenizer.path: TOKENIZER_BYTES}
         self.requests: list[httpx.Request] = []
         self.cuts: dict[str, int] = {}
+        self.oversize: dict[str, _CountedBody] = {}
         self.offline = False
         self.status: int | None = None
         self.ignore_range = False
@@ -44,6 +61,13 @@ class FakeHub:
     def ranges(self) -> list[str | None]:
         """The Range header of each request the CDN answered."""
         return [r.headers.get("Range") for r in self.requests if r.url.host == self.CDN]
+
+    def overflow(self, path: str, extra: int) -> _CountedBody:
+        """Makes `path` serve `extra` more bytes than the file's real size, like a misbehaving CDN. Returns the
+        counted body, so a test can check how much of it the caller actually pulled before giving up."""
+        body = _CountedBody(self.files[path] + bytes(extra))
+        self.oversize[path] = body
+        return body
 
     def _handle(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
@@ -60,6 +84,8 @@ class FakeHub:
         name = request.url.path.lstrip("/")
         asked = request.headers.get("Range")
         start = 0 if asked is None or self.ignore_range else int(asked.removeprefix("bytes=").removesuffix("-"))
+        if name in self.oversize:
+            return httpx.Response(200, content=self.oversize[name])
         status, body = 206 if start else 200, self.files[name][start:]
         if name in self.cuts:
             return httpx.Response(status, content=_dropped(body[: self.cuts.pop(name)]))

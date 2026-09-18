@@ -139,6 +139,8 @@ async def _fetch(client: httpx.AsyncClient, file: ModelFile, target: Path) -> As
                     out.write(chunk)
                     have += len(chunk)
                     yield have
+                    if have > file.size:  # a misbehaving CDN: stop instead of streaming until the disk is full
+                        break
     else:
         yield have
     if have < file.size:  # the body ended early without an error: keep the part, the next try resumes it

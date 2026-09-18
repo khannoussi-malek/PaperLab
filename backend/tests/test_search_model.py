@@ -115,6 +115,16 @@ async def test_a_checksum_mismatch_deletes_the_part_and_says_so(tmp_path, hub):
     assert search_model.download_bytes(tmp_path, VARIANT) == len(ONNX_BYTES)
 
 
+async def test_an_oversized_stream_stops_instead_of_filling_the_disk(tmp_path, hub):
+    body = hub.overflow(ONNX, len(ONNX_BYTES) * 10)  # a misbehaving CDN sending far more than the file's size
+
+    with pytest.raises(DownloadError, match="^The download was damaged, so it was deleted. Try again.$"):
+        await fetch(tmp_path, hub)
+
+    assert files_in(tmp_path) == ["nomic-embed-text-v1.5/tokenizer.json"]  # no part left to resume
+    assert body.pulled <= len(ONNX_BYTES) + search_model.CHUNK  # stopped just past file.size, not at the stream's end
+
+
 async def test_no_network_says_so_and_leaves_nothing_in_place(tmp_path, hub):
     hub.offline = True
 
