@@ -1,9 +1,10 @@
-import type { Reference } from '@/api/client'
+import type { UseQueryResult } from '@tanstack/react-query'
+import type { Reference, References } from '@/api/client'
 import type { Entry } from './citationEntry'
 
 /**
- * Which of the paper's stored `cites` references a reference-list entry is (D145). Pure: it runs in the browser on the
- * rows the References listing already returns.
+ * Which of the paper's stored `cites` references a reference-list entry is (D145), and what its card shows (D146).
+ * Pure: it runs in the browser on the rows the References listing already returns.
  */
 
 const MIN_TITLE_CHARS = 16
@@ -84,5 +85,39 @@ export function matchEntry(entry: Entry, rows: Reference[]): Reference | null {
 /** The first DOI printed in `text`, trailing punctuation trimmed: an unmatched card's Open page. */
 export function doiIn(text: string): string | null {
   const found = DOI.exec(text.normalize('NFKC').toLowerCase())
-  return found ? found[0].replace(/[.,;)]+$/, '') : null
+  return found ? found[0].replace(/[.,;)\]>]+$/, '') : null
+}
+
+/** What an unmatched card says about the paper's references, by their state (`error`: the listing itself failed). */
+export const UNMATCHED_LINES = {
+  none: "This paper's references haven't been looked up.",
+  failed: "Looking up this paper's references failed.",
+  fetching: "Looking up this paper's references…",
+  ready: null,
+  error: "Couldn't check your library for it.",
+} as const
+
+export type UnmatchedState = keyof typeof UNMATCHED_LINES
+
+export type CardView =
+  | { kind: 'loading' }
+  | { kind: 'unreadable' }
+  | { kind: 'in-library' | 'free-pdf' | 'details'; reference: Reference }
+  | { kind: 'unmatched'; text: string; doi: string | null; state: UnmatchedState; openReferences: boolean }
+
+/** D146: which of the card's states a citation shows, given the references listing. */
+export function cardView(
+  citation: { entry: Entry | null },
+  references: Pick<UseQueryResult<References>, 'data' | 'isError'>,
+): CardView {
+  const { entry } = citation
+  if (!entry) return { kind: 'unreadable' }
+  const { data, isError } = references
+  if (!data && !isError) return { kind: 'loading' }
+  const reference = data ? matchEntry(entry, data.rows) : null
+  if (reference?.paper_id) return { kind: 'in-library', reference }
+  if (reference) return { kind: reference.has_pdf ? 'free-pdf' : 'details', reference }
+  const state: UnmatchedState = data ? data.state : 'error'
+  const openReferences = state === 'none' || state === 'failed'
+  return { kind: 'unmatched', text: entry.text, doi: doiIn(entry.text), state, openReferences }
 }
