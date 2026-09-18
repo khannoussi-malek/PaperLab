@@ -9,6 +9,10 @@ import { defineConfig } from '@playwright/test'
 // paper-sources row: a test that changes the switches or the email must not run beside a search or an ingest.
 const MOVES_DEFAULT = /@moves-default|@moves-paper-sources/
 
+// A spec that needs the stack started with no search model (MODELS_DIR=/models/none, README) carries this tag: it
+// runs only as its own project, on that stack, and skips itself on a stack that has the model.
+const NO_SEARCH_MODEL = /@no-search-model/
+
 // Runs against the real stack: `docker compose up -d` first. No mocked backend.
 export default defineConfig({
   testDir: 'e2e',
@@ -29,13 +33,18 @@ export default defineConfig({
   projects: [
     {
       name: 'parallel',
-      grepInvert: MOVES_DEFAULT,
+      grepInvert: [MOVES_DEFAULT, NO_SEARCH_MODEL],
     },
     {
       name: 'default-mover',
       grep: MOVES_DEFAULT,
       workers: 1,
       dependencies: ['parallel'],
+    },
+    {
+      name: 'no-search-model',
+      grep: NO_SEARCH_MODEL,
+      workers: 1,
     },
   ],
 })

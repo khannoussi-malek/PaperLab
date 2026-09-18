@@ -12,6 +12,8 @@ export const FIRST_LINE = 'Highlights are the anchor'
 export const TABLE_FIXTURE_FILE = fileURLToPath(new URL('./fixtures/table-paper.pdf', import.meta.url))
 /** The start of the table paper's sentence line, which holds "88.5 ± 0.3 F1". */
 export const TABLE_LINE = 'Our best model reaches'
+/** Twelve pages, about 30,000 characters: too long for chat to send whole, so asking it needs the search model. */
+export const LONG_FIXTURE_FILE = fileURLToPath(new URL('./fixtures/long-paper.pdf', import.meta.url))
 export type Rect = [number, number, number, number]
 
 export async function uploadAndWaitUntilReady(
@@ -183,6 +185,8 @@ type Fixtures = {
   secondPaperId: string
   /** A freshly ingested copy of the table paper: a captioned 3 × 3 table and "88.5 ± 0.3 F1" on page 1. */
   tablePaperId: string
+  /** A freshly ingested copy of the long paper, which chat can't send whole. */
+  longPaperId: string
   /** A unique workspace name. Every workspace whose name starts with it is deleted after the test. */
   workspaceName: string
   /** An empty workspace named `workspaceName`. */
@@ -211,6 +215,11 @@ export const test = base.extend<Fixtures>({
   },
   tablePaperId: async ({ request }, use) => {
     const id = await uploadAndWaitUntilReady(request, TABLE_FIXTURE_FILE, 'table-paper.pdf')
+    await use(id)
+    await removePaperAndNotes(request, id)
+  },
+  longPaperId: async ({ request }, use) => {
+    const id = await uploadAndWaitUntilReady(request, LONG_FIXTURE_FILE, 'long-paper.pdf')
     await use(id)
     await removePaperAndNotes(request, id)
   },

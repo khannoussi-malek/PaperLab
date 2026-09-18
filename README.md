@@ -279,11 +279,18 @@ docker compose exec api python -m evals.answer_check --paper "<title prefix>" --
 ```
 
 - **End-to-end tests** run against the real stack, with no mocked backend. They expect the fake model, which always
-gives the same answer: start the API and the worker with
+gives the same answer, and the search model downloaded: start the API and the worker with
 `LLM_PROVIDER=fake DISCOVERY_PROVIDER=fake docker compose up -d api worker`, run the tests, then go back with
-`docker compose up -d api worker`.
+`docker compose up -d api worker`. The specs tagged `@no-search-model` need a stack with no search model and skip
+themselves otherwise: start it with
+`MODELS_DIR=/models/none LLM_PROVIDER=fake DISCOVERY_PROVIDER=fake docker compose up -d api worker`, then run
+`npx playwright test --project=no-search-model --no-deps`.
 - **Retrieval eval:** `docker compose exec api python -m evals.run` prints recall@k for the questions in
-`backend/evals/questions.yaml`. Run it twice after a re-ingest before comparing results.
+`backend/evals/questions.yaml`, asking with the search model PaperLab ships; `--variant full` or `--variant int8` asks
+with the other one once it is downloaded. Run it twice after a re-ingest before comparing results.
+- **Parity with the original model:** `backend/tests/test_embedding_parity.py` compares the full-precision ONNX model
+with vectors recorded from the torch model it replaced. It runs when `MODELS_DIR` points at a folder that holds it
+(`docker compose cp api:/models/nomic-embed-text-v1.5 <folder>/`) and is skipped otherwise.
 - **Answer eval:** `docker compose exec api python -m evals.answers --label <name>` asks the default model the
 questions in `backend/evals/answers.yaml` (facts, summaries, follow-ups, notes, questions a paper can't answer) and
 scores each answer. `--summarize` compares saved runs in `backend/evals/results/`. It takes a while on a local model:
