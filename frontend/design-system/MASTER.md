@@ -220,9 +220,11 @@ one-off animation classes.
   home's Papers / Notes / Chat panels (it replays each time a panel is shown).
 - **The PDF canvas** fades in (300 ms) once it has drawn, instead of flashing from blank.
 - **`pressable`** (scale to 97% while held) on filter chips, starter questions, source pills and the send button.
-- **`delayedIn`** (hidden for 150 ms, then a 200 ms fade) on every loading placeholder ("Loading…", "Loading page…",
-  "Loading references…"), and on a page title only while it still reads "Loading…". Most screens load in under 75 ms,
-  so the placeholder never shows; before, it flashed for a few frames.
+- **`delayedIn`** (hidden for 150 ms, then a 200 ms fade) on the page and panel loading placeholders ("Loading…",
+  "Loading page…", "Loading references…", "Loading the data…"), and on a page title only while it still reads
+  "Loading…". Most screens load in under 75 ms, so the placeholder never shows; before, it flashed for a few frames.
+  The loading lines inside a `CommandEmpty` (Add papers, Attach chart, Add model, the data picker) don't carry it yet:
+  that element stays mounted while its text changes, so it needs a `<span>` of its own.
 - **Page cross-fade:** a hash change to another page runs as a view transition (`withViewTransition`, called by
   `useRoute`'s one `hashchange` listener): the browser cross-fades the old page into the new one with its own 250 ms
   fade, instead of the old page vanishing and the new one fading in from the bare background. Picking a theme does the

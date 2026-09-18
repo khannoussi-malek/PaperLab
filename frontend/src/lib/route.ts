@@ -116,7 +116,7 @@ export const newChartHref = (datasetId?: string) => (datasetId ? `#/charts/new?d
 export const datasetHref = (datasetId: string, focus?: CellFocus) =>
   focus ? `#/datasets/${datasetId}?row=${focus.rowId}&column=${focus.columnId}` : `#/datasets/${datasetId}`
 
-/** Whether two URLs show the same page: only the query (a tab, a target) differs, and App keeps the page mounted. */
+/** Whether two URLs show the same page: only the query (a tab, a target) differs, so the view needs no cross-fade. */
 export const samePage = (oldURL: string, newURL: string) => new URL(oldURL).hash.split('?')[0] === new URL(newURL).hash.split('?')[0]
 
 // One hashchange listener for every useRoute, so a navigation is one cross-fade however many components read the route.
