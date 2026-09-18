@@ -173,7 +173,17 @@ test.describe('the graph views', () => {
     await expect(panel).toHaveCount(0)
   })
 
-  test('a failed workspaces list shows the load error, and Retry recovers it', async ({ page }) => {
+  test('a failed workspaces list shows the load error, and Retry recovers it', async ({
+    page,
+    request,
+    paperId,
+    secondPaperId,
+    workspaceId,
+    workspaceName,
+  }) => {
+    for (const id of [paperId, secondPaperId]) {
+      expect((await request.put(`/api/workspaces/${workspaceId}/papers/${id}`)).status()).toBe(204)
+    }
     await page.route('**/api/workspaces', (route) =>
       route.fulfill({ status: 500, json: { detail: 'Workspaces are unavailable.' } })
     )
@@ -190,6 +200,9 @@ test.describe('the graph views', () => {
 
     await page.unroute('**/api/workspaces')
     await page.getByRole('button', { name: 'Retry' }).click()
+    // Scoped to this test's own workspace (D51): the whole library may have no nodes or no default-layer links,
+    // which would show the empty state instead and hang this assertion even though the app is correct.
+    await scopeTo(page, workspaceName)
     await expect(page.locator('[data-view]').first()).toBeVisible()
   })
 
