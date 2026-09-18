@@ -1,5 +1,5 @@
 """Parity with the sentence-transformers model PaperLab ran before M23 (spec §4, §8.1). The fixture was recorded from
-that model on 2026-09-18, before torch left, by the script in the M23 plan's Task 1.
+that model on 2026-09-18, before torch left, by `tests/fixtures/record_embedding_parity.py`.
 
 The ONNX check needs the real full-precision model, so it is skipped unless MODELS_DIR holds it:
     MODELS_DIR="$HOME/.cache/paperlab-models" uv run pytest tests/test_embedding_parity.py -v
