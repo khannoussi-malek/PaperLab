@@ -97,7 +97,10 @@ _RELATED = text(
     WITH {_EDGES}, walk(paper_id, hops, via) AS (
       SELECT dst, 1, via FROM edges WHERE src = :paper_id
       UNION
-      SELECT e.dst, w.hops + 1, e.via FROM walk w JOIN edges e ON e.src = w.paper_id WHERE w.hops < :hops
+      -- `similar` counts for the first hop only: every paper with text has similar neighbours, so following them
+      -- further reaches most of the library (owner 2026-09-18, D112).
+      SELECT e.dst, w.hops + 1, e.via FROM walk w JOIN edges e ON e.src = w.paper_id
+       WHERE w.hops < :hops AND e.via <> 'similar'
     ), nearest AS (
       SELECT paper_id, min(hops) AS hops FROM walk WHERE paper_id <> :paper_id GROUP BY paper_id
     )
@@ -191,7 +194,8 @@ class Graph:
 
 
 async def related(session: AsyncSession, paper_id: uuid.UUID, hops: int = 1) -> list[Related]:
-    """Library papers within `hops` links of this one, nearest first, then most kinds of link, then title.
+    """Library papers within `hops` links of this one, nearest first, then most kinds of link, then title. A `similar`
+    link is followed for the first hop only.
 
     Raises InvalidInput("hops_out_of_range", allowed=[1, MAX_HOPS]), NotFound.
     """
