@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 import { FIRST_LINE, addOwnData, expect, test } from './fixtures'
 
 const firstLine = (page: Page) => page.locator('.pdf-page[data-page="1"] .textLayer span', { hasText: FIRST_LINE })
@@ -53,4 +53,47 @@ test('pointing at a link into a chart starts loading the chart library; the page
   const plotly = page.waitForRequest(PLOTLY)
   await quickChart.hover()
   await plotly
+})
+
+/** Holds GET responses matching `glob` back for a second, so what the page shows while it waits stays on screen. */
+const slow = (page: Page, glob: string) =>
+  page.route(glob, async (route) => {
+    if (route.request().method() === 'GET') await new Promise((resolve) => setTimeout(resolve, 1000))
+    await route.fallback()
+  })
+
+const animationOf = (locator: Locator) =>
+  locator.evaluate((element) => {
+    const style = getComputedStyle(element)
+    return { name: style.animationName, delay: style.animationDelay }
+  })
+
+test.describe('loading placeholders', () => {
+  test.use({ reducedMotion: 'no-preference' })
+
+  test('stay hidden for their first 150 ms, so a fast load never flashes them', async ({ page, paperId }) => {
+    await slow(page, '**/api/papers')
+    await page.goto('/')
+    const list = page.getByText('Loading…', { exact: true }).first()
+    await expect(list).toBeVisible()
+    expect(await animationOf(list)).toEqual({ name: 'enter', delay: '0.15s' })
+
+    await slow(page, `**/api/papers/${paperId}`)
+    await follow(page, `#/papers/${paperId}`)
+    const title = page.getByRole('heading', { level: 1 }).getByText('Loading…')
+    await expect(title).toBeVisible()
+    expect(await animationOf(title)).toEqual({ name: 'enter', delay: '0.15s' })
+  })
+})
+
+test.describe('loading placeholders with the OS set to reduce motion', () => {
+  test.use({ reducedMotion: 'reduce' })
+
+  test('show at once', async ({ page }) => {
+    await slow(page, '**/api/papers')
+    await page.goto('/')
+    const list = page.getByText('Loading…', { exact: true }).first()
+    await expect(list).toBeVisible()
+    expect((await animationOf(list)).name).toBe('none')
+  })
 })

@@ -14,6 +14,13 @@ export const slideUpIn =
 /** Pages and tab panels. A panel hidden with `display: none` replays it each time it is shown. */
 export const fadeIn = 'motion-safe:animate-in motion-safe:fade-in motion-safe:duration-300 motion-safe:ease-out'
 
+/**
+ * A loading placeholder: hidden for its first 150 ms, then fades in. A fast load (most of this local app) never flashes
+ * it; a slow one still says it is working. Put it on the element only while it shows the placeholder.
+ */
+export const delayedIn =
+  'motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200 motion-safe:delay-150 motion-safe:fill-mode-backwards'
+
 /** Small pressable controls shrink slightly while held. The element needs a transition that covers `scale`. */
 export const pressable = 'motion-safe:active:scale-[0.97]'
 

@@ -3,7 +3,7 @@ import { useState } from 'react'
 import type { Note } from '@/api/client'
 import { useChart, useChartMutations } from '@/api/queries'
 import { glass } from '@/components/glass'
-import { fadeIn } from '@/components/motion'
+import { delayedIn, fadeIn } from '@/components/motion'
 import { ModeToggle } from '@/components/mode-toggle'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -39,7 +39,7 @@ export function ChartPage({ chartId }: { chartId: string }) {
           {chart.data ? (
             <InlineTitle as="h1" value={chart.data.title} label="Chart title" editing={renaming} onEditingChange={setRenaming} onSave={saveTitle} />
           ) : (
-            <h1 className="mt-1 truncate font-heading text-3xl font-semibold" title={title}>
+            <h1 className={cn('mt-1 truncate font-heading text-3xl font-semibold', !chart.isError && delayedIn)} title={title}>
               {title}
             </h1>
           )}
