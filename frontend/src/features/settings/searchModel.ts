@@ -34,6 +34,14 @@ export function refusedDownload(detail: string): DownloadState {
   return { status: 'error', message: detail }
 }
 
+/** The app root's one polite, visually hidden live region: it must announce a finished download exactly once, even
+ * though the button that started it may have already unmounted. Errors announce through their own Alert instead, so
+ * this stays silent for every other state, including a still-running download (a live status line would re-read on
+ * every percent). */
+export function downloadAnnouncement(download: DownloadState): string {
+  return download.status === 'done' ? 'Search model downloaded.' : ''
+}
+
 /** P1: the library's one quiet line shows while no search model is downloaded and some paper is too long to chat
  * with whole. */
 export function showSearchNotice(status: Pick<EmbeddingStatus, 'model_present' | 'papers_needing_search'>): boolean {
