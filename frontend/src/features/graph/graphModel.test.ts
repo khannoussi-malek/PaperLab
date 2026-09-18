@@ -6,6 +6,7 @@ import {
   DEFAULT_LAYERS,
   degrees,
   focusedIds,
+  hopDistances,
   KIND_LABELS,
   labelError,
   layerCounts,
@@ -105,6 +106,23 @@ describe('focus', () => {
 
   it('leaves an unlinked paper on its own', () => {
     expect(focusedIds(links, 'lonely', 3)).toEqual(new Set(['lonely']))
+  })
+
+  it('measures how many links away each paper is, up to the limit, in either direction', () => {
+    expect(hopDistances(links, 'a', 3)).toEqual(
+      new Map([
+        ['a', 0],
+        ['b', 1],
+        ['c', 1],
+        ['d', 2],
+      ])
+    )
+    expect(hopDistances(links, 'd', 1)).toEqual(
+      new Map([
+        ['d', 0],
+        ['c', 1],
+      ])
+    )
   })
 })
 
