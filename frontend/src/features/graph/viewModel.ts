@@ -39,6 +39,21 @@ export function writeView(storage: ViewStorage | undefined, view: GraphView): vo
   }
 }
 
+export const WEBGL_OFF = '3D needs WebGL, which this browser has turned off. The other views work without it.'
+
+/**
+ * Whether this browser can draw WebGL, asked before the 3D canvas mounts. Never throws: the app has no error boundary,
+ * so a WebGL failure must never reach React as a throw.
+ */
+export function hasWebGL(doc: Pick<Document, 'createElement'> = document): boolean {
+  try {
+    const canvas = doc.createElement('canvas')
+    return (canvas.getContext('webgl2') ?? canvas.getContext('webgl')) !== null
+  } catch {
+    return false
+  }
+}
+
 /** D113: what every view is given. The page owns all of it, so switching views changes none of it. */
 export type ViewProps = {
   nodes: GraphNode[]

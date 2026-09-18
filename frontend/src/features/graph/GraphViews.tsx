@@ -1,4 +1,5 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Graph3DView } from './Graph3DView'
 import { GraphCanvas } from './GraphCanvas'
 import { MatrixView } from './MatrixView'
 import { RingsView } from './RingsView'
@@ -42,6 +43,9 @@ export function GraphViews({ view, onView, axis, ...shared }: Props) {
           focused={shared.inFocus}
           onSelect={shared.onSelect}
         />
+      </TabsContent>
+      <TabsContent value="3d" className="flex min-h-0 flex-col">
+        <Graph3DView {...shared} />
       </TabsContent>
       <TabsContent value="matrix" className="flex min-h-0 flex-col">
         <MatrixView {...shared} />
