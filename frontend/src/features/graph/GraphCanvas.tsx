@@ -3,7 +3,8 @@ import type { GraphLink, GraphNode } from '@/api/client'
 import { Button } from '@/components/ui/button'
 import { ErrorAlert } from '@/features/library/ErrorAlert'
 import { CHART_INK, type ChartTheme } from '@/features/charts/palette'
-import { degrees, nodeColor, tooltipFor } from './graphModel'
+import { carryPositions, endId, FADED, sizedNodes, tooltipFor, withAlpha, type SizedNode } from './graphModel'
+import { useBoxSize } from './useBoxSize'
 
 // Loaded on first use, exactly as PlotlyChart loads Plotly: react-force-graph-2d is 189 kB minified (61 kB gzipped)
 // and only this page draws a graph. A failed dynamic import is cached by the browser for the page's lifetime, so the
@@ -20,7 +21,7 @@ function loadForceGraph() {
 }
 
 /** react-force-graph mutates the objects it is given (x, y, vx, vy), so it gets its own copies, never cached data. */
-type CanvasNode = GraphNode & { color: string; radius: number; x?: number; y?: number }
+type CanvasNode = SizedNode & { x?: number; y?: number }
 type CanvasLink = {
   source: string | { id: string }
   target: string | { id: string }
@@ -38,15 +39,13 @@ type Props = {
   onSelect: (paperId: string) => void
 }
 
-const FADED = 0.12
-const MIN_RADIUS = 3
-const MAX_RADIUS = 9
-
 export function GraphCanvas({ nodes, links, theme, colors, focused, onSelect }: Props) {
   const [Graph, setGraph] = useState<typeof import('react-force-graph-2d').default | null>(null)
   const [failed, setFailed] = useState(false)
-  const box = useRef<HTMLDivElement>(null)
-  const [size, setSize] = useState({ width: 0, height: 0 })
+  const [box, size] = useBoxSize<HTMLDivElement>()
+  // K20: force-graph writes x/y onto the node objects it is given, so the last graph's objects know where every paper
+  // is. A rebuild (a layer, the theme, a saved link) starts from there instead of throwing the layout again.
+  const previous = useRef<CanvasNode[]>([])
 
   useEffect(() => {
     let cancelled = false
@@ -58,26 +57,9 @@ export function GraphCanvas({ nodes, links, theme, colors, focused, onSelect }: 
     }
   }, [])
 
-  // The canvas needs pixel sizes, so it follows its box instead of a CSS size.
-  useEffect(() => {
-    const element = box.current
-    if (!element) return
-    const observer = new ResizeObserver(([entry]) => {
-      const { width, height } = entry.contentRect
-      setSize({ width: Math.round(width), height: Math.round(height) })
-    })
-    observer.observe(element)
-    return () => observer.disconnect()
-  }, [])
-
   const data = useMemo(() => {
-    const degree = degrees(links)
-    const busiest = Math.max(1, ...degree.values())
-    const canvasNodes: CanvasNode[] = nodes.map((node) => ({
-      ...node,
-      color: nodeColor(node, colors, theme),
-      radius: MIN_RADIUS + ((MAX_RADIUS - MIN_RADIUS) * (degree.get(node.id) ?? 0)) / busiest,
-    }))
+    // oxlint-disable-next-line react/refs -- read once per rebuild, for where force-graph left each paper
+    const canvasNodes: CanvasNode[] = carryPositions(sizedNodes(nodes, links, colors, theme), previous.current)
     const canvasLinks = links.map((link) => ({
       source: link.source,
       target: link.target,
@@ -87,20 +69,22 @@ export function GraphCanvas({ nodes, links, theme, colors, focused, onSelect }: 
     return { nodes: canvasNodes, links: canvasLinks }
   }, [nodes, links, colors, theme])
 
+  useEffect(() => {
+    previous.current = data.nodes
+  }, [data])
+
   const ink = CHART_INK[theme].text
 
-  if (failed)
-    return (
-      <div className="grid min-h-[28rem] flex-1 place-items-center gap-2 p-6 text-center">
-        <ErrorAlert message="The graph view could not load. Reload the page to try again." />
-        <Button variant="outline" onClick={() => window.location.reload()}>
-          Reload
-        </Button>
-      </div>
-    )
+  if (failed) return <GraphLoadError />
 
   return (
-    <div ref={box} aria-hidden className="relative min-h-[28rem] flex-1 overflow-hidden rounded-xl">
+    <div
+      ref={box}
+      aria-hidden
+      data-view="2d"
+      data-ready={Graph !== null}
+      className="relative min-h-[28rem] flex-1 overflow-hidden rounded-xl"
+    >
       {Graph === null || size.width === 0 ? (
         <div className="h-full w-full animate-pulse rounded-xl bg-muted" />
       ) : (
@@ -141,14 +125,17 @@ export function GraphCanvas({ nodes, links, theme, colors, focused, onSelect }: 
   )
 }
 
-/** A hex colour at an opacity, so one palette serves both the faded and the solid state. */
-function withAlpha(hex: string, alpha: number): string {
-  const value = Number.parseInt(hex.slice(1), 16)
-  return `rgba(${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}, ${alpha})`
+/** A failed dynamic import: the error and a way out, outside any aria-hidden wrapper so a screen reader reaches them. */
+export function GraphLoadError() {
+  return (
+    <div className="grid min-h-[28rem] flex-1 place-items-center gap-2 p-6 text-center">
+      <ErrorAlert message="The graph view could not load. Reload the page to try again." />
+      <Button variant="outline" onClick={() => window.location.reload()}>
+        Reload
+      </Button>
+    </div>
+  )
 }
-
-/** force-graph swaps a link's string ids for node objects once the simulation runs. */
-const endId = (end: string | { id: string }): string => (typeof end === 'string' ? end : end.id)
 
 /** The owner's own label, along its link. Skipped when zoomed far out, where it would be unreadable anyway. */
 function drawLinkLabel(link: CanvasLink, ctx: CanvasRenderingContext2D, scale: number, ink: string) {

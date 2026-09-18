@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { GraphLink, GraphNode } from '@/api/client'
 import {
+  carryPositions,
   countsLine,
   DEFAULT_LAYERS,
   degrees,
@@ -10,6 +11,7 @@ import {
   layerCounts,
   legendEntries,
   nodeColor,
+  sizedNodes,
   tooltipFor,
   visibleLinks,
   workspaceColors,
@@ -210,5 +212,44 @@ describe('a link label', () => {
     expect(labelError('')).toBe('A link needs a short label, like "builds on".')
     expect(labelError('   ')).toBe('A link needs a short label, like "builds on".')
     expect(labelError('x'.repeat(81))).toBe('Keep the label under 80 characters.')
+  })
+})
+
+describe('the canvas nodes', () => {
+  it('sizes a paper from 3 to 9 by its share of the links, and paints it', () => {
+    const colors = workspaceColors(['Thesis'], 'light')
+    const links = [link('a', 'b', 'cites'), link('a', 'c', 'similar')]
+    const sized = sizedNodes([node('a', ['Thesis']), node('b'), node('c')], links, colors, 'light')
+    expect(sized.map((paper) => [paper.id, paper.radius, paper.color])).toEqual([
+      ['a', 9, '#2a78d6'],
+      ['b', 6, '#475569'],
+      ['c', 6, '#475569'],
+    ])
+  })
+})
+
+describe('positions across a rebuild', () => {
+  it('starts a surviving paper where it was, at rest, and leaves a new one to the simulation', () => {
+    const previous = [
+      { id: 'a', x: 10, y: -4, vx: 3, vy: 1 },
+      { id: 'gone', x: 1, y: 1 },
+    ]
+    expect(carryPositions([{ id: 'a', title: 'A' }, { id: 'new', title: 'N' }], previous)).toEqual([
+      { id: 'a', title: 'A', x: 10, y: -4, vx: 0, vy: 0 },
+      { id: 'new', title: 'N' },
+    ])
+  })
+
+  it('keeps the depth too, in 3D', () => {
+    expect(carryPositions([{ id: 'a' }], [{ id: 'a', x: 1, y: 2, z: 3 }])).toEqual([
+      { id: 'a', x: 1, y: 2, z: 3, vx: 0, vy: 0, vz: 0 },
+    ])
+  })
+
+  it('leaves a paper the simulation never placed to be placed, and never edits what it is given', () => {
+    const fresh = [{ id: 'a' }]
+    expect(carryPositions(fresh, [{ id: 'a' }])).toEqual([{ id: 'a' }])
+    carryPositions(fresh, [{ id: 'a', x: 1, y: 2 }])
+    expect(fresh).toEqual([{ id: 'a' }])
   })
 })
