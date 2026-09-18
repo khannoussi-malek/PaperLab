@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { ErrorAlert } from '@/features/library/ErrorAlert'
 import { CHART_INK, type ChartTheme } from '@/features/charts/palette'
 import { carryPositions, endId, FADED, sizedNodes, tooltipFor, withAlpha, type SizedNode } from './graphModel'
+import { OUTER_RING, type RingPlace } from './ringsModel'
 import { useBoxSize } from './useBoxSize'
 
 // Loaded on first use, exactly as PlotlyChart loads Plotly: react-force-graph-2d is 189 kB minified (61 kB gzipped)
@@ -21,7 +22,7 @@ function loadForceGraph() {
 }
 
 /** react-force-graph mutates the objects it is given (x, y, vx, vy), so it gets its own copies, never cached data. */
-type CanvasNode = SizedNode & { x?: number; y?: number }
+type CanvasNode = SizedNode & { x?: number; y?: number; fx?: number; fy?: number }
 type CanvasLink = {
   source: string | { id: string }
   target: string | { id: string }
@@ -37,9 +38,11 @@ type Props = {
   /** null: nothing focused, so nothing fades. */
   focused: Set<string> | null
   onSelect: (paperId: string) => void
+  /** Rings: every paper pinned to its place, in ring-widths from the centre, with no simulation. */
+  rings?: Map<string, RingPlace>
 }
 
-export function GraphCanvas({ nodes, links, theme, colors, focused, onSelect }: Props) {
+export function GraphCanvas({ nodes, links, theme, colors, focused, onSelect, rings }: Props) {
   const [Graph, setGraph] = useState<typeof import('react-force-graph-2d').default | null>(null)
   const [failed, setFailed] = useState(false)
   const [box, size] = useBoxSize<HTMLDivElement>()
@@ -57,9 +60,14 @@ export function GraphCanvas({ nodes, links, theme, colors, focused, onSelect }: 
     }
   }, [])
 
+  // Rings fill the box: the outer ring sits half a ring-width inside its shorter side. 0 in 2D, so a resize there
+  // doesn't rebuild the graph.
+  const ringWidth = rings ? Math.min(size.width, size.height) / 2 / (OUTER_RING + 0.5) : 0
+
   const data = useMemo(() => {
     // oxlint-disable-next-line react/refs -- read once per rebuild, for where force-graph left each paper
-    const canvasNodes: CanvasNode[] = carryPositions(sizedNodes(nodes, links, colors, theme), previous.current)
+    const carried: CanvasNode[] = carryPositions(sizedNodes(nodes, links, colors, theme), previous.current)
+    const canvasNodes = rings ? carried.map((node) => pin(node, rings.get(node.id), ringWidth)) : carried
     const canvasLinks = links.map((link) => ({
       source: link.source,
       target: link.target,
@@ -67,7 +75,7 @@ export function GraphCanvas({ nodes, links, theme, colors, focused, onSelect }: 
       label: link.label ?? null,
     }))
     return { nodes: canvasNodes, links: canvasLinks }
-  }, [nodes, links, colors, theme])
+  }, [nodes, links, colors, theme, rings, ringWidth])
 
   useEffect(() => {
     previous.current = data.nodes
@@ -81,7 +89,7 @@ export function GraphCanvas({ nodes, links, theme, colors, focused, onSelect }: 
     <div
       ref={box}
       aria-hidden
-      data-view="2d"
+      data-view={rings ? 'rings' : '2d'}
       data-ready={Graph !== null}
       className="relative min-h-[28rem] flex-1 overflow-hidden rounded-xl"
     >
@@ -118,7 +126,13 @@ export function GraphCanvas({ nodes, links, theme, colors, focused, onSelect }: 
             drawLinkLabel(link, ctx, scale, ink)
           }
           onNodeClick={(node: CanvasNode) => onSelect(node.id)}
-          cooldownTicks={120}
+          onRenderFramePre={
+            rings
+              ? (ctx: CanvasRenderingContext2D, zoom: number) => drawRings(ctx, zoom, ringWidth, CHART_INK[theme].grid)
+              : undefined
+          }
+          enableNodeDrag={!rings}
+          cooldownTicks={rings ? 0 : 120}
         />
       )}
     </div>
@@ -135,6 +149,26 @@ export function GraphLoadError() {
       </Button>
     </div>
   )
+}
+
+/** A Rings paper, fixed at its place: fx/fy hold it there, and x/y put it there before the first frame. */
+function pin(node: CanvasNode, place: RingPlace | undefined, ringWidth: number): CanvasNode {
+  if (!place) return node
+  const [x, y] = [place.x * ringWidth, place.y * ringWidth]
+  return { ...node, x, y, fx: x, fy: y }
+}
+
+/** Faint circles marking the rings, under the graph. */
+function drawRings(ctx: CanvasRenderingContext2D, zoom: number, ringWidth: number, color: string) {
+  ctx.save()
+  ctx.strokeStyle = color
+  ctx.lineWidth = 1 / zoom
+  for (let ring = 1; ring <= OUTER_RING; ring += 1) {
+    ctx.beginPath()
+    ctx.arc(0, 0, ring * ringWidth, 0, 2 * Math.PI)
+    ctx.stroke()
+  }
+  ctx.restore()
 }
 
 /** The owner's own label, along its link. Skipped when zoomed far out, where it would be unreadable anyway. */

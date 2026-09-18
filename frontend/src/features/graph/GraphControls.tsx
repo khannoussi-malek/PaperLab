@@ -75,7 +75,7 @@ export function GraphControls({
         </Select>
       </div>
 
-      {focused && (
+      {(focused || view === 'rings') && (
         <div className="flex flex-col gap-2">
           <Label htmlFor="graph-hops" className="text-sm font-medium">
             Links out

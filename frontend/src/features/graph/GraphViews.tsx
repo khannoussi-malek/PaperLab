@@ -1,6 +1,7 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { GraphCanvas } from './GraphCanvas'
 import { MatrixView } from './MatrixView'
+import { RingsView } from './RingsView'
 import { TimelineView } from './TimelineView'
 import type { TimeAxis } from './timelineModel'
 import { isGraphView, VIEW_LABELS, VIEWS, type GraphView, type ViewProps } from './viewModel'
@@ -47,6 +48,9 @@ export function GraphViews({ view, onView, axis, ...shared }: Props) {
       </TabsContent>
       <TabsContent value="timeline" className="flex min-h-0 flex-col">
         <TimelineView {...shared} axis={axis} />
+      </TabsContent>
+      <TabsContent value="rings" className="flex min-h-0 flex-col">
+        <RingsView {...shared} />
       </TabsContent>
     </Tabs>
   )

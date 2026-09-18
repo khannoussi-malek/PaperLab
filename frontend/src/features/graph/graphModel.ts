@@ -52,25 +52,30 @@ export function tooltipFor(text: string, doc: Pick<Document, 'createElement'> = 
 }
 
 /**
- * The focused paper and everything within `hops` visible links of it, in either direction: a `cites` link points one
- * way on the canvas but still connects both papers. Breadth-first over a visited set, so a cycle ends.
+ * How many visible links each paper is from `from`, up to `maxHops`, in either direction: a `cites` link points one
+ * way on the canvas but still connects both papers. `from` itself is 0; papers further away, or not connected, are
+ * left out. Breadth-first over a visited set, so a cycle ends.
  */
-export function focusedIds(links: GraphLink[], focusId: string, hops: number): Set<string> {
+export function hopDistances(links: GraphLink[], from: string, maxHops: number): Map<string, number> {
   const neighbours = new Map<string, string[]>()
-  const add = (from: string, to: string) => neighbours.set(from, [...(neighbours.get(from) ?? []), to])
+  const add = (a: string, b: string) => neighbours.set(a, [...(neighbours.get(a) ?? []), b])
   for (const link of links) {
     add(link.source, link.target)
     add(link.target, link.source)
   }
-  const seen = new Set([focusId])
-  let frontier = [focusId]
-  for (let step = 0; step < hops && frontier.length > 0; step += 1) {
-    const next = frontier.flatMap((id) => neighbours.get(id) ?? []).filter((id) => !seen.has(id))
-    for (const id of next) seen.add(id)
-    frontier = [...new Set(next)]
+  const distance = new Map([[from, 0]])
+  let frontier = [from]
+  for (let step = 1; step <= maxHops && frontier.length > 0; step += 1) {
+    const next = [...new Set(frontier.flatMap((id) => neighbours.get(id) ?? []))].filter((id) => !distance.has(id))
+    for (const id of next) distance.set(id, step)
+    frontier = next
   }
-  return seen
+  return distance
 }
+
+/** The focused paper and everything within `hops` visible links of it. */
+export const focusedIds = (links: GraphLink[], focusId: string, hops: number): Set<string> =>
+  new Set(hopDistances(links, focusId, hops).keys())
 
 /**
  * A colour per workspace, from the charts palette (already checked for colour-blind readers on both surfaces). Taken
