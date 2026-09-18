@@ -1,7 +1,7 @@
 import type { Note } from '@/api/client'
 import { useWorkspaceNotes, useWorkspacePapers } from '@/api/queries'
 import { glass } from '@/components/glass'
-import { isFresh, slideUpIn } from '@/components/motion'
+import { delayedIn, isFresh, slideUpIn } from '@/components/motion'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { ProvenanceBadge } from '@/features/notes/ProvenanceBadge'
@@ -60,7 +60,7 @@ export function WorkspaceNotes({ workspaceId }: { workspaceId: string }) {
       </Alert>
     )
   }
-  if (!notes.data || !papers.data) return <p className="py-2 text-muted-foreground">Loading…</p>
+  if (!notes.data || !papers.data) return <p className={cn('py-2 text-muted-foreground', delayedIn)}>Loading…</p>
 
   const groups = notesByPaper(notes.data, papers.data)
   if (groups.length === 0) {

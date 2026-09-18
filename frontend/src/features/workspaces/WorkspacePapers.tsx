@@ -1,11 +1,13 @@
 import { FileText, Plus } from 'lucide-react'
 import { useState } from 'react'
 import { useUploadPapers, useWorkspacePapers } from '@/api/queries'
+import { delayedIn } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { FindPapersButton } from '@/features/discovery/FindPapersButton'
 import { ErrorAlert, LoadError } from '@/features/library/ErrorAlert'
 import { PaperList } from '@/features/library/PaperList'
 import { UploadPdfsButton } from '@/features/library/UploadPdfsButton'
+import { cn } from '@/lib/utils'
 import { AddPapersDialog } from './AddPapersDialog'
 
 /** The Papers tab: the library's rows for this workspace's papers, plus adding from the library or by upload. */
@@ -32,7 +34,7 @@ export function WorkspacePapers({ workspaceId }: { workspaceId: string }) {
         papers.isError ? (
           <LoadError message={papers.error.message} onRetry={() => void papers.refetch()} />
         ) : (
-          <p className="text-muted-foreground">Loading…</p>
+          <p className={cn('text-muted-foreground', delayedIn)}>Loading…</p>
         )
       ) : list.length === 0 ? (
         <div className="grid place-items-center gap-2 rounded-xl border border-dashed border-glass-border px-6 py-16 text-center">

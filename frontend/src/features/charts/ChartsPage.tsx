@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import type { ChartSummary } from '@/api/client'
 import { useAllDatasets, useCharts, useChartMutations } from '@/api/queries'
 import { glass } from '@/components/glass'
-import { fadeIn } from '@/components/motion'
+import { delayedIn, fadeIn } from '@/components/motion'
 import { ModeToggle } from '@/components/mode-toggle'
 import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -138,7 +138,7 @@ export function ChartsPage() {
         charts.isError ? (
           <p className="text-destructive">{charts.error.message}</p>
         ) : (
-          <p className="text-muted-foreground">Loading…</p>
+          <p className={cn('text-muted-foreground', delayedIn)}>Loading…</p>
         )
       ) : list.length === 0 ? (
         <p className="text-muted-foreground">No charts yet. Build one from any data.</p>
