@@ -1,5 +1,5 @@
 import { Plus } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ChartSummary } from '@/api/client'
 import { useAllDatasets, useCharts, useChartMutations } from '@/api/queries'
 import { glass } from '@/components/glass'
@@ -14,6 +14,7 @@ import { datasetMeta } from '../data/datasetMeta'
 import { NewDatasetDialog } from '../data/NewDatasetDialog'
 import { ChartMenu } from './ChartMenu'
 import { InlineTitle } from './InlineTitle'
+import { warmPlotly } from './loadPlotly'
 import { TYPE_ICON } from './typeIcons'
 
 const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
@@ -88,6 +89,8 @@ export function ChartsPage() {
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [newDatasetOpen, setNewDatasetOpen] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
+  // Opening the list means a chart is likely next: load Plotly now, not after the click.
+  useEffect(warmPlotly, [])
 
   const list = charts.data
   const ownDatasets = (datasets.data ?? []).filter((dataset) => dataset.kind === 'user')
