@@ -241,7 +241,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
   function editNote(note: Note) {
     const anchor = note.anchors.find((a) => a.paper_id === paperId)
     if (!anchor) return
-    hoverCard.open({ page: anchor.page, noteIds: [note.id], editNoteId: note.id })
+    hoverCard.open({ kind: 'notes', page: anchor.page, noteIds: [note.id], editNoteId: note.id })
     // Same race as focusComposer: the closing menu's focus scope can steal focus back from the new textarea.
     // Scoped to this note: another note's hover or panel card can also have an "Edit note" textarea open.
     window.setTimeout(() =>
@@ -277,7 +277,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
       hoverCard.leave()
       return
     }
-    if (!hoverCard.show({ page: where.page, noteIds })) return
+    if (!hoverCard.show({ kind: 'notes', page: where.page, noteIds })) return
     setActiveNoteId(noteIds[0])
     scrollToElement(`article.note[data-note-id="${noteIds[0]}"]`, 'nearest')
   }
@@ -308,7 +308,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
   }
 
   const hover = hoverCard.target
-  const hoveredNotes = hover ? notes.filter((note) => hover.noteIds.includes(note.id)) : []
+  const hoveredNotes = hover?.kind === 'notes' ? notes.filter((note) => hover.noteIds.includes(note.id)) : []
 
   const shownError = error ?? paper.error?.message ?? notesQuery.error?.message ?? pdfError
   return (
@@ -385,7 +385,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
                     style={pdfRectToCss(rect, scale)}
                   />
                 ))}
-              {hover?.page === pageNumber && hoveredNotes.length > 0 && (
+              {hover?.kind === 'notes' && hover.page === pageNumber && hoveredNotes.length > 0 && (
                 <NoteHoverCard
                   notes={hoveredNotes}
                   paperId={paperId}
