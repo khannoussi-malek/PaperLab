@@ -545,11 +545,13 @@ That a canvas has no pattern here is why the canvas carries `aria-hidden` and th
   61 kB gzipped, its own chunk — the same rule as Plotly). It carries `aria-hidden` and a visually hidden line beside
   it reads `{n} papers, {m} links. Use the papers list to explore connections.` Transparent background, so the glass
   card shows through. A node's radius runs 3–9 px with its share of the links; a faded node or link draws at 12%
-  opacity. A `manual` link is 2.5 px wide with its label drawn along it above 1× zoom; every other link is 1 px;
-  `cites` and `manual` carry an arrow at the target end. Focus fades the rest of the graph without rebuilding it: the
-  node and link objects depend only on the papers and the visible links, so the simulation keeps its positions and
-  only the accessors change. The dynamic import's failure state — an `ErrorAlert` and a "Reload" button — sits
-  outside the `aria-hidden` wrapper, so a screen reader reaches what it can act on.
+  opacity. Never hand force-graph a string label: float-tooltip sets a string as innerHTML, and titles come from
+  PDFs and discovery sources. Every label goes through `tooltipFor`, which sets text. A `manual` link is 2.5 px wide
+  with its label drawn along it above 1× zoom; every other link is 1 px; `cites` and `manual` carry an arrow at the
+  target end. Focus and hops only change the accessors, so they fade the graph without moving it; a layer toggle, a
+  theme change, or a saved, renamed or removed link rebuilds it. The dynamic import's failure state — an
+  `ErrorAlert` and a "Reload" button — sits outside the `aria-hidden` wrapper, so a screen reader reaches what it can
+  act on.
 - **Colours:** `SERIES_COLORS` from `features/charts/palette.ts` through `useChartTheme()` — the same palette the
   charts use, already checked for colour-blind readers on both surfaces. A paper wears its **first** workspace's
   colour, workspaces take colours alphabetically (so a colour doesn't move when a paper joins one), and a paper in no

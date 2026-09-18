@@ -36,6 +36,17 @@ export const visibleLinks = (links: GraphLink[], layers: LinkKind[]): GraphLink[
   links.filter((link) => layers.includes(link.kind))
 
 /**
+ * A force-graph tooltip for untrusted text. force-graph hands a *string* label to float-tooltip, which sets it as
+ * innerHTML, and a title comes from a PDF or a discovery source. An element whose textContent is the text can never
+ * become markup.
+ */
+export function tooltipFor(text: string, doc: Pick<Document, 'createElement'> = document): HTMLElement {
+  const element = doc.createElement('span')
+  element.textContent = text
+  return element
+}
+
+/**
  * The focused paper and everything within `hops` visible links of it, in either direction: a `cites` link points one
  * way on the canvas but still connects both papers. Breadth-first over a visited set, so a cycle ends.
  */

@@ -8,6 +8,7 @@ import {
   KIND_LABELS,
   labelError,
   layerCounts,
+  tooltipFor,
   visibleLinks,
   workspaceColors,
 } from './graphModel'
@@ -150,6 +151,26 @@ describe('the counts line', () => {
     expect(countsLine(2, 3)).toBe('2 papers, 3 links')
     expect(countsLine(1, 1)).toBe('1 paper, 1 link')
     expect(countsLine(0, 0)).toBe('0 papers, 0 links')
+  })
+})
+
+describe('the node tooltip', () => {
+  it('writes untrusted text through textContent only, never innerHTML', () => {
+    const writes: { textContent?: string; innerHTML?: string } = {}
+    const fakeElement = {
+      set textContent(value: string) {
+        writes.textContent = value
+      },
+      set innerHTML(value: string) {
+        writes.innerHTML = value
+      },
+    }
+    const fakeDoc = { createElement: () => fakeElement } as unknown as Pick<Document, 'createElement'>
+
+    const result = tooltipFor('<img src=x onerror=alert(1)>', fakeDoc)
+
+    expect(result).toBe(fakeElement)
+    expect(writes).toEqual({ textContent: '<img src=x onerror=alert(1)>' })
   })
 })
 
