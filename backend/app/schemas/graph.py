@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
@@ -7,7 +8,8 @@ LinkKind = Literal["cites", "same_workspace", "co_anchored", "co_authored", "sha
 
 
 class GraphNode(BaseModel):
-    """A library paper. `workspaces` are names, oldest membership first: the first one colours the node."""
+    """A library paper. `workspaces` are names, oldest membership first: the first one colours the node. `added_at` is
+    when it came into the library."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -17,6 +19,7 @@ class GraphNode(BaseModel):
     workspaces: list[str]
     has_notes: bool
     status: str
+    added_at: datetime
 
 
 class GraphLink(BaseModel):

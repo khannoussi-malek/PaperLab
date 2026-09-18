@@ -77,6 +77,9 @@ test.describe('the graph page', () => {
     await page.reload()
     await page.getByRole('combobox', { name: 'Workspace' }).click()
     await page.getByRole('option', { name: workspaceName }).click()
+    // The page keeps the previous (whole-library) graph on screen while this one loads (keepPreviousData); wait
+    // for the workspace's own graph to land before clicking, or the click can land on a paper outside it.
+    await expect(counts).toHaveText(/^2 papers/)
     await page.getByRole('checkbox', { name: /^Your links/ }).check()
     await page.locator('.graph-paper').first().click()
     await expect(panel.locator('.graph-connection', { hasText: 'contradicts' })).toBeVisible()
@@ -87,6 +90,7 @@ test.describe('the graph page', () => {
     await page.reload()
     await page.getByRole('combobox', { name: 'Workspace' }).click()
     await page.getByRole('option', { name: workspaceName }).click()
+    await expect(counts).toHaveText(/^2 papers/)
     await page.getByRole('checkbox', { name: /^Your links/ }).check()
     await page.locator('.graph-paper').first().click()
     await expect(panel.getByRole('heading', { name: 'Your links' })).toBeHidden()

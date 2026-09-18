@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { GraphLink } from '@/api/client'
 import { useLibraryGraph, usePaperLinkMutations, useWorkspaces } from '@/api/queries'
 import { glass } from '@/components/glass'
@@ -7,12 +7,24 @@ import { ModeToggle } from '@/components/mode-toggle'
 import { Button } from '@/components/ui/button'
 import { useChartTheme } from '@/features/charts/useChartTheme'
 import { ErrorAlert, LoadError } from '@/features/library/ErrorAlert'
+import { browserStorage } from '@/features/notes/highlightColors'
 import { cn } from '@/lib/utils'
-import { GraphCanvas } from './GraphCanvas'
 import { GraphControls } from './GraphControls'
 import { GraphPanel } from './GraphPanel'
+import { GraphViews } from './GraphViews'
 import { LinkDialog, type LinkDraft } from './LinkDialog'
-import { countsLine, DEFAULT_LAYERS, focusedIds, layerCounts, visibleLinks, workspaceColors, type LinkKind } from './graphModel'
+import {
+  countsLine,
+  DEFAULT_LAYERS,
+  focusedIds,
+  layerCounts,
+  legendEntries,
+  visibleLinks,
+  workspaceColors,
+  type LinkKind,
+} from './graphModel'
+import type { TimeAxis } from './timelineModel'
+import { readView, writeView, type GraphView } from './viewModel'
 
 const EMPTY =
   'No links yet. Import references, add papers to a workspace, or turn on OpenAlex to fill this in.'
@@ -23,6 +35,8 @@ export function GraphPage() {
   const [focusId, setFocusId] = useState<string | null>(null)
   const [hops, setHops] = useState(1)
   const [dialog, setDialog] = useState<{ editing: GraphLink | null } | null>(null)
+  const [view, setView] = useState<GraphView>(() => readView(browserStorage()))
+  const [axis, setAxis] = useState<TimeAxis>('published')
   const theme = useChartTheme()
   const graph = useLibraryGraph(workspaceId)
   const workspaces = useWorkspaces()
@@ -32,12 +46,26 @@ export function GraphPage() {
   const allLinks = useMemo(() => graph.data?.links ?? [], [graph.data])
   const shown = useMemo(() => visibleLinks(allLinks, layers), [allLinks, layers])
   const counts = useMemo(() => layerCounts(allLinks), [allLinks])
-  const colors = useMemo(() => workspaceColors(nodes, theme), [nodes, theme])
+  // K20: from every workspace, not the papers on screen, so the workspace filter never recolours one.
+  const workspaceNames = useMemo(() => (workspaces.data ?? []).map((workspace) => workspace.name), [workspaces.data])
+  const colors = useMemo(() => workspaceColors(workspaceNames, theme), [workspaceNames, theme])
+  const legend = useMemo(() => legendEntries(nodes, colors, theme), [nodes, colors, theme])
   const focused = useMemo(() => nodes.find((node) => node.id === focusId) ?? null, [nodes, focusId])
   const inFocus = useMemo(
     () => (focused === null ? null : focusedIds(shown, focused.id, hops)),
     [shown, focused, hops]
   )
+
+  function chooseView(next: GraphView) {
+    setView(next)
+    writeView(browserStorage(), next)
+  }
+
+  // K20: a failed removal belongs to the paper and the workspace it happened in.
+  useEffect(() => {
+    links.remove.reset()
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [focused?.id, workspaceId])
 
   const toggleLayer = (kind: LinkKind) =>
     setLayers((current) => (current.includes(kind) ? current.filter((k) => k !== kind) : [...current, kind]))
@@ -91,9 +119,15 @@ export function GraphPage() {
         </div>
       </header>
 
-      {graph.data === undefined ? (
-        graph.isError ? (
-          <LoadError message={graph.error.message} onRetry={() => void graph.refetch()} />
+      {graph.data === undefined || workspaces.data === undefined ? (
+        graph.isError || workspaces.isError ? (
+          <LoadError
+            message={(graph.isError ? graph.error! : workspaces.error!).message}
+            onRetry={() => {
+              if (graph.isError) void graph.refetch()
+              if (workspaces.isError) void workspaces.refetch()
+            }}
+          />
         ) : (
           <div className="h-full w-full animate-pulse rounded-xl bg-muted" />
         )
@@ -110,11 +144,13 @@ export function GraphPage() {
                 setWorkspaceId(id)
                 setFocusId(null)
               }}
-              colors={colors}
-              nodes={nodes}
+              legend={legend}
               hops={hops}
               onHops={setHops}
               focused={focused !== null}
+              view={view}
+              axis={axis}
+              onAxis={setAxis}
             />
           </div>
 
@@ -123,12 +159,17 @@ export function GraphPage() {
             {nodes.length === 0 || allLinks.length === 0 ? (
               <div className="grid flex-1 place-items-center px-6 text-center text-muted-foreground">{EMPTY}</div>
             ) : (
-              <GraphCanvas
+              <GraphViews
+                view={view}
+                onView={chooseView}
+                axis={axis}
                 nodes={nodes}
                 links={shown}
                 theme={theme}
                 colors={colors}
-                focused={inFocus}
+                focusId={focused?.id ?? null}
+                hops={hops}
+                inFocus={inFocus}
                 onSelect={setFocusId}
               />
             )}
@@ -140,6 +181,7 @@ export function GraphPage() {
               nodes={nodes}
               links={shown}
               focused={focused}
+              hops={hops}
               onFocus={setFocusId}
               onClear={() => setFocusId(null)}
               onAddLink={() => setDialog({ editing: null })}

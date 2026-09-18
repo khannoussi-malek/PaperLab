@@ -4,6 +4,7 @@ import uuid
 
 import pytest
 from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 
 from app.core import paper_links
 from app.core.errors import Conflict, InvalidInput, NotFound
@@ -84,32 +85,59 @@ async def test_deleting_a_paper_removes_its_links(session):
     assert await session.scalar(select(PaperLink.id).where(PaperLink.id == link.id)) is None
 
 
-async def test_a_race_condition_on_double_submit_raises_conflict(session, monkeypatch):
-    """When two concurrent requests bypass the pre-check and both try to insert, the second's commit raises
-    IntegrityError on the unique index. The exception handler must catch it, roll back, and raise Conflict."""
+async def test_a_pair_linked_between_the_check_and_the_insert_is_already_linked(session, monkeypatch):
+    """A double submit: both requests pass the duplicate check before either inserts, so the second insert hits the
+    unique index. It still reads "already linked", and the session stays usable."""
     left, right = await add_papers(session)
+    # Read now: the rollback inside create() expires the object.
+    link_id = (await paper_links.create(session, left.id, right.id, "builds on")).id
+    real_scalar = session.scalar
+    checks = []
 
-    # Insert a link manually to set up the race condition state.
-    link = PaperLink(from_paper=left.id, to_paper=right.id, label="builds on")
-    session.add(link)
-    await session.commit()
-    link_id = link.id  # Store the ID before any potential expiry
+    async def first_check_misses(*args, **kwargs):
+        # The duplicate check ran before the other request's link was committed.
+        checks.append(args)
+        return None if len(checks) == 1 else await real_scalar(*args, **kwargs)
 
-    # Monkeypatch the select call in paper_links to return a query that will always return None,
-    # simulating a race where the pre-check is bypassed.
-    original_select = paper_links.select
+    monkeypatch.setattr(session, "scalar", first_check_misses)
 
-    def mock_select(*args, **kwargs):
-        # Return a query that when scalar()'d will return None
-        return select(None).select_from(PaperLink).where(False)
-
-    monkeypatch.setattr("app.core.paper_links.select", mock_select)
-
-    # Now call create() for the same pair the other way round. The pre-check will return None,
-    # but the commit will fail on IntegrityError, which should be caught and re-raised as Conflict.
-    with pytest.raises(Conflict, match=paper_links.ALREADY_LINKED):
+    with pytest.raises(Conflict, match="already linked"):
         await paper_links.create(session, right.id, left.id, "builds on")
+    assert await real_scalar(select(PaperLink.id).where(PaperLink.id == link_id)) == link_id
 
-    # Verify the session is still usable after the rollback and the original link is still there.
-    result = await session.scalar(original_select(PaperLink.id).where(PaperLink.id == link_id))
-    assert result is not None
+
+async def test_a_paper_deleted_between_the_check_and_the_insert_is_not_found(session, monkeypatch):
+    left, right = await add_papers(session)
+    real_get_paper = paper_links.get_paper
+    deleted = []
+
+    async def deleted_just_after_its_check(session, paper_id):
+        paper = await real_get_paper(session, paper_id)
+        if paper_id == right.id and not deleted:
+            # Another request deletes the paper right after create() found it, before the insert.
+            await session.execute(delete(Paper).where(Paper.id == right.id))
+            await session.commit()
+            deleted.append(paper_id)
+        return paper
+
+    monkeypatch.setattr(paper_links, "get_paper", deleted_just_after_its_check)
+
+    with pytest.raises(NotFound):
+        await paper_links.create(session, left.id, right.id, "builds on")
+
+
+async def test_an_insert_refused_for_another_reason_is_not_reported_as_already_linked(session, monkeypatch):
+    left, right = await add_papers(session)
+    real_commit = session.commit
+    commits = []
+
+    async def first_commit_refused():
+        commits.append(1)
+        if len(commits) == 1:
+            raise IntegrityError("INSERT INTO paper_links", {}, Exception("another constraint"))
+        await real_commit()
+
+    monkeypatch.setattr(session, "commit", first_commit_refused)
+
+    with pytest.raises(IntegrityError):
+        await paper_links.create(session, left.id, right.id, "builds on")

@@ -23,6 +23,11 @@ export const MIN_HOPS = 1
 export const MAX_HOPS = 3
 export const LABEL_MAX_CHARS = 80
 
+/** A faded paper or link, outside the focus: every view draws it at this opacity. */
+export const FADED = 0.12
+export const MIN_RADIUS = 3
+export const MAX_RADIUS = 9
+
 export const EMPTY_LABEL = 'A link needs a short label, like "builds on".'
 export const LABEL_TOO_LONG = `Keep the label under ${LABEL_MAX_CHARS} characters.`
 
@@ -47,41 +52,99 @@ export function tooltipFor(text: string, doc: Pick<Document, 'createElement'> = 
 }
 
 /**
- * The focused paper and everything within `hops` visible links of it, in either direction: a `cites` link points one
- * way on the canvas but still connects both papers. Breadth-first over a visited set, so a cycle ends.
+ * How many visible links each paper is from `from`, up to `maxHops`, in either direction: a `cites` link points one
+ * way on the canvas but still connects both papers. `from` itself is 0; papers further away, or not connected, are
+ * left out. Breadth-first over a visited set, so a cycle ends.
  */
-export function focusedIds(links: GraphLink[], focusId: string, hops: number): Set<string> {
+export function hopDistances(links: GraphLink[], from: string, maxHops: number): Map<string, number> {
   const neighbours = new Map<string, string[]>()
-  const add = (from: string, to: string) => neighbours.set(from, [...(neighbours.get(from) ?? []), to])
+  const add = (a: string, b: string) => neighbours.set(a, [...(neighbours.get(a) ?? []), b])
   for (const link of links) {
     add(link.source, link.target)
     add(link.target, link.source)
   }
-  const seen = new Set([focusId])
-  let frontier = [focusId]
-  for (let step = 0; step < hops && frontier.length > 0; step += 1) {
-    const next = frontier.flatMap((id) => neighbours.get(id) ?? []).filter((id) => !seen.has(id))
-    for (const id of next) seen.add(id)
-    frontier = [...new Set(next)]
+  const distance = new Map([[from, 0]])
+  let frontier = [from]
+  for (let step = 1; step <= maxHops && frontier.length > 0; step += 1) {
+    const next = [...new Set(frontier.flatMap((id) => neighbours.get(id) ?? []))].filter((id) => !distance.has(id))
+    for (const id of next) distance.set(id, step)
+    frontier = next
   }
-  return seen
+  return distance
+}
+
+/** The focused paper and everything within `hops` visible links of it. */
+export const focusedIds = (links: GraphLink[], focusId: string, hops: number): Set<string> =>
+  new Set(hopDistances(links, focusId, hops).keys())
+
+/**
+ * The muted note after a connected paper in the panel (K20): which way a Citations or Your links row points, seen from
+ * the focused paper, with a Your links row's own label after it. Null for the kinds that have no direction.
+ */
+export function connectionNote(link: GraphLink, focusId: string): string | null {
+  const outgoing = link.source === focusId
+  if (link.kind === 'cites') return outgoing ? 'this paper cites it' : 'it cites this paper'
+  if (link.kind !== 'manual') return null
+  const direction = outgoing ? 'your link to it' : 'your link from it'
+  return link.label ? `${direction}: ${link.label}` : direction
+}
+
+/** A connection row's React key: a manual link's own id, else the kind and both ends in order, so the two rows of a
+ * mutual citation never collide. */
+export const connectionKey = (link: GraphLink): string => `${link.kind}-${link.id ?? `${link.source}-${link.target}`}`
+
+export type HopSection = { heading: string; papers: GraphNode[] }
+
+/**
+ * The papers 2 to `hops` links from the focused paper, one section per distance headed `2 links away` / `3 links
+ * away`, each by title, so Links out changes something a screen reader can perceive. None at 1 link: the direct
+ * connections are listed by kind above them.
+ */
+export function hopSections(nodes: GraphNode[], links: GraphLink[], focusId: string, hops: number): HopSection[] {
+  const distance = hopDistances(links, focusId, hops)
+  return Array.from({ length: Math.max(0, hops - 1) }, (_, index) => index + 2)
+    .map((away) => ({
+      heading: `${away} links away`,
+      papers: nodes.filter((node) => distance.get(node.id) === away).sort((a, b) => a.title.localeCompare(b.title)),
+    }))
+    .filter((section) => section.papers.length > 0)
 }
 
 /**
- * A colour per workspace, from the charts palette (already checked for colour-blind readers on both surfaces).
- * Alphabetical, so a colour doesn't move when a paper joins a workspace. A paper wears its *first* workspace's
- * colour, and one with none stays grey.
+ * A colour per workspace, from the charts palette (already checked for colour-blind readers on both surfaces). Taken
+ * from every workspace, alphabetically — not from the papers on screen — so neither filtering by a workspace nor a
+ * paper joining one moves a colour. A paper wears its *first* workspace's colour, and one with none the muted ink.
  * ponytail: the palette has six colours and cycles past the sixth; a seventh workspace shares a colour, which the
  * legend still names. Add colours to SERIES_COLORS if a library ever has that many workspaces.
  */
-export function workspaceColors(nodes: GraphNode[], theme: ChartTheme): Map<string, string> {
-  const firsts = [...new Set(nodes.map((node) => node.workspaces[0]).filter((name) => name !== undefined))].sort()
+export function workspaceColors(names: readonly string[], theme: ChartTheme): Map<string, string> {
   const palette = SERIES_COLORS[theme]
-  return new Map(firsts.map((name, slot) => [name, palette[slot % palette.length]]))
+  return new Map([...new Set(names)].sort().map((name, slot) => [name, palette[slot % palette.length]]))
 }
 
 export const nodeColor = (node: GraphNode, colors: Map<string, string>, theme: ChartTheme): string =>
   colors.get(node.workspaces[0] ?? '') ?? CHART_INK[theme].muted
+
+export const NO_WORKSPACE = 'No workspace'
+
+export type LegendEntry = { name: string; color: string }
+
+/** The workspaces that colour a paper on screen, in colour order, then No workspace in the colour its papers wear. */
+export function legendEntries(nodes: GraphNode[], colors: Map<string, string>, theme: ChartTheme): LegendEntry[] {
+  const onScreen = new Set(nodes.map((node) => node.workspaces[0]))
+  const named = [...colors].filter(([name]) => onScreen.has(name)).map(([name, color]) => ({ name, color }))
+  const unfiled = nodes.some((node) => node.workspaces.length === 0)
+  return unfiled ? [...named, { name: NO_WORKSPACE, color: CHART_INK[theme].muted }] : named
+}
+
+/** Orders papers by their first workspace, alphabetically, with unfiled papers last: projects sit together. */
+export function byFirstWorkspace(a: GraphNode, b: GraphNode): number {
+  const [left, right] = [a.workspaces[0], b.workspaces[0]]
+  if (left === right) return 0
+  if (left === undefined) return 1
+  if (right === undefined) return -1
+  return left.localeCompare(right)
+}
 
 /** How many visible links touch each paper: the canvas sizes a node by it, the panel sorts by it. */
 export function degrees(links: GraphLink[]): Map<string, number> {
@@ -104,3 +167,49 @@ export function labelError(label: string): string | null {
   if (trimmed.length > LABEL_MAX_CHARS) return LABEL_TOO_LONG
   return null
 }
+
+/** A canvas paper: its colour, and a radius from MIN_RADIUS to MAX_RADIUS by its share of the visible links. */
+export type SizedNode = GraphNode & { color: string; radius: number }
+
+export function sizedNodes(
+  nodes: GraphNode[],
+  links: GraphLink[],
+  colors: Map<string, string>,
+  theme: ChartTheme
+): SizedNode[] {
+  const degree = degrees(links)
+  const busiest = Math.max(1, ...degree.values())
+  return nodes.map((node) => ({
+    ...node,
+    color: nodeColor(node, colors, theme),
+    radius: MIN_RADIUS + ((MAX_RADIUS - MIN_RADIUS) * (degree.get(node.id) ?? 0)) / busiest,
+  }))
+}
+
+/** Where force-graph left a paper: it writes x/y (and z in 3D) onto the node objects it is given. */
+export type Placed = { id: string; x?: number; y?: number; z?: number }
+
+type Motion = { x?: number; y?: number; z?: number; vx?: number; vy?: number; vz?: number }
+
+/**
+ * K20: a rebuilt graph (a layer toggled, the theme flipped, a link saved) starts each surviving paper where it was,
+ * at rest, instead of throwing the whole layout again. A new paper gets no position, so the simulation places it.
+ */
+export function carryPositions<T extends { id: string }>(next: readonly T[], previous: readonly Placed[]): (T & Motion)[] {
+  const was = new Map(previous.map((node) => [node.id, node]))
+  return next.map((node) => {
+    const old = was.get(node.id)
+    if (old?.x === undefined || old.y === undefined) return node
+    const depth = old.z === undefined ? {} : { z: old.z, vz: 0 }
+    return { ...node, x: old.x, y: old.y, vx: 0, vy: 0, ...depth }
+  })
+}
+
+/** A hex colour at an opacity, so one palette serves both the faded and the solid state. */
+export function withAlpha(hex: string, alpha: number): string {
+  const value = Number.parseInt(hex.slice(1), 16)
+  return `rgba(${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}, ${alpha})`
+}
+
+/** force-graph swaps a link's string ids for node objects once the simulation runs. */
+export const endId = (end: string | { id: string }): string => (typeof end === 'string' ? end : end.id)

@@ -1,13 +1,21 @@
 import { describe, expect, it } from 'vitest'
 import type { GraphLink, GraphNode } from '@/api/client'
 import {
+  carryPositions,
+  connectionKey,
+  connectionNote,
   countsLine,
   DEFAULT_LAYERS,
   degrees,
   focusedIds,
+  hopDistances,
+  hopSections,
   KIND_LABELS,
   labelError,
   layerCounts,
+  legendEntries,
+  nodeColor,
+  sizedNodes,
   tooltipFor,
   visibleLinks,
   workspaceColors,
@@ -28,6 +36,7 @@ const node = (id: string, workspaces: string[] = []): GraphNode => ({
   workspaces,
   has_notes: false,
   status: 'ready',
+  added_at: '2026-09-13T10:00:00Z',
 })
 
 describe('layers', () => {
@@ -101,29 +110,68 @@ describe('focus', () => {
   it('leaves an unlinked paper on its own', () => {
     expect(focusedIds(links, 'lonely', 3)).toEqual(new Set(['lonely']))
   })
+
+  it('measures how many links away each paper is, up to the limit, in either direction', () => {
+    expect(hopDistances(links, 'a', 3)).toEqual(
+      new Map([
+        ['a', 0],
+        ['b', 1],
+        ['c', 1],
+        ['d', 2],
+      ])
+    )
+    expect(hopDistances(links, 'd', 1)).toEqual(
+      new Map([
+        ['d', 0],
+        ['c', 1],
+      ])
+    )
+  })
 })
 
 describe('colours', () => {
-  it('gives each workspace its own colour, by the first workspace a paper is in', () => {
-    const colors = workspaceColors([node('a', ['Thesis']), node('b', ['Reading', 'Thesis']), node('c')], 'light')
-    // Alphabetical, and only a paper's *first* workspace counts, so 'Thesis' as b's second does not take a colour twice.
-    expect(colors.get('Reading')).toBe('#2a78d6')
-    expect(colors.get('Thesis')).toBe('#eb6834')
-    expect(colors.size).toBe(2)
-  })
-
-  it('orders workspaces by name, so a colour does not move when a paper is added', () => {
-    const one = workspaceColors([node('a', ['Zeta']), node('b', ['Alpha'])], 'light')
-    const two = workspaceColors([node('b', ['Alpha']), node('a', ['Zeta'])], 'light')
-    expect([...one]).toEqual([...two])
-    expect(one.get('Alpha')).toBe('#2a78d6')
+  it('colours every workspace from the full list, alphabetically, whatever is on screen', () => {
+    const colors = workspaceColors(['Thesis', 'Reading', 'Archive'], 'light')
+    expect([...colors]).toEqual([
+      ['Archive', '#2a78d6'],
+      ['Reading', '#eb6834'],
+      ['Thesis', '#1baf7a'],
+    ])
+    // The page passes every workspace, not the papers' own: filtering to one workspace can't move its colour.
+    expect(workspaceColors(['Reading', 'Archive', 'Thesis'], 'light')).toEqual(colors)
   })
 
   it('uses the dark palette in the dark theme and cycles past the sixth workspace', () => {
-    const names = ['w1', 'w2', 'w3', 'w4', 'w5', 'w6', 'w7']
-    const colors = workspaceColors(names.map((name) => node(name, [name])), 'dark')
+    const colors = workspaceColors(['w1', 'w2', 'w3', 'w4', 'w5', 'w6', 'w7'], 'dark')
     expect(colors.get('w1')).toBe('#3987e5')
     expect(colors.get('w7')).toBe('#3987e5')
+  })
+
+  it('paints a paper by its first workspace, and an unfiled one in the muted ink', () => {
+    const colors = workspaceColors(['Reading', 'Thesis'], 'light')
+    expect(nodeColor(node('a', ['Thesis', 'Reading']), colors, 'light')).toBe('#eb6834')
+    expect(nodeColor(node('b'), colors, 'dark')).toBe('#94a3b8')
+  })
+})
+
+describe('the legend', () => {
+  const colors = workspaceColors(['Archive', 'Reading', 'Thesis'], 'light')
+
+  it('names only the workspaces that colour a paper on screen', () => {
+    // 'Thesis' is only b's second workspace, so it colours nothing here, and no paper here is in 'Archive'.
+    expect(legendEntries([node('a', ['Reading']), node('b', ['Reading', 'Thesis'])], colors, 'light')).toEqual([
+      { name: 'Reading', color: '#eb6834' },
+    ])
+  })
+
+  it('ends with No workspace, in exactly the colour an unfiled paper wears', () => {
+    const entries = legendEntries([node('a', ['Thesis']), node('b')], colors, 'dark')
+    expect(entries.map((entry) => entry.name)).toEqual(['Thesis', 'No workspace'])
+    expect(entries[1].color).toBe(nodeColor(node('b'), colors, 'dark'))
+  })
+
+  it('leaves No workspace out when every paper has one', () => {
+    expect(legendEntries([node('a', ['Thesis'])], colors, 'light').map((entry) => entry.name)).toEqual(['Thesis'])
   })
 })
 
@@ -185,5 +233,73 @@ describe('a link label', () => {
     expect(labelError('')).toBe('A link needs a short label, like "builds on".')
     expect(labelError('   ')).toBe('A link needs a short label, like "builds on".')
     expect(labelError('x'.repeat(81))).toBe('Keep the label under 80 characters.')
+  })
+})
+
+describe('the canvas nodes', () => {
+  it('sizes a paper from 3 to 9 by its share of the links, and paints it', () => {
+    const colors = workspaceColors(['Thesis'], 'light')
+    const links = [link('a', 'b', 'cites'), link('a', 'c', 'similar')]
+    const sized = sizedNodes([node('a', ['Thesis']), node('b'), node('c')], links, colors, 'light')
+    expect(sized.map((paper) => [paper.id, paper.radius, paper.color])).toEqual([
+      ['a', 9, '#2a78d6'],
+      ['b', 6, '#475569'],
+      ['c', 6, '#475569'],
+    ])
+  })
+})
+
+describe('positions across a rebuild', () => {
+  it('starts a surviving paper where it was, at rest, and leaves a new one to the simulation', () => {
+    const previous = [
+      { id: 'a', x: 10, y: -4, vx: 3, vy: 1 },
+      { id: 'gone', x: 1, y: 1 },
+    ]
+    expect(carryPositions([{ id: 'a', title: 'A' }, { id: 'new', title: 'N' }], previous)).toEqual([
+      { id: 'a', title: 'A', x: 10, y: -4, vx: 0, vy: 0 },
+      { id: 'new', title: 'N' },
+    ])
+  })
+
+  it('keeps the depth too, in 3D', () => {
+    expect(carryPositions([{ id: 'a' }], [{ id: 'a', x: 1, y: 2, z: 3 }])).toEqual([
+      { id: 'a', x: 1, y: 2, z: 3, vx: 0, vy: 0, vz: 0 },
+    ])
+  })
+
+  it('leaves a paper the simulation never placed to be placed, and never edits what it is given', () => {
+    const fresh = [{ id: 'a' }]
+    expect(carryPositions(fresh, [{ id: 'a' }])).toEqual([{ id: 'a' }])
+    carryPositions(fresh, [{ id: 'a', x: 1, y: 2 }])
+    expect(fresh).toEqual([{ id: 'a' }])
+  })
+})
+
+describe('the panel', () => {
+  it('says which way a citation or your own link points, with your label after it', () => {
+    const cites = link('a', 'b', 'cites')
+    const mine = { ...link('a', 'b', 'manual'), id: 'l1', label: 'builds on' }
+    expect(connectionNote(cites, 'a')).toBe('this paper cites it')
+    expect(connectionNote(cites, 'b')).toBe('it cites this paper')
+    expect(connectionNote(mine, 'a')).toBe('your link to it: builds on')
+    expect(connectionNote(mine, 'b')).toBe('your link from it: builds on')
+    expect(connectionNote(link('a', 'b', 'similar'), 'a')).toBeNull()
+  })
+
+  it('lists the papers two and three links away under their own headings, by title', () => {
+    // a – b, then b – c and b – z, then c – d: from a, b is 1 away, c and z 2, d 3.
+    const nodes = [node('a'), node('b'), node('c'), node('d'), { ...node('z'), title: 'ALPHA' }]
+    const links = [link('a', 'b', 'cites'), link('b', 'c', 'similar'), link('b', 'z', 'similar'), link('c', 'd', 'cites')]
+    expect(hopSections(nodes, links, 'a', 3)).toEqual([
+      { heading: '2 links away', papers: [nodes[4], nodes[2]] },
+      { heading: '3 links away', papers: [nodes[3]] },
+    ])
+    expect(hopSections(nodes, links, 'a', 2).map((section) => section.heading)).toEqual(['2 links away'])
+    expect(hopSections(nodes, links, 'a', 1)).toEqual([])
+  })
+
+  it('keys a mutual citation\'s two rows apart, and a manual link by its own id', () => {
+    expect(connectionKey(link('a', 'b', 'cites'))).not.toBe(connectionKey(link('b', 'a', 'cites')))
+    expect(connectionKey({ ...link('a', 'b', 'manual'), id: 'l1' })).toBe('manual-l1')
   })
 })
