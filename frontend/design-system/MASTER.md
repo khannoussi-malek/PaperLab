@@ -527,6 +527,57 @@ with a set value). The onboarding, copy-button and OS-tab queries returned nothi
 - **Entry points:** an outline "Connect Claude" button (`Plug`) in the library header, before the Settings icon; and
   Settings' last section, "Connect Claude", with one muted sentence and an outline "Open Connect Claude" link (`Plug`).
 
+## Graph
+
+Patterns from ui-ux-pro-max (2026-09-17): `search.py "graph canvas visualization with layer toggles" --domain ux`
+returned nothing about graphs, only *Gesture Conflicts* (don't take the page's own gestures — the canvas takes wheel
+and drag, the page does not pan); `"detail side panel"` and `"checkbox toggle filter"` returned nothing at all;
+`"dialog form with searchable list"` gave *Submit Feedback* (High: loading, then success or error) and *Form Labels*
+(High: a visible label, never a placeholder alone); `"keyboard navigation focus visible"` gave *Focus States* and
+*Keyboard Navigation* (High); `"canvas accessibility screen reader"` gave *Screen Reader* and *Heading Hierarchy*.
+That a canvas has no pattern here is why the canvas carries `aria-hidden` and the side panel is the real interface.
+- **Page (`#/graph`):** `h-dvh` three-column grid, `14rem` controls · canvas · `20rem` panel, each column a `glass`
+  card with a `border-glass-border` hairline. The header is the library's shape: `font-heading` h1 "Graph", the counts
+  line under it, then an outline "Library" link and the theme toggle.
+- **Counts line:** `{n} papers, {m} links` (singulars at 1), with ` · Showing the first 2000 links.` appended when the
+  payload is truncated. It counts the *visible* links, so unticking a layer changes it.
+- **Canvas:** `react-force-graph-2d`, loaded with a dynamic `import()` in `GraphCanvas.tsx` and nowhere else (187 kB,
+  61 kB gzipped, its own chunk — the same rule as Plotly). It carries `aria-hidden` and a visually hidden line beside
+  it reads `{n} papers, {m} links. Use the papers list to explore connections.` Transparent background, so the glass
+  card shows through. A node's radius runs 3–9 px with its share of the links; a faded node or link draws at 12%
+  opacity. A `manual` link is 2.5 px wide with its label drawn along it above 1× zoom; every other link is 1 px;
+  `cites` and `manual` carry an arrow at the target end. Focus fades the rest of the graph without rebuilding it: the
+  node and link objects depend only on the papers and the visible links, so the simulation keeps its positions and
+  only the accessors change. The dynamic import's failure state — an `ErrorAlert` and a "Reload" button — sits
+  outside the `aria-hidden` wrapper, so a screen reader reaches what it can act on.
+- **Colours:** `SERIES_COLORS` from `features/charts/palette.ts` through `useChartTheme()` — the same palette the
+  charts use, already checked for colour-blind readers on both surfaces. A paper wears its **first** workspace's
+  colour, workspaces take colours alphabetically (so a colour doesn't move when a paper joins one), and a paper in no
+  workspace wears `CHART_INK[theme].muted` — the same token the charts' text uses, so it follows the theme. Past the
+  sixth workspace the palette cycles; the legend still names every one.
+- **Controls:** a `Checkbox` per link kind with its count, labelled exactly `Citations`, `Same workspace`, `Noted
+  together`, `Same author`, `Same topic`, `Similar content`, `Your links`; **Citations** and **Similar content** are
+  ticked on load, and drawing a link ticks **Your links**. Then a `Select` "Workspace" (**Whole library** first), a
+  `Select` "Links out" (1–3, only while a paper is focused), and the colour legend.
+- **Panel:** with nothing focused, an h2 "Papers" over a list of buttons (`.graph-paper`), sorted by link count then
+  title, each with its count. Focused, an h2 "Connected papers" with the paper's title under it, a ghost "Clear focus",
+  the outline "Link to another paper…" button, then an h3 per kind over rows (`.graph-connection`) linking to the
+  reader. A **Your links** row also gets ghost icon buttons "Edit label for {title}" and "Remove link to {title}";
+  removal asks with `window.confirm` first. Both custom rows carry the app's focus ring (`outline-none
+  focus-visible:ring-3 focus-visible:ring-ring/50`).
+- **Link dialog:** `Dialog` on `bg-glass-strong`, a `Command` list under the visible caption **Paper to link to**
+  (searchable, the focused paper left out) and an `Input` labelled **Label** with the placeholder `builds on`, capped
+  at 80 characters. cmdk overwrites any `id` passed to `CommandInput`, so the caption is plain text and the input is
+  named by `Command label=` (which fills cmdk's own hidden `<label>`) plus a matching `aria-label`; the **Label**
+  field keeps a real `<Label htmlFor>`, because it wraps a real `<input>`. Both rules are checked before the request
+  (`labelError`), and the server's refusal lands in an `ErrorAlert` inside the dialog. A failed save clears when the
+  dialog closes; a failed removal, which has no dialog, shows above the panel. The submit reads "Saving…" and
+  disables while it runs.
+- **Empty state:** `No links yet. Import references, add papers to a workspace, or turn on OpenAlex to fill this in.`
+- **Stable test hooks:** `.graph-paper`, `.graph-connection`, `data-paper-id` on both, the "Graph" link in the library
+  header, the "Workspace" and "Links out" selects, the checkbox names above, the "Connected papers" region, "Clear
+  focus", "Link to another paper…", "Paper to link to", "Label", "Save link", "Edit label for …" and "Remove link to …".
+
 ## Pre-delivery check (from ui-ux-pro-max Quick Reference §1–§3)
 
 Run through this before finishing any UI task, in **both** themes:
