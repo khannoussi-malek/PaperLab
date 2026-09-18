@@ -109,12 +109,14 @@ Fonts: body `Atkinson Hyperlegible Next Variable` (`font-sans`), headings `Crims
   "Chart title" / "Dataset name" / "Pasted data" / "CSV file" / "Create dataset" / "Charts use this data" / "Save
   anyway" / "View data table" / "Chart data" / "Add series" / "Choose data" / "Save chart" / "Save changes" / "Save
   as copy" / "Attach chart" / "Search charts" / "Remove chart" / "Add to note…" / "Quick chart" / "Open". Also
-  `article.connection-card`, `.cloud-tag`, `.key-hint`, `.test-result`, `li.model-row`, `.embedding-indexed`, and
+  `article.connection-card`, `.cloud-tag`, `.key-hint`, `.test-result`, `li.model-row`, `.embedding-indexed`,
+  `.search-model-status`, `.search-notice`, and
   the names "Settings" / "Add connection" / "Test" / "Edit connection" / "Delete connection" / "Add model" / "Add a
   model" / "Search or type a model name" / "Default model" / "Remove <name> from chat" / "Delete <name> from disk" /
   "Model to pull" / "Pull" / "Pulling <name>" / "Kind" / "Preset" / "Name" / "Base URL" / "API key" / "Replace key" /
   "Remove key" / "Save connection" / "Model" / "Manage models…" / "Set up a model" / "Open settings" / "Embedding
-  model" / "Re-index library" / "Re-index the library?" / "Re-index". Also `.reference-row`, `.references-summary`
+  model" / "Re-index library" / "Re-index the library?" / "Re-index" / the region "Search" / "Download search model ·
+  <N> MB" / "Downloading the search model". Also `.reference-row`, `.references-summary`
   and `.reference-list`.
   Also the names "Connect Claude" / "Open Connect Claude" / "Your system" (tabs "macOS" / "Windows" / "Windows + WSL" /
   "Linux") / "PaperLab folder" / "Copy" / "Copied" / "Check the server", and the regions "Claude Desktop" / "Claude
@@ -386,7 +388,7 @@ before deleting; `search.py "progress bar long running download status" --domain
 `--stack shadcn "select dialog form password input radio group"`: shadcn `Select` and `Dialog`, never native ones).
 - **Settings page (`#/settings`):** the library's page shell in a `max-w-3xl` column: a ghost "Library" link
   (`ArrowLeft`), the `font-heading` h1 "Settings", then two `section`s labelled by their h2: "Model connections" and
-  "Embedding model". The library header gains an outline icon link "Settings" (`Settings` icon) before the theme toggle.
+  "Search". The library header gains an outline icon link "Settings" (`Settings` icon) before the theme toggle.
 - **Model connections:** the h2 row ends with the view's one primary button, "Add connection" (`Plus`). With none, a
   dashed box says "No model connections yet. Add Ollama, Anthropic or any OpenAI-compatible server." Each connection is
   an `article.connection-card[data-connection-id]` on glass (`glass`, `ring-1 ring-glass-border`, `rounded-xl p-4`):
@@ -434,12 +436,23 @@ before deleting; `search.py "progress bar long running download status" --domain
   answers saved before connections read `AI · <model> · prompt v<N>`.
 - **Refusals:** `no_model` and `embedding_model_changed` alerts carry an outline "Open settings" link in `AlertAction`;
   `model_not_found` offers Retry, which asks with the dropdown's fallback.
-- **Embedding model:** a shadcn `Select` "Embedding model" showing the configured model. Always disabled, since there
-  is nothing to switch to yet, and a `Lock` icon joins its label once chunks exist; `.embedding-indexed` "indexed with nomic-ai/nomic-embed-text-v1.5 · 12,400 chunks"
-  (`tabular-nums`). When some chunks came from another model, a destructive `Alert`: "N chunks were indexed with another
-  model. Chat on those papers is refused until you re-index." An outline "Re-index library" (`RefreshCw`) opens the
-  `Dialog` "Re-index the library?" ("Every paper's passages are embedded again with <model>, in the background."),
-  with Cancel and destructive "Re-index"; then a `role="status"` line "Re-indexing N papers in the background."
+- **Search:** the section "Search" (h2) opens with the built-in search model: a `.search-model-status` line
+  (`text-sm tabular-nums text-muted-foreground`, no live region) reading "Search model: not downloaded", "Search
+  model: downloading… 42%" or "Search model: ready" (`statusLine`); while the model is missing, an outline `sm`
+  "Download search model · 548 MB" (`Download` icon; the size is what a download would fetch now, `downloadLabel`);
+  while it downloads, a shadcn `Progress` named "Downloading the search model" (`downloadPercent`); a failure in a
+  destructive `Alert`, with the button back to try again. `DownloadSearchModel` is the same block wherever it shows
+  (here, chat's `search_not_set_up` refusal, the library notice), and one download per tab drives them all
+  (`useSearchModelDownload`): leaving a page doesn't stop it. Patterns from ui-ux-pro-max: `search.py "download
+  progress bar large file" --domain ux` (a bar for long work) and `"empty state feature unavailable"` (the message
+  comes with its action). Below it, the embedding model: a shadcn `Select` "Embedding model" showing the configured
+  model. Always disabled, since there is nothing to switch to yet, and a `Lock` icon joins its label once chunks
+  exist; `.embedding-indexed` "indexed with nomic-ai/nomic-embed-text-v1.5 · 12,400 chunks" (`tabular-nums`).
+  When some chunks came from another model, a destructive `Alert`: "N chunks were indexed with another model. Chat on
+  those papers is refused until you re-index." An outline "Re-index library" (`RefreshCw`; disabled while no search
+  model is downloaded) opens the `Dialog` "Re-index the library?" ("Every paper's passages are embedded again with
+  <model>, in the background."), with Cancel and destructive "Re-index"; then a `role="status"` line "Re-indexing N
+  papers in the background."
 - **Chat panel details:** `.chat-cite` has `outline-none focus-visible:ring-2 focus-visible:ring-ring`. While an
   answer streams, the list stays at its bottom if it was there. "Save as note" stays inside the panel
   (`saveButtonPosition`) and re-measures when the panel changes size or is shown again.
