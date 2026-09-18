@@ -2,23 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { Config, Data, Layout, PlotlyHTMLElement, PlotMouseEvent } from 'plotly.js-dist-min'
 import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-
-// Loaded on first use: Plotly is about 4.6 MB, and most views never draw a chart. A failed import (a flaky network, a
-// blocked request, a stale-deploy chunk 404) clears the cache: a browser's module loader caches even a *failed*
-// dynamic import for the page's lifetime, so a same-page retry of the identical specifier replays the same
-// rejection instantly, without ever touching the network again. Clearing the cache doesn't undo that (only a real
-// reload does — see the error state's Retry below); it just keeps a stale rejection from haunting a future page
-// load in the same browsing session.
-let plotly: Promise<typeof import('plotly.js-dist-min')> | null = null
-function loadPlotly() {
-  if (!plotly) {
-    plotly = import('plotly.js-dist-min').catch((error: unknown) => {
-      plotly = null
-      throw error
-    })
-  }
-  return plotly
-}
+import { loadPlotly } from './loadPlotly'
 
 type Props = {
   traces: Data[]
@@ -32,7 +16,7 @@ type Props = {
   onPointClick?: (customdata: unknown) => void
 }
 
-/** Draws a compiled chart with Plotly, loaded on first use. The only file that imports the runtime module. */
+/** Draws a compiled chart with Plotly, loaded on first use (`loadPlotly`, the only importer of the runtime module). */
 export function PlotlyChart({ traces, layout, height, staticPlot = false, label, filename, onPointClick }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   const plotlyRef = useRef<typeof import('plotly.js-dist-min') | null>(null)

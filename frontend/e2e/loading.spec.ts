@@ -1,7 +1,10 @@
 import type { Page } from '@playwright/test'
-import { FIRST_LINE, expect, test } from './fixtures'
+import { FIRST_LINE, addOwnData, expect, test } from './fixtures'
 
 const firstLine = (page: Page) => page.locator('.pdf-page[data-page="1"] .textLayer span', { hasText: FIRST_LINE })
+
+/** Plotly's chunk, in the dev server and in a build alike. */
+const PLOTLY = /plotly/
 
 /** Opens a hash in the same document, the way a link does: `page.goto` would reload and start everything afresh. */
 const follow = (page: Page, hash: string) => page.evaluate((to) => (window.location.hash = to), hash)
@@ -23,4 +26,31 @@ test('one PDF.js worker serves the library preview and every paper opened after 
     await expect(firstLine(page)).toBeVisible()
   }
   expect(pdfWorkers).toHaveLength(1)
+})
+
+test('the chart library starts loading as the Charts list opens, before any chart is clicked', async ({ page }) => {
+  const plotly = page.waitForRequest(PLOTLY)
+  await page.goto('/#/charts')
+  await plotly
+})
+
+test('pointing at a link into a chart starts loading the chart library; the page alone does not', async ({
+  page,
+  request,
+  dataName,
+}) => {
+  const dataset = await addOwnData(request, dataName, 'x,y\n1,2\n3,4\n')
+  const requested: string[] = []
+  page.on('request', (r) => {
+    if (PLOTLY.test(r.url())) requested.push(r.url())
+  })
+  await page.goto(`/#/datasets/${dataset.id}`)
+  const quickChart = page.getByRole('link', { name: 'Quick chart' })
+  await expect(quickChart).toBeVisible()
+  await page.waitForTimeout(500)
+  expect(requested).toEqual([])
+
+  const plotly = page.waitForRequest(PLOTLY)
+  await quickChart.hover()
+  await plotly
 })
