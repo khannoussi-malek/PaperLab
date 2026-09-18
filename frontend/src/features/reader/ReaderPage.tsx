@@ -1,4 +1,4 @@
-import { Table2 } from 'lucide-react'
+import { Table2, Undo2 } from 'lucide-react'
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { api, type Note } from '@/api/client'
 import {
@@ -11,8 +11,9 @@ import {
   useReferences,
 } from '@/api/queries'
 import { glass } from '@/components/glass'
-import { fadeIn } from '@/components/motion'
+import { fadeIn, popIn } from '@/components/motion'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
 import { copyText } from '@/lib/clipboard'
 import { readerHref, type ReaderTab, type ReaderTarget } from '@/lib/route'
 import { cn } from '@/lib/utils'
@@ -42,6 +43,7 @@ import { RightPanel } from './RightPanel'
 import { readSelection, type SelectionAnchor } from './selection'
 import { useCitations } from './useCitations'
 import { useHoverCard } from './useHoverCard'
+import { useJumpBack } from './useJumpBack'
 import { usePdfDocument } from './usePdfDocument'
 import { DEFAULT_ZOOM_INDEX, ZOOM_STEPS } from './zoom'
 
@@ -126,6 +128,8 @@ export function ReaderPage({ paperId, tab, target }: Props) {
   // still queues the first lookup, D78), and the tab shares its cache.
   const references = useReferences(paperId, 'cites', citationsByPage.size > 0)
   const [overCitation, setOverCitation] = useState(false)
+  const pagesRef = useRef<HTMLElement>(null)
+  const jumpBack = useJumpBack(pagesRef)
   const [menu, setMenu] = useState<ContextMenuState | null>(null)
   const [flash, setFlash] = useState<Flash | null>(null)
   const promotedNoteId = useRef<string | null>(null)
@@ -201,9 +205,10 @@ export function ReaderPage({ paperId, tab, target }: Props) {
   }
 
   /** A citation's click, or Enter on its button: to its entry in the reference list, by the one scroll path (D147). */
-  function jumpTo(citation: Citation) {
+  function jumpTo(citation: Citation, viaKeyboard: boolean) {
     // A note being edited keeps the card (D147): closing it here would unmount NoteCard and lose the unsaved edit.
     if (editingNoteIds.length === 0) hoverCard.close()
+    jumpBack.save(citation, viaKeyboard)
     flashChunk(citation.jump.page, citation.jump.rects)
   }
 
@@ -216,7 +221,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
     const where = pointOnPage(event, scale)
     if (!where) return
     const citation = citationAt(citationsByPage.get(where.page) ?? [], where.point)
-    if (citation) jumpTo(citation)
+    if (citation) jumpTo(citation, false)
     else if (tableMarkerAt(tableMarksByPage.get(where.page) ?? [], where.point)) showTab('data')
   }
 
@@ -400,6 +405,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
       )}
 
       <section
+        ref={pagesRef}
         className={cn(
           'overflow-auto p-4',
           capturing && 'cursor-crosshair select-none',
@@ -411,6 +417,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
         onClick={handlePageClick}
         onMouseMove={capturing ? captureDrag.moveDrag : trackHover}
         onMouseLeave={leaveCard}
+        onScroll={jumpBack.onScroll}
         onContextMenu={openContextMenu}
       >
         {doc &&
@@ -482,10 +489,25 @@ export function ReaderPage({ paperId, tab, target }: Props) {
                 onFocusIn={focusCitation}
                 onFocusOut={closeCitationCard}
                 onEscape={closeCitationCard}
-                onJump={jumpTo}
+                onJump={(citation) => jumpTo(citation, true)}
               />
             </PdfPage>
           ))}
+        {/* Q1 (b): the way back from a citation jump, at the foot of the pages while they scroll. No height of its own. */}
+        {jumpBack.spot && (
+          <div className="pointer-events-none sticky bottom-4 flex h-0 items-end justify-center">
+            <Button
+              key={jumpBack.spot.id}
+              variant="ghost"
+              autoFocus={jumpBack.spot.viaKeyboard}
+              className={cn(glass, 'pointer-events-auto origin-bottom rounded-full border-glass-border bg-glass-strong shadow-lg', popIn)}
+              onClick={jumpBack.back}
+            >
+              <Undo2 aria-hidden />
+              Back to page {jumpBack.spot.page}
+            </Button>
+          </div>
+        )}
       </section>
 
       <RightPanel
