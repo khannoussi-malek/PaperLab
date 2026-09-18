@@ -220,11 +220,36 @@ one-off animation classes.
   home's Papers / Notes / Chat panels (it replays each time a panel is shown).
 - **The PDF canvas** fades in (300 ms) once it has drawn, instead of flashing from blank.
 - **`pressable`** (scale to 97% while held) on filter chips, starter questions, source pills and the send button.
-- **No exit animations** (they need the element to outlive its unmount).
+- **`delayedIn`** (hidden for 150 ms, then a 200 ms fade) on every loading placeholder ("Loading…", "Loading page…",
+  "Loading references…"), and on a page title only while it still reads "Loading…". Most screens load in under 75 ms,
+  so the placeholder never shows; before, it flashed for a few frames.
+- **Page cross-fade:** a hash change to another page runs as a view transition (`withViewTransition`, called by
+  `useRoute`'s one `hashchange` listener): the browser cross-fades the old page into the new one with its own 250 ms
+  fade, instead of the old page vanishing and the new one fading in from the bare background. Picking a theme does the
+  same. A change of query only (a reader or workspace tab, a note or chunk target; `samePage`) swaps at once: its panel
+  fades in by itself, and the page takes no clicks while a transition runs (`pointer-events` on `::view-transition`
+  doesn't change that in Chromium).
+- **Hover colours** ease with `transition-colors duration-150`; a hand-rolled row or link that changes colour on hover
+  carries it too.
+- **No exit animations** (they need the element to outlive its unmount). The page cross-fade is the one outgoing fade,
+  and it is the browser's snapshot of the old page, not the element itself.
 - **Tooltips on adjacent triggers** (the source pills) use `TooltipProvider disableHoverableContent`: a hoverable wide
   tooltip keeps its "pointer heading to the tooltip" zone over the next pill and shows the wrong explanation.
-- **E2E:** `e2e/motion.spec.ts` checks `animationName` (`enter` or `none`) under both motion settings. Hover tests move
-  the mouse like a person (`glideTo`: many small steps, then a rest); instant jumps confuse Radix's pointer tracking.
+- **E2E:** `e2e/motion.spec.ts` checks `animationName` (`enter` or `none`) under both motion settings, and records each
+  view transition with what was on screen when its update finished. Hover tests move the mouse like a person
+  (`glideTo`: many small steps, then a rest); instant jumps confuse Radix's pointer tracking.
+
+## Waiting
+
+Fix the wait before dressing it. Measured 2026-09-18 on the owner's library (headless Chrome, `e2e/loading.spec.ts`
+keeps each rule):
+- **One PDF.js worker** (`pdfWorker` in `reader/pdfjs.ts`) serves every document, the reader and the library preview
+  alike, passed to `getDocument({ worker })` so a task's `destroy()` never ends it. A worker per document cost ~250 ms on
+  every open: a paper took ~550 ms to show its pages, now ~50–120 ms.
+- **Plotly starts loading when a chart looks likely** (`loadPlotly.ts`): as the Charts list opens, or when the pointer or
+  focus reaches any `a[href^="#/charts/"]`. It still loads on first use (4.6 MB), so a session without charts never
+  fetches it; the first chart no longer waits ~1 s for it.
+- **No skeleton for a wait under 150 ms**: `delayedIn` (see Motion) keeps the placeholder out of sight.
 
 ## Workspaces
 
