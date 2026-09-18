@@ -41,8 +41,8 @@ async def get(session: AsyncSession, link_id: uuid.UUID) -> PaperLink:
 
 
 async def create(session: AsyncSession, from_paper: uuid.UUID, to_paper: uuid.UUID, label: str) -> PaperLink:
-    """Raises NotFound (either paper), InvalidInput (the same paper twice, or a bad label), Conflict (the pair is
-    already linked, whichever way round it was drawn)."""
+    """Raises NotFound (either paper, also when it is deleted mid-create), InvalidInput (the same paper twice, or a
+    bad label), Conflict (the pair is already linked, whichever way round it was drawn)."""
     cleaned = _clean_label(label)
     if from_paper == to_paper:
         raise InvalidInput(SAME_PAPER)
@@ -58,7 +58,13 @@ async def create(session: AsyncSession, from_paper: uuid.UUID, to_paper: uuid.UU
         await session.commit()
     except IntegrityError:
         await session.rollback()
-        raise Conflict(ALREADY_LINKED)
+        # Another request got in between the checks above and this insert: it deleted one of the papers, or drew
+        # the same link first. Ask again, so the answer names what actually happened.
+        await get_paper(session, from_paper)
+        await get_paper(session, to_paper)
+        if await session.scalar(existing.limit(1)) is None:
+            raise
+        raise Conflict(ALREADY_LINKED) from None
     return link
 
 
