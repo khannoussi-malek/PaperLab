@@ -49,6 +49,20 @@ async def test_status_counts_vectors_by_the_model_they_came_from(session):
     assert [i.chunks for i in after.indexed_with] == sorted((i.chunks for i in after.indexed_with), reverse=True)
 
 
+async def test_unembedded_papers_are_those_with_chunks_and_no_vector_whatever_their_status(session):
+    none = await indexed_paper(session, embedded=False)
+    mid_ingest = await indexed_paper(session, embedded=False)
+    mid_ingest.status = "enriching"
+    embedded = await indexed_paper(session)
+    no_chunks = await indexed_paper(session, chunks=0)
+    await session.commit()
+
+    found = set(await embedding_index.unembedded_papers(session))
+
+    assert {none.id, mid_ingest.id} <= found
+    assert not {embedded.id, no_chunks.id} & found
+
+
 async def test_vectors_from_another_model_are_refused_and_unembedded_chunks_are_not(session):
     old = await indexed_paper(session, "old-model")
     current = await indexed_paper(session, "test")

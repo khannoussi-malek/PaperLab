@@ -254,3 +254,13 @@ async def test_with_no_search_model_a_long_paper_says_so_before_its_index_and_a_
     with pytest.raises(Conflict, match="^search_not_set_up$"):
         await chat.prepare(session, large_unindexed.id, "q")
     assert (await chat.prepare(session, small_unindexed.id, "q")).whole_paper is True
+
+
+async def test_papers_needing_search_are_the_ready_ones_too_long_to_send_whole(session):
+    before = await chat.papers_needing_search(session)
+    await make_paper(session, ["x" * 25_000], embedded=False)  # long: counts, vectors or not
+    await make_paper(session, ["x" * 12_000, "y" * 12_001])  # 24,001 characters: one over SMALL_PAPER_CHARS
+    await make_paper(session, ["x" * 24_000])  # exactly SMALL_PAPER_CHARS: sent whole
+    await make_paper(session, ["x" * 25_000], status="chunking")  # not ready yet
+
+    assert await chat.papers_needing_search(session) - before == 2
