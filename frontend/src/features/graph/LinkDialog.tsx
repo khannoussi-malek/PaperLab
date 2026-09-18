@@ -65,10 +65,10 @@ export function LinkDialog({ open, onOpenChange, fromTitle, choices, editing, pe
         <form className="flex flex-col gap-4" onSubmit={submit}>
           {editing === null && (
             <div className="flex flex-col gap-2">
-              {/* cmdk overwrites any id passed to CommandInput, so a <Label htmlFor> would bind to nothing: the
-                  caption is plain text and the input names itself, as the app's other Command pickers do. */}
+              {/* cmdk overwrites any id passed to CommandInput, so a <Label htmlFor> would bind to nothing. The
+                  caption is plain text, and `label` fills cmdk's own hidden <label>, which does bind. */}
               <p className="text-sm leading-none font-medium">Paper to link to</p>
-              <Command className="rounded-lg border border-input bg-transparent">
+              <Command label="Paper to link to" className="rounded-lg border border-input bg-transparent">
                 <CommandInput aria-label="Paper to link to" placeholder="Search your papers" />
                 <CommandList className="max-h-56">
                   <CommandEmpty>No paper matches.</CommandEmpty>
