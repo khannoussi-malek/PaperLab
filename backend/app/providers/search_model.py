@@ -55,7 +55,7 @@ VARIANTS = {
     ),
 }
 # The variant PaperLab downloads and runs (spec §4). The other is never offered for download.
-SHIPPED = VARIANTS["int8"]
+SHIPPED = VARIANTS["full"]
 
 CHUNK = 1 << 20  # bytes per write, and per progress event
 TIMEOUT = httpx.Timeout(60, connect=10)
