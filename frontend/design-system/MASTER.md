@@ -561,14 +561,18 @@ That a canvas has no pattern here is why the canvas carries `aria-hidden` and th
   together`, `Same author`, `Same topic`, `Similar content`, `Your links`; **Citations** and **Similar content** are
   ticked on load, and drawing a link ticks **Your links**. Then a `Select` "Workspace" (**Whole library** first), a
   `Select` "Links out" (1–3, only while a paper is focused), and the colour legend.
-- **Panel:** with nothing focused, an h2 "Papers" over a list of buttons (`.graph-paper`), sorted by link count then
-  title, each with its count. Focused, an h2 "Connected papers" with the paper's title under it, a ghost "Clear focus",
-  the outline "Link to another paper…" button, then an h3 per kind over rows (`.graph-connection`) linking to the
-  reader. A **Your links** row also gets ghost icon buttons "Edit label for {title}" and "Remove link to {title}";
-  removal asks with `window.confirm` first. Both custom rows carry the app's focus ring (`outline-none
-  focus-visible:ring-3 focus-visible:ring-ring/50`).
+- **Panel:** it always lists the papers — an h2 "Papers" over buttons (`.graph-paper`), sorted by link count then
+  title, each with its count — so a keyboard user can move from paper to paper. With one focused, a "Connected papers"
+  section sits above that list: the h2, the paper's title under it, a ghost "Clear focus", the outline "Link to
+  another paper…" button, then an h3 per kind (plain blocks, not landmarks) over rows (`.graph-connection`) linking to
+  the reader. A **Your links** row also gets ghost icon buttons "Edit label for {title}" and "Remove link to {title}";
+  removal asks with `window.confirm` first. Focus follows the action: choosing a paper moves it to the "Connected
+  papers" heading (`tabIndex={-1}`), "Clear focus" returns it to that paper's button, and a confirmed removal moves it
+  to the heading. Both custom rows carry the app's focus ring (`outline-none focus-visible:ring-3
+  focus-visible:ring-ring/50`). Switching workspace keeps the page up while the new graph loads (`keepPreviousData`).
 - **Link dialog:** `Dialog` on `bg-glass-strong`, a `Command` list under the visible caption **Paper to link to**
-  (searchable, the focused paper left out) and an `Input` labelled **Label** with the placeholder `builds on`, capped
+  (searchable, the focused paper left out; once one is chosen a `role="status"` line reads `Linking to "{title}".`,
+  because cmdk's highlight follows the pointer and is not the choice) and an `Input` labelled **Label** with the placeholder `builds on`, capped
   at 80 characters. cmdk overwrites any `id` passed to `CommandInput`, so the caption is plain text and the input is
   named by `Command label=` (which fills cmdk's own hidden `<label>`) plus a matching `aria-label`; the **Label**
   field keeps a real `<Label htmlFor>`, because it wraps a real `<input>`. Both rules are checked before the request
