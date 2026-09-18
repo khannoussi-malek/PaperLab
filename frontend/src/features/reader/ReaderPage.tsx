@@ -1,7 +1,15 @@
 import { Table2 } from 'lucide-react'
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { api, type Note } from '@/api/client'
-import { useChunksOnPage, useDataset, useNoteMutations, useNotes, usePaper, usePaperDatasets } from '@/api/queries'
+import {
+  useChunksOnPage,
+  useDataset,
+  useNoteMutations,
+  useNotes,
+  usePaper,
+  usePaperDatasets,
+  useReferences,
+} from '@/api/queries'
 import { glass } from '@/components/glass'
 import { fadeIn } from '@/components/motion'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -20,15 +28,19 @@ import { browserStorage, highlightFill, loadLastColor, saveLastColor } from '../
 import { NoteHoverCard } from '../notes/NoteHoverCard'
 import { NotesPanel } from '../notes/NotesPanel'
 import { ReferencesTab } from '../references/ReferencesTab'
+import { CitationCard } from './CitationCard'
+import { CitationLinks } from './CitationLinks'
+import type { Citation } from './citations'
 import { pdfRectToCss, type PdfRect } from './coords'
 import { MAX_PANEL_SHARE, MIN_PANEL_WIDTH, loadPanelWidth, savePanelWidth } from './panelWidth'
-import { clientPointToPdf, notesAt, rectContains } from './hitTest'
+import { citationAt, clientPointToPdf, notesAt, rectContains } from './hitTest'
 import { PdfPage } from './PdfPage'
 import { ReaderContextMenu, type ContextMenuState } from './ReaderContextMenu'
 import { ReaderToolbar } from './ReaderToolbar'
 import { RetractionBanner } from './RetractionBanner'
 import { RightPanel } from './RightPanel'
 import { readSelection, type SelectionAnchor } from './selection'
+import { useCitations } from './useCitations'
 import { useHoverCard } from './useHoverCard'
 import { usePdfDocument } from './usePdfDocument'
 import { DEFAULT_ZOOM_INDEX, ZOOM_STEPS } from './zoom'
@@ -64,9 +76,12 @@ function scrollToElement(selector: string, block: ScrollLogicalPosition) {
   document.querySelector(selector)?.scrollIntoView({ behavior: 'smooth', block })
 }
 
-/** Places the hover card just below the lowest rect of the hovered notes, aligned with the leftmost. */
-function hoverCardPosition(highlights: PageHighlight[], noteIds: string[], scale: number) {
-  const rects = highlights.filter((h) => h.noteId !== null && noteIds.includes(h.noteId)).map((h) => h.rect)
+/** The rects of these notes' highlights on one page. */
+const noteRects = (highlights: PageHighlight[], noteIds: string[]) =>
+  highlights.filter((h) => h.noteId !== null && noteIds.includes(h.noteId)).map((h) => h.rect)
+
+/** Places a hover card just below the lowest of `rects` (the hovered notes', or a citation's link), aligned with the leftmost. */
+function hoverCardPosition(rects: PdfRect[], scale: number) {
   const left = Math.min(...rects.map((r) => r[0]))
   const bottom = Math.max(...rects.map((r) => r[3]))
   return { left: left * scale, top: (bottom + HOVER_CARD_GAP_PT) * scale }
@@ -106,6 +121,11 @@ export function ReaderPage({ paperId, tab, target }: Props) {
     })
   }, [])
   const hoverCard = useHoverCard(editingNoteIds.length > 0)
+  const citationsByPage = useCitations(doc)
+  // D149: fetched as soon as the pass finds a citation, so the first hover is instant. A read only (the References tab
+  // still queues the first lookup, D78), and the tab shares its cache.
+  const references = useReferences(paperId, 'cites', citationsByPage.size > 0)
+  const [overCitation, setOverCitation] = useState(false)
   const [menu, setMenu] = useState<ContextMenuState | null>(null)
   const [flash, setFlash] = useState<Flash | null>(null)
   const promotedNoteId = useRef<string | null>(null)
@@ -180,11 +200,23 @@ export function ReaderPage({ paperId, tab, target }: Props) {
     }
   }
 
-  /** A click on a captured table's marker opens the Data tab. */
-  function openTableMarker(event: MouseEvent) {
+  /** A citation's click, or Enter on its button: to its entry in the reference list, by the one scroll path (D147). */
+  function jumpTo(citation: Citation) {
+    hoverCard.close()
+    flashChunk(citation.jump.page, citation.jump.rects)
+  }
+
+  /** A click on a citation jumps to its entry; one on a captured table's marker opens the Data tab. */
+  function handlePageClick(event: MouseEvent) {
     if (capturing || readSelection(scale).kind !== 'none') return
+    // A card's own clicks stay the card's, even over another citation; a citation button's click (Enter or Space)
+    // has no pointer position and has already jumped.
+    if ((event.target as Element).closest('.note-hover-card, .citation-card, .citation-link')) return
     const where = pointOnPage(event, scale)
-    if (where && tableMarkerAt(tableMarksByPage.get(where.page) ?? [], where.point)) showTab('data')
+    if (!where) return
+    const citation = citationAt(citationsByPage.get(where.page) ?? [], where.point)
+    if (citation) jumpTo(citation)
+    else if (tableMarkerAt(tableMarksByPage.get(where.page) ?? [], where.point)) showTab('data')
   }
 
   function captureSelection(event: MouseEvent) {
@@ -265,21 +297,48 @@ export function ReaderPage({ paperId, tab, target }: Props) {
     setNumberDraft(draft)
   }
 
-  /** Shows the notes under the pointer and scrolls the panel to the first, only when that set changes. */
+  /** The pointer left the card and what it shows: close soon, unless keyboard focus is on that citation or in its card. */
+  function leaveCard() {
+    const open = hoverCard.target
+    if (open?.kind === 'citation' && document.activeElement?.closest(`[data-citation-id="${open.citationId}"]`)) return
+    hoverCard.leave()
+  }
+
+  /**
+   * Shows the citation or the notes under the pointer (a citation inside a highlight wins, D147); for notes, scrolls the
+   * panel to the first one, only when that set changes.
+   */
   function trackHover(event: MouseEvent) {
-    if ((event.target as Element).closest('.note-hover-card')) {
+    if ((event.target as Element).closest('.note-hover-card, .citation-card')) {
       hoverCard.stay()
       return
     }
     const where = event.buttons === 0 ? pointOnPage(event, scale) : null // no preview while dragging a selection
+    const citation = where ? citationAt(citationsByPage.get(where.page) ?? [], where.point) : null
+    setOverCitation(citation !== null)
+    if (where && citation) {
+      hoverCard.show({ kind: 'citation', page: where.page, citationId: citation.id })
+      return
+    }
     const noteIds = where ? notesAt(highlightsByPage.get(where.page) ?? [], where.point) : []
     if (!where || noteIds.length === 0) {
-      hoverCard.leave()
+      leaveCard()
       return
     }
     if (!hoverCard.show({ kind: 'notes', page: where.page, noteIds })) return
     setActiveNoteId(noteIds[0])
     scrollToElement(`article.note[data-note-id="${noteIds[0]}"]`, 'nearest')
+  }
+
+  /** Keyboard focus reached a citation's button (D147): its card opens, unless a note in the card is being edited. */
+  function focusCitation(citation: Citation) {
+    hoverCard.show({ kind: 'citation', page: citation.page, citationId: citation.id })
+  }
+
+  /** Focus left a citation and its card, or Escape: close its card, if it is the one open. */
+  function closeCitationCard(citation: Citation) {
+    const open = hoverCard.target
+    if (open?.kind === 'citation' && open.citationId === citation.id) hoverCard.close()
   }
 
   /** Right-click on a highlight or the pending selection opens our menu; anywhere else keeps the browser's. */
@@ -340,12 +399,17 @@ export function ReaderPage({ paperId, tab, target }: Props) {
       )}
 
       <section
-        className={cn('overflow-auto p-4', capturing && 'cursor-crosshair select-none')}
+        className={cn(
+          'overflow-auto p-4',
+          capturing && 'cursor-crosshair select-none',
+          // PDF.js's own stylesheet gives the text layer a text cursor, unlayered: only an !important utility beats it.
+          overCitation && !capturing && 'cursor-pointer [&_.textLayer_span]:cursor-pointer!',
+        )}
         onMouseDown={captureDrag.startDrag}
         onMouseUp={captureSelection}
-        onClick={openTableMarker}
+        onClick={handlePageClick}
         onMouseMove={capturing ? captureDrag.moveDrag : trackHover}
-        onMouseLeave={hoverCard.leave}
+        onMouseLeave={leaveCard}
         onContextMenu={openContextMenu}
       >
         {doc &&
@@ -389,7 +453,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
                 <NoteHoverCard
                   notes={hoveredNotes}
                   paperId={paperId}
-                  style={hoverCardPosition(highlightsByPage.get(pageNumber) ?? [], hover.noteIds, scale)}
+                  style={hoverCardPosition(noteRects(highlightsByPage.get(pageNumber) ?? [], hover.noteIds), scale)}
                   editNoteId={hover.editNoteId}
                   onPointerEnter={hoverCard.stay}
                   onPointerLeave={hoverCard.leave}
@@ -399,6 +463,26 @@ export function ReaderPage({ paperId, tab, target }: Props) {
                   onDelete={deleteNote}
                 />
               )}
+              <CitationLinks
+                citations={citationsByPage.get(pageNumber) ?? []}
+                scale={scale}
+                openId={hover?.kind === 'citation' && hover.page === pageNumber ? hover.citationId : null}
+                renderCard={(citation) => (
+                  <CitationCard
+                    citation={citation}
+                    paperId={paperId}
+                    references={references}
+                    style={hoverCardPosition([citation.rect], scale)}
+                    onPointerEnter={hoverCard.stay}
+                    onPointerLeave={leaveCard}
+                    onOpenReferences={() => showTab('references')}
+                  />
+                )}
+                onFocusIn={focusCitation}
+                onFocusOut={closeCitationCard}
+                onEscape={closeCitationCard}
+                onJump={jumpTo}
+              />
             </PdfPage>
           ))}
       </section>
