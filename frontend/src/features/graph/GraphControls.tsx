@@ -2,6 +2,8 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { KIND_LABELS, KINDS, MAX_HOPS, MIN_HOPS, type LegendEntry, type LinkKind } from './graphModel'
+import { TIME_AXIS_LABELS, type TimeAxis } from './timelineModel'
+import type { GraphView } from './viewModel'
 
 const ALL_WORKSPACES = 'all'
 
@@ -16,6 +18,9 @@ type Props = {
   hops: number
   onHops: (hops: number) => void
   focused: boolean
+  view: GraphView
+  axis: TimeAxis
+  onAxis: (axis: TimeAxis) => void
 }
 
 export function GraphControls({
@@ -29,6 +34,9 @@ export function GraphControls({
   hops,
   onHops,
   focused,
+  view,
+  axis,
+  onAxis,
 }: Props) {
 
   return (
@@ -82,6 +90,23 @@ export function GraphControls({
                   {value === 1 ? '1 link' : `${value} links`}
                 </SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      {view === 'timeline' && (
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="graph-time-axis" className="text-sm font-medium">
+            Time axis
+          </Label>
+          <Select value={axis} onValueChange={(value) => onAxis(value === 'added' ? 'added' : 'published')}>
+            <SelectTrigger id="graph-time-axis" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="published">{TIME_AXIS_LABELS.published}</SelectItem>
+              <SelectItem value="added">{TIME_AXIS_LABELS.added}</SelectItem>
             </SelectContent>
           </Select>
         </div>
