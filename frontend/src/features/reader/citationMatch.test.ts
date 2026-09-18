@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type { Reference } from '@/api/client'
+import type { Reference, References } from '@/api/client'
 import { joinLines, type Entry } from './citationEntry'
-import { doiIn, matchEntry, titleScore } from './citationMatch'
+import { cardView, doiIn, matchEntry, titleScore, UNMATCHED_LINES } from './citationMatch'
 
 const row = (fields: Partial<Reference>): Reference => ({
   id: 'r1',
@@ -89,6 +89,15 @@ describe('matching by title', () => {
     const entry = entryOf("[7] Forsgren et al. 2021. The SPACE of Developer Productivity: There's more to it than you think.")
     expect(matchEntry(entry, [short, long])).toBe(long)
   })
+
+  it('breaks a tie of equal score and title length by the lower position', () => {
+    const [later, earlier] = [
+      row({ id: 'later', title: 'A Paper About Distributed Systems', position: 5 }),
+      row({ id: 'earlier', title: 'A Paper About Distributed Systems', position: 2 }),
+    ]
+    const entry = entryOf('[8] Someone. 2020. A Paper About Distributed Systems.')
+    expect(matchEntry(entry, [later, earlier])).toBe(earlier)
+  })
 })
 
 describe('doiIn', () => {
@@ -96,5 +105,48 @@ describe('doiIn', () => {
     expect(doiIn('[3] In ICSE (https://doi.org/10.1145/3377811.3380330).')).toBe('10.1145/3377811.3380330')
     expect(doiIn('[1] Journal. DOI: 10.5555/PaperLab-E2E-free; more')).toBe('10.5555/paperlab-e2e-free')
     expect(doiIn('[3] Some Author. 2019. A paper this library has never stored.')).toBeNull()
+  })
+
+  it('also trims a trailing ] or >, from an angle-bracketed link or a bracketed entry', () => {
+    expect(doiIn('Available at <https://doi.org/10.1145/3377811>.')).toBe('10.1145/3377811')
+    expect(doiIn('[10.1000/xyz123]')).toBe('10.1000/xyz123')
+  })
+})
+
+describe('what the card shows', () => {
+  const entry = entryOf('[1] Ada Fixture. 2026. doi:10.5555/paperlab-e2e-', 'free')
+  const listing = (state: References['state'], rows: Reference[] = []) => ({
+    data: { state, error: null, direction: 'cites' as const, summary: { cited_by_3plus: 0, with_pdf: 0 }, rows },
+    isError: false,
+  })
+  const free = (fields: Partial<Reference>) => row({ doi: '10.5555/paperlab-e2e-free', ...fields })
+
+  it('says unreadable for an entry over the caps, whatever the listing', () => {
+    expect(cardView({ entry: null }, { data: undefined, isError: false })).toEqual({ kind: 'unreadable' })
+  })
+
+  it('waits for the listing, then shows a matched reference by where it stands', () => {
+    expect(cardView({ entry }, { data: undefined, isError: false })).toEqual({ kind: 'loading' })
+    expect(cardView({ entry }, listing('ready', [free({ paper_id: 'p1', has_pdf: true })])).kind).toBe('in-library')
+    expect(cardView({ entry }, listing('ready', [free({ has_pdf: true })])).kind).toBe('free-pdf')
+    expect(cardView({ entry }, listing('ready', [free({})])).kind).toBe('details')
+  })
+
+  it('shows the entry as printed when nothing matches, with a line for each state of the references', () => {
+    const unmatched = (references: Parameters<typeof cardView>[1]) => {
+      const view = cardView({ entry }, references)
+      if (view.kind !== 'unmatched') throw new Error(`expected unmatched, got ${view.kind}`)
+      return { line: UNMATCHED_LINES[view.state], open: view.openReferences, text: view.text, doi: view.doi }
+    }
+    expect(unmatched(listing('none'))).toEqual({
+      line: "This paper's references haven't been looked up.",
+      open: true,
+      text: '[1] Ada Fixture. 2026. doi:10.5555/paperlab-e2e-free',
+      doi: '10.5555/paperlab-e2e-free',
+    })
+    expect(unmatched(listing('failed'))).toMatchObject({ line: "Looking up this paper's references failed.", open: true })
+    expect(unmatched(listing('fetching'))).toMatchObject({ line: "Looking up this paper's references…", open: false })
+    expect(unmatched(listing('ready', [row({ title: 'Nothing like it at all, here' })]))).toMatchObject({ line: null, open: false })
+    expect(unmatched({ data: undefined, isError: true })).toMatchObject({ line: "Couldn't check your library for it.", open: false })
   })
 })
