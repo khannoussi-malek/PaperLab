@@ -103,9 +103,15 @@ export function GraphPage() {
         </div>
       </header>
 
-      {graph.data === undefined ? (
-        graph.isError ? (
-          <LoadError message={graph.error.message} onRetry={() => void graph.refetch()} />
+      {graph.data === undefined || workspaces.data === undefined ? (
+        graph.isError || workspaces.isError ? (
+          <LoadError
+            message={(graph.isError ? graph.error! : workspaces.error!).message}
+            onRetry={() => {
+              if (graph.isError) void graph.refetch()
+              if (workspaces.isError) void workspaces.refetch()
+            }}
+          />
         ) : (
           <div className="h-full w-full animate-pulse rounded-xl bg-muted" />
         )
