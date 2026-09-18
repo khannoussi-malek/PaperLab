@@ -80,7 +80,7 @@ export function setUnit(grid: Grid, column: number, unit: string | null): Grid {
 }
 
 /** The row's texts become (or extend, joined with " / ") the column names, and the row is removed. */
-export function useRowAsHeader(grid: Grid, row: number): Grid {
+export function rowAsHeader(grid: Grid, row: number): Grid {
   const cells = grid.rows[row].cells
   return {
     columns: grid.columns.map((c, i) => ({ ...c, name: [c.name, cells[i].raw.trim()].filter(Boolean).join(' / ') })),
