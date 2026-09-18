@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { isFresh } from './motion'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { isFresh, withViewTransition } from './motion'
 
 describe('isFresh', () => {
   const now = Date.parse('2026-09-14T12:00:10Z')
@@ -15,5 +15,40 @@ describe('isFresh', () => {
 
   it('is false for a timestamp it cannot read', () => {
     expect(isFresh('not a date', now)).toBe(false)
+  })
+})
+
+describe('withViewTransition', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  /** A browser with or without the View Transitions API, and with or without "reduce motion" set. */
+  function browser({ api, reduceMotion }: { api: boolean; reduceMotion: boolean }) {
+    const startViewTransition = vi.fn((update: () => void) => update())
+    vi.stubGlobal('document', api ? { startViewTransition } : {})
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: reduceMotion && query === '(prefers-reduced-motion: reduce)' }))
+    return startViewTransition
+  }
+
+  it('runs the update inside a view transition, so the browser cross-fades old into new', () => {
+    const start = browser({ api: true, reduceMotion: false })
+    const update = vi.fn()
+    withViewTransition(update)
+    expect(start).toHaveBeenCalledOnce()
+    expect(update).toHaveBeenCalledOnce()
+  })
+
+  it('just runs the update when the OS asks for reduced motion', () => {
+    const start = browser({ api: true, reduceMotion: true })
+    const update = vi.fn()
+    withViewTransition(update)
+    expect(start).not.toHaveBeenCalled()
+    expect(update).toHaveBeenCalledOnce()
+  })
+
+  it('just runs the update in a browser without view transitions', () => {
+    browser({ api: false, reduceMotion: false })
+    const update = vi.fn()
+    withViewTransition(update)
+    expect(update).toHaveBeenCalledOnce()
   })
 })

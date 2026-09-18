@@ -1,3 +1,5 @@
+import { flushSync } from 'react-dom'
+
 /**
  * Motion tokens (see "Motion" in design-system/MASTER.md). Entrances only, opacity and transform only, and every
  * one is `motion-safe`: with the OS set to reduce motion nothing moves. Pair `popIn` with an `origin-*` class so it
@@ -23,6 +25,19 @@ export const delayedIn =
 
 /** Small pressable controls shrink slightly while held. The element needs a transition that covers `scale`. */
 export const pressable = 'motion-safe:active:scale-[0.97]'
+
+/**
+ * Runs an update that changes the whole view (a page, a theme) as a view transition: the browser cross-fades the old
+ * view into the new one instead of swapping it in a frame. With reduced motion, or in a browser without the API, the
+ * update just runs. `flushSync` puts React's render inside the transition, so the new view is what it fades to.
+ */
+export function withViewTransition(update: () => void) {
+  if (typeof document.startViewTransition !== 'function' || matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    update()
+    return
+  }
+  document.startViewTransition(() => flushSync(update))
+}
 
 // ponytail: "new" = created in the last few seconds, judged by the browser clock. Fine for a local-first app on one
 // machine; track seen ids instead if the API ever runs somewhere with a different clock.

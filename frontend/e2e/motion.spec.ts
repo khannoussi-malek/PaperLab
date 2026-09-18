@@ -21,6 +21,39 @@ async function recordRowEntrances(page: Page): Promise<() => Promise<string[]>> 
   return () => page.evaluate(() => (window as unknown as { rowEntrances: string[] }).rowEntrances)
 }
 
+type Transition = { reader: boolean; dark: boolean }
+
+/**
+ * Records every view transition the page starts, with what was on screen when its update finished: the new page or
+ * theme must be in place by then, or the browser cross-fades into the old one and snaps afterwards.
+ */
+async function recordViewTransitions(page: Page): Promise<() => Promise<Transition[]>> {
+  await page.addInitScript(() => {
+    const started: { reader: boolean; dark: boolean }[] = []
+    Object.assign(window, { viewTransitions: started })
+    const start = document.startViewTransition.bind(document)
+    document.startViewTransition = ((update: () => void) =>
+      start(() => {
+        update()
+        const dark = document.documentElement.classList.contains('dark')
+        started.push({ reader: document.querySelector('.reader') !== null, dark })
+      })) as typeof document.startViewTransition
+  })
+  return () => page.evaluate(() => (window as unknown as { viewTransitions: Transition[] }).viewTransitions)
+}
+
+/** Opens the reader from its library row, shows its Chat tab and switches to the dark theme, the way a person does. */
+async function openThenGoDark(page: Page, paperId: string) {
+  await page.goto('/')
+  await libraryRow(page, paperId).getByRole('link').first().click()
+  await expect(page.locator('.reader')).toBeVisible()
+  await page.getByRole('tab', { name: 'Chat' }).click()
+  await expect(page.getByRole('tabpanel', { name: 'Chat' })).toBeVisible()
+  await page.getByRole('button', { name: 'Toggle theme' }).click()
+  await page.getByRole('menuitem', { name: 'Dark' }).click()
+  await expect(page.locator('html')).toHaveClass(/dark/)
+}
+
 /** Selects page 1's first line, saves it as a note, and returns the new card. */
 async function saveNote(page: Page, line: Locator, body: string) {
   await selectText(line)
@@ -163,6 +196,18 @@ test.describe('with motion allowed', () => {
     }
   })
 
+  test('opening a page or switching theme cross-fades the whole view, with the new one in place; a tab does not', async ({
+    page,
+    paperId,
+  }) => {
+    const transitions = await recordViewTransitions(page)
+    await openThenGoDark(page, paperId)
+    expect(await transitions()).toEqual([
+      { reader: true, dark: false },
+      { reader: true, dark: true },
+    ])
+  })
+
   test('filter chips shrink slightly while pressed', async ({ page, paperId }) => {
     await openReader(page, paperId)
     const chip = page.getByRole('group', { name: 'Show notes from' }).getByRole('button').first()
@@ -188,6 +233,12 @@ test.describe('with the OS set to reduce motion', () => {
     expect(await animationOf(page.locator('.note-hover-card'))).toBe('none')
     await page.getByRole('tab', { name: 'Chat' }).click()
     expect(await animationOf(page.getByRole('tabpanel', { name: 'Chat' }))).toBe('none')
+  })
+
+  test('page and theme changes happen at once, without a cross-fade', async ({ page, paperId }) => {
+    const transitions = await recordViewTransitions(page)
+    await openThenGoDark(page, paperId)
+    expect(await transitions()).toEqual([])
   })
 
   test('library rows brought back by the search do not fade in', async ({ page, paperId }) => {
