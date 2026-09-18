@@ -44,22 +44,27 @@ export function GraphPage() {
 
   function save(draft: LinkDraft) {
     const editing = dialog?.editing
+    // Show what was just drawn: Your links is off by default (P5), and a link the owner can't see is confusing.
+    const showManual = () => setLayers((current) => (current.includes('manual') ? current : [...current, 'manual']))
     const done = {
       onSuccess: () => {
         setDialog(null)
-        // Show what was just drawn: Your links is off by default (P5), and a link the owner can't see is confusing.
-        setLayers((current) => (current.includes('manual') ? current : [...current, 'manual']))
+        showManual()
       },
     }
     if (editing?.id) links.rename.mutate({ id: editing.id, label: draft.label }, done)
-    else if (focused) links.create.mutate({ from: focused.id, to: draft.toPaper, label: draft.label }, done)
+    // A 409 (ALREADY_LINKED) points at the existing link under Your links, so it also needs to be on.
+    else if (focused)
+      links.create.mutate({ from: focused.id, to: draft.toPaper, label: draft.label }, { ...done, onError: showManual })
   }
 
-  function remove(link: GraphLink) {
+  /** Whether the owner confirmed the removal, so the panel knows whether to move focus. */
+  function remove(link: GraphLink): boolean {
     const other = nodes.find((node) => node.id === (link.source === focusId ? link.target : link.source))
-    if (!link.id) return
-    if (!window.confirm(`Remove your link to "${other?.title ?? 'this paper'}"?`)) return
+    if (!link.id) return false
+    if (!window.confirm(`Remove your link to "${other?.title ?? 'this paper'}"?`)) return false
     links.remove.mutate(link.id)
+    return true
   }
 
   const counted = countsLine(nodes.length, shown.length)
@@ -115,7 +120,7 @@ export function GraphPage() {
 
           <div className={cn('flex min-h-0 flex-col rounded-xl border border-glass-border', glass)}>
             <p className="sr-only">{`${counted}. Use the papers list to explore connections.`}</p>
-            {nodes.length === 0 || shown.length === 0 ? (
+            {nodes.length === 0 || allLinks.length === 0 ? (
               <div className="grid flex-1 place-items-center px-6 text-center text-muted-foreground">{EMPTY}</div>
             ) : (
               <GraphCanvas

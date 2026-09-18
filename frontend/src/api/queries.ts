@@ -501,7 +501,11 @@ export const useCheckMcpServer = () => useMutation({ mutationFn: api.checkMcpSer
 
 /** Every library paper and the links between them, in one request (D109): layers and focus need no further calls. */
 export const useLibraryGraph = (workspaceId: string | null) =>
-  useQuery({ queryKey: keys.libraryGraph(workspaceId), queryFn: () => api.libraryGraph(workspaceId) })
+  useQuery({
+    queryKey: keys.libraryGraph(workspaceId),
+    queryFn: () => api.libraryGraph(workspaceId),
+    placeholderData: keepPreviousData,
+  })
 
 /** The owner's own links. Each write refetches the graph, which carries them. Save and remove report separately. */
 export function usePaperLinkMutations() {
@@ -516,7 +520,7 @@ export function usePaperLinkMutations() {
     mutationFn: ({ id, label }: { id: string; label: string }) => api.renamePaperLink(id, label),
     onSuccess,
   })
-  const remove = useMutation({ mutationFn: api.deletePaperLink, onSuccess })
+  const remove = useMutation({ mutationFn: api.deletePaperLink, onSettled: onSuccess })
   return {
     create,
     rename,

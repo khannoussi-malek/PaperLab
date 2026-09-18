@@ -32,6 +32,7 @@ export function LinkDialog({ open, onOpenChange, fromTitle, choices, editing, pe
   const [touched, setTouched] = useState(false)
   const invalid = labelError(label)
   const missingPaper = editing === null && toPaper === ''
+  const chosenTitle = choices.find((paper) => paper.id === toPaper)?.title
 
   function submit(event: FormEvent) {
     event.preventDefault()
@@ -88,6 +89,9 @@ export function LinkDialog({ open, onOpenChange, fromTitle, choices, editing, pe
                   ))}
                 </CommandList>
               </Command>
+              {chosenTitle !== undefined && (
+                <p role="status" className="text-sm text-muted-foreground">{`Linking to "${chosenTitle}".`}</p>
+              )}
               {touched && missingPaper && <p className="text-sm text-destructive">Choose a paper to link to.</p>}
             </div>
           )}

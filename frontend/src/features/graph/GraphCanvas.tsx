@@ -3,7 +3,7 @@ import type { GraphLink, GraphNode } from '@/api/client'
 import { Button } from '@/components/ui/button'
 import { ErrorAlert } from '@/features/library/ErrorAlert'
 import { CHART_INK, type ChartTheme } from '@/features/charts/palette'
-import { degrees, nodeColor } from './graphModel'
+import { degrees, nodeColor, tooltipFor } from './graphModel'
 
 // Loaded on first use, exactly as PlotlyChart loads Plotly: react-force-graph-2d is 189 kB minified (61 kB gzipped)
 // and only this page draws a graph. A failed dynamic import is cached by the browser for the page's lifetime, so the
@@ -110,7 +110,10 @@ export function GraphCanvas({ nodes, links, theme, colors, focused, onSelect }: 
           graphData={data}
           backgroundColor="rgba(0,0,0,0)"
           nodeId="id"
-          nodeLabel={(node: CanvasNode) => node.title}
+          // react-force-graph-2d's TooltipContent type says a React element, but the force-graph it wraps declares
+          // `Label = string | HTMLElement` and float-tooltip actually appends a raw HTMLElement — the wrapper's
+          // .d.ts is wrong here, not the runtime.
+          nodeLabel={(node: CanvasNode) => tooltipFor(node.title) as unknown as string}
           nodeRelSize={1}
           nodeVal={(node: CanvasNode) => node.radius * node.radius}
           nodeColor={(node: CanvasNode) =>
