@@ -41,14 +41,19 @@ export function writeView(storage: ViewStorage | undefined, view: GraphView): vo
 
 export const WEBGL_OFF = '3D needs WebGL, which this browser has turned off. The other views work without it.'
 
+/** A start-up failure the probe below can't predict: a lost context, a driver crash, too many live contexts. */
+export const WEBGL_FAILED = "3D couldn't start in this browser. The other views work without it."
+
 /**
- * Whether this browser can draw WebGL, asked before the 3D canvas mounts. Never throws: the app has no error boundary,
- * so a WebGL failure must never reach React as a throw.
+ * Whether this browser can draw WebGL 2, asked before the 3D canvas mounts. WebGL 1 alone is not enough: the
+ * installed three.js (r163+) requests a `'webgl2'` context only, and throws inside `WebGLRenderer`'s constructor
+ * when it gets none — so accepting WebGL 1 here would let a WebGL-1-only browser reach that throw. Never throws
+ * itself: the app has no error boundary around this probe, so asking must never throw.
  */
 export function hasWebGL(doc: Pick<Document, 'createElement'> = document): boolean {
   try {
     const canvas = doc.createElement('canvas')
-    return (canvas.getContext('webgl2') ?? canvas.getContext('webgl')) !== null
+    return canvas.getContext('webgl2') !== null
   } catch {
     return false
   }

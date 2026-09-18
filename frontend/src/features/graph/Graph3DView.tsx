@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Component, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { CHART_INK } from '@/features/charts/palette'
 import { GraphLoadError } from './GraphCanvas'
 import { carryPositions, endId, FADED, sizedNodes, tooltipFor, withAlpha, type SizedNode } from './graphModel'
 import { useBoxSize } from './useBoxSize'
-import { hasWebGL, WEBGL_OFF, type ViewProps } from './viewModel'
+import { hasWebGL, WEBGL_FAILED, WEBGL_OFF, type ViewProps } from './viewModel'
 
 // Loaded the first time 3D is picked, like 2D: react-force-graph-3d brings three.js, which no other view needs. This
 // file is the only one that imports it. A failed dynamic import is cached for the page's lifetime, so the cache is
@@ -17,6 +17,34 @@ function loadForceGraph3d() {
     })
   }
   return forceGraph3d
+}
+
+type BoundaryState = { failed: boolean }
+
+/**
+ * Catches a 3D start-up failure the WebGL probe in `hasWebGL` can't predict: a lost context, a driver crash, or the
+ * browser's cap on live WebGL contexts. three-forcegraph's `WebGLRenderer` throws inside a `useLayoutEffect` on
+ * mount, and the app has no error boundary elsewhere, so this one wraps only the box that mounts `<Graph>` — the
+ * rest of the page, including the tabs above it, is untouched. No logging: the failure has nowhere useful to go.
+ */
+class CanvasBoundary extends Component<{ children: ReactNode }, BoundaryState> {
+  state: BoundaryState = { failed: false }
+
+  static getDerivedStateFromError(): BoundaryState {
+    return { failed: true }
+  }
+
+  render() {
+    // Outside any aria-hidden wrapper, exactly like the WebGL-off message: a screen reader must still reach it.
+    if (this.state.failed) {
+      return (
+        <p className="grid min-h-[28rem] flex-1 place-items-center px-6 text-center text-muted-foreground">
+          {WEBGL_FAILED}
+        </p>
+      )
+    }
+    return this.props.children
+  }
 }
 
 /** react-force-graph-3d writes x/y/z and velocities onto the objects it is given, so it gets its own copies. */
@@ -74,41 +102,43 @@ export function Graph3DView({ nodes, links, theme, colors, inFocus, onSelect }: 
       {!webgl ? (
         <p className="grid min-h-[28rem] flex-1 place-items-center px-6 text-center text-muted-foreground">{WEBGL_OFF}</p>
       ) : (
-        <div ref={box} aria-hidden className="relative min-h-[28rem] flex-1 overflow-hidden rounded-xl">
-          {Graph === null || size.width === 0 ? (
-            <div className="h-full w-full animate-pulse rounded-xl bg-muted" />
-          ) : (
-            <Graph
-              width={size.width}
-              height={size.height}
-              graphData={data}
-              backgroundColor="rgba(0,0,0,0)"
-              showNavInfo={false}
-              controlType="orbit"
-              nodeId="id"
-              // As in 2D: float-tooltip sets a string label as innerHTML, so a title only ever goes in as an element.
-              nodeLabel={(node: Node3D) => tooltipFor(node.title) as unknown as string}
-              nodeRelSize={1}
-              nodeVal={(node: Node3D) => node.radius ** 3}
-              nodeOpacity={1}
-              nodeColor={(node: Node3D) =>
-                inFocus !== null && !inFocus.has(node.id) ? withAlpha(node.color, FADED) : node.color
-              }
-              linkOpacity={1}
-              linkColor={(link: Link3D) =>
-                withAlpha(link.kind === 'manual' ? ink.text : ink.muted, fadedLink(link) ? FADED : 0.55)
-              }
-              // 0 draws a one-pixel line, the 2D view's 1; text along a 3D link would need another dependency, so a
-              // `manual` link's label is its hover label instead.
-              linkWidth={(link: Link3D) => (link.kind === 'manual' ? 2.5 : 0)}
-              linkLabel={(link: Link3D) => (link.label ? tooltipFor(link.label) : null) as unknown as string}
-              linkDirectionalArrowLength={(link: Link3D) => (link.kind === 'cites' || link.kind === 'manual' ? 4 : 0)}
-              linkDirectionalArrowRelPos={1}
-              onNodeClick={(node: Node3D) => onSelect(node.id)}
-              cooldownTicks={120}
-            />
-          )}
-        </div>
+        <CanvasBoundary>
+          <div ref={box} aria-hidden className="relative min-h-[28rem] flex-1 overflow-hidden rounded-xl">
+            {Graph === null || size.width === 0 ? (
+              <div className="h-full w-full animate-pulse rounded-xl bg-muted" />
+            ) : (
+              <Graph
+                width={size.width}
+                height={size.height}
+                graphData={data}
+                backgroundColor="rgba(0,0,0,0)"
+                showNavInfo={false}
+                controlType="orbit"
+                nodeId="id"
+                // As in 2D: float-tooltip sets a string label as innerHTML, so a title only ever goes in as an element.
+                nodeLabel={(node: Node3D) => tooltipFor(node.title) as unknown as string}
+                nodeRelSize={1}
+                nodeVal={(node: Node3D) => node.radius ** 3}
+                nodeOpacity={1}
+                nodeColor={(node: Node3D) =>
+                  inFocus !== null && !inFocus.has(node.id) ? withAlpha(node.color, FADED) : node.color
+                }
+                linkOpacity={1}
+                linkColor={(link: Link3D) =>
+                  withAlpha(link.kind === 'manual' ? ink.text : ink.muted, fadedLink(link) ? FADED : 0.55)
+                }
+                // 0 draws a one-pixel line, the 2D view's 1; text along a 3D link would need another dependency, so
+                // a `manual` link's label is its hover label instead.
+                linkWidth={(link: Link3D) => (link.kind === 'manual' ? 2.5 : 0)}
+                linkLabel={(link: Link3D) => (link.label ? tooltipFor(link.label) : null) as unknown as string}
+                linkDirectionalArrowLength={(link: Link3D) => (link.kind === 'cites' || link.kind === 'manual' ? 4 : 0)}
+                linkDirectionalArrowRelPos={1}
+                onNodeClick={(node: Node3D) => onSelect(node.id)}
+                cooldownTicks={120}
+              />
+            )}
+          </div>
+        </CanvasBoundary>
       )}
     </div>
   )

@@ -45,12 +45,12 @@ describe('the 3D view’s WebGL check', () => {
   const browserWith = (getContext: (kind: string) => unknown) =>
     ({ createElement: () => ({ getContext }) }) as unknown as Pick<Document, 'createElement'>
 
-  it('accepts WebGL 2, or WebGL 1 where 2 is missing', () => {
+  it('accepts WebGL 2', () => {
     expect(hasWebGL(browserWith((kind) => (kind === 'webgl2' ? {} : null)))).toBe(true)
-    expect(hasWebGL(browserWith((kind) => (kind === 'webgl' ? {} : null)))).toBe(true)
   })
 
-  it('says no, without throwing, when both are off or asking throws', () => {
+  it('says no, without throwing, when only WebGL 1 is offered, both are off, or asking throws', () => {
+    expect(hasWebGL(browserWith((kind) => (kind === 'webgl' ? {} : null)))).toBe(false)
     expect(hasWebGL(browserWith(() => null))).toBe(false)
     expect(
       hasWebGL(
