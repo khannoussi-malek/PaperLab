@@ -563,53 +563,109 @@ and drag, the page does not pan); `"detail side panel"` and `"checkbox toggle fi
 (High: a visible label, never a placeholder alone); `"keyboard navigation focus visible"` gave *Focus States* and
 *Keyboard Navigation* (High); `"canvas accessibility screen reader"` gave *Screen Reader* and *Heading Hierarchy*.
 That a canvas has no pattern here is why the canvas carries `aria-hidden` and the side panel is the real interface.
-- **Page (`#/graph`):** `h-dvh` three-column grid, `14rem` controls · canvas · `20rem` panel, each column a `glass`
+For the views (2026-09-18): `"tabs view switcher"` and `"timeline chart axis"` returned nothing; `"data table sticky
+header accessible"` gave *Table Handling* and *Sticky Navigation* (Medium: scroll a wide table in its own box, and keep
+sticky cells from covering content) and *ARIA Labels* (High); `"3d visualization webgl fallback"` gave *Asset Weight*
+(Medium: lazy-load 3D).
+- **Page (`#/graph`):** `h-dvh` three-column grid, `14rem` controls · views · `20rem` panel, each column a `glass`
   card with a `border-glass-border` hairline. The header is the library's shape: `font-heading` h1 "Graph", the counts
-  line under it, then an outline "Library" link and the theme toggle.
+  line under it, then an outline "Library" link and the theme toggle. The page waits for both the graph and the
+  workspaces list before drawing; an error from either shows the load error with Retry.
 - **Counts line:** `{n} papers, {m} links` (singulars at 1), with ` · Showing the first 2000 links.` appended when the
-  payload is truncated. It counts the *visible* links, so unticking a layer changes it.
-- **Canvas:** `react-force-graph-2d`, loaded with a dynamic `import()` in `GraphCanvas.tsx` and nowhere else (187 kB,
+  payload is truncated. It counts the *visible* links, so unticking a layer changes it. It is the same in every view.
+- **Views:** shadcn `Tabs` at the top of the middle column, labelled exactly **2D**, **3D**, **Matrix**, **Timeline**,
+  **Rings** (tab list named "Graph view"; arrow keys move between them). Every view takes the same props
+  (`ViewProps` in `viewModel.ts`); the page owns layers, workspace, focus, hops, the panel and the dialog, so a switch
+  changes none of them. Radix renders only the chosen tab, so a view never picked loads nothing. The choice is
+  remembered per browser (`localStorage` `paperlab.graph.view`, 2D when storage is empty, junk or blocked); the URL
+  stays `#/graph`. The empty state replaces the whole column, tabs included. Each view's wrapper carries
+  `data-view="2d|3d|matrix|timeline|rings"`, and the canvas views `data-ready` once their module has loaded. In every
+  view a paper wears `nodeColor`, clicking it focuses it exactly as the panel does, and a focus fades what is outside
+  `focusedIds(visible links, focus, hops)` to `FADED` (12%).
+- **2D canvas:** `react-force-graph-2d`, loaded with a dynamic `import()` in `GraphCanvas.tsx` and nowhere else (187 kB,
   61 kB gzipped, its own chunk — the same rule as Plotly). It carries `aria-hidden` and a visually hidden line beside
   it reads `{n} papers, {m} links. Use the papers list to explore connections.` Transparent background, so the glass
-  card shows through. A node's radius runs 3–9 px with its share of the links; a faded node or link draws at 12%
-  opacity. Never hand force-graph a string label: float-tooltip sets a string as innerHTML, and titles come from
-  PDFs and discovery sources. Every label goes through `tooltipFor`, which sets text. A `manual` link is 2.5 px wide
+  card shows through. A node's radius runs 3–9 px with its share of the links (`sizedNodes`). Never hand force-graph a
+  string label: float-tooltip sets a string as innerHTML, and titles come from PDFs and discovery sources. Every label
+  — 2D, 3D and Rings, nodes and links — goes through `tooltipFor`, which sets text. A `manual` link is 2.5 px wide
   with its label drawn along it above 1× zoom; every other link is 1 px; `cites` and `manual` carry an arrow at the
   target end. Focus and hops only change the accessors, so they fade the graph without moving it; a layer toggle, a
-  theme change, or a saved, renamed or removed link rebuilds it. The dynamic import's failure state — an
-  `ErrorAlert` and a "Reload" button — sits outside the `aria-hidden` wrapper, so a screen reader reaches what it can
-  act on.
+  theme change, or a saved, renamed or removed link rebuilds it, and a rebuild starts every paper still on screen where
+  it was, at rest (`carryPositions`), so the layout isn't thrown again. The dynamic import's failure state
+  (`GraphLoadError`: an `ErrorAlert` and a "Reload" button) sits outside the `aria-hidden` wrapper, so a screen reader
+  reaches what it can act on.
+- **3D:** `react-force-graph-3d` (it brings three.js), imported dynamically in `Graph3DView.tsx` only, on first pick.
+  Free physics, `controlType="orbit"`: drag to orbit, scroll to zoom, click to focus. Same sizes, colours, fading,
+  2.5-wide `manual` links and arrows as 2D; a `manual` link's label is its hover label (`tooltipFor`), because text
+  along a 3D link would need another dependency. Positions carry across rebuilds in `x`/`y`/`z`. `hasWebGL` accepts
+  **WebGL 2 only** (three.js r163+ creates WebGL 2 contexts only, and throws inside `WebGLRenderer`'s constructor when
+  it gets none); before the canvas mounts the view asks `hasWebGL()`, and without it, outside the `aria-hidden` box, it
+  reads `3D needs WebGL, which this browser has turned off. The other views work without it.` A small error boundary
+  (`CanvasBoundary`) around the canvas mount catches a start-up failure the probe can't foresee — a lost context, a
+  driver crash, too many live contexts — and shows `3D couldn't start in this browser. The other views work without
+  it.`, also outside `aria-hidden`; the rest of the page, tabs included, is untouched.
+- **Matrix:** a plain `<table>` (not the shadcn `Table`, whose own overflow box would break `sticky`) captioned
+  `Links between your papers`, inside one `overflow-auto` box; the header row and the title column are `sticky` on
+  `bg-background`. At most 50 papers, the most connected first; over that a line above reads `Showing the 50 most
+  connected papers.` Rows and columns: by first workspace (unfiled last), then link count, then title, so each project
+  is a block on the diagonal. Row headers are buttons with the title (truncated, full title in `title`) that focus the
+  paper; column headers are the title rotated. A linked cell is shaded by how many kinds join the pair (the k-th colour
+  of `sequentialScale`) and carries its name as visually hidden text: `{row} and {column}: Citations, similar
+  content`. The diagonal reads `—`. It is the one view a screen reader reads cell by cell, so it is not `aria-hidden`.
+- **Timeline:** plain SVG over `timelineLayout` (pure, tested), `aria-hidden`, sized by `useBoxSize`. A `Select` "Time
+  axis" in the controls, only while the Timeline is shown: **Year published** (default) — one tick per year from the
+  first to the last, papers of a year stacked upwards by title, undated papers in a `Year unknown` lane at the right
+  end with `Turn on OpenAlex in Settings to fill in missing years.` under the view — or **Date added**, from the first
+  day a paper was added to the last, ticks by month (`en`, UTC), papers added the same day stacked, no unknown lane.
+  Links are arcs above the axis, higher the further apart; `manual` arcs 2.5 wide with an arrow in the ink colour,
+  `cites` arcs with a muted arrow. Dots and arcs carry a `<title>` (text children only). Axis and ticks use
+  `CHART_INK[theme].grid` / `.muted`.
+- **Rings:** the 2D canvas with every paper pinned (`fx`/`fy`, no simulation, no dragging) to the ring of its hop
+  distance from the centre: the focused paper, or with nothing focused the most connected one, with the line `Centred
+  on the most connected paper. Choose a paper to centre on it.` above the canvas. Rings 1–3, then an outer ring for the
+  further and the unconnected; papers spread evenly by angle from the top, clockwise, by first workspace then title.
+  **Links out** shows whenever Rings is, and rings beyond it fade. Faint circles in `CHART_INK[theme].grid` mark the
+  rings, which fill the shorter side of the box.
 - **Colours:** `SERIES_COLORS` from `features/charts/palette.ts` through `useChartTheme()` — the same palette the
   charts use, already checked for colour-blind readers on both surfaces. A paper wears its **first** workspace's
-  colour, workspaces take colours alphabetically (so a colour doesn't move when a paper joins one), and a paper in no
-  workspace wears `CHART_INK[theme].muted` — the same token the charts' text uses, so it follows the theme. Past the
-  sixth workspace the palette cycles; the legend still names every one.
+  colour; workspaces take colours alphabetically from the whole workspaces list (so neither the Workspace filter nor a
+  paper joining one moves a colour); a paper in no workspace wears `CHART_INK[theme].muted`. Past the sixth workspace
+  the palette cycles. The legend (`legendEntries`) lists the workspaces colouring a paper on screen, then **No
+  workspace** in exactly the node's own colour.
 - **Controls:** a `Checkbox` per link kind with its count, labelled exactly `Citations`, `Same workspace`, `Noted
   together`, `Same author`, `Same topic`, `Similar content`, `Your links`; **Citations** and **Similar content** are
   ticked on load, and drawing a link ticks **Your links**. Then a `Select` "Workspace" (**Whole library** first), a
-  `Select` "Links out" (1–3, only while a paper is focused), and the colour legend.
+  `Select` "Links out" (1–3, while a paper is focused or Rings is shown), a `Select` "Time axis" (Timeline only), and
+  the colour legend.
 - **Panel:** it always lists the papers — an h2 "Papers" over buttons (`.graph-paper`), sorted by link count then
   title, each with its count — so a keyboard user can move from paper to paper. With one focused, a "Connected papers"
   section sits above that list: the h2, the paper's title under it, a ghost "Clear focus", the outline "Link to
   another paper…" button, then an h3 per kind (plain blocks, not landmarks) over rows (`.graph-connection`) linking to
-  the reader. A **Your links** row also gets ghost icon buttons "Edit label for {title}" and "Remove link to {title}";
-  removal asks with `window.confirm` first. Focus follows the action: choosing a paper moves it to the "Connected
-  papers" heading (`tabIndex={-1}`), "Clear focus" returns it to that paper's button, and a confirmed removal moves it
-  to the heading. Both custom rows carry the app's focus ring (`outline-none focus-visible:ring-3
-  focus-visible:ring-ring/50`). Switching workspace keeps the page up while the new graph loads (`keepPreviousData`).
+  the reader. A row's muted note says which way it points: `this paper cites it` / `it cites this paper`, `your link
+  to it` / `your link from it` followed by the owner's label (`your link to it: builds on`). With **Links out** above
+  1, sections headed `2 links away` / `3 links away` follow, as buttons (`.graph-away`) that focus the paper. A **Your
+  links** row also gets ghost icon buttons "Edit label for {title}" and "Remove link to {title}"; removal asks with
+  `window.confirm` first. Focus follows the action: choosing a paper moves it to the "Connected papers" heading
+  (`tabIndex={-1}`), "Clear focus" returns it to that paper's button, a confirmed removal moves it to the heading, and
+  when the focused paper leaves the graph (a workspace switch landing without it) and keyboard focus has fallen to
+  `<body>`, it moves to the "Papers" heading (`tabIndex={-1}`). Both custom rows carry the app's focus ring
+  (`outline-none focus-visible:ring-3 focus-visible:ring-ring/50`). Switching workspace keeps the page up while the
+  new graph loads (`keepPreviousData`).
 - **Link dialog:** `Dialog` on `bg-glass-strong`, a `Command` list under the visible caption **Paper to link to**
   (searchable, the focused paper left out; once one is chosen a `role="status"` line reads `Linking to "{title}".`,
-  because cmdk's highlight follows the pointer and is not the choice) and an `Input` labelled **Label** with the placeholder `builds on`, capped
-  at 80 characters. cmdk overwrites any `id` passed to `CommandInput`, so the caption is plain text and the input is
-  named by `Command label=` (which fills cmdk's own hidden `<label>`) plus a matching `aria-label`; the **Label**
-  field keeps a real `<Label htmlFor>`, because it wraps a real `<input>`. Both rules are checked before the request
-  (`labelError`), and the server's refusal lands in an `ErrorAlert` inside the dialog. A failed save clears when the
-  dialog closes; a failed removal, which has no dialog, shows above the panel. The submit reads "Saving…" and
-  disables while it runs.
+  because cmdk's highlight follows the pointer and is not the choice) and an `Input` labelled **Label** with the
+  placeholder `builds on`, capped at 80 characters. cmdk overwrites any `id` passed to `CommandInput`, so the caption
+  is plain text and the input is named by `Command label=` (which fills cmdk's own hidden `<label>`) plus a matching
+  `aria-label`; the **Label** field keeps a real `<Label htmlFor>`, because it wraps a real `<input>`. Both rules are
+  checked before the request (`labelError`), and the server's refusal lands in an `ErrorAlert` inside the dialog. A
+  failed save clears when the dialog closes; a failed removal, which has no dialog, shows above the panel until the
+  focused paper or the workspace changes. The submit reads "Saving…" and disables while it runs.
 - **Empty state:** `No links yet. Import references, add papers to a workspace, or turn on OpenAlex to fill this in.`
-- **Stable test hooks:** `.graph-paper`, `.graph-connection`, `data-paper-id` on both, the "Graph" link in the library
-  header, the "Workspace" and "Links out" selects, the checkbox names above, the "Connected papers" region, "Clear
-  focus", "Link to another paper…", "Paper to link to", "Label", "Save link", "Edit label for …" and "Remove link to …".
+- **Stable test hooks:** `.graph-paper`, `.graph-connection`, `.graph-away`, `data-paper-id` on all three, the
+  "Graph" link in the library header, the "Graph view" tab list and its five tabs, `data-view` and `data-ready` on
+  each view, the "Workspace", "Links out" and "Time axis" selects, the checkbox names above, the "Links between your
+  papers" table, the "Connected papers" region, the "Papers" heading, "Clear focus", "Link to another paper…", "Paper
+  to link to", "Label", "Save link", "Edit label for …" and "Remove link to …".
 
 ## Pre-delivery check (from ui-ux-pro-max Quick Reference §1–§3)
 
