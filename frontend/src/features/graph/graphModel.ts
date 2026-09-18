@@ -99,6 +99,15 @@ export function legendEntries(nodes: GraphNode[], colors: Map<string, string>, t
   return unfiled ? [...named, { name: NO_WORKSPACE, color: CHART_INK[theme].muted }] : named
 }
 
+/** Orders papers by their first workspace, alphabetically, with unfiled papers last: projects sit together. */
+export function byFirstWorkspace(a: GraphNode, b: GraphNode): number {
+  const [left, right] = [a.workspaces[0], b.workspaces[0]]
+  if (left === right) return 0
+  if (left === undefined) return 1
+  if (right === undefined) return -1
+  return left.localeCompare(right)
+}
+
 /** How many visible links touch each paper: the canvas sizes a node by it, the panel sorts by it. */
 export function degrees(links: GraphLink[]): Map<string, number> {
   const counts = new Map<string, number>()

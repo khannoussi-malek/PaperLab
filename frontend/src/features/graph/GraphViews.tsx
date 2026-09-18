@@ -1,5 +1,6 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { GraphCanvas } from './GraphCanvas'
+import { MatrixView } from './MatrixView'
 import { isGraphView, VIEW_LABELS, VIEWS, type GraphView, type ViewProps } from './viewModel'
 
 type Props = ViewProps & {
@@ -36,6 +37,9 @@ export function GraphViews({ view, onView, ...shared }: Props) {
           focused={shared.inFocus}
           onSelect={shared.onSelect}
         />
+      </TabsContent>
+      <TabsContent value="matrix" className="flex min-h-0 flex-col">
+        <MatrixView {...shared} />
       </TabsContent>
     </Tabs>
   )
