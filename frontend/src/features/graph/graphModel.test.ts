@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest'
 import type { GraphLink, GraphNode } from '@/api/client'
 import {
   carryPositions,
+  connectionNote,
   countsLine,
   DEFAULT_LAYERS,
   degrees,
   focusedIds,
   hopDistances,
+  hopSections,
   KIND_LABELS,
   labelError,
   layerCounts,
@@ -269,5 +271,29 @@ describe('positions across a rebuild', () => {
     expect(carryPositions(fresh, [{ id: 'a' }])).toEqual([{ id: 'a' }])
     carryPositions(fresh, [{ id: 'a', x: 1, y: 2 }])
     expect(fresh).toEqual([{ id: 'a' }])
+  })
+})
+
+describe('the panel', () => {
+  it('says which way a citation or your own link points, with your label after it', () => {
+    const cites = link('a', 'b', 'cites')
+    const mine = { ...link('a', 'b', 'manual'), id: 'l1', label: 'builds on' }
+    expect(connectionNote(cites, 'a')).toBe('this paper cites it')
+    expect(connectionNote(cites, 'b')).toBe('it cites this paper')
+    expect(connectionNote(mine, 'a')).toBe('your link to it: builds on')
+    expect(connectionNote(mine, 'b')).toBe('your link from it: builds on')
+    expect(connectionNote(link('a', 'b', 'similar'), 'a')).toBeNull()
+  })
+
+  it('lists the papers two and three links away under their own headings, by title', () => {
+    // a – b, then b – c and b – z, then c – d: from a, b is 1 away, c and z 2, d 3.
+    const nodes = [node('a'), node('b'), node('c'), node('d'), { ...node('z'), title: 'ALPHA' }]
+    const links = [link('a', 'b', 'cites'), link('b', 'c', 'similar'), link('b', 'z', 'similar'), link('c', 'd', 'cites')]
+    expect(hopSections(nodes, links, 'a', 3)).toEqual([
+      { heading: '2 links away', papers: [nodes[4], nodes[2]] },
+      { heading: '3 links away', papers: [nodes[3]] },
+    ])
+    expect(hopSections(nodes, links, 'a', 2).map((section) => section.heading)).toEqual(['2 links away'])
+    expect(hopSections(nodes, links, 'a', 1)).toEqual([])
   })
 })

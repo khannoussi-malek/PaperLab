@@ -78,6 +78,35 @@ export const focusedIds = (links: GraphLink[], focusId: string, hops: number): S
   new Set(hopDistances(links, focusId, hops).keys())
 
 /**
+ * The muted note after a connected paper in the panel (K20): which way a Citations or Your links row points, seen from
+ * the focused paper, with a Your links row's own label after it. Null for the kinds that have no direction.
+ */
+export function connectionNote(link: GraphLink, focusId: string): string | null {
+  const outgoing = link.source === focusId
+  if (link.kind === 'cites') return outgoing ? 'this paper cites it' : 'it cites this paper'
+  if (link.kind !== 'manual') return null
+  const direction = outgoing ? 'your link to it' : 'your link from it'
+  return link.label ? `${direction}: ${link.label}` : direction
+}
+
+export type HopSection = { heading: string; papers: GraphNode[] }
+
+/**
+ * The papers 2 to `hops` links from the focused paper, one section per distance headed `2 links away` / `3 links
+ * away`, each by title, so Links out changes something a screen reader can perceive. None at 1 link: the direct
+ * connections are listed by kind above them.
+ */
+export function hopSections(nodes: GraphNode[], links: GraphLink[], focusId: string, hops: number): HopSection[] {
+  const distance = hopDistances(links, focusId, hops)
+  return Array.from({ length: Math.max(0, hops - 1) }, (_, index) => index + 2)
+    .map((away) => ({
+      heading: `${away} links away`,
+      papers: nodes.filter((node) => distance.get(node.id) === away).sort((a, b) => a.title.localeCompare(b.title)),
+    }))
+    .filter((section) => section.papers.length > 0)
+}
+
+/**
  * A colour per workspace, from the charts palette (already checked for colour-blind readers on both surfaces). Taken
  * from every workspace, alphabetically — not from the papers on screen — so neither filtering by a workspace nor a
  * paper joining one moves a colour. A paper wears its *first* workspace's colour, and one with none the muted ink.

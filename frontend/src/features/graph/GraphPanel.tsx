@@ -1,15 +1,17 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type RefObject } from 'react'
 import { Link2, Pencil, Trash2 } from 'lucide-react'
 import type { GraphLink, GraphNode } from '@/api/client'
 import { Button } from '@/components/ui/button'
 import { readerHref } from '@/lib/route'
-import { degrees, KIND_LABELS, KINDS } from './graphModel'
+import { connectionNote, degrees, hopSections, KIND_LABELS, KINDS } from './graphModel'
 
 type Props = {
   nodes: GraphNode[]
   /** The visible links only: the panel says exactly what the canvas draws. */
   links: GraphLink[]
   focused: GraphNode | null
+  /** Links out: papers 2 and 3 links away get their own sections. */
+  hops: number
   onFocus: (paperId: string) => void
   onClear: () => void
   onAddLink: () => void
@@ -28,18 +30,20 @@ function PapersList({
   degree,
   onFocus,
   buttonRefs,
+  headingRef,
 }: {
   nodes: GraphNode[]
   degree: Map<string, number>
   onFocus: (paperId: string) => void
   buttonRefs: ButtonRefs
+  headingRef: RefObject<HTMLHeadingElement | null>
 }) {
   const sorted = [...nodes].sort(
     (a, b) => (degree.get(b.id) ?? 0) - (degree.get(a.id) ?? 0) || a.title.localeCompare(b.title)
   )
   return (
     <section aria-labelledby="graph-papers" className="flex min-h-0 flex-col gap-2">
-      <h2 id="graph-papers" className="text-sm font-medium">
+      <h2 id="graph-papers" ref={headingRef} tabIndex={-1} className="text-sm font-medium">
         Papers
       </h2>
       <ul className="flex min-h-0 flex-col gap-1 overflow-y-auto">
@@ -68,22 +72,41 @@ function PapersList({
 }
 
 /** A paper's connections by kind, plus the papers list. D108: the canvas is hidden, so this is the interface. */
-export function GraphPanel({ nodes, links, focused, onFocus, onClear, onAddLink, onEditLink, onRemoveLink }: Props) {
+export function GraphPanel({
+  nodes,
+  links,
+  focused,
+  hops,
+  onFocus,
+  onClear,
+  onAddLink,
+  onEditLink,
+  onRemoveLink,
+}: Props) {
   const byId = new Map(nodes.map((node) => [node.id, node]))
   const degree = degrees(links)
   const buttonRefs = useRef<Map<string, HTMLButtonElement>>(new Map())
   const connectionsHeading = useRef<HTMLHeadingElement>(null)
+  const papersHeading = useRef<HTMLHeadingElement>(null)
   const clearedId = useRef<string | null>(null)
+  const shownId = useRef<string | null>(null)
 
   // Moves focus so a screen reader announces what just appeared: to the heading when a paper becomes focused, or
   // (after "Clear focus", which records the paper it cleared) back to that paper's own button. Depends on the
   // focused paper's *identity* only: a refetch that returns a new object for the same id must not steal focus again.
   useEffect(() => {
+    const previous = shownId.current
+    shownId.current = focused?.id ?? null
     if (focused !== null) {
       connectionsHeading.current?.focus()
     } else if (clearedId.current) {
       buttonRefs.current.get(clearedId.current)?.focus()
       clearedId.current = null
+    } else if (previous !== null && document.activeElement === document.body) {
+      // K20: the focused paper left the graph (a workspace switch landed without it) and took its section, and the
+      // keyboard focus inside it, along. Continue from the papers list, never from <body>. Only when focus was
+      // actually lost: the Workspace select the owner just used keeps it.
+      papersHeading.current?.focus()
     }
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [focused?.id])
@@ -99,6 +122,8 @@ export function GraphPanel({ nodes, links, focused, onFocus, onClear, onAddLink,
 
   const connections = focused ? links.filter((link) => link.source === focused.id || link.target === focused.id) : []
   const other = (link: GraphLink) => (link.source === focused?.id ? link.target : link.source)
+  const note = (link: GraphLink) => (focused ? connectionNote(link, focused.id) : null)
+  const away = focused ? hopSections(nodes, links, focused.id, hops) : []
 
   return (
     <>
@@ -151,7 +176,7 @@ export function GraphPanel({ nodes, links, focused, onFocus, onClear, onAddLink,
                             data-paper-id={paper.id}
                           >
                             {paper.title}
-                            {link.label && <span className="text-muted-foreground"> — {link.label}</span>}
+                            {note(link) && <span className="text-muted-foreground"> — {note(link)}</span>}
                           </a>
                           {kind === 'manual' && (
                             <>
@@ -180,10 +205,38 @@ export function GraphPanel({ nodes, links, focused, onFocus, onClear, onAddLink,
                 </div>
               )
             })}
+            {away.map((section) => (
+              <div key={section.heading} className="flex flex-col gap-1">
+                <h3 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{section.heading}</h3>
+                <ul className="flex flex-col gap-1">
+                  {section.papers.map((paper) => (
+                    <li key={paper.id}>
+                      <button
+                        type="button"
+                        className="graph-away flex w-full rounded-md px-2 py-1.5 text-left text-sm transition-colors duration-150 outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
+                        data-paper-id={paper.id}
+                        onClick={() => onFocus(paper.id)}
+                      >
+                        <span className="truncate" title={paper.title}>
+                          {paper.title}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
           </div>
         </section>
       )}
-      <PapersList key="graph-papers" nodes={nodes} degree={degree} onFocus={onFocus} buttonRefs={buttonRefs} />
+      <PapersList
+        key="graph-papers"
+        nodes={nodes}
+        degree={degree}
+        onFocus={onFocus}
+        buttonRefs={buttonRefs}
+        headingRef={papersHeading}
+      />
     </>
   )
 }
