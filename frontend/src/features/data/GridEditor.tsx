@@ -33,7 +33,7 @@ import {
   renameColumn,
   setUnit,
   splitColumn,
-  useRowAsHeader,
+  rowAsHeader,
 } from './gridModel'
 
 type Props = {
@@ -104,7 +104,7 @@ function RowMenu({ grid, row, onChange }: { grid: Grid; row: number; onChange: (
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className={menuSurface}>
-        <DropdownMenuItem onSelect={() => onChange(useRowAsHeader(grid, row))}>
+        <DropdownMenuItem onSelect={() => onChange(rowAsHeader(grid, row))}>
           <Rows3 aria-hidden />
           Use as header
         </DropdownMenuItem>
