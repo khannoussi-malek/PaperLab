@@ -16,7 +16,7 @@ import {
   renameColumn,
   splitColumn,
   toGridIn,
-  useRowAsHeader,
+  rowAsHeader,
   type Grid,
 } from './gridModel'
 
@@ -83,10 +83,10 @@ describe('editing', () => {
   })
 
   it('uses a row as the header, joining it onto names already there', () => {
-    const once = useRowAsHeader(fromPreview(preview), 0)
+    const once = rowAsHeader(fromPreview(preview), 0)
     expect(once.columns.map((c) => c.name)).toEqual(['System', 'Dev', 'Test'])
     expect(texts(once)).toEqual([['BERT-B', '88.5', '87.0'], ['BERT-L', '90.9', '']])
-    expect(useRowAsHeader(once, 1).columns.map((c) => c.name)).toEqual(['System / BERT-L', 'Dev / 90.9', 'Test'])
+    expect(rowAsHeader(once, 1).columns.map((c) => c.name)).toEqual(['System / BERT-L', 'Dev / 90.9', 'Test'])
   })
 
   it('merges a column into the one on its left: text and rects joined, the left id kept', () => {
