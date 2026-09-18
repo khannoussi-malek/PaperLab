@@ -2,6 +2,7 @@ import { Table2, ZoomIn, ZoomOut } from 'lucide-react'
 import type { Paper } from '@/api/client'
 import { glass } from '@/components/glass'
 import { ModeToggle } from '@/components/mode-toggle'
+import { delayedIn } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { PaperDetailsDialog } from './PaperDetailsDialog'
@@ -23,7 +24,7 @@ export function ReaderToolbar({ paper, zoomIndex, onZoomChange, capturing, onCap
       <Button variant="ghost" size="sm" asChild>
         <a href="#/">← Library</a>
       </Button>
-      <h1 className="mx-2 flex-1 truncate font-heading text-xl font-semibold" title={title}>
+      <h1 className={cn('mx-2 flex-1 truncate font-heading text-xl font-semibold', title === undefined && delayedIn)} title={title}>
         {title ?? 'Loading…'}
       </h1>
       <Button

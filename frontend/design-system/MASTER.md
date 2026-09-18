@@ -220,11 +220,38 @@ one-off animation classes.
   home's Papers / Notes / Chat panels (it replays each time a panel is shown).
 - **The PDF canvas** fades in (300 ms) once it has drawn, instead of flashing from blank.
 - **`pressable`** (scale to 97% while held) on filter chips, starter questions, source pills and the send button.
-- **No exit animations** (they need the element to outlive its unmount).
+- **`delayedIn`** (hidden for 150 ms, then a 200 ms fade) on the page and panel loading placeholders ("Loading…",
+  "Loading page…", "Loading references…", "Loading the data…"), and on a page title only while it still reads
+  "Loading…". Most screens load in under 75 ms, so the placeholder never shows; before, it flashed for a few frames.
+  The loading lines inside a `CommandEmpty` (Add papers, Attach chart, Add model, the data picker) don't carry it yet:
+  that element stays mounted while its text changes, so it needs a `<span>` of its own.
+- **Page cross-fade:** a hash change to another page runs as a view transition (`withViewTransition`, called by
+  `useRoute`'s one `hashchange` listener): the browser cross-fades the old page into the new one with its own 250 ms
+  fade, instead of the old page vanishing and the new one fading in from the bare background. Picking a theme does the
+  same. A change of query only (a reader or workspace tab, a note or chunk target; `samePage`) swaps at once: its panel
+  fades in by itself, and the page takes no clicks while a transition runs (`pointer-events` on `::view-transition`
+  doesn't change that in Chromium).
+- **Hover colours** ease with `transition-colors duration-150`; a hand-rolled row or link that changes colour on hover
+  carries it too.
+- **No exit animations** (they need the element to outlive its unmount). The page cross-fade is the one outgoing fade,
+  and it is the browser's snapshot of the old page, not the element itself.
 - **Tooltips on adjacent triggers** (the source pills) use `TooltipProvider disableHoverableContent`: a hoverable wide
   tooltip keeps its "pointer heading to the tooltip" zone over the next pill and shows the wrong explanation.
-- **E2E:** `e2e/motion.spec.ts` checks `animationName` (`enter` or `none`) under both motion settings. Hover tests move
-  the mouse like a person (`glideTo`: many small steps, then a rest); instant jumps confuse Radix's pointer tracking.
+- **E2E:** `e2e/motion.spec.ts` checks `animationName` (`enter` or `none`) under both motion settings, and records each
+  view transition with what was on screen when its update finished. Hover tests move the mouse like a person
+  (`glideTo`: many small steps, then a rest); instant jumps confuse Radix's pointer tracking.
+
+## Waiting
+
+Fix the wait before dressing it. Measured 2026-09-18 on the owner's library (headless Chrome, `e2e/loading.spec.ts`
+keeps each rule):
+- **One PDF.js worker** (`pdfWorker` in `reader/pdfjs.ts`) serves every document, the reader and the library preview
+  alike, passed to `getDocument({ worker })` so a task's `destroy()` never ends it. A worker per document cost ~250 ms on
+  every open: a paper took ~550 ms to show its pages, now ~50–120 ms.
+- **Plotly starts loading when a chart looks likely** (`loadPlotly.ts`): as the Charts list opens, or when the pointer or
+  focus reaches any `a[href^="#/charts/"]`. It still loads on first use (4.6 MB), so a session without charts never
+  fetches it; the first chart no longer waits ~1 s for it.
+- **No skeleton for a wait under 150 ms**: `delayedIn` (see Motion) keeps the placeholder out of sight.
 
 ## Workspaces
 
@@ -526,6 +553,63 @@ with a set value). The onboarding, copy-button and OS-tab queries returned nothi
   `CircleCheck` in `text-primary`; a failure is an `ErrorAlert` with the server's `detail`.
 - **Entry points:** an outline "Connect Claude" button (`Plug`) in the library header, before the Settings icon; and
   Settings' last section, "Connect Claude", with one muted sentence and an outline "Open Connect Claude" link (`Plug`).
+
+## Graph
+
+Patterns from ui-ux-pro-max (2026-09-17): `search.py "graph canvas visualization with layer toggles" --domain ux`
+returned nothing about graphs, only *Gesture Conflicts* (don't take the page's own gestures — the canvas takes wheel
+and drag, the page does not pan); `"detail side panel"` and `"checkbox toggle filter"` returned nothing at all;
+`"dialog form with searchable list"` gave *Submit Feedback* (High: loading, then success or error) and *Form Labels*
+(High: a visible label, never a placeholder alone); `"keyboard navigation focus visible"` gave *Focus States* and
+*Keyboard Navigation* (High); `"canvas accessibility screen reader"` gave *Screen Reader* and *Heading Hierarchy*.
+That a canvas has no pattern here is why the canvas carries `aria-hidden` and the side panel is the real interface.
+- **Page (`#/graph`):** `h-dvh` three-column grid, `14rem` controls · canvas · `20rem` panel, each column a `glass`
+  card with a `border-glass-border` hairline. The header is the library's shape: `font-heading` h1 "Graph", the counts
+  line under it, then an outline "Library" link and the theme toggle.
+- **Counts line:** `{n} papers, {m} links` (singulars at 1), with ` · Showing the first 2000 links.` appended when the
+  payload is truncated. It counts the *visible* links, so unticking a layer changes it.
+- **Canvas:** `react-force-graph-2d`, loaded with a dynamic `import()` in `GraphCanvas.tsx` and nowhere else (187 kB,
+  61 kB gzipped, its own chunk — the same rule as Plotly). It carries `aria-hidden` and a visually hidden line beside
+  it reads `{n} papers, {m} links. Use the papers list to explore connections.` Transparent background, so the glass
+  card shows through. A node's radius runs 3–9 px with its share of the links; a faded node or link draws at 12%
+  opacity. Never hand force-graph a string label: float-tooltip sets a string as innerHTML, and titles come from
+  PDFs and discovery sources. Every label goes through `tooltipFor`, which sets text. A `manual` link is 2.5 px wide
+  with its label drawn along it above 1× zoom; every other link is 1 px; `cites` and `manual` carry an arrow at the
+  target end. Focus and hops only change the accessors, so they fade the graph without moving it; a layer toggle, a
+  theme change, or a saved, renamed or removed link rebuilds it. The dynamic import's failure state — an
+  `ErrorAlert` and a "Reload" button — sits outside the `aria-hidden` wrapper, so a screen reader reaches what it can
+  act on.
+- **Colours:** `SERIES_COLORS` from `features/charts/palette.ts` through `useChartTheme()` — the same palette the
+  charts use, already checked for colour-blind readers on both surfaces. A paper wears its **first** workspace's
+  colour, workspaces take colours alphabetically (so a colour doesn't move when a paper joins one), and a paper in no
+  workspace wears `CHART_INK[theme].muted` — the same token the charts' text uses, so it follows the theme. Past the
+  sixth workspace the palette cycles; the legend still names every one.
+- **Controls:** a `Checkbox` per link kind with its count, labelled exactly `Citations`, `Same workspace`, `Noted
+  together`, `Same author`, `Same topic`, `Similar content`, `Your links`; **Citations** and **Similar content** are
+  ticked on load, and drawing a link ticks **Your links**. Then a `Select` "Workspace" (**Whole library** first), a
+  `Select` "Links out" (1–3, only while a paper is focused), and the colour legend.
+- **Panel:** it always lists the papers — an h2 "Papers" over buttons (`.graph-paper`), sorted by link count then
+  title, each with its count — so a keyboard user can move from paper to paper. With one focused, a "Connected papers"
+  section sits above that list: the h2, the paper's title under it, a ghost "Clear focus", the outline "Link to
+  another paper…" button, then an h3 per kind (plain blocks, not landmarks) over rows (`.graph-connection`) linking to
+  the reader. A **Your links** row also gets ghost icon buttons "Edit label for {title}" and "Remove link to {title}";
+  removal asks with `window.confirm` first. Focus follows the action: choosing a paper moves it to the "Connected
+  papers" heading (`tabIndex={-1}`), "Clear focus" returns it to that paper's button, and a confirmed removal moves it
+  to the heading. Both custom rows carry the app's focus ring (`outline-none focus-visible:ring-3
+  focus-visible:ring-ring/50`). Switching workspace keeps the page up while the new graph loads (`keepPreviousData`).
+- **Link dialog:** `Dialog` on `bg-glass-strong`, a `Command` list under the visible caption **Paper to link to**
+  (searchable, the focused paper left out; once one is chosen a `role="status"` line reads `Linking to "{title}".`,
+  because cmdk's highlight follows the pointer and is not the choice) and an `Input` labelled **Label** with the placeholder `builds on`, capped
+  at 80 characters. cmdk overwrites any `id` passed to `CommandInput`, so the caption is plain text and the input is
+  named by `Command label=` (which fills cmdk's own hidden `<label>`) plus a matching `aria-label`; the **Label**
+  field keeps a real `<Label htmlFor>`, because it wraps a real `<input>`. Both rules are checked before the request
+  (`labelError`), and the server's refusal lands in an `ErrorAlert` inside the dialog. A failed save clears when the
+  dialog closes; a failed removal, which has no dialog, shows above the panel. The submit reads "Saving…" and
+  disables while it runs.
+- **Empty state:** `No links yet. Import references, add papers to a workspace, or turn on OpenAlex to fill this in.`
+- **Stable test hooks:** `.graph-paper`, `.graph-connection`, `data-paper-id` on both, the "Graph" link in the library
+  header, the "Workspace" and "Links out" selects, the checkbox names above, the "Connected papers" region, "Clear
+  focus", "Link to another paper…", "Paper to link to", "Label", "Save link", "Edit label for …" and "Remove link to …".
 
 ## Pre-delivery check (from ui-ux-pro-max Quick Reference §1–§3)
 

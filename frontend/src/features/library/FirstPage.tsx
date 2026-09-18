@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { delayedIn } from '@/components/motion'
 import type { PDFPageProxy } from '@/features/reader/pdfjs'
 import { usePdfDocument } from '@/features/reader/usePdfDocument'
 import { cn } from '@/lib/utils'
@@ -58,10 +59,10 @@ export function FirstPage({ url, title }: { url: string; title: string }) {
         <div
           className={cn(
             'absolute inset-0 grid place-items-center bg-muted/60 p-4 text-center text-sm',
-            error ? 'text-destructive' : 'text-muted-foreground motion-safe:animate-pulse',
+            error ? 'text-destructive' : ['text-muted-foreground', delayedIn],
           )}
         >
-          {error ?? 'Loading page…'}
+          {error ?? <span className="motion-safe:animate-pulse">Loading page…</span>}
         </div>
       )}
     </div>

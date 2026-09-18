@@ -78,8 +78,9 @@ async def get_paper(paper_id: uuid.UUID) -> library.PaperCard:
 @recoverable
 async def related_papers(paper_id: uuid.UUID, hops: int = 1) -> list[graph.Related]:
     """Library papers connected to this one within `hops` links (1 to 3), nearest first. `via` says how: same_workspace,
-    co_anchored (a note on both), co_authored, shares_topic, cites (this paper cites it) or cited_by (it cites this
-    paper)."""
+    co_anchored (a note on both), co_authored, shares_topic, cites (this paper cites it), cited_by (it cites this
+    paper), similar (one is among the other's three closest by content) or manual (the owner linked them by hand).
+    `similar` counts for the first hop only; further hops follow the links someone made."""
     async with sessions() as session:
         return await graph.related(session, paper_id, hops)
 

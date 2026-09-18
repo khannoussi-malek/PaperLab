@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ChartSpec, Dataset, SeriesSpec } from '@/api/client'
 import { useChart, useChartMutations, useDataset, useLoadDataset } from '@/api/queries'
 import { glass } from '@/components/glass'
-import { fadeIn } from '@/components/motion'
+import { delayedIn, fadeIn } from '@/components/motion'
 import { ModeToggle } from '@/components/mode-toggle'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -155,7 +155,7 @@ export function ChartBuilderPage({ chartId, datasetId }: Props) {
         </Alert>
       )}
 
-      {!started && !loadError && <p className="text-sm text-muted-foreground">Loading…</p>}
+      {!started && !loadError && <p className={cn('text-sm text-muted-foreground', delayedIn)}>Loading…</p>}
 
       {started && (
         <div className="grid items-start gap-4 lg:grid-cols-[22rem_minmax(0,1fr)]">

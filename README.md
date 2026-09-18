@@ -32,6 +32,10 @@ and add them the same way.
 - Open a paper's **References** tab to see what it cites and what has cited it since, ranked for your library:
 references several of your papers cite come first, then ones close to what you write notes about, then ones with a
 free PDF. Import a reference in a click when a free PDF exists.
+- Open the **Graph** page to see how your papers connect: what cites what, papers in the same workspace, a note
+anchored on two of them, a shared author or topic, and papers that simply read alike — each a layer you can switch on
+or off. Similar content comes from the same embeddings search uses. Click a paper to focus it and list its
+connections, and draw your own link between two papers with a label like "builds on".
 - Hover a paper in the list to preview its first page and details.
 - With OpenAlex ticked in Settings, fill in each paper's title, authors, year, venue and topics from
 [OpenAlex](https://openalex.org/), and correct any of them by hand with **Edit details**. Your corrections are kept when

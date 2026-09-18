@@ -2,9 +2,11 @@ import { RefreshCw } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type { ReferencesDirection } from '@/api/client'
 import { useReferences, useRefreshReferences } from '@/api/queries'
+import { delayedIn } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ErrorAlert, LoadError } from '@/features/library/ErrorAlert'
+import { cn } from '@/lib/utils'
 import { ReferenceRow } from './ReferenceRow'
 import { summaryLine } from './referencesMeta'
 
@@ -45,7 +47,7 @@ export function ReferencesTab({ paperId, active, workspaceId }: { paperId: strin
 
       {references.isError && <LoadError message={references.error.message} onRetry={() => void references.refetch()} />}
 
-      {!data && !references.isError && <p className="text-muted-foreground">Loading references…</p>}
+      {!data && !references.isError && <p className={cn('text-muted-foreground', delayedIn)}>Loading references…</p>}
 
       {(data?.state === 'none' || data?.state === 'fetching') &&
         (refresh.error ? (

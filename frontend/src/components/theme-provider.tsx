@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { withViewTransition } from '@/components/motion'
 
 export type Theme = 'dark' | 'light' | 'system'
 
@@ -28,7 +29,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   const setTheme = (next: Theme) => {
     localStorage.setItem(STORAGE_KEY, next)
-    setThemeState(next)
+    // A sync render flushes its effects before flushSync returns, so the class above flips inside the transition.
+    withViewTransition(() => setThemeState(next))
   }
 
   return <ThemeContext.Provider value={{ theme, setTheme }}>{children}</ThemeContext.Provider>

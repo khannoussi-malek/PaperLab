@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useWorkspace } from '@/api/queries'
 import { glass } from '@/components/glass'
 import { ModeToggle } from '@/components/mode-toggle'
-import { fadeIn } from '@/components/motion'
+import { delayedIn, fadeIn } from '@/components/motion'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { workspaceHref, type WorkspaceTab } from '@/lib/route'
@@ -40,7 +40,10 @@ export function WorkspacePage({ workspaceId, tab }: { workspaceId: string; tab: 
             // `focus:` (not `focus-visible:`), so this always shows: it's not Tab-reachable, so the only way here is
             // our own arrival focus or a direct click, and `:focus-visible` can go unset for either depending on
             // what the user did just before landing (a mouse click earlier in the flow is enough to suppress it).
-            className="truncate rounded-sm font-heading text-3xl font-semibold outline-none focus:ring-3 focus:ring-ring/50"
+            className={cn(
+              'truncate rounded-sm font-heading text-3xl font-semibold outline-none focus:ring-3 focus:ring-ring/50',
+              workspace.data === undefined && delayedIn,
+            )}
             title={title}
           >
             {title}
