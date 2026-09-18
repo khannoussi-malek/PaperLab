@@ -202,7 +202,8 @@ export function ReaderPage({ paperId, tab, target }: Props) {
 
   /** A citation's click, or Enter on its button: to its entry in the reference list, by the one scroll path (D147). */
   function jumpTo(citation: Citation) {
-    hoverCard.close()
+    // A note being edited keeps the card (D147): closing it here would unmount NoteCard and lose the unsaved edit.
+    if (editingNoteIds.length === 0) hoverCard.close()
     flashChunk(citation.jump.page, citation.jump.rects)
   }
 
