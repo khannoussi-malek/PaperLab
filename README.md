@@ -159,10 +159,11 @@ open http://localhost:5180
 
 PaperLab works without a search model: upload papers, read them, highlight and take notes, and chat with short ones.
 Chatting with a long paper or a workspace needs the built-in search model, and so does Claude's `search_library`: it
-is `nomic-embed-text-v1.5` running on ONNX Runtime (548 MB). Download it in **Settings → Search**, or with the button
-the library shows while it is missing. It goes into the `models` volume, and the papers you added before are made
+is `nomic-embed-text-v1.5` running on ONNX Runtime (548 MB). Download it in **Settings → Search**, or from the library
+or chat when a long paper needs it. It goes into the `models` volume, and the papers you added before are made
 searchable in the background. If Settings → Search then says some chunks were indexed with another model, re-index
-the library there once.
+the library there once. The graph's Similar content layer and the References tab's note ranking also stay off until
+the model is downloaded.
 
 Upgrading from an older PaperLab? It ran the model on torch and kept it in the `hfcache` volume, which nothing uses
 any more: `docker volume rm paperlab_hfcache` frees its space (about 0.5 GB).
@@ -284,7 +285,8 @@ gives the same answer, and the search model downloaded: start the API and the wo
 `docker compose up -d api worker`. The specs tagged `@no-search-model` need a stack with no search model and skip
 themselves otherwise: start it with
 `MODELS_DIR=/models/none LLM_PROVIDER=fake DISCOVERY_PROVIDER=fake docker compose up -d api worker`, then run
-`npx playwright test --project=no-search-model --no-deps`.
+`npx playwright test --project=no-search-model --no-deps`, then `docker compose up -d api worker` again to bring the
+models folder back.
 - **Retrieval eval:** `docker compose exec api python -m evals.run` prints recall@k for the questions in
 `backend/evals/questions.yaml`, asking with the search model PaperLab ships; `--variant full` or `--variant int8` asks
 with the other one once it is downloaded. Run it twice after a re-ingest before comparing results.
