@@ -95,4 +95,42 @@ test.describe('the graph page', () => {
     await page.locator('.graph-paper').first().click()
     await expect(panel.getByRole('heading', { name: 'Your links' })).toBeHidden()
   })
+
+  test('keeps the link dialog inside a short window when a paper has a long title', async ({
+    page,
+    request,
+    paperId,
+    secondPaperId,
+    workspaceId,
+    workspaceName,
+  }) => {
+    // Whichever paper gets focused, the other one is the only choice, so both get the long title.
+    const title = `A long title ${'that keeps going '.repeat(12)}${workspaceName}`
+    for (const id of [paperId, secondPaperId]) {
+      expect((await request.patch(`/api/papers/${id}`, { data: { title } })).status()).toBe(200)
+      expect((await request.put(`/api/workspaces/${workspaceId}/papers/${id}`)).status()).toBe(204)
+    }
+
+    await page.goto('/#/graph')
+    await page.getByRole('combobox', { name: 'Workspace' }).click()
+    await page.getByRole('option', { name: workspaceName }).click()
+    await expect(page.locator('header p')).toHaveText(/^2 papers/)
+    await page.locator('.graph-paper').first().click()
+    await page.getByRole('button', { name: 'Link to another paper…' }).click()
+
+    // The dialog fits the window (its content scrolls instead), and the long title truncates rather than
+    // stretching the content past the dialog's right edge. Polled: the dialog zooms in as it opens.
+    const dialog = page.getByRole('dialog', { name: 'Link to another paper' })
+    await expect(dialog.getByRole('option')).toHaveCount(1)
+    // One choice keeps the dialog short, so the window shrinks below it (after opening: the page itself needs room).
+    await page.setViewportSize({ width: 1280, height: 300 })
+    await expect
+      .poll(() =>
+        dialog.evaluate((element) => {
+          const box = element.getBoundingClientRect()
+          return { inWindow: box.top >= 0 && box.bottom <= innerHeight, spillsSideways: element.scrollWidth > element.clientWidth }
+        }),
+      )
+      .toEqual({ inWindow: true, spillsSideways: false })
+  })
 })
