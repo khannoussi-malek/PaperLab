@@ -260,3 +260,19 @@ async def test_related_walks_similar_and_manual_links_as_well(session):
 
     assert "similar" in via[close.title]
     assert via[drawn.title] == ["manual"]
+
+
+async def test_related_follows_similar_for_the_first_hop_only(session):
+    # Every paper with text has similar neighbours, so following them past the first hop reaches most of the library
+    # (owner 2026-09-18): from hop 2 on, only links someone made count.
+    start, member, lookalike = await add_papers(session, *[f"H{n} {RUN}" for n in range(3)])
+    workspace = await workspaces.create(session, f"Hops {RUN}")
+    for paper in (start, member):
+        await workspaces.add_paper(session, workspace.id, paper.id)
+    for paper in (member, lookalike):
+        await chunked(session, paper, "hop")  # the same vector: each is the other's nearest
+
+    two = {row.title: (row.hops, row.via) for row in await graph.related(session, start.id, hops=2)}
+
+    assert two[member.title] == (1, ["same_workspace"])
+    assert lookalike.title not in two
