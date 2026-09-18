@@ -1,6 +1,6 @@
 """Retrieval eval: recall@k for the questions in evals/questions.yaml.
 
-    docker compose exec api python -m evals.run
+    docker compose exec api python -m evals.run [--variant int8|full]
     cd backend && uv run python -m evals.run --database-url postgresql+asyncpg://paperlab:paperlab@localhost:5433/paperlab
 
 A question is a hit at k when one of its top-k chunks is on an expected page and contains that entry's
@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from app.config import settings
 from app.core.retrieval import RetrievedChunk, retrieve
 from app.models import Paper
-from app.providers import embedding
+from app.providers import embedding, search_model
 
 QUESTIONS = Path(__file__).with_name("questions.yaml")
 KS = (4, 8)
@@ -87,13 +87,17 @@ async def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Print retrieval recall@k for evals/questions.yaml.")
     parser.add_argument("--database-url", default=settings.database_url)
     parser.add_argument("--questions", type=Path, default=QUESTIONS)
+    parser.add_argument("--variant", choices=sorted(search_model.VARIANTS), help="default: the one PaperLab ships")
     args = parser.parse_args(argv)
     try:
         questions = load_questions(args.questions)
+        embedder = embedding.load(search_model.VARIANTS.get(args.variant))
+        if embedder is None:
+            raise EvalError(f"no search model in {settings.models_dir}: download it in Settings → Search first")
         engine = create_async_engine(args.database_url)
         try:
             async with AsyncSession(engine) as session:
-                missed = await evaluate(session, questions, embedding.load())
+                missed = await evaluate(session, questions, embedder)
         finally:
             await engine.dispose()
     except EvalError as exc:
