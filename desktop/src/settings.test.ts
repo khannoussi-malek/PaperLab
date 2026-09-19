@@ -40,11 +40,21 @@ describe('settings.json', () => {
 
   it('round-trips the port and the update switch through a write and a read', () => {
     const dir = join(dataDir(), 'PaperLab') // not there yet: the first write makes it
-    const written = updateSettings(dir, { port: 5191, updatesEnabled: false })
+    const written = updateSettings(dir, DEFAULTS, { port: 5191, updatesEnabled: false })
 
     expect(written).toEqual({ ...DEFAULTS, port: 5191, updatesEnabled: false })
     expect(readSettings(dir)).toEqual(written)
-    expect(updateSettings(dir, { lastVersion: '0.1.0' })).toEqual({ ...written, lastVersion: '0.1.0' })
+    expect(updateSettings(dir, written, { lastVersion: '0.1.0' })).toEqual({ ...written, lastVersion: '0.1.0' })
     expect(JSON.parse(readFileSync(settingsFile(dir), 'utf8'))).toEqual({ ...written, lastVersion: '0.1.0' })
+  })
+
+  it("keeps port, keepRunning, updatesEnabled and dismissedUpdate when the file can't be read at write time", () => {
+    const dir = join(dataDir(), 'PaperLab')
+    const written = updateSettings(dir, DEFAULTS, { port: 5191, keepRunning: true, updatesEnabled: false, dismissedUpdate: '0.2.0' })
+    writeFileSync(settingsFile(dir), '{"port": 51') // a transient read failure: broken JSON now on disk
+
+    const after = updateSettings(dir, written, { lastVersion: '0.2.0' })
+
+    expect(after).toEqual({ ...written, lastVersion: '0.2.0' })
   })
 })

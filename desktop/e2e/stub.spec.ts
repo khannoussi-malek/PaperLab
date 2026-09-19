@@ -4,6 +4,7 @@ import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test'
+import { processEnv } from './helpers'
 
 // The desktop app against a stub docker: no Docker, no network. Each test has its own data folder whose settings.json
 // names a port nothing listens on, so a PaperLab running on :5190 is never touched.
@@ -11,9 +12,6 @@ const STUB = resolve('e2e/stub-docker.sh')
 const QUIET_PORT = 5199
 
 type Launched = { app: ElectronApplication; page: Page; calls: string }
-
-const processEnv = () =>
-  Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined))
 
 async function launchApp(env: Record<string, string>): Promise<Launched> {
   const dataDir = mkdtempSync(join(tmpdir(), 'paperlab-desktop-'))
@@ -47,7 +45,7 @@ test('with no docker anywhere, it says Docker is needed, with a link and Retry',
   }
 })
 
-test('a docker found only in the fixed places, not running: Start Docker, and Docker Desktop is left alone', async () => {
+test('a docker found only in the fixed places, not running: Start Docker', async () => {
   const { app, page, calls } = await launchApp({ PAPERLAB_DOCKER_PATHS: STUB, STUB_INFO: 'down' })
   try {
     await expect(title(page, 'Start Docker')).toBeVisible()

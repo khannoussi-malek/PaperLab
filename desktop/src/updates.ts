@@ -7,7 +7,7 @@ import type { Log } from './log'
 export const LATEST_RELEASE = 'https://api.github.com/repos/khannoussi-malek/PaperLab/releases/latest'
 
 /** The release page, built from a checked version rather than taken from the answer. */
-export const releasePage = (version: string) => `https://github.com/khannoussi-malek/PaperLab/releases/tag/v${version}`
+const releasePage = (version: string) => `https://github.com/khannoussi-malek/PaperLab/releases/tag/v${version}`
 
 type Version = { core: number[]; pre: string[] }
 
