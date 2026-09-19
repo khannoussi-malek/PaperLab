@@ -208,6 +208,25 @@ async function importedId(request: APIRequestContext, doi: string): Promise<stri
   return papers.find((paper) => paper.doi === doi)!.id
 }
 
+/**
+ * Holds the next reference import response until the returned function is called: the window to check that clicking
+ * Add to library doesn't lose focus (and so the card) while the import is pending.
+ */
+async function holdImport(page: Page) {
+  let release!: () => void
+  const held = new Promise<void>((done) => (release = done))
+  await page.route(
+    '**/api/references/*/import',
+    async (route) => {
+      const response = await route.fetch()
+      await held
+      await route.fulfill({ response })
+    },
+    { times: 1 },
+  )
+  return release
+}
+
 test.describe('once the references are looked up', () => {
   // References come from Semantic Scholar, which the owner may have switched off: the test turns the free sources on,
   // so it runs after the parallel specs, one at a time (playwright.config.ts), and puts the owner's settings back.
@@ -251,17 +270,31 @@ test.describe('once the references are looked up', () => {
     await expect(card.getByRole('button', { name: 'Add to library' })).toHaveCount(0)
     await expect(card.getByRole('link', { name: 'Open in PaperLab' })).toHaveCount(0)
 
-    // [4]: its "PDF" is a web page, so adding it fails, and the card says why.
+    // [4]: its "PDF" is a web page, so adding it fails, and the card says why. The Add button must keep focus (and so
+    // the card) while the import is pending: `disabled` loses it to <body> when Chromium fires the focusout.
     await glideToCitation(page, 4)
+    const release4 = await holdImport(page)
     await card.getByRole('button', { name: 'Add to library' }).click()
+    const adding4 = card.getByRole('button', { name: 'Adding…' })
+    await expect(adding4).toBeFocused()
+    await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))) // past Chrome's focus fixup
+    await expect(adding4).toBeFocused()
+    release4()
     await expect(card.getByRole('alert')).toContainText('No free PDF was found for this paper.')
 
     // [1]: the stored title, though the PDF prints another (matched by its DOI); added, then opened.
     await glideToCitation(page, 1)
     await expect(card.getByText(FREE, { exact: true })).toBeVisible()
+    const release1 = await holdImport(page)
     await card.getByRole('button', { name: 'Add to library' }).click()
+    const adding1 = card.getByRole('button', { name: 'Adding…' })
+    await expect(adding1).toBeFocused()
+    await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))) // past Chrome's focus fixup
+    await expect(adding1).toBeFocused()
+    release1()
     const open = card.getByRole('link', { name: 'Open in PaperLab' })
     await expect(open).toBeVisible({ timeout: 15_000 })
+    await expect(open).toBeFocused() // focus follows the add, once this card turns into In library
     await expect(card.getByRole('img', { name: `First page of ${FREE}` })).toBeVisible()
     const added = await importedId(request, `${FAKE_DOI_PREFIX}free`)
     await open.click()
