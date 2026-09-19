@@ -160,6 +160,31 @@ describe('spawnRunner', () => {
     }
   })
 
+  it.skipIf(process.platform === 'win32')("ends an aborted command's grandchild too, not just its immediate child", async () => {
+    const pidFile = join(tmpdir(), `paperlab-docker-test-${randomUUID()}.pid`)
+    const script = [
+      "const { spawn } = require('node:child_process')",
+      "const fs = require('node:fs')",
+      "const grandchild = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000)'])",
+      `fs.writeFileSync(${JSON.stringify(pidFile)}, String(grandchild.pid))`,
+      'setTimeout(() => {}, 30000)',
+    ].join('; ')
+    const ac = new AbortController()
+
+    try {
+      const ran = spawnRunner(process.execPath, ['-e', script], { env: process.env, timeoutMs: 10_000, signal: ac.signal })
+      await new Promise((r) => setTimeout(r, 300))
+      ac.abort()
+      await ran
+
+      const grandchildPid = Number(readFileSync(pidFile, 'utf8'))
+      await new Promise((r) => setTimeout(r, 500))
+      expect(() => process.kill(grandchildPid, 0)).toThrow(/ESRCH/)
+    } finally {
+      rmSync(pidFile, { force: true })
+    }
+  })
+
   it('keeps only a bounded tail of a long-running command\'s output, ending in the final line', async () => {
     const script = "for (let i = 0; i < 20000; i++) process.stdout.write('x'.repeat(50) + '\\n'); console.log('THE FINAL LINE')"
 

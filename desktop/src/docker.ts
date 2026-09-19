@@ -167,6 +167,11 @@ export const spawnRunner: Runner = (file, args, { env, timeoutMs, onLine, signal
     child.stderr.on('data', collect('stderr'))
     const finish = (code: number, error = '') => {
       if (timer !== null) clearTimeout(timer)
+      // The window closing during startup aborts `signal`: Node's own handling for it kills only this immediate
+      // child (then emits 'error' here, before a listener added on `signal` afterwards would run), which leaves
+      // `docker compose`'s own child process (the compose plugin) running, same as a plain child.kill() would.
+      // killTree ends the whole tree instead, exactly as the timeout path above already does.
+      if (signal?.aborted === true) killTree(child)
       resolve({ code, stdout: output.stdout, stderr: output.stderr + error, timedOut })
     }
     child.on('error', (error) => finish(-1, String(error)))
