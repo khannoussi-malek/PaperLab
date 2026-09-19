@@ -60,6 +60,7 @@ export type ReferencesDirection = References['direction']
 export type RefreshOut = components['schemas']['RefreshOut']
 export type McpSetup = components['schemas']['McpSetupOut']
 export type McpCheck = components['schemas']['McpCheckOut']
+export type SetupState = components['schemas']['SetupOut']
 export type GraphNode = components['schemas']['GraphNode']
 export type GraphLink = components['schemas']['GraphLink']
 export type LibraryGraph = components['schemas']['GraphOut']
@@ -222,6 +223,10 @@ export const api = {
   mcpSetup: () => request<McpSetup>('/api/mcp/setup'),
   /** Starts the MCP server as a client would and reads the library through it. Takes up to 30 s. */
   checkMcpServer: () => request<McpCheck>('/api/mcp/check', { method: 'POST' }),
+  /** Whether the first-run setup is done: while it isn't, the app opens #/setup on start. */
+  setup: () => request<SetupState>('/api/setup'),
+  /** Finish and Skip send true; false is for tests. */
+  setSetupDone: (done: boolean) => request<SetupState>('/api/setup', sendJson('PUT', { done })),
   /** Every library paper and the links between them, or one workspace's. Capped at 2000 links. */
   libraryGraph: (workspaceId: string | null) =>
     request<LibraryGraph>(workspaceId ? `/api/graph?workspace=${workspaceId}` : '/api/graph'),

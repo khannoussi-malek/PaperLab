@@ -129,3 +129,27 @@ async def test_workspaces_migration_keeps_categories_memberships_and_answers(scr
     assert members == [(child, paper, True)]
     assert tuple(answer) == ([], [], None)
     assert tuple(old) == (None, None)
+
+
+@pytest.mark.anyio
+async def test_the_setup_flag_starts_done_only_for_a_library_that_has_papers(scratch_url):
+    """R9: an existing library (papers before this migration) never sees the first-run setup; an empty one does. If the
+    migration is renumbered (K21), its PREV revision below moves with it."""
+    dsn = scratch_url.render_as_string(hide_password=False)
+    scratch = create_async_engine(scratch_url)
+    alembic(dsn, "upgrade", "head")
+    async with scratch.connect() as conn:
+        empty = await conn.scalar(text("SELECT done FROM setup"))
+
+    alembic(dsn, "downgrade", "0011")
+    async with scratch.begin() as conn:
+        await conn.execute(
+            text("INSERT INTO papers (id, title, file_path) VALUES (:p, 'P', '/p.pdf')"), {"p": uuid.uuid4()}
+        )
+    alembic(dsn, "upgrade", "head")
+    async with scratch.connect() as conn:
+        with_papers = await conn.scalar(text("SELECT done FROM setup"))
+        rows = await conn.scalar(text("SELECT count(*) FROM setup"))
+    await scratch.dispose()
+
+    assert (empty, with_papers, rows) == (False, True, 1)

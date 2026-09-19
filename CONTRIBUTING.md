@@ -33,12 +33,34 @@ You need [Docker](https://www.docker.com/) and [Ollama](https://ollama.com/).
 
 ```sh
 ollama pull qwen3:8b                  # the default chat model
-cp .env.example .env
 docker compose up -d --build          # db (:5433), redis, api (:8000), worker, frontend (:5180)
 open http://localhost:5180
 ```
 
 The first upload is slow: the worker downloads the embedding model once and caches it.
+
+## The desktop app
+
+`desktop/` is an Electron app that runs the release stack (`desktop/docker-compose.yml`) behind a window. To work on it
+against your dev stack, with Docker left alone:
+
+```sh
+cd desktop && npm ci
+unset ELECTRON_RUN_AS_NODE                          # some editors' terminals export it; Electron then runs as plain node and no window opens
+PAPERLAB_URL=http://localhost:5180 npm start      # the window, on the dev stack
+npm test && npm run typecheck                      # unit tests and types
+npm run e2e -- --project=stub                      # the window against a stub docker: no Docker needed
+```
+
+`PAPERLAB_DATA_DIR` points the app at another data folder (its settings, log and backups). `PAPERLAB_DOCKER` names the
+docker to use, and `PAPERLAB_DOCKER_PATHS` replaces the places it looks for one; the tests use both. `npm run icons`
+redraws `build/`'s icons from the favicon.
+
+The `stub` project fixes `PATH` to `/usr/bin:/bin` for every test (`desktop/e2e/stub.spec.ts`), so no real docker answers
+in place of the stub (`desktop/e2e/stub-docker.sh`) unless a test names it. That holds on macOS, where Docker Desktop's
+CLI lives elsewhere; on Linux, a distribution that installs `docker` straight into `/usr/bin` puts it on that `PATH`
+too, and the tests that expect no docker at all find yours instead. `PATH` is fixed in the spec file, not read from
+your shell, so run the suite somewhere `docker` isn't on `/usr/bin` or `/bin` if that happens.
 
 ## Tests
 

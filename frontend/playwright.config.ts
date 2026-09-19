@@ -7,11 +7,18 @@ import { defineConfig } from '@playwright/test'
 // nothing else is ever mid-test while the default moves. A tag, not a filename: a new spec that moves the
 // default says so itself instead of quietly losing the protection. `@moves-paper-sources` is the same for the one
 // paper-sources row: a test that changes the switches or the email must not run beside a search or an ingest.
-const MOVES_DEFAULT = /@moves-default|@moves-paper-sources/
+// `@moves-setup` is the same for the one setup flag: a spec that sets it back to not done would send every other
+// page to `#/setup`.
+const MOVES_DEFAULT = /@moves-default|@moves-paper-sources|@moves-setup/
 
 // A spec that needs the stack started with no search model (MODELS_DIR=/models/none, README) carries this tag: it
 // runs only as its own project, on that stack, and skips itself on a stack that has the model.
 const NO_SEARCH_MODEL = /@no-search-model/
+
+// The release stack (desktop/docker-compose.yml on :5190: the release image, no search model), run as its own project
+// with E2E_RELEASE=1 and E2E_BASE_URL=http://127.0.0.1:5190 (README, Development). These files show that the base
+// download is enough to read, take notes and chat with short papers, and that the first-run setup works there.
+const RELEASE_SPECS = /\/(first-run|library|reader-render|highlight-to-note|note-actions|chat|settings-connections)\.spec\.ts$/
 
 // Runs against the real stack: `docker compose up -d` first. No mocked backend.
 export default defineConfig({
@@ -46,5 +53,7 @@ export default defineConfig({
       grep: NO_SEARCH_MODEL,
       workers: 1,
     },
+    // Serial: first-run.spec.ts moves the setup flag, and nothing else may run meanwhile.
+    ...(process.env.E2E_RELEASE === '1' ? [{ name: 'release', testMatch: RELEASE_SPECS, workers: 1 }] : []),
   ],
 })
