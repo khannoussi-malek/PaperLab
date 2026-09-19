@@ -543,6 +543,72 @@ submit.
 - The switch keeps whichever direction the reader was viewing; both directions share one fetch state (the worker
   fills `cites` and `cited_by` together), so switching mid-fetch or mid-failure shows the same state either way.
 
+## Citation card
+
+Patterns from ui-ux-pro-max (2026-09-18, `--domain ux`): `"hover card popover preview"` gave *Hover vs Tap* (High:
+never rely on hover alone for an important action → every citation is also a focusable button, and a click jumps) and
+*Hover States* (a pointer cursor over what is clickable); `"keyboard focus popover escape"` gave *Focus States* and
+*Keyboard Navigation* (High: visible rings, tab order in document order); `"back to previous position after jump"`
+gave *Back Button* (High: never break the browser's Back → the jump adds no history entry, and the pill is the way
+back); `"tooltip link preview accessibility"` gave *Alt Text* and *ARIA Labels* (the first page is a named image,
+every button has a name).
+- **Which citations:** every numbered citation the PDF itself links (`[51]`). A link counts when its destination has a
+  line starting `[N]` from one label-height above to 2.5 below the destination point, in the destination's column.
+  Figure, table, section, footnote and "N pages" links stay inert. Author-year citations, citations the PDF doesn't
+  link, and `N.` list labels get nothing yet.
+- **Waiting:** the whole document is read once per open, in memory only (`readCitations`), when the browser is next
+  idle after the paper opens (`requestIdleCallback` with a 1 s timeout; a 300 ms `setTimeout` where it's missing), so it
+  never competes with page 1's first paint for the one PDF.js worker (see Waiting). Until it is done, links stay inert
+  (15 ms on the E2E fixture, 73–139 ms on the owner's 12–43-page papers). The paper's `cites` listing is fetched as
+  soon as the pass
+  finds a citation, so the first hover doesn't wait. It is a read only, shared with the References tab's cache.
+  Matching runs only for the open card.
+- **Surface and motion:** the note hover card's. `w-80`, strong glass (`bg-glass-strong border border-glass-border
+  rounded-xl p-3 shadow-lg backdrop-blur-lg backdrop-saturate-150`), `text-sm`, `popIn` from `origin-top-left`, 4 pt
+  below the link and aligned with it (no flip near the page bottom), closing 300 ms after the pointer leaves both.
+  There is one card at a time: a citation inside a highlight wins it, and while a note in the card is being edited a
+  citation never takes it. The pages section shows a pointer cursor over a citation. The text layer's own text cursor
+  comes from PDF.js's unlayered stylesheet, so it takes `[&_.textLayer_span]:cursor-pointer!`.
+- **States:** the card is a `section` named `Reference {N}`, and its first line is always `Reference {N}`
+  (`text-xs text-muted-foreground tabular-nums`). A card never shows both the details and the raw entry.
+  - **In library:** the cited paper's first page (`FirstPage`, a `6rem` column), then the title (`font-heading
+    font-semibold line-clamp-3`, full title in `title`), `byline · citations` (muted), and the co-citation badge. Primary
+    **Open in PaperLab**, ghost **Open page**.
+  - **Free PDF:** the title, byline and a secondary **PDF** badge. Primary **Add to library** (`Plus`; **Adding…** with
+    a spinning `LoaderCircle`, `aria-disabled` rather than the native `disabled` while it runs, so the button stays
+    focusable and keeps its name for a screen reader), ghost **Open page**. A failed add shows its `ErrorAlert` in the
+    card. Success turns the card into In library through the shared cache and moves focus onto the new **Open in
+    PaperLab** button.
+  - **Details only:** the title, byline and an outline **No free PDF**; ghost **Open page**.
+  - **Unmatched:** `From this paper's reference list`, then the entry as the PDF prints it (`max-h-40 overflow-auto
+    wrap-anywhere`), then one line:
+    - `This paper's references haven't been looked up.` or `Looking up this paper's references failed.`, both with a
+      ghost **Open References**, which opens the References tab (the card itself never looks anything up; the tab
+      fetches on open);
+    - `Looking up this paper's references…` (`role="status"`), and the card turns into a matched state by itself;
+    - `Couldn't check your library for it.` when the listing request itself failed.
+
+    Ghost **Open page** when the entry prints a DOI.
+  - **Unreadable** (over 12 lines or 1,200 characters): `This entry couldn't be read from the PDF. Click the citation
+    to see it in the list.`
+  - `Loading…` (`delayedIn`) until the listing settles.
+- **Click and keyboard:** a click on a citation jumps to its entry through `flashChunk`, the reader's one scroll path.
+  Each citation is also a transparent `<button class="citation-link">` over its link, in the page overlay, named
+  `Reference {N}`, with `aria-expanded` and `aria-controls` while its card is open. Its focus ring is
+  `focus-visible:outline-2 outline-primary`, visible on the white page. Focus opens the card, which follows the button
+  in the DOM, so Tab reaches the card's actions and then the next citation. Escape closes the card and puts focus back
+  on the button. Enter or Space jumps. Keyboard focus on a citation or in its card keeps the card open whatever the
+  pointer does.
+- **Back to page N:** after a jump, a strong-glass pill **Back to page {N}** (`Undo2`, `rounded-full`, `popIn` from
+  `origin-bottom`) sits sticky at the bottom centre of the pages column, with no height of its own. Choosing it scrolls
+  smoothly back to the exact spot and hides it. A later jump replaces the spot, scrolling back by hand to within half a
+  screen of it hides the pill too, and so does changing the zoom (`forScale`): a spot's `scrollTop` only means the same
+  place at the scale it was saved, so the pill just doesn't come back until the next jump. After a keyboard jump focus
+  moves to the pill, and after Back it returns to the citation.
+- **Stable test hooks:** `.citation-link`, `.citation-card`, `data-citation-id` on each citation's wrapper, the
+  "Reference N" button and region names, "Open References", "Add to library", "Open in PaperLab", "Open page", "Back to
+  page N", and the fixture `e2e/fixtures/citation-paper.pdf` (regenerated by `e2e/fixtures/make_citation_paper.py`).
+
 ## Connect Claude
 
 Patterns from ui-ux-pro-max (2026-09-17): `search.py "submit button loading state disabled" --domain ux` (loading, then
