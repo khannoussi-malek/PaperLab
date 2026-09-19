@@ -129,6 +129,20 @@ def test_images_build_natively_per_architecture_and_are_tagged_with_the_version_
     assert "ghcr.io/khannoussi-malek/paperlab" in text  # lowercase: registries refuse capitals
 
 
+def test_the_version_is_validated_once_and_reaches_the_manifest_job_through_env_not_interpolation():
+    """Both check's tag and the version sed replaces into come from desktop/package.json, so it is validated once,
+    in check; a shell command built from it (here, the manifest job's image tag) takes it through env, never
+    interpolated into the run: script directly."""
+    jobs = workflow()["jobs"]
+
+    assert "*[!0-9.]*" in jobs["check"]["steps"][-1]["run"]  # anything but digits and dots fails the job
+
+    tag_step = next(step for step in jobs["manifest"]["steps"] if "imagetools create" in step.get("run", ""))
+    assert tag_step["env"] == {"VERSION": "${{ needs.check.outputs.version }}"}
+    assert "$IMAGE:$VERSION" in tag_step["run"]
+    assert "needs.check.outputs.version" not in tag_step["run"]
+
+
 def test_each_system_builds_its_installers_and_the_release_stays_a_draft():
     jobs = workflow()["jobs"]
     text = (ROOT / ".github/workflows/release.yml").read_text()
