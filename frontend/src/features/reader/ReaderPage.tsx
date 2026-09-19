@@ -110,6 +110,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
   const notesQuery = useNotes(paperId)
   const mutations = useNoteMutations(paperId)
   const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX)
+  const scale = ZOOM_STEPS[zoomIndex]
   const [draft, setDraft] = useState<SelectionAnchor | null>(null)
   const [numberDraft, setNumberDraft] = useState<SelectionAnchor | null>(null)
   const [draftColor, setDraftColor] = useState(() => loadLastColor(browserStorage()))
@@ -129,7 +130,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
   const references = useReferences(paperId, 'cites', citationsByPage.size > 0)
   const [overCitation, setOverCitation] = useState(false)
   const pagesRef = useRef<HTMLElement>(null)
-  const jumpBack = useJumpBack(pagesRef)
+  const jumpBack = useJumpBack(pagesRef, scale)
   const [menu, setMenu] = useState<ContextMenuState | null>(null)
   const [flash, setFlash] = useState<Flash | null>(null)
   const promotedNoteId = useRef<string | null>(null)
@@ -137,7 +138,6 @@ export function ReaderPage({ paperId, tab, target }: Props) {
   const targetChunks = useChunksOnPage(paperId, target?.kind === 'chunk' ? target.page : null)
   const [error, setError] = useState<string | null>(null)
   const [panelWidth, setPanelWidth] = useState(() => loadPanelWidth(browserStorage()))
-  const scale = ZOOM_STEPS[zoomIndex]
   const datasets = usePaperDatasets(paperId)
   const tableMarksByPage = useMemo(() => tableMarks(datasets.data ?? []), [datasets.data])
   const numbersDatasetId = datasets.data?.find((d) => d.kind === 'numbers')?.id ?? null
