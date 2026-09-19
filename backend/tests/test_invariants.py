@@ -2,6 +2,7 @@
 
 import ast
 import os
+import re
 import subprocess
 import sys
 import uuid
@@ -32,6 +33,13 @@ def test_mcp_server_has_no_sql_and_imports_only_core_services():
     assert ours and all(name == "app.db" or name.split(".")[:2] == ["app", "core"] for name in ours), ours
     assert others == {"mcp"}
     assert [word for word in ("sqlalchemy", "select(", "text(", "execute(") if word in source] == []
+
+
+def test_the_lock_has_no_torch():
+    """M23: the search model runs on ONNX Runtime, so torch and the libraries that ran it on torch stay out."""
+    locked = set(re.findall(r'^name = "([^"]+)"$', (BACKEND / "uv.lock").read_text(), re.MULTILINE))
+    assert {"onnxruntime", "tokenizers", "numpy"} <= locked
+    assert {"torch", "sentence-transformers", "transformers"} & locked == set()
 
 
 def alembic(database_url: str, *args: str) -> None:

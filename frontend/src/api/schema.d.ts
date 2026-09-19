@@ -242,7 +242,7 @@ export interface paths {
         /**
          * Ask Workspace
          * @description Checked before streaming, in parameter order: 404 model_not_found or 409 no_model, then 409
-         *     follow_ups_paper_only, 404, 409 workspace_empty or workspace_not_indexed, 422.
+         *     follow_ups_paper_only, 404, 409 workspace_empty, search_not_set_up or workspace_not_indexed, 422.
          */
         post: operations["ask_workspace_api_workspaces__workspace_id__chat_post"];
         delete?: never;
@@ -769,6 +769,28 @@ export interface paths {
         get: operations["embedding_status_api_embedding_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/embedding/model": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Download Model
+         * @description Downloads the built-in search model into MODELS_DIR. Events: progress (repeated), then done with how many
+         *     papers were queued for embedding (D137). error replaces done: a damaged file is deleted, anything else that
+         *     arrived is kept for the next try. 409 model_present or download_running before the stream.
+         */
+        post: operations["download_model_api_embedding_model_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1647,6 +1669,25 @@ export interface components {
             /** Cited */
             cited: string[];
         };
+        /** DownloadDoneEvent */
+        DownloadDoneEvent: {
+            /** Papers Queued */
+            papers_queued: number;
+        };
+        /** DownloadErrorEvent */
+        DownloadErrorEvent: {
+            /** Detail */
+            detail: string;
+        };
+        /** DownloadProgressEvent */
+        DownloadProgressEvent: {
+            /** File */
+            file: string;
+            /** Completed */
+            completed: number;
+            /** Total */
+            total: number;
+        };
         /** EmbeddingStatusOut */
         EmbeddingStatusOut: {
             /** Model */
@@ -1655,6 +1696,14 @@ export interface components {
             chunks: number;
             /** Indexed With */
             indexed_with: components["schemas"]["IndexedModelOut"][];
+            /** Model Present */
+            model_present: boolean;
+            /** Download Bytes */
+            download_bytes: number;
+            /** Unembedded Papers */
+            unembedded_papers: number;
+            /** Papers Needing Search */
+            papers_needing_search: number;
         };
         /** ErrorEvent */
         ErrorEvent: {
@@ -4445,6 +4494,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EmbeddingStatusOut"];
+                };
+            };
+        };
+    };
+    download_model_api_embedding_model_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": components["schemas"]["DownloadProgressEvent"] | components["schemas"]["DownloadDoneEvent"] | components["schemas"]["DownloadErrorEvent"];
                 };
             };
         };

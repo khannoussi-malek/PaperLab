@@ -68,6 +68,18 @@ async def test_search_library_returns_ids_and_structure_not_prose(session, tmp_p
     }
 
 
+async def test_with_no_search_model_search_answers_a_recoverable_error_with_a_sentence(monkeypatch):
+    monkeypatch.setattr(embedding, "get_model", lambda: None)  # nothing downloaded
+
+    result = await call("search_library", query="how are notes anchored?")
+
+    assert result.is_error
+    assert result.structured_content == {
+        "error": "search_not_set_up",
+        "detail": "Search isn't set up. Download the search model in Settings to search long papers and workspaces.",
+    }
+
+
 async def test_an_unknown_workspace_answers_with_the_real_names(session):
     await workspaces.create(session, f"MCP thesis {RUN}")
 

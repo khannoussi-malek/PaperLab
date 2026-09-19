@@ -45,6 +45,9 @@ export type PullProgressEvent = components['schemas']['PullProgressEvent']
 export type PullDoneEvent = components['schemas']['PullDoneEvent']
 export type PullErrorEvent = components['schemas']['PullErrorEvent']
 export type EmbeddingStatus = components['schemas']['EmbeddingStatusOut']
+export type DownloadProgressEvent = components['schemas']['DownloadProgressEvent']
+export type DownloadDoneEvent = components['schemas']['DownloadDoneEvent']
+export type DownloadErrorEvent = components['schemas']['DownloadErrorEvent']
 export type Candidate = components['schemas']['CandidateOut']
 export type SearchResult = components['schemas']['SearchOut']
 export type PaperSources = components['schemas']['PaperSourcesOut']
@@ -199,6 +202,8 @@ export const api = {
   deleteInstalledModel: (connectionId: string, name: string) =>
     request<void>(`/api/llm/connections/${connectionId}/installed?name=${encodeURIComponent(name)}`, { method: 'DELETE' }),
   embeddingStatus: () => request<EmbeddingStatus>('/api/embedding'),
+  /** The raw response: on success its body is the download's SSE stream (progress…, then done or error). */
+  downloadSearchModel: () => fetch('/api/embedding/model', { method: 'POST' }),
   reindexLibrary: () => request<{ papers: number }>('/api/embedding/reindex', sendJson('POST', { confirm: true })),
   paperSources: () => request<PaperSources>('/api/paper-sources'),
   /** Only what `patch` holds changes: a key left out is kept, a null key is removed. */

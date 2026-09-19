@@ -7,6 +7,7 @@ import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { browserStorage } from '@/features/notes/highlightColors'
+import { DownloadSearchModel } from '@/features/settings/DownloadSearchModel'
 import { settingsHref } from '@/lib/route'
 import { cn } from '@/lib/utils'
 import { readAnswerSelection } from './answerSelection'
@@ -376,25 +377,30 @@ function ProblemAlert({ scope, problem, onRetry }: { scope: ChatScope; problem: 
     ? 'Re-indexing started. Ask again once the paper is ready.'
     : (reindex.error?.message ?? problem.message)
   return (
-    <Alert variant="destructive" className={cn('chat-error border-glass-border')}>
-      <AlertDescription>{message}</AlertDescription>
-      <AlertAction>
-        {problem.retryable && (
-          <Button variant="outline" size="xs" onClick={onRetry}>
-            Retry
-          </Button>
-        )}
-        {problem.reindex && !reindex.isSuccess && (
-          <Button variant="outline" size="xs" disabled={reindex.isPending} onClick={() => reindex.mutate()}>
-            Re-index
-          </Button>
-        )}
-        {problem.settings && (
-          <Button variant="outline" size="xs" asChild>
-            <a href={settingsHref}>Open settings</a>
-          </Button>
-        )}
-      </AlertAction>
-    </Alert>
+    // The download block sits outside the alert (not inside it): the alert is `role="alert"` (assertive, atomic),
+    // and the download's status line changes every percent, which would re-read the whole alert on each one.
+    <div className="chat-error flex flex-col gap-2">
+      <Alert variant="destructive" className={cn('border-glass-border')}>
+        <AlertDescription>{message}</AlertDescription>
+        <AlertAction>
+          {problem.retryable && (
+            <Button variant="outline" size="xs" onClick={onRetry}>
+              Retry
+            </Button>
+          )}
+          {problem.reindex && !reindex.isSuccess && (
+            <Button variant="outline" size="xs" disabled={reindex.isPending} onClick={() => reindex.mutate()}>
+              Re-index
+            </Button>
+          )}
+          {problem.settings && (
+            <Button variant="outline" size="xs" asChild>
+              <a href={settingsHref}>Open settings</a>
+            </Button>
+          )}
+        </AlertAction>
+      </Alert>
+      {problem.download && <DownloadSearchModel />}
+    </div>
   )
 }

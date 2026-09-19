@@ -17,6 +17,20 @@ export function notesAt(highlights: NoteRect[], point: [number, number]): string
   return [...new Set(hits)]
 }
 
+/** A citation's link is hit-tested this much larger on every side, so a narrow `[7]` is easy to point at. */
+const CITATION_PAD_PT = 1
+
+/** The first citation whose link, padded by CITATION_PAD_PT, contains the point (D147); null when none does. */
+export function citationAt<T extends { rect: PdfRect }>(citations: T[], point: [number, number]): T | null {
+  const pad = ([x0, y0, x1, y1]: PdfRect): PdfRect => [
+    x0 - CITATION_PAD_PT,
+    y0 - CITATION_PAD_PT,
+    x1 + CITATION_PAD_PT,
+    y1 + CITATION_PAD_PT,
+  ]
+  return citations.find((citation) => rectContains(pad(citation.rect), point)) ?? null
+}
+
 export function clientPointToPdf(
   point: { x: number; y: number },
   page: { left: number; top: number },

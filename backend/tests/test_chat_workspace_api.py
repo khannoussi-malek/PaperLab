@@ -103,6 +103,18 @@ async def test_workspace_chat_errors_before_streaming_get_status_codes(client, s
     assert fake_llm.calls == []
 
 
+async def test_with_no_search_model_workspace_chat_says_so_before_anything_about_its_papers(
+    client, session, fake_llm, monkeypatch
+):
+    monkeypatch.setattr(embedding, "get_model", lambda: None)  # nothing downloaded
+    unindexed = await make_workspace(session, [await make_paper(session, "Uploaded before the model", embedded=False)])
+
+    response = await client.post(f"/api/workspaces/{unindexed.id}/chat", json={"question": "why?"})
+
+    assert (response.status_code, response.json()) == (409, {"detail": "search_not_set_up"})
+    assert fake_llm.calls == []
+
+
 async def test_workspace_history_lists_its_answers_with_notes(client, session):
     paper = await make_paper(session, "DPR")
     workspace = await make_workspace(session, [paper])

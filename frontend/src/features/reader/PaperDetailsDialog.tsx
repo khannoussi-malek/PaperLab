@@ -68,7 +68,7 @@ export function PaperDetailsDialog({ paper }: { paper: Paper }) {
           Edit details
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg">
         <form onSubmit={submit} className="grid gap-4">
           <DialogHeader>
             <DialogTitle>Edit details</DialogTitle>

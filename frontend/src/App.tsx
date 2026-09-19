@@ -6,11 +6,28 @@ import { DatasetPage } from './features/data/DatasetPage'
 import { GraphPage } from './features/graph/GraphPage'
 import { LibraryPage } from './features/library/LibraryPage'
 import { ReaderPage } from './features/reader/ReaderPage'
+import { downloadAnnouncement } from './features/settings/searchModel'
 import { SettingsPage } from './features/settings/SettingsPage'
+import { useSearchModelDownload } from './features/settings/useSearchModelDownload'
 import { WorkspacePage } from './features/workspaces/WorkspacePage'
 import { useRoute } from './lib/route'
 
 export default function App() {
+  const { state } = useSearchModelDownload()
+  return (
+    <>
+      {/* Lives at the root, not in SearchNotice or the chat block: both unmount as soon as the status refetch
+          reports the model present, which would drop this announcement if it lived inside them. Polite, and empty
+          except right when the download finishes, so it never reads the running progress. */}
+      <p role="status" className="sr-only">
+        {downloadAnnouncement(state)}
+      </p>
+      <Page />
+    </>
+  )
+}
+
+function Page() {
   const route = useRoute()
   if (route.name === 'workspace') {
     // Keyed by workspace only: switching tabs must not remount the page.
