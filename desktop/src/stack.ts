@@ -71,7 +71,7 @@ export async function launch(deps: Deps, show: Show): Promise<Screen> {
       ? { kind: 'docker-needed' }
       : ((await checkDocker(docker, deps, show)) ??
         writeFilesOrFail(deps) ??
-        (await ensureImage(docker, show)) ??
+        (await ensureImage(docker, deps, show)) ??
         (await backupIfUpgrading(docker, deps, show)) ??
         (await start(docker, deps, show)))
   show(screen)
@@ -90,6 +90,7 @@ async function checkDocker(docker: Docker, deps: Deps, show: Show): Promise<Scre
       await deps.sleep(DOCKER_POLL_MS)
       info = await docker.info()
     }
+    if (!going(deps)) return { kind: 'stopping' }
   }
   if (!ok(info)) return { kind: 'start-docker' }
   if (info.stdout.trim() === 'windows') return { kind: 'linux-containers' }
@@ -108,10 +109,11 @@ function writeFilesOrFail(deps: Deps): Screen | null {
 }
 
 /** Step 5: this version's image, downloaded when it isn't here. An older version's image is never used instead. */
-async function ensureImage(docker: Docker, show: Show): Promise<Screen | null> {
+async function ensureImage(docker: Docker, deps: Deps, show: Show): Promise<Screen | null> {
   if (await docker.imagePresent()) return null
   show({ kind: 'downloading', line: null })
   const pulled = await docker.pull((line) => show({ kind: 'downloading', line }))
+  if (!going(deps)) return { kind: 'stopping' }
   return ok(pulled) ? null : { kind: 'download-failed', detail: lastLine(pulled) ?? 'docker compose pull failed' }
 }
 
@@ -120,8 +122,10 @@ async function backupIfUpgrading(docker: Docker, deps: Deps, show: Show): Promis
   if (!needsBackup(deps.lastVersion, deps.version)) return null
   show({ kind: 'backing-up' })
   const database = await docker.startDatabase()
+  if (!going(deps)) return { kind: 'stopping' }
   if (!ok(database)) return { kind: 'backup-failed', detail: lastLine(database) ?? "The database didn't start." }
   const backup = await deps.backup()
+  if (!going(deps)) return { kind: 'stopping' }
   return backup.ok ? null : { kind: 'backup-failed', detail: backup.detail }
 }
 
