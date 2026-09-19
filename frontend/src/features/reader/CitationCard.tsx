@@ -1,6 +1,6 @@
 import type { UseQueryResult } from '@tanstack/react-query'
 import { ExternalLink, LoaderCircle, Plus } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useMemo, useRef, type CSSProperties } from 'react'
 import { api, type Reference, type References } from '@/api/client'
 import { useImportReference } from '@/api/queries'
 import { delayedIn, popIn } from '@/components/motion'
@@ -66,14 +66,15 @@ function MatchedBody({ view, paperId }: { view: Matched; paperId: string }) {
   const fileUrl = reference.paper_id ? api.paperFileUrl(reference.paper_id) : null
 
   // A keyboard user's focus was on Add to library; once that add turns this card into In library, that button
-  // unmounts and focus would otherwise fall to <body>. Follow it to Open in PaperLab, once, for this add only.
-  const [justAdded, setJustAdded] = useState(false)
-  const openInPaperLab = useRef<HTMLAnchorElement>(null)
-  useEffect(() => {
-    if (!justAdded || view.kind !== 'in-library') return
-    openInPaperLab.current?.focus()
-    setJustAdded(false)
-  }, [justAdded, view.kind])
+  // unmounts and focus would otherwise fall to <body>. No state, no effect: a ref carries the "just added" flag, and
+  // the Open in PaperLab link's own callback ref follows focus there the moment it mounts — which, for a reference
+  // that had no `paper_id` before, only ever happens right after this add, never on a plain hover.
+  const focusAfterAdd = useRef(false)
+  const focusOpenInPaperLab = (el: HTMLAnchorElement | null) => {
+    if (!el || !focusAfterAdd.current) return
+    focusAfterAdd.current = false
+    el.focus()
+  }
 
   return (
     <>
@@ -88,7 +89,7 @@ function MatchedBody({ view, paperId }: { view: Matched; paperId: string }) {
       <div className="flex flex-wrap items-center gap-2">
         {reference.paper_id && (
           <Button size="sm" asChild>
-            <a ref={openInPaperLab} href={readerHref(reference.paper_id)}>
+            <a ref={focusOpenInPaperLab} href={readerHref(reference.paper_id)}>
               Open in PaperLab
             </a>
           </Button>
@@ -100,7 +101,11 @@ function MatchedBody({ view, paperId }: { view: Matched; paperId: string }) {
             className="aria-disabled:opacity-50"
             onClick={() => {
               if (importRef.isPending) return
-              importRef.mutate({ refId: reference.id }, { onSuccess: () => setJustAdded(true) })
+              focusAfterAdd.current = true
+              importRef.mutate(
+                { refId: reference.id },
+                { onError: () => { focusAfterAdd.current = false } },
+              )
             }}
           >
             {importRef.isPending ? <LoaderCircle aria-hidden className="motion-safe:animate-spin" /> : <Plus aria-hidden />}
