@@ -142,6 +142,11 @@ free link found. None of them send a paper's text.
 An MCP client you connect, such as Claude Desktop, receives what its tools return: passages from your papers, paper
 details and workspace names, and every note on a paper marked as yours or AI. Claude Desktop and Claude Code send what
 the tools return to Anthropic.
+- **Updates are announced, never installed.** Each time it opens, the desktop app asks GitHub whether a newer version
+is out and offers a download link when there is one. It is the only request the app makes on its own; turn it off in
+**Settings → Desktop app**.
+- **An upgrade keeps a way back.** Before a new version first starts, the desktop app saves a copy of your library's
+database in its data folder, keeping only the latest.
 - **AI is always labelled.** AI text is stored separately from yours, keeps the model and prompt version that
 produced it, and shows an AI badge. Editing an AI note marks it "AI · edited", never "You".
 - **Answers show their sources.** Chat answers cite passages you can click, so you can check every claim against the paper.
@@ -150,11 +155,82 @@ produced it, and shows an AI badge. Editing an AI note marks it "AI · edited", 
 
 ## Quick start
 
-You need [Docker](https://www.docker.com/) and [Ollama](https://ollama.com/) running on your machine.
+### The desktop app
+
+PaperLab runs on [Docker](https://www.docker.com/products/docker-desktop/): install Docker Desktop and open it once.
+Then download PaperLab for your system from the
+[latest release](https://github.com/khannoussi-malek/PaperLab/releases/latest) and open it.
+
+| System | File |
+|---|---|
+| macOS with Apple silicon | `PaperLab-<version>-arm64.dmg` |
+| macOS with an Intel processor | `PaperLab-<version>-x64.dmg` |
+| Windows | `PaperLab-<version>-x64.exe` |
+| Linux | `PaperLab-<version>-x86_64.AppImage`, or `PaperLab-<version>-amd64.deb` |
+
+The first launch downloads PaperLab itself (about 335 MB; an update downloads only what changed) and opens it in its
+own window. A short setup then offers a chat model and a search model. Each downloads only if you pick it, and Skip
+leaves both for later in Settings: reading, highlighting and notes need neither.
+
+PaperLab isn't signed yet, so your system asks before the first launch, and again after each update:
+- **macOS:** open PaperLab and close the warning. Then open **System Settings → Privacy & Security**, find the line
+  about PaperLab near the bottom, and click **Open Anyway**.
+- **Windows:** on "Windows protected your PC", click **More info**, then **Run anyway**.
+- **Linux:** make the AppImage executable (`chmod +x PaperLab-*.AppImage`) and run it. If it doesn't start (Ubuntu
+  24.04 blocks some AppImages, and Ubuntu 22.04 and later lack `libfuse2`), install the `.deb` instead.
+
+Closing the window stops PaperLab and frees its memory. To keep it running for Claude Desktop, turn on **Keep PaperLab
+running when the window is closed** in **Settings → Desktop app**: its menu-bar icon then opens or quits PaperLab.
+
+Any Docker that provides the `docker` command works: Docker Desktop, OrbStack, Colima or Rancher Desktop. Docker
+Desktop is free for personal use, education and small companies; larger companies need a paid Docker subscription.
+
+On Linux:
+- install Docker from [docker.com](https://docs.docker.com/engine/install/), not the Snap package: the Snap's Docker
+  can't read `~/.config`, where PaperLab keeps its files;
+- let Ollama listen beyond 127.0.0.1, so PaperLab's containers can reach it: run `sudo systemctl edit ollama`, add
+  `Environment="OLLAMA_HOST=0.0.0.0"` under `[Service]`, then `sudo systemctl restart ollama`. Other machines on your
+  network can then reach Ollama too, unless a firewall stops them.
+
+### Without the app
+
+With Docker Compose 2.24 or later, two commands install the same release, with no clone and no build:
+
+```sh
+VERSION=0.1.0   # the latest release's number
+curl -L "https://github.com/khannoussi-malek/PaperLab/releases/download/v$VERSION/paperlab-$VERSION.tar.gz" | tar xz
+cd paperlab && docker compose up -d   # then open http://127.0.0.1:5190
+```
+
+The `paperlab` folder holds `docker-compose.yml` and `scripts/paperlab-mcp`. To update, unpack a newer release over it
+and run `docker compose up -d` again. Nothing starts with the computer: `docker compose stop` stops PaperLab and
+`docker compose up -d` starts it.
+
+### Your library
+
+The desktop app and the commands above share one library, in the `paperlab-app` project's Docker volumes, so use one
+or the other. Updating or uninstalling keeps it.
+
+Before a new version of the app first starts, the app saves a copy of the database as `backups/latest.sql.gz` in its
+data folder, replacing the previous copy. The data folder is:
+- macOS: `~/Library/Application Support/PaperLab`;
+- Windows: `%APPDATA%\PaperLab`;
+- Linux: `~/.config/PaperLab`.
+
+Without the app, back up by hand in the PaperLab folder:
+`docker compose exec -T db pg_dump -U paperlab paperlab | gzip > paperlab-backup.sql.gz`.
+
+Going back to an older version on a library a newer one has used isn't supported: it doesn't start, and says why.
+
+`docker compose -p paperlab-app down -v` deletes everything: the library, its PDFs and the search model. The app's
+backup stays in its data folder.
+
+### Build from source
+
+For contributors, with Docker and [Ollama](https://ollama.com/) installed:
 
 ```sh
 ollama pull qwen3:8b                  # the default chat model
-cp .env.example .env
 docker compose up -d --build          # db (:5433), redis, api (:8000), worker, frontend (:5180)
 open http://localhost:5180
 ```
@@ -183,15 +259,17 @@ first start, `OPENALEX_MAILTO` and `SEMANTIC_SCHOLAR_API_KEY` from `.env` fill t
 ### Use PaperLab from Claude Desktop
 
 PaperLab includes an MCP server. Claude Desktop, Claude Code or another MCP client starts it inside the running `api`
-container, where it can read your PDFs, so the stack must be up (`docker compose up -d`, in the PaperLab folder).
+container, where it can read your PDFs, so PaperLab must be running: the desktop app open (or **Keep running** on in
+Settings → Desktop app), or `docker compose up -d` in the PaperLab folder.
 Restarting `api` ends the connection, and Claude Desktop needs a restart to connect again. If the server doesn't
 start, Claude Desktop writes what the launcher says to its own log: macOS `~/Library/Logs/Claude/mcp-server-paperlab.log`,
 Windows `%APPDATA%\Claude\logs\mcp-server-paperlab.log`, Linux in Claude Desktop's logs folder.
 
-Open PaperLab and click **Connect Claude** ([localhost:5180/#/connect-claude](http://localhost:5180/#/connect-claude)).
-It fills in the config or command for your system, and checks that PaperLab's side answers.
+Open PaperLab and click **Connect Claude**. It fills in the config or command for your system, and checks that
+PaperLab's side answers.
 
-Without the app, use the full path of your PaperLab folder:
+Without the Connect Claude page, use the full path of your PaperLab folder (the desktop app's data folder above, or
+the folder you unpacked):
 - **macOS and Linux:** in Claude Desktop (**Settings → Developer → Edit Config**), give `mcpServers.paperlab` the
   `"command": "<folder>/scripts/paperlab-mcp"`. For Claude Code: `claude mcp add -s user paperlab -- '<folder>/scripts/paperlab-mcp'`.
   Don't use `mcp install`: the entry it writes runs the server outside the container.
@@ -210,7 +288,7 @@ The first search takes a few seconds while the search model loads. Without it, `
 
 ### Configuration
 
-Settings live in `.env`.
+Settings live in an optional `.env` beside `docker-compose.yml`: every one has a default.
 
 
 | Variable                                                    | Default                             | What it does                                                                                                                        |
@@ -280,6 +358,8 @@ cd frontend && npm run gen:api                           # regenerate API types 
 cd frontend && npx tsc -b && npm test                    # types + unit tests
 cd frontend && npx playwright install chromium            # once
 cd frontend && npm run typecheck:e2e && npm run e2e      # end-to-end against the running stack
+cd desktop && npm ci && npm test && npm run typecheck    # the desktop app: unit tests and types
+cd desktop && npm run e2e -- --project=stub              # its window against a stub docker
 docker compose exec api python -m evals.answer_check --paper "<title prefix>" --workspace "<name>"  # manual, real LLM
 ```
 
@@ -291,6 +371,14 @@ themselves otherwise: start it with
 `MODELS_DIR=/models/none LLM_PROVIDER=fake DISCOVERY_PROVIDER=fake docker compose up -d api worker`, then run
 `npx playwright test --project=no-search-model --no-deps`, then `docker compose up -d api worker` again to bring the
 models folder back.
+- **The release stack** is what the desktop app and the two-command install run. Build it with
+`docker build -t ghcr.io/khannoussi-malek/paperlab:dev -t ghcr.io/khannoussi-malek/paperlab:<desktop/package.json's version> .`,
+then start it with `LLM_PROVIDER=fake DISCOVERY_PROVIDER=fake docker compose -f desktop/docker-compose.yml up -d`. It
+serves the built app on :5190 with its own volumes. In `frontend/`,
+`E2E_RELEASE=1 E2E_BASE_URL=http://127.0.0.1:5190 npx playwright test --project=release` runs what a fresh install must
+pass. In `desktop/`, `E2E_RELEASE=1 npx playwright test --project=release-stack` drives the app over it: upgrade backup,
+close and quit. `docker compose -f desktop/docker-compose.yml down -v` deletes that library, which is also the desktop
+app's.
 - **Retrieval eval:** `docker compose exec api python -m evals.run` prints recall@k for the questions in
 `backend/evals/questions.yaml`, asking with the search model PaperLab ships; `--variant full` or `--variant int8` asks
 with the other one once it is downloaded. Run it twice after a re-ingest before comparing results.
