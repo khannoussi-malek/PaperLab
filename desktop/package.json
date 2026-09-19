@@ -24,5 +24,34 @@
     "electron-builder": "26.15.3",
     "typescript": "~6.0.2",
     "vitest": "^5.0.0"
+  },
+  "build": {
+    "appId": "io.github.khannoussi-malek.paperlab",
+    "productName": "PaperLab",
+    "directories": { "output": "release", "buildResources": "build" },
+    "files": ["dist/**/*.js", "src/startup.html", "package.json"],
+    "extraResources": [
+      { "from": "docker-compose.yml", "to": "docker-compose.yml" },
+      { "from": "../scripts/paperlab-mcp", "to": "scripts/paperlab-mcp" },
+      { "from": "build/icon.png", "to": "icon.png" },
+      { "from": "build/trayTemplate.png", "to": "trayTemplate.png" },
+      { "from": "build/trayTemplate@2x.png", "to": "trayTemplate@2x.png" }
+    ],
+    "artifactName": "PaperLab-${version}-${arch}.${ext}",
+    "mac": {
+      "target": [{ "target": "dmg", "arch": ["arm64", "x64"] }],
+      "category": "public.app-category.education",
+      "identity": "-",
+      "hardenedRuntime": false
+    },
+    "win": { "target": [{ "target": "nsis", "arch": ["x64"] }] },
+    "linux": {
+      "target": [
+        { "target": "AppImage", "arch": ["x64"] },
+        { "target": "deb", "arch": ["x64"] }
+      ],
+      "category": "Education",
+      "maintainer": "malek khannoussi"
+    }
   }
 }

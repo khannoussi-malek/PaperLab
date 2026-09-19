@@ -173,6 +173,7 @@ function createWindow() {
     minWidth: 900,
     minHeight: 600,
     title: 'PaperLab',
+    icon: join(resourcesDir(), 'icon.png'),
     webPreferences: { preload: join(__dirname, 'preload.js'), contextIsolation: true, sandbox: true, nodeIntegration: false },
   })
   guard(win.webContents)
@@ -222,9 +223,14 @@ function handleSwitches() {
   })
 }
 
+/** Packaged: electron-builder's extraResources. Unpackaged: build/, where npm run icons writes them. */
+function resourcesDir() {
+  return app.isPackaged ? process.resourcesPath : join(__dirname, '..', 'build')
+}
+
 /** macOS: the menu-bar template image, which follows the bar's colour. Elsewhere: the app icon at tray size. */
 function trayImage() {
-  const dir = app.isPackaged ? process.resourcesPath : join(__dirname, '..', 'build')
+  const dir = resourcesDir()
   if (process.platform === 'darwin') return nativeImage.createFromPath(join(dir, 'trayTemplate.png'))
   return nativeImage.createFromPath(join(dir, 'icon.png')).resize({ width: 16, height: 16 })
 }

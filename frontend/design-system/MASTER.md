@@ -665,6 +665,9 @@ with a set value). The onboarding, copy-button and OS-tab queries returned nothi
   - muted body lines;
   - the last error line in a `bg-muted` monospace box;
   - link buttons, the first one primary.
+- **App icon** (`desktop/build/icon.png`, 1024 px, `npm run icons` in `desktop/`): the favicon on a `primary` (#2563eb)
+  rounded square, on the macOS grid (an 824 px plate, 100 px margin, 185 px corners). electron-builder makes the
+  macOS `.icns` and the Windows `.ico` from it. The menu-bar tray uses black template images of the page instead.
 - **Test hooks:** the region "Desktop app"; the switches by their labels; the startup page's `h1` and `#detail`.
 
 ## First-run setup
