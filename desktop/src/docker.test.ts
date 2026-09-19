@@ -1,5 +1,7 @@
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { randomUUID } from 'node:crypto'
+import { readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   commandEnv,
@@ -134,6 +136,38 @@ describe('spawnRunner', () => {
 
     expect(ran.timedOut).toBe(true)
     expect(Date.now() - started).toBeLessThan(5_000)
+  })
+
+  it.skipIf(process.platform === 'win32')("ends a timed-out command's grandchild too, not just its immediate child", async () => {
+    const pidFile = join(tmpdir(), `paperlab-docker-test-${randomUUID()}.pid`)
+    const script = [
+      "const { spawn } = require('node:child_process')",
+      "const fs = require('node:fs')",
+      "const grandchild = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000)'])",
+      `fs.writeFileSync(${JSON.stringify(pidFile)}, String(grandchild.pid))`,
+      'setTimeout(() => {}, 30000)',
+    ].join('; ')
+
+    try {
+      const ran = await spawnRunner(process.execPath, ['-e', script], { env: process.env, timeoutMs: 300 })
+      expect(ran.timedOut).toBe(true)
+
+      const grandchildPid = Number(readFileSync(pidFile, 'utf8'))
+      await new Promise((r) => setTimeout(r, 500))
+      expect(() => process.kill(grandchildPid, 0)).toThrow(/ESRCH/)
+    } finally {
+      rmSync(pidFile, { force: true })
+    }
+  })
+
+  it('keeps only a bounded tail of a long-running command\'s output, ending in the final line', async () => {
+    const script = "for (let i = 0; i < 20000; i++) process.stdout.write('x'.repeat(50) + '\\n'); console.log('THE FINAL LINE')"
+
+    const ran = await spawnRunner(process.execPath, ['-e', script], { env: process.env, timeoutMs: 10_000 })
+
+    expect(ran.stdout.length).toBeLessThanOrEqual(16 * 1024)
+    expect(ran.stdout.trimEnd().endsWith('THE FINAL LINE')).toBe(true)
+    expect(lastLine(ran)).toBe('THE FINAL LINE')
   })
 })
 
