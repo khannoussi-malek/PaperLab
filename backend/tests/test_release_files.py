@@ -1,6 +1,7 @@
 """The files a release is built from (spec §3, §4, §7): the build context, the compose file the desktop app writes out,
 and the release workflow. Each test pins the spec's values; the builds themselves run in the plan and in CI."""
 
+import re
 from pathlib import Path
 
 import pytest
@@ -93,3 +94,49 @@ def test_no_env_file_is_needed_in_either_stack():
 
     assert [release[name]["env_file"] for name in ("migrate", "api", "worker")] == [OPTIONAL_ENV] * 3
     assert compose("docker-compose.yml")["x-backend"]["env_file"] == OPTIONAL_ENV
+
+
+def workflow() -> dict:
+    return yaml.safe_load((ROOT / ".github/workflows/release.yml").read_text())
+
+
+def test_a_version_tag_releases_and_a_change_to_the_release_files_is_a_dry_run():
+    triggers = workflow()[True]  # YAML 1.1 reads the key `on` as true
+
+    assert triggers["push"] == {"tags": ["v*"]}
+    assert "workflow_dispatch" in triggers
+    assert triggers["pull_request"]["paths"] == [
+        ".github/workflows/release.yml",
+        "desktop/**",
+        "Dockerfile",
+        ".dockerignore",
+    ]
+    assert [path.name for path in (ROOT / ".github/workflows").iterdir()] == ["release.yml"]  # the only workflow
+
+
+def test_images_build_natively_per_architecture_and_are_tagged_with_the_version_only():
+    jobs = workflow()["jobs"]
+    legs = jobs["image"]["strategy"]["matrix"]["include"]
+    text = (ROOT / ".github/workflows/release.yml").read_text()
+
+    assert [(leg["platform"], leg["runner"]) for leg in legs] == [
+        ("linux/amd64", "ubuntu-latest"),
+        ("linux/arm64", "ubuntu-24.04-arm"),
+    ]
+    assert jobs["image"]["permissions"] == {"contents": "read", "packages": "write"}
+    assert jobs["release"]["permissions"] == {"contents": "write"}
+    assert re.search(r"paperlab:latest|:latest\b", text) is None
+    assert "ghcr.io/khannoussi-malek/paperlab" in text  # lowercase: registries refuse capitals
+
+
+def test_each_system_builds_its_installers_and_the_release_stays_a_draft():
+    jobs = workflow()["jobs"]
+    text = (ROOT / ".github/workflows/release.yml").read_text()
+
+    assert [leg["os"] for leg in jobs["installers"]["strategy"]["matrix"]["include"]] == [
+        "macos-latest",
+        "windows-latest",
+        "ubuntu-latest",
+    ]
+    assert "desktop/package.json" in jobs["check"]["steps"][-1]["run"]  # the tag must be the app's version
+    assert "gh release create" in text and "--draft" in text

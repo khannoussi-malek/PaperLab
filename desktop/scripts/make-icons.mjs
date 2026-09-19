@@ -1,6 +1,6 @@
 // Renders desktop/build's icons from the favicon with Playwright's Chromium (`npx playwright install chromium` once):
-// icon.png (1024 px) for the installers, and macOS's menu-bar template images (black on transparent, 16 and 32 px).
-// Run `npm run icons`, then commit the three PNGs.
+// icon.png (1024 px, the favicon on a plate) for the installers, and macOS's menu-bar template images (black on
+// transparent, 16 and 32 px). Run `npm run icons`, then commit the three PNGs.
 import { mkdir, readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { chromium } from '@playwright/test'
@@ -25,7 +25,14 @@ async function render(svg, size, file) {
   await page.screenshot({ path: out(file), omitBackground: true })
   await page.close()
 }
-await render(favicon, 1024, 'icon.png')
+// The app icon: the favicon on a primary (#2563eb) rounded square, on the macOS grid (an 824 px plate in 1024, 100 px
+// margin, 185 px corners), so it sits with other Dock icons and shows on light and dark backgrounds.
+const plate = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="#2563eb"/>
+  <image href="data:image/svg+xml;base64,${Buffer.from(favicon).toString('base64')}" x="218" y="218" width="588" height="588"/>
+</svg>`
+
+await render(plate, 1024, 'icon.png')
 await render(template, 16, 'trayTemplate.png')
 await render(template, 32, 'trayTemplate@2x.png')
 await browser.close()
