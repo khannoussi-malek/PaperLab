@@ -243,6 +243,46 @@ describe('launch', () => {
     expect(calls.at(-1)).toBe('compose up -d')
   })
 
+  it('stops without checking Compose when the window closes while waiting for Docker Desktop', async () => {
+    const closing = new AbortController()
+    // The second `info` answers ok, as in "goes on to start PaperLab once Docker Desktop answers" — but the window
+    // closes during the poll that fetches it, so nothing past the wait loop may run.
+    const { docker, calls } = fakeDocker([[/^info /, (times) => (times < 2 ? NOT_RUNNING : { stdout: 'linux\n' })]])
+    const sleep = async () => void closing.abort() // the window closes while waiting for Docker Desktop
+    const { deps: all } = deps(docker, { autoStart: async () => {}, signal: closing.signal, sleep })
+
+    expect((await run(all)).last).toEqual({ kind: 'stopping' })
+    expect(calls).toEqual(['info --format {{.OSType}}', 'info --format {{.OSType}}'])
+  })
+
+  it('stops without acting on the pull when the window closes during the download', async () => {
+    const missing: [RegExp, Answer] = [/^image inspect/, always({ code: 1 })]
+    const { docker, calls } = fakeDocker([missing, [/^compose pull/, always({ lines: ['db Pulling'] })]])
+    const closing = new AbortController()
+    const shown: Screen[] = []
+    const showAndClose = (screen: Screen) => {
+      shown.push(screen)
+      if (screen.kind === 'downloading' && screen.line !== null) closing.abort() // the window closes mid-pull
+    }
+    const { deps: all } = deps(docker, { signal: closing.signal })
+
+    expect(await launch(all, showAndClose)).toEqual({ kind: 'stopping' })
+    expect(calls).not.toContain('compose up -d')
+  })
+
+  it('stops without starting PaperLab when the window closes during the backup', async () => {
+    const { docker, calls } = fakeDocker()
+    const closing = new AbortController()
+    const backup: Deps['backup'] = async () => {
+      closing.abort() // the window closes mid-backup
+      return { ok: true }
+    }
+    const { deps: all } = deps(docker, { lastVersion: '0.1.0', signal: closing.signal, backup })
+
+    expect((await run(all)).last).toEqual({ kind: 'stopping' })
+    expect(calls).not.toContain('compose up -d') // migrate runs inside `compose up -d`
+  })
+
   it("says so when its files can't be written", async () => {
     const { docker } = fakeDocker()
     const { deps: all } = deps(docker, {
