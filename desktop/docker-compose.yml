@@ -1,0 +1,88 @@
+# PaperLab from its published image: the file the desktop app writes to its data folder, and the one the release's
+# paperlab-<version>.tar.gz holds. Run it yourself with `docker compose up -d` in its folder (Docker Compose 2.24 or
+# later), then open http://127.0.0.1:5190. Nothing here starts with the computer, and every setting has a default, so
+# a .env beside this file is optional.
+name: paperlab-app
+
+x-app: &app
+  # The desktop app sets PAPERLAB_VERSION to its own version; the release tarball's copy names its version for dev.
+  image: ghcr.io/khannoussi-malek/paperlab:${PAPERLAB_VERSION:-dev}
+  env_file:
+    - path: .env
+      required: false
+  volumes:
+    - pdfs:/data/pdfs
+    - models:/models
+
+services:
+  db:
+    # Pinned: an update never moves Postgres or pgvector underneath a library.
+    image: pgvector/pgvector:0.8.6-pg16
+    environment:
+      POSTGRES_USER: paperlab
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-paperlab}
+      POSTGRES_DB: paperlab
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U paperlab"]
+      interval: 2s
+      retries: 30
+
+  redis:
+    image: redis:7.4.11-alpine
+    # Append-only: queued and interrupted ingestion jobs survive a stop, a recreated container and a hard stop.
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes: [redisdata:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      retries: 30
+
+  migrate:
+    <<: *app
+    # Once per start, before the api and the worker: after an update the worker never runs a job on the old schema.
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    <<: *app
+    # Exec form: uvicorn is PID 1 and gets `compose stop`'s SIGTERM itself.
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      # Tests: `LLM_PROVIDER=fake DISCOVERY_PROVIDER=fake docker compose up -d`.
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      DISCOVERY_PROVIDER: ${DISCOVERY_PROVIDER:-live}
+      # Where Connect Claude points Claude Desktop: the desktop app sets its data folder; from a shell it is the folder
+      # `docker compose up` ran in.
+      PAPERLAB_DIR: ${PAPERLAB_DIR:-${PWD:-}}
+    ports: ["127.0.0.1:${PAPERLAB_PORT:-5190}:8000"]
+    # Ollama on the host, on Linux too: Docker Desktop defines this name, Docker Engine doesn't.
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  worker:
+    <<: *app
+    # Exec form: arq is PID 1, so `compose stop` cancels a running job and arq queues it again for the next start.
+    command: ["arq", "app.workers.settings.WorkerSettings"]
+    environment:
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      DISCOVERY_PROVIDER: ${DISCOVERY_PROVIDER:-live}
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+# The library. The project name and these volume names are where it lives: releases never rename them.
+volumes:
+  pgdata:
+  pdfs:
+  redisdata:
+  models:
