@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'" />
+    <title>PaperLab</title>
+    <style>
+      /* frontend/design-system/MASTER.md's tokens, light and dark; the fonts' own fallbacks (the app's fonts are bundled
+         in the frontend, not here). */
+      :root {
+        color-scheme: light dark;
+        --background: #f8fafc;
+        --foreground: #0f172a;
+        --muted: #f1f5f9;
+        --muted-foreground: #475569;
+        --primary: #2563eb;
+        --primary-foreground: #ffffff;
+        --border: #cbd5e1;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --background: #0f172a;
+          --foreground: #f1f5f9;
+          --muted: #1e293b;
+          --muted-foreground: #94a3b8;
+          --primary: #60a5fa;
+          --primary-foreground: #0f172a;
+          --border: rgb(255 255 255 / 0.15);
+        }
+      }
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--background); color: var(--foreground); font: 16px/1.5 ui-sans-serif, system-ui, sans-serif; }
+      main { max-width: 34rem; padding: 2rem; }
+      h1 { font: 600 1.875rem/1.2 ui-serif, Georgia, serif; margin: 0 0 0.75rem; display: flex; align-items: center; gap: 0.625rem; }
+      p { margin: 0 0 0.5rem; }
+      #detail { white-space: pre-wrap; font: 0.75rem/1.5 ui-monospace, monospace; background: var(--muted); color: var(--muted-foreground); padding: 0.75rem; border-radius: 0.625rem; max-height: 14rem; overflow: auto; margin: 0.75rem 0 0; }
+      #actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem; }
+      #actions a { padding: 0.375rem 0.875rem; border: 1px solid var(--border); border-radius: 0.625rem; color: var(--foreground); text-decoration: none; font-size: 0.875rem; }
+      #actions a.primary { background: var(--primary); border-color: var(--primary); color: var(--primary-foreground); }
+      #actions a:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+      .busy { width: 1rem; height: 1rem; flex: none; border: 2px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) { .busy { animation: none; } }
+      [hidden] { display: none !important; }
+    </style>
+  </head>
+  <body>
+    <main aria-live="polite">
+      <h1 id="title"><span class="busy" aria-hidden="true"></span>Opening PaperLab</h1>
+      <div id="body"></div>
+      <pre id="detail" hidden></pre>
+      <div id="actions"></div>
+    </main>
+    <script>
+      // The app (src/main.ts) calls show(view) for each startup state; stack.ts's viewFor builds the view. Buttons are
+      // links to this page with ?action=…, which the app runs instead of loading. Everything is set as text, never HTML.
+      const LABELS = { retry: 'Retry', 'show-log': 'Show log' }
+      const element = (tag, props) => Object.assign(document.createElement(tag), props)
+
+      window.show = (view) => {
+        document.title = `PaperLab · ${view.title}`
+        const spinner = element('span', { className: 'busy' })
+        spinner.setAttribute('aria-hidden', 'true')
+        document.getElementById('title').replaceChildren(...(view.busy ? [spinner] : []), view.title)
+        document.getElementById('body').replaceChildren(...view.body.map((line) => element('p', { textContent: line })))
+        const detail = document.getElementById('detail')
+        detail.hidden = view.detail === null
+        detail.textContent = view.detail ?? ''
+        const links = [
+          ...(view.link ? [element('a', { href: view.link.href, textContent: view.link.label })] : []),
+          ...view.actions.map((action) => element('a', { href: `?action=${action}`, textContent: LABELS[action] })),
+        ]
+        links[0]?.classList.add('primary')
+        document.getElementById('actions').replaceChildren(...links)
+      }
+    </script>
+  </body>
+</html>
