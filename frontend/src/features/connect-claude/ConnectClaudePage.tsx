@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ErrorAlert, LoadError } from '@/features/library/ErrorAlert'
+import { useDesktop } from '@/features/settings/desktop'
 import { copyText } from '@/lib/clipboard'
 import { cn } from '@/lib/utils'
 import { claudeCodeCommand, configFileHint, desktopConfig, detectOs, type SetupOs } from './connectClaude'
@@ -68,6 +69,7 @@ function CopyBlock({ text }: { text: string }) {
 export function ConnectClaudePage() {
   const setup = useMcpSetup()
   const check = useCheckMcpServer()
+  const desktop = useDesktop()
   const [os, setOs] = useState<SetupOs>(() => detectOs(platform()))
   const [typed, setTyped] = useState<string | null>(null)
   const folder = typed ?? setup.data?.folder ?? ''
@@ -208,7 +210,13 @@ export function ConnectClaudePage() {
             Desktop's logs folder. Open it to see why the server didn't start.
           </li>
           <li>
-            PaperLab must be running: <code className={code}>docker compose up -d</code> in the PaperLab folder.
+            {desktop !== null ? (
+              'Keep the PaperLab app open (or turn on Keep running in Settings).'
+            ) : (
+              <>
+                PaperLab must be running: <code className={code}>docker compose up -d</code> in the PaperLab folder.
+              </>
+            )}
           </li>
           <li>After restarting PaperLab's api, restart Claude Desktop too: the connection ends with it.</li>
           <li>The first search takes about 30 seconds while the embedding model loads.</li>
