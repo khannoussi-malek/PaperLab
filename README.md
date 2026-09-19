@@ -303,6 +303,8 @@ Settings live in an optional `.env` beside `docker-compose.yml`: every one has a
 | `DISCOVERY_PROVIDER`                                        | `live`                              | `fake` answers Find papers and Similar with three fixed papers and no network (for tests)                                           |
 | `POSTGRES_PASSWORD`, `DATABASE_URL`, `REDIS_URL`, `PDF_DIR` | see `.env.example`                  | Database, queue and PDF storage                                                                                                     |
 
+Ollama listens on IPv4 only by default. If you type `localhost` into a connection's base URL, some systems resolve
+that to `::1` first and the connection fails even though Ollama is running; use `127.0.0.1` instead.
 
 
 
@@ -376,9 +378,9 @@ models folder back.
 then start it with `LLM_PROVIDER=fake DISCOVERY_PROVIDER=fake docker compose -f desktop/docker-compose.yml up -d`. It
 serves the built app on :5190 with its own volumes. In `frontend/`,
 `E2E_RELEASE=1 E2E_BASE_URL=http://127.0.0.1:5190 npx playwright test --project=release` runs what a fresh install must
-pass. In `desktop/`, `E2E_RELEASE=1 npx playwright test --project=release-stack` drives the app over it: upgrade backup,
-close and quit. `docker compose -f desktop/docker-compose.yml down -v` deletes that library, which is also the desktop
-app's.
+pass. In `desktop/`, `npm run build && E2E_RELEASE=1 npx playwright test --project=release-stack` drives the app over
+it: upgrade backup, close and quit. `docker compose -f desktop/docker-compose.yml down -v` deletes that library, which
+is also the desktop app's.
 - **Retrieval eval:** `docker compose exec api python -m evals.run` prints recall@k for the questions in
 `backend/evals/questions.yaml`, asking with the search model PaperLab ships; `--variant full` or `--variant int8` asks
 with the other one once it is downloaded. Run it twice after a re-ingest before comparing results.
