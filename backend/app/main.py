@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 
 from arq import create_pool
@@ -6,6 +7,8 @@ from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api import charts, chat, datasets, discovery, embedding, graph, health, links, llm, notes, papers, workspaces
 from app.api import mcp as mcp_api
@@ -17,6 +20,31 @@ from app.core.errors import Conflict, DomainError, InvalidInput, NotFound
 from app.db import SessionLocal
 
 STATUS_BY_ERROR = {NotFound: 404, InvalidInput: 422, Conflict: 409}
+
+# The only Host names the release image answers (spec §3): a web page in the user's browser can rebind its own name to
+# 127.0.0.1, but it still sends that name, so it can't read the library as same-origin.
+LOCAL_HOSTS = ["127.0.0.1", "localhost"]
+
+
+class FrontendFiles(StaticFiles):
+    """The built frontend. index.html is revalidated on every load, so after an update the app's window never
+    keeps an old page that points at hashed asset files the new image no longer has; the hashed files keep the
+    default headers."""
+
+    def file_response(self, full_path, stat_result, scope, status_code=200):
+        response = super().file_response(full_path, stat_result, scope, status_code)
+        if os.path.basename(full_path) == "index.html":
+            response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
+def serve_frontend(app: FastAPI, folder: str) -> None:
+    """The release image (FRONTEND_DIST): the frontend at / after every router, so /api/* always wins, and only local
+    Host names. The app routes with hashes (#/graph), so no fallback route is needed. No folder: nothing changes."""
+    if not folder or not os.path.isdir(folder):
+        return
+    app.mount("/", FrontendFiles(directory=folder, html=True), name="frontend")
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=LOCAL_HOSTS)
 
 
 @asynccontextmanager
@@ -60,6 +88,7 @@ def create_app() -> FastAPI:
         errors = [{key: value for key, value in error.items() if key != "input"} for error in exc.errors()]
         return JSONResponse({"detail": jsonable_encoder(errors)}, status_code=422)
 
+    serve_frontend(app, settings.frontend_dist)
     return app
 
 
