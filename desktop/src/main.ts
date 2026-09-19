@@ -78,7 +78,9 @@ function launchDeps(docker: Docker | null, bin: string | null, signal: AbortSign
     lastVersion: settings.lastVersion,
     writeFiles: () => writeFiles(DATA, SOURCES),
     backup: () => backUp(DATA, (path) => docker?.dumpTo(path) ?? Promise.reject(new Error('docker was not found'))),
-    markStarted: () => setSettings({ lastVersion: app.getVersion() }),
+    backedUpFrom: settings.backedUpFrom,
+    markBackedUp: () => setSettings({ backedUpFrom: settings.lastVersion }),
+    markStarted: () => setSettings({ lastVersion: app.getVersion(), backedUpFrom: null }),
     signal,
   }
 }

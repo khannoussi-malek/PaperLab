@@ -55,6 +55,8 @@ function deps(docker: Deps['docker'], more: Partial<Deps> = {}) {
       return { ok: true }
     },
     markStarted: () => void events.push('started'),
+    backedUpFrom: null,
+    markBackedUp: () => void events.push('marked backed up'),
     ...more,
   }
   return { deps: all, events, clock }
@@ -163,13 +165,24 @@ describe('launch', () => {
     expect(last.kind).toBe('ready')
     expect(shown).toEqual(['checking', 'backing-up', 'starting', 'ready'])
     expect(upgrade.calls.slice(-2)).toEqual(['compose up -d --wait db', 'compose up -d'])
-    expect(events).toEqual(['write files', 'backup', 'started'])
+    expect(events).toEqual(['write files', 'backup', 'marked backed up', 'started'])
 
     const fresh = fakeDocker()
     const first = deps(fresh.docker, { lastVersion: null })
     await run(first.deps)
     expect(first.events).toEqual(['write files', 'started'])
     expect(fresh.calls).not.toContain('compose up -d --wait db')
+  })
+
+  it('skips the backup on a retry that already took it for this upgrade, going straight to migrate', async () => {
+    const { docker, calls } = fakeDocker()
+    const { deps: all, events } = deps(docker, { lastVersion: '0.1.0', backedUpFrom: '0.1.0' })
+
+    const { last } = await run(all)
+
+    expect(last.kind).toBe('ready')
+    expect(events).not.toContain('backup')
+    expect(calls).not.toContain('compose up -d --wait db')
   })
 
   it('stops at Backup failed when pg_dump fails, and migrate never runs', async () => {

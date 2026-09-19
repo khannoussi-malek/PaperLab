@@ -8,7 +8,14 @@ const dataDir = () => mkdtempSync(join(tmpdir(), 'paperlab-settings-'))
 
 describe('settings.json', () => {
   it('starts from the defaults: stop on close, port 5190, the update check on', () => {
-    expect(DEFAULTS).toEqual({ keepRunning: false, port: 5190, updatesEnabled: true, dismissedUpdate: null, lastVersion: null })
+    expect(DEFAULTS).toEqual({
+      keepRunning: false,
+      port: 5190,
+      updatesEnabled: true,
+      dismissedUpdate: null,
+      lastVersion: null,
+      backedUpFrom: null,
+    })
   })
 
   it('gives the defaults for a missing file, an unreadable one, broken JSON and JSON that is not an object', () => {
