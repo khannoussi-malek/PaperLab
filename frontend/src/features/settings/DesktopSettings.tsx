@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
+import { delayedIn } from '@/components/motion'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
+import { cn } from '@/lib/utils'
 import { useDesktop, type PaperlabDesktop } from './desktop'
 
 /** Settings → Desktop app (P5, P8): only inside the desktop app, where window.paperlabDesktop exists. */
@@ -47,7 +49,8 @@ function DesktopSection({ desktop }: { desktop: PaperlabDesktop }) {
   )
 }
 
-/** One setting: its label and line, and a switch that stays disabled until the app has answered. */
+/** One setting: its label and line, and a switch that shows only once the app has answered — "Loading…" until then,
+ * so it never flashes the wrong position while the read is in flight. */
 function DesktopSwitch({ id, label, help, read, write }: Toggle) {
   const [checked, setChecked] = useState<boolean | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -80,7 +83,11 @@ function DesktopSwitch({ id, label, help, read, write }: Toggle) {
           </Alert>
         )}
       </div>
-      <Switch id={id} checked={checked ?? false} disabled={checked === null} onCheckedChange={change} />
+      {checked === null ? (
+        <p className={cn('text-sm text-muted-foreground', delayedIn)}>Loading…</p>
+      ) : (
+        <Switch id={id} checked={checked} onCheckedChange={change} />
+      )}
     </div>
   )
 }
