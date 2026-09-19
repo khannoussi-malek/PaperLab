@@ -30,9 +30,30 @@ def release_app(dist, session, arq, pdf_dir):
     return application
 
 
+@pytest.fixture
+def missing_dist_app(tmp_path, monkeypatch, session, arq, pdf_dir):
+    """FRONTEND_DIST set to a folder that isn't there (Minor 1): the mount is skipped, but the defences must not be."""
+    monkeypatch.setattr(settings, "frontend_dist", str(tmp_path / "missing"))
+    application = create_app()
+    application.dependency_overrides[get_session] = lambda: session
+    application.state.arq = arq
+    return application
+
+
 async def get(app, path: str, host: str = APP_HOST):
     async with AsyncClient(transport=ASGITransport(app=app), base_url=f"http://{APP_HOST}") as http:
         return await http.get(path, headers={"Host": host})
+
+
+PDF = {"file": ("paper.pdf", b"%PDF-1.7\nbody", "application/pdf")}
+
+
+async def post(app, path: str, origin: str | None = None, host: str = APP_HOST):
+    headers = {"Host": host}
+    if origin is not None:
+        headers["Origin"] = origin
+    async with AsyncClient(transport=ASGITransport(app=app), base_url=f"http://{APP_HOST}") as http:
+        return await http.post(path, headers=headers, files=PDF)
 
 
 async def test_the_page_is_revalidated_on_every_load_and_its_hashed_files_are_not(release_app):
@@ -60,11 +81,30 @@ async def test_only_this_computers_names_are_answered(release_app):
     assert (await get(release_app, "/", host="localhost:5190")).status_code == 200
 
 
-async def test_without_a_built_frontend_nothing_changes(client, tmp_path, monkeypatch):
-    """The dev setup: FRONTEND_DIST empty (the `client` app), or naming a folder that isn't there."""
+async def test_without_a_built_frontend_nothing_changes(client):
+    """The dev setup: FRONTEND_DIST empty (the `client` app), so neither defence is added."""
     assert (await client.get("/")).status_code == 404
     assert (await client.get("/api/health", headers={"Host": "evil.example"})).status_code == 200
 
-    monkeypatch.setattr(settings, "frontend_dist", str(tmp_path / "missing"))
-    async with AsyncClient(transport=ASGITransport(app=create_app()), base_url="http://test") as http:
-        assert (await http.get("/", headers={"Host": "evil.example"})).status_code == 404
+
+async def test_a_missing_dist_folder_still_refuses_an_untrusted_host(missing_dist_app):
+    """Minor 1: FRONTEND_DIST set to a folder that isn't there still adds both defences; only the mount is skipped."""
+    assert (await get(missing_dist_app, "/", host="evil.example")).status_code == 400
+    assert (await get(missing_dist_app, "/api/health", host="evil.example")).status_code == 400
+    assert (await get(missing_dist_app, "/")).status_code == 404  # no mount: falls through to the API's 404
+
+
+async def test_a_cross_site_write_is_refused_but_same_origin_and_no_origin_are_not(release_app):
+    evil = await post(release_app, "/api/papers", origin="https://evil.example")
+    same = await post(release_app, "/api/papers", origin=f"http://{APP_HOST}")
+    none = await post(release_app, "/api/papers")
+
+    assert evil.status_code == 403
+    assert same.status_code == 201
+    assert none.status_code == 201
+
+
+async def test_without_a_built_frontend_any_origin_is_accepted_on_a_write(client):
+    response = await client.post("/api/papers", headers={"Origin": "https://evil.example"}, files=PDF)
+
+    assert response.status_code == 201

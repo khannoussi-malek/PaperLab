@@ -1,9 +1,11 @@
 import os
+from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
+from urllib.parse import urlparse
 
 from arq import create_pool
 from arq.connections import RedisSettings
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -26,6 +28,9 @@ STATUS_BY_ERROR = {NotFound: 404, InvalidInput: 422, Conflict: 409}
 # 127.0.0.1, but it still sends that name, so it can't read the library as same-origin.
 LOCAL_HOSTS = ["127.0.0.1", "localhost"]
 
+# Methods a cross-site form or fetch can send with no preflight, so Origin is the only defence against them.
+SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+
 
 class FrontendFiles(StaticFiles):
     """The built frontend. index.html is revalidated on every load, so after an update the app's window never
@@ -40,12 +45,24 @@ class FrontendFiles(StaticFiles):
 
 
 def serve_frontend(app: FastAPI, folder: str) -> None:
-    """The release image (FRONTEND_DIST): the frontend at / after every router, so /api/* always wins, and only local
-    Host names. The app routes with hashes (#/graph), so no fallback route is needed. No folder: nothing changes."""
-    if not folder or not os.path.isdir(folder):
+    """The release image (FRONTEND_DIST): the frontend at / after every router, so /api/* always wins, only local Host
+    names, and no cross-site write (a browser always sends Origin on those; curl and the MCP script, which send none,
+    are unaffected). Both defences are added whenever FRONTEND_DIST is set, even if the folder itself is missing, so
+    only the mount below is behind the isdir check. No folder at all: nothing changes."""
+    if not folder:
+        return
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=LOCAL_HOSTS)
+
+    @app.middleware("http")
+    async def same_origin_writes(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
+        origin = request.headers.get("origin")
+        if request.method not in SAFE_METHODS and origin is not None and urlparse(origin).hostname not in LOCAL_HOSTS:
+            return JSONResponse({"detail": "Cross-site request refused"}, status_code=403)
+        return await call_next(request)
+
+    if not os.path.isdir(folder):
         return
     app.mount("/", FrontendFiles(directory=folder, html=True), name="frontend")
-    app.add_middleware(TrustedHostMiddleware, allowed_hosts=LOCAL_HOSTS)
 
 
 @asynccontextmanager
