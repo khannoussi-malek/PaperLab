@@ -7,7 +7,9 @@ import { defineConfig } from '@playwright/test'
 // nothing else is ever mid-test while the default moves. A tag, not a filename: a new spec that moves the
 // default says so itself instead of quietly losing the protection. `@moves-paper-sources` is the same for the one
 // paper-sources row: a test that changes the switches or the email must not run beside a search or an ingest.
-const MOVES_DEFAULT = /@moves-default|@moves-paper-sources/
+// `@moves-setup` is the same for the one setup flag: a spec that sets it back to not done would send every other
+// page to `#/setup`.
+const MOVES_DEFAULT = /@moves-default|@moves-paper-sources|@moves-setup/
 
 // A spec that needs the stack started with no search model (MODELS_DIR=/models/none, README) carries this tag: it
 // runs only as its own project, on that stack, and skips itself on a stack that has the model.

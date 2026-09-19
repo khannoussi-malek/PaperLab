@@ -9,6 +9,8 @@ import { ReaderPage } from './features/reader/ReaderPage'
 import { downloadAnnouncement } from './features/settings/searchModel'
 import { SettingsPage } from './features/settings/SettingsPage'
 import { useSearchModelDownload } from './features/settings/useSearchModelDownload'
+import { SetupPage } from './features/setup/SetupPage'
+import { useOpenSetupOnStart } from './features/setup/useOpenSetupOnStart'
 import { WorkspacePage } from './features/workspaces/WorkspacePage'
 import { useRoute } from './lib/route'
 
@@ -29,6 +31,7 @@ export default function App() {
 
 function Page() {
   const route = useRoute()
+  useOpenSetupOnStart()
   if (route.name === 'workspace') {
     // Keyed by workspace only: switching tabs must not remount the page.
     return <WorkspacePage key={route.workspaceId} workspaceId={route.workspaceId} tab={route.tab} />
@@ -56,6 +59,9 @@ function Page() {
   }
   if (route.name === 'connect-claude') {
     return <ConnectClaudePage />
+  }
+  if (route.name === 'setup') {
+    return <SetupPage />
   }
   if (route.name === 'graph') {
     return <GraphPage />

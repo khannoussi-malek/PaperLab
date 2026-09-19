@@ -667,6 +667,30 @@ with a set value). The onboarding, copy-button and OS-tab queries returned nothi
   - link buttons, the first one primary.
 - **Test hooks:** the region "Desktop app"; the switches by their labels; the startup page's `h1` and `#detail`.
 
+## First-run setup
+
+- **Page (`#/setup`):** opened once on start while `GET /api/setup` says not done (`useOpenSetupOnStart`). Settings'
+  page shell (`max-w-3xl`), the h1 "Set up PaperLab", a muted line "Choose the models PaperLab uses. Nothing downloads
+  until you pick it.", then the steps "1. Chat" and "2. Search" as a small `ol` (current step `aria-current="step"`,
+  `font-medium text-foreground`).
+- **Each step** is a `section` labelled by its h2 ("Chat", "Search"), ending with its own primary Continue (or
+  Finish), disabled while the step's download runs, and a ghost Skip. The page ends with a ghost "Skip setup" and the
+  muted line "You can read, highlight and take notes now. Set up chat and search any time in Settings." above a
+  `border-glass-border` rule. Finish and Skip setup go to the library.
+- **Chat:**
+  - "Ollama on this computer": outline `sm` buttons "Use <model>" for installed models, and "Pull qwen3:4b · 2.5 GB" /
+    "Pull qwen3:8b · 5.2 GB" (`Download` icon) with a muted `text-xs` note for those not installed;
+  - the pull's `Progress` named "Pulling <model>" with its status line;
+  - no Ollama: a line, the Linux note, and "Get Ollama" (`ExternalLink`) and "Retry" (`RefreshCw`);
+  - "Use a cloud model" (`Cloud`) opens M9's connection dialog, then Add model;
+  - the pick becomes chat's default: a `role="status"` line "Chat uses <model>." (`.setup-chat-choice`).
+- **Search:** the built-in search model or Skip. A `text-sm font-medium` "Built-in", the muted `text-sm` line "The
+  built-in search model stays on this computer.", then Settings → Search's own `DownloadSearchModel` with
+  `alwaysShowStatus` (its status line, "Download search model · 548 MB", its progress bar), unchanged. Finish waits
+  while it downloads; Skip leaves search for Settings → Search.
+- **Test hooks:** h1 "Set up PaperLab"; regions "Chat" and "Search"; `.setup-chat-choice`; the Built-in line;
+  `.search-model-status`; the buttons by name.
+
 ## Graph
 
 Patterns from ui-ux-pro-max (2026-09-17): `search.py "graph canvas visualization with layer toggles" --domain ux`
