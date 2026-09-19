@@ -123,7 +123,8 @@ export function ConnectionDialog({ open, onOpenChange, connection, onCreated }: 
       if (connection) {
         await update.mutateAsync({ id: connection.id, ...updateBody(form) })
       } else {
-        onCreated?.(await create.mutateAsync(createBody(form)))
+        const created = await create.mutateAsync(createBody(form))
+        onCreated?.(created)
       }
       openChange(false)
     } catch {
