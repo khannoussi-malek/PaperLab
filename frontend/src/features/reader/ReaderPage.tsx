@@ -293,6 +293,11 @@ export function ReaderPage({ paperId, tab, target }: Props) {
     copyText(text).catch((reason: Error) => setError(reason.message))
   }
 
+  /** The skip link's target: the side panel's tab list, or its first focusable element (the active tab). */
+  function focusSidePanel() {
+    document.querySelector<HTMLElement>('#reader-panel-tabs [role="tab"]')?.focus()
+  }
+
   function focusComposer() {
     // After the menu has finished closing, or its focus handling takes focus straight back.
     window.setTimeout(() => document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Note"]')?.focus())
@@ -394,6 +399,19 @@ export function ReaderPage({ paperId, tab, target }: Props) {
         {paper.data?.is_retracted && <RetractionBanner paper={paper.data} />}
       </div>
 
+      {/* Hidden until focused: hundreds of citation buttons sit between the toolbar and the side panel in tab order,
+          so a keyboard user can jump straight past all of them. */}
+      <button
+        type="button"
+        onClick={focusSidePanel}
+        className={cn(
+          glass,
+          'sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-20 focus:rounded-full focus:border focus:border-glass-border focus:bg-glass-strong focus:px-3 focus:py-1.5 focus:text-sm focus:font-medium focus:shadow-lg focus:outline-2 focus:outline-primary',
+        )}
+      >
+        Skip to side panel
+      </button>
+
       {shownError && (
         <Alert
           variant="destructive"
@@ -493,13 +511,13 @@ export function ReaderPage({ paperId, tab, target }: Props) {
               />
             </PdfPage>
           ))}
-        {/* Q1 (b): the way back from a citation jump, at the foot of the pages while they scroll. No height of its own. */}
+        {/* The way back from a citation jump, at the foot of the pages while they scroll. No height of its own. */}
         {jumpBack.spot && (
           <div className="pointer-events-none sticky bottom-4 flex h-0 items-end justify-center">
             <Button
               key={jumpBack.spot.id}
+              ref={jumpBack.pillRef}
               variant="ghost"
-              autoFocus={jumpBack.spot.viaKeyboard}
               className={cn(glass, 'pointer-events-auto origin-bottom rounded-full border-glass-border bg-glass-strong shadow-lg', popIn)}
               onClick={jumpBack.back}
             >

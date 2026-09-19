@@ -61,11 +61,18 @@ export function pageColumns(boxes: TextBox[], width: number): Line[][] {
 
 function linesOf(boxes: TextBox[]): Line[] {
   const rows: TextBox[][] = []
+  let rowMaxH = 0 // the open row's tallest box so far: a running max keeps this O(boxes), not O(boxes^2)
   for (const box of [...boxes].sort((a, b) => a.base - b.base || a.x0 - b.x0)) {
     const row = rows.at(-1)
-    const tolerance = Math.max(SAME_LINE_PT, SAME_LINE_H * Math.max(box.h, ...(row ?? []).map((b) => b.h)))
-    if (row && Math.abs(box.base - row[0].base) <= tolerance) row.push(box)
-    else rows.push([box])
+    const candidateMaxH = row ? Math.max(box.h, rowMaxH) : box.h
+    const tolerance = Math.max(SAME_LINE_PT, SAME_LINE_H * candidateMaxH)
+    if (row && Math.abs(box.base - row[0].base) <= tolerance) {
+      row.push(box)
+      rowMaxH = candidateMaxH
+    } else {
+      rows.push([box])
+      rowMaxH = box.h
+    }
   }
   return rows.map(lineOf).filter((line): line is Line => line !== null)
 }

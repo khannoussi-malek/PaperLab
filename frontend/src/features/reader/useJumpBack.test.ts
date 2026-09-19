@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { afterScroll, forScale, type JumpSpot } from './useJumpBack'
 
-describe('the way back from a citation jump (Q1-b)', () => {
+describe('the way back from a citation jump', () => {
   const spot: JumpSpot = { id: 1, scrollTop: 1000, page: 1, citationId: '38R', viaKeyboard: false, away: false, scale: 1 }
 
   it('stays while the jump is still near the spot, and arms once it is half a screen away', () => {

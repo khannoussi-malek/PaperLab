@@ -52,6 +52,14 @@ describe('columns and lines', () => {
     expect(labelOf({ text: '12. Ada Fixture. 2019.' })).toBeNull()
     expect(labelOf({ text: '2019. [51] in a sentence' })).toBeNull()
   })
+
+  it('keeps a running maximum row height, so a box joins on a later, taller box\'s tolerance too', () => {
+    const boxes = [box('Short.', LEFT, 100, 9), box('Tall.', LEFT + 31, 100.5, 40), box('More.', LEFT + 57, 104, 9)]
+    const [left] = pageColumns(boxes, 612)
+    // 4 pt from the first box's baseline clears a 9 pt box's own tolerance (2.7) only once the 40 pt box widens it.
+    expect(left).toHaveLength(1)
+    expect(left[0].text).toBe('Short.Tall.More.')
+  })
 })
 
 describe('the label under a destination', () => {
