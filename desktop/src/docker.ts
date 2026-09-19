@@ -2,7 +2,7 @@
  * Docker for the desktop app (spec §5): find the docker binary, run it without a shell and under a time limit, and the
  * commands the launch needs. Every command and its exit code goes to main.log.
  */
-import { spawn } from 'node:child_process'
+import { spawn, type ChildProcess } from 'node:child_process'
 import { accessSync, constants, createWriteStream, statSync } from 'node:fs'
 import { join, posix, win32 } from 'node:path'
 import { pipeline } from 'node:stream/promises'
@@ -120,21 +120,48 @@ export function staleTags(tags: readonly string[], current: string): string[] {
   return tags.map((tag) => tag.trim()).filter((tag) => (compareVersions(tag, current) ?? 0) < 0)
 }
 
-/** Runs a command without a shell (a data folder with spaces stays one argument), ends it past its time limit, and
- * hands each output line to onLine as it arrives. */
+/** Keeps memory flat during a pull, which has no time limit and can print progress for minutes: only this many
+ * trailing characters of stdout/stderr are kept. onLine still sees every line as it streams by. */
+const OUTPUT_TAIL = 16 * 1024
+
+/** Ends a timed-out command's whole process tree, not just the immediate child: `docker compose` runs the compose
+ * plugin as its own child process, which plain `child.kill()` leaves running.
+ * POSIX: spawnRunner starts the command as its own process-group leader, so `-pid` signals the whole group; a group
+ * that can't be signalled that way falls back to killing just the child.
+ * Windows has no process groups, so `taskkill /T` walks the same parent-child tree instead; it's fire-and-forget,
+ * with any failure only logged. */
+function killTree(child: ChildProcess): void {
+  if (process.platform === 'win32') {
+    if (child.pid !== undefined) {
+      spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { shell: false, windowsHide: true }).on('error', (error) => {
+        console.error('PaperLab could not stop a timed-out docker command', error)
+      })
+    }
+    return
+  }
+  try {
+    if (child.pid !== undefined) process.kill(-child.pid, 'SIGTERM')
+  } catch {
+    child.kill()
+  }
+}
+
+/** Runs a command without a shell (a data folder with spaces stays one argument), ends it and everything it spawned
+ * past its time limit, and hands each output line to onLine as it arrives. */
 export const spawnRunner: Runner = (file, args, { env, timeoutMs, onLine, signal }) =>
   new Promise((resolve) => {
-    const child = spawn(file, args, { env, shell: false, windowsHide: true, signal })
+    const child = spawn(file, args, { env, shell: false, windowsHide: true, signal, detached: process.platform !== 'win32' })
     const output = { stdout: '', stderr: '' }
     let timedOut = false
     const expire = () => {
       timedOut = true
-      child.kill()
+      killTree(child)
     }
     const timer = timeoutMs === null ? null : setTimeout(expire, timeoutMs)
     const collect = (stream: 'stdout' | 'stderr') => (chunk: Buffer) => {
-      output[stream] += chunk.toString()
-      for (const line of chunk.toString().split(/\r?\n|\r/)) if (line.trim()) onLine?.(line.trim())
+      const text = chunk.toString()
+      output[stream] = (output[stream] + text).slice(-OUTPUT_TAIL)
+      for (const line of text.split(/\r?\n|\r/)) if (line.trim()) onLine?.(line.trim())
     }
     child.stdout.on('data', collect('stdout'))
     child.stderr.on('data', collect('stderr'))
