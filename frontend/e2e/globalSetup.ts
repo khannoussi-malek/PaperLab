@@ -61,6 +61,17 @@ export async function sweepE2EConnections() {
   }
 }
 
+/** No spec meets the first-run setup by surprise: it is done for the whole run. first-run.spec.ts moves the flag and
+ * puts it back itself. */
+async function markSetupDone() {
+  const response = await fetch(`${BASE}/api/setup`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ done: true }),
+  })
+  if (response.status !== 200) throw new Error(`PUT /api/setup answered ${response.status}: bring the stack up before the E2E run`)
+}
+
 /**
  * Records the owner's default model, and clears what an earlier run left behind. E2E runs on the owner's own
  * database, so every run has to hand it back exactly as it found it.
@@ -79,4 +90,5 @@ export default async function globalSetup() {
     await writeFile(OWNERS_DEFAULT_FILE, ownersDefault)
   }
   await sweepE2EConnections()
+  await markSetupDone()
 }

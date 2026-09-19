@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { LLMConnection } from '@/api/client'
+import type { LLMConnection, LLMModel } from '@/api/client'
 import { useAvailableModels, useConnectionMutations } from '@/api/queries'
 import { glass } from '@/components/glass'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -11,10 +11,12 @@ type Props = {
   connection: LLMConnection
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** Called with the model just added (the first-run setup makes it chat's default). */
+  onAdded?: (model: LLMModel) => void
 }
 
 /** Search the provider's own model list, or type any name by hand, and add it to chat. Follows AddPapersDialog. */
-export function AddModelDialog({ connection, open, onOpenChange }: Props) {
+export function AddModelDialog({ connection, open, onOpenChange, onAdded }: Props) {
   const available = useAvailableModels(connection.id, open)
   const { addModel } = useConnectionMutations()
   const [search, setSearch] = useState('')
@@ -34,7 +36,15 @@ export function AddModelDialog({ connection, open, onOpenChange }: Props) {
 
   /** A refusal leaves the dialog open with the reason below; `mutate` reports it there instead of rejecting. */
   function add(name: string) {
-    addModel.mutate({ connectionId: connection.id, name }, { onSuccess: close })
+    addModel.mutate(
+      { connectionId: connection.id, name },
+      {
+        onSuccess: (model) => {
+          onAdded?.(model)
+          close()
+        },
+      },
+    )
   }
 
   return (
