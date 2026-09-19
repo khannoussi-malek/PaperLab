@@ -50,6 +50,11 @@ export type Deps = {
   lastVersion: string | null
   writeFiles: () => void
   backup: () => Promise<BackupResult>
+  /** The lastVersion a backup has already been taken for this upgrade from (D142), so a retry after backup ok but a
+   * later step failing doesn't dump again over the good backup. */
+  backedUpFrom: string | null
+  /** Records that this upgrade's backup is done, right after the rename. */
+  markBackedUp: () => void
   /** Writes lastVersion once PaperLab answers, so after migrate has run. */
   markStarted: () => void
   /** Aborted when the window closes during startup. */
@@ -117,16 +122,21 @@ async function ensureImage(docker: Docker, deps: Deps, show: Show): Promise<Scre
   return ok(pulled) ? null : { kind: 'download-failed', detail: lastLine(pulled) ?? 'docker compose pull failed' }
 }
 
-/** Step 6 (D142): before a new version first starts, the database alone, then the backup. migrate waits for both. */
+/** Step 6 (D142): before a new version first starts, the database alone, then the backup. migrate waits for both. A
+ * retry that already took this upgrade's dump (backedUpFrom === lastVersion) skips straight to migrate, so it never
+ * dumps the now-migrated database over the good pre-upgrade backup. */
 async function backupIfUpgrading(docker: Docker, deps: Deps, show: Show): Promise<Screen | null> {
   if (!needsBackup(deps.lastVersion, deps.version)) return null
+  if (deps.backedUpFrom === deps.lastVersion) return null
   show({ kind: 'backing-up' })
   const database = await docker.startDatabase()
   if (!going(deps)) return { kind: 'stopping' }
   if (!ok(database)) return { kind: 'backup-failed', detail: lastLine(database) ?? "The database didn't start." }
   const backup = await deps.backup()
   if (!going(deps)) return { kind: 'stopping' }
-  return backup.ok ? null : { kind: 'backup-failed', detail: backup.detail }
+  if (!backup.ok) return { kind: 'backup-failed', detail: backup.detail }
+  deps.markBackedUp()
+  return null
 }
 
 /** Step 7: compose up (it waits for migrate), then /api/health every second for up to 120 s. */

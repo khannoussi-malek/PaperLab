@@ -14,10 +14,11 @@ const writes = (content: string, result: Result = done()) => async (path: string
 }
 
 describe('needsBackup', () => {
-  it('backs up only when another version used this library: never on a fresh install or a restart', () => {
+  it('backs up only on a real upgrade: never on a fresh install, a restart, or a downgrade', () => {
     expect(needsBackup(null, '0.2.0')).toBe(false)
     expect(needsBackup('0.2.0', '0.2.0')).toBe(false)
     expect(needsBackup('0.1.0', '0.2.0')).toBe(true)
+    expect(needsBackup('0.2.0', '0.1.0')).toBe(false)
   })
 })
 

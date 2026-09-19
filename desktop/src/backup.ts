@@ -5,13 +5,15 @@
 import { mkdirSync, renameSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { lastLine, type Result } from './docker'
+import { compareVersions } from './updates'
 
 export type BackupResult = { ok: true } | { ok: false; detail: string }
 
-/** A backup only when this version starts on a library another one used: lastVersion null is a fresh install (nothing
- * to back up yet), and the same version is a restart. */
+/** A backup only on a real upgrade: lastVersion null is a fresh install (nothing to back up yet), the same version is
+ * a restart, and a downgrade goes straight to migrate and fails there (it must not dump the already-migrated
+ * database over the one dump still good for going back). */
 export function needsBackup(lastVersion: string | null, current: string): boolean {
-  return lastVersion !== null && lastVersion !== current
+  return lastVersion !== null && (compareVersions(lastVersion, current) ?? 0) < 0
 }
 
 export function backupFiles(dataDir: string) {

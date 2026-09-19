@@ -11,9 +11,19 @@ export type Settings = {
   updatesEnabled: boolean
   dismissedUpdate: string | null
   lastVersion: string | null
+  /** The lastVersion a backup has already been taken for this upgrade from (D142): lets a retry skip backing up
+   * again over the dump it already took. Cleared once the new version starts. */
+  backedUpFrom: string | null
 }
 
-export const DEFAULTS: Settings = { keepRunning: false, port: 5190, updatesEnabled: true, dismissedUpdate: null, lastVersion: null }
+export const DEFAULTS: Settings = {
+  keepRunning: false,
+  port: 5190,
+  updatesEnabled: true,
+  dismissedUpdate: null,
+  lastVersion: null,
+  backedUpFrom: null,
+}
 
 const isPort = (value: unknown): value is number => Number.isInteger(value) && (value as number) >= 1 && (value as number) <= 65535
 const isTextOrNull = (value: unknown): value is string | null => value === null || typeof value === 'string'
@@ -36,6 +46,7 @@ export function parseSettings(text: string): Settings {
     updatesEnabled: typeof raw.updatesEnabled === 'boolean' ? raw.updatesEnabled : DEFAULTS.updatesEnabled,
     dismissedUpdate: isTextOrNull(raw.dismissedUpdate) ? raw.dismissedUpdate : DEFAULTS.dismissedUpdate,
     lastVersion: isTextOrNull(raw.lastVersion) ? raw.lastVersion : DEFAULTS.lastVersion,
+    backedUpFrom: isTextOrNull(raw.backedUpFrom) ? raw.backedUpFrom : DEFAULTS.backedUpFrom,
   }
 }
 
