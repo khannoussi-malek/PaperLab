@@ -646,6 +646,54 @@ with a set value). The onboarding, copy-button and OS-tab queries returned nothi
 - **Entry points:** an outline "Connect Claude" button (`Plug`) in the library header, before the Settings icon; and
   Settings' last section, "Connect Claude", with one muted sentence and an outline "Open Connect Claude" link (`Plug`).
 
+## Desktop app
+
+- **Settings → Desktop app:** only inside the desktop app. `useDesktop()` is null in a browser, so the section renders
+  nothing there. A `section` labelled by its h2 "Desktop app", after Search and before Connect Claude. Each setting is
+  a row:
+  - on the left, the `Label` and a muted `text-sm` line;
+  - on the right, a shadcn `Switch`, its `id` tied to the label, disabled until the app answers;
+  - a refused change flips back and shows a destructive `Alert` under its line.
+  - The two rows: "Keep PaperLab running when the window is closed" ("Claude Desktop can use your library and uploads
+    keep processing while it runs."), and "Check for updates on launch" ("Each time it opens, PaperLab asks GitHub
+    whether a newer version is out.").
+- **Connect Claude, in the app:** the "If it doesn't work" line reads "Keep the PaperLab app open (or turn on Keep
+  running in Settings)." instead of the `docker compose up -d` command.
+- **The startup page** (`desktop/src/startup.html`, before PaperLab answers) carries these tokens' values inline, light
+  and dark:
+  - a `font-heading`-style h1 with a spinner while busy;
+  - muted body lines;
+  - the last error line in a `bg-muted` monospace box;
+  - link buttons, the first one primary.
+- **App icon** (`desktop/build/icon.png`, 1024 px, `npm run icons` in `desktop/`): the favicon on a `primary` (#2563eb)
+  rounded square, on the macOS grid (an 824 px plate, 100 px margin, 185 px corners). electron-builder makes the
+  macOS `.icns` and the Windows `.ico` from it. The menu-bar tray uses black template images of the page instead.
+- **Test hooks:** the region "Desktop app"; the switches by their labels; the startup page's `h1` and `#detail`.
+
+## First-run setup
+
+- **Page (`#/setup`):** opened once on start while `GET /api/setup` says not done (`useOpenSetupOnStart`). Settings'
+  page shell (`max-w-3xl`), the h1 "Set up PaperLab", a muted line "Choose the models PaperLab uses. Nothing downloads
+  until you pick it.", then the steps "1. Chat" and "2. Search" as a small `ol` (current step `aria-current="step"`,
+  `font-medium text-foreground`).
+- **Each step** is a `section` labelled by its h2 ("Chat", "Search"), ending with its own primary Continue (or
+  Finish), disabled while the step's download runs, and a ghost Skip. The page ends with a ghost "Skip setup" and the
+  muted line "You can read, highlight and take notes now. Set up chat and search any time in Settings." above a
+  `border-glass-border` rule. Finish and Skip setup go to the library.
+- **Chat:**
+  - "Ollama on this computer": outline `sm` buttons "Use <model>" for installed models, and "Pull qwen3:4b · 2.5 GB" /
+    "Pull qwen3:8b · 5.2 GB" (`Download` icon) with a muted `text-xs` note for those not installed;
+  - the pull's `Progress` named "Pulling <model>" with its status line;
+  - no Ollama: a line, the Linux note, and "Get Ollama" (`ExternalLink`) and "Retry" (`RefreshCw`);
+  - "Use a cloud model" (`Cloud`) opens Settings' connection dialog, then Add model;
+  - the pick becomes chat's default: a `role="status"` line "Chat uses <model>." (`.setup-chat-choice`).
+- **Search:** the built-in search model or Skip. A `text-sm font-medium` "Built-in", the muted `text-sm` line "The
+  built-in search model stays on this computer.", then Settings → Search's own `DownloadSearchModel` with
+  `alwaysShowStatus` (its status line, "Download search model · 548 MB", its progress bar), unchanged. Finish waits
+  while it downloads; Skip leaves search for Settings → Search.
+- **Test hooks:** h1 "Set up PaperLab"; regions "Chat" and "Search"; `.setup-chat-choice`; the Built-in line;
+  `.search-model-status`; the buttons by name.
+
 ## Graph
 
 Patterns from ui-ux-pro-max (2026-09-17): `search.py "graph canvas visualization with layer toggles" --domain ux`

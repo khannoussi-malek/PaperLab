@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { api, errorDetail, type PullDoneEvent, type PullErrorEvent, type PullProgressEvent } from '@/api/client'
+import { api, errorDetail, type LLMModel, type PullDoneEvent, type PullErrorEvent, type PullProgressEvent } from '@/api/client'
 import { useInvalidateModels } from '@/api/queries'
 import { readSse } from '@/features/chat/sse'
 
@@ -11,9 +11,10 @@ export type PullState =
 
 /**
  * Pulls a model on an Ollama connection and follows its progress events. Leaving the page aborts the request,
- * which stops the download itself, not just the following: coming back needs a new Pull.
+ * which stops the download itself, not just the following: coming back needs a new Pull. `onDone` runs once the
+ * model is there, with the model chat now lists (the first-run setup makes it the default).
  */
-export function usePullModel(connectionId: string) {
+export function usePullModel(connectionId: string, { onDone }: { onDone?: (model: LLMModel) => void } = {}) {
   const [state, setState] = useState<PullState>({ status: 'idle' })
   const invalidateModels = useInvalidateModels()
   const controller = useRef<AbortController | null>(null)
@@ -33,7 +34,9 @@ export function usePullModel(connectionId: string) {
         if (event === 'progress') setState({ status: 'pulling', name, line: JSON.parse(data) as PullProgressEvent })
         if (event === 'error') return fail((JSON.parse(data) as PullErrorEvent).message)
         if (event === 'done') {
-          setState({ status: 'done', name: (JSON.parse(data) as PullDoneEvent).model.name })
+          const { model } = JSON.parse(data) as PullDoneEvent
+          setState({ status: 'done', name: model.name })
+          onDone?.(model)
           return void invalidateModels()
         }
       }

@@ -63,6 +63,7 @@ const keys = {
   referencesDirection: (paperId: string, direction: ReferencesDirection) =>
     ['references', paperId, direction] as const,
   mcpSetup: ['mcp', 'setup'] as const,
+  setup: ['setup'] as const,
   // Its own key: the graph is one payload, refetched when the owner's own links change, not when the library polls.
   graph: ['graph'] as const,
   libraryGraph: (workspaceId: string | null) => ['graph', workspaceId ?? 'library'] as const,
@@ -535,4 +536,16 @@ export function usePaperLinkMutations() {
     saveError: (create.error ?? rename.error)?.message ?? null,
     removeError: remove.error?.message ?? null,
   }
+}
+
+/** Whether the first-run setup is done (the server's one flag); read once on start (useOpenSetupOnStart). */
+export const useSetup = () => useQuery({ queryKey: keys.setup, queryFn: api.setup })
+
+/** Finish and Skip: done for every browser and the desktop app, since the flag lives on the server. */
+export function useFinishSetup() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: () => api.setSetupDone(true),
+    onSuccess: (setup) => client.setQueryData(keys.setup, setup),
+  })
 }

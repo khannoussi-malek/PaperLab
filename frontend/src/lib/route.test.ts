@@ -14,6 +14,7 @@ import {
   regionHref,
   samePage,
   settingsHref,
+  setupHref,
   workspaceHref,
 } from './route'
 
@@ -153,6 +154,11 @@ describe('parseRoute', () => {
     expect(graphHref).toBe('#/graph')
     expect(parseRoute(graphHref)).toEqual({ name: 'graph' })
     expect(parseRoute('#/graph/focus')).toEqual({ name: 'library' })
+  })
+
+  it('opens the first-run setup', () => {
+    expect(setupHref).toBe('#/setup')
+    expect(parseRoute(setupHref)).toEqual({ name: 'setup' })
   })
 })
 

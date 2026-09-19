@@ -17,6 +17,8 @@ type Props = {
   onOpenChange: (open: boolean) => void
   /** Omitted: "Add connection". Set: "Edit connection", starting from its saved values. */
   connection?: LLMConnection
+  /** Called with the connection this dialog just created (the first-run setup then asks for its model). */
+  onCreated?: (connection: LLMConnection) => void
 }
 
 function initialForm(connection?: LLMConnection): ConnectionForm {
@@ -78,7 +80,7 @@ function KeyField({ form, set, connection, showNotice }: KeyFieldProps) {
 }
 
 /** Add or edit an Ollama, Anthropic or OpenAI-compatible connection. Never calls the provider: Test connection does that. */
-export function ConnectionDialog({ open, onOpenChange, connection }: Props) {
+export function ConnectionDialog({ open, onOpenChange, connection, onCreated }: Props) {
   const { create, update } = useConnectionMutations()
   const [form, setForm] = useState<ConnectionForm>(() => initialForm(connection))
   const [preset, setPreset] = useState('Custom')
@@ -121,7 +123,8 @@ export function ConnectionDialog({ open, onOpenChange, connection }: Props) {
       if (connection) {
         await update.mutateAsync({ id: connection.id, ...updateBody(form) })
       } else {
-        await create.mutateAsync(createBody(form))
+        const created = await create.mutateAsync(createBody(form))
+        onCreated?.(created)
       }
       openChange(false)
     } catch {

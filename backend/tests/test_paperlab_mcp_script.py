@@ -1,6 +1,7 @@
 """scripts/paperlab-mcp, the launcher MCP clients start on macOS, Linux and WSL, run with `sh` against a fake docker."""
 
 import os
+import shutil
 import stat
 import subprocess
 from pathlib import Path
@@ -22,14 +23,14 @@ esac
 """
 
 
-def run_script(tmp_path: Path, **fake) -> tuple[subprocess.CompletedProcess, list[str]]:
+def run_script(tmp_path: Path, script: Path = SCRIPT, **fake) -> tuple[subprocess.CompletedProcess, list[str]]:
     docker = tmp_path / "docker"
     docker.write_text(FAKE_DOCKER)
     docker.chmod(0o755)
     log = tmp_path / "calls.log"
     env = {**os.environ, "PAPERLAB_DOCKER": str(docker), "FAKE_LOG": str(log), **fake}
     result = subprocess.run(
-        ["sh", str(SCRIPT)], cwd=tmp_path, env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=30
+        ["sh", str(script)], cwd=tmp_path, env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=30
     )
     return result, log.read_text().splitlines() if log.exists() else []
 
@@ -49,7 +50,9 @@ def test_with_api_not_running_it_says_how_to_start_paperlab(tmp_path):
 
     assert len(calls) == 1
     assert (result.returncode, result.stdout) == (1, "")
-    assert result.stderr == f'paperlab-mcp: PaperLab isn\'t running. Start it with "docker compose up -d" in {ROOT}.\n'
+    assert result.stderr == (
+        f'paperlab-mcp: PaperLab isn\'t running. Open the PaperLab app, or run "docker compose up -d" in {ROOT}.\n'
+    )
 
 
 def test_when_docker_refuses_access_it_names_the_docker_group(tmp_path):
@@ -89,3 +92,46 @@ def test_the_script_is_executable_and_checked_out_with_lf_line_endings():
     assert SCRIPT.stat().st_mode & stat.S_IXUSR
     assert b"\r" not in SCRIPT.read_bytes()
     assert "scripts/paperlab-mcp text eol=lf" in (ROOT / ".gitattributes").read_text().splitlines()
+
+
+def test_from_the_apps_data_folder_it_runs_compose_there(tmp_path):
+    """The desktop app's data folder and the release tarball hold scripts/paperlab-mcp beside docker-compose.yml. The
+    folder has a space in it, like macOS's Application Support."""
+    folder = tmp_path / "PaperLab data"
+    (folder / "scripts").mkdir(parents=True)
+    script = folder / "scripts" / "paperlab-mcp"
+    shutil.copy2(SCRIPT, script)
+    (folder / "docker-compose.yml").write_text("name: paperlab-app\n")
+
+    result, calls = run_script(tmp_path, script=script, FAKE_PS="db\nredis\n")
+
+    assert calls == [f"{folder}|compose ps --status running --services"]
+    assert result.stderr == (
+        f'paperlab-mcp: PaperLab isn\'t running. Open the PaperLab app, or run "docker compose up -d" in {folder}.\n'
+    )
+
+
+@pytest.mark.skipif(Path("/usr/bin/docker").exists(), reason="a docker in /usr/bin is on this test's PATH")
+@pytest.mark.parametrize("place", [".docker/bin/docker", ".rd/bin/docker"])
+def test_docker_desktops_and_rancher_desktops_per_user_docker_are_found_without_path(tmp_path, place):
+    """Docker Desktop's per-user install and Rancher Desktop put docker in the home folder, which an app started from
+    the Dock never has on PATH."""
+    home = tmp_path / "home"
+    docker = home / place
+    docker.parent.mkdir(parents=True)
+    docker.write_text(FAKE_DOCKER)
+    docker.chmod(0o755)
+    log = tmp_path / "calls.log"
+
+    result = subprocess.run(
+        ["sh", str(SCRIPT)],
+        cwd=tmp_path,
+        env={"HOME": str(home), "PATH": "/usr/bin:/bin", "FAKE_LOG": str(log), "FAKE_PS": "api\n"},
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert log.read_text().splitlines()[0] == f"{ROOT}|compose ps --status running --services"

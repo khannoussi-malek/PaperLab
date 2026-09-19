@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     # The folder `docker compose up` ran in, from `PAPERLAB_DIR: ${PWD:-}` in docker-compose.yml (Compose uses its own
     # working directory when the shell exports no PWD). Empty outside Compose. Connect Claude prefills with it.
     paperlab_dir: str = ""
+    # The built frontend's folder (the release image sets /app/web). Empty: the API serves no page, as in development,
+    # where Vite serves the frontend on :5180.
+    frontend_dist: str = ""
 
 
 settings = Settings()

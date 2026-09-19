@@ -3,12 +3,13 @@ import { fadeIn } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { connectClaudeHref } from '@/lib/route'
 import { cn } from '@/lib/utils'
+import { DesktopSettings } from './DesktopSettings'
 import { EmbeddingSettings } from './EmbeddingSettings'
 import { ModelsSettings } from './ModelsSettings'
 import { PaperSourcesSettings } from './PaperSourcesSettings'
 
-/** `#/settings`: model connections (which models chat lists, and the default), paper sources, the embedding model, and
- * a link to Connect Claude. */
+/** `#/settings`: model connections (which models chat lists, and the default), paper sources, the embedding model, the
+ * desktop app's switches (only in the app), and a link to Connect Claude. */
 export function SettingsPage() {
   return (
     <main className={cn('mx-auto flex max-w-3xl flex-col gap-8 px-4 py-6', fadeIn)}>
@@ -25,6 +26,7 @@ export function SettingsPage() {
       <ModelsSettings />
       <PaperSourcesSettings />
       <EmbeddingSettings />
+      <DesktopSettings />
 
       <section aria-labelledby="connect-claude-heading" className="flex flex-col gap-3">
         <h2 id="connect-claude-heading" className="font-heading text-xl font-semibold">
