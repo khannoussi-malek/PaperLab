@@ -64,6 +64,7 @@ Defined in `src/index.css` as CSS variables and exposed to Tailwind through `@th
 | `glass` / `glass-strong` | white 70% / white 85% | slate-800 55% / slate-800 92% | Frosted chrome / cards and floating surfaces |
 | `glass-border` | slate-400 35% | white 10% | Hairline on glass |
 | `ambient-1` / `ambient-2` (body glow) | blue 12% / violet 10% | blue 18% / violet 16% | Radial glows behind the glass |
+| `on-page-ring` | `#2563eb` | same | Focus ring for controls on the always-white PDF page (citation buttons); fixed across themes so dark theme still keeps 3:1 |
 
 All text pairs above meet WCAG AA (4.5:1) in their theme. Check any new pair before using it.
 
@@ -109,12 +110,14 @@ Fonts: body `Atkinson Hyperlegible Next Variable` (`font-sans`), headings `Crims
   "Chart title" / "Dataset name" / "Pasted data" / "CSV file" / "Create dataset" / "Charts use this data" / "Save
   anyway" / "View data table" / "Chart data" / "Add series" / "Choose data" / "Save chart" / "Save changes" / "Save
   as copy" / "Attach chart" / "Search charts" / "Remove chart" / "Add to note…" / "Quick chart" / "Open". Also
-  `article.connection-card`, `.cloud-tag`, `.key-hint`, `.test-result`, `li.model-row`, `.embedding-indexed`, and
+  `article.connection-card`, `.cloud-tag`, `.key-hint`, `.test-result`, `li.model-row`, `.embedding-indexed`,
+  `.search-model-status`, `.search-notice`, and
   the names "Settings" / "Add connection" / "Test" / "Edit connection" / "Delete connection" / "Add model" / "Add a
   model" / "Search or type a model name" / "Default model" / "Remove <name> from chat" / "Delete <name> from disk" /
   "Model to pull" / "Pull" / "Pulling <name>" / "Kind" / "Preset" / "Name" / "Base URL" / "API key" / "Replace key" /
   "Remove key" / "Save connection" / "Model" / "Manage models…" / "Set up a model" / "Open settings" / "Embedding
-  model" / "Re-index library" / "Re-index the library?" / "Re-index". Also `.reference-row`, `.references-summary`
+  model" / "Re-index library" / "Re-index the library?" / "Re-index" / the region "Search" / "Download search model ·
+  <N> MB" / "Downloading the search model". Also `.reference-row`, `.references-summary`
   and `.reference-list`.
   Also the names "Connect Claude" / "Open Connect Claude" / "Your system" (tabs "macOS" / "Windows" / "Windows + WSL" /
   "Linux") / "PaperLab folder" / "Copy" / "Copied" / "Check the server", and the regions "Claude Desktop" / "Claude
@@ -386,7 +389,7 @@ before deleting; `search.py "progress bar long running download status" --domain
 `--stack shadcn "select dialog form password input radio group"`: shadcn `Select` and `Dialog`, never native ones).
 - **Settings page (`#/settings`):** the library's page shell in a `max-w-3xl` column: a ghost "Library" link
   (`ArrowLeft`), the `font-heading` h1 "Settings", then two `section`s labelled by their h2: "Model connections" and
-  "Embedding model". The library header gains an outline icon link "Settings" (`Settings` icon) before the theme toggle.
+  "Search". The library header gains an outline icon link "Settings" (`Settings` icon) before the theme toggle.
 - **Model connections:** the h2 row ends with the view's one primary button, "Add connection" (`Plus`). With none, a
   dashed box says "No model connections yet. Add Ollama, Anthropic or any OpenAI-compatible server." Each connection is
   an `article.connection-card[data-connection-id]` on glass (`glass`, `ring-1 ring-glass-border`, `rounded-xl p-4`):
@@ -433,13 +436,31 @@ before deleting; `search.py "progress bar long running download status" --domain
 - **AI mark:** its tooltip and screen-reader label read `AI · <model> · <connection> · prompt v<N>` (`aiMark`);
   answers saved before connections read `AI · <model> · prompt v<N>`.
 - **Refusals:** `no_model` and `embedding_model_changed` alerts carry an outline "Open settings" link in `AlertAction`;
-  `model_not_found` offers Retry, which asks with the dropdown's fallback.
-- **Embedding model:** a shadcn `Select` "Embedding model" showing the configured model. Always disabled, since there
-  is nothing to switch to yet, and a `Lock` icon joins its label once chunks exist; `.embedding-indexed` "indexed with nomic-ai/nomic-embed-text-v1.5 · 12,400 chunks"
-  (`tabular-nums`). When some chunks came from another model, a destructive `Alert`: "N chunks were indexed with another
-  model. Chat on those papers is refused until you re-index." An outline "Re-index library" (`RefreshCw`) opens the
-  `Dialog` "Re-index the library?" ("Every paper's passages are embedded again with <model>, in the background."),
-  with Cancel and destructive "Re-index"; then a `role="status"` line "Re-indexing N papers in the background."
+  `model_not_found` offers Retry, which asks with the dropdown's fallback. `search_not_set_up` reads "Search isn't set
+  up, so this can't be searched yet." with the `DownloadSearchModel` block under the message and no Retry (ask again
+  once the status line says ready).
+- **Search:** the section "Search" (h2) opens with the built-in search model: a `.search-model-status` line
+  (`text-sm tabular-nums text-muted-foreground`, no live region) reading "Search model: not downloaded", "Search
+  model: downloading… 42%" or "Search model: ready" (`statusLine`); while the model is missing, an outline `sm`
+  "Download search model · 548 MB" (`Download` icon; the size is what a download would fetch now, `downloadLabel`);
+  while it downloads, a shadcn `Progress` named "Downloading the search model" (`downloadPercent`); a failure in a
+  destructive `Alert`, with the button back to try again. `DownloadSearchModel` is the same block wherever it shows
+  (here, chat's `search_not_set_up` refusal, the library notice), and one download per tab drives them all
+  (`useSearchModelDownload`): leaving a page doesn't stop it. Patterns from ui-ux-pro-max: `search.py "download
+  progress bar large file" --domain ux` (a bar for long work) and `"empty state feature unavailable"` (the message
+  comes with its action). Below it, the embedding model: a shadcn `Select` "Embedding model" showing the configured
+  model. Always disabled, since there is nothing to switch to yet, and a `Lock` icon joins its label once chunks
+  exist; `.embedding-indexed` "indexed with nomic-ai/nomic-embed-text-v1.5 · 12,400 chunks" (`tabular-nums`).
+  When some chunks came from another model, a destructive `Alert`: "N chunks were indexed with another model. Chat on
+  those papers is refused until you re-index." An outline "Re-index library" (`RefreshCw`; disabled while no search
+  model is downloaded) opens the `Dialog` "Re-index the library?" ("Every paper's passages are embedded again with
+  <model>, in the background."), with Cancel and destructive "Re-index"; then a `role="status"` line "Re-indexing N
+  papers in the background."
+- **Library notice:** while no search model is downloaded and some ready paper is too long to chat with whole
+  (`showSearchNotice`: `model_present` false and `papers_needing_search > 0`), one `.search-notice` row sits between
+  the library header and the workspace sidebar: the muted line "Search isn't set up: long papers and workspaces can't
+  be searched yet." (`text-sm text-muted-foreground`) and the `DownloadSearchModel` block. Not an `Alert`, not glass:
+  it is information, not an error. It goes away once the model is here.
 - **Chat panel details:** `.chat-cite` has `outline-none focus-visible:ring-2 focus-visible:ring-ring`. While an
   answer streams, the list stays at its bottom if it was there. "Save as note" stays inside the panel
   (`saveButtonPosition`) and re-measures when the panel changes size or is shown again.
@@ -522,6 +543,77 @@ submit.
   count is zero; the whole line is left out when both are.
 - The switch keeps whichever direction the reader was viewing; both directions share one fetch state (the worker
   fills `cites` and `cited_by` together), so switching mid-fetch or mid-failure shows the same state either way.
+
+## Citation card
+
+Patterns from ui-ux-pro-max (2026-09-18, `--domain ux`): `"hover card popover preview"` gave *Hover vs Tap* (High:
+never rely on hover alone for an important action → every citation is also a focusable button, and a click jumps) and
+*Hover States* (a pointer cursor over what is clickable); `"keyboard focus popover escape"` gave *Focus States* and
+*Keyboard Navigation* (High: visible rings, tab order in document order); `"back to previous position after jump"`
+gave *Back Button* (High: never break the browser's Back → the jump adds no history entry, and the pill is the way
+back); `"tooltip link preview accessibility"` gave *Alt Text* and *ARIA Labels* (the first page is a named image,
+every button has a name).
+- **Which citations:** every numbered citation the PDF itself links (`[51]`). A link counts when its destination has a
+  line starting `[N]` from one label-height above to 2.5 below the destination point, in the destination's column.
+  Figure, table, section, footnote and "N pages" links stay inert. Author-year citations, citations the PDF doesn't
+  link, and `N.` list labels get nothing yet.
+- **Waiting:** the whole document is read once per open, in memory only (`readCitations`), when the browser is next
+  idle after the paper opens (`requestIdleCallback` with a 1 s timeout; a 300 ms `setTimeout` where it's missing), so it
+  never competes with page 1's first paint for the one PDF.js worker (see Waiting). Until it is done, links stay inert
+  (15 ms on the E2E fixture, 73–139 ms on the owner's 12–43-page papers). The paper's `cites` listing is fetched as
+  soon as the pass finds a citation, so the first hover doesn't wait. It is a read only, shared with the References
+  tab's cache. Matching runs only for the open card.
+- **Surface and motion:** the note hover card's. `w-80`, strong glass (`bg-glass-strong border border-glass-border
+  rounded-xl p-3 shadow-lg backdrop-blur-lg backdrop-saturate-150`), `text-sm`, `popIn` from `origin-top-left`, 4 pt
+  below the link and aligned with it (no flip near the page bottom), closing 300 ms after the pointer leaves both.
+  There is one card at a time: a citation inside a highlight wins it, and while a note in the card is being edited a
+  citation never takes it. The pages section shows a pointer cursor over a citation. The text layer's own text cursor
+  comes from PDF.js's unlayered stylesheet, so it takes `[&_.textLayer_span]:cursor-pointer!`.
+- **States:** the card is a `section` named `Reference {N}`, and its first line is always `Reference {N}`
+  (`text-xs text-muted-foreground tabular-nums`). A card never shows both the details and the raw entry.
+  - **In library:** the cited paper's first page (`FirstPage`, a `6rem` column), then the title (`font-heading
+    font-semibold line-clamp-3`, full title in `title`), `byline · citations` (muted), and the co-citation badge. Primary
+    **Open in PaperLab** link, ghost **Open page**.
+  - **Free PDF:** the title, byline and a secondary **PDF** badge. Primary **Add to library** (`Plus`; **Adding…** with
+    a spinning `LoaderCircle`, `aria-disabled` rather than the native `disabled` while it runs, so the button stays
+    focusable and keeps its name for a screen reader), ghost **Open page**. A failed add shows its `ErrorAlert` in the
+    card. Success turns the card into In library through the shared cache and moves focus onto the new **Open in
+    PaperLab** link.
+  - **Details only:** the title, byline and an outline **No free PDF**; ghost **Open page**.
+  - **Unmatched:** `From this paper's reference list`, then the entry as the PDF prints it (`max-h-40 overflow-auto
+    wrap-anywhere`), then one line:
+    - `This paper's references haven't been looked up.` or `Looking up this paper's references failed.`, both with a
+      ghost **Open References**, which opens the References tab (the card itself never looks anything up; the tab
+      fetches on open);
+    - `Looking up this paper's references…` (`role="status"`), and the card turns into a matched state by itself;
+    - `Couldn't check your library for it.` when the listing request itself failed.
+
+    Ghost **Open page** when the entry prints a DOI.
+  - **Unreadable** (over 12 lines or 1,200 characters): `This entry couldn't be read from the PDF. Click the citation
+    to see it in the list.`
+  - `Loading…` (`delayedIn`) until the listing settles.
+- **Click and keyboard:** a click on a citation jumps to its entry through `flashChunk`, the reader's one scroll path.
+  Each citation is also a transparent `<button class="citation-link">` over its link, in the page overlay, named
+  `Reference {N}`, with `aria-expanded` (always `true` or `false`) and `aria-controls` while its card is open. Its
+  focus ring is `focus-visible:outline-2 outline-on-page-ring`, a token fixed to the light theme's `primary` so it
+  keeps 3:1 contrast on the always-white page in dark theme too. Focus opens the card, which follows the button in the
+  DOM, so Tab reaches the card's actions and then the next citation. Escape closes the card and puts focus back on the
+  button. Enter or Space jumps. Keyboard focus on a citation or in its card keeps its card open; pointing at another
+  citation or at a highlight still replaces it. A **Skip to side panel** button, hidden until focused (`sr-only
+  focus:not-sr-only`; a button, not an `<a href="#…">`, since the reader's routing reads the URL hash), is the first
+  tab stop after the toolbar, so a keyboard user never has to walk through every citation on the page to reach it.
+- **Back to page N:** after a jump, a strong-glass pill **Back to page {N}** (`Undo2`, `rounded-full`, `popIn` from
+  `origin-bottom`) sits sticky at the bottom centre of the pages column, with no height of its own. Choosing it scrolls
+  smoothly back to the exact spot and hides it. A later jump replaces the spot, and scrolling back by hand to within
+  half a screen of it hides the pill too. Changing the zoom (`forScale`) also hides it, since a spot's `scrollTop` only
+  means the same place at the scale it was saved — the pill comes back once the zoom returns to that scale, still at
+  the same saved spot. After a keyboard jump focus moves to the pill once, the first time it appears for that spot; if
+  the pill then disappears while it still holds focus (scrolled back by hand, or zoomed away and back), focus returns
+  to the citation button that jumped, the same one Back returns focus to.
+- **Stable test hooks:** `.citation-link`, `.citation-card`, `data-citation-id` on each citation's wrapper, the
+  "Reference N" button and region names, "Open References", "Add to library", "Open in PaperLab", "Open page", "Back to
+  page N", "Skip to side panel", and the fixture `e2e/fixtures/citation-paper.pdf` (regenerated by
+  `e2e/fixtures/make_citation_paper.py`).
 
 ## Connect Claude
 

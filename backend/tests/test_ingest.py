@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import enrichment, paper_sources, papers
-from app.models import Author, Chunk, Paper, paper_authors, paper_topics
+from app.models import Author, Chunk, Paper, PaperStatus, paper_authors, paper_topics
 from app.providers import embedding
 from app.workers import ingest
 from app.workers.settings import WorkerSettings
@@ -58,23 +58,69 @@ async def test_chunks_are_embedded_with_the_document_prefix(worker_session, samp
 
     chunks = await chunks_of(worker_session, paper.id)
     prefixed = [f"search_document: {c.text}" for c in chunks]
-    assert embedder.calls == [(prefixed, {"batch_size": 16, "normalize_embeddings": True})]
+    assert embedder.calls == [(prefixed, {})]
     for chunk, text in zip(chunks, prefixed):
         assert np.allclose(chunk.embedding, unit_vector(text), atol=1e-6)
 
 
-async def test_model_loads_once_per_worker_not_per_job(worker_session, sample_pdf, embedder, monkeypatch):
+async def test_the_worker_loads_the_model_on_its_first_job_and_keeps_it(
+    worker_session, sample_pdf, embedder, monkeypatch
+):
     loads = []
     monkeypatch.setattr(embedding, "load", lambda: loads.append("load") or embedder)
+    monkeypatch.setattr(embedding, "_model", None)
     paper = await add_paper(worker_session, sample_pdf)
-    worker_ctx = {}
 
-    await WorkerSettings.on_startup(worker_ctx)
-    await ingest.ingest_paper(worker_ctx, str(paper.id))
-    await ingest.ingest_paper(worker_ctx, str(paper.id))
+    await ingest.ingest_paper({}, str(paper.id))  # the worker's own ctx: no test fake in it
+    await ingest.ingest_paper({}, str(paper.id))
 
     assert loads == ["load"]
     assert len(embedder.calls) == 2
+    assert getattr(WorkerSettings, "on_startup", None) is None  # nothing loads at start (D136)
+
+
+async def test_with_no_search_model_a_paper_is_ready_without_vectors(worker_session, sample_pdf, monkeypatch):
+    stages = []
+    real_set_status = papers.set_status
+
+    async def record(session, paper_id, status, **fields):
+        stages.append(status)
+        await real_set_status(session, paper_id, status, **fields)
+
+    monkeypatch.setattr(papers, "set_status", record)
+    paper = await add_paper(worker_session, sample_pdf)
+
+    await ingest.ingest_paper({"embedder": None}, str(paper.id))
+    await worker_session.refresh(paper)
+
+    assert (paper.status, paper.status_error) == ("ready", None)
+    assert stages == [PaperStatus.EXTRACTING, PaperStatus.CHUNKING, PaperStatus.ENRICHING, PaperStatus.READY]
+    chunks = await chunks_of(worker_session, paper.id)
+    assert chunks and all(c.embedding is None for c in chunks)
+
+
+async def test_once_the_model_arrives_the_queued_reembed_embeds_the_paper(worker_session, sample_pdf, embedder):
+    paper = await add_paper(worker_session, sample_pdf)
+    await ingest.ingest_paper({"embedder": None}, str(paper.id))
+
+    await ingest.reembed_paper({"embedder": embedder}, str(paper.id))  # what a finished download queues (D137)
+
+    chunks = await chunks_of(worker_session, paper.id)
+    assert all(c.embedding is not None and c.embed_model == "test" for c in chunks)
+    for chunk in chunks:
+        assert np.allclose(chunk.embedding, unit_vector(f"search_document: {chunk.text}"), atol=1e-6)
+
+
+async def test_reembed_with_no_search_model_changes_nothing_and_says_so(worker_session, sample_pdf, ctx, caplog):
+    paper = await add_paper(worker_session, sample_pdf)
+    await ingest.ingest_paper(ctx, str(paper.id))
+    before = [list(c.embedding) for c in await chunks_of(worker_session, paper.id)]
+
+    with caplog.at_level("INFO", logger="app.workers.ingest"):
+        await ingest.reembed_paper({"embedder": None}, str(paper.id))
+
+    assert [list(c.embedding) for c in await chunks_of(worker_session, paper.id)] == before
+    assert f"no search model: re-embedding {paper.id} skipped" in caplog.text
 
 
 async def test_reingest_is_idempotent(worker_session, sample_pdf, ctx):

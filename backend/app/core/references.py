@@ -255,7 +255,10 @@ async def set_state(session: AsyncSession, paper_id: uuid.UUID, state: str, erro
 
 
 async def embed_new(session: AsyncSession, embedder) -> None:
-    """Vectors for reference titles and notes that have none, or were made by another model or before an edit."""
+    """Vectors for reference titles and notes that have none, or were made by another model or before an edit.
+    With no search model (embedder None) there are none to make: the listing ranks by its other signals (D136)."""
+    if embedder is None:
+        return
     await session.execute(_TAKE_LOCK, {"key": REFERENCES_LOCK})
     model_name = settings.embed_model
     refs = (

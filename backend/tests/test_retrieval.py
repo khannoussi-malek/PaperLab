@@ -8,6 +8,7 @@ from pgvector.sqlalchemy import Vector
 from sqlalchemy import bindparam, insert, text
 
 from app.core import retrieval
+from app.core.errors import Conflict
 from app.core.retrieval import retrieve
 from app.models import Chunk, Paper, Workspace, workspace_papers
 from app.providers import embedding
@@ -97,6 +98,17 @@ async def test_uses_the_process_model_when_no_embedder_is_given(session, embedde
 
     found = await retrieve(session, QUERY, paper_ids=[paper_a.id], k=1)
     assert len(found) == 1 and embedder.calls
+
+
+async def test_with_no_search_model_retrieval_says_search_is_not_set_up(session, monkeypatch):
+    monkeypatch.setattr(embedding, "get_model", lambda: None)  # nothing downloaded
+
+    with pytest.raises(Conflict, match="^search_not_set_up$") as refused:
+        await retrieve(session, QUERY, k=3)
+
+    assert refused.value.details == {
+        "detail": "Search isn't set up. Download the search model in Settings to search long papers and workspaces."
+    }
 
 
 def fresh_query(embedder) -> list[float]:

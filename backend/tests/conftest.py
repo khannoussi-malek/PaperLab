@@ -59,9 +59,10 @@ def anyio_backend():
 
 @pytest.fixture(autouse=True)
 def no_real_embedding_model(monkeypatch):
-    """A test that forgets to pass a FakeEmbedder fails at once instead of downloading 523 MB."""
+    """A test that forgets to pass a FakeEmbedder fails at once instead of loading the search model from
+    MODELS_DIR."""
 
-    def refuse():
+    def refuse(*args, **kwargs):
         raise RuntimeError("tests must not load the embedding model; pass a FakeEmbedder or patch get_model")
 
     monkeypatch.setattr(embedding, "load", refuse)
@@ -110,7 +111,7 @@ def unit_vector(seed: str) -> list[float]:
 
 
 class FakeEmbedder:
-    """Stands in for SentenceTransformer: records every encode call instead of running a model.
+    """Stands in for onnx_embedding.Embedder: records every encode call instead of running a model.
 
     A text embeds to `vectors[text]` when a test set one, otherwise to `unit_vector(text)`.
     """

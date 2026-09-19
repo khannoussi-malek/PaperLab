@@ -3,14 +3,18 @@ from typing import Literal
 
 from pydantic_settings import BaseSettings
 
+from app.providers.search_model import SHIPPED
+
 
 class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://paperlab:paperlab@db:5432/paperlab"
     redis_url: str = "redis://redis:6379"
     pdf_dir: Path = Path("/data/pdfs")
-    # Fixed by the vector(768) column; changing it means a migration and a full re-embed.
-    # Keep the org prefix: "nomic-embed-text-v1.5" alone is not a Hugging Face repo.
-    embed_model: str = "nomic-ai/nomic-embed-text-v1.5"
+    # The name chunks record with their vectors (D137). It follows the built-in search model's shipped variant
+    # (providers/search_model.py) and is not meant to be set; tests set it to "test". vector(768) fixes the size.
+    embed_model: str = SHIPPED.name
+    # Where the built-in search model is downloaded (the `models` volume). Empty of it until the user downloads it.
+    models_dir: Path = Path("/models")
     # `fake` swaps every provider call made through a model connection for a scripted one (the E2E stack).
     # With LLM_MODEL, OLLAMA_URL and ANTHROPIC_API_KEY it also seeds the first connection while there are none;
     # after that the database decides which model answers.

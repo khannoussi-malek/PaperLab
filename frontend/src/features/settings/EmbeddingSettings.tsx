@@ -9,9 +9,11 @@ import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, Di
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
+import { DownloadSearchModel } from './DownloadSearchModel'
 import { indexedLine, staleChunks } from './embeddingStatus'
 
-/** The "Embedding model" section: the model in use (locked once anything is indexed), and a confirmed re-index. */
+/** The "Search" section: the built-in search model (its status, its download), the embedding model in use (locked
+ * once anything is indexed), and a confirmed re-index. */
 export function EmbeddingSettings() {
   const status = useEmbeddingStatus()
   const reindex = useReindexLibrary()
@@ -32,9 +34,9 @@ export function EmbeddingSettings() {
   }
 
   return (
-    <section aria-labelledby="embedding-model-heading" className="flex flex-col gap-4">
-      <h2 id="embedding-model-heading" className="font-heading text-xl font-semibold">
-        Embedding model
+    <section aria-labelledby="search-heading" className="flex flex-col gap-4">
+      <h2 id="search-heading" className="font-heading text-xl font-semibold">
+        Search
       </h2>
 
       {status.data === undefined ? (
@@ -52,6 +54,7 @@ export function EmbeddingSettings() {
         )
       ) : (
         <div className="flex flex-col gap-3">
+          <DownloadSearchModel alwaysShowStatus />
           <div className="grid gap-1.5">
             <Label htmlFor="embedding-model" className="flex items-center gap-1.5 text-sm font-medium">
               {status.data.chunks > 0 && <Lock aria-hidden className="size-3.5" />}
@@ -80,7 +83,8 @@ export function EmbeddingSettings() {
           )}
 
           <div>
-            <Button variant="outline" onClick={() => openConfirm(true)}>
+            {/* With no search model a re-index would queue jobs that embed nothing. */}
+            <Button variant="outline" disabled={!status.data.model_present} onClick={() => openConfirm(true)}>
               <RefreshCw aria-hidden />
               Re-index library
             </Button>

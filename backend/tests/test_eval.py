@@ -2,6 +2,7 @@ import pytest
 from conftest import unit_vector
 
 from app.models import Chunk, Paper
+from app.providers import embedding, search_model
 from evals import run
 
 pytestmark = pytest.mark.anyio
@@ -69,3 +70,15 @@ async def test_malformed_questions_file_exits_2(tmp_path, capsys):
 
     assert await run.main(["--questions", str(path)]) == 2
     assert "expected" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(("flag", "variant"), [([], None), (["--variant", "full"], search_model.VARIANTS["full"])])
+async def test_with_no_search_model_the_eval_says_so_and_exits_2(tmp_path, capsys, monkeypatch, flag, variant):
+    asked = []
+    monkeypatch.setattr(embedding, "load", lambda variant=None: asked.append(variant))  # nothing downloaded
+    path = tmp_path / "questions.yaml"
+    path.write_text(QUESTIONS)
+
+    assert await run.main(["--questions", str(path), *flag]) == 2
+    assert asked == [variant]  # None: the shipped one
+    assert "no search model in" in capsys.readouterr().err

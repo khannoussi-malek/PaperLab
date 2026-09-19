@@ -9,6 +9,7 @@ import { FindPapersButton } from '../discovery/FindPapersButton'
 import { WorkspaceSidebar } from '../workspaces/WorkspaceSidebar'
 import { ErrorAlert, LoadError } from './ErrorAlert'
 import { PaperList } from './PaperList'
+import { SearchNotice } from './SearchNotice'
 import { UploadPdfsButton } from './UploadPdfsButton'
 
 export function LibraryPage() {
@@ -56,6 +57,8 @@ export function LibraryPage() {
           <ModeToggle />
         </div>
       </header>
+
+      <SearchNotice />
 
       <div className="grid items-start gap-4 lg:grid-cols-[14rem_minmax(0,1fr)]">
         <WorkspaceSidebar activeId={null} />

@@ -68,4 +68,13 @@ describe('refusal', () => {
     })
     expect(refusal(409, 'embedding_model_changed')).toMatchObject({ retryable: false, settings: true })
   })
+
+  it("words a search that isn't set up, and offers the search model's download instead of Retry", () => {
+    expect(refusal(409, 'search_not_set_up')).toEqual({
+      message: "Search isn't set up, so this can't be searched yet.",
+      retryable: false,
+      reindex: false,
+      download: true,
+    })
+  })
 })

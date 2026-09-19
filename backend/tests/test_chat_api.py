@@ -9,6 +9,7 @@ from test_chat_workspace import add_note
 from app.core import chat
 from app.main import create_app
 from app.models import Chunk, LLMOutput, Note, Paper
+from app.providers import embedding
 from app.providers.llm import FAKE_ANSWER, FAKE_TOKENS
 
 pytestmark = pytest.mark.anyio
@@ -115,7 +116,8 @@ async def test_save_failure_sends_an_error_event_instead_of_done(client, session
     assert "done" not in [name for name, _ in events]
 
 
-async def test_chat_errors_before_streaming_get_status_codes(client, session, fake_llm):
+async def test_chat_errors_before_streaming_get_status_codes(client, session, fake_llm, embedder, monkeypatch):
+    monkeypatch.setattr(embedding, "get_model", lambda: embedder)  # a search model is downloaded
     extracting, _ = await make_paper(session, ["Intro text."], status="extracting")
     unindexed, _ = await make_paper(session, ["x" * 25_000])  # too large to send whole, and no vectors
     ready, _ = await make_paper(session, ["Intro text."])
@@ -131,6 +133,21 @@ async def test_chat_errors_before_streaming_get_status_codes(client, session, fa
     for body in [{}, {"question": "   "}, {"question": "x" * 2001}]:
         assert (await ask(ready.id, body)).status_code == 422
     assert fake_llm.calls == []
+
+
+async def test_with_no_search_model_a_long_paper_is_refused_and_a_short_one_still_answers(
+    client, session, fake_llm, monkeypatch, answers_in_test_transaction
+):
+    monkeypatch.setattr(embedding, "get_model", lambda: None)  # nothing downloaded
+    long, _ = await make_paper(session, ["x" * 25_000])
+    short, _ = await make_paper(session, ["Intro text."])
+
+    refused = await client.post(f"/api/papers/{long.id}/chat", json={"question": "why?"})
+    answered = await client.post(f"/api/papers/{short.id}/chat", json={"question": "why?"})
+
+    assert (refused.status_code, refused.json()) == (409, {"detail": "search_not_set_up"})
+    assert [name for name, _ in parse_sse(answered.text)][-1] == "done"
+    assert len(fake_llm.calls) == 1
 
 
 async def test_history_lists_answers_oldest_first_with_replaced_chunks_as_null(client, session):

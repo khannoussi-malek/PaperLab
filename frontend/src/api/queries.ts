@@ -399,6 +399,12 @@ export const useAvailableModels = (connectionId: string, enabled: boolean) =>
 
 export const useEmbeddingStatus = () => useQuery({ queryKey: keys.embedding, queryFn: api.embeddingStatus })
 
+/** For a stream that isn't a mutation (the search model's download): read the embedding status again. */
+export function useInvalidateEmbedding() {
+  const client = useQueryClient()
+  return () => client.invalidateQueries({ queryKey: keys.embedding })
+}
+
 /** For streams that aren't mutations (a chat refusal, a finished pull): refetch connections and chat models. */
 export function useInvalidateModels() {
   const client = useQueryClient()

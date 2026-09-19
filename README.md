@@ -68,6 +68,10 @@ workspace: answers cite passages from its papers and your notes.
 - Read in a PDF.js reader with zoom, in a light, dark or system theme. The page itself stays white.
 - Select text to highlight it in one of five colours, or a custom one, and add a note if you want.
 - Hover a highlight to see, edit, recolour or delete its note in place. Right-click it for the same actions and "Copy quote".
+- Hover a numbered citation the PDF links, like `[51]`, to see which paper it is: its details once the paper's
+references are looked up, with **Open in PaperLab** when it's in your library or **Add to library** when a free PDF
+exists, and otherwise the entry exactly as the reference list prints it. Click it to jump to that entry, and **Back to
+page N** takes you back to where you were. Tab reaches every citation too.
 - Resize the side panel by dragging its edge. It remembers the width.
 
 **Capture data and chart it**
@@ -155,25 +159,18 @@ docker compose up -d --build          # db (:5433), redis, api (:8000), worker, 
 open http://localhost:5180
 ```
 
-The first upload takes longer: the worker downloads the embedding model once and caches it.
-
 ### First start
 
-The worker loads the embedding model (`nomic-ai/nomic-embed-text-v1.5`, about 523 MB) when it starts, and the API
-loads it on the first question that retrieves: every workspace chat, and large papers. Both read the `hfcache`
-volume. Download the model into it once, before the first `docker compose up`:
+PaperLab works without a search model: upload papers, read them, highlight and take notes, and chat with short ones.
+Chatting with a long paper or a workspace needs the built-in search model, and so does Claude's `search_library`: it
+is `nomic-embed-text-v1.5` running on ONNX Runtime (548 MB). Download it in **Settings → Search**, or from the library
+or chat when a long paper needs it. It goes into the `models` volume, and the papers you added before are made
+searchable in the background. If Settings → Search then says some chunks were indexed with another model, re-index
+the library there once. The graph's Similar content layer and the References tab's note ranking also stay off until
+the model is downloaded.
 
-```sh
-docker compose build api
-docker compose run --rm --no-deps api python -c "from app.providers.embedding import load; load()"
-```
-
-Hugging Face gives up on a download after 10 seconds without data. On a slow connection, raise that in `.env`
-(both containers read it):
-
-```sh
-HF_HUB_DOWNLOAD_TIMEOUT=60
-```
+Upgrading from an older PaperLab? It ran the model on torch and kept it in the `hfcache` volume, which nothing uses
+any more: `docker volume rm paperlab_hfcache` frees its space (about 0.5 GB).
 
 Real chats also need a model: `ollama pull qwen3:8b` on the host. While there are no model connections, the API
 creates one at startup from `LLM_PROVIDER` / `LLM_MODEL` in `.env`; after that, add and switch models in **Settings**.
@@ -209,7 +206,7 @@ The server has four tools:
 - `related_papers`: library papers connected to one, up to three links away;
 - `create_note`: a note on a passage it quotes exactly.
 
-The first search takes about 30 seconds while the embedding model loads.
+The first search takes a few seconds while the search model loads. Without it, `search_library` answers that search isn't set up.
 
 ### Configuration
 
@@ -237,7 +234,7 @@ Settings live in `.env`.
 flowchart LR
   UI["Browser<br/>React · PDF.js · shadcn/ui"] -- "REST + SSE" --> API["API<br/>FastAPI"]
   API --> DB[("Postgres 16<br/>+ pgvector")]
-  API -- "ingest job" --> Q[(Redis)] --> W["Worker (ARQ)<br/>PyMuPDF · sentence-transformers"]
+  API -- "ingest job" --> Q[(Redis)] --> W["Worker (ARQ)<br/>PyMuPDF · ONNX Runtime"]
   W --> DB
   API -- "chat" --> LLM["Ollama on the host, Anthropic<br/>or an OpenAI-compatible server"]
 ```
@@ -248,7 +245,8 @@ flowchart LR
 `uploaded → extracting → chunking → embedding → enriching → ready`, or `failed` with the reason. Enrichment never fails
 a paper: with no OpenAlex match, or no network, it is still ready. PyMuPDF extracts the text with
 its coordinates, so highlights and citations can point at exact rectangles on the page. Chunks are embedded with
-`nomic-embed-text-v1.5` into `vector(768)` columns.
+`nomic-embed-text-v1.5` on ONNX Runtime into `vector(768)` columns once the search model is downloaded; until then a
+paper is ready without them.
 - **Chat:** a question retrieves the closest chunks for that paper (or sends the whole paper if it's short), streams the
 model's answer over Server-Sent Events as `sources → token → done`, and saves it with its prompt version. Prompts are
 versioned files in `backend/prompts/`.
@@ -258,7 +256,7 @@ versioned files in `backend/prompts/`.
 backend/
   app/api/         HTTP routes: papers, notes, chat, health, llm, embedding
   app/core/        domain logic: chunking, retrieval, chat, note provenance rules
-  app/providers/   PDF extraction, embeddings, OpenAlex, LLM adapters (Ollama, Anthropic, OpenAI-compatible, fake), Ollama pull/delete
+  app/providers/   PDF extraction, the search model and its download, OpenAlex, LLM adapters (Ollama, Anthropic, OpenAI-compatible, fake), Ollama pull/delete
   app/workers/     the ARQ jobs: ingestion and the references fetch
   mcp_server/      the MCP server Claude Desktop starts: search, papers, related papers, notes
   prompts/         versioned prompts
@@ -286,11 +284,19 @@ docker compose exec api python -m evals.answer_check --paper "<title prefix>" --
 ```
 
 - **End-to-end tests** run against the real stack, with no mocked backend. They expect the fake model, which always
-gives the same answer: start the API and the worker with
+gives the same answer, and the search model downloaded: start the API and the worker with
 `LLM_PROVIDER=fake DISCOVERY_PROVIDER=fake docker compose up -d api worker`, run the tests, then go back with
-`docker compose up -d api worker`.
+`docker compose up -d api worker`. The specs tagged `@no-search-model` need a stack with no search model and skip
+themselves otherwise: start it with
+`MODELS_DIR=/models/none LLM_PROVIDER=fake DISCOVERY_PROVIDER=fake docker compose up -d api worker`, then run
+`npx playwright test --project=no-search-model --no-deps`, then `docker compose up -d api worker` again to bring the
+models folder back.
 - **Retrieval eval:** `docker compose exec api python -m evals.run` prints recall@k for the questions in
-`backend/evals/questions.yaml`. Run it twice after a re-ingest before comparing results.
+`backend/evals/questions.yaml`, asking with the search model PaperLab ships; `--variant full` or `--variant int8` asks
+with the other one once it is downloaded. Run it twice after a re-ingest before comparing results.
+- **Parity with the original model:** `backend/tests/test_embedding_parity.py` compares the full-precision ONNX model
+with vectors recorded from the torch model it replaced. It runs when `MODELS_DIR` points at a folder that holds it
+(`docker compose cp api:/models/nomic-embed-text-v1.5 <folder>/`) and is skipped otherwise.
 - **Answer eval:** `docker compose exec api python -m evals.answers --label <name>` asks the default model the
 questions in `backend/evals/answers.yaml` (facts, summaries, follow-ups, notes, questions a paper can't answer) and
 scores each answer. `--summarize` compares saved runs in `backend/evals/results/`. It takes a while on a local model:
