@@ -1,6 +1,6 @@
 import type { UseQueryResult } from '@tanstack/react-query'
 import { ExternalLink, LoaderCircle, Plus } from 'lucide-react'
-import { useMemo, type CSSProperties } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { api, type Reference, type References } from '@/api/client'
 import { useImportReference } from '@/api/queries'
 import { delayedIn, popIn } from '@/components/motion'
@@ -64,6 +64,17 @@ function MatchedBody({ view, paperId }: { view: Matched; paperId: string }) {
   const { reference } = view
   const link = pageLink({ ...reference, core_id: null })
   const fileUrl = reference.paper_id ? api.paperFileUrl(reference.paper_id) : null
+
+  // A keyboard user's focus was on Add to library; once that add turns this card into In library, that button
+  // unmounts and focus would otherwise fall to <body>. Follow it to Open in PaperLab, once, for this add only.
+  const [justAdded, setJustAdded] = useState(false)
+  const openInPaperLab = useRef<HTMLAnchorElement>(null)
+  useEffect(() => {
+    if (!justAdded || view.kind !== 'in-library') return
+    openInPaperLab.current?.focus()
+    setJustAdded(false)
+  }, [justAdded, view.kind])
+
   return (
     <>
       {fileUrl ? (
@@ -77,11 +88,21 @@ function MatchedBody({ view, paperId }: { view: Matched; paperId: string }) {
       <div className="flex flex-wrap items-center gap-2">
         {reference.paper_id && (
           <Button size="sm" asChild>
-            <a href={readerHref(reference.paper_id)}>Open in PaperLab</a>
+            <a ref={openInPaperLab} href={readerHref(reference.paper_id)}>
+              Open in PaperLab
+            </a>
           </Button>
         )}
         {view.kind === 'free-pdf' && (
-          <Button size="sm" disabled={importRef.isPending} onClick={() => importRef.mutate({ refId: reference.id })}>
+          <Button
+            size="sm"
+            aria-disabled={importRef.isPending || undefined}
+            className="aria-disabled:opacity-50"
+            onClick={() => {
+              if (importRef.isPending) return
+              importRef.mutate({ refId: reference.id }, { onSuccess: () => setJustAdded(true) })
+            }}
+          >
             {importRef.isPending ? <LoaderCircle aria-hidden className="motion-safe:animate-spin" /> : <Plus aria-hidden />}
             {importRef.isPending ? 'Adding…' : 'Add to library'}
           </Button>
