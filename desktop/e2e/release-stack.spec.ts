@@ -1,4 +1,4 @@
-import { execFileSync, spawn } from 'node:child_process'
+import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -46,6 +46,24 @@ async function closeWindow(app: ElectronApplication) {
   const exited = new Promise((done) => app.process().once('exit', done))
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].close())
   return exited
+}
+
+/** The exit code once `child` exits, or — within `ms` — rejects and kills it. A plain `child.once('exit', ...)`
+ * await never settles if the process never exits (the single-instance failure the caller below exists to catch),
+ * which would suspend the test forever: no assertion ever runs, and neither does its `finally`. Bounding the wait
+ * turns a hang into a timely, specific failure that reaches cleanup, instead of Playwright's own generic timeout
+ * reporting it with the process still running. */
+function exitCode(child: ChildProcess, ms: number): Promise<number | null> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      child.kill()
+      reject(new Error(`did not exit within ${ms}ms`))
+    }, ms)
+    child.once('exit', (code) => {
+      clearTimeout(timer)
+      resolve(code)
+    })
+  })
 }
 
 test('the window shows the library; a link elsewhere opens in the browser; Settings and Connect Claude know the app @release-stack', async () => {
@@ -121,6 +139,7 @@ test('with Keep running off, closing the window stops PaperLab @release-stack', 
 test('with Keep running on, closing hides the window, a second launch shows it, and Quit stops PaperLab @release-stack', async () => {
   const dataDir = dataFolder()
   const { app, page } = await open(dataDir)
+  let second: ChildProcess | undefined
   try {
     await expect(library(page)).toBeVisible({ timeout: STARTUP })
     await page.goto('http://127.0.0.1:5190/#/settings')
@@ -132,8 +151,8 @@ test('with Keep running on, closing hides the window, a second launch shows it, 
     await expect.poll(() => visible(app)).toBe(false)
     expect(running()).toEqual(expect.arrayContaining(['api', 'worker']))
 
-    const second = spawn(ELECTRON, ['.'], { env: { ...processEnv(), PAPERLAB_DATA_DIR: dataDir } })
-    expect(await new Promise((done) => second.once('exit', done))).toBe(0)
+    const secondProcess = (second = spawn(ELECTRON, ['.'], { env: { ...processEnv(), PAPERLAB_DATA_DIR: dataDir } }))
+    expect(await exitCode(secondProcess, STARTUP)).toBe(0)
     await expect.poll(() => visible(app)).toBe(true)
     expect(running()).toEqual(expect.arrayContaining(['api', 'worker'])) // the second launch stopped nothing
 
@@ -142,6 +161,7 @@ test('with Keep running on, closing hides the window, a second launch shows it, 
     await exited
     expect(running()).toEqual([])
   } finally {
+    second?.kill() // a no-op once it has already exited; catches it if it never did (the failure this test exists for)
     await app.close().catch(() => undefined) // already exited on the happy path; still safe to call again
     rmSync(dataDir, { recursive: true, force: true })
   }
