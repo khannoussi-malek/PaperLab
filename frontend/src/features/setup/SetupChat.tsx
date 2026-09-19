@@ -14,7 +14,7 @@ import { StepButtons } from './StepButtons'
 
 /**
  * Step 1 (spec §5): a chat model from Ollama (installed, or pulled here with its live progress) or a cloud connection
- * (M9's dialogs). The model picked or pulled becomes chat's default (PUT /api/llm/default).
+ * (Settings' own dialogs). The model picked or pulled becomes chat's default (PUT /api/llm/default).
  */
 export function SetupChat({ onNext }: { onNext: () => void }) {
   const connections = useConnections()
