@@ -25,8 +25,13 @@ const LOG_FILE = join(DATA, 'logs', 'main.log')
 const log = fileLog(LOG_FILE)
 const STARTUP_FILE = join(__dirname, '..', 'src', 'startup.html')
 const STARTUP_URL = pathToFileURL(STARTUP_FILE).href
-/** Development only: skip Docker and show a PaperLab that is already running, such as the dev stack on :5180. */
-const DEV_URL = process.env.PAPERLAB_URL ?? null
+/** Development only: skip Docker and show a PaperLab that is already running, such as the dev stack on :5180. An
+ * environment variable set for a packaged app is not a trusted seam, so this (and PAPERLAB_DOCKER_PATHS, below) are
+ * honoured only unpackaged: what the tests and `npm start` run. PAPERLAB_DATA_DIR and PAPERLAB_DOCKER stay live in a
+ * packaged app; the docs use them. */
+const DEV_URL = app.isPackaged ? null : (process.env.PAPERLAB_URL ?? null)
+/** What `findDocker` sees: PAPERLAB_DOCKER_PATHS dropped once packaged (see DEV_URL, above). */
+const DOCKER_ENV: NodeJS.ProcessEnv = app.isPackaged ? { ...process.env, PAPERLAB_DOCKER_PATHS: undefined } : process.env
 const RESOURCES = app.isPackaged ? process.resourcesPath : join(__dirname, '..')
 const SOURCES = {
   compose: join(RESOURCES, 'docker-compose.yml'),
@@ -41,10 +46,10 @@ let launching: AbortController | null = null
 let quitting = false
 
 function setSettings(patch: Partial<Settings>) {
-  settings = updateSettings(DATA, patch)
+  settings = updateSettings(DATA, settings, patch)
 }
 
-const locateDocker = () => findDocker(process.platform, process.env, homedir(), usable)
+const locateDocker = () => findDocker(process.platform, DOCKER_ENV, homedir(), usable)
 const dockerAt = (bin: string, signal?: AbortSignal) =>
   makeDocker(bin, spawnRunner, { dataDir: DATA, version: app.getVersion(), port: settings.port }, log, { signal })
 
@@ -149,14 +154,19 @@ async function offerUpdate(update: Update) {
 
 /** Window safety (spec §5): PaperLab and the startup page stay; other http(s) addresses open in the system browser. */
 function guard(contents: WebContents) {
-  contents.on('will-navigate', (event, url) => {
+  // will-navigate misses a server-issued redirect and a sub-frame's own navigation (Electron ≥ 25); the same check
+  // applies to all three. will-frame-navigate hands its url on the event itself, not as a second argument.
+  const navigate = (event: { preventDefault: () => void }, url: string) => {
     const action = startupAction(url, STARTUP_URL)
     const where = navigationFor(url, APP_ORIGIN, STARTUP_URL)
     if (action === null && where === 'allow') return
     event.preventDefault()
     if (action !== null) onAction(action)
     else if (where === 'external') void shell.openExternal(url)
-  })
+  }
+  contents.on('will-navigate', (event, url) => navigate(event, url))
+  contents.on('will-redirect', (event, url) => navigate(event, url))
+  contents.on('will-frame-navigate', (event) => navigate(event, event.url))
   contents.setWindowOpenHandler(({ url }) => {
     if (/^https?:/.test(url)) void shell.openExternal(url)
     return { action: 'deny' }

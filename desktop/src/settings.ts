@@ -61,9 +61,11 @@ export function readSettings(dataDir: string): Settings {
   }
 }
 
-/** The settings with `patch` applied, written whole (a temp file renamed over the old one) and returned. */
-export function updateSettings(dataDir: string, patch: Partial<Settings>): Settings {
-  const next = { ...readSettings(dataDir), ...patch }
+/** `current` (the settings already held in memory, not re-read from disk: a transient read failure must not reset
+ * every other field to its default) with `patch` applied, written whole (a temp file renamed over the old one) and
+ * returned. */
+export function updateSettings(dataDir: string, current: Settings, patch: Partial<Settings>): Settings {
+  const next = { ...current, ...patch }
   mkdirSync(dataDir, { recursive: true })
   const temp = `${settingsFile(dataDir)}.tmp`
   writeFileSync(temp, `${JSON.stringify(next, null, 2)}\n`)

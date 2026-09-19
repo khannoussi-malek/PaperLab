@@ -12,7 +12,7 @@ import { compareVersions } from './updates'
 
 export const IMAGE = 'ghcr.io/khannoussi-malek/paperlab'
 /** Time limits in ms. null: none, since a pull reports its progress instead. */
-export const LIMITS = { info: 15_000, version: 15_000, up: 300_000, stop: 30_000, pull: null } as const
+const LIMITS = { info: 15_000, version: 15_000, up: 300_000, stop: 30_000, pull: null } as const
 
 export type Result = { code: number; stdout: string; stderr: string; timedOut: boolean }
 export type RunOptions = {
@@ -179,7 +179,9 @@ export const spawnRunner: Runner = (file, args, { env, timeoutMs, onLine, signal
   })
 
 /** pg_dump of the library, gzipped straight into `path` (D142): the dump streams to the file, never into memory. No
- * time limit, like a pull: a large library takes a while. */
+ * time limit, like a pull: a large library takes a while. Deliberately takes no signal either, unlike every other
+ * command here: a backup cannot be cancelled, so the window closing waits for pg_dump to finish rather than leaving
+ * a half-written dump behind. */
 async function dumpTo(bin: string, args: string[], env: NodeJS.ProcessEnv, path: string, log: Log): Promise<Result> {
   const child = spawn(bin, args, { env, shell: false, windowsHide: true })
   const errors: string[] = []

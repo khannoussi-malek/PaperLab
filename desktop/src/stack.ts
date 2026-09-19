@@ -6,14 +6,15 @@ import { chmodSync, copyFileSync, mkdirSync, realpathSync } from 'node:fs'
 import { join } from 'node:path'
 import { needsBackup, type BackupResult } from './backup'
 import { composeVersionOk, isDockerDesktop, lastLine, type Docker, type Result } from './docker'
+import type { StartupAction } from './navigation'
 
 /** What a first launch downloads, in MB: the release image (164) plus Postgres and Redis (152 + 17), rounded up
  * (Task 5's measured CONTENT SIZE, in place of the spec's predicted 905). */
 export const DOWNLOAD_MB = 335
-export const DOCKER_POLL_MS = 2_000
-export const DOCKER_WAIT_MS = 120_000
-export const HEALTH_POLL_MS = 1_000
-export const HEALTH_WAIT_MS = 120_000
+const DOCKER_POLL_MS = 2_000
+const DOCKER_WAIT_MS = 120_000
+const HEALTH_POLL_MS = 1_000
+const HEALTH_WAIT_MS = 120_000
 const PERMISSION = /permission denied/i
 const PORT_TAKEN = /port is already allocated|address already in use/i
 
@@ -189,14 +190,13 @@ function resolve(path: string, realpath: (path: string) => string): string {
   }
 }
 
-export type Action = 'retry' | 'show-log'
 /** What the startup page draws (src/startup.html's show()). Text only; the page never reads it as HTML. */
 export type View = {
   title: string
   body: string[]
   detail: string | null
   link: { href: string; label: string } | null
-  actions: Action[]
+  actions: StartupAction[]
   busy: boolean
 }
 
@@ -209,8 +209,8 @@ const view = (title: string, body: string[], more: Partial<View> = {}): View => 
   busy: false,
   ...more,
 })
-const RETRY: Action[] = ['retry']
-const FAILED: Action[] = ['retry', 'show-log']
+const RETRY: StartupAction[] = ['retry']
+const FAILED: StartupAction[] = ['retry', 'show-log']
 
 type Views = { [K in Screen['kind']]: (screen: Extract<Screen, { kind: K }>) => View }
 

@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { gunzipSync } from 'node:zlib'
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test'
+import { processEnv } from './helpers'
 
 // The desktop app over the real release stack (README, Development: E2E_RELEASE=1). This version's image is tagged
 // locally, so nothing is pulled, and the library on :5190 is already migrated. Each test has its own data folder; the
@@ -16,9 +17,6 @@ const FAILING_PG_DUMP = resolve('e2e/failing-pg-dump.sh')
 const STARTUP = 240_000
 
 test.describe.configure({ mode: 'serial' })
-
-const processEnv = () =>
-  Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined))
 
 function dataFolder(settings: object = {}): string {
   const dir = mkdtempSync(join(tmpdir(), 'paperlab-release-'))

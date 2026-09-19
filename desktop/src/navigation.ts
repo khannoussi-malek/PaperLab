@@ -1,6 +1,6 @@
 /** Window safety (spec §5): which navigations stay in PaperLab's window, and the startup page's buttons. */
 
-export type Navigation = 'allow' | 'external' | 'deny'
+type Navigation = 'allow' | 'external' | 'deny'
 export type StartupAction = 'retry' | 'show-log'
 
 const withoutQuery = (url: string) => url.split(/[?#]/)[0]
