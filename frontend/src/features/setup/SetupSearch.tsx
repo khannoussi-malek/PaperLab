@@ -9,8 +9,8 @@ import { BUILT_IN_SEARCH } from './setup'
 import { StepButtons } from './StepButtons'
 
 /**
- * Step 2 (spec §5, D179): the built-in search model, downloaded here with M23's own button and progress, or Skip.
- * Finish waits while the download runs; Skip leaves search for Settings → Search.
+ * Step 2 (spec §5, D179): the built-in search model, downloaded here with the search model download's own button and
+ * progress, or Skip. Finish waits while the download runs; Skip leaves search for Settings → Search.
  */
 export function SetupSearch({ onFinish }: { onFinish: () => void }) {
   const status = useEmbeddingStatus()

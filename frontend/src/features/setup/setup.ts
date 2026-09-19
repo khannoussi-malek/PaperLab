@@ -6,7 +6,7 @@ export type SetupStep = 'chat' | 'search'
 
 export const SKIPPED = 'You can read, highlight and take notes now. Set up chat and search any time in Settings.'
 export const LINUX_OLLAMA = 'Ollama must listen beyond 127.0.0.1 for PaperLab to reach it: see the README.'
-/** The Search step's one line about Built-in (spec §5: "stays on this computer"); M23's download gives its size. */
+/** The Search step's one line about Built-in (spec §5: "stays on this computer"); the search model download gives its size. */
 export const BUILT_IN_SEARCH = 'The built-in search model stays on this computer.'
 
 /** Opens #/setup on start while the server says setup isn't done, unless it is already open. */

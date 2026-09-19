@@ -682,7 +682,7 @@ with a set value). The onboarding, copy-button and OS-tab queries returned nothi
     "Pull qwen3:8b · 5.2 GB" (`Download` icon) with a muted `text-xs` note for those not installed;
   - the pull's `Progress` named "Pulling <model>" with its status line;
   - no Ollama: a line, the Linux note, and "Get Ollama" (`ExternalLink`) and "Retry" (`RefreshCw`);
-  - "Use a cloud model" (`Cloud`) opens M9's connection dialog, then Add model;
+  - "Use a cloud model" (`Cloud`) opens Settings' connection dialog, then Add model;
   - the pick becomes chat's default: a `role="status"` line "Chat uses <model>." (`.setup-chat-choice`).
 - **Search:** the built-in search model or Skip. A `text-sm font-medium` "Built-in", the muted `text-sm` line "The
   built-in search model stays on this computer.", then Settings → Search's own `DownloadSearchModel` with

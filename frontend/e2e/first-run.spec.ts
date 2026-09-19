@@ -18,7 +18,7 @@ async function openAndSettle(page: Page, path: string) {
   await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))))
 }
 
-/** GET /api/embedding (M23's seven fields) as a fresh install sees it: the built-in model there or not as `present()`
+/** GET /api/embedding (the search model status's seven fields) as a fresh install sees it: the built-in model there or not as `present()`
  * says, whatever this stack has. The rest of the answer is the stack's own, read once through `request` (not
  * `route.fetch()`: the app queries this route twice in a row -- SetupSearch, then DownloadSearchModel once it mounts
  * -- and a second `route.fetch()` on the same interceptor sometimes throws "Response has been disposed"). */
@@ -46,14 +46,15 @@ test.describe('first-run setup @moves-setup', () => {
 
     await page.getByRole('button', { name: 'Skip setup' }).click()
 
-    await expect(page.getByRole('heading', { level: 1, name: 'PaperLab' })).toBeVisible()
+    await expect(page).not.toHaveURL(/#\/setup/)
+    await expect(page.getByRole('heading', { level: 1, name: 'PaperLab', exact: true })).toBeVisible()
     await openAndSettle(page, '/')
     await expect(page).not.toHaveURL(/#\/setup/)
     const other = await browser.newContext({ baseURL: test.info().project.use.baseURL })
     const second = await other.newPage()
     await openAndSettle(second, '/')
-    await expect(second.getByRole('heading', { level: 1, name: 'PaperLab' })).toBeVisible()
     await expect(second).not.toHaveURL(/#\/setup/)
+    await expect(second.getByRole('heading', { level: 1, name: 'PaperLab', exact: true })).toBeVisible()
     await other.close()
   })
 
@@ -65,7 +66,8 @@ test.describe('first-run setup @moves-setup', () => {
     await expect(page.getByRole('region', { name: 'Search' })).toBeVisible()
     await page.getByRole('button', { name: 'Finish' }).click()
 
-    await expect(page.getByRole('heading', { level: 1, name: 'PaperLab' })).toBeVisible()
+    await expect(page).not.toHaveURL(/#\/setup/)
+    await expect(page.getByRole('heading', { level: 1, name: 'PaperLab', exact: true })).toBeVisible()
     expect(await (await request.get('/api/setup')).json()).toEqual({ done: true })
   })
 
@@ -115,7 +117,8 @@ test.describe('first-run setup @moves-setup', () => {
 
     await search.getByRole('button', { name: 'Skip', exact: true }).click()
 
-    await expect(page.getByRole('heading', { level: 1, name: 'PaperLab' })).toBeVisible()
+    await expect(page).not.toHaveURL(/#\/setup/)
+    await expect(page.getByRole('heading', { level: 1, name: 'PaperLab', exact: true })).toBeVisible()
     expect(downloads).toEqual([]) // P7: nothing downloads until it is picked
     expect(await (await request.get('/api/setup')).json()).toEqual({ done: true })
   })
@@ -130,6 +133,7 @@ test.describe('first-run setup @moves-setup', () => {
     })
     const defaults: unknown[] = []
     await page.route('**/api/llm/default', async (route) => {
+      if (route.request().method() !== 'PUT') return route.fallback()
       const body = route.request().postDataJSON() as { model_id: string }
       defaults.push(body)
       await route.fulfill({ json: { id: body.model_id, name: 'qwen3:4b', is_default: true } })
