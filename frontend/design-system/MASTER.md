@@ -646,6 +646,27 @@ with a set value). The onboarding, copy-button and OS-tab queries returned nothi
 - **Entry points:** an outline "Connect Claude" button (`Plug`) in the library header, before the Settings icon; and
   Settings' last section, "Connect Claude", with one muted sentence and an outline "Open Connect Claude" link (`Plug`).
 
+## Desktop app
+
+- **Settings → Desktop app:** only inside the desktop app. `useDesktop()` is null in a browser, so the section renders
+  nothing there. A `section` labelled by its h2 "Desktop app", after Search and before Connect Claude. Each setting is
+  a row:
+  - on the left, the `Label` and a muted `text-sm` line;
+  - on the right, a shadcn `Switch`, its `id` tied to the label, disabled until the app answers;
+  - a refused change flips back and shows a destructive `Alert` under its line.
+  - The two rows: "Keep PaperLab running when the window is closed" ("Claude Desktop can use your library and uploads
+    keep processing while it runs."), and "Check for updates on launch" ("Each time it opens, PaperLab asks GitHub
+    whether a newer version is out.").
+- **Connect Claude, in the app:** the "If it doesn't work" line reads "Keep the PaperLab app open (or turn on Keep
+  running in Settings)." instead of the `docker compose up -d` command.
+- **The startup page** (`desktop/src/startup.html`, before PaperLab answers) carries these tokens' values inline, light
+  and dark:
+  - a `font-heading`-style h1 with a spinner while busy;
+  - muted body lines;
+  - the last error line in a `bg-muted` monospace box;
+  - link buttons, the first one primary.
+- **Test hooks:** the region "Desktop app"; the switches by their labels; the startup page's `h1` and `#detail`.
+
 ## Graph
 
 Patterns from ui-ux-pro-max (2026-09-17): `search.py "graph canvas visualization with layer toggles" --domain ux`
