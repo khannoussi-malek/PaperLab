@@ -1,0 +1,28 @@
+{
+  "name": "paperlab-desktop",
+  "productName": "PaperLab",
+  "version": "0.1.0",
+  "description": "PaperLab, a local-first research reader, in its own window over Docker.",
+  "homepage": "https://github.com/khannoussi-malek/PaperLab",
+  "author": "malek khannoussi",
+  "license": "Apache-2.0",
+  "private": true,
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "npm run build && electron .",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.check.json",
+    "e2e": "npm run build && playwright test",
+    "icons": "node scripts/make-icons.mjs",
+    "dist": "npm run build && electron-builder --publish never"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^24.13.3",
+    "electron": "44.4.3",
+    "electron-builder": "26.15.3",
+    "typescript": "~6.0.2",
+    "vitest": "^5.0.0"
+  }
+}
