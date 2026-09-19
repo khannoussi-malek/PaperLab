@@ -8,6 +8,7 @@ from app.models.note import Note, Provenance, note_anchors
 from app.models.paper import Chunk, Paper, PaperStatus
 from app.models.paper_sources import PaperSources
 from app.models.references import ExternalRef, NoteEmbedding, paper_references
+from app.models.setup import Setup
 from app.models.workspace import Workspace, workspace_papers
 
 __all__ = [
@@ -29,6 +30,7 @@ __all__ = [
     "PaperSources",
     "PaperStatus",
     "Provenance",
+    "Setup",
     "Workspace",
     "cell_table",
     "chart_datasets",
