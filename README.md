@@ -68,6 +68,10 @@ workspace: answers cite passages from its papers and your notes.
 - Read in a PDF.js reader with zoom, in a light, dark or system theme. The page itself stays white.
 - Select text to highlight it in one of five colours, or a custom one, and add a note if you want.
 - Hover a highlight to see, edit, recolour or delete its note in place. Right-click it for the same actions and "Copy quote".
+- Hover a numbered citation the PDF links, like `[51]`, to see which paper it is: its details once the paper's
+references are looked up, with **Open in PaperLab** when it's in your library or **Add to library** when a free PDF
+exists, and otherwise the entry exactly as the reference list prints it. Click it to jump to that entry, and **Back to
+page N** takes you back to where you were. Tab reaches every citation too.
 - Resize the side panel by dragging its edge. It remembers the width.
 
 **Capture data and chart it**
