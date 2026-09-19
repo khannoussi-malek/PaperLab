@@ -64,6 +64,7 @@ Defined in `src/index.css` as CSS variables and exposed to Tailwind through `@th
 | `glass` / `glass-strong` | white 70% / white 85% | slate-800 55% / slate-800 92% | Frosted chrome / cards and floating surfaces |
 | `glass-border` | slate-400 35% | white 10% | Hairline on glass |
 | `ambient-1` / `ambient-2` (body glow) | blue 12% / violet 10% | blue 18% / violet 16% | Radial glows behind the glass |
+| `on-page-ring` | `#2563eb` | same | Focus ring for controls on the always-white PDF page (citation buttons); fixed across themes so dark theme still keeps 3:1 |
 
 All text pairs above meet WCAG AA (4.5:1) in their theme. Check any new pair before using it.
 
@@ -560,9 +561,8 @@ every button has a name).
   idle after the paper opens (`requestIdleCallback` with a 1 s timeout; a 300 ms `setTimeout` where it's missing), so it
   never competes with page 1's first paint for the one PDF.js worker (see Waiting). Until it is done, links stay inert
   (15 ms on the E2E fixture, 73–139 ms on the owner's 12–43-page papers). The paper's `cites` listing is fetched as
-  soon as the pass
-  finds a citation, so the first hover doesn't wait. It is a read only, shared with the References tab's cache.
-  Matching runs only for the open card.
+  soon as the pass finds a citation, so the first hover doesn't wait. It is a read only, shared with the References
+  tab's cache. Matching runs only for the open card.
 - **Surface and motion:** the note hover card's. `w-80`, strong glass (`bg-glass-strong border border-glass-border
   rounded-xl p-3 shadow-lg backdrop-blur-lg backdrop-saturate-150`), `text-sm`, `popIn` from `origin-top-left`, 4 pt
   below the link and aligned with it (no flip near the page bottom), closing 300 ms after the pointer leaves both.
@@ -573,12 +573,12 @@ every button has a name).
   (`text-xs text-muted-foreground tabular-nums`). A card never shows both the details and the raw entry.
   - **In library:** the cited paper's first page (`FirstPage`, a `6rem` column), then the title (`font-heading
     font-semibold line-clamp-3`, full title in `title`), `byline · citations` (muted), and the co-citation badge. Primary
-    **Open in PaperLab**, ghost **Open page**.
+    **Open in PaperLab** link, ghost **Open page**.
   - **Free PDF:** the title, byline and a secondary **PDF** badge. Primary **Add to library** (`Plus`; **Adding…** with
     a spinning `LoaderCircle`, `aria-disabled` rather than the native `disabled` while it runs, so the button stays
     focusable and keeps its name for a screen reader), ghost **Open page**. A failed add shows its `ErrorAlert` in the
     card. Success turns the card into In library through the shared cache and moves focus onto the new **Open in
-    PaperLab** button.
+    PaperLab** link.
   - **Details only:** the title, byline and an outline **No free PDF**; ghost **Open page**.
   - **Unmatched:** `From this paper's reference list`, then the entry as the PDF prints it (`max-h-40 overflow-auto
     wrap-anywhere`), then one line:
@@ -594,20 +594,26 @@ every button has a name).
   - `Loading…` (`delayedIn`) until the listing settles.
 - **Click and keyboard:** a click on a citation jumps to its entry through `flashChunk`, the reader's one scroll path.
   Each citation is also a transparent `<button class="citation-link">` over its link, in the page overlay, named
-  `Reference {N}`, with `aria-expanded` and `aria-controls` while its card is open. Its focus ring is
-  `focus-visible:outline-2 outline-primary`, visible on the white page. Focus opens the card, which follows the button
-  in the DOM, so Tab reaches the card's actions and then the next citation. Escape closes the card and puts focus back
-  on the button. Enter or Space jumps. Keyboard focus on a citation or in its card keeps the card open whatever the
-  pointer does.
+  `Reference {N}`, with `aria-expanded` (always `true` or `false`) and `aria-controls` while its card is open. Its
+  focus ring is `focus-visible:outline-2 outline-on-page-ring`, a token fixed to the light theme's `primary` so it
+  keeps 3:1 contrast on the always-white page in dark theme too. Focus opens the card, which follows the button in the
+  DOM, so Tab reaches the card's actions and then the next citation. Escape closes the card and puts focus back on the
+  button. Enter or Space jumps. Keyboard focus on a citation or in its card keeps its card open; pointing at another
+  citation or at a highlight still replaces it. A **Skip to side panel** button, hidden until focused (`sr-only
+  focus:not-sr-only`; a button, not an `<a href="#…">`, since the reader's routing reads the URL hash), is the first
+  tab stop after the toolbar, so a keyboard user never has to walk through every citation on the page to reach it.
 - **Back to page N:** after a jump, a strong-glass pill **Back to page {N}** (`Undo2`, `rounded-full`, `popIn` from
   `origin-bottom`) sits sticky at the bottom centre of the pages column, with no height of its own. Choosing it scrolls
-  smoothly back to the exact spot and hides it. A later jump replaces the spot, scrolling back by hand to within half a
-  screen of it hides the pill too, and so does changing the zoom (`forScale`): a spot's `scrollTop` only means the same
-  place at the scale it was saved, so the pill just doesn't come back until the next jump. After a keyboard jump focus
-  moves to the pill, and after Back it returns to the citation.
+  smoothly back to the exact spot and hides it. A later jump replaces the spot, and scrolling back by hand to within
+  half a screen of it hides the pill too. Changing the zoom (`forScale`) also hides it, since a spot's `scrollTop` only
+  means the same place at the scale it was saved — the pill comes back once the zoom returns to that scale, still at
+  the same saved spot. After a keyboard jump focus moves to the pill once, the first time it appears for that spot; if
+  the pill then disappears while it still holds focus (scrolled back by hand, or zoomed away and back), focus returns
+  to the citation button that jumped, the same one Back returns focus to.
 - **Stable test hooks:** `.citation-link`, `.citation-card`, `data-citation-id` on each citation's wrapper, the
   "Reference N" button and region names, "Open References", "Add to library", "Open in PaperLab", "Open page", "Back to
-  page N", and the fixture `e2e/fixtures/citation-paper.pdf` (regenerated by `e2e/fixtures/make_citation_paper.py`).
+  page N", "Skip to side panel", and the fixture `e2e/fixtures/citation-paper.pdf` (regenerated by
+  `e2e/fixtures/make_citation_paper.py`).
 
 ## Connect Claude
 

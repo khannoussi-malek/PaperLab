@@ -30,7 +30,7 @@ export function RightPanel({ tab, onTabChange, width, onWidthChange, notes, chat
       className={cn('reader-panel relative min-h-0 gap-0 border-l border-glass-border', glass)}
     >
       <PanelResizeHandle width={width} onWidthChange={onWidthChange} />
-      <TabsList className="mx-4 mt-3 w-auto">
+      <TabsList id="reader-panel-tabs" className="mx-4 mt-3 w-auto">
         <TabsTrigger value="notes">Notes</TabsTrigger>
         <TabsTrigger value="chat">Chat</TabsTrigger>
         <TabsTrigger value="data">Data</TabsTrigger>

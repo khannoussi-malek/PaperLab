@@ -99,9 +99,11 @@ function MatchedBody({ view, paperId }: { view: Matched; paperId: string }) {
             size="sm"
             aria-disabled={importRef.isPending || undefined}
             className="aria-disabled:opacity-50"
-            onClick={() => {
+            onClick={(event) => {
               if (importRef.isPending) return
-              focusAfterAdd.current = true
+              // Only when the button truly had focus: a click alone doesn't focus a button in Safari, and this
+              // would otherwise carry the card's own pointer-driven close past the click.
+              focusAfterAdd.current = document.activeElement === event.currentTarget
               importRef.mutate(
                 { refId: reference.id },
                 { onError: () => { focusAfterAdd.current = false } },

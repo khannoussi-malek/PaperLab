@@ -127,7 +127,7 @@ test('only linked [N] citations get a card, one card shows at a time, and a note
   await expect(noteCard.getByRole('textbox', { name: 'Edit note' })).toBeVisible()
   await expect(citationCard).toHaveCount(0)
 
-  // Task 6's fix (22feb0f): a citation jump while the note is being edited keeps that note's card and its unsaved text.
+  // A citation jump while the note is being edited keeps that note's card and its unsaved text.
   const editBox = noteCard.getByRole('textbox', { name: 'Edit note' })
   await editBox.fill('citation overlap note, still editing')
   await clickCitation(page, 2)
@@ -152,14 +152,14 @@ test('a click jumps to the entry in the reference list, and Back returns to the 
   await expect.poll(() => covers(flash, label)).toBe(true)
   await expect(bodyLine).not.toBeInViewport()
 
-  // Q1 (b): the way back to the citation.
+  // The way back to the citation.
   const back = page.getByRole('button', { name: 'Back to page 1' })
   await expect(back).toBeVisible()
   await back.click()
   await expect(bodyLine).toBeInViewport()
   await expect(back).toHaveCount(0)
 
-  // Task 7's fix (fbcc6e0): the saved spot carries its scale; a zoom change hides the pill until it comes back to it.
+  // The saved spot carries its scale; a zoom change hides the pill until the zoom returns to it.
   await clickCitation(page, 2)
   await expect(back).toBeVisible()
   await page.getByRole('button', { name: 'Zoom in' }).click()
@@ -174,9 +174,13 @@ test('citations work from the keyboard: focus opens the card, Tab enters it, Esc
 }) => {
   await openCitationPaper(page, citationPaperId)
   const reference = citationButton(page, 1)
+  const skipLink = page.getByRole('button', { name: 'Skip to side panel' })
 
-  // The first citation is the first tab stop after the toolbar.
+  // The skip link is the first tab stop after the toolbar, ahead of every citation on the page; the first citation
+  // is the next stop.
   await page.getByRole('button', { name: 'Toggle theme' }).focus()
+  await page.keyboard.press('Tab')
+  await expect(skipLink).toBeFocused()
   await page.keyboard.press('Tab')
   await expect(reference).toBeFocused()
   const card = page.getByRole('region', { name: 'Reference 1' })
@@ -191,8 +195,13 @@ test('citations work from the keyboard: focus opens the card, Tab enters it, Esc
 
   await page.keyboard.press('Enter')
   await expect(page.locator('.pdf-page[data-page="2"] .chunk-flash').first()).toBeInViewport()
-  // Q1 (b): focus follows to the way back.
+  // The way back after a citation jump: focus follows to the pill.
   await expect(page.getByRole('button', { name: 'Back to page 1' })).toBeFocused()
+
+  // Activating the skip link moves focus straight into the side panel, past every citation on the page.
+  await skipLink.focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByRole('tab', { name: 'Notes' })).toBeFocused()
 })
 
 /** Papers the test imported from the fake's fixed DOIs would show as In library in the next run: removed by prefix. */

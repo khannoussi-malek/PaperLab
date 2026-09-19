@@ -44,9 +44,9 @@ export function CitationLinks({ citations, scale, openId, renderCard, onFocusIn,
         <button
           type="button"
           aria-label={`Reference ${citation.label}`}
-          aria-expanded={open || undefined}
+          aria-expanded={open}
           aria-controls={open ? citationCardId(citation) : undefined}
-          className="citation-link absolute rounded-xs outline-primary focus-visible:outline-2"
+          className="citation-link absolute rounded-xs outline-on-page-ring focus-visible:outline-2"
           style={pdfRectToCss(citation.rect, scale)}
           onClick={() => onJump(citation)}
         />
