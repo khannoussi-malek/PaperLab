@@ -33,6 +33,9 @@ jobs:
         name: The tag is desktop/package.json's version
         run: |
           version=$(node -p "require('./desktop/package.json').version")
+          case "$version" in
+            ''|*[!0-9.]*) echo "::error::desktop/package.json's version $version is not just digits and dots"; exit 1 ;;
+          esac
           if [ "$GITHUB_EVENT_NAME" = push ] && [ "${GITHUB_REF_NAME#v}" != "$version" ]; then
             echo "::error::The tag $GITHUB_REF_NAME is not v$version, desktop/package.json's version"
             exit 1
@@ -115,7 +118,9 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Tag both architectures with the version, never latest
         working-directory: /tmp/digests
-        run: docker buildx imagetools create -t "$IMAGE:${{ needs.check.outputs.version }}" $(printf "$IMAGE@sha256:%s " *)
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+        run: docker buildx imagetools create -t "$IMAGE:$VERSION" $(printf "$IMAGE@sha256:%s " *)
 
   installers:
     needs: check
