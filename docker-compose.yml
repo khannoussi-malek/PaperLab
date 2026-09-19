@@ -2,7 +2,10 @@ name: paperlab
 
 x-backend: &backend
   build: ./backend
-  env_file: .env
+  # Optional: every setting has a default in app/config.py (Docker Compose 2.24 or later).
+  env_file:
+    - path: .env
+      required: false
   volumes:
     - ./backend:/src
     - pdfs:/data/pdfs
