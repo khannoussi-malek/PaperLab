@@ -10,11 +10,11 @@ test('drawing a box over a table previews its grid; fixing it and saving outline
   const dialog = page.getByRole('dialog', { name: 'Capture table' })
   await expect(dialog.getByRole('textbox', { name: 'Table name' })).toHaveValue('Table 1: Results on the dev set.')
   await expect(dialog.locator('canvas.capture-crop')).toBeVisible()
-  await expect(dialog.getByRole('textbox', { name: 'Row 2, column 2' })).toHaveValue('88.5')
-
-  await dialog.getByRole('button', { name: 'Row 1 actions' }).click()
-  await page.getByRole('menuitem', { name: 'Use as header' }).click()
+  // The table's own header row names the columns (`split_header`), so the grid opens on the first data row and
+  // nothing has to be promoted by hand. "Use as header" is still there for a table it can't read; dataset-grid.spec
+  // covers it.
   await expect(dialog.getByRole('textbox', { name: 'Column 2 name' })).toHaveValue('Dev F1')
+  await expect(dialog.getByRole('textbox', { name: 'Row 1, column 2' })).toHaveValue('88.5')
   await dialog.getByRole('textbox', { name: 'Row 1, column 2' }).fill('88.6')
   await dialog.getByRole('button', { name: 'Save table' }).click()
   await expect(dialog).toBeHidden()
@@ -66,7 +66,7 @@ test('adding rows and columns in the capture dialog grows the grid without savin
   await page.getByRole('button', { name: 'Capture table' }).click()
   await dragBox(page, 1, [60, 145, 420, 200])
   const dialog = page.getByRole('dialog', { name: 'Capture table' })
-  await expect(dialog.getByRole('textbox', { name: 'Row 2, column 2' })).toHaveValue('88.5')
+  await expect(dialog.getByRole('textbox', { name: 'Row 1, column 2' })).toHaveValue('88.5')
 
   await dialog.getByRole('button', { name: 'Add row' }).click()
   await dialog.getByRole('button', { name: 'Add column' }).click()
@@ -80,7 +80,7 @@ test('a long table scrolls inside its grid, keeping the crop, name and Save butt
   await page.getByRole('button', { name: 'Capture table' }).click()
   await dragBox(page, 1, [60, 145, 420, 200])
   const dialog = page.getByRole('dialog', { name: 'Capture table' })
-  await expect(dialog.getByRole('textbox', { name: 'Row 2, column 2' })).toHaveValue('88.5')
+  await expect(dialog.getByRole('textbox', { name: 'Row 1, column 2' })).toHaveValue('88.5')
   for (let i = 0; i < 13; i++) await dialog.getByRole('button', { name: 'Add row' }).click()
   await expect(dialog.getByRole('textbox', { name: 'Row 15, column 1' })).toBeAttached()
 

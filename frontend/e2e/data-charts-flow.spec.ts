@@ -14,8 +14,7 @@ test('capture, add a number, add own data, chart all three, fix a cell, open the
   await dragBox(page, 1, [60, 145, 420, 200])
   const capture = page.getByRole('dialog', { name: 'Capture table' })
   await capture.getByRole('textbox', { name: 'Table name' }).fill(`${dataName} table`)
-  await capture.getByRole('button', { name: 'Row 1 actions' }).click()
-  await page.getByRole('menuitem', { name: 'Use as header' }).click()
+  // The header row already names the columns, so row 2 is the second data row without promoting anything.
   await capture.getByRole('textbox', { name: 'Row 2, column 2' }).fill('90.8')
   await capture.getByRole('button', { name: 'Save table' }).click()
   await expect(page.locator('.pdf-page[data-page="1"] .table-region')).toHaveCount(1)

@@ -170,6 +170,9 @@ test('each row shows the sources that found it, and a source turned off in Setti
   // In the same page, so the search has to be asked again rather than read from the cache it left behind.
   await page.keyboard.press('Escape')
   await page.getByRole('link', { name: 'Settings' }).click()
+  // Settings is one page per section now: the rail opens Model connections, and Paper sources is its own. Clicked,
+  // not `goto`, so this stays the same page and the search below is asked again rather than read from its cache.
+  await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('link', { name: 'Paper sources' }).click()
   const core = page.getByRole('region', { name: 'Paper sources' }).getByRole('checkbox', { name: 'CORE' })
   await core.click()
   await expect(core).not.toBeChecked()
