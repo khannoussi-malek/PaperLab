@@ -133,8 +133,12 @@ Fonts: body `Atkinson Hyperlegible Next Variable` (`font-sans`), headings `Crims
   an ellipsis (`line-clamp-2`), with the full passage in `title`. The note's own body is never clamped in the panel.
 - One primary button per view. Destructive actions use `text-destructive` and ask for confirmation.
   A delete icon repeated on every list row stays `text-muted-foreground` until its row is hovered or focused.
+- **A note card copies its own quote.** Every `NoteCard` with an anchor on the open paper starts its footer with a
+  ghost `icon-sm` `Copy` button labelled "Copy quote", in both variants. It copies the anchor's `quoted_text` alone,
+  swaps to `Check` for 1.5 s, announces "Quote copied." in an `sr-only` `role="status"`, and shows a refused
+  clipboard as a `role="alert"` line in the same footer.
 - **The hover card manages its note.** It is `NoteCard` in its compact variant (`div.hover-note`, never an
-  `article.note`): colour, Edit, Delete. It stays open while the pointer is on the highlight or the card, closes
+  `article.note`): Copy quote, colour, Edit, Delete. It stays open while the pointer is on the highlight or the card, closes
   300 ms after it leaves both, and never closes while any of its notes is being edited. Keyboard users use the panel.
 - **Right-click is resolved by the highlight hit-test.** A saved highlight opens the note menu (colours, Edit note,
   Copy quote, Delete note); the pending selection opens the draft menu (Highlight in <colour>, Add note…, Copy text,

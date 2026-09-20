@@ -185,3 +185,24 @@ test('the You and AI filter chips filter the notes list, and AI includes edited 
   await expect(cards).toHaveCount(0)
   await expect(page.getByText('No notes match these filters.')).toBeVisible()
 })
+
+test('one button copies a highlight, from the panel and from the hover card', async ({ page, request, paperId }) => {
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
+  const line = await openReader(page, paperId)
+  await saveNoteOn(page, line, 'worth quoting')
+  const [note] = await (await request.get(`/api/papers/${paperId}/notes`)).json()
+  const quote: string = note.anchors[0].quoted_text
+  expect(quote.length).toBeGreaterThan(0)
+
+  const panelCard = page.locator(`article.note[data-note-id="${note.id}"]`)
+  await panelCard.getByRole('button', { name: 'Copy quote' }).click()
+  await expect(panelCard.getByRole('status')).toHaveText('Quote copied.')
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(quote)
+
+  // The same button on the card that opens over the highlight itself.
+  await page.evaluate(() => navigator.clipboard.writeText('something else'))
+  await line.hover()
+  const hoverCard = page.locator('.note-hover-card')
+  await hoverCard.getByRole('button', { name: 'Copy quote' }).click()
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(quote)
+})
