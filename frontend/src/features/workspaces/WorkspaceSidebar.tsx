@@ -1,8 +1,9 @@
-import { EllipsisVertical, Library, Pencil, Plus, Trash2 } from 'lucide-react'
+import { EllipsisVertical, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type { Workspace } from '@/api/client'
 import { useWorkspaceMutations, useWorkspaces } from '@/api/queries'
 import { glass } from '@/components/glass'
+import { railItem } from '@/components/nav'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -19,12 +20,6 @@ const MAX_NAME = 80 // the API's limit
 /** A failed create or rename in words. The API's own code isn't meant for display; other failures show as sent. */
 const nameError = (error: Error | null) =>
   error?.message === 'workspace_name_taken' ? 'A workspace with this name already exists' : (error?.message ?? null)
-
-const itemClass = (active: boolean) =>
-  cn(
-    'flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none transition-colors duration-150 hover:bg-foreground/5 focus-visible:ring-3 focus-visible:ring-ring/50',
-    active && 'bg-primary/10 font-medium shadow-[inset_3px_0_0_var(--color-primary)]',
-  )
 
 type NameFormProps = {
   initial?: string
@@ -84,7 +79,7 @@ function NameForm({ initial = '', error, pending, onSubmit, onCancel, onEdit }: 
   )
 }
 
-/** The library's navigation: All papers, then each workspace, alphabetically. */
+/** The workspaces section of the navigation rail: every workspace, alphabetically, with its own row menu. */
 export function WorkspaceSidebar({ activeId }: { activeId: string | null }) {
   const workspaces = useWorkspaces()
   const { create, rename, remove } = useWorkspaceMutations()
@@ -164,16 +159,9 @@ export function WorkspaceSidebar({ activeId }: { activeId: string | null }) {
 
   const error = workspaces.error ?? remove.error
   return (
-    <nav
-      aria-label="Workspaces"
-      className={cn('flex flex-col gap-0.5 self-start rounded-xl p-2 ring-1 ring-glass-border lg:sticky lg:top-6', glass)}
-    >
-      <a href="#/" aria-current={activeId === null ? 'page' : undefined} className={itemClass(activeId === null)}>
-        <Library aria-hidden className="size-4 text-muted-foreground" />
-        All papers
-      </a>
-
-      <h2 className="px-2 pt-3 pb-1 text-xs font-medium text-muted-foreground">Workspaces</h2>
+    // Nested inside the rail's own `nav`: this one keeps its name, so "the workspaces" stays a region of its own.
+    <nav aria-label="Workspaces" className="flex flex-col gap-0.5">
+      <h2 className="px-2 pt-1 pb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">Workspaces</h2>
       {error && (
         <p role="alert" className="px-2 text-xs text-destructive">
           {error.message}
@@ -197,7 +185,7 @@ export function WorkspaceSidebar({ activeId }: { activeId: string | null }) {
                   href={workspaceHref(workspace.id)}
                   title={workspace.name}
                   aria-current={workspace.id === activeId ? 'page' : undefined}
-                  className={itemClass(workspace.id === activeId)}
+                  className={railItem(workspace.id === activeId)}
                 >
                   <span className="truncate">{workspace.name}</span>
                 </a>

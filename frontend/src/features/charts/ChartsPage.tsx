@@ -1,10 +1,12 @@
 import { Plus } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { ChartSummary } from '@/api/client'
 import { useAllDatasets, useCharts, useChartMutations } from '@/api/queries'
+import { AppShell } from '@/components/AppShell'
 import { glass } from '@/components/glass'
-import { delayedIn, fadeIn } from '@/components/motion'
-import { ModeToggle } from '@/components/mode-toggle'
+import { delayedIn } from '@/components/motion'
+import { PanelResizeHandle } from '@/components/PanelResizeHandle'
+import { loadPanelWidth, panelTrack, savePanelWidth } from '@/components/panelWidth'
 import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -12,45 +14,43 @@ import { chartHref, datasetHref, newChartHref } from '@/lib/route'
 import { cn } from '@/lib/utils'
 import { datasetMeta } from '../data/datasetMeta'
 import { NewDatasetDialog } from '../data/NewDatasetDialog'
+import { browserStorage } from '../notes/highlightColors'
 import { ChartMenu } from './ChartMenu'
+import { chartMeta, plural } from './chartMeta'
+import { CHART_PREVIEW } from './chartPreviewPanel'
+import { ChartPreview } from './ChartPreview'
 import { InlineTitle } from './InlineTitle'
 import { warmPlotly } from './loadPlotly'
 import { TYPE_ICON } from './typeIcons'
 
-const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
-const RELATIVE_UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
-  ['year', 60 * 60 * 24 * 365],
-  ['month', 60 * 60 * 24 * 30],
-  ['week', 60 * 60 * 24 * 7],
-  ['day', 60 * 60 * 24],
-  ['hour', 60 * 60],
-  ['minute', 60],
-]
-
-/** "2 hours ago", down to the minute; "just now" under a minute. */
-function relativeTime(iso: string): string {
-  const seconds = (Date.parse(iso) - Date.now()) / 1000
-  for (const [unit, secondsPerUnit] of RELATIVE_UNITS) {
-    if (Math.abs(seconds) >= secondsPerUnit) return rtf.format(Math.round(seconds / secondsPerUnit), unit)
-  }
-  return 'just now'
-}
-
-const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`
+/** Skimming the list with the mouse shouldn't fetch and draw a chart for every row it crosses. */
+const HOVER_PREVIEW_DELAY_MS = 150
+/** `AppShell`'s `p-3` on the view pane, which sits between the preview's right edge and the window's. */
+const PANE_PADDING_PX = 12
 
 type RowProps = {
   chart: ChartSummary
   renaming: boolean
+  previewed: boolean
+  onPreview: (id: string, immediate: boolean) => void
   onRename: () => void
   onSaveTitle: (title: string) => Promise<boolean>
   onStopRenaming: () => void
   onError: (message: string) => void
 }
 
-function ChartRow({ chart, renaming, onRename, onSaveTitle, onStopRenaming, onError }: RowProps) {
+function ChartRow({ chart, renaming, previewed, onPreview, onRename, onSaveTitle, onStopRenaming, onError }: RowProps) {
   const Icon = TYPE_ICON[chart.type]
   return (
-    <li className="chart-row flex items-center gap-3 px-4 py-3" data-chart-id={chart.id}>
+    <li
+      className={cn(
+        'chart-row flex items-center gap-3 px-4 py-3 transition-colors duration-150 hover:bg-foreground/5',
+        previewed && 'lg:bg-primary/5 lg:shadow-[inset_3px_0_0_var(--color-primary)]',
+      )}
+      data-chart-id={chart.id}
+      onMouseEnter={() => onPreview(chart.id, false)}
+      onFocus={() => onPreview(chart.id, true)}
+    >
       <Icon aria-hidden className="size-4 shrink-0 text-muted-foreground" />
       <div className="min-w-0 flex-1">
         {renaming ? (
@@ -72,9 +72,7 @@ function ChartRow({ chart, renaming, onRename, onSaveTitle, onStopRenaming, onEr
           </a>
         )}
         <p className="truncate text-sm text-muted-foreground">{chart.sources.join(', ')}</p>
-        <p className="text-xs text-muted-foreground">
-          Used in {plural(chart.note_count, 'note')} · edited {relativeTime(chart.updated_at)}
-        </p>
+        <p className="text-xs text-muted-foreground">{chartMeta(chart)}</p>
       </div>
       <ChartMenu chart={chart} onRename={onRename} onError={onError} />
     </li>
@@ -89,6 +87,11 @@ export function ChartsPage() {
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [newDatasetOpen, setNewDatasetOpen] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [previewId, setPreviewId] = useState<string | null>(null)
+  const [previewWidth, setPreviewWidth] = useState(() => loadPanelWidth(CHART_PREVIEW, browserStorage()))
+  const hoverTimer = useRef<number | undefined>(undefined)
+  useEffect(() => () => window.clearTimeout(hoverTimer.current), [])
+  useEffect(() => savePanelWidth(CHART_PREVIEW, browserStorage(), previewWidth), [previewWidth])
   // Opening the list means a chart is likely next: load Plotly now, not after the click.
   useEffect(warmPlotly, [])
 
@@ -100,99 +103,125 @@ export function ChartsPage() {
     return true
   }
 
+  // Hover waits; focus doesn't, so arrowing down the list keeps up with the keyboard.
+  function preview(id: string, immediate: boolean) {
+    window.clearTimeout(hoverTimer.current)
+    if (immediate) setPreviewId(id)
+    else hoverTimer.current = window.setTimeout(() => setPreviewId(id), HOVER_PREVIEW_DELAY_MS)
+  }
+
+  // Falls back to the first chart, so the panel is never empty and a deleted chart's preview goes away.
+  const previewed = list?.find((chart) => chart.id === previewId) ?? list?.[0]
+
   return (
-    <main className={cn('mx-auto flex max-w-5xl flex-col gap-6 px-4 py-6', fadeIn)}>
-      <header className="flex items-start justify-between gap-2">
-        <div>
-          <Button variant="ghost" size="sm" asChild className="-ml-2.5">
-            <a href="#/">← Library</a>
-          </Button>
-          <h1 className="mt-1 font-heading text-3xl font-semibold">Charts</h1>
-          {list && (
-            <p className="text-sm text-muted-foreground">
-              {plural(list.length, 'chart')} · {plural(ownDatasets.length, 'dataset')} of your own
-            </p>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => setNewDatasetOpen(true)}>
+    <AppShell
+      title="Charts"
+      actions={
+        <>
+          <Button variant="ghost" size="sm" onClick={() => setNewDatasetOpen(true)}>
             New dataset
           </Button>
-          <Button asChild>
+          <Button size="sm" asChild>
             <a href={newChartHref()}>
               <Plus aria-hidden />
               New chart
             </a>
           </Button>
-          <ModeToggle />
+        </>
+      }
+      status={list && `${plural(list.length, 'chart')} · ${plural(ownDatasets.length, 'dataset')} of your own`}
+    >
+      {/* The track is a variable so the two columns only exist from `lg` up, where the preview does. CSS clamps it
+          too, so a remembered width still fits after the window shrinks; the handle clamps as it drags. */}
+      <div
+        className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_var(--preview-track)]"
+        style={{ '--preview-track': panelTrack(CHART_PREVIEW, previewWidth) } as CSSProperties}
+      >
+        <div className="flex min-w-0 flex-col gap-6">
+          {actionError && (
+            <Alert variant="destructive" className="border-glass-border">
+              <AlertDescription>{actionError}</AlertDescription>
+            </Alert>
+          )}
+
+          {list === undefined ? (
+            charts.isError ? (
+              <p className="text-destructive">{charts.error.message}</p>
+            ) : (
+              <p className={cn('text-muted-foreground', delayedIn)}>Loading…</p>
+            )
+          ) : list.length === 0 ? (
+            <p className="text-muted-foreground">No charts yet. Build one from any data.</p>
+          ) : (
+            <Card className={cn('gap-0 py-0 ring-glass-border', glass)}>
+              <ul className="divide-y divide-border">
+                {list.map((chart) => (
+                  <ChartRow
+                    key={chart.id}
+                    chart={chart}
+                    renaming={renamingId === chart.id}
+                    previewed={chart.id === previewed?.id}
+                    onPreview={preview}
+                    onRename={() => setRenamingId(chart.id)}
+                    onSaveTitle={(title) => saveTitle(chart.id, title)}
+                    onStopRenaming={() => setRenamingId(null)}
+                    onError={setActionError}
+                  />
+                ))}
+              </ul>
+            </Card>
+          )}
+
+          <div className="flex flex-col gap-2">
+            <h2 className="font-heading text-xl font-semibold">My data</h2>
+            {datasets.isError ? (
+              <Alert variant="destructive" className="border-glass-border">
+                <AlertDescription>{datasets.error.message}</AlertDescription>
+                <AlertAction>
+                  <Button variant="outline" size="xs" onClick={() => void datasets.refetch()}>
+                    Retry
+                  </Button>
+                </AlertAction>
+              </Alert>
+            ) : ownDatasets.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No datasets of your own yet.</p>
+            ) : (
+              <ul className="flex flex-col gap-1">
+                {ownDatasets.map((dataset) => (
+                  <li key={dataset.id}>
+                    <a
+                      href={datasetHref(dataset.id)}
+                      className="own-dataset flex items-baseline gap-2 rounded-md px-2 py-1 transition-colors duration-150 hover:bg-foreground/5"
+                    >
+                      <span className="truncate font-medium" title={dataset.name}>
+                        {dataset.name}
+                      </span>
+                      <span className="shrink-0 text-sm text-muted-foreground tabular-nums">{datasetMeta(dataset)}</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <NewDatasetDialog open={newDatasetOpen} onOpenChange={setNewDatasetOpen} />
         </div>
-      </header>
 
-      {actionError && (
-        <Alert variant="destructive" className="border-glass-border">
-          <AlertDescription>{actionError}</AlertDescription>
-        </Alert>
-      )}
-
-      {list === undefined ? (
-        charts.isError ? (
-          <p className="text-destructive">{charts.error.message}</p>
-        ) : (
-          <p className={cn('text-muted-foreground', delayedIn)}>Loading…</p>
-        )
-      ) : list.length === 0 ? (
-        <p className="text-muted-foreground">No charts yet. Build one from any data.</p>
-      ) : (
-        <Card className={cn('gap-0 py-0 ring-glass-border', glass)}>
-          <ul className="divide-y divide-border">
-            {list.map((chart) => (
-              <ChartRow
-                key={chart.id}
-                chart={chart}
-                renaming={renamingId === chart.id}
-                onRename={() => setRenamingId(chart.id)}
-                onSaveTitle={(title) => saveTitle(chart.id, title)}
-                onStopRenaming={() => setRenamingId(null)}
-                onError={setActionError}
-              />
-            ))}
-          </ul>
-        </Card>
-      )}
-
-      <div className="flex flex-col gap-2">
-        <h2 className="font-heading text-xl font-semibold">My data</h2>
-        {datasets.isError ? (
-          <Alert variant="destructive" className="border-glass-border">
-            <AlertDescription>{datasets.error.message}</AlertDescription>
-            <AlertAction>
-              <Button variant="outline" size="xs" onClick={() => void datasets.refetch()}>
-                Retry
-              </Button>
-            </AlertAction>
-          </Alert>
-        ) : ownDatasets.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No datasets of your own yet.</p>
-        ) : (
-          <ul className="flex flex-col gap-1">
-            {ownDatasets.map((dataset) => (
-              <li key={dataset.id}>
-                <a
-                  href={datasetHref(dataset.id)}
-                  className="own-dataset flex items-baseline gap-2 rounded-md px-2 py-1 transition-colors duration-150 hover:bg-foreground/5"
-                >
-                  <span className="truncate font-medium" title={dataset.name}>
-                    {dataset.name}
-                  </span>
-                  <span className="shrink-0 text-sm text-muted-foreground tabular-nums">{datasetMeta(dataset)}</span>
-                </a>
-              </li>
-            ))}
-          </ul>
+        {/* Desktop only: the preview follows hover and focus, and is dragged wider, none of which a touch screen has. */}
+        {previewed && (
+          <div className="relative sticky top-0 hidden lg:block">
+            {/* `inset`: the pane's own padding sits between this column and the window's right edge. */}
+            <PanelResizeHandle
+              limits={CHART_PREVIEW}
+              width={previewWidth}
+              onWidthChange={setPreviewWidth}
+              label="Resize preview"
+              inset={PANE_PADDING_PX}
+            />
+            <ChartPreview chart={previewed} width={previewWidth} />
+          </div>
         )}
       </div>
-
-      <NewDatasetDialog open={newDatasetOpen} onOpenChange={setNewDatasetOpen} />
-    </main>
+    </AppShell>
   )
 }

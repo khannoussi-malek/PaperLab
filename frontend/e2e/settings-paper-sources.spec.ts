@@ -32,7 +32,7 @@ test('ticking a source off and on saves it, and it stays that way after a reload
   request,
 }) => {
   await setSourceSettings(request, { enabled: { crossref: true } })
-  await page.goto('/#/settings')
+  await page.goto('/#/settings/sources')
   const crossref = section(page).getByRole('checkbox', { name: 'Crossref' })
   await expect(crossref).toBeChecked()
 
@@ -50,7 +50,7 @@ test('ticking a source off and on saves it, and it stays that way after a reload
 
 test('OpenAlex says it may cost money, and Unpaywall asks for a contact email', { tag }, async ({ page, request }) => {
   await setSourceSettings(request, { contact_email: null })
-  await page.goto('/#/settings')
+  await page.goto('/#/settings/sources')
 
   await expect(rowOf(page, 'openalex')).toContainText('May cost money')
   await expect(rowOf(page, 'openalex')).toContainText('Free up to $0.10 of use a day without a key')
@@ -60,7 +60,7 @@ test('OpenAlex says it may cost money, and Unpaywall asks for a contact email', 
 
 test('the contact email is checked before it is sent, saved, and removed', { tag }, async ({ page, request }) => {
   await setSourceSettings(request, { contact_email: null })
-  await page.goto('/#/settings')
+  await page.goto('/#/settings/sources')
   const email = section(page).getByRole('textbox', { name: 'Contact email' })
   const save = section(page).getByRole('button', { name: 'Save', exact: true })
   const remove = section(page).getByRole('button', { name: 'Remove', exact: true })
@@ -122,7 +122,7 @@ test('an API key is saved and removed without ever being shown back', { tag }, a
     }
     await route.fulfill({ json: answer })
   })
-  await page.goto('/#/settings')
+  await page.goto('/#/settings/sources')
   const core = rowOf(page, 'core')
 
   await core.getByLabel('CORE API key').fill(KEY)

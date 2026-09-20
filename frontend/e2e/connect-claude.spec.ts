@@ -84,7 +84,7 @@ test('a second check clears the previous error while it runs', async ({ page }) 
 })
 
 test('Settings links to Connect Claude', async ({ page }) => {
-  await page.goto('/#/settings')
+  await page.goto('/#/settings/claude')
 
   await page.getByRole('region', { name: 'Connect Claude' }).getByRole('link', { name: 'Open Connect Claude' }).click()
 
