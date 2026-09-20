@@ -176,7 +176,7 @@ export function PaperList({ papers, workspaceId }: Props) {
         </div>
         {/* Desktop only: the preview follows hover and focus, which a touch screen doesn't have. */}
         {previewed && (
-          <div className="sticky top-6 hidden lg:block">
+          <div className="sticky top-0 hidden lg:block">
             <PaperPreview paper={previewed} />
           </div>
         )}

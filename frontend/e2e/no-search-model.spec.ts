@@ -61,7 +61,7 @@ test.describe('with no search model @no-search-model', () => {
           event('done', { papers_queued: 1 }),
       })
     })
-    await page.goto('/#/settings')
+    await page.goto('/#/settings/search')
     const section = page.getByRole('region', { name: 'Search' })
     const status = section.locator('.search-model-status')
     await expect(status).toHaveText('Search model: not downloaded')

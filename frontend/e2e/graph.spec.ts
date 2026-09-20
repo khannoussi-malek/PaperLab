@@ -22,7 +22,7 @@ test.describe('the graph page', () => {
     // Scope to this test's workspace: two papers, and the links between them only.
     await page.getByRole('combobox', { name: 'Workspace' }).click()
     await page.getByRole('option', { name: workspaceName }).click()
-    const counts = page.locator('header p')
+    const counts = page.locator('.status-bar')
     await expect(counts).toHaveText(/^2 papers, \d+ links?/)
 
     // Citations and Similar content are the layers on by default (P5); unticking one lowers the count.
@@ -114,7 +114,7 @@ test.describe('the graph page', () => {
     await page.goto('/#/graph')
     await page.getByRole('combobox', { name: 'Workspace' }).click()
     await page.getByRole('option', { name: workspaceName }).click()
-    await expect(page.locator('header p')).toHaveText(/^2 papers/)
+    await expect(page.locator('.status-bar')).toHaveText(/^2 papers/)
     await page.locator('.graph-paper').first().click()
     await page.getByRole('button', { name: 'Link to another paper…' }).click()
 

@@ -1,8 +1,8 @@
 import { Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useDataset, useDatasetMutations } from '@/api/queries'
+import { AppShell, shellTitle } from '@/components/AppShell'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { fadeIn } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { chartsHref, newChartHref, readerHref, type CellFocus } from '@/lib/route'
@@ -99,22 +99,17 @@ export function DatasetPage({ datasetId, focus }: Props) {
 
   if (dataset.isError) {
     return (
-      <main className={cn('mx-auto flex max-w-5xl flex-col gap-4 px-4 py-6', fadeIn)}>
-        <Button variant="ghost" size="sm" asChild className="-ml-2.5 self-start">
-          <a href={chartsHref}>← Back</a>
-        </Button>
+      <AppShell back={{ href: chartsHref, label: 'Back' }} title="Dataset">
         <p className="text-muted-foreground">This dataset doesn't exist.</p>
-      </main>
+      </AppShell>
     )
   }
 
   return (
-    <main className={cn('mx-auto flex max-w-5xl flex-col gap-4 px-4 py-6 pb-24', fadeIn)}>
-      <div>
-        <Button variant="ghost" size="sm" asChild className="-ml-2.5">
-          <a href={backHref}>← Back</a>
-        </Button>
-        {dataset.data && (
+    <AppShell
+      back={{ href: backHref, label: 'Back' }}
+      title={
+        dataset.data && (
           <>
             {editingName ? (
               <Input
@@ -133,7 +128,7 @@ export function DatasetPage({ datasetId, focus }: Props) {
                   }
                 }}
                 onBlur={commitName}
-                className="mt-1 h-auto border-0 bg-transparent px-0 font-heading text-3xl font-semibold shadow-none focus-visible:ring-2"
+                className="h-7 border-0 bg-transparent px-1 font-heading text-base font-semibold shadow-none focus-visible:ring-2"
               />
             ) : (
               <h1
@@ -141,19 +136,24 @@ export function DatasetPage({ datasetId, focus }: Props) {
                 title="Rename"
                 onClick={() => setEditingName(true)}
                 onKeyDown={(e) => e.key === 'Enter' && setEditingName(true)}
-                className="mt-1 cursor-text truncate rounded-md font-heading text-3xl font-semibold focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+                className={cn(shellTitle, 'cursor-text rounded-md focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none')}
               >
                 {dataset.data.name}
               </h1>
             )}
-            <p className="text-sm text-muted-foreground">
-              {datasetSource(dataset.data)}
-              {dataset.data.kind === 'table' && dataset.data.page !== null && ` · p. ${dataset.data.page}`}
-            </p>
           </>
-        )}
-      </div>
-
+        )
+      }
+      status={
+        dataset.data && (
+          <>
+            {datasetSource(dataset.data)}
+            {dataset.data.kind === 'table' && dataset.data.page !== null && ` · p. ${dataset.data.page}`}
+          </>
+        )
+      }
+    >
+      <div className="flex max-w-5xl flex-col gap-4 pb-24">
       {error && (
         <Alert variant="destructive">
           <AlertDescription>{error.message}</AlertDescription>
@@ -164,7 +164,7 @@ export function DatasetPage({ datasetId, focus }: Props) {
 
       {dataset.data && (
         <>
-          <div className="sticky bottom-0 -mx-4 mt-auto flex items-center justify-between gap-2 border-t border-glass-border bg-card/95 px-4 py-3 backdrop-blur">
+          <div className="sticky bottom-0 -mx-3 mt-auto flex items-center justify-between gap-2 border-t border-glass-border bg-card/95 px-3 py-3 backdrop-blur">
             <Button variant="ghost" className="text-destructive hover:text-destructive" onClick={deleteDataset} disabled={remove.isPending}>
               <Trash2 aria-hidden />
               Delete dataset
@@ -188,6 +188,7 @@ export function DatasetPage({ datasetId, focus }: Props) {
           />
         </>
       )}
-    </main>
+      </div>
+    </AppShell>
   )
 }

@@ -14,6 +14,7 @@ import {
   regionHref,
   samePage,
   settingsHref,
+  settingsSectionHref,
   setupHref,
   workspaceHref,
 } from './route'
@@ -140,8 +141,12 @@ describe('parseRoute', () => {
 
   it('opens the settings page, and nothing under it', () => {
     expect(settingsHref).toBe('#/settings')
-    expect(parseRoute(settingsHref)).toEqual({ name: 'settings' })
-    expect(parseRoute('#/settings/models')).toEqual({ name: 'library' })
+    expect(parseRoute(settingsHref)).toEqual({ name: 'settings', section: 'models' })
+    expect(parseRoute('#/settings/sources')).toEqual({ name: 'settings', section: 'sources' })
+    expect(parseRoute(settingsSectionHref('desktop'))).toEqual({ name: 'settings', section: 'desktop' })
+    // An unknown or misspelt section still opens Settings, on its first section.
+    expect(parseRoute('#/settings/nonsense')).toEqual({ name: 'settings', section: 'models' })
+    expect(parseRoute('#/settings/models/extra')).toEqual({ name: 'library' })
   })
 
   it('opens the Connect Claude page, and nothing under it', () => {

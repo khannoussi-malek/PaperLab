@@ -33,7 +33,8 @@ import { CitationCard } from './CitationCard'
 import { CitationLinks } from './CitationLinks'
 import type { Citation } from './citations'
 import { pdfRectToCss, type PdfRect } from './coords'
-import { MAX_PANEL_SHARE, MIN_PANEL_WIDTH, loadPanelWidth, savePanelWidth } from './panelWidth'
+import { loadPanelWidth, panelTrack, savePanelWidth } from '@/components/panelWidth'
+import { READER_PANEL } from './panelWidth'
 import { citationAt, clientPointToPdf, notesAt, rectContains } from './hitTest'
 import { PdfPage } from './PdfPage'
 import { SelectionCopyButton } from './SelectionCopyButton'
@@ -138,7 +139,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
   const shownTargetId = useRef<string | null>(null)
   const targetChunks = useChunksOnPage(paperId, target?.kind === 'chunk' ? target.page : null)
   const [error, setError] = useState<string | null>(null)
-  const [panelWidth, setPanelWidth] = useState(() => loadPanelWidth(browserStorage()))
+  const [panelWidth, setPanelWidth] = useState(() => loadPanelWidth(READER_PANEL, browserStorage()))
   const datasets = usePaperDatasets(paperId)
   const tableMarksByPage = useMemo(() => tableMarks(datasets.data ?? []), [datasets.data])
   const numbersDatasetId = datasets.data?.find((d) => d.kind === 'numbers')?.id ?? null
@@ -147,7 +148,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
   const captureDrag = useCaptureDrag(scale)
   const { capturing, capture } = captureDrag
 
-  useEffect(() => savePanelWidth(browserStorage(), panelWidth), [panelWidth])
+  useEffect(() => savePanelWidth(READER_PANEL, browserStorage(), panelWidth), [panelWidth])
   const notes = useMemo(() => notesQuery.data ?? [], [notesQuery.data])
 
   const highlightsByPage = useMemo(() => groupHighlights(notes, draft, paperId), [notes, draft, paperId])
@@ -393,7 +394,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
     <div
       className={cn('reader grid h-dvh grid-rows-[auto_minmax(0,1fr)]', fadeIn)}
       // CSS clamps too, so a stored width still fits after the window shrinks; the handle clamps as it drags.
-      style={{ gridTemplateColumns: `minmax(0,1fr) clamp(${MIN_PANEL_WIDTH}px, ${panelWidth}px, ${MAX_PANEL_SHARE * 100}vw)` }}
+      style={{ gridTemplateColumns: `minmax(0,1fr) ${panelTrack(READER_PANEL, panelWidth)}` }}
     >
       {/* One grid row either way, so the pages and the panel keep their row whether or not the banner shows. */}
       <div className="col-span-full">

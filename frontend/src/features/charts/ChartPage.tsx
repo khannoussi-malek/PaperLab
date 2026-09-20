@@ -2,9 +2,9 @@ import { PencilLine } from 'lucide-react'
 import { useState } from 'react'
 import type { Note } from '@/api/client'
 import { useChart, useChartMutations } from '@/api/queries'
+import { AppShell, shellTitle } from '@/components/AppShell'
 import { glass } from '@/components/glass'
-import { delayedIn, fadeIn } from '@/components/motion'
-import { ModeToggle } from '@/components/mode-toggle'
+import { delayedIn } from '@/components/motion'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -30,42 +30,39 @@ export function ChartPage({ chartId }: { chartId: string }) {
   }
 
   return (
-    <main className={cn('mx-auto flex max-w-5xl flex-col gap-4 px-4 py-6', fadeIn)}>
-      <header className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <Button variant="ghost" size="sm" asChild className="-ml-2.5">
-            <a href={chartsHref}>← Charts</a>
-          </Button>
-          {chart.data ? (
-            <InlineTitle as="h1" value={chart.data.title} label="Chart title" editing={renaming} onEditingChange={setRenaming} onSave={saveTitle} />
-          ) : (
-            <h1 className={cn('mt-1 truncate font-heading text-3xl font-semibold', !chart.isError && delayedIn)} title={title}>
-              {title}
-            </h1>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          {chart.data && (
-            <>
-              <Button variant="outline" asChild>
-                <a href={editChartHref(chart.data.id)}>
-                  <PencilLine aria-hidden />
-                  Edit
-                </a>
-              </Button>
-              <ChartMenu
-                chart={{ id: chart.data.id, title: chart.data.title, note_count: chart.data.note_ids.length }}
-                onRename={() => setRenaming(true)}
-                withEdit={false}
-                onAddToNote={setNoteResult}
-                onError={(error) => setNoteResult({ error })}
-              />
-            </>
-          )}
-          <ModeToggle />
-        </div>
-      </header>
-
+    <AppShell
+      back={{ href: chartsHref, label: 'Charts' }}
+      title={
+        chart.data ? (
+          <InlineTitle as="h1" value={chart.data.title} label="Chart title" editing={renaming} onEditingChange={setRenaming} onSave={saveTitle} />
+        ) : (
+          <h1 className={cn(shellTitle, !chart.isError && delayedIn)} title={title}>
+            {title}
+          </h1>
+        )
+      }
+      actions={
+        chart.data && (
+          <>
+            <Button variant="ghost" size="sm" asChild>
+              <a href={editChartHref(chart.data.id)}>
+                <PencilLine aria-hidden />
+                Edit
+              </a>
+            </Button>
+            <ChartMenu
+              chart={{ id: chart.data.id, title: chart.data.title, note_count: chart.data.note_ids.length }}
+              onRename={() => setRenaming(true)}
+              withEdit={false}
+              onAddToNote={setNoteResult}
+              onError={(error) => setNoteResult({ error })}
+            />
+          </>
+        )
+      }
+      status={chart.data && `Used in ${plural(chart.data.note_ids.length, 'note')}`}
+    >
+      <div className="flex max-w-5xl flex-col gap-4">
       {chart.isError && !chart.data && (
         <p className="text-muted-foreground">
           This chart doesn't exist.{' '}
@@ -101,6 +98,7 @@ export function ChartPage({ chartId }: { chartId: string }) {
           </CardContent>
         </Card>
       )}
-    </main>
+      </div>
+    </AppShell>
   )
 }

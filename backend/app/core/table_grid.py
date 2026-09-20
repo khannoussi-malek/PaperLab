@@ -12,6 +12,8 @@ import re
 import statistics
 from dataclasses import dataclass
 
+from app.core.numbers import parse_number
+
 Rect = tuple[float, float, float, float]
 
 # A word joins the current row when their vertical spans overlap by half the smaller height (subscripts stay in).
@@ -78,6 +80,7 @@ def _separators(rows: list[list[GridCell]], min_gap: float) -> list[float]:
     allowed = min(SPANNING_ROWS, len(rows) - 1)
     # A row counts once where its own phrases overlap, so merge each row's intervals first.
     counts: dict[float, int] = {}
+    starts: set[float] = set()
     for row in rows:
         spans = sorted((c.bbox[0], c.bbox[2]) for c in row if c.bbox)
         merged: list[list[float]] = []
@@ -89,22 +92,26 @@ def _separators(rows: list[list[GridCell]], min_gap: float) -> list[float]:
         for start, end in merged:
             counts[start] = counts.get(start, 0) + 1
             counts[end] = counts.get(end, 0) - 1
+            starts.add(start)
     xs = sorted(counts)
     separators, covered, gap_start = [], 0, None
     for x in xs[:-1]:  # past the last x nothing is covered, and that edge is not a column boundary
         covered += counts[x]
-        if covered <= allowed:
+        # A cell starting here closes the gap, however few rows reach it. Counting coverage alone couldn't tell a
+        # column only two rows fill from a label crossing a gap, so one blank cell in a short table used to merge
+        # that column into its neighbour; a spanning label starts outside the gap, a column starts inside it.
+        if x in starts:
+            if gap_start is not None and x - gap_start >= min_gap:
+                separators.append((gap_start + x) / 2)
+            gap_start = None
+        elif covered <= allowed:
             gap_start = x if gap_start is None else gap_start
-            continue
-        if gap_start is not None and x - gap_start >= min_gap:
-            separators.append((gap_start + x) / 2)
-        gap_start = None
     return separators
 
 
 def words_to_grid(words: list[Word]) -> list[list[GridCell]]:
-    """Rows of cells, top to bottom and left to right. Every column has text: a separator only sits where at most
-    SPANNING_ROWS rows reach, so more rows than that start a phrase between any two separators."""
+    """Rows of cells, top to bottom and left to right. Every column has text: a separator only sits in a range no
+    row starts a phrase in, so every column holds the phrases of at least one row."""
     if not words:
         return []
     height = statistics.median(w.y1 - w.y0 for w in words)
@@ -144,3 +151,21 @@ def caption_name(blocks: list[tuple[Rect, str]], region: Rect) -> str | None:
     if len(name) <= CAPTION_NAME_CHARS:
         return name
     return name[: CAPTION_NAME_CHARS - 1].rsplit(" ", 1)[0] + "…"
+
+
+def _has_number(cells: list[GridCell]) -> bool:
+    return any(parse_number(cell.text).value is not None for cell in cells)
+
+
+def split_header(grid: list[list[GridCell]]) -> tuple[list[str], list[list[GridCell]]]:
+    """(column names, data rows). The first row names the columns when it holds no number and a row below it does;
+    otherwise the names are empty and every row is data, and the owner names the columns in the grid editor.
+
+    ponytail: a header of numbered columns ("1", "2", "3") reads as data. Naming them by hand is the fix.
+    """
+    if not grid:
+        return [], []
+    head, body = grid[0], grid[1:]
+    if not body or _has_number(head) or not any(_has_number(row) for row in body):
+        return [""] * len(head), grid
+    return [cell.text for cell in head], body
