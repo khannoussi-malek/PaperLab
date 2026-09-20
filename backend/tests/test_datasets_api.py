@@ -64,8 +64,8 @@ async def test_capture_a_table_and_a_number_over_http(client, session, table_pdf
     assert preview.status_code == 200
     body = preview.json()
     assert body["name"] == "Table 1: Results on the dev set."
-    assert [[c["raw"] for c in row["cells"]] for row in body["grid"]["rows"]] == [list(row) for row in TABLE_ROWS]
-    assert body["grid"]["columns"] == [{"id": None, "name": "", "unit": None}] * 3
+    assert [[c["raw"] for c in row["cells"]] for row in body["grid"]["rows"]] == [list(r) for r in TABLE_ROWS[1:]]
+    assert body["grid"]["columns"] == [{"id": None, "name": name, "unit": None} for name in TABLE_ROWS[0]]
 
     created = await client.post(
         "/api/datasets",
@@ -74,7 +74,7 @@ async def test_capture_a_table_and_a_number_over_http(client, session, table_pdf
     )  # fmt: skip
     assert created.status_code == 201
     table = created.json()
-    assert (table["region"], table["rows"][2]["cells"][1]["origin"]) == (TABLE_REGION, "extracted")
+    assert (table["region"], table["rows"][1]["cells"][1]["origin"]) == (TABLE_REGION, "extracted")
 
     candidates = await client.post("/api/numbers/candidates", json={"text": "reaches 90.9 ± 0.2 F1 on dev"})
     assert candidates.json() == [{"raw": "90.9 ± 0.2", "value": 90.9, "error": 0.2, "unit_hint": "F1"}]
