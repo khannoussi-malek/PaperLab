@@ -1,4 +1,4 @@
-from app.core.table_grid import CAPTION_NAME_CHARS, GridCell, Word, caption_name, words_to_grid
+from app.core.table_grid import CAPTION_NAME_CHARS, GridCell, Word, caption_name, split_header, words_to_grid
 
 
 def word(x0: float, top: float, text: str, width: float | None = None, height: float = 10) -> Word:
@@ -94,3 +94,49 @@ def test_a_long_caption_is_cut_at_a_word_with_an_ellipsis():
 
     assert name is not None and name.endswith("…") and len(name) <= CAPTION_NAME_CHARS
     assert name.removesuffix("…").split()[-1] == "word"
+
+
+def test_a_column_only_two_rows_fill_is_not_swallowed_by_its_neighbour():
+    """A blank cell in a short table used to drop a column's row count to SPANNING_ROWS, so the splitter read the
+    column itself as a gap a label was crossing and merged it into the column on its left."""
+    words = [
+        word(72, 100, "Model"), word(200, 100, "MNLI"), word(300, 100, "QQP"),
+        word(72, 114, "BERT-B"), word(200, 114, "84.6"), word(300, 114, "71.2"),
+        word(72, 128, "BERT-L"), word(300, 128, "72.1"),  # no MNLI score for this row
+    ]  # fmt: skip
+
+    assert texts(words_to_grid(words)) == [
+        ["Model", "MNLI", "QQP"],
+        ["BERT-B", "84.6", "71.2"],
+        ["BERT-L", "", "72.1"],
+    ]
+
+
+def test_a_header_row_of_names_becomes_the_column_names():
+    grid = words_to_grid([
+        word(72, 100, "System"), word(200, 100, "Dev"), word(300, 100, "Test"),
+        word(72, 114, "BERT-B"), word(200, 114, "88.5"), word(300, 114, "87.0"),
+    ])  # fmt: skip
+
+    names, rows = split_header(grid)
+
+    assert names == ["System", "Dev", "Test"]
+    assert texts(rows) == [["BERT-B", "88.5", "87.0"]]
+
+
+def test_a_first_row_holding_numbers_is_data_and_leaves_the_columns_unnamed():
+    grid = words_to_grid([
+        word(72, 100, "BERT-B"), word(200, 100, "88.5"),
+        word(72, 114, "BERT-L"), word(200, 114, "90.9"),
+    ])  # fmt: skip
+
+    names, rows = split_header(grid)
+
+    assert names == ["", ""]
+    assert texts(rows) == [["BERT-B", "88.5"], ["BERT-L", "90.9"]]
+
+
+def test_a_single_row_is_data_not_a_header():
+    grid = words_to_grid([word(72, 100, "System"), word(200, 100, "Dev")])
+
+    assert split_header(grid) == (["", ""], grid)

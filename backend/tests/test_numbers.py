@@ -52,3 +52,25 @@ def test_every_number_in_a_selection_is_a_candidate_with_the_word_after_it_as_un
 
 def test_digits_inside_words_are_not_candidates():
     assert find_numbers("GPT-2 and v2 of word2vec, 3x faster") == []
+
+
+@pytest.mark.parametrize(
+    ("raw", "value"),
+    [("14k", 14_000.0), ("110m", 110_000_000.0), ("1.2b", 1_200_000_000.0)],
+)
+def test_a_lowercase_scale_suffix_reads_like_its_uppercase(raw, value):
+    assert parse_number(raw).value == pytest.approx(value)
+
+
+# "310 K" is 310 kelvin, not 310 thousand: a scale suffix has to touch its number. The unit belongs to the
+# column, so the cell reads as a label and the owner sees it, instead of a silently multiplied number.
+@pytest.mark.parametrize("raw", ["310 K", "2.5 B", "14 M"])
+def test_a_letter_after_a_space_is_a_unit_so_the_cell_is_a_label(raw):
+    assert (parse_number(raw).value, parse_number(raw).error) == (None, None)
+
+
+def test_a_unit_after_a_number_is_a_hint_not_a_thousand_multiplier():
+    assert find_numbers("annealed at 310 K for 2 h") == [
+        NumberCandidate(raw="310", value=310.0, error=None, unit_hint="K"),
+        NumberCandidate(raw="2", value=2.0, error=None, unit_hint="h"),
+    ]

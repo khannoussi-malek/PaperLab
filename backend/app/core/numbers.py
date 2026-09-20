@@ -1,6 +1,6 @@
 """Reading numbers the way papers print them. The one parser: cells and captured numbers both go through here.
 
-Handles "88.5", "−3", "1,234", "88.5 ± 0.3", "34%", "110M", "1.2e-3", and best-result or footnote marks ("90.9*",
+Handles "88.5", "−3", "1,234", "88.5 ± 0.3", "34%", "110M", "14k", "1.2e-3", and best-result or footnote marks ("90.9*",
 "90.9†", "**90.9**"). A cell that isn't exactly one of those ("BERT-L", "—", "88.5 F1") has no value: it's a label.
 ponytail: "." is the only decimal separator ("1,5" is not 1.5), and "1.2×10^-3" isn't read; add them when a paper
 needs them.
@@ -10,10 +10,11 @@ import re
 from dataclasses import dataclass
 
 _NUMBER = r"(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:[eE][+-]?\d+)?|\.\d+"
-# Whitespace only before a suffix or "%", so a match never swallows the space before the next word.
-_AMOUNT = rf"[+-]?(?:{_NUMBER})(?:\s*[KMB])?(?:\s*%)?"
+# A scale suffix must touch its number: "14K" is 14 thousand, but "310 K" is 310 kelvin, and reading that as
+# 310,000 put a silently wrong number in a chart. Whitespace stays allowed before "%", which is never a unit.
+_AMOUNT = rf"[+-]?(?:{_NUMBER})(?:[KMBkmb])?(?:\s*%)?"
 _WITH_ERROR = re.compile(rf"(?P<value>{_AMOUNT})(?:\s*±\s*(?P<error>{_AMOUNT}))?")
-_PARTS = re.compile(rf"(?P<sign>[+-]?)(?P<number>{_NUMBER})\s*(?P<suffix>[KMB]?)")
+_PARTS = re.compile(rf"(?P<sign>[+-]?)(?P<number>{_NUMBER})(?P<suffix>[KMBkmb]?)")
 _SCALE = {"": 1.0, "K": 1e3, "M": 1e6, "B": 1e9}
 _MARKS = "*†‡§¶"
 _NOT_UNITS = {"a", "an", "and", "at", "by", "for", "from", "in", "of", "on", "or", "the", "to", "vs", "with"}
@@ -44,7 +45,7 @@ def _clean(raw: str) -> str:
 def _amount(text: str) -> float:
     parts = _PARTS.match(text)
     assert parts is not None  # only called on text _AMOUNT matched
-    number = float(parts["number"].replace(",", "")) * _SCALE[parts["suffix"]]
+    number = float(parts["number"].replace(",", "")) * _SCALE[parts["suffix"].upper()]
     return -number if parts["sign"] == "-" else number
 
 

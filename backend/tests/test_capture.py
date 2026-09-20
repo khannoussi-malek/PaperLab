@@ -26,16 +26,17 @@ async def test_a_region_preview_is_a_grid_read_from_the_page_ready_to_save(sessi
     preview = await capture.preview_table(session, paper.id, 1, TABLE_REGION)
 
     assert preview.name == "Table 1: Results on the dev set."
-    assert [(c.id, c.name, c.unit) for c in preview.grid.columns] == [(None, "", None)] * 3
-    assert [[c.raw for c in row.cells] for row in preview.grid.rows] == [list(row) for row in TABLE_ROWS]
-    cell = preview.grid.rows[2].cells[1]
+    # The table's header row names the columns, so a chart built on this dataset can label its axes.
+    assert [(c.id, c.name, c.unit) for c in preview.grid.columns] == [(None, name, None) for name in TABLE_ROWS[0]]
+    assert [[c.raw for c in row.cells] for row in preview.grid.rows] == [list(row) for row in TABLE_ROWS[1:]]
+    cell = preview.grid.rows[1].cells[1]
     assert (cell.raw, cell.extracted, cell.page) == ("90.9 ± 0.2", "90.9 ± 0.2", 1)
     assert len(cell.bbox) == 1 and TABLE_REGION[0] <= cell.bbox[0][0] < cell.bbox[0][2] <= TABLE_REGION[2]
 
     saved = await datasets.create_dataset(
         session, preview.name, "table", preview.grid, paper_id=paper.id, page=1, region=TABLE_REGION
     )
-    assert (saved.rows[2].cells[1].value, saved.rows[2].cells[1].error, saved.rows[2].cells[1].origin) == (
+    assert (saved.rows[1].cells[1].value, saved.rows[1].cells[1].error, saved.rows[1].cells[1].origin) == (
         90.9, 0.2, "extracted"
     )
 

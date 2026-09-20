@@ -14,7 +14,7 @@ from app.core.datasets import CellIn, ColumnIn, DatasetView, GridIn, Rect, RowIn
 from app.core.errors import InvalidInput
 from app.core.numbers import parse_number
 from app.core.papers import get_paper, get_paper_file
-from app.core.table_grid import caption_name, words_to_grid
+from app.core.table_grid import caption_name, split_header, words_to_grid
 from app.models import Dataset, DatasetColumn, DatasetRow, Paper, cell_table
 from app.providers.extraction import read_region
 
@@ -42,18 +42,17 @@ def _check_page(paper: Paper, page: int) -> None:
 
 
 async def preview_table(session: AsyncSession, paper_id: uuid.UUID, page: int, region: Rect) -> TablePreview:
-    """The proposed grid for a box drawn on a page. Nothing is saved: the owner fixes the grid, then creates the
-    dataset with it."""
+    """The proposed grid for a box drawn on a page, the table's own header row read as the column names (so a chart
+    built on it can label its axes). Nothing is saved: the owner fixes the grid, then creates the dataset with it."""
     paper = await get_paper(session, paper_id)
     _check_page(paper, page)
     if not (region[0] < region[2] and region[1] < region[3]):
         raise InvalidInput("a region needs x0 < x1 and y0 < y1")
     path = await get_paper_file(session, paper_id)
     text = await asyncio.to_thread(read_region, path, page, region)
-    rows = words_to_grid(text.words)
-    width = len(rows[0]) if rows else 0
+    names, body = split_header(words_to_grid(text.words))
     grid = GridIn(
-        columns=[ColumnIn(id=None, name="", unit=None) for _ in range(width)],
+        columns=[ColumnIn(id=None, name=name, unit=None) for name in names],
         rows=[
             RowIn(
                 id=None,
@@ -62,10 +61,10 @@ async def preview_table(session: AsyncSession, paper_id: uuid.UUID, page: int, r
                     for cell in row
                 ],
             )
-            for row in rows
+            for row in body
         ],
     )
-    return TablePreview(name=caption_name(text.blocks, region) if rows else None, grid=grid)
+    return TablePreview(name=caption_name(text.blocks, region) if names else None, grid=grid)
 
 
 async def _number_columns(session: AsyncSession, dataset: Dataset) -> dict[str, uuid.UUID]:
