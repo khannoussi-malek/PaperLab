@@ -11,7 +11,7 @@ test('the search model is ready, the embedding model is locked once papers are i
     reindexCalls += 1
     return route.fulfill({ status: 202, json: { papers: 3 } })
   })
-  await page.goto('/#/settings')
+  await page.goto('/#/settings/search')
 
   const section = page.getByRole('region', { name: 'Search' })
   // This stack has the search model (it was downloaded into the models volume); the no-model view is no-search-model.spec.ts.
@@ -36,7 +36,7 @@ test('the search model is ready, the embedding model is locked once papers are i
 test('a failed re-index shows the server error and leaves the dialog open to retry or cancel', async ({ page }) => {
   // Re-indexing the owner's whole library is never run for real here: the request is answered by the test.
   await page.route('**/api/embedding/reindex', (route) => route.fulfill({ status: 500, json: { detail: 'Re-index failed' } }))
-  await page.goto('/#/settings')
+  await page.goto('/#/settings/search')
 
   const section = page.getByRole('region', { name: 'Search' })
   await section.getByRole('button', { name: 'Re-index library' }).click()

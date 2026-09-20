@@ -1,14 +1,13 @@
-import { ArrowLeft, Check, CircleCheck, Copy } from 'lucide-react'
+import { Check, CircleCheck, Copy } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { useCheckMcpServer, useMcpSetup } from '@/api/queries'
-import { fadeIn } from '@/components/motion'
+import { AppShell } from '@/components/AppShell'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ErrorAlert, LoadError } from '@/features/library/ErrorAlert'
 import { useDesktop } from '@/features/settings/desktop'
 import { copyText } from '@/lib/clipboard'
-import { cn } from '@/lib/utils'
 import { claudeCodeCommand, configFileHint, desktopConfig, detectOs, type SetupOs } from './connectClaude'
 
 const COPIED_MS = 2000
@@ -76,17 +75,11 @@ export function ConnectClaudePage() {
   const ready = folder.trim() !== ''
 
   return (
-    <main className={cn('mx-auto flex max-w-3xl flex-col gap-8 px-4 py-6', fadeIn)}>
-      <div>
-        <Button variant="ghost" size="sm" asChild className="-ml-2.5">
-          <a href="#/">
-            <ArrowLeft aria-hidden />
-            Library
-          </a>
-        </Button>
-        <h1 className="mt-1 font-heading text-3xl font-semibold">Connect Claude</h1>
-      </div>
-
+    <AppShell title="Connect Claude">
+      {/* Wider than Settings' reading column: this page is mostly config to copy, and a JSON snippet wrapped at
+          prose width is harder to read. Still capped, at the width Charts and a chart use, so content panes line up
+          and nothing stretches across a wide monitor. */}
+      <div className="flex max-w-5xl flex-col gap-8">
       <Section id="claude-can-heading" title="What Claude can do">
         <ul className="list-disc space-y-1 pl-5 text-sm">
           <li>Search your library for the passages closest to a question, in every paper or one workspace.</li>
@@ -234,6 +227,7 @@ export function ConnectClaudePage() {
           <li>Connect Claude has been tested on macOS.</li>
         </ul>
       </Section>
-    </main>
+      </div>
+    </AppShell>
   )
 }

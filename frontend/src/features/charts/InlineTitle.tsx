@@ -15,12 +15,13 @@ type Props = {
   onEditingChange?: (editing: boolean) => void
 }
 
+// `h1` is toolbar-sized: it is only ever the app shell's own title (see `shellTitle` in AppShell).
 const textClass: Record<Tag, string> = {
-  h1: 'mt-1 truncate font-heading text-3xl font-semibold',
+  h1: 'min-w-0 truncate font-heading text-base leading-none font-semibold',
   span: 'truncate font-heading text-lg font-semibold',
 }
 const inputClass: Record<Tag, string> = {
-  h1: 'mt-1 h-auto border-0 bg-transparent px-0 font-heading text-3xl font-semibold shadow-none focus-visible:ring-2',
+  h1: 'h-7 border-0 bg-transparent px-1 font-heading text-base font-semibold shadow-none focus-visible:ring-2',
   span: 'h-7 font-heading text-lg font-semibold',
 }
 

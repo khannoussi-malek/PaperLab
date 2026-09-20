@@ -20,15 +20,15 @@ type Props = {
 export function ReaderToolbar({ paper, zoomIndex, onZoomChange, capturing, onCaptureChange }: Props) {
   const title = paper?.title
   return (
-    <header className={cn('col-span-full flex items-center gap-2 border-b border-glass-border px-4 py-2', glass)}>
-      <Button variant="ghost" size="sm" asChild>
+    <header className={cn('col-span-full flex h-11 items-center gap-1 border-b border-glass-border px-2', glass)}>
+      <Button variant="ghost" size="sm" asChild className="shrink-0 text-muted-foreground">
         <a href="#/">← Library</a>
       </Button>
-      <h1 className={cn('mx-2 flex-1 truncate font-heading text-xl font-semibold', title === undefined && delayedIn)} title={title}>
+      <h1 className={cn('mx-1.5 min-w-0 flex-1 truncate font-heading text-base leading-none font-semibold', title === undefined && delayedIn)} title={title}>
         {title ?? 'Loading…'}
       </h1>
       <Button
-        variant="outline"
+        variant="ghost"
         size="sm"
         aria-pressed={capturing}
         className="aria-pressed:border-primary aria-pressed:bg-primary/10 aria-pressed:text-primary"
@@ -39,20 +39,20 @@ export function ReaderToolbar({ paper, zoomIndex, onZoomChange, capturing, onCap
       </Button>
       {paper && <PaperDetailsDialog paper={paper} />}
       <Button
-        variant="outline"
-        size="icon"
+        variant="ghost"
+        size="icon-sm"
         aria-label="Zoom out"
         disabled={zoomIndex === 0}
         onClick={() => onZoomChange(Math.max(0, zoomIndex - 1))}
       >
         <ZoomOut aria-hidden />
       </Button>
-      <span className="zoom-level min-w-14 text-center text-sm tabular-nums">
+      <span className="zoom-level min-w-12 text-center text-sm tabular-nums">
         {Math.round(ZOOM_STEPS[zoomIndex] * 100)}%
       </span>
       <Button
-        variant="outline"
-        size="icon"
+        variant="ghost"
+        size="icon-sm"
         aria-label="Zoom in"
         disabled={zoomIndex === ZOOM_STEPS.length - 1}
         onClick={() => onZoomChange(Math.min(ZOOM_STEPS.length - 1, zoomIndex + 1))}

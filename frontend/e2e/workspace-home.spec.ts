@@ -57,8 +57,8 @@ test("add two library papers to a workspace, see both papers' notes, and open on
   for (const id of [paperId, secondPaperId]) {
     await expect(page.locator(`.paper-row a[href="#/papers/${id}"]`)).toBeVisible()
   }
-  // Scoped to the header: the Chat tab's scope line repeats the counts.
-  await expect(page.locator('header').getByText('2 papers · 2 notes')).toBeVisible()
+  // Scoped to the status bar: the Chat tab's scope line repeats the counts.
+  await expect(page.locator('.status-bar')).toHaveText('2 papers · 2 notes')
 
   await page.getByRole('tab', { name: 'Notes' }).click()
   await expect(page).toHaveURL(new RegExp(`#/workspaces/${workspaceId}\\?tab=notes$`))

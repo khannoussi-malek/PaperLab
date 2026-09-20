@@ -2,9 +2,9 @@ import { Plus } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type { ChartSpec, Dataset, SeriesSpec } from '@/api/client'
 import { useChart, useChartMutations, useDataset, useLoadDataset } from '@/api/queries'
+import { AppShell } from '@/components/AppShell'
 import { glass } from '@/components/glass'
-import { delayedIn, fadeIn } from '@/components/motion'
-import { ModeToggle } from '@/components/mode-toggle'
+import { delayedIn } from '@/components/motion'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -138,17 +138,11 @@ export function ChartBuilderPage({ chartId, datasetId }: Props) {
   const noteCount = chart.data?.note_ids.length ?? 0
 
   return (
-    <main className={cn('mx-auto flex max-w-7xl flex-col gap-4 px-4 py-6', fadeIn)}>
-      <header className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <Button variant="ghost" size="sm" asChild className="-ml-2.5">
-            <a href={chartId ? chartHref(chartId) : chartsHref}>{chartId ? '← Chart' : '← Charts'}</a>
-          </Button>
-          <h1 className="mt-1 font-heading text-3xl font-semibold">{chartId ? 'Edit chart' : 'New chart'}</h1>
-        </div>
-        <ModeToggle />
-      </header>
-
+    <AppShell
+      back={chartId ? { href: chartHref(chartId), label: 'Chart' } : { href: chartsHref, label: 'Charts' }}
+      title={chartId ? 'Edit chart' : 'New chart'}
+    >
+      <div className="flex flex-col gap-4">
       {loadError && (
         <Alert variant="destructive" className="border-glass-border">
           <AlertDescription>{chartId ? "This chart doesn't exist." : `Couldn't load that data: ${loadError.message}`}</AlertDescription>
@@ -238,7 +232,7 @@ export function ChartBuilderPage({ chartId, datasetId }: Props) {
             </CardContent>
           </Card>
 
-          <Card className={cn('min-w-0 ring-glass-border lg:sticky lg:top-4', glass)}>
+          <Card className={cn('min-w-0 ring-glass-border lg:sticky lg:top-0', glass)}>
             <CardContent>
               {preview ? (
                 <ChartView spec={preview} />
@@ -249,6 +243,7 @@ export function ChartBuilderPage({ chartId, datasetId }: Props) {
           </Card>
         </div>
       )}
-    </main>
+      </div>
+    </AppShell>
   )
 }

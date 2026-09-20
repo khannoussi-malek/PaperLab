@@ -63,7 +63,7 @@ export function PaperDetailsDialog({ paper }: { paper: Paper }) {
   return (
     <Dialog open={open} onOpenChange={openChange}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
+        <Button variant="ghost" size="sm">
           <PencilLine aria-hidden />
           Edit details
         </Button>

@@ -50,7 +50,7 @@ test.describe('the graph views', () => {
     await page.getByRole('checkbox', { name: /^Citations/ }).uncheck()
     await page.getByRole('checkbox', { name: /^Similar content/ }).uncheck()
     await page.getByRole('checkbox', { name: /^Your links/ }).check()
-    await expect(page.locator('header p')).toHaveText(/^3 papers, 2 links/)
+    await expect(page.locator('.status-bar')).toHaveText(/^3 papers, 2 links/)
 
     // The switcher, in the spec's order, on 2D.
     const tabs = page.getByRole('tablist', { name: 'Graph view' })
@@ -194,7 +194,9 @@ test.describe('the graph views', () => {
       page.goto('/#/graph'),
     ])
     expect(graphLoaded.status()).toBe(200)
-    await expect(page.getByRole('alert')).toContainText('Workspaces are unavailable.')
+    // The view's own alert, not the rail's: the rail says its list is broken on every page, while this is the
+    // one that offers Retry.
+    await expect(page.getByRole('main').getByRole('alert')).toContainText('Workspaces are unavailable.')
     await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible()
     await expect(page.locator('[data-view]')).toHaveCount(0)
 
