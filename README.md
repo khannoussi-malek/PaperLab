@@ -1,6 +1,6 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset=".github/assets/paperlab-banner-dark.png">
-  <img alt="PaperLab: read deeper, keep every thought, see what you missed. A paper's highlights lead to a note, a cited AI answer, and a new connection across your library." src=".github/assets/paperlab-banner.png">
+  <img alt="PaperLab: your papers, your machine, one app, always there. Download it and open it: a paper's highlights lead to a note, a cited AI answer and a new connection across your library, while PaperLab sits in the menu bar for Claude Desktop." src=".github/assets/paperlab-banner.png">
 </picture>
 
 # PaperLab
@@ -27,18 +27,6 @@ always marked as AI in the interface.
 cost money and stays off until you tick it), shows one list with the sources that found each paper, and adds one in a
 click when a free PDF exists (arXiv, a repository or an open-access publisher). A paper with no free copy links to its
 page, so you can download it yourself. Nothing gets past a paywall.
-- Open a paper's **Similar** tab for papers like it, suggested by [Semantic Scholar](https://www.semanticscholar.org/),
-and add them the same way.
-- Open a paper's **References** tab to see what it cites and what has cited it since, ranked for your library:
-references several of your papers cite come first, then ones close to what you write notes about, then ones with a
-free PDF. Import a reference in a click when a free PDF exists.
-- Open the **Graph** page to see how your papers connect: what cites what, papers in the same workspace, a note
-anchored on two of them, a shared author or topic, and papers that simply read alike — each a layer you can switch on
-or off. Similar content comes from the same embeddings search uses. Click a paper to focus it and list its
-connections, and draw your own link between two papers with a label like "builds on". Look at it five ways: the 2D
-map, a 3D one you can turn around when clusters overlap, a **Matrix** of exactly which papers connect and how (a table
-a screen reader can read cell by cell), a **Timeline** of what builds on older work, by year published or date added,
-and **Rings** showing how many links away everything is from one paper.
 - Hover a paper in the list to preview its first page and details.
 - With OpenAlex ticked in Settings, fill in each paper's title, authors, year, venue and topics from
 [OpenAlex](https://openalex.org/), and correct any of them by hand with **Edit details**. Your corrections are kept when
@@ -68,11 +56,47 @@ workspace: answers cite passages from its papers and your notes.
 - Read in a PDF.js reader with zoom, in a light, dark or system theme. The page itself stays white.
 - Select text to highlight it in one of five colours, or a custom one, and add a note if you want.
 - Hover a highlight to see, edit, recolour or delete its note in place. Right-click it for the same actions and "Copy quote".
+- Resize the side panel by dragging its edge. It remembers the width.
+
+**Follow a citation**
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/feature-follow-a-citation-dark.png">
+  <img alt="A page of a paper where hovering a numbered citation opens its reference: one already in your library with Open in PaperLab, one not yet added with Add to library, and a Back to page 4 pill." src=".github/assets/feature-follow-a-citation.png">
+</picture>
+
 - Hover a numbered citation the PDF links, like `[51]`, to see which paper it is: its details once the paper's
 references are looked up, with **Open in PaperLab** when it's in your library or **Add to library** when a free PDF
 exists, and otherwise the entry exactly as the reference list prints it. Click it to jump to that entry, and **Back to
 page N** takes you back to where you were. Tab reaches every citation too.
-- Resize the side panel by dragging its edge. It remembers the width.
+
+**See how your papers connect**
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/feature-see-connections-dark.png">
+  <img alt="The library as a graph: papers as dots coloured by workspace, joined by citations and similar content, with the link layers and their counts beside it and tabs for the 2D, 3D, Matrix, Timeline and Rings views." src=".github/assets/feature-see-connections.png">
+</picture>
+
+- Open the **Graph** page to see how your papers connect: what cites what, papers in the same workspace, a note
+anchored on two of them, a shared author or topic, and papers that simply read alike — each a layer you can switch on
+or off. Similar content comes from the same embeddings search uses. Click a paper to focus it and list its
+connections, and draw your own link between two papers with a label like "builds on". Look at it five ways: the 2D
+map, a 3D one you can turn around when clusters overlap, a **Matrix** of exactly which papers connect and how (a table
+a screen reader can read cell by cell), a **Timeline** of what builds on older work, by year published or date added,
+and **Rings** showing how many links away everything is from one paper.
+
+**Follow the references**
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/feature-references-dark.png">
+  <img alt="A paper's References tab ranked for your library, one reference marked In library and one offering Import, beside the Similar panel suggesting papers that read alike." src=".github/assets/feature-references.png">
+</picture>
+
+- Open a paper's **References** tab to see what it cites and what has cited it since, ranked for your library:
+references several of your papers cite come first, then ones close to what you write notes about, then ones with a
+free PDF. Import a reference in a click when a free PDF exists.
+- Open a paper's **Similar** tab for papers like it, suggested by [Semantic Scholar](https://www.semanticscholar.org/),
+and add them the same way.
 
 **Capture data and chart it**
 
@@ -124,7 +148,19 @@ the papers in your library connected to one (a shared workspace, note, author or
 on a passage it quotes.
 - A note it saves is marked AI, like a note saved from chat, and is highlighted on the lines it quoted.
 
+**Install it as an app**
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/feature-the-app-dark.png">
+  <img alt="The PaperLab window showing the first-run setup offering a chat model with a Skip setup line, and the menu-bar icon with Open PaperLab and Quit PaperLab." src=".github/assets/feature-the-app.png">
+</picture>
+
+- Download PaperLab for macOS, Windows or Linux and open it ([Quick start](#quick-start)). It starts everything
+it needs, so there is no repo to clone and no server to run. Docker is the one thing to install first.
+- A short first run offers a chat model and a search model. Both are optional and both can be skipped: reading,
+highlighting and notes work without either, and you can set them up later in **Settings**.
+- Closing the window stops PaperLab. Turn on **Keep running** and it stays in the menu bar instead, so Claude
+Desktop can reach your library and uploads keep processing while the window is closed.
 
 ## Principles
 
@@ -150,8 +186,6 @@ database in its data folder, keeping only the latest.
 - **AI is always labelled.** AI text is stored separately from yours, keeps the model and prompt version that
 produced it, and shows an AI badge. Editing an AI note marks it "AI · edited", never "You".
 - **Answers show their sources.** Chat answers cite passages you can click, so you can check every claim against the paper.
-
-
 
 ## Quick start
 
@@ -290,7 +324,6 @@ The first search takes a few seconds while the search model loads. Without it, `
 
 Settings live in an optional `.env` beside `docker-compose.yml`: every one has a default.
 
-
 | Variable                                                    | Default                             | What it does                                                                                                                        |
 | ----------------------------------------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `LLM_PROVIDER`                                              | `ollama`                            | Seeds the first model connection: `ollama` or `anthropic`. `fake` answers every model with fixed text (for tests) and seeds nothing |
@@ -306,8 +339,6 @@ Settings live in an optional `.env` beside `docker-compose.yml`: every one has a
 Ollama listens on IPv4 only by default. If you type `localhost` into a connection's base URL, some systems resolve
 that to `::1` first and the connection fails even though Ollama is running; use `127.0.0.1` instead.
 
-
-
 ## How it works
 
 ```mermaid
@@ -318,8 +349,6 @@ flowchart LR
   W --> DB
   API -- "chat" --> LLM["Ollama on the host, Anthropic<br/>or an OpenAI-compatible server"]
 ```
-
-
 
 - **Ingestion:** an upload queues one job that can safely run again. The paper's status moves through
 `uploaded → extracting → chunking → embedding → enriching → ready`, or `failed` with the reason. Enrichment never fails
@@ -346,8 +375,6 @@ frontend/
   design-system/   MASTER.md: design tokens and UI rules
   e2e/             Playwright specs against the real stack
 ```
-
-
 
 ## Development
 
@@ -393,8 +420,6 @@ scores each answer. `--summarize` compares saved runs in `backend/evals/results/
 don't restart the API while it runs.
 - **UI changes** follow `frontend/design-system/MASTER.md`: shadcn/ui components, Tailwind tokens, both themes, and the  
 stable test hooks listed there.
-
-
 
 ## Contributing
 
