@@ -1,8 +1,9 @@
-import { ChartColumn } from 'lucide-react'
+import { Check, ChartColumn, Copy } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { Note } from '@/api/client'
 import { isFresh, slideUpIn } from '@/components/motion'
 import { Button } from '@/components/ui/button'
+import { copyText } from '@/lib/clipboard'
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
@@ -43,12 +44,31 @@ export function NoteCard({
   const [editing, setEditing] = useState(startEditing)
   const [body, setBody] = useState(note.body)
   const [attachingChart, setAttachingChart] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const [copyError, setCopyError] = useState<string | null>(null)
   const anchor = note.anchors.find((a) => a.paper_id === paperId)
 
   useEffect(() => {
     onEditingChange?.(note.id, editing)
     return () => onEditingChange?.(note.id, false)
   }, [editing, note.id, onEditingChange])
+
+  useEffect(() => {
+    if (!copied) return
+    const timer = setTimeout(() => setCopied(false), 1500)
+    return () => clearTimeout(timer)
+  }, [copied])
+
+  async function copyQuote(quote: string) {
+    try {
+      await copyText(quote)
+      setCopyError(null)
+      setCopied(true)
+    } catch (error) {
+      setCopied(false)
+      setCopyError(error instanceof Error ? error.message : 'Could not copy.')
+    }
+  }
 
   async function save() {
     if (await onUpdate(body)) setEditing(false)
@@ -115,6 +135,14 @@ export function NoteCard({
         </CardContent>
 
         <CardFooter className="justify-end gap-2">
+          <span className="sr-only" role="status">
+            {copied ? 'Quote copied.' : ''}
+          </span>
+          {copyError && (
+            <p role="alert" className="mr-auto text-xs text-destructive">
+              {copyError}
+            </p>
+          )}
           {editing ? (
             <>
               <Button variant="ghost" size="sm" onClick={cancel}>
@@ -126,6 +154,16 @@ export function NoteCard({
             </>
           ) : (
             <>
+              {anchor?.quoted_text && (
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Copy quote"
+                  onClick={() => void copyQuote(anchor.quoted_text)}
+                >
+                  {copied ? <Check aria-hidden /> : <Copy aria-hidden />}
+                </Button>
+              )}
               {!compact && (
                 <Button variant="ghost" size="sm" onClick={() => setAttachingChart(true)}>
                   <ChartColumn aria-hidden />

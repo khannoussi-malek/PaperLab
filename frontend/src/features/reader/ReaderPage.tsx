@@ -36,6 +36,7 @@ import { pdfRectToCss, type PdfRect } from './coords'
 import { MAX_PANEL_SHARE, MIN_PANEL_WIDTH, loadPanelWidth, savePanelWidth } from './panelWidth'
 import { citationAt, clientPointToPdf, notesAt, rectContains } from './hitTest'
 import { PdfPage } from './PdfPage'
+import { SelectionCopyButton } from './SelectionCopyButton'
 import { ReaderContextMenu, type ContextMenuState } from './ReaderContextMenu'
 import { ReaderToolbar } from './ReaderToolbar'
 import { RetractionBanner } from './RetractionBanner'
@@ -289,8 +290,15 @@ export function ReaderPage({ paperId, tab, target }: Props) {
     )
   }
 
-  function copyToClipboard(text: string) {
-    copyText(text).catch((reason: Error) => setError(reason.message))
+  /** Answers whether the text reached the clipboard, so a button can show it worked; a refusal goes to the alert. */
+  function copyToClipboard(text: string): Promise<boolean> {
+    return copyText(text).then(
+      () => true,
+      (reason: Error) => {
+        setError(reason.message)
+        return false
+      },
+    )
   }
 
   /** The skip link's target: the side panel's tab list, or its first focusable element (the active tab). */
@@ -464,6 +472,15 @@ export function ReaderPage({ paperId, tab, target }: Props) {
                 </Fragment>
               ))}
               <NumberMarks marks={numberMarksByPage.get(pageNumber) ?? []} scale={scale} />
+              {draft?.page === pageNumber && draft.rects.length > 0 && (
+                <SelectionCopyButton
+                  style={{
+                    left: draft.rects[draft.rects.length - 1][0] * scale,
+                    top: draft.rects[draft.rects.length - 1][3] * scale + 4,
+                  }}
+                  onCopy={() => copyToClipboard(draft.quotedText)}
+                />
+              )}
               {captureDrag.box?.page === pageNumber && (
                 <div className="capture-box absolute bg-primary/10 outline-2 outline-primary" style={pdfRectToCss(captureDrag.box.rect, scale)} />
               )}
