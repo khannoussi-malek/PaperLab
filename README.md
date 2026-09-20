@@ -421,6 +421,22 @@ don't restart the API while it runs.
 - **UI changes** follow `frontend/design-system/MASTER.md`: shadcn/ui components, Tailwind tokens, both themes, and the  
 stable test hooks listed there.
 
+## Who made this
+
+PaperLab is built by **Malek Khannoussi** ([malekkhannoussi.tn](https://www.malekkhannoussi.tn/),
+[LinkedIn](https://www.linkedin.com/in/khannoussi-malek/)).
+
+I started it on my way to a PhD. I wanted a tool that let me read papers properly, where every note stays attached to
+the passage it came from and every answer can be checked against the page it came from. It didn't exist, so I built it,
+and it has been what I work on every day since.
+
+**I am looking for a PhD position.** If you supervise research, or you know a group where this kind of work would fit,
+I would be glad to hear from you. A pointer to an opening, an introduction, or an honest opinion on the work would all
+help, and any of them would mean a lot.
+
+I post updates on [LinkedIn](https://www.linkedin.com/in/khannoussi-malek/), but this repository usually runs a few
+months ahead of what is posted there, so what you see here is the newest state.
+
 ## Contributing
 
 PaperLab is [Apache-2.0](LICENSE) and open to contributions.
