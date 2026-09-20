@@ -3,6 +3,8 @@ import { withViewTransition } from '@/components/motion'
 
 export type ReaderTab = 'notes' | 'chat' | 'data' | 'similar' | 'references'
 export type WorkspaceTab = 'papers' | 'notes' | 'chat'
+/** Settings is one page per section, so a section can be linked to, reloaded and kept in the window's history. */
+export type SettingsSection = 'models' | 'sources' | 'search' | 'desktop' | 'claude'
 export type Rect = [number, number, number, number]
 /** A grid cell to scroll to and focus once, when a chart point of data typed in is opened. */
 export type CellFocus = { rowId: string; columnId: string }
@@ -20,7 +22,7 @@ export type Route =
   | { name: 'chart'; chartId: string }
   | { name: 'chart-builder'; chartId: string | null; datasetId: string | null }
   | { name: 'dataset'; datasetId: string; focus: CellFocus | null }
-  | { name: 'settings' }
+  | { name: 'settings'; section: SettingsSection }
   | { name: 'connect-claude' }
   | { name: 'graph' }
   | { name: 'setup' }
@@ -30,6 +32,8 @@ const HASH = /^#\/(papers|workspaces)\/([0-9a-f-]{36})(?:\?(.*))?$/i
 const CHARTS_HASH = /^#\/charts(?:\/(new|[0-9a-f-]{36})(\/edit)?)?(?:\?(.*))?$/i
 const DATASET_HASH = /^#\/datasets\/([0-9a-f-]{36})(?:\?(.*))?$/i
 const SETTINGS_HASH = '#/settings'
+const SETTINGS_SECTION_HASH = /^#\/settings\/([a-z]+)$/
+const SETTINGS_SECTIONS: readonly SettingsSection[] = ['models', 'sources', 'search', 'desktop', 'claude']
 const CONNECT_CLAUDE_HASH = '#/connect-claude'
 const GRAPH_HASH = '#/graph'
 const SETUP_HASH = '#/setup'
@@ -67,7 +71,13 @@ function chartsRoute(match: RegExpExecArray): Route {
 }
 
 export function parseRoute(hash: string): Route {
-  if (hash === SETTINGS_HASH) return { name: 'settings' }
+  if (hash === SETTINGS_HASH) return { name: 'settings', section: 'models' }
+  const settings = SETTINGS_SECTION_HASH.exec(hash)
+  // An unknown section opens the first one rather than the library: the address is still Settings.
+  if (settings) {
+    const asked = settings[1] as SettingsSection
+    return { name: 'settings', section: SETTINGS_SECTIONS.includes(asked) ? asked : 'models' }
+  }
   if (hash === CONNECT_CLAUDE_HASH) return { name: 'connect-claude' }
   if (hash === GRAPH_HASH) return { name: 'graph' }
   if (hash === SETUP_HASH) return { name: 'setup' }
@@ -109,6 +119,7 @@ export const workspaceHref = (workspaceId: string, tab: WorkspaceTab = 'papers')
   tab === 'papers' ? `#/workspaces/${workspaceId}` : `#/workspaces/${workspaceId}?tab=${tab}`
 
 export const settingsHref = SETTINGS_HASH
+export const settingsSectionHref = (section: SettingsSection) => `${SETTINGS_HASH}/${section}`
 export const connectClaudeHref = CONNECT_CLAUDE_HASH
 export const graphHref = GRAPH_HASH
 export const setupHref = SETUP_HASH

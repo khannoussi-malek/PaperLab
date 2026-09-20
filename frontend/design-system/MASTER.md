@@ -21,6 +21,39 @@ for landing pages, so only these parts of its output were kept:
 - Glass (added 2026-09-13, "subtle"): ui-ux-pro-max's Glassmorphism style (`search.py "glassmorphism" --domain style`),
   toned down for reading: more opaque surfaces than its 15–30% default, so text keeps ≥ 4.5:1.
 
+## Shell
+
+PaperLab is a desktop app, not a web page: it fills the window, and nothing about the window scrolls. The pattern is
+ui-ux-pro-max's first rule for desktop software (`search.py "enterprise desktop application dense toolbar sidebar
+status bar" --stack javafx`, severity High): *"application shell plus feature workspaces — a stable navigation around
+changing work areas. Don't replace the whole shell for every feature."*
+
+`AppShell` (`@/components/AppShell`) is that shell, a `h-dvh` grid of four fixed parts:
+
+| Part | Size | Holds |
+|---|---|---|
+| Toolbar | `h-11`, glass, hairline under | An optional back button, the view's `h1` (`shellTitle`: `font-heading text-base`), the view's actions, `ModeToggle` |
+| Rail (`NavRail`) | `14rem`, glass, hairline right | Library / Graph / Charts, then the workspaces, then Connect Claude / Settings pinned to the bottom |
+| View | the rest | The route's page, and the only part that changes |
+| Status bar | `.status-bar`, `h-6`, `text-xs text-muted-foreground` | This view's counts: "24 papers", "1 paper · 0 notes", "24 papers, 57 links" |
+
+- **A view never draws its own chrome.** No page title bigger than `text-base`, no per-page theme toggle, no per-page
+  navigation buttons, no `mx-auto max-w-*` centring the whole page. A page that did any of these read as a web page.
+- **Actions go in the toolbar**, quiet (`variant="ghost" size="sm"`) except the one primary action per view, which
+  stays `default` ("Upload PDFs", "New chart").
+- **A drill-down gets `back`**, not a link in its body: a chart backs out to Charts, a dataset to where it came from.
+  The rail stays lit on the section it belongs to (`activeNav` in `@/components/nav`).
+- **Content is capped, not centred**: a view wraps its content in a `max-w-*` that suits it, left-aligned inside the
+  pane, so nothing stretches across a wide monitor and nothing floats in the middle of the window. `max-w-3xl` for a
+  view that is mostly prose and forms (Settings; ui-ux-pro-max, Layout → Container Width: 65–75 characters),
+  `max-w-5xl` for one with code or data to read across (a chart, a dataset, Connect Claude). A view with a preview
+  column beside its list fills the pane instead (the library, Charts): the cap would only squeeze the list.
+- **`fills`** is for a view that lays itself out to the pane's height and scrolls its own regions (the graph, the
+  workspace tabs). Without it the pane scrolls the view.
+- **Two views take the whole window and draw no shell**: the reader (the paper needs the width) and first-run setup
+  (there is nothing to navigate to yet). The reader's toolbar is the same `h-11` glass bar with the same quiet
+  buttons, so the chrome still reads as one app.
+
 ## Glass
 
 The app chrome is frosted glass over a faint blue/violet glow on the page background. The paper is not.
@@ -90,13 +123,13 @@ Fonts: body `Atkinson Hyperlegible Next Variable` (`font-sans`), headings `Crims
 - **The PDF page stays white in both themes.** It is the paper. Highlights use `mix-blend-multiply`.
 - **Nothing that shifts selection coordinates** goes on `.pdf-page`: no border, no padding.
 - **Stable test hooks.** Keep the class names and accessible names the Playwright specs use
-  (`.paper-row`, `.status`, `.paper-preview`, `.search-count`, `.no-matches`, "Clear search", `.pdf-page`, `.pdf-overlay`, `.highlight`, `.draft`, `.zoom-level`,
+  (`.status-bar`, `.paper-row`, `.status`, `.paper-preview`, `.chart-preview`, `.search-count`, `.no-matches`, "Clear search", `.pdf-page`, `.pdf-overlay`, `.highlight`, `.draft`, `.zoom-level`,
   `article.note`, `.provenance-badge`, `.note-hover-card`, `.reader-panel`, `article.chat-answer`, `.chat-question`,
   `.chat-sources`, `.chat-answer-text`, `.chat-cite`, `.chat-answer-footer`, `.chat-following`,
   `article.chat-answer[data-parent-id]`, `.chunk-flash`, `.save-as-note`,
   `.retraction-banner`, `.reader`, `.highlight.active`, `a.workspace-note`, `section[data-paper-id]`, `.chat-scope`,
   `[data-paper-id]` on "Add papers" options, the "Note" / "Save note" / "Zoom in" / "Toggle theme" / "Question" / "Ask" /
-  "Save as note" / "Retry" / "Re-index" / "Follow up" / "Stop following" / "Resize panel" / "Edit details" / "Save" / "Cancel" names, the "Ask this paper"
+  "Save as note" / "Retry" / "Re-index" / "Follow up" / "Stop following" / "Resize panel" / "Resize preview" / "Edit details" / "Save" / "Cancel" names, the "Ask this paper"
   and "Ask this workspace" headings and "Suggested questions" list, the "Edit details" dialog with its "Title" /
   "Authors" / "Year" / "Venue" /
   "DOI" fields and "Retracted" checkbox, the "Workspaces" navigation with "New workspace" / "Workspace name" /
@@ -109,7 +142,8 @@ Fonts: body `Atkinson Hyperlegible Next Variable` (`font-sans`), headings `Crims
   found" / "Value" / "± error" / "Unit" / "Add number" / "Charts" / "New dataset" / "New chart" / "Chart actions" /
   "Chart title" / "Dataset name" / "Pasted data" / "CSV file" / "Create dataset" / "Charts use this data" / "Save
   anyway" / "View data table" / "Chart data" / "Add series" / "Choose data" / "Save chart" / "Save changes" / "Save
-  as copy" / "Attach chart" / "Search charts" / "Remove chart" / "Add to note…" / "Quick chart" / "Open". Also
+  as copy" / "Attach chart" / "Search charts" / "Remove chart" / "Add to note…" / "Quick chart" / "Open" /
+  "Open chart". Also
   `article.connection-card`, `.cloud-tag`, `.key-hint`, `.test-result`, `li.model-row`, `.embedding-indexed`,
   `.search-model-status`, `.search-notice`, and
   the names "Settings" / "Add connection" / "Test" / "Edit connection" / "Delete connection" / "Add model" / "Add a
@@ -205,13 +239,23 @@ fields validation" --domain ux`: mark required fields, show loading then success
   shows a destructive `Alert` inside the dialog, which stays open with the draft. Only changed fields are sent: the
   server remembers them as corrections that re-processing never overwrites.
 
-## Resizable panel
+## Resizable panels
 
-- The reader's right panel is resizable from its left edge (`PanelResizeHandle`, the WAI-ARIA window splitter:
-  `role="separator"`, "Resize panel", `aria-valuenow`/`min`/`max`). Drag it; or focus it and use ←/→ (16 px steps);
-  double-click or Enter goes back to 360 px. A 2px `primary` line shows on hover (60%), focus and drag.
-- Width: 360 px default, 320 px minimum, at most 60% of the window (`panelWidth.ts`). The grid clamps with CSS `clamp()`
-  too, so a remembered width still fits a smaller window. Remembered in `localStorage` `paperlab-panel-width`.
+One implementation, in `@/components`: `PanelResizeHandle` (the WAI-ARIA window splitter: `role="separator"`,
+`aria-valuenow`/`min`/`max`) over `panelWidth.ts`. A panel brings its own `PanelLimits` — storage key, default,
+minimum and the share of the window it may take — so two panels share the code without sharing a width.
+
+- **Drag** the handle on the panel's left edge; or focus it and use ←/→ (16 px steps); double-click or Enter goes
+  back to that panel's default. A 2 px `primary` line shows on hover (60%), focus and drag.
+- **The grid track** comes from `panelTrack`, a CSS `clamp()`, so a remembered width still fits after the window
+  shrinks; the handle clamps as it drags. The chosen width is remembered in `localStorage`, per panel.
+- **A panel not flush to the window** passes `inset`, the padding between its right edge and the window's, so the
+  drag maths stays right.
+
+| Panel | Name | Default | Min | Max share | Key |
+|---|---|---|---|---|---|
+| Reader, Notes \| Chat (`READER_PANEL`) | "Resize panel" | 360 | 320 | 60% | `paperlab-panel-width` |
+| Charts preview (`CHART_PREVIEW`) | "Resize preview" | 440 | 320 | 50% | `paperlab-chart-preview-width` |
 
 ## Motion
 
@@ -272,10 +316,11 @@ order matches visual order, severity High), `search.py "active navigation state 
 confirmation" --domain ux` (highlight the active nav item; confirm before delete, High) and `search.py "dialog
 command searchable list dropdown submenu checkbox" --stack shadcn` (Command for a searchable list rather than an
 Input with a custom dropdown; Dialog for modal content, High).
-- **Sidebar:** a plain `nav` ("Workspaces") on glass beside the library and each workspace home, never in the reader
-  (the paper keeps its width). "All papers", then the workspaces alphabetically, then a ghost "New workspace" (`Plus`).
-  The active item has `aria-current="page"`, `bg-primary/10` and the same 3 px `primary` inset bar as the previewed
-  paper row. Each workspace's `EllipsisVertical` "Workspace actions" button stays invisible until its row is hovered
+- **Sidebar:** the workspaces section of the shell's rail (see Shell): a nested `nav` ("Workspaces") under an
+  uppercase `text-xs` label, the workspaces alphabetically, then a ghost "New workspace" (`Plus`). It is the one part
+  of the rail that can outgrow it, so it takes the rail's scroll. Rows share the rail's own style (`railItem` in
+  `@/components/nav`): the active one has `aria-current="page"`, `bg-primary/10` and the same 3 px `primary` inset bar
+  as the previewed paper row. Each workspace's `EllipsisVertical` "Workspace actions" button stays invisible until its row is hovered
   or focused, like the rows' delete icon.
 - **Names:** create and rename are an inline `Input` ("Workspace name"): Enter saves, Escape cancels, leaving it blank
   cancels. A refusal is a `role="alert"` line under the field in `text-xs text-destructive`: "Enter a name" or "A
@@ -294,7 +339,8 @@ Input with a custom dropdown; Dialog for modal content, High).
   `.no-matches`: the library's dashed empty-state card with `SearchX`, "No papers match “…”", "Check the spelling, or try
   an author's surname or a year." and an outline "Clear search". The preview
   hides until something matches.
-- **Workspace home:** the header is the workspace name (Crimson Pro, `text-3xl`) over "N papers · M notes". Tabs are
+- **Workspace home:** the workspace name is the shell's title (and takes focus on arrival, so a keyboard user lands
+  somewhere after the page remounts); "N papers · M notes" is the status bar. Tabs are
   shadcn `Tabs` kept in the hash (`?tab=notes|chat`, `location.replace`), all `forceMount`ed. Papers: "Add papers" is
   the view's primary button, "Upload PDFs" is outline.
 - **Add papers:** a `Dialog` on strong glass with a `Command` checklist of library papers not yet in the workspace.
@@ -345,12 +391,26 @@ shadcn `Select`, never a native select) and the dataviz skill (below).
   filled from the word after it, and primary "Add number". A captured number is underlined on the page with a
   `.number-mark`: a 2 px dashed bottom border in fixed `slate-900/60` in both themes (it sits on the white page),
   never violet (AI) and never a highlight fill.
-- **Charts page (`#/charts`):** the library's layout, `font-heading` "Charts" over "N charts · M datasets of your own",
-  outline "New dataset" and primary "New chart". A glass list of `.chart-row[data-chart-id]`: type icon, title, sources
-  in muted text ("BERT, XLNet, My data"), "Used in N notes · edited 2 h ago", and a "Chart actions" menu (Edit, Rename,
-  Duplicate, Delete). Rename is an inline `Input` "Chart title" (Enter saves, Escape cancels, blank cancels). Delete
-  asks with `window.confirm`, saying how many notes show the chart and that they are kept. Below, "My data": a list of
-  `a.own-dataset` links. The library header gains an outline "Charts" link (`ChartColumn`).
+- **Charts page (`#/charts`):** the library's layout exactly — the list and "My data" in a
+  `lg:grid-cols-[minmax(0,1fr)_22rem]` grid with the preview sticky beside them, filling the pane (no `max-w-*`, or
+  the cap would come out of the list). The title is "Charts" and "N charts · M datasets of your own" is the status
+  bar, with ghost "New dataset" and primary "New chart" in the toolbar. A glass list of `.chart-row[data-chart-id]`:
+  type icon, title, sources in muted text ("BERT, XLNet, My data"), `chartMeta` ("Used in N notes · edited 2 hours
+  ago"), and a "Chart actions" menu (Edit, Rename, Duplicate, Delete). Rename is an inline `Input` "Chart title"
+  (Enter saves, Escape cancels, blank cancels). Delete asks with `window.confirm`, saying how many notes show the
+  chart and that they are kept. Below, "My data": a list of `a.own-dataset` links. Charts is a rail item
+  (`ChartColumn`), above the workspaces.
+- **Chart preview:** `aside.chart-preview` "Chart preview", the same shape as the library's `.paper-preview` and on
+  the same rules: it follows hover (after 150 ms, so skimming the list doesn't fetch and draw every row it crosses)
+  and focus (at once, so the keyboard keeps up), falls back to the first chart so it is never empty, and is
+  `hidden lg:block` because a touch screen has neither. The previewed row wears the same `lg:bg-primary/5` and 3 px
+  `primary` inset bar as a previewed paper. Inside: the drawing (`ChartView`, `height=220`, `staticPlot`, no data
+  table — clicking a point belongs on the chart's own page), the title, its sources, `chartMeta`, and an outline
+  "Open chart". The list carries only a summary, so the spec is fetched per preview (`useChart`) and cached; the
+  box keeps its height while it loads, so the panel never jumps.
+- **Preview width:** dragged from its left edge ("Resize preview", see Resizable panels). The drawing grows with it
+  (`previewChartHeight`: 0.62 of the width, between 200 and 480 px), so the space goes to the chart rather than to
+  margin, and the title and "Open chart" stay in view.
 - **New dataset:** a dialog with shadcn `Tabs` "Type" (name + column count → an empty grid), "Paste" (a `Textarea`
   "Pasted data" for tab-separated or CSV text) and "Upload CSV" (a native file input "CSV file"), a "Dataset name"
   field, and primary "Create dataset"; it opens the new dataset's page.
@@ -359,8 +419,9 @@ shadcn `Select`, never a native select) and the dataviz skill (below).
   ghost), "Quick chart" and primary "Save". Saving a grid that drops columns charts use opens an `AlertDialog`-style
   shadcn `Dialog` "Charts use this data" listing those chart titles, with Cancel and destructive "Save anyway". A
   focused cell from a chart point (`?row=&column=`) is scrolled to and focused once.
-- **Chart page (`#/charts/:id`):** "← Charts", the title as an inline-renameable `h1`, outline "Edit", and a "Chart
-  actions" menu (Rename, Duplicate, Add to note…, Delete). The chart sits in a glass card.
+- **Chart page (`#/charts/:id`):** the shell with `back` to Charts, the title as an inline-renameable `h1` in the
+  toolbar, then ghost "Edit" and a "Chart actions" menu (Rename, Duplicate, Add to note…, Delete). "Used in N notes"
+  is the status bar. The chart sits in a glass card.
 - **Chart view:** `.chart-view[data-chart-type][data-series-count]`, at least 360 px tall including the axis band. While
   data refetches, including while a changed spec's data loads, the last drawing stays at `opacity-60` (no skeleton),
   still compiled from the spec that drew it, and warnings stay hidden until the new data arrives. A warning shows
@@ -389,6 +450,21 @@ shadcn `Select`, never a native select) and the dataviz skill (below).
   surfaces). Several series colours are under 3:1 on the surface, so every chart keeps its legend (2+ series) and its
   data table view.
 
+## Settings
+
+Patterns from ui-ux-pro-max (`search.py "settings page sidebar navigation grouped sections" --domain ux`: the current
+section is visually indicated, and a long page keeps its navigation in view).
+
+- **One section at a time.** `#/settings/<section>` renders exactly one of Model connections, Paper sources, Search,
+  Desktop app and Connect Claude. `#/settings` opens the first; an unknown section opens the first too, rather than
+  falling back to the library, since the address is still Settings.
+- **The section list** is a `nav` labelled "Settings sections", a `ul` of links using the shell's own `railItem`
+  style, each with its lucide icon and `aria-current="page"` when open. It is 14rem wide beside the content from
+  `sm:` up, sticky at `top-6` so it stays in view down a long section, and stacks above the content below `sm:`.
+- **Desktop app** is listed only inside the desktop app (`useDesktop()`), and its address falls back to the first
+  section in a browser.
+- The content column keeps the reading width (`max-w-3xl`) it had as one long page.
+
 ## Model connections
 
 Patterns from ui-ux-pro-max (`search.py "form password input masked secret test connection feedback" --domain ux`:
@@ -396,9 +472,9 @@ loading then success or error on submit; `search.py "destructive confirmation de
 before deleting; `search.py "progress bar long running download status" --domain ux`: a progress bar for long work;
 `search.py "dropdown select model picker empty state" --domain ux`: an empty state names the fix and links to it;
 `--stack shadcn "select dialog form password input radio group"`: shadcn `Select` and `Dialog`, never native ones).
-- **Settings page (`#/settings`):** the library's page shell in a `max-w-3xl` column: a ghost "Library" link
-  (`ArrowLeft`), the `font-heading` h1 "Settings", then two `section`s labelled by their h2: "Model connections" and
-  "Search". The library header gains an outline icon link "Settings" (`Settings` icon) before the theme toggle.
+- **Settings page (`#/settings`):** the shell with the h1 "Settings", its content in a `max-w-3xl` column, then two
+  `section`s labelled by their h2: "Model connections" and "Search". Settings is reached from the rail, where it is
+  pinned to the bottom with Connect Claude (see Shell), not from a per-page header.
 - **Model connections:** the h2 row ends with the view's one primary button, "Add connection" (`Plus`). With none, a
   dashed box says "No model connections yet. Add Ollama, Anthropic or any OpenAI-compatible server." Each connection is
   an `article.connection-card[data-connection-id]` on glass (`glass`, `ring-1 ring-glass-border`, `rounded-xl p-4`):
@@ -466,8 +542,8 @@ before deleting; `search.py "progress bar long running download status" --domain
   <model>, in the background."), with Cancel and destructive "Re-index"; then a `role="status"` line "Re-indexing N
   papers in the background."
 - **Library notice:** while no search model is downloaded and some ready paper is too long to chat with whole
-  (`showSearchNotice`: `model_present` false and `papers_needing_search > 0`), one `.search-notice` row sits between
-  the library header and the workspace sidebar: the muted line "Search isn't set up: long papers and workspaces can't
+  (`showSearchNotice`: `model_present` false and `papers_needing_search > 0`), one `.search-notice` row sits at the top of
+  the library's pane, above the paper list: the muted line "Search isn't set up: long papers and workspaces can't
   be searched yet." (`text-sm text-muted-foreground`) and the `DownloadSearchModel` block. Not an `Alert`, not glass:
   it is information, not an error. It goes away once the model is here.
 - **Chat panel details:** `.chat-cite` has `outline-none focus-visible:ring-2 focus-visible:ring-ring`. While an
@@ -501,7 +577,7 @@ Pattern from ui-ux-pro-max (`search.py "search results list with add button in m
 result suggests what to try next (severity Medium). Its "autocomplete as you type" advice is declined on purpose: a
 search asks every paper source that is on, and OpenAlex costs money past a small daily allowance, so search runs on
 submit.
-- **Find papers:** an outline button (`Search`) beside Upload PDFs, in the library header and a workspace's Papers tab,
+- **Find papers:** an outline button (`Search`) beside Upload PDFs, in the library's toolbar and a workspace's Papers tab,
   opens a shadcn `Dialog` (`sm:max-w-2xl`, glass like Add papers). One `Input` labelled "Title, DOI, arXiv ID or
   OpenAlex ID" and a Search submit button, disabled and reading "Searching…" while a search runs. Results scroll inside
   the dialog (`max-h-[60vh]`). Sources that failed while others answered show above the results in a non-destructive
@@ -631,8 +707,8 @@ success or error, High); `"success feedback confirmation message after action"` 
 `"input placeholder label helper text"` (a visible label, never only a placeholder, High); `"long text overflow code
 horizontal scroll"` (wide content scrolls inside its own box, High); `--stack shadcn "tabs code block"` (shadcn `Tabs`
 with a set value). The onboarding, copy-button and OS-tab queries returned nothing specific.
-- **Page (`#/connect-claude`):** Settings' page shell (`max-w-3xl`, ghost "Library" back link, `font-heading` h1
-  "Connect Claude"), then `section`s labelled by their h2, in order: What Claude can do, What Claude receives, Your
+- **Page (`#/connect-claude`):** the shell with the h1 "Connect Claude" and a `max-w-5xl` column (wider than
+  Settings': its config blocks are code, not prose), then `section`s labelled by their h2, in order: What Claude can do, What Claude receives, Your
   system, PaperLab folder, Claude Desktop, Claude Code, Check PaperLab's side, If it doesn't work. Body copy is
   `text-sm`; notes and help are `text-muted-foreground`.
 - **Your system:** a shadcn `Tabs` whose `TabsList` is labelled "Your system": macOS, Windows, Windows + WSL, Linux.
@@ -652,7 +728,7 @@ with a set value). The onboarding, copy-button and OS-tab queries returned nothi
 - **Check PaperLab's side:** a muted line that this checks PaperLab, not Claude's config; "Check the server" is the
   view's one primary button ("Checking…" and disabled while it runs). Success is a `role="status"` line with a
   `CircleCheck` in `text-primary`; a failure is an `ErrorAlert` with the server's `detail`.
-- **Entry points:** an outline "Connect Claude" button (`Plug`) in the library header, before the Settings icon; and
+- **Entry points:** a "Connect Claude" rail item (`Plug`), pinned at the bottom above Settings; and
   Settings' last section, "Connect Claude", with one muted sentence and an outline "Open Connect Claude" link (`Plug`).
 
 ## Desktop app
@@ -681,8 +757,9 @@ with a set value). The onboarding, copy-button and OS-tab queries returned nothi
 
 ## First-run setup
 
-- **Page (`#/setup`):** opened once on start while `GET /api/setup` says not done (`useOpenSetupOnStart`). Settings'
-  page shell (`max-w-3xl`), the h1 "Set up PaperLab", a muted line "Choose the models PaperLab uses. Nothing downloads
+- **Page (`#/setup`):** opened once on start while `GET /api/setup` says not done (`useOpenSetupOnStart`). One of the
+  two views that draw no app shell (see Shell): there is nothing to navigate to yet. A centred `max-w-3xl` column, the
+  h1 "Set up PaperLab", a muted line "Choose the models PaperLab uses. Nothing downloads
   until you pick it.", then the steps "1. Chat" and "2. Search" as a small `ol` (current step `aria-current="step"`,
   `font-medium text-foreground`).
 - **Each step** is a `section` labelled by its h2 ("Chat", "Search"), ending with its own primary Continue (or
@@ -716,10 +793,11 @@ For the views (2026-09-18): `"tabs view switcher"` and `"timeline chart axis"` r
 header accessible"` gave *Table Handling* and *Sticky Navigation* (Medium: scroll a wide table in its own box, and keep
 sticky cells from covering content) and *ARIA Labels* (High); `"3d visualization webgl fallback"` gave *Asset Weight*
 (Medium: lazy-load 3D).
-- **Page (`#/graph`):** `h-dvh` three-column grid, `14rem` controls · views · `20rem` panel, each column a `glass`
-  card with a `border-glass-border` hairline. The header is the library's shape: `font-heading` h1 "Graph", the counts
-  line under it, then an outline "Library" link and the theme toggle. The page waits for both the graph and the
-  workspaces list before drawing; an error from either shows the load error with Retry.
+- **Page (`#/graph`):** a `fills` view in the shell (see Shell): a three-column grid, `12rem` controls · views ·
+  `17rem` panel, each column a `glass` card with a `border-glass-border` hairline. Narrower columns than a full-width
+  page would take, because the rail already owns `14rem` and the canvas should get what's left. The title is "Graph"
+  and the counts line is the status bar. The page waits for both the graph and the workspaces list before drawing; an
+  error from either shows the load error with Retry.
 - **Counts line:** `{n} papers, {m} links` (singulars at 1), with ` · Showing the first 2000 links.` appended when the
   payload is truncated. It counts the *visible* links, so unticking a layer changes it. It is the same in every view.
 - **Views:** shadcn `Tabs` at the top of the middle column, labelled exactly **2D**, **3D**, **Matrix**, **Timeline**,
@@ -819,7 +897,7 @@ sticky cells from covering content) and *ARIA Labels* (High); `"3d visualization
   focused paper or the workspace changes. The submit reads "Saving…" and disables while it runs.
 - **Empty state:** `No links yet. Import references, add papers to a workspace, or turn on OpenAlex to fill this in.`
 - **Stable test hooks:** `.graph-paper`, `.graph-connection`, `.graph-away`, `data-paper-id` on all three, the
-  "Graph" link in the library header, the "Graph view" tab list and its five tabs, `data-view` and `data-ready` on
+  "Graph" rail item, the "Graph view" tab list and its five tabs, `data-view` and `data-ready` on
   each view, the "Workspace", "Links out" and "Time axis" selects, the checkbox names above, the "Links between your
   papers" table, the "Connected papers" region, the "Papers" heading, "Clear focus", "Link to another paper…", "Paper
   to link to", "Label", "Save link", "Edit label for …" and "Remove link to …".

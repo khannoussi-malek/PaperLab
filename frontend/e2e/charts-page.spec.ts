@@ -4,7 +4,8 @@ test('uploading a CSV makes your own data, listed under My data', async ({ page,
   await page.goto('/')
   await page.getByRole('link', { name: 'Charts' }).click()
   await expect(page.getByRole('heading', { name: 'Charts', level: 1 })).toBeVisible()
-  await page.getByRole('link', { name: '← Library' }).click()
+  // Back through the rail, which is on every view now, not a per-page "← Library" button.
+  await page.getByRole('link', { name: 'Library', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'PaperLab', level: 1 })).toBeVisible()
   await page.getByRole('link', { name: 'Charts' }).click()
 
@@ -160,4 +161,71 @@ test("a chart whose refetch fails keeps its drawing and never claims it doesn't 
 
   await expect(page.locator('.chart-view')).toHaveAttribute('data-series-count', '1')
   await expect(page.getByText("This chart doesn't exist.")).toHaveCount(0)
+})
+
+test('hovering a chart draws it beside the list, and keyboard focus previews it too', async ({
+  page,
+  request,
+  dataName,
+}) => {
+  const data = await addOwnData(request, `${dataName} runs`, 'run,F1\nmine,92.0\nbaseline,89.1\n')
+  const chart = await addChart(request, `${dataName} hovered`, barSpec(data, 'run', ['F1']))
+  const other = await addChart(request, `${dataName} other`, barSpec(data, 'run', ['F1']))
+  await page.goto('/#/charts')
+
+  const preview = page.locator('.chart-preview')
+  const row = page.locator('.chart-row', { hasText: `${dataName} hovered` })
+  await row.hover()
+  await expect(preview.getByRole('heading')).toHaveText(`${dataName} hovered`)
+  await expect(preview.getByRole('link', { name: 'Open chart' })).toHaveAttribute('href', `#/charts/${chart.id}`)
+  // The drawing itself, not just the frame: the bars are there once Plotly has run.
+  await expect(preview.locator('.chart-view .barlayer .point path').first()).toBeVisible()
+
+  // Focus previews too, so the list is usable from the keyboard, and the previewed row says so.
+  await page.locator('.chart-row', { hasText: `${dataName} other` }).getByRole('link').focus()
+  await expect(preview.getByRole('heading')).toHaveText(`${dataName} other`)
+  await expect(preview.getByRole('link', { name: 'Open chart' })).toHaveAttribute('href', `#/charts/${other.id}`)
+})
+
+test('the chart preview is dragged wider, draws a bigger chart, and keeps its width across a reload', async ({
+  page,
+  request,
+  dataName,
+}) => {
+  const VIEWPORT = { width: 1400, height: 900 }
+  const data = await addOwnData(request, `${dataName} runs`, 'run,F1\nmine,92.0\nbaseline,89.1\n')
+  await addChart(request, `${dataName} sized`, barSpec(data, 'run', ['F1']))
+  await page.setViewportSize(VIEWPORT)
+  await page.goto('/#/charts')
+
+  const preview = page.locator('.chart-preview')
+  await page.locator('.chart-row', { hasText: `${dataName} sized` }).hover()
+  await expect(preview.getByRole('heading')).toHaveText(`${dataName} sized`)
+
+  const previewBox = async () => (await preview.boundingBox())!
+  const chartBox = async () => (await preview.locator('.chart-view').boundingBox())!
+  await expect.poll(async () => Math.round((await previewBox()).width)).toBe(440)
+  const startHeight = Math.round((await chartBox()).height)
+
+  // Press on the panel's left edge, where the handle straddles the border, and drag it left.
+  const handle = page.getByRole('separator', { name: 'Resize preview' })
+  const box = await previewBox()
+  const y = box.y + box.height / 2
+  await page.mouse.move(box.x, y)
+  await page.mouse.down()
+  await page.mouse.move(box.x - 160, y, { steps: 5 })
+  await page.mouse.up()
+
+  await expect.poll(async () => Math.round((await previewBox()).width)).toBe(600)
+  await expect(handle).toHaveAttribute('aria-valuenow', '600')
+  // Wider panel, bigger drawing: the space goes to the chart, not to margin.
+  expect(Math.round((await chartBox()).height)).toBeGreaterThan(startHeight)
+
+  await page.reload()
+  await expect.poll(async () => Math.round((await previewBox()).width)).toBe(600)
+
+  // Never wider than half the window, and Enter puts it back.
+  await handle.focus()
+  await page.keyboard.press('Enter')
+  await expect.poll(async () => Math.round((await previewBox()).width)).toBe(440)
 })

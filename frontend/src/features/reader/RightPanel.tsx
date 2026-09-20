@@ -4,7 +4,8 @@ import { fadeIn } from '@/components/motion'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { ReaderTab } from '@/lib/route'
 import { cn } from '@/lib/utils'
-import { PanelResizeHandle } from './PanelResizeHandle'
+import { PanelResizeHandle } from '@/components/PanelResizeHandle'
+import { READER_PANEL } from './panelWidth'
 
 type Props = {
   tab: ReaderTab
@@ -29,7 +30,7 @@ export function RightPanel({ tab, onTabChange, width, onWidthChange, notes, chat
       onValueChange={(value) => onTabChange(value as ReaderTab)}
       className={cn('reader-panel relative min-h-0 gap-0 border-l border-glass-border', glass)}
     >
-      <PanelResizeHandle width={width} onWidthChange={onWidthChange} />
+      <PanelResizeHandle limits={READER_PANEL} width={width} onWidthChange={onWidthChange} />
       <TabsList id="reader-panel-tabs" className="mx-4 mt-3 w-auto">
         <TabsTrigger value="notes">Notes</TabsTrigger>
         <TabsTrigger value="chat">Chat</TabsTrigger>

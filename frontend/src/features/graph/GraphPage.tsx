@@ -1,10 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { GraphLink } from '@/api/client'
 import { useLibraryGraph, usePaperLinkMutations, useWorkspaces } from '@/api/queries'
+import { AppShell } from '@/components/AppShell'
 import { glass } from '@/components/glass'
-import { fadeIn } from '@/components/motion'
-import { ModeToggle } from '@/components/mode-toggle'
-import { Button } from '@/components/ui/button'
 import { useChartTheme } from '@/features/charts/useChartTheme'
 import { ErrorAlert, LoadError } from '@/features/library/ErrorAlert'
 import { browserStorage } from '@/features/notes/highlightColors'
@@ -102,23 +100,16 @@ export function GraphPage() {
     : undefined
 
   return (
-    <main className={cn('mx-auto flex h-dvh max-w-7xl flex-col gap-4 px-4 py-6', fadeIn)}>
-      <header className="flex items-center justify-between gap-2">
-        <div>
-          <h1 className="font-heading text-3xl font-semibold">Graph</h1>
-          <p className="text-sm text-muted-foreground">
-            {counted}
-            {graph.data?.truncated && ' · Showing the first 2000 links.'}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" asChild>
-            <a href="#/">Library</a>
-          </Button>
-          <ModeToggle />
-        </div>
-      </header>
-
+    <AppShell
+      fills
+      title="Graph"
+      status={
+        <>
+          {counted}
+          {graph.data?.truncated && ' · Showing the first 2000 links.'}
+        </>
+      }
+    >
       {graph.data === undefined || workspaces.data === undefined ? (
         graph.isError || workspaces.isError ? (
           <LoadError
@@ -129,10 +120,12 @@ export function GraphPage() {
             }}
           />
         ) : (
-          <div className="h-full w-full animate-pulse rounded-xl bg-muted" />
+          <div className="min-h-0 flex-1 animate-pulse rounded-xl bg-muted" />
         )
       ) : (
-        <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[14rem_minmax(0,1fr)_20rem]">
+        // Narrower than they were as a page: the rail takes 14rem of the window now, and the canvas is what
+        // should get what's left.
+        <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[12rem_minmax(0,1fr)_17rem]">
           <div className={cn('min-h-0 overflow-y-auto rounded-xl border border-glass-border p-4', glass)}>
             <GraphControls
               counts={counts}
@@ -210,6 +203,6 @@ export function GraphPage() {
           onSubmit={save}
         />
       )}
-    </main>
+    </AppShell>
   )
 }
