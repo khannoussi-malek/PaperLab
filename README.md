@@ -231,7 +231,7 @@ On Linux:
 With Docker Compose 2.24 or later, two commands install the same release, with no clone and no build:
 
 ```sh
-VERSION=0.1.0   # the latest release's number
+VERSION=0.1.1   # the latest release's number
 curl -L "https://github.com/khannoussi-malek/PaperLab/releases/download/v$VERSION/paperlab-$VERSION.tar.gz" | tar xz
 cd paperlab && docker compose up -d   # then open http://127.0.0.1:5190
 ```
