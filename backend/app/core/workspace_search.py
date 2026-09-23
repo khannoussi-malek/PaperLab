@@ -159,3 +159,49 @@ async def search_batch(session: AsyncSession, providers: Providers, run: Workspa
         new_hits += 1
 
     return BatchResult(new_hits=new_hits, sources_exhausted=exhausted, errors=errors)
+
+
+from app.core import workspaces
+from app.core.errors import Conflict, NotFound
+
+
+async def start_run(
+    session: AsyncSession, workspace_id, query_text: str, filters: dict, sources: list[str],
+    query_overrides: dict | None = None, run_id=None,
+) -> WorkspaceSearchRun:
+    await workspaces.get(session, workspace_id)  # raises NotFound if missing
+    if run_id is not None:
+        run = await get_run(session, run_id)
+        if run.status == "running":
+            raise Conflict("search_run_already_running")
+        run.status = "running"
+        run.stopped_at = None
+        await session.commit()
+        return run
+
+    run = WorkspaceSearchRun(
+        workspace_id=workspace_id, query_text=query_text, filters_json=filters,
+        query_overrides_json=query_overrides or {}, sources_json=sources, status="running",
+        started_at=datetime.now(timezone.utc), stats_json={},
+    )
+    session.add(run)
+    await session.flush()
+    for source in sources:
+        session.add(WorkspaceSearchCursor(run_id=run.id, source=source, cursor_json={"value": 0}))
+    await session.commit()
+    return run
+
+
+async def stop_run(session: AsyncSession, run_id) -> WorkspaceSearchRun:
+    run = await get_run(session, run_id)
+    run.status = "stopped"
+    run.stopped_at = datetime.now(timezone.utc)
+    await session.commit()
+    return run
+
+
+async def get_run(session: AsyncSession, run_id) -> WorkspaceSearchRun:
+    run = await session.get(WorkspaceSearchRun, run_id)
+    if run is None:
+        raise NotFound(f"search run {run_id} not found")
+    return run
