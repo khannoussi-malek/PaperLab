@@ -150,3 +150,60 @@ async def test_search_batch_records_source_error_without_failing_run(session, fa
     ).scalar_one()
     assert cursor.last_error is not None
     assert not cursor.exhausted
+
+
+@pytest.mark.asyncio
+async def test_start_run_creates_cursors_for_each_source(session):
+    from app.core.workspace_search import start_run
+    workspace = Workspace(name=f"Lifecycle {uuid.uuid4().hex[:8]}")
+    session.add(workspace)
+    await session.flush()
+    await session.commit()
+
+    run = await start_run(session, workspace.id, "bert", filters={}, sources=["arxiv", "openalex"])
+
+    assert run.status == "running"
+    cursors = (await session.execute(
+        select(WorkspaceSearchCursor).where(WorkspaceSearchCursor.run_id == run.id)
+    )).scalars().all()
+    assert {c.source for c in cursors} == {"arxiv", "openalex"}
+
+
+@pytest.mark.asyncio
+async def test_stop_run_sets_status_and_stopped_at(session):
+    from app.core.workspace_search import start_run, stop_run
+    workspace = Workspace(name=f"Stop {uuid.uuid4().hex[:8]}")
+    session.add(workspace)
+    await session.flush()
+    await session.commit()
+    run = await start_run(session, workspace.id, "bert", filters={}, sources=["arxiv"])
+
+    stopped = await stop_run(session, run.id)
+
+    assert stopped.status == "stopped"
+    assert stopped.stopped_at is not None
+
+
+@pytest.mark.asyncio
+async def test_start_run_on_a_stopped_run_resumes_its_cursors(session):
+    from app.core.workspace_search import start_run, stop_run
+    workspace = Workspace(name=f"Resume {uuid.uuid4().hex[:8]}")
+    session.add(workspace)
+    await session.flush()
+    await session.commit()
+    run = await start_run(session, workspace.id, "bert", filters={}, sources=["arxiv"])
+    cursor = (await session.execute(
+        select(WorkspaceSearchCursor).where(WorkspaceSearchCursor.run_id == run.id)
+    )).scalar_one()
+    cursor.cursor_json = {"value": 40}
+    await session.commit()
+    await stop_run(session, run.id)
+
+    resumed = await start_run(session, workspace.id, "bert", filters={}, sources=["arxiv"], run_id=run.id)
+
+    assert resumed.id == run.id
+    assert resumed.status == "running"
+    reloaded_cursor = (await session.execute(
+        select(WorkspaceSearchCursor).where(WorkspaceSearchCursor.run_id == run.id)
+    )).scalar_one()
+    assert reloaded_cursor.cursor_json == {"value": 40}
