@@ -291,6 +291,32 @@ async def test_patch_hit_exclude_with_a_reason_succeeds(session, client):
     assert resp.json()["stage1_exclude_reason"] == "wrong_topic"
 
 
+async def test_patch_hit_cannot_null_out_reason_while_still_not_relevant(session, client):
+    """A second PATCH that omits stage1_status entirely must not be able to null the reason out from under an
+    already-not_relevant hit — the schema validator alone can't catch this since it never sees the hit's
+    persisted state, only this request's own fields."""
+    from app.models.workspace_search import WorkspaceSearchHit
+
+    hit_id = await _make_hit(session, "reason bypass target")
+    workspace_id = (await session.get(WorkspaceSearchHit, hit_id)).workspace_id
+
+    first = await client.patch(
+        f"/api/workspaces/{workspace_id}/search/hits/{hit_id}",
+        json={"stage1_status": "not_relevant", "stage1_exclude_reason": "wrong_topic"},
+    )
+    assert first.status_code == 200
+
+    second = await client.patch(
+        f"/api/workspaces/{workspace_id}/search/hits/{hit_id}",
+        json={"stage1_exclude_reason": None},
+    )
+
+    assert second.status_code == 422
+    hit = await session.get(WorkspaceSearchHit, hit_id)
+    assert hit.stage1_status == "not_relevant"
+    assert hit.stage1_exclude_reason == "wrong_topic"
+
+
 async def test_patch_hit_rejects_a_garbage_stage1_status(session, client):
     from app.models.workspace_search import WorkspaceSearchHit
 

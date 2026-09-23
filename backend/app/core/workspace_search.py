@@ -258,6 +258,16 @@ async def review_hit(session: AsyncSession, hit_id, workspace_id, update: "HitRe
     hit = await session.get(WorkspaceSearchHit, hit_id)
     if hit is None or hit.workspace_id != workspace_id:
         raise NotFound(f"hit {hit_id} not found")
+
+    # The schema's model_validator only sees this request's own fields, not the hit's persisted state, so a
+    # partial update that omits stage1_status (e.g. one that only nulls stage1_exclude_reason) can't be caught
+    # there. Check the *effective* post-patch combination here instead.
+    fields = update.model_fields_set
+    new_status = update.stage1_status if "stage1_status" in fields else hit.stage1_status
+    new_reason = update.stage1_exclude_reason if "stage1_exclude_reason" in fields else hit.stage1_exclude_reason
+    if new_status == "not_relevant" and not new_reason:
+        raise InvalidInput("stage1_exclude_reason is required when stage1_status is not_relevant")
+
     for field_name, value in update.model_dump(exclude_unset=True).items():
         setattr(hit, field_name, value)
     await session.commit()
