@@ -122,3 +122,13 @@ async def citing_works(http: httpx.AsyncClient, work_id: str, limit: int) -> lis
     }
     response = await http.get("/works", params=params)
     return json_body(response.raise_for_status())["results"]
+
+
+async def search_page(http: httpx.AsyncClient, title: str, page_size: int, cursor: int) -> tuple[list[dict], int | None]:
+    """One page of OpenAlex results."""
+    params = {"filter": f"title.search:{title}", "per-page": page_size, "page": cursor, "select": WORK_FIELDS}
+    response = await http.get("/works", params=params)
+    body = json_body(response.raise_for_status())
+    results = body["results"]
+    next_cursor = cursor + 1 if cursor * page_size < body["meta"]["count"] else None
+    return results, next_cursor

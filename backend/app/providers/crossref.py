@@ -31,6 +31,15 @@ async def search(http: httpx.AsyncClient, title: str, rows: int) -> list[dict]:
     return json_body(response.raise_for_status())["message"]["items"]
 
 
+async def search_page(http: httpx.AsyncClient, title: str, page_size: int, cursor: int) -> tuple[list[dict], int | None]:
+    """One page of Crossref results."""
+    params = {"query.bibliographic": title, "rows": page_size, "offset": cursor, "select": FIELDS}
+    response = await http.get("/works", params=params)
+    items = json_body(response.raise_for_status())["message"]["items"]
+    next_cursor = cursor + page_size if len(items) == page_size else None
+    return items, next_cursor
+
+
 async def get_work(http: httpx.AsyncClient, doi: str) -> dict | None:
     """The work for `doi`, or None when Crossref has no such DOI."""
     # A DOI can contain "?" or other reserved characters; left bare they'd truncate the path into a query string.

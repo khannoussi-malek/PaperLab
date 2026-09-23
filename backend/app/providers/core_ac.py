@@ -32,3 +32,16 @@ async def search(http: httpx.AsyncClient, title: str, limit: int) -> list[dict]:
     params = {"q": f"title:({' AND '.join(words)})", "limit": limit}
     response = await http.get("/v3/search/works/", params=params)
     return json_body(response.raise_for_status())["results"]
+
+
+async def search_page(http: httpx.AsyncClient, title: str, page_size: int, cursor: int) -> tuple[list[dict], int | None]:
+    """One page of CORE results."""
+    words = title_words(title)
+    if not words:
+        return [], None
+    params = {"q": f"title:({' AND '.join(words)})", "limit": page_size, "offset": cursor}
+    response = await http.get("/v3/search/works/", params=params)
+    body = json_body(response.raise_for_status())
+    results = body["results"]
+    next_cursor = cursor + page_size if cursor + page_size < body["totalHits"] else None
+    return results, next_cursor
