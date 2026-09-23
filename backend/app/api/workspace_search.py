@@ -4,7 +4,7 @@ from fastapi import APIRouter, Request
 
 from app.api.deps import SessionDep
 from app.core import workspace_search
-from app.schemas.workspace_search import SearchRunCreate, SearchRunOut
+from app.schemas.workspace_search import HitListOut, SearchRunCreate, SearchRunOut
 
 router = APIRouter(prefix="/api/workspaces/{workspace_id}/search", tags=["workspace-search"])
 
@@ -45,3 +45,12 @@ async def stop_run(workspace_id: uuid.UUID, run_id: uuid.UUID, session: SessionD
 @router.get("/runs/{run_id}")
 async def get_run(workspace_id: uuid.UUID, run_id: uuid.UUID, session: SessionDep) -> SearchRunOut:
     return await workspace_search.get_run(session, run_id, workspace_id=workspace_id)
+
+
+@router.get("/hits")
+async def list_hits(
+    workspace_id: uuid.UUID, session: SessionDep, limit: int = 50, after: str | None = None,
+    stage1_status: str | None = None,
+) -> HitListOut:
+    items, next_cursor = await workspace_search.list_hits(session, workspace_id, limit, after, stage1_status)
+    return HitListOut(items=items, next_cursor=next_cursor)

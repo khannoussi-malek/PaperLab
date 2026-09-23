@@ -6,11 +6,14 @@ instead of returned. `search_batch()` takes a `WorkspaceSearchRun` row (not raw 
 caller (M7.6) can build one the same way this plan's worker does.
 """
 
+import base64
+import json
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 import httpx
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.candidates import Candidate, from_arxiv, from_core, from_crossref, from_s2, from_work, merge, normal_title
@@ -207,3 +210,34 @@ async def get_run(session: AsyncSession, run_id, workspace_id=None) -> Workspace
     if run is None or (workspace_id is not None and run.workspace_id != workspace_id):
         raise NotFound(f"search run {run_id} not found")
     return run
+
+
+def _encode_cursor(first_seen_at: datetime, hit_id: uuid.UUID) -> str:
+    return base64.urlsafe_b64encode(json.dumps([first_seen_at.isoformat(), str(hit_id)]).encode()).decode()
+
+
+def _decode_cursor(cursor: str) -> tuple[str, str]:
+    seen_at, hit_id = json.loads(base64.urlsafe_b64decode(cursor.encode()).decode())
+    return seen_at, hit_id
+
+
+async def list_hits(
+    session: AsyncSession, workspace_id, limit: int = 50, after: str | None = None,
+    stage1_status: str | None = None,
+) -> tuple[list[WorkspaceSearchHit], str | None]:
+    """Keyset-paginated hit listing, ordered by (first_seen_at, id) so the cursor is stable even when several
+    hits share a first_seen_at timestamp. `tuple_()` on both sides makes SQLAlchemy emit a real SQL row-value
+    comparison (`WHERE (first_seen_at, id) > (:seen_at, :id)`) instead of a no-op Python tuple comparison."""
+    query = select(WorkspaceSearchHit).where(WorkspaceSearchHit.workspace_id == workspace_id)
+    if stage1_status:
+        query = query.where(WorkspaceSearchHit.stage1_status == stage1_status)
+    if after:
+        seen_at, hit_id = _decode_cursor(after)
+        query = query.where(
+            tuple_(WorkspaceSearchHit.first_seen_at, WorkspaceSearchHit.id)
+            > tuple_(datetime.fromisoformat(seen_at), uuid.UUID(hit_id))
+        )
+    query = query.order_by(WorkspaceSearchHit.first_seen_at, WorkspaceSearchHit.id).limit(limit)
+    hits = (await session.execute(query)).scalars().all()
+    next_cursor = _encode_cursor(hits[-1].first_seen_at, hits[-1].id) if len(hits) == limit else None
+    return hits, next_cursor
