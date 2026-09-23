@@ -46,6 +46,9 @@ async def run_workspace_search(ctx: dict, run_id: str) -> None:
                         .scalars()
                         .all()
                     )
+                    # ponytail: a source stuck on httpx errors never sets its cursor exhausted, so this keeps
+                    # retrying it every pass with no backoff — fine for a blip, add backoff/max-retries if a
+                    # dead API key or outage needs to stop spinning the loop.
                     if cursors and all(c.exhausted for c in cursors):
                         run.status = "exhausted"
                         run.stopped_at = datetime.now(timezone.utc)
