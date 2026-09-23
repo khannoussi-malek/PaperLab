@@ -56,6 +56,18 @@ async def get(http: httpx.AsyncClient, arxiv_id: str) -> dict | None:
     return entries[0] if entries else None
 
 
+async def search_page(http: httpx.AsyncClient, title: str, page_size: int, cursor: int) -> tuple[list[dict], int | None]:
+    """One page of arXiv results. `cursor` is `start`; returns (entries, next_start_or_None)."""
+    words = title_words(title)
+    if not words:
+        return [], None
+    query = " AND ".join(f"ti:{word}" for word in words)
+    response = await http.get("/api/query", params={"search_query": query, "start": cursor, "max_results": page_size})
+    entries = _entries(response.raise_for_status())
+    next_cursor = cursor + page_size if len(entries) == page_size else None
+    return entries, next_cursor
+
+
 def _entries(response: httpx.Response) -> list[dict]:
     try:
         feed = ET.fromstring(response.content)

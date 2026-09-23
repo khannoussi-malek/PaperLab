@@ -96,3 +96,13 @@ async def citations(http: httpx.AsyncClient, key: str, cap: int) -> list[dict] |
     """The papers citing `key` (citing-paper records, in the API's own, unsorted order), capped at `cap` (D79: this
     direction is not paged to the end). None when unknown."""
     return await _edge(http, key, "citations", "citingPaper", cap)
+
+
+async def search_page(http: httpx.AsyncClient, title: str, page_size: int, cursor: int) -> tuple[list[dict], int | None]:
+    """One page of Semantic Scholar results."""
+    params = {"query": title, "offset": cursor, "limit": page_size, "fields": ",".join(PAPER_FIELDS)}
+    response = await http.get("/graph/v1/paper/search", params=params)
+    body = json_body(response.raise_for_status())
+    data = body.get("data", [])
+    next_cursor = cursor + page_size if body.get("next") is not None else None
+    return data, next_cursor
