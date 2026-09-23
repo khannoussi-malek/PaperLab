@@ -1,7 +1,7 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, File, Query, Request, UploadFile
 
 from app.api.deps import DiscoveryDep, SessionDep
 from app.core import workspace_search
@@ -97,3 +97,15 @@ async def import_hits(
     for paper_id in result.paper_ids:
         await _enqueue_ingest(request, paper_id)
     return ImportHitsOut(imported=result.imported, failed=result.failed)
+
+
+@router.post("/hits/{hit_id}/upload")
+async def upload_hit_pdf(
+    workspace_id: uuid.UUID, hit_id: uuid.UUID, session: SessionDep, request: Request,
+    file: UploadFile = File(...),
+) -> HitOut:
+    content = await file.read()
+    hit, created = await workspace_search.upload_hit_pdf(session, workspace_id, hit_id, file.filename, content)
+    if created:
+        await _enqueue_ingest(request, hit.paper_id)
+    return hit
