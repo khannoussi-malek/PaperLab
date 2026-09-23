@@ -99,10 +99,78 @@ def _core_work() -> dict:
             "arxivId": None, "downloadUrl": pdf_url}  # fmt: skip
 
 
+# search_page() pagination (Task 11): a separate, small fixture list distinct from PAPERS, so a paginated search
+# request never disturbs the single-page Find Papers / Similar / references fixtures above. Every provider's
+# search_page() is exercised with page_size=2 against these 3 items, which exhausts on page 2 (a short page) for
+# every next_cursor rule below, OpenAlex's 1-based `page` cursor included.
+PAGE_PAPERS = [(f"PaperLab Pagination Fixture {n}", f"{DOI_PREFIX}page-{n}") for n in (1, 2, 3)]
+
+
+def _page_slice(offset: int, limit: int) -> list[tuple[str, str]]:
+    return PAGE_PAPERS[offset : offset + limit]
+
+
+def _openalex_search_page(params: httpx.QueryParams) -> httpx.Response:
+    page, page_size = int(params["page"]), int(params["per-page"])
+    items = _page_slice((page - 1) * page_size, page_size)
+    return httpx.Response(200, json={
+        "meta": {"count": len(PAGE_PAPERS)}, "results": [_work(title, doi, None) for title, doi in items],
+    })  # fmt: skip
+
+
+def _crossref_search_page(params: httpx.QueryParams) -> httpx.Response:
+    items = _page_slice(int(params["offset"]), int(params["rows"]))
+    return httpx.Response(200, json={"message": {"items": [_crossref_item(title, doi, None) for title, doi in items]}})
+
+
+def _arxiv_search_page_feed(params: httpx.QueryParams) -> str:
+    offset, page_size = int(params["start"]), int(params["max_results"])
+    entries = "".join(
+        f"""
+  <entry>
+    <id>http://arxiv.org/abs/2609.{index:05d}v1</id>
+    <published>2026-01-05T00:00:00Z</published>
+    <title>{title}</title>
+    <author><name>Ada Fixture</name></author>
+    <arxiv:doi>{doi}</arxiv:doi>
+  </entry>"""
+        for index, (title, doi) in enumerate(_page_slice(offset, page_size), start=offset + 1)
+    )
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:arxiv="http://arxiv.org/schemas/atom">{entries}
+</feed>"""
+
+
+def _page_core_work(core_id: int, title: str, doi: str) -> dict:
+    return {"id": core_id, "title": title, "authors": [{"name": "Fixture, Ada"}], "yearPublished": 2026, "doi": doi,
+            "arxivId": None, "downloadUrl": None}  # fmt: skip
+
+
+def _core_search_page(params: httpx.QueryParams) -> httpx.Response:
+    offset, page_size = int(params["offset"]), int(params["limit"])
+    results = [
+        _page_core_work(900100 + offset + i, title, doi)
+        for i, (title, doi) in enumerate(_page_slice(offset, page_size))
+    ]
+    return httpx.Response(200, json={"totalHits": len(PAGE_PAPERS), "results": results})
+
+
+def _s2_search_page(params: httpx.QueryParams) -> httpx.Response:
+    offset, page_size = int(params["offset"]), int(params["limit"])
+    items = _page_slice(offset, page_size)
+    data = [_s2_paper(offset + i, title, doi, None) for i, (title, doi) in enumerate(items)]
+    body = {"data": data}
+    if offset + page_size < len(PAGE_PAPERS):
+        body["next"] = offset + page_size
+    return httpx.Response(200, json=body)
+
+
 def _handle(request: httpx.Request) -> httpx.Response:
     host, path = request.url.host, request.url.path
     s2_papers = [_s2_paper(i, *paper) for i, paper in enumerate(PAPERS)]
     if host == "api.openalex.org" and path == "/works":
+        if "page" in request.url.params:
+            return _openalex_search_page(request.url.params)
         return httpx.Response(200, json={"results": [_work(*paper) for paper in PAPERS]})
     if host == "api.openalex.org" and path.startswith("/works/"):
         return httpx.Response(200, json=_work(*PAPERS[0]))
@@ -116,17 +184,26 @@ def _handle(request: httpx.Request) -> httpx.Response:
             return httpx.Response(200, json={"recommendedPapers": s2_papers})
         if path == "/graph/v1/paper/search/match":
             return httpx.Response(200, json={"data": [{"paperId": "f" * 40}]})
+        if path == "/graph/v1/paper/search":
+            return _s2_search_page(request.url.params)
         if path == "/graph/v1/paper/batch":
             return httpx.Response(200, json=[None] * len(json.loads(request.read())["ids"]))
         if path.startswith("/graph/v1/paper/"):
             return httpx.Response(200, json=s2_papers[0])
     if host == "api.crossref.org" and path == "/works":
+        if "offset" in request.url.params:
+            return _crossref_search_page(request.url.params)
         return httpx.Response(200, json={"message": {"items": [_crossref_item(*paper) for paper in PAPERS]}})
     if host == "api.crossref.org" and path.startswith("/works/"):
         return httpx.Response(200, json={"message": _crossref_item(*PAPERS[0])})
     if host == "export.arxiv.org" and path == "/api/query":
+        if "start" in request.url.params:
+            return httpx.Response(200, text=_arxiv_search_page_feed(request.url.params),
+                                   headers={"content-type": "application/atom+xml"})  # fmt: skip
         return httpx.Response(200, text=_arxiv_feed(), headers={"content-type": "application/atom+xml"})
     if host == "api.core.ac.uk" and path == "/v3/search/works/":
+        if "offset" in request.url.params:
+            return _core_search_page(request.url.params)
         return httpx.Response(200, json={"results": [_core_work()]})
     if host == "api.unpaywall.org":
         pdf_url = next((url for _, doi, url in PAPERS if path == f"/v2/{doi}"), None)

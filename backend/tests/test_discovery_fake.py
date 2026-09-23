@@ -5,7 +5,7 @@ from app.core import discovery, references
 from app.core.errors import Conflict
 from app.core.paper_sources import SOURCES, SourceSettings
 from app.models import Paper, paper_references
-from app.providers import discovery_fake
+from app.providers import arxiv, core_ac, crossref, discovery_fake, openalex, semantic_scholar
 from app.providers.extraction import extract
 
 # Fetches and embeds take one advisory lock (core/references.py); in a test it lasts until the rollback, so these
@@ -80,3 +80,63 @@ async def test_the_e2e_fake_gives_any_paper_three_references_and_one_citing_work
     )
     assert [r.title for r in cited_by.rows] == [discovery_fake.FREE_TITLE]
     assert {r.title: r.has_pdf for r in cites.rows}[discovery_fake.CLOSED_TITLE] is False
+
+
+# search_page() pagination (Task 11): a separate 3-item fixture list, distinct from PAPERS, so these don't disturb
+# the single-page Find Papers / Similar / references tests above. page_size=2 against 3 items exhausts on page 2
+# (a short page) for every provider, including OpenAlex's 1-based `page` cursor.
+
+
+async def test_the_e2e_fakes_arxiv_search_page_has_two_pages_then_exhausts(fake_providers):
+    page1, cursor1 = await arxiv.search_page(fake_providers.arxiv, "anything", page_size=2, cursor=0)
+    assert len(page1) == 2
+    assert cursor1 == 2
+
+    page2, cursor2 = await arxiv.search_page(fake_providers.arxiv, "anything", page_size=2, cursor=cursor1)
+    assert len(page2) == 1
+    assert cursor2 is None
+    assert {e["title"] for e in page1}.isdisjoint({e["title"] for e in page2})
+
+
+async def test_the_e2e_fakes_crossref_search_page_has_two_pages_then_exhausts(fake_providers):
+    page1, cursor1 = await crossref.search_page(fake_providers.crossref, "anything", page_size=2, cursor=0)
+    assert len(page1) == 2
+    assert cursor1 == 2
+
+    page2, cursor2 = await crossref.search_page(fake_providers.crossref, "anything", page_size=2, cursor=cursor1)
+    assert len(page2) == 1
+    assert cursor2 is None
+    assert {i["title"][0] for i in page1}.isdisjoint({i["title"][0] for i in page2})
+
+
+async def test_the_e2e_fakes_core_search_page_has_two_pages_then_exhausts(fake_providers):
+    page1, cursor1 = await core_ac.search_page(fake_providers.core, "anything", page_size=2, cursor=0)
+    assert len(page1) == 2
+    assert cursor1 == 2
+
+    page2, cursor2 = await core_ac.search_page(fake_providers.core, "anything", page_size=2, cursor=cursor1)
+    assert len(page2) == 1
+    assert cursor2 is None
+    assert {r["title"] for r in page1}.isdisjoint({r["title"] for r in page2})
+
+
+async def test_the_e2e_fakes_semantic_scholar_search_page_has_two_pages_then_exhausts(fake_providers):
+    page1, cursor1 = await semantic_scholar.search_page(fake_providers.s2, "anything", page_size=2, cursor=0)
+    assert len(page1) == 2
+    assert cursor1 == 2
+
+    page2, cursor2 = await semantic_scholar.search_page(fake_providers.s2, "anything", page_size=2, cursor=cursor1)
+    assert len(page2) == 1
+    assert cursor2 is None
+    assert {p["title"] for p in page1}.isdisjoint({p["title"] for p in page2})
+
+
+async def test_the_e2e_fakes_openalex_search_page_has_two_pages_then_exhausts(fake_providers):
+    page1, cursor1 = await openalex.search_page(fake_providers.openalex, "anything", page_size=2, cursor=1)
+    assert len(page1) == 2
+    assert cursor1 == 2
+
+    page2, cursor2 = await openalex.search_page(fake_providers.openalex, "anything", page_size=2, cursor=cursor1)
+    assert len(page2) == 1
+    assert cursor2 is None
+    assert {r["title"] for r in page1}.isdisjoint({r["title"] for r in page2})
