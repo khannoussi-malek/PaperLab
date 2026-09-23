@@ -1,6 +1,16 @@
 import pytest
 
+from app.api.deps import get_discovery
+
 pytestmark = pytest.mark.anyio
+
+
+@pytest.fixture
+def discovery_api(app, discovery_fakes):
+    """Same pattern as test_discovery_api.py's fixture: routes DiscoveryDep to the fake providers so import_hits'
+    download_pdf call has a real (fake) PDF host to hit."""
+    app.dependency_overrides[get_discovery] = lambda: discovery_fakes.providers
+    return discovery_fakes
 
 
 async def test_start_run_over_http(client):
@@ -431,3 +441,137 @@ async def test_bulk_patch_hits_only_updates_hits_in_the_workspace(session, clien
     assert resp.json()["updated"] == 1
     other = await session.get(WorkspaceSearchHit, other_hit)
     assert other.stage1_status is None
+
+
+async def _make_importable_hit(session, pdf_urls: list[str], workspace_id=None):
+    import uuid as uuid_mod
+    from datetime import datetime, timezone
+
+    from app.models.references import ExternalRef
+    from app.models.workspace import Workspace
+    from app.models.workspace_search import WorkspaceSearchHit, WorkspaceSearchRun
+
+    if workspace_id is None:
+        workspace = Workspace(name=f"Import {uuid_mod.uuid4().hex[:8]}")
+        session.add(workspace)
+        await session.flush()
+        workspace_id = workspace.id
+    ref = ExternalRef(title="Importable Paper", pdf_urls=pdf_urls)
+    session.add(ref)
+    await session.flush()
+    run = WorkspaceSearchRun(
+        workspace_id=workspace_id, query_text="q", filters_json={}, query_overrides_json={},
+        sources_json=[], status="exhausted", started_at=datetime.now(timezone.utc), stats_json={},
+    )
+    session.add(run)
+    await session.flush()
+    hit = WorkspaceSearchHit(
+        workspace_id=workspace_id, run_id=run.id, external_ref_id=ref.id, source_method="database_search",
+        normalized_title="importable paper", stage1_status="relevant", first_seen_at=datetime.now(timezone.utc),
+    )
+    session.add(hit)
+    await session.commit()
+    return hit.id
+
+
+async def test_import_hits_with_free_pdf_succeeds_and_enqueues_ingest(session, client, discovery_api, arq):
+    from app.models.workspace_search import WorkspaceSearchHit
+
+    discovery_api.pdf_host.reply("/paper.pdf", 200, content=b"%PDF-1.4 fake content")
+    hit_id = await _make_importable_hit(session, pdf_urls=["https://pdf.example/paper.pdf"])
+    hit = await session.get(WorkspaceSearchHit, hit_id)
+    workspace_id = hit.workspace_id
+
+    resp = await client.post(f"/api/workspaces/{workspace_id}/search/hits/import", json={"hit_ids": [str(hit_id)]})
+
+    assert resp.status_code == 200
+    assert resp.json() == {"imported": 1, "failed": 0}
+
+    await session.refresh(hit)
+    assert hit.acquisition_status == "imported"
+    assert hit.paper_id is not None
+    assert arq.jobs == [("ingest_paper", str(hit.paper_id))]
+
+
+async def test_import_hits_with_no_pdf_urls_skips_straight_to_failed(session, client, discovery_api):
+    from app.models.workspace_search import WorkspaceSearchHit
+
+    hit_id = await _make_importable_hit(session, pdf_urls=[])
+    hit = await session.get(WorkspaceSearchHit, hit_id)
+
+    resp = await client.post(f"/api/workspaces/{hit.workspace_id}/search/hits/import", json={"hit_ids": [str(hit_id)]})
+
+    assert resp.status_code == 200
+    assert resp.json() == {"imported": 0, "failed": 1}
+    assert discovery_api.pdf_host.requests == []  # download_pdf must never be called with an empty url list
+
+    await session.refresh(hit)
+    assert hit.acquisition_status == "failed"
+    assert hit.paper_id is None
+
+
+async def test_import_hits_download_failure_marks_failed_and_continues_the_batch(session, client, discovery_api):
+    from app.models.workspace_search import WorkspaceSearchHit
+
+    discovery_api.pdf_host.reply("/gone.pdf", 404, text="not found")
+    discovery_api.pdf_host.reply("/ok.pdf", 200, content=b"%PDF-1.4 ok content")
+
+    failing_id = await _make_importable_hit(session, pdf_urls=["https://pdf.example/gone.pdf"])
+    workspace_id = (await session.get(WorkspaceSearchHit, failing_id)).workspace_id
+    ok_id = await _make_importable_hit(session, pdf_urls=["https://pdf.example/ok.pdf"], workspace_id=workspace_id)
+
+    resp = await client.post(
+        f"/api/workspaces/{workspace_id}/search/hits/import",
+        json={"hit_ids": [str(failing_id), str(ok_id)]},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json() == {"imported": 1, "failed": 1}
+
+    failing_hit = await session.get(WorkspaceSearchHit, failing_id)
+    ok_hit = await session.get(WorkspaceSearchHit, ok_id)
+    await session.refresh(failing_hit)
+    await session.refresh(ok_hit)
+    assert failing_hit.acquisition_status == "failed"
+    assert ok_hit.acquisition_status == "imported"
+    assert ok_hit.paper_id is not None
+
+
+async def test_import_hits_only_imports_hits_owned_by_the_workspace(session, client, discovery_api):
+    from app.models.workspace_search import WorkspaceSearchHit
+
+    discovery_api.pdf_host.reply("/other.pdf", 200, content=b"%PDF-1.4 other content")
+    owned_id = await _make_importable_hit(session, pdf_urls=[])
+    owned_hit = await session.get(WorkspaceSearchHit, owned_id)
+    other_id = await _make_importable_hit(session, pdf_urls=["https://pdf.example/other.pdf"])
+
+    resp = await client.post(
+        f"/api/workspaces/{owned_hit.workspace_id}/search/hits/import",
+        json={"hit_ids": [str(owned_id), str(other_id)]},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json() == {"imported": 0, "failed": 1}  # only the owned (no-pdf) hit is processed
+    other_hit = await session.get(WorkspaceSearchHit, other_id)
+    assert other_hit.acquisition_status == "not_attempted"
+    assert discovery_api.pdf_host.requests == []
+
+
+async def test_import_hits_without_hit_ids_targets_relevant_not_yet_imported_hits(session, client, discovery_api):
+    from app.models.workspace_search import WorkspaceSearchHit
+
+    discovery_api.pdf_host.reply("/new.pdf", 200, content=b"%PDF-1.4 new content")
+    new_id = await _make_importable_hit(session, pdf_urls=["https://pdf.example/new.pdf"])
+    workspace_id = (await session.get(WorkspaceSearchHit, new_id)).workspace_id
+    already_id = await _make_importable_hit(session, pdf_urls=[], workspace_id=workspace_id)
+    already_hit = await session.get(WorkspaceSearchHit, already_id)
+    already_hit.acquisition_status = "imported"
+    await session.commit()
+
+    resp = await client.post(f"/api/workspaces/{workspace_id}/search/hits/import", json={})
+
+    assert resp.status_code == 200
+    assert resp.json() == {"imported": 1, "failed": 0}
+    new_hit = await session.get(WorkspaceSearchHit, new_id)
+    await session.refresh(new_hit)
+    assert new_hit.acquisition_status == "imported"
