@@ -172,6 +172,8 @@ async def start_run(
     await workspaces.get(session, workspace_id)  # raises NotFound if missing
     if run_id is not None:
         run = await get_run(session, run_id)
+        if run.workspace_id != workspace_id:
+            raise NotFound(f"search run {run_id} not found")
         if run.status == "running":
             raise Conflict("search_run_already_running")
         run.status = "running"
