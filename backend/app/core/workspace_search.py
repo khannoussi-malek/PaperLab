@@ -194,16 +194,16 @@ async def start_run(
     return run
 
 
-async def stop_run(session: AsyncSession, run_id) -> WorkspaceSearchRun:
-    run = await get_run(session, run_id)
+async def stop_run(session: AsyncSession, run_id, workspace_id=None) -> WorkspaceSearchRun:
+    run = await get_run(session, run_id, workspace_id)
     run.status = "stopped"
     run.stopped_at = datetime.now(timezone.utc)
     await session.commit()
     return run
 
 
-async def get_run(session: AsyncSession, run_id) -> WorkspaceSearchRun:
+async def get_run(session: AsyncSession, run_id, workspace_id=None) -> WorkspaceSearchRun:
     run = await session.get(WorkspaceSearchRun, run_id)
-    if run is None:
+    if run is None or (workspace_id is not None and run.workspace_id != workspace_id):
         raise NotFound(f"search run {run_id} not found")
     return run

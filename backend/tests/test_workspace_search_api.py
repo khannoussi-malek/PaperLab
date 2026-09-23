@@ -88,3 +88,34 @@ async def test_start_run_for_unknown_workspace_is_404(client):
         json={"query": "bert", "filters": {}, "sources": ["arxiv"]},
     )
     assert resp.status_code == 404
+
+
+async def test_get_run_for_wrong_workspace_is_404(client):
+    owner_ws = await client.post("/api/workspaces", json={"name": "Owner workspace"})
+    other_ws = await client.post("/api/workspaces", json={"name": "Other workspace"})
+    started = await client.post(
+        f"/api/workspaces/{owner_ws.json()['id']}/search/runs",
+        json={"query": "bert", "filters": {}, "sources": ["arxiv"]},
+    )
+    run_id = started.json()["id"]
+
+    resp = await client.get(f"/api/workspaces/{other_ws.json()['id']}/search/runs/{run_id}")
+
+    assert resp.status_code == 404
+
+
+async def test_stop_run_for_wrong_workspace_is_404(client):
+    owner_ws = await client.post("/api/workspaces", json={"name": "Owner workspace"})
+    other_ws = await client.post("/api/workspaces", json={"name": "Other workspace"})
+    started = await client.post(
+        f"/api/workspaces/{owner_ws.json()['id']}/search/runs",
+        json={"query": "bert", "filters": {}, "sources": ["arxiv"]},
+    )
+    run_id = started.json()["id"]
+
+    resp = await client.post(f"/api/workspaces/{other_ws.json()['id']}/search/runs/{run_id}/stop")
+
+    assert resp.status_code == 404
+
+    fetched = await client.get(f"/api/workspaces/{owner_ws.json()['id']}/search/runs/{run_id}")
+    assert fetched.json()["status"] == "running"
