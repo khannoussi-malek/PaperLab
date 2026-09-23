@@ -65,6 +65,14 @@ export type GraphNode = components['schemas']['GraphNode']
 export type GraphLink = components['schemas']['GraphLink']
 export type LibraryGraph = components['schemas']['GraphOut']
 export type PaperLinkOut = components['schemas']['LinkOut']
+export type SearchRun = components['schemas']['SearchRunOut']
+export type SearchRunCreate = components['schemas']['SearchRunCreate']
+export type Hit = components['schemas']['HitOut']
+export type HitListOut = components['schemas']['HitListOut']
+export type HitReviewUpdate = components['schemas']['HitReviewUpdate']
+export type BulkHitReviewUpdate = components['schemas']['BulkHitReviewUpdate']
+export type BulkUpdateOut = components['schemas']['BulkUpdateOut']
+export type ImportHitsOut = components['schemas']['ImportHitsOut']
 
 /** Where a chat lives: the reader's paper, or a workspace. */
 export type ChatScope = { kind: 'paper' | 'workspace'; id: string }
@@ -235,4 +243,29 @@ export const api = {
   renamePaperLink: (id: string, label: string) =>
     request<PaperLinkOut>(`/api/links/${id}`, sendJson('PATCH', { label })),
   deletePaperLink: (id: string) => request<void>(`/api/links/${id}`, { method: 'DELETE' }),
+  startSearchRun: (workspaceId: string, body: SearchRunCreate) =>
+    request<SearchRun>(`/api/workspaces/${workspaceId}/search/runs`, sendJson('POST', body)),
+  stopSearchRun: (workspaceId: string, runId: string) =>
+    request<SearchRun>(`/api/workspaces/${workspaceId}/search/runs/${runId}/stop`, { method: 'POST' }),
+  getSearchRun: (workspaceId: string, runId: string) =>
+    request<SearchRun>(`/api/workspaces/${workspaceId}/search/runs/${runId}`),
+  listSearchHits: (workspaceId: string, params: { after?: string; limit?: number; stage1_status?: string }) => {
+    const entries = Object.entries(params).filter(([, value]) => value !== undefined) as [string, string | number][]
+    const query = new URLSearchParams(entries.map(([key, value]) => [key, String(value)]))
+    return request<HitListOut>(`/api/workspaces/${workspaceId}/search/hits?${query}`)
+  },
+  patchSearchHit: (workspaceId: string, hitId: string, body: HitReviewUpdate) =>
+    request<Hit>(`/api/workspaces/${workspaceId}/search/hits/${hitId}`, sendJson('PATCH', body)),
+  bulkPatchSearchHits: (workspaceId: string, body: BulkHitReviewUpdate) =>
+    request<BulkUpdateOut>(`/api/workspaces/${workspaceId}/search/hits/bulk`, sendJson('PATCH', body)),
+  /** `hitIds` omitted imports every hit still pending acquisition. */
+  importSearchHits: (workspaceId: string, hitIds?: string[]) =>
+    request<ImportHitsOut>(
+      `/api/workspaces/${workspaceId}/search/hits/import`, sendJson('POST', { hit_ids: hitIds ?? null }),
+    ),
+  uploadHitPdf: (workspaceId: string, hitId: string, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return request<Hit>(`/api/workspaces/${workspaceId}/search/hits/${hitId}/upload`, { method: 'POST', body: form })
+  },
 }
