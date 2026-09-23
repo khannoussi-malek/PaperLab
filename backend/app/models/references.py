@@ -31,6 +31,7 @@ class ExternalRef(Base):
     # Set once on import: every paper citing this reference then shows it in the library.
     imported_as: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("papers.id", ondelete="SET NULL"))
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+    core_id: Mapped[str | None] = mapped_column(Text, default=None)
 
 
 paper_references = Table(
