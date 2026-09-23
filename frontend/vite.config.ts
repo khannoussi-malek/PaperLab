@@ -11,5 +11,8 @@ export default defineConfig({
     // API_URL is http://api:8000 inside compose; the host default is for `npm run dev` on the host.
     proxy: { '/api': process.env.API_URL ?? 'http://localhost:8000' },
   },
-  test: { include: ['src/**/*.test.ts'] },
+  test: {
+    include: ['src/**/*.test.{ts,tsx}'],
+    setupFiles: ['./src/test/setup.ts'],
+  },
 })
