@@ -7,8 +7,10 @@ import pytest
 from sqlalchemy import select
 
 from app.core import discovery
+from app.core.candidates import normal_title
 from app.core.paper_sources import SOURCES, SourceSettings
 from app.core.workspace_search import search_batch
+from app.models.references import ExternalRef
 from app.models.workspace import Workspace
 from app.models.workspace_search import WorkspaceSearchCursor, WorkspaceSearchHit, WorkspaceSearchRun
 from app.providers import arxiv, discovery_fake
@@ -89,6 +91,42 @@ async def test_search_batch_dedupes_across_sources(session, fake_providers):
     assert len(titles) == len(hits)  # no duplicate normalized titles from the same fixture paper
     assert len(hits) == 3  # 3 sources x 3 shared papers, merged down to 3 — not 9
     assert result.new_hits == 3
+
+
+async def test_search_batch_preserves_existing_screening_state(session, fake_providers):
+    # discovery_fake's PAGE_PAPERS[0] ("...Fixture 1", doi "...page-1") is what arxiv's page 0 returns first.
+    # Pre-seed its ExternalRef + a WorkspaceSearchHit already screened by a user (this run's spec P2's global
+    # constraint: a hit already in the pool — this run or an earlier one — keeps its screening state).
+    run = await _new_run(session, ["arxiv"])
+    title, doi = discovery_fake.PAGE_PAPERS[0]
+    ref = ExternalRef(title=title, doi=doi)
+    session.add(ref)
+    await session.flush()
+    existing_hit = WorkspaceSearchHit(
+        workspace_id=run.workspace_id,
+        run_id=run.id,
+        external_ref_id=ref.id,
+        source_method="database_search",
+        normalized_title=normal_title(title),
+        first_seen_at=datetime.now(timezone.utc),
+        stage1_status="relevant",
+        priority=2,
+    )
+    session.add(existing_hit)
+    await session.commit()
+
+    result = await search_batch(session, fake_providers, run)
+
+    hits = (
+        (await session.execute(select(WorkspaceSearchHit).where(WorkspaceSearchHit.external_ref_id == ref.id)))
+        .scalars()
+        .all()
+    )
+    assert len(hits) == 1  # not duplicated by this batch
+    assert hits[0].id == existing_hit.id
+    assert hits[0].stage1_status == "relevant"  # untouched, not overwritten or reset
+    assert hits[0].priority == 2
+    assert result.new_hits == 2  # the other 2 PAGE_PAPERS are still new
 
 
 async def test_search_batch_records_source_error_without_failing_run(session, fake_providers):
