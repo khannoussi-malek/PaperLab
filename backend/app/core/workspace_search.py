@@ -355,3 +355,42 @@ async def import_hits(
 
     await session.commit()
     return ImportResult(imported, failed, paper_ids)
+
+
+async def upload_hit_pdf(
+    session: AsyncSession, workspace_id: uuid.UUID, hit_id: uuid.UUID, filename: str | None, content: bytes
+) -> tuple[WorkspaceSearchHit, bool]:
+    """Manual acquisition (spec Task 10) for a hit with no free PDF: the user supplies the file directly instead of
+    `import_hits` finding one. Same ownership scoping and already-imported handling as `import_hits` above — a
+    hit whose ExternalRef.imported_as is already set gets the existing paper attached, no new paper, no re-enqueue.
+    Returns (hit, created) so the route only enqueues ingest when this call actually created a new paper.
+
+    The %PDF-body check is the trust boundary for this user-uploaded file (spec's Global Constraint): reject
+    before touching the already-imported branch too, using the same magic bytes `papers.create_paper` checks."""
+    if not content.startswith(papers.PDF_MAGIC):
+        raise InvalidInput("uploaded file is not a PDF")
+
+    hit = await session.get(WorkspaceSearchHit, hit_id)
+    if hit is None or hit.workspace_id != workspace_id:
+        raise NotFound(f"hit {hit_id} not found")
+
+    ref = await session.get(ExternalRef, hit.external_ref_id) if hit.external_ref_id else None
+    if ref is not None and ref.imported_as is not None:
+        await workspaces.add_paper(session, workspace_id, ref.imported_as)
+        hit.acquisition_status = "manual"
+        hit.paper_id = ref.imported_as
+        await session.commit()
+        return hit, False
+
+    paper = await papers.create_paper(
+        session, filename or f"{hit.normalized_title}.pdf", content, settings.pdf_dir,
+        prefill={"title": ref.title} if ref else None,
+    )
+    await workspaces.add_paper(session, workspace_id, paper.id)
+    if ref is not None:
+        same_paper = [ExternalRef.id == ref.id, *_same_reference(ref.s2_id, ref.openalex_id, ref.doi, ref.arxiv_id)]
+        await session.execute(update(ExternalRef).where(or_(*same_paper)).values(imported_as=paper.id))
+    hit.acquisition_status = "manual"
+    hit.paper_id = paper.id
+    await session.commit()
+    return hit, True

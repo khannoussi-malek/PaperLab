@@ -640,3 +640,101 @@ async def test_import_hits_new_import_sets_external_ref_imported_as(session, cli
     ref = await session.get(ExternalRef, ref_id)
     await session.refresh(ref)
     assert ref.imported_as == hit.paper_id
+
+
+async def test_upload_pdf_marks_hit_manual_and_enqueues_ingest(session, client, arq):
+    from app.models.references import ExternalRef
+    from app.models.workspace_search import WorkspaceSearchHit
+
+    hit_id = await _make_importable_hit(session, pdf_urls=[])
+    hit = await session.get(WorkspaceSearchHit, hit_id)
+    workspace_id = hit.workspace_id
+    ref_id = hit.external_ref_id
+
+    resp = await client.post(
+        f"/api/workspaces/{workspace_id}/search/hits/{hit_id}/upload",
+        files={"file": ("paper.pdf", b"%PDF-1.4 real enough for the check", "application/pdf")},
+    )
+
+    assert resp.status_code == 200
+    await session.refresh(hit)
+    assert hit.acquisition_status == "manual"
+    assert hit.paper_id is not None
+    assert arq.jobs == [("ingest_paper", str(hit.paper_id))]
+
+    ref = await session.get(ExternalRef, ref_id)
+    await session.refresh(ref)
+    assert ref.imported_as == hit.paper_id  # same bookkeeping as import_hits' new-import branch
+
+
+async def test_upload_non_pdf_is_rejected(session, client, arq):
+    from app.models.workspace_search import WorkspaceSearchHit
+
+    hit_id = await _make_importable_hit(session, pdf_urls=[])
+    workspace_id = (await session.get(WorkspaceSearchHit, hit_id)).workspace_id
+
+    resp = await client.post(
+        f"/api/workspaces/{workspace_id}/search/hits/{hit_id}/upload",
+        files={"file": ("paper.pdf", b"<html>not a pdf</html>", "application/pdf")},
+    )
+
+    assert resp.status_code == 422
+    hit = await session.get(WorkspaceSearchHit, hit_id)
+    await session.refresh(hit)
+    assert hit.acquisition_status != "manual"
+    assert hit.paper_id is None
+    assert arq.jobs == []
+
+
+async def test_upload_for_already_imported_hit_attaches_existing_paper(session, client, arq):
+    """The reference behind this hit is already imported (an earlier hit, run, or the References panel). Uploading
+    a file for it must attach the existing paper, not create a duplicate or re-enqueue ingest for it."""
+    from app.models import Paper
+    from app.models.workspace_search import WorkspaceSearchHit
+
+    existing_paper = Paper(title="Already in the library", file_path="/nonexistent.pdf")
+    session.add(existing_paper)
+    await session.flush()
+
+    hit_id = await _make_importable_hit(session, pdf_urls=[], imported_as=existing_paper.id)
+    hit = await session.get(WorkspaceSearchHit, hit_id)
+    workspace_id = hit.workspace_id
+
+    resp = await client.post(
+        f"/api/workspaces/{workspace_id}/search/hits/{hit_id}/upload",
+        files={"file": ("paper.pdf", b"%PDF-1.4 ignored content", "application/pdf")},
+    )
+
+    assert resp.status_code == 200
+    await session.refresh(hit)
+    assert (hit.acquisition_status, hit.paper_id) == ("manual", existing_paper.id)
+    assert arq.jobs == []  # no new paper created, so no ingest job
+
+    from sqlalchemy import select
+
+    from app.models import workspace_papers
+
+    membership = await session.execute(
+        select(workspace_papers).where(
+            workspace_papers.c.workspace_id == workspace_id, workspace_papers.c.paper_id == existing_paper.id
+        )
+    )
+    assert membership.first() is not None
+
+
+async def test_upload_for_wrong_workspace_is_404(session, client):
+    from app.models.workspace_search import WorkspaceSearchHit
+
+    hit_id = await _make_importable_hit(session, pdf_urls=[])
+    other_ws = await client.post("/api/workspaces", json={"name": "Other upload workspace"})
+    other_workspace_id = other_ws.json()["id"]
+
+    resp = await client.post(
+        f"/api/workspaces/{other_workspace_id}/search/hits/{hit_id}/upload",
+        files={"file": ("paper.pdf", b"%PDF-1.4 content", "application/pdf")},
+    )
+
+    assert resp.status_code == 404
+    hit = await session.get(WorkspaceSearchHit, hit_id)
+    await session.refresh(hit)
+    assert hit.acquisition_status != "manual"
