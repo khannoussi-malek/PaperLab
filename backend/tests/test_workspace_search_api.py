@@ -443,7 +443,7 @@ async def test_bulk_patch_hits_only_updates_hits_in_the_workspace(session, clien
     assert other.stage1_status is None
 
 
-async def _make_importable_hit(session, pdf_urls: list[str], workspace_id=None):
+async def _make_importable_hit(session, pdf_urls: list[str], workspace_id=None, imported_as=None):
     import uuid as uuid_mod
     from datetime import datetime, timezone
 
@@ -456,7 +456,7 @@ async def _make_importable_hit(session, pdf_urls: list[str], workspace_id=None):
         session.add(workspace)
         await session.flush()
         workspace_id = workspace.id
-    ref = ExternalRef(title="Importable Paper", pdf_urls=pdf_urls)
+    ref = ExternalRef(title="Importable Paper", pdf_urls=pdf_urls, imported_as=imported_as)
     session.add(ref)
     await session.flush()
     run = WorkspaceSearchRun(
@@ -575,3 +575,68 @@ async def test_import_hits_without_hit_ids_targets_relevant_not_yet_imported_hit
     new_hit = await session.get(WorkspaceSearchHit, new_id)
     await session.refresh(new_hit)
     assert new_hit.acquisition_status == "imported"
+
+
+async def test_import_hits_already_in_library_attaches_existing_paper_without_downloading(
+    session, client, discovery_api, arq
+):
+    """The reference behind this hit was already imported — an earlier run, or the References panel's own
+    import_reference flow — so ExternalRef.imported_as is already set. import_hits must not download or create
+    a duplicate paper for it: it attaches the existing paper and skips straight to imported."""
+    from app.models import Paper
+    from app.models.workspace_search import WorkspaceSearchHit
+
+    existing_paper = Paper(title="Already in the library", file_path="/nonexistent.pdf")
+    session.add(existing_paper)
+    await session.flush()
+
+    hit_id = await _make_importable_hit(
+        session, pdf_urls=["https://pdf.example/should-not-be-fetched.pdf"], imported_as=existing_paper.id
+    )
+    hit = await session.get(WorkspaceSearchHit, hit_id)
+    workspace_id = hit.workspace_id
+
+    resp = await client.post(f"/api/workspaces/{workspace_id}/search/hits/import", json={"hit_ids": [str(hit_id)]})
+
+    assert resp.status_code == 200
+    assert resp.json() == {"imported": 1, "failed": 0}
+    assert discovery_api.pdf_host.requests == []  # no download attempted
+
+    await session.refresh(hit)
+    assert (hit.acquisition_status, hit.paper_id) == ("imported", existing_paper.id)
+    assert arq.jobs == []  # ingest_paper must not be enqueued again for a paper that already exists
+
+    from sqlalchemy import select
+
+    from app.models import workspace_papers
+
+    membership = await session.execute(
+        select(workspace_papers).where(
+            workspace_papers.c.workspace_id == workspace_id, workspace_papers.c.paper_id == existing_paper.id
+        )
+    )
+    assert membership.first() is not None  # workspaces.add_paper ran for the existing paper
+
+
+async def test_import_hits_new_import_sets_external_ref_imported_as(session, client, discovery_api):
+    """The same bookkeeping import_reference does: once a hit's download succeeds and creates a new paper, the
+    backing ExternalRef.imported_as must point at it, so other papers' References tabs citing this reference (or
+    the References panel's own import) see it as already in the library instead of importing it again."""
+    from app.models.references import ExternalRef
+    from app.models.workspace_search import WorkspaceSearchHit
+
+    discovery_api.pdf_host.reply("/fresh.pdf", 200, content=b"%PDF-1.4 fresh content")
+    hit_id = await _make_importable_hit(session, pdf_urls=["https://pdf.example/fresh.pdf"])
+    hit = await session.get(WorkspaceSearchHit, hit_id)
+    workspace_id = hit.workspace_id
+    ref_id = hit.external_ref_id
+
+    resp = await client.post(f"/api/workspaces/{workspace_id}/search/hits/import", json={"hit_ids": [str(hit_id)]})
+
+    assert resp.status_code == 200
+    assert resp.json() == {"imported": 1, "failed": 0}
+
+    await session.refresh(hit)
+    ref = await session.get(ExternalRef, ref_id)
+    await session.refresh(ref)
+    assert ref.imported_as == hit.paper_id
