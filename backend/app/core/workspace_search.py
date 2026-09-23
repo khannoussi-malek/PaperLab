@@ -15,12 +15,13 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 import httpx
-from sqlalchemy import or_, select, tuple_
+from sqlalchemy import or_, select, tuple_, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.candidates import Candidate, from_arxiv, from_core, from_crossref, from_s2, from_work, merge, normal_title
 from app.core.discovery import Providers, download_pdf
+from app.core.references import _same_reference
 from app.models.references import ExternalRef
 from app.models.workspace_search import WorkspaceSearchCursor, WorkspaceSearchHit, WorkspaceSearchRun
 from app.providers import arxiv, core_ac, crossref, openalex, semantic_scholar
@@ -312,7 +313,9 @@ async def import_hits(
     every targeted hit (hit_ids, or every not-yet-imported `relevant` hit) gets its own outcome, so one hit with no
     free PDF never stops the rest of the batch. A hit left `failed` is Manual acquisition's job (Task 11).
     `paper_ids` are the newly created papers, for the route to enqueue ingest on — a core function has no
-    Request to enqueue with itself."""
+    Request to enqueue with itself. A hit whose ExternalRef.imported_as is already set (import_reference's own
+    bookkeeping, same as ours below) is attached to that existing paper without downloading again, and its
+    paper_id is left out of paper_ids so ingest isn't re-enqueued for a paper that already went through it."""
     query = select(WorkspaceSearchHit).where(WorkspaceSearchHit.workspace_id == workspace_id)
     query = (
         query.where(WorkspaceSearchHit.id.in_(hit_ids))
@@ -326,6 +329,14 @@ async def import_hits(
         if hit.acquisition_status == "imported":
             continue
         ref = await session.get(ExternalRef, hit.external_ref_id) if hit.external_ref_id else None
+        if ref is not None and ref.imported_as is not None:
+            # Already in the library — an earlier hit in this batch, an earlier run, or the References panel.
+            # Attach the existing paper instead of downloading/creating a duplicate, and don't re-enqueue ingest.
+            await workspaces.add_paper(session, workspace_id, ref.imported_as)
+            hit.acquisition_status = "imported"
+            hit.paper_id = ref.imported_as
+            imported += 1
+            continue
         data = await download_pdf(providers.pdf, ref.pdf_urls) if ref and ref.pdf_urls else None
         if data is None:
             hit.acquisition_status = "failed"
@@ -335,6 +346,8 @@ async def import_hits(
             session, f"{hit.normalized_title}.pdf", data, settings.pdf_dir, prefill={"title": ref.title}
         )
         await workspaces.add_paper(session, workspace_id, paper.id)
+        same_paper = [ExternalRef.id == ref.id, *_same_reference(ref.s2_id, ref.openalex_id, ref.doi, ref.arxiv_id)]
+        await session.execute(update(ExternalRef).where(or_(*same_paper)).values(imported_as=paper.id))
         hit.acquisition_status = "imported"
         hit.paper_id = paper.id
         imported += 1
