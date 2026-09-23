@@ -7,6 +7,7 @@ caller (M7.6) can build one the same way this plan's worker does.
 """
 
 import base64
+import binascii
 import json
 import uuid
 from dataclasses import dataclass, field
@@ -165,7 +166,7 @@ async def search_batch(session: AsyncSession, providers: Providers, run: Workspa
 
 
 from app.core import workspaces
-from app.core.errors import Conflict, NotFound
+from app.core.errors import Conflict, InvalidInput, NotFound
 
 
 async def start_run(
@@ -216,9 +217,14 @@ def _encode_cursor(first_seen_at: datetime, hit_id: uuid.UUID) -> str:
     return base64.urlsafe_b64encode(json.dumps([first_seen_at.isoformat(), str(hit_id)]).encode()).decode()
 
 
-def _decode_cursor(cursor: str) -> tuple[str, str]:
-    seen_at, hit_id = json.loads(base64.urlsafe_b64decode(cursor.encode()).decode())
-    return seen_at, hit_id
+def _decode_cursor(cursor: str) -> tuple[datetime, uuid.UUID]:
+    """Raises InvalidInput for any malformed cursor — bad base64/UTF-8, bad JSON, wrong shape, or a
+    seen_at/hit_id that don't parse as a datetime/UUID — so a tampered `after` value is a clean 422."""
+    try:
+        seen_at, hit_id = json.loads(base64.urlsafe_b64decode(cursor.encode()).decode())
+        return datetime.fromisoformat(seen_at), uuid.UUID(hit_id)
+    except (binascii.Error, UnicodeDecodeError, json.JSONDecodeError, ValueError, TypeError) as exc:
+        raise InvalidInput("invalid pagination cursor") from exc
 
 
 async def list_hits(
@@ -234,8 +240,7 @@ async def list_hits(
     if after:
         seen_at, hit_id = _decode_cursor(after)
         query = query.where(
-            tuple_(WorkspaceSearchHit.first_seen_at, WorkspaceSearchHit.id)
-            > tuple_(datetime.fromisoformat(seen_at), uuid.UUID(hit_id))
+            tuple_(WorkspaceSearchHit.first_seen_at, WorkspaceSearchHit.id) > tuple_(seen_at, hit_id)
         )
     query = query.order_by(WorkspaceSearchHit.first_seen_at, WorkspaceSearchHit.id).limit(limit)
     hits = (await session.execute(query)).scalars().all()

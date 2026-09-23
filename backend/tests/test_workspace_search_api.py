@@ -199,3 +199,21 @@ async def test_list_hits_filters_by_stage1_status(session, client):
     items = resp.json()["items"]
     assert len(items) == 1
     assert items[0]["normalized_title"] == "relevant one"
+
+
+async def test_list_hits_with_zero_limit_is_422(client):
+    ws = await client.post("/api/workspaces", json={"name": "Zero limit test"})
+    workspace_id = ws.json()["id"]
+
+    resp = await client.get(f"/api/workspaces/{workspace_id}/search/hits?limit=0")
+
+    assert resp.status_code == 422
+
+
+async def test_list_hits_with_malformed_cursor_is_422(client):
+    ws = await client.post("/api/workspaces", json={"name": "Bad cursor test"})
+    workspace_id = ws.json()["id"]
+
+    resp = await client.get(f"/api/workspaces/{workspace_id}/search/hits?after=not-valid-base64-json")
+
+    assert resp.status_code == 422
