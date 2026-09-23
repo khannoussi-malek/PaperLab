@@ -78,6 +78,16 @@ describe('parseRoute', () => {
     expect(parseRoute(`#/workspaces/${id}?tab=graph`)).toEqual({ name: 'workspace', workspaceId: id, tab: 'papers' })
   })
 
+  it('workspaceHref builds a search tab url', () => {
+    expect(workspaceHref(id, 'search')).toBe(`#/workspaces/${id}?tab=search`)
+    expect(parseRoute(workspaceHref(id, 'search'))).toEqual({ name: 'workspace', workspaceId: id, tab: 'search' })
+  })
+
+  it('workspaceHref builds an acquisition tab url', () => {
+    expect(workspaceHref(id, 'acquisition')).toBe(`#/workspaces/${id}?tab=acquisition`)
+    expect(parseRoute(workspaceHref(id, 'acquisition'))).toEqual({ name: 'workspace', workspaceId: id, tab: 'acquisition' })
+  })
+
   it('keeps the Data tab in the hash', () => {
     expect(readerHref(id, 'data')).toBe(`#/papers/${id}?tab=data`)
     expect(parseRoute(readerHref(id, 'data'))).toEqual({ name: 'reader', paperId: id, tab: 'data', target: null })
