@@ -207,3 +207,34 @@ async def test_start_run_on_a_stopped_run_resumes_its_cursors(session):
         select(WorkspaceSearchCursor).where(WorkspaceSearchCursor.run_id == run.id)
     )).scalar_one()
     assert reloaded_cursor.cursor_json == {"value": 40}
+
+
+@pytest.mark.asyncio
+async def test_start_run_raises_conflict_on_already_running(session):
+    from app.core.errors import Conflict
+    from app.core.workspace_search import start_run
+    workspace = Workspace(name=f"Conflict {uuid.uuid4().hex[:8]}")
+    session.add(workspace)
+    await session.flush()
+    await session.commit()
+    run = await start_run(session, workspace.id, "bert", filters={}, sources=["arxiv"])
+
+    with pytest.raises(Conflict):
+        await start_run(session, workspace.id, "bert", filters={}, sources=["arxiv"], run_id=run.id)
+
+
+@pytest.mark.asyncio
+async def test_start_run_raises_not_found_for_cross_workspace_run(session):
+    from app.core.errors import NotFound
+    from app.core.workspace_search import start_run, stop_run
+    workspace_a = Workspace(name=f"Workspace A {uuid.uuid4().hex[:8]}")
+    workspace_b = Workspace(name=f"Workspace B {uuid.uuid4().hex[:8]}")
+    session.add(workspace_a)
+    session.add(workspace_b)
+    await session.flush()
+    await session.commit()
+    run = await start_run(session, workspace_a.id, "bert", filters={}, sources=["arxiv"])
+    await stop_run(session, run.id)
+
+    with pytest.raises(NotFound):
+        await start_run(session, workspace_b.id, "bert", filters={}, sources=["arxiv"], run_id=run.id)
