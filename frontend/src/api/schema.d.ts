@@ -339,6 +339,143 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/workspaces/{workspace_id}/search/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start Run */
+        post: operations["start_run_api_workspaces__workspace_id__search_runs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/search/runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Run */
+        get: operations["get_run_api_workspaces__workspace_id__search_runs__run_id__get"];
+        put?: never;
+        /** Restart Run */
+        post: operations["restart_run_api_workspaces__workspace_id__search_runs__run_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/search/runs/{run_id}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stop Run */
+        post: operations["stop_run_api_workspaces__workspace_id__search_runs__run_id__stop_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/search/hits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Hits */
+        get: operations["list_hits_api_workspaces__workspace_id__search_hits_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/search/hits/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Patch Hits Bulk */
+        patch: operations["patch_hits_bulk_api_workspaces__workspace_id__search_hits_bulk_patch"];
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/search/hits/{hit_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Patch Hit */
+        patch: operations["patch_hit_api_workspaces__workspace_id__search_hits__hit_id__patch"];
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/search/hits/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import Hits */
+        post: operations["import_hits_api_workspaces__workspace_id__search_hits_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/search/hits/{hit_id}/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload Hit Pdf */
+        post: operations["upload_hit_pdf_api_workspaces__workspace_id__search_hits__hit_id__upload_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/papers/{paper_id}/tables/preview": {
         parameters: {
             query?: never;
@@ -1142,12 +1279,36 @@ export interface components {
             /** Name */
             name?: string | null;
         };
+        /** Body_upload_hit_pdf_api_workspaces__workspace_id__search_hits__hit_id__upload_post */
+        Body_upload_hit_pdf_api_workspaces__workspace_id__search_hits__hit_id__upload_post: {
+            /** File */
+            file: string;
+        };
         /** Body_upload_paper_api_papers_post */
         Body_upload_paper_api_papers_post: {
             /** File */
             file: string;
             /** Workspace Id */
             workspace_id?: string | null;
+        };
+        /** BulkHitReviewUpdate */
+        BulkHitReviewUpdate: {
+            /** Hit Ids */
+            hit_ids: string[];
+            /**
+             * Stage1 Status
+             * @enum {string}
+             */
+            stage1_status: "relevant" | "not_relevant" | "maybe";
+            /** Stage1 Exclude Reason */
+            stage1_exclude_reason?: ("wrong_topic" | "wrong_study_type" | "duplicate" | "language" | "inaccessible" | "other") | null;
+            /** Priority */
+            priority?: number | null;
+        };
+        /** BulkUpdateOut */
+        BulkUpdateOut: {
+            /** Updated */
+            updated: number;
         };
         /**
          * CandidateIn
@@ -1834,6 +1995,76 @@ export interface components {
             /** Columns */
             columns: string[];
         };
+        /** HitListOut */
+        HitListOut: {
+            /** Items */
+            items: components["schemas"]["HitOut"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
+        /** HitOut */
+        HitOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /** External Ref Id */
+            external_ref_id: string | null;
+            /** Source Method */
+            source_method: string;
+            /** Normalized Title */
+            normalized_title: string;
+            /**
+             * First Seen At
+             * Format: date-time
+             */
+            first_seen_at: string;
+            /** Stage1 Status */
+            stage1_status: string | null;
+            /** Stage1 Exclude Reason */
+            stage1_exclude_reason: string | null;
+            /** Stage1 Note */
+            stage1_note: string | null;
+            /** Priority */
+            priority: number | null;
+            /** Topic Fit */
+            topic_fit: string | null;
+            /** Acquisition Status */
+            acquisition_status: string;
+            /** Paper Id */
+            paper_id: string | null;
+        };
+        /** HitReviewUpdate */
+        HitReviewUpdate: {
+            /** Stage1 Status */
+            stage1_status?: ("relevant" | "not_relevant" | "maybe") | null;
+            /** Stage1 Exclude Reason */
+            stage1_exclude_reason?: ("wrong_topic" | "wrong_study_type" | "duplicate" | "language" | "inaccessible" | "other") | null;
+            /** Stage1 Note */
+            stage1_note?: string | null;
+            /** Priority */
+            priority?: number | null;
+            /** Topic Fit */
+            topic_fit?: ("same_topic" | "related_topic" | "different_topic" | "out_of_scope") | null;
+        };
+        /** ImportHitsOut */
+        ImportHitsOut: {
+            /** Imported */
+            imported: number;
+            /** Failed */
+            failed: number;
+        };
+        /** ImportHitsRequest */
+        ImportHitsRequest: {
+            /** Hit Ids */
+            hit_ids?: string[] | null;
+        };
         /** ImportReferenceIn */
         ImportReferenceIn: {
             /** Workspace Id */
@@ -2448,6 +2679,61 @@ export interface components {
             results: components["schemas"]["CandidateOut"][];
             /** Notices */
             notices: string[];
+        };
+        /** SearchRunCreate */
+        SearchRunCreate: {
+            /** Query */
+            query: string;
+            /**
+             * Filters
+             * @default {}
+             */
+            filters: {
+                [key: string]: unknown;
+            };
+            /** Sources */
+            sources: string[];
+            /**
+             * Query Overrides
+             * @default {}
+             */
+            query_overrides: {
+                [key: string]: unknown;
+            };
+        };
+        /** SearchRunOut */
+        SearchRunOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Workspace Id
+             * Format: uuid
+             */
+            workspace_id: string;
+            /** Query Text */
+            query_text: string;
+            /** Filters Json */
+            filters_json: {
+                [key: string]: unknown;
+            };
+            /** Sources Json */
+            sources_json: string[];
+            /** Status */
+            status: string;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Stopped At */
+            stopped_at: string | null;
+            /** Stats Json */
+            stats_json: {
+                [key: string]: unknown;
+            };
         };
         /**
          * Series
@@ -3494,6 +3780,314 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NoteOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_run_api_workspaces__workspace_id__search_runs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SearchRunCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchRunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_run_api_workspaces__workspace_id__search_runs__run_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchRunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restart_run_api_workspaces__workspace_id__search_runs__run_id__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchRunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stop_run_api_workspaces__workspace_id__search_runs__run_id__stop_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchRunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_hits_api_workspaces__workspace_id__search_hits_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                after?: string | null;
+                stage1_status?: string | null;
+            };
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HitListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_hits_bulk_api_workspaces__workspace_id__search_hits_bulk_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkHitReviewUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkUpdateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_hit_api_workspaces__workspace_id__search_hits__hit_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                hit_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HitReviewUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HitOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_hits_api_workspaces__workspace_id__search_hits_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportHitsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportHitsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_hit_pdf_api_workspaces__workspace_id__search_hits__hit_id__upload_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                hit_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_hit_pdf_api_workspaces__workspace_id__search_hits__hit_id__upload_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HitOut"];
                 };
             };
             /** @description Validation Error */

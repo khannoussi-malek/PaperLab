@@ -1,4 +1,11 @@
-import { QueryClient, keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  QueryClient,
+  keepPreviousData,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
 import { sameCandidate } from '@/features/discovery/candidateMeta'
 import {
   api,
@@ -7,6 +14,7 @@ import {
   type ChatScope,
   type DatasetCreate,
   type GridIn,
+  type HitReviewUpdate,
   type LLMConnectionUpdate,
   type NoteCreate,
   type NumberCreate,
@@ -18,6 +26,8 @@ import {
   type References,
   type ReferencesDirection,
   type SearchResult,
+  type SearchRun,
+  type SearchRunCreate,
 } from './client'
 
 export const PAPERS_POLL_MS = 2000
@@ -37,6 +47,10 @@ const keys = {
   workspaces: ['workspaces'] as const,
   workspacePapers: (id: string) => ['workspaces', id, 'papers'] as const,
   workspaceNotes: (id: string) => ['workspaces', id, 'notes'] as const,
+  searchRuns: (workspaceId: string) => ['workspaces', workspaceId, 'search', 'runs'] as const,
+  searchRun: (workspaceId: string, runId: string) => ['workspaces', workspaceId, 'search', 'runs', runId] as const,
+  searchHits: (workspaceId: string, stage1Status: string) =>
+    ['workspaces', workspaceId, 'search', 'hits', stage1Status] as const,
   // Every dataset query starts with this; a saved grid or a captured number refreshes every list and detail.
   datasets: ['datasets'] as const,
   paperDatasets: (paperId: string) => ['datasets', 'paper', paperId] as const,
@@ -72,6 +86,11 @@ const keys = {
 /** Poll the library only while a paper is still ingesting. */
 export function papersPollInterval(papers: Paper[] | undefined): number | false {
   return papers?.some((paper) => paper.status !== 'ready' && paper.status !== 'failed') ? PAPERS_POLL_MS : false
+}
+
+/** Poll a search run only while it's still running. */
+export function searchRunPollInterval(run: SearchRun | undefined): number | false {
+  return run?.status === 'running' ? PAPERS_POLL_MS : false
 }
 
 export const usePapers = () =>
@@ -280,6 +299,53 @@ export function useWorkspaceMembership() {
         client.invalidateQueries({ queryKey: keys.papers }),
         client.invalidateQueries({ queryKey: keys.workspaces }),
       ]),
+  })
+}
+
+/** Starts a search run for a workspace's saved query. */
+export function useStartSearchRun(workspaceId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (body: SearchRunCreate) => api.startSearchRun(workspaceId, body),
+    onSuccess: () => client.invalidateQueries({ queryKey: keys.searchRuns(workspaceId) }),
+  })
+}
+
+/** One search run; polls while it's still running. `runId` is null before a run has started. */
+export const useSearchRun = (workspaceId: string, runId: string | null) =>
+  useQuery({
+    queryKey: keys.searchRun(workspaceId, runId ?? ''),
+    queryFn: () => api.getSearchRun(workspaceId, runId!),
+    enabled: runId !== null,
+    refetchInterval: (query) => searchRunPollInterval(query.state.data),
+  })
+
+/** A run's hits, keyset-paginated; `stage1Status` filters to one review state ('all' when omitted). */
+export const useSearchHits = (workspaceId: string, stage1Status?: string) =>
+  useInfiniteQuery({
+    queryKey: keys.searchHits(workspaceId, stage1Status ?? 'all'),
+    queryFn: ({ pageParam }) =>
+      api.listSearchHits(workspaceId, { after: pageParam, limit: 50, stage1_status: stage1Status }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
+  })
+
+/** Reviews one hit (the stage-1 triage decision). */
+export function usePatchSearchHit(workspaceId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ hitId, body }: { hitId: string; body: HitReviewUpdate }) =>
+      api.patchSearchHit(workspaceId, hitId, body),
+    onSuccess: () => client.invalidateQueries({ queryKey: keys.searchHits(workspaceId, 'all') }),
+  })
+}
+
+/** Imports hits into the corpus; omitting `hitIds` imports every hit still pending acquisition. */
+export function useImportSearchHits(workspaceId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (hitIds?: string[]) => api.importSearchHits(workspaceId, hitIds),
+    onSuccess: () => client.invalidateQueries({ queryKey: keys.searchHits(workspaceId, 'all') }),
   })
 }
 
