@@ -12,6 +12,7 @@ import json
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 
 import httpx
 from sqlalchemy import or_, select, tuple_
@@ -22,6 +23,9 @@ from app.core.discovery import Providers
 from app.models.references import ExternalRef
 from app.models.workspace_search import WorkspaceSearchCursor, WorkspaceSearchHit, WorkspaceSearchRun
 from app.providers import arxiv, core_ac, crossref, openalex, semantic_scholar
+
+if TYPE_CHECKING:
+    from app.schemas.workspace_search import HitReviewUpdate
 
 # Provider request page sizes. No source publishes a "max" beyond what its own search_page tests exercise, so
 # these mirror discovery.py's PER_SOURCE ballpark, generous enough that most runs exhaust a source in one page.
@@ -246,3 +250,38 @@ async def list_hits(
     hits = (await session.execute(query)).scalars().all()
     next_cursor = _encode_cursor(hits[-1].first_seen_at, hits[-1].id) if len(hits) == limit else None
     return hits, next_cursor
+
+
+async def review_hit(session: AsyncSession, hit_id, workspace_id, update: "HitReviewUpdate") -> WorkspaceSearchHit:
+    """Stage-1 screening update for one hit. Scoped to workspace_id (same ownership rule as get_run/stop_run) so a
+    hit_id guessed or leaked from another workspace can't be patched through this route."""
+    hit = await session.get(WorkspaceSearchHit, hit_id)
+    if hit is None or hit.workspace_id != workspace_id:
+        raise NotFound(f"hit {hit_id} not found")
+    for field_name, value in update.model_dump(exclude_unset=True).items():
+        setattr(hit, field_name, value)
+    await session.commit()
+    return hit
+
+
+async def bulk_review_hits(
+    session: AsyncSession, workspace_id, hit_ids: list, stage1_status: str,
+    stage1_exclude_reason: str | None, priority: int | None,
+) -> int:
+    """Applies the same stage1_status (and optional reason/priority) to every hit in hit_ids that belongs to
+    workspace_id. Hit ids from another workspace are silently excluded from the count, not raised as an error —
+    a bulk action naming one bad id shouldn't fail the whole batch."""
+    result = await session.execute(
+        select(WorkspaceSearchHit).where(
+            WorkspaceSearchHit.id.in_(hit_ids), WorkspaceSearchHit.workspace_id == workspace_id
+        )
+    )
+    hits = result.scalars().all()
+    for hit in hits:
+        hit.stage1_status = stage1_status
+        if stage1_exclude_reason:
+            hit.stage1_exclude_reason = stage1_exclude_reason
+        if priority is not None:
+            hit.priority = priority
+    await session.commit()
+    return len(hits)

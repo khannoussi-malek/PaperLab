@@ -217,3 +217,191 @@ async def test_list_hits_with_malformed_cursor_is_422(client):
     resp = await client.get(f"/api/workspaces/{workspace_id}/search/hits?after=not-valid-base64-json")
 
     assert resp.status_code == 422
+
+
+async def _make_hit(session, title: str, workspace_id=None):
+    import uuid as uuid_mod
+    from datetime import datetime, timezone
+
+    from app.models.workspace import Workspace
+    from app.models.workspace_search import WorkspaceSearchHit, WorkspaceSearchRun
+
+    if workspace_id is None:
+        workspace = Workspace(name=f"Patch {uuid_mod.uuid4().hex[:8]}")
+        session.add(workspace)
+        await session.flush()
+        workspace_id = workspace.id
+    run = WorkspaceSearchRun(
+        workspace_id=workspace_id, query_text="q", filters_json={}, query_overrides_json={},
+        sources_json=[], status="exhausted", started_at=datetime.now(timezone.utc), stats_json={},
+    )
+    session.add(run)
+    await session.flush()
+    hit = WorkspaceSearchHit(
+        workspace_id=workspace_id, run_id=run.id, source_method="database_search",
+        normalized_title=title, first_seen_at=datetime.now(timezone.utc),
+    )
+    session.add(hit)
+    await session.commit()
+    return hit.id
+
+
+async def test_patch_hit_sets_stage1_fields(session, client):
+    from app.models.workspace_search import WorkspaceSearchHit
+
+    hit_id = await _make_hit(session, "patch target")
+    workspace_id = (await session.get(WorkspaceSearchHit, hit_id)).workspace_id
+
+    resp = await client.patch(
+        f"/api/workspaces/{workspace_id}/search/hits/{hit_id}",
+        json={"stage1_status": "relevant", "priority": 4, "topic_fit": "same_topic"},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["stage1_status"] == "relevant"
+    assert resp.json()["priority"] == 4
+
+
+async def test_patch_hit_exclude_requires_a_reason(session, client):
+    from app.models.workspace_search import WorkspaceSearchHit
+
+    hit_id = await _make_hit(session, "exclude target")
+    workspace_id = (await session.get(WorkspaceSearchHit, hit_id)).workspace_id
+
+    resp = await client.patch(
+        f"/api/workspaces/{workspace_id}/search/hits/{hit_id}", json={"stage1_status": "not_relevant"}
+    )
+
+    assert resp.status_code == 422
+
+
+async def test_patch_hit_exclude_with_a_reason_succeeds(session, client):
+    from app.models.workspace_search import WorkspaceSearchHit
+
+    hit_id = await _make_hit(session, "exclude target 2")
+    workspace_id = (await session.get(WorkspaceSearchHit, hit_id)).workspace_id
+
+    resp = await client.patch(
+        f"/api/workspaces/{workspace_id}/search/hits/{hit_id}",
+        json={"stage1_status": "not_relevant", "stage1_exclude_reason": "wrong_topic"},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["stage1_status"] == "not_relevant"
+    assert resp.json()["stage1_exclude_reason"] == "wrong_topic"
+
+
+async def test_patch_hit_rejects_a_garbage_stage1_status(session, client):
+    from app.models.workspace_search import WorkspaceSearchHit
+
+    hit_id = await _make_hit(session, "garbage status")
+    workspace_id = (await session.get(WorkspaceSearchHit, hit_id)).workspace_id
+
+    resp = await client.patch(
+        f"/api/workspaces/{workspace_id}/search/hits/{hit_id}", json={"stage1_status": "super_relevant"}
+    )
+
+    assert resp.status_code == 422
+
+
+async def test_patch_hit_rejects_priority_out_of_range(session, client):
+    from app.models.workspace_search import WorkspaceSearchHit
+
+    hit_id = await _make_hit(session, "bad priority")
+    workspace_id = (await session.get(WorkspaceSearchHit, hit_id)).workspace_id
+
+    resp = await client.patch(
+        f"/api/workspaces/{workspace_id}/search/hits/{hit_id}", json={"priority": 9}
+    )
+
+    assert resp.status_code == 422
+
+
+async def test_patch_hit_for_unknown_hit_is_404(client):
+    ws = await client.post("/api/workspaces", json={"name": "Patch 404 test"})
+    workspace_id = ws.json()["id"]
+
+    resp = await client.patch(
+        f"/api/workspaces/{workspace_id}/search/hits/00000000-0000-0000-0000-000000000000",
+        json={"stage1_status": "relevant"},
+    )
+
+    assert resp.status_code == 404
+
+
+async def test_patch_hit_for_wrong_workspace_is_404(session, client):
+    from app.models.workspace_search import WorkspaceSearchHit
+
+    hit_id = await _make_hit(session, "wrong workspace target")
+    other_ws = await client.post("/api/workspaces", json={"name": "Other patch workspace"})
+    other_workspace_id = other_ws.json()["id"]
+
+    resp = await client.patch(
+        f"/api/workspaces/{other_workspace_id}/search/hits/{hit_id}", json={"stage1_status": "relevant"}
+    )
+
+    assert resp.status_code == 404
+    hit = await session.get(WorkspaceSearchHit, hit_id)
+    assert hit.stage1_status is None
+
+
+async def test_bulk_patch_hits(session, client):
+    from app.models.workspace_search import WorkspaceSearchHit
+
+    hit_a = await _make_hit(session, "bulk a")
+    workspace_id = (await session.get(WorkspaceSearchHit, hit_a)).workspace_id
+    hit_b = await _make_hit(session, "bulk b", workspace_id=workspace_id)
+
+    resp = await client.patch(
+        f"/api/workspaces/{workspace_id}/search/hits/bulk",
+        json={"hit_ids": [str(hit_a), str(hit_b)], "stage1_status": "relevant"},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["updated"] == 2
+
+
+async def test_bulk_patch_hits_exclude_requires_a_reason(session, client):
+    hit_a = await _make_hit(session, "bulk exclude a")
+    from app.models.workspace_search import WorkspaceSearchHit
+
+    workspace_id = (await session.get(WorkspaceSearchHit, hit_a)).workspace_id
+
+    resp = await client.patch(
+        f"/api/workspaces/{workspace_id}/search/hits/bulk",
+        json={"hit_ids": [str(hit_a)], "stage1_status": "not_relevant"},
+    )
+
+    assert resp.status_code == 422
+
+
+async def test_bulk_patch_hits_rejects_a_garbage_stage1_status(session, client):
+    hit_a = await _make_hit(session, "bulk garbage a")
+    from app.models.workspace_search import WorkspaceSearchHit
+
+    workspace_id = (await session.get(WorkspaceSearchHit, hit_a)).workspace_id
+
+    resp = await client.patch(
+        f"/api/workspaces/{workspace_id}/search/hits/bulk",
+        json={"hit_ids": [str(hit_a)], "stage1_status": "super_relevant"},
+    )
+
+    assert resp.status_code == 422
+
+
+async def test_bulk_patch_hits_only_updates_hits_in_the_workspace(session, client):
+    from app.models.workspace_search import WorkspaceSearchHit
+
+    owned_hit = await _make_hit(session, "owned bulk hit")
+    other_hit = await _make_hit(session, "other workspace bulk hit")
+    workspace_id = (await session.get(WorkspaceSearchHit, owned_hit)).workspace_id
+
+    resp = await client.patch(
+        f"/api/workspaces/{workspace_id}/search/hits/bulk",
+        json={"hit_ids": [str(owned_hit), str(other_hit)], "stage1_status": "relevant"},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["updated"] == 1
+    other = await session.get(WorkspaceSearchHit, other_hit)
+    assert other.stage1_status is None
