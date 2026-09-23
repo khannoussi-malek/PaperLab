@@ -5,7 +5,15 @@ from fastapi import APIRouter, Query, Request
 
 from app.api.deps import SessionDep
 from app.core import workspace_search
-from app.schemas.workspace_search import HitListOut, SearchRunCreate, SearchRunOut
+from app.schemas.workspace_search import (
+    BulkHitReviewUpdate,
+    BulkUpdateOut,
+    HitListOut,
+    HitOut,
+    HitReviewUpdate,
+    SearchRunCreate,
+    SearchRunOut,
+)
 
 router = APIRouter(prefix="/api/workspaces/{workspace_id}/search", tags=["workspace-search"])
 
@@ -55,3 +63,21 @@ async def list_hits(
 ) -> HitListOut:
     items, next_cursor = await workspace_search.list_hits(session, workspace_id, limit, after, stage1_status)
     return HitListOut(items=items, next_cursor=next_cursor)
+
+
+# Registered before "/hits/{hit_id}": both are PATCH routes and Starlette matches path templates in registration
+# order, so "/hits/bulk" must come first or a PATCH to it would be swallowed by "/hits/{hit_id}" (and fail there
+# trying to parse "bulk" as a UUID).
+@router.patch("/hits/bulk")
+async def patch_hits_bulk(workspace_id: uuid.UUID, payload: BulkHitReviewUpdate, session: SessionDep) -> BulkUpdateOut:
+    count = await workspace_search.bulk_review_hits(
+        session, workspace_id, payload.hit_ids, payload.stage1_status, payload.stage1_exclude_reason, payload.priority,
+    )
+    return BulkUpdateOut(updated=count)
+
+
+@router.patch("/hits/{hit_id}")
+async def patch_hit(
+    workspace_id: uuid.UUID, hit_id: uuid.UUID, payload: HitReviewUpdate, session: SessionDep
+) -> HitOut:
+    return await workspace_search.review_hit(session, hit_id, workspace_id, payload)
