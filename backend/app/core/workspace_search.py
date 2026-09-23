@@ -18,8 +18,9 @@ import httpx
 from sqlalchemy import or_, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.core.candidates import Candidate, from_arxiv, from_core, from_crossref, from_s2, from_work, merge, normal_title
-from app.core.discovery import Providers
+from app.core.discovery import Providers, download_pdf
 from app.models.references import ExternalRef
 from app.models.workspace_search import WorkspaceSearchCursor, WorkspaceSearchHit, WorkspaceSearchRun
 from app.providers import arxiv, core_ac, crossref, openalex, semantic_scholar
@@ -169,7 +170,7 @@ async def search_batch(session: AsyncSession, providers: Providers, run: Workspa
     return BatchResult(new_hits=new_hits, sources_exhausted=exhausted, errors=errors)
 
 
-from app.core import workspaces
+from app.core import papers, workspaces
 from app.core.errors import Conflict, InvalidInput, NotFound
 
 
@@ -295,3 +296,49 @@ async def bulk_review_hits(
             hit.priority = priority
     await session.commit()
     return len(hits)
+
+
+@dataclass(frozen=True)
+class ImportResult:
+    imported: int
+    failed: int
+    paper_ids: list[uuid.UUID] = field(default_factory=list)
+
+
+async def import_hits(
+    session: AsyncSession, providers: Providers, workspace_id: uuid.UUID, hit_ids: list[uuid.UUID] | None
+) -> ImportResult:
+    """Best-effort bulk import (spec Task 9), mirroring discovery.add's one-candidate download-then-create flow:
+    every targeted hit (hit_ids, or every not-yet-imported `relevant` hit) gets its own outcome, so one hit with no
+    free PDF never stops the rest of the batch. A hit left `failed` is Manual acquisition's job (Task 11).
+    `paper_ids` are the newly created papers, for the route to enqueue ingest on — a core function has no
+    Request to enqueue with itself."""
+    query = select(WorkspaceSearchHit).where(WorkspaceSearchHit.workspace_id == workspace_id)
+    query = (
+        query.where(WorkspaceSearchHit.id.in_(hit_ids))
+        if hit_ids
+        else query.where(WorkspaceSearchHit.stage1_status == "relevant")
+    )
+    hits = (await session.execute(query)).scalars().all()
+
+    imported, failed, paper_ids = 0, 0, []
+    for hit in hits:
+        if hit.acquisition_status == "imported":
+            continue
+        ref = await session.get(ExternalRef, hit.external_ref_id) if hit.external_ref_id else None
+        data = await download_pdf(providers.pdf, ref.pdf_urls) if ref and ref.pdf_urls else None
+        if data is None:
+            hit.acquisition_status = "failed"
+            failed += 1
+            continue
+        paper = await papers.create_paper(
+            session, f"{hit.normalized_title}.pdf", data, settings.pdf_dir, prefill={"title": ref.title}
+        )
+        await workspaces.add_paper(session, workspace_id, paper.id)
+        hit.acquisition_status = "imported"
+        hit.paper_id = paper.id
+        imported += 1
+        paper_ids.append(paper.id)
+
+    await session.commit()
+    return ImportResult(imported, failed, paper_ids)

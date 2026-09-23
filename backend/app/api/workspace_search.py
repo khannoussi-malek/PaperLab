@@ -3,7 +3,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query, Request
 
-from app.api.deps import SessionDep
+from app.api.deps import DiscoveryDep, SessionDep
 from app.core import workspace_search
 from app.schemas.workspace_search import (
     BulkHitReviewUpdate,
@@ -11,6 +11,8 @@ from app.schemas.workspace_search import (
     HitListOut,
     HitOut,
     HitReviewUpdate,
+    ImportHitsOut,
+    ImportHitsRequest,
     SearchRunCreate,
     SearchRunOut,
 )
@@ -20,6 +22,10 @@ router = APIRouter(prefix="/api/workspaces/{workspace_id}/search", tags=["worksp
 
 async def _enqueue(request: Request, run_id: uuid.UUID) -> None:
     await request.app.state.arq.enqueue_job("run_workspace_search", str(run_id))
+
+
+async def _enqueue_ingest(request: Request, paper_id: uuid.UUID) -> None:
+    await request.app.state.arq.enqueue_job("ingest_paper", str(paper_id))
 
 
 @router.post("/runs", status_code=201)
@@ -81,3 +87,13 @@ async def patch_hit(
     workspace_id: uuid.UUID, hit_id: uuid.UUID, payload: HitReviewUpdate, session: SessionDep
 ) -> HitOut:
     return await workspace_search.review_hit(session, hit_id, workspace_id, payload)
+
+
+@router.post("/hits/import")
+async def import_hits(
+    workspace_id: uuid.UUID, payload: ImportHitsRequest, session: SessionDep, providers: DiscoveryDep, request: Request
+) -> ImportHitsOut:
+    result = await workspace_search.import_hits(session, providers, workspace_id, payload.hit_ids)
+    for paper_id in result.paper_ids:
+        await _enqueue_ingest(request, paper_id)
+    return ImportHitsOut(imported=result.imported, failed=result.failed)

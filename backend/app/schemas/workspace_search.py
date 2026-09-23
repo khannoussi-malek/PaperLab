@@ -87,3 +87,12 @@ class BulkHitReviewUpdate(BaseModel):
 
 class BulkUpdateOut(BaseModel):
     updated: int
+
+
+class ImportHitsRequest(BaseModel):
+    hit_ids: list[uuid.UUID] | None = None
+
+
+class ImportHitsOut(BaseModel):
+    imported: int
+    failed: int
