@@ -46,6 +46,11 @@ export function HitTable({ workspaceId }: { workspaceId: string }) {
           Import all with PDF in this filter
         </Button>
       </div>
+      {importHits.isError && (
+        <p role="alert" className="px-3 py-1 text-xs text-destructive">
+          {importHits.error.message}
+        </p>
+      )}
       <div ref={parentRef} className="min-h-0 flex-1 overflow-auto">
         <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
           {virtualItems.map((virtualRow) => {
