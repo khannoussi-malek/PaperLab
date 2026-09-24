@@ -71,13 +71,20 @@ class BatchResult:
 
 async def _find_or_create_external_ref(session: AsyncSession, candidate: Candidate) -> ExternalRef:
     """The OR-match below can hit more than one row (e.g. one row shares the candidate's DOI, a different row
-    shares its s2_id) — `.first()` still only ever backfills the single row it picks. Backfilling an identifier
-    onto that row is only safe when no OTHER row already owns the same value: otherwise it either violates
-    external_refs' UNIQUE(s2_id)/UNIQUE(openalex_id) constraint, or — for doi/arxiv_id/core_id, which have no DB
-    uniqueness — silently mis-attributes an identifier to the wrong paper (spec review I3; this exact mechanism
-    corrupted a real row once, see the ledger's "Closed Access Fixture" incident). `pdf_urls` gets its own,
-    stricter check: it only crosses over when the matched row's own DOI doesn't contradict the candidate's, so a
-    match found only via a weaker/shared identifier never hands one paper's PDF link to a different paper."""
+    shares its s2_id) — `.first()` on an unordered result would pick one arbitrarily, and a wrong pick doesn't
+    just risk a bad backfill (handled below), it attaches this hit to the wrong paper outright (Important 2 from
+    the fix-round review: a candidate importable later would then download/attach the WRONG row's PDF). DOI is
+    the strongest identifier, so when the candidate has one, a DOI-matching row is ordered first — ties among
+    several DOI matches (shouldn't happen; doi has no DB-level uniqueness) or candidates with no DOI fall back to
+    whatever order the DB happens to return, same as before.
+
+    Backfilling an identifier onto whichever row is picked is only safe when no OTHER row already owns the same
+    value: otherwise it either violates external_refs' UNIQUE(s2_id)/UNIQUE(openalex_id) constraint, or — for
+    doi/arxiv_id/core_id, which have no DB uniqueness — silently mis-attributes an identifier to the wrong paper
+    (spec review I3; this exact mechanism corrupted a real row once, see the ledger's "Closed Access Fixture"
+    incident). `pdf_urls` gets its own, stricter check: it only crosses over when the matched row's own DOI
+    doesn't contradict the candidate's, so a match found only via a weaker/shared identifier never hands one
+    paper's PDF link to a different paper."""
     conditions = [
         column == value
         for value, column in (
@@ -89,9 +96,14 @@ async def _find_or_create_external_ref(session: AsyncSession, candidate: Candida
         )
         if value
     ]
-    existing = (
-        (await session.execute(select(ExternalRef).where(or_(*conditions)))).scalars().first() if conditions else None
-    )
+    existing = None
+    if conditions:
+        query = select(ExternalRef).where(or_(*conditions))
+        if candidate.doi:
+            # `.is_(True)` turns a NULL-doi row's comparison (SQL NULL, not FALSE) into a definite boolean first —
+            # otherwise Postgres' NULLS-FIRST-on-DESC default would rank a no-DOI row above an actual DOI match.
+            query = query.order_by((ExternalRef.doi == candidate.doi).is_(True).desc())
+        existing = (await session.execute(query)).scalars().first()
     if existing is not None:
         for field_name in ("doi", "arxiv_id", "s2_id", "openalex_id", "core_id"):
             value = getattr(candidate, field_name, None)

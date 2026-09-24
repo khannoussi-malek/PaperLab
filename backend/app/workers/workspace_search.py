@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 import uuid
 from datetime import datetime, timezone
 
@@ -21,8 +22,29 @@ BATCH_PACING_SECONDS = 2.0
 # iteration comfortably cover that within this many iterations. Hitting the cap before every source naturally
 # exhausts is a valid terminal state (a bounded scan that found what it found), not a failure.
 MAX_BATCH_ITERATIONS = 200
+# ARQ's own default job_timeout is 300s. Registered as this job's actual job_timeout in workers/settings.py
+# (imported from here, not redefined there, so the two can never drift apart). Bounding the loop by iteration
+# count alone doesn't bound it by wall-clock time — 200 iterations x (pacing + a handful of per-source HTTP
+# calls that can each take several seconds) can land in the same ballpark as this timeout on a broad query, so
+# the loop also checks a wall-clock deadline below (SEARCH_RUN_SAFETY_MARGIN) to make sure it always finishes
+# well inside this window, turning this into a true backstop instead of a race the loop might lose.
+SEARCH_RUN_JOB_TIMEOUT = 1800
+# ponytail: a hard kill mid-commit (e.g. a true ARQ-level cancellation past even this longer timeout) could still
+# rarely leave a run stuck at "running" — full cancellation-safe cleanup (asyncio.shield around the final status
+# write) is a known ceiling, not solved here, since the deadline check below makes it very unlikely in practice.
+# Margin subtracted from SEARCH_RUN_JOB_TIMEOUT for the loop's own wall-clock deadline (C2 Important 1) — enough
+# room for one in-flight batch's HTTP calls plus the final commit to finish after the deadline trips.
+SEARCH_RUN_SAFETY_MARGIN = 60
 
 _TRY_LOCK = text("SELECT pg_try_advisory_xact_lock(:key)")
+
+
+def _now() -> float:
+    """A thin wrapper around time.monotonic(), so a test can monkeypatch just this module's own clock reads
+    without touching the real stdlib `time` module — asyncio's own event loop calls `time.monotonic()`
+    internally (e.g. for `loop.time()`), so patching it globally would also scramble asyncio's own scheduling
+    during a test, not just this function's deadline math."""
+    return time.monotonic()
 
 
 def _lock_key(run_id: uuid.UUID) -> int:
@@ -40,11 +62,23 @@ async def _try_lock(session, run_id: uuid.UUID) -> bool:
     return bool(await session.scalar(_TRY_LOCK, {"key": _lock_key(run_id)}))
 
 
+async def _mark_exhausted_unless_stopped(session, run: WorkspaceSearchRun) -> None:
+    """The loop's shared terminal-state write for both the natural (all-cursors) exit and the bounded-backstop
+    (iteration-cap or wall-clock deadline) exit. Re-checks status fresh first: a concurrent Stop landing during
+    the last batch already set a status that must not be clobbered back to "exhausted" (bundled minor)."""
+    await session.refresh(run)
+    if run.status == "running":
+        run.status = "exhausted"
+        run.stopped_at = datetime.now(timezone.utc)
+        await session.commit()
+
+
 async def run_workspace_search(ctx: dict, run_id: str) -> None:
     """ARQ job: pages a search run's sources, one search_batch() call per iteration, until every source is
     exhausted, the run's status stops being "running" (checked fresh from the DB each iteration, so a
-    concurrent stop-run call is noticed), or MAX_BATCH_ITERATIONS is hit (a bounded backstop, not expected to
-    matter in practice — see C2). ctx["transport"] is a test's MockTransport."""
+    concurrent stop-run call is noticed), MAX_BATCH_ITERATIONS is hit, or a wall-clock deadline
+    (SEARCH_RUN_JOB_TIMEOUT - SEARCH_RUN_SAFETY_MARGIN) passes — both bounded backstops, not expected to matter
+    in practice (see C2). ctx["transport"] is a test's MockTransport."""
     rid = uuid.UUID(run_id)
     async with SessionLocal() as session:
         try:
@@ -58,12 +92,17 @@ async def run_workspace_search(ctx: dict, run_id: str) -> None:
                 transport = discovery_fake.transport()
             providers = discovery.build_providers(sources, transport)
             try:
+                # Computed once, before the first iteration, so a slow first batch still counts against it — an
+                # iteration count alone doesn't bound wall-clock time (Important 1).
+                deadline = _now() + SEARCH_RUN_JOB_TIMEOUT - SEARCH_RUN_SAFETY_MARGIN
                 for iteration in range(MAX_BATCH_ITERATIONS):
                     if iteration > 0:
                         await asyncio.sleep(BATCH_PACING_SECONDS)
                     await session.refresh(run)
                     if run.status != "running":
                         return
+                    if _now() >= deadline:
+                        break  # wall-clock backstop — falls through to the shared terminal-state write below
                     if not await _try_lock(session, rid):
                         logger.info("workspace search run %s already being processed elsewhere; backing off", rid)
                         return
@@ -89,15 +128,11 @@ async def run_workspace_search(ctx: dict, run_id: str) -> None:
                         .all()
                     )
                     if cursors and all(c.exhausted for c in cursors):
-                        run.status = "exhausted"
-                        run.stopped_at = datetime.now(timezone.utc)
-                        await session.commit()
+                        await _mark_exhausted_unless_stopped(session, run)
                         return
-                # Reached only by running out of iterations without every source naturally exhausting — still a
-                # valid terminal state (C2 part 3), not a failure.
-                run.status = "exhausted"
-                run.stopped_at = datetime.now(timezone.utc)
-                await session.commit()
+                # Reached by running out of iterations or hitting the wall-clock deadline without every source
+                # naturally exhausting — still a valid terminal state (C2 part 3), not a failure.
+                await _mark_exhausted_unless_stopped(session, run)
             finally:
                 await providers.aclose()
         except Exception:

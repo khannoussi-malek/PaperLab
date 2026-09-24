@@ -357,12 +357,13 @@ async def test_search_batch_uses_the_per_source_query_override(session, fake_pro
     assert seen_queries == ["transformer architectures"]  # not run.query_text ("bert")
 
 
-async def test_find_or_create_external_ref_does_not_cross_contaminate_on_or_match(session):
-    """Two existing rows: one shares the candidate's DOI, a different one already holds the candidate's s2_id.
-    The OR-match can hit both — backfilling blindly onto whichever `.first()` picks either violates
-    external_refs' UNIQUE(s2_id) (this exact mechanism corrupted a real row once — the ledger's "Closed Access
-    Fixture" incident) or hands a paper's PDF link to an unrelated row matched only via a weaker identifier
-    (I3)."""
+async def test_find_or_create_external_ref_prefers_the_doi_match_over_a_weaker_identifier_match(session):
+    """Two existing rows: ref_a shares the candidate's DOI; ref_b only shares the candidate's s2_id and has its
+    own, unrelated DOI. The OR-match hits both. Before Important 2's ordering fix, `.first()` on the unordered
+    result could pick either row arbitrarily — picking ref_b would attach this hit (and later, its import/PDF
+    download) to the wrong paper entirely, not just risk a bad backfill. DOI is the strongest identifier, so
+    ref_a must win deterministically, and the fix must still not crash or cross-write onto ref_b (this exact
+    backfill mechanism corrupted a real row once — the ledger's "Closed Access Fixture" incident)."""
     ref_a = ExternalRef(title="Ref A", doi="10.5555/paperlab-i3-a")
     ref_b = ExternalRef(title="Ref B", doi="10.5555/paperlab-i3-b", s2_id="i3-shared-s2-id")
     session.add_all([ref_a, ref_b])
@@ -378,6 +379,8 @@ async def test_find_or_create_external_ref_does_not_cross_contaminate_on_or_matc
     ref = await _find_or_create_external_ref(session, candidate)
     await session.commit()  # must not raise IntegrityError
 
+    assert ref.id == ref_a.id  # the DOI match wins deterministically, not ref_b
+
     # "i3-shared-s2-id" must still belong to exactly one row — never duplicated onto ref_a.
     holders = (
         await session.execute(select(ExternalRef.id).where(ExternalRef.s2_id == "i3-shared-s2-id"))
@@ -387,14 +390,8 @@ async def test_find_or_create_external_ref_does_not_cross_contaminate_on_or_matc
     await session.refresh(ref_a)
     await session.refresh(ref_b)
     assert ref_a.doi == "10.5555/paperlab-i3-a"  # never overwritten by the candidate's own doi
-    assert ref_b.doi == "10.5555/paperlab-i3-b"  # never overwritten either
-
-    # Whichever row the OR-match picked, the candidate's pdf_urls only lands on it if that row's own DOI doesn't
-    # contradict the candidate's — a match found only via ref_b's shared-but-unrelated s2_id must not cross-write.
-    if ref.doi and ref.doi != candidate.doi:
-        assert ref.pdf_urls == []
-    else:
-        assert ref.pdf_urls == candidate.pdf_urls
+    assert ref_b.doi == "10.5555/paperlab-i3-b"  # untouched — never even loaded as the matched row
+    assert ref_a.pdf_urls == candidate.pdf_urls  # ref_a's own DOI matches the candidate's, so this is safe
 
 
 async def test_insert_hit_is_race_safe_under_a_duplicate_attempt(session):
