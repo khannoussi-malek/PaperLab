@@ -11,19 +11,20 @@ import {
   useUploadHitPdf,
 } from '@/api/queries'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import { HitContextMenu, HitMenu } from './HitMenu'
 import { HitPreview } from './HitPreview'
 
 const ROW_HEIGHT = 44
-/** Skimming the list with the mouse shouldn't swap the preview for every row it crosses — same delay PaperList
- * uses for the same reason. */
-const HOVER_PREVIEW_DELAY_MS = 150
 
 /** The hit pool for a search run: a virtualized list (rows can run into the thousands) beside a preview of the
- * hovered or focused one (title, byline, abstract — same split as the library's PaperList/PaperPreview), stage-1
- * triage via a right-click menu or a trailing ⋮ button on each row, and two ways to get a PDF: one hit at a time
- * from the preview panel's "Add PDF" (fetching a PDF starts ingestion — chunking, embedding — for that paper, so
- * this is the cheap default), or "Import all with PDF in this filter" when the user has decided that cost is
+ * selected one (title, byline, abstract — same split as the library's PaperList/PaperPreview). Selection moves by
+ * clicking a row or with the ↑/↓ arrow keys (from the row list or the filter box) — not hover, so skimming the
+ * list with the mouse doesn't fight with reading the panel. A filter box narrows the already-loaded rows by title
+ * client-side (no new request — see `useSearchHits`, still the full, unfiltered query underneath); stage-1 triage
+ * is via a right-click menu or a trailing ⋮ button on each row, and there are two ways to get a PDF: one hit at a
+ * time from the preview panel's "Add PDF" (fetching a PDF starts ingestion — chunking, embedding — for that paper,
+ * so this is the cheap default), or "Import all with PDF in this filter" when the user has decided that cost is
  * worth paying for everything currently in view at once. `run` is only read here to know whether the worker has
  * found more since the pool was last loaded — the run's own live status is shown elsewhere (SearchTab),
  * unaffected by any of this. */
@@ -36,23 +37,18 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
   const newHits = useNewHitsAvailable(run)
   const refreshHits = useRefreshHits(workspaceId)
   const parentRef = useRef<HTMLDivElement>(null)
-  const hoverTimer = useRef<number | undefined>(undefined)
   const [previewId, setPreviewId] = useState<string | null>(null)
+  const [filterText, setFilterText] = useState('')
 
   const rows = data?.pages.flatMap((page) => page.items) ?? []
-  // Falls back to the first loaded row, so the panel is never empty on first paint (mirrors PaperList).
-  const previewed = rows.find((hit) => hit.id === previewId) ?? rows[0]
-
-  useEffect(() => () => window.clearTimeout(hoverTimer.current), [])
-
-  function preview(id: string, immediate: boolean) {
-    window.clearTimeout(hoverTimer.current)
-    if (immediate) setPreviewId(id)
-    else hoverTimer.current = window.setTimeout(() => setPreviewId(id), HOVER_PREVIEW_DELAY_MS)
-  }
+  const filter = filterText.trim().toLowerCase()
+  const filteredRows = filter ? rows.filter((hit) => (hit.title ?? hit.normalized_title).toLowerCase().includes(filter)) : rows
+  // Falls back to the first loaded row, so the panel is never empty on first paint (mirrors PaperList) — and to
+  // whichever row is first once a filter drops the previously selected one out of view.
+  const previewed = filteredRows.find((hit) => hit.id === previewId) ?? filteredRows[0]
 
   const virtualizer = useVirtualizer({
-    count: rows.length,
+    count: filteredRows.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => ROW_HEIGHT,
     overscan: 10,
@@ -64,28 +60,61 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
   const virtualItems = virtualizer.getVirtualItems()
   const onReview = (hitId: string, body: HitReviewUpdate) => reviewHit.mutate({ hitId, body })
 
+  // ↑/↓ moves the selected row by one, wrapping never — the top/bottom just stop. Works from the filter box too
+  // (arrow keys do nothing useful in a single-line input, so hijacking them here doesn't lose anything), and
+  // scrolls the new selection into view since it can be off-screen in a long, virtualized list.
+  function moveSelection(direction: 1 | -1, event: React.KeyboardEvent) {
+    if (filteredRows.length === 0) return
+    event.preventDefault()
+    const currentIndex = filteredRows.findIndex((hit) => hit.id === previewed?.id)
+    const nextIndex = Math.min(Math.max(currentIndex + direction, 0), filteredRows.length - 1)
+    setPreviewId(filteredRows[nextIndex].id)
+    virtualizer.scrollToIndex(nextIndex, { align: 'auto' })
+  }
+
+  function onListKeyDown(event: React.KeyboardEvent) {
+    if (event.key === 'ArrowDown') moveSelection(1, event)
+    else if (event.key === 'ArrowUp') moveSelection(-1, event)
+  }
+
   // Data only ever moves into view because the user is scrolled to the bottom of what's loaded — never on a
   // background timer or poll, which doesn't scale once the pool reaches thousands of hits (re-fetching an
   // infinite query re-fetches every already-loaded page; see useNewHitsAvailable's docstring). Two cases at the
   // bottom: a known next page (hasNextPage) just fetches it, same as always. When there is no known next page but
   // the worker has found more since our last real fetch (newHits.available, from the already-polled run status),
   // the cached "no more pages" cursor is stale — pay the one real-refresh cost here, since the user scrolling to
-  // the bottom asking for more is exactly the moment it's worth it.
+  // the bottom asking for more is exactly the moment it's worth it. Keyed off the *filtered* list's own bottom —
+  // a filter that's currently showing only a few matches should still be able to page in more of the pool looking
+  // for further matches, the same way scrolling the unfiltered list does.
   useEffect(() => {
     const lastItem = virtualItems.at(-1)
-    if (!lastItem || lastItem.index < rows.length - 1 || isFetchingNextPage) return
+    if (!lastItem || lastItem.index < filteredRows.length - 1 || isFetchingNextPage) return
     if (hasNextPage) {
       fetchNextPage()
     } else if (newHits.available) {
       newHits.acknowledge()
       refreshHits()
     }
-  }, [virtualItems, hasNextPage, isFetchingNextPage, fetchNextPage, rows.length, newHits, refreshHits])
+  }, [virtualItems, hasNextPage, isFetchingNextPage, fetchNextPage, filteredRows.length, newHits, refreshHits])
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center justify-between border-b px-3 py-2 text-sm">
-        <span>{rows.length} in pool</span>
+      <div className="flex items-center justify-between gap-3 border-b px-3 py-2 text-sm">
+        <label className="flex flex-1 items-center gap-2">
+          <span className="sr-only">Search hits</span>
+          <input
+            type="text"
+            value={filterText}
+            onChange={(event) => setFilterText(event.target.value)}
+            onKeyDown={onListKeyDown}
+            placeholder="Search by title…"
+            aria-label="Search hits"
+            className="h-8 w-full max-w-xs rounded-lg border bg-background px-2 text-sm"
+          />
+        </label>
+        <span className="shrink-0 text-muted-foreground">
+          {filter ? `${filteredRows.length} of ${rows.length} in pool` : `${rows.length} in pool`}
+        </span>
         <Button type="button" size="sm" disabled={importAllHits.isPending} onClick={() => importAllHits.mutate()}>
           Import all with PDF in this filter
         </Button>
@@ -118,19 +147,33 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
           {uploadHitPdf.error.message}
         </p>
       )}
+      {filter && filteredRows.length === 0 && (
+        <p className="px-3 py-1 text-xs text-muted-foreground">No hits match “{filterText.trim()}”.</p>
+      )}
       <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(0,1fr)_22rem]">
-        <div ref={parentRef} aria-label="Hit pool" className="min-h-0 overflow-auto">
+        <div
+          ref={parentRef}
+          aria-label="Hit pool"
+          tabIndex={0}
+          onKeyDown={onListKeyDown}
+          className="min-h-0 overflow-auto outline-none"
+        >
           <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
             {virtualItems.map((virtualRow) => {
-              const hit = rows[virtualRow.index]
+              const hit = filteredRows[virtualRow.index]
               const byline = [hit.authors?.slice(0, 3).join(', '), hit.year].filter(Boolean).join(' · ')
+              const selected = hit.id === previewed?.id
               return (
                 <HitContextMenu key={hit.id} hit={hit} onReview={onReview}>
                   <div
-                    className="flex w-full items-center gap-2 border-b px-3 text-sm hover:bg-muted"
+                    className={cn(
+                      'flex w-full cursor-pointer items-center gap-2 border-b px-3 text-sm hover:bg-muted',
+                      selected && 'bg-muted',
+                    )}
                     style={{ position: 'absolute', top: virtualRow.start, height: virtualRow.size, width: '100%' }}
-                    onMouseEnter={() => preview(hit.id, false)}
-                    onFocus={() => preview(hit.id, true)}
+                    aria-selected={selected}
+                    onClick={() => setPreviewId(hit.id)}
+                    onFocus={() => setPreviewId(hit.id)}
                   >
                     <span className="flex-1 truncate">
                       {hit.title ?? hit.normalized_title}
@@ -144,7 +187,8 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
             })}
           </div>
         </div>
-        {/* Desktop only: the preview follows hover and focus, which a touch screen doesn't have — same as PaperPreview. */}
+        {/* Desktop only: the preview panel follows the click/arrow-key selection, which a touch screen doesn't
+            have arrow keys for anyway — same split as PaperPreview. */}
         {previewed && (
           <div className="hidden min-h-0 lg:block">
             <HitPreview

@@ -70,7 +70,35 @@ test('a hit with a linked ExternalRef shows its real title and a compact byline 
   expect(pool().queryByText('a paper about llms')).not.toBeInTheDocument()
 })
 
-test('hovering a row previews its title, byline and abstract in the side panel', async () => {
+test('typing in the search box filters the pool by title, client-side, with no new request', async () => {
+  const hits: Hit[] = [
+    { ...baseHit, id: 'h1', title: 'Attention Is All You Need', normalized_title: 'attention is all you need' },
+    { ...baseHit, id: 'h2', title: 'BERT: Pre-training', normalized_title: 'bert pre-training' },
+  ]
+  vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: hits, next_cursor: null })
+
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  await pool().findByText('Attention Is All You Need')
+  const callsBeforeTyping = vi.mocked(api.listSearchHits).mock.calls.length
+
+  fireEvent.change(screen.getByLabelText('Search hits'), { target: { value: 'bert' } })
+
+  await waitFor(() => expect(pool().queryByText('Attention Is All You Need')).not.toBeInTheDocument())
+  expect(pool().getByText('BERT: Pre-training')).toBeInTheDocument()
+  expect(screen.getByText('1 of 2 in pool')).toBeInTheDocument()
+  expect(api.listSearchHits).toHaveBeenCalledTimes(callsBeforeTyping)
+})
+
+test('a filter that matches nothing says so instead of showing an empty list', async () => {
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  await pool().findByText('a paper about llms')
+
+  fireEvent.change(screen.getByLabelText('Search hits'), { target: { value: 'nonexistent' } })
+
+  expect(await screen.findByText('No hits match “nonexistent”.')).toBeInTheDocument()
+})
+
+test('the previewed hit shows its title, byline and abstract in the side panel', async () => {
   const richHit: Hit = {
     ...baseHit,
     title: 'Attention Is All You Need',
@@ -82,7 +110,7 @@ test('hovering a row previews its title, byline and abstract in the side panel',
   vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: [richHit], next_cursor: null })
 
   renderWithClient(<HitTable workspaceId="ws-1" />)
-  // A single hit is previewed by default (falls back to the first loaded row) — no hover needed to see it here.
+  // A single hit is previewed by default (falls back to the first loaded row).
   const panel = await preview()
   await panel.findByText('Attention Is All You Need')
 
@@ -90,6 +118,47 @@ test('hovering a row previews its title, byline and abstract in the side panel',
   expect(
     panel.getByText('The dominant sequence transduction models are based on complex recurrent networks.'),
   ).toBeInTheDocument()
+})
+
+test('clicking a row previews it, and hovering another row does nothing', async () => {
+  const hits: Hit[] = [
+    { ...baseHit, id: 'h1', title: 'First Paper', normalized_title: 'first paper' },
+    { ...baseHit, id: 'h2', title: 'Second Paper', normalized_title: 'second paper' },
+  ]
+  vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: hits, next_cursor: null })
+
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  const panel = await preview()
+  await panel.findByText('First Paper') // the first row previews by default
+
+  fireEvent.mouseEnter(pool().getByText('Second Paper'))
+  expect(panel.queryByText('Second Paper')).not.toBeInTheDocument() // hover alone changes nothing
+
+  fireEvent.click(pool().getByText('Second Paper'))
+  await panel.findByText('Second Paper')
+  expect(panel.queryByText('First Paper')).not.toBeInTheDocument()
+})
+
+test('↓/↑ move the previewed selection to the next/previous row and stop at the ends', async () => {
+  const hits: Hit[] = [
+    { ...baseHit, id: 'h1', title: 'First Paper', normalized_title: 'first paper' },
+    { ...baseHit, id: 'h2', title: 'Second Paper', normalized_title: 'second paper' },
+  ]
+  vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: hits, next_cursor: null })
+
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  const panel = await preview()
+  await panel.findByText('First Paper')
+
+  const hitPool = screen.getByLabelText('Hit pool')
+  fireEvent.keyDown(hitPool, { key: 'ArrowDown' })
+  await panel.findByText('Second Paper')
+
+  fireEvent.keyDown(hitPool, { key: 'ArrowDown' }) // already at the last row — stays put, no wrap
+  await panel.findByText('Second Paper')
+
+  fireEvent.keyDown(hitPool, { key: 'ArrowUp' })
+  await panel.findByText('First Paper')
 })
 
 test('a hit with no linked ExternalRef previews its normalized title and says no abstract is available', async () => {
