@@ -76,6 +76,13 @@ test('a hit with no linked ExternalRef falls back to normalized_title and shows 
   expect(screen.queryByText('Copy DOI')).not.toBeInTheDocument()
 })
 
+test('a hit with an empty-string title (falsy but not null) still falls back to normalized_title, not a blank row', () => {
+  mockHits([{ ...failedHit, external_ref_id: 'ref-3', title: '' }])
+  renderWithClient(<ManualAcquisitionTab workspaceId="ws-1" />)
+
+  expect(screen.getByText('unreachable paper')).toBeInTheDocument()
+})
+
 test('a hit with a linked ExternalRef shows the real title, byline, an Open page link and a Copy DOI button (I7)', async () => {
   mockHits([richHit])
   renderWithClient(<ManualAcquisitionTab workspaceId="ws-1" />)

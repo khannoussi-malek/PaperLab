@@ -357,15 +357,25 @@ export const useSearchHits = (workspaceId: string, stage1Status?: string, acquis
 
 /** Refetches the hit pool whenever a polled run reports genuine new progress (I1): `useSearchHits` has no poll of
  * its own, so without this the pool stays stale until some other mutation (a review, an import, an upload)
- * happens to invalidate it. Keyed off `last_batch_new_hits` specifically — not every poll tick — so a run sitting
- * between batches (nothing new yet) doesn't spam refetches. `client` and `workspaceId` are stable across renders,
- * so the effect only actually re-fires when that count changes. */
+ * happens to invalidate it.
+ *
+ * Keyed off the *cumulative* `stats_json.per_source_raw_count` (summed across sources), not `last_batch_new_hits`
+ * — the worker overwrites `last_batch_new_hits` fresh every batch (workers/workspace_search.py), so it's "how
+ * many hits did *this* batch add," not a running total. Two different batches that happen to add the same count
+ * (plausible with fixed per-source page sizes against a large result set) would look identical to an effect keyed
+ * on that alone, and the second batch's hits would never trigger a refetch — including, worst case, the run's
+ * final batch, whose hits then never reach the pool at all once polling stops. `per_source_raw_count` only ever
+ * grows across a run, so its sum is a safe monotonic signal. `run?.status` is also a dependency so the run's
+ * transition to a terminal state (exhausted/stopped/failed) always forces one last refetch, even in the
+ * edge case where the raw-count sum didn't change between the last two polls. */
 export function useRefetchHitsOnProgress(workspaceId: string, run: SearchRun | undefined) {
   const client = useQueryClient()
-  const lastBatchNewHits = run?.stats_json?.last_batch_new_hits as number | undefined
+  const rawCounts = run?.stats_json?.per_source_raw_count as Record<string, number> | undefined
+  const rawCountTotal = rawCounts ? Object.values(rawCounts).reduce((sum, count) => sum + count, 0) : undefined
+  const status = run?.status
   useEffect(() => {
-    if (lastBatchNewHits !== undefined) client.invalidateQueries({ queryKey: keys.searchHitsRoot(workspaceId) })
-  }, [client, workspaceId, lastBatchNewHits])
+    if (rawCountTotal !== undefined) client.invalidateQueries({ queryKey: keys.searchHitsRoot(workspaceId) })
+  }, [client, workspaceId, rawCountTotal, status])
 }
 
 /** Reviews one hit (the stage-1 triage decision). */

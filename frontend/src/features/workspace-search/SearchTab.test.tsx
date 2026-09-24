@@ -135,15 +135,18 @@ test('a 409 from Stop (the run already finished naturally) is swallowed, not sho
   expect(screen.queryByRole('alert')).not.toBeInTheDocument()
 })
 
-test('invalidates the hit pool when the polled run reports new progress, not on every poll tick (I1)', async () => {
+test('invalidates the hit pool on each real batch, keyed on cumulative raw counts (not last_batch_new_hits) plus status (I1 fix round)', async () => {
   const runKey = { queryKey: ['workspaces', 'ws-1', 'search', 'runs', 'run-1'] }
   const hitsKey = { queryKey: ['workspaces', 'ws-1', 'search', 'hits'] }
-  const runAt = (lastBatchNewHits: number) => ({
+  // last_batch_new_hits deliberately repeats 20 across every tick below, including two genuinely different real
+  // batches — the bug this round fixed treated a repeated last_batch_new_hits as "nothing new," even though the
+  // cumulative per_source_raw_count total (workers/workspace_search.py's own running total) kept growing.
+  const runAt = (arxivRawCount: number, status = 'running') => ({
     id: 'run-1', workspace_id: 'ws-1', query_text: 'q', filters_json: {}, sources_json: ['arxiv'],
-    status: 'running', started_at: '2026-09-24T00:00:00Z', stopped_at: null,
-    stats_json: { last_batch_new_hits: lastBatchNewHits },
+    status, started_at: '2026-09-24T00:00:00Z', stopped_at: null,
+    stats_json: { last_batch_new_hits: 20, per_source_raw_count: { arxiv: arxivRawCount } },
   })
-  vi.mocked(api.getSearchRun).mockResolvedValue(runAt(3) as never)
+  vi.mocked(api.getSearchRun).mockResolvedValue(runAt(20) as never)
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
 
@@ -152,14 +155,24 @@ test('invalidates the hit pool when the polled run reports new progress, not on 
   await waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith(hitsKey))
   const callsAfterFirstBatch = invalidateSpy.mock.calls.length
 
-  // A poll tick that reports the *same* count (nothing new since last time) must not invalidate again.
-  vi.mocked(api.getSearchRun).mockResolvedValue(runAt(3) as never)
-  await client.refetchQueries(runKey)
-  await waitFor(() => expect(api.getSearchRun).toHaveBeenCalledTimes(2)) // lets the resulting render/effect flush
-  expect(invalidateSpy.mock.calls.length).toBe(callsAfterFirstBatch)
-
-  // A poll tick with genuinely new progress invalidates again.
-  vi.mocked(api.getSearchRun).mockResolvedValue(runAt(5) as never)
+  // A second, genuinely different batch that happens to report the same last_batch_new_hits (20) as the first
+  // must still invalidate, since the cumulative raw-count total grew (20 -> 40) — this is the case the old
+  // last_batch_new_hits-only key missed, including on a run's very last batch.
+  vi.mocked(api.getSearchRun).mockResolvedValue(runAt(40) as never)
   await client.refetchQueries(runKey)
   await waitFor(() => expect(invalidateSpy.mock.calls.length).toBeGreaterThan(callsAfterFirstBatch))
+  const callsAfterSecondBatch = invalidateSpy.mock.calls.length
+
+  // A poll tick reporting the exact same state as last time (nothing new at all) must not invalidate again.
+  vi.mocked(api.getSearchRun).mockResolvedValue(runAt(40) as never)
+  await client.refetchQueries(runKey)
+  await waitFor(() => expect(api.getSearchRun).toHaveBeenCalledTimes(3)) // lets the resulting render/effect flush
+  expect(invalidateSpy.mock.calls.length).toBe(callsAfterSecondBatch)
+
+  // The run's transition to a terminal status forces one final invalidation, even though the raw-count sum is
+  // unchanged from the tick just before it (e.g. the terminal-marking pass itself added nothing new) — otherwise
+  // a last batch that happened to repeat the previous total would never reach the pool.
+  vi.mocked(api.getSearchRun).mockResolvedValue(runAt(40, 'exhausted') as never)
+  await client.refetchQueries(runKey)
+  await waitFor(() => expect(invalidateSpy.mock.calls.length).toBeGreaterThan(callsAfterSecondBatch))
 })
