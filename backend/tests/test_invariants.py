@@ -36,6 +36,15 @@ def test_mcp_server_has_no_sql_and_imports_only_core_services():
     assert [word for word in ("sqlalchemy", "select(", "text(", "execute(") if word in source] == []
 
 
+@pytest.mark.parametrize(
+    "module", ["app.providers.llm", "app.providers.embedding", "app.core.retrieval", "app.core.chat"]
+)
+def test_each_module_imports_first_without_a_cycle(module):
+    """Providers never import core at module level (M25): whichever of these a process imports first, it loads."""
+    result = subprocess.run([sys.executable, "-c", f"import {module}"], cwd=BACKEND, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+
+
 def test_the_lock_has_no_torch():
     """M23: the search model runs on ONNX Runtime, so torch and the libraries that ran it on torch stay out."""
     locked = set(re.findall(r'^name = "([^"]+)"$', (BACKEND / "uv.lock").read_text(), re.MULTILINE))

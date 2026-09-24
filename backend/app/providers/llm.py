@@ -14,8 +14,6 @@ import httpx
 import httpx2
 
 from app.config import settings
-from app.core.chat import WORKSPACE_SYSTEM_PROMPT
-from app.core.note_suggestions import SYSTEM_PROMPT as NOTE_SUGGESTIONS_SYSTEM_PROMPT
 from app.providers.base import LLM, LLMError, LLMUnavailable
 
 # Cold model loads take 7-10 s before the first line; httpx's default 5 s read timeout is too short. Local
@@ -231,6 +229,13 @@ class FakeLLM:
         self.calls: list[tuple[str, str]] = []
 
     async def stream(self, system: str, prompt: str) -> AsyncIterator[str]:
+        # Imported here: core.chat → retrieval → embedding → http_embedders → this module. Providers never import core
+        # at module level.
+        from app.core.chat import WORKSPACE_SYSTEM_PROMPT
+
+        # Same reason: note_suggestions → core.chat → retrieval → embedding → http_embedders → this module.
+        from app.core.note_suggestions import SYSTEM_PROMPT as NOTE_SUGGESTIONS_SYSTEM_PROMPT
+
         self.calls.append((system, prompt))
         if system == WORKSPACE_SYSTEM_PROMPT:
             tokens = FAKE_WORKSPACE_TOKENS
