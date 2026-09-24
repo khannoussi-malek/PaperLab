@@ -165,7 +165,7 @@ test('the preview panel offers a way to get the PDF for a hit that needs one: se
   expect(panel.getByLabelText('Upload PDF for a paper about llms')).toBeInTheDocument()
 })
 
-test('clicking "Add PDF" in the preview panel imports only that one hit, not the whole filter', async () => {
+test('clicking "Add PDF" in the preview panel imports only that one hit, not the whole filter, and never re-fetches the pool', async () => {
   const hit: Hit = { ...baseHit, acquisition_status: 'pending' }
   vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: [hit], next_cursor: null })
   vi.spyOn(api, 'importSearchHits').mockResolvedValue({ imported: 1, failed: 0 })
@@ -173,10 +173,32 @@ test('clicking "Add PDF" in the preview panel imports only that one hit, not the
   renderWithClient(<HitTable workspaceId="ws-1" />)
   const panel = await preview()
   await panel.findByText('a paper about llms')
+  const callsBeforeClick = vi.mocked(api.listSearchHits).mock.calls.length
 
   fireEvent.click(panel.getByRole('button', { name: 'Add PDF' }))
 
   await waitFor(() => expect(api.importSearchHits).toHaveBeenCalledWith('ws-1', ['h1']))
+  // A successful import updates the hit's own acquisition_status (the "Get the PDF" section disappears)
+  // by patching the already-loaded row in place, not by re-fetching the pool from the server.
+  await waitFor(() => expect(panel.queryByRole('button', { name: 'Add PDF' })).not.toBeInTheDocument())
+  expect(api.listSearchHits).toHaveBeenCalledTimes(callsBeforeClick)
+})
+
+test('a hit with no free PDF found stays acquirable and tells the user to use the manual options', async () => {
+  const hit: Hit = { ...baseHit, acquisition_status: 'pending' }
+  vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: [hit], next_cursor: null })
+  vi.spyOn(api, 'importSearchHits').mockResolvedValue({ imported: 0, failed: 1 })
+
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  const panel = await preview()
+  await panel.findByText('a paper about llms')
+
+  fireEvent.click(panel.getByRole('button', { name: 'Add PDF' }))
+
+  expect(await screen.findByRole('status')).toHaveTextContent('No PDF found automatically')
+  // Not a mutation error — the manual fallback options stay offered, same as any other unacquired hit.
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  expect(panel.getByRole('link', { name: 'Search by title' })).toBeInTheDocument()
 })
 
 test('uploading a PDF from the preview panel calls the upload mutation for that hit', async () => {
@@ -227,6 +249,18 @@ test('marking relevant from the ⋮ menu sends only stage1_status', async () => 
   fireEvent.click(await screen.findByRole('menuitem', { name: 'Relevant' }))
 
   await waitFor(() => expect(api.patchSearchHit).toHaveBeenCalledWith('ws-1', 'h1', { stage1_status: 'relevant' }))
+})
+
+test('reviewing a hit patches it into the pool in place, without re-fetching the pool', async () => {
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  await pool().findByText('a paper about llms')
+  const callsBeforeClick = vi.mocked(api.listSearchHits).mock.calls.length
+
+  fireEvent.pointerDown(pool().getByRole('button', { name: 'Hit actions' }))
+  fireEvent.click(await screen.findByRole('menuitem', { name: 'Relevant' }))
+
+  await waitFor(() => expect(api.patchSearchHit).toHaveBeenCalled())
+  expect(api.listSearchHits).toHaveBeenCalledTimes(callsBeforeClick)
 })
 
 test('picking a reason under Not relevant… sends stage1_status and the reason together', async () => {

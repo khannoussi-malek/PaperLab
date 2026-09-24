@@ -6,6 +6,7 @@ import {
   useMutation,
   useQuery,
   useQueryClient,
+  type InfiniteData,
 } from '@tanstack/react-query'
 import { sameCandidate } from '@/features/discovery/candidateMeta'
 import {
@@ -15,6 +16,8 @@ import {
   type ChatScope,
   type DatasetCreate,
   type GridIn,
+  type Hit,
+  type HitListOut,
   type HitReviewUpdate,
   type LLMConnectionUpdate,
   type NoteCreate,
@@ -399,32 +402,65 @@ export function useRefreshHits(workspaceId: string) {
   return () => client.invalidateQueries({ queryKey: keys.searchHitsRoot(workspaceId) })
 }
 
+/** After one hit's fields change (review, import, upload), refresh every cached view of the hit pool:
+ *
+ * - Patch the new fields directly into every already-loaded page, in place, with no network request. This is
+ *   what keeps HitTable's own view correct — it holds the *unfiltered* pool, which can run into the thousands of
+ *   hits across dozens of pages, and re-fetching all of them on every single review/import/upload is the same
+ *   scaling problem `useNewHitsAvailable`'s docstring describes for background polling (observed: a full-pool
+ *   refetch burst on every click).
+ * - Actually re-fetch any *filtered* view (e.g. ManualAcquisitionTab's `acquisition_status: 'failed'` list, which
+ *   `WorkspacePage` keeps mounted alongside HitTable via `forceMount`): changing a hit's status can push it in or
+ *   out of a filter's membership, which patching its fields in place can't fix — but a filtered view is always a
+ *   small, bounded subset of the pool, so a real refetch there is cheap. */
+function patchHitFields(client: QueryClient, workspaceId: string, hitId: string, fields: Partial<Hit>) {
+  client.setQueriesData<InfiniteData<HitListOut, string | undefined>>(
+    { queryKey: keys.searchHitsRoot(workspaceId) },
+    (data) =>
+      data && {
+        ...data,
+        pages: data.pages.map((page) => ({
+          ...page,
+          items: page.items.map((item) => (item.id === hitId ? { ...item, ...fields } : item)),
+        })),
+      },
+  )
+  client.invalidateQueries({
+    queryKey: keys.searchHitsRoot(workspaceId),
+    predicate: (query) => query.queryKey[4] !== 'all' || query.queryKey[5] !== 'all',
+  })
+}
+
 /** Reviews one hit (the stage-1 triage decision). */
 export function usePatchSearchHit(workspaceId: string) {
   const client = useQueryClient()
   return useMutation({
     mutationFn: ({ hitId, body }: { hitId: string; body: HitReviewUpdate }) =>
       api.patchSearchHit(workspaceId, hitId, body),
-    onSuccess: () => client.invalidateQueries({ queryKey: keys.searchHitsRoot(workspaceId) }),
+    onSuccess: (hit) => patchHitFields(client, workspaceId, hit.id, hit),
   })
 }
 
-/** Imports hits into the corpus; omitting `hitIds` imports every hit still pending acquisition. */
+/** Imports one hit into the corpus (the only way the UI calls this — HitTable's per-hit "Add PDF" button; see its
+ * docstring for why this is never a bulk action). The import response only carries counts, not the updated hit,
+ * so this derives the new `acquisition_status` from them directly: `imported` and `failed` are each 0 or 1 for a
+ * single targeted hit, and exactly one of them is 1 — `failed` here means no free copy was found automatically,
+ * not a request error, so it resolves rather than rejects (HitPreview keeps offering the manual options). */
 export function useImportSearchHits(workspaceId: string) {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: (hitIds?: string[]) => api.importSearchHits(workspaceId, hitIds),
-    onSuccess: () => client.invalidateQueries({ queryKey: keys.searchHitsRoot(workspaceId) }),
+    mutationFn: (hitIds: [string]) => api.importSearchHits(workspaceId, hitIds),
+    onSuccess: (result, [hitId]) =>
+      patchHitFields(client, workspaceId, hitId, { acquisition_status: result.imported > 0 ? 'imported' : 'failed' }),
   })
 }
 
-/** Manual acquisition (Task 10): uploads a PDF for one hit that had no free download. Invalidates every hit-pool
- * view (not just this one's own 'failed' filter) since acquisition_status changing also affects HitTable's list. */
+/** Manual acquisition (Task 10): uploads a PDF for one hit that had no free download. */
 export function useUploadHitPdf(workspaceId: string) {
   const client = useQueryClient()
   return useMutation({
     mutationFn: ({ hitId, file }: { hitId: string; file: File }) => api.uploadHitPdf(workspaceId, hitId, file),
-    onSuccess: () => client.invalidateQueries({ queryKey: keys.searchHitsRoot(workspaceId) }),
+    onSuccess: (hit) => patchHitFields(client, workspaceId, hit.id, hit),
   })
 }
 
