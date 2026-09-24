@@ -157,7 +157,9 @@ async def test_prepare_on_a_paper_without_notes_says_so(session):
 
     prepared = await chat.prepare(session, paper.id, "why?")
 
-    assert "Notes (newest first):\n\n(none)\n\nQuestion: why?" in prepared.prompt  # no earlier-questions block
+    assert (
+        "Notes (newest first):\n\nNo notes have been written yet.\n\nQuestion: why?" in prepared.prompt
+    )  # no earlier-questions block
     assert (prepared.notes, prepared.notes_used, prepared.notes_total) == ([], 0, 0)
 
 

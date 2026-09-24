@@ -38,6 +38,10 @@ NOTE_QUOTE_CHARS = 160
 NOTE_BODY_CHARS = 400
 # ponytail: newest-first is a guess at relevance; rank by similarity to the question if users hit the budget.
 NOTES_CHAR_BUDGET = 16_000
+# A bare "(none)" here once got parroted back as an answer's entire content by a small local model asked a
+# question that itself mentioned "notes" — a short, quotable placeholder sitting right above "Question: ..." reads
+# too much like a plausible answer to a weak model. A full sentence doesn't.
+NO_NOTES_PLACEHOLDER = "No notes have been written yet."
 BADGES = {Provenance.HUMAN: "You", Provenance.LLM: "AI", Provenance.LLM_EDITED: "AI · edited"}
 _CITATION = re.compile(r"\[([CN])(\d+)\]")
 _SOURCE_COLUMNS = (Chunk.id, Chunk.paper_id, Chunk.page, Chunk.section_title, Chunk.bbox, Chunk.text)
@@ -254,7 +258,7 @@ async def _prepare_workspace(session: AsyncSession, workspace_id: uuid.UUID, que
     every_note = await workspaces.notes(session, workspace_id)
     block, used = format_notes_block(every_note, members)
     prompt = WORKSPACE_PROMPT_TEMPLATE.format(
-        context=format_context(members, sources), notes=block or "(none)", question=question
+        context=format_context(members, sources), notes=block or NO_NOTES_PLACEHOLDER, question=question
     )
     return Prepared(
         sources=sources,
@@ -304,7 +308,7 @@ async def prepare(
     block, used = format_notes_block(every_note, {paper_id: paper})
     context = format_context(paper, sources)
     earlier = _earlier_block(thread)
-    prompt = PROMPT_TEMPLATE.format(context=context, notes=block or "(none)", earlier=earlier, question=question)
+    prompt = PROMPT_TEMPLATE.format(context=context, notes=block or NO_NOTES_PLACEHOLDER, earlier=earlier, question=question)
     return Prepared(
         sources=sources, system=SYSTEM_PROMPT, prompt=prompt, whole_paper=whole_paper, notes=used,
         notes_total=len(every_note),
