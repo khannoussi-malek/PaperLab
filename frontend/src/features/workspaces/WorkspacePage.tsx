@@ -5,6 +5,8 @@ import { glass } from '@/components/glass'
 import { delayedIn, fadeIn } from '@/components/motion'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { ManualAcquisitionTab } from '@/features/workspace-search/ManualAcquisitionTab'
+import { SearchTab } from '@/features/workspace-search/SearchTab'
 import { workspaceHref, type WorkspaceTab } from '@/lib/route'
 import { cn } from '@/lib/utils'
 import { WorkspaceChat } from './WorkspaceChat'
@@ -65,6 +67,8 @@ export function WorkspacePage({ workspaceId, tab }: { workspaceId: string; tab: 
             <TabsTrigger value="papers">Papers</TabsTrigger>
             <TabsTrigger value="notes">Notes</TabsTrigger>
             <TabsTrigger value="chat">Chat</TabsTrigger>
+            <TabsTrigger value="search">Search</TabsTrigger>
+            <TabsTrigger value="acquisition">Manual acquisition</TabsTrigger>
           </TabsList>
           <TabsContent value="papers" forceMount className={panel}>
             <WorkspacePapers workspaceId={workspaceId} />
@@ -75,6 +79,12 @@ export function WorkspacePage({ workspaceId, tab }: { workspaceId: string; tab: 
           {/* The chat panel scrolls its own answer list and keeps the question box in view. */}
           <TabsContent value="chat" forceMount className={cn(panel, 'flex flex-col overflow-hidden')}>
             <WorkspaceChat workspace={workspace.data} onShowNotes={() => showTab('notes')} />
+          </TabsContent>
+          <TabsContent value="search" forceMount className={panel}>
+            <SearchTab workspaceId={workspaceId} />
+          </TabsContent>
+          <TabsContent value="acquisition" forceMount className={panel}>
+            <ManualAcquisitionTab workspaceId={workspaceId} />
           </TabsContent>
         </Tabs>
       )}

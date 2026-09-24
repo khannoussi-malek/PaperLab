@@ -49,8 +49,10 @@ const keys = {
   workspaceNotes: (id: string) => ['workspaces', id, 'notes'] as const,
   searchRuns: (workspaceId: string) => ['workspaces', workspaceId, 'search', 'runs'] as const,
   searchRun: (workspaceId: string, runId: string) => ['workspaces', workspaceId, 'search', 'runs', runId] as const,
-  searchHits: (workspaceId: string, stage1Status: string) =>
-    ['workspaces', workspaceId, 'search', 'hits', stage1Status] as const,
+  searchHits: (workspaceId: string, stage1Status: string, acquisitionStatus: string) =>
+    ['workspaces', workspaceId, 'search', 'hits', stage1Status, acquisitionStatus] as const,
+  // A prefix of every searchHits key above (whatever the filters), for invalidating them all at once.
+  searchHitsRoot: (workspaceId: string) => ['workspaces', workspaceId, 'search', 'hits'] as const,
   // Every dataset query starts with this; a saved grid or a captured number refreshes every list and detail.
   datasets: ['datasets'] as const,
   paperDatasets: (paperId: string) => ['datasets', 'paper', paperId] as const,
@@ -329,12 +331,14 @@ export const useSearchRun = (workspaceId: string, runId: string | null) =>
     refetchInterval: (query) => searchRunPollInterval(query.state.data),
   })
 
-/** A run's hits, keyset-paginated; `stage1Status` filters to one review state ('all' when omitted). */
-export const useSearchHits = (workspaceId: string, stage1Status?: string) =>
+/** A run's hits, keyset-paginated; `stage1Status`/`acquisitionStatus` each filter to one status ('all' when omitted). */
+export const useSearchHits = (workspaceId: string, stage1Status?: string, acquisitionStatus?: string) =>
   useInfiniteQuery({
-    queryKey: keys.searchHits(workspaceId, stage1Status ?? 'all'),
+    queryKey: keys.searchHits(workspaceId, stage1Status ?? 'all', acquisitionStatus ?? 'all'),
     queryFn: ({ pageParam }) =>
-      api.listSearchHits(workspaceId, { after: pageParam, limit: 50, stage1_status: stage1Status }),
+      api.listSearchHits(workspaceId, {
+        after: pageParam, limit: 50, stage1_status: stage1Status, acquisition_status: acquisitionStatus,
+      }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
   })
@@ -345,7 +349,7 @@ export function usePatchSearchHit(workspaceId: string) {
   return useMutation({
     mutationFn: ({ hitId, body }: { hitId: string; body: HitReviewUpdate }) =>
       api.patchSearchHit(workspaceId, hitId, body),
-    onSuccess: () => client.invalidateQueries({ queryKey: keys.searchHits(workspaceId, 'all') }),
+    onSuccess: () => client.invalidateQueries({ queryKey: keys.searchHitsRoot(workspaceId) }),
   })
 }
 
@@ -354,7 +358,17 @@ export function useImportSearchHits(workspaceId: string) {
   const client = useQueryClient()
   return useMutation({
     mutationFn: (hitIds?: string[]) => api.importSearchHits(workspaceId, hitIds),
-    onSuccess: () => client.invalidateQueries({ queryKey: keys.searchHits(workspaceId, 'all') }),
+    onSuccess: () => client.invalidateQueries({ queryKey: keys.searchHitsRoot(workspaceId) }),
+  })
+}
+
+/** Manual acquisition (Task 10): uploads a PDF for one hit that had no free download. Invalidates every hit-pool
+ * view (not just this one's own 'failed' filter) since acquisition_status changing also affects HitTable's list. */
+export function useUploadHitPdf(workspaceId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ hitId, file }: { hitId: string; file: File }) => api.uploadHitPdf(workspaceId, hitId, file),
+    onSuccess: () => client.invalidateQueries({ queryKey: keys.searchHitsRoot(workspaceId) }),
   })
 }
 

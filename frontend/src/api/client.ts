@@ -249,7 +249,10 @@ export const api = {
     request<SearchRun>(`/api/workspaces/${workspaceId}/search/runs/${runId}/stop`, { method: 'POST' }),
   getSearchRun: (workspaceId: string, runId: string) =>
     request<SearchRun>(`/api/workspaces/${workspaceId}/search/runs/${runId}`),
-  listSearchHits: (workspaceId: string, params: { after?: string; limit?: number; stage1_status?: string }) => {
+  listSearchHits: (
+    workspaceId: string,
+    params: { after?: string; limit?: number; stage1_status?: string; acquisition_status?: string },
+  ) => {
     const entries = Object.entries(params).filter(([, value]) => value !== undefined) as [string, string | number][]
     const query = new URLSearchParams(entries.map(([key, value]) => [key, String(value)]))
     return request<HitListOut>(`/api/workspaces/${workspaceId}/search/hits?${query}`)
