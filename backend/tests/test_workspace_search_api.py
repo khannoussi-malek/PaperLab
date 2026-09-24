@@ -1012,6 +1012,20 @@ async def test_snowball_route_with_unowned_seed_is_404(session, client, fake_pro
     assert resp.status_code == 404
 
 
+async def test_snowball_route_rejects_an_empty_seed_paper_ids_list(client):
+    """An empty seed list has nothing to hop from — SnowballRequest.seed_paper_ids rejects it with a 422 instead
+    of accepting a request that can only ever produce zero results."""
+    ws = await client.post("/api/workspaces", json={"name": f"Snowball empty seeds {uuid.uuid4().hex[:8]}"})
+    workspace_id = ws.json()["id"]
+
+    resp = await client.post(
+        f"/api/workspaces/{workspace_id}/search/snowball",
+        json={"seed_paper_ids": [], "backward": True, "forward": False},
+    )
+
+    assert resp.status_code == 422
+
+
 async def test_list_hits_surfaces_stage2_eligibility(session, client):
     """A hit whose paper has a stage-2 eligibility verdict for its own run shows stage2_status/
     stage2_exclude_reason in the GET /search/hits response; a hit with no verdict yet shows both as null."""
