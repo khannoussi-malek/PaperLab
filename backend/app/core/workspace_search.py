@@ -25,7 +25,12 @@ from app.core.candidates import Candidate, from_arxiv, from_core, from_crossref,
 from app.core.discovery import Providers, _add_unpaywall_links, download_pdf
 from app.core.references import _same_reference
 from app.models.references import ExternalRef
-from app.models.workspace_search import WorkspaceSearchCursor, WorkspaceSearchHit, WorkspaceSearchRun
+from app.models.workspace_search import (
+    SearchRunEligibility,
+    WorkspaceSearchCursor,
+    WorkspaceSearchHit,
+    WorkspaceSearchRun,
+)
 from app.providers import arxiv, core_ac, crossref, openalex, semantic_scholar
 
 if TYPE_CHECKING:
@@ -469,6 +474,34 @@ async def snowball(
     return SnowballResult(new_hits=new_hits, skipped_seeds=skipped, errors=errors)
 
 
+async def set_eligibility(
+    session: AsyncSession, workspace_id: uuid.UUID, paper_id: uuid.UUID, run_id: uuid.UUID,
+    status: str, exclude_reason: str | None,
+) -> SearchRunEligibility:
+    """Upserts one (paper_id, run_id) stage-2 verdict: insert on the first PATCH, update in place on a later one
+    for the same pair. Same ownership discipline as review_hit/get_run — confirms both the run (get_run, which
+    already raises NotFound on a workspace mismatch or missing run) and the paper (workspace_papers membership,
+    same check snowball() above uses) belong to workspace_id before writing."""
+    await get_run(session, run_id, workspace_id)
+    member = (await session.execute(
+        select(workspace_papers.c.paper_id).where(
+            workspace_papers.c.workspace_id == workspace_id, workspace_papers.c.paper_id == paper_id
+        )
+    )).first()
+    if member is None:
+        raise NotFound(f"paper {paper_id} not in workspace {workspace_id}")
+
+    row = await session.get(SearchRunEligibility, (paper_id, run_id))
+    if row is None:
+        row = SearchRunEligibility(paper_id=paper_id, search_run_id=run_id)
+        session.add(row)
+    row.stage2_status = status
+    row.stage2_exclude_reason = exclude_reason
+    row.assessed_at = datetime.now(timezone.utc)
+    await session.commit()
+    return row
+
+
 def _encode_cursor(first_seen_at: datetime, hit_id: uuid.UUID) -> str:
     return base64.urlsafe_b64encode(json.dumps([first_seen_at.isoformat(), str(hit_id)]).encode()).decode()
 
@@ -476,11 +509,19 @@ def _encode_cursor(first_seen_at: datetime, hit_id: uuid.UUID) -> str:
 _HIT_COLUMNS = [column.name for column in WorkspaceSearchHit.__table__.columns]
 
 
-def _hit_out_dict(hit: WorkspaceSearchHit, ref: ExternalRef | None) -> dict:
+def _hit_out_dict(
+    hit: WorkspaceSearchHit, ref: ExternalRef | None,
+    stage2_status: str | None = None, stage2_exclude_reason: str | None = None,
+) -> dict:
     """A hit's own columns plus its linked ExternalRef's title/authors/year/venue/doi/abstract, merged into one
     dict for HitOut (I7). This codebase's models never use relationship() (a manual join/lookup is the convention), so the
     caller passes in whichever `ref` it already has — a join row here, an explicit session.get elsewhere — and
-    this just does the merge, once, the same way for all three HitOut-producing call sites below."""
+    this just does the merge, once, the same way for all three HitOut-producing call sites below.
+
+    stage2_status/stage2_exclude_reason come from the hit's SearchRunEligibility row (paper_id, run_id), when one
+    exists — only list_hits looks it up (the Screening tab drives off the list); review_hit/upload_hit_pdf are
+    stage-1/acquisition mutations, not stage-2 actions, so they leave these at their None default rather than
+    adding a fetch nothing reads."""
     data = {name: getattr(hit, name) for name in _HIT_COLUMNS}
     data.update(
         title=ref.title if ref else None,
@@ -489,6 +530,8 @@ def _hit_out_dict(hit: WorkspaceSearchHit, ref: ExternalRef | None) -> dict:
         venue=ref.venue if ref else None,
         doi=ref.doi if ref else None,
         abstract=ref.abstract if ref else None,
+        stage2_status=stage2_status,
+        stage2_exclude_reason=stage2_exclude_reason,
     )
     return data
 
@@ -512,10 +555,19 @@ async def list_hits(
     comparison (`WHERE (first_seen_at, id) > (:seen_at, :id)`) instead of a no-op Python tuple comparison.
 
     Outer-joins ExternalRef (I7) since external_ref_id is nullable — a hit with no linked ref still comes back,
-    with title/authors/year/venue/doi all None via `_hit_out_dict`."""
+    with title/authors/year/venue/doi all None via `_hit_out_dict`. Also outer-joins SearchRunEligibility on
+    (paper_id, run_id) so the Screening tab (a later task) can drive its list off this same endpoint, filtered to
+    acquisition_status IN ('imported', 'manual') — a hit with no stage-2 verdict yet still comes back, with
+    stage2_status/stage2_exclude_reason None."""
     query = (
-        select(WorkspaceSearchHit, ExternalRef)
+        select(WorkspaceSearchHit, ExternalRef, SearchRunEligibility)
         .join(ExternalRef, WorkspaceSearchHit.external_ref_id == ExternalRef.id, isouter=True)
+        .join(
+            SearchRunEligibility,
+            (SearchRunEligibility.paper_id == WorkspaceSearchHit.paper_id)
+            & (SearchRunEligibility.search_run_id == WorkspaceSearchHit.run_id),
+            isouter=True,
+        )
         .where(WorkspaceSearchHit.workspace_id == workspace_id)
     )
     if stage1_status:
@@ -529,7 +581,13 @@ async def list_hits(
         )
     query = query.order_by(WorkspaceSearchHit.first_seen_at, WorkspaceSearchHit.id).limit(limit)
     rows = (await session.execute(query)).all()
-    items = [_hit_out_dict(hit, ref) for hit, ref in rows]
+    items = [
+        _hit_out_dict(
+            hit, ref,
+            elig.stage2_status if elig else None, elig.stage2_exclude_reason if elig else None,
+        )
+        for hit, ref, elig in rows
+    ]
     next_cursor = _encode_cursor(rows[-1][0].first_seen_at, rows[-1][0].id) if len(rows) == limit else None
     return items, next_cursor
 
