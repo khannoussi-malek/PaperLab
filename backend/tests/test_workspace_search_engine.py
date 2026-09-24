@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from app.core import discovery, workspaces
 from app.core.candidates import Candidate, normal_title
 from app.core.paper_sources import SOURCES, SourceSettings
-from app.core.workspace_search import _find_or_create_external_ref, _insert_hit, search_batch, snowball
+from app.core.workspace_search import _find_or_create_external_ref, _insert_hit, search_batch, set_eligibility, snowball
 from app.models.references import ExternalRef
 from app.models.workspace import Workspace
 from app.models.workspace_search import WorkspaceSearchCursor, WorkspaceSearchHit, WorkspaceSearchRun
@@ -594,3 +594,65 @@ async def test_search_run_eligibility_round_trips(session):
 
     fetched = await session.get(SearchRunEligibility, (paper.id, run.id))
     assert fetched.stage2_status == "include"
+
+
+async def test_set_eligibility_upserts_on_a_second_call(session):
+    """First call inserts a (paper_id, run_id) row; a second call for the same pair updates it in place instead
+    of inserting a duplicate — same upsert discipline the M30a screening PATCH already has for stage1 fields."""
+    from app.models import Paper
+    from app.models.workspace_search import SearchRunEligibility
+
+    workspace = Workspace(name=f"eligibility-upsert-{uuid.uuid4().hex[:8]}")
+    session.add(workspace)
+    paper = Paper(title="Upsert Paper", doi=f"10.9999/{uuid.uuid4().hex[:8]}", file_path="/nonexistent.pdf")
+    session.add(paper)
+    await session.flush()
+    await workspaces.add_paper(session, workspace.id, paper.id)
+    run = WorkspaceSearchRun(
+        workspace_id=workspace.id, query_text="q", sources_json=["arxiv"], status="exhausted",
+        started_at=datetime.now(timezone.utc), stats_json={},
+    )
+    session.add(run)
+    await session.flush()
+    await session.commit()
+
+    await set_eligibility(session, workspace.id, paper.id, run.id, "include", None)
+
+    row = await session.get(SearchRunEligibility, (paper.id, run.id))
+    assert row.stage2_status == "include"
+    assert row.stage2_exclude_reason is None
+
+    await set_eligibility(session, workspace.id, paper.id, run.id, "exclude", "not_relevant")
+
+    count = await session.scalar(
+        select(func.count()).select_from(SearchRunEligibility).where(
+            SearchRunEligibility.paper_id == paper.id, SearchRunEligibility.search_run_id == run.id
+        )
+    )
+    assert count == 1  # still exactly one row for (paper_id, run_id) — updated, not duplicated
+    row = await session.get(SearchRunEligibility, (paper.id, run.id))
+    assert row.stage2_status == "exclude"
+    assert row.stage2_exclude_reason == "not_relevant"
+
+
+async def test_set_eligibility_raises_not_found_for_a_paper_outside_the_workspace(session):
+    from app.models import Paper
+
+    workspace = Workspace(name=f"eligibility-owner-{uuid.uuid4().hex[:8]}")
+    session.add(workspace)
+    paper = Paper(title="Outsider Paper", doi=f"10.9999/{uuid.uuid4().hex[:8]}", file_path="/nonexistent.pdf")
+    session.add(paper)
+    await session.flush()
+    run = WorkspaceSearchRun(
+        workspace_id=workspace.id, query_text="q", sources_json=["arxiv"], status="exhausted",
+        started_at=datetime.now(timezone.utc), stats_json={},
+    )
+    session.add(run)
+    await session.flush()
+    await session.commit()
+    # paper deliberately never added to the workspace via workspaces.add_paper
+
+    from app.core.errors import NotFound
+
+    with pytest.raises(NotFound):
+        await set_eligibility(session, workspace.id, paper.id, run.id, "include", None)

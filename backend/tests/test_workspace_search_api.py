@@ -1,3 +1,6 @@
+import uuid
+from datetime import datetime, timezone
+
 import pytest
 
 from app.api.deps import get_discovery
@@ -1004,6 +1007,140 @@ async def test_snowball_route_with_unowned_seed_is_404(session, client, fake_pro
     resp = await client.post(
         f"/api/workspaces/{workspace_id2}/search/snowball",
         json={"seed_paper_ids": [str(seed.id)], "backward": True, "forward": False},
+    )
+
+    assert resp.status_code == 404
+
+
+async def test_list_hits_surfaces_stage2_eligibility(session, client):
+    """A hit whose paper has a stage-2 eligibility verdict for its own run shows stage2_status/
+    stage2_exclude_reason in the GET /search/hits response; a hit with no verdict yet shows both as null."""
+    import uuid as uuid_mod
+    from datetime import datetime, timezone
+
+    from app.models import Paper
+    from app.models.workspace import Workspace
+    from app.models.workspace_search import SearchRunEligibility, WorkspaceSearchHit, WorkspaceSearchRun
+
+    workspace = Workspace(name=f"Eligibility join {uuid_mod.uuid4().hex[:8]}")
+    session.add(workspace)
+    await session.flush()
+    run = WorkspaceSearchRun(
+        workspace_id=workspace.id, query_text="q", filters_json={}, query_overrides_json={},
+        sources_json=[], status="exhausted", started_at=datetime.now(timezone.utc), stats_json={},
+    )
+    session.add(run)
+    await session.flush()
+    paper = Paper(title="Eligible Paper", doi=f"10.9999/{uuid_mod.uuid4().hex[:8]}", file_path="/nonexistent.pdf")
+    session.add(paper)
+    await session.flush()
+    session.add(WorkspaceSearchHit(
+        workspace_id=workspace.id, run_id=run.id, source_method="database_search", paper_id=paper.id,
+        normalized_title="assessed hit", first_seen_at=datetime.now(timezone.utc),
+    ))
+    session.add(WorkspaceSearchHit(
+        workspace_id=workspace.id, run_id=run.id, source_method="database_search",
+        normalized_title="unassessed hit", first_seen_at=datetime.now(timezone.utc),
+    ))
+    session.add(SearchRunEligibility(
+        paper_id=paper.id, search_run_id=run.id, stage2_status="include", assessed_at=datetime.now(timezone.utc),
+    ))
+    await session.commit()
+
+    resp = await client.get(f"/api/workspaces/{workspace.id}/search/hits")
+
+    assert resp.status_code == 200
+    items = {item["normalized_title"]: item for item in resp.json()["items"]}
+    assert items["assessed hit"]["stage2_status"] == "include"
+    assert items["assessed hit"]["stage2_exclude_reason"] is None
+    assert items["unassessed hit"]["stage2_status"] is None
+    assert items["unassessed hit"]["stage2_exclude_reason"] is None
+
+
+async def _make_eligible_paper(session, client, workspace_id=None):
+    """Workspace (if not given) + a paper that's a member of it + an exhausted run in that same workspace —
+    the minimum an eligibility PATCH needs to succeed. Returns (workspace_id, paper_id, run_id)."""
+    from app.core import workspaces
+    from app.models import Paper
+    from app.models.workspace_search import WorkspaceSearchRun
+
+    if workspace_id is None:
+        ws = await client.post("/api/workspaces", json={"name": f"Eligibility route {uuid.uuid4().hex[:8]}"})
+        workspace_id = ws.json()["id"]
+    paper = Paper(title="Route Paper", doi=f"10.9999/{uuid.uuid4().hex[:8]}", file_path="/nonexistent.pdf")
+    session.add(paper)
+    await session.flush()
+    await workspaces.add_paper(session, workspace_id, paper.id)
+    run = WorkspaceSearchRun(
+        workspace_id=workspace_id, query_text="q", filters_json={}, query_overrides_json={},
+        sources_json=[], status="exhausted", started_at=datetime.now(timezone.utc), stats_json={},
+    )
+    session.add(run)
+    await session.flush()
+    await session.commit()
+    return workspace_id, paper.id, run.id
+
+
+async def test_set_eligibility_route_sets_and_upserts(session, client):
+    workspace_id, paper_id, run_id = await _make_eligible_paper(session, client)
+
+    resp = await client.patch(
+        f"/api/workspaces/{workspace_id}/papers/{paper_id}/eligibility?run={run_id}",
+        json={"status": "include"},
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["paper_id"] == str(paper_id)
+    assert body["search_run_id"] == str(run_id)
+    assert body["stage2_status"] == "include"
+    assert body["stage2_exclude_reason"] is None
+
+    resp2 = await client.patch(
+        f"/api/workspaces/{workspace_id}/papers/{paper_id}/eligibility?run={run_id}",
+        json={"status": "exclude", "exclude_reason": "not_relevant"},
+    )
+
+    assert resp2.status_code == 200
+    body2 = resp2.json()
+    assert body2["stage2_status"] == "exclude"
+    assert body2["stage2_exclude_reason"] == "not_relevant"
+
+
+async def test_set_eligibility_route_for_paper_not_in_workspace_is_404(session, client):
+    from app.models import Paper
+    from app.models.workspace_search import WorkspaceSearchRun
+
+    ws = await client.post("/api/workspaces", json={"name": f"Elig no membership {uuid.uuid4().hex[:8]}"})
+    workspace_id = ws.json()["id"]
+    paper = Paper(title="Outside Paper", doi=f"10.9999/{uuid.uuid4().hex[:8]}", file_path="/nonexistent.pdf")
+    session.add(paper)
+    await session.flush()
+    run = WorkspaceSearchRun(
+        workspace_id=workspace_id, query_text="q", filters_json={}, query_overrides_json={},
+        sources_json=[], status="exhausted", started_at=datetime.now(timezone.utc), stats_json={},
+    )
+    session.add(run)
+    await session.flush()
+    await session.commit()
+    # paper deliberately never added to the workspace via workspaces.add_paper
+
+    resp = await client.patch(
+        f"/api/workspaces/{workspace_id}/papers/{paper.id}/eligibility?run={run.id}",
+        json={"status": "include"},
+    )
+
+    assert resp.status_code == 404
+
+
+async def test_set_eligibility_route_for_run_from_a_different_workspace_is_404(session, client):
+    workspace_id1, paper_id1, run_id1 = await _make_eligible_paper(session, client)
+    ws2 = await client.post("/api/workspaces", json={"name": f"Elig other run {uuid.uuid4().hex[:8]}"})
+    workspace_id2 = ws2.json()["id"]
+
+    resp = await client.patch(
+        f"/api/workspaces/{workspace_id2}/papers/{paper_id1}/eligibility?run={run_id1}",
+        json={"status": "include"},
     )
 
     assert resp.status_code == 404

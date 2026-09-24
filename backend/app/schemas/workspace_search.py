@@ -65,6 +65,10 @@ class HitOut(BaseModel):
     venue: str | None = None
     doi: str | None = None
     abstract: str | None = None
+    # From the hit's linked SearchRunEligibility row (paper_id, run_id): stage-2 screening verdict, one join away
+    # (Task 4). None when no verdict has been recorded yet for this hit's own run.
+    stage2_status: str | None = None
+    stage2_exclude_reason: str | None = None
 
 
 class HitListOut(BaseModel):
@@ -125,3 +129,20 @@ class SnowballOut(BaseModel):
     new_hits: int
     skipped_seeds: list[uuid.UUID]
     errors: dict[str, str]
+
+
+class EligibilityUpdate(BaseModel):
+    status: Literal["include", "exclude"]
+    # Free-text, unlike stage1's CHECK'd ExcludeReason enum — SearchRunEligibility.stage2_exclude_reason is a
+    # plain TEXT column with no DB-level CHECK constraint (Task 1).
+    exclude_reason: str | None = None
+
+
+class EligibilityOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    paper_id: uuid.UUID
+    search_run_id: uuid.UUID
+    stage2_status: str | None
+    stage2_exclude_reason: str | None
+    assessed_at: datetime | None

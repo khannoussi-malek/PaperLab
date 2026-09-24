@@ -3,9 +3,10 @@ import uuid
 from fastapi import APIRouter, Response
 
 from app.api.deps import SessionDep
-from app.core import workspaces
+from app.core import workspace_search, workspaces
 from app.schemas.notes import NoteOut
 from app.schemas.papers import PaperOut
+from app.schemas.workspace_search import EligibilityOut, EligibilityUpdate
 from app.schemas.workspaces import WorkspaceCreate, WorkspaceOut, WorkspaceRename
 
 router = APIRouter(prefix="/api/workspaces", tags=["workspaces"])
@@ -52,3 +53,12 @@ async def list_papers(workspace_id: uuid.UUID, session: SessionDep) -> list[Pape
 @router.get("/{workspace_id}/notes")
 async def list_notes(workspace_id: uuid.UUID, session: SessionDep) -> list[NoteOut]:
     return await workspaces.notes(session, workspace_id)
+
+
+@router.patch("/{workspace_id}/papers/{paper_id}/eligibility")
+async def set_eligibility(
+    workspace_id: uuid.UUID, paper_id: uuid.UUID, run: uuid.UUID, payload: EligibilityUpdate, session: SessionDep,
+) -> EligibilityOut:
+    return await workspace_search.set_eligibility(
+        session, workspace_id, paper_id, run, payload.status, payload.exclude_reason
+    )
