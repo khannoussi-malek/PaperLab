@@ -480,6 +480,28 @@ export function useImportSearchHits(workspaceId: string) {
   })
 }
 
+/** Imports every hit still pending acquisition in the current (unfiltered) pool — the deliberate "bulk" action
+ * behind HitTable's "Import all with PDF in this filter" button, as opposed to `useImportSearchHits`'s one-hit-at-
+ * a-time "Add PDF". The response carries no ids of what changed (could be many hits at once), so there's nothing
+ * to patch — same reasoning as `useSnowball`'s reset: drop the unfiltered pool's own query back to page 1 and
+ * re-fetch just that (never a blanket `invalidateQueries` over the whole family, which would re-fetch every
+ * already-loaded page of a pool that can run into the thousands), plus a real, cheap refetch of any filtered
+ * view whose membership could have shifted (e.g. ManualAcquisitionTab's `'failed'` filter). */
+export function useImportAllHits(workspaceId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: () => api.importSearchHits(workspaceId, undefined),
+    onSuccess: () =>
+      Promise.all([
+        client.resetQueries({ queryKey: keys.searchHits(workspaceId, 'all', 'all'), exact: true }),
+        client.invalidateQueries({
+          queryKey: keys.searchHitsRoot(workspaceId),
+          predicate: (query) => query.queryKey[4] !== 'all' || query.queryKey[5] !== 'all',
+        }),
+      ]),
+  })
+}
+
 /** Manual acquisition (Task 10): uploads a PDF for one hit that had no free download. */
 export function useUploadHitPdf(workspaceId: string) {
   const client = useQueryClient()

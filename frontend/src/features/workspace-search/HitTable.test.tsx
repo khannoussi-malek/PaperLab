@@ -346,3 +346,23 @@ test('a failed import shows an error message', async () => {
 
   expect(await screen.findByRole('alert')).toHaveTextContent('Import failed')
 })
+
+test('"Import all with PDF in this filter" imports every hit still pending in the pool, not just one', async () => {
+  vi.spyOn(api, 'importSearchHits').mockResolvedValue({ imported: 1, failed: 0 })
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  await pool().findByText('a paper about llms')
+
+  fireEvent.click(screen.getByRole('button', { name: 'Import all with PDF in this filter' }))
+
+  await waitFor(() => expect(api.importSearchHits).toHaveBeenCalledWith('ws-1', undefined))
+})
+
+test('a failed bulk import shows an error message', async () => {
+  vi.spyOn(api, 'importSearchHits').mockRejectedValue(new Error('Bulk import failed'))
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  await pool().findByText('a paper about llms')
+
+  fireEvent.click(screen.getByRole('button', { name: 'Import all with PDF in this filter' }))
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('Bulk import failed')
+})

@@ -46,8 +46,9 @@ test('search, screen, import a hit, then upload its PDF manually', async ({ page
   const title = 'paperlab pagination fixture 2'
   const row = page.locator('[data-slot="context-menu-trigger"]', { hasText: title })
   await row.getByRole('button', { name: 'Hit actions' }).click()
-  await page.getByRole('menuitem', { name: 'Relevant' }).click()
-  await expect(page.getByRole('menuitem', { name: 'Relevant' })).toHaveCount(0)
+  // exact: true — Playwright's default substring match on "Relevant" also matches "Not relevant…".
+  await page.getByRole('menuitem', { name: 'Relevant', exact: true }).click()
+  await expect(page.getByRole('menuitem', { name: 'Relevant', exact: true })).toHaveCount(0)
 
   await Promise.all([
     page.waitForResponse((r) => r.url().endsWith('/search/hits/import') && r.request().method() === 'POST'),
