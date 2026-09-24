@@ -51,7 +51,11 @@ export function HitPreview({ hit, onReview, onUpload, uploadPending }: Props) {
   return (
     <aside
       aria-label="Hit preview"
-      className={cn('hit-preview flex flex-col gap-2 overflow-y-auto rounded-xl p-4 ring-1 ring-glass-border', glass)}
+      // h-full: without it this grows to fit its own content (a long abstract easily exceeds the panel's
+      // available height) instead of respecting the bounded height its parent already has — its own
+      // overflow-y-auto then has nothing left to actually clip, and content spills past the panel instead of
+      // scrolling inside it.
+      className={cn('hit-preview flex h-full flex-col gap-2 overflow-y-auto rounded-xl p-4 ring-1 ring-glass-border', glass)}
     >
       <h2 className="font-heading text-lg leading-snug font-semibold wrap-anywhere">{title}</h2>
       {byline && <p className="text-sm text-muted-foreground">{byline}</p>}
