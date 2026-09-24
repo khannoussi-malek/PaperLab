@@ -39,6 +39,11 @@ function asPrismaRuns(runs: PrismaExportOut['runs']): PrismaRun[] {
 export function PrismaTab({ workspaceId }: { workspaceId: string }) {
   const [runs, setRuns] = useState('all')
   const { data } = usePrismaExport(workspaceId, runs)
+  // Dropdown options always come from the combined export — the backend only populates
+  // `runs` on that branch ([] for a per-run export, since the caller already knows which
+  // run). Fetched separately so the picker stays populated after selecting one run; this
+  // shares the 'all' query's cache entry when `runs === 'all'`, so no extra request.
+  const { data: allRunsData } = usePrismaExport(workspaceId, 'all')
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 p-3">
@@ -50,7 +55,7 @@ export function PrismaTab({ workspaceId }: { workspaceId: string }) {
           className="w-fit rounded border px-2 py-1 text-sm"
         >
           <option value="all">All runs (combined)</option>
-          {data && asPrismaRuns(data.runs).map((r) => (
+          {allRunsData && asPrismaRuns(allRunsData.runs).map((r) => (
             <option key={r.id} value={r.id}>{r.query_text}</option>
           ))}
         </select>
