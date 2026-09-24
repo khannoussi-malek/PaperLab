@@ -117,6 +117,35 @@ test('focusing a different row (via its ⋮ button) swaps the preview immediatel
   expect(panel.queryByText('First Paper')).not.toBeInTheDocument()
 })
 
+test('the preview panel offers the same review actions as the menu, so reading and deciding are the same step', async () => {
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  const panel = await preview()
+  await panel.findByText('a paper about llms')
+
+  fireEvent.click(panel.getByRole('button', { name: 'Relevant' }))
+
+  await waitFor(() => expect(api.patchSearchHit).toHaveBeenCalledWith('ws-1', 'h1', { stage1_status: 'relevant' }))
+})
+
+test('the preview panel requires a reason before Not relevant can be clicked, same rule as the menu', async () => {
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  const panel = await preview()
+  await panel.findByText('a paper about llms')
+
+  expect(panel.getByRole('button', { name: 'Not relevant' })).toBeDisabled()
+
+  fireEvent.change(panel.getByLabelText('Exclusion reason'), { target: { value: 'duplicate' } })
+  expect(panel.getByRole('button', { name: 'Not relevant' })).toBeEnabled()
+  fireEvent.click(panel.getByRole('button', { name: 'Not relevant' }))
+
+  await waitFor(() =>
+    expect(api.patchSearchHit).toHaveBeenCalledWith('ws-1', 'h1', {
+      stage1_status: 'not_relevant',
+      stage1_exclude_reason: 'duplicate',
+    }),
+  )
+})
+
 test('the trailing ⋮ button opens a menu with Relevant, Maybe and Not relevant…', async () => {
   renderWithClient(<HitTable workspaceId="ws-1" />)
   await pool().findByText('a paper about llms')
