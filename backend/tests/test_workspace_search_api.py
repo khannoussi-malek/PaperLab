@@ -28,6 +28,39 @@ async def test_start_run_over_http(client):
     assert body["query_text"] == "bert"
 
 
+async def test_start_run_response_exposes_query_overrides(client):
+    """A run's recorded search strategy (what a PRISMA methods section later cites) must show what was actually
+    submitted, per-source overrides included — SearchRunOut had no such field before this fix (I6 part 3)."""
+    ws = await client.post("/api/workspaces", json={"name": "Query overrides test"})
+    workspace_id = ws.json()["id"]
+
+    resp = await client.post(
+        f"/api/workspaces/{workspace_id}/search/runs",
+        json={
+            "query": "bert", "filters": {}, "sources": ["arxiv", "openalex"],
+            "query_overrides": {"arxiv": "bert language model"},
+        },
+    )
+
+    assert resp.status_code == 201
+    assert resp.json()["query_overrides_json"] == {"arxiv": "bert language model"}
+
+
+async def test_start_run_rejects_an_unsupported_source(client):
+    """Unpaywall is DOI-only PDF enrichment, never a discovery source (spec §6/app/core/paper_sources.py's own
+    comment: "Unpaywall only adds PDF links") — search_batch's _PAGE_FUNCS has no "unpaywall" entry, so sending it
+    used to reach a KeyError inside the worker and crash the whole run instead of a clean 422 (C1)."""
+    ws = await client.post("/api/workspaces", json={"name": "Unsupported source test"})
+    workspace_id = ws.json()["id"]
+
+    resp = await client.post(
+        f"/api/workspaces/{workspace_id}/search/runs",
+        json={"query": "bert", "filters": {}, "sources": ["unpaywall"]},
+    )
+
+    assert resp.status_code == 422
+
+
 async def test_start_run_enqueues_the_worker_job(client, arq):
     ws = await client.post("/api/workspaces", json={"name": "Enqueue test"})
     workspace_id = ws.json()["id"]
@@ -248,6 +281,17 @@ async def test_list_hits_with_zero_limit_is_422(client):
     workspace_id = ws.json()["id"]
 
     resp = await client.get(f"/api/workspaces/{workspace_id}/search/hits?limit=0")
+
+    assert resp.status_code == 422
+
+
+async def test_list_hits_with_a_garbage_stage1_status_filter_is_422(client):
+    """stage1_status/acquisition_status used to be plain str query params — a garbage value silently matched
+    nothing instead of a clean 422 (bundled minor)."""
+    ws = await client.post("/api/workspaces", json={"name": "Garbage filter test"})
+    workspace_id = ws.json()["id"]
+
+    resp = await client.get(f"/api/workspaces/{workspace_id}/search/hits?stage1_status=not-a-real-status")
 
     assert resp.status_code == 422
 
@@ -672,6 +716,60 @@ async def test_import_hits_new_import_sets_external_ref_imported_as(session, cli
     ref = await session.get(ExternalRef, ref_id)
     await session.refresh(ref)
     assert ref.imported_as == hit.paper_id
+
+
+async def test_import_hits_skips_a_manually_acquired_hit(session, client, discovery_api):
+    """Running "Import all" after a hit was manually uploaded must not re-attach it and overwrite its provenance
+    from "manual" to "imported" — spec §4.4 and M30b's PRISMA export need that distinction kept (I8)."""
+    from app.models.workspace_search import WorkspaceSearchHit
+
+    discovery_api.pdf_host.reply("/should-not-be-fetched.pdf", 200, content=b"%PDF-1.4 should not be used")
+    hit_id = await _make_importable_hit(session, pdf_urls=["https://pdf.example/should-not-be-fetched.pdf"])
+    hit = await session.get(WorkspaceSearchHit, hit_id)
+    hit.acquisition_status = "manual"
+    await session.commit()
+
+    resp = await client.post(
+        f"/api/workspaces/{hit.workspace_id}/search/hits/import", json={"hit_ids": [str(hit_id)]}
+    )
+
+    assert resp.status_code == 200
+    assert resp.json() == {"imported": 0, "failed": 0}  # skipped entirely — neither imported nor failed
+    assert discovery_api.pdf_host.requests == []  # never re-downloaded
+
+    await session.refresh(hit)
+    assert hit.acquisition_status == "manual"
+
+
+async def test_import_hits_enriches_a_missing_pdf_via_unpaywall_before_failing(session, client, app, discovery_fakes):
+    """spec §6: Unpaywall is DOI-only PDF enrichment for a candidate missing a free PDF, applied post-merge —
+    import_hits only ever checked ref.pdf_urls as already stored and never called into it (I5)."""
+    from app.models.references import ExternalRef
+    from app.models.workspace_search import WorkspaceSearchHit
+
+    hit_id = await _make_importable_hit(session, pdf_urls=[])
+    hit = await session.get(WorkspaceSearchHit, hit_id)
+    workspace_id = hit.workspace_id
+    ref = await session.get(ExternalRef, hit.external_ref_id)
+    ref.doi = "10.5555/paperlab-i5-unpaywall"
+    await session.commit()
+
+    discovery_fakes.unpaywall.reply(
+        f"/v2/{ref.doi}", 200,
+        json={"best_oa_location": {"url_for_pdf": "https://pdf.example/i5.pdf"}, "oa_locations": []},
+    )
+    discovery_fakes.pdf_host.reply("/i5.pdf", 200, content=b"%PDF-1.4 enriched content")
+    app.dependency_overrides[get_discovery] = lambda: discovery_fakes.turned_on("unpaywall")
+
+    resp = await client.post(f"/api/workspaces/{workspace_id}/search/hits/import", json={"hit_ids": [str(hit_id)]})
+
+    assert resp.status_code == 200
+    assert resp.json() == {"imported": 1, "failed": 0}
+
+    await session.refresh(hit)
+    assert hit.acquisition_status == "imported"
+    await session.refresh(ref)
+    assert ref.pdf_urls == ["https://pdf.example/i5.pdf"]
 
 
 async def test_upload_pdf_marks_hit_manual_and_enqueues_ingest(session, client, arq):

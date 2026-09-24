@@ -1,8 +1,9 @@
+import asyncio
 import logging
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 
 from app.config import settings
 from app.core import discovery, paper_sources
@@ -13,11 +14,37 @@ from app.providers import discovery_fake
 
 logger = logging.getLogger(__name__)
 
+# A flat pause between full-batch passes (one page from every source happens together each iteration), enough to
+# stay under arXiv's ~3 req/3s and Crossref's ~1 req/s guidance (spec §6) without tuning each source separately.
+BATCH_PACING_SECONDS = 2.0
+# Backstop for a real run: spec §16 targets ~3,000 rows/run, and page sizes 20-100 across ~5 sources per
+# iteration comfortably cover that within this many iterations. Hitting the cap before every source naturally
+# exhausts is a valid terminal state (a bounded scan that found what it found), not a failure.
+MAX_BATCH_ITERATIONS = 200
+
+_TRY_LOCK = text("SELECT pg_try_advisory_xact_lock(:key)")
+
+
+def _lock_key(run_id: uuid.UUID) -> int:
+    """Postgres advisory locks take an int8/int4 key; a UUID is 128 bits, so this folds it down to 63 bits (fits
+    a signed bigint). A hash collision only ever makes an unrelated run wait its turn — it can't corrupt data —
+    so this doesn't need to be collision-proof."""
+    return run_id.int & 0x7FFFFFFFFFFFFFFF
+
+
+async def _try_lock(session, run_id: uuid.UUID) -> bool:
+    """Non-blocking and transaction-scoped: released automatically on the next commit/rollback, so it only ever
+    covers one batch iteration, not the whole run. False means another worker's iteration is already in flight
+    for this run right now (e.g. a stop-then-immediate-restart race, since enqueue_job has no dedup job id) — the
+    caller should back off instead of racing it to the same insert (I2)."""
+    return bool(await session.scalar(_TRY_LOCK, {"key": _lock_key(run_id)}))
+
 
 async def run_workspace_search(ctx: dict, run_id: str) -> None:
     """ARQ job: pages a search run's sources, one search_batch() call per iteration, until every source is
-    exhausted or the run's status stops being "running" (checked fresh from the DB each iteration, so a
-    concurrent stop-run call is noticed). ctx["transport"] is a test's MockTransport."""
+    exhausted, the run's status stops being "running" (checked fresh from the DB each iteration, so a
+    concurrent stop-run call is noticed), or MAX_BATCH_ITERATIONS is hit (a bounded backstop, not expected to
+    matter in practice — see C2). ctx["transport"] is a test's MockTransport."""
     rid = uuid.UUID(run_id)
     async with SessionLocal() as session:
         try:
@@ -31,12 +58,27 @@ async def run_workspace_search(ctx: dict, run_id: str) -> None:
                 transport = discovery_fake.transport()
             providers = discovery.build_providers(sources, transport)
             try:
-                while True:
+                for iteration in range(MAX_BATCH_ITERATIONS):
+                    if iteration > 0:
+                        await asyncio.sleep(BATCH_PACING_SECONDS)
                     await session.refresh(run)
                     if run.status != "running":
-                        break
-                    await search_batch(session, providers, run)
+                        return
+                    if not await _try_lock(session, rid):
+                        logger.info("workspace search run %s already being processed elsewhere; backing off", rid)
+                        return
+
+                    result = await search_batch(session, providers, run)
+                    per_source_raw = dict(run.stats_json.get("per_source_raw_count", {}))
+                    for source, count in result.raw_counts.items():
+                        per_source_raw[source] = per_source_raw.get(source, 0) + count
+                    run.stats_json = {
+                        **run.stats_json,
+                        "last_batch_new_hits": result.new_hits,
+                        "per_source_raw_count": per_source_raw,
+                    }
                     await session.commit()
+
                     cursors = (
                         (
                             await session.execute(
@@ -46,20 +88,24 @@ async def run_workspace_search(ctx: dict, run_id: str) -> None:
                         .scalars()
                         .all()
                     )
-                    # ponytail: a source stuck on httpx errors never sets its cursor exhausted, so this keeps
-                    # retrying it every pass with no backoff — fine for a blip, add backoff/max-retries if a
-                    # dead API key or outage needs to stop spinning the loop.
                     if cursors and all(c.exhausted for c in cursors):
                         run.status = "exhausted"
                         run.stopped_at = datetime.now(timezone.utc)
                         await session.commit()
-                        break
+                        return
+                # Reached only by running out of iterations without every source naturally exhausting — still a
+                # valid terminal state (C2 part 3), not a failure.
+                run.status = "exhausted"
+                run.stopped_at = datetime.now(timezone.utc)
+                await session.commit()
             finally:
                 await providers.aclose()
         except Exception:
             logger.exception("workspace search run %s failed", rid)
             await session.rollback()
             await session.execute(
-                update(WorkspaceSearchRun).where(WorkspaceSearchRun.id == rid).values(status="failed")
+                update(WorkspaceSearchRun)
+                .where(WorkspaceSearchRun.id == rid)
+                .values(status="failed", stopped_at=datetime.now(timezone.utc))
             )
             await session.commit()

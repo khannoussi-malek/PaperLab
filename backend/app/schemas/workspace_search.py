@@ -9,12 +9,17 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 Stage1Status = Literal["relevant", "not_relevant", "maybe"]
 ExcludeReason = Literal["wrong_topic", "wrong_study_type", "duplicate", "language", "inaccessible", "other"]
 TopicFit = Literal["same_topic", "related_topic", "different_topic", "out_of_scope"]
+AcquisitionStatus = Literal["not_attempted", "queued", "imported", "failed", "manual"]
+# Search/discovery sources only (spec §6) — Unpaywall is DOI-only enrichment, never fanned out to by search_batch
+# (app/core/paper_sources.py's own comment: "Unpaywall only adds PDF links"). Sending it here used to reach
+# _PAGE_FUNCS[source] with no "unpaywall" entry and crash the whole run with a KeyError (C1).
+SearchSource = Literal["arxiv", "crossref", "core", "semantic_scholar", "openalex"]
 
 
 class SearchRunCreate(BaseModel):
     query: str
     filters: dict = {}
-    sources: list[str]
+    sources: list[SearchSource]
     query_overrides: dict = {}
 
 
@@ -25,6 +30,7 @@ class SearchRunOut(BaseModel):
     workspace_id: uuid.UUID
     query_text: str
     filters_json: dict
+    query_overrides_json: dict
     sources_json: list[str]
     status: str
     started_at: datetime
