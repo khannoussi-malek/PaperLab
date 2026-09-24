@@ -149,6 +149,29 @@ test('typing in the search box filters the pool by title, client-side, with no n
   expect(api.listSearchHits).toHaveBeenCalledTimes(callsBeforeTyping)
 })
 
+test('the search box also matches the abstract, not just the title', async () => {
+  const hits: Hit[] = [
+    {
+      ...baseHit, id: 'h1', title: 'Attention Is All You Need', normalized_title: 'attention is all you need',
+      abstract: 'A novel network architecture based solely on attention mechanisms.',
+    },
+    {
+      ...baseHit, id: 'h2', title: 'BERT: Pre-training', normalized_title: 'bert pre-training',
+      abstract: 'We introduce a new language representation model.',
+    },
+  ]
+  vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: hits, next_cursor: null })
+
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  await pool().findByText('Attention Is All You Need')
+
+  // "mechanisms" appears only in the first hit's abstract, not in either title.
+  fireEvent.change(screen.getByLabelText('Search hits'), { target: { value: 'mechanisms' } })
+
+  await waitFor(() => expect(pool().queryByText('BERT: Pre-training')).not.toBeInTheDocument())
+  expect(pool().getByText('Attention Is All You Need')).toBeInTheDocument()
+})
+
 test('a filter that matches nothing says so instead of showing an empty list', async () => {
   renderWithClient(<HitTable workspaceId="ws-1" />)
   await pool().findByText('a paper about llms')
