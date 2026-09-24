@@ -76,6 +76,11 @@ export type HitReviewUpdate = components['schemas']['HitReviewUpdate']
 export type BulkHitReviewUpdate = components['schemas']['BulkHitReviewUpdate']
 export type BulkUpdateOut = components['schemas']['BulkUpdateOut']
 export type ImportHitsOut = components['schemas']['ImportHitsOut']
+export type SnowballRequest = components['schemas']['SnowballRequest']
+export type SnowballOut = components['schemas']['SnowballOut']
+export type EligibilityUpdate = components['schemas']['EligibilityUpdate']
+export type EligibilityOut = components['schemas']['EligibilityOut']
+export type PrismaExportOut = components['schemas']['PrismaExportOut']
 
 /** Where a chat lives: the reader's paper, or a workspace. */
 export type ChatScope = { kind: 'paper' | 'workspace'; id: string }
@@ -274,4 +279,14 @@ export const api = {
     form.append('file', file)
     return request<Hit>(`/api/workspaces/${workspaceId}/search/hits/${hitId}/upload`, { method: 'POST', body: form })
   },
+  snowball: (workspaceId: string, body: SnowballRequest) =>
+    request<SnowballOut>(`/api/workspaces/${workspaceId}/search/snowball`, sendJson('POST', body)),
+  setEligibility: (workspaceId: string, paperId: string, runId: string, body: EligibilityUpdate) =>
+    request<EligibilityOut>(
+      `/api/workspaces/${workspaceId}/papers/${paperId}/eligibility?run=${runId}`,
+      sendJson('PATCH', body),
+    ),
+  /** `runs`: a single run id, or `'all'` to combine every run in the workspace. */
+  prismaExport: (workspaceId: string, runs: string) =>
+    request<PrismaExportOut>(`/api/workspaces/${workspaceId}/search/prisma?runs=${runs}`),
 }
