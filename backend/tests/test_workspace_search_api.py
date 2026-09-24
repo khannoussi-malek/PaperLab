@@ -211,6 +211,38 @@ async def test_list_hits_filters_by_stage1_status(session, client):
     assert items[0]["normalized_title"] == "relevant one"
 
 
+async def test_list_hits_filters_by_acquisition_status(session, client):
+    import uuid as uuid_mod
+    from datetime import datetime, timezone
+
+    from app.models.workspace import Workspace
+    from app.models.workspace_search import WorkspaceSearchHit, WorkspaceSearchRun
+
+    workspace = Workspace(name=f"Hit acquisition filter {uuid_mod.uuid4().hex[:8]}")
+    session.add(workspace)
+    await session.flush()
+    run = WorkspaceSearchRun(
+        workspace_id=workspace.id, query_text="q", filters_json={}, query_overrides_json={},
+        sources_json=[], status="exhausted", started_at=datetime.now(timezone.utc), stats_json={},
+    )
+    session.add(run)
+    await session.flush()
+    session.add(WorkspaceSearchHit(
+        workspace_id=workspace.id, run_id=run.id, source_method="database_search",
+        normalized_title="failed one", acquisition_status="failed", first_seen_at=datetime.now(timezone.utc),
+    ))
+    session.add(WorkspaceSearchHit(
+        workspace_id=workspace.id, run_id=run.id, source_method="database_search",
+        normalized_title="not attempted one", first_seen_at=datetime.now(timezone.utc),
+    ))
+    await session.commit()
+
+    resp = await client.get(f"/api/workspaces/{workspace.id}/search/hits?acquisition_status=failed")
+    items = resp.json()["items"]
+    assert len(items) == 1
+    assert items[0]["normalized_title"] == "failed one"
+
+
 async def test_list_hits_with_zero_limit_is_422(client):
     ws = await client.post("/api/workspaces", json={"name": "Zero limit test"})
     workspace_id = ws.json()["id"]
