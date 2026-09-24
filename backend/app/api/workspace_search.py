@@ -132,11 +132,11 @@ async def snowball_route(
 
 @router.get("/prisma")
 async def prisma_export_route(workspace_id: uuid.UUID, session: SessionDep, runs: str = "all") -> PrismaExportOut:
-    run_id = None if runs == "all" else None
+    run_id: uuid.UUID | None = None
     if runs != "all":
         try:
             run_id = uuid.UUID(runs)
         except ValueError as exc:
-            raise InvalidInput("invalid pagination cursor") from exc
+            raise InvalidInput(f"invalid runs value: {runs!r}") from exc
     export = await workspace_search.prisma_export(session, workspace_id, run_id)
     return export

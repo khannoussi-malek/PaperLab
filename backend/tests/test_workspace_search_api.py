@@ -1188,10 +1188,12 @@ async def test_prisma_export_route_rejects_a_run_id_from_another_workspace(clien
 
 
 async def test_prisma_export_route_rejects_malformed_runs_value(client):
-    """Malformed runs value (not 'all' and not a valid UUID) should be a clean 422."""
+    """Malformed runs value (not 'all' and not a valid UUID) should be a clean 422 with appropriate error message."""
     ws = await client.post("/api/workspaces", json={"name": "PRISMA malformed test"})
     workspace_id = ws.json()["id"]
 
     resp = await client.get(f"/api/workspaces/{workspace_id}/search/prisma?runs=not-a-uuid")
 
     assert resp.status_code == 422
+    body = resp.json()
+    assert "invalid runs value" in body["detail"].lower()
