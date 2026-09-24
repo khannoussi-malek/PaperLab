@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { Hit } from '@/api/client'
+import type { EligibilityUpdate, Hit } from '@/api/client'
 import { useSearchHits, useSetEligibility, useSnowball } from '@/api/queries'
 import { Button } from '@/components/ui/button'
 
@@ -9,7 +9,11 @@ import { Button } from '@/components/ui/button'
  *
  * `useSearchHits` filters to exactly one `acquisition_status` per call, so this calls it twice — once for
  * 'imported', once for 'manual' — and merges the two `rows` arrays. Extending the hook/backend to accept a list
- * of statuses would be the bigger change for what only this one screen needs (Task 7's `queries.ts` guidance). */
+ * of statuses would be the bigger change for what only this one screen needs (Task 7's `queries.ts` guidance).
+ *
+ * Each call is independently keyset-paginated (50/page, same as ManualAcquisitionTab's identical situation —
+ * see its "I7 fix 1" comment), so each gets its own "Load more" — silently showing only the first 50 imported
+ * or first 50 manual papers would leave stage-2 screening incomplete with no indication anything is missing. */
 export function ScreeningTab({ workspaceId }: { workspaceId: string }) {
   const imported = useSearchHits(workspaceId, undefined, 'imported')
   const manual = useSearchHits(workspaceId, undefined, 'manual')
@@ -30,20 +34,33 @@ export function ScreeningTab({ workspaceId }: { workspaceId: string }) {
         <ScreeningRow
           key={hit.id}
           hit={hit}
-          onInclude={() =>
-            setEligibility.mutate({ paperId: hit.paper_id!, runId: hit.run_id, body: { status: 'include' } })
-          }
-          onExclude={(reason) =>
-            setEligibility.mutate({
-              paperId: hit.paper_id!,
-              runId: hit.run_id,
-              body: { status: 'exclude', exclude_reason: reason },
-            })
-          }
-          onSnowball={() => snowball.mutate({ seed_paper_ids: [hit.paper_id!], backward: true, forward: true })}
+          onSetEligibility={(paperId, runId, body) => setEligibility.mutate({ paperId, runId, body })}
+          onSnowball={(paperId) => snowball.mutate({ seed_paper_ids: [paperId], backward: true, forward: true })}
           snowballPending={snowball.isPending}
         />
       ))}
+      {imported.hasNextPage && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={imported.isFetchingNextPage}
+          onClick={() => imported.fetchNextPage()}
+        >
+          {imported.isFetchingNextPage ? 'Loading…' : 'Load more imported'}
+        </Button>
+      )}
+      {manual.hasNextPage && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={manual.isFetchingNextPage}
+          onClick={() => manual.fetchNextPage()}
+        >
+          {manual.isFetchingNextPage ? 'Loading…' : 'Load more manual'}
+        </Button>
+      )}
       {setEligibility.isError && (
         <p role="alert" className="text-xs text-destructive">
           {setEligibility.error.message}
@@ -78,27 +95,33 @@ function snowballMessage(result: { new_hits: number; skipped_seeds: string[]; er
 /** One hit's row: verdict badge, Include, a two-step free-text Exclude (stage-2's `stage2_exclude_reason` has no
  * CHECK constraint in the DB, unlike stage-1's fixed `EXCLUDE_REASONS` enum — so this is a plain text input, not a
  * `<select>`, gated the same way HitPreview's stage-1 "Not relevant" button gates on `disabled={!reason}`), and
- * Snowball. */
+ * Snowball.
+ *
+ * `HitOut.paper_id` is typed nullable (`string | null`), even though it should always be set for hits this tab
+ * queries (`acquisition_status` 'imported'/'manual' only exist once a Paper row has been created — see
+ * `useImportSearchHits`/`useUploadHitPdf` in queries.ts). Rather than force-unwrap it, this guards the actionable
+ * section behind `paperId &&` — same convention as HitPreview's `hit.doi &&`/ManualAcquisitionTab's `hit.doi &&` —
+ * so a hit with no linked paper record (however unlikely) renders no actions instead of firing a malformed
+ * mutation call with `paperId: undefined`. */
 function ScreeningRow({
   hit,
-  onInclude,
-  onExclude,
+  onSetEligibility,
   onSnowball,
   snowballPending,
 }: {
   hit: Hit
-  onInclude: () => void
-  onExclude: (reason: string) => void
-  onSnowball: () => void
+  onSetEligibility: (paperId: string, runId: string, body: EligibilityUpdate) => void
+  onSnowball: (paperId: string) => void
   snowballPending: boolean
 }) {
   const title = hit.title || hit.normalized_title
+  const paperId = hit.paper_id
   const [excluding, setExcluding] = useState(false)
   const [reason, setReason] = useState('')
 
-  const confirmExclude = () => {
+  const confirmExclude = (id: string) => {
     if (!reason) return
-    onExclude(reason)
+    onSetEligibility(id, hit.run_id, { status: 'exclude', exclude_reason: reason })
     setReason('')
     setExcluding(false)
   }
@@ -107,44 +130,50 @@ function ScreeningRow({
     <div className="flex items-center justify-between gap-3 border-b pb-2 text-sm">
       <span className="flex-1 truncate">{title}</span>
       <span className="text-xs text-muted-foreground">{hit.stage2_status ?? 'not assessed'}</span>
-      <Button
-        type="button"
-        size="sm"
-        variant={hit.stage2_status === 'include' ? 'default' : 'outline'}
-        onClick={onInclude}
-      >
-        Include
-      </Button>
-      {excluding ? (
+      {paperId ? (
         <>
-          <label htmlFor={`exclude-reason-${hit.id}`} className="sr-only">
-            Exclusion reason for {title}
-          </label>
-          <input
-            id={`exclude-reason-${hit.id}`}
-            type="text"
-            value={reason}
-            onChange={(event) => setReason(event.target.value)}
-            placeholder="Reason for excluding…"
-            className="h-8 w-40 rounded-lg border bg-background px-2 text-sm"
-          />
-          <Button type="button" size="sm" variant="destructive" disabled={!reason} onClick={confirmExclude}>
-            Confirm exclude
+          <Button
+            type="button"
+            size="sm"
+            variant={hit.stage2_status === 'include' ? 'default' : 'outline'}
+            onClick={() => onSetEligibility(paperId, hit.run_id, { status: 'include' })}
+          >
+            Include
+          </Button>
+          {excluding ? (
+            <>
+              <label htmlFor={`exclude-reason-${hit.id}`} className="sr-only">
+                Exclusion reason for {title}
+              </label>
+              <input
+                id={`exclude-reason-${hit.id}`}
+                type="text"
+                value={reason}
+                onChange={(event) => setReason(event.target.value)}
+                placeholder="Reason for excluding…"
+                className="h-8 w-40 rounded-lg border bg-background px-2 text-sm"
+              />
+              <Button type="button" size="sm" variant="destructive" disabled={!reason} onClick={() => confirmExclude(paperId)}>
+                Confirm exclude
+              </Button>
+            </>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              variant={hit.stage2_status === 'exclude' ? 'destructive' : 'outline'}
+              onClick={() => setExcluding(true)}
+            >
+              Exclude
+            </Button>
+          )}
+          <Button type="button" size="sm" variant="outline" disabled={snowballPending} onClick={() => onSnowball(paperId)}>
+            Snowball
           </Button>
         </>
       ) : (
-        <Button
-          type="button"
-          size="sm"
-          variant={hit.stage2_status === 'exclude' ? 'destructive' : 'outline'}
-          onClick={() => setExcluding(true)}
-        >
-          Exclude
-        </Button>
+        <span className="text-xs text-muted-foreground">No linked paper record</span>
       )}
-      <Button type="button" size="sm" variant="outline" disabled={snowballPending} onClick={onSnowball}>
-        Snowball
-      </Button>
     </div>
   )
 }
