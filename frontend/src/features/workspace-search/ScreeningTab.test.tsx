@@ -40,22 +40,28 @@ const manualHit = {
   normalized_title: 'manual paper lowercase',
 }
 
+type HitsMock = { items: object[]; hasNextPage?: boolean; isFetchingNextPage?: boolean; fetchNextPage?: () => void }
+
 // Mirrors ManualAcquisitionTab.test.tsx's idiom, but ScreeningTab calls useSearchHits twice (once per
 // acquisition_status: 'imported' and 'manual') and merges the results, so the mock dispatches on that arg.
-function mockHits(byStatus: Record<string, object[]>) {
+// Each status also carries its own pagination fields (hasNextPage/fetchNextPage/isFetchingNextPage), since each
+// useSearchHits call paginates independently.
+function mockHits(byStatus: Record<string, HitsMock>) {
   vi.spyOn(queries, 'useSearchHits').mockImplementation(
-    (_workspaceId: string, _stage1Status?: string, acquisitionStatus?: string) =>
-      ({
-        data: { pages: [{ items: byStatus[acquisitionStatus ?? ''] ?? [], next_cursor: null }] },
-        hasNextPage: false,
-        isFetchingNextPage: false,
-        fetchNextPage: vi.fn(),
-      }) as any,
+    (_workspaceId: string, _stage1Status?: string, acquisitionStatus?: string) => {
+      const entry = byStatus[acquisitionStatus ?? ''] ?? { items: [] }
+      return {
+        data: { pages: [{ items: entry.items, next_cursor: null }] },
+        hasNextPage: entry.hasNextPage ?? false,
+        isFetchingNextPage: entry.isFetchingNextPage ?? false,
+        fetchNextPage: entry.fetchNextPage ?? vi.fn(),
+      } as any
+    },
   )
 }
 
 beforeEach(() => {
-  mockHits({ imported: [importedHit], manual: [] })
+  mockHits({ imported: { items: [importedHit] }, manual: { items: [] } })
 })
 
 afterEach(() => {
@@ -74,7 +80,7 @@ test('shows an imported hit with Include/Exclude actions and no verdict yet', ()
 })
 
 test('merges imported and manual hits from the two separate useSearchHits calls', () => {
-  mockHits({ imported: [importedHit], manual: [manualHit] })
+  mockHits({ imported: { items: [importedHit] }, manual: { items: [manualHit] } })
   renderWithClient(<ScreeningTab workspaceId="ws-1" />)
 
   expect(screen.getByText('Imported Paper')).toBeInTheDocument()
@@ -177,8 +183,63 @@ test('a failed eligibility update shows an alert with the error', async () => {
 })
 
 test('shows an empty-state message when there is nothing to screen', () => {
-  mockHits({ imported: [], manual: [] })
+  mockHits({ imported: { items: [] }, manual: { items: [] } })
   renderWithClient(<ScreeningTab workspaceId="ws-1" />)
 
   expect(screen.getByText(/nothing to screen/i)).toBeInTheDocument()
+})
+
+test('hides Load more controls when neither status has a next page (the common case)', () => {
+  renderWithClient(<ScreeningTab workspaceId="ws-1" />)
+  expect(screen.queryByRole('button', { name: /Load more/ })).not.toBeInTheDocument()
+})
+
+test('a Load more control for imported hits fetches that query\'s next page, not the other one', () => {
+  const importedFetchNextPage = vi.fn()
+  const manualFetchNextPage = vi.fn()
+  mockHits({
+    imported: { items: [importedHit], hasNextPage: true, fetchNextPage: importedFetchNextPage },
+    manual: { items: [manualHit], fetchNextPage: manualFetchNextPage },
+  })
+  renderWithClient(<ScreeningTab workspaceId="ws-1" />)
+
+  fireEvent.click(screen.getByRole('button', { name: 'Load more imported' }))
+
+  expect(importedFetchNextPage).toHaveBeenCalledTimes(1)
+  expect(manualFetchNextPage).not.toHaveBeenCalled()
+  expect(screen.queryByRole('button', { name: 'Load more manual' })).not.toBeInTheDocument()
+})
+
+test('a Load more control for manual hits fetches that query\'s next page, not the other one', () => {
+  const importedFetchNextPage = vi.fn()
+  const manualFetchNextPage = vi.fn()
+  mockHits({
+    imported: { items: [importedHit], fetchNextPage: importedFetchNextPage },
+    manual: { items: [manualHit], hasNextPage: true, fetchNextPage: manualFetchNextPage },
+  })
+  renderWithClient(<ScreeningTab workspaceId="ws-1" />)
+
+  fireEvent.click(screen.getByRole('button', { name: 'Load more manual' }))
+
+  expect(manualFetchNextPage).toHaveBeenCalledTimes(1)
+  expect(importedFetchNextPage).not.toHaveBeenCalled()
+  expect(screen.queryByRole('button', { name: 'Load more imported' })).not.toBeInTheDocument()
+})
+
+test('Load more imported is disabled and relabelled while that page is already fetching', () => {
+  mockHits({ imported: { items: [importedHit], hasNextPage: true, isFetchingNextPage: true }, manual: { items: [] } })
+  renderWithClient(<ScreeningTab workspaceId="ws-1" />)
+
+  expect(screen.getByRole('button', { name: 'Loading…' })).toBeDisabled()
+})
+
+test('a hit with no linked paper record (paper_id null) renders no actions, not a crash or a malformed mutation call', () => {
+  mockHits({ imported: { items: [{ ...importedHit, id: 'h3', paper_id: null }] }, manual: { items: [] } })
+  renderWithClient(<ScreeningTab workspaceId="ws-1" />)
+
+  expect(screen.getByText('Imported Paper')).toBeInTheDocument()
+  expect(screen.getByText('No linked paper record')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Include' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Exclude' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Snowball' })).not.toBeInTheDocument()
 })
