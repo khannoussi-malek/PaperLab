@@ -52,3 +52,15 @@ class WorkspaceSearchHit(Base):
     topic_fit: Mapped[str | None] = mapped_column(String, default=None)
     acquisition_status: Mapped[str] = mapped_column(String, default="not_attempted")
     paper_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("papers.id", ondelete="SET NULL"), default=None)
+
+
+class SearchRunEligibility(Base):
+    __tablename__ = "search_run_eligibility"
+
+    paper_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("papers.id", ondelete="CASCADE"), primary_key=True)
+    search_run_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("workspace_search_runs.id", ondelete="CASCADE"), primary_key=True
+    )
+    stage2_status: Mapped[str | None] = mapped_column(Text, default=None)
+    stage2_exclude_reason: Mapped[str | None] = mapped_column(Text, default=None)
+    assessed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), default=None)
