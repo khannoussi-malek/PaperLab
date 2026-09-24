@@ -203,10 +203,18 @@ async def test_worker_marks_the_run_failed_on_an_unexpected_error(session, worke
     assert reloaded.stopped_at is not None  # same bookkeeping as stop_run's own status change (bundled minor)
 
 
-async def test_worker_bounds_retries_on_a_source_that_always_errors(session, worker):
+async def test_worker_bounds_retries_on_a_source_that_always_errors(session, worker, monkeypatch):
     """A source whose provider always raises httpx.HTTPError must not retry forever: search_batch's own error
     count on the cursor (C2 part 1) caps it at SOURCE_ERROR_CAP attempts, so the run reaches a terminal state
-    instead of spinning until ARQ's job_timeout kills it mid-commit."""
+    instead of spinning until ARQ's job_timeout kills it mid-commit. Retries are spaced out by a growing cooldown
+    (real wall-clock minutes, not iterations) so a brief/transient error gets a real chance to clear — the fake
+    clock here jumps far enough each call that every cooldown is already over by the next attempt, so this test
+    still runs in milliseconds despite that real-world spacing."""
+    from app.core import workspace_search as core_module
+
+    fake_clock = itertools.count(0, step=10_000)
+    monkeypatch.setattr(core_module, "_now", lambda: datetime.fromtimestamp(next(fake_clock), tz=timezone.utc))
+
     always_429 = {"transport": httpx.MockTransport(lambda request: httpx.Response(429))}
     run = await _new_run(session, "running")
     session.add(WorkspaceSearchCursor(run_id=run.id, source="arxiv", cursor_json={"value": 0}))

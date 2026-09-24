@@ -11,7 +11,7 @@ import binascii
 import json
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
 import httpx
@@ -37,7 +37,16 @@ PAGE_SIZE_BY_SOURCE = {"openalex": 100, "crossref": 30, "arxiv": 20, "core": 20,
 # A source stuck on httpx errors (spec §16: unauthenticated S2 search 429s by default) retries this many times
 # before its cursor is marked exhausted instead of spinning forever (C2 part 1) — small enough that a real outage
 # still lets the run finish on its other sources well inside a job's lifetime.
-SOURCE_ERROR_CAP = 3
+#
+# Retries are spaced out (below), not consecutive: without spacing, all SOURCE_ERROR_CAP attempts land within a
+# few seconds of each other (one worker-loop pacing interval apart, BATCH_PACING_SECONDS in
+# workers/workspace_search.py), so a source that's just having a brief, transient blip — arXiv's own API answers
+# a plain 406 every so often for no discernible reason, confirmed by re-running an identical, otherwise-successful
+# request seconds later — gets abandoned for the rest of the run before the blip could ever clear. Growing
+# cooldowns give a real chance for that, while a source that's persistently broken (an unauthenticated S2/CORE
+# 429, expected by default per spec §16) still gives up for good once every backoff step is spent.
+SOURCE_ERROR_CAP = 6
+_ERROR_BACKOFF_SECONDS = (10, 30, 90, 180, 300)
 
 _PAGE_FUNCS = {
     "arxiv": arxiv.search_page,
@@ -143,6 +152,14 @@ async def _find_or_create_external_ref(session: AsyncSession, candidate: Candida
     return ref
 
 
+def _now() -> datetime:
+    """A thin wrapper around datetime.now(timezone.utc), so a test can monkeypatch just this module's own clock
+    reads for the error-backoff check below without needing a real sleep — same reasoning as
+    workers/workspace_search.py's own _now() wrapper (that one for a wall-clock deadline, this one for a
+    per-source retry cooldown)."""
+    return datetime.now(timezone.utc)
+
+
 async def search_batch(session: AsyncSession, providers: Providers, run: WorkspaceSearchRun) -> BatchResult:
     """One page per source in `run.sources_json`, merged and deduped, new hits stored. A source that fails (a
     provider's search_page raising httpx.HTTPError, same as discovery.py's existing search()) is recorded in
@@ -159,10 +176,14 @@ async def search_batch(session: AsyncSession, providers: Providers, run: Workspa
     exhausted: list[str] = []
     raw_counts: dict[str, int] = {}
 
+    now = _now()
     for source in run.sources_json:
         cursor = cursors.get(source)
         if cursor is None or cursor.exhausted:
             continue
+        retry_after = cursor.cursor_json.get("retry_after")
+        if retry_after and now < datetime.fromisoformat(retry_after):
+            continue  # cooling down from a recent error — not a failure, not exhausted, just not due yet
         client = providers.client(source)
         if client is None:
             # Disabled/unconfigured (e.g. Unpaywall with no contact_email — the fresh-database default): nothing
@@ -185,12 +206,21 @@ async def search_batch(session: AsyncSession, providers: Providers, run: Workspa
             errors[source] = str(exc)
             # Bounded retry (C2 part 1): a source stuck on httpx errors (e.g. an unauthenticated S2 429 — the
             # default case per spec §16's spike, not an edge case) must eventually stop retrying instead of
-            # spinning until the worker's job_timeout kills it mid-commit.
+            # spinning until the worker's job_timeout kills it mid-commit. Spaced out (see SOURCE_ERROR_CAP's
+            # comment), not consecutive, so a brief/transient error gets a real chance to clear before the source
+            # is abandoned for the rest of the run.
             error_count = cursor.cursor_json.get("errors", 0) + 1
-            cursor.cursor_json = {**cursor.cursor_json, "errors": error_count}
             if error_count >= SOURCE_ERROR_CAP:
                 cursor.exhausted = True
                 exhausted.append(source)
+                cursor.cursor_json = {**cursor.cursor_json, "errors": error_count}
+            else:
+                backoff = _ERROR_BACKOFF_SECONDS[min(error_count - 1, len(_ERROR_BACKOFF_SECONDS) - 1)]
+                cursor.cursor_json = {
+                    **cursor.cursor_json,
+                    "errors": error_count,
+                    "retry_after": (now + timedelta(seconds=backoff)).isoformat(),
+                }
             continue
         found[source] = [c for raw in raw_items if (c := _MAPPERS[source](raw)) is not None]
         raw_counts[source] = len(raw_items)
