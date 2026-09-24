@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import type { HitReviewUpdate, SearchRun } from '@/api/client'
+import type { Hit, HitReviewUpdate, SearchRun } from '@/api/client'
 import {
   totalRawFound,
   useImportAllHits,
@@ -18,11 +18,17 @@ import { HitPreview } from './HitPreview'
 
 const ROW_HEIGHT = 44
 
+function hasPdfOrAbstract(hit: Hit): boolean {
+  return hit.acquisition_status === 'imported' || hit.acquisition_status === 'manual' || Boolean(hit.abstract)
+}
+
 /** The hit pool for a search run: a virtualized list (rows can run into the thousands) beside a preview of the
- * selected one (title, byline, abstract — same split as the library's PaperList/PaperPreview). Selection moves by
- * clicking a row or with the ↑/↓ arrow keys (from the row list or the filter box) — not hover, so skimming the
- * list with the mouse doesn't fight with reading the panel. A filter box narrows the already-loaded rows by title
- * client-side (no new request — see `useSearchHits`, still the full, unfiltered query underneath); stage-1 triage
+ * selected one (title, byline, abstract — same split as the library's PaperList/PaperPreview). Rows with an
+ * abstract to read or a PDF already in the corpus sort first (`hasPdfOrAbstract`) — those are the ones a reader
+ * can actually judge; a bare title with neither is the hardest to screen. Selection moves by clicking a row or
+ * with the ↑/↓ arrow keys (from the row list or the filter box) — not hover, so skimming the list with the mouse
+ * doesn't fight with reading the panel. A filter box narrows the already-loaded rows by title client-side (no new
+ * request — see `useSearchHits`, still the full, unfiltered query underneath); stage-1 triage
  * is via a right-click menu or a trailing ⋮ button on each row, and there are two ways to get a PDF: one hit at a
  * time from the preview panel's "Add PDF" (fetching a PDF starts ingestion — chunking, embedding — for that paper,
  * so this is the cheap default), or "Import all with PDF in this filter" when the user has decided that cost is
@@ -46,12 +52,18 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
   const rawFound = totalRawFound(run)
   const filter = filterText.trim().toLowerCase()
   const filteredRows = filter ? rows.filter((hit) => (hit.title ?? hit.normalized_title).toLowerCase().includes(filter)) : rows
+  // A hit with an abstract to read or a PDF already in the corpus is the one worth looking at first — a bare
+  // title with neither is the hardest to judge relevance from. Stable sort (native since ES2019), so hits within
+  // each group keep their existing (first_seen_at, id) order from the server.
+  const visibleRows = filteredRows
+    .slice()
+    .sort((a, b) => Number(hasPdfOrAbstract(b)) - Number(hasPdfOrAbstract(a)))
   // Falls back to the first loaded row, so the panel is never empty on first paint (mirrors PaperList) — and to
   // whichever row is first once a filter drops the previously selected one out of view.
-  const previewed = filteredRows.find((hit) => hit.id === previewId) ?? filteredRows[0]
+  const previewed = visibleRows.find((hit) => hit.id === previewId) ?? visibleRows[0]
 
   const virtualizer = useVirtualizer({
-    count: filteredRows.length,
+    count: visibleRows.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => ROW_HEIGHT,
     overscan: 10,
@@ -67,11 +79,11 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
   // (arrow keys do nothing useful in a single-line input, so hijacking them here doesn't lose anything), and
   // scrolls the new selection into view since it can be off-screen in a long, virtualized list.
   function moveSelection(direction: 1 | -1, event: React.KeyboardEvent) {
-    if (filteredRows.length === 0) return
+    if (visibleRows.length === 0) return
     event.preventDefault()
-    const currentIndex = filteredRows.findIndex((hit) => hit.id === previewed?.id)
-    const nextIndex = Math.min(Math.max(currentIndex + direction, 0), filteredRows.length - 1)
-    setPreviewId(filteredRows[nextIndex].id)
+    const currentIndex = visibleRows.findIndex((hit) => hit.id === previewed?.id)
+    const nextIndex = Math.min(Math.max(currentIndex + direction, 0), visibleRows.length - 1)
+    setPreviewId(visibleRows[nextIndex].id)
     virtualizer.scrollToIndex(nextIndex, { align: 'auto' })
   }
 
@@ -91,14 +103,14 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
   // for further matches, the same way scrolling the unfiltered list does.
   useEffect(() => {
     const lastItem = virtualItems.at(-1)
-    if (!lastItem || lastItem.index < filteredRows.length - 1 || isFetchingNextPage) return
+    if (!lastItem || lastItem.index < visibleRows.length - 1 || isFetchingNextPage) return
     if (hasNextPage) {
       fetchNextPage()
     } else if (newHits.available) {
       newHits.acknowledge()
       refreshHits()
     }
-  }, [virtualItems, hasNextPage, isFetchingNextPage, fetchNextPage, filteredRows.length, newHits, refreshHits])
+  }, [virtualItems, hasNextPage, isFetchingNextPage, fetchNextPage, visibleRows.length, newHits, refreshHits])
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -117,7 +129,7 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
         </label>
         <span className="shrink-0 text-muted-foreground">
           {rawFound !== undefined && `${rawFound} found so far · `}
-          {filter ? `${filteredRows.length} of ${rows.length} in pool` : `${rows.length} in pool`}
+          {filter ? `${visibleRows.length} of ${rows.length} in pool` : `${rows.length} in pool`}
         </span>
         <Button type="button" size="sm" disabled={importAllHits.isPending} onClick={() => importAllHits.mutate()}>
           Import all with PDF in this filter
@@ -151,7 +163,7 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
           {uploadHitPdf.error.message}
         </p>
       )}
-      {filter && filteredRows.length === 0 && (
+      {filter && visibleRows.length === 0 && (
         <p className="px-3 py-1 text-xs text-muted-foreground">No hits match “{filterText.trim()}”.</p>
       )}
       <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(0,1fr)_22rem]">
@@ -164,7 +176,7 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
         >
           <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
             {virtualItems.map((virtualRow) => {
-              const hit = filteredRows[virtualRow.index]
+              const hit = visibleRows[virtualRow.index]
               const byline = [hit.authors?.slice(0, 3).join(', '), hit.year].filter(Boolean).join(' · ')
               const selected = hit.id === previewed?.id
               return (

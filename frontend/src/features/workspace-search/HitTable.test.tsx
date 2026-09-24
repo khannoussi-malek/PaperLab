@@ -70,6 +70,39 @@ test('a hit with a linked ExternalRef shows its real title and a compact byline 
   expect(pool().queryByText('a paper about llms')).not.toBeInTheDocument()
 })
 
+test('a hit with an abstract or an already-acquired PDF sorts before one with neither', async () => {
+  const hits: Hit[] = [
+    { ...baseHit, id: 'h1', title: 'No Info Paper', normalized_title: 'no info paper' },
+    { ...baseHit, id: 'h2', title: 'Has Abstract Paper', normalized_title: 'has abstract paper', abstract: 'A summary.' },
+    { ...baseHit, id: 'h3', title: 'Has PDF Paper', normalized_title: 'has pdf paper', acquisition_status: 'imported' },
+  ]
+  vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: hits, next_cursor: null })
+
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  await pool().findByText('No Info Paper')
+
+  const text = screen.getByLabelText('Hit pool').textContent ?? ''
+  expect(text.indexOf('Has Abstract Paper')).toBeLessThan(text.indexOf('No Info Paper'))
+  expect(text.indexOf('Has PDF Paper')).toBeLessThan(text.indexOf('No Info Paper'))
+})
+
+test('the sort is stable: hits within the same group (both informative, or both bare) keep their server order', async () => {
+  const hits: Hit[] = [
+    { ...baseHit, id: 'h1', title: 'Bare First', normalized_title: 'bare first' },
+    { ...baseHit, id: 'h2', title: 'Abstract First', normalized_title: 'abstract first', abstract: 'One.' },
+    { ...baseHit, id: 'h3', title: 'Abstract Second', normalized_title: 'abstract second', abstract: 'Two.' },
+    { ...baseHit, id: 'h4', title: 'Bare Second', normalized_title: 'bare second' },
+  ]
+  vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: hits, next_cursor: null })
+
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  await pool().findByText('Bare First')
+
+  const text = screen.getByLabelText('Hit pool').textContent ?? ''
+  expect(text.indexOf('Abstract First')).toBeLessThan(text.indexOf('Abstract Second'))
+  expect(text.indexOf('Bare First')).toBeLessThan(text.indexOf('Bare Second'))
+})
+
 test('typing in the search box filters the pool by title, client-side, with no new request', async () => {
   const hits: Hit[] = [
     { ...baseHit, id: 'h1', title: 'Attention Is All You Need', normalized_title: 'attention is all you need' },
