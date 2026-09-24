@@ -12,7 +12,7 @@ from app.providers.openalex import json_body
 
 BASE_URL = "https://api.semanticscholar.org"
 TIMEOUT = httpx.Timeout(10.0)
-PAPER_FIELDS = "title,year,venue,authors,externalIds,openAccessPdf,citationCount"
+PAPER_FIELDS = "title,year,venue,authors,externalIds,openAccessPdf,citationCount,abstract"
 # The default pool is recent papers only, and its picks for BERT were weak. all-cs also served a biology DOI.
 RECOMMENDATION_POOL = "all-cs"
 PAGE = 100  # references/citations page size (M7.5 D79)
@@ -100,7 +100,7 @@ async def citations(http: httpx.AsyncClient, key: str, cap: int) -> list[dict] |
 
 async def search_page(http: httpx.AsyncClient, title: str, page_size: int, cursor: int) -> tuple[list[dict], int | None]:
     """One page of Semantic Scholar results."""
-    params = {"query": title, "offset": cursor, "limit": page_size, "fields": ",".join(PAPER_FIELDS)}
+    params = {"query": title, "offset": cursor, "limit": page_size, "fields": PAPER_FIELDS}
     response = await http.get("/graph/v1/paper/search", params=params)
     body = json_body(response.raise_for_status())
     data = body.get("data", [])

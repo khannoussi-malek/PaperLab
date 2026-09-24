@@ -62,6 +62,7 @@ async def test_get_parses_the_entry_without_its_version(arxiv_api):
 
     entry = await arxiv.get(arxiv_api.client, "1810.04805")
 
+    assert entry.pop("abstract").startswith("We introduce a new language representation model called BERT")
     assert entry == {
         "arxiv_id": "1810.04805",
         "title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
@@ -89,6 +90,7 @@ async def test_an_old_style_id_whitespace_in_the_title_and_the_doi_are_normalise
         "authors": ["Yosuke Imamura"],
         "year": 1999,
         "doi": "10.1143/ptp.101.1155",
+        "abstract": None,
     }
 
 

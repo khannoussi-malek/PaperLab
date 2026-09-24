@@ -291,9 +291,9 @@ async def test_list_hits_filters_by_acquisition_status(session, client):
 
 
 async def test_list_hits_surfaces_the_linked_external_ref_and_tolerates_none(session, client):
-    """I7: HitOut's title/authors/year/venue/doi come from a join to ExternalRef, not just normalized_title. A hit
-    with no external_ref_id (never matched to a candidate, or the match was cleared) must still come back with
-    those fields None instead of crashing the join."""
+    """I7: HitOut's title/authors/year/venue/doi/abstract come from a join to ExternalRef, not just
+    normalized_title. A hit with no external_ref_id (never matched to a candidate, or the match was cleared) must
+    still come back with those fields None instead of crashing the join."""
     import uuid as uuid_mod
     from datetime import datetime, timezone
 
@@ -312,7 +312,7 @@ async def test_list_hits_surfaces_the_linked_external_ref_and_tolerates_none(ses
     await session.flush()
     ref = ExternalRef(
         title="The Real Title", authors=["Ada Lovelace"], year=1843, venue="Analytical Engine Quarterly",
-        doi="10.1234/real",
+        doi="10.1234/real", abstract="A study of the Analytical Engine's general applicability.",
     )
     session.add(ref)
     await session.flush()
@@ -336,12 +336,14 @@ async def test_list_hits_surfaces_the_linked_external_ref_and_tolerates_none(ses
     assert linked["year"] == 1843
     assert linked["venue"] == "Analytical Engine Quarterly"
     assert linked["doi"] == "10.1234/real"
+    assert linked["abstract"] == "A study of the Analytical Engine's general applicability."
     unlinked = items["no ref one"]
     assert unlinked["title"] is None
     assert unlinked["authors"] is None
     assert unlinked["year"] is None
     assert unlinked["venue"] is None
     assert unlinked["doi"] is None
+    assert unlinked["abstract"] is None
 
 
 async def test_list_hits_with_zero_limit_is_422(client):

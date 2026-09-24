@@ -121,6 +121,8 @@ async def _find_or_create_external_ref(session: AsyncSession, candidate: Candida
                 existing.pdf_urls = candidate.pdf_urls
         if candidate.cited_by_count and not existing.cited_by_count:
             existing.cited_by_count = candidate.cited_by_count
+        if candidate.abstract and not existing.abstract:
+            existing.abstract = candidate.abstract
         return existing
     ref = ExternalRef(
         title=candidate.title,
@@ -133,6 +135,7 @@ async def _find_or_create_external_ref(session: AsyncSession, candidate: Candida
         year=candidate.year,
         venue=candidate.venue,
         cited_by_count=candidate.cited_by_count,
+        abstract=candidate.abstract,
         pdf_urls=candidate.pdf_urls,
     )
     session.add(ref)
@@ -326,8 +329,8 @@ _HIT_COLUMNS = [column.name for column in WorkspaceSearchHit.__table__.columns]
 
 
 def _hit_out_dict(hit: WorkspaceSearchHit, ref: ExternalRef | None) -> dict:
-    """A hit's own columns plus its linked ExternalRef's title/authors/year/venue/doi, merged into one dict for
-    HitOut (I7). This codebase's models never use relationship() (a manual join/lookup is the convention), so the
+    """A hit's own columns plus its linked ExternalRef's title/authors/year/venue/doi/abstract, merged into one
+    dict for HitOut (I7). This codebase's models never use relationship() (a manual join/lookup is the convention), so the
     caller passes in whichever `ref` it already has — a join row here, an explicit session.get elsewhere — and
     this just does the merge, once, the same way for all three HitOut-producing call sites below."""
     data = {name: getattr(hit, name) for name in _HIT_COLUMNS}
@@ -337,6 +340,7 @@ def _hit_out_dict(hit: WorkspaceSearchHit, ref: ExternalRef | None) -> dict:
         year=ref.year if ref else None,
         venue=ref.venue if ref else None,
         doi=ref.doi if ref else None,
+        abstract=ref.abstract if ref else None,
     )
     return data
 
