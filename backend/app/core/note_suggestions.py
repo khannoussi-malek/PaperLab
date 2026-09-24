@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import prompts
 from app.core.chat import chunk_sources, format_context
 from app.core.errors import Conflict
+from app.core.notes import list_notes_for_paper
 from app.core.papers import get_paper
 from app.core.retrieval import RetrievedChunk
 from app.models import Chunk, LLMOutput, PaperStatus
@@ -54,15 +55,33 @@ def _sample_evenly(chunks: list[RetrievedChunk], k: int) -> list[RetrievedChunk]
     return [chunks[i] for i in indices]
 
 
+def _spot(page: int, bbox: list) -> tuple:
+    """A location on the page, hashable. The only reliable "is this already noted" signal available: note_anchors
+    has a chunk_id column, but nothing that writes an anchor (promote_llm_fragment included) ever populates it —
+    every anchor is created keyed on (page, bbox) instead, so that's what a repeat suggestion has to match too."""
+    return (page, tuple(tuple(rect) for rect in bbox))
+
+
+async def _already_noted(session: AsyncSession, paper_id: uuid.UUID) -> set[tuple]:
+    notes = await list_notes_for_paper(session, paper_id)
+    return {_spot(a.page, a.bbox) for note in notes for a in note.anchors}
+
+
 async def suggest(session: AsyncSession, paper_id: uuid.UUID, llm: LLM) -> Suggested:
-    """Raises NotFound, or Conflict("paper_not_ready" | "paper_not_indexed")."""
+    """Raises NotFound, or Conflict("paper_not_ready" | "paper_not_indexed"). Skips any passage a note (human or
+    AI, from an earlier accepted suggestion or written by hand) already covers — asking again shouldn't keep
+    re-suggesting the same spots, and there's nothing useful left to say about one that already has a note."""
     paper = await get_paper(session, paper_id)
     if paper.status != PaperStatus.READY:
         raise Conflict("paper_not_ready")
     all_chunks = await chunk_sources(session, Chunk.paper_id == paper_id)
     if not all_chunks:
         raise Conflict("paper_not_indexed")
-    sample = _sample_evenly(all_chunks, SUGGEST_K)
+    already_noted = await _already_noted(session, paper_id)
+    candidates = [c for c in all_chunks if _spot(c.page, c.bbox) not in already_noted]
+    if not candidates:  # every passage already has a note covering it
+        return Suggested(suggestions=[], content="", sources=[])
+    sample = _sample_evenly(candidates, SUGGEST_K)
     prompt = PROMPT_TEMPLATE.format(context=format_context(paper, sample))
     content = "".join([text async for text in llm.stream(SYSTEM_PROMPT, prompt)])
 
