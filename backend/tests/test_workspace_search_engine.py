@@ -6,10 +6,10 @@ import httpx
 import pytest
 from sqlalchemy import func, select
 
-from app.core import discovery
+from app.core import discovery, workspaces
 from app.core.candidates import Candidate, normal_title
 from app.core.paper_sources import SOURCES, SourceSettings
-from app.core.workspace_search import _find_or_create_external_ref, _insert_hit, search_batch
+from app.core.workspace_search import _find_or_create_external_ref, _insert_hit, search_batch, snowball
 from app.models.references import ExternalRef
 from app.models.workspace import Workspace
 from app.models.workspace_search import WorkspaceSearchCursor, WorkspaceSearchHit, WorkspaceSearchRun
@@ -127,6 +127,77 @@ async def test_search_batch_preserves_existing_screening_state(session, fake_pro
     assert hits[0].stage1_status == "relevant"  # untouched, not overwritten or reset
     assert hits[0].priority == 2
     assert result.new_hits == 2  # the other 2 PAGE_PAPERS are still new
+
+
+async def test_snowball_backward_stores_the_seeds_references_as_hits(session, fake_providers):
+    from app.models import Paper
+
+    workspace = Workspace(name=f"snowball-test-{uuid.uuid4().hex[:8]}")
+    session.add(workspace)
+    seed = Paper(
+        title="Attention Is All You Need", doi="10.5555/paperlab-e2e-free", file_path="/nonexistent.pdf"
+    )  # doi matches a fixture arxiv id
+    session.add(seed)
+    await session.flush()
+    await workspaces.add_paper(session, workspace.id, seed.id)
+
+    result = await snowball(session, fake_providers, workspace.id, [seed.id], backward=True, forward=False)
+
+    assert result.new_hits > 0
+    assert result.skipped_seeds == []
+
+
+async def test_snowball_does_not_duplicate_or_overwrite_an_existing_hit(session, fake_providers):
+    # discovery_fake's S2 /references handler answers every key with the same three PAPERS fixtures (see its own
+    # docstring: "any library paper cites the three papers"). Pre-seed PAPERS[0]'s (the free paper) ExternalRef +
+    # a WorkspaceSearchHit already screened by a user, then snowball backward from a different seed that would
+    # rediscover the same paper. Assert: still exactly one hit for that external_ref_id, stage1_status untouched —
+    # mirrors test_search_batch_preserves_existing_screening_state, since _store_candidates_as_hits is the same
+    # dedup path both features share.
+    from app.models import Paper
+
+    workspace = Workspace(name=f"snowball-dedup-{uuid.uuid4().hex[:8]}")
+    session.add(workspace)
+    seed = Paper(title="A Different Seed Paper", doi="10.5555/paperlab-e2e-landing", file_path="/nonexistent.pdf")
+    session.add(seed)
+    await session.flush()
+    await workspaces.add_paper(session, workspace.id, seed.id)
+
+    # discovery_fake's PAPERS DOIs are shared, fixed test fixtures also used by other flows (Find Papers Add,
+    # references) against this same dev DB, so an ExternalRef for PAPERS[0] may already exist outside this test's
+    # transaction. Resolving through _find_or_create_external_ref (the same path snowball itself uses) rather
+    # than inserting a fresh row guarantees the pre-seeded hit attaches to the exact row snowball will later
+    # dedup against, instead of racing an untiebroken DOI match against a leftover duplicate.
+    free_title, free_doi, _ = discovery_fake.PAPERS[0]
+    ref = await _find_or_create_external_ref(session, Candidate(title=free_title, doi=free_doi))
+    await session.flush()
+    prior_run = WorkspaceSearchRun(
+        workspace_id=workspace.id, query_text="prior database search", sources_json=["arxiv"], status="exhausted",
+        started_at=datetime.now(timezone.utc), stats_json={},
+    )
+    session.add(prior_run)
+    await session.flush()
+    existing_hit = WorkspaceSearchHit(
+        workspace_id=workspace.id, run_id=prior_run.id, external_ref_id=ref.id, source_method="database_search",
+        normalized_title=normal_title(free_title), first_seen_at=datetime.now(timezone.utc),
+        stage1_status="relevant", priority=2,
+    )
+    session.add(existing_hit)
+    await session.commit()
+
+    result = await snowball(session, fake_providers, workspace.id, [seed.id], backward=True, forward=False)
+
+    hits = (
+        (await session.execute(select(WorkspaceSearchHit).where(WorkspaceSearchHit.external_ref_id == ref.id)))
+        .scalars()
+        .all()
+    )
+    assert len(hits) == 1  # not duplicated by snowball rediscovering it
+    assert hits[0].id == existing_hit.id
+    assert hits[0].stage1_status == "relevant"  # untouched, not overwritten or reset
+    assert hits[0].priority == 2
+    assert hits[0].source_method == "database_search"  # not relabeled snowball_backward
+    assert result.new_hits == 2  # the other 2 PAPERS fixtures (landing, closed) are still new
 
 
 async def test_search_batch_records_source_error_without_failing_run(session, fake_providers):
