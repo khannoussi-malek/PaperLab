@@ -19,7 +19,9 @@ SearchSource = Literal["arxiv", "crossref", "core", "semantic_scholar", "openale
 class SearchRunCreate(BaseModel):
     query: str
     filters: dict = {}
-    sources: list[SearchSource]
+    # An empty list has no cursors to page, so the worker would spin through MAX_BATCH_ITERATIONS doing nothing
+    # before exiting — harmless but wasteful; reject it instead (bundled minor).
+    sources: list[SearchSource] = Field(min_length=1)
     query_overrides: dict = {}
 
 

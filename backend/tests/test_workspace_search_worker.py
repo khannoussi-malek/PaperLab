@@ -1,5 +1,6 @@
 """ARQ job that pages a workspace search run to exhaustion (M30a Task 5)."""
 
+import itertools
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -253,6 +254,50 @@ async def test_worker_marks_exhausted_when_the_iteration_cap_is_hit(session, wor
     assert calls == 3  # ran exactly MAX_BATCH_ITERATIONS times, not forever
     reloaded = await session.get(WorkspaceSearchRun, run.id, populate_existing=True)
     assert reloaded.status == "exhausted"
+
+
+async def test_worker_stops_via_wall_clock_deadline_before_the_iteration_cap(session, worker, monkeypatch):
+    """MAX_BATCH_ITERATIONS bounds the loop by count, but nothing tied that to wall-clock time before this fix —
+    200 iterations of pacing plus per-source HTTP calls can land in the same ballpark as SEARCH_RUN_JOB_TIMEOUT
+    on a broad query, so the iteration cap alone might not fire before ARQ's hard kill does (Important 1). Fakes
+    the clock jumping far past the deadline between the pre-loop calculation and the first iteration's check, and
+    confirms the run reaches exhausted without running any batches at all."""
+    # First call computes the deadline (time 0 -> deadline = 0 + 1800 - 60 = 1740); every call after that is far
+    # past it, so the very first iteration's check trips. Patches the worker's own _now() wrapper, not the real
+    # time.monotonic — asyncio's event loop calls that internally, so patching it globally would also scramble
+    # the test's own scheduling instead of just this function's deadline math.
+    fake_clock = itertools.chain([0.0], itertools.repeat(10_000.0))
+    monkeypatch.setattr(worker_module, "_now", lambda: next(fake_clock))
+
+    run = await _new_run(session, "running")
+    session.add(WorkspaceSearchCursor(run_id=run.id, source="arxiv", cursor_json={"value": 0}))
+    await session.commit()
+
+    await worker_module.run_workspace_search(worker, str(run.id))
+
+    reloaded = await session.get(WorkspaceSearchRun, run.id, populate_existing=True)
+    assert reloaded.status == "exhausted"  # the wall-clock backstop tripped it, not the iteration cap
+    hits = (
+        (await session.execute(select(WorkspaceSearchHit).where(WorkspaceSearchHit.run_id == run.id)))
+        .scalars()
+        .all()
+    )
+    assert hits == []  # zero batches ran — the deadline was already past on the first iteration
+
+
+async def test_mark_exhausted_unless_stopped_does_not_clobber_a_concurrent_stop(session):
+    """Both of the loop's "mark exhausted" exit points share this helper specifically so a Stop that lands in the
+    narrow window between the last batch's commit and this final write isn't clobbered back to "exhausted"
+    (bundled minor)."""
+    run = await _new_run(session, "running")
+    await session.commit()
+    await session.execute(update(WorkspaceSearchRun).where(WorkspaceSearchRun.id == run.id).values(status="stopped"))
+    await session.commit()
+
+    await worker_module._mark_exhausted_unless_stopped(session, run)
+
+    reloaded = await session.get(WorkspaceSearchRun, run.id, populate_existing=True)
+    assert reloaded.status == "stopped"  # not overwritten
 
 
 async def test_worker_records_stats_json_after_a_batch(session, worker):

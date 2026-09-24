@@ -61,6 +61,20 @@ async def test_start_run_rejects_an_unsupported_source(client):
     assert resp.status_code == 422
 
 
+async def test_start_run_rejects_an_empty_sources_list(client):
+    """An empty list has no cursors to page, so the worker would spin through MAX_BATCH_ITERATIONS doing nothing
+    before exiting — harmless but wasteful; rejected outright instead (bundled minor)."""
+    ws = await client.post("/api/workspaces", json={"name": "Empty sources test"})
+    workspace_id = ws.json()["id"]
+
+    resp = await client.post(
+        f"/api/workspaces/{workspace_id}/search/runs",
+        json={"query": "bert", "filters": {}, "sources": []},
+    )
+
+    assert resp.status_code == 422
+
+
 async def test_start_run_enqueues_the_worker_job(client, arq):
     ws = await client.post("/api/workspaces", json={"name": "Enqueue test"})
     workspace_id = ws.json()["id"]
