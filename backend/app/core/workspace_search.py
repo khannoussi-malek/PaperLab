@@ -745,3 +745,101 @@ async def upload_hit_pdf(
     hit.paper_id = paper.id
     await session.commit()
     return _hit_out_dict(hit, ref), True
+
+
+@dataclass(frozen=True)
+class PrismaExport:
+    identified: int
+    duplicates_removed: int
+    stage1_screened: int
+    stage1_excluded: int
+    stage1_excluded_by_reason: dict[str, int]
+    sought: int
+    not_retrieved: int
+    stage2_assessed: int
+    stage2_excluded: int
+    stage2_excluded_by_reason: dict[str, int]
+    included: int
+    runs: list[dict]  # per-run metadata for the methods section — [] for a per-run export (the caller already
+    # knows which run), populated for the combined export.
+
+
+async def prisma_export(session: AsyncSession, workspace_id: uuid.UUID, run_id: uuid.UUID | None) -> PrismaExport:
+    """Combined (run_id=None, every run in the workspace deduped together) or per-run PRISMA funnel, per spec
+    §4/§13.
+
+    `identified` is `sum(stats_json.per_source_raw_count.values())` (raw, pre-dedup database-search counts — only
+    search_batch's worker loop writes that field) plus one per stored hit whose source_method isn't
+    "database_search". Snowball hits have no stats_json entry of their own (snowball() never writes one), so
+    without that second term `identified` would under-count the moment any snowball hit exists in the workspace
+    and `duplicates_removed = max(identified - len(hits), 0)` would silently clamp to 0 instead of reporting a
+    real number — this also matches PRISMA convention, where citation-chasing is its own "identified via other
+    methods" line. Applied identically in both branches: a snowball hop's own lightweight run (snowball()
+    creates one per call, WorkspaceSearchHit.run_id is NOT NULL) reports its own hit as identified in its own
+    per-run breakdown too, since the per-run hit_query below is already scoped to that run_id."""
+    if run_id is not None:
+        run = await get_run(session, run_id, workspace_id)
+        stats_identified = sum(run.stats_json.get("per_source_raw_count", {}).values())
+        hit_query = select(WorkspaceSearchHit).where(WorkspaceSearchHit.run_id == run_id)
+        runs_meta = []
+    else:
+        runs = (
+            await session.execute(select(WorkspaceSearchRun).where(WorkspaceSearchRun.workspace_id == workspace_id))
+        ).scalars().all()
+        stats_identified = sum(sum(r.stats_json.get("per_source_raw_count", {}).values()) for r in runs)
+        hit_query = select(WorkspaceSearchHit).where(WorkspaceSearchHit.workspace_id == workspace_id)
+        runs_meta = [
+            {
+                "id": str(r.id), "query_text": r.query_text, "filters_json": r.filters_json,
+                "started_at": r.started_at.isoformat(),
+            }
+            for r in runs
+        ]
+
+    hits = (await session.execute(hit_query)).scalars().all()
+    identified = stats_identified + sum(1 for h in hits if h.source_method != "database_search")
+    duplicates_removed = max(identified - len(hits), 0)
+
+    stage1_screened = sum(1 for h in hits if h.stage1_status is not None)
+    excluded = [h for h in hits if h.stage1_status == "not_relevant"]
+    stage1_excluded_by_reason: dict[str, int] = {}
+    for h in excluded:
+        reason = h.stage1_exclude_reason
+        stage1_excluded_by_reason[reason] = stage1_excluded_by_reason.get(reason, 0) + 1
+
+    relevant = [h for h in hits if h.stage1_status == "relevant"]
+    sought = len(relevant)
+    not_retrieved = sum(1 for h in relevant if h.acquisition_status not in ("imported", "manual"))
+
+    in_corpus_paper_ids = [h.paper_id for h in relevant if h.paper_id is not None]
+    # Combined view: the same paper can carry eligibility rows from more than one run — take the most recently
+    # assessed_at per paper_id, across ALL that paper's eligibility rows in this workspace (not just this run's),
+    # per spec §13's stated tie-break. Per-run view: scoped to just this run's own verdict.
+    elig_query = select(SearchRunEligibility).where(SearchRunEligibility.paper_id.in_(in_corpus_paper_ids))
+    if run_id is not None:
+        elig_query = elig_query.where(SearchRunEligibility.search_run_id == run_id)
+    elig_rows = (await session.execute(elig_query)).scalars().all()
+    latest_by_paper: dict[uuid.UUID, SearchRunEligibility] = {}
+    for row in elig_rows:
+        current = latest_by_paper.get(row.paper_id)
+        if current is None or (row.assessed_at or datetime.min.replace(tzinfo=timezone.utc)) > (
+            current.assessed_at or datetime.min.replace(tzinfo=timezone.utc)
+        ):
+            latest_by_paper[row.paper_id] = row
+
+    stage2_assessed = len(latest_by_paper)
+    stage2_excluded_rows = [r for r in latest_by_paper.values() if r.stage2_status == "exclude"]
+    stage2_excluded = len(stage2_excluded_rows)
+    stage2_excluded_by_reason: dict[str, int] = {}
+    for r in stage2_excluded_rows:
+        reason = r.stage2_exclude_reason or "unspecified"
+        stage2_excluded_by_reason[reason] = stage2_excluded_by_reason.get(reason, 0) + 1
+    included = sum(1 for r in latest_by_paper.values() if r.stage2_status == "include")
+
+    return PrismaExport(
+        identified=identified, duplicates_removed=duplicates_removed, stage1_screened=stage1_screened,
+        stage1_excluded=len(excluded), stage1_excluded_by_reason=stage1_excluded_by_reason,
+        sought=sought, not_retrieved=not_retrieved, stage2_assessed=stage2_assessed,
+        stage2_excluded=stage2_excluded, stage2_excluded_by_reason=stage2_excluded_by_reason,
+        included=included, runs=runs_meta,
+    )

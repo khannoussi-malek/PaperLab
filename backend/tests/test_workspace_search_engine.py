@@ -9,7 +9,15 @@ from sqlalchemy import func, select
 from app.core import discovery, workspaces
 from app.core.candidates import Candidate, normal_title
 from app.core.paper_sources import SOURCES, SourceSettings
-from app.core.workspace_search import _find_or_create_external_ref, _insert_hit, search_batch, set_eligibility, snowball
+from app.core.workspace_search import (
+    PrismaExport,
+    _find_or_create_external_ref,
+    _insert_hit,
+    prisma_export,
+    search_batch,
+    set_eligibility,
+    snowball,
+)
 from app.models.references import ExternalRef
 from app.models.workspace import Workspace
 from app.models.workspace_search import WorkspaceSearchCursor, WorkspaceSearchHit, WorkspaceSearchRun
@@ -656,3 +664,203 @@ async def test_set_eligibility_raises_not_found_for_a_paper_outside_the_workspac
 
     with pytest.raises(NotFound):
         await set_eligibility(session, workspace.id, paper.id, run.id, "include", None)
+
+
+async def test_prisma_combined_counts_the_full_funnel(session):
+    """One run, 5 hits. Hand count (source_method matters this time — see below):
+      hit1: stage1 not_relevant/wrong_topic, database_search
+      hit2: stage1 not_relevant/duplicate,   database_search
+      hit3: stage1 relevant, imported, paper A, database_search
+      hit4: stage1 relevant, imported, paper B, database_search
+      hit5: stage1 relevant, failed,   no paper, snowball_backward  <- the one snowball hit
+    Paper A eligibility: include. Paper B eligibility: exclude/out_of_scope.
+    run.stats_json.per_source_raw_count = {"arxiv": 6, "openalex": 2} -> stats sum = 8.
+
+    identified = stats sum (8) + count of hits whose source_method != "database_search" (hit5 only) = 9.
+    duplicates_removed = max(identified(9) - len(hits)(5), 0) = 4.
+    stage1_screened = 5 (all 5 have a stage1_status).
+    stage1_excluded = 2 (hit1, hit2); by_reason = {"wrong_topic": 1, "duplicate": 1}.
+    sought = 3 (hit3, hit4, hit5 - all stage1 relevant).
+    not_retrieved = 1 (hit5's acquisition_status "failed" is not in ("imported", "manual")).
+    stage2_assessed = 2 (paper A, paper B - the only relevant hits carrying a paper_id).
+    stage2_excluded = 1 (paper B); by_reason = {"out_of_scope": 1}.
+    included = 1 (paper A).
+    """
+    from app.models import Paper
+    from app.models.workspace_search import SearchRunEligibility
+
+    run = await _new_run(session, ["arxiv"])
+    run.stats_json = {"per_source_raw_count": {"arxiv": 6, "openalex": 2}}
+
+    paper_a = Paper(title="Paper A", doi=f"10.9999/{uuid.uuid4().hex[:8]}", file_path="/nonexistent.pdf")
+    paper_b = Paper(title="Paper B", doi=f"10.9999/{uuid.uuid4().hex[:8]}", file_path="/nonexistent.pdf")
+    session.add_all([paper_a, paper_b])
+    await session.flush()
+
+    now = datetime.now(timezone.utc)
+
+    def hit(**overrides) -> WorkspaceSearchHit:
+        base = dict(
+            workspace_id=run.workspace_id, run_id=run.id, source_method="database_search",
+            normalized_title=f"hit-{uuid.uuid4().hex[:8]}", first_seen_at=now,
+        )
+        base.update(overrides)
+        return WorkspaceSearchHit(**base)
+
+    session.add_all([
+        hit(stage1_status="not_relevant", stage1_exclude_reason="wrong_topic"),
+        hit(stage1_status="not_relevant", stage1_exclude_reason="duplicate"),
+        hit(stage1_status="relevant", acquisition_status="imported", paper_id=paper_a.id),
+        hit(stage1_status="relevant", acquisition_status="imported", paper_id=paper_b.id),
+        hit(
+            stage1_status="relevant", acquisition_status="failed", source_method="snowball_backward",
+        ),
+    ])
+    session.add_all([
+        SearchRunEligibility(
+            paper_id=paper_a.id, search_run_id=run.id, stage2_status="include", assessed_at=now,
+        ),
+        SearchRunEligibility(
+            paper_id=paper_b.id, search_run_id=run.id, stage2_status="exclude",
+            stage2_exclude_reason="out_of_scope", assessed_at=now,
+        ),
+    ])
+    await session.commit()
+
+    result = await prisma_export(session, run.workspace_id, run_id=None)
+
+    assert isinstance(result, PrismaExport)
+    assert result.identified == 9
+    assert result.duplicates_removed == 4
+    assert result.stage1_screened == 5
+    assert result.stage1_excluded == 2
+    assert result.stage1_excluded_by_reason == {"wrong_topic": 1, "duplicate": 1}
+    assert result.sought == 3
+    assert result.not_retrieved == 1
+    assert result.stage2_assessed == 2
+    assert result.stage2_excluded == 1
+    assert result.stage2_excluded_by_reason == {"out_of_scope": 1}
+    assert result.included == 1
+    assert result.runs == [
+        {
+            "id": str(run.id), "query_text": run.query_text, "filters_json": run.filters_json,
+            "started_at": run.started_at.isoformat(),
+        }
+    ]
+
+
+async def test_prisma_combined_uses_the_most_recently_assessed_verdict_across_two_runs(session):
+    """Same paper, two different runs, two different eligibility verdicts with two DIFFERENT assessed_at
+    timestamps. The later-timed row (run_b's, "include") must win over the earlier-timed row (run_a's,
+    "exclude") in the combined view - per spec §13's explicit edge case. run_b's row is added to the session
+    FIRST, run_a's SECOND, so a pass just because insertion order happened to match assessed_at order can't
+    happen: the code has to actually compare timestamps."""
+    from app.models import Paper
+    from app.models.workspace_search import SearchRunEligibility
+
+    workspace = Workspace(name=f"prisma-tiebreak-{uuid.uuid4().hex[:8]}")
+    session.add(workspace)
+    paper = Paper(title="Reassessed Paper", doi=f"10.9999/{uuid.uuid4().hex[:8]}", file_path="/nonexistent.pdf")
+    session.add(paper)
+    await session.flush()
+
+    earlier = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    later = datetime(2026, 6, 1, tzinfo=timezone.utc)
+
+    run_a = WorkspaceSearchRun(
+        workspace_id=workspace.id, query_text="q-a", filters_json={}, query_overrides_json={},
+        sources_json=["arxiv"], status="exhausted", started_at=earlier, stats_json={},
+    )
+    run_b = WorkspaceSearchRun(
+        workspace_id=workspace.id, query_text="q-b", filters_json={}, query_overrides_json={},
+        sources_json=["arxiv"], status="exhausted", started_at=later, stats_json={},
+    )
+    session.add_all([run_a, run_b])
+    await session.flush()
+
+    # Only one hit is needed to put the paper "in corpus" for the combined view (relevant + a paper_id) - it
+    # doesn't matter which run found it.
+    session.add(
+        WorkspaceSearchHit(
+            workspace_id=workspace.id, run_id=run_a.id, source_method="database_search",
+            normalized_title="reassessed-paper", first_seen_at=earlier, stage1_status="relevant",
+            acquisition_status="imported", paper_id=paper.id,
+        )
+    )
+    # run_b's (later assessed_at) row added first, run_a's (earlier assessed_at) second - insertion order is the
+    # OPPOSITE of assessed_at order, so a code path that just kept "whichever row it saw last" would win here too
+    # and this test wouldn't catch it; only comparing assessed_at explicitly picks run_b's "include".
+    session.add(
+        SearchRunEligibility(
+            paper_id=paper.id, search_run_id=run_b.id, stage2_status="include", assessed_at=later,
+        )
+    )
+    session.add(
+        SearchRunEligibility(
+            paper_id=paper.id, search_run_id=run_a.id, stage2_status="exclude",
+            stage2_exclude_reason="wrong_topic", assessed_at=earlier,
+        )
+    )
+    await session.commit()
+
+    result = await prisma_export(session, workspace.id, run_id=None)
+
+    assert result.stage2_assessed == 1  # one paper, one counted verdict
+    assert result.included == 1  # run_b's later "include" wins
+    assert result.stage2_excluded == 0  # run_a's earlier "exclude" is shadowed, not counted
+
+
+async def test_prisma_per_run_identified_count_comes_from_stats_json_not_hit_count(session):
+    """run_2's stats_json.per_source_raw_count sums to 10 (what it actually found, pre-dedup), but only 2
+    WorkspaceSearchHit rows carry run_2's own run_id: hit_new (a genuinely new database_search find) and
+    hit_snowball (a snowball_backward hit, attributed to run_2 for this fixture only to also prove the
+    snowball-counts-toward-identified term applies in the per-run branch, not just combined). The other 8 things
+    run_2's search turned up were already in the pool from an earlier run (run_1) and kept run_1's run_id per
+    _store_candidates_as_hits' dedup rule, so they don't carry run_2's run_id at all.
+
+    identified must be stats_json sum (10) + 1 snowball hit = 11 - NOT len(hits with run_id=run_2) (2), and NOT
+    the bare stats_json sum alone (10). All three numbers differ, so using the wrong formula is caught here.
+    duplicates_removed = max(11 - 2, 0) = 9.
+    """
+    workspace = Workspace(name=f"prisma-per-run-{uuid.uuid4().hex[:8]}")
+    session.add(workspace)
+    await session.flush()
+    now = datetime.now(timezone.utc)
+
+    run_1 = WorkspaceSearchRun(
+        workspace_id=workspace.id, query_text="q1", filters_json={}, query_overrides_json={},
+        sources_json=["arxiv"], status="exhausted", started_at=now, stats_json={"per_source_raw_count": {"arxiv": 8}},
+    )
+    run_2 = WorkspaceSearchRun(
+        workspace_id=workspace.id, query_text="q2", filters_json={}, query_overrides_json={},
+        sources_json=["arxiv"], status="exhausted", started_at=now,
+        stats_json={"per_source_raw_count": {"arxiv": 10}},
+    )
+    session.add_all([run_1, run_2])
+    await session.flush()
+
+    # The 8 items run_2's search re-found that were already in the pool: they stayed attributed to run_1, not
+    # run_2 (_store_candidates_as_hits keeps a re-found hit's original run/screening state).
+    already_in_pool = [
+        WorkspaceSearchHit(
+            workspace_id=workspace.id, run_id=run_1.id, source_method="database_search",
+            normalized_title=f"already-{i}", first_seen_at=now,
+        )
+        for i in range(8)
+    ]
+    hit_new = WorkspaceSearchHit(
+        workspace_id=workspace.id, run_id=run_2.id, source_method="database_search",
+        normalized_title="run2-new-find", first_seen_at=now,
+    )
+    hit_snowball = WorkspaceSearchHit(
+        workspace_id=workspace.id, run_id=run_2.id, source_method="snowball_backward",
+        normalized_title="run2-snowball-find", first_seen_at=now,
+    )
+    session.add_all([*already_in_pool, hit_new, hit_snowball])
+    await session.commit()
+
+    result = await prisma_export(session, workspace.id, run_id=run_2.id)
+
+    assert result.identified == 11  # stats_json sum (10) + 1 snowball hit - not 2 (hit count), not 10 (stats alone)
+    assert result.duplicates_removed == 9
+    assert result.runs == []  # per-run export: caller already knows which run
