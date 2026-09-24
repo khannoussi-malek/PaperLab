@@ -65,9 +65,11 @@ async def get_run(workspace_id: uuid.UUID, run_id: uuid.UUID, session: SessionDe
 @router.get("/hits")
 async def list_hits(
     workspace_id: uuid.UUID, session: SessionDep, limit: Annotated[int, Query(gt=0)] = 50,
-    after: str | None = None, stage1_status: str | None = None,
+    after: str | None = None, stage1_status: str | None = None, acquisition_status: str | None = None,
 ) -> HitListOut:
-    items, next_cursor = await workspace_search.list_hits(session, workspace_id, limit, after, stage1_status)
+    items, next_cursor = await workspace_search.list_hits(
+        session, workspace_id, limit, after, stage1_status, acquisition_status
+    )
     return HitListOut(items=items, next_cursor=next_cursor)
 
 
