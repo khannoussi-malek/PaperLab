@@ -57,7 +57,11 @@ test('search, screen, import a hit, then upload its PDF manually', async ({ page
 
   // fixture 2 has no free PDF, so the import fails and it needs manual acquisition.
   await page.getByRole('tab', { name: 'Manual acquisition' }).click()
-  const uploadInput = page.getByLabel(`Upload PDF for ${title}`)
+  // Every tab stays mounted (forceMount, for I1's runId preservation), inactive ones hidden by CSS alone, not
+  // the `hidden` attribute — the Search tab's own preview panel can render an upload control with the same
+  // label for this same hit, so scope to the one active tabpanel rather than a bare page-wide getByLabel.
+  const activeTab = page.locator('[role="tabpanel"][data-state="active"]')
+  const uploadInput = activeTab.getByLabel(`Upload PDF for ${title}`)
   await expect(uploadInput).toBeVisible()
 
   const [uploadResponse] = await Promise.all([
@@ -66,6 +70,6 @@ test('search, screen, import a hit, then upload its PDF manually', async ({ page
   ])
   const uploaded = await uploadResponse.json()
 
-  await expect(page.getByLabel(`Upload PDF for ${title}`)).toHaveCount(0)
+  await expect(activeTab.getByLabel(`Upload PDF for ${title}`)).toHaveCount(0)
   await removePaperAndNotes(request, uploaded.paper_id)
 })
