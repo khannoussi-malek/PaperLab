@@ -9,7 +9,6 @@ import {
   useSearchHits,
   useUploadHitPdf,
 } from '@/api/queries'
-import { Button } from '@/components/ui/button'
 import { HitContextMenu, HitMenu } from './HitMenu'
 import { HitPreview } from './HitPreview'
 
@@ -20,9 +19,11 @@ const HOVER_PREVIEW_DELAY_MS = 150
 
 /** The hit pool for a search run: a virtualized list (rows can run into the thousands) beside a preview of the
  * hovered or focused one (title, byline, abstract — same split as the library's PaperList/PaperPreview), stage-1
- * triage via a right-click menu or a trailing ⋮ button on each row, and a bulk import for hits that already
- * cleared review. `run` is only read here to know whether the worker has found more since the pool was last
- * loaded — the run's own live status is shown elsewhere (SearchTab), unaffected by any of this. */
+ * triage via a right-click menu or a trailing ⋮ button on each row, and PDF acquisition one hit at a time from the
+ * preview panel — no bulk "import everything" action: fetching a PDF starts ingestion (chunking, embedding) for
+ * that paper, and doing that automatically for every hit in a filter at once is exactly what made a big pool
+ * expensive. `run` is only read here to know whether the worker has found more since the pool was last loaded —
+ * the run's own live status is shown elsewhere (SearchTab), unaffected by any of this. */
 export function HitTable({ workspaceId, run }: { workspaceId: string; run?: SearchRun }) {
   const { data, hasNextPage, isFetchingNextPage, fetchNextPage } = useSearchHits(workspaceId)
   const importHits = useImportSearchHits(workspaceId)
@@ -81,9 +82,6 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center justify-between border-b px-3 py-2 text-sm">
         <span>{rows.length} in pool</span>
-        <Button type="button" size="sm" disabled={importHits.isPending} onClick={() => importHits.mutate(undefined)}>
-          Import all with PDF in this filter
-        </Button>
       </div>
       {importHits.isError && (
         <p role="alert" className="px-3 py-1 text-xs text-destructive">
@@ -132,6 +130,8 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
             <HitPreview
               hit={previewed}
               onReview={onReview}
+              onAddPdf={(hitId) => importHits.mutate([hitId])}
+              addPdfPending={importHits.isPending}
               onUpload={(hitId, file) => uploadHitPdf.mutate({ hitId, file })}
               uploadPending={uploadHitPdf.isPending}
             />
