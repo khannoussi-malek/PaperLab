@@ -155,6 +155,7 @@ test('the preview panel offers a way to get the PDF for a hit that needs one: se
   const panel = await preview()
   await panel.findByText('a paper about llms')
 
+  expect(panel.getByRole('button', { name: 'Add PDF' })).toBeInTheDocument()
   expect(panel.getByRole('link', { name: 'Search by title' })).toHaveAttribute(
     'href',
     'https://scholar.google.com/scholar?q=a%20paper%20about%20llms',
@@ -162,6 +163,20 @@ test('the preview panel offers a way to get the PDF for a hit that needs one: se
   expect(panel.getByRole('link', { name: 'Open page' })).toHaveAttribute('href', 'https://doi.org/10.1234/attention')
   expect(panel.getByRole('button', { name: 'Copy DOI' })).toBeInTheDocument()
   expect(panel.getByLabelText('Upload PDF for a paper about llms')).toBeInTheDocument()
+})
+
+test('clicking "Add PDF" in the preview panel imports only that one hit, not the whole filter', async () => {
+  const hit: Hit = { ...baseHit, acquisition_status: 'pending' }
+  vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: [hit], next_cursor: null })
+  vi.spyOn(api, 'importSearchHits').mockResolvedValue({ imported: 1, failed: 0 })
+
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  const panel = await preview()
+  await panel.findByText('a paper about llms')
+
+  fireEvent.click(panel.getByRole('button', { name: 'Add PDF' }))
+
+  await waitFor(() => expect(api.importSearchHits).toHaveBeenCalledWith('ws-1', ['h1']))
 })
 
 test('uploading a PDF from the preview panel calls the upload mutation for that hit', async () => {
@@ -290,8 +305,10 @@ test('at the bottom with no known next page, real new progress triggers exactly 
 test('a failed import shows an error message', async () => {
   vi.spyOn(api, 'importSearchHits').mockRejectedValue(new Error('Import failed'))
   renderWithClient(<HitTable workspaceId="ws-1" />)
+  const panel = await preview()
+  await panel.findByText('a paper about llms')
 
-  fireEvent.click(await screen.findByRole('button', { name: 'Import all with PDF in this filter' }))
+  fireEvent.click(panel.getByRole('button', { name: 'Add PDF' }))
 
   expect(await screen.findByRole('alert')).toHaveTextContent('Import failed')
 })

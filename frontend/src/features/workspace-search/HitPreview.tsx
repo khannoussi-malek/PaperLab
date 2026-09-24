@@ -12,18 +12,24 @@ type ExcludeReason = (typeof EXCLUDE_REASONS)[number]
 type Props = {
   hit: Hit
   onReview: (hitId: string, body: HitReviewUpdate) => void
+  onAddPdf: (hitId: string) => void
+  addPdfPending: boolean
   onUpload: (hitId: string, file: File) => void
   uploadPending: boolean
 }
 
 /** The hovered or focused hit's title, byline and abstract, plus the same stage-1 triage HitMenu offers and (for
- * a hit with no PDF yet) the same acquisition options ManualAcquisitionTab offers — same split as the library's
+ * a hit with no PDF yet) acquisition options like ManualAcquisitionTab's — same split as the library's
  * PaperList/PaperPreview, but this panel also carries the actions: reading, deciding relevance and getting the
  * PDF are all the same moment here, instead of PaperPreview's read-only "Open in reader" button. HitMenu/
  * HitContextMenu stay available too, for triage without hovering (keyboard, touch, or a quick pass across many
  * rows). A hit whose candidate never matched an ExternalRef (title/authors/year/venue/abstract/doi all null)
- * falls back to the normalized_title every hit always has, and shows nothing else. */
-export function HitPreview({ hit, onReview, onUpload, uploadPending }: Props) {
+ * falls back to the normalized_title every hit always has, and shows nothing else.
+ *
+ * PDF acquisition is deliberately per-hit, not bulk: adding a PDF is what starts ingestion (chunking, embedding)
+ * for that paper, and there is no "import everything in this filter" action anywhere in this feature — the user
+ * decides, one paper at a time, when that cost is worth paying. */
+export function HitPreview({ hit, onReview, onAddPdf, addPdfPending, onUpload, uploadPending }: Props) {
   const title = hit.title || hit.normalized_title
   const byline = [hit.authors?.join(', ') || null, hit.year, hit.venue].filter(Boolean).join(' · ')
   const [reason, setReason] = useState<ExcludeReason | ''>('')
@@ -101,6 +107,9 @@ export function HitPreview({ hit, onReview, onUpload, uploadPending }: Props) {
       {needsAcquisition && (
         <div className="mt-2 flex flex-col gap-2 border-t border-glass-border pt-3">
           <p className="text-xs font-medium text-muted-foreground">Get the PDF</p>
+          <Button type="button" size="sm" disabled={addPdfPending} onClick={() => onAddPdf(hit.id)}>
+            {addPdfPending ? 'Adding…' : 'Add PDF'}
+          </Button>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
             <a
               href={`https://scholar.google.com/scholar?q=${encodeURIComponent(title)}`}
