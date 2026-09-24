@@ -28,6 +28,7 @@ export function ManualAcquisitionTab({ workspaceId }: { workspaceId: string }) {
               type="file"
               accept="application/pdf"
               aria-label={`Upload PDF for ${hit.normalized_title}`}
+              disabled={upload.isPending}
               onChange={(e) => {
                 const file = e.target.files?.[0]
                 if (file) upload.mutate({ hitId: hit.id, file })
