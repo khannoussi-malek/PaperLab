@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   QueryClient,
   keepPreviousData,
@@ -355,40 +355,48 @@ export const useSearchHits = (workspaceId: string, stage1Status?: string, acquis
     getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
   })
 
-/** Refetches the hit pool whenever a polled run reports genuine new progress (I1): `useSearchHits` has no poll of
- * its own, so without this the pool stays stale until some other mutation (a review, an import, an upload)
- * happens to invalidate it.
+/** Signals that the hit pool is worth refreshing, without refreshing it automatically.
+ *
+ * An earlier version auto-invalidated the pool on every bit of progress (I1). That doesn't scale: invalidating
+ * an infinite query re-fetches every already-loaded page, not just new data, and a search run can find a pool of
+ * 3,000+ hits spread across dozens of pages — re-fetching all of them, repeatedly, in the background while a real
+ * run trickles in new results over many minutes froze the UI (observed: 70+ requests in a single burst, every
+ * ~20s, for as long as the run kept running). There is no cheap way to fetch only the new tail with this query
+ * library's infinite-query model, so the fix is to not do it automatically at all — surface a lightweight count
+ * (from the already-polled `stats_json`, no extra request) and let an explicit user action (`acknowledge`) pay
+ * the one-time cost of a real refresh, exactly once, on demand.
  *
  * Keyed off the *cumulative* `stats_json.per_source_raw_count` (summed across sources), not `last_batch_new_hits`
  * — the worker overwrites `last_batch_new_hits` fresh every batch (workers/workspace_search.py), so it's "how
- * many hits did *this* batch add," not a running total. Two different batches that happen to add the same count
- * (plausible with fixed per-source page sizes against a large result set) would look identical to an effect keyed
- * on that alone, and the second batch's hits would never trigger a refetch — including, worst case, the run's
- * final batch, whose hits then never reach the pool at all once polling stops. `per_source_raw_count` only ever
- * grows across a run, so its sum is a safe monotonic signal. `run?.status` is also a dependency so the run's
- * transition to a terminal state (exhausted/stopped/failed) always forces one last refetch, even in the
- * edge case where the raw-count sum didn't change between the last two polls. */
-// Invalidating an infinite query re-fetches every already-loaded page, not just new data. A run can report
-// progress every few seconds for many minutes, so doing that on every tick floods the API once the user has
-// scrolled past a handful of pages (observed: thousands of requests/10min on a long-running real search).
-// Throttled to at most once per this window; a terminal status transition always bypasses the throttle so the
-// run's last batch is never missed.
-const HITS_REFETCH_THROTTLE_MS = 20_000
-
-export function useRefetchHitsOnProgress(workspaceId: string, run: SearchRun | undefined) {
-  const client = useQueryClient()
+ * many hits did *this* batch add," not a running total, and two different batches can report the same count. */
+export function useNewHitsAvailable(run: SearchRun | undefined) {
   const rawCounts = run?.stats_json?.per_source_raw_count as Record<string, number> | undefined
   const rawCountTotal = rawCounts ? Object.values(rawCounts).reduce((sum, count) => sum + count, 0) : undefined
-  const status = run?.status
-  const lastInvalidatedAt = useRef(-Infinity)
+  const baseline = useRef<number | undefined>(undefined)
+  const [available, setAvailable] = useState(false)
+
   useEffect(() => {
     if (rawCountTotal === undefined) return
-    const isTerminal = status !== undefined && status !== 'running'
-    if (isTerminal || Date.now() - lastInvalidatedAt.current >= HITS_REFETCH_THROTTLE_MS) {
-      lastInvalidatedAt.current = Date.now()
-      client.invalidateQueries({ queryKey: keys.searchHitsRoot(workspaceId) })
+    if (baseline.current === undefined) {
+      baseline.current = rawCountTotal // first tick just sets the starting point — nothing "new" relative to it yet
+      return
     }
-  }, [client, workspaceId, rawCountTotal, status])
+    if (rawCountTotal > baseline.current) setAvailable(true)
+  }, [rawCountTotal])
+
+  return {
+    available,
+    acknowledge: () => {
+      baseline.current = rawCountTotal
+      setAvailable(false)
+    },
+  }
+}
+
+/** The one-time, explicit refresh `useNewHitsAvailable`'s banner triggers on click. */
+export function useRefreshHits(workspaceId: string) {
+  const client = useQueryClient()
+  return () => client.invalidateQueries({ queryKey: keys.searchHitsRoot(workspaceId) })
 }
 
 /** Reviews one hit (the stage-1 triage decision). */
