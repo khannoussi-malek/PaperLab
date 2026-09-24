@@ -36,6 +36,7 @@ beforeEach(() => {
   vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: [baseHit], next_cursor: null })
   vi.spyOn(api, 'patchSearchHit').mockResolvedValue(baseHit)
   vi.spyOn(api, 'importSearchHits')
+  vi.spyOn(api, 'uploadHitPdf')
   // jsdom never lays anything out, so offsetHeight is always 0 — the virtualizer treats a zero-height
   // scroll container as "nothing visible" and renders no rows at all. Give it a plausible viewport.
   vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(600)
@@ -144,6 +145,47 @@ test('the preview panel requires a reason before Not relevant can be clicked, sa
       stage1_exclude_reason: 'duplicate',
     }),
   )
+})
+
+test('the preview panel offers a way to get the PDF for a hit that needs one: search, open page, copy DOI, upload', async () => {
+  const hit: Hit = { ...baseHit, doi: '10.1234/attention', acquisition_status: 'failed' }
+  vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: [hit], next_cursor: null })
+
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  const panel = await preview()
+  await panel.findByText('a paper about llms')
+
+  expect(panel.getByRole('link', { name: 'Search by title' })).toHaveAttribute(
+    'href',
+    'https://scholar.google.com/scholar?q=a%20paper%20about%20llms',
+  )
+  expect(panel.getByRole('link', { name: 'Open page' })).toHaveAttribute('href', 'https://doi.org/10.1234/attention')
+  expect(panel.getByRole('button', { name: 'Copy DOI' })).toBeInTheDocument()
+  expect(panel.getByLabelText('Upload PDF for a paper about llms')).toBeInTheDocument()
+})
+
+test('uploading a PDF from the preview panel calls the upload mutation for that hit', async () => {
+  vi.spyOn(api, 'uploadHitPdf').mockResolvedValue({ ...baseHit, acquisition_status: 'manual', paper_id: 'p1' })
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  const panel = await preview()
+  await panel.findByText('a paper about llms')
+
+  const file = new File(['%PDF-1.4'], 'paper.pdf', { type: 'application/pdf' })
+  fireEvent.change(panel.getByLabelText('Upload PDF for a paper about llms'), { target: { files: [file] } })
+
+  await waitFor(() => expect(api.uploadHitPdf).toHaveBeenCalledWith('ws-1', 'h1', file))
+})
+
+test('the preview panel hides the PDF-getting options once a hit is already imported or manually acquired', async () => {
+  const hit: Hit = { ...baseHit, acquisition_status: 'imported' }
+  vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: [hit], next_cursor: null })
+
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  const panel = await preview()
+  await panel.findByText('a paper about llms')
+
+  expect(panel.queryByRole('link', { name: 'Search by title' })).not.toBeInTheDocument()
+  expect(panel.queryByLabelText('Upload PDF for a paper about llms')).not.toBeInTheDocument()
 })
 
 test('the trailing ⋮ button opens a menu with Relevant, Maybe and Not relevant…', async () => {
