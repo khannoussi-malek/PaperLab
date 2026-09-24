@@ -84,3 +84,24 @@ test('marking relevant sends only stage1_status', async () => {
 
   await waitFor(() => expect(api.patchSearchHit).toHaveBeenCalledWith('ws-1', 'h1', { stage1_status: 'relevant' }))
 })
+
+test('stays virtualized: a large hit pool renders far fewer rows than it has hits', async () => {
+  const manyHits: Hit[] = Array.from({ length: 200 }, (_, i) => ({ ...baseHit, id: `h${i}`, normalized_title: `hit-${i}` }))
+  vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: manyHits, next_cursor: null })
+
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  await screen.findByText('hit-0')
+
+  const rowButtons = screen.getAllByRole('button', { name: /^hit-\d+/ })
+  expect(rowButtons.length).toBeGreaterThan(0)
+  expect(rowButtons.length).toBeLessThan(50)
+})
+
+test('a failed import shows an error message', async () => {
+  vi.spyOn(api, 'importSearchHits').mockRejectedValue(new Error('Import failed'))
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Import all with PDF in this filter' }))
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('Import failed')
+})

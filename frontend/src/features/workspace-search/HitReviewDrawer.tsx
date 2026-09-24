@@ -63,6 +63,11 @@ export function HitReviewDrawer({
       <Button type="button" variant="ghost" onClick={onClose} className="mt-4">
         Close
       </Button>
+      {patch.isError && (
+        <p role="alert" className="mt-2 text-xs text-destructive">
+          {patch.error.message}
+        </p>
+      )}
     </div>
   )
 }
