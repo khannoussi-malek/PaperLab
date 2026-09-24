@@ -135,96 +135,41 @@ test('a 409 from Stop (the run already finished naturally) is swallowed, not sho
   expect(screen.queryByRole('alert')).not.toBeInTheDocument()
 })
 
-test('invalidates the hit pool on each real batch, keyed on cumulative raw counts (not last_batch_new_hits) plus status (I1 fix round)', async () => {
+test('shows a "New hits found" banner on real progress, but never auto-refetches the pool', async () => {
   const runKey = { queryKey: ['workspaces', 'ws-1', 'search', 'runs', 'run-1'] }
-  const hitsKey = { queryKey: ['workspaces', 'ws-1', 'search', 'hits'] }
-  // last_batch_new_hits deliberately repeats 20 across every tick below, including two genuinely different real
-  // batches — the bug this round fixed treated a repeated last_batch_new_hits as "nothing new," even though the
-  // cumulative per_source_raw_count total (workers/workspace_search.py's own running total) kept growing.
-  const runAt = (arxivRawCount: number, status = 'running') => ({
+  // last_batch_new_hits deliberately repeats 20 across every tick below, including a genuinely different real
+  // batch — the cumulative per_source_raw_count total (workers/workspace_search.py's own running total) is the
+  // real signal, not this per-batch count, which the worker overwrites fresh every batch.
+  const runAt = (arxivRawCount: number) => ({
     id: 'run-1', workspace_id: 'ws-1', query_text: 'q', filters_json: {}, sources_json: ['arxiv'],
-    status, started_at: '2026-09-24T00:00:00Z', stopped_at: null,
+    status: 'running', started_at: '2026-09-24T00:00:00Z', stopped_at: null,
     stats_json: { last_batch_new_hits: 20, per_source_raw_count: { arxiv: arxivRawCount } },
   })
   vi.mocked(api.getSearchRun).mockResolvedValue(runAt(20) as never)
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
-  // Real progress ticks are throttled to at most one invalidation per 20s (a later test below covers the
-  // throttle itself); every tick here jumps the clock past that window first, so this test's assertions are
-  // about the *key* (cumulative raw count + status), not about timing.
-  let now = 0
-  const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now)
-  const advanceClock = () => {
-    now += 21_000
-  }
 
   renderWithClient(<SearchTab workspaceId="ws-1" runId="run-1" onRunIdChange={vi.fn()} />, client)
+  await screen.findByText(/running/)
+  // The very first tick just establishes a baseline — nothing "new" relative to a run that just started.
+  expect(screen.queryByText('New hits found')).not.toBeInTheDocument()
 
-  await waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith(hitsKey))
-  const callsAfterFirstBatch = invalidateSpy.mock.calls.length
-
-  // A second, genuinely different batch that happens to report the same last_batch_new_hits (20) as the first
-  // must still invalidate, since the cumulative raw-count total grew (20 -> 40) — this is the case the old
-  // last_batch_new_hits-only key missed, including on a run's very last batch.
-  advanceClock()
+  // A genuinely later batch (raw count grew 20 -> 40) shows the banner — but must NOT auto-refetch the pool.
+  // Invalidating an infinite query re-fetches every already-loaded page; doing that automatically on every poll
+  // tick is exactly what froze the UI on a long-running real search with a large pool.
   vi.mocked(api.getSearchRun).mockResolvedValue(runAt(40) as never)
   await client.refetchQueries(runKey)
-  await waitFor(() => expect(invalidateSpy.mock.calls.length).toBeGreaterThan(callsAfterFirstBatch))
-  const callsAfterSecondBatch = invalidateSpy.mock.calls.length
+  await screen.findByText('New hits found')
+  expect(invalidateSpy).not.toHaveBeenCalled()
 
-  // A poll tick reporting the exact same state as last time (nothing new at all) must not invalidate again,
-  // even with the clock advanced past the throttle window.
-  advanceClock()
-  vi.mocked(api.getSearchRun).mockResolvedValue(runAt(40) as never)
+  // Clicking Refresh pays the real cost exactly once, on the user's own request.
+  fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
+  expect(invalidateSpy).toHaveBeenCalledTimes(1)
+  expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['workspaces', 'ws-1', 'search', 'hits'] })
+  await waitFor(() => expect(screen.queryByText('New hits found')).not.toBeInTheDocument())
+
+  // A further poll tick reporting the exact same total (nothing new since the refresh) must not re-show it.
   await client.refetchQueries(runKey)
-  await waitFor(() => expect(api.getSearchRun).toHaveBeenCalledTimes(3)) // lets the resulting render/effect flush
-  expect(invalidateSpy.mock.calls.length).toBe(callsAfterSecondBatch)
-
-  // The run's transition to a terminal status forces one final invalidation, even though the raw-count sum is
-  // unchanged from the tick just before it (e.g. the terminal-marking pass itself added nothing new) — otherwise
-  // a last batch that happened to repeat the previous total would never reach the pool. No clock advance here:
-  // a terminal status must bypass the throttle, not just benefit from an already-elapsed window.
-  vi.mocked(api.getSearchRun).mockResolvedValue(runAt(40, 'exhausted') as never)
-  await client.refetchQueries(runKey)
-  await waitFor(() => expect(invalidateSpy.mock.calls.length).toBeGreaterThan(callsAfterSecondBatch))
-
-  nowSpy.mockRestore()
-})
-
-test('throttles progress-triggered invalidation instead of re-fetching every loaded page on every poll tick', async () => {
-  const runKey = { queryKey: ['workspaces', 'ws-1', 'search', 'runs', 'run-1'] }
-  const hitsKey = { queryKey: ['workspaces', 'ws-1', 'search', 'hits'] }
-  const runAt = (arxivRawCount: number) => ({
-    id: 'run-1', workspace_id: 'ws-1', query_text: 'q', filters_json: {}, sources_json: ['arxiv'],
-    status: 'running', started_at: '2026-09-24T00:00:00Z', stopped_at: null,
-    stats_json: { last_batch_new_hits: 1, per_source_raw_count: { arxiv: arxivRawCount } },
-  })
-  vi.mocked(api.getSearchRun).mockResolvedValue(runAt(1) as never)
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
-  let now = 0
-  const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now)
-
-  renderWithClient(<SearchTab workspaceId="ws-1" runId="run-1" onRunIdChange={vi.fn()} />, client)
-  await waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith(hitsKey))
-  const callsAfterFirstTick = invalidateSpy.mock.calls.length
-
-  // Ten poll ticks in a row, each finding one genuinely new hit (a realistic long-running search against a
-  // real provider), all within the throttle window — this is exactly the pattern that flooded the API with
-  // thousands of requests in ten minutes before this fix: re-fetching every already-loaded page on every tick.
-  for (let i = 2; i <= 11; i++) {
-    now += 500 // well under the 20s window
-    vi.mocked(api.getSearchRun).mockResolvedValue(runAt(i) as never)
-    await client.refetchQueries(runKey)
-  }
-  await waitFor(() => expect(api.getSearchRun).toHaveBeenCalledTimes(11))
-  expect(invalidateSpy.mock.calls.length).toBe(callsAfterFirstTick) // none of the throttled ticks invalidated
-
-  // Once the window has genuinely elapsed, the next tick with new progress invalidates again.
-  now += 21_000
-  vi.mocked(api.getSearchRun).mockResolvedValue(runAt(12) as never)
-  await client.refetchQueries(runKey)
-  await waitFor(() => expect(invalidateSpy.mock.calls.length).toBeGreaterThan(callsAfterFirstTick))
-
-  nowSpy.mockRestore()
+  await waitFor(() => expect(api.getSearchRun).toHaveBeenCalledTimes(3))
+  expect(screen.queryByText('New hits found')).not.toBeInTheDocument()
 })
