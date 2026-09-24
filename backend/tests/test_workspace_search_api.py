@@ -290,6 +290,60 @@ async def test_list_hits_filters_by_acquisition_status(session, client):
     assert items[0]["normalized_title"] == "failed one"
 
 
+async def test_list_hits_surfaces_the_linked_external_ref_and_tolerates_none(session, client):
+    """I7: HitOut's title/authors/year/venue/doi come from a join to ExternalRef, not just normalized_title. A hit
+    with no external_ref_id (never matched to a candidate, or the match was cleared) must still come back with
+    those fields None instead of crashing the join."""
+    import uuid as uuid_mod
+    from datetime import datetime, timezone
+
+    from app.models.references import ExternalRef
+    from app.models.workspace import Workspace
+    from app.models.workspace_search import WorkspaceSearchHit, WorkspaceSearchRun
+
+    workspace = Workspace(name=f"Hit ref join {uuid_mod.uuid4().hex[:8]}")
+    session.add(workspace)
+    await session.flush()
+    run = WorkspaceSearchRun(
+        workspace_id=workspace.id, query_text="q", filters_json={}, query_overrides_json={},
+        sources_json=[], status="exhausted", started_at=datetime.now(timezone.utc), stats_json={},
+    )
+    session.add(run)
+    await session.flush()
+    ref = ExternalRef(
+        title="The Real Title", authors=["Ada Lovelace"], year=1843, venue="Analytical Engine Quarterly",
+        doi="10.1234/real",
+    )
+    session.add(ref)
+    await session.flush()
+    session.add(WorkspaceSearchHit(
+        workspace_id=workspace.id, run_id=run.id, source_method="database_search", external_ref_id=ref.id,
+        normalized_title="the real title", first_seen_at=datetime.now(timezone.utc),
+    ))
+    session.add(WorkspaceSearchHit(
+        workspace_id=workspace.id, run_id=run.id, source_method="database_search", external_ref_id=None,
+        normalized_title="no ref one", first_seen_at=datetime.now(timezone.utc),
+    ))
+    await session.commit()
+
+    resp = await client.get(f"/api/workspaces/{workspace.id}/search/hits")
+
+    assert resp.status_code == 200
+    items = {item["normalized_title"]: item for item in resp.json()["items"]}
+    linked = items["the real title"]
+    assert linked["title"] == "The Real Title"
+    assert linked["authors"] == ["Ada Lovelace"]
+    assert linked["year"] == 1843
+    assert linked["venue"] == "Analytical Engine Quarterly"
+    assert linked["doi"] == "10.1234/real"
+    unlinked = items["no ref one"]
+    assert unlinked["title"] is None
+    assert unlinked["authors"] is None
+    assert unlinked["year"] is None
+    assert unlinked["venue"] is None
+    assert unlinked["doi"] is None
+
+
 async def test_list_hits_with_zero_limit_is_422(client):
     ws = await client.post("/api/workspaces", json={"name": "Zero limit test"})
     workspace_id = ws.json()["id"]

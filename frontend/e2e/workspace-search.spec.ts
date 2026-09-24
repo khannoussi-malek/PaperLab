@@ -3,27 +3,34 @@ import { expect, FIXTURE_FILE, removePaperAndNotes, test } from './fixtures'
 
 // search_batch's per-source page size (workspace_search.py's PAGE_SIZE_BY_SOURCE) is far bigger than the 3-item
 // pagination fixture (discovery_fake.py's PAGE_PAPERS), so the run's very first batch already stores every hit
-// this query will ever find. It never reaches a terminal status on its own, though: SearchControls' default
-// sources include "unpaywall", and with no contact email configured (a fresh stack's default) that source has no
-// client, so search_batch's `if client is None: continue` skips it every pass without ever marking its cursor
-// exhausted — the worker's `all(c.exhausted for c in cursors)` check can never be true, and it polls forever.
-// Stopping the run explicitly (the real Stop control) is the only way to end it, so this test does that instead
-// of waiting for a status the app cannot actually reach.
-async function waitForHits(request: APIRequestContext, workspaceId: string) {
+// this query will ever find, and exhausts every source's cursor in that same batch. This run used to never
+// reach a terminal status on its own: SearchControls hard-coded "unpaywall" into every Start click, and with no
+// contact email configured (a fresh stack's default) that source had no client, so search_batch's
+// `if client is None: continue` skipped it every pass without ever marking its cursor exhausted — the worker's
+// `all(c.exhausted for c in cursors)` check could never become true, and it polled forever. Both halves of that
+// are fixed now: SearchControls only ever sends the sources actually enabled in settings, never unpaywall
+// (which has no search role at all — C1), and the worker's own cursor error-caps, iteration cap and wall-clock
+// deadline (C2) independently guarantee termination besides. So this test polls the run's own status via the
+// API for "exhausted", instead of clicking the Stop control to force an end it no longer needs — this exercises
+// the actual fixed behavior end to end, not a workaround for it.
+async function waitForRunToFinish(request: APIRequestContext, workspaceId: string, runId: string) {
   await expect
-    .poll(async () => (await (await request.get(`/api/workspaces/${workspaceId}/search/hits`)).json()).items.length, {
+    .poll(async () => (await (await request.get(`/api/workspaces/${workspaceId}/search/runs/${runId}`)).json()).status, {
       timeout: 15_000,
     })
-    .toBeGreaterThan(0)
+    .toBe('exhausted')
 }
 
 test('search, screen, import a hit, then upload its PDF manually', async ({ page, request, workspaceId }) => {
   await page.goto(`/#/workspaces/${workspaceId}?tab=search`)
   await page.getByLabel('Search query').fill('bert')
-  await page.getByRole('button', { name: 'Start' }).click()
+  const [startResponse] = await Promise.all([
+    page.waitForResponse((r) => r.url().endsWith('/search/runs') && r.request().method() === 'POST'),
+    page.getByRole('button', { name: 'Start' }).click(),
+  ])
+  const { id: runId } = await startResponse.json()
 
-  await waitForHits(request, workspaceId)
-  await page.getByRole('button', { name: 'Stop' }).click()
+  await waitForRunToFinish(request, workspaceId, runId)
 
   // HitTable's hit-pool query isn't invalidated by the run in the background; reload to pick up the stored hits.
   await page.reload()

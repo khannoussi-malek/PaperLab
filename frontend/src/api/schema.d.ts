@@ -2039,6 +2039,16 @@ export interface components {
             acquisition_status: string;
             /** Paper Id */
             paper_id: string | null;
+            /** Title */
+            title?: string | null;
+            /** Authors */
+            authors?: string[] | null;
+            /** Year */
+            year?: number | null;
+            /** Venue */
+            venue?: string | null;
+            /** Doi */
+            doi?: string | null;
         };
         /** HitReviewUpdate */
         HitReviewUpdate: {
@@ -2692,7 +2702,7 @@ export interface components {
                 [key: string]: unknown;
             };
             /** Sources */
-            sources: string[];
+            sources: ("arxiv" | "crossref" | "core" | "semantic_scholar" | "openalex")[];
             /**
              * Query Overrides
              * @default {}
@@ -2717,6 +2727,10 @@ export interface components {
             query_text: string;
             /** Filters Json */
             filters_json: {
+                [key: string]: unknown;
+            };
+            /** Query Overrides Json */
+            query_overrides_json: {
                 [key: string]: unknown;
             };
             /** Sources Json */
@@ -3929,7 +3943,8 @@ export interface operations {
             query?: {
                 limit?: number;
                 after?: string | null;
-                stage1_status?: string | null;
+                stage1_status?: ("relevant" | "not_relevant" | "maybe") | null;
+                acquisition_status?: ("not_attempted" | "queued" | "imported" | "failed" | "manual") | null;
             };
             header?: never;
             path: {

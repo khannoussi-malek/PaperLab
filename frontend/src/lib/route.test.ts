@@ -72,20 +72,35 @@ describe('parseRoute', () => {
 
   it('opens a workspace on its Papers tab by default, and keeps another tab in the hash', () => {
     expect(workspaceHref(id)).toBe(`#/workspaces/${id}`)
-    expect(parseRoute(workspaceHref(id))).toEqual({ name: 'workspace', workspaceId: id, tab: 'papers' })
+    expect(parseRoute(workspaceHref(id))).toEqual({ name: 'workspace', workspaceId: id, tab: 'papers', runId: null })
     expect(workspaceHref(id, 'chat')).toBe(`#/workspaces/${id}?tab=chat`)
-    expect(parseRoute(workspaceHref(id, 'notes'))).toEqual({ name: 'workspace', workspaceId: id, tab: 'notes' })
-    expect(parseRoute(`#/workspaces/${id}?tab=graph`)).toEqual({ name: 'workspace', workspaceId: id, tab: 'papers' })
+    expect(parseRoute(workspaceHref(id, 'notes'))).toEqual({ name: 'workspace', workspaceId: id, tab: 'notes', runId: null })
+    expect(parseRoute(`#/workspaces/${id}?tab=graph`)).toEqual({ name: 'workspace', workspaceId: id, tab: 'papers', runId: null })
   })
 
   it('workspaceHref builds a search tab url', () => {
     expect(workspaceHref(id, 'search')).toBe(`#/workspaces/${id}?tab=search`)
-    expect(parseRoute(workspaceHref(id, 'search'))).toEqual({ name: 'workspace', workspaceId: id, tab: 'search' })
+    expect(parseRoute(workspaceHref(id, 'search'))).toEqual({ name: 'workspace', workspaceId: id, tab: 'search', runId: null })
   })
 
   it('workspaceHref builds an acquisition tab url', () => {
     expect(workspaceHref(id, 'acquisition')).toBe(`#/workspaces/${id}?tab=acquisition`)
-    expect(parseRoute(workspaceHref(id, 'acquisition'))).toEqual({ name: 'workspace', workspaceId: id, tab: 'acquisition' })
+    expect(parseRoute(workspaceHref(id, 'acquisition'))).toEqual({
+      name: 'workspace', workspaceId: id, tab: 'acquisition', runId: null,
+    })
+  })
+
+  it('workspaceHref round-trips an active run id (I1), so a reload on the Search tab keeps it', () => {
+    expect(workspaceHref(id, 'search', other)).toBe(`#/workspaces/${id}?tab=search&run=${other}`)
+    expect(parseRoute(workspaceHref(id, 'search', other))).toEqual({
+      name: 'workspace', workspaceId: id, tab: 'search', runId: other,
+    })
+  })
+
+  it('ignores a malformed run id in the hash', () => {
+    expect(parseRoute(`#/workspaces/${id}?tab=search&run=not-a-real-id`)).toEqual({
+      name: 'workspace', workspaceId: id, tab: 'search', runId: null,
+    })
   })
 
   it('keeps the Data tab in the hash', () => {

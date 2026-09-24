@@ -9,7 +9,7 @@ describe('activeNav', () => {
     expect(activeNav({ name: 'charts' })).toBe('charts')
     expect(activeNav({ name: 'settings', section: 'models' })).toBe('settings')
     expect(activeNav({ name: 'connect-claude' })).toBe('connect-claude')
-    expect(activeNav({ name: 'workspace', workspaceId: 'w1', tab: 'papers' })).toBe('workspace')
+    expect(activeNav({ name: 'workspace', workspaceId: 'w1', tab: 'papers', runId: null })).toBe('workspace')
   })
 
   it('keeps Charts lit while you are inside a chart, the builder or a dataset', () => {
@@ -27,7 +27,7 @@ describe('activeNav', () => {
 
 describe('activeWorkspaceId', () => {
   it('is the open workspace, and null everywhere else', () => {
-    expect(activeWorkspaceId({ name: 'workspace', workspaceId: 'w1', tab: 'notes' })).toBe('w1')
+    expect(activeWorkspaceId({ name: 'workspace', workspaceId: 'w1', tab: 'notes', runId: null })).toBe('w1')
     expect(activeWorkspaceId({ name: 'library' })).toBeNull()
     expect(activeWorkspaceId({ name: 'charts' })).toBeNull()
   })

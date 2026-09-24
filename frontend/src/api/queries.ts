@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import {
   QueryClient,
   keepPreviousData,
@@ -313,11 +314,22 @@ export function useStartSearchRun(workspaceId: string) {
   })
 }
 
-/** Stops a running search run. */
+/** Stops a running search run. `stop_run` 409s ("search_run_not_running") when the run already finished naturally
+ * right as the user clicked Stop — a harmless race (Minor 5), not a real error, so it's swallowed here: the mutation
+ * re-fetches the run's real (now-finished) state and resolves with that instead of surfacing `.isError`. */
 export function useStopSearchRun(workspaceId: string) {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: (runId: string) => api.stopSearchRun(workspaceId, runId),
+    mutationFn: async (runId: string) => {
+      try {
+        return await api.stopSearchRun(workspaceId, runId)
+      } catch (error) {
+        if (error instanceof Error && error.message === 'search_run_not_running') {
+          return api.getSearchRun(workspaceId, runId)
+        }
+        throw error
+      }
+    },
     onSuccess: () => client.invalidateQueries({ queryKey: keys.searchRuns(workspaceId) }),
   })
 }
@@ -342,6 +354,19 @@ export const useSearchHits = (workspaceId: string, stage1Status?: string, acquis
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
   })
+
+/** Refetches the hit pool whenever a polled run reports genuine new progress (I1): `useSearchHits` has no poll of
+ * its own, so without this the pool stays stale until some other mutation (a review, an import, an upload)
+ * happens to invalidate it. Keyed off `last_batch_new_hits` specifically — not every poll tick — so a run sitting
+ * between batches (nothing new yet) doesn't spam refetches. `client` and `workspaceId` are stable across renders,
+ * so the effect only actually re-fires when that count changes. */
+export function useRefetchHitsOnProgress(workspaceId: string, run: SearchRun | undefined) {
+  const client = useQueryClient()
+  const lastBatchNewHits = run?.stats_json?.last_batch_new_hits as number | undefined
+  useEffect(() => {
+    if (lastBatchNewHits !== undefined) client.invalidateQueries({ queryKey: keys.searchHitsRoot(workspaceId) })
+  }, [client, workspaceId, lastBatchNewHits])
+}
 
 /** Reviews one hit (the stage-1 triage decision). */
 export function usePatchSearchHit(workspaceId: string) {

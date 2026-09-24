@@ -34,7 +34,7 @@ function Page() {
   useOpenSetupOnStart()
   if (route.name === 'workspace') {
     // Keyed by workspace only: switching tabs must not remount the page.
-    return <WorkspacePage key={route.workspaceId} workspaceId={route.workspaceId} tab={route.tab} />
+    return <WorkspacePage key={route.workspaceId} workspaceId={route.workspaceId} tab={route.tab} runId={route.runId} />
   }
   if (route.name === 'reader') {
     // Keyed by paper only: switching tabs must not remount the reader.
