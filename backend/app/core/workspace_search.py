@@ -20,6 +20,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.core import discovery
 from app.core.candidates import Candidate, from_arxiv, from_core, from_crossref, from_s2, from_work, merge, normal_title
 from app.core.discovery import Providers, _add_unpaywall_links, download_pdf
 from app.core.references import _same_reference
@@ -233,6 +234,20 @@ async def search_batch(session: AsyncSession, providers: Providers, run: Workspa
             # succeeds clears whatever error streak came before it.
             cursor.cursor_json = {"value": next_cursor}
 
+    new_hits = await _store_candidates_as_hits(session, run, "database_search", found)
+
+    return BatchResult(new_hits=new_hits, sources_exhausted=exhausted, errors=errors, raw_counts=raw_counts)
+
+
+async def _store_candidates_as_hits(
+    session: AsyncSession, run: WorkspaceSearchRun, source_method: str, found: dict[str, list[Candidate]],
+    seed_paper_id: uuid.UUID | None = None, snowball_round: int | None = None,
+) -> int:
+    """Merges candidates from every source, dedups against the existing pool by (workspace_id, external_ref_id),
+    and stores new ones as hits. Shared by search_batch (source_method="database_search") and snowball
+    (source_method="snowball_backward"/"snowball_forward") so both features use exactly one hit-creation/dedup
+    path — a paper already in the pool (this run, an earlier one, or a prior snowball hop) keeps its existing
+    screening state (spec P8, §9)."""
     all_candidates = [c for group in found.values() for c in group]
     merged = merge(found, len(all_candidates)) if all_candidates else []
 
@@ -253,14 +268,18 @@ async def search_batch(session: AsyncSession, providers: Providers, run: Workspa
         )
         if existing_hit is not None:
             continue  # already in the pool (this run or an earlier one) — keeps its existing screening decision
-        if await _insert_hit(session, run, ref, candidate):
+        if await _insert_hit(
+            session, run, ref, candidate, source_method=source_method,
+            seed_paper_id=seed_paper_id, snowball_round=snowball_round,
+        ):
             new_hits += 1
-
-    return BatchResult(new_hits=new_hits, sources_exhausted=exhausted, errors=errors, raw_counts=raw_counts)
+    return new_hits
 
 
 async def _insert_hit(
-    session: AsyncSession, run: WorkspaceSearchRun, ref: ExternalRef, candidate: Candidate
+    session: AsyncSession, run: WorkspaceSearchRun, ref: ExternalRef, candidate: Candidate,
+    source_method: str = "database_search", seed_paper_id: uuid.UUID | None = None,
+    snowball_round: int | None = None,
 ) -> bool:
     """Inserts a new pool hit for `ref`, or no-ops if the DB's own `(workspace_id, external_ref_id)` unique
     constraint already has a row for it — not just this function's own pre-check SELECT above, which two workers
@@ -272,7 +291,9 @@ async def _insert_hit(
             workspace_id=run.workspace_id,
             run_id=run.id,
             external_ref_id=ref.id,
-            source_method="database_search",
+            source_method=source_method,
+            seed_paper_id=seed_paper_id,
+            snowball_round=snowball_round,
             normalized_title=normal_title(candidate.title),
             first_seen_at=datetime.now(timezone.utc),
         )
@@ -284,6 +305,7 @@ async def _insert_hit(
 
 from app.core import paper_sources, papers, workspaces
 from app.core.errors import Conflict, InvalidInput, NotFound
+from app.models import Paper, workspace_papers
 
 # OpenAlex's `page` cursor is 1-based; every other source's is a 0-based offset (Task 2's convention — the
 # engine tests' own START_CURSOR already knows this). Seeding OpenAlex at 0 asked its fake for a negative offset
@@ -349,6 +371,102 @@ async def get_run(session: AsyncSession, run_id, workspace_id=None) -> Workspace
     if run is None or (workspace_id is not None and run.workspace_id != workspace_id):
         raise NotFound(f"search run {run_id} not found")
     return run
+
+
+# Own constants, deliberately not references.py's REFS_CAP/CITING_CAP — the two features stay decoupled even
+# though the values happen to match today.
+SNOWBALL_REFS_CAP = 500
+SNOWBALL_CITING_CAP = 200
+
+
+@dataclass(frozen=True)
+class SnowballResult:
+    new_hits: int
+    skipped_seeds: list[uuid.UUID] = field(default_factory=list)
+    errors: dict[str, str] = field(default_factory=dict)
+
+
+async def _snowball_from_s2(
+    providers: Providers, paper: Paper, backward: bool, forward: bool
+) -> dict[str, list[Candidate]] | None:
+    """None when Semantic Scholar doesn't know `paper` (a 404 on any direction asked for — same signal
+    references.py's _from_semantic_scholar uses). Mirrors that function, scoped to just the requested
+    direction(s)."""
+    key = await discovery.s2_key(providers.s2, paper)
+    if key is None:
+        return None
+    out: dict[str, list[Candidate]] = {}
+    if backward:
+        cites = await semantic_scholar.references(providers.s2, key, SNOWBALL_REFS_CAP)
+        if cites is None:
+            return None
+        out["backward"] = [from_s2(p) for p in cites]
+    if forward:
+        cited_by = await semantic_scholar.citations(providers.s2, key, SNOWBALL_CITING_CAP)
+        if cited_by is None:
+            return None
+        out["forward"] = [from_s2(p) for p in cited_by]
+    return out
+
+
+async def snowball(
+    session: AsyncSession, providers: Providers, workspace_id: uuid.UUID, seed_paper_ids: list[uuid.UUID],
+    backward: bool, forward: bool,
+) -> SnowballResult:
+    """One hop, from each seed paper, via Semantic Scholar. New hits land in the same pool as database-search
+    hits (spec P8, §9), tagged snowball_backward/snowball_forward, deduped by (workspace_id, external_ref_id)
+    through the same `_store_candidates_as_hits` path search_batch uses — a seed's reference already in the pool
+    keeps its existing screening state.
+
+    WorkspaceSearchHit.run_id is NOT NULL, and a snowball hop isn't a polling "run" — a lightweight run row is
+    created once per call (status="exhausted" immediately: there's nothing to page) and used as every resulting
+    hit's run_id, which also gives PRISMA's later per-run reporting a real row to point at.
+
+    Semantic Scholar entirely off (providers.s2 is None) raises Conflict once, up front, mirroring
+    references.fetch()'s "nothing enabled" check — with no source configured at all there's no useful
+    per-seed distinction to make (every seed would just land in skipped_seeds for the same reason)."""
+    if providers.s2 is None:
+        raise Conflict("Semantic Scholar is off. Turn it on in Settings → Paper sources to snowball.")
+
+    run = WorkspaceSearchRun(
+        workspace_id=workspace_id, query_text=f"snowball ({len(seed_paper_ids)} seed paper(s))",
+        filters_json={}, query_overrides_json={}, sources_json=["semantic_scholar"], status="exhausted",
+        started_at=datetime.now(timezone.utc), stats_json={},
+    )
+    session.add(run)
+    await session.flush()
+
+    skipped: list[uuid.UUID] = []
+    errors: dict[str, str] = {}
+    new_hits = 0
+    for paper_id in seed_paper_ids:
+        member = (
+            await session.execute(
+                select(workspace_papers.c.paper_id).where(
+                    workspace_papers.c.workspace_id == workspace_id, workspace_papers.c.paper_id == paper_id
+                )
+            )
+        ).first()
+        if member is None:
+            raise NotFound(f"paper {paper_id} not in workspace {workspace_id}")
+        paper = await session.get(Paper, paper_id)
+        try:
+            found = await _snowball_from_s2(providers, paper, backward, forward)
+        except httpx.HTTPError as exc:
+            errors["semantic_scholar"] = str(exc)
+            continue
+        if found is None:
+            skipped.append(paper_id)
+            continue
+        for direction, candidates in found.items():
+            source_method = "snowball_backward" if direction == "backward" else "snowball_forward"
+            new_hits += await _store_candidates_as_hits(
+                session, run, source_method, {"semantic_scholar": candidates},
+                seed_paper_id=paper_id, snowball_round=1,
+            )
+
+    await session.commit()
+    return SnowballResult(new_hits=new_hits, skipped_seeds=skipped, errors=errors)
 
 
 def _encode_cursor(first_seen_at: datetime, hit_id: uuid.UUID) -> str:
