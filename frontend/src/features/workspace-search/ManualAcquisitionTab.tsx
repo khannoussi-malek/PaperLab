@@ -33,7 +33,8 @@ export function ManualAcquisitionTab({ workspaceId }: { workspaceId: string }) {
         <p className="text-sm text-muted-foreground">Nothing needs manual acquisition right now.</p>
       )}
       {rows.map((hit) => {
-        const title = hit.title ?? hit.normalized_title
+        // `||`, not `??`: an empty-string title (falsy but not null/undefined) must still fall back, not render blank.
+        const title = hit.title || hit.normalized_title
         const byline = [hit.authors?.join(', ') || null, hit.year, hit.venue].filter(Boolean).join(' · ')
         // Only doi ever reaches HitOut, so pageLink's other identifiers are always null here — still the same
         // "Open page" logic the References panel uses, just fed less to work with.

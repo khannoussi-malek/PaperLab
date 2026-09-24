@@ -32,7 +32,9 @@ test('search, screen, import a hit, then upload its PDF manually', async ({ page
 
   await waitForRunToFinish(request, workspaceId, runId)
 
-  // HitTable's hit-pool query isn't invalidated by the run in the background; reload to pick up the stored hits.
+  // The hit pool now self-invalidates on real progress once the run's own poll notices it (I1), so this reload
+  // is a belt-and-suspenders check that the pool is actually populated by the time this test looks — not a
+  // required workaround for missing invalidation, the way it used to be.
   await page.reload()
   await expect(page.getByText(/[1-9]\d* in pool/)).toBeVisible()
 
