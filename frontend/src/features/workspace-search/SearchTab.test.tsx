@@ -135,41 +135,8 @@ test('a 409 from Stop (the run already finished naturally) is swallowed, not sho
   expect(screen.queryByRole('alert')).not.toBeInTheDocument()
 })
 
-test('shows a "New hits found" banner on real progress, but never auto-refetches the pool', async () => {
-  const runKey = { queryKey: ['workspaces', 'ws-1', 'search', 'runs', 'run-1'] }
-  // last_batch_new_hits deliberately repeats 20 across every tick below, including a genuinely different real
-  // batch — the cumulative per_source_raw_count total (workers/workspace_search.py's own running total) is the
-  // real signal, not this per-batch count, which the worker overwrites fresh every batch.
-  const runAt = (arxivRawCount: number) => ({
-    id: 'run-1', workspace_id: 'ws-1', query_text: 'q', filters_json: {}, sources_json: ['arxiv'],
-    status: 'running', started_at: '2026-09-24T00:00:00Z', stopped_at: null,
-    stats_json: { last_batch_new_hits: 20, per_source_raw_count: { arxiv: arxivRawCount } },
-  })
-  vi.mocked(api.getSearchRun).mockResolvedValue(runAt(20) as never)
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
-
-  renderWithClient(<SearchTab workspaceId="ws-1" runId="run-1" onRunIdChange={vi.fn()} />, client)
-  await screen.findByText(/running/)
-  // The very first tick just establishes a baseline — nothing "new" relative to a run that just started.
-  expect(screen.queryByText('New hits found')).not.toBeInTheDocument()
-
-  // A genuinely later batch (raw count grew 20 -> 40) shows the banner — but must NOT auto-refetch the pool.
-  // Invalidating an infinite query re-fetches every already-loaded page; doing that automatically on every poll
-  // tick is exactly what froze the UI on a long-running real search with a large pool.
-  vi.mocked(api.getSearchRun).mockResolvedValue(runAt(40) as never)
-  await client.refetchQueries(runKey)
-  await screen.findByText('New hits found')
-  expect(invalidateSpy).not.toHaveBeenCalled()
-
-  // Clicking Refresh pays the real cost exactly once, on the user's own request.
-  fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
-  expect(invalidateSpy).toHaveBeenCalledTimes(1)
-  expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['workspaces', 'ws-1', 'search', 'hits'] })
-  await waitFor(() => expect(screen.queryByText('New hits found')).not.toBeInTheDocument())
-
-  // A further poll tick reporting the exact same total (nothing new since the refresh) must not re-show it.
-  await client.refetchQueries(runKey)
-  await waitFor(() => expect(api.getSearchRun).toHaveBeenCalledTimes(3))
-  expect(screen.queryByText('New hits found')).not.toBeInTheDocument()
-})
+// The hit pool no longer auto-refetches or shows a banner from here at all — HitTable owns that decision
+// entirely now, gated on the user actually being scrolled to the bottom (see HitTable.test.tsx's "at the bottom
+// with no known next page, real new progress triggers exactly one refetch" test). SearchTab's status line above
+// stays real-time regardless (covered by the "shows a status indicator" test above), since it's just the
+// already-polled run object rendered directly — no separate fetch of its own to gate.

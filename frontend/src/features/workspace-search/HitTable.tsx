@@ -1,17 +1,22 @@
 import { useEffect, useRef } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { useImportSearchHits, usePatchSearchHit, useSearchHits } from '@/api/queries'
+import type { SearchRun } from '@/api/client'
+import { useImportSearchHits, useNewHitsAvailable, usePatchSearchHit, useRefreshHits, useSearchHits } from '@/api/queries'
 import { Button } from '@/components/ui/button'
 import { HitContextMenu, HitMenu } from './HitMenu'
 
 const ROW_HEIGHT = 44
 
 /** The hit pool for a search run: a virtualized list (rows can run into the thousands) with stage-1 triage via
- * a right-click menu or a trailing ⋮ button on each row, and a bulk import for hits that already cleared review. */
-export function HitTable({ workspaceId }: { workspaceId: string }) {
+ * a right-click menu or a trailing ⋮ button on each row, and a bulk import for hits that already cleared review.
+ * `run` is only read here to know whether the worker has found more since the pool was last loaded — the run's
+ * own live status is shown elsewhere (SearchTab), unaffected by any of this. */
+export function HitTable({ workspaceId, run }: { workspaceId: string; run?: SearchRun }) {
   const { data, hasNextPage, isFetchingNextPage, fetchNextPage } = useSearchHits(workspaceId)
   const importHits = useImportSearchHits(workspaceId)
   const reviewHit = usePatchSearchHit(workspaceId)
+  const newHits = useNewHitsAvailable(run)
+  const refreshHits = useRefreshHits(workspaceId)
   const parentRef = useRef<HTMLDivElement>(null)
 
   const rows = data?.pages.flatMap((page) => page.items) ?? []
@@ -28,15 +33,23 @@ export function HitTable({ workspaceId }: { workspaceId: string }) {
   })
   const virtualItems = virtualizer.getVirtualItems()
 
-  // Once the rendered range reaches the last loaded row, fetch the next page. An effect (not a render-time call,
-  // as the sketch had it) — fetchNextPage triggers a query state update, and doing that mid-render risks React
-  // warning about updating state while rendering.
+  // Data only ever moves into view because the user is scrolled to the bottom of what's loaded — never on a
+  // background timer or poll, which doesn't scale once the pool reaches thousands of hits (re-fetching an
+  // infinite query re-fetches every already-loaded page; see useNewHitsAvailable's docstring). Two cases at the
+  // bottom: a known next page (hasNextPage) just fetches it, same as always. When there is no known next page but
+  // the worker has found more since our last real fetch (newHits.available, from the already-polled run status),
+  // the cached "no more pages" cursor is stale — pay the one real-refresh cost here, since the user scrolling to
+  // the bottom asking for more is exactly the moment it's worth it.
   useEffect(() => {
     const lastItem = virtualItems.at(-1)
-    if (lastItem && lastItem.index >= rows.length - 1 && hasNextPage && !isFetchingNextPage) {
+    if (!lastItem || lastItem.index < rows.length - 1 || isFetchingNextPage) return
+    if (hasNextPage) {
       fetchNextPage()
+    } else if (newHits.available) {
+      newHits.acknowledge()
+      refreshHits()
     }
-  }, [virtualItems, hasNextPage, isFetchingNextPage, fetchNextPage, rows.length])
+  }, [virtualItems, hasNextPage, isFetchingNextPage, fetchNextPage, rows.length, newHits, refreshHits])
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
