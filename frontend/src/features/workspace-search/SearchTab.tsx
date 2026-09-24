@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { useSearchRun, useStartSearchRun } from '@/api/queries'
+import { useSearchRun, useStartSearchRun, useStopSearchRun } from '@/api/queries'
 import { SearchControls } from './SearchControls'
 import { HitTable } from './HitTable'
 
 export function SearchTab({ workspaceId }: { workspaceId: string }) {
   const [runId, setRunId] = useState<string | null>(null)
   const startRun = useStartSearchRun(workspaceId)
+  const stopRun = useStopSearchRun(workspaceId)
   const run = useSearchRun(workspaceId, runId)
 
   return (
@@ -13,6 +14,7 @@ export function SearchTab({ workspaceId }: { workspaceId: string }) {
       <SearchControls
         isRunning={run.data?.status === 'running'}
         onStart={(args) => startRun.mutate(args, { onSuccess: (created) => setRunId(created.id) })}
+        onStop={() => runId && stopRun.mutate(runId)}
       />
       {run.data && (
         <div className="border-b px-3 py-1 text-sm text-muted-foreground">
