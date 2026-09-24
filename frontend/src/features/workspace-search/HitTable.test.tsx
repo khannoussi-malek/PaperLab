@@ -45,28 +45,38 @@ test('renders hit titles from the paginated query', async () => {
   expect(await screen.findByText('a paper about llms')).toBeInTheDocument()
 })
 
-test('clicking a row opens the review drawer', async () => {
+test('the trailing ⋮ button opens a menu with Relevant, Maybe and Not relevant…', async () => {
   renderWithClient(<HitTable workspaceId="ws-1" />)
-  fireEvent.click(await screen.findByRole('button', { name: /a paper about llms/ }))
+  await screen.findByText('a paper about llms')
+  fireEvent.pointerDown(screen.getByRole('button', { name: 'Hit actions' }))
 
-  expect(screen.getByRole('dialog', { name: 'Review hit' })).toBeInTheDocument()
+  expect(await screen.findByRole('menuitem', { name: 'Relevant' })).toBeInTheDocument()
+  expect(screen.getByRole('menuitem', { name: 'Maybe' })).toBeInTheDocument()
+  expect(screen.getByRole('menuitem', { name: 'Not relevant…' })).toBeInTheDocument()
 })
 
-test('marking not relevant without picking a reason does not submit', async () => {
+test('right-clicking a row opens the same menu', async () => {
   renderWithClient(<HitTable workspaceId="ws-1" />)
-  fireEvent.click(await screen.findByRole('button', { name: /a paper about llms/ }))
+  fireEvent.contextMenu(await screen.findByText('a paper about llms'))
 
-  fireEvent.click(screen.getByRole('button', { name: 'Not relevant' }))
-
-  expect(api.patchSearchHit).not.toHaveBeenCalled()
+  expect(await screen.findByRole('menuitem', { name: 'Relevant' })).toBeInTheDocument()
 })
 
-test('picking a reason then marking not relevant sends the exclude reason', async () => {
+test('marking relevant from the ⋮ menu sends only stage1_status', async () => {
   renderWithClient(<HitTable workspaceId="ws-1" />)
-  fireEvent.click(await screen.findByRole('button', { name: /a paper about llms/ }))
+  await screen.findByText('a paper about llms')
+  fireEvent.pointerDown(screen.getByRole('button', { name: 'Hit actions' }))
+  fireEvent.click(await screen.findByRole('menuitem', { name: 'Relevant' }))
 
-  fireEvent.change(screen.getByLabelText('Exclusion reason'), { target: { value: 'duplicate' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Not relevant' }))
+  await waitFor(() => expect(api.patchSearchHit).toHaveBeenCalledWith('ws-1', 'h1', { stage1_status: 'relevant' }))
+})
+
+test('picking a reason under Not relevant… sends stage1_status and the reason together', async () => {
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  await screen.findByText('a paper about llms')
+  fireEvent.pointerDown(screen.getByRole('button', { name: 'Hit actions' }))
+  fireEvent.click(await screen.findByRole('menuitem', { name: 'Not relevant…' }))
+  fireEvent.click(await screen.findByRole('menuitem', { name: 'duplicate' }))
 
   await waitFor(() =>
     expect(api.patchSearchHit).toHaveBeenCalledWith('ws-1', 'h1', {
@@ -76,13 +86,14 @@ test('picking a reason then marking not relevant sends the exclude reason', asyn
   )
 })
 
-test('marking relevant sends only stage1_status', async () => {
+test('a failed review shows an error message', async () => {
+  vi.spyOn(api, 'patchSearchHit').mockRejectedValue(new Error('Review failed'))
   renderWithClient(<HitTable workspaceId="ws-1" />)
-  fireEvent.click(await screen.findByRole('button', { name: /a paper about llms/ }))
+  await screen.findByText('a paper about llms')
+  fireEvent.pointerDown(screen.getByRole('button', { name: 'Hit actions' }))
+  fireEvent.click(await screen.findByRole('menuitem', { name: 'Maybe' }))
 
-  fireEvent.click(screen.getByRole('button', { name: 'Relevant' }))
-
-  await waitFor(() => expect(api.patchSearchHit).toHaveBeenCalledWith('ws-1', 'h1', { stage1_status: 'relevant' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('Review failed')
 })
 
 test('stays virtualized: a large hit pool renders far fewer rows than it has hits', async () => {
@@ -92,9 +103,9 @@ test('stays virtualized: a large hit pool renders far fewer rows than it has hit
   renderWithClient(<HitTable workspaceId="ws-1" />)
   await screen.findByText('hit-0')
 
-  const rowButtons = screen.getAllByRole('button', { name: /^hit-\d+/ })
-  expect(rowButtons.length).toBeGreaterThan(0)
-  expect(rowButtons.length).toBeLessThan(50)
+  const rowMenuButtons = screen.getAllByRole('button', { name: 'Hit actions' })
+  expect(rowMenuButtons.length).toBeGreaterThan(0)
+  expect(rowMenuButtons.length).toBeLessThan(50)
 })
 
 test('a failed import shows an error message', async () => {
