@@ -7,6 +7,12 @@ import { Button } from '@/components/ui/button'
  * automatically, or uploaded manually via ManualAcquisitionTab), plus one-hop snowballing from any of them.
  * Spec §9, §4 step 5.
  *
+ * Both calls filter to `stage1_status: 'relevant'`, not just an `acquisition_status` — a hit only reaches
+ * acquisition at all once stage-1 marks it relevant, but PRISMA's funnel (prisma_export's `sought`/`not_retrieved`/
+ * `stage2_assessed`) counts stage-2 only for relevant hits too, so this list must match that scope exactly; without
+ * it a hit stage-1 later un-marked "relevant" (still carrying acquisition_status imported/manual from before) would
+ * keep showing up here for stage-2 screening while PRISMA no longer counts it at all.
+ *
  * `useSearchHits` filters to exactly one `acquisition_status` per call, so this calls it twice — once for
  * 'imported', once for 'manual' — and merges the two `rows` arrays. Extending the hook/backend to accept a list
  * of statuses would be the bigger change for what only this one screen needs (Task 7's `queries.ts` guidance).
@@ -15,8 +21,8 @@ import { Button } from '@/components/ui/button'
  * see its "I7 fix 1" comment), so each gets its own "Load more" — silently showing only the first 50 imported
  * or first 50 manual papers would leave stage-2 screening incomplete with no indication anything is missing. */
 export function ScreeningTab({ workspaceId }: { workspaceId: string }) {
-  const imported = useSearchHits(workspaceId, undefined, 'imported')
-  const manual = useSearchHits(workspaceId, undefined, 'manual')
+  const imported = useSearchHits(workspaceId, 'relevant', 'imported')
+  const manual = useSearchHits(workspaceId, 'relevant', 'manual')
   const setEligibility = useSetEligibility(workspaceId)
   const snowball = useSnowball(workspaceId)
 

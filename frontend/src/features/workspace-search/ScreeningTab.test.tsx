@@ -71,8 +71,8 @@ afterEach(() => {
 test('shows an imported hit with Include/Exclude actions and no verdict yet', () => {
   renderWithClient(<ScreeningTab workspaceId="ws-1" />)
 
-  expect(queries.useSearchHits).toHaveBeenCalledWith('ws-1', undefined, 'imported')
-  expect(queries.useSearchHits).toHaveBeenCalledWith('ws-1', undefined, 'manual')
+  expect(queries.useSearchHits).toHaveBeenCalledWith('ws-1', 'relevant', 'imported')
+  expect(queries.useSearchHits).toHaveBeenCalledWith('ws-1', 'relevant', 'manual')
   expect(screen.getByText('Imported Paper')).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Include' })).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Exclude' })).toBeInTheDocument()
