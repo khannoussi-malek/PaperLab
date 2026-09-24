@@ -30,6 +30,7 @@ const baseHit = {
   topic_fit: null,
   acquisition_status: 'pending',
   paper_id: null,
+  sources: [],
 } satisfies Hit
 
 beforeEach(() => {
@@ -68,6 +69,30 @@ test('a hit with a linked ExternalRef shows its real title and a compact byline 
   expect(pool().getByText(/Ashish Vaswani, Noam Shazeer, Niki Parmar · 2017/)).toBeInTheDocument()
   expect(pool().queryByText(/Jakob Uszkoreit/)).not.toBeInTheDocument()
   expect(pool().queryByText('a paper about llms')).not.toBeInTheDocument()
+})
+
+test('the row shows a label for the hit\'s first (most-trusted) source; a hit with none shows no label', async () => {
+  const hits: Hit[] = [
+    { ...baseHit, id: 'h1', title: 'Has Sources', normalized_title: 'has sources', sources: ['arxiv', 'openalex'] },
+    { ...baseHit, id: 'h2', title: 'No Sources', normalized_title: 'no sources', sources: [] },
+  ]
+  vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: hits, next_cursor: null })
+
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  await pool().findByText('Has Sources')
+
+  expect(pool().getByText('arXiv')).toBeInTheDocument()
+  expect(pool().queryByText('OpenAlex')).not.toBeInTheDocument() // only the first (most-trusted) source shows
+})
+
+test('the preview panel lists every source that matched the hit, not just the first', async () => {
+  const hit: Hit = { ...baseHit, sources: ['arxiv', 'openalex', 'core'] }
+  vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: [hit], next_cursor: null })
+
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  const panel = await preview()
+
+  expect(await panel.findByText('Found via arXiv, OpenAlex, CORE')).toBeInTheDocument()
 })
 
 test('a hit with an abstract or an already-acquired PDF sorts before one with neither', async () => {

@@ -2131,6 +2131,11 @@ export interface components {
             doi?: string | null;
             /** Abstract */
             abstract?: string | null;
+            /**
+             * Sources
+             * @default []
+             */
+            sources: string[];
             /** Stage2 Status */
             stage2_status?: string | null;
             /** Stage2 Exclude Reason */

@@ -33,6 +33,9 @@ class ExternalRef(Base):
     imported_as: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("papers.id", ondelete="SET NULL"))
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()"))
     core_id: Mapped[str | None] = mapped_column(Text, default=None)
+    # Every provider that has ever matched this paper, trust-order first (Candidate.sources' own convention) —
+    # union'd across every merge that touches this row, never just the most recent one.
+    sources: Mapped[list[str]] = mapped_column(JSONB, server_default=text("'[]'"))
 
 
 paper_references = Table(

@@ -65,6 +65,9 @@ class HitOut(BaseModel):
     venue: str | None = None
     doi: str | None = None
     abstract: str | None = None
+    # Every provider that has ever matched this hit's linked ExternalRef, trust-order first — [] when
+    # external_ref_id is None, same as the other linked-ref fields above.
+    sources: list[str] = []
     # From the hit's linked SearchRunEligibility row (paper_id, run_id): stage-2 screening verdict, one join away
     # (Task 4). None when no verdict has been recorded yet for this hit's own run.
     stage2_status: str | None = None

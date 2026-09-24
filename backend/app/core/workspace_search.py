@@ -138,6 +138,11 @@ async def _find_or_create_external_ref(session: AsyncSession, candidate: Candida
             existing.cited_by_count = candidate.cited_by_count
         if candidate.abstract and not existing.abstract:
             existing.abstract = candidate.abstract
+        # Union, not backfill-if-empty like the fields above: a later search or snowball round can rediscover an
+        # already-known paper through a source that hadn't found it before, and every one of those is worth
+        # keeping, not just whichever happened to create the row.
+        if candidate.sources:
+            existing.sources = list(dict.fromkeys([*existing.sources, *candidate.sources]))
         return existing
     ref = ExternalRef(
         title=candidate.title,
@@ -152,6 +157,7 @@ async def _find_or_create_external_ref(session: AsyncSession, candidate: Candida
         cited_by_count=candidate.cited_by_count,
         abstract=candidate.abstract,
         pdf_urls=candidate.pdf_urls,
+        sources=list(candidate.sources),
     )
     session.add(ref)
     await session.flush()
@@ -548,10 +554,11 @@ def _hit_out_dict(
     hit: WorkspaceSearchHit, ref: ExternalRef | None,
     stage2_status: str | None = None, stage2_exclude_reason: str | None = None,
 ) -> dict:
-    """A hit's own columns plus its linked ExternalRef's title/authors/year/venue/doi/abstract, merged into one
-    dict for HitOut (I7). This codebase's models never use relationship() (a manual join/lookup is the convention), so the
-    caller passes in whichever `ref` it already has — a join row here, an explicit session.get elsewhere — and
-    this just does the merge, once, the same way for all three HitOut-producing call sites below.
+    """A hit's own columns plus its linked ExternalRef's title/authors/year/venue/doi/abstract/sources, merged into
+    one dict for HitOut (I7). This codebase's models never use relationship() (a manual join/lookup is the
+    convention), so the caller passes in whichever `ref` it already has — a join row here, an explicit
+    session.get elsewhere — and this just does the merge, once, the same way for all three HitOut-producing call
+    sites below.
 
     stage2_status/stage2_exclude_reason come from the hit's SearchRunEligibility row (paper_id, run_id), when one
     exists — only list_hits looks it up (the Screening tab drives off the list); review_hit/upload_hit_pdf are
@@ -565,6 +572,7 @@ def _hit_out_dict(
         venue=ref.venue if ref else None,
         doi=ref.doi if ref else None,
         abstract=ref.abstract if ref else None,
+        sources=ref.sources if ref else [],
         stage2_status=stage2_status,
         stage2_exclude_reason=stage2_exclude_reason,
     )
