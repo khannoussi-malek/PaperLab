@@ -12,7 +12,7 @@ import threading
 import numpy as np
 
 from app.config import settings
-from app.providers import search_model
+from app.providers import http_embedders, search_model
 from app.providers.base import DIMENSIONS, LLMError, TextEmbedder, WrongDimensions
 from app.providers.onnx_embedding import Embedder, normalize
 
@@ -107,3 +107,15 @@ async def embed_documents(model: TextEmbedder, texts: list[str]) -> list[list[fl
 
 async def embed_query(model: TextEmbedder, text: str) -> list[float]:
     return (await _encode(model, [model.query_prefix + text]))[0]
+
+
+def build(source, transport=None) -> TextEmbedder | None:
+    """The embedder for a search source (core/embedding_sources.Source), built per question and per job from its
+    connection's current values, like build_llm: an edited key applies to the next call. Built-in: this process's
+    model, or None until it is downloaded. Under LLM_PROVIDER=fake every connection-based source is
+    FakeRemoteEmbedder (M9 decision 13)."""
+    if source.kind == "builtin":
+        return get_model()
+    fake = settings.llm_provider == "fake"
+    adapter = http_embedders.FakeRemoteEmbedder if fake else http_embedders.ADAPTERS[source.kind]
+    return adapter(source, prefixes(source.model), transport)
