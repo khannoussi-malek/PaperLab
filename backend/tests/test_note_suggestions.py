@@ -1,10 +1,11 @@
 import uuid
 
 import pytest
-from test_chat import make_paper
+from test_chat import chunks_of, make_paper
 
 from app.core.errors import Conflict
-from app.core.note_suggestions import NOTE_SUGGESTIONS_PROMPT_VERSION, _sample_evenly, save_suggestions, suggest
+from app.core.note_suggestions import NOTE_SUGGESTIONS_PROMPT_VERSION, Suggested, _sample_evenly, save_suggestions, suggest
+from app.core.notes import Anchor, create_human_note, promote_llm_fragment
 from app.core.retrieval import RetrievedChunk
 from app.models import LLMOutput
 from app.providers.llm import FAKE_NOTE_SUGGESTIONS, FakeLLM
@@ -80,6 +81,53 @@ async def test_suggest_raises_conflict_for_an_unindexed_paper(session):
 
     with pytest.raises(Conflict, match="paper_not_indexed"):
         await suggest(session, paper.id, FakeLLM())
+
+
+async def test_suggest_skips_a_passage_already_covered_by_a_human_note(session):
+    paper = await make_paper(session, ["one", "two", "three"])
+    chunks = await chunks_of(session, paper.id)
+    already_noted = chunks[1]  # "two"
+    await create_human_note(
+        session, "My own note on this.",
+        Anchor(paper_id=paper.id, page=already_noted.page, bbox=already_noted.bbox, quoted_text=already_noted.text),
+    )
+    llm = FakeLLM()
+
+    result = await suggest(session, paper.id, llm)
+
+    assert already_noted.id not in {c.id for c in result.sources}
+    assert {c.text for c in result.sources} == {"one", "three"}
+
+
+async def test_suggest_skips_a_passage_already_promoted_from_an_earlier_suggestion(session):
+    """The exact scenario the user hit: clicking "Suggest notes" a second time must not keep re-suggesting a
+    passage whose earlier suggestion was already accepted."""
+    paper = await make_paper(session, ["one", "two", "three"])
+    chunks = await chunks_of(session, paper.id)
+    first_round = await suggest(session, paper.id, FakeLLM())
+    output_id = await save_suggestions(session, paper.id, first_round, "fake", "Fake")
+    accepted = first_round.suggestions[0]  # "Fake first passage note." on chunks[0] ("one")
+    await promote_llm_fragment(session, output_id, accepted.body, [accepted.source.id])
+
+    second_round = await suggest(session, paper.id, FakeLLM())
+
+    assert chunks[0].id not in {c.id for c in second_round.sources}
+    assert {c.text for c in second_round.sources} == {"two", "three"}
+
+
+async def test_suggest_returns_nothing_and_skips_the_llm_call_when_every_passage_is_already_noted(session):
+    paper = await make_paper(session, ["one"])
+    [only_chunk] = await chunks_of(session, paper.id)
+    await create_human_note(
+        session, "Covers the whole (one-chunk) paper.",
+        Anchor(paper_id=paper.id, page=only_chunk.page, bbox=only_chunk.bbox, quoted_text=only_chunk.text),
+    )
+    llm = FakeLLM()
+
+    result = await suggest(session, paper.id, llm)
+
+    assert result == Suggested(suggestions=[], content="", sources=[])
+    assert llm.calls == []  # nothing left to ask about, so no wasted call
 
 
 async def test_save_suggestions_stores_kind_note_suggestions_not_chat(session):
