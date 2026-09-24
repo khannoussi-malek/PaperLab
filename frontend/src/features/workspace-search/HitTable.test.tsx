@@ -1,9 +1,15 @@
 // @vitest-environment jsdom
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { HitTable } from './HitTable'
 import { api, type Hit } from '@/api/client'
+
+/** The row list only — excludes the preview panel, which also renders the current hit's title/byline. Always
+ * present (even before data loads), so this can be synchronous. */
+const pool = () => within(screen.getByLabelText('Hit pool'))
+/** The preview panel only. Only mounts once there's a hit to preview, so this is async. */
+const preview = async () => within(await screen.findByLabelText('Hit preview'))
 
 function renderWithClient(ui: React.ReactElement) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -42,10 +48,10 @@ afterEach(() => {
 
 test('renders hit titles from the paginated query', async () => {
   renderWithClient(<HitTable workspaceId="ws-1" />)
-  expect(await screen.findByText('a paper about llms')).toBeInTheDocument()
+  expect(await pool().findByText('a paper about llms')).toBeInTheDocument()
 })
 
-test('a hit with a linked ExternalRef shows its real title and a compact byline, not just normalized_title', async () => {
+test('a hit with a linked ExternalRef shows its real title and a compact byline in the row, not just normalized_title', async () => {
   const richHit: Hit = {
     ...baseHit,
     title: 'Attention Is All You Need',
@@ -55,15 +61,15 @@ test('a hit with a linked ExternalRef shows its real title and a compact byline,
   vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: [richHit], next_cursor: null })
 
   renderWithClient(<HitTable workspaceId="ws-1" />)
+  await pool().findByText(/Attention Is All You Need/)
 
-  expect(await screen.findByText(/Attention Is All You Need/)).toBeInTheDocument()
   // Byline caps at 3 authors even though 4 are present.
-  expect(screen.getByText(/Ashish Vaswani, Noam Shazeer, Niki Parmar · 2017/)).toBeInTheDocument()
-  expect(screen.queryByText(/Jakob Uszkoreit/)).not.toBeInTheDocument()
-  expect(screen.queryByText('a paper about llms')).not.toBeInTheDocument()
+  expect(pool().getByText(/Ashish Vaswani, Noam Shazeer, Niki Parmar · 2017/)).toBeInTheDocument()
+  expect(pool().queryByText(/Jakob Uszkoreit/)).not.toBeInTheDocument()
+  expect(pool().queryByText('a paper about llms')).not.toBeInTheDocument()
 })
 
-test('the ⋮ menu shows the title, byline and abstract before the review actions', async () => {
+test('hovering a row previews its title, byline and abstract in the side panel', async () => {
   const richHit: Hit = {
     ...baseHit,
     title: 'Attention Is All You Need',
@@ -75,28 +81,46 @@ test('the ⋮ menu shows the title, byline and abstract before the review action
   vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: [richHit], next_cursor: null })
 
   renderWithClient(<HitTable workspaceId="ws-1" />)
-  await screen.findByText(/Attention Is All You Need/)
-  fireEvent.pointerDown(screen.getByRole('button', { name: 'Hit actions' }))
+  // A single hit is previewed by default (falls back to the first loaded row) — no hover needed to see it here.
+  const panel = await preview()
+  await panel.findByText('Attention Is All You Need')
 
-  const menu = await screen.findByRole('menu')
-  expect(menu).toHaveTextContent('Attention Is All You Need')
-  expect(menu).toHaveTextContent('Ashish Vaswani · 2017 · NeurIPS')
-  expect(menu).toHaveTextContent('The dominant sequence transduction models are based on complex recurrent networks.')
+  expect(panel.getByText('Ashish Vaswani · 2017 · NeurIPS')).toBeInTheDocument()
+  expect(
+    panel.getByText('The dominant sequence transduction models are based on complex recurrent networks.'),
+  ).toBeInTheDocument()
 })
 
-test('a hit with no linked ExternalRef shows no byline and no abstract in the menu, just the normalized title', async () => {
+test('a hit with no linked ExternalRef previews its normalized title and says no abstract is available', async () => {
   renderWithClient(<HitTable workspaceId="ws-1" />)
-  await screen.findByText('a paper about llms')
-  fireEvent.pointerDown(screen.getByRole('button', { name: 'Hit actions' }))
 
-  const menu = await screen.findByRole('menu')
-  expect(menu).toHaveTextContent('a paper about llms')
+  const panel = await preview()
+  expect(await panel.findByText('a paper about llms')).toBeInTheDocument()
+  expect(panel.getByText('No abstract available for this hit.')).toBeInTheDocument()
+})
+
+test('focusing a different row (via its ⋮ button) swaps the preview immediately, no hover delay', async () => {
+  const hits: Hit[] = [
+    { ...baseHit, id: 'h1', title: 'First Paper', normalized_title: 'first paper' },
+    { ...baseHit, id: 'h2', title: 'Second Paper', normalized_title: 'second paper' },
+  ]
+  vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: hits, next_cursor: null })
+
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  const panel = await preview()
+  await panel.findByText('First Paper') // the first row previews by default
+
+  const [, secondRowMenuButton] = pool().getAllByRole('button', { name: 'Hit actions' })
+  fireEvent.focus(secondRowMenuButton)
+
+  await panel.findByText('Second Paper')
+  expect(panel.queryByText('First Paper')).not.toBeInTheDocument()
 })
 
 test('the trailing ⋮ button opens a menu with Relevant, Maybe and Not relevant…', async () => {
   renderWithClient(<HitTable workspaceId="ws-1" />)
-  await screen.findByText('a paper about llms')
-  fireEvent.pointerDown(screen.getByRole('button', { name: 'Hit actions' }))
+  await pool().findByText('a paper about llms')
+  fireEvent.pointerDown(pool().getByRole('button', { name: 'Hit actions' }))
 
   expect(await screen.findByRole('menuitem', { name: 'Relevant' })).toBeInTheDocument()
   expect(screen.getByRole('menuitem', { name: 'Maybe' })).toBeInTheDocument()
@@ -105,15 +129,15 @@ test('the trailing ⋮ button opens a menu with Relevant, Maybe and Not relevant
 
 test('right-clicking a row opens the same menu', async () => {
   renderWithClient(<HitTable workspaceId="ws-1" />)
-  fireEvent.contextMenu(await screen.findByText('a paper about llms'))
+  fireEvent.contextMenu(await pool().findByText('a paper about llms'))
 
   expect(await screen.findByRole('menuitem', { name: 'Relevant' })).toBeInTheDocument()
 })
 
 test('marking relevant from the ⋮ menu sends only stage1_status', async () => {
   renderWithClient(<HitTable workspaceId="ws-1" />)
-  await screen.findByText('a paper about llms')
-  fireEvent.pointerDown(screen.getByRole('button', { name: 'Hit actions' }))
+  await pool().findByText('a paper about llms')
+  fireEvent.pointerDown(pool().getByRole('button', { name: 'Hit actions' }))
   fireEvent.click(await screen.findByRole('menuitem', { name: 'Relevant' }))
 
   await waitFor(() => expect(api.patchSearchHit).toHaveBeenCalledWith('ws-1', 'h1', { stage1_status: 'relevant' }))
@@ -121,8 +145,8 @@ test('marking relevant from the ⋮ menu sends only stage1_status', async () => 
 
 test('picking a reason under Not relevant… sends stage1_status and the reason together', async () => {
   renderWithClient(<HitTable workspaceId="ws-1" />)
-  await screen.findByText('a paper about llms')
-  fireEvent.pointerDown(screen.getByRole('button', { name: 'Hit actions' }))
+  await pool().findByText('a paper about llms')
+  fireEvent.pointerDown(pool().getByRole('button', { name: 'Hit actions' }))
   fireEvent.click(await screen.findByRole('menuitem', { name: 'Not relevant…' }))
   fireEvent.click(await screen.findByRole('menuitem', { name: 'duplicate' }))
 
@@ -137,8 +161,8 @@ test('picking a reason under Not relevant… sends stage1_status and the reason 
 test('a failed review shows an error message', async () => {
   vi.spyOn(api, 'patchSearchHit').mockRejectedValue(new Error('Review failed'))
   renderWithClient(<HitTable workspaceId="ws-1" />)
-  await screen.findByText('a paper about llms')
-  fireEvent.pointerDown(screen.getByRole('button', { name: 'Hit actions' }))
+  await pool().findByText('a paper about llms')
+  fireEvent.pointerDown(pool().getByRole('button', { name: 'Hit actions' }))
   fireEvent.click(await screen.findByRole('menuitem', { name: 'Maybe' }))
 
   expect(await screen.findByRole('alert')).toHaveTextContent('Review failed')
@@ -149,9 +173,9 @@ test('stays virtualized: a large hit pool renders far fewer rows than it has hit
   vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: manyHits, next_cursor: null })
 
   renderWithClient(<HitTable workspaceId="ws-1" />)
-  await screen.findByText('hit-0')
+  await pool().findByText('hit-0')
 
-  const rowMenuButtons = screen.getAllByRole('button', { name: 'Hit actions' })
+  const rowMenuButtons = pool().getAllByRole('button', { name: 'Hit actions' })
   expect(rowMenuButtons.length).toBeGreaterThan(0)
   expect(rowMenuButtons.length).toBeLessThan(50)
 })
@@ -167,7 +191,7 @@ test('at the bottom with no known next page, real new progress triggers exactly 
   })
 
   const { client, rerender } = renderWithClient(<HitTable workspaceId="ws-1" run={runAt(10) as never} />)
-  await screen.findByText('a paper about llms')
+  await pool().findByText('a paper about llms')
   expect(api.listSearchHits).toHaveBeenCalledTimes(1) // the first run tick only sets a baseline, nothing to refetch yet
 
   const rerenderWithClient = (run: unknown) =>
@@ -179,7 +203,7 @@ test('at the bottom with no known next page, real new progress triggers exactly 
 
   // A poll tick reporting the same total (nothing new) must not trigger a refetch.
   rerenderWithClient(runAt(10))
-  await waitFor(() => expect(screen.getByText('a paper about llms')).toBeInTheDocument())
+  await waitFor(() => expect(pool().getByText('a paper about llms')).toBeInTheDocument())
   expect(api.listSearchHits).toHaveBeenCalledTimes(1)
 
   // Real new progress (raw count grew) while sitting at the bottom triggers exactly one refetch.
