@@ -151,6 +151,8 @@ async def test_reingest_replaces_the_vectors(worker_session, sample_pdf, ctx, em
 
 async def test_embedder_failure_ends_failed_with_error(worker_session, sample_pdf):
     class ExplodingEmbedder:
+        document_prefix = query_prefix = ""
+
         def encode(self, texts, **kwargs):
             raise RuntimeError("model ran out of memory")
 

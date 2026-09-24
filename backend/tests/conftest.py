@@ -8,7 +8,6 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 import httpx
-import numpy as np
 import pymupdf
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -118,18 +117,25 @@ def unit_vector(seed: str) -> list[float]:
 
 
 class FakeEmbedder:
-    """Stands in for onnx_embedding.Embedder: records every encode call instead of running a model.
+    """Stands in for any search source (a TextEmbedder, D150): records every encode call instead of running a model.
 
-    A text embeds to `vectors[text]` when a test set one, otherwise to `unit_vector(text)`.
+    A text embeds to `vectors[text]` when a test set one, otherwise to `unit_vector(text)`. Local, with the nomic
+    prefixes, named "test" like the chunks tests write; a test makes a cloud one with is_local=False, or one named
+    after the active source.
     """
 
-    def __init__(self):
-        self.calls: list[tuple[list[str], dict]] = []
+    document_prefix, query_prefix = "search_document: ", "search_query: "
+
+    def __init__(self, name: str = "test", label: str = "Test", is_local: bool = True):
+        self.name = self.model = name
+        self.label = label
+        self.is_local = is_local
+        self.calls: list[tuple[list[str], dict]] = []  # (texts, {}): M23's prefix assertions keep their form
         self.vectors: dict[str, list[float]] = {}
 
-    def encode(self, texts: list[str], **kwargs):
-        self.calls.append((list(texts), kwargs))
-        return np.array([self.vectors.get(t) or unit_vector(t) for t in texts], dtype=np.float32)
+    async def encode(self, texts: list[str]) -> list[list[float]]:
+        self.calls.append((list(texts), {}))
+        return [self.vectors.get(t) or unit_vector(t) for t in texts]
 
 
 @pytest.fixture
