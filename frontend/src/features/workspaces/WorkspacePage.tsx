@@ -85,7 +85,13 @@ export function WorkspacePage({ workspaceId, tab, runId }: { workspaceId: string
           <TabsContent value="chat" forceMount className={cn(panel, 'flex flex-col overflow-hidden')}>
             <WorkspaceChat workspace={workspace.data} onShowNotes={() => showTab('notes')} />
           </TabsContent>
-          <TabsContent value="search" forceMount className={panel}>
+          {/* SearchTab's HitTable virtualizes its own row list — it needs to measure a real, bounded viewport
+              to know which rows are actually visible. Without flex/overflow-hidden here (mirroring the chat
+              panel above), `panel`'s plain overflow-auto never actually clips anything: nothing constrains
+              HitTable's own scroll container to a real pixel height, so it grows to fit every loaded row, the
+              virtualizer renders all of them as real DOM nodes instead of just the visible ones, and "am I
+              scrolled to the bottom" is trivially always true. */}
+          <TabsContent value="search" forceMount className={cn(panel, 'flex flex-col overflow-hidden')}>
             <SearchTab workspaceId={workspaceId} runId={runId} onRunIdChange={setRunId} />
           </TabsContent>
           <TabsContent value="acquisition" forceMount className={panel}>
