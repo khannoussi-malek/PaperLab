@@ -2049,6 +2049,8 @@ export interface components {
             venue?: string | null;
             /** Doi */
             doi?: string | null;
+            /** Abstract */
+            abstract?: string | null;
         };
         /** HitReviewUpdate */
         HitReviewUpdate: {

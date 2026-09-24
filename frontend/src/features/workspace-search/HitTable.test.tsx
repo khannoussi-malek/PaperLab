@@ -45,6 +45,54 @@ test('renders hit titles from the paginated query', async () => {
   expect(await screen.findByText('a paper about llms')).toBeInTheDocument()
 })
 
+test('a hit with a linked ExternalRef shows its real title and a compact byline, not just normalized_title', async () => {
+  const richHit: Hit = {
+    ...baseHit,
+    title: 'Attention Is All You Need',
+    authors: ['Ashish Vaswani', 'Noam Shazeer', 'Niki Parmar', 'Jakob Uszkoreit'],
+    year: 2017,
+  }
+  vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: [richHit], next_cursor: null })
+
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+
+  expect(await screen.findByText(/Attention Is All You Need/)).toBeInTheDocument()
+  // Byline caps at 3 authors even though 4 are present.
+  expect(screen.getByText(/Ashish Vaswani, Noam Shazeer, Niki Parmar · 2017/)).toBeInTheDocument()
+  expect(screen.queryByText(/Jakob Uszkoreit/)).not.toBeInTheDocument()
+  expect(screen.queryByText('a paper about llms')).not.toBeInTheDocument()
+})
+
+test('the ⋮ menu shows the title, byline and abstract before the review actions', async () => {
+  const richHit: Hit = {
+    ...baseHit,
+    title: 'Attention Is All You Need',
+    authors: ['Ashish Vaswani'],
+    year: 2017,
+    venue: 'NeurIPS',
+    abstract: 'The dominant sequence transduction models are based on complex recurrent networks.',
+  }
+  vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: [richHit], next_cursor: null })
+
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  await screen.findByText(/Attention Is All You Need/)
+  fireEvent.pointerDown(screen.getByRole('button', { name: 'Hit actions' }))
+
+  const menu = await screen.findByRole('menu')
+  expect(menu).toHaveTextContent('Attention Is All You Need')
+  expect(menu).toHaveTextContent('Ashish Vaswani · 2017 · NeurIPS')
+  expect(menu).toHaveTextContent('The dominant sequence transduction models are based on complex recurrent networks.')
+})
+
+test('a hit with no linked ExternalRef shows no byline and no abstract in the menu, just the normalized title', async () => {
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  await screen.findByText('a paper about llms')
+  fireEvent.pointerDown(screen.getByRole('button', { name: 'Hit actions' }))
+
+  const menu = await screen.findByRole('menu')
+  expect(menu).toHaveTextContent('a paper about llms')
+})
+
 test('the trailing ⋮ button opens a menu with Relevant, Maybe and Not relevant…', async () => {
   renderWithClient(<HitTable workspaceId="ws-1" />)
   await screen.findByText('a paper about llms')

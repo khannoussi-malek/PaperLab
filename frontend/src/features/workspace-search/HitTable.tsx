@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import type { SearchRun } from '@/api/client'
+import type { HitReviewUpdate, SearchRun } from '@/api/client'
 import { useImportSearchHits, useNewHitsAvailable, usePatchSearchHit, useRefreshHits, useSearchHits } from '@/api/queries'
 import { Button } from '@/components/ui/button'
 import { HitContextMenu, HitMenu } from './HitMenu'
@@ -73,15 +73,20 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
         <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
           {virtualItems.map((virtualRow) => {
             const hit = rows[virtualRow.index]
+            const onReview = (hitId: string, body: HitReviewUpdate) => reviewHit.mutate({ hitId, body })
+            const byline = [hit.authors?.slice(0, 3).join(', '), hit.year].filter(Boolean).join(' · ')
             return (
-              <HitContextMenu key={hit.id} hitId={hit.id} onReview={(hitId, body) => reviewHit.mutate({ hitId, body })}>
+              <HitContextMenu key={hit.id} hit={hit} onReview={onReview}>
                 <div
                   className="flex w-full items-center gap-2 border-b px-3 text-sm hover:bg-muted"
                   style={{ position: 'absolute', top: virtualRow.start, height: virtualRow.size, width: '100%' }}
                 >
-                  <span className="flex-1 truncate">{hit.normalized_title}</span>
+                  <span className="flex-1 truncate">
+                    {hit.title ?? hit.normalized_title}
+                    {byline && <span className="text-muted-foreground"> · {byline}</span>}
+                  </span>
                   <span className="text-xs text-muted-foreground">{hit.stage1_status ?? 'unreviewed'}</span>
-                  <HitMenu hitId={hit.id} onReview={(hitId, body) => reviewHit.mutate({ hitId, body })} />
+                  <HitMenu hit={hit} onReview={onReview} />
                 </div>
               </HitContextMenu>
             )
