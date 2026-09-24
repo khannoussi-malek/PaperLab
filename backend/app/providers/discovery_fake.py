@@ -105,6 +105,11 @@ def _core_work() -> dict:
 # every next_cursor rule below, OpenAlex's 1-based `page` cursor included.
 PAGE_PAPERS = [(f"PaperLab Pagination Fixture {n}", f"{DOI_PREFIX}page-{n}") for n in (1, 2, 3)]
 
+# arXiv ids and S2 paperIds below are generated positionally, same as PAPERS' own (FREE_ARXIV_ID, _s2_paper(i, ...)
+# via enumerate(PAPERS)). Offset by these bases so PAGE_PAPERS never lands on PAPERS' 2609.0000{1,2,3} / hex(1,2,3).
+_PAGE_ARXIV_INDEX_BASE = 10_000
+_PAGE_S2_INDEX_BASE = 1_000
+
 
 def _page_slice(offset: int, limit: int) -> list[tuple[str, str]]:
     return PAGE_PAPERS[offset : offset + limit]
@@ -134,7 +139,7 @@ def _arxiv_search_page_feed(params: httpx.QueryParams) -> str:
     <author><name>Ada Fixture</name></author>
     <arxiv:doi>{doi}</arxiv:doi>
   </entry>"""
-        for index, (title, doi) in enumerate(_page_slice(offset, page_size), start=offset + 1)
+        for index, (title, doi) in enumerate(_page_slice(offset, page_size), start=_PAGE_ARXIV_INDEX_BASE + offset + 1)
     )
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom" xmlns:arxiv="http://arxiv.org/schemas/atom">{entries}
@@ -158,7 +163,7 @@ def _core_search_page(params: httpx.QueryParams) -> httpx.Response:
 def _s2_search_page(params: httpx.QueryParams) -> httpx.Response:
     offset, page_size = int(params["offset"]), int(params["limit"])
     items = _page_slice(offset, page_size)
-    data = [_s2_paper(offset + i, title, doi, None) for i, (title, doi) in enumerate(items)]
+    data = [_s2_paper(_PAGE_S2_INDEX_BASE + offset + i, title, doi, None) for i, (title, doi) in enumerate(items)]
     body = {"data": data}
     if offset + page_size < len(PAGE_PAPERS):
         body["next"] = offset + page_size
