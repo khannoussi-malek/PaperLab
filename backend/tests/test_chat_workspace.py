@@ -186,7 +186,7 @@ async def test_workspace_prepare_without_notes_says_so(session, embedder):
 
     prepared = await chat.prepare(session, chat.Scope(workspace_id=workspace.id), "why?", embedder)
 
-    assert "Notes (newest first):\n\n(none)\n" in prepared.prompt
+    assert "Notes (newest first):\n\nNo notes have been written yet.\n" in prepared.prompt
     assert (prepared.notes, prepared.notes_used, prepared.notes_total) == ([], 0, 0)
 
 
