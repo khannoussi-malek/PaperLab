@@ -15,6 +15,7 @@ import httpx2
 
 from app.config import settings
 from app.core.chat import WORKSPACE_SYSTEM_PROMPT
+from app.core.note_suggestions import SYSTEM_PROMPT as NOTE_SUGGESTIONS_SYSTEM_PROMPT
 from app.providers.base import LLM, LLMError, LLMUnavailable
 
 # Cold model loads take 7-10 s before the first line; httpx's default 5 s read timeout is too short. Local
@@ -204,6 +205,10 @@ FAKE_WORKSPACE_TOKENS = [
     "Fake ", "workspace ", "answer: ", "both ", "papers ", "describe ", "the ", "method ",
     "[C", "1]", "[C", "2]", ", ", "as ", "your ", "note ", "says ", "[N", "1]", ".",
 ]
+# note_suggestions.py's format: one "[C{i}]: body" line per passage — a middle one deliberately skipped, so the
+# E2E stack exercises "the model covered fewer passages than it was given" too, not just the happy count.
+FAKE_NOTE_SUGGESTIONS = "[C1]: Fake first passage note.\n[C3]: Fake third passage note."
+FAKE_NOTE_SUGGESTIONS_TOKENS = ["[C1]: Fake ", "first ", "passage ", "note.\n[C3]: Fake ", "third ", "passage ", "note."]
 # What every connection lists on the fake stack, and the key its Test connection rejects.
 FAKE_MODELS = ["fake-large", "fake-small"]
 FAKE_BAD_KEY = "bad-key"
@@ -227,7 +232,12 @@ class FakeLLM:
 
     async def stream(self, system: str, prompt: str) -> AsyncIterator[str]:
         self.calls.append((system, prompt))
-        tokens = FAKE_WORKSPACE_TOKENS if system == WORKSPACE_SYSTEM_PROMPT else FAKE_TOKENS
+        if system == WORKSPACE_SYSTEM_PROMPT:
+            tokens = FAKE_WORKSPACE_TOKENS
+        elif system == NOTE_SUGGESTIONS_SYSTEM_PROMPT:
+            tokens = FAKE_NOTE_SUGGESTIONS_TOKENS
+        else:
+            tokens = FAKE_TOKENS
         for index, token in enumerate(tokens):
             if index == self.fail_after:
                 raise LLMError("fake model failed mid-answer")

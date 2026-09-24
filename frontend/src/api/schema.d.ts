@@ -155,6 +155,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/papers/{paper_id}/notes/suggest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Suggest Notes
+         * @description One-click suggestions, not automatic notes (P1 of this feature): the caller shows each as a card the
+         *     reader accepts or dismisses individually, via the unchanged POST /api/notes/promote and this response's
+         *     own output_id.
+         */
+        post: operations["suggest_notes_api_papers__paper_id__notes_suggest_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/notes": {
         parameters: {
             query?: never;
@@ -2357,6 +2379,37 @@ export interface components {
              */
             provenance: "human" | "llm" | "llm_edited";
         };
+        /** NoteSuggestionOut */
+        NoteSuggestionOut: {
+            /** Body */
+            body: string;
+            /**
+             * Chunk Id
+             * Format: uuid
+             */
+            chunk_id: string;
+            /** Page */
+            page: number;
+            /** Section */
+            section: string | null;
+            /** Bbox */
+            bbox: [
+                number,
+                number,
+                number,
+                number
+            ][];
+        };
+        /** NoteSuggestionsOut */
+        NoteSuggestionsOut: {
+            /**
+             * Output Id
+             * Format: uuid
+             */
+            output_id: string;
+            /** Suggestions */
+            suggestions: components["schemas"]["NoteSuggestionOut"][];
+        };
         /** NoteUpdate */
         NoteUpdate: {
             /** Body */
@@ -3449,6 +3502,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NoteOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    suggest_notes_api_papers__paper_id__notes_suggest_post: {
+        parameters: {
+            query: {
+                model_id: string | null;
+            };
+            header?: never;
+            path: {
+                paper_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteSuggestionsOut"];
                 };
             };
             /** @description Validation Error */

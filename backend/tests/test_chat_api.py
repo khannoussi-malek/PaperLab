@@ -63,7 +63,7 @@ async def test_chat_streams_sources_then_tokens_then_done_and_saves_one_output(c
 
     [output] = await outputs_for(session, paper.id)
     assert events[-1][1] == {
-        "output_id": str(output.id), "model": "fake", "connection_name": "Fake", "prompt_version": 2, "cited": ["C1"]
+        "output_id": str(output.id), "model": "fake", "connection_name": "Fake", "prompt_version": 3, "cited": ["C1"]
     }
     assert (output.question, output.content, output.model, output.connection_name) == (
         "What is the method?", FAKE_ANSWER, "fake", "Fake"

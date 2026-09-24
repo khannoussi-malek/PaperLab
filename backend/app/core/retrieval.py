@@ -69,7 +69,7 @@ async def query_embedder(embedder=None):
 
 
 def _to_chunk(row, distance: float | None = None) -> RetrievedChunk:
-    """Row → RetrievedChunk. Shared with chat.py's _chunk_sources: both a raw-SQL row and an ORM row
+    """Row → RetrievedChunk. Shared with chat.py's chunk_sources: both a raw-SQL row and an ORM row
     expose these same attributes; only retrieval's rows carry a distance."""
     return RetrievedChunk(
         id=row.id,

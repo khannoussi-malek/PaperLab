@@ -1,3 +1,4 @@
+import uuid
 from collections.abc import AsyncIterator
 from dataclasses import replace
 from typing import Annotated
@@ -33,6 +34,18 @@ async def resolve_llm(payload: ChatRequest, session: SessionDep, transport: Tran
 
 
 LLMDep = Annotated[LLM, Depends(resolve_llm)]
+
+
+async def resolve_llm_by_model_id(
+    session: SessionDep, transport: TransportDep, model_id: uuid.UUID | None = None
+) -> LLM:
+    """Same resolution as resolve_llm, for a route with no ChatRequest body to carry model_id — note suggestions
+    take no question, just an optional model to pick."""
+    connection, model = await llm_connections.resolve(session, model_id)
+    return build_llm(connection, model.name, transport=transport)
+
+
+LLMByModelIdDep = Annotated[LLM, Depends(resolve_llm_by_model_id)]
 
 
 async def get_discovery(session: SessionDep) -> AsyncIterator[discovery.Providers]:

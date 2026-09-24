@@ -75,7 +75,7 @@ async def test_workspace_chat_streams_sources_with_notes_then_tokens_then_done(c
     [output] = await session.scalars(select(LLMOutput).where(LLMOutput.workspace_id == workspace.id))
     chunk_ids = [uuid.UUID(s["chunk_id"]) for s in sources["sources"]]
     done = {
-        "output_id": str(output.id), "model": "fake", "connection_name": "Fake", "prompt_version": 1,
+        "output_id": str(output.id), "model": "fake", "connection_name": "Fake", "prompt_version": 2,
         "cited": ["C1", "C2", "N1"],
     }
     assert events[-1][1] == done

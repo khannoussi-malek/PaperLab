@@ -15,6 +15,8 @@ export type ChatTokenEvent = components['schemas']['TokenEvent']
 export type ChatDoneEvent = components['schemas']['DoneEvent']
 export type ChatErrorEvent = components['schemas']['ErrorEvent']
 export type PromoteRequest = components['schemas']['PromoteRequest']
+export type NoteSuggestion = components['schemas']['NoteSuggestionOut']
+export type NoteSuggestionsOut = components['schemas']['NoteSuggestionsOut']
 export type Workspace = components['schemas']['WorkspaceOut']
 export type ChartRef = components['schemas']['ChartRefOut']
 export type Dataset = components['schemas']['DatasetOut']
@@ -158,6 +160,10 @@ export const api = {
     request<void>(`/api/workspaces/${workspaceId}/papers/${paperId}`, { method: 'DELETE' }),
   listChat: (scope: ChatScope) => request<ChatAnswer[]>(chatUrl(scope)),
   promoteNote: (promote: PromoteRequest) => request<Note>('/api/notes/promote', sendJson('POST', promote)),
+  /** One-click suggestions, not automatic notes: accept one through promoteNote, unchanged, using this
+   * response's own output_id and a suggestion's chunk_id. */
+  suggestNotes: (paperId: string) =>
+    request<NoteSuggestionsOut>(`/api/papers/${paperId}/notes/suggest`, { method: 'POST' }),
   previewTable: (paperId: string, page: number, region: [number, number, number, number]) =>
     request<TablePreview>(`/api/papers/${paperId}/tables/preview`, sendJson('POST', { page, region })),
   addNumber: (paperId: string, number: NumberCreate) =>

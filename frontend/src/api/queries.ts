@@ -144,6 +144,13 @@ export function useReindexPaper(paperId: string) {
   })
 }
 
+/** Generates note suggestions for one paper (P1 of this feature: cards to accept or dismiss, never saved on
+ * their own). No cache to invalidate on success — nothing is written yet, the caller just renders the result;
+ * accepting one goes through usePromoteNote, unchanged, which already invalidates the note lists that need it. */
+export function useSuggestNotes(paperId: string) {
+  return useMutation({ mutationFn: () => api.suggestNotes(paperId) })
+}
+
 /** Saves part of a chat answer as an AI note. Resolves once the lists that show it have refetched and include it. */
 export function usePromoteNote() {
   const client = useQueryClient()

@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from app.api import chat as chat_api
-from app.api.deps import get_transport, resolve_llm
+from app.api.deps import get_transport, resolve_llm, resolve_llm_by_model_id
 from app.config import settings
 from app.core import discovery
 from app.db import get_session
@@ -262,9 +262,10 @@ def answers_in_test_transaction(session, monkeypatch):
 
 @pytest.fixture
 def fake_llm(app, answers_in_test_transaction):
-    """Every chat question answered by this FakeLLM, whatever model it names."""
+    """Every chat question (or note-suggestion generation) answered by this FakeLLM, whatever model it names."""
     fake = FakeLLM()
     app.dependency_overrides[resolve_llm] = lambda: fake
+    app.dependency_overrides[resolve_llm_by_model_id] = lambda: fake
     return fake
 
 
