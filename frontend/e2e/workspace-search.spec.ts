@@ -44,11 +44,10 @@ test('search, screen, import a hit, then upload its PDF manually', async ({ page
   // ExternalRef and imports for free instead of failing. "fixture 2" derives "2609.00002", which never collides,
   // so it reliably has no free PDF and always needs manual acquisition below.
   const title = 'paperlab pagination fixture 2'
-  await page.locator('button', { hasText: title }).click()
-
-  const drawer = page.getByRole('dialog', { name: 'Review hit' })
-  await drawer.getByRole('button', { name: 'Relevant', exact: true }).click()
-  await expect(drawer).toHaveCount(0)
+  const row = page.locator('[data-slot="context-menu-trigger"]', { hasText: title })
+  await row.getByRole('button', { name: 'Hit actions' }).click()
+  await page.getByRole('menuitem', { name: 'Relevant' }).click()
+  await expect(page.getByRole('menuitem', { name: 'Relevant' })).toHaveCount(0)
 
   await Promise.all([
     page.waitForResponse((r) => r.url().endsWith('/search/hits/import') && r.request().method() === 'POST'),

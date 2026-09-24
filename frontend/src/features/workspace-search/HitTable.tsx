@@ -1,17 +1,17 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { useImportSearchHits, useSearchHits } from '@/api/queries'
+import { useImportSearchHits, usePatchSearchHit, useSearchHits } from '@/api/queries'
 import { Button } from '@/components/ui/button'
-import { HitReviewDrawer } from './HitReviewDrawer'
+import { HitContextMenu, HitMenu } from './HitMenu'
 
 const ROW_HEIGHT = 44
 
 /** The hit pool for a search run: a virtualized list (rows can run into the thousands) with stage-1 triage via
- * a row-click drawer, and a bulk import for hits that already cleared review. */
+ * a right-click menu or a trailing ⋮ button on each row, and a bulk import for hits that already cleared review. */
 export function HitTable({ workspaceId }: { workspaceId: string }) {
   const { data, hasNextPage, isFetchingNextPage, fetchNextPage } = useSearchHits(workspaceId)
   const importHits = useImportSearchHits(workspaceId)
-  const [openHitId, setOpenHitId] = useState<string | null>(null)
+  const reviewHit = usePatchSearchHit(workspaceId)
   const parentRef = useRef<HTMLDivElement>(null)
 
   const rows = data?.pages.flatMap((page) => page.items) ?? []
@@ -51,29 +51,31 @@ export function HitTable({ workspaceId }: { workspaceId: string }) {
           {importHits.error.message}
         </p>
       )}
+      {reviewHit.isError && (
+        <p role="alert" className="px-3 py-1 text-xs text-destructive">
+          {reviewHit.error.message}
+        </p>
+      )}
       <div ref={parentRef} className="min-h-0 flex-1 overflow-auto">
         <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
           {virtualItems.map((virtualRow) => {
             const hit = rows[virtualRow.index]
             return (
-              <button
-                key={hit.id}
-                type="button"
-                onClick={() => setOpenHitId(hit.id)}
-                className="flex w-full items-center gap-2 border-b px-3 text-left text-sm hover:bg-muted"
-                style={{ position: 'absolute', top: virtualRow.start, height: virtualRow.size, width: '100%' }}
-              >
-                <span className="flex-1 truncate">{hit.normalized_title}</span>
-                <span className="text-xs text-muted-foreground">{hit.stage1_status ?? 'unreviewed'}</span>
-              </button>
+              <HitContextMenu key={hit.id} hitId={hit.id} onReview={(hitId, body) => reviewHit.mutate({ hitId, body })}>
+                <div
+                  className="flex w-full items-center gap-2 border-b px-3 text-sm hover:bg-muted"
+                  style={{ position: 'absolute', top: virtualRow.start, height: virtualRow.size, width: '100%' }}
+                >
+                  <span className="flex-1 truncate">{hit.normalized_title}</span>
+                  <span className="text-xs text-muted-foreground">{hit.stage1_status ?? 'unreviewed'}</span>
+                  <HitMenu hitId={hit.id} onReview={(hitId, body) => reviewHit.mutate({ hitId, body })} />
+                </div>
+              </HitContextMenu>
             )
           })}
         </div>
       </div>
       {isFetchingNextPage && <div className="border-t px-3 py-1 text-xs text-muted-foreground">Loading more…</div>}
-      {openHitId && (
-        <HitReviewDrawer workspaceId={workspaceId} hitId={openHitId} onClose={() => setOpenHitId(null)} />
-      )}
     </div>
   )
 }
