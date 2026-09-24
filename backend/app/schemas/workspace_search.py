@@ -146,3 +146,18 @@ class EligibilityOut(BaseModel):
     stage2_status: str | None
     stage2_exclude_reason: str | None
     assessed_at: datetime | None
+
+
+class PrismaExportOut(BaseModel):
+    identified: int
+    duplicates_removed: int
+    stage1_screened: int
+    stage1_excluded: int
+    stage1_excluded_by_reason: dict[str, int]
+    sought: int
+    not_retrieved: int
+    stage2_assessed: int
+    stage2_excluded: int
+    stage2_excluded_by_reason: dict[str, int]
+    included: int
+    runs: list[dict]

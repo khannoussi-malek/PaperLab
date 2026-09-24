@@ -339,6 +339,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/workspaces/{workspace_id}/papers/{paper_id}/eligibility": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Set Eligibility */
+        patch: operations["set_eligibility_api_workspaces__workspace_id__papers__paper_id__eligibility_patch"];
+        trace?: never;
+    };
     "/api/workspaces/{workspace_id}/search/runs": {
         parameters: {
             query?: never;
@@ -470,6 +487,40 @@ export interface paths {
         put?: never;
         /** Upload Hit Pdf */
         post: operations["upload_hit_pdf_api_workspaces__workspace_id__search_hits__hit_id__upload_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/search/snowball": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Snowball Route */
+        post: operations["snowball_route_api_workspaces__workspace_id__search_snowball_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/search/prisma": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Prisma Export Route */
+        get: operations["prisma_export_route_api_workspaces__workspace_id__search_prisma_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1867,6 +1918,35 @@ export interface components {
             /** Total */
             total: number;
         };
+        /** EligibilityOut */
+        EligibilityOut: {
+            /**
+             * Paper Id
+             * Format: uuid
+             */
+            paper_id: string;
+            /**
+             * Search Run Id
+             * Format: uuid
+             */
+            search_run_id: string;
+            /** Stage2 Status */
+            stage2_status: string | null;
+            /** Stage2 Exclude Reason */
+            stage2_exclude_reason: string | null;
+            /** Assessed At */
+            assessed_at: string | null;
+        };
+        /** EligibilityUpdate */
+        EligibilityUpdate: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "include" | "exclude";
+            /** Exclude Reason */
+            exclude_reason?: string | null;
+        };
         /** EmbeddingStatusOut */
         EmbeddingStatusOut: {
             /** Model */
@@ -2051,6 +2131,10 @@ export interface components {
             doi?: string | null;
             /** Abstract */
             abstract?: string | null;
+            /** Stage2 Status */
+            stage2_status?: string | null;
+            /** Stage2 Exclude Reason */
+            stage2_exclude_reason?: string | null;
         };
         /** HitReviewUpdate */
         HitReviewUpdate: {
@@ -2449,6 +2533,39 @@ export interface components {
             /** Color By */
             color_by?: string | null;
         };
+        /** PrismaExportOut */
+        PrismaExportOut: {
+            /** Identified */
+            identified: number;
+            /** Duplicates Removed */
+            duplicates_removed: number;
+            /** Stage1 Screened */
+            stage1_screened: number;
+            /** Stage1 Excluded */
+            stage1_excluded: number;
+            /** Stage1 Excluded By Reason */
+            stage1_excluded_by_reason: {
+                [key: string]: number;
+            };
+            /** Sought */
+            sought: number;
+            /** Not Retrieved */
+            not_retrieved: number;
+            /** Stage2 Assessed */
+            stage2_assessed: number;
+            /** Stage2 Excluded */
+            stage2_excluded: number;
+            /** Stage2 Excluded By Reason */
+            stage2_excluded_by_reason: {
+                [key: string]: number;
+            };
+            /** Included */
+            included: number;
+            /** Runs */
+            runs: {
+                [key: string]: unknown;
+            }[];
+        };
         /** PromoteRequest */
         PromoteRequest: {
             /**
@@ -2825,6 +2942,32 @@ export interface components {
         SetupOut: {
             /** Done */
             done: boolean;
+        };
+        /** SnowballOut */
+        SnowballOut: {
+            /** New Hits */
+            new_hits: number;
+            /** Skipped Seeds */
+            skipped_seeds: string[];
+            /** Errors */
+            errors: {
+                [key: string]: string;
+            };
+        };
+        /** SnowballRequest */
+        SnowballRequest: {
+            /** Seed Paper Ids */
+            seed_paper_ids: string[];
+            /**
+             * Backward
+             * @default true
+             */
+            backward: boolean;
+            /**
+             * Forward
+             * @default true
+             */
+            forward: boolean;
         };
         /**
          * SourceKeys
@@ -3809,6 +3952,44 @@ export interface operations {
             };
         };
     };
+    set_eligibility_api_workspaces__workspace_id__papers__paper_id__eligibility_patch: {
+        parameters: {
+            query: {
+                run: string;
+            };
+            header?: never;
+            path: {
+                workspace_id: string;
+                paper_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EligibilityUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EligibilityOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     start_run_api_workspaces__workspace_id__search_runs_post: {
         parameters: {
             query?: never;
@@ -4105,6 +4286,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HitOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    snowball_route_api_workspaces__workspace_id__search_snowball_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SnowballRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SnowballOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    prisma_export_route_api_workspaces__workspace_id__search_prisma_get: {
+        parameters: {
+            query?: {
+                runs?: string;
+            };
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrismaExportOut"];
                 };
             };
             /** @description Validation Error */

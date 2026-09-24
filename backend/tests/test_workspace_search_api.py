@@ -1144,3 +1144,54 @@ async def test_set_eligibility_route_for_run_from_a_different_workspace_is_404(s
     )
 
     assert resp.status_code == 404
+
+
+async def test_prisma_export_route_combined_view(client):
+    """GET /search/prisma?runs=all with no runs yet: every count is 0, runs=[]."""
+    ws = await client.post("/api/workspaces", json={"name": "PRISMA combined test"})
+    workspace_id = ws.json()["id"]
+
+    resp = await client.get(f"/api/workspaces/{workspace_id}/search/prisma?runs=all")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["identified"] == 0
+    assert body["duplicates_removed"] == 0
+    assert body["stage1_screened"] == 0
+    assert body["stage1_excluded"] == 0
+    assert body["stage1_excluded_by_reason"] == {}
+    assert body["sought"] == 0
+    assert body["not_retrieved"] == 0
+    assert body["stage2_assessed"] == 0
+    assert body["stage2_excluded"] == 0
+    assert body["stage2_excluded_by_reason"] == {}
+    assert body["included"] == 0
+    assert body["runs"] == []
+
+
+async def test_prisma_export_route_rejects_a_run_id_from_another_workspace(client):
+    """Ownership check: a run_id that exists but belongs to a different workspace is 404."""
+    owner_ws = await client.post("/api/workspaces", json={"name": "PRISMA owner workspace"})
+    owner_ws_id = owner_ws.json()["id"]
+    other_ws = await client.post("/api/workspaces", json={"name": "PRISMA other workspace"})
+    other_ws_id = other_ws.json()["id"]
+
+    started = await client.post(
+        f"/api/workspaces/{owner_ws_id}/search/runs",
+        json={"query": "test", "filters": {}, "sources": ["arxiv"]},
+    )
+    run_id = started.json()["id"]
+
+    resp = await client.get(f"/api/workspaces/{other_ws_id}/search/prisma?runs={run_id}")
+
+    assert resp.status_code == 404
+
+
+async def test_prisma_export_route_rejects_malformed_runs_value(client):
+    """Malformed runs value (not 'all' and not a valid UUID) should be a clean 422."""
+    ws = await client.post("/api/workspaces", json={"name": "PRISMA malformed test"})
+    workspace_id = ws.json()["id"]
+
+    resp = await client.get(f"/api/workspaces/{workspace_id}/search/prisma?runs=not-a-uuid")
+
+    assert resp.status_code == 422

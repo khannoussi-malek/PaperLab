@@ -5,6 +5,7 @@ from fastapi import APIRouter, File, Query, Request, UploadFile
 
 from app.api.deps import DiscoveryDep, SessionDep
 from app.core import workspace_search
+from app.core.errors import InvalidInput
 from app.schemas.workspace_search import (
     AcquisitionStatus,
     BulkHitReviewUpdate,
@@ -14,6 +15,7 @@ from app.schemas.workspace_search import (
     HitReviewUpdate,
     ImportHitsOut,
     ImportHitsRequest,
+    PrismaExportOut,
     SearchRunCreate,
     SearchRunOut,
     SnowballOut,
@@ -126,3 +128,15 @@ async def snowball_route(
         session, providers, workspace_id, payload.seed_paper_ids, payload.backward, payload.forward
     )
     return SnowballOut(new_hits=result.new_hits, skipped_seeds=result.skipped_seeds, errors=result.errors)
+
+
+@router.get("/prisma")
+async def prisma_export_route(workspace_id: uuid.UUID, session: SessionDep, runs: str = "all") -> PrismaExportOut:
+    run_id = None if runs == "all" else None
+    if runs != "all":
+        try:
+            run_id = uuid.UUID(runs)
+        except ValueError as exc:
+            raise InvalidInput("invalid pagination cursor") from exc
+    export = await workspace_search.prisma_export(session, workspace_id, run_id)
+    return export
