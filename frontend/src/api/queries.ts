@@ -506,6 +506,26 @@ export function useImportAllHits(workspaceId: string) {
           queryKey: keys.searchHitsRoot(workspaceId),
           predicate: (query) => query.queryKey[4] !== 'all' || query.queryKey[5] !== 'all',
         }),
+        client.invalidateQueries({ queryKey: keys.prismaRoot(workspaceId) }),
+      ]),
+  })
+}
+
+/** Deletes every hit not yet imported or manually acquired — the pool's own "start over" action. Same reset
+ * (never invalidate) treatment of the big unfiltered pool as `useImportAllHits`, for the same reason: this can
+ * change every row in it at once, and invalidating an infinite query re-fetches every already-loaded page. */
+export function useClearSearchHits(workspaceId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: () => api.clearSearchHits(workspaceId),
+    onSuccess: () =>
+      Promise.all([
+        client.resetQueries({ queryKey: keys.searchHits(workspaceId, 'all', 'all'), exact: true }),
+        client.invalidateQueries({
+          queryKey: keys.searchHitsRoot(workspaceId),
+          predicate: (query) => query.queryKey[4] !== 'all' || query.queryKey[5] !== 'all',
+        }),
+        client.invalidateQueries({ queryKey: keys.prismaRoot(workspaceId) }),
       ]),
   })
 }

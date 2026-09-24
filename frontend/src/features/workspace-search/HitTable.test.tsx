@@ -38,6 +38,8 @@ beforeEach(() => {
   vi.spyOn(api, 'patchSearchHit').mockResolvedValue(baseHit)
   vi.spyOn(api, 'importSearchHits')
   vi.spyOn(api, 'uploadHitPdf')
+  vi.spyOn(api, 'clearSearchHits')
+  vi.spyOn(window, 'confirm').mockReturnValue(true)
   // jsdom never lays anything out, so offsetHeight is always 0 — the virtualizer treats a zero-height
   // scroll container as "nothing visible" and renders no rows at all. Give it a plausible viewport.
   vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(600)
@@ -513,4 +515,36 @@ test('a failed bulk import shows an error message', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Import all with PDF in this filter' }))
 
   expect(await screen.findByRole('alert')).toHaveTextContent('Bulk import failed')
+})
+
+test('"Clear old results" asks for confirmation before deleting anything', async () => {
+  vi.spyOn(window, 'confirm').mockReturnValue(false)
+  vi.spyOn(api, 'clearSearchHits').mockResolvedValue({ deleted: 5 })
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  await pool().findByText('a paper about llms')
+
+  fireEvent.click(screen.getByRole('button', { name: 'Clear old results' }))
+
+  expect(window.confirm).toHaveBeenCalled()
+  expect(api.clearSearchHits).not.toHaveBeenCalled()
+})
+
+test('confirming "Clear old results" deletes the not-yet-imported hits', async () => {
+  vi.spyOn(api, 'clearSearchHits').mockResolvedValue({ deleted: 5 })
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  await pool().findByText('a paper about llms')
+
+  fireEvent.click(screen.getByRole('button', { name: 'Clear old results' }))
+
+  await waitFor(() => expect(api.clearSearchHits).toHaveBeenCalledWith('ws-1'))
+})
+
+test('a failed clear shows an error message', async () => {
+  vi.spyOn(api, 'clearSearchHits').mockRejectedValue(new Error('Clear failed'))
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  await pool().findByText('a paper about llms')
+
+  fireEvent.click(screen.getByRole('button', { name: 'Clear old results' }))
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('Clear failed')
 })

@@ -11,6 +11,7 @@ from app.schemas.workspace_search import (
     AcquisitionStatus,
     BulkHitReviewUpdate,
     BulkUpdateOut,
+    ClearHitsOut,
     HitListOut,
     HitOut,
     HitReviewUpdate,
@@ -79,6 +80,12 @@ async def list_hits(
         session, workspace_id, limit, after, stage1_status, acquisition_status
     )
     return HitListOut(items=items, next_cursor=next_cursor)
+
+
+@router.delete("/hits")
+async def clear_hits(workspace_id: uuid.UUID, session: SessionDep) -> ClearHitsOut:
+    deleted = await workspace_search.clear_hits(session, workspace_id)
+    return ClearHitsOut(deleted=deleted)
 
 
 # Registered before "/hits/{hit_id}": both are PATCH routes and Starlette matches path templates in registration

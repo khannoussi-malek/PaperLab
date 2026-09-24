@@ -959,6 +959,50 @@ async def test_upload_for_wrong_workspace_is_404(session, client):
     assert hit.acquisition_status != "manual"
 
 
+async def test_clear_hits_deletes_everything_not_imported_or_manual(session, client):
+    from sqlalchemy import select
+
+    from app.models.workspace_search import WorkspaceSearchHit, WorkspaceSearchRun
+
+    ws = await client.post("/api/workspaces", json={"name": "Clear hits test"})
+    workspace_id = ws.json()["id"]
+    run = WorkspaceSearchRun(
+        workspace_id=workspace_id, query_text="q", filters_json={}, query_overrides_json={},
+        sources_json=[], status="exhausted", started_at=datetime.now(timezone.utc), stats_json={},
+    )
+    session.add(run)
+    await session.flush()
+
+    def hit(status: str, **extra) -> WorkspaceSearchHit:
+        return WorkspaceSearchHit(
+            workspace_id=workspace_id, run_id=run.id, source_method="database_search",
+            normalized_title=f"{status} hit {uuid.uuid4().hex[:6]}", first_seen_at=datetime.now(timezone.utc),
+            acquisition_status=status, **extra,
+        )
+
+    not_attempted = hit("not_attempted")
+    failed = hit("failed")
+    imported = hit("imported")
+    manual = hit("manual")
+    session.add_all([not_attempted, failed, imported, manual])
+    await session.commit()
+
+    resp = await client.request("DELETE", f"/api/workspaces/{workspace_id}/search/hits")
+
+    assert resp.status_code == 200
+    assert resp.json() == {"deleted": 2}
+    remaining = (
+        await session.execute(select(WorkspaceSearchHit).where(WorkspaceSearchHit.workspace_id == workspace_id))
+    ).scalars().all()
+    assert {h.id for h in remaining} == {imported.id, manual.id}
+
+
+async def test_clear_hits_for_unknown_workspace_is_404(client):
+    resp = await client.request("DELETE", f"/api/workspaces/{uuid.uuid4()}/search/hits")
+
+    assert resp.status_code == 404
+
+
 async def test_snowball_route_stores_hits_and_returns_counts(session, client, fake_providers_all):
     """POST /search/snowball with a seed paper in the workspace returns 200 with new_hits > 0."""
     from app.models import Paper
