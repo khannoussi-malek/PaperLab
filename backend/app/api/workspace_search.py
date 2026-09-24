@@ -6,6 +6,7 @@ from fastapi import APIRouter, File, Query, Request, UploadFile
 from app.api.deps import DiscoveryDep, SessionDep
 from app.core import workspace_search
 from app.core.errors import InvalidInput
+from app.core.prisma_export import prisma_export
 from app.schemas.workspace_search import (
     AcquisitionStatus,
     BulkHitReviewUpdate,
@@ -138,5 +139,5 @@ async def prisma_export_route(workspace_id: uuid.UUID, session: SessionDep, runs
             run_id = uuid.UUID(runs)
         except ValueError as exc:
             raise InvalidInput(f"invalid runs value: {runs!r}") from exc
-    export = await workspace_search.prisma_export(session, workspace_id, run_id)
+    export = await prisma_export(session, workspace_id, run_id)
     return export

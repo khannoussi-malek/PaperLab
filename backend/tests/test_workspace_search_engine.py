@@ -9,11 +9,10 @@ from sqlalchemy import func, select
 from app.core import discovery, workspaces
 from app.core.candidates import Candidate, normal_title
 from app.core.paper_sources import SOURCES, SourceSettings
+from app.core.prisma_export import PrismaExport, prisma_export
 from app.core.workspace_search import (
-    PrismaExport,
     _find_or_create_external_ref,
     _insert_hit,
-    prisma_export,
     search_batch,
     set_eligibility,
     snowball,
@@ -21,7 +20,7 @@ from app.core.workspace_search import (
 from app.models.references import ExternalRef
 from app.models.workspace import Workspace
 from app.models.workspace_search import WorkspaceSearchCursor, WorkspaceSearchHit, WorkspaceSearchRun
-from app.providers import arxiv, discovery_fake
+from app.providers import arxiv, discovery_fake, semantic_scholar
 
 pytestmark = pytest.mark.anyio
 
@@ -153,6 +152,90 @@ async def test_snowball_backward_stores_the_seeds_references_as_hits(session, fa
 
     assert result.new_hits > 0
     assert result.skipped_seeds == []
+
+
+async def test_snowball_keeps_one_directions_hits_when_the_other_direction_errors(session, fake_providers):
+    """Fix-round finding: /references (backward) answers 200 while /citations (forward) 429s (spec §16: this is
+    the default, unauthenticated-S2 case, not an edge case). Before the fix, `_snowball_from_s2` let the forward
+    httpx.HTTPError propagate straight out of the whole call, and `snowball`'s try/except caught it at the
+    per-SEED level — discarding the backward hits that had already come back successfully. Each direction must be
+    wrapped separately: keep whatever came back, record the error for just the direction that failed."""
+    from app.models import Paper
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/citations"):
+            return httpx.Response(429)
+        return discovery_fake._handle(request)
+
+    mixed_s2_client = semantic_scholar.new_client(None, transport=httpx.MockTransport(handle))
+    providers = replace(fake_providers, s2=mixed_s2_client)
+
+    workspace = Workspace(name=f"snowball-mixed-{uuid.uuid4().hex[:8]}")
+    session.add(workspace)
+    seed = Paper(title="Attention Is All You Need", doi="10.5555/paperlab-e2e-free", file_path="/nonexistent.pdf")
+    session.add(seed)
+    await session.flush()
+    await workspaces.add_paper(session, workspace.id, seed.id)
+
+    try:
+        result = await snowball(session, providers, workspace.id, [seed.id], backward=True, forward=True)
+    finally:
+        await mixed_s2_client.aclose()
+
+    assert result.new_hits > 0  # the backward hits were still stored
+    assert result.skipped_seeds == []
+    assert any("semantic_scholar" in key for key in result.errors)  # the forward failure is recorded
+    hits = (
+        (await session.execute(select(WorkspaceSearchHit).where(WorkspaceSearchHit.workspace_id == workspace.id)))
+        .scalars()
+        .all()
+    )
+    assert all(h.source_method == "snowball_backward" for h in hits)  # no forward hits stored
+
+
+async def test_snowball_skips_a_seed_semantic_scholar_does_not_know_but_still_processes_the_other(
+    session, fake_providers
+):
+    """Review Focus: one seed alongside one Semantic Scholar has never heard of (its DOI isn't arXiv-style, so
+    `s2_key` builds a "DOI:<doi>" key with no network call, but S2 itself answers 404 for that key — the same
+    "unknown paper" signal a title-match miss would give). The unknown seed must land in `skipped_seeds` without
+    raising, and the other, known seed must still produce hits — one seed's 404 must never abort the batch."""
+    from app.models import Paper
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        if "snowball-unknown" in str(request.url) and (
+            request.url.path.endswith("/references") or request.url.path.endswith("/citations")
+        ):
+            return httpx.Response(404)
+        return discovery_fake._handle(request)
+
+    unknown_s2_client = semantic_scholar.new_client(None, transport=httpx.MockTransport(handle))
+    providers = replace(fake_providers, s2=unknown_s2_client)
+
+    workspace = Workspace(name=f"snowball-unknown-seed-{uuid.uuid4().hex[:8]}")
+    session.add(workspace)
+    known_seed = Paper(
+        title="Attention Is All You Need", doi="10.5555/paperlab-e2e-free", file_path="/nonexistent.pdf"
+    )
+    unknown_seed = Paper(
+        title="A Paper Semantic Scholar Has Never Heard Of", doi="10.5555/paperlab-snowball-unknown",
+        file_path="/nonexistent.pdf",
+    )
+    session.add_all([known_seed, unknown_seed])
+    await session.flush()
+    await workspaces.add_paper(session, workspace.id, known_seed.id)
+    await workspaces.add_paper(session, workspace.id, unknown_seed.id)
+
+    try:
+        result = await snowball(
+            session, providers, workspace.id, [unknown_seed.id, known_seed.id], backward=True, forward=False
+        )
+    finally:
+        await unknown_s2_client.aclose()
+
+    assert result.skipped_seeds == [unknown_seed.id]
+    assert result.new_hits > 0
+    assert result.errors == {}
 
 
 async def test_snowball_does_not_duplicate_or_overwrite_an_existing_hit(session, fake_providers):

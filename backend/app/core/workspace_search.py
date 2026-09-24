@@ -393,25 +393,41 @@ class SnowballResult:
 
 async def _snowball_from_s2(
     providers: Providers, paper: Paper, backward: bool, forward: bool
-) -> dict[str, list[Candidate]] | None:
+) -> tuple[dict[str, list[Candidate]], dict[str, str]] | None:
     """None when Semantic Scholar doesn't know `paper` (a 404 on any direction asked for — same signal
     references.py's _from_semantic_scholar uses). Mirrors that function, scoped to just the requested
-    direction(s)."""
+    direction(s).
+
+    Otherwise returns whatever direction(s) succeeded, plus a per-direction message for whichever raised
+    httpx.HTTPError (e.g. an unauthenticated S2 429 — spec §16's default, not an edge case). Each direction is
+    tried and caught independently: one direction erroring must never drop the other direction's already-fetched
+    hits (fix-round finding — /citations 429ing used to wipe out a successful /references call for the same
+    seed, because the exception used to propagate out of this whole function to snowball()'s per-seed
+    try/except)."""
     key = await discovery.s2_key(providers.s2, paper)
     if key is None:
         return None
     out: dict[str, list[Candidate]] = {}
+    errors: dict[str, str] = {}
     if backward:
-        cites = await semantic_scholar.references(providers.s2, key, SNOWBALL_REFS_CAP)
-        if cites is None:
-            return None
-        out["backward"] = [from_s2(p) for p in cites]
+        try:
+            cites = await semantic_scholar.references(providers.s2, key, SNOWBALL_REFS_CAP)
+        except httpx.HTTPError as exc:
+            errors["semantic_scholar_backward"] = str(exc)
+        else:
+            if cites is None:
+                return None
+            out["backward"] = [from_s2(p) for p in cites]
     if forward:
-        cited_by = await semantic_scholar.citations(providers.s2, key, SNOWBALL_CITING_CAP)
-        if cited_by is None:
-            return None
-        out["forward"] = [from_s2(p) for p in cited_by]
-    return out
+        try:
+            cited_by = await semantic_scholar.citations(providers.s2, key, SNOWBALL_CITING_CAP)
+        except httpx.HTTPError as exc:
+            errors["semantic_scholar_forward"] = str(exc)
+        else:
+            if cited_by is None:
+                return None
+            out["forward"] = [from_s2(p) for p in cited_by]
+    return out, errors
 
 
 async def snowball(
@@ -456,13 +472,17 @@ async def snowball(
             raise NotFound(f"paper {paper_id} not in workspace {workspace_id}")
         paper = await session.get(Paper, paper_id)
         try:
-            found = await _snowball_from_s2(providers, paper, backward, forward)
+            result = await _snowball_from_s2(providers, paper, backward, forward)
         except httpx.HTTPError as exc:
+            # A failure before either direction's own try/except could run (e.g. the s2_key title-match lookup
+            # itself 429ing) — not a per-direction error, so no direction-specific key to give it.
             errors["semantic_scholar"] = str(exc)
             continue
-        if found is None:
+        if result is None:
             skipped.append(paper_id)
             continue
+        found, direction_errors = result
+        errors.update(direction_errors)
         for direction, candidates in found.items():
             source_method = "snowball_backward" if direction == "backward" else "snowball_forward"
             new_hits += await _store_candidates_as_hits(
@@ -478,10 +498,14 @@ async def set_eligibility(
     session: AsyncSession, workspace_id: uuid.UUID, paper_id: uuid.UUID, run_id: uuid.UUID,
     status: str, exclude_reason: str | None,
 ) -> SearchRunEligibility:
-    """Upserts one (paper_id, run_id) stage-2 verdict: insert on the first PATCH, update in place on a later one
-    for the same pair. Same ownership discipline as review_hit/get_run — confirms both the run (get_run, which
-    already raises NotFound on a workspace mismatch or missing run) and the paper (workspace_papers membership,
-    same check snowball() above uses) belong to workspace_id before writing."""
+    """Upserts one (paper_id, run_id) stage-2 verdict in a single INSERT ... ON CONFLICT DO UPDATE, insert on the
+    first PATCH, update in place on a later one for the same pair. A `session.get` then conditional `session.add`
+    (the previous approach) has a race window between the SELECT and the write where two concurrent PATCHes for
+    the same pair can both see no row and both try to insert — one loses to a duplicate-PK IntegrityError. A
+    single upsert statement closes that window, same discipline as `_insert_hit`'s upsert above, on this table's
+    own (paper_id, search_run_id) composite PK. Same ownership discipline as review_hit/get_run — confirms both
+    the run (get_run, which already raises NotFound on a workspace mismatch or missing run) and the paper
+    (workspace_papers membership, same check snowball() above uses) belong to workspace_id before writing."""
     await get_run(session, run_id, workspace_id)
     member = (await session.execute(
         select(workspace_papers.c.paper_id).where(
@@ -491,13 +515,24 @@ async def set_eligibility(
     if member is None:
         raise NotFound(f"paper {paper_id} not in workspace {workspace_id}")
 
-    row = await session.get(SearchRunEligibility, (paper_id, run_id))
-    if row is None:
-        row = SearchRunEligibility(paper_id=paper_id, search_run_id=run_id)
-        session.add(row)
-    row.stage2_status = status
-    row.stage2_exclude_reason = exclude_reason
-    row.assessed_at = datetime.now(timezone.utc)
+    assessed_at = datetime.now(timezone.utc)
+    stmt = (
+        pg_insert(SearchRunEligibility)
+        .values(
+            paper_id=paper_id, search_run_id=run_id, stage2_status=status,
+            stage2_exclude_reason=exclude_reason, assessed_at=assessed_at,
+        )
+        .on_conflict_do_update(
+            index_elements=["paper_id", "search_run_id"],
+            set_={"stage2_status": status, "stage2_exclude_reason": exclude_reason, "assessed_at": assessed_at},
+        )
+        .returning(SearchRunEligibility)
+        # populate_existing: an UPDATE branch's RETURNING row must overwrite an already-identity-mapped instance
+        # (e.g. this same (paper_id, run_id) loaded earlier in this session) with the fresh DB values — without
+        # it, the ORM leaves an already-loaded object's attributes as they were and the caller sees stale data.
+        .execution_options(populate_existing=True)
+    )
+    row = (await session.execute(stmt)).scalar_one()
     await session.commit()
     return row
 
@@ -745,107 +780,3 @@ async def upload_hit_pdf(
     hit.paper_id = paper.id
     await session.commit()
     return _hit_out_dict(hit, ref), True
-
-
-@dataclass(frozen=True)
-class PrismaExport:
-    identified: int
-    duplicates_removed: int
-    stage1_screened: int
-    stage1_excluded: int
-    stage1_excluded_by_reason: dict[str, int]
-    sought: int
-    not_retrieved: int
-    stage2_assessed: int
-    stage2_excluded: int
-    stage2_excluded_by_reason: dict[str, int]
-    included: int
-    runs: list[dict]  # per-run metadata for the methods section — [] for a per-run export (the caller already
-    # knows which run), populated for the combined export.
-
-
-async def prisma_export(session: AsyncSession, workspace_id: uuid.UUID, run_id: uuid.UUID | None) -> PrismaExport:
-    """Combined (run_id=None, every run in the workspace deduped together) or per-run PRISMA funnel, per spec
-    §4/§13.
-
-    `identified` is `sum(stats_json.per_source_raw_count.values())` (raw, pre-dedup database-search counts — only
-    search_batch's worker loop writes that field) plus one per stored hit whose source_method isn't
-    "database_search". Snowball hits have no stats_json entry of their own (snowball() never writes one), so
-    without that second term `identified` would under-count the moment any snowball hit exists in the workspace
-    and `duplicates_removed = max(identified - len(hits), 0)` would silently clamp to 0 instead of reporting a
-    real number — this also matches PRISMA convention, where citation-chasing is its own "identified via other
-    methods" line. Applied identically in both branches: a snowball hop's own lightweight run (snowball()
-    creates one per call, WorkspaceSearchHit.run_id is NOT NULL) reports its own hit as identified in its own
-    per-run breakdown too, since the per-run hit_query below is already scoped to that run_id."""
-    if run_id is not None:
-        run = await get_run(session, run_id, workspace_id)
-        stats_identified = sum(run.stats_json.get("per_source_raw_count", {}).values())
-        hit_query = select(WorkspaceSearchHit).where(WorkspaceSearchHit.run_id == run_id)
-        runs_meta = []
-        workspace_run_ids = [run_id]
-    else:
-        runs = (
-            await session.execute(select(WorkspaceSearchRun).where(WorkspaceSearchRun.workspace_id == workspace_id))
-        ).scalars().all()
-        stats_identified = sum(sum(r.stats_json.get("per_source_raw_count", {}).values()) for r in runs)
-        hit_query = select(WorkspaceSearchHit).where(WorkspaceSearchHit.workspace_id == workspace_id)
-        runs_meta = [
-            {
-                "id": str(r.id), "query_text": r.query_text, "filters_json": r.filters_json,
-                "started_at": r.started_at.isoformat(),
-            }
-            for r in runs
-        ]
-        workspace_run_ids = [r.id for r in runs]
-
-    hits = (await session.execute(hit_query)).scalars().all()
-    identified = stats_identified + sum(1 for h in hits if h.source_method != "database_search")
-    duplicates_removed = max(identified - len(hits), 0)
-
-    stage1_screened = sum(1 for h in hits if h.stage1_status is not None)
-    excluded = [h for h in hits if h.stage1_status == "not_relevant"]
-    stage1_excluded_by_reason: dict[str, int] = {}
-    for h in excluded:
-        reason = h.stage1_exclude_reason
-        stage1_excluded_by_reason[reason] = stage1_excluded_by_reason.get(reason, 0) + 1
-
-    relevant = [h for h in hits if h.stage1_status == "relevant"]
-    sought = len(relevant)
-    not_retrieved = sum(1 for h in relevant if h.acquisition_status not in ("imported", "manual"))
-
-    in_corpus_paper_ids = [h.paper_id for h in relevant if h.paper_id is not None]
-    # Combined view: the same paper can carry eligibility rows from more than one run — take the most recently
-    # assessed_at per paper_id, across ALL of that paper's eligibility rows from a run IN THIS WORKSPACE (not
-    # just this run's, but never another workspace's — papers are shared/reusable entities, not 1:1 with a
-    # workspace, so a paper independently screened in two different workspaces would otherwise leak an unrelated
-    # workspace's verdict into this export whenever it happened to be the more recently assessed one). Per-run
-    # view: scoped to just this run's own verdict (workspace_run_ids == [run_id] there).
-    elig_query = select(SearchRunEligibility).where(
-        SearchRunEligibility.paper_id.in_(in_corpus_paper_ids),
-        SearchRunEligibility.search_run_id.in_(workspace_run_ids),
-    )
-    elig_rows = (await session.execute(elig_query)).scalars().all()
-    latest_by_paper: dict[uuid.UUID, SearchRunEligibility] = {}
-    for row in elig_rows:
-        current = latest_by_paper.get(row.paper_id)
-        if current is None or (row.assessed_at or datetime.min.replace(tzinfo=timezone.utc)) > (
-            current.assessed_at or datetime.min.replace(tzinfo=timezone.utc)
-        ):
-            latest_by_paper[row.paper_id] = row
-
-    stage2_assessed = len(latest_by_paper)
-    stage2_excluded_rows = [r for r in latest_by_paper.values() if r.stage2_status == "exclude"]
-    stage2_excluded = len(stage2_excluded_rows)
-    stage2_excluded_by_reason: dict[str, int] = {}
-    for r in stage2_excluded_rows:
-        reason = r.stage2_exclude_reason or "unspecified"
-        stage2_excluded_by_reason[reason] = stage2_excluded_by_reason.get(reason, 0) + 1
-    included = sum(1 for r in latest_by_paper.values() if r.stage2_status == "include")
-
-    return PrismaExport(
-        identified=identified, duplicates_removed=duplicates_removed, stage1_screened=stage1_screened,
-        stage1_excluded=len(excluded), stage1_excluded_by_reason=stage1_excluded_by_reason,
-        sought=sought, not_retrieved=not_retrieved, stage2_assessed=stage2_assessed,
-        stage2_excluded=stage2_excluded, stage2_excluded_by_reason=stage2_excluded_by_reason,
-        included=included, runs=runs_meta,
-    )
