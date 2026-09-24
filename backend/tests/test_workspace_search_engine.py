@@ -152,6 +152,81 @@ async def test_search_batch_records_source_error_without_failing_run(session, fa
     assert not cursor.exhausted
 
 
+async def test_search_batch_skips_a_cooling_down_source_without_counting_a_new_error(session, fake_providers, monkeypatch):
+    """A source that just errored is skipped entirely on the very next call, not retried immediately — real
+    consecutive-iteration retries land within a couple of pacing intervals of each other (a few seconds), which
+    doesn't give a brief/transient error (arXiv's API has answered a plain 406 to an otherwise-valid, identical
+    request that then succeeded seconds later) any real chance to clear before the source is abandoned."""
+    from app.core import workspace_search as core_module
+
+    fails_once = [True]
+
+    async def flaky_arxiv_search(http, query, page_size, cursor):
+        if fails_once[0]:
+            fails_once[0] = False
+            raise httpx.HTTPError("transient 406")
+        return [], None
+
+    monkeypatch.setitem(core_module._PAGE_FUNCS, "arxiv", flaky_arxiv_search)
+    fake_clock = iter([datetime(2026, 1, 1, tzinfo=timezone.utc), datetime(2026, 1, 1, 0, 0, 1, tzinfo=timezone.utc)])
+    monkeypatch.setattr(core_module, "_now", lambda: next(fake_clock))
+
+    run = await _new_run(session, ["arxiv"])
+    await search_batch(session, fake_providers, run)  # first call: errors, starts a 10s cooldown
+    cursor = (
+        await session.execute(
+            select(WorkspaceSearchCursor).where(
+                WorkspaceSearchCursor.run_id == run.id, WorkspaceSearchCursor.source == "arxiv"
+            )
+        )
+    ).scalar_one()
+    assert cursor.cursor_json["errors"] == 1
+
+    # Second call, one fake second later — still well inside the cooldown. Must be skipped entirely: no new
+    # attempt (flaky_arxiv_search would raise AssertionError-free either way here, so the real signal is the
+    # error count staying put, not incrementing to 2).
+    result = await search_batch(session, fake_providers, run)
+    await session.refresh(cursor)
+    assert "arxiv" not in result.errors
+    assert cursor.cursor_json["errors"] == 1
+    assert not cursor.exhausted
+
+
+async def test_search_batch_retries_a_cooled_down_source_and_a_success_clears_the_error_count(session, fake_providers, monkeypatch):
+    """Once the cooldown has genuinely elapsed, the source is tried again — and a page that succeeds this time
+    clears the error streak entirely (same as a fresh cursor), not just decrements it."""
+    from app.core import workspace_search as core_module
+
+    fails_once = [True]
+
+    async def flaky_arxiv_search(http, query, page_size, cursor):
+        if fails_once[0]:
+            fails_once[0] = False
+            raise httpx.HTTPError("transient 406")
+        return [], None  # succeeds and exhausts cleanly on the retry
+
+    monkeypatch.setitem(core_module._PAGE_FUNCS, "arxiv", flaky_arxiv_search)
+    far_future = iter([datetime(2026, 1, 1, tzinfo=timezone.utc), datetime(2026, 1, 1, 1, tzinfo=timezone.utc)])
+    monkeypatch.setattr(core_module, "_now", lambda: next(far_future))
+
+    run = await _new_run(session, ["arxiv"])
+    await search_batch(session, fake_providers, run)  # errors, starts a cooldown
+
+    result = await search_batch(session, fake_providers, run)  # an hour later: well past even the longest backoff
+
+    assert "arxiv" not in result.errors
+    assert result.sources_exhausted == ["arxiv"]  # the retry ran (not skipped) and succeeded straight to exhaustion
+    cursor = (
+        await session.execute(
+            select(WorkspaceSearchCursor).where(
+                WorkspaceSearchCursor.run_id == run.id, WorkspaceSearchCursor.source == "arxiv"
+            )
+        )
+    ).scalar_one()
+    assert cursor.exhausted  # this fake's next_cursor is None — a real, clean exhaustion, not an error-cap trip
+    assert cursor.last_error is None  # cleared unconditionally on any successful page, exhausting or not
+
+
 async def test_search_batch_marks_a_disabled_source_cursor_exhausted(session):
     """A source whose Providers.client() is None (Unpaywall with no contact_email configured — the
     fresh-database default) has nothing to fetch. Its cursor must still flip to exhausted immediately, or the
