@@ -113,3 +113,15 @@ class ImportHitsRequest(BaseModel):
 class ImportHitsOut(BaseModel):
     imported: int
     failed: int
+
+
+class SnowballRequest(BaseModel):
+    seed_paper_ids: list[uuid.UUID]
+    backward: bool = True
+    forward: bool = True
+
+
+class SnowballOut(BaseModel):
+    new_hits: int
+    skipped_seeds: list[uuid.UUID]
+    errors: dict[str, str]

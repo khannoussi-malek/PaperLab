@@ -1,6 +1,9 @@
 import pytest
 
 from app.api.deps import get_discovery
+from app.core import discovery
+from app.core.paper_sources import SOURCES, SourceSettings
+from app.providers import discovery_fake
 
 pytestmark = pytest.mark.anyio
 
@@ -11,6 +14,16 @@ def discovery_api(app, discovery_fakes):
     download_pdf call has a real (fake) PDF host to hit."""
     app.dependency_overrides[get_discovery] = lambda: discovery_fakes.providers
     return discovery_fakes
+
+
+@pytest.fixture
+async def fake_providers_all(app):
+    """Every source on, routed to discovery_fake's MockTransport — for snowball and search_batch tests."""
+    every_source = SourceSettings(contact_email=discovery_fake.MAILTO, enabled=dict.fromkeys(SOURCES, True))
+    providers = discovery.build_providers(every_source, discovery_fake.transport())
+    app.dependency_overrides[get_discovery] = lambda: providers
+    yield providers
+    await providers.aclose()
 
 
 async def test_start_run_over_http(client):
@@ -938,3 +951,59 @@ async def test_upload_for_wrong_workspace_is_404(session, client):
     hit = await session.get(WorkspaceSearchHit, hit_id)
     await session.refresh(hit)
     assert hit.acquisition_status != "manual"
+
+
+async def test_snowball_route_stores_hits_and_returns_counts(session, client, fake_providers_all):
+    """POST /search/snowball with a seed paper in the workspace returns 200 with new_hits > 0."""
+    from app.models import Paper
+    from app.core import workspaces
+
+    # Create workspace
+    ws = await client.post("/api/workspaces", json={"name": "Snowball test"})
+    workspace_id = ws.json()["id"]
+
+    # Create and add a seed paper that the fake S2 provider has references for
+    # doi="10.5555/paperlab-e2e-free" is one of the discovery_fake.PAPERS fixtures
+    seed = Paper(
+        title="PaperLab Find Papers Fixture", doi="10.5555/paperlab-e2e-free", file_path="/nonexistent.pdf"
+    )
+    session.add(seed)
+    await session.flush()
+    await workspaces.add_paper(session, workspace_id, seed.id)
+
+    resp = await client.post(
+        f"/api/workspaces/{workspace_id}/search/snowball",
+        json={"seed_paper_ids": [str(seed.id)], "backward": True, "forward": False},
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["new_hits"] > 0
+    assert body["skipped_seeds"] == []
+    assert body["errors"] == {}
+
+
+async def test_snowball_route_with_unowned_seed_is_404(session, client, fake_providers_all):
+    """POST /search/snowball with a seed_paper_ids entry that isn't in the workspace returns 404."""
+    from app.models import Paper
+    from app.core import workspaces
+
+    # Create two workspaces
+    ws1 = await client.post("/api/workspaces", json={"name": "Workspace 1"})
+    workspace_id1 = ws1.json()["id"]
+    ws2 = await client.post("/api/workspaces", json={"name": "Workspace 2"})
+    workspace_id2 = ws2.json()["id"]
+
+    # Create a seed paper in workspace 1
+    seed = Paper(title="Test Paper", doi="10.5555/test", file_path="/nonexistent.pdf")
+    session.add(seed)
+    await session.flush()
+    await workspaces.add_paper(session, workspace_id1, seed.id)
+
+    # Try to snowball on workspace 2 with workspace 1's seed
+    resp = await client.post(
+        f"/api/workspaces/{workspace_id2}/search/snowball",
+        json={"seed_paper_ids": [str(seed.id)], "backward": True, "forward": False},
+    )
+
+    assert resp.status_code == 404

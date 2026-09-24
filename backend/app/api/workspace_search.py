@@ -16,6 +16,8 @@ from app.schemas.workspace_search import (
     ImportHitsRequest,
     SearchRunCreate,
     SearchRunOut,
+    SnowballOut,
+    SnowballRequest,
     Stage1Status,
 )
 
@@ -114,3 +116,13 @@ async def upload_hit_pdf(
     if created:
         await _enqueue_ingest(request, hit["paper_id"])
     return hit
+
+
+@router.post("/snowball")
+async def snowball_route(
+    workspace_id: uuid.UUID, payload: SnowballRequest, session: SessionDep, providers: DiscoveryDep,
+) -> SnowballOut:
+    result = await workspace_search.snowball(
+        session, providers, workspace_id, payload.seed_paper_ids, payload.backward, payload.forward
+    )
+    return SnowballOut(new_hits=result.new_hits, skipped_seeds=result.skipped_seeds, errors=result.errors)
