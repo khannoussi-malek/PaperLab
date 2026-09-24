@@ -68,3 +68,19 @@ test('a failed upload shows an alert with the error', async () => {
 
   expect(await screen.findByRole('alert')).toHaveTextContent('Upload failed')
 })
+
+test('file input is disabled while upload is pending', async () => {
+  vi.spyOn(api, 'uploadHitPdf').mockImplementation(
+    () => new Promise(() => {}) // never resolves, keeps mutation pending
+  )
+
+  renderWithClient(<ManualAcquisitionTab workspaceId="ws-1" />)
+
+  const input = screen.getByLabelText('Upload PDF for unreachable paper') as HTMLInputElement
+  expect(input.disabled).toBe(false)
+
+  const file = new File([new Uint8Array([1, 2, 3])], 'paper.pdf', { type: 'application/pdf' })
+  fireEvent.change(input, { target: { files: [file] } })
+
+  await waitFor(() => expect(input.disabled).toBe(true))
+})
