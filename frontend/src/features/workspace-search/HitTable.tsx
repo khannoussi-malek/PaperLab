@@ -3,6 +3,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import type { Hit, HitReviewUpdate, SearchRun } from '@/api/client'
 import {
   totalRawFound,
+  useClearSearchHits,
   useImportAllHits,
   useImportSearchHits,
   useNewHitsAvailable,
@@ -33,7 +34,10 @@ function hasPdfOrAbstract(hit: Hit): boolean {
  * is via a right-click menu or a trailing ⋮ button on each row, and there are two ways to get a PDF: one hit at a
  * time from the preview panel's "Add PDF" (fetching a PDF starts ingestion — chunking, embedding — for that paper,
  * so this is the cheap default), or "Import all with PDF in this filter" when the user has decided that cost is
- * worth paying for everything currently in view at once. `run` is read for two things: whether the worker has
+ * worth paying for everything currently in view at once. "Clear old results" is the other direction — every
+ * search a workspace has ever run lands in this same shared pool, with no built-in way to remove anything, so
+ * this wipes every not-yet-imported hit back to empty (confirmed first — it's destructive) when the accumulated
+ * history no longer matters; already-imported papers are untouched. `run` is read for two things: whether the worker has
  * found more since the pool was last loaded (the run's own live status is shown elsewhere, SearchTab, unaffected
  * by any of this), and the live "N found so far" count — the raw, pre-dedup total every source has turned up
  * (`totalRawFound`), distinct from "in pool," which is the de-duplicated count of what's actually been loaded. */
@@ -41,6 +45,7 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
   const { data, hasNextPage, isFetchingNextPage, fetchNextPage } = useSearchHits(workspaceId)
   const importHits = useImportSearchHits(workspaceId)
   const importAllHits = useImportAllHits(workspaceId)
+  const clearHits = useClearSearchHits(workspaceId)
   const reviewHit = usePatchSearchHit(workspaceId)
   const uploadHitPdf = useUploadHitPdf(workspaceId)
   const newHits = useNewHitsAvailable(run)
@@ -135,6 +140,19 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
         <Button type="button" size="sm" disabled={importAllHits.isPending} onClick={() => importAllHits.mutate()}>
           Import all with PDF in this filter
         </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={clearHits.isPending}
+          onClick={() => {
+            if (window.confirm('Clear every hit not yet imported? Papers already in your corpus stay untouched.')) {
+              clearHits.mutate()
+            }
+          }}
+        >
+          Clear old results
+        </Button>
       </div>
       {importHits.isError && (
         <p role="alert" className="px-3 py-1 text-xs text-destructive">
@@ -144,6 +162,11 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
       {importAllHits.isError && (
         <p role="alert" className="px-3 py-1 text-xs text-destructive">
           {importAllHits.error.message}
+        </p>
+      )}
+      {clearHits.isError && (
+        <p role="alert" className="px-3 py-1 text-xs text-destructive">
+          {clearHits.error.message}
         </p>
       )}
       {/* A "failed" import is a resolved response (see useImportSearchHits), not a rejected mutation — no free

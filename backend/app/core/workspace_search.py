@@ -15,7 +15,7 @@ from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
 import httpx
-from sqlalchemy import or_, select, tuple_, update
+from sqlalchemy import delete, or_, select, tuple_, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -679,6 +679,22 @@ async def bulk_review_hits(
             hit.priority = priority
     await session.commit()
     return len(hits)
+
+
+async def clear_hits(session: AsyncSession, workspace_id: uuid.UUID) -> int:
+    """Deletes every hit in the pool that hasn't been imported or manually acquired -- a clean-slate reset for a
+    workspace whose accumulated search history no longer matters. Papers already pulled into the corpus are
+    untouched (their hits are excluded from the delete, same as `import_hits`' own acquisition_status check).
+    Run/cursor history is left alone too — this clears the pool a run FED, not the record that the run happened."""
+    await workspaces.get(session, workspace_id)  # raises NotFound if missing
+    result = await session.execute(
+        delete(WorkspaceSearchHit).where(
+            WorkspaceSearchHit.workspace_id == workspace_id,
+            WorkspaceSearchHit.acquisition_status.notin_(["imported", "manual"]),
+        )
+    )
+    await session.commit()
+    return result.rowcount
 
 
 @dataclass(frozen=True)

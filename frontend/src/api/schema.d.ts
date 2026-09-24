@@ -419,7 +419,8 @@ export interface paths {
         get: operations["list_hits_api_workspaces__workspace_id__search_hits_get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** Clear Hits */
+        delete: operations["clear_hits_api_workspaces__workspace_id__search_hits_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1671,6 +1672,11 @@ export interface components {
             text: string;
             /** Strategy Ver */
             strategy_ver: number;
+        };
+        /** ClearHitsOut */
+        ClearHitsOut: {
+            /** Deleted */
+            deleted: number;
         };
         /** ColumnIn */
         ColumnIn: {
@@ -4149,6 +4155,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HitListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_hits_api_workspaces__workspace_id__search_hits_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClearHitsOut"];
                 };
             };
             /** @description Validation Error */

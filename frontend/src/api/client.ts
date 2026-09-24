@@ -76,6 +76,7 @@ export type HitReviewUpdate = components['schemas']['HitReviewUpdate']
 export type BulkHitReviewUpdate = components['schemas']['BulkHitReviewUpdate']
 export type BulkUpdateOut = components['schemas']['BulkUpdateOut']
 export type ImportHitsOut = components['schemas']['ImportHitsOut']
+export type ClearHitsOut = components['schemas']['ClearHitsOut']
 export type SnowballRequest = components['schemas']['SnowballRequest']
 export type SnowballOut = components['schemas']['SnowballOut']
 export type EligibilityUpdate = components['schemas']['EligibilityUpdate']
@@ -274,6 +275,9 @@ export const api = {
     request<ImportHitsOut>(
       `/api/workspaces/${workspaceId}/search/hits/import`, sendJson('POST', { hit_ids: hitIds ?? null }),
     ),
+  /** Deletes every hit in the pool not yet imported or manually acquired; papers already in the corpus stay. */
+  clearSearchHits: (workspaceId: string) =>
+    request<ClearHitsOut>(`/api/workspaces/${workspaceId}/search/hits`, { method: 'DELETE' }),
   uploadHitPdf: (workspaceId: string, hitId: string, file: File) => {
     const form = new FormData()
     form.append('file', file)

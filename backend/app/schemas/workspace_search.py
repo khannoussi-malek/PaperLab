@@ -122,6 +122,10 @@ class ImportHitsOut(BaseModel):
     failed: int
 
 
+class ClearHitsOut(BaseModel):
+    deleted: int
+
+
 class SnowballRequest(BaseModel):
     # An empty list has no seed to hop from, so it would produce a run with zero results and nothing recorded —
     # reject it instead (same "reject rather than silently do nothing" convention as SearchRunCreate.sources).
