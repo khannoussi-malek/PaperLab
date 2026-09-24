@@ -511,16 +511,30 @@ export function useSetEligibility(workspaceId: string) {
  * from this mutation's own `.data`/`.isSuccess`/`.isError` by ScreeningTab, the same way `HitTable` already
  * reads `useImportSearchHits`'s `failed` count from mutation state without any cache patching.
  *
- * `onSuccess` invalidates only `prismaRoot`: a snowballed hit can shift the PRISMA funnel's counts, and
+ * `onSuccess` always invalidates `prismaRoot`: a snowballed hit can shift the PRISMA funnel's counts, and
  * PrismaTab stays mounted forever (`WorkspacePage`'s `forceMount`), so its export query never refetches on its
- * own without this. It does NOT touch `searchHitsRoot` — a snowball call can run while the Search tab's big
- * unfiltered pool is mounted too, and invalidating that here would re-trigger its full refetch on every click,
- * the exact storm `patchMatchingHits`'s docstring describes. */
+ * own without this.
+ *
+ * When `new_hits > 0`, it also *resets* — `exact: true`, one query, never the whole family — the unfiltered
+ * pool's own query (`searchHits(workspaceId, 'all', 'all')`). Without this, a snowballed hit was invisible in
+ * the Search tab until an unrelated refetch or a full reload: nothing else marks that query stale. `reset`, not
+ * `invalidate`: invalidating an infinite query re-fetches every already-loaded page — the exact request storm
+ * `patchMatchingHits`'s docstring describes for a pool that can run into the thousands of hits across dozens of
+ * pages — while resetting drops it back to just page 1 and re-fetches only that. HARD RULE: never
+ * `invalidateQueries({ queryKey: searchHitsRoot(workspaceId) })` here, or any other filtered variant — a
+ * snowball call can run while the Search tab's big unfiltered pool (or a filtered tab) is mounted too, and a
+ * wholesale invalidate would re-trigger a full refetch on every click. */
 export function useSnowball(workspaceId: string) {
   const client = useQueryClient()
   return useMutation({
     mutationFn: (body: SnowballRequest) => api.snowball(workspaceId, body),
-    onSuccess: () => client.invalidateQueries({ queryKey: keys.prismaRoot(workspaceId) }),
+    onSuccess: (result) => {
+      const work = [client.invalidateQueries({ queryKey: keys.prismaRoot(workspaceId) })]
+      if (result.new_hits > 0) {
+        work.push(client.resetQueries({ queryKey: keys.searchHits(workspaceId, 'all', 'all'), exact: true }))
+      }
+      return Promise.all(work)
+    },
   })
 }
 

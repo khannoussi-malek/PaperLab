@@ -14,6 +14,7 @@ import {
 } from './queries'
 
 const prismaRootKey = (workspaceId: string) => ['workspaces', workspaceId, 'search', 'prisma']
+const searchHitsAllKey = (workspaceId: string) => ['workspaces', workspaceId, 'search', 'hits', 'all', 'all']
 
 function withQueryClient(client: QueryClient) {
   return ({ children }: { children: ReactNode }) => createElement(QueryClientProvider, { client }, children)
@@ -99,5 +100,33 @@ describe('prisma cache invalidation', () => {
 
     expect(invalidateSpy).toHaveBeenCalledTimes(1)
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: prismaRootKey('ws-1') })
+  })
+
+  // Task 3: snowballed hits were invisible in the Search tab until an unrelated refetch or a full page reload —
+  // nothing marked the unfiltered pool's own query stale. The fix must reset (not invalidate) exactly that one
+  // query, and only when there's something new to show.
+  it('useSnowball resets only the unfiltered hit pool (exact match) when new_hits > 0', async () => {
+    vi.spyOn(api, 'snowball').mockResolvedValue({ new_hits: 2, skipped_seeds: [], errors: {} })
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const resetSpy = vi.spyOn(client, 'resetQueries')
+
+    const { result } = renderHook(() => useSnowball('ws-1'), { wrapper: withQueryClient(client) })
+    result.current.mutate({ seed_paper_ids: ['p1'], backward: true, forward: true })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    expect(resetSpy).toHaveBeenCalledTimes(1)
+    expect(resetSpy).toHaveBeenCalledWith({ queryKey: searchHitsAllKey('ws-1'), exact: true })
+  })
+
+  it('useSnowball does not reset the hit pool when new_hits is 0', async () => {
+    vi.spyOn(api, 'snowball').mockResolvedValue({ new_hits: 0, skipped_seeds: [], errors: {} })
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const resetSpy = vi.spyOn(client, 'resetQueries')
+
+    const { result } = renderHook(() => useSnowball('ws-1'), { wrapper: withQueryClient(client) })
+    result.current.mutate({ seed_paper_ids: ['p1'], backward: true, forward: true })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    expect(resetSpy).not.toHaveBeenCalled()
   })
 })
