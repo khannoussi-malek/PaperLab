@@ -64,6 +64,7 @@ class HitOut(BaseModel):
     year: int | None = None
     venue: str | None = None
     doi: str | None = None
+    abstract: str | None = None
 
 
 class HitListOut(BaseModel):

@@ -167,9 +167,11 @@ async def test_crossref_next_cursor_when_page_is_short(monkeypatch):
 
 async def test_semantic_scholar_search_page_uses_offset(monkeypatch):
     seen_offsets = []
+    seen_fields = []
 
     async def fake_get(self, url, params=None, **kwargs):
         seen_offsets.append(params["offset"])
+        seen_fields.append(params["fields"])
         request = httpx.Request("GET", url, params=params)
         return httpx.Response(200, json={"total": 0, "data": [], "next": None}, request=request)
 
@@ -178,6 +180,9 @@ async def test_semantic_scholar_search_page_uses_offset(monkeypatch):
         await semantic_scholar.search_page(http, "transformer", page_size=20, cursor=0)
         await semantic_scholar.search_page(http, "transformer", page_size=20, cursor=20)
     assert seen_offsets == [0, 20]
+    # A bare `",".join(PAPER_FIELDS)` on the (string, not list) constant would insert a comma between every
+    # character instead of the field names — this pins the real, whole-field-list value the request must carry.
+    assert seen_fields == [semantic_scholar.PAPER_FIELDS, semantic_scholar.PAPER_FIELDS]
 
 
 async def test_semantic_scholar_next_cursor_when_next_field_present(monkeypatch):

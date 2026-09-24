@@ -12,7 +12,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from typing import Any
 
-from app.core.enrichment import ARXIV_DOI_PREFIX, short_id
+from app.core.enrichment import ARXIV_DOI_PREFIX, abstract_text, short_id
 
 # CandidateIn (app/schemas/discovery.py) rejects a candidate over either limit with 422; capping here first means
 # the Add button never shows for a candidate its own endpoint would then refuse.
@@ -44,6 +44,7 @@ class Candidate:
     s2_id: str | None = None
     core_id: str | None = None
     cited_by_count: int | None = None
+    abstract: str | None = None
     pdf_urls: list[str] = field(default_factory=list)
     sources: tuple[str, ...] = ()
     paper_id: uuid.UUID | None = None
@@ -84,6 +85,7 @@ def from_work(work: dict[str, Any]) -> Candidate:
         arxiv_id=arxiv_id,
         openalex_id=short_id(work.get("id")),
         cited_by_count=work.get("cited_by_count"),
+        abstract=abstract_text(work.get("abstract_inverted_index")),
         pdf_urls=ordered_pdf_urls(arxiv_id, best.get("pdf_url"), *(place.get("pdf_url") for place in locations)),
         sources=("openalex",),
     )
@@ -102,6 +104,7 @@ def from_s2(paper: dict[str, Any]) -> Candidate:
         arxiv_id=arxiv_id,
         s2_id=paper.get("paperId"),
         cited_by_count=paper.get("citationCount"),
+        abstract=paper.get("abstract") or None,
         pdf_urls=ordered_pdf_urls(arxiv_id, (paper.get("openAccessPdf") or {}).get("url")),
         sources=("semantic_scholar",),
     )
@@ -129,13 +132,16 @@ def from_arxiv(entry: Mapping[str, Any]) -> Candidate:
         year=entry["year"],
         doi=entry["doi"],
         arxiv_id=entry["arxiv_id"],
+        abstract=entry.get("abstract"),
         pdf_urls=ordered_pdf_urls(entry["arxiv_id"]),
         sources=("arxiv",),
     )
 
 
 def from_crossref(item: Mapping[str, Any]) -> Candidate | None:
-    """None for a record that isn't a paper. Crossref lists no free PDFs: its links are for text mining (D68)."""
+    """None for a record that isn't a paper. Crossref lists no free PDFs: its links are for text mining (D68).
+    No abstract either: Crossref's `abstract` field, when present, is raw JATS XML markup, not plain text —
+    left unset here rather than surfacing tags to the reader."""
     if item.get("type") not in CROSSREF_PAPER_TYPES:
         return None
     doi = (item.get("DOI") or "").lower() or None
@@ -169,6 +175,7 @@ def from_core(work: Mapping[str, Any]) -> Candidate:
         doi=doi,
         arxiv_id=arxiv_id,
         core_id=str(work["id"]) if work.get("id") is not None else None,
+        abstract=work.get("abstract") or None,
         pdf_urls=ordered_pdf_urls(arxiv_id, work.get("downloadUrl")),
         sources=("core",),
     )
@@ -225,6 +232,7 @@ def _combined(records: list[Candidate]) -> Candidate:
         s2_id=first("s2_id"),
         core_id=first("core_id"),
         cited_by_count=max(counts, default=None),
+        abstract=first("abstract"),
         pdf_urls=ordered_pdf_urls(arxiv_id, *(url for r in records for url in r.pdf_urls)),
         sources=tuple(dict.fromkeys(source for r in records for source in r.sources)),
     )

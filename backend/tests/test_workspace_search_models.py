@@ -41,7 +41,10 @@ async def test_run_cursor_hit_round_trip(session):
     session.add(hit)
     await session.commit()
 
-    loaded = (await session.execute(select(WorkspaceSearchHit))).scalar_one()
+    # Scoped to this test's own row: this suite shares the dev database (conftest.py), which now holds
+    # thousands of real hits from manual testing — an unfiltered select(WorkspaceSearchHit) finds all of them,
+    # not just this one, and .scalar_one() correctly refuses to pick a row among many.
+    loaded = (await session.execute(select(WorkspaceSearchHit).where(WorkspaceSearchHit.id == hit.id))).scalar_one()
     assert loaded.acquisition_status == "not_attempted"
     assert loaded.run_id == run.id
 

@@ -94,4 +94,5 @@ def _entry(node: ET.Element) -> dict | None:
         ],
         "year": int(published[:4]) if published[:4].isdigit() else None,
         "doi": doi.lower() or None,
+        "abstract": " ".join(node.findtext("atom:summary", "", NS).split()) or None,
     }

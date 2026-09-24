@@ -25,6 +25,7 @@ class ExternalRef(Base):
     year: Mapped[int | None]
     venue: Mapped[str | None] = mapped_column(Text)
     cited_by_count: Mapped[int | None]
+    abstract: Mapped[str | None] = mapped_column(Text, default=None)
     pdf_urls: Mapped[list[str]] = mapped_column(JSONB, server_default=text("'[]'"))
     title_embedding: Mapped[Any | None] = mapped_column(Vector(768))
     title_embed_model: Mapped[str | None] = mapped_column(Text)
