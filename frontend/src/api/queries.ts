@@ -15,6 +15,7 @@ import {
   type ChartSpec,
   type ChatScope,
   type DatasetCreate,
+  type EligibilityUpdate,
   type GridIn,
   type Hit,
   type HitListOut,
@@ -32,6 +33,7 @@ import {
   type SearchResult,
   type SearchRun,
   type SearchRunCreate,
+  type SnowballRequest,
 } from './client'
 
 export const PAPERS_POLL_MS = 2000
@@ -57,6 +59,7 @@ const keys = {
     ['workspaces', workspaceId, 'search', 'hits', stage1Status, acquisitionStatus] as const,
   // A prefix of every searchHits key above (whatever the filters), for invalidating them all at once.
   searchHitsRoot: (workspaceId: string) => ['workspaces', workspaceId, 'search', 'hits'] as const,
+  prisma: (workspaceId: string, runs: string) => ['workspaces', workspaceId, 'search', 'prisma', runs] as const,
   // Every dataset query starts with this; a saved grid or a captured number refreshes every list and detail.
   datasets: ['datasets'] as const,
   paperDatasets: (paperId: string) => ['datasets', 'paper', paperId] as const,
@@ -413,7 +416,12 @@ export function useRefreshHits(workspaceId: string) {
  *   `WorkspacePage` keeps mounted alongside HitTable via `forceMount`): changing a hit's status can push it in or
  *   out of a filter's membership, which patching its fields in place can't fix — but a filtered view is always a
  *   small, bounded subset of the pool, so a real refetch there is cheap. */
-function patchHitFields(client: QueryClient, workspaceId: string, hitId: string, fields: Partial<Hit>) {
+function patchMatchingHits(
+  client: QueryClient,
+  workspaceId: string,
+  match: (hit: Hit) => boolean,
+  fields: Partial<Hit>,
+) {
   client.setQueriesData<InfiniteData<HitListOut, string | undefined>>(
     { queryKey: keys.searchHitsRoot(workspaceId) },
     (data) =>
@@ -421,7 +429,7 @@ function patchHitFields(client: QueryClient, workspaceId: string, hitId: string,
         ...data,
         pages: data.pages.map((page) => ({
           ...page,
-          items: page.items.map((item) => (item.id === hitId ? { ...item, ...fields } : item)),
+          items: page.items.map((item) => (match(item) ? { ...item, ...fields } : item)),
         })),
       },
   )
@@ -429,6 +437,15 @@ function patchHitFields(client: QueryClient, workspaceId: string, hitId: string,
     queryKey: keys.searchHitsRoot(workspaceId),
     predicate: (query) => query.queryKey[4] !== 'all' || query.queryKey[5] !== 'all',
   })
+}
+
+function patchHitFields(client: QueryClient, workspaceId: string, hitId: string, fields: Partial<Hit>) {
+  patchMatchingHits(client, workspaceId, (hit) => hit.id === hitId, fields)
+}
+
+/** Whether a cached hit is the one an eligibility update (keyed by paper + run, not hit id) just changed. */
+export function matchesEligibleHit(hit: Hit, paperId: string, runId: string): boolean {
+  return hit.paper_id === paperId && hit.run_id === runId
 }
 
 /** Reviews one hit (the stage-1 triage decision). */
@@ -461,6 +478,44 @@ export function useUploadHitPdf(workspaceId: string) {
   return useMutation({
     mutationFn: ({ hitId, file }: { hitId: string; file: File }) => api.uploadHitPdf(workspaceId, hitId, file),
     onSuccess: (hit) => patchHitFields(client, workspaceId, hit.id, hit),
+  })
+}
+
+/** Sets a paper's stage-2 eligibility for one search run. The response is a full `EligibilityOut`, not a hit, so
+ * this patches its `stage2_status`/`stage2_exclude_reason` onto every cached hit whose `(paper_id, run_id)`
+ * matches `(paper_id, search_run_id)` from the response — never by `hit.id`, which the response doesn't carry.
+ * Same filtered-views-only real invalidate as `patchHitFields`; see `patchMatchingHits`'s docstring above. */
+export function useSetEligibility(workspaceId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ paperId, runId, body }: { paperId: string; runId: string; body: EligibilityUpdate }) =>
+      api.setEligibility(workspaceId, paperId, runId, body),
+    onSuccess: (out) =>
+      patchMatchingHits(client, workspaceId, (hit) => matchesEligibleHit(hit, out.paper_id, out.search_run_id), {
+        stage2_status: out.stage2_status,
+        stage2_exclude_reason: out.stage2_exclude_reason,
+      }),
+  })
+}
+
+/** Runs backward/forward snowballing from a set of seed papers. The response (`new_hits`, `skipped_seeds`,
+ * `errors`) carries no ids of what it created, so there's nothing to patch and nothing safe to invalidate: a
+ * snowball call can run while the Search tab's big unfiltered pool is mounted (`WorkspacePage`'s `forceMount`),
+ * and invalidating `searchHitsRoot` here would re-trigger that pool's full refetch on every click — the exact
+ * storm `patchMatchingHits`'s docstring describes. No `onSuccess`: the counts are surfaced directly from this
+ * mutation's own `.data`/`.isSuccess`/`.isError` by ScreeningTab, the same way `HitTable` already reads
+ * `useImportSearchHits`'s `failed` count from mutation state without any cache patching. */
+export function useSnowball(workspaceId: string) {
+  return useMutation({
+    mutationFn: (body: SnowballRequest) => api.snowball(workspaceId, body),
+  })
+}
+
+/** The PRISMA flow-diagram counts (`runs`: a single run id, or `'all'` to combine every run in the workspace). */
+export function usePrismaExport(workspaceId: string, runs: string) {
+  return useQuery({
+    queryKey: keys.prisma(workspaceId, runs),
+    queryFn: () => api.prismaExport(workspaceId, runs),
   })
 }
 
