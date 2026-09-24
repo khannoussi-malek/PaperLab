@@ -19,7 +19,7 @@ pytestmark = pytest.mark.anyio
 
 # Task 2's cursor convention (task-2-brief.md): 0 for arXiv/CORE/Crossref/S2 (offset-style), 1 for OpenAlex
 # (1-based page number). Starting OpenAlex at 0 would ask its fake for a negative offset and get nothing back.
-START_CURSOR = {"arxiv": 0, "semantic_scholar": 0, "openalex": 1}
+START_CURSOR = {"arxiv": 0, "semantic_scholar": 0, "openalex": 1, "unpaywall": 0}
 
 
 @pytest.fixture
@@ -150,6 +150,30 @@ async def test_search_batch_records_source_error_without_failing_run(session, fa
     ).scalar_one()
     assert cursor.last_error is not None
     assert not cursor.exhausted
+
+
+async def test_search_batch_marks_a_disabled_source_cursor_exhausted(session):
+    """A source whose Providers.client() is None (Unpaywall with no contact_email configured — the
+    fresh-database default) has nothing to fetch. Its cursor must still flip to exhausted immediately, or the
+    worker's `all(c.exhausted for c in cursors)` check can never become true (M30a Task 17 E2E bug: a source
+    stuck at exhausted=False forever turns the worker's paging loop into a busy-loop)."""
+    providers = discovery.Providers(pdf=httpx.AsyncClient())  # every other client left at its None default
+    try:
+        run = await _new_run(session, ["unpaywall"])
+        result = await search_batch(session, providers, run)
+    finally:
+        await providers.pdf.aclose()
+
+    assert result.new_hits == 0
+    cursor = (
+        await session.execute(
+            select(WorkspaceSearchCursor).where(
+                WorkspaceSearchCursor.run_id == run.id, WorkspaceSearchCursor.source == "unpaywall"
+            )
+        )
+    ).scalar_one()
+    assert cursor.exhausted
+    assert cursor.last_error is None  # not an error state — there was nothing to do here
 
 
 @pytest.mark.asyncio

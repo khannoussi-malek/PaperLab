@@ -119,6 +119,12 @@ async def search_batch(session: AsyncSession, providers: Providers, run: Workspa
             continue
         client = providers.client(source)
         if client is None:
+            # Disabled/unconfigured (e.g. Unpaywall with no contact_email — the fresh-database default): nothing
+            # to fetch here, not an error. Mark it exhausted now so the worker's all(c.exhausted ...) check can
+            # still become true once every other source has genuinely exhausted (M30a Task 17 E2E bug).
+            cursor.last_error = None
+            cursor.exhausted = True
+            exhausted.append(source)
             continue
         try:
             raw_items, next_cursor = await _PAGE_FUNCS[source](
