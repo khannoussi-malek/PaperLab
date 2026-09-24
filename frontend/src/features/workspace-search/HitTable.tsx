@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { HitReviewUpdate, SearchRun } from '@/api/client'
-import { useImportSearchHits, useNewHitsAvailable, usePatchSearchHit, useRefreshHits, useSearchHits } from '@/api/queries'
+import {
+  useImportSearchHits,
+  useNewHitsAvailable,
+  usePatchSearchHit,
+  useRefreshHits,
+  useSearchHits,
+  useUploadHitPdf,
+} from '@/api/queries'
 import { Button } from '@/components/ui/button'
 import { HitContextMenu, HitMenu } from './HitMenu'
 import { HitPreview } from './HitPreview'
@@ -20,6 +27,7 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
   const { data, hasNextPage, isFetchingNextPage, fetchNextPage } = useSearchHits(workspaceId)
   const importHits = useImportSearchHits(workspaceId)
   const reviewHit = usePatchSearchHit(workspaceId)
+  const uploadHitPdf = useUploadHitPdf(workspaceId)
   const newHits = useNewHitsAvailable(run)
   const refreshHits = useRefreshHits(workspaceId)
   const parentRef = useRef<HTMLDivElement>(null)
@@ -87,6 +95,11 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
           {reviewHit.error.message}
         </p>
       )}
+      {uploadHitPdf.isError && (
+        <p role="alert" className="px-3 py-1 text-xs text-destructive">
+          {uploadHitPdf.error.message}
+        </p>
+      )}
       <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div ref={parentRef} aria-label="Hit pool" className="min-h-0 overflow-auto">
           <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
@@ -116,7 +129,12 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
         {/* Desktop only: the preview follows hover and focus, which a touch screen doesn't have — same as PaperPreview. */}
         {previewed && (
           <div className="hidden min-h-0 lg:block">
-            <HitPreview hit={previewed} onReview={onReview} />
+            <HitPreview
+              hit={previewed}
+              onReview={onReview}
+              onUpload={(hitId, file) => uploadHitPdf.mutate({ hitId, file })}
+              uploadPending={uploadHitPdf.isPending}
+            />
           </div>
         )}
       </div>
