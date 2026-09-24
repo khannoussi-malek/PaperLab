@@ -1,16 +1,21 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { HitReviewUpdate, SearchRun } from '@/api/client'
 import { useImportSearchHits, useNewHitsAvailable, usePatchSearchHit, useRefreshHits, useSearchHits } from '@/api/queries'
 import { Button } from '@/components/ui/button'
 import { HitContextMenu, HitMenu } from './HitMenu'
+import { HitPreview } from './HitPreview'
 
 const ROW_HEIGHT = 44
+/** Skimming the list with the mouse shouldn't swap the preview for every row it crosses — same delay PaperList
+ * uses for the same reason. */
+const HOVER_PREVIEW_DELAY_MS = 150
 
-/** The hit pool for a search run: a virtualized list (rows can run into the thousands) with stage-1 triage via
- * a right-click menu or a trailing ⋮ button on each row, and a bulk import for hits that already cleared review.
- * `run` is only read here to know whether the worker has found more since the pool was last loaded — the run's
- * own live status is shown elsewhere (SearchTab), unaffected by any of this. */
+/** The hit pool for a search run: a virtualized list (rows can run into the thousands) beside a preview of the
+ * hovered or focused one (title, byline, abstract — same split as the library's PaperList/PaperPreview), stage-1
+ * triage via a right-click menu or a trailing ⋮ button on each row, and a bulk import for hits that already
+ * cleared review. `run` is only read here to know whether the worker has found more since the pool was last
+ * loaded — the run's own live status is shown elsewhere (SearchTab), unaffected by any of this. */
 export function HitTable({ workspaceId, run }: { workspaceId: string; run?: SearchRun }) {
   const { data, hasNextPage, isFetchingNextPage, fetchNextPage } = useSearchHits(workspaceId)
   const importHits = useImportSearchHits(workspaceId)
@@ -18,8 +23,20 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
   const newHits = useNewHitsAvailable(run)
   const refreshHits = useRefreshHits(workspaceId)
   const parentRef = useRef<HTMLDivElement>(null)
+  const hoverTimer = useRef<number | undefined>(undefined)
+  const [previewId, setPreviewId] = useState<string | null>(null)
 
   const rows = data?.pages.flatMap((page) => page.items) ?? []
+  // Falls back to the first loaded row, so the panel is never empty on first paint (mirrors PaperList).
+  const previewed = rows.find((hit) => hit.id === previewId) ?? rows[0]
+
+  useEffect(() => () => window.clearTimeout(hoverTimer.current), [])
+
+  function preview(id: string, immediate: boolean) {
+    window.clearTimeout(hoverTimer.current)
+    if (immediate) setPreviewId(id)
+    else hoverTimer.current = window.setTimeout(() => setPreviewId(id), HOVER_PREVIEW_DELAY_MS)
+  }
 
   const virtualizer = useVirtualizer({
     count: rows.length,
@@ -69,29 +86,39 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
           {reviewHit.error.message}
         </p>
       )}
-      <div ref={parentRef} className="min-h-0 flex-1 overflow-auto">
-        <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
-          {virtualItems.map((virtualRow) => {
-            const hit = rows[virtualRow.index]
-            const onReview = (hitId: string, body: HitReviewUpdate) => reviewHit.mutate({ hitId, body })
-            const byline = [hit.authors?.slice(0, 3).join(', '), hit.year].filter(Boolean).join(' · ')
-            return (
-              <HitContextMenu key={hit.id} hit={hit} onReview={onReview}>
-                <div
-                  className="flex w-full items-center gap-2 border-b px-3 text-sm hover:bg-muted"
-                  style={{ position: 'absolute', top: virtualRow.start, height: virtualRow.size, width: '100%' }}
-                >
-                  <span className="flex-1 truncate">
-                    {hit.title ?? hit.normalized_title}
-                    {byline && <span className="text-muted-foreground"> · {byline}</span>}
-                  </span>
-                  <span className="text-xs text-muted-foreground">{hit.stage1_status ?? 'unreviewed'}</span>
-                  <HitMenu hit={hit} onReview={onReview} />
-                </div>
-              </HitContextMenu>
-            )
-          })}
+      <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(0,1fr)_22rem]">
+        <div ref={parentRef} aria-label="Hit pool" className="min-h-0 overflow-auto">
+          <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
+            {virtualItems.map((virtualRow) => {
+              const hit = rows[virtualRow.index]
+              const onReview = (hitId: string, body: HitReviewUpdate) => reviewHit.mutate({ hitId, body })
+              const byline = [hit.authors?.slice(0, 3).join(', '), hit.year].filter(Boolean).join(' · ')
+              return (
+                <HitContextMenu key={hit.id} hit={hit} onReview={onReview}>
+                  <div
+                    className="flex w-full items-center gap-2 border-b px-3 text-sm hover:bg-muted"
+                    style={{ position: 'absolute', top: virtualRow.start, height: virtualRow.size, width: '100%' }}
+                    onMouseEnter={() => preview(hit.id, false)}
+                    onFocus={() => preview(hit.id, true)}
+                  >
+                    <span className="flex-1 truncate">
+                      {hit.title ?? hit.normalized_title}
+                      {byline && <span className="text-muted-foreground"> · {byline}</span>}
+                    </span>
+                    <span className="text-xs text-muted-foreground">{hit.stage1_status ?? 'unreviewed'}</span>
+                    <HitMenu hit={hit} onReview={onReview} />
+                  </div>
+                </HitContextMenu>
+              )
+            })}
+          </div>
         </div>
+        {/* Desktop only: the preview follows hover and focus, which a touch screen doesn't have — same as PaperPreview. */}
+        {previewed && (
+          <div className="hidden min-h-0 lg:block">
+            <HitPreview hit={previewed} />
+          </div>
+        )}
       </div>
       {isFetchingNextPage && <div className="border-t px-3 py-1 text-xs text-muted-foreground">Loading more…</div>}
     </div>
