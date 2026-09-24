@@ -6,6 +6,8 @@ import { delayedIn, fadeIn } from '@/components/motion'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ManualAcquisitionTab } from '@/features/workspace-search/ManualAcquisitionTab'
+import { PrismaTab } from '@/features/workspace-search/PrismaTab'
+import { ScreeningTab } from '@/features/workspace-search/ScreeningTab'
 import { SearchTab } from '@/features/workspace-search/SearchTab'
 import { workspaceHref, type WorkspaceTab } from '@/lib/route'
 import { cn } from '@/lib/utils'
@@ -74,6 +76,8 @@ export function WorkspacePage({ workspaceId, tab, runId }: { workspaceId: string
             <TabsTrigger value="chat">Chat</TabsTrigger>
             <TabsTrigger value="search">Search</TabsTrigger>
             <TabsTrigger value="acquisition">Manual acquisition</TabsTrigger>
+            <TabsTrigger value="screening">Screening</TabsTrigger>
+            <TabsTrigger value="prisma">PRISMA</TabsTrigger>
           </TabsList>
           <TabsContent value="papers" forceMount className={panel}>
             <WorkspacePapers workspaceId={workspaceId} />
@@ -96,6 +100,15 @@ export function WorkspacePage({ workspaceId, tab, runId }: { workspaceId: string
           </TabsContent>
           <TabsContent value="acquisition" forceMount className={panel}>
             <ManualAcquisitionTab workspaceId={workspaceId} />
+          </TabsContent>
+          {/* ScreeningTab and PrismaTab both root a `flex min-h-0 flex-1 flex-col` layout of their own (like
+              WorkspaceChat/SearchTab above), so they need the same bounded viewport here, not `panel`'s plain
+              overflow-auto. */}
+          <TabsContent value="screening" forceMount className={cn(panel, 'flex flex-col overflow-hidden')}>
+            <ScreeningTab workspaceId={workspaceId} />
+          </TabsContent>
+          <TabsContent value="prisma" forceMount className={cn(panel, 'flex flex-col overflow-hidden')}>
+            <PrismaTab workspaceId={workspaceId} />
           </TabsContent>
         </Tabs>
       )}

@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react'
 import { withViewTransition } from '@/components/motion'
 
 export type ReaderTab = 'notes' | 'chat' | 'data' | 'similar' | 'references'
-export type WorkspaceTab = 'papers' | 'notes' | 'chat' | 'search' | 'acquisition'
+export type WorkspaceTab = 'papers' | 'notes' | 'chat' | 'search' | 'acquisition' | 'screening' | 'prisma'
 /** Settings is one page per section, so a section can be linked to, reloaded and kept in the window's history. */
 export type SettingsSection = 'models' | 'sources' | 'search' | 'desktop' | 'claude'
 export type Rect = [number, number, number, number]
@@ -102,7 +102,10 @@ export function parseRoute(hash: string): Route {
     return {
       name: 'workspace',
       workspaceId: match[2],
-      tab: tab === 'notes' || tab === 'chat' || tab === 'search' || tab === 'acquisition' ? tab : 'papers',
+      tab:
+        tab === 'notes' || tab === 'chat' || tab === 'search' || tab === 'acquisition' || tab === 'screening' || tab === 'prisma'
+          ? tab
+          : 'papers',
       runId: UUID.test(run) ? run : null,
     }
   }
