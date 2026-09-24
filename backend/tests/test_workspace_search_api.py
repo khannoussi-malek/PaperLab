@@ -329,6 +329,7 @@ async def test_list_hits_surfaces_the_linked_external_ref_and_tolerates_none(ses
     ref = ExternalRef(
         title="The Real Title", authors=["Ada Lovelace"], year=1843, venue="Analytical Engine Quarterly",
         doi="10.1234/real", abstract="A study of the Analytical Engine's general applicability.",
+        sources=["arxiv", "openalex"],
     )
     session.add(ref)
     await session.flush()
@@ -353,6 +354,7 @@ async def test_list_hits_surfaces_the_linked_external_ref_and_tolerates_none(ses
     assert linked["venue"] == "Analytical Engine Quarterly"
     assert linked["doi"] == "10.1234/real"
     assert linked["abstract"] == "A study of the Analytical Engine's general applicability."
+    assert linked["sources"] == ["arxiv", "openalex"]
     unlinked = items["no ref one"]
     assert unlinked["title"] is None
     assert unlinked["authors"] is None
@@ -360,6 +362,7 @@ async def test_list_hits_surfaces_the_linked_external_ref_and_tolerates_none(ses
     assert unlinked["venue"] is None
     assert unlinked["doi"] is None
     assert unlinked["abstract"] is None
+    assert unlinked["sources"] == []
 
 
 async def test_list_hits_with_zero_limit_is_422(client):

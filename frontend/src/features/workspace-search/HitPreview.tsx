@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { pageLink } from '@/features/discovery/candidateMeta'
 import { copyText } from '@/lib/clipboard'
 import { cn } from '@/lib/utils'
-import { EXCLUDE_REASONS } from './hitReview'
+import { EXCLUDE_REASONS, sourceLabel } from './hitReview'
 
 type ExcludeReason = (typeof EXCLUDE_REASONS)[number]
 
@@ -65,6 +65,9 @@ export function HitPreview({ hit, onReview, onAddPdf, addPdfPending, onUpload, u
     >
       <h2 className="font-heading text-lg leading-snug font-semibold wrap-anywhere">{title}</h2>
       {byline && <p className="text-sm text-muted-foreground">{byline}</p>}
+      {hit.sources.length > 0 && (
+        <p className="text-xs text-muted-foreground">Found via {hit.sources.map(sourceLabel).join(', ')}</p>
+      )}
       {hit.abstract ? (
         <p className="mt-2 text-sm whitespace-pre-line">{hit.abstract}</p>
       ) : (

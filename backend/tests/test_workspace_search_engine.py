@@ -631,6 +631,31 @@ async def test_find_or_create_external_ref_prefers_the_doi_match_over_a_weaker_i
     assert ref_a.pdf_urls == candidate.pdf_urls  # ref_a's own DOI matches the candidate's, so this is safe
 
 
+async def test_find_or_create_external_ref_sets_sources_on_creation(session):
+    candidate = Candidate(title="New paper", doi="10.5555/paperlab-sources-a", sources=("arxiv", "openalex"))
+
+    ref = await _find_or_create_external_ref(session, candidate)
+    await session.commit()
+
+    assert ref.sources == ["arxiv", "openalex"]
+
+
+async def test_find_or_create_external_ref_unions_sources_on_a_later_rediscovery(session):
+    """A paper first found via arxiv, then later rediscovered (a new search run, or snowball) via a source that
+    hadn't found it before — both should end up recorded, not just whichever created the row, and never
+    duplicated if the same source finds it again."""
+    existing = ExternalRef(title="Existing paper", doi="10.5555/paperlab-sources-b", sources=["arxiv"])
+    session.add(existing)
+    await session.commit()
+
+    candidate = Candidate(title="Existing paper", doi="10.5555/paperlab-sources-b", sources=("openalex", "arxiv"))
+    ref = await _find_or_create_external_ref(session, candidate)
+    await session.commit()
+
+    assert ref.id == existing.id
+    assert ref.sources == ["arxiv", "openalex"]  # existing order kept, "openalex" appended once, "arxiv" not duplicated
+
+
 async def test_insert_hit_is_race_safe_under_a_duplicate_attempt(session):
     """Proxy for two search_batch calls racing on the same (workspace_id, external_ref_id) after a
     stop-then-immediate-restart (enqueue_job has no dedup job id): this suite's per-test session is one

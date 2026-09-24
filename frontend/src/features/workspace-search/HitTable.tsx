@@ -14,6 +14,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { HitContextMenu, HitMenu } from './HitMenu'
+import { sourceLabel } from './hitReview'
 import { HitPreview } from './HitPreview'
 
 const ROW_HEIGHT = 44
@@ -195,6 +196,11 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
                       {hit.title ?? hit.normalized_title}
                       {byline && <span className="text-muted-foreground"> · {byline}</span>}
                     </span>
+                    {hit.sources[0] && (
+                      <span className="shrink-0 rounded-full border px-1.5 py-0.5 text-xs text-muted-foreground">
+                        {sourceLabel(hit.sources[0])}
+                      </span>
+                    )}
                     <span className="text-xs text-muted-foreground">{hit.stage1_status ?? 'unreviewed'}</span>
                     <HitMenu hit={hit} onReview={onReview} />
                   </div>
