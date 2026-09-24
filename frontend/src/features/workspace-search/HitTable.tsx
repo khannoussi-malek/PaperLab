@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { HitReviewUpdate, SearchRun } from '@/api/client'
 import {
+  totalRawFound,
   useImportAllHits,
   useImportSearchHits,
   useNewHitsAvailable,
@@ -25,9 +26,10 @@ const ROW_HEIGHT = 44
  * is via a right-click menu or a trailing ⋮ button on each row, and there are two ways to get a PDF: one hit at a
  * time from the preview panel's "Add PDF" (fetching a PDF starts ingestion — chunking, embedding — for that paper,
  * so this is the cheap default), or "Import all with PDF in this filter" when the user has decided that cost is
- * worth paying for everything currently in view at once. `run` is only read here to know whether the worker has
- * found more since the pool was last loaded — the run's own live status is shown elsewhere (SearchTab),
- * unaffected by any of this. */
+ * worth paying for everything currently in view at once. `run` is read for two things: whether the worker has
+ * found more since the pool was last loaded (the run's own live status is shown elsewhere, SearchTab, unaffected
+ * by any of this), and the live "N found so far" count — the raw, pre-dedup total every source has turned up
+ * (`totalRawFound`), distinct from "in pool," which is the de-duplicated count of what's actually been loaded. */
 export function HitTable({ workspaceId, run }: { workspaceId: string; run?: SearchRun }) {
   const { data, hasNextPage, isFetchingNextPage, fetchNextPage } = useSearchHits(workspaceId)
   const importHits = useImportSearchHits(workspaceId)
@@ -41,6 +43,7 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
   const [filterText, setFilterText] = useState('')
 
   const rows = data?.pages.flatMap((page) => page.items) ?? []
+  const rawFound = totalRawFound(run)
   const filter = filterText.trim().toLowerCase()
   const filteredRows = filter ? rows.filter((hit) => (hit.title ?? hit.normalized_title).toLowerCase().includes(filter)) : rows
   // Falls back to the first loaded row, so the panel is never empty on first paint (mirrors PaperList) — and to
@@ -113,6 +116,7 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
           />
         </label>
         <span className="shrink-0 text-muted-foreground">
+          {rawFound !== undefined && `${rawFound} found so far · `}
           {filter ? `${filteredRows.length} of ${rows.length} in pool` : `${rows.length} in pool`}
         </span>
         <Button type="button" size="sm" disabled={importAllHits.isPending} onClick={() => importAllHits.mutate()}>

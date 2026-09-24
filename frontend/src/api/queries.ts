@@ -364,6 +364,14 @@ export const useSearchHits = (workspaceId: string, stage1Status?: string, acquis
     getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
   })
 
+/** Every source's raw, pre-dedup count of what it's found so far, summed (`run.stats_json.per_source_raw_count`)
+ * — "how many papers we found," before removing the ones more than one source turned up. `undefined` before the
+ * run has reported any progress yet. */
+export function totalRawFound(run: SearchRun | undefined): number | undefined {
+  const rawCounts = run?.stats_json?.per_source_raw_count as Record<string, number> | undefined
+  return rawCounts ? Object.values(rawCounts).reduce((sum, count) => sum + count, 0) : undefined
+}
+
 /** Signals that the hit pool is worth refreshing, without refreshing it automatically.
  *
  * An earlier version auto-invalidated the pool on every bit of progress (I1). That doesn't scale: invalidating
@@ -375,12 +383,12 @@ export const useSearchHits = (workspaceId: string, stage1Status?: string, acquis
  * (from the already-polled `stats_json`, no extra request) and let an explicit user action (`acknowledge`) pay
  * the one-time cost of a real refresh, exactly once, on demand.
  *
- * Keyed off the *cumulative* `stats_json.per_source_raw_count` (summed across sources), not `last_batch_new_hits`
- * — the worker overwrites `last_batch_new_hits` fresh every batch (workers/workspace_search.py), so it's "how
- * many hits did *this* batch add," not a running total, and two different batches can report the same count. */
+ * Keyed off the *cumulative* `stats_json.per_source_raw_count` (summed across sources, via `totalRawFound`), not
+ * `last_batch_new_hits` — the worker overwrites `last_batch_new_hits` fresh every batch
+ * (workers/workspace_search.py), so it's "how many hits did *this* batch add," not a running total, and two
+ * different batches can report the same count. */
 export function useNewHitsAvailable(run: SearchRun | undefined) {
-  const rawCounts = run?.stats_json?.per_source_raw_count as Record<string, number> | undefined
-  const rawCountTotal = rawCounts ? Object.values(rawCounts).reduce((sum, count) => sum + count, 0) : undefined
+  const rawCountTotal = totalRawFound(run)
   const baseline = useRef<number | undefined>(undefined)
   const [available, setAvailable] = useState(false)
 

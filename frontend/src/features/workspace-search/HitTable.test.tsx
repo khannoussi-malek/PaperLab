@@ -405,6 +405,27 @@ test('at the bottom with no known next page, real new progress triggers exactly 
   expect(api.listSearchHits).toHaveBeenCalledTimes(2)
 })
 
+test('shows the live raw found count from the run, separate from the deduped "in pool" count', async () => {
+  const run = {
+    id: 'run-1', workspace_id: 'ws-1', query_text: 'q', filters_json: {}, sources_json: ['arxiv', 'openalex'],
+    status: 'running', started_at: '2026-09-24T00:00:00Z', stopped_at: null,
+    stats_json: { per_source_raw_count: { arxiv: 80, openalex: 47 } },
+  }
+
+  renderWithClient(<HitTable workspaceId="ws-1" run={run as never} />)
+  await pool().findByText('a paper about llms')
+
+  expect(screen.getByText(/127 found so far/)).toBeInTheDocument()
+  expect(screen.getByText(/1 in pool/)).toBeInTheDocument()
+})
+
+test('with no run yet, only the "in pool" count shows — no "found so far" claim with nothing to back it', async () => {
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  await pool().findByText('a paper about llms')
+
+  expect(screen.queryByText(/found so far/)).not.toBeInTheDocument()
+})
+
 test('a failed import shows an error message', async () => {
   vi.spyOn(api, 'importSearchHits').mockRejectedValue(new Error('Import failed'))
   renderWithClient(<HitTable workspaceId="ws-1" />)
