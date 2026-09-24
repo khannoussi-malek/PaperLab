@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import {
   QueryClient,
   keepPreviousData,
@@ -368,13 +368,26 @@ export const useSearchHits = (workspaceId: string, stage1Status?: string, acquis
  * grows across a run, so its sum is a safe monotonic signal. `run?.status` is also a dependency so the run's
  * transition to a terminal state (exhausted/stopped/failed) always forces one last refetch, even in the
  * edge case where the raw-count sum didn't change between the last two polls. */
+// Invalidating an infinite query re-fetches every already-loaded page, not just new data. A run can report
+// progress every few seconds for many minutes, so doing that on every tick floods the API once the user has
+// scrolled past a handful of pages (observed: thousands of requests/10min on a long-running real search).
+// Throttled to at most once per this window; a terminal status transition always bypasses the throttle so the
+// run's last batch is never missed.
+const HITS_REFETCH_THROTTLE_MS = 20_000
+
 export function useRefetchHitsOnProgress(workspaceId: string, run: SearchRun | undefined) {
   const client = useQueryClient()
   const rawCounts = run?.stats_json?.per_source_raw_count as Record<string, number> | undefined
   const rawCountTotal = rawCounts ? Object.values(rawCounts).reduce((sum, count) => sum + count, 0) : undefined
   const status = run?.status
+  const lastInvalidatedAt = useRef(-Infinity)
   useEffect(() => {
-    if (rawCountTotal !== undefined) client.invalidateQueries({ queryKey: keys.searchHitsRoot(workspaceId) })
+    if (rawCountTotal === undefined) return
+    const isTerminal = status !== undefined && status !== 'running'
+    if (isTerminal || Date.now() - lastInvalidatedAt.current >= HITS_REFETCH_THROTTLE_MS) {
+      lastInvalidatedAt.current = Date.now()
+      client.invalidateQueries({ queryKey: keys.searchHitsRoot(workspaceId) })
+    }
   }, [client, workspaceId, rawCountTotal, status])
 }
 
