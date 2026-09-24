@@ -32,7 +32,7 @@ async def worker(session, monkeypatch):
     return {"transport": discovery_fake.transport()}
 
 
-async def _new_run(session, status: str) -> WorkspaceSearchRun:
+async def _new_run(session, status: str, sources: list[str] | None = None) -> WorkspaceSearchRun:
     workspace = Workspace(name=f"Worker test {uuid.uuid4().hex[:8]}")
     session.add(workspace)
     await session.flush()
@@ -41,7 +41,7 @@ async def _new_run(session, status: str) -> WorkspaceSearchRun:
         query_text="bert",
         filters_json={},
         query_overrides_json={},
-        sources_json=["arxiv"],
+        sources_json=sources or ["arxiv"],
         status=status,
         started_at=datetime.now(timezone.utc),
         stats_json={},
@@ -129,6 +129,40 @@ async def test_worker_stops_mid_loop_on_a_concurrent_status_change(session, work
         await session.execute(select(WorkspaceSearchCursor).where(WorkspaceSearchCursor.run_id == run.id))
     ).scalar_one()
     assert cursor.exhausted is False  # exited early — the source never actually finished paging
+
+
+async def test_worker_exhausts_with_one_disabled_source(session, worker, monkeypatch):
+    """arxiv pages normally against the fake and exhausts after one page (fixture's 3 items, page size 20).
+    unpaywall has no contact_email configured (the `worker` fixture clears paper_sources so SourceSettings()'s
+    fresh-database default applies), so its Providers.client() is None. Before the fix, an unconfigured source's
+    cursor never flips to exhausted, so `all(c.exhausted for c in cursors)` never becomes true and the loop spins
+    forever. A SAFETY_CAP force-stops the run so a regression fails this test instead of hanging it."""
+    SAFETY_CAP = 5
+    real_search_batch = worker_module.search_batch
+    calls = 0
+
+    async def capped_search_batch(session_arg, providers, run_arg):
+        nonlocal calls
+        calls += 1
+        result = await real_search_batch(session_arg, providers, run_arg)
+        if calls >= SAFETY_CAP:
+            await session_arg.execute(
+                update(WorkspaceSearchRun).where(WorkspaceSearchRun.id == run_arg.id).values(status="stopped")
+            )
+        return result
+
+    monkeypatch.setattr(worker_module, "search_batch", capped_search_batch)
+
+    run = await _new_run(session, "running", sources=["arxiv", "unpaywall"])
+    session.add(WorkspaceSearchCursor(run_id=run.id, source="arxiv", cursor_json={"value": 0}))
+    session.add(WorkspaceSearchCursor(run_id=run.id, source="unpaywall", cursor_json={"value": 0}))
+    await session.commit()
+
+    await worker_module.run_workspace_search(worker, str(run.id))
+
+    assert calls < SAFETY_CAP  # exhausted itself well before the safety cap had to step in
+    reloaded = await session.get(WorkspaceSearchRun, run.id, populate_existing=True)
+    assert reloaded.status == "exhausted"  # not "stopped" — the safety cap never fired
 
 
 async def test_worker_does_nothing_for_a_run_that_is_not_running(session, worker):
