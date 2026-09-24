@@ -88,6 +88,14 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
           {importHits.error.message}
         </p>
       )}
+      {/* A "failed" import is a resolved response (see useImportSearchHits), not a rejected mutation — no free
+          copy was found automatically, which isn't an error so much as a cue to use the manual options already
+          in the preview panel. */}
+      {importHits.isSuccess && importHits.data.failed > 0 && (
+        <p role="status" className="px-3 py-1 text-xs text-muted-foreground">
+          No PDF found automatically for that paper — try the options below, or upload one.
+        </p>
+      )}
       {reviewHit.isError && (
         <p role="alert" className="px-3 py-1 text-xs text-destructive">
           {reviewHit.error.message}
