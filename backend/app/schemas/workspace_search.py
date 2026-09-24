@@ -120,7 +120,9 @@ class ImportHitsOut(BaseModel):
 
 
 class SnowballRequest(BaseModel):
-    seed_paper_ids: list[uuid.UUID]
+    # An empty list has no seed to hop from, so it would produce a run with zero results and nothing recorded —
+    # reject it instead (same "reject rather than silently do nothing" convention as SearchRunCreate.sources).
+    seed_paper_ids: list[uuid.UUID] = Field(min_length=1)
     backward: bool = True
     forward: bool = True
 
