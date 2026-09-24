@@ -59,7 +59,10 @@ const keys = {
     ['workspaces', workspaceId, 'search', 'hits', stage1Status, acquisitionStatus] as const,
   // A prefix of every searchHits key above (whatever the filters), for invalidating them all at once.
   searchHitsRoot: (workspaceId: string) => ['workspaces', workspaceId, 'search', 'hits'] as const,
-  prisma: (workspaceId: string, runs: string) => ['workspaces', workspaceId, 'search', 'prisma', runs] as const,
+  // A prefix of every usePrismaExport key (whatever `runs`) — small and cheap to invalidate wholesale, unlike
+  // searchHitsRoot's multi-thousand-row pool above.
+  prismaRoot: (workspaceId: string) => ['workspaces', workspaceId, 'search', 'prisma'] as const,
+  prisma: (workspaceId: string, runs: string) => [...keys.prismaRoot(workspaceId), runs] as const,
   // Every dataset query starts with this; a saved grid or a captured number refreshes every list and detail.
   datasets: ['datasets'] as const,
   paperDatasets: (paperId: string) => ['datasets', 'paper', paperId] as const,
@@ -415,7 +418,11 @@ export function useRefreshHits(workspaceId: string) {
  * - Actually re-fetch any *filtered* view (e.g. ManualAcquisitionTab's `acquisition_status: 'failed'` list, which
  *   `WorkspacePage` keeps mounted alongside HitTable via `forceMount`): changing a hit's status can push it in or
  *   out of a filter's membership, which patching its fields in place can't fix — but a filtered view is always a
- *   small, bounded subset of the pool, so a real refetch there is cheap. */
+ *   small, bounded subset of the pool, so a real refetch there is cheap.
+ * - Also invalidate `prismaRoot`: review/import/upload/eligibility can all shift the PRISMA funnel's counts, and
+ *   PrismaTab stays mounted forever (`WorkspacePage`'s `forceMount`), so its export query never refetches on its
+ *   own without this. `prismaRoot`'s pool is tiny (a handful of runs), unlike `searchHitsRoot` above, so a
+ *   wholesale invalidate here needs no predicate. */
 function patchMatchingHits(
   client: QueryClient,
   workspaceId: string,
@@ -437,6 +444,7 @@ function patchMatchingHits(
     queryKey: keys.searchHitsRoot(workspaceId),
     predicate: (query) => query.queryKey[4] !== 'all' || query.queryKey[5] !== 'all',
   })
+  client.invalidateQueries({ queryKey: keys.prismaRoot(workspaceId) })
 }
 
 function patchHitFields(client: QueryClient, workspaceId: string, hitId: string, fields: Partial<Hit>) {
@@ -499,15 +507,20 @@ export function useSetEligibility(workspaceId: string) {
 }
 
 /** Runs backward/forward snowballing from a set of seed papers. The response (`new_hits`, `skipped_seeds`,
- * `errors`) carries no ids of what it created, so there's nothing to patch and nothing safe to invalidate: a
- * snowball call can run while the Search tab's big unfiltered pool is mounted (`WorkspacePage`'s `forceMount`),
- * and invalidating `searchHitsRoot` here would re-trigger that pool's full refetch on every click — the exact
- * storm `patchMatchingHits`'s docstring describes. No `onSuccess`: the counts are surfaced directly from this
- * mutation's own `.data`/`.isSuccess`/`.isError` by ScreeningTab, the same way `HitTable` already reads
- * `useImportSearchHits`'s `failed` count from mutation state without any cache patching. */
+ * `errors`) carries no ids of what it created, so there's nothing to patch — the counts are surfaced directly
+ * from this mutation's own `.data`/`.isSuccess`/`.isError` by ScreeningTab, the same way `HitTable` already
+ * reads `useImportSearchHits`'s `failed` count from mutation state without any cache patching.
+ *
+ * `onSuccess` invalidates only `prismaRoot`: a snowballed hit can shift the PRISMA funnel's counts, and
+ * PrismaTab stays mounted forever (`WorkspacePage`'s `forceMount`), so its export query never refetches on its
+ * own without this. It does NOT touch `searchHitsRoot` — a snowball call can run while the Search tab's big
+ * unfiltered pool is mounted too, and invalidating that here would re-trigger its full refetch on every click,
+ * the exact storm `patchMatchingHits`'s docstring describes. */
 export function useSnowball(workspaceId: string) {
+  const client = useQueryClient()
   return useMutation({
     mutationFn: (body: SnowballRequest) => api.snowball(workspaceId, body),
+    onSuccess: () => client.invalidateQueries({ queryKey: keys.prismaRoot(workspaceId) }),
   })
 }
 

@@ -1,6 +1,23 @@
-import { describe, expect, it } from 'vitest'
-import type { Hit, Paper, SearchRun } from './client'
-import { PAPERS_POLL_MS, matchesEligibleHit, papersPollInterval, searchRunPollInterval } from './queries'
+// @vitest-environment jsdom
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { renderHook, waitFor } from '@testing-library/react'
+import { createElement, type ReactNode } from 'react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { api, type Hit, type Paper, type SearchRun } from './client'
+import {
+  PAPERS_POLL_MS,
+  matchesEligibleHit,
+  papersPollInterval,
+  searchRunPollInterval,
+  useSetEligibility,
+  useSnowball,
+} from './queries'
+
+const prismaRootKey = (workspaceId: string) => ['workspaces', workspaceId, 'search', 'prisma']
+
+function withQueryClient(client: QueryClient) {
+  return ({ children }: { children: ReactNode }) => createElement(QueryClientProvider, { client }, children)
+}
 
 const paper = (status: string) => ({ status }) as Paper
 const run = (status: string) => ({ status }) as SearchRun
@@ -43,5 +60,44 @@ describe('matchesEligibleHit', () => {
 
   it('never matches a hit with no imported paper (paper_id null)', () => {
     expect(matchesEligibleHit(hit(null, 'run-1'), 'paper-1', 'run-1')).toBe(false)
+  })
+})
+
+// Controller ruling (Task 10): PrismaTab stays mounted forever (WorkspacePage's forceMount), so its
+// usePrismaExport query never refetches on its own once data changes underneath it. These prove the fix
+// targets only the small prisma cache — never `searchHitsRoot`'s multi-thousand-row unfiltered pool, which is
+// the exact request-storm `patchMatchingHits`'s own docstring warns against re-triggering wholesale.
+describe('prisma cache invalidation', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  it('useSetEligibility (routed through patchMatchingHits) invalidates the prisma root', async () => {
+    vi.spyOn(api, 'setEligibility').mockResolvedValue({
+      paper_id: 'p1',
+      search_run_id: 'run-1',
+      stage2_status: 'include',
+      stage2_exclude_reason: null,
+      assessed_at: '2026-09-24T00:00:00Z',
+    })
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
+
+    const { result } = renderHook(() => useSetEligibility('ws-1'), { wrapper: withQueryClient(client) })
+    result.current.mutate({ paperId: 'p1', runId: 'run-1', body: { status: 'include' } })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({ queryKey: prismaRootKey('ws-1') }))
+  })
+
+  it('useSnowball invalidates only the prisma root, never searchHitsRoot wholesale', async () => {
+    vi.spyOn(api, 'snowball').mockResolvedValue({ new_hits: 2, skipped_seeds: [], errors: {} })
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
+
+    const { result } = renderHook(() => useSnowball('ws-1'), { wrapper: withQueryClient(client) })
+    result.current.mutate({ seed_paper_ids: ['p1'], backward: true, forward: true })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    expect(invalidateSpy).toHaveBeenCalledTimes(1)
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: prismaRootKey('ws-1') })
   })
 })
