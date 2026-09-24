@@ -24,13 +24,23 @@ function hasPdfOrAbstract(hit: Hit): boolean {
   return hit.acquisition_status === 'imported' || hit.acquisition_status === 'manual' || Boolean(hit.abstract)
 }
 
+/** Matches the filter box against title and abstract — whichever provider supplied it, a search term can turn up
+ * in either, and a title-only match misses a hit whose title doesn't mention it but whose abstract does. */
+function matchesFilter(hit: Hit, filter: string): boolean {
+  const title = (hit.title ?? hit.normalized_title).toLowerCase()
+  const abstract = hit.abstract?.toLowerCase() ?? ''
+  return title.includes(filter) || abstract.includes(filter)
+}
+
 /** The hit pool for a search run: a virtualized list (rows can run into the thousands) beside a preview of the
  * selected one (title, byline, abstract — same split as the library's PaperList/PaperPreview). Rows with an
  * abstract to read or a PDF already in the corpus sort first (`hasPdfOrAbstract`) — those are the ones a reader
  * can actually judge; a bare title with neither is the hardest to screen. Selection moves by clicking a row or
  * with the ↑/↓ arrow keys (from the row list or the filter box) — not hover, so skimming the list with the mouse
- * doesn't fight with reading the panel. A filter box narrows the already-loaded rows by title client-side (no new
- * request — see `useSearchHits`, still the full, unfiltered query underneath); stage-1 triage
+ * doesn't fight with reading the panel. A filter box narrows the already-loaded rows by title OR abstract
+ * (`matchesFilter`) client-side (no new request — see `useSearchHits`, still the full, unfiltered query
+ * underneath) — whichever provider supplied the abstract, a term can turn up there even when the title doesn't
+ * mention it. Stage-1 triage
  * is via a right-click menu or a trailing ⋮ button on each row, and there are two ways to get a PDF: one hit at a
  * time from the preview panel's "Add PDF" (fetching a PDF starts ingestion — chunking, embedding — for that paper,
  * so this is the cheap default), or "Import all with PDF in this filter" when the user has decided that cost is
@@ -57,7 +67,7 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
   const rows = data?.pages.flatMap((page) => page.items) ?? []
   const rawFound = totalRawFound(run)
   const filter = filterText.trim().toLowerCase()
-  const filteredRows = filter ? rows.filter((hit) => (hit.title ?? hit.normalized_title).toLowerCase().includes(filter)) : rows
+  const filteredRows = filter ? rows.filter((hit) => matchesFilter(hit, filter)) : rows
   // A hit with an abstract to read or a PDF already in the corpus is the one worth looking at first — a bare
   // title with neither is the hardest to judge relevance from. Stable sort (native since ES2019), so hits within
   // each group keep their existing (first_seen_at, id) order from the server.
@@ -128,7 +138,7 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
             value={filterText}
             onChange={(event) => setFilterText(event.target.value)}
             onKeyDown={onListKeyDown}
-            placeholder="Search by title…"
+            placeholder="Search by title or abstract…"
             aria-label="Search hits"
             className="h-8 w-full max-w-xs rounded-lg border bg-background px-2 text-sm"
           />
