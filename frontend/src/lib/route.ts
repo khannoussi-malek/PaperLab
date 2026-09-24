@@ -17,7 +17,9 @@ export type ReaderTarget =
 export type Route =
   | { name: 'library' }
   | { name: 'reader'; paperId: string; tab: ReaderTab; target: ReaderTarget }
-  | { name: 'workspace'; workspaceId: string; tab: WorkspaceTab }
+  // `runId` is the active search run, round-tripped through the URL (I1) so a page reload doesn't lose track of
+  // it — null when there's none, same convention as `target` above.
+  | { name: 'workspace'; workspaceId: string; tab: WorkspaceTab; runId: string | null }
   | { name: 'charts' }
   | { name: 'chart'; chartId: string }
   | { name: 'chart-builder'; chartId: string | null; datasetId: string | null }
@@ -96,7 +98,13 @@ export function parseRoute(hash: string): Route {
   const params = new URLSearchParams(match[3])
   const tab = params.get('tab')
   if (match[1] === 'workspaces') {
-    return { name: 'workspace', workspaceId: match[2], tab: tab === 'notes' || tab === 'chat' || tab === 'search' || tab === 'acquisition' ? tab : 'papers' }
+    const run = params.get('run') ?? ''
+    return {
+      name: 'workspace',
+      workspaceId: match[2],
+      tab: tab === 'notes' || tab === 'chat' || tab === 'search' || tab === 'acquisition' ? tab : 'papers',
+      runId: UUID.test(run) ? run : null,
+    }
   }
   const readerTab = tab === 'chat' || tab === 'data' || tab === 'similar' || tab === 'references' ? tab : 'notes'
   return { name: 'reader', paperId: match[2], tab: readerTab, target: readerTarget(params) }
@@ -115,8 +123,14 @@ export const noteHref = (paperId: string, noteId: string) => `#/papers/${paperId
 export const regionHref = (paperId: string, page: number, rects: Rect[]) =>
   `#/papers/${paperId}?tab=data&page=${page}&rects=${rects.map((r) => r.join(',')).join(';')}`
 
-export const workspaceHref = (workspaceId: string, tab: WorkspaceTab = 'papers') =>
-  tab === 'papers' ? `#/workspaces/${workspaceId}` : `#/workspaces/${workspaceId}?tab=${tab}`
+/** `runId` round-trips the active search run through the URL (I1); omit it (or pass null) when there's none. */
+export const workspaceHref = (workspaceId: string, tab: WorkspaceTab = 'papers', runId?: string | null) => {
+  const params = new URLSearchParams()
+  if (tab !== 'papers') params.set('tab', tab)
+  if (runId) params.set('run', runId)
+  const query = params.toString()
+  return query ? `#/workspaces/${workspaceId}?${query}` : `#/workspaces/${workspaceId}`
+}
 
 export const settingsHref = SETTINGS_HASH
 export const settingsSectionHref = (section: SettingsSection) => `${SETTINGS_HASH}/${section}`

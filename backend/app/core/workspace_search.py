@@ -322,6 +322,25 @@ def _encode_cursor(first_seen_at: datetime, hit_id: uuid.UUID) -> str:
     return base64.urlsafe_b64encode(json.dumps([first_seen_at.isoformat(), str(hit_id)]).encode()).decode()
 
 
+_HIT_COLUMNS = [column.name for column in WorkspaceSearchHit.__table__.columns]
+
+
+def _hit_out_dict(hit: WorkspaceSearchHit, ref: ExternalRef | None) -> dict:
+    """A hit's own columns plus its linked ExternalRef's title/authors/year/venue/doi, merged into one dict for
+    HitOut (I7). This codebase's models never use relationship() (a manual join/lookup is the convention), so the
+    caller passes in whichever `ref` it already has — a join row here, an explicit session.get elsewhere — and
+    this just does the merge, once, the same way for all three HitOut-producing call sites below."""
+    data = {name: getattr(hit, name) for name in _HIT_COLUMNS}
+    data.update(
+        title=ref.title if ref else None,
+        authors=ref.authors if ref else None,
+        year=ref.year if ref else None,
+        venue=ref.venue if ref else None,
+        doi=ref.doi if ref else None,
+    )
+    return data
+
+
 def _decode_cursor(cursor: str) -> tuple[datetime, uuid.UUID]:
     """Raises InvalidInput for any malformed cursor — bad base64/UTF-8, bad JSON, wrong shape, or a
     seen_at/hit_id that don't parse as a datetime/UUID — so a tampered `after` value is a clean 422."""
@@ -335,11 +354,18 @@ def _decode_cursor(cursor: str) -> tuple[datetime, uuid.UUID]:
 async def list_hits(
     session: AsyncSession, workspace_id, limit: int = 50, after: str | None = None,
     stage1_status: str | None = None, acquisition_status: str | None = None,
-) -> tuple[list[WorkspaceSearchHit], str | None]:
+) -> tuple[list[dict], str | None]:
     """Keyset-paginated hit listing, ordered by (first_seen_at, id) so the cursor is stable even when several
     hits share a first_seen_at timestamp. `tuple_()` on both sides makes SQLAlchemy emit a real SQL row-value
-    comparison (`WHERE (first_seen_at, id) > (:seen_at, :id)`) instead of a no-op Python tuple comparison."""
-    query = select(WorkspaceSearchHit).where(WorkspaceSearchHit.workspace_id == workspace_id)
+    comparison (`WHERE (first_seen_at, id) > (:seen_at, :id)`) instead of a no-op Python tuple comparison.
+
+    Outer-joins ExternalRef (I7) since external_ref_id is nullable — a hit with no linked ref still comes back,
+    with title/authors/year/venue/doi all None via `_hit_out_dict`."""
+    query = (
+        select(WorkspaceSearchHit, ExternalRef)
+        .join(ExternalRef, WorkspaceSearchHit.external_ref_id == ExternalRef.id, isouter=True)
+        .where(WorkspaceSearchHit.workspace_id == workspace_id)
+    )
     if stage1_status:
         query = query.where(WorkspaceSearchHit.stage1_status == stage1_status)
     if acquisition_status:
@@ -350,12 +376,13 @@ async def list_hits(
             tuple_(WorkspaceSearchHit.first_seen_at, WorkspaceSearchHit.id) > tuple_(seen_at, hit_id)
         )
     query = query.order_by(WorkspaceSearchHit.first_seen_at, WorkspaceSearchHit.id).limit(limit)
-    hits = (await session.execute(query)).scalars().all()
-    next_cursor = _encode_cursor(hits[-1].first_seen_at, hits[-1].id) if len(hits) == limit else None
-    return hits, next_cursor
+    rows = (await session.execute(query)).all()
+    items = [_hit_out_dict(hit, ref) for hit, ref in rows]
+    next_cursor = _encode_cursor(rows[-1][0].first_seen_at, rows[-1][0].id) if len(rows) == limit else None
+    return items, next_cursor
 
 
-async def review_hit(session: AsyncSession, hit_id, workspace_id, update: "HitReviewUpdate") -> WorkspaceSearchHit:
+async def review_hit(session: AsyncSession, hit_id, workspace_id, update: "HitReviewUpdate") -> dict:
     """Stage-1 screening update for one hit. Scoped to workspace_id (same ownership rule as get_run/stop_run) so a
     hit_id guessed or leaked from another workspace can't be patched through this route."""
     hit = await session.get(WorkspaceSearchHit, hit_id)
@@ -374,7 +401,8 @@ async def review_hit(session: AsyncSession, hit_id, workspace_id, update: "HitRe
     for field_name, value in update.model_dump(exclude_unset=True).items():
         setattr(hit, field_name, value)
     await session.commit()
-    return hit
+    ref = await session.get(ExternalRef, hit.external_ref_id) if hit.external_ref_id else None
+    return _hit_out_dict(hit, ref)
 
 
 async def bulk_review_hits(
@@ -472,7 +500,7 @@ async def import_hits(
 
 async def upload_hit_pdf(
     session: AsyncSession, workspace_id: uuid.UUID, hit_id: uuid.UUID, filename: str | None, content: bytes
-) -> tuple[WorkspaceSearchHit, bool]:
+) -> tuple[dict, bool]:
     """Manual acquisition (spec Task 10) for a hit with no free PDF: the user supplies the file directly instead of
     `import_hits` finding one. Same ownership scoping and already-imported handling as `import_hits` above — a
     hit whose ExternalRef.imported_as is already set gets the existing paper attached, no new paper, no re-enqueue.
@@ -493,7 +521,7 @@ async def upload_hit_pdf(
         hit.acquisition_status = "manual"
         hit.paper_id = ref.imported_as
         await session.commit()
-        return hit, False
+        return _hit_out_dict(hit, ref), False
 
     paper = await papers.create_paper(
         session, filename or f"{hit.normalized_title}.pdf", content, settings.pdf_dir,
@@ -506,4 +534,4 @@ async def upload_hit_pdf(
     hit.acquisition_status = "manual"
     hit.paper_id = paper.id
     await session.commit()
-    return hit, True
+    return _hit_out_dict(hit, ref), True

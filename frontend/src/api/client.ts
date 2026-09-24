@@ -67,6 +67,9 @@ export type LibraryGraph = components['schemas']['GraphOut']
 export type PaperLinkOut = components['schemas']['LinkOut']
 export type SearchRun = components['schemas']['SearchRunOut']
 export type SearchRunCreate = components['schemas']['SearchRunCreate']
+// The five sources search_batch actually fans out to (backend's SearchSource Literal) — unlike PaperSourceId,
+// never includes 'unpaywall', which has no search/discovery role (spec §6).
+export type SearchSource = SearchRunCreate['sources'][number]
 export type Hit = components['schemas']['HitOut']
 export type HitListOut = components['schemas']['HitListOut']
 export type HitReviewUpdate = components['schemas']['HitReviewUpdate']

@@ -18,11 +18,16 @@ import { countsLine } from './workspaceMeta'
 // like the reader's panels. `text-base` undoes TabsContent's `text-sm`.
 const panel = cn('min-h-0 flex-1 overflow-auto text-base data-[state=inactive]:hidden', fadeIn)
 
-/** A workspace's home: its name and counts over Papers, Notes and Chat tabs, inside the app shell. */
-export function WorkspacePage({ workspaceId, tab }: { workspaceId: string; tab: WorkspaceTab }) {
+/** A workspace's home: its name and counts over Papers, Notes and Chat tabs, inside the app shell. `runId` is the
+ * active search run, read from the URL (I1) so SearchTab survives a reload instead of resetting to no run. */
+export function WorkspacePage({ workspaceId, tab, runId }: { workspaceId: string; tab: WorkspaceTab; runId: string | null }) {
   const workspace = useWorkspace(workspaceId)
-  // replace, not assign: switching tabs shouldn't add history entries for Back to walk through.
-  const showTab = (next: WorkspaceTab) => window.location.replace(workspaceHref(workspaceId, next))
+  // replace, not assign: switching tabs shouldn't add history entries for Back to walk through. Carries the
+  // current runId along so switching tabs and back (or a reload from another tab) doesn't drop it.
+  const showTab = (next: WorkspaceTab) => window.location.replace(workspaceHref(workspaceId, next, runId))
+  // SearchTab reports a new run id here instead of holding it in local state, so the URL (and a reload) stays in
+  // sync with whatever run is actually active.
+  const setRunId = (next: string) => window.location.replace(workspaceHref(workspaceId, 'search', next))
   const title = workspace.data?.name ?? (workspace.data === null ? 'Workspace not found' : 'Loading…')
 
   // The page is keyed by workspace, so opening another one remounts it from scratch and whatever a click or the
@@ -81,7 +86,7 @@ export function WorkspacePage({ workspaceId, tab }: { workspaceId: string; tab: 
             <WorkspaceChat workspace={workspace.data} onShowNotes={() => showTab('notes')} />
           </TabsContent>
           <TabsContent value="search" forceMount className={panel}>
-            <SearchTab workspaceId={workspaceId} />
+            <SearchTab workspaceId={workspaceId} runId={runId} onRunIdChange={setRunId} />
           </TabsContent>
           <TabsContent value="acquisition" forceMount className={panel}>
             <ManualAcquisitionTab workspaceId={workspaceId} />

@@ -56,6 +56,14 @@ class HitOut(BaseModel):
     topic_fit: str | None
     acquisition_status: str
     paper_id: uuid.UUID | None
+    # From the hit's linked ExternalRef (I7): the real title/authors/year/venue/doi are one join away, so Manual
+    # acquisition and stage-1 screening don't have to show only `normalized_title`. None when external_ref_id is
+    # None (defaults let a bare WorkspaceSearchHit still validate without these looked up).
+    title: str | None = None
+    authors: list[str] | None = None
+    year: int | None = None
+    venue: str | None = None
+    doi: str | None = None
 
 
 class HitListOut(BaseModel):

@@ -112,5 +112,5 @@ async def upload_hit_pdf(
     content = await file.read()
     hit, created = await workspace_search.upload_hit_pdf(session, workspace_id, hit_id, file.filename, content)
     if created:
-        await _enqueue_ingest(request, hit.paper_id)
+        await _enqueue_ingest(request, hit["paper_id"])
     return hit
