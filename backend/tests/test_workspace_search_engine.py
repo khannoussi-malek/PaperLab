@@ -496,3 +496,30 @@ async def test_insert_hit_is_race_safe_under_a_duplicate_attempt(session):
         select(func.count()).select_from(WorkspaceSearchHit).where(WorkspaceSearchHit.external_ref_id == ref.id)
     )
     assert count == 1
+
+
+async def test_search_run_eligibility_round_trips(session):
+    from app.models import Paper
+    from app.models.workspace_search import SearchRunEligibility
+
+    workspace = Workspace(name=f"eligibility-test-{uuid.uuid4().hex[:8]}")
+    session.add(workspace)
+    paper = Paper(title="Seed Paper", doi=f"10.9999/{uuid.uuid4().hex[:8]}", file_path="/nonexistent.pdf")
+    session.add(paper)
+    await session.flush()
+    run = WorkspaceSearchRun(
+        workspace_id=workspace.id, query_text="q", sources_json=["arxiv"], status="exhausted",
+        started_at=datetime.now(timezone.utc), stats_json={},
+    )
+    session.add(run)
+    await session.flush()
+
+    row = SearchRunEligibility(
+        paper_id=paper.id, search_run_id=run.id, stage2_status="include",
+        assessed_at=datetime.now(timezone.utc),
+    )
+    session.add(row)
+    await session.commit()
+
+    fetched = await session.get(SearchRunEligibility, (paper.id, run.id))
+    assert fetched.stage2_status == "include"
