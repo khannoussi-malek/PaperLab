@@ -6,6 +6,7 @@ import { pressable } from '@/components/motion'
 import type { SelectionAnchor } from '../reader/selection'
 import { NoteCard } from './NoteCard'
 import { NoteComposer } from './NoteComposer'
+import { SuggestedNotes } from './SuggestedNotes'
 
 type Props = {
   paperId: string
@@ -69,6 +70,7 @@ export function NotesPanel(props: Props) {
       ) : (
         <p className="text-sm text-muted-foreground">Select text in the paper to add a note.</p>
       )}
+      <SuggestedNotes paperId={paperId} />
       {notes.length > 0 && shown.length === 0 && (
         <p className="text-sm text-muted-foreground">No notes match these filters.</p>
       )}

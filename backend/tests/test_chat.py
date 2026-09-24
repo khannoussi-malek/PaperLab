@@ -129,7 +129,7 @@ async def test_save_answer_fills_every_column_and_inserts_no_note(session):
     ids = [s.id for s in prepared.sources]
     assert (row.paper_id, row.kind, row.question, row.content) == (paper.id, "chat", "why?", answer)
     assert (row.source_chunks, row.cited_chunks) == (ids, [ids[2], ids[0]])
-    assert (row.model, row.prompt_version, row.whole_paper) == ("qwen3:8b", 2, True)
+    assert (row.model, row.prompt_version, row.whole_paper) == ("qwen3:8b", 3, True)
     assert await session.scalar(select(func.count()).select_from(Note)) == notes_before
 
 
@@ -142,7 +142,7 @@ async def test_prepare_gives_a_paper_its_own_notes_newest_first_after_the_passag
 
     prepared = await chat.prepare(session, paper.id, "What do my notes say?")
 
-    assert (prepared.system, prepared.prompt_version) == (chat.SYSTEM_PROMPT, 2)
+    assert (prepared.system, prepared.prompt_version) == (chat.SYSTEM_PROMPT, 3)
     assert "[N1]" in prepared.system
     notes_block = '[N1] (AI · Devlin 2019 p.1) "quote Uses NSP." — Uses NSP.\n[N2] (You · Devlin 2019 p.2)'
     assert notes_block in prepared.prompt and "Not this paper" not in prepared.prompt
@@ -161,6 +161,17 @@ async def test_prepare_on_a_paper_without_notes_says_so(session):
         "Notes (newest first):\n\nNo notes have been written yet.\n\nQuestion: why?" in prepared.prompt
     )  # no earlier-questions block
     assert (prepared.notes, prepared.notes_used, prepared.notes_total) == ([], 0, 0)
+
+
+async def test_system_prompt_warns_against_inventing_new_n_labels(session):
+    """Regression: a small model asked to "generate notes" once labelled its own new content [N1], [N2]... —
+    the same bracket syntax the prompt uses for citing an EXISTING note — instead of writing cited prose. Pins
+    the instruction added to stop that, so a future prompt rewrite can't silently drop it."""
+    paper = await make_paper(session, ["one"])
+
+    prepared = await chat.prepare(session, paper.id, "generate notes to explain the paper")
+
+    assert "never invent a new [n#]" in prepared.system.lower()
 
 
 def test_follow_up_sources_keep_every_fresh_passage_and_the_best_earlier_ones_that_fit():

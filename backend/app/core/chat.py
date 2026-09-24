@@ -18,8 +18,8 @@ from app.core.papers import get_paper
 from app.core.retrieval import RetrievedChunk, _to_chunk, query_embedder, retrieve
 from app.models import Chunk, LLMOutput, Note, Paper, PaperStatus, Provenance
 
-CHAT_PROMPT_VERSION = 2  # v2: the paper's notes follow its passages; a follow-up adds the earlier questions
-WORKSPACE_PROMPT_VERSION = 1
+CHAT_PROMPT_VERSION = 3  # v3: [N#] is explicitly citation-only, so "generate notes" can't get mislabeled as one
+WORKSPACE_PROMPT_VERSION = 2
 # Each file holds the system prompt, then the user prompt template after the marker line.
 SYSTEM_PROMPT, PROMPT_TEMPLATE = prompts.load("chat", CHAT_PROMPT_VERSION).split("\n<!-- prompt -->\n")
 WORKSPACE_SYSTEM_PROMPT, WORKSPACE_PROMPT_TEMPLATE = prompts.load("chat_workspace", WORKSPACE_PROMPT_VERSION).split(
@@ -104,7 +104,7 @@ class Answer:
     notes: list[NoteSource | None] = field(default_factory=list)  # None: the note was deleted
 
 
-async def _chunk_sources(session: AsyncSession, *where) -> list[RetrievedChunk]:
+async def chunk_sources(session: AsyncSession, *where) -> list[RetrievedChunk]:
     rows = await session.execute(select(*_SOURCE_COLUMNS).where(*where).order_by(Chunk.ordinal))
     return [_to_chunk(row) for row in rows]
 
@@ -173,7 +173,7 @@ async def load_thread(session: AsyncSession, paper_id: uuid.UUID, parent_id: uui
 async def _earlier_sources(session: AsyncSession, thread: Thread, paper_id: uuid.UUID) -> list[RetrievedChunk]:
     """The thread's passages still on this paper, in thread order; a re-ingest may have replaced some."""
     where = (Chunk.id.in_(thread.source_ids), Chunk.paper_id == paper_id)
-    found = {chunk.id: chunk for chunk in await _chunk_sources(session, *where)}
+    found = {chunk.id: chunk for chunk in await chunk_sources(session, *where)}
     return [found[i] for i in dict.fromkeys(thread.source_ids) if i in found]
 
 
@@ -298,7 +298,7 @@ async def prepare(
         if embedded == 0:  # ingested before M4, or before the model arrived: the UI offers Re-index
             raise Conflict("paper_not_indexed")
     if whole_paper:
-        sources = await _chunk_sources(session, Chunk.paper_id == paper_id)
+        sources = await chunk_sources(session, Chunk.paper_id == paper_id)
     else:
         await embedding_index.check_model(session, settings.embed_model, [paper_id])
         sources = await retrieve(session, question, paper_ids=[paper_id], k=RETRIEVE_K, embedder=embedder)
@@ -376,7 +376,7 @@ async def list_answers(session: AsyncSession, paper_id: uuid.UUID | Scope) -> li
     query = select(LLMOutput).where(in_scope, LLMOutput.kind == "chat")
     outputs = list(await session.scalars(query.order_by(LLMOutput.created_at)))
     wanted = {chunk_id for output in outputs for chunk_id in output.source_chunks}
-    chunks = {c.id: c for c in await _chunk_sources(session, Chunk.id.in_(wanted))}
+    chunks = {c.id: c for c in await chunk_sources(session, Chunk.id.in_(wanted))}
     note_ids = {note_id for output in outputs for note_id in output.source_notes}
     notes = await _with_anchors(session, list(await session.scalars(select(Note).where(Note.id.in_(note_ids)))))
     by_id = {n.id: n for n in notes}

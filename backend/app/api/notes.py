@@ -2,9 +2,10 @@ import uuid
 
 from fastapi import APIRouter, Response
 
-from app.api.deps import SessionDep
-from app.core import notes
+from app.api.deps import LLMByModelIdDep, SessionDep
+from app.core import note_suggestions, notes
 from app.schemas.chat import PromoteRequest
+from app.schemas.note_suggestions import NoteSuggestionOut, NoteSuggestionsOut
 from app.schemas.notes import NoteCreate, NoteOut, NoteUpdate
 
 router = APIRouter(tags=["notes"])
@@ -13,6 +14,24 @@ router = APIRouter(tags=["notes"])
 @router.get("/api/papers/{paper_id}/notes")
 async def list_paper_notes(paper_id: uuid.UUID, session: SessionDep) -> list[NoteOut]:
     return await notes.list_notes_for_paper(session, paper_id)
+
+
+@router.post("/api/papers/{paper_id}/notes/suggest")
+async def suggest_notes(paper_id: uuid.UUID, session: SessionDep, llm: LLMByModelIdDep) -> NoteSuggestionsOut:
+    """One-click suggestions, not automatic notes (P1 of this feature): the caller shows each as a card the
+    reader accepts or dismisses individually, via the unchanged POST /api/notes/promote and this response's
+    own output_id."""
+    suggested = await note_suggestions.suggest(session, paper_id, llm)
+    output_id = await note_suggestions.save_suggestions(session, paper_id, suggested, llm.model, llm.connection_name)
+    return NoteSuggestionsOut(
+        output_id=output_id,
+        suggestions=[
+            NoteSuggestionOut(
+                body=s.body, chunk_id=s.source.id, page=s.source.page, section=s.source.section, bbox=s.source.bbox,
+            )
+            for s in suggested.suggestions
+        ],
+    )
 
 
 @router.post("/api/notes", status_code=201)
