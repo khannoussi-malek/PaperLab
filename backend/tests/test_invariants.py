@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy import text
 from sqlalchemy.engine import make_url
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import create_async_engine
 
 BACKEND = Path(__file__).resolve().parents[1]
@@ -153,3 +154,46 @@ async def test_the_setup_flag_starts_done_only_for_a_library_that_has_papers(scr
     await scratch.dispose()
 
     assert (empty, with_papers, rows) == (False, True, 1)
+
+
+@pytest.mark.anyio
+async def test_the_search_source_is_one_row_that_keeps_its_connection(scratch_url):
+    """D151 on a throwaway database: every test's session shadows the dev database's table (conftest), so the table's
+    own rules are checked here. One row; Built-in has neither connection nor model; a connection search uses can't be
+    deleted even by a caller that forgets to ask."""
+    dsn = scratch_url.render_as_string(hide_password=False)
+    alembic(dsn, "upgrade", "head")
+    scratch = create_async_engine(scratch_url)
+    ids = {"id": uuid.uuid4()}
+    try:
+        async with scratch.begin() as conn:
+            await conn.execute(
+                text(
+                    "INSERT INTO llm_connections (id, kind, label, base_url) "
+                    "VALUES (:id, 'ollama', 'Ollama', 'http://localhost:11434')"
+                ),
+                ids,
+            )
+            await conn.execute(
+                text(
+                    "INSERT INTO embedding_source (kind, connection_id, model) "
+                    "VALUES ('ollama', :id, 'nomic-embed-text')"
+                ),
+                ids,
+            )
+        for refused in (
+            "INSERT INTO embedding_source (kind) VALUES ('builtin')",  # a second row
+            "INSERT INTO embedding_source (id, kind) VALUES (false, 'builtin')",  # the key can only be true
+            "UPDATE embedding_source SET kind = 'voyage'",  # 768 dimensions only (D131)
+            "UPDATE embedding_source SET kind = 'builtin'",  # Built-in with a connection
+            "UPDATE embedding_source SET model = NULL",  # a connection's source without a model
+            "DELETE FROM llm_connections",  # NO ACTION: search uses it
+        ):
+            with pytest.raises(IntegrityError):
+                async with scratch.begin() as conn:
+                    await conn.execute(text(refused))
+        async with scratch.begin() as conn:
+            await conn.execute(text("UPDATE embedding_source SET kind = 'builtin', connection_id = NULL, model = NULL"))
+            await conn.execute(text("DELETE FROM llm_connections"))  # free once search no longer uses it
+    finally:
+        await scratch.dispose()

@@ -12,7 +12,7 @@ import numpy as np
 import pymupdf
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import delete, or_
+from sqlalchemy import delete, or_, text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -32,6 +32,11 @@ from app.workers import ingest
 TEST_DATABASE_URL = os.environ.get(
     "TEST_DATABASE_URL", "postgresql+asyncpg://paperlab:paperlab@localhost:5433/paperlab"
 )
+
+# D159: every test starts on Built-in whatever the owner chose. An empty table of the same shape in the test
+# connection's temporary schema hides the owner's row: Postgres searches pg_temp before public. Not a DELETE, which
+# would hold the row's lock until the rollback while every other test's DELETE waited on it.
+SHADOW_SEARCH_SOURCE = text("CREATE TEMP TABLE embedding_source (LIKE public.embedding_source INCLUDING ALL)")
 
 OPENALEX_FIXTURES = Path(__file__).parent / "fixtures" / "openalex"
 _RECORDINGS = "".join(path.read_text() for path in OPENALEX_FIXTURES.glob("*.json"))
@@ -78,6 +83,8 @@ async def session():
     engine = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool, hide_parameters=True)
     async with engine.connect() as connection:
         transaction = await connection.begin()
+        # On the connection, outside any savepoint: a service's rollback must never drop it.
+        await connection.execute(SHADOW_SEARCH_SOURCE)
         # create_savepoint: a service's session.commit() only releases a savepoint.
         async with AsyncSession(
             bind=connection, expire_on_commit=False, join_transaction_mode="create_savepoint"
