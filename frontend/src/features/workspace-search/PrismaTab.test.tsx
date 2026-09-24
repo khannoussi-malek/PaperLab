@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, within } from '@testing-library/react'
 import { expect, test, vi, afterEach } from 'vitest'
 import { PrismaTab } from './PrismaTab'
 import * as queries from '@/api/queries'
@@ -101,4 +101,54 @@ test('run picker stays populated after selecting a run, even though the per-run 
 
   fireEvent.change(select, { target: { value: 'run-1' } })
   expect((select as HTMLSelectElement).value).toBe('run-1')
+})
+
+// Item 5a: the reasons behind stage-1/stage-2 exclusions, straight off PrismaExportOut's own
+// *_excluded_by_reason maps — no extra fetch.
+test('shows the stage-1 and stage-2 exclusion reason breakdowns', () => {
+  mockPrismaExport()
+  render(<PrismaTab workspaceId="ws-1" />)
+
+  expect(screen.getByText('off topic: 42')).toBeInTheDocument()
+  expect(screen.getByText('wrong population: 14')).toBeInTheDocument()
+})
+
+// Item 5b: selecting a specific run shows that run's own recorded query/filters/date, from the combined
+// export's `runs[]` metadata the picker already fetched — no extra request.
+test("shows the selected run's query, filters and date from the combined export's runs metadata", () => {
+  mockPrismaExport()
+  render(<PrismaTab workspaceId="ws-1" />)
+
+  // Nothing shown for the combined view — there's no single run to describe.
+  expect(screen.queryByLabelText('Selected run details')).not.toBeInTheDocument()
+
+  const select = screen.getByRole('combobox', { name: 'Runs' })
+  fireEvent.change(select, { target: { value: 'run-2' } })
+
+  const details = within(screen.getByLabelText('Selected run details'))
+  expect(details.getByText('llm evaluation')).toBeInTheDocument()
+  expect(details.getByText('2026-09-24T00:05:00Z')).toBeInTheDocument()
+  expect(details.getByText('None')).toBeInTheDocument() // filters_json is {} for both fixture runs
+})
+
+// Item 5c: a loading state and an error state, same inline `role="alert"` pattern ScreeningTab/
+// ManualAcquisitionTab use for their own mutation errors.
+test('shows a loading state before the export arrives', () => {
+  vi.spyOn(queries, 'usePrismaExport').mockReturnValue(
+    { data: undefined, isPending: true, isError: false, error: null } as ReturnType<typeof queries.usePrismaExport>,
+  )
+  render(<PrismaTab workspaceId="ws-1" />)
+
+  expect(screen.getByText(/loading/i)).toBeInTheDocument()
+})
+
+test('shows an alert with the error message when the export request fails', () => {
+  vi.spyOn(queries, 'usePrismaExport').mockReturnValue(
+    {
+      data: undefined, isPending: false, isError: true, error: new Error('Could not load the PRISMA export.'),
+    } as ReturnType<typeof queries.usePrismaExport>,
+  )
+  render(<PrismaTab workspaceId="ws-1" />)
+
+  expect(screen.getByRole('alert')).toHaveTextContent('Could not load the PRISMA export.')
 })
