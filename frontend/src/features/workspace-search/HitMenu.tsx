@@ -22,8 +22,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import type { Hit, HitReviewUpdate } from '@/api/client'
-
-const EXCLUDE_REASONS = ['wrong_topic', 'wrong_study_type', 'duplicate', 'language', 'inaccessible', 'other'] as const
+import { EXCLUDE_REASONS } from './hitReview'
 
 const menuSurface = cn(glass, 'w-56 bg-glass-strong ring-glass-border')
 

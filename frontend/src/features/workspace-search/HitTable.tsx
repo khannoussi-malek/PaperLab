@@ -49,6 +49,7 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
     initialRect: { width: 600, height: 600 },
   })
   const virtualItems = virtualizer.getVirtualItems()
+  const onReview = (hitId: string, body: HitReviewUpdate) => reviewHit.mutate({ hitId, body })
 
   // Data only ever moves into view because the user is scrolled to the bottom of what's loaded — never on a
   // background timer or poll, which doesn't scale once the pool reaches thousands of hits (re-fetching an
@@ -91,7 +92,6 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
           <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
             {virtualItems.map((virtualRow) => {
               const hit = rows[virtualRow.index]
-              const onReview = (hitId: string, body: HitReviewUpdate) => reviewHit.mutate({ hitId, body })
               const byline = [hit.authors?.slice(0, 3).join(', '), hit.year].filter(Boolean).join(' · ')
               return (
                 <HitContextMenu key={hit.id} hit={hit} onReview={onReview}>
@@ -116,7 +116,7 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
         {/* Desktop only: the preview follows hover and focus, which a touch screen doesn't have — same as PaperPreview. */}
         {previewed && (
           <div className="hidden min-h-0 lg:block">
-            <HitPreview hit={previewed} />
+            <HitPreview hit={previewed} onReview={onReview} />
           </div>
         )}
       </div>
