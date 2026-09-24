@@ -7,7 +7,7 @@ import { api, type Hit } from '@/api/client'
 
 function renderWithClient(ui: React.ReactElement) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>)
+  return { client, ...render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>) }
 }
 
 const baseHit = {
@@ -106,6 +106,42 @@ test('stays virtualized: a large hit pool renders far fewer rows than it has hit
   const rowMenuButtons = screen.getAllByRole('button', { name: 'Hit actions' })
   expect(rowMenuButtons.length).toBeGreaterThan(0)
   expect(rowMenuButtons.length).toBeLessThan(50)
+})
+
+test('at the bottom with no known next page, real new progress triggers exactly one refetch — never on its own', async () => {
+  // A single hit with next_cursor: null means hasNextPage is false from the very first render, and a 1-item
+  // list is trivially "scrolled to the bottom" — this isolates the fallback path (no known next page, but the
+  // worker found more) from the ordinary fetchNextPage path, which a bigger pool would also exercise.
+  const runAt = (arxivRawCount: number) => ({
+    id: 'run-1', workspace_id: 'ws-1', query_text: 'q', filters_json: {}, sources_json: ['arxiv'],
+    status: 'running', started_at: '2026-09-24T00:00:00Z', stopped_at: null,
+    stats_json: { per_source_raw_count: { arxiv: arxivRawCount } },
+  })
+
+  const { client, rerender } = renderWithClient(<HitTable workspaceId="ws-1" run={runAt(10) as never} />)
+  await screen.findByText('a paper about llms')
+  expect(api.listSearchHits).toHaveBeenCalledTimes(1) // the first run tick only sets a baseline, nothing to refetch yet
+
+  const rerenderWithClient = (run: unknown) =>
+    rerender(
+      <QueryClientProvider client={client}>
+        <HitTable workspaceId="ws-1" run={run as never} />
+      </QueryClientProvider>,
+    )
+
+  // A poll tick reporting the same total (nothing new) must not trigger a refetch.
+  rerenderWithClient(runAt(10))
+  await waitFor(() => expect(screen.getByText('a paper about llms')).toBeInTheDocument())
+  expect(api.listSearchHits).toHaveBeenCalledTimes(1)
+
+  // Real new progress (raw count grew) while sitting at the bottom triggers exactly one refetch.
+  rerenderWithClient(runAt(25))
+  await waitFor(() => expect(api.listSearchHits).toHaveBeenCalledTimes(2))
+
+  // Acknowledged — a further tick with no additional progress must not trigger yet another one.
+  rerenderWithClient(runAt(25))
+  await new Promise((resolve) => setTimeout(resolve, 10))
+  expect(api.listSearchHits).toHaveBeenCalledTimes(2)
 })
 
 test('a failed import shows an error message', async () => {
