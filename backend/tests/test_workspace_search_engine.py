@@ -864,3 +864,76 @@ async def test_prisma_per_run_identified_count_comes_from_stats_json_not_hit_cou
     assert result.identified == 11  # stats_json sum (10) + 1 snowball hit - not 2 (hit count), not 10 (stats alone)
     assert result.duplicates_removed == 9
     assert result.runs == []  # per-run export: caller already knows which run
+
+
+async def test_prisma_combined_does_not_leak_another_workspaces_eligibility_verdict(session):
+    """Papers are shared/reusable entities, not 1:1 with a workspace (workspace_papers is the join table -
+    confirmed by test_set_eligibility_raises_not_found_for_a_paper_outside_the_workspace and by
+    upload_hit_pdf's separate workspaces.add_paper association step). The SAME physical paper independently
+    screened in two DIFFERENT workspaces, via two DIFFERENT runs, must never let one workspace's combined
+    export pick up the other workspace's SearchRunEligibility verdict - even when that other verdict is the
+    more recently assessed_at one, which is exactly the condition that would make a missing workspace scope on
+    elig_query silently "win" via the most-recent-verdict tie-break."""
+    from app.models import Paper
+    from app.models.workspace_search import SearchRunEligibility
+
+    workspace_a = Workspace(name=f"prisma-leak-a-{uuid.uuid4().hex[:8]}")
+    workspace_b = Workspace(name=f"prisma-leak-b-{uuid.uuid4().hex[:8]}")
+    session.add_all([workspace_a, workspace_b])
+    paper = Paper(title="Shared Paper", doi=f"10.9999/{uuid.uuid4().hex[:8]}", file_path="/nonexistent.pdf")
+    session.add(paper)
+    await session.flush()
+    await workspaces.add_paper(session, workspace_a.id, paper.id)
+    await workspaces.add_paper(session, workspace_b.id, paper.id)
+
+    earlier = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    later = datetime(2026, 6, 1, tzinfo=timezone.utc)  # workspace B's verdict is the more recent one
+
+    run_a = WorkspaceSearchRun(
+        workspace_id=workspace_a.id, query_text="q-a", filters_json={}, query_overrides_json={},
+        sources_json=["arxiv"], status="exhausted", started_at=earlier, stats_json={},
+    )
+    run_b = WorkspaceSearchRun(
+        workspace_id=workspace_b.id, query_text="q-b", filters_json={}, query_overrides_json={},
+        sources_json=["arxiv"], status="exhausted", started_at=later, stats_json={},
+    )
+    session.add_all([run_a, run_b])
+    await session.flush()
+
+    session.add_all([
+        WorkspaceSearchHit(
+            workspace_id=workspace_a.id, run_id=run_a.id, source_method="database_search",
+            normalized_title="shared-paper-in-a", first_seen_at=earlier, stage1_status="relevant",
+            acquisition_status="imported", paper_id=paper.id,
+        ),
+        WorkspaceSearchHit(
+            workspace_id=workspace_b.id, run_id=run_b.id, source_method="database_search",
+            normalized_title="shared-paper-in-b", first_seen_at=later, stage1_status="relevant",
+            acquisition_status="imported", paper_id=paper.id,
+        ),
+    ])
+    session.add_all([
+        SearchRunEligibility(
+            paper_id=paper.id, search_run_id=run_a.id, stage2_status="include", assessed_at=earlier,
+        ),
+        SearchRunEligibility(
+            paper_id=paper.id, search_run_id=run_b.id, stage2_status="exclude",
+            stage2_exclude_reason="wrong_topic", assessed_at=later,
+        ),
+    ])
+    await session.commit()
+
+    result_a = await prisma_export(session, workspace_a.id, run_id=None)
+    result_b = await prisma_export(session, workspace_b.id, run_id=None)
+
+    # Workspace A must see only its OWN verdict (include from run_a) - NOT workspace B's later-assessed
+    # "exclude", even though "exclude" is the more recently assessed_at row workspace-blind code would pick.
+    assert result_a.stage2_assessed == 1
+    assert result_a.included == 1
+    assert result_a.stage2_excluded == 0
+
+    # And vice versa: workspace B must see only its own "exclude", not workspace A's earlier "include".
+    assert result_b.stage2_assessed == 1
+    assert result_b.stage2_excluded == 1
+    assert result_b.stage2_excluded_by_reason == {"wrong_topic": 1}
+    assert result_b.included == 0

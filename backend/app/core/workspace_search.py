@@ -782,6 +782,7 @@ async def prisma_export(session: AsyncSession, workspace_id: uuid.UUID, run_id: 
         stats_identified = sum(run.stats_json.get("per_source_raw_count", {}).values())
         hit_query = select(WorkspaceSearchHit).where(WorkspaceSearchHit.run_id == run_id)
         runs_meta = []
+        workspace_run_ids = [run_id]
     else:
         runs = (
             await session.execute(select(WorkspaceSearchRun).where(WorkspaceSearchRun.workspace_id == workspace_id))
@@ -795,6 +796,7 @@ async def prisma_export(session: AsyncSession, workspace_id: uuid.UUID, run_id: 
             }
             for r in runs
         ]
+        workspace_run_ids = [r.id for r in runs]
 
     hits = (await session.execute(hit_query)).scalars().all()
     identified = stats_identified + sum(1 for h in hits if h.source_method != "database_search")
@@ -813,11 +815,15 @@ async def prisma_export(session: AsyncSession, workspace_id: uuid.UUID, run_id: 
 
     in_corpus_paper_ids = [h.paper_id for h in relevant if h.paper_id is not None]
     # Combined view: the same paper can carry eligibility rows from more than one run — take the most recently
-    # assessed_at per paper_id, across ALL that paper's eligibility rows in this workspace (not just this run's),
-    # per spec §13's stated tie-break. Per-run view: scoped to just this run's own verdict.
-    elig_query = select(SearchRunEligibility).where(SearchRunEligibility.paper_id.in_(in_corpus_paper_ids))
-    if run_id is not None:
-        elig_query = elig_query.where(SearchRunEligibility.search_run_id == run_id)
+    # assessed_at per paper_id, across ALL of that paper's eligibility rows from a run IN THIS WORKSPACE (not
+    # just this run's, but never another workspace's — papers are shared/reusable entities, not 1:1 with a
+    # workspace, so a paper independently screened in two different workspaces would otherwise leak an unrelated
+    # workspace's verdict into this export whenever it happened to be the more recently assessed one). Per-run
+    # view: scoped to just this run's own verdict (workspace_run_ids == [run_id] there).
+    elig_query = select(SearchRunEligibility).where(
+        SearchRunEligibility.paper_id.in_(in_corpus_paper_ids),
+        SearchRunEligibility.search_run_id.in_(workspace_run_ids),
+    )
     elig_rows = (await session.execute(elig_query)).scalars().all()
     latest_by_paper: dict[uuid.UUID, SearchRunEligibility] = {}
     for row in elig_rows:
