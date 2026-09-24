@@ -16,11 +16,12 @@ from typing import TYPE_CHECKING
 
 import httpx
 from sqlalchemy import or_, select, tuple_, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.candidates import Candidate, from_arxiv, from_core, from_crossref, from_s2, from_work, merge, normal_title
-from app.core.discovery import Providers, download_pdf
+from app.core.discovery import Providers, _add_unpaywall_links, download_pdf
 from app.core.references import _same_reference
 from app.models.references import ExternalRef
 from app.models.workspace_search import WorkspaceSearchCursor, WorkspaceSearchHit, WorkspaceSearchRun
@@ -32,6 +33,11 @@ if TYPE_CHECKING:
 # Provider request page sizes. No source publishes a "max" beyond what its own search_page tests exercise, so
 # these mirror discovery.py's PER_SOURCE ballpark, generous enough that most runs exhaust a source in one page.
 PAGE_SIZE_BY_SOURCE = {"openalex": 100, "crossref": 30, "arxiv": 20, "core": 20, "semantic_scholar": 75}
+
+# A source stuck on httpx errors (spec §16: unauthenticated S2 search 429s by default) retries this many times
+# before its cursor is marked exhausted instead of spinning forever (C2 part 1) — small enough that a real outage
+# still lets the run finish on its other sources well inside a job's lifetime.
+SOURCE_ERROR_CAP = 3
 
 _PAGE_FUNCS = {
     "arxiv": arxiv.search_page,
@@ -57,9 +63,21 @@ class BatchResult:
     new_hits: int
     sources_exhausted: list[str] = field(default_factory=list)
     errors: dict[str, str] = field(default_factory=dict)
+    # Per-source raw item counts for this one batch, pre-merge/pre-dedup — spec §5/§13 wants these for M30b's
+    # PRISMA "identified" number, which can't be reconstructed later once a run is exhausted (I1). The worker
+    # accumulates these into run.stats_json across iterations; search_batch itself stays stateless.
+    raw_counts: dict[str, int] = field(default_factory=dict)
 
 
 async def _find_or_create_external_ref(session: AsyncSession, candidate: Candidate) -> ExternalRef:
+    """The OR-match below can hit more than one row (e.g. one row shares the candidate's DOI, a different row
+    shares its s2_id) — `.first()` still only ever backfills the single row it picks. Backfilling an identifier
+    onto that row is only safe when no OTHER row already owns the same value: otherwise it either violates
+    external_refs' UNIQUE(s2_id)/UNIQUE(openalex_id) constraint, or — for doi/arxiv_id/core_id, which have no DB
+    uniqueness — silently mis-attributes an identifier to the wrong paper (spec review I3; this exact mechanism
+    corrupted a real row once, see the ledger's "Closed Access Fixture" incident). `pdf_urls` gets its own,
+    stricter check: it only crosses over when the matched row's own DOI doesn't contradict the candidate's, so a
+    match found only via a weaker/shared identifier never hands one paper's PDF link to a different paper."""
     conditions = [
         column == value
         for value, column in (
@@ -75,10 +93,22 @@ async def _find_or_create_external_ref(session: AsyncSession, candidate: Candida
         (await session.execute(select(ExternalRef).where(or_(*conditions)))).scalars().first() if conditions else None
     )
     if existing is not None:
-        for field_name in ("doi", "arxiv_id", "s2_id", "openalex_id", "core_id", "pdf_urls", "cited_by_count"):
+        for field_name in ("doi", "arxiv_id", "s2_id", "openalex_id", "core_id"):
             value = getattr(candidate, field_name, None)
-            if value and not getattr(existing, field_name, None):
+            if not value or getattr(existing, field_name, None):
+                continue  # nothing to backfill, or `existing` already has its own value for this field
+            column = getattr(ExternalRef, field_name)
+            owned_elsewhere = await session.scalar(
+                select(ExternalRef.id).where(column == value, ExternalRef.id != existing.id)
+            )
+            if owned_elsewhere is None:
                 setattr(existing, field_name, value)
+        if candidate.pdf_urls and not existing.pdf_urls:
+            doi_conflict = existing.doi and candidate.doi and existing.doi != candidate.doi
+            if not doi_conflict:
+                existing.pdf_urls = candidate.pdf_urls
+        if candidate.cited_by_count and not existing.cited_by_count:
+            existing.cited_by_count = candidate.cited_by_count
         return existing
     ref = ExternalRef(
         title=candidate.title,
@@ -112,6 +142,7 @@ async def search_batch(session: AsyncSession, providers: Providers, run: Workspa
     found: dict[str, list[Candidate]] = {}
     errors: dict[str, str] = {}
     exhausted: list[str] = []
+    raw_counts: dict[str, int] = {}
 
     for source in run.sources_json:
         cursor = cursors.get(source)
@@ -126,20 +157,35 @@ async def search_batch(session: AsyncSession, providers: Providers, run: Workspa
             cursor.exhausted = True
             exhausted.append(source)
             continue
+        # P11: a per-source override (query_overrides_json) takes over that source's query; otherwise the run's
+        # own query_text, same as before. Recorded on the run so a later PRISMA export reflects what was actually
+        # searched (I6), not just what the caller intended.
+        query_for_source = run.query_overrides_json.get(source) or run.query_text
         try:
             raw_items, next_cursor = await _PAGE_FUNCS[source](
-                client, run.query_text, PAGE_SIZE_BY_SOURCE[source], cursor.cursor_json.get("value", 0)
+                client, query_for_source, PAGE_SIZE_BY_SOURCE[source], cursor.cursor_json.get("value", 0)
             )
         except httpx.HTTPError as exc:
             cursor.last_error = str(exc)
             errors[source] = str(exc)
+            # Bounded retry (C2 part 1): a source stuck on httpx errors (e.g. an unauthenticated S2 429 — the
+            # default case per spec §16's spike, not an edge case) must eventually stop retrying instead of
+            # spinning until the worker's job_timeout kills it mid-commit.
+            error_count = cursor.cursor_json.get("errors", 0) + 1
+            cursor.cursor_json = {**cursor.cursor_json, "errors": error_count}
+            if error_count >= SOURCE_ERROR_CAP:
+                cursor.exhausted = True
+                exhausted.append(source)
             continue
         found[source] = [c for raw in raw_items if (c := _MAPPERS[source](raw)) is not None]
+        raw_counts[source] = len(raw_items)
         cursor.last_error = None
         if next_cursor is None:
             cursor.exhausted = True
             exhausted.append(source)
         else:
+            # A fresh dict with no "errors" key resets the count to 0 (`.get("errors", 0)` above) — a page that
+            # succeeds clears whatever error streak came before it.
             cursor.cursor_json = {"value": next_cursor}
 
     all_candidates = [c for group in found.values() for c in group]
@@ -162,23 +208,42 @@ async def search_batch(session: AsyncSession, providers: Providers, run: Workspa
         )
         if existing_hit is not None:
             continue  # already in the pool (this run or an earlier one) — keeps its existing screening decision
-        session.add(
-            WorkspaceSearchHit(
-                workspace_id=run.workspace_id,
-                run_id=run.id,
-                external_ref_id=ref.id,
-                source_method="database_search",
-                normalized_title=normal_title(candidate.title),
-                first_seen_at=datetime.now(timezone.utc),
-            )
+        if await _insert_hit(session, run, ref, candidate):
+            new_hits += 1
+
+    return BatchResult(new_hits=new_hits, sources_exhausted=exhausted, errors=errors, raw_counts=raw_counts)
+
+
+async def _insert_hit(
+    session: AsyncSession, run: WorkspaceSearchRun, ref: ExternalRef, candidate: Candidate
+) -> bool:
+    """Inserts a new pool hit for `ref`, or no-ops if the DB's own `(workspace_id, external_ref_id)` unique
+    constraint already has a row for it — not just this function's own pre-check SELECT above, which two workers
+    racing the same run (e.g. a stop-then-immediate-restart, since enqueue_job has no dedup job id) can both pass
+    before either commits. Returns whether a row was actually inserted (I2)."""
+    inserted_id = await session.scalar(
+        pg_insert(WorkspaceSearchHit)
+        .values(
+            workspace_id=run.workspace_id,
+            run_id=run.id,
+            external_ref_id=ref.id,
+            source_method="database_search",
+            normalized_title=normal_title(candidate.title),
+            first_seen_at=datetime.now(timezone.utc),
         )
-        new_hits += 1
+        .on_conflict_do_nothing(index_elements=["workspace_id", "external_ref_id"])
+        .returning(WorkspaceSearchHit.id)
+    )
+    return inserted_id is not None
 
-    return BatchResult(new_hits=new_hits, sources_exhausted=exhausted, errors=errors)
 
-
-from app.core import papers, workspaces
+from app.core import paper_sources, papers, workspaces
 from app.core.errors import Conflict, InvalidInput, NotFound
+
+# OpenAlex's `page` cursor is 1-based; every other source's is a 0-based offset (Task 2's convention — the
+# engine tests' own START_CURSOR already knows this). Seeding OpenAlex at 0 asked its fake for a negative offset
+# and got nothing back "by coincidence," hiding the bug (I4).
+_STARTING_CURSOR_VALUE = {"openalex": 1}
 
 
 async def start_run(
@@ -197,21 +262,37 @@ async def start_run(
         await session.commit()
         return run
 
+    if filters:
+        # Real per-source filter translation is out of scope for this fix wave — recording a filter the run never
+        # actually applied would misreport the search strategy a PRISMA methods section later cites (I6 part 2).
+        raise InvalidInput("search run filters are not supported yet")
+
+    # D73's merge trust order (app/core/paper_sources.SOURCES) is what search_batch's `found` dict — insertion
+    # ordered, fed straight into merge()'s ranking — relies on; storing sources in whatever order the caller sent
+    # them silently let the caller's field order become the trust order instead.
+    ordered_sources = [source for source in paper_sources.SOURCES if source in sources]
+
     run = WorkspaceSearchRun(
         workspace_id=workspace_id, query_text=query_text, filters_json=filters,
-        query_overrides_json=query_overrides or {}, sources_json=sources, status="running",
+        query_overrides_json=query_overrides or {}, sources_json=ordered_sources, status="running",
         started_at=datetime.now(timezone.utc), stats_json={},
     )
     session.add(run)
     await session.flush()
-    for source in sources:
-        session.add(WorkspaceSearchCursor(run_id=run.id, source=source, cursor_json={"value": 0}))
+    for source in ordered_sources:
+        seed = {"value": _STARTING_CURSOR_VALUE.get(source, 0)}
+        session.add(WorkspaceSearchCursor(run_id=run.id, source=source, cursor_json=seed))
     await session.commit()
     return run
 
 
 async def stop_run(session: AsyncSession, run_id, workspace_id=None) -> WorkspaceSearchRun:
     run = await get_run(session, run_id, workspace_id)
+    if run.status != "running":
+        # Stopping only applies to a run that's actually in flight — same "doesn't apply to the current state"
+        # convention as start_run's own Conflict above, not a silent no-op that could paper over a stale double
+        # click.
+        raise Conflict("search_run_not_running")
     run.status = "stopped"
     run.stopped_at = datetime.now(timezone.utc)
     await session.commit()
@@ -334,7 +415,9 @@ async def import_hits(
 
     imported, failed, paper_ids = 0, 0, []
     for hit in hits:
-        if hit.acquisition_status == "imported":
+        if hit.acquisition_status in ("imported", "manual"):
+            # "manual" is its own provenance (spec §4.4/M30b's PRISMA export need it distinguished from an
+            # automatic import) — re-running Import all must never quietly relabel it "imported" (I8).
             continue
         ref = await session.get(ExternalRef, hit.external_ref_id) if hit.external_ref_id else None
         if ref is not None and ref.imported_as is not None:
@@ -345,6 +428,16 @@ async def import_hits(
             hit.paper_id = ref.imported_as
             imported += 1
             continue
+        if ref is not None and not ref.pdf_urls and ref.doi:
+            # Unpaywall's real role (spec §6): DOI-only PDF enrichment for a candidate missing one, applied
+            # post-merge — never a discovery source. import_hits only ever looked at pdf_urls as already stored;
+            # try this once before giving up (I5). providers.unpaywall may be None (source off) — the helper
+            # already treats that as a no-op, same as discovery.add()'s own callers do.
+            [enriched] = await _add_unpaywall_links(
+                providers.unpaywall, [Candidate(title=ref.title, doi=ref.doi, arxiv_id=ref.arxiv_id)]
+            )
+            if enriched.pdf_urls:
+                ref.pdf_urls = enriched.pdf_urls
         data = await download_pdf(providers.pdf, ref.pdf_urls) if ref and ref.pdf_urls else None
         if data is None:
             hit.acquisition_status = "failed"

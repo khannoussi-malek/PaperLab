@@ -4,10 +4,11 @@ import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
+import httpx
 import pytest
 from sqlalchemy import delete, select, update
 
-from app.core.workspace_search import PAGE_SIZE_BY_SOURCE
+from app.core.workspace_search import PAGE_SIZE_BY_SOURCE, SOURCE_ERROR_CAP
 from app.models import PaperSources
 from app.models.workspace import Workspace
 from app.models.workspace_search import WorkspaceSearchCursor, WorkspaceSearchHit, WorkspaceSearchRun
@@ -21,14 +22,19 @@ pytestmark = pytest.mark.anyio
 async def worker(session, monkeypatch):
     """Same pattern as test_references_api.py's `worker` fixture: point the job's own SessionLocal at the test's
     rolled-back session, and clear any leftover paper_sources row from the shared dev DB (D15) so the defaults
-    apply (arxiv on, OpenAlex off) instead of whatever a developer last configured."""
+    apply (arxiv on, OpenAlex off) instead of whatever a developer last configured. Also skips the real
+    BATCH_PACING_SECONDS sleep between iterations (C2 part 2) so multi-iteration tests stay fast."""
     await session.execute(delete(PaperSources))
 
     @asynccontextmanager
     async def shared_session():
         yield session
 
+    async def no_sleep(*_args, **_kwargs):
+        return None
+
     monkeypatch.setattr(worker_module, "SessionLocal", shared_session)
+    monkeypatch.setattr(worker_module.asyncio, "sleep", no_sleep)
     return {"transport": discovery_fake.transport()}
 
 
@@ -187,9 +193,108 @@ async def test_worker_marks_the_run_failed_on_an_unexpected_error(session, worke
     run = await _new_run(session, "running")
     session.add(WorkspaceSearchCursor(run_id=run.id, source="arxiv", cursor_json={"value": 0}))
     await session.commit()
-    run_id = run.id  # captured before the call: the worker's own rollback expires `run` (test_references_api.py's pattern)
+    run_id = run.id  # captured before the call: the worker's rollback expires `run` (test_references_api.py's pattern)
 
     await worker_module.run_workspace_search(worker, str(run_id))
 
     reloaded = await session.get(WorkspaceSearchRun, run_id, populate_existing=True)
     assert reloaded.status == "failed"
+    assert reloaded.stopped_at is not None  # same bookkeeping as stop_run's own status change (bundled minor)
+
+
+async def test_worker_bounds_retries_on_a_source_that_always_errors(session, worker):
+    """A source whose provider always raises httpx.HTTPError must not retry forever: search_batch's own error
+    count on the cursor (C2 part 1) caps it at SOURCE_ERROR_CAP attempts, so the run reaches a terminal state
+    instead of spinning until ARQ's job_timeout kills it mid-commit."""
+    always_429 = {"transport": httpx.MockTransport(lambda request: httpx.Response(429))}
+    run = await _new_run(session, "running")
+    session.add(WorkspaceSearchCursor(run_id=run.id, source="arxiv", cursor_json={"value": 0}))
+    await session.commit()
+
+    await worker_module.run_workspace_search(always_429, str(run.id))
+
+    reloaded = await session.get(WorkspaceSearchRun, run.id, populate_existing=True)
+    assert reloaded.status == "exhausted"  # the error cap tripped it, not the MAX_BATCH_ITERATIONS backstop
+    cursor = (
+        await session.execute(select(WorkspaceSearchCursor).where(WorkspaceSearchCursor.run_id == run.id))
+    ).scalar_one()
+    assert cursor.exhausted is True
+    assert cursor.cursor_json.get("errors") == SOURCE_ERROR_CAP
+
+
+async def test_worker_marks_exhausted_when_the_iteration_cap_is_hit(session, worker, monkeypatch):
+    """A source that always finds a fresh page (never a short page, never an error) would page forever under the
+    old `while True` loop. MAX_BATCH_ITERATIONS (C2 part 3) bounds it, and hitting the cap is a valid terminal
+    state — exhausted, not failed — since a bounded scan that found what it found isn't an error."""
+    monkeypatch.setattr(worker_module, "MAX_BATCH_ITERATIONS", 3)
+
+    from app.core import workspace_search as core_module
+
+    async def never_ending_page(client, query, page_size, cursor):
+        return [], cursor + page_size  # a "full" page every time — next_cursor is never None, never exhausts
+
+    monkeypatch.setitem(core_module._PAGE_FUNCS, "arxiv", never_ending_page)
+    real_search_batch = worker_module.search_batch
+    calls = 0
+
+    async def counting_search_batch(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return await real_search_batch(*args, **kwargs)
+
+    monkeypatch.setattr(worker_module, "search_batch", counting_search_batch)
+
+    run = await _new_run(session, "running")
+    session.add(WorkspaceSearchCursor(run_id=run.id, source="arxiv", cursor_json={"value": 0}))
+    await session.commit()
+
+    await worker_module.run_workspace_search(worker, str(run.id))
+
+    assert calls == 3  # ran exactly MAX_BATCH_ITERATIONS times, not forever
+    reloaded = await session.get(WorkspaceSearchRun, run.id, populate_existing=True)
+    assert reloaded.status == "exhausted"
+
+
+async def test_worker_records_stats_json_after_a_batch(session, worker):
+    """I1: the UI reads stats_json.last_batch_new_hits for live progress, and M30b's PRISMA export needs a
+    per-source raw (pre-dedup) count that can't be reconstructed once a run is exhausted — neither was ever
+    written before this fix."""
+    run = await _new_run(session, "running")
+    session.add(WorkspaceSearchCursor(run_id=run.id, source="arxiv", cursor_json={"value": 0}))
+    await session.commit()
+
+    await worker_module.run_workspace_search(worker, str(run.id))
+
+    reloaded = await session.get(WorkspaceSearchRun, run.id, populate_existing=True)
+    assert reloaded.stats_json["last_batch_new_hits"] == len(discovery_fake.PAGE_PAPERS)
+    assert reloaded.stats_json["per_source_raw_count"] == {"arxiv": len(discovery_fake.PAGE_PAPERS)}
+
+
+async def test_worker_backs_off_when_another_worker_holds_the_lock(session, worker, monkeypatch):
+    """I2: a stop-then-immediate-restart race (enqueue_job has no dedup job id) can start two workers on the same
+    run_id. When this worker's own advisory-lock attempt reports the run already in flight elsewhere, it must
+    back off cleanly — no search_batch call, no status change, no exception."""
+
+    async def lock_held_elsewhere(*_args, **_kwargs):
+        return False
+
+    monkeypatch.setattr(worker_module, "_try_lock", lock_held_elsewhere)
+    real_search_batch = worker_module.search_batch
+    calls = 0
+
+    async def counting_search_batch(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return await real_search_batch(*args, **kwargs)
+
+    monkeypatch.setattr(worker_module, "search_batch", counting_search_batch)
+
+    run = await _new_run(session, "running")
+    session.add(WorkspaceSearchCursor(run_id=run.id, source="arxiv", cursor_json={"value": 0}))
+    await session.commit()
+
+    await worker_module.run_workspace_search(worker, str(run.id))
+
+    assert calls == 0
+    reloaded = await session.get(WorkspaceSearchRun, run.id, populate_existing=True)
+    assert reloaded.status == "running"  # untouched — this worker never got past the lock check

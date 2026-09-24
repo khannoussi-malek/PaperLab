@@ -4,12 +4,12 @@ from datetime import datetime, timezone
 
 import httpx
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.core import discovery
-from app.core.candidates import normal_title
+from app.core.candidates import Candidate, normal_title
 from app.core.paper_sources import SOURCES, SourceSettings
-from app.core.workspace_search import search_batch
+from app.core.workspace_search import _find_or_create_external_ref, _insert_hit, search_batch
 from app.models.references import ExternalRef
 from app.models.workspace import Workspace
 from app.models.workspace_search import WorkspaceSearchCursor, WorkspaceSearchHit, WorkspaceSearchRun
@@ -262,3 +262,165 @@ async def test_start_run_raises_not_found_for_cross_workspace_run(session):
 
     with pytest.raises(NotFound):
         await start_run(session, workspace_b.id, "bert", filters={}, sources=["arxiv"], run_id=run.id)
+
+
+@pytest.mark.asyncio
+async def test_start_run_seeds_openalex_cursor_at_one_not_zero(session):
+    """OpenAlex's `page` param is 1-based; every other source's cursor is a 0-based offset (I4). Seeding OpenAlex
+    at 0 asked its fake for a negative offset and got nothing back "by coincidence," hiding the bug."""
+    from app.core.workspace_search import start_run
+    workspace = Workspace(name=f"OpenAlex seed {uuid.uuid4().hex[:8]}")
+    session.add(workspace)
+    await session.flush()
+    await session.commit()
+
+    run = await start_run(session, workspace.id, "bert", filters={}, sources=["arxiv", "openalex"])
+
+    cursors = {
+        c.source: c.cursor_json
+        for c in (
+            await session.execute(select(WorkspaceSearchCursor).where(WorkspaceSearchCursor.run_id == run.id))
+        ).scalars()
+    }
+    assert cursors["openalex"] == {"value": 1}
+    assert cursors["arxiv"] == {"value": 0}
+
+
+@pytest.mark.asyncio
+async def test_start_run_orders_sources_by_paper_sources_trust_order(session):
+    """D73's merge trust order is app/core/paper_sources.SOURCES; search_batch's `found` dict is insertion-ordered
+    and feeds merge()'s ranking directly, so storing sources in whatever order the caller sent them would let the
+    caller's field order silently become the trust order instead (bundled minor)."""
+    from app.core.workspace_search import start_run
+    workspace = Workspace(name=f"Source order {uuid.uuid4().hex[:8]}")
+    session.add(workspace)
+    await session.flush()
+    await session.commit()
+
+    run = await start_run(session, workspace.id, "bert", filters={}, sources=["arxiv", "openalex", "crossref"])
+
+    assert run.sources_json == ["openalex", "crossref", "arxiv"]  # paper_sources.SOURCES order, not caller order
+
+
+@pytest.mark.asyncio
+async def test_start_run_rejects_non_empty_filters(session):
+    """Real per-source filter translation is out of scope for this fix wave; accepting and silently ignoring a
+    filter would misreport the search strategy a PRISMA methods section later cites (I6 part 2)."""
+    from app.core.errors import InvalidInput
+    from app.core.workspace_search import start_run
+    workspace = Workspace(name=f"Filters rejected {uuid.uuid4().hex[:8]}")
+    session.add(workspace)
+    await session.flush()
+    await session.commit()
+
+    with pytest.raises(InvalidInput):
+        await start_run(session, workspace.id, "bert", filters={"open_access_only": True}, sources=["arxiv"])
+
+
+@pytest.mark.asyncio
+async def test_stop_run_on_a_non_running_run_is_conflict(session):
+    """Stopping only applies to a run actually in flight — same "doesn't apply to the current state" convention
+    as start_run's own Conflict on an already-running run (bundled minor)."""
+    from app.core.errors import Conflict
+    from app.core.workspace_search import start_run, stop_run
+    workspace = Workspace(name=f"Stop conflict {uuid.uuid4().hex[:8]}")
+    session.add(workspace)
+    await session.flush()
+    await session.commit()
+    run = await start_run(session, workspace.id, "bert", filters={}, sources=["arxiv"])
+    await stop_run(session, run.id)
+
+    with pytest.raises(Conflict):
+        await stop_run(session, run.id)
+
+
+async def test_search_batch_uses_the_per_source_query_override(session, fake_providers, monkeypatch):
+    """P11's per-source override (run.query_overrides_json) must actually reach that source's search_page call —
+    before this fix it was accepted, stored, and silently ignored (I6 part 1)."""
+    import app.core.workspace_search as core_module
+
+    seen_queries = []
+    real_page = arxiv.search_page
+
+    async def recording_page(http, query, page_size, cursor):
+        seen_queries.append(query)
+        return await real_page(http, query, page_size, cursor)
+
+    monkeypatch.setitem(core_module._PAGE_FUNCS, "arxiv", recording_page)
+
+    run = await _new_run(session, ["arxiv"])
+    run.query_overrides_json = {"arxiv": "transformer architectures"}
+    await session.commit()
+
+    await search_batch(session, fake_providers, run)
+
+    assert seen_queries == ["transformer architectures"]  # not run.query_text ("bert")
+
+
+async def test_find_or_create_external_ref_does_not_cross_contaminate_on_or_match(session):
+    """Two existing rows: one shares the candidate's DOI, a different one already holds the candidate's s2_id.
+    The OR-match can hit both — backfilling blindly onto whichever `.first()` picks either violates
+    external_refs' UNIQUE(s2_id) (this exact mechanism corrupted a real row once — the ledger's "Closed Access
+    Fixture" incident) or hands a paper's PDF link to an unrelated row matched only via a weaker identifier
+    (I3)."""
+    ref_a = ExternalRef(title="Ref A", doi="10.5555/paperlab-i3-a")
+    ref_b = ExternalRef(title="Ref B", doi="10.5555/paperlab-i3-b", s2_id="i3-shared-s2-id")
+    session.add_all([ref_a, ref_b])
+    await session.commit()
+
+    candidate = Candidate(
+        title="New candidate",
+        doi="10.5555/paperlab-i3-a",
+        s2_id="i3-shared-s2-id",
+        pdf_urls=["https://example.test/candidate.pdf"],
+    )
+
+    ref = await _find_or_create_external_ref(session, candidate)
+    await session.commit()  # must not raise IntegrityError
+
+    # "i3-shared-s2-id" must still belong to exactly one row — never duplicated onto ref_a.
+    holders = (
+        await session.execute(select(ExternalRef.id).where(ExternalRef.s2_id == "i3-shared-s2-id"))
+    ).scalars().all()
+    assert holders == [ref_b.id]
+
+    await session.refresh(ref_a)
+    await session.refresh(ref_b)
+    assert ref_a.doi == "10.5555/paperlab-i3-a"  # never overwritten by the candidate's own doi
+    assert ref_b.doi == "10.5555/paperlab-i3-b"  # never overwritten either
+
+    # Whichever row the OR-match picked, the candidate's pdf_urls only lands on it if that row's own DOI doesn't
+    # contradict the candidate's — a match found only via ref_b's shared-but-unrelated s2_id must not cross-write.
+    if ref.doi and ref.doi != candidate.doi:
+        assert ref.pdf_urls == []
+    else:
+        assert ref.pdf_urls == candidate.pdf_urls
+
+
+async def test_insert_hit_is_race_safe_under_a_duplicate_attempt(session):
+    """Proxy for two search_batch calls racing on the same (workspace_id, external_ref_id) after a
+    stop-then-immediate-restart (enqueue_job has no dedup job id): this suite's per-test session is one
+    savepoint-wrapped connection, so two genuinely overlapping transactions aren't reproducible here — two
+    sequential calls sharing the same candidate/ref is the accepted proxy (I2 part 2)."""
+    workspace = Workspace(name=f"Insert race {uuid.uuid4().hex[:8]}")
+    session.add(workspace)
+    ref = ExternalRef(title="Racing Paper", doi="10.5555/paperlab-i2-race")
+    session.add(ref)
+    await session.flush()
+    run = WorkspaceSearchRun(
+        workspace_id=workspace.id, query_text="q", filters_json={}, query_overrides_json={},
+        sources_json=["arxiv"], status="running", started_at=datetime.now(timezone.utc), stats_json={},
+    )
+    session.add(run)
+    await session.flush()
+    await session.commit()
+    candidate = Candidate(title="Racing Paper", doi="10.5555/paperlab-i2-race")
+
+    first = await _insert_hit(session, run, ref, candidate)
+    second = await _insert_hit(session, run, ref, candidate)  # the "concurrent" duplicate attempt
+
+    assert (first, second) == (True, False)  # no crash on the duplicate; only the first actually inserted
+    count = await session.scalar(
+        select(func.count()).select_from(WorkspaceSearchHit).where(WorkspaceSearchHit.external_ref_id == ref.id)
+    )
+    assert count == 1

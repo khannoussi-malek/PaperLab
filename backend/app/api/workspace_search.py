@@ -6,6 +6,7 @@ from fastapi import APIRouter, File, Query, Request, UploadFile
 from app.api.deps import DiscoveryDep, SessionDep
 from app.core import workspace_search
 from app.schemas.workspace_search import (
+    AcquisitionStatus,
     BulkHitReviewUpdate,
     BulkUpdateOut,
     HitListOut,
@@ -15,6 +16,7 @@ from app.schemas.workspace_search import (
     ImportHitsRequest,
     SearchRunCreate,
     SearchRunOut,
+    Stage1Status,
 )
 
 router = APIRouter(prefix="/api/workspaces/{workspace_id}/search", tags=["workspace-search"])
@@ -65,7 +67,8 @@ async def get_run(workspace_id: uuid.UUID, run_id: uuid.UUID, session: SessionDe
 @router.get("/hits")
 async def list_hits(
     workspace_id: uuid.UUID, session: SessionDep, limit: Annotated[int, Query(gt=0)] = 50,
-    after: str | None = None, stage1_status: str | None = None, acquisition_status: str | None = None,
+    after: str | None = None, stage1_status: Stage1Status | None = None,
+    acquisition_status: AcquisitionStatus | None = None,
 ) -> HitListOut:
     items, next_cursor = await workspace_search.list_hits(
         session, workspace_id, limit, after, stage1_status, acquisition_status
