@@ -13,6 +13,7 @@ function renderWithClient(ui: React.ReactElement) {
 beforeEach(() => {
   vi.spyOn(api, 'startSearchRun')
   vi.spyOn(api, 'getSearchRun')
+  vi.spyOn(api, 'stopSearchRun')
 })
 
 afterEach(() => {
@@ -47,4 +48,32 @@ test('shows a status indicator once a run has started', async () => {
 
   await waitFor(() => expect(screen.getByText(/running/)).toBeInTheDocument())
   expect(screen.getByText(/7 new in last batch/)).toBeInTheDocument()
+})
+
+test('clicking Stop stops the in-progress run', async () => {
+  const runningRunData = {
+    id: 'run-1',
+    workspace_id: 'ws-1',
+    query_text: 'code review LLM',
+    filters_json: {},
+    sources_json: ['arxiv'],
+    status: 'running',
+    started_at: '2026-09-24T00:00:00Z',
+    stopped_at: null,
+    stats_json: {},
+  }
+  const stoppedRunData = { ...runningRunData, status: 'stopped', stopped_at: '2026-09-24T00:01:00Z' }
+  vi.mocked(api.startSearchRun).mockResolvedValue(runningRunData as never)
+  vi.mocked(api.getSearchRun).mockResolvedValue(runningRunData as never)
+  vi.mocked(api.stopSearchRun).mockResolvedValue(stoppedRunData as never)
+
+  renderWithClient(<SearchTab workspaceId="ws-1" />)
+
+  fireEvent.change(screen.getByLabelText('Search query'), { target: { value: 'code review LLM' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Start' }))
+
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Stop' })).toBeInTheDocument())
+  fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
+
+  await waitFor(() => expect(api.stopSearchRun).toHaveBeenCalledWith('ws-1', 'run-1'))
 })

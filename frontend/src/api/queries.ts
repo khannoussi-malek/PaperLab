@@ -311,6 +311,15 @@ export function useStartSearchRun(workspaceId: string) {
   })
 }
 
+/** Stops a running search run. */
+export function useStopSearchRun(workspaceId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (runId: string) => api.stopSearchRun(workspaceId, runId),
+    onSuccess: () => client.invalidateQueries({ queryKey: keys.searchRuns(workspaceId) }),
+  })
+}
+
 /** One search run; polls while it's still running. `runId` is null before a run has started. */
 export const useSearchRun = (workspaceId: string, runId: string | null) =>
   useQuery({
