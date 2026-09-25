@@ -145,13 +145,15 @@ Fonts: body `Atkinson Hyperlegible Next Variable` (`font-sans`), headings `Crims
   as copy" / "Attach chart" / "Search charts" / "Remove chart" / "Add to note…" / "Quick chart" / "Open" /
   "Open chart". Also
   `article.connection-card`, `.cloud-tag`, `.key-hint`, `.test-result`, `li.model-row`, `.embedding-indexed`,
-  `.search-model-status`, `.search-notice`, and
+  `.search-model-status`, `.search-notice`, `.search-source-status`, `.search-rebuild`, and
   the names "Settings" / "Add connection" / "Test" / "Edit connection" / "Delete connection" / "Add model" / "Add a
   model" / "Search or type a model name" / "Default model" / "Remove <name> from chat" / "Delete <name> from disk" /
   "Model to pull" / "Pull" / "Pulling <name>" / "Kind" / "Preset" / "Name" / "Base URL" / "API key" / "Replace key" /
   "Remove key" / "Save connection" / "Model" / "Manage models…" / "Set up a model" / "Open settings" / "Embedding
   model" / "Re-index library" / "Re-index the library?" / "Re-index" / the region "Search" / "Download search model ·
-  <N> MB" / "Downloading the search model". Also `.reference-row`, `.references-summary`
+  <N> MB" / "Downloading the search model" / "Search source" / "Connection" / "Model" / "Switch search to <label>" /
+  "Switch search to <label>?" / "Switch" / "Rebuilding search" / "Try again" / "Pull nomic-embed-text · 274 MB" /
+  "Use another search source". Also `.reference-row`, `.references-summary`
   and `.reference-list`.
   Also the names "Connect Claude" / "Open Connect Claude" / "Your system" (tabs "macOS" / "Windows" / "Windows + WSL" /
   "Linux") / "PaperLab folder" / "Copy" / "Copied" / "Check the server", and the regions "Claude Desktop" / "Claude
@@ -523,24 +525,49 @@ before deleting; `search.py "progress bar long running download status" --domain
 - **Refusals:** `no_model` and `embedding_model_changed` alerts carry an outline "Open settings" link in `AlertAction`;
   `model_not_found` offers Retry, which asks with the dropdown's fallback. `search_not_set_up` reads "Search isn't set
   up, so this can't be searched yet." with the `DownloadSearchModel` block under the message and no Retry (ask again
-  once the status line says ready).
+  once the status line says ready). `search_rebuilding` shows the rebuild instead of its message (`rebuild: true`),
+  then "Search is ready again." with Retry.
 - **Search:** the section "Search" (h2) opens with the built-in search model: a `.search-model-status` line
   (`text-sm tabular-nums text-muted-foreground`, no live region) reading "Search model: not downloaded", "Search
   model: downloading… 42%" or "Search model: ready" (`statusLine`); while the model is missing, an outline `sm`
   "Download search model · 548 MB" (`Download` icon; the size is what a download would fetch now, `downloadLabel`);
   while it downloads, a shadcn `Progress` named "Downloading the search model" (`downloadPercent`); a failure in a
   destructive `Alert`, with the button back to try again. `DownloadSearchModel` is the same block wherever it shows
-  (here, chat's `search_not_set_up` refusal, the library notice), and one download per tab drives them all
+  (here: here only while Built-in is the picked source, chat's `search_not_set_up` refusal, the library notice), and
+  one download per tab drives them all
   (`useSearchModelDownload`): leaving a page doesn't stop it. Patterns from ui-ux-pro-max: `search.py "download
   progress bar large file" --domain ux` (a bar for long work) and `"empty state feature unavailable"` (the message
-  comes with its action). Below it, the embedding model: a shadcn `Select` "Embedding model" showing the configured
-  model. Always disabled, since there is nothing to switch to yet, and a `Lock` icon joins its label once chunks
-  exist; `.embedding-indexed` "indexed with nomic-ai/nomic-embed-text-v1.5 · 12,400 chunks" (`tabular-nums`).
+  comes with its action). `.embedding-indexed` "indexed with nomic-ai/nomic-embed-text-v1.5 · 12,400 chunks" (`tabular-nums`).
   When some chunks came from another model, a destructive `Alert`: "N chunks were indexed with another model. Chat on
-  those papers is refused until you re-index." An outline "Re-index library" (`RefreshCw`; disabled while no search
-  model is downloaded) opens the `Dialog` "Re-index the library?" ("Every paper's passages are embedded again with
+  those papers is refused until you re-index." An outline "Re-index library" (`RefreshCw`; disabled while Built-in is
+  in use without its model) opens the `Dialog` "Re-index the library?" ("Every paper's passages are embedded again with
   <model>, in the background."), with Cancel and destructive "Re-index"; then a `role="status"` line "Re-indexing N
   papers in the background."
+- **Search source:** Settings → Search opens with `.search-source-status` "Search source: Built-in" / "Search source:
+  Ollama · nomic-embed-text" / "Search source: OpenAI · text-embedding-3-small" (`sourceLine`, `text-sm font-medium`)
+  and the `.cloud-tag` "Cloud" badge when the source isn't local. Under it a shadcn `Select` "Search source" (Built-in,
+  Ollama, OpenAI, Gemini, OpenAI-compatible; OpenAI and Gemini carry the Cloud tag) and one muted `text-xs` line for
+  the pick (`whereLine`: "Runs on this computer. Nothing leaves it." / "Runs on <host>. Nothing leaves your network." /
+  "Cloud: every passage of every paper, and every search question, goes to <host>."). "Connection" (not for Built-in)
+  lists the eligible connections with their Cloud tag; with none, "No OpenAI connection yet." and an outline `sm` "Add
+  OpenAI key" (`Plus`) that opens the connection dialog on that preset. "Model": a `Select` for OpenAI, the fixed name
+  in `font-mono` for Gemini and Ollama, an `Input` with a native `datalist` of the server's models for
+  OpenAI-compatible. Built-in picked shows the `DownloadSearchModel` block. A primary "Switch search to <label>" shows
+  while the picks differ from the source in use, disabled while Built-in's model is missing or a compatible model is
+  empty. It opens the glass `Dialog` "Switch search to <label>?": what goes where and its estimate (`switchDialog`; the
+  notes are named, P3 = A), the pause sentence, a muted `text-xs` footnote, Cancel (nothing sent, the picker goes back)
+  and Switch. A refusal shows in a destructive `Alert` inside the dialog; `embedding_model_not_pulled` adds an outline
+  "Pull nomic-embed-text · 274 MB" (`Download`) with a `Progress` "Pulling nomic-embed-text", then switches by itself.
+  While a switch or a re-index runs, `.search-rebuild`: "Search is being rebuilt with OpenAI: 12 of 20 papers."
+  (`rebuildLine`, `tabular-nums text-muted-foreground`) and a `Progress` named "Rebuilding search"; the status polls
+  every 2 s meanwhile. A `source_error` shows a destructive `Alert` "Some papers couldn't be embedded: <reason>." with
+  an outline `xs` "Try again" (never asks first). With a cloud source, the Re-index dialog says what it sends again
+  (`reindexDialog`). Patterns from ui-ux-pro-max: a bar for long work (`"progress bar long running download status"`),
+  confirm before an irreversible or costly action (`"destructive confirmation delete dialog"`).
+- **Where search is needed while it is rebuilt:** chat's `.chat-error` shows `.search-rebuild` in place of the message
+  and no Retry, with the `source_error` alert under it; once `rebuild` is null, "Search is ready again." with Retry.
+  The library's `.search-notice` and the graph header show the same line, muted. M23's not-set-up notices (chat and
+  library) end with a muted link "Use another search source" (`#/settings`).
 - **Library notice:** while no search model is downloaded and some ready paper is too long to chat with whole
   (`showSearchNotice`: `model_present` false and `papers_needing_search > 0`), one `.search-notice` row sits at the top of
   the library's pane, above the paper list: the muted line "Search isn't set up: long papers and workspaces can't
