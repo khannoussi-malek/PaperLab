@@ -1,6 +1,6 @@
 import { CornerDownRight, Sparkles } from 'lucide-react'
 import { createElement, Fragment, useMemo, type ReactNode } from 'react'
-import type { ChatSource, NoteSource } from '@/api/client'
+import type { ChatScope, ChatSource, NoteSource, SavedNote } from '@/api/client'
 import { pressable, slideUpIn } from '@/components/motion'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -9,6 +9,8 @@ import { cn } from '@/lib/utils'
 import { aiMark } from './aiMark'
 import { describeSource, splitCitations, type Segment } from './citations'
 import { markdownPieces, type Piece, type Tag } from './markdown'
+import { splitNoteBlocks } from './noteBlocks'
+import { SuggestedNote } from './SuggestedNote'
 
 type Props = {
   question: string
@@ -30,6 +32,9 @@ type Props = {
   reply?: boolean
   /** Offered on a saved paper answer: asks the next question as a follow-up to this one. */
   followUp?: { onClick: () => void; disabled: boolean }
+  /** Given on a saved answer: where its suggested notes save to, and which are saved already. Absent while an answer
+   * streams and until its saved copy is listed, so a card's Save stays disabled. */
+  suggestions?: { scope: ChatScope; saved: SavedNote[] }
   pending?: boolean
   /** Fade up on mount: only the answer being asked now, never ones loaded from history. */
   animate?: boolean
@@ -49,13 +54,40 @@ const hintFor = (source: Cited) => ('note_id' in source ? NOTE_HINT : CITE_HINT)
 
 export function ChatAnswer(props: Props) {
   const { question, wholePaper, sources, notes, notesUsed, notesTotal, segments, footer, outputId, pending } = props
-  const { animate, paperLabel, onCite, children, parentId, reply, followUp } = props
+  const { animate, paperLabel, onCite, children, parentId, reply, followUp, suggestions } = props
   const sourceFor = (label: string) => [...(sources ?? []), ...notes].find((source) => source?.label === label)
   const describe = (source: Cited) => describeSource(source, paperLabel?.(source.paper_id))
   const waiting = pending && segments.length === 0
   const content = segments.map((segment) => (segment.kind === 'text' ? segment.text : `[${segment.label}]`)).join('')
-  const pieces = useMemo(() => markdownPieces(content), [content])
+  // Prose, suggested notes and the marker lines between them, each with its own markdown; the parts tile `content`.
+  const rendered = useMemo(
+    () =>
+      splitNoteBlocks(content).map((part) => ({
+        part,
+        pieces: part.kind === 'marker' ? [] : markdownPieces(content.slice(part.start, part.end)),
+      })),
+    [content],
+  )
   const known = new Set([...(sources ?? []), ...notes].flatMap((source) => (source ? [source.label] : [])))
+  const renderText = (text: string) =>
+    splitCitations(text, known).map((segment, i) => {
+      const source = segment.kind === 'cite' ? sourceFor(segment.label) : undefined
+      // The tooltip renders in a portal, so the answer's text (which promote.ts counts) is unchanged.
+      return source ? (
+        <Hint key={i} label={describe(source)} detail={hintFor(source)}>
+          <button
+            type="button"
+            className="chat-cite rounded-xs font-medium text-primary underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label={describe(source)}
+            onClick={() => onCite(source)}
+          >
+            [{source.label}]
+          </button>
+        </Hint>
+      ) : (
+        <span key={i}>{segment.kind === 'text' ? segment.text : `[${segment.label}]`}</span>
+      )
+    })
   return (
     <article
       className={cn('chat-answer flex flex-col gap-2', reply && 'ml-3 border-l border-glass-border pl-3', animate && slideUpIn)}
@@ -75,29 +107,36 @@ export function ChatAnswer(props: Props) {
             {waiting ? (
               <TypingIndicator label={sources === null ? 'Finding sources…' : 'Writing the answer…'} />
             ) : (
-              // The text content is exactly the answer, markers and hidden markdown syntax included: promote.ts counts
-              // offsets in it.
+              // The text content is exactly the answer, markers and hidden markdown syntax included (promote.ts counts
+              // offsets in it); a suggested note's label and buttons are data-chrome, which answerSelection.ts leaves out.
               <div className="chat-answer-text space-y-2 text-sm leading-relaxed whitespace-pre-line">
-                {renderPieces(pieces, (text) =>
-                  splitCitations(text, known).map((segment, i) => {
-                    const source = segment.kind === 'cite' ? sourceFor(segment.label) : undefined
-                    // The tooltip renders in a portal, so the answer's text (which promote.ts counts) is unchanged.
-                    return source ? (
-                      <Hint key={i} label={describe(source)} detail={hintFor(source)}>
-                        <button
-                          type="button"
-                          className="chat-cite rounded-xs font-medium text-primary underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
-                          aria-label={describe(source)}
-                          onClick={() => onCite(source)}
-                        >
-                          [{source.label}]
-                        </button>
-                      </Hint>
+                {rendered.map(({ part, pieces }) => {
+                  const key = `${part.kind}-${part.start}`
+                  const text = content.slice(part.start, part.end)
+                  // Checked together (not `kind === 'marker'` then `kind === 'prose'`): TS only narrows a union member
+                  // away once its discriminant is excluded entirely, and this member's `kind` is itself `'prose' |
+                  // 'marker'`, so excluding just one of those literals at a time leaves `part.index` still unreachable.
+                  if (part.kind !== 'note') {
+                    return part.kind === 'marker' ? (
+                      <span key={key} hidden>
+                        {text}
+                      </span>
                     ) : (
-                      <span key={i}>{segment.kind === 'text' ? segment.text : `[${segment.label}]`}</span>
+                      <Fragment key={key}>{renderPieces(pieces, renderText)}</Fragment>
                     )
-                  }),
-                )}
+                  }
+                  // An empty block renders nothing, but keeps its index for the blocks after it.
+                  if (part.end === part.start) return null
+                  const save =
+                    outputId && suggestions
+                      ? { scope: suggestions.scope, outputId, saved: suggestions.saved.find((s) => s.index === part.index) }
+                      : undefined
+                  return (
+                    <SuggestedNote key={key} index={part.index} save={save}>
+                      {renderPieces(pieces, renderText)}
+                    </SuggestedNote>
+                  )
+                })}
               </div>
             )}
 

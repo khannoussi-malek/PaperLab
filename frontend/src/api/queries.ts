@@ -9,6 +9,7 @@ import {
   type InfiniteData,
 } from '@tanstack/react-query'
 import { sameCandidate } from '@/features/discovery/candidateMeta'
+import { ALREADY_SAVED } from '@/features/chat/noteBlocks'
 import {
   api,
   type Candidate,
@@ -175,6 +176,20 @@ export function usePromoteNote() {
     mutationFn: (promote: PromoteRequest) => api.promoteNote(promote),
     // A workspace answer can anchor the note on several papers, and workspace Notes tabs and counts list it too.
     onSuccess: () => refreshNotes(client),
+  })
+}
+
+/** Saves a suggested note from a saved answer. Resolves once the answer's history knows it (its card then reads Saved)
+ * and the notes lists have refetched. On `already_saved` the history is refetched too: it names the note. */
+export function useSaveSuggestion() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ outputId, index }: { scope: ChatScope; outputId: string; index: number }) =>
+      api.saveSuggestion(outputId, index),
+    onSuccess: (_note, { scope }) =>
+      Promise.all([client.invalidateQueries({ queryKey: keys.chat(scope) }), refreshNotes(client)]),
+    onError: (error, { scope }) =>
+      error.message === ALREADY_SAVED ? client.invalidateQueries({ queryKey: keys.chat(scope) }) : undefined,
   })
 }
 
