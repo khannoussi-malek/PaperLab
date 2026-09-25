@@ -1,0 +1,118 @@
+---
+import FollowButton from '../../components/FollowButton.astro'
+import Shot from '../../components/Shot.astro'
+import StarButton from '../../components/StarButton.astro'
+import BaseLayout from '../../layouts/BaseLayout.astro'
+import { REPO } from '../../lib/site'
+
+const today = [
+  { title: 'Search free sources at once', body: 'arXiv, Crossref, CORE, Unpaywall and Semantic Scholar in one query, merged into one list with the sources that found each paper.' },
+  { title: 'Group the review in a workspace', body: 'Every paper, note and chat of the review in one place, and a chat that answers across all of it with citations.' },
+  { title: 'Follow references both ways', body: 'What a paper cites and what has cited it since, ranked for your library, with free PDFs imported in a click.' },
+  { title: 'Extract data you can trace', body: 'Capture a results table or a single number, and every point on your chart links back to its page.' },
+]
+
+const next = [
+  { title: 'Saved searches with a hit pool', body: 'Run a query across sources, page it to the end, and keep every hit with where it came from.' },
+  { title: 'Two-stage screening', body: 'Title-and-abstract screening, then full-text eligibility with a reason for each exclusion.' },
+  { title: 'Snowballing', body: 'Grow the pool from your included papers, backward through references and forward through citations.' },
+  { title: 'PRISMA counts and export', body: 'The flow numbers kept as you go, with a breakdown of exclusion reasons, ready for the methods section.' },
+]
+---
+
+<BaseLayout
+  title="PaperLab for systematic reviews and literature surveys"
+  description="A local-first workflow for systematic reviews: search free sources, follow references both ways, screen, snowball and count for PRISMA. Free and open source."
+>
+  <section class="section">
+    <div class="wrap">
+      <p class="eyebrow">Systematic reviews</p>
+      <h1>A review workflow you can defend</h1>
+      <p class="lead">
+        A systematic review lives or dies on its trail: where each paper came from, why it was excluded, which passage a
+        number was taken from. PaperLab keeps that trail on your machine, from the first query to the chart.
+      </p>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="today-heading">
+    <div class="wrap">
+      <h2 id="today-heading">In the app today</h2>
+      <div class="grid">
+        {
+          today.map((item) => (
+            <div class="card">
+              <h3>{item.title}</h3>
+              <p class="muted">{item.body}</p>
+            </div>
+          ))
+        }
+      </div>
+      <div class="shot-row">
+        <Shot
+          name="feature-workspaces"
+          alt="A workspace called Dense retrieval, open on its Chat tab, where an AI answer cites passages from its papers and one of your notes."
+        />
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="next-heading">
+    <div class="wrap">
+      <h2 id="next-heading">Coming in the next release</h2>
+      <p class="lead">
+        These are built and in the <a href={REPO}>source on GitHub</a>, and ship with the next desktop release. Star the
+        repository to get that release in your feed.
+      </p>
+      <div class="grid">
+        {
+          next.map((item) => (
+            <div class="card">
+              <span class="badge">Next release</span>
+              <h3>{item.title}</h3>
+              <p class="muted">{item.body}</p>
+            </div>
+          ))
+        }
+      </div>
+      <div class="actions spaced">
+        <StarButton where="slr-next" />
+        <FollowButton where="slr-next" />
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="honest-heading">
+    <div class="wrap prose">
+      <h2 id="honest-heading">What it won't do</h2>
+      <p class="muted">
+        PaperLab doesn't get past a paywall. When no free copy of a paper exists, it links to the publisher's page and
+        you add the PDF yourself. And it doesn't screen for you: every include and exclude is your decision, recorded with its
+        reason.
+      </p>
+      <p class="muted">
+        Reviewing in a field PaperLab hasn't met yet? <a href={`${REPO}/issues/new`}>Tell me which databases you search</a>:
+        a new paper source is one of the most useful things to add.
+      </p>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .shot-row {
+    margin-top: 2.5rem;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+    background: var(--muted);
+    color: var(--primary);
+    margin-bottom: 0.6rem;
+  }
+  .spaced {
+    margin-top: 2rem;
+  }
+</style>

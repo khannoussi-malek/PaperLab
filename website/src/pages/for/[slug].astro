@@ -1,0 +1,147 @@
+---
+import DownloadButton from '../../components/DownloadButton.astro'
+import Faqs from '../../components/Faqs.astro'
+import FollowButton from '../../components/FollowButton.astro'
+import StarButton from '../../components/StarButton.astro'
+import BaseLayout from '../../layouts/BaseLayout.astro'
+import { AUDIENCES, type Audience } from '../../lib/audiences'
+import { featureBySlug } from '../../lib/features'
+import { GUIDES } from '../../lib/guides'
+import { breadcrumbs, faqPage } from '../../lib/schema'
+import { href } from '../../lib/site'
+
+// One page per audience: their problems first, each answered by a feature, then a workflow and guides.
+export function getStaticPaths() {
+  return AUDIENCES.map((audience) => ({ params: { slug: audience.slug }, props: { audience } }))
+}
+
+const { audience } = Astro.props as { audience: Audience }
+const path = `for/${audience.slug}/`
+const guides = GUIDES.filter((guide) => audience.guides.includes(guide.path))
+const others = AUDIENCES.filter((other) => other.slug !== audience.slug)
+const jsonLd = [faqPage(audience.faqs), breadcrumbs([[audience.name, path]])]
+---
+
+<BaseLayout title={audience.title} description={audience.description} jsonLd={jsonLd}>
+  <article class="section">
+    <div class="wrap">
+      <div class="head">
+        <p class="eyebrow">Who it's for · {audience.label}</p>
+        <h1>{audience.h1}</h1>
+        <p class="answer">{audience.answer}</p>
+        <div class="actions">
+          <DownloadButton where={`for-${audience.slug}`} label="Download for free" />
+          <StarButton where={`for-${audience.slug}`} />
+        </div>
+      </div>
+
+      <section aria-labelledby="problems-heading">
+        <h2 id="problems-heading">What gets in the way, and what helps</h2>
+        <ul class="problems">
+          {
+            audience.problems.map(({ problem, answer, feature }) => {
+              const f = featureBySlug(feature)
+              return (
+                <li class="card">
+                  <h3>{problem}</h3>
+                  <p class="muted">{answer}</p>
+                  {f && <a href={href(`features/${f.slug}/`)}>{f.name} →</a>}
+                </li>
+              )
+            })
+          }
+        </ul>
+      </section>
+
+      <div class="body">
+        <section aria-labelledby="workflow-heading">
+          <h2 id="workflow-heading">A workflow that works</h2>
+          <ol>{audience.workflow.map((step) => <li>{step}</li>)}</ol>
+        </section>
+
+        <section aria-labelledby="guides-heading">
+          <h2 id="guides-heading">Guides for you</h2>
+          <ul>
+            {
+              guides.map((guide) => (
+                <li>
+                  <a href={href(guide.path)}>{guide.title}</a> <span class="muted">— {guide.blurb}</span>
+                </li>
+              ))
+            }
+          </ul>
+        </section>
+
+        <Faqs faqs={audience.faqs} />
+
+        <aside class="card follow">
+          <p>
+            The PaperLab page on LinkedIn breaks down one feature a week. Follow along, and tell us where it breaks on your
+            papers.
+          </p>
+          <FollowButton where={`for-${audience.slug}`} />
+        </aside>
+
+        <p class="others">
+          Also for:{' '}
+          {
+            others.map((other, i) => (
+              <>
+                <a href={href(`for/${other.slug}/`)}>{other.label}</a>
+                {i < others.length - 1 ? ' · ' : ''}
+              </>
+            ))
+          }
+        </p>
+      </div>
+    </div>
+  </article>
+</BaseLayout>
+
+<style>
+  .head,
+  .body {
+    max-width: 48rem;
+  }
+  h1 {
+    font-size: clamp(2.2rem, 5vw, 3.4rem);
+  }
+  .answer {
+    font-size: 1.15rem;
+    line-height: 1.65;
+    padding: 1.25rem 1.5rem;
+    border-left: 4px solid #facc15;
+    background: var(--glass-strong);
+    border-radius: 0 14px 14px 0;
+    box-shadow: var(--shadow);
+    margin-bottom: 1.5rem;
+  }
+  h2 {
+    margin-top: 3.5rem;
+  }
+  .problems {
+    list-style: none;
+    padding: 0;
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+  }
+  .problems h3 {
+    font-size: 1.3rem;
+  }
+  .problems a {
+    font-weight: 700;
+    text-decoration: none;
+  }
+  ol li,
+  ul li {
+    margin-bottom: 0.5rem;
+  }
+  .follow {
+    margin-top: 3rem;
+  }
+  .others {
+    margin-top: 2rem;
+    color: var(--muted-foreground);
+  }
+</style>

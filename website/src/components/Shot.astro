@@ -1,0 +1,25 @@
+---
+import { href } from '../lib/site'
+
+// A README screenshot from .github/assets (converted to WebP in public/shots/ by `npm run shots`), light or dark with the reader's theme.
+// `crop` shows only the app half of the banner-style pictures, leaving out the title they carry for the README.
+interface Props {
+  name: string
+  alt: string
+  eager?: boolean
+  crop?: boolean
+}
+const { name, alt, eager = false, crop = false } = Astro.props
+---
+
+<picture class:list={['shot', { crop }]}>
+  <source media="(prefers-color-scheme: dark)" srcset={href(`shots/${name}-dark.webp`)} />
+  <img
+    src={href(`shots/${name}.webp`)}
+    alt={alt}
+    width="1600"
+    height="600"
+    loading={eager ? 'eager' : 'lazy'}
+    decoding="async"
+  />
+</picture>

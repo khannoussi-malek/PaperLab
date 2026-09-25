@@ -1,0 +1,11 @@
+---
+import { RELEASES } from '../lib/site'
+
+interface Props {
+  where: string
+  label?: string
+}
+const { where, label = 'Download for free' } = Astro.props
+---
+
+<a class="btn btn-primary" href={RELEASES} data-goal="download" data-where={where} rel="noopener">{label}</a>

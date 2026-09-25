@@ -1,0 +1,94 @@
+---
+import FollowButton from '../../components/FollowButton.astro'
+import StarButton from '../../components/StarButton.astro'
+import BaseLayout from '../../layouts/BaseLayout.astro'
+import { breadcrumbs } from '../../lib/schema'
+import { AUTHOR, BASE, CONTRIBUTING, LINKEDIN, REPO, SITE, href } from '../../lib/site'
+
+// Who builds PaperLab and why. Guides credit this page as their author, so search engines and readers can see a
+// real person with a track record behind the advice. Copy follows the README's "Who made this".
+const jsonLd = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'Person',
+    name: AUTHOR.name,
+    url: `${SITE}${BASE}about/`,
+    sameAs: [AUTHOR.site, AUTHOR.linkedin, AUTHOR.github],
+    knowsAbout: ['Research tools', 'Retrieval-augmented generation', 'Local-first software', 'Literature reviews'],
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    name: 'PaperLab',
+    url: `${SITE}${BASE}`,
+    logo: `${SITE}${BASE}favicon.svg`,
+    sameAs: [REPO, LINKEDIN],
+    founder: { '@type': 'Person', name: AUTHOR.name },
+  },
+  breadcrumbs([['About', 'about/']]),
+]
+---
+
+<BaseLayout
+  title="About PaperLab and the person who builds it"
+  description="PaperLab is built in the open by Malek Khannoussi, on his way to a PhD, as a reading tool where every note and answer can be checked against its page."
+  jsonLd={jsonLd}
+>
+  <section class="section">
+    <div class="wrap prose">
+      <p class="eyebrow dot-yellow">About</p>
+      <h1>Built by one researcher, in the open</h1>
+      <p class="lead">
+        PaperLab is built by <a href={AUTHOR.site}>{AUTHOR.name}</a>. I started it on my way to a PhD, because I wanted
+        a tool that let me read papers properly: every note attached to the passage it came from, and every answer
+        checkable against the page. It didn't exist, so I built it, and it has been what I work on every day since.
+      </p>
+
+      <h2>What PaperLab stands for</h2>
+      <ul>
+        <li><strong>Your papers stay yours.</strong> Local-first, no accounts, and a written list of everything each setting sends.</li>
+        <li><strong>AI is labelled.</strong> Model text is stored apart from yours, with the model and prompt behind it.</li>
+        <li><strong>Answers show their sources.</strong> Every claim links to the passage it came from.</li>
+        <li><strong>No paywall tricks.</strong> Only free, legal copies of papers.</li>
+      </ul>
+      <p>
+        More on each: <a href={href('features/local-first/')}>local-first and private</a>,
+        <a href={href('features/anchored-notes/')}>anchored notes</a>, <a href={href('features/ask-a-paper/')}>cited
+        answers</a>, and <a href={href('features/find-papers/')}>finding free papers</a>.
+      </p>
+
+      <h2>I'm looking for a PhD position</h2>
+      <p>
+        If you supervise research, or know a group where this kind of work would fit, I would be glad to hear from you. A
+        pointer to an opening, an introduction, or an honest opinion on the work would all help.
+      </p>
+      <p>
+        Reach me on <a href={AUTHOR.linkedin}>LinkedIn</a> or through <a href={AUTHOR.site}>malekkhannoussi.tn</a>.
+      </p>
+
+      <h2>Follow and help</h2>
+      <p>
+        The <a href={LINKEDIN}>PaperLab page on LinkedIn</a> posts a weekly breakdown of how one feature works. The
+        repository usually runs a few months ahead of what is posted, and a star puts each release in your GitHub feed.
+        The most useful ten minutes you can give needs no code: add a question from your field to the retrieval eval,
+        as <a href={CONTRIBUTING}>CONTRIBUTING.md</a> explains.
+      </p>
+      <div class="actions">
+        <StarButton where="about" />
+        <FollowButton where="about" />
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  h2 {
+    margin-top: 2.5rem;
+  }
+  li {
+    margin-bottom: 0.5rem;
+  }
+  .actions {
+    margin-top: 1.5rem;
+  }
+</style>

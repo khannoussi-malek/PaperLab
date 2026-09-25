@@ -1,0 +1,58 @@
+---
+import GuideLayout from '../../../layouts/GuideLayout.astro'
+import { href } from '../../../lib/site'
+---
+
+<GuideLayout
+  path="guides/organize-research-papers/"
+  title="How to organise research papers: folders, tags and projects"
+  description="A system for organising research papers that survives a PhD: one library, projects instead of folders, consistent names, notes linked to passages."
+  question="What is the best way to organise research papers?"
+  answer="Keep one library for every paper you read, and organise by project rather than by folders: a paper can belong to several projects without being copied. Identify papers by DOI or arXiv ID, keep clean metadata, and attach your notes to the passages they refer to. Then you find papers by what you need them for, and never lose which copy has your notes."
+  updated="2026-09-25"
+  faqs={[
+    {
+      q: 'Folders or tags for research papers?',
+      a: 'Tags or projects, because a paper often belongs to several topics. Folders force one place and lead to duplicate copies with different notes.',
+    },
+    {
+      q: 'How should I name PDF files?',
+      a: 'If you manage files by hand, a pattern like Author-Year-ShortTitle.pdf sorts well. A library tool that stores metadata makes file names matter much less.',
+    },
+    {
+      q: 'Should I keep papers I didn’t find useful?',
+      a: 'Yes, with a one-line note on why. It stops you rereading them, and it documents what you ruled out.',
+    },
+  ]}
+  paperlab="PaperLab keeps one local library: upload PDFs or find free copies by DOI, correct any detail by hand, and group papers into workspaces, with a paper in as many as it serves. Every note stays on its passage, and a graph shows how the library connects."
+>
+  <h2>One library, many projects</h2>
+  <p>
+    Store each paper once. Group papers into projects, chapters or workspaces that reference the same copy, so your
+    highlights and notes exist in one place no matter where you open the paper.
+  </p>
+
+  <h2>Identify papers properly</h2>
+  <ul>
+    <li>Record the <a href={href('glossary/doi/')}>DOI</a> or arXiv ID: it is the one identifier that never changes.</li>
+    <li>Fix wrong titles, years and authors once, at import.</li>
+    <li>Know whether you have the <a href={href('glossary/preprint/')}>preprint</a> or the published version.</li>
+  </ul>
+
+  <h2>A structure that lasts</h2>
+  <table>
+    <thead><tr><th scope="col">Level</th><th scope="col">What it holds</th></tr></thead>
+    <tbody>
+      <tr><td>Library</td><td>Every paper you've read or plan to</td></tr>
+      <tr><td>Project</td><td>The papers for one question, chapter or article</td></tr>
+      <tr><td>Notes</td><td>Your thinking, attached to the passage it is about</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Weekly habits</h2>
+  <ul>
+    <li>Process new papers the week you add them: a first pass and a one-line note.</li>
+    <li>Delete duplicates as soon as you see them.</li>
+    <li>Review a project's notes before each writing session.</li>
+  </ul>
+</GuideLayout>

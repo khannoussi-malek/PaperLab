@@ -1,0 +1,61 @@
+---
+import GuideLayout from '../../../layouts/GuideLayout.astro'
+import { href } from '../../../lib/site'
+---
+
+<GuideLayout
+  path="guides/chat-with-a-pdf-locally/"
+  title="How to chat with a PDF locally and privately, with cited answers"
+  description="Ask PDFs questions without uploading them: a local model with Ollama, a search index on your machine, and answers that cite the page."
+  question="How can you chat with a PDF locally, without uploading it?"
+  answer="Run the model on your own computer with Ollama or LM Studio, and use a reader that keeps the PDF's text and search index on your machine too. A local setup splits the PDF into passages, finds the ones relevant to your question, and sends only those to the local model. Choose a tool whose answers cite the passages they used, so you can check each claim against the page."
+  updated="2026-09-25"
+  faqs={[
+    {
+      q: 'Is it safe to upload research PDFs to online chat tools?',
+      a: 'It depends on the service’s terms and your data. Unpublished manuscripts, reviews under confidentiality, and patient or company data often shouldn’t leave your machine. A local model avoids the question.',
+    },
+    {
+      q: 'What computer do I need to run a local model?',
+      a: 'A recent laptop with 16 GB of memory runs small models (around 7–8 billion parameters) well enough for questions about a paper. Apple silicon Macs and machines with a modern GPU are faster.',
+    },
+    {
+      q: 'Why do answers need citations?',
+      a: 'Models can state things a paper never says. An answer that cites the passage it used lets you check the claim in seconds instead of trusting it.',
+    },
+    {
+      q: 'Can I use Claude or ChatGPT with my local papers?',
+      a: 'Yes, through the Model Context Protocol (MCP): a local server exposes your library to Claude Desktop or another client, which then sends the passages it reads to its provider. That is a choice you make per tool.',
+    },
+  ]}
+  paperlab="PaperLab is a free, open-source PDF reader that runs on your machine and chats with a local Ollama model, Anthropic with your own key, or any OpenAI-compatible server — cloud models are tagged “Cloud”. Answers cite passages like [C1]; click one and the paper scrolls to it. Keep part of an answer as a note, marked AI. It also ships an MCP server for Claude Desktop."
+>
+  <h2>How local PDF chat works</h2>
+  <ol>
+    <li><strong>Extract:</strong> the PDF's text is pulled out and split into sections and passages.</li>
+    <li><strong>Index:</strong> each passage becomes a vector with an <a href={href('glossary/embeddings/')}>embedding</a> model, stored in a local <a href={href('glossary/vector-database/')}>vector database</a>.</li>
+    <li><strong>Retrieve:</strong> your question is matched against the passages; the closest ones are selected.</li>
+    <li><strong>Answer:</strong> only those passages go to the model, which answers and cites them. This is <a href={href('glossary/rag/')}>retrieval-augmented generation</a>.</li>
+  </ol>
+  <p>
+    Short papers can be sent to the model whole, which avoids missing context. Long ones need the retrieval step.
+  </p>
+
+  <h2>Setting it up</h2>
+  <ul>
+    <li>Install <a href="https://ollama.com/">Ollama</a> to run a <a href={href('glossary/local-llm/')}>local LLM</a>, and pull a model, for example <code>ollama pull qwen3:8b</code>.</li>
+    <li>Pick a reader that works with it and stores your library locally.</li>
+    <li>Try a question you know the answer to, and check that the cited passage really says it.</li>
+  </ul>
+
+  <h2>What to look for in a tool</h2>
+  <table>
+    <thead><tr><th scope="col">Question</th><th scope="col">Why it matters</th></tr></thead>
+    <tbody>
+      <tr><td>Where does the PDF text go?</td><td>Local storage keeps unpublished work private</td></tr>
+      <tr><td>Can it use a local model?</td><td>No text leaves your machine, and it costs nothing per question</td></tr>
+      <tr><td>Do answers cite the page?</td><td>You can check claims instead of trusting them</td></tr>
+      <tr><td>Are AI notes marked?</td><td>You can tell your thinking from the model's later</td></tr>
+    </tbody>
+  </table>
+</GuideLayout>
