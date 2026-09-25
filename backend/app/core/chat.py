@@ -17,10 +17,11 @@ from app.core.papers import get_paper
 from app.core.retrieval import RetrievedChunk, _to_chunk, retrieve, searchable
 from app.models import Chunk, LLMOutput, Note, Paper, PaperStatus, Provenance
 
-# v4: asked for notes, the model writes each as a :::note block (M20); v3: [N#] is explicitly citation-only, so
-# "generate notes" can't get mislabeled as one.
-CHAT_PROMPT_VERSION = 4
-WORKSPACE_PROMPT_VERSION = 3  # v3: the same :::note rule
+# v5: the note-block delimiter has a literal example, after the answer eval found qwen3:8b using near-miss markers
+# (<::note>, -::note); v4: asked for notes, the model writes each as a :::note block (M20); v3: [N#] is explicitly
+# citation-only, so "generate notes" can't get mislabeled as one.
+CHAT_PROMPT_VERSION = 5
+WORKSPACE_PROMPT_VERSION = 4  # v4: the same sharpened :::note example
 # Each file holds the system prompt, then the user prompt template after this marker line.
 PROMPT_MARKER = "\n<!-- prompt -->\n"
 SYSTEM_PROMPT, PROMPT_TEMPLATE = prompts.load("chat", CHAT_PROMPT_VERSION).split(PROMPT_MARKER)
