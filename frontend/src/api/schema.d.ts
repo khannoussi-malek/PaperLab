@@ -939,8 +939,9 @@ export interface paths {
         put?: never;
         /**
          * Pull Model
-         * @description Events: progress (repeated), then done with the model, now listed in chat. error replaces done, also when
-         *     Ollama can't be reached, and then nothing is added.
+         * @description Events: progress (repeated), then done with the model, now listed in chat (null for Settings → Search's pull,
+         *     which sends add_to_chat false). error replaces done, also when Ollama can't be reached, and then nothing is
+         *     added.
          */
         post: operations["pull_model_api_llm_connections__connection_id__pull_post"];
         delete?: never;
@@ -986,6 +987,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/embedding/source": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Switch Source
+         * @description Makes the pick the search source (D158): checks it (422, 404), probes it, saves it and starts a rebuild, then
+         *     queues every paper not yet on its name. 200 with nothing queued for the source in use; 409 search_model_missing,
+         *     embedding_model_not_pulled; 502 the provider's sentence; 503 when the papers couldn't be queued after the save.
+         */
+        put: operations["switch_source_api_embedding_source_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/embedding/model": {
         parameters: {
             query?: never;
@@ -1019,7 +1042,9 @@ export interface paths {
         put?: never;
         /**
          * Reindex Library
-         * @description Queues one re-embed per paper with chunks. Chunk ids stay, so answers and notes keep their sources.
+         * @description Queues a re-embed of every paper with chunks, or with missing_only (Settings' Try again) only those not yet on
+         *     the active source. Both clear the last error and start a rebuild (D156). Chunk ids stay, so answers and notes keep
+         *     their sources.
          */
         post: operations["reindex_library_api_embedding_reindex_post"];
         delete?: never;
@@ -1991,6 +2016,16 @@ export interface components {
             unembedded_papers: number;
             /** Papers Needing Search */
             papers_needing_search: number;
+            source: components["schemas"]["SearchSourceOut"];
+            rebuild: components["schemas"]["RebuildOut"] | null;
+            /** Source Error */
+            source_error: string | null;
+            /** Library Papers */
+            library_papers: number;
+            /** Library Notes */
+            library_notes: number;
+            /** Library Chars */
+            library_chars: number;
         };
         /** ErrorEvent */
         ErrorEvent: {
@@ -2644,7 +2679,7 @@ export interface components {
         };
         /** PullDoneEvent */
         PullDoneEvent: {
-            model: components["schemas"]["ModelOut"];
+            model: components["schemas"]["ModelOut"] | null;
         };
         /** PullErrorEvent */
         PullErrorEvent: {
@@ -2664,6 +2699,18 @@ export interface components {
         PullRequest: {
             /** Name */
             name: string;
+            /**
+             * Add To Chat
+             * @default true
+             */
+            add_to_chat: boolean;
+        };
+        /** RebuildOut */
+        RebuildOut: {
+            /** Done */
+            done: number;
+            /** Total */
+            total: number;
         };
         /**
          * ReferenceOut
@@ -2748,6 +2795,11 @@ export interface components {
              * @constant
              */
             confirm: true;
+            /**
+             * Missing Only
+             * @default false
+             */
+            missing_only: boolean;
         };
         /** ResolveRequest */
         ResolveRequest: {
@@ -2931,6 +2983,46 @@ export interface components {
             stats_json: {
                 [key: string]: unknown;
             };
+        };
+        /** SearchSourceIn */
+        SearchSourceIn: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "builtin" | "ollama" | "openai" | "gemini" | "openai_compatible";
+            /** Connection Id */
+            connection_id?: string | null;
+            /** Model */
+            model?: string | null;
+            /**
+             * Confirm
+             * @constant
+             */
+            confirm: true;
+        };
+        /**
+         * SearchSourceOut
+         * @description The search source without its key (M9's rule). `label`: Built-in, OpenAI, Gemini, or the connection's label.
+         */
+        SearchSourceOut: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "builtin" | "ollama" | "openai" | "gemini" | "openai_compatible";
+            /** Connection Id */
+            connection_id: string | null;
+            /** Connection Label */
+            connection_label: string | null;
+            /** Model */
+            model: string | null;
+            /** Host */
+            host: string | null;
+            /** Is Local */
+            is_local: boolean;
+            /** Label */
+            label: string;
         };
         /**
          * Series
@@ -3517,8 +3609,8 @@ export interface operations {
     };
     suggest_notes_api_papers__paper_id__notes_suggest_post: {
         parameters: {
-            query: {
-                model_id: string | null;
+            query?: {
+                model_id?: string | null;
             };
             header?: never;
             path: {
@@ -5510,6 +5602,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EmbeddingStatusOut"];
+                };
+            };
+        };
+    };
+    switch_source_api_embedding_source_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SearchSourceIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReindexOut"];
+                };
+            };
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReindexOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

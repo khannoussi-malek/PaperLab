@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { api, type Hit, type Paper, type SearchRun } from './client'
 import {
   PAPERS_POLL_MS,
+  embeddingPollInterval,
   matchesEligibleHit,
   papersPollInterval,
   searchRunPollInterval,
@@ -128,5 +129,14 @@ describe('prisma cache invalidation', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
 
     expect(resetSpy).not.toHaveBeenCalled()
+  })
+})
+
+describe('embeddingPollInterval', () => {
+  it('asks again every 2 s while search is being rebuilt, and stops once it is done or before the first load', () => {
+    expect(embeddingPollInterval({ rebuild: { done: 3, total: 20 } })).toBe(PAPERS_POLL_MS)
+    expect(PAPERS_POLL_MS).toBe(2000)
+    expect(embeddingPollInterval({ rebuild: null })).toBe(false)
+    expect(embeddingPollInterval(undefined)).toBe(false)
   })
 })

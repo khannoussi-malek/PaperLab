@@ -16,6 +16,7 @@ import {
   type ChatScope,
   type DatasetCreate,
   type EligibilityUpdate,
+  type EmbeddingStatus,
   type GridIn,
   type Hit,
   type HitListOut,
@@ -33,6 +34,7 @@ import {
   type SearchResult,
   type SearchRun,
   type SearchRunCreate,
+  type SearchSourceIn,
   type SnowballRequest,
 } from './client'
 
@@ -718,7 +720,17 @@ export const useConnections = () => useQuery({ queryKey: keys.connections, query
 export const useAvailableModels = (connectionId: string, enabled: boolean) =>
   useQuery({ queryKey: keys.available(connectionId), queryFn: () => api.availableModels(connectionId), enabled })
 
-export const useEmbeddingStatus = () => useQuery({ queryKey: keys.embedding, queryFn: api.embeddingStatus })
+/** GET /api/embedding again every 2 s while search is being rebuilt (D156), so every rebuild line moves; never else. */
+export function embeddingPollInterval(status: Pick<EmbeddingStatus, 'rebuild'> | undefined): number | false {
+  return status?.rebuild ? PAPERS_POLL_MS : false
+}
+
+export const useEmbeddingStatus = () =>
+  useQuery({
+    queryKey: keys.embedding,
+    queryFn: api.embeddingStatus,
+    refetchInterval: (query) => embeddingPollInterval(query.state.data),
+  })
 
 /** For a stream that isn't a mutation (the search model's download): read the embedding status again. */
 export function useInvalidateEmbedding() {
@@ -775,7 +787,28 @@ export function useUpdatePaperSources() {
 /** Queues a re-embed of every paper; the status line refetches once it's queued. */
 export function useReindexLibrary() {
   const client = useQueryClient()
-  return useMutation({ mutationFn: api.reindexLibrary, onSettled: () => client.invalidateQueries({ queryKey: keys.embedding }) })
+  return useMutation({
+    mutationFn: () => api.reindexLibrary(false),
+    onSettled: () => client.invalidateQueries({ queryKey: keys.embedding }),
+  })
+}
+
+/** Settings' Try again (D155): resumes the rebuild for the papers not yet on the active source. Never asks first. */
+export function useTryAgain() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: () => api.reindexLibrary(true),
+    onSettled: () => client.invalidateQueries({ queryKey: keys.embedding }),
+  })
+}
+
+/** Switches the search source (D158). The status refetches, and then polls while the rebuild runs. */
+export function useSwitchSearchSource() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (body: SearchSourceIn) => api.switchSearchSource(body),
+    onSettled: () => client.invalidateQueries({ queryKey: keys.embedding }),
+  })
 }
 
 /** One direction of a paper's references, fetched only once `enabled` (the References tab is open). Polls while the

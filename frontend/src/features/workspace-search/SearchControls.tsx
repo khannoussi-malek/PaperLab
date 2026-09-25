@@ -2,14 +2,14 @@ import { useState } from 'react'
 import { usePaperSources } from '@/api/queries'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import type { SearchRunCreate, SearchSource } from '@/api/client'
+import type { SearchRunCreate, SearchRunSource } from '@/api/client'
 
 // Search/discovery sources only (spec §6) — mirrors the backend's SearchSource Literal. Unpaywall is DOI-only PDF
 // enrichment, never fanned out to by search_batch, so it's excluded here regardless of its own settings switch
 // (C1: sending it used to 422 every Start click).
-const SEARCH_SOURCE_IDS: readonly SearchSource[] = ['arxiv', 'crossref', 'core', 'semantic_scholar', 'openalex']
+const SEARCH_SOURCE_IDS: readonly SearchRunSource[] = ['arxiv', 'crossref', 'core', 'semantic_scholar', 'openalex']
 
-function isSearchSource(id: string): id is SearchSource {
+function isSearchSource(id: string): id is SearchRunSource {
   return (SEARCH_SOURCE_IDS as readonly string[]).includes(id)
 }
 
@@ -27,7 +27,7 @@ export function SearchControls({
   // undefined until usePaperSources resolves, so Start stays disabled rather than sending an empty/wrong list.
   const enabledSources = paperSources.data?.sources
     .filter((source) => source.enabled && isSearchSource(source.id))
-    .map((source) => source.id as SearchSource)
+    .map((source) => source.id as SearchRunSource)
 
   return (
     <div className="flex items-center gap-2 border-b p-3">
