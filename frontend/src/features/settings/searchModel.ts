@@ -1,4 +1,4 @@
-import type { EmbeddingStatus } from '@/api/client'
+import type { EmbeddingStatus, SearchSource } from '@/api/client'
 import { describePull } from './pullProgress'
 
 /** Where this tab's download of the built-in search model stands. */
@@ -42,8 +42,10 @@ export function downloadAnnouncement(download: DownloadState): string {
   return download.status === 'done' ? 'Search model downloaded.' : ''
 }
 
-/** P1: the library's one quiet line shows while no search model is downloaded and some paper is too long to chat
- * with whole. */
-export function showSearchNotice(status: Pick<EmbeddingStatus, 'model_present' | 'papers_needing_search'>): boolean {
-  return !status.model_present && status.papers_needing_search > 0
+/** P1: the library's one quiet line shows while Built-in is the source, its model isn't downloaded, and some paper is
+ * too long to chat with whole. Another source needs no download (D133). */
+export function showSearchNotice(
+  status: Pick<EmbeddingStatus, 'model_present' | 'papers_needing_search'> & { source: Pick<SearchSource, 'kind'> },
+): boolean {
+  return status.source.kind === 'builtin' && !status.model_present && status.papers_needing_search > 0
 }

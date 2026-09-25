@@ -1,7 +1,8 @@
 /**
  * Why an answer failed, in words, and what the user can do about it. `settings`: the fix is on the settings page.
  * `endsThread`: the answer a follow-up continued is gone, so the panel stops following it. `download`: the fix is the
- * search model's Download button, shown in place.
+ * search model's Download button, shown in place. `rebuild`: search is being rebuilt with a new source; the panel
+ * shows its line and bar instead of `message`.
  */
 export type ChatProblem = {
   message: string
@@ -10,6 +11,7 @@ export type ChatProblem = {
   settings?: boolean
   endsThread?: boolean
   download?: boolean
+  rebuild?: boolean
 }
 
 const FOLLOWED_ANSWER_GONE: ChatProblem = {
@@ -38,6 +40,9 @@ const REFUSALS: Record<string, ChatProblem> = {
     reindex: false,
     download: true,
   },
+  // P1 (D156): search is being rebuilt with a new source. The panel shows the rebuild's line and bar from
+  // GET /api/embedding in place of this message, then "Search is ready again." with Retry once it ends.
+  search_rebuilding: { message: 'Search is being rebuilt.', retryable: true, reindex: false, rebuild: true },
   workspace_empty: { message: 'Add papers to chat with this workspace.', retryable: false, reindex: false },
   workspace_not_indexed: {
     message: "None of this workspace's papers can be searched yet. Ask again once they finish processing.",
