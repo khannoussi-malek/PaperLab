@@ -47,6 +47,9 @@ export type PullProgressEvent = components['schemas']['PullProgressEvent']
 export type PullDoneEvent = components['schemas']['PullDoneEvent']
 export type PullErrorEvent = components['schemas']['PullErrorEvent']
 export type EmbeddingStatus = components['schemas']['EmbeddingStatusOut']
+export type SearchSource = components['schemas']['SearchSourceOut']
+export type SearchSourceIn = components['schemas']['SearchSourceIn']
+export type Rebuild = components['schemas']['RebuildOut']
 export type DownloadProgressEvent = components['schemas']['DownloadProgressEvent']
 export type DownloadDoneEvent = components['schemas']['DownloadDoneEvent']
 export type DownloadErrorEvent = components['schemas']['DownloadErrorEvent']
@@ -71,7 +74,8 @@ export type SearchRun = components['schemas']['SearchRunOut']
 export type SearchRunCreate = components['schemas']['SearchRunCreate']
 // The five sources search_batch actually fans out to (backend's SearchSource Literal) — unlike PaperSourceId,
 // never includes 'unpaywall', which has no search/discovery role (spec §6).
-export type SearchSource = SearchRunCreate['sources'][number]
+// Named SearchRunSource, not SearchSource: M25 gives the embedding search source that name instead (SearchSourceOut).
+export type SearchRunSource = SearchRunCreate['sources'][number]
 export type Hit = components['schemas']['HitOut']
 export type HitListOut = components['schemas']['HitListOut']
 export type HitReviewUpdate = components['schemas']['HitReviewUpdate']
@@ -219,16 +223,22 @@ export const api = {
     request<LLMModel>(`/api/llm/connections/${connectionId}/models`, sendJson('POST', { name })),
   removeModel: (id: string) => request<void>(`/api/llm/models/${id}`, { method: 'DELETE' }),
   setDefaultModel: (modelId: string) => request<LLMModel>('/api/llm/default', sendJson('PUT', { model_id: modelId })),
-  /** The raw response: on success its body is the pull's SSE stream (progress…, then done or error). */
-  pullModel: (connectionId: string, name: string, signal?: AbortSignal) =>
-    fetch(`/api/llm/connections/${connectionId}/pull`, { ...sendJson('POST', { name }), signal }),
+  /** The raw response: on success its body is the pull's SSE stream (progress…, then done or error). `addToChat`
+   * false: Settings → Search's pull, which never lists the model in chat (`done.model` is null). */
+  pullModel: (connectionId: string, name: string, signal?: AbortSignal, addToChat = true) =>
+    fetch(`/api/llm/connections/${connectionId}/pull`, { ...sendJson('POST', { name, add_to_chat: addToChat }), signal }),
   /** `name` goes in the query: Ollama names can contain `/`. */
   deleteInstalledModel: (connectionId: string, name: string) =>
     request<void>(`/api/llm/connections/${connectionId}/installed?name=${encodeURIComponent(name)}`, { method: 'DELETE' }),
   embeddingStatus: () => request<EmbeddingStatus>('/api/embedding'),
   /** The raw response: on success its body is the download's SSE stream (progress…, then done or error). */
   downloadSearchModel: () => fetch('/api/embedding/model', { method: 'POST' }),
-  reindexLibrary: () => request<{ papers: number }>('/api/embedding/reindex', sendJson('POST', { confirm: true })),
+  /** `missingOnly`: Settings' Try again, which embeds only the papers not yet on the active source. */
+  reindexLibrary: (missingOnly: boolean) =>
+    request<{ papers: number }>('/api/embedding/reindex', sendJson('POST', { confirm: true, missing_only: missingOnly })),
+  /** Probes the source, then saves it and queues the papers not yet on it: 202 {papers}, 200 for the source in use. */
+  switchSearchSource: (body: SearchSourceIn) =>
+    request<{ papers: number }>('/api/embedding/source', sendJson('PUT', body)),
   paperSources: () => request<PaperSources>('/api/paper-sources'),
   /** Only what `patch` holds changes: a key left out is kept, a null key is removed. */
   updatePaperSources: (patch: PaperSourcesUpdate) =>
