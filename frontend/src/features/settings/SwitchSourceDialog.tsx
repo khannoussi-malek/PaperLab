@@ -35,10 +35,7 @@ type Props = {
  */
 export function SwitchSourceDialog({ open, onOpenChange, picks, target, library }: Props) {
   const switchSource = useSwitchSearchSource()
-  const { state: pull, pull: startPull } = usePullModel(picks.connectionId ?? '', {
-    addToChat: false,
-    onDone: () => void send(),
-  })
+  const { state: pull, pull: startPull } = usePullModel(picks.connectionId ?? '', { addToChat: false })
   const text = switchDialog(target, library)
   const refused = switchSource.error?.message
   const line = pull.status === 'pulling' ? pull.line : null
@@ -83,7 +80,14 @@ export function SwitchSourceDialog({ open, onOpenChange, picks, target, library 
         )}
         {refused === NOT_PULLED && pull.status !== 'pulling' && (
           <div>
-            <Button variant="outline" onClick={() => void startPull(OLLAMA_MODEL)}>
+            <Button
+              variant="outline"
+              onClick={() =>
+                void startPull(OLLAMA_MODEL).then((ok) => {
+                  if (ok) void send()
+                })
+              }
+            >
               <Download aria-hidden />
               {PULL_LABEL}
             </Button>

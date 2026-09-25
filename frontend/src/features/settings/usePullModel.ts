@@ -19,7 +19,8 @@ export type PullState =
  * `addToChat` false never has one to pass (D152), but SetupChat.tsx's `onDone` sets the pulled model as chat's
  * default from its `id`, which only a real model carries — dropping the parameter entirely would have broken that
  * (and its Playwright coverage in e2e/first-run.spec.ts) for no gain, since a future zero-arg caller still satisfies
- * this type.
+ * this type. `pull` also resolves to whether it finished successfully, for a caller with no model to check (the
+ * search-only pull, where `onDone` never fires) to act on once the download is done.
  */
 export function usePullModel(
   connectionId: string,
@@ -31,7 +32,7 @@ export function usePullModel(
 
   useEffect(() => () => controller.current?.abort(), [])
 
-  async function pull(name: string) {
+  async function pull(name: string): Promise<boolean> {
     controller.current?.abort()
     const current = new AbortController()
     controller.current = current
@@ -39,23 +40,32 @@ export function usePullModel(
     const fail = (message: string) => setState({ status: 'error', name, message })
     try {
       const response = await api.pullModel(connectionId, name, current.signal, addToChat)
-      if (!response.ok || !response.body) return fail(await errorDetail(response))
+      if (!response.ok || !response.body) {
+        fail(await errorDetail(response))
+        return false
+      }
       for await (const { event, data } of readSse(response.body)) {
         if (event === 'progress') setState({ status: 'pulling', name, line: JSON.parse(data) as PullProgressEvent })
-        if (event === 'error') return fail((JSON.parse(data) as PullErrorEvent).message)
+        if (event === 'error') {
+          fail((JSON.parse(data) as PullErrorEvent).message)
+          return false
+        }
         if (event === 'done') {
           // A pull for search lists nothing in chat, so its done event carries no model (D152).
           const { model } = JSON.parse(data) as PullDoneEvent
           setState({ status: 'done', name: model?.name ?? name })
           if (model) onDone?.(model)
-          return void invalidateModels()
+          void invalidateModels()
+          return true
         }
       }
       fail('The download stopped before it finished.')
+      return false
     } catch (error) {
-      if (current.signal.aborted) return
+      if (current.signal.aborted) return false
       console.warn('model pull stream failed', error)
       fail("Can't reach the PaperLab API.")
+      return false
     }
   }
 
