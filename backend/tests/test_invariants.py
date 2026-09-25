@@ -96,9 +96,7 @@ async def test_migrations_upgrade_downgrade_upgrade(scratch_url):
     scratch = create_async_engine(scratch_url)
     async with scratch.connect() as conn:
         chunks, links, edges = (
-            await conn.execute(
-                text("SELECT to_regclass('chunks'), to_regclass('paper_links'), to_regclass('edges')")
-            )
+            await conn.execute(text("SELECT to_regclass('chunks'), to_regclass('paper_links'), to_regclass('edges')"))
         ).one()
     await scratch.dispose()
     assert chunks and links
@@ -213,3 +211,50 @@ async def test_the_search_source_is_one_row_that_keeps_its_connection(scratch_ur
             await conn.execute(text("DELETE FROM llm_connections"))  # free once search no longer uses it
     finally:
         await scratch.dispose()
+
+
+@pytest.mark.anyio
+async def test_note_papers_migration_links_every_anchored_pair_and_cascades(scratch_url):
+    """Notes written at 0017, the head when M20's branch was cut, gain one link per note and paper they have a passage
+    on. If the migration is renumbered (K21), this upgrade target moves with it. The cascade is checked here, on a
+    throwaway database, so a broken cascade can be planted without touching the owner's."""
+    dsn = scratch_url.render_as_string(hide_password=False)
+    alembic(dsn, "upgrade", "0017")
+    first, second, note = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    ids = {"a": first, "b": second, "n": note}
+    scratch = create_async_engine(scratch_url)
+    async with scratch.begin() as conn:
+        await conn.execute(
+            text("INSERT INTO papers (id, title, file_path) VALUES (:a, 'A', '/a.pdf'), (:b, 'B', '/b.pdf')"), ids
+        )
+        await conn.execute(text("INSERT INTO notes (id, body, provenance) VALUES (:n, 'n', 'human')"), ids)
+        # Two passages on the first paper and one on the second: two links, not three.
+        await conn.execute(
+            text(
+                "INSERT INTO note_anchors (note_id, paper_id, page, bbox, quoted_text) VALUES "
+                "(:n, :a, 1, '[[1, 2, 3, 4]]', 'q'), (:n, :a, 2, '[[1, 2, 3, 4]]', 'q'), "
+                "(:n, :b, 1, '[[1, 2, 3, 4]]', 'q')"
+            ),
+            ids,
+        )
+
+    alembic(dsn, "upgrade", "head")
+
+    async with scratch.begin() as conn:
+        links = sorted((await conn.execute(text("SELECT note_id, paper_id FROM note_papers"))).all())
+        await conn.execute(text("DELETE FROM note_papers WHERE note_id = :n AND paper_id = :a"), ids)
+        left = (await conn.execute(text("SELECT paper_id FROM note_anchors"))).scalars().all()
+    with pytest.raises(IntegrityError, match="note_anchors_note_paper_fkey"):
+        async with scratch.begin() as conn:
+            await conn.execute(
+                text("INSERT INTO note_anchors (note_id, paper_id, page, bbox) VALUES (:n, :a, 3, '[[1, 2, 3, 4]]')"),
+                ids,
+            )
+    async with scratch.begin() as conn:
+        await conn.execute(text("DELETE FROM papers WHERE id = :b"), ids)
+        kept = (await conn.execute(text("SELECT count(*) FROM notes WHERE id = :n"), ids)).scalar_one()
+        links_after = (await conn.execute(text("SELECT count(*) FROM note_papers"))).scalar_one()
+    await scratch.dispose()
+    assert links == sorted([(note, first), (note, second)])
+    assert left == [second]
+    assert (kept, links_after) == (1, 0)
