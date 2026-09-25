@@ -7,6 +7,7 @@ import { api, type Hit, type Paper, type SearchRun } from './client'
 import {
   PAPERS_POLL_MS,
   embeddingPollInterval,
+  isNotesList,
   matchesEligibleHit,
   papersPollInterval,
   searchRunPollInterval,
@@ -138,5 +139,19 @@ describe('embeddingPollInterval', () => {
     expect(PAPERS_POLL_MS).toBe(2000)
     expect(embeddingPollInterval({ rebuild: null })).toBe(false)
     expect(embeddingPollInterval(undefined)).toBe(false)
+  })
+})
+
+describe('isNotesList', () => {
+  it('is true for a paper’s notes and for every workspace query, whose Notes tabs and counts list notes', () => {
+    expect(isNotesList(['papers', 'p1', 'notes'])).toBe(true)
+    expect(isNotesList(['workspaces'])).toBe(true)
+    expect(isNotesList(['workspaces', 'w1', 'notes'])).toBe(true)
+  })
+
+  it('is false for a paper, its chunks or its chat', () => {
+    expect(isNotesList(['papers', 'p1'])).toBe(false)
+    expect(isNotesList(['papers', 'p1', 'chat'])).toBe(false)
+    expect(isNotesList(['papers', 'p1', 'chunks', 2])).toBe(false)
   })
 })

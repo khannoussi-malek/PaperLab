@@ -4,7 +4,11 @@ import { countsLine, notesByPaper } from './workspaceMeta'
 
 const paper = (id: string, title: string) => ({ id, title }) as Paper
 const note = (id: string, ...paperIds: string[]) =>
-  ({ id, anchors: paperIds.map((paper_id) => ({ paper_id, page: 1, bbox: [], quoted_text: id })) }) as unknown as Note
+  ({
+    id,
+    paper_ids: paperIds,
+    anchors: paperIds.map((paper_id) => ({ paper_id, page: 1, bbox: [], quoted_text: id })),
+  }) as unknown as Note
 
 describe('countsLine', () => {
   it('counts papers and notes, singular or plural', () => {
@@ -51,6 +55,11 @@ describe('notesByPaper', () => {
     // Anchors list p-zzz first; the correct pick is p-aaa, since "p-aaa" < "p-zzz".
     const both = note('n1', 'p-zzz', 'p-aaa')
     expect(notesByPaper([both], [zzz, aaa])).toEqual([{ paper: aaa, notes: [both] }])
+  })
+
+  it('groups a note with no passage in the workspace under its first linked paper there', () => {
+    const whole = { id: 'n1', paper_ids: ['p-elsewhere', 'p-dpr', 'p-bert'], anchors: [] } as unknown as Note
+    expect(notesByPaper([whole], [dpr, bert])).toEqual([{ paper: bert, notes: [whole] }])
   })
 
   it('leaves out notes with no anchor on a workspace paper, and papers with no notes', () => {

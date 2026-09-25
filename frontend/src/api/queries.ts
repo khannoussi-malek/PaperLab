@@ -97,6 +97,14 @@ const keys = {
   libraryGraph: (workspaceId: string | null) => ['graph', workspaceId ?? 'library'] as const,
 }
 
+/** Every list that shows notes: a paper's notes, and every workspace query (its Notes tab and its note count). */
+export const isNotesList = (queryKey: readonly unknown[]) => queryKey[2] === 'notes' || queryKey[0] === 'workspaces'
+
+/** Refetches every list that shows notes: after a note is saved, edited, moved between papers or deleted, or a chart
+ * it shows changes. */
+const refreshNotes = (client: QueryClient) =>
+  client.invalidateQueries({ predicate: (query) => isNotesList(query.queryKey) })
+
 /** Poll the library only while a paper is still ingesting. */
 export function papersPollInterval(papers: Paper[] | undefined): number | false {
   return papers?.some((paper) => paper.status !== 'ready' && paper.status !== 'failed') ? PAPERS_POLL_MS : false
@@ -159,11 +167,7 @@ export function usePromoteNote() {
   return useMutation({
     mutationFn: (promote: PromoteRequest) => api.promoteNote(promote),
     // A workspace answer can anchor the note on several papers, and workspace Notes tabs and counts list it too.
-    onSuccess: (note) =>
-      Promise.all([
-        ...note.anchors.map((anchor) => client.invalidateQueries({ queryKey: keys.notes(anchor.paper_id) })),
-        client.invalidateQueries({ queryKey: keys.workspaces }),
-      ]),
+    onSuccess: () => refreshNotes(client),
   })
 }
 
@@ -605,9 +609,11 @@ export function usePrismaExport(workspaceId: string, runs: string) {
   })
 }
 
-export function useNoteMutations(paperId: string) {
+/** Create, edit, recolour and delete a note: any of them can change what every notes list shows (reader, workspace
+ * Notes tabs and counts, the Notes page). */
+export function useNoteMutations() {
   const client = useQueryClient()
-  const onSuccess = () => client.invalidateQueries({ queryKey: keys.notes(paperId) })
+  const onSuccess = () => refreshNotes(client)
   return {
     create: useMutation({ mutationFn: (note: NoteCreate) => api.createNote(note), onSuccess }),
     update: useMutation({
@@ -678,10 +684,6 @@ export const useResolvedChart = (spec: ChartSpec | null) =>
     enabled: spec !== null,
     placeholderData: keepPreviousData,
   })
-
-/** Notes show their charts: refetch every notes list (reader and workspaces) after a chart or an embed changes. */
-const refreshNotes = (client: QueryClient) =>
-  client.invalidateQueries({ predicate: (query) => query.queryKey[2] === 'notes' || query.queryKey[0] === 'workspaces' })
 
 export function useChartMutations() {
   const client = useQueryClient()

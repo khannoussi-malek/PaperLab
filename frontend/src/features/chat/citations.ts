@@ -10,8 +10,9 @@ export function describeSource(
   paperName?: string,
 ): string {
   if ('provenance' in source) {
-    const where = paperName ? `${paperName} p.${source.page}` : `p.${source.page}`
-    return [source.label, PROVENANCE_LABEL[source.provenance], where].join(' · ')
+    // A note on the whole paper has no page (D95): its paper names it alone.
+    const where = [paperName, source.page === null ? null : `p.${source.page}`].filter(Boolean).join(' ')
+    return [source.label, PROVENANCE_LABEL[source.provenance], where].filter(Boolean).join(' · ')
   }
   const where = `Source ${source.label.replace(/^C/, '')}: ${paperName ? `${paperName}, ` : ''}page ${source.page}`
   return source.section ? `${where}, section “${source.section}”` : where
