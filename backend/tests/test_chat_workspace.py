@@ -199,7 +199,7 @@ async def test_workspace_prepare_retrieves_across_papers_with_per_paper_labels_a
 
     prepared = await chat.prepare(session, chat.Scope(workspace_id=workspace.id), "How do they retrieve?", embedder)
 
-    assert (prepared.system, prepared.whole_paper, prepared.prompt_version) == (chat.WORKSPACE_SYSTEM_PROMPT, False, 4)
+    assert (prepared.system, prepared.whole_paper, prepared.prompt_version) == (chat.WORKSPACE_SYSTEM_PROMPT, False, 5)
     assert prepared.sources[0].text == f"{run} dpr 2"
     assert len(prepared.sources) == 6 and {s.paper_id for s in prepared.sources} == {dpr.id, bert.id}  # 3 each
     assert f"[C1] (Karpukhin 2020, p.3, Method)\n{run} dpr 2" in prepared.prompt
@@ -286,7 +286,7 @@ async def test_workspace_answers_are_saved_and_listed_per_workspace(session, emb
 
     row = await session.get(LLMOutput, output_id)
     chunk_ids = [s.id for s in prepared.sources]
-    assert (row.paper_id, row.workspace_id, row.prompt_version) == (None, workspace.id, 4)
+    assert (row.paper_id, row.workspace_id, row.prompt_version) == (None, workspace.id, 5)
     assert (row.source_chunks, row.cited_chunks) == (chunk_ids, [chunk_ids[1], chunk_ids[0]])
     assert (row.source_notes, row.notes_used, row.notes_total) == ([kept.id, deleted.id], 2, 2)
 
