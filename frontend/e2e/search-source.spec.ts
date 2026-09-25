@@ -191,6 +191,43 @@ test('switching to Ollama without nomic-embed-text offers its pull, which stays 
   await expect(section.locator('.search-rebuild')).toContainText('Search is being rebuilt with Ollama: 0 of 20 papers.')
 })
 
+test('cancelling during an Ollama pull stops the switch that would otherwise follow it', async ({ page }) => {
+  await stubSearch(page, status(BUILT_IN_NAME))
+  const puts: unknown[] = []
+  await page.route('**/api/embedding/source', (route) => {
+    puts.push(route.request().postDataJSON())
+    return route.fulfill({ status: 409, json: { detail: 'embedding_model_not_pulled' } })
+  })
+  let release = () => {}
+  const held = new Promise<void>((resolve) => (release = resolve))
+  await page.route(`**/api/llm/connections/${OLLAMA.id}/pull`, async (route) => {
+    await held // the pull "runs" until the test lets it finish, after Cancel is already pressed
+    return route.fulfill({
+      status: 200,
+      contentType: 'text/event-stream',
+      body: event('progress', { status: 'pulling', total: 100, completed: 100 }) + event('done', { model: null }),
+    })
+  })
+  await page.goto('/#/settings/search')
+  const section = page.getByRole('region', { name: 'Search' })
+  await section.getByRole('combobox', { name: 'Search source' }).click()
+  await page.getByRole('option', { name: 'Ollama', exact: true }).click()
+  await section.getByRole('button', { name: 'Switch search to Ollama' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Switch search to Ollama?' })
+  await dialog.getByRole('button', { name: 'Switch', exact: true }).click()
+  await expect(dialog.getByRole('alert')).toHaveText("nomic-embed-text isn't in Ollama yet.")
+  await dialog.getByRole('button', { name: 'Pull nomic-embed-text · 274 MB' }).click()
+  await expect(dialog.getByRole('progressbar')).toBeVisible() // the pull is in flight
+
+  await dialog.getByRole('button', { name: 'Cancel' }).click()
+  await expect(dialog).toBeHidden()
+  expect(puts).toHaveLength(1) // only the refusal so far; Cancel itself sends nothing new
+
+  release() // the pull finishes only now, well after Cancel — the dialog stays mounted (D157) to receive it
+  await page.waitForTimeout(300) // a bugged build would fire a second PUT here; give it the chance to
+  expect(puts).toHaveLength(1) // still just the refusal: a cancelled dialog must not switch once the pull lands
+})
+
 test('Built-in without its model shows the download block and waits for it before switching', async ({ page }) => {
   await stubSearch(page, status(OPENAI_NAME, { source: ON_OPENAI, model_present: false, download_bytes: 138_007_688 }))
   await page.goto('/#/settings/search')
