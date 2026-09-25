@@ -1,4 +1,5 @@
 import { Download } from 'lucide-react'
+import { useEffect, useRef } from 'react'
 import { useSwitchSearchSource } from '@/api/queries'
 import { glass } from '@/components/glass'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -36,6 +37,13 @@ type Props = {
 export function SwitchSourceDialog({ open, onOpenChange, picks, target, library }: Props) {
   const switchSource = useSwitchSearchSource()
   const { state: pull, pull: startPull } = usePullModel(picks.connectionId ?? '', { addToChat: false })
+  // The dialog stays mounted while "closed" (a controlled Radix Dialog), so a pull already in flight keeps running
+  // past Cancel; the ref lets the pull's `.then()` (whose closure captured `open` at click time) check whether the
+  // dialog is STILL open before switching, instead of switching anyway on a stale true.
+  const openRef = useRef(open)
+  useEffect(() => {
+    openRef.current = open
+  })
   const text = switchDialog(target, library)
   const refused = switchSource.error?.message
   const line = pull.status === 'pulling' ? pull.line : null
@@ -84,7 +92,7 @@ export function SwitchSourceDialog({ open, onOpenChange, picks, target, library 
               variant="outline"
               onClick={() =>
                 void startPull(OLLAMA_MODEL).then((ok) => {
-                  if (ok) void send()
+                  if (ok && openRef.current) void send()
                 })
               }
             >
