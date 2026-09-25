@@ -631,6 +631,16 @@ export function useNoteMutations() {
   }
 }
 
+/** Replaces a note's papers. Every notes list can change (a paper's, a workspace's, the Notes page), and the graph's
+ * noted papers and "noted together" links with them. Resolves once the lists shown have refetched. */
+export function useSetNotePapers() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ noteId, paperIds }: { noteId: string; paperIds: string[] }) => api.setNotePapers(noteId, paperIds),
+    onSuccess: () => Promise.all([refreshNotes(client), client.invalidateQueries({ queryKey: keys.graph })]),
+  })
+}
+
 /** A paper's datasets (captured tables and its numbers), in page order. */
 export const usePaperDatasets = (paperId: string) =>
   useQuery({ queryKey: keys.paperDatasets(paperId), queryFn: () => api.listDatasets(paperId) })

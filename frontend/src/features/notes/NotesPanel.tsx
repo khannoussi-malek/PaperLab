@@ -3,6 +3,7 @@ import { useState, type ReactNode } from 'react'
 import type { Note } from '@/api/client'
 import { cn } from '@/lib/utils'
 import { pressable } from '@/components/motion'
+import { notesHref } from '@/lib/route'
 import type { SelectionAnchor } from '../reader/selection'
 import { NoteCard } from './NoteCard'
 import { NoteComposer } from './NoteComposer'
@@ -22,6 +23,9 @@ type Props = {
   onUpdateNote: (note: Note, body: string) => Promise<boolean>
   onColorNote: (note: Note, hex: string) => Promise<boolean>
   onDeleteNote: (note: Note) => Promise<void>
+  /** A Papers save just took a note off this paper: say where it went. */
+  movedToNotes: boolean
+  onPapersSaved: (note: Note) => void
 }
 
 // A new selection must reset the composer's text, so the draft's position is its identity.
@@ -38,6 +42,14 @@ export function NotesPanel(props: Props) {
   return (
     // RightPanel draws the glass and the border; blur inside blur looks muddy.
     <aside className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-4" aria-label="Notes">
+      {props.movedToNotes && (
+        <p role="status" className="moved-notice rounded-lg bg-muted px-3 py-2 text-sm">
+          Moved to{' '}
+          <a href={notesHref()} className="text-primary hover:underline">
+            Notes
+          </a>
+        </p>
+      )}
       {/* Filters the list only: every highlight stays on the paper. */}
       <div role="group" aria-label="Show notes from" className="flex flex-wrap items-center gap-2">
         <FilterChip
@@ -84,6 +96,7 @@ export function NotesPanel(props: Props) {
           onUpdate={(body) => props.onUpdateNote(note, body)}
           onColorChange={(hex) => props.onColorNote(note, hex)}
           onDelete={() => props.onDeleteNote(note)}
+          onPapersSaved={props.onPapersSaved}
         />
       ))}
     </aside>

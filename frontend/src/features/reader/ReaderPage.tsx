@@ -117,6 +117,8 @@ export function ReaderPage({ paperId, tab, target }: Props) {
   const [numberDraft, setNumberDraft] = useState<SelectionAnchor | null>(null)
   const [draftColor, setDraftColor] = useState(() => loadLastColor(browserStorage()))
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null)
+  // A Papers save took a note off this paper; it stays said until a save keeps one here (Spec note 17).
+  const [movedToNotes, setMovedToNotes] = useState(false)
   // Ids of hover-card notes being edited; the card stays open while any is.
   const [editingNoteIds, setEditingNoteIds] = useState<string[]>([])
   const setNoteEditing = useCallback((noteId: string, editing: boolean) => {
@@ -571,6 +573,8 @@ export function ReaderPage({ paperId, tab, target }: Props) {
             onUpdateNote={updateNoteBody}
             onColorNote={recolorNote}
             onDeleteNote={deleteNote}
+            movedToNotes={movedToNotes}
+            onPapersSaved={(saved) => setMovedToNotes(!saved.paper_ids.includes(paperId))}
           />
         }
         chat={
