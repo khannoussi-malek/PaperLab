@@ -2,11 +2,12 @@ import asyncio
 import logging
 import uuid
 
-from app.core import enrichment, paper_sources, papers
+from app.core import embedding_index, embedding_sources, enrichment, paper_sources, papers
 from app.core.chunking import chunk_blocks
 from app.db import SessionLocal
 from app.models import PaperStatus
 from app.providers import embedding, openalex
+from app.providers.base import LLMError, LLMUnavailable
 from app.providers.extraction import ExtractedDoc, extract
 
 logger = logging.getLogger(__name__)
@@ -30,12 +31,33 @@ async def _enrich(session, transport, paper_id: uuid.UUID, doc: ExtractedDoc) ->
         await session.rollback()
 
 
-async def search_embedder(ctx: dict):
-    """The model that embeds chunks: a test's fake in ctx["embedder"], else this process's own, loaded on first need
-    and kept (D136). None while no search model is downloaded."""
+async def search_embedder(ctx: dict, session):
+    """The embedder for this job: a test's fake in ctx["embedder"], else the active search source's, read now so a
+    switch applies to the next job without a restart (D151). ctx["transport"] is a test's MockTransport. None while
+    Built-in is the source and its model isn't downloaded (D136)."""
     if "embedder" in ctx:
         return ctx["embedder"]
-    return await asyncio.to_thread(embedding.get_model)
+    source = await embedding_sources.active(session)
+    return await asyncio.to_thread(embedding.build, source, ctx.get("transport"))
+
+
+async def _embed(session, pid: uuid.UUID, embedder) -> bool:
+    """Embeds the paper's chunks and writes them if `embedder` is still the search source. A failing source never
+    fails a paper: the old vectors stay and the error is kept for Settings' Try again (D155). True when written."""
+    chunks = await papers.list_chunks(session, pid)
+    try:
+        vectors = await embedding.embed_documents(embedder, [c.text for c in chunks])
+    except (LLMUnavailable, LLMError) as exc:
+        logger.warning("embedding %s with %s failed: %s", pid, embedder.label, exc)
+        await embedding_sources.record_error(session, str(exc))
+        return False
+    # ponytail: a switch landing between this check and the commit leaves one paper on the old source; Try again
+    # fixes it.
+    if await embedding_sources.active_name(session) != embedder.name:
+        logger.info("the search source changed while embedding %s; the newer job embeds it", pid)
+        return False
+    await papers.set_embeddings(session, [c.id for c in chunks], vectors, embedder.name)
+    return True
 
 
 async def ingest_paper(ctx: dict, paper_id: str) -> None:
@@ -43,7 +65,8 @@ async def ingest_paper(ctx: dict, paper_id: str) -> None:
 
     Idempotent: chunks, vectors, authorships and topics are replaced wholesale, so re-run it freely. With no search
     model the embedding stage is skipped: the paper is ready to read and note, and a finished download embeds it (D137).
-    Tests put a fake model in ctx["embedder"] and an httpx transport in ctx["transport"].
+    A failing search source leaves the paper ready without vectors (D155). Tests put a fake model in
+    ctx["embedder"] and an httpx transport in ctx["transport"].
     """
     pid = uuid.UUID(paper_id)
     async with SessionLocal() as session:
@@ -61,14 +84,12 @@ async def ingest_paper(ctx: dict, paper_id: str) -> None:
             drafts = chunk_blocks(doc.blocks)
             await papers.replace_chunks(session, pid, drafts)
 
-            embedder = await search_embedder(ctx)
+            embedder = await search_embedder(ctx, session)
             if embedder is None:
                 logger.info("no search model: %s is ready without vectors", pid)
             else:
                 await papers.set_status(session, pid, PaperStatus.EMBEDDING)
-                chunks = await papers.list_chunks(session, pid)
-                vectors = await embedding.embed_documents(embedder, [c.text for c in chunks])
-                await papers.set_embeddings(session, [c.id for c in chunks], vectors)
+                await _embed(session, pid, embedder)
 
             await papers.set_status(session, pid, PaperStatus.ENRICHING)
             await _enrich(session, ctx.get("transport"), pid, doc)
@@ -83,17 +104,19 @@ async def ingest_paper(ctx: dict, paper_id: str) -> None:
             await papers.set_status(session, pid, PaperStatus.FAILED, error=f"{type(exc).__name__}: {exc}")
 
 
-async def reembed_paper(ctx: dict, paper_id: str) -> None:
-    """Embeds a paper's chunks again with the configured model, in place: chunk ids stay, so saved answers and notes
-    keep their sources. A library re-index queues one per paper, and so does a finished model download for each paper
-    without vectors (D137). With no search model it does nothing."""
+async def reembed_paper(ctx: dict, paper_id: str, missing_only: bool = False) -> None:
+    """Embeds a paper's chunks again with the search source, in place: chunk ids stay, so saved answers and notes keep
+    their sources. A re-index queues one per paper; a switch and Try again queue them with missing_only, which skips a
+    paper already on the source, so a double click or an earlier queued job never pays a cloud twice (D155). A
+    finished model download queues one per paper without vectors (D137). With no search model it does nothing."""
     pid = uuid.UUID(paper_id)
-    embedder = await search_embedder(ctx)
-    if embedder is None:
-        logger.info("no search model: re-embedding %s skipped", pid)
-        return
     async with SessionLocal() as session:
-        chunks = await papers.list_chunks(session, pid)
-        vectors = await embedding.embed_documents(embedder, [c.text for c in chunks])
-        await papers.set_embeddings(session, [c.id for c in chunks], vectors)
-    logger.info("re-embedded %s: %d chunks", pid, len(chunks))
+        embedder = await search_embedder(ctx, session)
+        if embedder is None:
+            logger.info("no search model: re-embedding %s skipped", pid)
+            return
+        if missing_only and not await embedding_index.papers_to_embed(session, embedder.name, [pid]):
+            logger.info("%s is already embedded with %s", pid, embedder.name)
+            return
+        if await _embed(session, pid, embedder):
+            logger.info("re-embedded %s with %s", pid, embedder.name)

@@ -3,10 +3,11 @@ from contextlib import asynccontextmanager
 
 import httpx
 import pytest
+from conftest import FakeEmbedder
 from sqlalchemy import delete, select
 
 from app.api.deps import get_discovery
-from app.core import references
+from app.core import embedding_sources, references
 from app.models import ExternalRef, Note, NoteEmbedding, Paper, PaperSources, paper_references
 from app.workers import references as references_worker
 
@@ -153,6 +154,25 @@ async def test_the_worker_fetch_stores_embeds_and_marks_ready(library, worker, e
     [ref] = await library.scalars(select(ExternalRef))
     assert (ref.title, ref.title_embedding is not None) == ("Worker reference", True)
     assert embedder.calls[0][0] == ["search_document: Worker reference"]
+
+
+async def test_the_worker_fetch_reaches_ready_when_embedding_fails(library, worker, caplog):
+    reader = Paper(title="Reader", file_path="/nonexistent.pdf", doi=READER_DOI, references_state="fetching")
+    library.add(reader)
+    await library.flush()
+    refusing = FakeEmbedder(label="Ollama", refuse="Can't reach ollama.test")
+
+    with caplog.at_level("WARNING", logger="app.workers.references"):
+        ctx = {**worker, "embedder": refusing, "transport": sources_transport()}
+        await references_worker.fetch_references(ctx, str(reader.id))
+
+    await library.refresh(reader)
+    assert (reader.references_state, reader.references_error) == ("ready", None)  # ranked without note similarity
+    assert (
+        f"the references of {reader.id} weren't embedded, so the tab ranks without note similarity: "
+        "Can't reach ollama.test"
+    ) in caplog.text
+    assert (await embedding_sources.active(library)).error is None  # no paper lacks vectors because of it (D155)
 
 
 async def test_the_worker_marks_failed_with_the_reason_and_the_paper_stays_usable(library, worker):

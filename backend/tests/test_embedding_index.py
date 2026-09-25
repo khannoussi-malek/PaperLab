@@ -2,11 +2,11 @@ import uuid
 from contextlib import asynccontextmanager
 
 import pytest
-from conftest import unit_vector
-from sqlalchemy import select
+from conftest import FakeEmbedder, unit_vector
+from sqlalchemy import select, update
 
 from app.config import settings
-from app.core import embedding_index
+from app.core import embedding_index, embedding_sources, llm_connections
 from app.core.errors import Conflict
 from app.models import Chunk, Paper
 from app.providers import embedding
@@ -29,6 +29,44 @@ async def indexed_paper(session, model: str = "test", chunks: int = 2, embedded:
     )
     await session.commit()
     return paper
+
+
+OLLAMA_NAME = "ollama/nomic-embed-text"
+
+
+def worker_uses(session, monkeypatch) -> None:
+    """The worker's jobs open this test's rolled-back session instead of their own."""
+
+    @asynccontextmanager
+    async def shared_session():
+        yield session
+
+    monkeypatch.setattr(ingest, "SessionLocal", shared_session)
+
+
+async def vectors_of(session, paper_id) -> list[tuple[str, list[float] | None]]:
+    # populate_existing: set_embeddings is a bulk UPDATE, which leaves loaded chunks stale.
+    query = select(Chunk).where(Chunk.paper_id == paper_id).order_by(Chunk.ordinal)
+    chunks = await session.scalars(query.execution_options(populate_existing=True))
+    return [(c.embed_model, None if c.embedding is None else list(c.embedding)) for c in chunks]
+
+
+async def ollama_source(session) -> embedding_sources.Source:
+    label = f"Ollama {uuid.uuid4().hex[:8]}"
+    connection = await llm_connections.create_connection(session, "ollama", label, "http://ollama.test:11434", None)
+    return await embedding_sources.candidate(session, "ollama", connection.id, None)
+
+
+class SwitchingEmbedder(FakeEmbedder):
+    """Embeds, while the owner switches search to another source."""
+
+    def __init__(self, session, switch_to: embedding_sources.Source):
+        super().__init__()
+        self._session, self._switch_to = session, switch_to
+
+    async def encode(self, texts):
+        await embedding_sources.save(self._session, self._switch_to)
+        return await super().encode(texts)
 
 
 async def test_status_counts_vectors_by_the_model_they_came_from(session):
@@ -140,3 +178,64 @@ async def test_reembed_paper_embeds_every_chunk_again_with_the_configured_model_
     assert all(list(c.embedding) != list(before[c.id]) for c in after)
     await embedding_index.check_model(session, "test", [paper.id])
     assert ingest.reembed_paper in WorkerSettings.functions
+
+
+async def test_papers_to_embed_are_those_with_a_chunk_not_on_that_source(session):
+    done = await indexed_paper(session, "test")
+    other = await indexed_paper(session, "old-model")
+    unembedded = await indexed_paper(session, "test", embedded=False)
+    half = await indexed_paper(session, "test")
+    await session.execute(update(Chunk).where(Chunk.paper_id == half.id, Chunk.ordinal == 0).values(embedding=None))
+
+    found = set(await embedding_index.papers_to_embed(session, "test"))
+
+    assert {other.id, unembedded.id, half.id} <= found and done.id not in found
+    assert await embedding_index.papers_to_embed(session, "test", [done.id, other.id]) == [other.id]
+
+
+async def test_a_missing_only_job_skips_a_paper_already_on_the_active_source(session, embedder, monkeypatch):
+    done, waiting = await indexed_paper(session, "test"), await indexed_paper(session, "old-model")
+    worker_uses(session, monkeypatch)
+
+    await ingest.reembed_paper({"embedder": embedder}, str(done.id), True)
+    await ingest.reembed_paper({"embedder": embedder}, str(waiting.id), True)
+
+    waiting_texts = [f"search_document: {waiting.title} passage {i}" for i in range(2)]
+    assert [texts for texts, _ in embedder.calls] == [waiting_texts]
+    assert {model for model, _ in await vectors_of(session, waiting.id)} == {"test"}
+
+
+async def test_reembed_keeps_the_old_vectors_when_the_source_fails_and_records_why(session, monkeypatch):
+    paper = await indexed_paper(session, "old-model")
+    before = await vectors_of(session, paper.id)
+    worker_uses(session, monkeypatch)
+    refusing = FakeEmbedder(label="OpenAI", refuse="Key rejected by OpenAI")
+
+    await ingest.reembed_paper({"embedder": refusing}, str(paper.id))
+
+    assert await vectors_of(session, paper.id) == before
+    assert (await embedding_sources.active(session)).error == "Key rejected by OpenAI"
+
+
+async def test_vectors_record_the_name_of_the_source_that_made_them(session, monkeypatch):
+    source = await ollama_source(session)
+    await embedding_sources.save(session, source)
+    paper = await indexed_paper(session, "test")
+    worker_uses(session, monkeypatch)
+
+    await ingest.reembed_paper({"embedder": FakeEmbedder(name=OLLAMA_NAME, label=source.label)}, str(paper.id))
+
+    assert {model for model, _ in await vectors_of(session, paper.id)} == {OLLAMA_NAME}
+
+
+async def test_a_switch_while_embedding_drops_the_vectors_and_says_so(session, monkeypatch, caplog):
+    paper = await indexed_paper(session, "test", embedded=False)
+    switching = SwitchingEmbedder(session, await ollama_source(session))
+    worker_uses(session, monkeypatch)
+
+    with caplog.at_level("INFO", logger="app.workers.ingest"):
+        await ingest.reembed_paper({"embedder": switching}, str(paper.id))
+
+    assert switching.calls  # it did embed
+    assert all(vector is None for _, vector in await vectors_of(session, paper.id))
+    assert f"the search source changed while embedding {paper.id}; the newer job embeds it" in caplog.text

@@ -23,6 +23,7 @@ from app.db import get_session
 from app.main import create_app
 from app.models import Author, Paper, PaperSources
 from app.providers import arxiv, core_ac, crossref, embedding, openalex, semantic_scholar, unpaywall
+from app.providers.base import LLMUnavailable
 from app.providers.llm import FakeLLM
 from app.workers import ingest
 
@@ -126,15 +127,18 @@ class FakeEmbedder:
 
     document_prefix, query_prefix = "search_document: ", "search_query: "
 
-    def __init__(self, name: str = "test", label: str = "Test", is_local: bool = True):
+    def __init__(self, name: str = "test", label: str = "Test", is_local: bool = True, refuse: str | None = None):
         self.name = self.model = name
         self.label = label
         self.is_local = is_local
+        self.refuse = refuse  # a message: encode fails with it, as a source that refuses
         self.calls: list[tuple[list[str], dict]] = []  # (texts, {}): M23's prefix assertions keep their form
         self.vectors: dict[str, list[float]] = {}
 
     async def encode(self, texts: list[str]) -> list[list[float]]:
         self.calls.append((list(texts), {}))
+        if self.refuse is not None:
+            raise LLMUnavailable(self.refuse)
         return [self.vectors.get(t) or unit_vector(t) for t in texts]
 
 

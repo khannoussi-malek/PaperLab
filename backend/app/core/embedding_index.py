@@ -10,7 +10,7 @@ return nonsense. So chat refuses those papers until the library is re-indexed wi
 import uuid
 from dataclasses import dataclass
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import Conflict
@@ -60,4 +60,20 @@ async def unembedded_papers(session: AsyncSession) -> list[uuid.UUID]:
     """Papers with chunks and no vectors: what a finished model download queues for embedding (D137). Whatever their
     status: a paper mid-ingest when the model landed has chunks and no vectors, and would otherwise never get any."""
     query = select(Chunk.paper_id).group_by(Chunk.paper_id).having(func.count(Chunk.embedding) == 0)
+    return list(await session.scalars(query))
+
+
+def _lacking(name: str):
+    """A chunk without a vector from `name`: none yet, or another source's."""
+    return or_(Chunk.embedding.is_(None), Chunk.embed_model != name)
+
+
+async def papers_to_embed(
+    session: AsyncSession, name: str, paper_ids: list[uuid.UUID] | None = None
+) -> list[uuid.UUID]:
+    """Papers with a chunk that has no vector from `name` (D155): what a switch and Try again queue, and what a
+    missing_only job checks before it pays a source again. `paper_ids` narrows it to those papers."""
+    query = select(Chunk.paper_id).group_by(Chunk.paper_id).having(func.bool_or(_lacking(name)))
+    if paper_ids is not None:
+        query = query.where(Chunk.paper_id.in_(paper_ids))
     return list(await session.scalars(query))
