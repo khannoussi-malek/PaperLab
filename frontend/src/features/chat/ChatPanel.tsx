@@ -389,14 +389,6 @@ function ProblemAlert({ scope, problem, onRetry }: { scope: ChatScope; problem: 
     <>
       <Alert variant="destructive" className={cn('chat-error border-glass-border')}>
         {waiting && embedding.data?.rebuild ? <SearchRebuild /> : <AlertDescription>{message}</AlertDescription>}
-        {problem.download && (
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-            <DownloadSearchModel />
-            <a href={settingsHref} className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
-              Use another search source
-            </a>
-          </div>
-        )}
         <AlertAction>
           {problem.retryable && !waiting && (
             <Button variant="outline" size="xs" onClick={onRetry}>
@@ -415,6 +407,16 @@ function ProblemAlert({ scope, problem, onRetry }: { scope: ChatScope; problem: 
           )}
         </AlertAction>
       </Alert>
+      {/* The download block sits outside the alert (not inside it): the alert is role="alert" (assertive, atomic),
+          and the download's status line changes every percent, which would re-read the whole alert on each one. */}
+      {problem.download && (
+        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+          <DownloadSearchModel />
+          <a href={settingsHref} className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
+            Use another search source
+          </a>
+        </div>
+      )}
       {/* D155: a paper that keeps failing keeps search paused; the reason and Try again are here too. */}
       {waiting && <SourceError />}
     </>
