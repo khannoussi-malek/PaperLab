@@ -112,7 +112,7 @@ export function SearchSourcePicker({ status }: { status: EmbeddingStatus }) {
         target={{ kind: chosen.kind, label, model: chosen.model, isLocal: chosen.kind === 'builtin' || connection?.is_local === true }}
         library={status}
       />
-      <ConnectionDialog open={adding} onOpenChange={setAdding} preset={missing?.preset} />
+      <ConnectionDialog key={missing?.preset ?? 'custom'} open={adding} onOpenChange={setAdding} preset={missing?.preset} />
     </div>
   )
 }
