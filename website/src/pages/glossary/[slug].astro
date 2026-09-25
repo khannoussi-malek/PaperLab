@@ -1,0 +1,142 @@
+---
+import DownloadButton from '../../components/DownloadButton.astro'
+import BaseLayout from '../../layouts/BaseLayout.astro'
+import { featureBySlug, type Feature } from '../../lib/features'
+import { TERMS, type Term } from '../../lib/glossary'
+import { GUIDES } from '../../lib/guides'
+import { breadcrumbs } from '../../lib/schema'
+import { BASE, SITE, href } from '../../lib/site'
+
+// One term per page: the definition first, then more detail, then where PaperLab uses it.
+export function getStaticPaths() {
+  return TERMS.map((term) => ({ params: { slug: term.slug }, props: { term } }))
+}
+
+const { term } = Astro.props as { term: Term }
+const path = `glossary/${term.slug}/`
+const features = term.features.map(featureBySlug).filter((f): f is Feature => f !== undefined)
+const guides = GUIDES.filter((guide) => term.guides.includes(guide.path))
+const related = TERMS.filter((other) => term.related.includes(other.slug))
+
+const jsonLd = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'DefinedTerm',
+    name: term.name,
+    description: term.definition,
+    url: `${SITE}${BASE}${path}`,
+    inDefinedTermSet: `${SITE}${BASE}glossary/`,
+  },
+  breadcrumbs([
+    ['Glossary', 'glossary/'],
+    [term.name, path],
+  ]),
+]
+---
+
+<BaseLayout title={term.title} description={term.description} jsonLd={jsonLd}>
+  <article class="section">
+    <div class="wrap prose">
+      <nav aria-label="Breadcrumb" class="crumbs">
+        <a href={href()}>PaperLab</a> / <a href={href('glossary/')}>Glossary</a>
+      </nav>
+      <h1>{term.title.split('?')[0]}?</h1>
+      <p class="answer">{term.definition}</p>
+      {term.more.map((paragraph) => <p>{paragraph}</p>)}
+
+      <aside class="card in-paperlab">
+        <p class="eyebrow dot-yellow">In PaperLab</p>
+        <p>{term.inPaperLab}</p>
+        <ul>
+          {
+            features.map((feature) => (
+              <li>
+                <a href={href(`features/${feature.slug}/`)}>{feature.name}</a>
+                <span class="muted"> — {feature.tagline}</span>
+              </li>
+            ))
+          }
+        </ul>
+        <DownloadButton where={`glossary-${term.slug}`} label="Try PaperLab free" />
+      </aside>
+
+      {
+        guides.length > 0 && (
+          <section aria-labelledby="guides-heading">
+            <h2 id="guides-heading">Read next</h2>
+            <ul>
+              {guides.map((guide) => (
+                <li>
+                  <a href={href(guide.path)}>{guide.title}</a>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )
+      }
+
+      <section aria-labelledby="related-heading">
+        <h2 id="related-heading">Related terms</h2>
+        <ul class="terms">
+          {
+            related.map((other) => (
+              <li>
+                <a href={href(`glossary/${other.slug}/`)}>{other.name}</a>
+              </li>
+            ))
+          }
+        </ul>
+        <p><a href={href('glossary/')}>The whole glossary →</a></p>
+      </section>
+    </div>
+  </article>
+</BaseLayout>
+
+<style>
+  .crumbs {
+    font-size: 0.9rem;
+    color: var(--muted-foreground);
+    margin-bottom: 1rem;
+  }
+  .crumbs a {
+    color: inherit;
+  }
+  .answer {
+    font-size: 1.15rem;
+    line-height: 1.65;
+    padding: 1.25rem 1.5rem;
+    border-left: 4px solid #facc15;
+    background: var(--glass-strong);
+    border-radius: 0 14px 14px 0;
+    box-shadow: var(--shadow);
+  }
+  .in-paperlab {
+    margin: 2.5rem 0;
+  }
+  .in-paperlab ul {
+    padding-left: 1.2rem;
+  }
+  .in-paperlab a {
+    font-weight: 700;
+  }
+  h2 {
+    margin-top: 2.5rem;
+  }
+  .terms {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    list-style: none;
+    padding: 0;
+  }
+  .terms a {
+    display: inline-block;
+    padding: 0.3rem 0.8rem;
+    border-radius: 999px;
+    border: 1px solid var(--glass-border);
+    background: var(--glass);
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.95rem;
+  }
+</style>

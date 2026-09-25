@@ -17,7 +17,7 @@ def test_the_build_context_leaves_out_every_env_file_and_every_local_folder():
     """Docker reads these patterns from the context root: a bare `.env` or `node_modules` would still let
     frontend/.env* and frontend/node_modules into the image (spec §3)."""
     patterns = set((ROOT / ".dockerignore").read_text().split())
-    required = {"**/.env", "**/.env.*", "**/node_modules", "**/.venv", ".git", "docs", "desktop", "frontend/dist"}
+    required = {"**/.env", "**/.env.*", "**/node_modules", "**/.venv", ".git", "docs", "desktop", "website", "frontend/dist"}
 
     assert required <= patterns
     assert {".env", "node_modules", ".venv"} & patterns == set()

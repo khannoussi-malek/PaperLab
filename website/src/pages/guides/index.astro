@@ -1,0 +1,80 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro'
+import { GUIDES, TOPICS } from '../../lib/guides'
+import { breadcrumbs } from '../../lib/schema'
+import { href } from '../../lib/site'
+
+// Guides grouped by topic: each group is a cluster of pages on one subject, linked from one place.
+const groups = TOPICS.map((topic) => ({ topic, guides: GUIDES.filter((guide) => guide.topic === topic) })).filter(
+  (group) => group.guides.length > 0,
+)
+---
+
+<BaseLayout
+  title="Guides — reading, noting and questioning research papers"
+  description="Practical guides for researchers: read papers efficiently, take notes you can cite, find free PDFs, do systematic reviews, and use AI honestly."
+  jsonLd={[breadcrumbs([['Guides', 'guides/']])]}
+>
+  <section class="section">
+    <div class="wrap">
+      <div class="prose">
+        <p class="eyebrow dot-yellow">Guides</p>
+        <h1>Read, note and question papers well</h1>
+        <p class="lead">
+          Practical answers to the questions researchers ask most, whichever tools you use. Terms are explained in the{' '}
+          <a href={href('glossary/')}>glossary</a>.
+        </p>
+      </div>
+      {
+        groups.map(({ topic, guides }) => (
+          <section class="group" aria-label={topic}>
+            <h2>{topic}</h2>
+            <ul class="guides">
+              {guides.map((guide) => (
+                <li class="card">
+                  <a href={href(guide.path)}>{guide.title}</a>
+                  <span class="muted">{guide.blurb}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))
+      }
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .group {
+    margin-top: 3rem;
+  }
+  .group h2 {
+    font-size: 1.7rem;
+  }
+  .guides {
+    list-style: none;
+    padding: 0;
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
+  }
+  .guides li {
+    display: grid;
+    gap: 0.3rem;
+    position: relative;
+  }
+  .guides a {
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: var(--foreground);
+    text-decoration: none;
+  }
+  .guides a::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+  }
+  .guides li:hover a {
+    color: var(--primary);
+  }
+</style>

@@ -1,0 +1,50 @@
+---
+import GuideLayout from '../../../layouts/GuideLayout.astro'
+import { href } from '../../../lib/site'
+---
+
+<GuideLayout
+  path="guides/disclose-ai-use-in-research/"
+  title="How to disclose AI use in research writing and theses"
+  description="What to disclose when you use AI in research: which tool, model and version, for what, and how you checked it. Keep AI text apart from yours to make it easy."
+  question="How should you disclose AI use in research?"
+  answer="State which tool and model you used, its version, what you used it for, and how you checked its output, following your university's or journal's policy. Most policies say an AI can't be an author and that you are responsible for every claim. Disclosure is easiest when AI-written text was kept separate from your own and labelled with the model that produced it from the start."
+  updated="2026-09-25"
+  faqs={[
+    {
+      q: 'Do I have to disclose using AI to summarise papers?',
+      a: 'Policies differ. Many ask you to disclose AI use that shaped the content, not spell checking. When in doubt, disclose: it costs a sentence.',
+    },
+    {
+      q: 'Can AI be listed as an author?',
+      a: 'Major publishers and guidelines say no, because an AI can’t take responsibility for the work.',
+    },
+    {
+      q: 'Where does the disclosure go?',
+      a: 'Usually in the methods, the acknowledgements, or a dedicated statement, as the venue specifies.',
+    },
+  ]}
+  paperlab="PaperLab stores AI text apart from yours, with the model and prompt version that produced it, and labels it AI everywhere. Editing an AI note marks it “AI · edited”, never “You”, so you always know what to disclose."
+>
+  <h2>What to record while you work</h2>
+  <ul>
+    <li>The tool and the model, with its version.</li>
+    <li>What you asked it to do: summarise, suggest, translate, draft.</li>
+    <li>Which parts of your work it affected.</li>
+    <li>How you checked its output against sources.</li>
+  </ul>
+
+  <h2>A disclosure you can adapt</h2>
+  <p class="card">
+    “We used [tool] with [model and version] to [purpose]. All outputs were checked against the cited sources by the
+    authors, who take full responsibility for the content.”
+  </p>
+
+  <h2>Why checking matters</h2>
+  <p>
+    Models can invent citations and misattribute claims, the problem known as
+    <a href={href('glossary/hallucination/')}>hallucination</a>. Disclosing use is not enough: each claim that came from
+    an AI should be traced to its source. See <a href={href('guides/check-ai-answers-against-sources/')}>how to check AI
+    answers</a>.
+  </p>
+</GuideLayout>

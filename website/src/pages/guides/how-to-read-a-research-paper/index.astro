@@ -1,0 +1,62 @@
+---
+import GuideLayout from '../../../layouts/GuideLayout.astro'
+import { href } from '../../../lib/site'
+---
+
+<GuideLayout
+  path="guides/how-to-read-a-research-paper/"
+  title="How to read a research paper efficiently: the three-pass method"
+  description="Read a research paper in three passes: skim for the claim, read for the argument, then check the details. What to skip, what to note, and how to keep it."
+  question="How do you read a research paper efficiently?"
+  answer="Read it in three passes instead of front to back. First skim the title, abstract, figures and conclusion (5–10 minutes) to decide whether it matters. Then read the introduction, method and results for the argument, marking the claims you'd cite. Only for papers central to your work, do a third pass that checks the details, the maths and the references. Write a note at each mark, tied to the passage, so you never have to read it twice."
+  updated="2026-09-25"
+  faqs={[
+    {
+      q: 'How long should it take to read a research paper?',
+      a: 'A first pass takes 5–10 minutes and is enough for most papers. A careful second pass takes about an hour. A full third pass, re-deriving results and checking references, can take several hours and is only worth it for papers your own work builds on.',
+    },
+    {
+      q: 'Should I read the abstract or the conclusion first?',
+      a: 'Both, in the first pass: the abstract says what the authors claim, and the conclusion often says it more plainly, with limitations. Then look at the figures, which carry most results.',
+    },
+    {
+      q: 'How do I remember what I read in a paper?',
+      a: 'Write short notes in your own words while reading, each attached to the passage it came from, and revisit them when you write. Notes you can trace back to the page are the ones you can cite with confidence later.',
+    },
+    {
+      q: 'Can AI summarize a paper for me?',
+      a: 'It can help you decide whether to read it, but a summary can be wrong in ways you can’t see. Use tools whose answers cite the passages they used, and check the claims you rely on against the page.',
+    },
+  ]}
+  paperlab="PaperLab is a free, open-source reader that runs on your computer. Highlight a passage in one of five colours and the note you write stays attached to it; click the note later and the paper opens at that spot. When you do ask a model, its answer cites the passages it used, so checking it takes one click."
+>
+  <h2>Pass one: decide whether it matters (5–10 minutes)</h2>
+  <ul>
+    <li>Read the title, abstract, headings, figures and their captions, and the conclusion.</li>
+    <li>Glance at the references for papers you already know, and note any <a href={href('glossary/preprint/')}>preprint</a> you may want the published version of.</li>
+    <li>Answer five questions: what kind of paper is it, what is the claim, is it relevant to you, is it well founded at a glance, and what are the main contributions?</li>
+  </ul>
+  <p>Most papers stop here. That is the point: you read more papers well by reading most of them briefly.</p>
+
+  <h2>Pass two: follow the argument (about an hour)</h2>
+  <ul>
+    <li>Read the introduction, method and results. Skip proofs and derivations for now.</li>
+    <li>Look hard at figures and tables: axes, error bars, what is compared with what.</li>
+    <li>Highlight the claims you might cite and write one line on each: what it says and whether you believe it.</li>
+    <li>Mark references you want to follow up: <a href={href('glossary/snowballing/')}>snowballing</a> from them later finds what a search misses.</li>
+  </ul>
+
+  <h2>Pass three: check it (for the papers your work rests on)</h2>
+  <ul>
+    <li>Try to re-derive the key results, or re-run them if the code is available.</li>
+    <li>Question every assumption and look for what the paper doesn't test.</li>
+    <li>Compare the numbers with your own results or with other papers.</li>
+  </ul>
+
+  <h2>What to note while reading</h2>
+  <p>
+    A good reading note records the claim, the evidence for it, your judgement, and where on the page it came from.
+    That last part is the one people skip, and it's the one that saves you rereading when you write the related-work
+    section months later.
+  </p>
+</GuideLayout>

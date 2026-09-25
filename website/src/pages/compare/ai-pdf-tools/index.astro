@@ -1,0 +1,55 @@
+---
+import GuideLayout from '../../../layouts/GuideLayout.astro'
+import { href } from '../../../lib/site'
+---
+
+<GuideLayout
+  path="compare/ai-pdf-tools/"
+  title="Open-source alternative to ChatPDF, Elicit and SciSpace"
+  description="Online AI paper tools compared with a local, open-source option: where your PDFs go, which models you can use, whether answers cite the page, and what it costs."
+  question="Is there an open-source, local alternative to ChatPDF, Elicit or SciSpace?"
+  answer="Yes. ChatPDF, Elicit and SciSpace are online services: you upload papers or search their index, and their models answer on their servers, with free tiers and paid plans. A local, open-source tool such as PaperLab keeps your PDFs and notes on your computer, lets you pick the model (including local ones through Ollama), and cites the passage behind each answer. Online tools are quicker to start; local ones keep your data and cost nothing per question."
+  updated="2026-09-25"
+  faqs={[
+    {
+      q: 'Is ChatPDF free?',
+      a: 'ChatPDF, Elicit and SciSpace each offer a free tier with limits and paid plans. Limits change, so check their pricing pages.',
+    },
+    {
+      q: 'What does Elicit do that a PDF chat tool doesn’t?',
+      a: 'Elicit searches a large index of papers and extracts data from many at once into a table. PDF chat tools focus on the documents you bring.',
+    },
+    {
+      q: 'Why use a local tool instead?',
+      a: 'Unpublished work, peer reviews and sensitive data often shouldn’t be uploaded. A local tool with a local model keeps the text on your machine, and has no per-question cost.',
+    },
+  ]}
+  paperlab="PaperLab is free and open source under Apache-2.0. It runs on your machine, answers with a local Ollama model or a cloud model of your choice (tagged “Cloud”), cites the passage behind every claim, and keeps AI text labelled and apart from your notes. It also finds free PDFs across arXiv, Crossref, CORE, Unpaywall and Semantic Scholar."
+>
+  <h2>Two kinds of tool</h2>
+  <table>
+    <thead><tr><th scope="col"></th><th scope="col">Online services</th><th scope="col">Local, open source</th></tr></thead>
+    <tbody>
+      <tr><td>Where PDFs go</td><td>Uploaded to the service</td><td>Stay on your computer</td></tr>
+      <tr><td>Models</td><td>The service's choice</td><td>Yours: a <a href={href('glossary/local-llm/')}>local LLM</a> or a cloud one</td></tr>
+      <tr><td>Cost</td><td>Free tier, then subscription</td><td>Free; cloud models bill per use</td></tr>
+      <tr><td>Setup</td><td>Sign up and go</td><td>Install once</td></tr>
+      <tr><td>Searching all of science</td><td>Often built in</td><td>Through open sources you enable</td></tr>
+      <tr><td>Source code</td><td>Closed</td><td>Open: you can read and change it</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Questions to ask any AI paper tool</h2>
+  <ul>
+    <li>Does each answer point to the passage it used, and can I open it? (See <a href={href('glossary/rag/')}>RAG</a>.)</li>
+    <li>Where are my PDFs and notes stored, and for how long?</li>
+    <li>Can I export my notes, with their sources?</li>
+    <li>Is AI-written text marked, so I can disclose it honestly?</li>
+  </ul>
+
+  <h2>When an online service is the better fit</h2>
+  <p>
+    If you need to search and extract data across thousands of papers you don't have yet, a service with its own large
+    index saves time. For reading, noting and questioning the papers you do have, a local tool keeps you in control.
+  </p>
+</GuideLayout>

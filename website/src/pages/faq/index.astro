@@ -1,0 +1,96 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro'
+
+// One list feeds both the page and its FAQPage structured data, so the two can't drift apart.
+const faqs = [
+  {
+    q: 'Is PaperLab free?',
+    a: 'Yes. PaperLab is free and open source under the Apache-2.0 licence. Cloud models you connect bill you directly; local models through Ollama cost nothing.',
+  },
+  {
+    q: 'Do my papers leave my computer?',
+    a: 'Not with a local model. Your PDFs, notes and search index live in a local database. A model tagged “Cloud” receives the passages and notes sent with each question, and a search source tagged Cloud receives the text it indexes; PaperLab asks before that first send. The README lists what every setting sends and where.',
+  },
+  {
+    q: 'Do I need an AI model to use it?',
+    a: 'No. Reading, highlighting and notes work without any model. The first run offers a chat model and a search model, and both can be skipped and set up later in Settings.',
+  },
+  {
+    q: 'Which models can I use?',
+    a: 'A local Ollama model, Anthropic with your own key, or any OpenAI-compatible server: OpenAI, OpenRouter, Groq, Mistral, DeepSeek, Gemini, LM Studio, vLLM or llama.cpp. You pick the model per question.',
+  },
+  {
+    q: 'Can it download paywalled papers?',
+    a: 'No. PaperLab adds a paper in a click when a free copy exists on arXiv, a repository or an open-access publisher. When there is none, it links to the publisher’s page and you download it yourself.',
+  },
+  {
+    q: 'How do I tell what I wrote from what the AI wrote?',
+    a: 'AI text is stored apart from yours, with the model and prompt version that produced it, and always shows an AI badge. Editing an AI note marks it “AI · edited”, never “You”.',
+  },
+  {
+    q: 'Why do I need Docker?',
+    a: 'PaperLab runs its database, search index and background worker in Docker, so the app itself stays small and your library stays in one place. Docker Desktop, OrbStack, Colima and Rancher Desktop all work.',
+  },
+  {
+    q: 'Is PaperLab a Zotero replacement?',
+    a: 'It does a different job. Zotero manages references and citations for writing; PaperLab is where you read: notes anchored to the passage, answers that cite the page, and a graph of how papers connect. Many people will want both.',
+  },
+  {
+    q: 'Does it work with Claude Desktop?',
+    a: 'Yes. PaperLab includes an MCP server, so Claude Desktop, Claude Code or another MCP client can search your library, read a paper’s outline and notes, and save a note on a passage it quotes, marked AI.',
+  },
+  {
+    q: 'How can I help?',
+    a: 'Star the repository so other researchers find it, and follow the weekly breakdowns on LinkedIn. To contribute, add a question from your field to the retrieval eval (about ten minutes, no application code) or pick an issue labelled good first issue.',
+  },
+]
+
+const jsonLd = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: faqs.map(({ q, a }) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })),
+  },
+]
+---
+
+<BaseLayout
+  title="FAQ — privacy, models, paywalls and Docker in PaperLab"
+  description="Answers about PaperLab: what stays on your computer, which AI models work, why it never gets past a paywall, how AI text is labelled, and why it needs Docker."
+  jsonLd={jsonLd}
+>
+  <section class="section">
+    <div class="wrap prose">
+      <p class="eyebrow">FAQ</p>
+      <h1>Questions people ask</h1>
+      {
+        faqs.map(({ q, a }) => (
+          <details>
+            <summary>
+              <h2>{q}</h2>
+            </summary>
+            <p class="muted">{a}</p>
+          </details>
+        ))
+      }
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  details {
+    border-bottom: 1px solid var(--border);
+    padding: 1rem 0;
+  }
+  summary {
+    cursor: pointer;
+    list-style-position: outside;
+  }
+  summary h2 {
+    display: inline;
+    font-size: 1.35rem;
+  }
+  details p {
+    margin: 0.75rem 0 0.25rem;
+  }
+</style>

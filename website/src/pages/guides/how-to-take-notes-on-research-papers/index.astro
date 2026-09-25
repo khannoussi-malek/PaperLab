@@ -1,0 +1,55 @@
+---
+import GuideLayout from '../../../layouts/GuideLayout.astro'
+import { href } from '../../../lib/site'
+---
+
+<GuideLayout
+  path="guides/how-to-take-notes-on-research-papers/"
+  title="How to take notes on research papers you can find and cite later"
+  description="Research notes that stay useful: one idea per note, in your words, attached to the passage it came from, and grouped by project."
+  question="How should you take notes on research papers?"
+  answer="Write one idea per note, in your own words, and attach each note to the exact passage it came from: the page, and ideally the highlighted sentence. Record whether it is the paper's claim or your opinion, group notes by project rather than by paper, and review them when you write. A note that can't be traced back to its source can't be cited with confidence."
+  updated="2026-09-25"
+  faqs={[
+    {
+      q: 'Should I take notes on paper or digitally?',
+      a: 'Either works for thinking; digital notes win for finding things again. What matters most is that each note records its source precisely enough to go back to it.',
+    },
+    {
+      q: 'How do I organize notes from many papers?',
+      a: 'Group them by the question or project they serve, not only by paper. A note on a method belongs next to notes from other papers that use or criticise it.',
+    },
+    {
+      q: 'What is the difference between a highlight and a note?',
+      a: 'A highlight marks what the paper says. A note says what you think about it: why it matters, whether you believe it, and how it connects to your work. Highlights without notes are hard to use later.',
+    },
+    {
+      q: 'Can I use AI to take notes on papers?',
+      a: 'It can draft notes, but keep them visibly separate from your own and keep the passage each one is based on. Otherwise, months later, you can’t tell your judgement from a model’s summary.',
+    },
+  ]}
+  paperlab="In PaperLab every note is anchored to the passage you highlighted, with its page and position, and clicking it reopens the paper right there. Each note shows who wrote it — You, AI, or AI · edited — and you can filter by either. Workspaces group papers by project and show all their notes in one place."
+>
+  <h2>The four parts of a useful note</h2>
+  <ol>
+    <li><strong>The source, precisely:</strong> paper, page, and the passage itself.</li>
+    <li><strong>The idea, in your words:</strong> one per note, so it can be moved and combined.</li>
+    <li><strong>Whose it is:</strong> the paper's claim, your interpretation, or something a tool generated.</li>
+    <li><strong>Why it matters:</strong> which question or chapter it serves.</li>
+  </ol>
+
+  <h2>A workflow that holds up over a PhD</h2>
+  <ul>
+    <li>Highlight while reading, but write a note only when you have a thought about the passage.</li>
+    <li>Colour-code consistently, for example yellow for claims, green for methods, blue for numbers you might reuse.</li>
+    <li>Keep project folders or workspaces, and put each paper in every project it serves.</li>
+    <li>Before writing a section, read the notes for that project, not the papers again.</li>
+  </ul>
+
+  <h2>Common mistakes</h2>
+  <ul>
+    <li>Highlighting everything and noting nothing.</li>
+    <li>Notes in a separate app that lose the link to the page.</li>
+    <li>Mixing AI summaries with your own notes until you can't tell them apart, and missing an <a href={href('glossary/hallucination/')}>AI hallucination</a> as a result.</li>
+  </ul>
+</GuideLayout>

@@ -1,0 +1,60 @@
+---
+import GuideLayout from '../../../layouts/GuideLayout.astro'
+import { href } from '../../../lib/site'
+---
+
+<GuideLayout
+  path="guides/find-a-free-pdf-of-a-paper/"
+  title="How to find a free, legal PDF of a research paper"
+  description="Legal ways to read a paywalled paper for free: arXiv and preprints, institutional repositories, Unpaywall, CORE, your library, or emailing the authors."
+  question="How can you find a free, legal PDF of a research paper?"
+  answer="Many paywalled papers have a legal free copy somewhere. Search the title on arXiv or another preprint server, check the authors' institutional repository, and paste the DOI into Unpaywall or CORE, which index open-access versions. Semantic Scholar and Google Scholar often link a free PDF. If none exists, ask your library for interlibrary loan or email the authors: most are glad to send their paper."
+  updated="2026-09-25"
+  faqs={[
+    {
+      q: 'Is it legal to read the arXiv version of a published paper?',
+      a: 'Yes. Authors post preprints and accepted manuscripts on arXiv and repositories under the rights they keep. The text may differ slightly from the published version, so check the published one before quoting page numbers.',
+    },
+    {
+      q: 'What is Unpaywall?',
+      a: 'Unpaywall is a free database of open-access copies of scholarly articles. Give it a DOI and it returns a legal free version if one exists, from a repository, a preprint server or the publisher.',
+    },
+    {
+      q: 'Can I email the author for a copy of their paper?',
+      a: 'Yes, and it usually works. Authors can generally share their own work for scholarly use. A short, polite email with the paper’s title is enough.',
+    },
+    {
+      q: 'What is the difference between a preprint and a postprint?',
+      a: 'A preprint is the version before peer review. A postprint, or accepted manuscript, is the peer-reviewed text before the publisher’s formatting. Postprints match the published content closely.',
+    },
+  ]}
+  paperlab="PaperLab's Find papers searches arXiv, Crossref, CORE, Unpaywall and Semantic Scholar at once, shows which source found each paper, and adds it in a click when a free PDF exists. When there is no free copy, it links to the publisher's page and stops there: it never gets past a paywall."
+>
+  <h2>Where free copies live</h2>
+  <table>
+    <thead><tr><th scope="col">Source</th><th scope="col">What you find there</th></tr></thead>
+    <tbody>
+      <tr><td>arXiv, bioRxiv, medRxiv, SSRN</td><td><a href={href('glossary/preprint/')}>Preprints</a> and accepted manuscripts, posted by the authors</td></tr>
+      <tr><td>Institutional repositories, HAL, Zenodo</td><td>Versions universities and funders require authors to deposit</td></tr>
+      <tr><td>Unpaywall</td><td>A legal <a href={href('glossary/open-access/')}>open-access</a> copy for a DOI, wherever it is hosted</td></tr>
+      <tr><td>CORE</td><td>Full texts aggregated from thousands of repositories</td></tr>
+      <tr><td>Semantic Scholar, Google Scholar</td><td>“All versions” links, often including a free PDF</td></tr>
+      <tr><td>PubMed Central</td><td>Free full text for much biomedical research</td></tr>
+    </tbody>
+  </table>
+
+  <h2>A quick order to try</h2>
+  <ol>
+    <li>Paste the <a href={href('glossary/doi/')}>DOI</a> into Unpaywall.</li>
+    <li>Search the exact title on arXiv or the field's preprint server.</li>
+    <li>Open the paper on Semantic Scholar or Google Scholar and check its other versions.</li>
+    <li>Look at the first author's university repository or personal page.</li>
+    <li>Ask your library, or email the corresponding author.</li>
+  </ol>
+
+  <h2>What to avoid</h2>
+  <p>
+    Sites that copy paywalled papers without permission put you and your institution at legal risk, and their files
+    can be altered. The legal routes above cover a large share of recent research.
+  </p>
+</GuideLayout>
