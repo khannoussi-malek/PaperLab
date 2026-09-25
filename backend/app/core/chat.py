@@ -17,12 +17,15 @@ from app.core.papers import get_paper
 from app.core.retrieval import RetrievedChunk, _to_chunk, retrieve, searchable
 from app.models import Chunk, LLMOutput, Note, Paper, PaperStatus, Provenance
 
-CHAT_PROMPT_VERSION = 3  # v3: [N#] is explicitly citation-only, so "generate notes" can't get mislabeled as one
-WORKSPACE_PROMPT_VERSION = 2
-# Each file holds the system prompt, then the user prompt template after the marker line.
-SYSTEM_PROMPT, PROMPT_TEMPLATE = prompts.load("chat", CHAT_PROMPT_VERSION).split("\n<!-- prompt -->\n")
+# v4: asked for notes, the model writes each as a :::note block (M20); v3: [N#] is explicitly citation-only, so
+# "generate notes" can't get mislabeled as one.
+CHAT_PROMPT_VERSION = 4
+WORKSPACE_PROMPT_VERSION = 3  # v3: the same :::note rule
+# Each file holds the system prompt, then the user prompt template after this marker line.
+PROMPT_MARKER = "\n<!-- prompt -->\n"
+SYSTEM_PROMPT, PROMPT_TEMPLATE = prompts.load("chat", CHAT_PROMPT_VERSION).split(PROMPT_MARKER)
 WORKSPACE_SYSTEM_PROMPT, WORKSPACE_PROMPT_TEMPLATE = prompts.load("chat_workspace", WORKSPACE_PROMPT_VERSION).split(
-    "\n<!-- prompt -->\n"
+    PROMPT_MARKER
 )
 # ponytail: characters stand in for tokens. Revisit with the eval numbers or a model's real context size.
 SMALL_PAPER_CHARS = 24_000

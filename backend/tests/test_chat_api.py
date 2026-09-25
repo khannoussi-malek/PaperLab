@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from conftest import parse_sse
 from sqlalchemy import delete, func, select
+from test_chat import NOTE_RULE
 from test_chat_workspace import add_note
 from test_note_papers import paper_only_note
 
@@ -64,7 +65,7 @@ async def test_chat_streams_sources_then_tokens_then_done_and_saves_one_output(c
 
     [output] = await outputs_for(session, paper.id)
     assert events[-1][1] == {
-        "output_id": str(output.id), "model": "fake", "connection_name": "Fake", "prompt_version": 3, "cited": ["C1"]
+        "output_id": str(output.id), "model": "fake", "connection_name": "Fake", "prompt_version": 4, "cited": ["C1"]
     }
     assert (output.question, output.content, output.model, output.connection_name) == (
         "What is the method?", FAKE_ANSWER, "fake", "Fake"
@@ -289,3 +290,12 @@ async def test_saving_a_suggestion_answers_each_refusal_with_its_status(client, 
     assert (missing.status_code, missing.json()) == (422, {"detail": "no_such_block"})
     assert negative.status_code == 422
     assert (unknown.status_code, unknown.json()) == (404, {"detail": "answer_not_found"})
+
+
+async def test_paper_chat_asks_with_the_note_block_rule(client, session, fake_llm):
+    paper, _ = await make_paper(session, ["Intro text."])
+
+    await client.post(f"/api/papers/{paper.id}/chat", json={"question": "What is it about?"})
+
+    system, _ = fake_llm.calls[0]
+    assert system == chat.SYSTEM_PROMPT and NOTE_RULE in system

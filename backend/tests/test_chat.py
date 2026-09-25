@@ -15,6 +15,22 @@ from app.providers import embedding
 
 pytestmark = pytest.mark.anyio
 
+OLD_N_RULE = (
+    '- [N#] only ever labels a note already listed below. Never invent a new [N#] to number or head something you '
+    'write yourself — if the question asks you to summarize, list key points, or "generate notes," just answer in '
+    'cited prose or a dash list; saving anything as an actual note happens separately, outside this answer.'
+)
+NEW_N_RULE = (
+    '- [N#] only ever labels a note already listed below. Never invent a new [N#] to number or head something you '
+    'write yourself — if the question asks you to summarize or list key points, just answer in cited prose or a '
+    'dash list.'
+)
+NOTE_RULE = (
+    '- Only when the question asks you to write notes, write each note as its own block: a line ":::note", the note '
+    'with its citations, then a line ":::". One idea per note, kept short. Otherwise never write these blocks.'
+)
+PROSE = "- Answer in concise plain prose."
+
 
 async def make_paper(session, texts: list[str], *, status="ready", embedded=True, **fields) -> Paper:
     paper = Paper(title="Attention Is All You Need", file_path="/nonexistent.pdf", status=status, **fields)
@@ -130,7 +146,7 @@ async def test_save_answer_fills_every_column_and_inserts_no_note(session):
     ids = [s.id for s in prepared.sources]
     assert (row.paper_id, row.kind, row.question, row.content) == (paper.id, "chat", "why?", answer)
     assert (row.source_chunks, row.cited_chunks) == (ids, [ids[2], ids[0]])
-    assert (row.model, row.prompt_version, row.whole_paper) == ("qwen3:8b", 3, True)
+    assert (row.model, row.prompt_version, row.whole_paper) == ("qwen3:8b", 4, True)
     assert await session.scalar(select(func.count()).select_from(Note)) == notes_before
 
 
@@ -143,7 +159,7 @@ async def test_prepare_gives_a_paper_its_own_notes_newest_first_after_the_passag
 
     prepared = await chat.prepare(session, paper.id, "What do my notes say?")
 
-    assert (prepared.system, prepared.prompt_version) == (chat.SYSTEM_PROMPT, 3)
+    assert (prepared.system, prepared.prompt_version) == (chat.SYSTEM_PROMPT, 4)
     assert "[N1]" in prepared.system
     notes_block = '[N1] (AI · Devlin 2019 p.1) "quote Uses NSP." — Uses NSP.\n[N2] (You · Devlin 2019 p.2)'
     assert notes_block in prepared.prompt and "Not this paper" not in prepared.prompt
@@ -288,3 +304,14 @@ async def test_paper_chat_sends_a_note_on_the_whole_paper_without_a_page(session
 
     assert "[N1] (You · Devlin 2019) — The whole paper argues for grounding." in prepared.prompt
     assert prepared.notes == [chat.NoteSource(id=note.id, paper_id=paper.id, page=None, provenance="human")]
+
+
+def test_the_note_block_rule_is_new_in_chat_v4_and_workspace_v3_and_the_older_prompts_stay():
+    expected_chat = prompts.load("chat", 3).replace(OLD_N_RULE, NEW_N_RULE).replace(PROSE, f"{NOTE_RULE}\n{PROSE}")
+    assert prompts.load("chat", 4) == expected_chat
+    expected_workspace = (
+        prompts.load("chat_workspace", 2).replace(OLD_N_RULE, NEW_N_RULE).replace(PROSE, f"{NOTE_RULE}\n{PROSE}")
+    )
+    assert prompts.load("chat_workspace", 3) == expected_workspace
+    assert NOTE_RULE not in prompts.load("chat", 3) + prompts.load("chat_workspace", 2)
+    assert (chat.CHAT_PROMPT_VERSION, chat.WORKSPACE_PROMPT_VERSION) == (4, 3)
