@@ -48,8 +48,8 @@ test.describe('with no search model @no-search-model', () => {
 
     const refused = page.locator('.chat-error')
     await expect(refused).toContainText("Search isn't set up, so this can't be searched yet.")
-    await expect(refused.getByRole('button', { name: DOWNLOAD })).toBeVisible()
-    await expect(refused.getByRole('link', { name: 'Use another search source' })).toHaveAttribute('href', '#/settings')
+    await expect(page.getByRole('button', { name: DOWNLOAD })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Use another search source' })).toHaveAttribute('href', '#/settings')
     await expect(refused.getByRole('button', { name: 'Retry' })).toHaveCount(0)
   })
 
