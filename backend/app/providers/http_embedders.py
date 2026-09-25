@@ -1,6 +1,6 @@
-"""The search sources behind a model connection (D150–D155): Ollama, and OpenAI with OpenAI-compatible servers. Each is
-an async TextEmbedder built per call by embedding.build from the connection's current values, like build_llm; under
-LLM_PROVIDER=fake every one is FakeRemoteEmbedder.
+"""The search sources behind a model connection (D150–D155): Ollama, OpenAI with OpenAI-compatible servers, and Gemini.
+Each is an async TextEmbedder built per call by embedding.build from the connection's current values, like build_llm;
+under LLM_PROVIDER=fake every one is FakeRemoteEmbedder.
 
 `source` is anything with kind, model, name, label, is_local, host, base_url and api_key (embedding_sources.Source).
 A call's batches go one after another, so at most ARQ's 10 jobs send requests at once. Each request retries 429s, 5xx
@@ -22,6 +22,7 @@ RETRIED = {429, 500, 502, 503, 504}
 FIRST_WAIT = 1.0  # seconds, then 2, then 4
 MAX_WAIT = 20.0  # one batch stays well inside ARQ's 300 s job timeout
 GAVE_UP = "{label} is limiting requests (429), and PaperLab gave up after 4 tries. Try again in a few minutes."
+GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"  # native, not M9's /openai endpoint
 _sleep = asyncio.sleep  # tests record the waits instead
 
 
@@ -131,6 +132,28 @@ class OpenAIEmbedder(_Remote):
         return [item["embedding"] for item in sorted(data, key=lambda item: item["index"])]
 
 
+class GeminiEmbedder(_Remote):
+    """Google's native batchEmbedContents for gemini-embedding-2 (D154): one request per text (several parts in one
+    request become one vector), 768 dimensions each, 100 a call. The key goes in x-goog-api-key, never in the URL, where
+    logs would keep it. Predicted from Google's reference; the top-level outputDimensionality is its documented REST
+    form, marked deprecated in favour of embedContentConfig, which is where it moves if Google refuses it."""
+
+    BATCH = 100
+
+    def _headers(self):
+        return {"x-goog-api-key": self._source.api_key} if self._source.api_key else {}
+
+    async def _batch(self, client, texts):
+        model = f"models/{self.model}"
+        requests = [
+            {"model": model, "content": {"parts": [{"text": text}]}, "outputDimensionality": DIMENSIONS}
+            for text in texts
+        ]
+        url = f"{GEMINI_BASE}/{model}:batchEmbedContents"
+        response = await _post(client, url, {"requests": requests}, self._source)
+        return [item["values"] for item in _json(response, self._source)["embeddings"]]
+
+
 class FakeRemoteEmbedder:
     """LLM_PROVIDER=fake's stand-in for every connection-based source (M9 decision 13): DIMENSIONS numbers from a hash
     of each text, offline. It records under the source's own name, which embedding_sources.name_for makes `fake:…`."""
@@ -147,4 +170,9 @@ def _seed(text: str) -> int:
     return int.from_bytes(hashlib.sha256(text.encode()).digest()[:8], "big")
 
 
-ADAPTERS = {"ollama": OllamaEmbedder, "openai": OpenAIEmbedder, "openai_compatible": OpenAIEmbedder}
+ADAPTERS = {
+    "ollama": OllamaEmbedder,
+    "openai": OpenAIEmbedder,
+    "openai_compatible": OpenAIEmbedder,
+    "gemini": GeminiEmbedder,
+}
