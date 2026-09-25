@@ -200,6 +200,11 @@ type Fixtures = {
   llmName: string
   /** A connection named `llmName` with one model, `e2e-model`. */
   llmConnection: LlmConnection
+  /**
+   * Registers a note to delete after the test. The paper fixtures only find the notes on their paper, so a note moved
+   * to no paper, or saved on none, would otherwise stay on the owner's database.
+   */
+  cleanupNote: (noteId: string) => void
 }
 
 export const test = base.extend<Fixtures>({
@@ -254,6 +259,12 @@ export const test = base.extend<Fixtures>({
   // No teardown of its own: `llmName` deletes it.
   llmConnection: async ({ request, llmName }, use) => {
     await use(await addLlmConnection(request, llmName))
+  },
+  cleanupNote: async ({ request }, use) => {
+    const ids = new Set<string>()
+    await use((noteId) => void ids.add(noteId))
+    // A note a paper fixture deleted already answers 404: fine.
+    for (const id of ids) await request.delete(`/api/notes/${id}`)
   },
 })
 
