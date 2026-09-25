@@ -27,6 +27,7 @@ export type Route =
   | { name: 'settings'; section: SettingsSection }
   | { name: 'connect-claude' }
   | { name: 'graph' }
+  | { name: 'notes'; paper: string | null } // a paper id, 'none' for no paper, or null for every note
   | { name: 'setup' }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -38,6 +39,7 @@ const SETTINGS_SECTION_HASH = /^#\/settings\/([a-z]+)$/
 const SETTINGS_SECTIONS: readonly SettingsSection[] = ['models', 'sources', 'search', 'desktop', 'claude']
 const CONNECT_CLAUDE_HASH = '#/connect-claude'
 const GRAPH_HASH = '#/graph'
+const NOTES_HASH = /^#\/notes(?:\?(.*))?$/i
 const SETUP_HASH = '#/setup'
 
 function pageOf(params: URLSearchParams): number | null {
@@ -82,6 +84,11 @@ export function parseRoute(hash: string): Route {
   }
   if (hash === CONNECT_CLAUDE_HASH) return { name: 'connect-claude' }
   if (hash === GRAPH_HASH) return { name: 'graph' }
+  const notes = NOTES_HASH.exec(hash)
+  if (notes) {
+    const paper = new URLSearchParams(notes[1]).get('paper') ?? ''
+    return { name: 'notes', paper: paper === 'none' || UUID.test(paper) ? paper : null }
+  }
   if (hash === SETUP_HASH) return { name: 'setup' }
   const charts = CHARTS_HASH.exec(hash)
   if (charts) return chartsRoute(charts)
@@ -139,6 +146,8 @@ export const settingsHref = SETTINGS_HASH
 export const settingsSectionHref = (section: SettingsSection) => `${SETTINGS_HASH}/${section}`
 export const connectClaudeHref = CONNECT_CLAUDE_HASH
 export const graphHref = GRAPH_HASH
+/** The Notes page: every note, one paper's (its id), or the notes on no paper ('none'). */
+export const notesHref = (paper?: string | null) => (paper ? `#/notes?paper=${paper}` : '#/notes')
 export const setupHref = SETUP_HASH
 export const chartsHref = '#/charts'
 export const chartHref = (chartId: string) => `#/charts/${chartId}`

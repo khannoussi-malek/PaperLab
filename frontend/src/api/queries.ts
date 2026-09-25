@@ -95,10 +95,13 @@ const keys = {
   // Its own key: the graph is one payload, refetched when the owner's own links change, not when the library polls.
   graph: ['graph'] as const,
   libraryGraph: (workspaceId: string | null) => ['graph', workspaceId ?? 'library'] as const,
+  // The Notes page's lists: every note, one paper's, or those on no paper.
+  allNotes: (paper: string | null) => ['notes', paper ?? 'all'] as const,
 }
 
-/** Every list that shows notes: a paper's notes, and every workspace query (its Notes tab and its note count). */
-export const isNotesList = (queryKey: readonly unknown[]) => queryKey[2] === 'notes' || queryKey[0] === 'workspaces'
+/** Every list that shows notes: the Notes page's, a paper's, and every workspace query (its Notes tab and count). */
+export const isNotesList = (queryKey: readonly unknown[]) =>
+  queryKey[0] === 'notes' || queryKey[2] === 'notes' || queryKey[0] === 'workspaces'
 
 /** Refetches every list that shows notes: after a note is saved, edited, moved between papers or deleted, or a chart
  * it shows changes. */
@@ -126,6 +129,10 @@ export const usePaper = (id: string) => useQuery({ queryKey: keys.paper(id), que
 
 export const useNotes = (paperId: string) =>
   useQuery({ queryKey: keys.notes(paperId), queryFn: () => api.listNotes(paperId) })
+
+/** The Notes page: every note, one paper's, or those on no paper, newest first. */
+export const useAllNotes = (paper: string | null) =>
+  useQuery({ queryKey: keys.allNotes(paper), queryFn: () => api.listAllNotes(paper) })
 
 /** One page's chunks, fetched only when `page` is set: the reader's `?chunk=` target needs its rects. */
 export const useChunksOnPage = (paperId: string, page: number | null) =>
