@@ -1,9 +1,9 @@
 """Chat over one paper or one workspace: choose the sources, build the prompt, store answers.
 
-Never writes notes: an answer becomes a note only through notes.promote_llm_fragment.
+Never writes notes: an answer becomes a note through notes.promote_llm_fragment or notes.save_suggestion, both a
+click by the reader.
 """
 
-import re
 import uuid
 from dataclasses import dataclass, field
 
@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import prompts, workspaces
 from app.core.errors import Conflict, NotFound
-from app.core.notes import Anchor, NoteView, _with_anchors, list_notes_for_paper
+from app.core.notes import _CITATION, Anchor, NoteView, _with_anchors, list_notes_for_paper, papers_of, parse_citations
 from app.core.papers import get_paper
 from app.core.retrieval import RetrievedChunk, _to_chunk, retrieve, searchable
 from app.models import Chunk, LLMOutput, Note, Paper, PaperStatus, Provenance
@@ -42,7 +42,6 @@ NOTES_CHAR_BUDGET = 16_000
 # too much like a plausible answer to a weak model. A full sentence doesn't.
 NO_NOTES_PLACEHOLDER = "No notes have been written yet."
 BADGES = {Provenance.HUMAN: "You", Provenance.LLM: "AI", Provenance.LLM_EDITED: "AI · edited"}
-_CITATION = re.compile(r"\[([CN])(\d+)\]")
 _SOURCE_COLUMNS = (Chunk.id, Chunk.paper_id, Chunk.page, Chunk.section_title, Chunk.bbox, Chunk.text)
 
 
@@ -97,10 +96,20 @@ class Thread:
 
 
 @dataclass(frozen=True)
+class SavedNote:
+    """A suggested note saved from an answer (D96): its block, the note, and the note's papers now, by title."""
+
+    index: int
+    note_id: uuid.UUID
+    paper_ids: list[uuid.UUID]
+
+
+@dataclass(frozen=True)
 class Answer:
     output: LLMOutput
     sources: list[RetrievedChunk | None]  # None: a re-ingest replaced that chunk
     notes: list[NoteSource | None] = field(default_factory=list)  # None: the note was deleted
+    saved_notes: list[SavedNote] = field(default_factory=list)  # by block index
 
 
 async def chunk_sources(session: AsyncSession, *where) -> list[RetrievedChunk]:
@@ -336,12 +345,6 @@ async def prepare(
     )
 
 
-def parse_citations(text: str, n: int, kind: str = "C") -> list[int]:
-    """[C{i}] (or [N{i}]) numbers cited in the final text: first-seen order, no repeats, unknown labels dropped."""
-    cited = (int(number) for label, number in _CITATION.findall(text) if label == kind)
-    return list(dict.fromkeys(i for i in cited if 1 <= i <= n))
-
-
 async def save_answer(
     session: AsyncSession,
     paper_id: uuid.UUID | Scope,
@@ -394,12 +397,24 @@ async def list_answers(session: AsyncSession, paper_id: uuid.UUID | Scope) -> li
     note_ids = {note_id for output in outputs for note_id in output.source_notes}
     notes = await _with_anchors(session, list(await session.scalars(select(Note).where(Note.id.in_(note_ids)))))
     by_id = {n.id: n for n in notes}
+    saved = (
+        await session.execute(
+            select(Note.source_id, Note.source_block, Note.id)
+            .where(Note.source_id.in_([o.id for o in outputs]), Note.source_block.is_not(None))
+            .order_by(Note.source_block)
+        )
+    ).all()
+    saved_papers = await papers_of(session, [note_id for *_, note_id in saved])
+    saved_notes: dict[uuid.UUID, list[SavedNote]] = {}
+    for output_id, index, note_id in saved:
+        saved_notes.setdefault(output_id, []).append(SavedNote(index, note_id, saved_papers.get(note_id, [])))
     return [
         Answer(
             output=o,
             sources=[chunks.get(chunk_id) for chunk_id in o.source_chunks],
             # None: the note was deleted, or is no longer linked to a paper in scope (spec §4.3).
             notes=[None if note_id not in by_id else _source(by_id[note_id], members) for note_id in o.source_notes],
+            saved_notes=saved_notes.get(o.id, []),
         )
         for o in outputs
     ]

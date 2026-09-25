@@ -2,6 +2,8 @@
 
 - LLM responses go to llm_outputs, never directly into notes.            (core/chat.py)
 - Promoting an LLM fragment creates a note with provenance='llm' + source_id. (here)
+- Saving a chat suggestion creates a note with provenance='llm', source_id = the answer and source_block = the
+  block's index.  (here)
 - Editing an 'llm' note flips it to 'llm_edited'.                          (here)
 - Changing a note's colour never changes its provenance.                     (here)
 - Changing a note's papers never changes its provenance (D97).                (here)
@@ -20,6 +22,7 @@ from datetime import datetime
 
 from sqlalchemy import delete, func, insert, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.chunking import join_lines
@@ -39,6 +42,11 @@ _PLAIN = str.maketrans({"‘": "'", "’": "'", "“": '"', "”": '"', "–": "
 MCP_OUTPUT_KIND = "mcp"
 QUOTE_NOT_FOUND_HINT = "Copy quoted_text exactly from one passage of this paper, as search_library returned it."
 QUOTE_AMBIGUOUS_HINT = "This text appears more than once in the paper. Quote a longer stretch around it."
+# A citation marker in a stored answer: [C3] is a passage, [N2] a note. Chat parses answers with the same pattern.
+_CITATION = re.compile(r"\[([CN])(\d+)\]")
+# A suggested note in a chat answer (D94): a line ":::note", the note, then a line ":::".
+NOTE_OPEN, NOTE_CLOSE = ":::note", ":::"
+STALE_CHUNK = "a cited chunk no longer exists; the paper was re-ingested, so ask again"
 
 
 @dataclass(frozen=True)
@@ -83,6 +91,34 @@ def normalize_color(color: str) -> str:
     if not _HEX_COLOR.fullmatch(value):
         raise InvalidInput(f"colour {color!r} is not a #rrggbb hex value")
     return value
+
+
+def parse_citations(text: str, n: int, kind: str = "C") -> list[int]:
+    """[C{i}] (or [N{i}]) numbers cited in the final text: first-seen order, no repeats, unknown labels dropped."""
+    cited = (int(number) for label, number in _CITATION.findall(text) if label == kind)
+    return list(dict.fromkeys(i for i in cited if 1 <= i <= n))
+
+
+def note_blocks(content: str) -> list[str]:
+    """The suggested notes in a chat answer, in order: blocks numbered from 0, empty ones included, so an index never
+    shifts. A line that is exactly `:::note` once stripped opens a block and one that is exactly `:::` closes it; the
+    block is the lines between, joined and stripped as a whole. A block still open at the end runs to the end, and a
+    `:::note` line inside a block is text (they don't nest). Lines split on "\\n" only, so features/chat/noteBlocks.ts
+    reads an answer the same way (both are tested on its noteBlocks.cases.json)."""
+    blocks: list[str] = []
+    lines: list[str] | None = None  # the open block's lines; None outside a block
+    for line in content.split("\n"):
+        if lines is None:
+            if line.strip() == NOTE_OPEN:
+                lines = []
+        elif line.strip() == NOTE_CLOSE:
+            blocks.append("\n".join(lines).strip())
+            lines = None
+        else:
+            lines.append(line)
+    if lines is not None:
+        blocks.append("\n".join(lines).strip())
+    return blocks
 
 
 def reading_position(note: NoteView, paper_id: uuid.UUID) -> tuple[int, float, float]:
@@ -258,13 +294,31 @@ def _collapse_whitespace(text: str) -> str:
     return " ".join(text.split())
 
 
+async def _chunk_anchors(session: AsyncSession, chunk_ids: list[uuid.UUID]) -> list[dict]:
+    """One anchor row (no note_id yet) per spot the chunks cover, in their order: note_anchors' PK is (note_id,
+    paper_id, page, bbox), and two chunks can share a spot. chunk_id stays NULL because a re-ingest replaces chunks
+    (D10). Raises InvalidInput(STALE_CHUNK) when a chunk is gone."""
+    wanted = list(dict.fromkeys(chunk_ids))
+    if not wanted:
+        return []
+    chunks = {c.id: c for c in await session.scalars(select(Chunk).where(Chunk.id.in_(wanted)))}
+    if len(chunks) != len(wanted):
+        raise InvalidInput(STALE_CHUNK)
+    rows: dict[tuple, dict] = {}
+    for chunk_id in wanted:
+        c = chunks[chunk_id]
+        key = (c.paper_id, c.page, tuple(tuple(rect) for rect in c.bbox))
+        rows.setdefault(key, {"paper_id": c.paper_id, "page": c.page, "bbox": c.bbox, "quoted_text": c.text})
+    return list(rows.values())
+
+
 async def promote_llm_fragment(
     session: AsyncSession, output_id: uuid.UUID, body: str, chunk_ids: list[uuid.UUID]
 ) -> NoteView:
     """Save part of a stored answer as a note with provenance='llm' and source_id = the answer.
 
     The body must come from the answer, so text a person wrote can never be labelled as AI output.
-    One anchor per cited chunk; chunk_id stays NULL because a re-ingest replaces chunks (D10).
+    One anchor per spot the cited chunks cover (_chunk_anchors, shared with save_suggestion).
     """
     output = await session.get(LLMOutput, output_id)
     if output is None:
@@ -279,27 +333,56 @@ async def promote_llm_fragment(
         raise InvalidInput("a promoted note needs at least one cited chunk")
     if not set(wanted) <= set(output.source_chunks):
         raise InvalidInput("a chunk is not a source of this answer")
-    chunks = {c.id: c for c in await session.scalars(select(Chunk).where(Chunk.id.in_(wanted)))}
-    if len(chunks) != len(wanted):
-        raise InvalidInput("a cited chunk no longer exists; the paper was re-ingested, so ask again")
+    rows = await _chunk_anchors(session, wanted)
 
     note = Note(body=text, provenance=Provenance.LLM, source_id=output.id)
     session.add(note)
     await session.flush()
-    # note_anchors' PK is (note_id, paper_id, page, bbox); two chunks can share a spot on the
-    # page, so collapse to one anchor per key or the bulk insert hits a duplicate-key error.
-    anchors: dict[tuple, dict] = {}
-    for chunk_id in wanted:
-        c = chunks[chunk_id]
-        key = (c.paper_id, c.page, tuple(tuple(rect) for rect in c.bbox))
-        anchors.setdefault(
-            key, {"note_id": note.id, "paper_id": c.paper_id, "page": c.page, "bbox": c.bbox, "quoted_text": c.text}
-        )
-    await _link(session, note.id, [row["paper_id"] for row in anchors.values()])
-    await session.execute(insert(note_anchors), list(anchors.values()))
+    await _link(session, note.id, [row["paper_id"] for row in rows])
+    await session.execute(insert(note_anchors), [{**row, "note_id": note.id} for row in rows])
     await session.commit()
     await session.refresh(note)
     return (await _with_anchors(session, [note]))[0]
+
+
+async def save_suggestion(session: AsyncSession, output_id: uuid.UUID, index: int) -> NoteView:
+    """Saves the chat answer's `:::note` block `index` as a note (D94, D96): provenance='llm', source_id = the answer,
+    source_block = the index. The body is the block as stored, markers kept, so it is always the model's words.
+
+    Anchored on the passages the block itself cites ([N…] anchors nothing), and linked to their papers, plus the
+    answer's paper in paper chat (N6). Raises NotFound("answer_not_found"), InvalidInput("no_such_block" | "empty_body"
+    | STALE_CHUNK), Conflict("already_saved").
+    """
+    output = await session.get(LLMOutput, output_id)
+    if output is None or output.kind != "chat":
+        raise NotFound("answer_not_found")
+    blocks = note_blocks(output.content)
+    if not 0 <= index < len(blocks):
+        raise InvalidInput("no_such_block")
+    body = blocks[index]
+    if not body:
+        raise InvalidInput("empty_body")
+    cited = [output.source_chunks[i - 1] for i in parse_citations(body, len(output.source_chunks))]
+    rows = await _chunk_anchors(session, cited)
+    papers = [row["paper_id"] for row in rows] + ([output.paper_id] if output.paper_id else [])
+
+    note = Note(body=body, provenance=Provenance.LLM, source_id=output_id, source_block=index)
+    session.add(note)
+    try:
+        await session.flush()
+    except IntegrityError:
+        await session.rollback()
+        # Name the refusal only when it is the unique index: another insert failure (the answer deleted meanwhile)
+        # is not "already saved".
+        saved = select(Note.id).where(Note.source_id == output_id, Note.source_block == index)
+        if await session.scalar(saved) is None:
+            raise
+        raise Conflict("already_saved") from None
+    await _link(session, note.id, papers)
+    if rows:
+        await session.execute(insert(note_anchors), [{**row, "note_id": note.id} for row in rows])
+    await session.commit()
+    return await _view(session, note)
 
 
 async def _get_chart(session: AsyncSession, chart_id: uuid.UUID) -> Chart:

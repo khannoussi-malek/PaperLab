@@ -1,0 +1,52 @@
+[
+  {
+    "name": "two blocks with prose around them",
+    "content": "Here are notes.\n:::note\nSelf-attention relates every position [C1].\n:::\nIn between.\n:::note\nKeep one idea per note.\n:::\nThat is all.",
+    "blocks": ["Self-attention relates every position [C1].", "Keep one idea per note."]
+  },
+  {
+    "name": "an unclosed last block runs to the end, as one does while it streams",
+    "content": "Notes:\n:::note\nFirst [C1].\n:::\n:::note\nSecond, still streaming [C",
+    "blocks": ["First [C1].", "Second, still streaming [C"]
+  },
+  {
+    "name": "a :::note line inside a block is text",
+    "content": ":::note\nOuter\n:::note\ninner\n:::\nafter",
+    "blocks": ["Outer\n:::note\ninner"]
+  },
+  {
+    "name": "an empty block keeps its index",
+    "content": ":::note\n\n:::\n:::note\nSecond [N1].\n:::",
+    "blocks": ["", "Second [N1]."]
+  },
+  {
+    "name": "indented markers, and a body stripped as a whole",
+    "content": "Intro\n  :::note  \n\n   A body with its own indent.\n\n  :::\nOutro",
+    "blocks": ["A body with its own indent."]
+  },
+  {
+    "name": "no blocks: markers must be whole lines",
+    "content": "Plain prose [C1] with ::: and :::notes inline.\n::: not a marker\n:::notes",
+    "blocks": []
+  },
+  {
+    "name": "a close marker outside a block is prose",
+    "content": ":::\nText\n:::note\nA\n:::",
+    "blocks": ["A"]
+  },
+  {
+    "name": "an open marker on the last line starts an empty block",
+    "content": "Prose\n:::note",
+    "blocks": [""]
+  },
+  {
+    "name": "a multi-line body keeps its inner lines",
+    "content": ":::note\nLine one [C2].\n\n- a list item\n:::",
+    "blocks": ["Line one [C2].\n\n- a list item"]
+  },
+  {
+    "name": "Windows line endings",
+    "content": "Intro\r\n:::note\r\nBody [C1].\r\n:::\r\n",
+    "blocks": ["Body [C1]."]
+  }
+]

@@ -56,6 +56,12 @@ class ErrorEvent(BaseModel):
     retryable: bool
 
 
+class SavedNoteOut(BaseModel):
+    index: int  # the answer's :::note block it was saved from, from 0
+    note_id: uuid.UUID
+    paper_ids: list[uuid.UUID]  # the note's papers now, by title: where the card's Open goes
+
+
 class ChatAnswer(BaseModel):
     id: uuid.UUID
     question: str
@@ -72,9 +78,14 @@ class ChatAnswer(BaseModel):
     notes_used: int | None
     notes_total: int | None
     parent_id: uuid.UUID | None  # the answer this one follows up; null for a question asked on its own
+    saved_notes: list[SavedNoteOut]  # its suggested notes already saved, by block
 
 
 class PromoteRequest(BaseModel):
     output_id: uuid.UUID
     body: str = Field(max_length=50_000)
     chunk_ids: list[uuid.UUID] = Field(min_length=1, max_length=100)
+
+
+class SaveSuggestion(BaseModel):
+    index: int = Field(ge=0)  # the answer's :::note block, from 0

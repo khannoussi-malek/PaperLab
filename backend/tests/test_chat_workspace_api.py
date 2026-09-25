@@ -186,3 +186,17 @@ def test_workspace_schemas_are_in_openapi():
     for name in ["NoteSource", "WorkspaceOut", "WorkspaceCreate", "WorkspaceRename"]:
         assert name in schemas
     assert "workspace_ids" in schemas["PaperOut"]["required"]
+
+
+async def test_the_workspace_history_lists_its_saved_suggestions(client, session):
+    workspace = await make_workspace(session, [])
+    output = LLMOutput(workspace_id=workspace.id, kind="chat", question="notes?", content=":::note\nA loose idea.\n:::",
+                       model="m", prompt_version=2)  # fmt: skip
+    session.add(output)
+    await session.commit()
+    workspace_id, output_id = workspace.id, output.id
+
+    note = await notes.save_suggestion(session, output_id, 0)
+
+    [answer] = (await client.get(f"/api/workspaces/{workspace_id}/chat")).json()
+    assert answer["saved_notes"] == [{"index": 0, "note_id": str(note.id), "paper_ids": []}]

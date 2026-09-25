@@ -11,7 +11,7 @@ from app.core import chat
 from app.main import create_app
 from app.models import Chunk, LLMOutput, Note, Paper
 from app.providers import embedding
-from app.providers.llm import FAKE_ANSWER, FAKE_TOKENS
+from app.providers.llm import FAKE_ANSWER, FAKE_NOTES_ANSWER, FAKE_TOKENS
 
 pytestmark = pytest.mark.anyio
 
@@ -242,3 +242,50 @@ async def test_a_note_on_the_whole_paper_goes_out_with_no_page(client, session, 
     assert sources["notes"] == expected
     [answer] = (await client.get(f"/api/papers/{paper_id}/chat")).json()
     assert answer["notes"] == expected
+
+
+async def test_a_suggested_note_saves_from_the_stored_answer_and_the_history_knows_it(client, session, fake_llm):
+    paper, _ = await make_paper(session, ["Intro text.", "Method text."])
+    paper_id = paper.id
+    await client.post(f"/api/papers/{paper_id}/chat", json={"question": "Create notes on this paper"})
+    [output] = await outputs_for(session, paper_id)
+    output_id = output.id  # the refused second save rolls back, which expires `output`
+
+    saved = await client.post(f"/api/chat/answers/{output_id}/notes", json={"index": 0})
+    again = await client.post(f"/api/chat/answers/{output_id}/notes", json={"index": 0})
+
+    assert saved.status_code == 201
+    note = saved.json()
+    assert (note["body"], note["provenance"], note["source_id"]) == (
+        "The method anchors every note on a passage [C1].", "llm", str(output_id)
+    )
+    assert (note["paper_ids"], [anchor["page"] for anchor in note["anchors"]]) == ([str(paper_id)], [1])
+    assert (again.status_code, again.json()) == (409, {"detail": "already_saved"})
+    [answer] = (await client.get(f"/api/papers/{paper_id}/chat")).json()
+    assert answer["content"] == FAKE_NOTES_ANSWER
+    assert answer["saved_notes"] == [{"index": 0, "note_id": note["id"], "paper_ids": [str(paper_id)]}]
+
+
+async def test_saving_a_suggestion_answers_each_refusal_with_its_status(client, session):
+    paper, chunks = await make_paper(session, ["Intro text."])
+    content = ":::note\n\n:::\n:::note\nIt says so [C1].\n:::"
+    output = LLMOutput(paper_id=paper.id, kind="chat", question="notes?", content=content, model="m",
+                       prompt_version=3, source_chunks=[chunks[0].id])  # fmt: skip
+    session.add(output)
+    await session.commit()
+    url = f"/api/chat/answers/{output.id}/notes"
+    await session.execute(delete(Chunk).where(Chunk.id == chunks[0].id))
+
+    empty = await client.post(url, json={"index": 0})
+    stale = await client.post(url, json={"index": 1})
+    missing = await client.post(url, json={"index": 2})
+    negative = await client.post(url, json={"index": -1})
+    unknown = await client.post(f"/api/chat/answers/{uuid.uuid4()}/notes", json={"index": 0})
+
+    assert (empty.status_code, empty.json()) == (422, {"detail": "empty_body"})
+    assert (stale.status_code, stale.json()) == (
+        422, {"detail": "a cited chunk no longer exists; the paper was re-ingested, so ask again"}
+    )
+    assert (missing.status_code, missing.json()) == (422, {"detail": "no_such_block"})
+    assert negative.status_code == 422
+    assert (unknown.status_code, unknown.json()) == (404, {"detail": "answer_not_found"})
