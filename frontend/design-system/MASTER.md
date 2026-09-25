@@ -559,15 +559,18 @@ before deleting; `search.py "progress bar long running download status" --domain
   and Switch. A refusal shows in a destructive `Alert` inside the dialog; `embedding_model_not_pulled` adds an outline
   "Pull nomic-embed-text · 274 MB" (`Download`) with a `Progress` "Pulling nomic-embed-text", then switches by itself.
   While a switch or a re-index runs, `.search-rebuild`: "Search is being rebuilt with OpenAI: 12 of 20 papers."
-  (`rebuildLine`, `tabular-nums text-muted-foreground`) and a `Progress` named "Rebuilding search"; the status polls
-  every 2 s meanwhile. A `source_error` shows a destructive `Alert` "Some papers couldn't be embedded: <reason>." with
+  (`rebuildLine`, `tabular-nums text-muted-foreground`), a ghost `xs` "Try again" next to it (a stalled rebuild can
+  leave nothing in `source_error`, so this is the always-available, low-key way out — `missing_only` retry is a no-op
+  once nothing is actually stuck), and a `Progress` named "Rebuilding search"; the status polls every 2 s meanwhile. A
+  `source_error` shows a destructive `Alert` "Some papers couldn't be embedded: <reason>." with
   an outline `xs` "Try again" (never asks first). With a cloud source, the Re-index dialog says what it sends again
   (`reindexDialog`). Patterns from ui-ux-pro-max: a bar for long work (`"progress bar long running download status"`),
   confirm before an irreversible or costly action (`"destructive confirmation delete dialog"`).
-- **Where search is needed while it is rebuilt:** chat's `.chat-error` shows `.search-rebuild` in place of the message
-  and no Retry, with the `source_error` alert under it; once `rebuild` is null, "Search is ready again." with Retry.
+- **Where search is needed while it is rebuilt:** chat's `.chat-error` shows the static "Search is being rebuilt." and
+  no Retry, with `.search-rebuild` and the `source_error` alert as siblings under it (outside the alert, `role="alert"`,
+  so its 2 s poll doesn't re-announce the whole thing); once `rebuild` is null, "Search is ready again." with Retry.
   The library's `.search-notice` and the graph header show the same line, muted. M23's not-set-up notices (chat and
-  library) end with a muted link "Use another search source" (`#/settings`).
+  library) end with a muted link "Use another search source" (`#/settings/search`).
 - **Library notice:** while no search model is downloaded and some ready paper is too long to chat with whole
   (`showSearchNotice`: `model_present` false and `papers_needing_search > 0`), one `.search-notice` row sits at the top of
   the library's pane, above the paper list: the muted line "Search isn't set up: long papers and workspaces can't

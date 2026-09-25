@@ -10,7 +10,7 @@ import { browserStorage } from '@/features/notes/highlightColors'
 import { DownloadSearchModel } from '@/features/settings/DownloadSearchModel'
 import { SearchRebuild, SourceError } from '@/features/settings/SearchRebuild'
 import { READY_AGAIN } from '@/features/settings/searchSources'
-import { settingsHref } from '@/lib/route'
+import { settingsHref, settingsSectionHref } from '@/lib/route'
 import { cn } from '@/lib/utils'
 import { readAnswerSelection } from './answerSelection'
 import { ChatAnswer } from './ChatAnswer'
@@ -388,7 +388,7 @@ function ProblemAlert({ scope, problem, onRetry }: { scope: ChatScope; problem: 
   return (
     <>
       <Alert variant="destructive" className={cn('chat-error border-glass-border')}>
-        {waiting && embedding.data?.rebuild ? <SearchRebuild /> : <AlertDescription>{message}</AlertDescription>}
+        <AlertDescription>{waiting ? 'Search is being rebuilt.' : message}</AlertDescription>
         <AlertAction>
           {problem.retryable && !waiting && (
             <Button variant="outline" size="xs" onClick={onRetry}>
@@ -412,11 +412,17 @@ function ProblemAlert({ scope, problem, onRetry }: { scope: ChatScope; problem: 
       {problem.download && (
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
           <DownloadSearchModel />
-          <a href={settingsHref} className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
+          <a
+            href={settingsSectionHref('search')}
+            className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+          >
             Use another search source
           </a>
         </div>
       )}
+      {/* Same reason as the download block above: SearchRebuild's line and bar change on every 2 s poll while a
+          paper finishes, which would re-read the whole alert on each one if it stayed inside. */}
+      {waiting && embedding.data?.rebuild && <SearchRebuild />}
       {/* D155: a paper that keeps failing keeps search paused; the reason and Try again are here too. */}
       {waiting && <SourceError />}
     </>

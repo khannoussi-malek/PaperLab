@@ -144,11 +144,12 @@ test('switching to a cloud source asks first with what it sends, then search pau
   await page.getByRole('textbox', { name: 'Question' }).fill('What does it say about retrieval?')
   await page.getByRole('textbox', { name: 'Question' }).press('Enter')
   const refused = page.locator('.chat-error')
-  await expect(refused.locator('.search-rebuild')).toContainText(rebuilding)
+  await expect(refused).toContainText('Search is being rebuilt.') // the dynamic line moved out of the alert (Fix D155/D156)
+  await expect(page.locator('.search-rebuild')).toContainText(rebuilding)
   await expect(refused.getByRole('button', { name: 'Retry' })).toHaveCount(0)
 
   search.set(status(OPENAI_NAME, { source: ON_OPENAI, rebuild: { done: 20, total: 20 } }))
-  await expect(refused.locator('.search-rebuild')).toContainText('Search is being rebuilt with OpenAI: 20 of 20 papers.')
+  await expect(page.locator('.search-rebuild')).toContainText('Search is being rebuilt with OpenAI: 20 of 20 papers.')
   search.set(status(OPENAI_NAME, { source: ON_OPENAI }))
   await expect(refused).toContainText('Search is ready again.') // the 2 s poll saw the rebuild end
   await expect(refused.getByRole('button', { name: 'Retry' })).toBeVisible()
@@ -274,5 +275,5 @@ test('where search is not set up, the notice offers another search source', asyn
 
   const notice = page.locator('.search-notice')
   await expect(notice).toContainText("Search isn't set up: long papers and workspaces can't be searched yet.")
-  await expect(notice.getByRole('link', { name: 'Use another search source' })).toHaveAttribute('href', '#/settings')
+  await expect(notice.getByRole('link', { name: 'Use another search source' })).toHaveAttribute('href', '#/settings/search')
 })
