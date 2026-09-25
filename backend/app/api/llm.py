@@ -143,8 +143,9 @@ def pull_error(message: str) -> ServerSentEvent:
 async def pull_model(
     payload: PullRequest, connection: OllamaDep, transport: TransportDep
 ) -> AsyncIterable[ServerSentEvent]:
-    """Events: progress (repeated), then done with the model, now listed in chat. error replaces done, also when
-    Ollama can't be reached, and then nothing is added."""
+    """Events: progress (repeated), then done with the model, now listed in chat (null for Settings → Search's pull,
+    which sends add_to_chat false). error replaces done, also when Ollama can't be reached, and then nothing is
+    added."""
     connection_id, base_url, label = connection.id, connection.base_url, connection.label
     try:
         async for line in ollama_admin.pull(base_url, payload.name, transport=transport):
@@ -157,6 +158,10 @@ async def pull_model(
     except Exception:
         logger.exception("pulling %s on %s (%s) failed unexpectedly", payload.name, label, llm.host_of(base_url))
         yield pull_error("The download stopped because of an unexpected error")
+        return
+
+    if not payload.add_to_chat:  # an embedding model never lands in chat's dropdown (D152)
+        yield ServerSentEvent(event="done", data=PullDoneEvent(model=None))
         return
 
     try:

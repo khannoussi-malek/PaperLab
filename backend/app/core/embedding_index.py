@@ -14,7 +14,7 @@ from sqlalchemy import DateTime, func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import Conflict
-from app.models import Chunk, Paper
+from app.models import Chunk, Note, Paper
 
 
 @dataclass(frozen=True)
@@ -34,6 +34,13 @@ class EmbeddingStatus:
 class Rebuild:
     done: int  # papers of the rebuild already on the new source
     total: int  # papers with chunks created at or before the rebuild started
+
+
+@dataclass(frozen=True)
+class LibrarySize:
+    papers: int  # papers with chunks
+    notes: int
+    chars: int  # their chunk text and every note's text: what a switch sends, for the dialog's estimate (P3 = A)
 
 
 async def status(session: AsyncSession, model: str) -> EmbeddingStatus:
@@ -126,3 +133,15 @@ async def pending_in(session: AsyncSession, source, paper_ids: list[uuid.UUID]) 
         )
     )
     return await session.scalar(query.limit(1)) is not None
+
+
+async def library_size(session: AsyncSession) -> LibrarySize:
+    """What a switch to a cloud source sends (D157, P3 = A): every paper's chunks and every note."""
+    papers, chunk_chars = (
+        await session.execute(
+            select(func.count(func.distinct(Chunk.paper_id)), func.coalesce(func.sum(func.length(Chunk.text)), 0))
+        )
+    ).one()
+    note_query = select(func.count(), func.coalesce(func.sum(func.length(Note.body)), 0)).select_from(Note)
+    notes, note_chars = (await session.execute(note_query)).one()
+    return LibrarySize(papers=papers, notes=notes, chars=chunk_chars + note_chars)
