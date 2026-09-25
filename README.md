@@ -177,6 +177,9 @@ Desktop can reach your library and uploads keep processing while the window is c
 - **Local first.** One user, one machine, no accounts. Your PDFs, notes and search index live in a local Postgres
 database. With a local model (Ollama, LM Studio and other servers on your machine), the text of your papers and
 notes never leaves your computer; a model tagged "Cloud" receives the passages and notes sent with each question.
+A search source tagged Cloud (OpenAI, Gemini, or an Ollama or OpenAI-compatible server outside your network) receives
+the text of every chunk of every paper and of every note when you switch to it, each paper and note you add, and every
+search question. PaperLab asks before the first send, with an estimate of the cost.
 Metadata lookups on OpenAlex are off unless you tick OpenAlex, and they send a paper's DOI or title, never its text.
 Find papers sends what you type to every paper source that is on and can answer it, then the results' DOIs to Semantic
 Scholar and, for results without a free PDF, to Unpaywall. The Similar and References tabs send Semantic Scholar the
@@ -289,6 +292,15 @@ searchable in the background. If Settings → Search then says some chunks were 
 the library there once. The graph's Similar content layer and the References tab's note ranking also stay off until
 the model is downloaded.
 
+Search can also run on Ollama's `nomic-embed-text`, OpenAI (`text-embedding-3-small` or `-large`), Gemini
+(`gemini-embedding-2`) or an OpenAI-compatible server instead of the built-in model: pick one in **Settings → Search**.
+It uses a connection from **Settings → Model connections**, so a key is entered once, and every source gives the 768
+numbers the search index holds. A switch embeds every paper again in the background, and your notes the next time a
+References tab fetches. Search pauses with its progress until the papers are done, while reading, notes and chat on
+short papers keep working. A source tagged Cloud asks first, with an estimate of what it sends and what it costs. If
+some papers can't be embedded (a rejected key, a server that went away), Settings → Search says why, and **Try again**
+embeds just those. With another source in use, the built-in model is never downloaded.
+
 Upgrading from an older PaperLab? It ran the model on torch and kept it in the `hfcache` volume, which nothing uses
 any more: `docker volume rm paperlab_hfcache` frees its space (about 0.5 GB).
 
@@ -329,6 +341,7 @@ The server has four tools:
 - `create_note`: a note on a passage it quotes exactly.
 
 The first search takes a few seconds while the search model loads. Without it, `search_library` answers that search isn't set up.
+While search is being rebuilt with a new source, `search_library` answers how far it got; ask again when it finishes.
 
 ### Configuration
 
