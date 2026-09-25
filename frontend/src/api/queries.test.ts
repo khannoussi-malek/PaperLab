@@ -154,4 +154,9 @@ describe('isNotesList', () => {
     expect(isNotesList(['papers', 'p1', 'chat'])).toBe(false)
     expect(isNotesList(['papers', 'p1', 'chunks', 2])).toBe(false)
   })
+
+  it('is true for the Notes page’s lists', () => {
+    expect(isNotesList(['notes', 'all'])).toBe(true)
+    expect(isNotesList(['notes', 'none'])).toBe(true)
+  })
 })

@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils'
  * belong to Charts), so the rail never goes blank while you are deep inside one. `null` is for the two views that take
  * the whole window and draw no rail: the reader and first-run setup.
  */
-export type NavKey = 'library' | 'workspace' | 'graph' | 'charts' | 'connect-claude' | 'settings' | null
+export type NavKey = 'library' | 'workspace' | 'graph' | 'charts' | 'notes' | 'connect-claude' | 'settings' | null
 
 export function activeNav(route: Route): NavKey {
   switch (route.name) {
@@ -21,6 +21,8 @@ export function activeNav(route: Route): NavKey {
     case 'chart-builder':
     case 'dataset':
       return 'charts'
+    case 'notes':
+      return 'notes'
     case 'connect-claude':
       return 'connect-claude'
     case 'settings':
