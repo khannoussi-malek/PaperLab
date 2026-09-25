@@ -1,3 +1,5 @@
+import type { ConnectionForm } from './connectionForm'
+
 /** A place an OpenAI-compatible connection can point at. Chat POSTs `{baseUrl}/chat/completions`. */
 export type Preset = { name: string; baseUrl: string }
 
@@ -24,4 +26,12 @@ export function applyPreset(presetName: string, current: { label: string; baseUr
   const typed = current.label.trim() !== '' && !PRESETS.some((p) => p.name === current.label.trim())
   const label = typed ? current.label : preset.name === 'Custom' ? '' : preset.name
   return { label, baseUrl: preset.baseUrl }
+}
+
+/** A new connection's form, from Settings → Search's "Add OpenAI key", "Add Gemini key" or "Add Ollama": Ollama at
+ * its usual address, an OpenAI-compatible preset's name and address, or (no preset) an empty compatible form. */
+export function presetForm(preset?: string): ConnectionForm {
+  if (preset === 'Ollama') return { kind: 'ollama', label: 'Ollama', baseUrl: OLLAMA_BASE_URL, apiKey: '', keyChange: 'replace' }
+  const empty: ConnectionForm = { kind: 'openai_compatible', label: '', baseUrl: '', apiKey: '', keyChange: 'replace' }
+  return preset === undefined ? empty : { ...empty, ...applyPreset(preset, empty) }
 }

@@ -1,4 +1,4 @@
-import { Lock, RefreshCw } from 'lucide-react'
+import { RefreshCw } from 'lucide-react'
 import { useState } from 'react'
 import { useEmbeddingStatus, useReindexLibrary } from '@/api/queries'
 import { glass } from '@/components/glass'
@@ -6,18 +6,20 @@ import { delayedIn } from '@/components/motion'
 import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
-import { DownloadSearchModel } from './DownloadSearchModel'
 import { indexedLine, staleChunks } from './embeddingStatus'
+import { SearchRebuild, SourceError } from './SearchRebuild'
+import { CloudTag, SearchSourcePicker } from './SearchSourcePicker'
+import { reindexDialog, sourceLine } from './searchSources'
 
-/** The "Search" section: the built-in search model (its status, its download), the embedding model in use (locked
- * once anything is indexed), and a confirmed re-index. */
+/** The "Search" section: which source search embeds with and switching it (D150–D158), the rebuild a switch or a
+ * re-index starts, the last embedding failure, what the library is indexed with, and a confirmed re-index. */
 export function EmbeddingSettings() {
   const status = useEmbeddingStatus()
   const reindex = useReindexLibrary()
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const data = status.data
+  const cloudReindex = data === undefined ? null : reindexDialog(data.source, data)
 
   function openConfirm(open: boolean) {
     if (open) reindex.reset() // clear a previous refusal so a reopened dialog starts clean
@@ -39,7 +41,7 @@ export function EmbeddingSettings() {
         Search
       </h2>
 
-      {status.data === undefined ? (
+      {data === undefined ? (
         status.isError ? (
           <Alert variant="destructive" className="border-glass-border">
             <AlertDescription>{status.error.message}</AlertDescription>
@@ -54,37 +56,30 @@ export function EmbeddingSettings() {
         )
       ) : (
         <div className="flex flex-col gap-3">
-          <DownloadSearchModel alwaysShowStatus />
-          <div className="grid gap-1.5">
-            <Label htmlFor="embedding-model" className="flex items-center gap-1.5 text-sm font-medium">
-              {status.data.chunks > 0 && <Lock aria-hidden className="size-3.5" />}
-              Embedding model
-            </Label>
-            {/* Always disabled: the app embeds with one configured model, so there is nothing yet to switch to. */}
-            <Select value={status.data.model} disabled>
-              <SelectTrigger id="embedding-model" aria-label="Embedding model" disabled className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={status.data.model}>{status.data.model}</SelectItem>
-              </SelectContent>
-            </Select>
-            {indexedLine(status.data) && (
-              <p className="embedding-indexed text-xs tabular-nums text-muted-foreground">{indexedLine(status.data)}</p>
-            )}
-          </div>
+          <p className="search-source-status flex items-center gap-2 text-sm font-medium">
+            {sourceLine(data.source)}
+            {!data.source.is_local && <CloudTag />}
+          </p>
+          <SearchSourcePicker key={`${data.source.kind}:${data.source.connection_id}:${data.source.model}`} status={data} />
+          <SearchRebuild />
+          <SourceError />
 
-          {staleChunks(status.data) > 0 && (
+          {indexedLine(data) && <p className="embedding-indexed text-xs tabular-nums text-muted-foreground">{indexedLine(data)}</p>}
+          {staleChunks(data) > 0 && data.rebuild === null && (
             <Alert variant="destructive" className="border-glass-border">
               <AlertDescription>
-                {staleChunks(status.data)} chunks were indexed with another model. Chat on those papers is refused until you re-index.
+                {staleChunks(data)} chunks were indexed with another model. Chat on those papers is refused until you re-index.
               </AlertDescription>
             </Alert>
           )}
 
           <div>
-            {/* With no search model a re-index would queue jobs that embed nothing. */}
-            <Button variant="outline" disabled={!status.data.model_present} onClick={() => openConfirm(true)}>
+            {/* With Built-in in use and no model downloaded, a re-index would queue jobs that embed nothing. */}
+            <Button
+              variant="outline"
+              disabled={data.source.kind === 'builtin' && !data.model_present}
+              onClick={() => openConfirm(true)}
+            >
               <RefreshCw aria-hidden />
               Re-index library
             </Button>
@@ -102,10 +97,26 @@ export function EmbeddingSettings() {
         <DialogContent className={cn(glass, 'bg-glass-strong ring-glass-border sm:max-w-md')}>
           <DialogHeader>
             <DialogTitle>Re-index the library?</DialogTitle>
-            <DialogDescription>
-              Every paper's passages are embedded again with {status.data?.model}, in the background.
-            </DialogDescription>
+            {cloudReindex === null ? (
+              <DialogDescription>
+                Every paper's passages are embedded again with {data?.model}, in the background.
+              </DialogDescription>
+            ) : (
+              // P2: with a cloud source a re-index sends everything again, so it says what and roughly the cost.
+              <DialogDescription asChild>
+                <div className="flex flex-col gap-2">
+                  {cloudReindex.body.map((sentence) => (
+                    <p key={sentence}>{sentence}</p>
+                  ))}
+                </div>
+              </DialogDescription>
+            )}
           </DialogHeader>
+          {cloudReindex?.footnote.map((sentence) => (
+            <p key={sentence} className="text-xs text-muted-foreground">
+              {sentence}
+            </p>
+          ))}
           {reindex.error && (
             <Alert variant="destructive" className="border-glass-border">
               <AlertDescription>{reindex.error.message}</AlertDescription>

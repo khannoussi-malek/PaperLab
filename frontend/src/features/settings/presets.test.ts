@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyPreset, PRESETS } from './presets'
+import { applyPreset, presetForm, PRESETS } from './presets'
 
 const blank = { label: '', baseUrl: '' }
 
@@ -27,5 +27,20 @@ describe('applyPreset', () => {
   it("keeps a name the owner typed, and replaces another preset's name", () => {
     expect(applyPreset('Groq', { label: 'My Groq', baseUrl: '' })).toEqual({ label: 'My Groq', baseUrl: 'https://api.groq.com/openai/v1' })
     expect(applyPreset('Groq', { label: 'OpenAI', baseUrl: 'https://api.openai.com/v1' }).label).toBe('Groq')
+  })
+})
+
+describe('presetForm', () => {
+  it('starts a new connection on a preset: OpenAI or Gemini with its address, Ollama at its usual one, else empty', () => {
+    const fresh = { apiKey: '', keyChange: 'replace' }
+    expect(presetForm('OpenAI')).toEqual({ kind: 'openai_compatible', label: 'OpenAI', baseUrl: 'https://api.openai.com/v1', ...fresh })
+    expect(presetForm('Gemini')).toEqual({
+      kind: 'openai_compatible',
+      label: 'Gemini',
+      baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+      ...fresh,
+    })
+    expect(presetForm('Ollama')).toEqual({ kind: 'ollama', label: 'Ollama', baseUrl: 'http://host.docker.internal:11434', ...fresh })
+    expect(presetForm()).toEqual({ kind: 'openai_compatible', label: '', baseUrl: '', ...fresh })
   })
 })
