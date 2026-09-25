@@ -35,6 +35,14 @@ NOTE_RULE_V2 = (
     'line with only ":::" closes it — exactly three colons, nothing else (not "<::note>", not "-::note"). One idea '
     'per note, kept short. Otherwise never write these blocks.'
 )
+NOTE_RULE_V3 = (
+    '- Write a ":::note" block only when the question itself explicitly asks you to write, take, or make notes — '
+    'never because the answer happens to contain a good, note-worthy point. When it does apply, use exactly this '
+    'shape (example):\n:::note\nThe note, with its citations [C1].\n:::\nA line with only ":::note" opens a block '
+    'and a line with only ":::" closes it — exactly three colons, nothing else (not "<::note>", not "-::note"). '
+    'One idea per note, kept short. For every other question, including follow-ups, do not write one of these '
+    'blocks at all.'
+)
 PROSE = "- Answer in concise plain prose."
 
 
@@ -152,7 +160,7 @@ async def test_save_answer_fills_every_column_and_inserts_no_note(session):
     ids = [s.id for s in prepared.sources]
     assert (row.paper_id, row.kind, row.question, row.content) == (paper.id, "chat", "why?", answer)
     assert (row.source_chunks, row.cited_chunks) == (ids, [ids[2], ids[0]])
-    assert (row.model, row.prompt_version, row.whole_paper) == ("qwen3:8b", 5, True)
+    assert (row.model, row.prompt_version, row.whole_paper) == ("qwen3:8b", 6, True)
     assert await session.scalar(select(func.count()).select_from(Note)) == notes_before
 
 
@@ -165,7 +173,7 @@ async def test_prepare_gives_a_paper_its_own_notes_newest_first_after_the_passag
 
     prepared = await chat.prepare(session, paper.id, "What do my notes say?")
 
-    assert (prepared.system, prepared.prompt_version) == (chat.SYSTEM_PROMPT, 5)
+    assert (prepared.system, prepared.prompt_version) == (chat.SYSTEM_PROMPT, 6)
     assert "[N1]" in prepared.system
     notes_block = '[N1] (AI · Devlin 2019 p.1) "quote Uses NSP." — Uses NSP.\n[N2] (You · Devlin 2019 p.2)'
     assert notes_block in prepared.prompt and "Not this paper" not in prepared.prompt
@@ -326,4 +334,10 @@ def test_the_note_block_rule_is_sharpened_in_chat_v5_and_workspace_v4_after_the_
     assert prompts.load("chat", 5) == prompts.load("chat", 4).replace(NOTE_RULE, NOTE_RULE_V2)
     assert prompts.load("chat_workspace", 4) == prompts.load("chat_workspace", 3).replace(NOTE_RULE, NOTE_RULE_V2)
     assert NOTE_RULE_V2 not in prompts.load("chat", 4) + prompts.load("chat_workspace", 3)
-    assert (chat.CHAT_PROMPT_VERSION, chat.WORKSPACE_PROMPT_VERSION) == (5, 4)
+
+
+def test_the_note_block_rule_leads_with_never_in_chat_v6_and_workspace_v5_after_a_stray_block_on_a_follow_up():
+    assert prompts.load("chat", 6) == prompts.load("chat", 5).replace(NOTE_RULE_V2, NOTE_RULE_V3)
+    assert prompts.load("chat_workspace", 5) == prompts.load("chat_workspace", 4).replace(NOTE_RULE_V2, NOTE_RULE_V3)
+    assert NOTE_RULE_V3 not in prompts.load("chat", 5) + prompts.load("chat_workspace", 4)
+    assert (chat.CHAT_PROMPT_VERSION, chat.WORKSPACE_PROMPT_VERSION) == (6, 5)

@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from conftest import parse_sse
 from sqlalchemy import delete, func, select
-from test_chat import NOTE_RULE_V2
+from test_chat import NOTE_RULE_V3
 from test_chat_workspace import add_note
 from test_note_papers import paper_only_note
 
@@ -65,7 +65,7 @@ async def test_chat_streams_sources_then_tokens_then_done_and_saves_one_output(c
 
     [output] = await outputs_for(session, paper.id)
     assert events[-1][1] == {
-        "output_id": str(output.id), "model": "fake", "connection_name": "Fake", "prompt_version": 5, "cited": ["C1"]
+        "output_id": str(output.id), "model": "fake", "connection_name": "Fake", "prompt_version": 6, "cited": ["C1"]
     }
     assert (output.question, output.content, output.model, output.connection_name) == (
         "What is the method?", FAKE_ANSWER, "fake", "Fake"
@@ -298,4 +298,4 @@ async def test_paper_chat_asks_with_the_note_block_rule(client, session, fake_ll
     await client.post(f"/api/papers/{paper.id}/chat", json={"question": "What is it about?"})
 
     system, _ = fake_llm.calls[0]
-    assert system == chat.SYSTEM_PROMPT and NOTE_RULE_V2 in system
+    assert system == chat.SYSTEM_PROMPT and NOTE_RULE_V3 in system

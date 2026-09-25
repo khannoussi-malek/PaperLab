@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from conftest import parse_sse, unit_vector
 from sqlalchemy import delete, insert, select
-from test_chat import NOTE_RULE_V2
+from test_chat import NOTE_RULE_V3
 
 from app.core import chat, notes
 from app.main import create_app
@@ -76,7 +76,7 @@ async def test_workspace_chat_streams_sources_with_notes_then_tokens_then_done(c
     [output] = await session.scalars(select(LLMOutput).where(LLMOutput.workspace_id == workspace.id))
     chunk_ids = [uuid.UUID(s["chunk_id"]) for s in sources["sources"]]
     done = {
-        "output_id": str(output.id), "model": "fake", "connection_name": "Fake", "prompt_version": 4,
+        "output_id": str(output.id), "model": "fake", "connection_name": "Fake", "prompt_version": 5,
         "cited": ["C1", "C2", "N1"],
     }
     assert events[-1][1] == done
@@ -210,4 +210,4 @@ async def test_workspace_chat_asks_with_the_note_block_rule(client, session, fak
     await client.post(f"/api/workspaces/{workspace.id}/chat", json={"question": "Compare the methods"})
 
     system, _ = fake_llm.calls[0]
-    assert system == chat.WORKSPACE_SYSTEM_PROMPT and NOTE_RULE_V2 in system
+    assert system == chat.WORKSPACE_SYSTEM_PROMPT and NOTE_RULE_V3 in system
