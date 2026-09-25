@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { GraphLink } from '@/api/client'
-import { useLibraryGraph, usePaperLinkMutations, useWorkspaces } from '@/api/queries'
+import { useEmbeddingStatus, useLibraryGraph, usePaperLinkMutations, useWorkspaces } from '@/api/queries'
 import { AppShell } from '@/components/AppShell'
 import { glass } from '@/components/glass'
 import { useChartTheme } from '@/features/charts/useChartTheme'
 import { ErrorAlert, LoadError } from '@/features/library/ErrorAlert'
 import { browserStorage } from '@/features/notes/highlightColors'
+import { rebuildLine } from '@/features/settings/searchSources'
 import { cn } from '@/lib/utils'
 import { GraphControls } from './GraphControls'
 import { GraphPanel } from './GraphPanel'
@@ -36,6 +37,7 @@ export function GraphPage() {
   const [view, setView] = useState<GraphView>(() => readView(browserStorage()))
   const [axis, setAxis] = useState<TimeAxis>('published')
   const theme = useChartTheme()
+  const embedding = useEmbeddingStatus()
   const graph = useLibraryGraph(workspaceId)
   const workspaces = useWorkspaces()
   const links = usePaperLinkMutations()
@@ -107,6 +109,7 @@ export function GraphPage() {
         <>
           {counted}
           {graph.data?.truncated && ' · Showing the first 2000 links.'}
+          {embedding.data?.rebuild && ` · ${rebuildLine(embedding.data.source.label, embedding.data.rebuild)}`}
         </>
       }
     >

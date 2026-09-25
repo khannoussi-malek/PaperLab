@@ -77,4 +77,13 @@ describe('refusal', () => {
       download: true,
     })
   })
+
+  it('words a search being rebuilt, whose panel shows the rebuild and offers Retry once it ends', () => {
+    expect(refusal(409, 'search_rebuilding')).toEqual({
+      message: 'Search is being rebuilt.',
+      retryable: true,
+      reindex: false,
+      rebuild: true,
+    })
+  })
 })

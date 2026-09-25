@@ -46,9 +46,13 @@ describe('downloadAnnouncement', () => {
 })
 
 describe('showSearchNotice', () => {
-  it('shows only while the model is missing and some paper is too long to chat with whole', () => {
-    expect(showSearchNotice({ model_present: false, papers_needing_search: 2 })).toBe(true)
-    expect(showSearchNotice({ model_present: true, papers_needing_search: 2 })).toBe(false)
-    expect(showSearchNotice({ model_present: false, papers_needing_search: 0 })).toBe(false)
+  const builtIn = { kind: 'builtin' as const }
+
+  it('shows only while Built-in is the source, its model is missing, and some paper is too long to chat with whole', () => {
+    expect(showSearchNotice({ source: builtIn, model_present: false, papers_needing_search: 2 })).toBe(true)
+    expect(showSearchNotice({ source: builtIn, model_present: true, papers_needing_search: 2 })).toBe(false)
+    expect(showSearchNotice({ source: builtIn, model_present: false, papers_needing_search: 0 })).toBe(false)
+    // Another source searches without the built-in model: there is nothing to download (D133).
+    expect(showSearchNotice({ source: { kind: 'openai' }, model_present: false, papers_needing_search: 2 })).toBe(false)
   })
 })
