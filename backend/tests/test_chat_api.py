@@ -5,6 +5,7 @@ import pytest
 from conftest import parse_sse
 from sqlalchemy import delete, func, select
 from test_chat_workspace import add_note
+from test_note_papers import paper_only_note
 
 from app.core import chat
 from app.main import create_app
@@ -225,3 +226,19 @@ def test_stream_event_schemas_are_in_openapi():
 
     for name in ["ChatRequest", "ChatSource", "SourcesEvent", "TokenEvent", "DoneEvent", "ErrorEvent", "ChatAnswer"]:
         assert name in schemas
+
+
+async def test_a_note_on_the_whole_paper_goes_out_with_no_page(client, session, fake_llm):
+    paper, _ = await make_paper(session, ["Intro text."])
+    paper_id = paper.id
+    note = await paper_only_note(session, paper, body="The whole paper, briefly.")
+
+    response = await client.post(f"/api/papers/{paper_id}/chat", json={"question": "What did I write?"})
+
+    sources = parse_sse(response.text)[0][1]
+    expected = [
+        {"label": "N1", "note_id": str(note.id), "paper_id": str(paper_id), "page": None, "provenance": "human"}
+    ]
+    assert sources["notes"] == expected
+    [answer] = (await client.get(f"/api/papers/{paper_id}/chat")).json()
+    assert answer["notes"] == expected
