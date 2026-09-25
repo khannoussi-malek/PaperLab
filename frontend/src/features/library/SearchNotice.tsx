@@ -2,7 +2,7 @@ import { useEmbeddingStatus } from '@/api/queries'
 import { DownloadSearchModel } from '@/features/settings/DownloadSearchModel'
 import { showSearchNotice } from '@/features/settings/searchModel'
 import { rebuildLine } from '@/features/settings/searchSources'
-import { settingsHref } from '@/lib/route'
+import { settingsSectionHref } from '@/lib/route'
 
 /**
  * One quiet line under the library header, only when there is something to say:
@@ -22,7 +22,7 @@ export function SearchNotice() {
     <div className="search-notice flex flex-wrap items-start gap-x-3 gap-y-2 text-sm text-muted-foreground">
       <p className="py-1.5">Search isn't set up: long papers and workspaces can't be searched yet.</p>
       <DownloadSearchModel />
-      <a href={settingsHref} className="py-1.5 underline-offset-4 hover:text-foreground hover:underline">
+      <a href={settingsSectionHref('search')} className="py-1.5 underline-offset-4 hover:text-foreground hover:underline">
         Use another search source
       </a>
     </div>
