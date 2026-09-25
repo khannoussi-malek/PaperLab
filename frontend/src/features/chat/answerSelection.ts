@@ -4,12 +4,17 @@ export type AnswerSelection = { outputId: string; anchor: number; focus: number;
 const elementOf = (node: Node) => (node instanceof Element ? node : node.parentElement)
 const closestOf = (node: Node, selector: string) => elementOf(node)?.closest<HTMLElement>(selector) ?? null
 
-/** Characters from the start of `root`'s text to a boundary point. Works whatever node the boundary is in. */
+/**
+ * Characters of the answer from the start of `root` to a boundary point. A suggested note's label, buttons and refusal
+ * are marked `data-chrome`: they aren't part of the answer, so they aren't counted (SuggestedNote.tsx).
+ */
 function offsetIn(root: HTMLElement, node: Node, offset: number): number {
   const range = document.createRange()
   range.selectNodeContents(root)
   range.setEnd(node, offset)
-  return range.toString().length
+  const before = range.cloneContents()
+  before.querySelectorAll('[data-chrome]').forEach((element) => element.remove())
+  return before.textContent?.length ?? 0
 }
 
 /**
@@ -20,7 +25,7 @@ function offsetIn(root: HTMLElement, node: Node, offset: number): number {
 function clampedOffsetIn(root: HTMLElement, node: Node, offset: number): number {
   if (root.contains(node)) return offsetIn(root, node, offset)
   const precedesRoot = (root.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_PRECEDING) !== 0
-  return precedesRoot ? 0 : (root.textContent?.length ?? 0)
+  return precedesRoot ? 0 : offsetIn(root, root, root.childNodes.length)
 }
 
 /** Reads the browser selection; null unless it lies within one saved answer's article, outside its question. */
