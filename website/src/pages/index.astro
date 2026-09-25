@@ -1,0 +1,429 @@
+---
+import DownloadButton from '../components/DownloadButton.astro'
+import FollowButton from '../components/FollowButton.astro'
+import ReadingDesk from '../components/ReadingDesk.astro'
+import Shot from '../components/Shot.astro'
+import StarButton from '../components/StarButton.astro'
+import BaseLayout from '../layouts/BaseLayout.astro'
+import { AUDIENCES } from '../lib/audiences'
+import { GUIDES } from '../lib/guides'
+import { CONTRIBUTING, LINKEDIN, RELEASES, REPO, href } from '../lib/site'
+
+// Each dot keeps the brand's colour meaning: yellow = highlight, violet = AI, blue = citations and links.
+const features = [
+  {
+    dot: 'dot-yellow',
+    tag: 'Read and highlight',
+    slug: 'pdf-highlighter',
+    shot: 'feature-reading',
+    title: 'Highlight, and the note stays put',
+    body: 'Select a passage, pick one of five colours, write a note. Every note keeps the page and position it came from, so one click takes you back to it.',
+    alt: 'A page of the BERT paper highlighted in five colours, with the note card that opens when you hover a highlight.',
+  },
+  {
+    dot: 'dot-violet',
+    tag: 'Ask a paper',
+    slug: 'ask-a-paper',
+    shot: 'feature-ask-a-paper',
+    title: 'Answers you can check against the page',
+    body: 'Ask a question and the answer cites the passages it used, like [C1]. Click one and the paper scrolls to that passage and flashes it. Keep the useful part as a note, marked AI.',
+    alt: 'An AI answer citing [C1] and [C2]; hovering [C1] shows its page and section, and a line leads to that passage on the page.',
+  },
+  {
+    dot: '',
+    tag: 'Connect papers',
+    slug: 'citation-graph',
+    shot: 'feature-see-connections',
+    title: 'See how your library fits together',
+    body: 'A graph of what cites what, shared authors and topics, notes that span two papers, and papers that simply read alike. In 2D, 3D, a matrix, a timeline or rings.',
+    alt: 'The library as a graph: papers as dots coloured by workspace, joined by citations and similar content.',
+  },
+]
+
+const principles = [
+  {
+    dot: 'dot-green',
+    slug: 'local-first',
+    title: 'Your papers stay on your machine',
+    body: 'One user, one computer, no accounts. With a local model through Ollama, the text of your papers never leaves it. Cloud models are tagged “Cloud”, and the README lists what each setting sends and where.',
+  },
+  {
+    dot: 'dot-violet',
+    slug: 'anchored-notes',
+    title: 'AI is always labelled',
+    body: 'What a model wrote is stored apart from what you wrote, with the model and prompt behind it. Edit an AI note and it says “AI · edited”, never “You”.',
+  },
+  {
+    dot: 'dot-yellow',
+    slug: 'find-papers',
+    title: 'No paywall tricks',
+    body: 'PaperLab finds free copies on arXiv, repositories and open-access publishers. When there is none, it links to the publisher and stops there.',
+  },
+]
+
+const tools = [
+  { name: 'search_library', what: 'searches your papers and notes' },
+  { name: 'get_paper', what: 'reads a paper’s details, outline and notes' },
+  { name: 'related_papers', what: 'finds the papers connected to one' },
+  { name: 'create_note', what: 'saves a note on a passage it quotes, marked AI' },
+]
+
+const jsonLd = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: 'PaperLab',
+    description:
+      'A local-first reader for research papers: highlights become notes anchored to the page, and AI answers cite the passages they used.',
+    applicationCategory: 'EducationalApplication',
+    operatingSystem: 'macOS, Windows, Linux',
+    license: 'https://www.apache.org/licenses/LICENSE-2.0',
+    downloadUrl: RELEASES,
+    codeRepository: REPO,
+    sameAs: [REPO, LINKEDIN],
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+    author: { '@type': 'Person', name: 'Malek Khannoussi', url: 'https://www.malekkhannoussi.tn/' },
+  },
+]
+---
+
+<BaseLayout
+  title="PaperLab — local research reader for PDFs and notes"
+  description="Read papers on your own machine. Highlights become notes anchored to the page, and AI answers cite the passage they came from. Free and open source."
+  jsonLd={jsonLd}
+>
+  <section class="hero">
+    <div class="wrap hero-grid">
+      <div class="hero-copy">
+        <p class="eyebrow dot-yellow">Free and open source · runs on your computer</p>
+        <h1>Read papers properly. <mark>Every note remembers its page.</mark></h1>
+        <p class="lead">
+          PaperLab is a research reader that runs on your own machine. Highlight a passage and the note stays attached to
+          it. Ask a paper a question and the answer shows exactly where it came from.
+        </p>
+        <div class="actions">
+          <DownloadButton where="hero" label="Download for free" />
+          <StarButton where="hero" />
+        </div>
+        <p class="fine muted">macOS, Windows and Linux · needs Docker Desktop · reading and notes work without any AI model</p>
+      </div>
+      <ReadingDesk />
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="what-heading">
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="what-heading">The note is the main thing, not the chat</h2>
+        <p class="lead">Every tool in PaperLab ends in something you keep, with a trail back to where it came from.</p>
+      </div>
+      <div class="rows">
+        {
+          features.map((feature, i) => (
+            <article class:list={['row', { flip: i % 2 === 1 }]}>
+              <div class="row-copy">
+                <p class:list={['eyebrow', feature.dot]}>{feature.tag}</p>
+                <h3>{feature.title}</h3>
+                <p class="muted">{feature.body}</p>
+                <a class="more-link" href={href(`features/${feature.slug}/`)}>
+                  More about {feature.tag.toLowerCase()} →
+                </a>
+              </div>
+              <Shot name={feature.shot} alt={feature.alt} crop />
+            </article>
+          ))
+        }
+      </div>
+      <p class="more"><a href={href('features/')}>See everything PaperLab does →</a></p>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="rules-heading">
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="rules-heading">Three rules it doesn't bend</h2>
+        <p class="lead">Built for people who have to trust their sources, and show their supervisor where a claim came from.</p>
+      </div>
+      <div class="grid">
+        {
+          principles.map((rule) => (
+            <div class="card">
+              <p class:list={['eyebrow', rule.dot]}>{rule.title}</p>
+              <p class="muted">{rule.body}</p>
+              <a class="more-link" href={href(`features/${rule.slug}/`)}>How it works →</a>
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="claude-heading">
+    <div class="wrap split">
+      <div>
+        <p class="eyebrow dot-violet">Works with Claude</p>
+        <h2 id="claude-heading">Your library, inside Claude Desktop</h2>
+        <p class="muted">
+          PaperLab ships an MCP server. Connect Claude Desktop, Claude Code or another MCP client, and it can work with
+          your library the way you do, while everything it writes stays marked <span class="ai-tag">AI</span>.
+        </p>
+        <p class="muted">
+          For chat inside PaperLab, pick any model per question: a local Ollama model, Anthropic with your key, or any
+          OpenAI-compatible server.
+        </p>
+        <p>
+          <a class="more-link" href={href('features/claude-desktop-mcp/')}>The MCP server in detail →</a> ·
+          <a class="more-link" href={href('features/any-model/')}>Every model you can use →</a>
+        </p>
+      </div>
+      <div class="card tools">
+        <p class="tools-title">Four tools, one library</p>
+        <ul>
+          {
+            tools.map((tool) => (
+              <li>
+                <code>{tool.name}</code>
+                <span class="muted">{tool.what}</span>
+              </li>
+            ))
+          }
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="guides-heading">
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="guides-heading">Guides for reading research well</h2>
+        <p class="lead">Practical answers to what researchers ask most, whichever tools you use.</p>
+      </div>
+      <ul class="guide-cards">
+        {
+          GUIDES.slice(0, 6).map((guide) => (
+            <li class="card">
+              <a href={href(guide.path)}>{guide.title}</a>
+              <span class="muted">{guide.blurb}</span>
+            </li>
+          ))
+        }
+      </ul>
+      <p class="more"><a href={href('guides/')}>All guides →</a> · <a href={href('glossary/')}>Glossary →</a></p>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="for-heading">
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="for-heading">Who it's for</h2>
+        <p class="lead">Anyone whose work depends on reading papers carefully, and showing where a claim came from.</p>
+      </div>
+      <ul class="audiences">
+        {
+          AUDIENCES.map((audience) => (
+            <li class="card">
+              <a href={href(`for/${audience.slug}/`)}>{audience.name}</a>
+              <span class="muted">{audience.blurb}</span>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="who-heading">
+    <div class="wrap split">
+      <div>
+        <p class="eyebrow">Who builds this</p>
+        <h2 id="who-heading">One researcher, building in the open</h2>
+        <p class="muted">
+          I'm Malek. I started PaperLab on my way to a PhD because I wanted to read papers properly, where every note
+          stays attached to its passage and every answer can be checked against the page. It didn't exist, so I built
+          it, and I work on it every day.
+        </p>
+        <p class="muted">
+          Every week the PaperLab page on LinkedIn breaks down how one feature works: how a paper becomes searchable
+          chunks, how a cited answer is put together, how to keep AI text honest. Follow along, and tell me where it
+          breaks on your papers.
+        </p>
+        <div class="actions">
+          <FollowButton where="who" />
+          <a class="btn" href={CONTRIBUTING} data-goal="contribute" data-where="who">Contribute</a>
+        </div>
+      </div>
+      <figure class="carousel">
+        <img
+          src={href('carousel-life-of-a-question.jpg')}
+          alt="The first slide of a LinkedIn carousel titled Life of a question, from the weekly PaperLab series."
+          width="800"
+          height="1000"
+          loading="lazy"
+        />
+        <figcaption class="muted fine">From the weekly LinkedIn series.</figcaption>
+      </figure>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .hero {
+    padding: 4rem 0 3rem;
+  }
+  .hero-grid {
+    display: grid;
+    gap: 3rem;
+    align-items: center;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  }
+  .hero h1 {
+    font-size: clamp(2.6rem, 5.4vw, 4.1rem);
+    line-height: 1.04;
+    letter-spacing: -0.015em;
+    margin-bottom: 1.25rem;
+  }
+  .hero .lead {
+    margin-bottom: 1.75rem;
+  }
+  .fine {
+    font-size: 0.9rem;
+    margin-top: 1rem;
+  }
+  .rows {
+    display: grid;
+    gap: 4.5rem;
+  }
+  .row {
+    display: grid;
+    gap: 3rem;
+    align-items: center;
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  }
+  .row.flip .row-copy {
+    order: 2;
+  }
+  .row h3 {
+    font-size: 1.9rem;
+  }
+  .more {
+    margin-top: 3rem;
+    font-weight: 600;
+  }
+  .guide-cards {
+    list-style: none;
+    padding: 0;
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  }
+  .guide-cards li {
+    display: grid;
+    gap: 0.35rem;
+    position: relative;
+  }
+  .guide-cards a {
+    font-weight: 700;
+    color: var(--foreground);
+    text-decoration: none;
+  }
+  .guide-cards a::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+  }
+  .guide-cards li:hover a {
+    color: var(--primary);
+  }
+  .audiences {
+    list-style: none;
+    padding: 0;
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+  }
+  .audiences li {
+    display: grid;
+    gap: 0.35rem;
+    position: relative;
+    padding: 1.2rem 1.3rem;
+  }
+  .audiences a {
+    font-family: 'Crimson Pro Variable', Georgia, serif;
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: var(--foreground);
+    text-decoration: none;
+  }
+  .audiences a::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+  }
+  .audiences li:hover a {
+    color: var(--primary);
+  }
+  .more-link {
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .more-link:hover {
+    text-decoration: underline;
+  }
+  .grid .eyebrow {
+    font-size: 1rem;
+  }
+  .split {
+    display: grid;
+    gap: 3rem;
+    align-items: center;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .tools-title {
+    font-family: 'Crimson Pro Variable', Georgia, serif;
+    font-size: 1.4rem;
+    font-weight: 600;
+  }
+  .tools ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.9rem;
+  }
+  .tools li {
+    display: grid;
+    gap: 0.15rem;
+  }
+  .tools code {
+    width: fit-content;
+    color: var(--ai);
+    background: var(--ai-surface);
+  }
+  .carousel {
+    margin: 0;
+    max-width: 22rem;
+    justify-self: center;
+  }
+  .carousel img {
+    border-radius: 14px;
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow);
+    transform: rotate(1.5deg);
+  }
+  .carousel figcaption {
+    margin-top: 0.75rem;
+    text-align: center;
+  }
+  @media (max-width: 880px) {
+    .hero-grid,
+    .row,
+    .split {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .row.flip .row-copy {
+      order: 0;
+    }
+    .hero {
+      padding-top: 2.5rem;
+    }
+  }
+</style>

@@ -1,0 +1,67 @@
+---
+import DownloadButton from './DownloadButton.astro'
+import FollowButton from './FollowButton.astro'
+import StarButton from './StarButton.astro'
+
+// The same closing ask on every page, so analytics can compare pages like for like.
+---
+
+<section class="cta" aria-labelledby="cta-heading">
+  <div class="wrap">
+    <div class="panel">
+      <div>
+        <h2 id="cta-heading">Help PaperLab reach <mark>the next researcher</mark></h2>
+        <p class="muted">
+          PaperLab is free, open source and built by one person. A star helps other researchers find it and puts each
+          new release in your GitHub feed. The PaperLab page on LinkedIn posts a weekly breakdown of how one feature
+          works.
+        </p>
+      </div>
+      <div class="actions">
+        <StarButton where="cta" />
+        <FollowButton where="cta" />
+        <DownloadButton where="cta" />
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .cta {
+    padding: 2rem 0 4rem;
+  }
+  .panel {
+    display: grid;
+    gap: 1.5rem 3rem;
+    align-items: center;
+    grid-template-columns: minmax(0, 1.2fr) auto;
+    padding: 2.5rem;
+    border-radius: 20px;
+    background:
+      radial-gradient(30rem 20rem at 0% 0%, var(--glow-1), transparent 70%),
+      radial-gradient(30rem 20rem at 100% 100%, var(--glow-2), transparent 70%),
+      var(--glass-strong);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow);
+  }
+  h2 {
+    font-size: clamp(1.8rem, 3.4vw, 2.3rem);
+  }
+  p {
+    margin: 0;
+    max-width: 38rem;
+  }
+  .actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .actions :global(.btn) {
+    justify-content: center;
+  }
+  @media (max-width: 880px) {
+    .panel {
+      grid-template-columns: minmax(0, 1fr);
+      padding: 1.75rem;
+    }
+  }
+</style>

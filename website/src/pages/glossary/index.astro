@@ -1,0 +1,73 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro'
+import { TERMS } from '../../lib/glossary'
+import { breadcrumbs } from '../../lib/schema'
+import { BASE, SITE, href } from '../../lib/site'
+
+const sorted = [...TERMS].sort((a, b) => a.name.localeCompare(b.name))
+const jsonLd = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'DefinedTermSet',
+    name: 'PaperLab research glossary',
+    url: `${SITE}${BASE}glossary/`,
+    hasDefinedTerm: sorted.map((term) => ({
+      '@type': 'DefinedTerm',
+      name: term.name,
+      url: `${SITE}${BASE}glossary/${term.slug}/`,
+    })),
+  },
+  breadcrumbs([['Glossary', 'glossary/']]),
+]
+---
+
+<BaseLayout
+  title="Research and AI glossary: RAG, embeddings, MCP, PRISMA, DOI"
+  description="Plain definitions of the terms researchers meet with AI tools and literature reviews: RAG, embeddings, MCP, local LLMs, DOI, open access, co-citation, PRISMA."
+  jsonLd={jsonLd}
+>
+  <section class="section">
+    <div class="wrap prose">
+      <p class="eyebrow">Glossary</p>
+      <h1>Research and AI terms, in plain words</h1>
+      <p class="lead">
+        What the words around AI reading tools and literature reviews mean, and where each one shows up in practice.
+      </p>
+      <dl class="terms">
+        {
+          sorted.map((term) => (
+            <div class="card">
+              <dt>
+                <a href={href(`glossary/${term.slug}/`)}>{term.name}</a>
+              </dt>
+              <dd class="muted">{term.description}</dd>
+            </div>
+          ))
+        }
+      </dl>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .terms {
+    display: grid;
+    gap: 1rem;
+    margin-top: 2rem;
+  }
+  dt {
+    font-family: 'Crimson Pro Variable', Georgia, serif;
+    font-size: 1.35rem;
+    font-weight: 600;
+  }
+  dt a {
+    color: var(--foreground);
+    text-decoration: none;
+  }
+  dt a:hover {
+    color: var(--primary);
+  }
+  dd {
+    margin: 0.25rem 0 0;
+  }
+</style>

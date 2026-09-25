@@ -1,0 +1,177 @@
+---
+import DownloadButton from '../components/DownloadButton.astro'
+import Faqs from '../components/Faqs.astro'
+import StarButton from '../components/StarButton.astro'
+import { FEATURES } from '../lib/features'
+import { GUIDES } from '../lib/guides'
+import { breadcrumbs, faqPage } from '../lib/schema'
+import { AUTHOR, BASE, SITE, href } from '../lib/site'
+import BaseLayout from './BaseLayout.astro'
+
+// A guide answers one question people ask. The answer comes first, in one paragraph an AI assistant can quote whole;
+// the page then explains, and only after that says how PaperLab does it.
+interface Props {
+  path: string
+  title: string
+  description: string
+  question: string
+  answer: string
+  faqs: { q: string; a: string }[]
+  updated: string
+  paperlab: string
+}
+const { path, title, description, question, answer, faqs, updated, paperlab } = Astro.props
+const url = `${SITE}${BASE}${path}`
+const related = GUIDES.filter((guide) => guide.path !== path).slice(0, 3)
+const features = FEATURES.filter((feature) => feature.guides.includes(path))
+
+const jsonLd = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: question,
+    description,
+    url,
+    dateModified: updated,
+    author: { '@type': 'Person', name: AUTHOR.name, url: `${SITE}${BASE}about/` },
+    publisher: { '@type': 'Organization', name: 'PaperLab', url: `${SITE}${BASE}` },
+  },
+  faqPage(faqs),
+  breadcrumbs([
+    ['Guides', 'guides/'],
+    [question, path],
+  ]),
+]
+---
+
+<BaseLayout title={title} description={description} jsonLd={jsonLd}>
+  <article class="section">
+    <div class="wrap prose">
+      <nav aria-label="Breadcrumb" class="crumbs">
+        <a href={href()}>PaperLab</a> / <a href={href('guides/')}>Guides</a>
+      </nav>
+      <h1>{question}</h1>
+      <p class="answer" set:html={answer} />
+      <p class="updated muted">
+        By <a href={href('about/')}>{AUTHOR.name}</a> · Updated
+        {new Date(updated).toLocaleDateString('en-GB', { dateStyle: 'long' })}
+      </p>
+
+      <div class="body">
+        <slot />
+      </div>
+
+      <aside class="card paperlab" aria-labelledby="paperlab-heading">
+        <p class="eyebrow dot-yellow" id="paperlab-heading">How PaperLab does this</p>
+        <p set:html={paperlab} />
+        {
+          features.length > 0 && (
+            <ul class="features">
+              {features.map((feature) => (
+                <li>
+                  <a href={href(`features/${feature.slug}/`)}>{feature.name}</a>
+                  <span class="muted"> — {feature.tagline}</span>
+                </li>
+              ))}
+            </ul>
+          )
+        }
+        <div class="actions">
+          <DownloadButton where={`guide-${path}`} label="Try PaperLab free" />
+          <StarButton where={`guide-${path}`} />
+        </div>
+      </aside>
+
+      <Faqs faqs={faqs} />
+
+      <section aria-labelledby="related-heading" class="related">
+        <h2 id="related-heading">More guides</h2>
+        <ul>
+          {
+            related.map((guide) => (
+              <li>
+                <a href={href(guide.path)}>{guide.title}</a>
+                <span class="muted">{guide.blurb}</span>
+              </li>
+            ))
+          }
+        </ul>
+        <p><a href={href('guides/')}>All guides →</a></p>
+      </section>
+    </div>
+  </article>
+</BaseLayout>
+
+<style>
+  .crumbs {
+    font-size: 0.9rem;
+    color: var(--muted-foreground);
+    margin-bottom: 1rem;
+  }
+  .crumbs a {
+    color: inherit;
+  }
+  h1 {
+    font-size: clamp(2.2rem, 5vw, 3.2rem);
+  }
+  /* The one paragraph an assistant or a search snippet can lift whole. */
+  .answer {
+    font-size: 1.2rem;
+    line-height: 1.6;
+    padding: 1.25rem 1.5rem;
+    border-left: 4px solid #facc15;
+    background: var(--glass-strong);
+    border-radius: 0 14px 14px 0;
+    box-shadow: var(--shadow);
+  }
+  .updated {
+    font-size: 0.85rem;
+  }
+  .body :global(h2) {
+    margin-top: 2.5rem;
+  }
+  .body :global(li) {
+    margin-bottom: 0.5rem;
+  }
+  .body :global(table) {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95rem;
+    margin: 1rem 0;
+  }
+  .body :global(th),
+  .body :global(td) {
+    text-align: left;
+    padding: 0.6rem 0.5rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  .paperlab {
+    margin: 3rem 0;
+  }
+  .features {
+    padding-left: 1.2rem;
+    margin: 0 0 1.25rem;
+  }
+  .features li {
+    margin-bottom: 0.4rem;
+  }
+  .features a {
+    font-weight: 700;
+  }
+  .related ul {
+    list-style: none;
+    padding: 0;
+    display: grid;
+    gap: 0.75rem;
+  }
+  .related li {
+    display: grid;
+  }
+  .related a {
+    font-weight: 600;
+  }
+  h2 {
+    margin-top: 2.5rem;
+  }
+</style>

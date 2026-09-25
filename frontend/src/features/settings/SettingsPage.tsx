@@ -67,6 +67,28 @@ export function SettingsPage() {
               </li>
             ))}
           </ul>
+          {/* Opens in the system browser: the desktop app hands every new-window http(s) link to it. */}
+          <p className="mt-4 px-3 text-xs text-muted-foreground">
+            Finding PaperLab useful?{' '}
+            <a
+              href="https://github.com/khannoussi-malek/PaperLab"
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Star PaperLab on GitHub"
+              className="underline underline-offset-2 hover:text-foreground"
+            >
+              ⭐ Star it
+            </a>{' '}
+            ·{' '}
+            <a
+              href="https://www.linkedin.com/company/os-paperlab"
+              target="_blank"
+              rel="noreferrer"
+              className="underline underline-offset-2 hover:text-foreground"
+            >
+              Follow on LinkedIn
+            </a>
+          </p>
         </nav>
         {/* Settings is prose and forms: a reading-width column, as macOS System Settings and Zotero's own do. */}
         <div className="flex max-w-3xl flex-1 flex-col gap-8">

@@ -1,0 +1,328 @@
+@import '@fontsource-variable/atkinson-hyperlegible-next';
+@import '@fontsource-variable/crimson-pro';
+
+/* The app's tokens (frontend/design-system/MASTER.md), so the site and the app look like one product. */
+:root {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+  --muted: #f1f5f9;
+  --muted-foreground: #475569;
+  --border: #e2e8f0;
+  --ai: #6d28d9;
+  --ai-surface: #f5f3ff;
+  --highlight: #facc15;
+  --linkedin: #0a66c2;
+  --mark: rgb(250 204 21 / 0.55);
+  --hl-green: rgb(74 222 128 / 0.5);
+  --hl-blue: rgb(96 165 250 / 0.45);
+  --glass: rgb(255 255 255 / 0.72);
+  --glass-strong: rgb(255 255 255 / 0.9);
+  --glass-border: rgb(148 163 184 / 0.35);
+  --glow-1: rgb(37 99 235 / 0.14);
+  --glow-2: rgb(124 58 237 / 0.12);
+  --shadow: 0 18px 40px -18px rgb(15 23 42 / 0.3);
+  --radius: 0.625rem;
+  --width: 72rem;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0f172a;
+    --foreground: #f1f5f9;
+    --card: #1e293b;
+    --primary: #60a5fa;
+    --primary-foreground: #0f172a;
+    --muted: #1e293b;
+    --muted-foreground: #94a3b8;
+    --border: rgb(255 255 255 / 0.1);
+    --ai: #a78bfa;
+    --ai-surface: #221d3a;
+    --linkedin: #70b5f9;
+    --mark: rgb(250 204 21 / 0.35);
+    --glass: rgb(30 41 59 / 0.6);
+    --glass-strong: rgb(30 41 59 / 0.92);
+    --glass-border: rgb(255 255 255 / 0.1);
+    --glow-1: rgb(59 130 246 / 0.24);
+    --glow-2: rgb(139 92 246 / 0.22);
+    --shadow: 0 18px 40px -18px rgb(0 0 0 / 0.6);
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+/* The brand canvas: slate paper-white with a blue glow top-left and a violet one bottom-right, as on the README banner. */
+body {
+  margin: 0;
+  background-color: var(--background);
+  background-image:
+    radial-gradient(60rem 40rem at 0% -10%, var(--glow-1), transparent 70%),
+    radial-gradient(60rem 40rem at 100% 100%, var(--glow-2), transparent 70%);
+  background-attachment: fixed;
+  color: var(--foreground);
+  font-family: 'Atkinson Hyperlegible Next Variable', system-ui, sans-serif;
+  font-size: 1.0625rem;
+  line-height: 1.6;
+}
+
+h1,
+h2,
+h3 {
+  font-family: 'Crimson Pro Variable', Georgia, serif;
+  line-height: 1.15;
+  text-wrap: balance;
+  margin: 0 0 0.5em;
+}
+
+h1 {
+  font-size: clamp(2.4rem, 6vw, 4rem);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+h2 {
+  font-size: clamp(1.8rem, 4vw, 2.4rem);
+  font-weight: 600;
+}
+
+h3 {
+  font-size: 1.4rem;
+  font-weight: 600;
+}
+
+p {
+  margin: 0 0 1em;
+  text-wrap: pretty;
+}
+
+a {
+  color: var(--primary);
+}
+
+a:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+  background: var(--muted);
+  padding: 0.1em 0.35em;
+  border-radius: 0.3rem;
+}
+
+pre {
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  overflow-x: auto;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+pre code {
+  background: none;
+  padding: 0;
+}
+
+.wrap {
+  max-width: var(--width);
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+.prose {
+  max-width: 44rem;
+}
+
+.lead {
+  font-size: 1.2rem;
+  color: var(--muted-foreground);
+  max-width: 40rem;
+}
+
+.muted {
+  color: var(--muted-foreground);
+}
+
+.section {
+  padding: 4rem 0;
+}
+
+.section-head {
+  max-width: 44rem;
+  margin-bottom: 2.5rem;
+}
+
+/* A small glass pill with a colour dot: the dot's colour carries the meaning (yellow highlight, violet AI, blue link). */
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.8rem;
+  border-radius: 999px;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  font-size: 0.85rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+}
+
+.eyebrow::before {
+  content: '';
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 3px;
+  background: var(--dot, var(--primary));
+}
+
+.dot-yellow {
+  --dot: #facc15;
+}
+.dot-violet {
+  --dot: var(--ai);
+}
+.dot-green {
+  --dot: #4ade80;
+}
+
+/* Buttons: one primary action per block, the rest outlined. */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1.15rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--glass-border);
+  background: var(--glass-strong);
+  color: var(--foreground);
+  font-weight: 600;
+  font-size: 1rem;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    transform 120ms ease,
+    border-color 120ms ease;
+}
+
+.btn:hover {
+  border-color: var(--primary);
+  transform: translateY(-1px);
+}
+
+.btn-primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-foreground);
+  box-shadow: 0 10px 24px -10px rgb(37 99 235 / 0.6);
+}
+
+.btn-linkedin {
+  color: var(--linkedin);
+}
+
+.btn .count {
+  font-variant-numeric: tabular-nums;
+  padding-left: 0.5rem;
+  margin-left: 0.1rem;
+  border-left: 1px solid var(--border);
+  color: var(--muted-foreground);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.shot {
+  display: block;
+  border-radius: 14px;
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  background: var(--card);
+}
+
+/* The README pictures are banners: title on the left, the app on the right. .crop shows only the app side. */
+.shot.crop {
+  aspect-ratio: 1.3;
+}
+
+.shot.crop img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: right center;
+}
+
+.grid {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+}
+
+.card {
+  background: var(--glass-strong);
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  padding: 1.5rem;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(12px);
+}
+
+.card.ai {
+  background: var(--ai-surface);
+  border-color: rgb(109 40 217 / 0.18);
+}
+
+.card p:last-child {
+  margin-bottom: 0;
+}
+
+/* The one highlighter stroke, as on a highlighted passage in the reader. */
+mark {
+  background: linear-gradient(transparent 55%, var(--mark) 55%);
+  color: inherit;
+  padding: 0 0.1em;
+}
+
+.ai-tag {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: var(--ai-surface);
+  color: var(--ai);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn {
+    transition: none;
+  }
+  .btn:hover {
+    transform: none;
+  }
+}

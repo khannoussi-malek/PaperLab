@@ -1,0 +1,232 @@
+---
+import DownloadButton from '../../components/DownloadButton.astro'
+import Faqs from '../../components/Faqs.astro'
+import Shot from '../../components/Shot.astro'
+import StarButton from '../../components/StarButton.astro'
+import BaseLayout from '../../layouts/BaseLayout.astro'
+import { FEATURES, featureBySlug, type Feature } from '../../lib/features'
+import { TERMS } from '../../lib/glossary'
+import { GUIDES } from '../../lib/guides'
+import { breadcrumbs, faqPage } from '../../lib/schema'
+import { BASE, SITE, href } from '../../lib/site'
+
+// One page per feature, from src/lib/features.ts: answer first, then details, tips, questions, and links onward.
+export function getStaticPaths() {
+  return FEATURES.map((feature) => ({ params: { slug: feature.slug }, props: { feature } }))
+}
+
+const { feature } = Astro.props as { feature: Feature }
+const related = feature.related.map((slug) => featureBySlug(slug)).filter((f): f is Feature => f !== undefined)
+const guides = GUIDES.filter((guide) => feature.guides.includes(guide.path))
+const terms = TERMS.filter((term) => term.features.includes(feature.slug))
+const path = `features/${feature.slug}/`
+
+const jsonLd = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'WebPage',
+    name: feature.h1,
+    description: feature.description,
+    url: `${SITE}${BASE}${path}`,
+    about: { '@type': 'SoftwareApplication', name: 'PaperLab', applicationCategory: 'EducationalApplication' },
+  },
+  faqPage(feature.faqs),
+  breadcrumbs([
+    ['Features', 'features/'],
+    [feature.name, path],
+  ]),
+]
+---
+
+<BaseLayout title={feature.title} description={feature.description} jsonLd={jsonLd} image={feature.shot}>
+  <article class="section">
+    <div class="wrap">
+      <nav aria-label="Breadcrumb" class="crumbs">
+        <a href={href()}>PaperLab</a> / <a href={href('features/')}>Features</a> / {feature.name}
+      </nav>
+      <div class="head">
+        {feature.next && <p class="eyebrow dot-violet">Next release</p>}
+        <h1>{feature.h1}</h1>
+        <p class="answer">{feature.answer}</p>
+      </div>
+      {feature.shot && feature.shotAlt && <Shot name={feature.shot} alt={feature.shotAlt} eager />}
+
+      <div class="body">
+        <section aria-labelledby="can-heading">
+          <h2 id="can-heading">What you can do</h2>
+          <ul class="points">{feature.points.map((point) => <li>{point}</li>)}</ul>
+        </section>
+
+        {
+          feature.steps && (
+            <section aria-labelledby="how-heading">
+              <h2 id="how-heading">How it works</h2>
+              <ol class="steps">
+                {feature.steps.map((step) => (
+                  <li class="card">
+                    <h3>{step.title}</h3>
+                    <p class="muted">{step.body}</p>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          )
+        }
+
+        <section aria-labelledby="tips-heading">
+          <h2 id="tips-heading">Tips</h2>
+          <ul class="tips">{feature.tips.map((tip) => <li>{tip}</li>)}</ul>
+        </section>
+
+        <aside class="card try">
+          <p>
+            <strong>PaperLab is free and open source.</strong>
+            {feature.next ? ' This feature ships in the next desktop release.' : ' This works in the current release.'}
+          </p>
+          <div class="actions">
+            <DownloadButton where={`feature-${feature.slug}`} label="Download for free" />
+            <StarButton where={`feature-${feature.slug}`} />
+          </div>
+        </aside>
+
+        <Faqs faqs={feature.faqs} />
+
+        <section aria-labelledby="related-heading">
+          <h2 id="related-heading">Works well with</h2>
+          <ul class="related">
+            {
+              related.map((f) => (
+                <li class="card">
+                  <a href={href(`features/${f.slug}/`)}>{f.name}</a>
+                  <span class="muted">{f.tagline}</span>
+                </li>
+              ))
+            }
+          </ul>
+        </section>
+
+        {
+          guides.length > 0 && (
+            <section aria-labelledby="guides-heading">
+              <h2 id="guides-heading">Guides</h2>
+              <ul class="guide-links">
+                {guides.map((guide) => (
+                  <li>
+                    <a href={href(guide.path)}>{guide.title}</a> <span class="muted">— {guide.blurb}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )
+        }
+        {
+          terms.length > 0 && (
+            <section aria-labelledby="terms-heading">
+              <h2 id="terms-heading">Terms explained</h2>
+              <ul class="term-links">
+                {terms.map((term) => (
+                  <li>
+                    <a href={href(`glossary/${term.slug}/`)}>{term.name}</a>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )
+        }
+        <p><a href={href('features/')}>All features →</a></p>
+      </div>
+    </div>
+  </article>
+</BaseLayout>
+
+<style>
+  .crumbs {
+    font-size: 0.9rem;
+    color: var(--muted-foreground);
+    margin-bottom: 1rem;
+  }
+  .crumbs a {
+    color: inherit;
+  }
+  .head {
+    max-width: 48rem;
+  }
+  h1 {
+    font-size: clamp(2.2rem, 5vw, 3.4rem);
+  }
+  .answer {
+    font-size: 1.15rem;
+    line-height: 1.65;
+    padding: 1.25rem 1.5rem;
+    border-left: 4px solid #facc15;
+    background: var(--glass-strong);
+    border-radius: 0 14px 14px 0;
+    box-shadow: var(--shadow);
+    margin-bottom: 2.5rem;
+  }
+  .body {
+    max-width: 48rem;
+  }
+  h2 {
+    margin-top: 3rem;
+  }
+  .points li,
+  .tips li,
+  .guide-links li {
+    margin-bottom: 0.55rem;
+  }
+  .tips li::marker {
+    content: '✦  ';
+    color: #eab308;
+  }
+  .steps {
+    list-style: none;
+    padding: 0;
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+    counter-reset: step;
+  }
+  .steps li {
+    counter-increment: step;
+  }
+  .steps h3::before {
+    content: counter(step) '. ';
+    color: var(--primary);
+  }
+  .try {
+    margin-top: 3rem;
+  }
+  .term-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    list-style: none;
+    padding: 0;
+  }
+  .term-links a {
+    display: inline-block;
+    padding: 0.3rem 0.8rem;
+    border-radius: 999px;
+    border: 1px solid var(--glass-border);
+    background: var(--glass);
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.95rem;
+  }
+  .related {
+    list-style: none;
+    padding: 0;
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  }
+  .related li {
+    display: grid;
+    gap: 0.3rem;
+    padding: 1.1rem 1.25rem;
+  }
+  .related a {
+    font-weight: 700;
+  }
+</style>

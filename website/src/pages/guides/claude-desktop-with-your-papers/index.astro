@@ -1,0 +1,60 @@
+---
+import GuideLayout from '../../../layouts/GuideLayout.astro'
+import { REPO, href } from '../../../lib/site'
+---
+
+<GuideLayout
+  path="guides/claude-desktop-with-your-papers/"
+  title="How to use Claude Desktop with your research papers (MCP)"
+  description="Give Claude Desktop or Claude Code access to your local library of PDFs through an MCP server: what MCP is, how to connect it, and what gets sent."
+  question="How can Claude Desktop read your own research papers?"
+  answer="Connect it to a local MCP server that exposes your library. The Model Context Protocol (MCP) lets Claude Desktop, Claude Code and other clients call tools on your machine, such as searching your papers or reading a paper's notes. You add the server in Claude Desktop's config (Settings → Developer → Edit Config), restart it, and Claude can then search and quote your PDFs. What the tools return is sent to Anthropic with your conversation."
+  updated="2026-09-25"
+  faqs={[
+    {
+      q: 'What is an MCP server?',
+      a: 'A small program that offers tools to an AI client over the Model Context Protocol. The client decides when to call a tool, and the server returns data, such as passages from your papers.',
+    },
+    {
+      q: 'Does Claude get all my PDFs?',
+      a: 'No, only what each tool call returns: the passages, details or notes it asked for. Those are sent to Anthropic as part of the conversation, so connect only libraries you’re comfortable sharing that way.',
+    },
+    {
+      q: 'Does it work with Claude Code?',
+      a: 'Yes. Claude Code adds MCP servers with the claude mcp add command, and can then use the same tools from the terminal.',
+    },
+    {
+      q: 'Can Claude write notes into my library?',
+      a: 'If the server offers a tool for it. A good one marks those notes as AI, so they never pass for your own.',
+    },
+  ]}
+  paperlab="PaperLab ships an MCP server with four tools: search_library, get_paper, related_papers and create_note. Open PaperLab and click Connect Claude: it fills in the config or command for your system and checks that PaperLab answers. Notes Claude saves are marked AI and highlighted on the lines it quoted."
+>
+  <h2>What Claude can do with your library</h2>
+  <ul>
+    <li>Find the passages across your papers closest to a question with <a href={href('glossary/semantic-search-term/')}>semantic search</a>, and quote them.</li>
+    <li>Read a paper's outline and your notes on it before answering.</li>
+    <li>Follow connections: shared authors, topics, workspaces or citations.</li>
+    <li>Save a note on a passage it quotes, for you to review.</li>
+  </ul>
+
+  <h2>Connecting it</h2>
+  <ol>
+    <li>Make sure the <a href={href('glossary/mcp/')}>MCP</a> server's app is running, since Claude starts the tool through it.</li>
+    <li>In Claude Desktop, open <strong>Settings → Developer → Edit Config</strong> and add the server under <code>mcpServers</code>.</li>
+    <li>Restart Claude Desktop and look for the tools icon in a new chat.</li>
+    <li>Ask something only your library can answer, and check the passage it quotes.</li>
+  </ol>
+  <p>
+    If the server doesn't start, Claude Desktop writes the reason to its log, for example
+    <code>~/Library/Logs/Claude/</code> on macOS. PaperLab's exact steps for each system are in the
+    <a href={`${REPO}#use-paperlab-from-claude-desktop`}>README</a>.
+  </p>
+
+  <h2>Prompts that work well</h2>
+  <ul>
+    <li>“Search my library for how these papers evaluate retrieval, and quote each one with its page.”</li>
+    <li>“Read my notes on this paper and list the questions I left open.”</li>
+    <li>“Which papers in my library are connected to this one, and how?”</li>
+  </ul>
+</GuideLayout>

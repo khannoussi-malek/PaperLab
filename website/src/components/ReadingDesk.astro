@@ -1,0 +1,199 @@
+---
+// The hero picture, drawn in HTML like the README banner (.claude/skills/paperlab-visuals/banner.html): a white paper
+// with highlights, the note that stays on one, a cited AI answer, and a reference your papers share.
+// Laid out on a 600×540 design grid: 1em = 10 design px, so it scales with its width and the wires stay on their lines.
+const lines = [
+  { w: 100 },
+  { w: 94 },
+  { w: 97 },
+  { w: 88, hl: 'yellow' },
+  { w: 62, hl: 'yellow' },
+  { w: 99 },
+  { w: 91 },
+  { w: 96 },
+  { w: 70, gap: true },
+]
+const lines2 = [{ w: 98 }, { w: 93, hl: 'green' }, { w: 95 }, { w: 89 }, { w: 97 }, { w: 57, hl: 'blue' }, { w: 92 }, { w: 80 }]
+---
+
+<div class="desk" aria-hidden="true">
+  <div class="stage">
+    <div class="page">
+      <div class="ttl" style="width:78%"></div>
+      {lines.map((l) => <div class:list={['ln', l.hl && `hl ${l.hl}`, l.gap && 'gap']} style={`width:${l.w}%`} />)}
+      <div class="ttl small" style="width:44%"></div>
+      {lines2.map((l) => <div class:list={['ln', l.hl && `hl ${l.hl}`]} style={`width:${l.w}%`} />)}
+    </div>
+
+    <svg class="wires" viewBox="0 0 600 540">
+      <path d="M262 158 C 300 158, 300 92, 336 88" stroke="#eab308"></path>
+      <circle cx="262" cy="158" r="4.5" fill="#eab308"></circle>
+      <path d="M274 325 C 320 325, 320 262, 352 258" stroke="#22c55e"></path>
+      <circle cx="274" cy="325" r="4.5" fill="#22c55e"></circle>
+      <path d="M188 397 C 188 440, 220 452, 256 452" stroke="#2563eb"></path>
+      <circle cx="188" cy="397" r="4.5" fill="#2563eb"></circle>
+    </svg>
+
+    <div class="note you" style="left:56%; top:4%; width:42%">
+      <span class="badge you">● You</span>
+      <div class="quote">“…masks 15% of the input tokens”</div>
+      Why 15%? Try 10% and 20% on my runs.
+    </div>
+    <div class="note ai" style="left:58.5%; top:36%; width:40%">
+      <span class="badge ai">✦ AI</span>
+      BERT learns from masked words <span class="cite">[C1]</span> and next-sentence prediction <span class="cite"
+        >[C2]</span
+      >.
+      <div class="chips"><span>C1 · p. 4</span><span>C2 · p. 5</span></div>
+    </div>
+    <div class="note ref" style="left:42.5%; top:74%; width:56%">
+      <span class="badge ref">↗ Reference</span>
+      Cited by <b>3 of your papers</b>, and a free PDF exists. <span class="cite">Import</span>
+    </div>
+  </div>
+</div>
+
+<style>
+  .desk {
+    container-type: inline-size;
+    width: 100%;
+  }
+  .stage {
+    position: relative;
+    aspect-ratio: 600 / 540;
+    font-size: calc(100cqw / 60);
+  }
+  /* The paper is white in both themes. */
+  .page {
+    position: absolute;
+    left: 3.33%;
+    top: 7.4%;
+    width: 50%;
+    height: 81.5%;
+    padding: 3.4em 3em;
+    background: #fff;
+    border-radius: 0.6em;
+    box-shadow:
+      0 1px 2px rgb(15 23 42 / 0.06),
+      0 24px 48px -16px rgb(15 23 42 / 0.25);
+  }
+  .ttl {
+    height: 1.1em;
+    border-radius: 0.4em;
+    background: #334155;
+    margin-bottom: 1.6em;
+  }
+  .ttl.small {
+    height: 1em;
+  }
+  .ln {
+    position: relative;
+    height: 0.7em;
+    border-radius: 0.4em;
+    background: #e2e8f0;
+    margin-bottom: 1.1em;
+  }
+  .ln.gap {
+    margin-bottom: 2.6em;
+  }
+  .ln.hl {
+    background: #94a3b8;
+    isolation: isolate;
+  }
+  .ln.hl::before {
+    content: '';
+    position: absolute;
+    inset: -0.5em -0.6em;
+    border-radius: 0.3em;
+    background: var(--c);
+    z-index: -1;
+  }
+  .yellow {
+    --c: rgb(250 204 21 / 0.55);
+  }
+  .green {
+    --c: rgb(74 222 128 / 0.5);
+  }
+  .blue {
+    --c: rgb(96 165 250 / 0.45);
+  }
+  .wires {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+  }
+  .wires path {
+    fill: none;
+    stroke-width: 2;
+    stroke-dasharray: 5 6;
+  }
+  .note {
+    position: absolute;
+    padding: 1.3em 1.5em;
+    border-radius: 1.4em;
+    background: var(--glass-strong);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(12px);
+    font-size: 1.6em;
+    line-height: 1.4;
+    color: var(--foreground);
+  }
+  .note.ai {
+    background: var(--ai-surface);
+    border-color: rgb(109 40 217 / 0.18);
+  }
+  .note.ref {
+    border-color: rgb(37 99 235 / 0.35);
+  }
+  .badge {
+    display: flex;
+    width: fit-content;
+    align-items: center;
+    height: 1.6em;
+    padding: 0 0.7em;
+    border-radius: 999px;
+    font-size: 0.8em;
+    font-weight: 700;
+    margin-bottom: 0.5em;
+  }
+  .badge.you {
+    background: #f1f5f9;
+    color: #1e293b;
+  }
+  .badge.ai {
+    background: #6d28d9;
+    color: #fff;
+  }
+  .badge.ref {
+    background: #0f172a;
+    color: #fff;
+  }
+  .quote {
+    font-size: 0.85em;
+    color: var(--muted-foreground);
+    border-left: 2px solid #cbd5e1;
+    padding-left: 0.6em;
+    margin-bottom: 0.4em;
+  }
+  .cite {
+    color: var(--primary);
+    font-weight: 700;
+  }
+  .chips {
+    display: flex;
+    gap: 0.35em;
+    margin-top: 0.5em;
+  }
+  .chips span {
+    font-size: 0.75em;
+    font-weight: 700;
+    padding: 0.1em 0.5em;
+    border-radius: 0.5em;
+    border: 1px solid #ddd6fe;
+    background: #fff;
+    color: #334155;
+  }
+</style>

@@ -1,0 +1,52 @@
+---
+import GuideLayout from '../../../layouts/GuideLayout.astro'
+import { href } from '../../../lib/site'
+---
+
+<GuideLayout
+  path="compare/obsidian/"
+  title="PaperLab vs Obsidian for research notes on papers"
+  description="Obsidian is a general notes app built on linked Markdown files. PaperLab keeps notes attached to the passage in the PDF. How they differ, and using both."
+  question="PaperLab or Obsidian for notes on research papers?"
+  answer="They solve different parts of research. Obsidian is a general notes app on local Markdown files, strong for linking ideas and writing, with PDF annotation through plugins. PaperLab is a reading tool: every note is attached to the passage in the PDF it came from, answers about a paper cite the page, and AI text is labelled. Many researchers read and note in a reading tool, then develop ideas in a notes app."
+  updated="2026-09-25"
+  faqs={[
+    {
+      q: 'Can Obsidian annotate PDFs?',
+      a: 'Through community plugins. Obsidian itself focuses on Markdown notes and links between them.',
+    },
+    {
+      q: 'Are both local-first?',
+      a: 'Yes. Obsidian stores notes as files on your computer; PaperLab keeps papers and notes in a local database. Neither needs an account for local use.',
+    },
+    {
+      q: 'Is PaperLab open source?',
+      a: 'Yes, under Apache-2.0. Obsidian is free to use but not open source.',
+    },
+  ]}
+  paperlab="PaperLab anchors each note to its passage, shows who wrote it, You or AI, and groups notes by workspace. The graph links papers by citations, authors, topics, shared notes and similar content."
+>
+  <h2>Side by side</h2>
+  <table>
+    <thead><tr><th scope="col"></th><th scope="col">Obsidian</th><th scope="col">PaperLab</th></tr></thead>
+    <tbody>
+      <tr><td>Main job</td><td>Linked notes and writing</td><td>Reading and questioning papers</td></tr>
+      <tr><td>Notes live</td><td>In Markdown files</td><td>On the passage in the PDF</td></tr>
+      <tr><td>PDF annotation</td><td>Through plugins</td><td>Built in, five colours or your own</td></tr>
+      <tr><td>Graph</td><td>Links between notes</td><td>Citations, authors, topics, notes, similar papers</td></tr>
+      <tr><td>AI answers about a paper</td><td>Through plugins</td><td>Built in, citing the page (<a href={href('glossary/rag/')}>RAG</a>)</td></tr>
+      <tr><td>Source code</td><td>Closed</td><td>Open, Apache-2.0</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Using both</h2>
+  <ol>
+    <li>Read and highlight in PaperLab; write notes on the passages.</li>
+    <li>Carry the ideas worth developing into your notes app, with a link back to the paper.</li>
+    <li>Write from your notes app; check claims against the passages in PaperLab.</li>
+  </ol>
+  <p>
+    See also <a href={href('guides/how-to-take-notes-on-research-papers/')}>how to take notes on research papers</a> and
+    <a href={href('compare/zotero/')}>PaperLab vs Zotero</a>.
+  </p>
+</GuideLayout>

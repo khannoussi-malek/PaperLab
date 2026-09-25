@@ -1,0 +1,61 @@
+---
+import GuideLayout from '../../../layouts/GuideLayout.astro'
+import { href } from '../../../lib/site'
+---
+
+<GuideLayout
+  path="compare/zotero/"
+  title="PaperLab vs Zotero: a reading tool and a reference manager"
+  description="Zotero manages references and cites them as you write. PaperLab is where you read: notes on the passage and cited AI answers. Many researchers use both."
+  question="PaperLab or Zotero: which one do you need?"
+  answer="They do different jobs, and many researchers will want both. Zotero is a free, open-source reference manager: it collects sources from the browser, stores their metadata, and inserts citations and bibliographies into Word, LibreOffice and Google Docs. PaperLab is a free, open-source reading tool: notes anchored to the passage they came from, answers from a local or cloud model that cite the page, and a graph of how your papers connect."
+  updated="2026-09-25"
+  faqs={[
+    {
+      q: 'Is PaperLab a Zotero replacement?',
+      a: 'No. PaperLab doesn’t insert citations into a document or format bibliographies, which is where Zotero shines. Use Zotero to collect and cite, and PaperLab to read and think.',
+    },
+    {
+      q: 'Does Zotero have AI features?',
+      a: 'Zotero itself focuses on reference management; AI features come from third-party plugins. PaperLab builds cited answers into the reader, and keeps AI text labelled and apart from your own notes.',
+    },
+    {
+      q: 'Are both free and open source?',
+      a: 'Yes. Zotero is free and open source, with optional paid storage for syncing. PaperLab is free and open source under Apache-2.0 and runs on your computer.',
+    },
+  ]}
+  paperlab="PaperLab reads the PDFs you already have: upload them, or find free copies by title, DOI or arXiv ID. Highlight and note on the page, ask with citations, follow references in both directions, and see your library as a graph — all stored on your machine."
+>
+  <h2>Side by side</h2>
+  <table>
+    <thead><tr><th scope="col"></th><th scope="col">Zotero</th><th scope="col">PaperLab</th></tr></thead>
+    <tbody>
+      <tr><td>Main job</td><td>Collect, organise and cite references</td><td>Read, annotate and question papers</td></tr>
+      <tr><td>Citations in your document</td><td>Yes: Word, LibreOffice, Google Docs</td><td>No</td></tr>
+      <tr><td>Capture from the browser</td><td>Yes, one click</td><td>Find papers by title, DOI or arXiv ID</td></tr>
+      <tr><td>Notes on the page</td><td>Annotations in its PDF reader</td><td>Notes anchored to the passage, filterable by who wrote them</td></tr>
+      <tr><td>Ask a paper questions</td><td>Through plugins</td><td>Built in, with answers that cite the page</td></tr>
+      <tr><td>Local AI models</td><td>Depends on the plugin</td><td><a href={href('glossary/local-llm/')}>Local models</a> through Ollama and other servers</td></tr>
+      <tr><td>Library graph</td><td>No built-in graph</td><td>Citations, authors, topics, notes, similar content</td></tr>
+      <tr><td>Sync across devices</td><td>Yes, with an account</td><td>No: one user, one machine</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Choose Zotero when</h2>
+  <ul>
+    <li>You are writing and need citations and a bibliography in a citation style.</li>
+    <li>You collect sources from many websites and want them in one place, synced.</li>
+  </ul>
+
+  <h2>Choose PaperLab when</h2>
+  <ul>
+    <li>You read deeply and want notes that lead back to the passage.</li>
+    <li>You want to ask papers questions privately, and check every answer against the page.</li>
+    <li>You want to see how the papers in a project connect, through citations and <a href={href('glossary/co-citation/')}>co-citation</a>.</li>
+  </ul>
+
+  <p>
+    Both projects are open source. <a href="https://www.zotero.org/">Zotero</a> has served researchers since 2006;
+    PaperLab is new and focuses on reading.
+  </p>
+</GuideLayout>

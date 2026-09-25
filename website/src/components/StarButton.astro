@@ -1,0 +1,17 @@
+---
+import { stars } from '../lib/buildData'
+import { REPO } from '../lib/site'
+import { formatStars } from '../lib/github'
+
+interface Props {
+  where: string
+  label?: string
+}
+const { where, label = 'Star on GitHub' } = Astro.props
+---
+
+<a class="btn" href={REPO} data-goal="star" data-where={where} rel="noopener">
+  <span aria-hidden="true">⭐</span>
+  {label}
+  {stars !== null && <span class="count" aria-label={`${stars} stars`}>{formatStars(stars)}</span>}
+</a>
