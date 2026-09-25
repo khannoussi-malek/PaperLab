@@ -20,7 +20,7 @@ from datetime import datetime
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
+from app.core import embedding_sources
 from app.core.errors import InvalidInput
 from app.core.papers import get_paper
 from app.core.workspaces import get as get_workspace
@@ -34,10 +34,11 @@ SIMILAR_NEIGHBOURS = 3
 MAX_LINKS = 2000
 
 
-def _similarity() -> dict:
-    """`similar`'s parameters. Only the current model's vectors are averaged: search and chat refuse to mix two
-    models' vectors (core/embedding_index.py), and mid-reindex a paper can still hold the old one's."""
-    return {"neighbours": SIMILAR_NEIGHBOURS, "embed_model": settings.embed_model}
+def _similarity(name: str) -> dict:
+    """`similar`'s parameters. Only the search source's own vectors are averaged (D156): search and chat refuse to mix
+    two models' vectors, and mid-rebuild a paper can still hold the old source's, so only papers already embedded
+    again are linked."""
+    return {"neighbours": SIMILAR_NEIGHBOURS, "embed_model": name}
 
 
 # The one definition both `related()` and `library_graph()` build on (D106). Directed rows: every undirected kind is
@@ -204,7 +205,9 @@ async def related(session: AsyncSession, paper_id: uuid.UUID, hops: int = 1) -> 
     if not 1 <= hops <= MAX_HOPS:
         raise InvalidInput("hops_out_of_range", allowed=[1, MAX_HOPS])
     await get_paper(session, paper_id)
-    rows = await session.execute(_RELATED, {"paper_id": paper_id, "hops": hops, **_similarity()})
+    rows = await session.execute(
+        _RELATED, {"paper_id": paper_id, "hops": hops, **_similarity(await embedding_sources.active_name(session))}
+    )
     return [Related(row.paper_id, row.title, row.year, row.hops, list(row.via)) for row in rows]
 
 
@@ -221,7 +224,11 @@ async def library_graph(session: AsyncSession, workspace_id: uuid.UUID | None = 
         Node(row.id, row.title, row.year, list(row.workspaces), row.has_notes, row.status, row.added_at)
         for row in await session.execute(_GRAPH_NODES, scope)
     ]
-    rows = list(await session.execute(_GRAPH_LINKS, {**scope, **_similarity(), "cap": MAX_LINKS + 1}))
+    rows = list(
+        await session.execute(
+            _GRAPH_LINKS, {**scope, **_similarity(await embedding_sources.active_name(session)), "cap": MAX_LINKS + 1}
+        )
+    )
     # Nodes and links are two statements, so a paper created or deleted between them could leave a link with a missing
     # end, which the canvas's link force can't draw. Keep only links whose both ends were listed.
     listed = {node.id for node in nodes}

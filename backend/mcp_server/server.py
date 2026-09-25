@@ -61,7 +61,8 @@ async def search_library(query: str, workspace: str | None = None) -> list[libra
     """Passages from the owner's papers closest to `query`, closest first (at most 3 from one paper). Leave out
     `workspace` to search the whole library, or give a workspace's exact name; an unknown name answers with the
     names that exist. Until the owner downloads the search model, it answers search_not_set_up with a sentence to
-    pass on."""
+    pass on. While search is being rebuilt with a new source, it answers search_rebuilding with how far it got (done
+    of total papers): try again when it finishes."""
     async with sessions() as session:
         return await library.search(session, query, workspace)
 
@@ -81,7 +82,8 @@ async def related_papers(paper_id: uuid.UUID, hops: int = 1) -> list[graph.Relat
     """Library papers connected to this one within `hops` links (1 to 3), nearest first. `via` says how: same_workspace,
     co_anchored (a note on both), co_authored, shares_topic, cites (this paper cites it), cited_by (it cites this
     paper), similar (one is among the other's three closest by content) or manual (the owner linked them by hand).
-    `similar` counts for the first hop only; further hops follow the links someone made."""
+    `similar` counts for the first hop only; further hops follow the links someone made. While search is being
+    rebuilt with a new source, similar links only the papers already embedded again."""
     async with sessions() as session:
         return await graph.related(session, paper_id, hops)
 

@@ -6,9 +6,11 @@ from contextlib import asynccontextmanager
 import pytest
 from mcp import Client
 from pdf_papers import TWO_LINE_QUOTE, chunked_paper
+from sqlalchemy import delete
+from test_search_rebuild import OLLAMA_NAME, paper_with, switched
 
 from app.core import workspaces
-from app.models import LLMOutput, Note, Paper
+from app.models import Chunk, LLMOutput, Note, Paper
 from app.providers import embedding
 from mcp_server import server
 
@@ -77,6 +79,23 @@ async def test_with_no_search_model_search_answers_a_recoverable_error_with_a_se
     assert result.structured_content == {
         "error": "search_not_set_up",
         "detail": "Search isn't set up. Download the search model in Settings to search long papers and workspaces.",
+    }
+
+
+async def test_mid_rebuild_search_answers_a_recoverable_error_with_how_far_it_got(session):
+    await session.execute(delete(Chunk))  # D15: the rebuild counts only this test's papers
+    await paper_with(session, OLLAMA_NAME)
+    await paper_with(session, "test")
+    source = await switched(session)
+
+    result = await call("search_library", query="how are notes anchored?")
+
+    assert result.is_error
+    assert result.structured_content == {
+        "error": "search_rebuilding",
+        "detail": f"Search is being rebuilt with {source.label}: 1 of 2 papers. Try again when it finishes.",
+        "done": 1,
+        "total": 2,
     }
 
 
