@@ -41,7 +41,7 @@ from app.core import chat, llm_connections
 from app.core.errors import DomainError
 from app.core.notes import normalize_quote
 from app.core.retrieval import RetrievedChunk
-from app.models import Chunk, Note, Provenance, note_anchors
+from app.models import Chunk, Note, Provenance, note_anchors, note_papers
 from app.providers import embedding
 from app.providers import llm as llm_provider
 from app.providers.base import LLM, LLMError, LLMUnavailable
@@ -192,6 +192,7 @@ async def add_note(session: AsyncSession, paper_id: uuid.UUID, fixture: NoteFixt
     note = Note(body=fixture.body, provenance=Provenance(fixture.provenance))
     session.add(note)
     await session.flush()
+    await session.execute(insert(note_papers).values(note_id=note.id, paper_id=paper_id))
     await session.execute(
         insert(note_anchors).values(
             note_id=note.id, paper_id=paper_id, page=fixture.page, bbox=anchor.bbox,

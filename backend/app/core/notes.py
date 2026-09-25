@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.chunking import join_lines
 from app.core.errors import Conflict, InvalidInput, NotFound
 from app.core.papers import get_paper, get_paper_file, list_chunks
-from app.models import Chart, Chunk, LLMOutput, Note, Provenance, note_anchors, note_charts
+from app.models import Chart, Chunk, LLMOutput, Note, Provenance, note_anchors, note_charts, note_papers
 from app.providers.extraction import quote_rects
 
 Rect = tuple[float, float, float, float]
@@ -94,6 +94,14 @@ async def _get_note(session: AsyncSession, note_id: uuid.UUID) -> Note:
     return note
 
 
+async def _link(session: AsyncSession, note_id: uuid.UUID, paper_ids) -> None:
+    """Links the note to these papers (D95), each once; a link it has already is kept. Every writer calls it before it
+    inserts anchors: note_anchors references note_papers, so an anchor on an unlinked paper is refused."""
+    rows = [{"note_id": note_id, "paper_id": paper_id} for paper_id in dict.fromkeys(paper_ids)]
+    if rows:
+        await session.execute(pg_insert(note_papers).values(rows).on_conflict_do_nothing())
+
+
 async def _with_anchors(session: AsyncSession, notes: list[Note]) -> list[NoteView]:
     rows = await session.execute(select(note_anchors).where(note_anchors.c.note_id.in_([n.id for n in notes])))
     anchors: dict[uuid.UUID, list[Anchor]] = {}
@@ -130,9 +138,7 @@ async def _with_anchors(session: AsyncSession, notes: list[Note]) -> list[NoteVi
     ]
 
 
-async def create_human_note(
-    session: AsyncSession, body: str, anchor: Anchor, color: str = DEFAULT_COLOR
-) -> NoteView:
+async def create_human_note(session: AsyncSession, body: str, anchor: Anchor, color: str = DEFAULT_COLOR) -> NoteView:
     paper = await get_paper(session, anchor.paper_id)
     if paper.page_count is not None and not 1 <= anchor.page <= paper.page_count:
         raise InvalidInput(f"page {anchor.page} is outside 1..{paper.page_count}")
@@ -145,6 +151,7 @@ async def create_human_note(
     note = Note(body=body.strip(), provenance=Provenance.HUMAN, color=normalize_color(color))
     session.add(note)
     await session.flush()
+    await _link(session, note.id, [anchor.paper_id])
     await session.execute(
         insert(note_anchors).values(
             note_id=note.id,
@@ -230,6 +237,7 @@ async def promote_llm_fragment(
         anchors.setdefault(
             key, {"note_id": note.id, "paper_id": c.paper_id, "page": c.page, "bbox": c.bbox, "quoted_text": c.text}
         )
+    await _link(session, note.id, [row["paper_id"] for row in anchors.values()])
     await session.execute(insert(note_anchors), list(anchors.values()))
     await session.commit()
     await session.refresh(note)
@@ -285,6 +293,7 @@ async def create_chart_note(session: AsyncSession, chart_id: uuid.UUID, anchors:
         key = (a.paper_id, a.page, tuple(tuple(r) for r in a.bbox))
         rows.setdefault(key, {"note_id": note.id, "paper_id": a.paper_id, "page": a.page,
                               "bbox": [list(r) for r in a.bbox], "quoted_text": a.quoted_text})  # fmt: skip
+    await _link(session, note.id, [row["paper_id"] for row in rows.values()])
     await session.execute(insert(note_anchors), list(rows.values()))
     await session.execute(insert(note_charts).values(note_id=note.id, chart_id=chart_id))
     await session.commit()
@@ -371,6 +380,7 @@ async def create_llm_note(session: AsyncSession, paper_id: uuid.UUID, body: str,
     note = Note(body=text, provenance=Provenance.LLM, source_id=output.id)
     session.add(note)
     await session.flush()
+    await _link(session, note.id, [paper_id])
     await session.execute(
         insert(note_anchors).values(
             note_id=note.id,

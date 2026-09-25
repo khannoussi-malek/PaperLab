@@ -8,7 +8,7 @@ from sqlalchemy import delete, insert
 from app.core import chat
 from app.core.errors import Conflict, NotFound
 from app.core.notes import Anchor, NoteView
-from app.models import Chunk, LLMOutput, Note, Paper, Workspace, note_anchors, workspace_papers
+from app.models import Chunk, LLMOutput, Note, Paper, Workspace, note_anchors, note_papers, workspace_papers
 
 pytestmark = pytest.mark.anyio
 
@@ -145,6 +145,7 @@ async def add_note(session, paper: Paper, body: str, *, page=1, updated_at=NOW, 
     stored = Note(body=body, provenance=provenance, created_at=naive, updated_at=naive)
     session.add(stored)
     await session.flush()
+    await session.execute(insert(note_papers).values(note_id=stored.id, paper_id=paper.id))
     await session.execute(
         insert(note_anchors).values(
             note_id=stored.id, paper_id=paper.id, page=page, bbox=[[72, 100, 300, 110]], quoted_text=f"quote {body}"

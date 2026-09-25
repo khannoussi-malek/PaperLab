@@ -5,7 +5,7 @@ from sqlalchemy import func, insert, select, text, update
 
 from app.core import notes, workspaces
 from app.core.errors import Conflict, InvalidInput, NotFound
-from app.models import Note, Paper, Provenance, note_anchors, workspace_papers
+from app.models import Note, Paper, Provenance, note_anchors, note_papers, workspace_papers
 
 pytestmark = pytest.mark.anyio
 
@@ -39,6 +39,7 @@ async def test_create_strips_the_name_and_lists_alphabetically_with_counts(sessi
     await note_on(session, second)
     both = await note_on(session, first, page=2)
     # One note anchored on two workspace papers counts once.
+    await session.execute(insert(note_papers).values(note_id=both.id, paper_id=second.id))
     await session.execute(
         insert(note_anchors).values(note_id=both.id, paper_id=second.id, page=3, bbox=[[1, 2, 3, 4]], quoted_text="q")
     )
@@ -143,6 +144,9 @@ async def test_notes_appear_once_by_paper_title_then_reading_order(session):
     shared = Note(body="both", provenance=Provenance.LLM)
     session.add(shared)
     await session.flush()
+    await session.execute(
+        insert(note_papers), [{"note_id": shared.id, "paper_id": pid} for pid in (bert.id, attention.id)]
+    )
     await session.execute(
         insert(note_anchors),
         [
