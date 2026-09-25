@@ -76,7 +76,41 @@ async def test_ollama_sends_nomic_embed_text_with_truncation(server):
     assert server.bodies() == [{"model": "nomic-embed-text", "input": ["search_document: alpha"], "truncate": True}]
 
 
-@pytest.mark.parametrize(("kind", "count", "batches"), [("openai", 129, [128, 1]), ("ollama", 33, [32, 1])])
+async def test_gemini_sends_one_request_per_text_at_768_with_the_key_in_a_header(server):
+    await embedding.embed_documents(built("gemini", server), ["alpha", "beta"])
+    await embedding.embed_query(built("gemini", server), "what is attention?")
+
+    documents, question = server.requests
+    assert str(documents.url) == (
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2:batchEmbedContents"
+    )
+    assert documents.headers["x-goog-api-key"] == KEY and KEY not in str(documents.url)
+    assert server.bodies()[0] == {
+        "requests": [
+            {
+                "model": "models/gemini-embedding-2",
+                "content": {"parts": [{"text": f"title: none | text: {text}"}]},  # several parts would be one vector
+                "outputDimensionality": 768,
+            }
+            for text in ["alpha", "beta"]
+        ]
+    }
+    # No task types for this model: its instructions are text prefixes (D154).
+    assert server.bodies()[1]["requests"][0]["content"]["parts"] == [
+        {"text": "task: search result | query: what is attention?"}
+    ]
+
+
+async def test_a_rejected_gemini_key_says_so(server):
+    server.statuses = [403]
+
+    with pytest.raises(LLMUnavailable, match="^Key rejected by Gemini$"):
+        await embedding.embed_query(built("gemini", server), "q")
+
+
+@pytest.mark.parametrize(
+    ("kind", "count", "batches"), [("openai", 129, [128, 1]), ("gemini", 101, [100, 1]), ("ollama", 33, [32, 1])]
+)
 async def test_texts_go_in_batches_one_after_another_and_come_back_in_order(server, kind, count, batches):
     texts = [f"text {i}" for i in range(count)]
 

@@ -1,5 +1,5 @@
-"""The embedding APIs of Ollama and OpenAI (and OpenAI-compatible servers) behind one httpx.MockTransport, for the
-search source tests (D159). No network: every request is answered here and recorded."""
+"""The embedding APIs of Ollama, OpenAI (and OpenAI-compatible servers) and Gemini behind one httpx.MockTransport,
+for the search source tests (D159). No network: every request is answered here and recorded."""
 
 import json
 import math
@@ -12,8 +12,12 @@ KEY = "sk-test-EMBED9876"
 OPENAI_URL = "https://api.openai.com/v1"
 OLLAMA_URL = "http://ollama.test:11434"
 COMPAT_URL = "http://vllm.test:8000/v1"
+GEMINI_URL = (
+    "https://generativelanguage.googleapis.com/v1beta/openai"  # M9's preset: the same key serves the native API
+)
 # What a model gives when nothing shortens it: OpenAI's text-embedding-3 sizes.
-NATIVE = {"text-embedding-3-small": 1536, "text-embedding-3-large": 3072}
+NATIVE = {"text-embedding-3-small": 1536, "text-embedding-3-large": 3072, "gemini-embedding-2": 3072}
+MODEL = "gemini-embedding-2"
 # Predicted from Ollama's chat endpoint, which answers a missing model this way (spec D152).
 NOT_PULLED = {"error": 'model "nomic-embed-text" not found, try pulling it first'}
 SOURCES = {
@@ -24,6 +28,10 @@ SOURCES = {
     "openai": dict(
         model="text-embedding-3-small", base_url=OPENAI_URL, api_key=KEY, label="OpenAI", host="api.openai.com",
         name="openai/text-embedding-3-small@768",
+    ),
+    "gemini": dict(
+        model="gemini-embedding-2", base_url=GEMINI_URL, api_key=KEY, label="Gemini",
+        host="generativelanguage.googleapis.com", name="gemini/gemini-embedding-2@768",
     ),
     "openai_compatible": dict(
         model="bge-m3", base_url=COMPAT_URL, api_key=KEY, label="vLLM", host="vllm.test",
@@ -46,7 +54,8 @@ def source(kind: str, **fields) -> SimpleNamespace:
 
 
 class FakeEmbeddings:
-    """Routes by path: `/api/embed` (Ollama) and `/embeddings` (OpenAI and compatible servers).
+    """Routes by path: `/api/embed` (Ollama), `/embeddings` (OpenAI and compatible servers) and `:batchEmbedContents`
+    (Gemini).
 
     - `statuses` are answered first, one per request, in order: an HTTP status, "refuse" (ConnectError, like a server
       that isn't running) or "drop" (ReadTimeout). A 429 carries `Retry-After: 2`. An error body echoes the key the
@@ -81,6 +90,12 @@ class FakeEmbeddings:
             size = self.dims or body.get("dimensions") or NATIVE.get(body["model"], 768)
             data = [{"index": i, "embedding": vector(t, size)} for i, t in enumerate(body["input"])]
             return httpx.Response(200, json={"data": data[::-1], "usage": {"prompt_tokens": len(data)}})
+        if path.endswith(":batchEmbedContents"):
+            values = [
+                vector(r["content"]["parts"][0]["text"], self.dims or r.get("outputDimensionality") or NATIVE[MODEL])
+                for r in body["requests"]
+            ]
+            return httpx.Response(200, json={"embeddings": [{"values": v} for v in values]})
         raise AssertionError(f"unrouted embedding request: {request.method} {request.url}")
 
     @staticmethod
