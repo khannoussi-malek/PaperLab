@@ -9,12 +9,11 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.core import embedding_index, workspaces
 from app.core.errors import InvalidInput
 from app.core.notes import list_notes_for_paper
 from app.core.papers import get_paper
-from app.core.retrieval import MAX_PER_PAPER, query_embedder, retrieve
+from app.core.retrieval import MAX_PER_PAPER, retrieve, searchable
 from app.models import Chunk, Paper, Workspace, workspace_papers
 
 SEARCH_K = 8
@@ -71,7 +70,8 @@ async def search(
     or one workspace (by name). The name is checked before anything is embedded, so a wrong one never loads the model.
 
     Raises InvalidInput("empty_query"), NotFound("unknown_workspace", available=[...]),
-    Conflict("search_not_set_up", detail=<sentence>) with no search model, Conflict("embedding_model_changed").
+    Conflict("search_not_set_up" | "search_rebuilding", detail=<sentence>, …), Conflict("embedding_model_changed"), or
+    Conflict(<the question can't be embedded>).
     """
     if not query.strip():
         raise InvalidInput("empty_query")
@@ -80,8 +80,7 @@ async def search(
     else:
         workspace_id = await workspaces.by_name(session, workspace)
         scope = [paper.id for paper in await workspaces.papers(session, workspace_id)]
-    embedder = await query_embedder(embedder)  # with no model, "not set up" comes before which vectors are stale
-    await embedding_index.check_model(session, settings.embed_model, scope)
+    embedder = await searchable(session, scope, embedder)  # not set up, then rebuilding, then stale vectors (D156)
     found = await retrieve(
         session, query, workspace_id=workspace_id, k=k, embedder=embedder, per_paper=MAX_PER_PAPER
     )

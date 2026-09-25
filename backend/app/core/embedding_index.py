@@ -10,11 +10,11 @@ return nonsense. So chat refuses those papers until the library is re-indexed wi
 import uuid
 from dataclasses import dataclass
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import DateTime, func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import Conflict
-from app.models import Chunk
+from app.models import Chunk, Paper
 
 
 @dataclass(frozen=True)
@@ -28,6 +28,12 @@ class EmbeddingStatus:
     model: str  # settings.embed_model: what new chunks and questions are embedded with
     chunks: int  # chunks that have a vector
     indexed_with: list[IndexedModel]  # the models those vectors came from, most chunks first
+
+
+@dataclass(frozen=True)
+class Rebuild:
+    done: int  # papers of the rebuild already on the new source
+    total: int  # papers with chunks created at or before the rebuild started
 
 
 async def status(session: AsyncSession, model: str) -> EmbeddingStatus:
@@ -68,6 +74,14 @@ def _lacking(name: str):
     return or_(Chunk.embedding.is_(None), Chunk.embed_model != name)
 
 
+def _at_or_before(started_at):
+    """`Paper.created_at <= started_at`'s right side, typed explicitly: papers.created_at is timestamptz, but the
+    model maps it without a time zone (Paper.created_at), so an untyped bind would compile as TIMESTAMP WITHOUT TIME
+    ZONE and asyncpg would refuse the rebuild's tz-aware started_at.
+    ponytail: fix at the source by mapping Paper.created_at with DateTime(timezone=True) if another caller hits this."""
+    return literal(started_at, type_=DateTime(timezone=True))
+
+
 async def papers_to_embed(
     session: AsyncSession, name: str, paper_ids: list[uuid.UUID] | None = None
 ) -> list[uuid.UUID]:
@@ -77,3 +91,38 @@ async def papers_to_embed(
     if paper_ids is not None:
         query = query.where(Chunk.paper_id.in_(paper_ids))
     return list(await session.scalars(query))
+
+
+async def rebuild(session: AsyncSession, source) -> Rebuild | None:
+    """How far a rebuild toward the search source has got (D156), or None when there is none to show:
+    - rebuild_model isn't the source's name (a release renamed the built-in model: Settings shows its Re-index prompt,
+      D137, rather than a rebuild nobody started);
+    - or no paper of the rebuild is pending.
+    No flag to clear: it ends when set_embeddings writes the last paper, one transaction per paper. Papers added after
+    it started don't count, so a new upload never pauses search."""
+    if source.rebuild_model != source.name or source.rebuild_started_at is None:
+        return None
+    per_paper = (
+        select(Chunk.paper_id, func.bool_or(_lacking(source.name)).label("pending"))
+        .join(Paper, Paper.id == Chunk.paper_id)
+        .where(Paper.created_at <= _at_or_before(source.rebuild_started_at))
+        .group_by(Chunk.paper_id)
+        .subquery()
+    )
+    counts = select(func.count(), func.count().filter(per_paper.c.pending)).select_from(per_paper)
+    total, pending = (await session.execute(counts)).one()
+    return None if pending == 0 else Rebuild(done=total - pending, total=total)
+
+
+async def pending_in(session: AsyncSession, source, paper_ids: list[uuid.UUID]) -> bool:
+    """Whether any of these papers still waits for the rebuild: one it counts, with a chunk not on the new source."""
+    query = (
+        select(Chunk.id)
+        .join(Paper, Paper.id == Chunk.paper_id)
+        .where(
+            Chunk.paper_id.in_(paper_ids),
+            Paper.created_at <= _at_or_before(source.rebuild_started_at),
+            _lacking(source.name),
+        )
+    )
+    return await session.scalar(query.limit(1)) is not None

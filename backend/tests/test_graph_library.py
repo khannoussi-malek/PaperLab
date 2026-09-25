@@ -4,6 +4,7 @@ import uuid
 
 import pytest
 from sqlalchemy import insert
+from test_search_rebuild import OLLAMA_NAME, switched
 
 from app.core import graph, paper_links, workspaces
 from app.core.errors import NotFound
@@ -247,6 +248,25 @@ async def test_similar_never_compares_vectors_from_another_embedding_model(sessi
 
     assert frozenset((same.title, twin.title)) in similar
     assert not [pair for pair in similar if stale.title in pair]
+
+
+async def test_similar_compares_only_vectors_from_the_active_search_source(session):
+    # D156: after a switch, a paper still on the old model is left out of `similar` until it is embedded again.
+    await switched(session)
+    moved, twin, waiting = await add_papers(session, *[f"S{n} {RUN}" for n in range(3)])
+    vector = unit_vector(f"{RUN}-source")
+    for paper, model in [(moved, OLLAMA_NAME), (twin, OLLAMA_NAME), (waiting, "test")]:
+        session.add(
+            Chunk(paper_id=paper.id, ordinal=0, page=1, bbox=[[0, 0, 1, 1]], text=paper.title, embedding=vector,
+                  embed_model=model, strategy_ver=1)
+        )  # fmt: skip
+    await session.commit()
+
+    result = await graph.library_graph(session)
+    similar = {frozenset(pair) for kind, *pair in links_between(result, [moved, twin, waiting]) if kind == "similar"}
+
+    assert frozenset((moved.title, twin.title)) in similar
+    assert not [pair for pair in similar if waiting.title in pair]
 
 
 async def test_related_walks_similar_and_manual_links_as_well(session):

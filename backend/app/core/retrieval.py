@@ -8,9 +8,11 @@ from pgvector.sqlalchemy import Vector
 from sqlalchemy import bindparam, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import embedding_index, embedding_sources
 from app.core.errors import Conflict
 from app.models import workspace_papers
 from app.providers import embedding
+from app.providers.base import LLMError, LLMUnavailable, TextEmbedder
 
 Rect = tuple[float, float, float, float]
 
@@ -46,6 +48,10 @@ ITERATIVE_SCAN = text("SET LOCAL hnsw.iterative_scan = relaxed_order")
 
 # D136: what the MCP server passes on with Conflict("search_not_set_up"); the app words it itself (spec §5, §6).
 SEARCH_NOT_SET_UP = "Search isn't set up. Download the search model in Settings to search long papers and workspaces."
+# P1: what the MCP tool passes on with Conflict("search_rebuilding"); the app words it from GET /api/embedding.
+SEARCH_REBUILDING = "Search is being rebuilt with {label}: {done} of {total} {papers}. Try again when it finishes."
+# D155: a revoked key or a server that went away, at question time. The chat panel shows it as sent.
+QUESTION_FAILED = "Search couldn't embed your question: {reason}."
 
 
 @dataclass(frozen=True)
@@ -59,12 +65,39 @@ class RetrievedChunk:
     distance: float | None = None  # None when chat sends the whole paper instead of retrieving
 
 
-async def query_embedder(embedder=None):
-    """The model that embeds a question: `embedder` when the caller passes one (tests, evals), else this process's own,
-    loaded on first need. Raises Conflict("search_not_set_up") while no search model is downloaded (D136)."""
-    model = embedder if embedder is not None else await asyncio.to_thread(embedding.get_model)
-    if model is None:
+async def _built(source: embedding_sources.Source) -> TextEmbedder:
+    model = await asyncio.to_thread(embedding.build, source)
+    if model is None:  # Built-in, and the model isn't downloaded yet (D136)
         raise Conflict("search_not_set_up", detail=SEARCH_NOT_SET_UP)
+    return model
+
+
+async def query_embedder(session: AsyncSession, embedder: TextEmbedder | None = None) -> TextEmbedder:
+    """What embeds a question: `embedder` when the caller passes one (tests, evals), else the active search source's,
+    built for this question (D151). Raises Conflict("search_not_set_up") while Built-in has no model (D136)."""
+    if embedder is not None:
+        return embedder
+    return await _built(await embedding_sources.active(session))
+
+
+async def searchable(
+    session: AsyncSession, paper_ids: list[uuid.UUID], embedder: TextEmbedder | None = None
+) -> TextEmbedder:
+    """D156's gate before a search in `paper_ids`, in order:
+    - no source → search_not_set_up;
+    - a paper in scope still waiting for the rebuild → search_rebuilding, with how far it got;
+    - vectors from another model in scope → embedding_model_changed;
+    - else the embedder.
+    The scope decides: mid-rebuild, a paper already re-embedded answers, and a library search with any paper still
+    waiting pauses (P1 never gives partial results)."""
+    source = await embedding_sources.active(session)
+    model = embedder if embedder is not None else await _built(source)
+    rebuild = await embedding_index.rebuild(session, source)
+    if rebuild is not None and await embedding_index.pending_in(session, source, paper_ids):
+        papers = "paper" if rebuild.total == 1 else "papers"
+        detail = SEARCH_REBUILDING.format(label=source.label, done=rebuild.done, total=rebuild.total, papers=papers)
+        raise Conflict("search_rebuilding", detail=detail, done=rebuild.done, total=rebuild.total)
+    await embedding_index.check_model(session, model.name, paper_ids)
     return model
 
 
@@ -92,8 +125,8 @@ async def retrieve(
     embedder=None,
     per_paper: int | None = None,
 ) -> list[RetrievedChunk]:
-    """The k chunks nearest to the query, closest first. embedder=None uses the process-cached model, and raises
-    Conflict("search_not_set_up") while there is none (query_embedder).
+    """The k chunks nearest to the query, closest first. embedder=None embeds the question with the active search
+    source (query_embedder); a source that fails raises Conflict with QUESTION_FAILED's sentence (D155).
 
     Scope: paper_ids, workspace_id, or neither (the whole library). A scope that resolves to 2+ papers (a
     workspace with several members, or 2+ paper_ids) keeps at most per_paper (default MAX_PER_PAPER) chunks
@@ -112,8 +145,12 @@ async def retrieve(
     # just one paper, which must be as uncapped as passing that paper's id directly.
     if per_paper is None and paper_ids is not None and len(paper_ids) > 1:
         per_paper = MAX_PER_PAPER
-    model = await query_embedder(embedder)
-    params = {"q": await embedding.embed_query(model, query), "k": k, "candidates": max(CANDIDATES, k)}
+    model = await query_embedder(session, embedder)
+    try:
+        question = await embedding.embed_query(model, query)
+    except (LLMUnavailable, LLMError) as exc:
+        raise Conflict(QUESTION_FAILED.format(reason=str(exc).rstrip("."))) from exc
+    params = {"q": question, "k": k, "candidates": max(CANDIDATES, k)}
     params["per_paper"] = k if per_paper is None else per_paper
     if paper_ids is None:
         statement = NEAREST

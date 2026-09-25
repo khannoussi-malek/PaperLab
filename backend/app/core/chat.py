@@ -10,12 +10,11 @@ from dataclasses import dataclass, field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
-from app.core import embedding_index, prompts, workspaces
+from app.core import prompts, workspaces
 from app.core.errors import Conflict, NotFound
 from app.core.notes import Anchor, NoteView, _with_anchors, list_notes_for_paper
 from app.core.papers import get_paper
-from app.core.retrieval import RetrievedChunk, _to_chunk, query_embedder, retrieve
+from app.core.retrieval import RetrievedChunk, _to_chunk, retrieve, searchable
 from app.models import Chunk, LLMOutput, Note, Paper, PaperStatus, Provenance
 
 CHAT_PROMPT_VERSION = 3  # v3: [N#] is explicitly citation-only, so "generate notes" can't get mislabeled as one
@@ -243,17 +242,17 @@ def format_notes_block(notes: list[NoteView], papers: dict[uuid.UUID, Paper]) ->
 async def _prepare_workspace(session: AsyncSession, workspace_id: uuid.UUID, question: str, embedder) -> Prepared:
     """Retrieved passages across the workspace's papers plus all its notes, trimmed. No whole-paper skip.
 
-    Raises NotFound, or Conflict("workspace_empty" | "search_not_set_up" | "workspace_not_indexed" |
-    "embedding_model_changed").
+    Raises NotFound, or Conflict("workspace_empty" | "search_not_set_up" | "search_rebuilding" |
+    "embedding_model_changed" | "workspace_not_indexed").
     """
     members = {p.id: p for p in await workspaces.papers(session, workspace_id)}
     if not members:
         raise Conflict("workspace_empty")
-    embedder = await query_embedder(embedder)  # before the index: with no model, no paper has vectors (D136)
     ready = [paper_id for paper_id, paper in members.items() if paper.status == PaperStatus.READY]
+    # D156's gate before the index: not set up, then rebuilding, then vectors from another model.
+    embedder = await searchable(session, ready, embedder)
     if not await session.scalar(select(func.count(Chunk.embedding)).where(Chunk.paper_id.in_(ready))):
         raise Conflict("workspace_not_indexed")
-    await embedding_index.check_model(session, settings.embed_model, ready)
     sources = await retrieve(session, question, paper_ids=ready, k=RETRIEVE_K, embedder=embedder)
     every_note = await workspaces.notes(session, workspace_id)
     block, used = format_notes_block(every_note, members)
@@ -278,8 +277,8 @@ async def prepare(
     larger ones send the RETRIEVE_K nearest chunks. The paper's notes follow, newest first, as in workspace chat.
     A follow-up (`thread`) adds the earlier questions, and a large paper's earlier passages ahead of the fresh ones.
 
-    Raises NotFound, or Conflict("paper_not_ready" | "search_not_set_up" | "paper_not_indexed" |
-    "embedding_model_changed"). A small paper needs no search model.
+    Raises NotFound, or Conflict("paper_not_ready" | "search_not_set_up" | "search_rebuilding" |
+    "embedding_model_changed" | "paper_not_indexed"). A small paper needs no search model.
     """
     scope = _scope(paper_id)
     if scope.workspace_id is not None:
@@ -294,13 +293,13 @@ async def prepare(
     chars, embedded = await _size(session, paper_id)
     whole_paper = chars <= SMALL_PAPER_CHARS
     if not whole_paper:
-        embedder = await query_embedder(embedder)  # before the index: with no model, no paper has vectors (D136)
+        # D156's gate before the index: not set up, then rebuilding, then vectors from another model.
+        embedder = await searchable(session, [paper_id], embedder)
         if embedded == 0:  # ingested before M4, or before the model arrived: the UI offers Re-index
             raise Conflict("paper_not_indexed")
     if whole_paper:
         sources = await chunk_sources(session, Chunk.paper_id == paper_id)
     else:
-        await embedding_index.check_model(session, settings.embed_model, [paper_id])
         sources = await retrieve(session, question, paper_ids=[paper_id], k=RETRIEVE_K, embedder=embedder)
         if thread is not None:
             sources = follow_up_sources(await _earlier_sources(session, thread, paper_id), sources)
