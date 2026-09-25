@@ -155,6 +155,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Notes
+         * @description Every note, newest first. `paper=<id>`: the notes linked to that paper (404 when there is none); `paper=none`:
+         *     the notes on no paper. Any other value is a 422.
+         */
+        get: operations["list_notes_api_notes_get"];
+        put?: never;
+        /** Create Note */
+        post: operations["create_note_api_notes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notes/{note_id}/papers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Note Papers
+         * @description Replaces the note's papers. 404 for the note or `unknown_paper`; 422 over 100 papers.
+         */
+        put: operations["set_note_papers_api_notes__note_id__papers_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/papers/{paper_id}/notes/suggest": {
         parameters: {
             query?: never;
@@ -171,23 +213,6 @@ export interface paths {
          *     own output_id.
          */
         post: operations["suggest_notes_api_papers__paper_id__notes_suggest_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/notes": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Create Note */
-        post: operations["create_note_api_notes_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -267,6 +292,28 @@ export interface paths {
          *     follow_ups_paper_only, 404, 409 workspace_empty, search_not_set_up or workspace_not_indexed, 422.
          */
         post: operations["ask_workspace_api_workspaces__workspace_id__chat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/chat/answers/{output_id}/notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Save Suggestion
+         * @description Saves the answer's :::note block `index` as an AI note, read from the stored answer (D94). 404 answer_not_found;
+         *     409 already_saved (the history's saved_notes names the note); 422 no_such_block, empty_body, or a cited passage a
+         *     re-ingest replaced.
+         */
+        post: operations["save_suggestion_api_chat_answers__output_id__notes_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1643,6 +1690,8 @@ export interface components {
             notes_total: number | null;
             /** Parent Id */
             parent_id: string | null;
+            /** Saved Notes */
+            saved_notes: components["schemas"]["SavedNoteOut"][];
         };
         /** ChatModelOut */
         ChatModelOut: {
@@ -2389,8 +2438,15 @@ export interface components {
             updated_at: string;
             /** Anchors */
             anchors: components["schemas"]["AnchorOut"][];
+            /** Paper Ids */
+            paper_ids: string[];
             /** Charts */
             charts: components["schemas"]["ChartRefOut"][];
+        };
+        /** NotePapersIn */
+        NotePapersIn: {
+            /** Paper Ids */
+            paper_ids: string[];
         };
         /** NoteSource */
         NoteSource: {
@@ -2407,7 +2463,7 @@ export interface components {
              */
             paper_id: string;
             /** Page */
-            page: number;
+            page: number | null;
             /**
              * Provenance
              * @enum {string}
@@ -2914,6 +2970,23 @@ export interface components {
             position: number;
             /** Cells */
             cells: components["schemas"]["CellOut"][];
+        };
+        /** SaveSuggestion */
+        SaveSuggestion: {
+            /** Index */
+            index: number;
+        };
+        /** SavedNoteOut */
+        SavedNoteOut: {
+            /** Index */
+            index: number;
+            /**
+             * Note Id
+             * Format: uuid
+             */
+            note_id: string;
+            /** Paper Ids */
+            paper_ids: string[];
         };
         /**
          * SearchOut
@@ -3607,15 +3680,13 @@ export interface operations {
             };
         };
     };
-    suggest_notes_api_papers__paper_id__notes_suggest_post: {
+    list_notes_api_notes_get: {
         parameters: {
             query?: {
-                model_id?: string | null;
+                paper?: string | "none" | null;
             };
             header?: never;
-            path: {
-                paper_id: string;
-            };
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
@@ -3626,7 +3697,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NoteSuggestionsOut"];
+                    "application/json": components["schemas"]["NoteOut"][];
                 };
             };
             /** @description Validation Error */
@@ -3660,6 +3731,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NoteOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_note_papers_api_notes__note_id__papers_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                note_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotePapersIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    suggest_notes_api_papers__paper_id__notes_suggest_post: {
+        parameters: {
+            query?: {
+                model_id?: string | null;
+            };
+            header?: never;
+            path: {
+                paper_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteSuggestionsOut"];
                 };
             };
             /** @description Validation Error */
@@ -3889,6 +4028,41 @@ export interface operations {
                 };
                 content: {
                     "text/event-stream": components["schemas"]["SourcesEvent"] | components["schemas"]["TokenEvent"] | components["schemas"]["DoneEvent"] | components["schemas"]["ErrorEvent"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_suggestion_api_chat_answers__output_id__notes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                output_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveSuggestion"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteOut"];
                 };
             };
             /** @description Validation Error */

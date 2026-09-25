@@ -16,21 +16,22 @@ export type PaperNotes = { paper: Paper; notes: Note[] }
 const comparePlain = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0)
 
 /**
- * A workspace's notes grouped by paper. A note anchored on two of a workspace's papers shows once, under the
- * anchor whose paper sorts first by `(title, id)`, plain comparison — matching the API's own tie-break
- * (core/workspaces.py). The API already returns notes sorted by that same key, so groups are built, and kept, in
- * the order the API sent them, rather than re-sorted here. Papers with no notes are left out.
+ * A workspace's notes grouped by paper. A note linked to two of a workspace's papers shows once, under the one that
+ * sorts first by `(title, id)`, plain comparison — matching the API's own order (core/workspaces.py), which also puts
+ * the notes with no passage on that paper first. The API already returns notes in that order, so groups are built, and
+ * kept, in the order it sent them. Papers with no notes are left out.
  */
 export function notesByPaper(notes: Note[], papers: Paper[]): PaperNotes[] {
   const byId = new Map(papers.map((paper) => [paper.id, paper]))
   const groups = new Map<string, Note[]>()
   for (const note of notes) {
-    const onWorkspace = note.anchors.filter((anchor) => byId.has(anchor.paper_id))
-    const first = onWorkspace.sort((a, b) => {
-      const [pa, pb] = [byId.get(a.paper_id)!, byId.get(b.paper_id)!]
-      return comparePlain(pa.title, pb.title) || comparePlain(pa.id, pb.id)
-    })[0]
-    if (first) groups.set(first.paper_id, [...(groups.get(first.paper_id) ?? []), note])
+    const first = note.paper_ids
+      .filter((paperId) => byId.has(paperId))
+      .toSorted((a, b) => {
+        const [pa, pb] = [byId.get(a)!, byId.get(b)!]
+        return comparePlain(pa.title, pb.title) || comparePlain(pa.id, pb.id)
+      })[0]
+    if (first) groups.set(first, [...(groups.get(first) ?? []), note])
   }
   return [...groups].map(([paperId, grouped]) => ({ paper: byId.get(paperId)!, notes: grouped }))
 }

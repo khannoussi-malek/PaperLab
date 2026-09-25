@@ -9,6 +9,7 @@ export type NoteUpdate = components['schemas']['NoteUpdate']
 export type ChatSource = components['schemas']['ChatSource']
 export type NoteSource = components['schemas']['NoteSource']
 export type ChatAnswer = components['schemas']['ChatAnswer']
+export type SavedNote = components['schemas']['SavedNoteOut']
 // Prefixed: the DOM already has a global `ErrorEvent`.
 export type ChatSourcesEvent = components['schemas']['SourcesEvent']
 export type ChatTokenEvent = components['schemas']['TokenEvent']
@@ -151,6 +152,11 @@ export const api = {
   createNote: (note: NoteCreate) => request<Note>('/api/notes', sendJson('POST', note)),
   updateNote: (id: string, patch: NoteUpdate) => request<Note>(`/api/notes/${id}`, sendJson('PATCH', patch)),
   deleteNote: (id: string) => request<void>(`/api/notes/${id}`, { method: 'DELETE' }),
+  /** Every note, newest first: all of them (`null`), a paper's (its id), or those on no paper (`'none'`). */
+  listAllNotes: (paper: string | null) => request<Note[]>(paper === null ? '/api/notes' : `/api/notes?paper=${paper}`),
+  /** Replaces a note's papers; a passage on a paper left out goes with it. */
+  setNotePapers: (noteId: string, paperIds: string[]) =>
+    request<Note>(`/api/notes/${noteId}/papers`, sendJson('PUT', { paper_ids: paperIds })),
   listWorkspaces: () => request<Workspace[]>('/api/workspaces'),
   createWorkspace: (name: string) => request<Workspace>('/api/workspaces', sendJson('POST', { name })),
   renameWorkspace: (id: string, name: string) =>
@@ -164,6 +170,9 @@ export const api = {
     request<void>(`/api/workspaces/${workspaceId}/papers/${paperId}`, { method: 'DELETE' }),
   listChat: (scope: ChatScope) => request<ChatAnswer[]>(chatUrl(scope)),
   promoteNote: (promote: PromoteRequest) => request<Note>('/api/notes/promote', sendJson('POST', promote)),
+  /** Saves block `index` of a saved answer's suggested notes. A second save is refused with `already_saved`. */
+  saveSuggestion: (outputId: string, index: number) =>
+    request<Note>(`/api/chat/answers/${outputId}/notes`, sendJson('POST', { index })),
   /** One-click suggestions, not automatic notes: accept one through promoteNote, unchanged, using this
    * response's own output_id and a suggestion's chunk_id. */
   suggestNotes: (paperId: string) =>
