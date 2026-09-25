@@ -8,7 +8,7 @@ from fastapi.sse import EventSourceResponse, ServerSentEvent
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import LLMDep, SessionDep
-from app.core import chat
+from app.core import chat, notes
 from app.core.errors import Conflict
 from app.core.retrieval import RetrievedChunk
 from app.db import SessionLocal
@@ -20,9 +20,12 @@ from app.schemas.chat import (
     DoneEvent,
     ErrorEvent,
     NoteSource,
+    SavedNoteOut,
+    SaveSuggestion,
     SourcesEvent,
     TokenEvent,
 )
+from app.schemas.notes import NoteOut
 
 logger = logging.getLogger(__name__)
 
@@ -44,9 +47,7 @@ async def prepare_answer(paper_id: uuid.UUID, payload: ChatRequest, session: Ses
     return await _prepare(session, chat.Scope(paper_id=paper_id), payload.question, thread)
 
 
-async def prepare_workspace_answer(
-    workspace_id: uuid.UUID, payload: ChatRequest, session: SessionDep
-) -> chat.Prepared:
+async def prepare_workspace_answer(workspace_id: uuid.UUID, payload: ChatRequest, session: SessionDep) -> chat.Prepared:
     if payload.parent_id is not None:
         raise Conflict("follow_ups_paper_only")  # D62: until workspace follow-ups are measured
     return await _prepare(session, chat.Scope(workspace_id=workspace_id), payload.question)
@@ -169,6 +170,7 @@ def to_answer(answer: chat.Answer) -> ChatAnswer:
         notes_used=output.notes_used,
         notes_total=output.notes_total,
         parent_id=output.parent_id,
+        saved_notes=[SavedNoteOut(index=s.index, note_id=s.note_id, paper_ids=s.paper_ids) for s in answer.saved_notes],
     )
 
 
@@ -180,3 +182,11 @@ async def history(paper_id: uuid.UUID, session: SessionDep) -> list[ChatAnswer]:
 @router.get("/api/workspaces/{workspace_id}/chat")
 async def workspace_history(workspace_id: uuid.UUID, session: SessionDep) -> list[ChatAnswer]:
     return [to_answer(answer) for answer in await chat.list_answers(session, chat.Scope(workspace_id=workspace_id))]
+
+
+@router.post("/api/chat/answers/{output_id}/notes", status_code=201)
+async def save_suggestion(output_id: uuid.UUID, payload: SaveSuggestion, session: SessionDep) -> NoteOut:
+    """Saves the answer's :::note block `index` as an AI note, read from the stored answer (D94). 404 answer_not_found;
+    409 already_saved (the history's saved_notes names the note); 422 no_such_block, empty_body, or a cited passage a
+    re-ingest replaced."""
+    return await notes.save_suggestion(session, output_id, payload.index)
