@@ -384,6 +384,23 @@ async def test_the_fake_stack_pulls_without_ollama(client, session, pulls_in_tes
     assert events[-1][1]["model"]["name"] == "fake-pulled"
 
 
+async def test_a_pull_for_search_adds_nothing_to_chat(client, provider, pulls_in_test_transaction):
+    """Settings → Search pulls nomic-embed-text with add_to_chat false: an embedding model never lands in chat."""
+    connection = await ollama(client)
+    provider.reply("/api/pull", 200, text=json.dumps({"status": "success"}) + "\n")
+
+    response = await pull_for_search(client, connection["id"])
+
+    assert parse_sse(response.text)[-1] == ("done", {"model": None})
+    listed = (await client.get("/api/llm/connections")).json()
+    assert [c["models"] for c in listed if c["id"] == connection["id"]] == [[]]
+
+
+async def pull_for_search(client, connection_id: str):
+    body = {"name": "nomic-embed-text", "add_to_chat": False}
+    return await client.post(f"/api/llm/connections/{connection_id}/pull", json=body)
+
+
 @owner_rows
 async def test_a_stored_key_appears_in_no_llm_response_and_no_log_record(
     client, session, provider, caplog, pulls_in_test_transaction

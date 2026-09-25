@@ -8,7 +8,7 @@ from sqlalchemy import select, update
 from app.config import settings
 from app.core import embedding_index, embedding_sources, llm_connections
 from app.core.errors import Conflict
-from app.models import Chunk, Paper
+from app.models import Chunk, Note, Paper
 from app.providers import embedding
 from app.workers import ingest
 from app.workers.settings import WorkerSettings
@@ -153,8 +153,8 @@ async def test_reindexing_needs_the_explicit_confirmation_then_queues_every_pape
     every_paper = set(await session.scalars(select(Chunk.paper_id).distinct()))
     assert response.status_code == 202
     assert response.json() == {"papers": len(every_paper)}
-    assert set(arq.jobs) == {("reembed_paper", str(paper_id)) for paper_id in every_paper}
-    assert {str(p.id) for p in papers} <= {paper_id for _, paper_id in arq.jobs}
+    assert set(arq.jobs) == {("reembed_paper", str(paper_id), False) for paper_id in every_paper}
+    assert {str(p.id) for p in papers} <= {paper_id for _, paper_id, _ in arq.jobs}
 
 
 async def test_reembed_paper_embeds_every_chunk_again_with_the_configured_model_in_place(
@@ -239,3 +239,18 @@ async def test_a_switch_while_embedding_drops_the_vectors_and_says_so(session, m
     assert switching.calls  # it did embed
     assert all(vector is None for _, vector in await vectors_of(session, paper.id))
     assert f"the search source changed while embedding {paper.id}; the newer job embeds it" in caplog.text
+
+
+async def test_the_library_size_is_its_papers_with_chunks_its_notes_and_their_characters(session):
+    before = await embedding_index.library_size(session)
+    paper = await indexed_paper(session, chunks=3)
+    note = Note(body="notes go to a cloud search source too (P3 = A)", provenance="human")
+    session.add(note)
+    await session.commit()
+    chunk_chars = sum(len(c.text) for c in await session.scalars(select(Chunk).where(Chunk.paper_id == paper.id)))
+
+    after = await embedding_index.library_size(session)
+
+    assert (after.papers - before.papers, after.notes - before.notes, after.chars - before.chars) == (
+        1, 1, chunk_chars + len(note.body)
+    )  # fmt: skip

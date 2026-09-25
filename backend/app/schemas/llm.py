@@ -77,6 +77,8 @@ class DefaultModelIn(BaseModel):
 
 class PullRequest(BaseModel):
     name: ModelName
+    # False for Settings → Search's pull of nomic-embed-text (D152): an embedding model never lands in chat's list.
+    add_to_chat: bool = True
 
 
 # SSE payloads of a pull, one model per event name: progress (repeated), then done, or error.
@@ -87,7 +89,7 @@ class PullProgressEvent(BaseModel):
 
 
 class PullDoneEvent(BaseModel):
-    model: ModelOut
+    model: ModelOut | None  # None: the pull wasn't added to chat (add_to_chat false)
 
 
 class PullErrorEvent(BaseModel):
