@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from conftest import unit_vector
 from sqlalchemy import delete, insert
+from test_note_papers import paper_only_note
 
 from app.core import chat
 from app.core.errors import Conflict, NotFound
@@ -112,6 +113,35 @@ def test_notes_block_drops_the_line_that_would_push_past_the_budget():
 
     assert len(block) == 15_893
     assert [s.id for s in used] == [n.id for n in full]  # notes_used (27) is one less than notes_total (28)
+
+
+def test_notes_block_names_a_note_on_the_whole_paper_by_its_first_linked_paper_with_no_page_or_quote():
+    whole = NoteView(
+        uuid.uuid4(), "Dual encoders [C1] scale.", "human", "#facc15", None, NOW, NOW, [], [BERT.id, DPR.id]
+    )
+
+    block, used = chat.format_notes_block([whole], PAPERS)
+
+    assert block == "[N1] (You · BERT) — Dual encoders scale."
+    assert used == [chat.NoteSource(id=whole.id, paper_id=BERT.id, page=None, provenance="human")]
+
+
+def test_notes_block_names_a_note_by_its_linked_paper_in_scope_when_its_passage_is_elsewhere():
+    elsewhere = Anchor(uuid.uuid4(), 3, [(72.0, 100.0, 300.0, 110.0)], "a quote from a paper outside the scope")
+    note = NoteView(
+        uuid.uuid4(), "Compare.", "llm", "#facc15", None, NOW, NOW, [elsewhere], [DPR.id, elsewhere.paper_id]
+    )
+
+    block, used = chat.format_notes_block([note], PAPERS)
+
+    assert block == "[N1] (AI · Karpukhin 2020) — Compare."
+    assert used == [chat.NoteSource(id=note.id, paper_id=DPR.id, page=None, provenance="llm")]
+
+
+def test_notes_block_leaves_out_a_note_with_no_passage_in_scope_and_no_body():
+    empty = NoteView(uuid.uuid4(), "  ", "human", "#facc15", None, NOW, NOW, [], [DPR.id])
+
+    assert chat.format_notes_block([empty], PAPERS) == ("", [])
 
 
 async def make_workspace(session, papers: list[Paper]) -> Workspace:
@@ -267,3 +297,21 @@ async def test_workspace_answers_are_saved_and_listed_per_workspace(session, emb
     assert (await chat.list_answers(session, dpr.id))[0].notes == []
     with pytest.raises(NotFound):
         await chat.list_answers(session, chat.Scope(workspace_id=uuid.uuid4()))
+
+
+async def test_listed_answers_name_a_whole_paper_note_by_its_paper_and_drop_one_taken_off_the_scope(session, embedder):
+    run = uuid.uuid4().hex
+    dpr = await make_paper(session, "DPR", [f"{run} a"])
+    workspace = await make_workspace(session, [dpr])
+    naive = NOW.replace(tzinfo=None)  # notes' dates are mapped without a timezone
+    kept = await paper_only_note(session, dpr, body="On the whole of DPR.", created=naive)
+    moved = await paper_only_note(session, dpr, body="Moved away.", created=naive - timedelta(days=1))
+    scope = chat.Scope(workspace_id=workspace.id)
+    prepared = await chat.prepare(session, scope, "why?", embedder)
+    await chat.save_answer(session, scope, "why?", prepared, "Both [N1][N2].", "m", "Conn")
+    await session.execute(delete(note_papers).where(note_papers.c.note_id == moved.id))
+
+    [answer] = await chat.list_answers(session, scope)
+
+    assert "[N1] (You · DPR) — On the whole of DPR.\n[N2] (You · DPR) — Moved away." in prepared.prompt
+    assert answer.notes == [chat.NoteSource(id=kept.id, paper_id=dpr.id, page=None, provenance="human"), None]

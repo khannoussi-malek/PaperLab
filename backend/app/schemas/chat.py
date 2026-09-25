@@ -25,8 +25,8 @@ class ChatSource(BaseModel):
 class NoteSource(BaseModel):
     label: str  # "N1": the marker the answer cites
     note_id: uuid.UUID
-    paper_id: uuid.UUID  # the anchor the prompt quoted
-    page: int
+    paper_id: uuid.UUID  # the paper the prompt named it by
+    page: int | None  # null: the note is on the whole paper
     provenance: Literal["human", "llm", "llm_edited"]
 
 
@@ -67,7 +67,7 @@ class ChatAnswer(BaseModel):
     whole_paper: bool
     # sources[i] is C{i+1}. null: a re-ingest replaced that chunk, so its marker renders as plain text.
     sources: list[ChatSource | None]
-    # notes[i] is N{i+1}. null: the note (or its paper) was deleted.
+    # notes[i] is N{i+1}. null: the note was deleted, or is no longer linked to a paper in scope.
     notes: list[NoteSource | None]
     notes_used: int | None
     notes_total: int | None

@@ -5,6 +5,7 @@ import pytest
 from conftest import unit_vector
 from sqlalchemy import delete, func, select
 from test_chat_workspace import NOW, add_note
+from test_note_papers import paper_only_note
 
 from app.core import chat, prompts
 from app.core.errors import Conflict, NotFound
@@ -277,3 +278,13 @@ async def test_papers_needing_search_are_the_ready_ones_too_long_to_send_whole(s
     await make_paper(session, ["x" * 25_000], status="chunking")  # not ready yet
 
     assert await chat.papers_needing_search(session) - before == 2
+
+
+async def test_paper_chat_sends_a_note_on_the_whole_paper_without_a_page(session):
+    paper = await make_paper(session, ["one"], authors=["Jacob Devlin"], year=2019)
+    note = await paper_only_note(session, paper, body="The whole paper argues for grounding.")
+
+    prepared = await chat.prepare(session, paper.id, "What do I think?")
+
+    assert "[N1] (You · Devlin 2019) — The whole paper argues for grounding." in prepared.prompt
+    assert prepared.notes == [chat.NoteSource(id=note.id, paper_id=paper.id, page=None, provenance="human")]
