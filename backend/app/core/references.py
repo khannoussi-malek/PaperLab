@@ -18,7 +18,6 @@ from sqlalchemy import delete, func, insert, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.core import discovery, papers
 from app.core.candidates import Candidate, from_s2, from_work, merge, ordered_pdf_urls
 from app.core.errors import Conflict, NotFound
@@ -255,12 +254,13 @@ async def set_state(session: AsyncSession, paper_id: uuid.UUID, state: str, erro
 
 
 async def embed_new(session: AsyncSession, embedder) -> None:
-    """Vectors for reference titles and notes that have none, or were made by another model or before an edit.
-    With no search model (embedder None) there are none to make: the listing ranks by its other signals (D136)."""
+    """Vectors for reference titles and notes that have none, or were made by another source or before an edit, under
+    the embedder's name. With no search model (embedder None) there are none to make: the listing ranks by its other
+    signals (D136). Every source embeds them, cloud or not (P3 = A, D161): no source-specific branch."""
     if embedder is None:
         return
     await session.execute(_TAKE_LOCK, {"key": REFERENCES_LOCK})
-    model_name = settings.embed_model
+    model_name = embedder.name
     refs = (
         await session.execute(
             select(ExternalRef.id, ExternalRef.title).where(

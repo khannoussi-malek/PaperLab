@@ -65,6 +65,6 @@ async def chunked_paper(
     await papers.replace_chunks(session, paper.id, chunk_blocks(doc.blocks))
     chunks = await papers.list_chunks(session, paper.id)
     vectors = [unit_vector(uuid.uuid4().hex) for _ in chunks]
-    await papers.set_embeddings(session, [c.id for c in chunks], vectors)
+    await papers.set_embeddings(session, [c.id for c in chunks], vectors, "test")
     await papers.set_status(session, paper.id, PaperStatus.READY, page_count=doc.page_count)
     return paper, chunks, vectors

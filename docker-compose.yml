@@ -57,6 +57,9 @@ services:
     # The References fetch runs here, so the E2E stack's fake discovery must reach the worker too.
     environment:
       DISCOVERY_PROVIDER: ${DISCOVERY_PROVIDER:-live}
+      # Search sources behind a model connection embed here, so the E2E stack's fake providers must reach the worker
+      # too: a real source would record real names while the API reads `fake:` ones.
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
       # The built-in search model's folder. E2E's no-search-model run points it at an empty one (README).
       MODELS_DIR: ${MODELS_DIR:-/models}
     # Not `arq --watch`: that restarts the worker in-process and never re-imports changed code.

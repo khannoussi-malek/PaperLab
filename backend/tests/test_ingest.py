@@ -4,11 +4,11 @@ from pathlib import Path
 import httpx
 import numpy as np
 import pytest
-from conftest import FakeOpenAlex, recorded, unit_vector
+from conftest import FakeEmbedder, FakeOpenAlex, recorded, unit_vector
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core import enrichment, paper_sources, papers
+from app.core import embedding_sources, enrichment, paper_sources, papers
 from app.models import Author, Chunk, Paper, PaperStatus, paper_authors, paper_topics
 from app.providers import embedding
 from app.workers import ingest
@@ -97,6 +97,20 @@ async def test_with_no_search_model_a_paper_is_ready_without_vectors(worker_sess
     assert stages == [PaperStatus.EXTRACTING, PaperStatus.CHUNKING, PaperStatus.ENRICHING, PaperStatus.READY]
     chunks = await chunks_of(worker_session, paper.id)
     assert chunks and all(c.embedding is None for c in chunks)
+
+
+async def test_a_failing_source_never_fails_a_paper(worker_session, sample_pdf, caplog):
+    paper = await add_paper(worker_session, sample_pdf)
+    refusing = FakeEmbedder(label="OpenAI", refuse="Key rejected by OpenAI")
+
+    with caplog.at_level("WARNING", logger="app.workers.ingest"):
+        await ingest.ingest_paper({"embedder": refusing}, str(paper.id))
+    await worker_session.refresh(paper)
+
+    assert (paper.status, paper.status_error) == ("ready", None)
+    assert all(chunk.embedding is None for chunk in await chunks_of(worker_session, paper.id))
+    assert (await embedding_sources.active(worker_session)).error == "Key rejected by OpenAI"  # for Try again
+    assert f"embedding {paper.id} with OpenAI failed: Key rejected by OpenAI" in caplog.text
 
 
 async def test_once_the_model_arrives_the_queued_reembed_embeds_the_paper(worker_session, sample_pdf, embedder):

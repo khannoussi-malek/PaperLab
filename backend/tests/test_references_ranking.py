@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from conftest import unit_vector
+from conftest import FakeEmbedder, unit_vector
 from sqlalchemy import delete, func, select, update
 
 from app.core import references
@@ -117,6 +117,26 @@ async def test_only_missing_or_stale_vectors_are_embedded(library, embedder):
     await references.embed_new(library, embedder)
     assert embedder.calls[-1][0] == ["search_document: edited"]
     assert reader.id  # the paper itself is untouched
+
+
+async def test_a_cloud_source_embeds_notes_and_titles_as_a_local_one_does_under_its_own_name(library):
+    """P3 = A (owner, D161): every search source, cloud or not, embeds notes and reference titles for the ranking.
+    Their vectors record the source's name, so a switch embeds them again like the papers."""
+    name = "openai/text-embedding-3-small@768"
+    cloud = FakeEmbedder(name=name, label="OpenAI", is_local=False)
+    ref = ExternalRef(title="Needs a vector")
+    note = Note(body="a note about attention", provenance="human")
+    library.add_all([ref, note])
+    await library.flush()
+
+    await references.embed_new(library, cloud)
+
+    assert [texts for texts, _ in cloud.calls] == [
+        ["search_document: Needs a vector"],
+        ["search_document: a note about attention"],
+    ]  # nomic's prefixes: FakeEmbedder keeps them whatever its name
+    assert await library.scalar(select(NoteEmbedding.embed_model).where(NoteEmbedding.note_id == note.id)) == name
+    assert await library.scalar(select(ExternalRef.title_embed_model).where(ExternalRef.id == ref.id)) == name
 
 
 async def test_with_no_search_model_nothing_is_embedded(library):
