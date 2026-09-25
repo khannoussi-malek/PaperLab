@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.chunking import join_lines
 from app.core.errors import Conflict, InvalidInput, NotFound
 from app.core.papers import get_paper, get_paper_file, list_chunks
-from app.models import Chart, Chunk, LLMOutput, Note, Provenance, note_anchors, note_charts, note_papers
+from app.models import Chart, Chunk, LLMOutput, Note, Paper, Provenance, note_anchors, note_charts, note_papers
 from app.providers.extraction import quote_rects
 
 Rect = tuple[float, float, float, float]
@@ -64,6 +64,7 @@ class NoteView:
     created_at: datetime
     updated_at: datetime
     anchors: list[Anchor]
+    paper_ids: list[uuid.UUID]  # its papers by title, then id (D95); a passage is only ever on one of them
     charts: list[ChartRef] = field(default_factory=list)
 
 
@@ -102,7 +103,22 @@ async def _link(session: AsyncSession, note_id: uuid.UUID, paper_ids) -> None:
         await session.execute(pg_insert(note_papers).values(rows).on_conflict_do_nothing())
 
 
+async def papers_of(session: AsyncSession, note_ids) -> dict[uuid.UUID, list[uuid.UUID]]:
+    """Each note's papers (D95), by title then id: what "a note's first paper" means everywhere. A note with no paper
+    is absent. Sorted here, as workspaces.notes and the frontend sort, not by the database's collation."""
+    rows = await session.execute(
+        select(note_papers.c.note_id, Paper.id, Paper.title)
+        .join(Paper, Paper.id == note_papers.c.paper_id)
+        .where(note_papers.c.note_id.in_(list(note_ids)))
+    )
+    by_note: dict[uuid.UUID, list[tuple[str, str, uuid.UUID]]] = {}
+    for note_id, paper_id, title in rows:
+        by_note.setdefault(note_id, []).append((title, str(paper_id), paper_id))
+    return {note_id: [paper_id for *_, paper_id in sorted(papers)] for note_id, papers in by_note.items()}
+
+
 async def _with_anchors(session: AsyncSession, notes: list[Note]) -> list[NoteView]:
+    """The notes as views: their passages, their papers and the charts they show."""
     rows = await session.execute(select(note_anchors).where(note_anchors.c.note_id.in_([n.id for n in notes])))
     anchors: dict[uuid.UUID, list[Anchor]] = {}
     for row in rows:
@@ -113,6 +129,7 @@ async def _with_anchors(session: AsyncSession, notes: list[Note]) -> list[NoteVi
             quoted_text=row.quoted_text or "",
         )
         anchors.setdefault(row.note_id, []).append(anchor)
+    linked = await papers_of(session, [n.id for n in notes])
     shown = await session.execute(
         select(note_charts.c.note_id, Chart.id, Chart.title)
         .join(Chart, Chart.id == note_charts.c.chart_id)
@@ -132,6 +149,7 @@ async def _with_anchors(session: AsyncSession, notes: list[Note]) -> list[NoteVi
             created_at=n.created_at,
             updated_at=n.updated_at,
             anchors=anchors.get(n.id, []),
+            paper_ids=linked.get(n.id, []),
             charts=charts.get(n.id, []),
         )
         for n in notes
@@ -166,12 +184,19 @@ async def create_human_note(session: AsyncSession, body: str, anchor: Anchor, co
     return (await _with_anchors(session, [note]))[0]
 
 
+def _placed_on(note: NoteView, paper_id: uuid.UUID) -> bool:
+    return any(anchor.paper_id == paper_id for anchor in note.anchors)
+
+
 async def list_notes_for_paper(session: AsyncSession, paper_id: uuid.UUID) -> list[NoteView]:
+    """The notes linked to the paper (D95): those with no passage on it first, newest first; then the rest in reading
+    order. Raises NotFound."""
     await get_paper(session, paper_id)
-    anchored_here = select(note_anchors.c.note_id).where(note_anchors.c.paper_id == paper_id)
-    notes = list(await session.scalars(select(Note).where(Note.id.in_(anchored_here))))
-    views = await _with_anchors(session, notes)
-    return sorted(views, key=lambda v: reading_position(v, paper_id))
+    linked_here = select(note_papers.c.note_id).where(note_papers.c.paper_id == paper_id)
+    views = await _with_anchors(session, list(await session.scalars(select(Note).where(Note.id.in_(linked_here)))))
+    whole = sorted((v for v in views if not _placed_on(v, paper_id)), key=lambda v: v.created_at, reverse=True)
+    placed = sorted((v for v in views if _placed_on(v, paper_id)), key=lambda v: reading_position(v, paper_id))
+    return whole + placed
 
 
 async def update_note(

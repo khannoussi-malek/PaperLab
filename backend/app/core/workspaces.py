@@ -1,4 +1,4 @@
-"""Workspaces: named, flat sets of shared papers. A workspace's notes are the notes anchored in its papers.
+"""Workspaces: named, flat sets of shared papers. A workspace's notes are the notes linked to its papers.
 
 Removing a paper from a workspace, or deleting a workspace, never deletes papers or notes.
 """
@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.errors import Conflict, InvalidInput, NotFound
 from app.core.notes import NoteView, _with_anchors, reading_position
 from app.core.papers import get_paper
-from app.models import Note, Paper, Workspace, note_anchors, workspace_papers
+from app.models import Note, Paper, Workspace, note_papers, workspace_papers
 
 NAME_MAX_CHARS = 80
 
@@ -46,9 +46,9 @@ async def _ensure_name_free(session: AsyncSession, name: str, workspace_id: uuid
 async def _views(session: AsyncSession, *where) -> list[WorkspaceView]:
     member = workspace_papers.c.workspace_id == Workspace.id
     paper_count = select(func.count()).select_from(workspace_papers).where(member)
-    anchors_in_papers = note_anchors.join(workspace_papers, workspace_papers.c.paper_id == note_anchors.c.paper_id)
-    # DISTINCT: a note anchored twice, or on two of the workspace's papers, is one note.
-    note_count = select(func.count(func.distinct(note_anchors.c.note_id))).select_from(anchors_in_papers).where(member)
+    papers_notes = note_papers.join(workspace_papers, workspace_papers.c.paper_id == note_papers.c.paper_id)
+    # DISTINCT: a note linked to two of the workspace's papers is one note.
+    note_count = select(func.count(func.distinct(note_papers.c.note_id))).select_from(papers_notes).where(member)
     query = select(
         Workspace.id,
         Workspace.name,
@@ -147,16 +147,18 @@ async def papers(session: AsyncSession, workspace_id: uuid.UUID) -> list[Paper]:
 
 
 async def notes(session: AsyncSession, workspace_id: uuid.UUID) -> list[NoteView]:
-    """Notes anchored in the workspace's papers, each once: by paper title, then reading position."""
+    """Notes linked to the workspace's papers, each once, under its first linked paper there by title (then id). Under
+    a paper, the notes with no passage on it come first, newest first; then the rest in reading order."""
     members = {p.id: p for p in await papers(session, workspace_id)}
-    anchored = select(note_anchors.c.note_id).where(note_anchors.c.paper_id.in_(members))
-    views = await _with_anchors(session, list(await session.scalars(select(Note).where(Note.id.in_(anchored)))))
+    linked = select(note_papers.c.note_id).where(note_papers.c.paper_id.in_(members))
+    views = await _with_anchors(session, list(await session.scalars(select(Note).where(Note.id.in_(linked)))))
 
     def position(view: NoteView):
-        # A note anchored on two workspace papers sorts under the first by title.
-        return min(
-            (members[pid].title, str(pid), *reading_position(view, pid))
-            for pid in {a.paper_id for a in view.anchors} & members.keys()
-        )
+        # paper_ids is sorted by (title, id) already, so the first one in the workspace is the paper it sorts under.
+        paper_id = next(pid for pid in view.paper_ids if pid in members)
+        under = (members[paper_id].title, str(paper_id))
+        if any(anchor.paper_id == paper_id for anchor in view.anchors):
+            return (*under, 1, *reading_position(view, paper_id))
+        return (*under, 0, -view.created_at.timestamp())
 
     return sorted(views, key=position)

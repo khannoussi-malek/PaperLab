@@ -1,6 +1,7 @@
 import uuid
 
 import pytest
+from test_note_papers import paper_only_note
 
 from app.models import Paper
 
@@ -60,3 +61,12 @@ async def test_note_and_file_errors_map_to_status_codes(client, session):
     assert page_out_of_range.status_code == 422
     assert unknown_paper.status_code == 404
     assert missing_file.status_code == 404
+
+
+async def test_a_papers_notes_include_one_on_the_whole_paper_with_its_papers(client, session):
+    paper = await make_paper(session, "/nonexistent.pdf")
+    note = await paper_only_note(session, paper)
+
+    listed = (await client.get(f"/api/papers/{paper.id}/notes")).json()
+
+    assert [(n["id"], n["paper_ids"], n["anchors"]) for n in listed] == [(str(note.id), [str(paper.id)], [])]

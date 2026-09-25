@@ -2,6 +2,7 @@ import uuid
 
 import pytest
 from sqlalchemy import func, insert, select, text, update
+from test_note_papers import paper_only_note
 
 from app.core import notes, workspaces
 from app.core.errors import Conflict, InvalidInput, NotFound
@@ -179,3 +180,17 @@ async def test_by_name_for_an_unknown_name_lists_every_name(session):
     available = unknown.value.details["available"]
     assert unknown.value.details == {"available": available}
     assert f"Alpha review {RUN}" in available  # the database's collation, not Python's sort, orders the names
+
+
+async def test_a_note_on_a_whole_workspace_paper_is_counted_and_listed_first_under_it(session):
+    workspace = await workspaces.create(session, f"Whole papers {RUN}")
+    bert = await make_paper(session, "BERT")
+    await workspaces.add_paper(session, workspace.id, bert.id)
+    placed = await note_on(session, bert, page=1)
+    whole = await paper_only_note(session, bert)
+
+    listed = await workspaces.notes(session, workspace.id)
+
+    assert [n.id for n in listed] == [whole.id, placed.id]
+    assert listed[0].paper_ids == [bert.id]
+    assert (await workspaces.get(session, workspace.id)).note_count == 2

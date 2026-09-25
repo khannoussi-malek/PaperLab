@@ -21,7 +21,7 @@ PAPERS = {DPR.id: DPR, BERT.id: BERT}
 def view(paper: Paper, *, body="", quote="a quote", provenance="human", page=1, minutes_ago=0) -> NoteView:
     anchor = Anchor(paper_id=paper.id, page=page, bbox=[(72.0, 100.0, 300.0, 110.0)], quoted_text=quote)
     updated = NOW - timedelta(minutes=minutes_ago)
-    return NoteView(uuid.uuid4(), body, provenance, "#facc15", None, updated, updated, [anchor])
+    return NoteView(uuid.uuid4(), body, provenance, "#facc15", None, updated, updated, [anchor], [paper.id])
 
 
 def test_notes_block_all_fit_newest_first_with_badges_labels_and_pages():
