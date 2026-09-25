@@ -1,0 +1,81 @@
+---
+import GuideLayout from '../../../layouts/GuideLayout.astro'
+import { href } from '../../../lib/site'
+---
+
+<GuideLayout
+  path="guides/systematic-literature-review/"
+  title="How to do a systematic literature review, step by step"
+  description="The steps of a systematic literature review: protocol, search, two-stage screening, snowballing, data extraction, synthesis and the PRISMA flow diagram."
+  question="How do you do a systematic literature review?"
+  answer="Define a focused question, write and ideally register a protocol, then search several databases with a documented query. Remove duplicates, screen titles and abstracts against your criteria, then screen full texts and record a reason for every exclusion. Snowball through the references of included papers, extract data in a fixed form, appraise quality, synthesise the findings, and report the counts at each stage in a PRISMA flow diagram."
+  updated="2026-09-25"
+  faqs={[
+    {
+      q: 'How long does a systematic review take?',
+      a: 'Often six months to over a year for a full review with two reviewers. Rapid reviews cut steps to finish in weeks, and should say which steps they cut.',
+    },
+    {
+      q: 'What is a PRISMA flow diagram?',
+      a: 'A diagram from the PRISMA 2020 reporting guideline showing how many records were found, removed as duplicates, screened, excluded (with reasons) and included. Most journals expect one.',
+    },
+    {
+      q: 'What is the difference between a systematic review and a literature review?',
+      a: 'A systematic review follows a predefined, reproducible method for searching, selecting and appraising studies. A narrative literature review is shaped by the author and doesn’t need to be reproducible.',
+    },
+    {
+      q: 'What is snowballing in a literature review?',
+      a: 'Following the references of included papers backwards, and the papers that cite them forwards, to find studies the database search missed.',
+    },
+    {
+      q: 'Do I need two reviewers?',
+      a: 'For a full systematic review, independent screening by two people reduces missed studies and bias. When that isn’t possible, say so and have a second person check a sample.',
+    },
+  ]}
+  paperlab="PaperLab searches arXiv, Crossref, CORE, Unpaywall and Semantic Scholar at once, follows references in both directions, and imports free PDFs in a click, all in a workspace for the review. Saved searches with a hit pool, two-stage screening with a reason for every exclusion, snowballing and PRISMA counts are built and arrive in the next release."
+>
+  <h2>1. Frame the question</h2>
+  <p>
+    A focused question decides everything after it. In health research, PICO (population, intervention, comparison,
+    outcome) is the usual frame; in software engineering and the social sciences, a clear scope with inclusion and
+    exclusion criteria does the same job.
+  </p>
+
+  <h2>2. Write a protocol</h2>
+  <p>
+    Record the question, databases, search strings, criteria and planned analysis before you start. Health reviews
+    register it on PROSPERO; others can publish it on OSF. A protocol protects you from changing the rules halfway.
+  </p>
+
+  <h2>3. Search, and document the search</h2>
+  <ul>
+    <li>Search several sources: subject databases, plus broad ones such as Crossref, Semantic Scholar or OpenAlex.</li>
+    <li>Save every query string, date and result count: reviewers will ask.</li>
+    <li>Remove duplicates by <a href={href('glossary/doi/')}>DOI</a> first, then by title.</li>
+  </ul>
+
+  <h2>4. Screen in two stages</h2>
+  <ol>
+    <li><strong>Title and abstract:</strong> quick include, exclude or maybe against your criteria.</li>
+    <li><strong>Full text:</strong> read the paper and record the reason for every exclusion.</li>
+  </ol>
+
+  <h2>5. Snowball</h2>
+  <p>
+    <a href={href('glossary/snowballing/')}>Snowballing</a>: for every included paper, check its references (backward) and the papers citing it (forward). Screen what you find
+    with the same criteria, and count it separately in your flow diagram.
+  </p>
+
+  <h2>6. Extract, appraise, synthesise</h2>
+  <ul>
+    <li>Extract into a fixed form, and keep the page each number came from.</li>
+    <li>Appraise quality with a tool suited to the study design.</li>
+    <li>Synthesise narratively, or with a meta-analysis when studies are comparable.</li>
+  </ul>
+
+  <h2>7. Report with PRISMA</h2>
+  <p>
+    Follow the <a href={href('glossary/prisma/')}>PRISMA</a> 2020 checklist and include the flow diagram. The numbers are easy if you counted as you went,
+    and painful to rebuild at the end. See also <a href={href('systematic-reviews/')}>PaperLab for systematic reviews</a>.
+  </p>
+</GuideLayout>

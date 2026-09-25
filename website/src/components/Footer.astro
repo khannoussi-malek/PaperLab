@@ -1,0 +1,51 @@
+---
+import { CONTRIBUTING, LINKEDIN, REPO, href } from '../lib/site'
+---
+
+<footer class="site-footer">
+  <div class="wrap row">
+    <p>
+      PaperLab is built by <a href={href('about/')}>Malek Khannoussi</a> and licensed{' '}
+      <a href={`${REPO}/blob/main/LICENSE`}>Apache-2.0</a>.
+    </p>
+    <ul>
+      <li><a href={href('about/')}>About</a></li>
+      <li><a href={REPO}>Source on GitHub</a></li>
+      <li><a href={CONTRIBUTING}>Contribute</a></li>
+      <li><a href={LINKEDIN}>LinkedIn</a></li>
+      <li><a href={href('guides/')}>Guides</a></li>
+      <li><a href={href('glossary/')}>Glossary</a></li>
+      <li><a href={href('faq/')}>FAQ</a></li>
+    </ul>
+  </div>
+</footer>
+
+<style>
+  .site-footer {
+    border-top: 1px solid var(--border);
+    padding: 2rem 0;
+    font-size: 0.95rem;
+    color: var(--muted-foreground);
+  }
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem 2rem;
+    justify-content: space-between;
+    align-items: center;
+  }
+  p {
+    margin: 0;
+  }
+  ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.25rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  a {
+    color: inherit;
+  }
+</style>

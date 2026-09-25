@@ -1,0 +1,65 @@
+---
+import GuideLayout from '../../../layouts/GuideLayout.astro'
+import { href } from '../../../lib/site'
+---
+
+<GuideLayout
+  path="guides/write-a-related-work-section/"
+  title="How to write a related work section that isn't a list of papers"
+  description="Write a related work section organised by idea, not by paper: group studies, compare them, show the gap your work fills, and cite passages you checked."
+  question="How do you write a good related work section?"
+  answer="Organise it by idea, not by paper. Group prior work into three to five themes that matter for your contribution, say what each group established and where it falls short, and end each theme by showing how your work differs. Compare papers with each other rather than summarising them one by one, and cite claims you have checked on the page, not from memory or a summary."
+  updated="2026-09-25"
+  faqs={[
+    {
+      q: 'How long should a related work section be?',
+      a: 'In a conference paper, often half a page to a page and a half. In a thesis, a full chapter. Length matters less than whether it sets up your contribution.',
+    },
+    {
+      q: 'Should related work come before or after the method?',
+      a: 'Both are common. Early placement frames the problem; late placement, common in computer science, lets you compare with your approach once readers know it.',
+    },
+    {
+      q: 'How many papers should I cite?',
+      a: 'Enough to cover each theme fairly, including the strongest competing approaches. Missing an obvious key paper hurts more than citing too few minor ones.',
+    },
+    {
+      q: 'Can I use AI to write it?',
+      a: 'Check your venue’s policy and disclose use. Models misattribute claims easily, so every sentence about a paper should be checked against that paper.',
+    },
+  ]}
+  paperlab="In PaperLab, a workspace per theme holds its papers and every note from them in one place, each note leading back to its passage. Workspace chat answers across all the papers with citations, and the References tab shows which works your papers cite most, so you don't miss a key one."
+>
+  <h2>1. Find the themes before you write</h2>
+  <p>
+    Read your notes, not the papers, and sort them into groups by the question each paper answers or the approach it
+    takes. Three to five themes usually cover a contribution. Papers can sit in more than one.
+  </p>
+
+  <h2>2. Write each theme as an argument</h2>
+  <ul>
+    <li>Open with what the group of papers established.</li>
+    <li>Compare them: where they agree, differ, and why.</li>
+    <li>Close with the limitation that your work addresses.</li>
+  </ul>
+
+  <h2>3. Check every claim against its source</h2>
+  <p>
+    “X showed Y” is a factual claim. Open the passage and confirm it says Y, in the conditions you imply. Notes that link
+    to their passage make this fast; summaries from an AI make it essential, since a
+    <a href={href('glossary/hallucination/')}>hallucination</a> can put a claim in the wrong paper.
+  </p>
+
+  <h2>4. Don't miss the obvious paper</h2>
+  <p>
+    Papers that many of your sources cite, their <a href={href('glossary/co-citation/')}>co-cited</a> core, are the ones
+    reviewers expect. Check the references of your key papers and the papers citing them.
+  </p>
+
+  <h2>Common mistakes</h2>
+  <ul>
+    <li>One paragraph per paper, in chronological order.</li>
+    <li>Describing papers without saying how they relate to yours.</li>
+    <li>Citing a paper for a claim it doesn't make.</li>
+  </ul>
+</GuideLayout>

@@ -1,0 +1,133 @@
+---
+import DownloadButton from '../../components/DownloadButton.astro'
+import StarButton from '../../components/StarButton.astro'
+import BaseLayout from '../../layouts/BaseLayout.astro'
+import { latestVersion } from '../../lib/buildData'
+import { REPO } from '../../lib/site'
+
+const files = [
+  { system: 'macOS with Apple silicon', file: 'PaperLab-<version>-arm64.dmg' },
+  { system: 'macOS with an Intel processor', file: 'PaperLab-<version>-x64.dmg' },
+  { system: 'Windows', file: 'PaperLab-<version>-x64.exe' },
+  { system: 'Linux', file: 'PaperLab-<version>-x86_64.AppImage or PaperLab-<version>-amd64.deb' },
+]
+---
+
+<BaseLayout
+  title="Download PaperLab — desktop app for macOS, Windows, Linux"
+  description="Install Docker Desktop, then download PaperLab from GitHub Releases for macOS, Windows or Linux. Free and open source. Or run it with two Docker commands."
+>
+  <section class="section">
+    <div class="wrap prose">
+      <p class="eyebrow">Download</p>
+      <h1>Install PaperLab in two steps</h1>
+      <ol class="steps">
+        <li>
+          <h2>Install Docker Desktop and open it once</h2>
+          <p class="muted">
+            PaperLab runs its database and search in <a href="https://www.docker.com/products/docker-desktop/"
+              >Docker</a
+            >. OrbStack, Colima and Rancher Desktop work too. On Linux, install Docker from docker.com rather than the Snap
+            package.
+          </p>
+        </li>
+        <li>
+          <h2>Download PaperLab for your system and open it</h2>
+          <p><DownloadButton where="download-page" label="Get the latest release" /></p>
+          <table>
+            <thead><tr><th scope="col">System</th><th scope="col">File</th></tr></thead>
+            <tbody>
+              {
+                files.map(({ system, file }) => (
+                  <tr>
+                    <td>{system}</td>
+                    <td><code>{file}</code></td>
+                  </tr>
+                ))
+              }
+            </tbody>
+          </table>
+          <p class="muted">
+            The first launch downloads PaperLab itself (about 335 MB) and opens it in its own window. A short setup offers
+            a chat model and a search model. Both are optional: reading, highlighting and notes need neither.
+          </p>
+        </li>
+      </ol>
+
+      <h2>The first launch asks for permission</h2>
+      <p class="muted">PaperLab isn't signed yet, so your system asks before the first launch and after each update.</p>
+      <ul>
+        <li>
+          <strong>macOS:</strong> open PaperLab and close the warning, then go to System Settings → Privacy & Security and
+          click <strong>Open Anyway</strong>.
+        </li>
+        <li><strong>Windows:</strong> on “Windows protected your PC”, click <strong>More info</strong>, then <strong>Run anyway</strong>.</li>
+        <li>
+          <strong>Linux:</strong> run <code>chmod +x PaperLab-*.AppImage</code> and start it. If it doesn't start, install
+          the <code>.deb</code> instead.
+        </li>
+      </ul>
+
+      <h2>Without the app</h2>
+      <p class="muted">With Docker Compose 2.24 or later, two commands install the same release, with no clone and no build:</p>
+      <pre><code>VERSION={latestVersion ?? '<version>'}   # the latest release's number
+curl -L "https://github.com/khannoussi-malek/PaperLab/releases/download/v$VERSION/paperlab-$VERSION.tar.gz" | tar xz
+cd paperlab && docker compose up -d   # then open http://127.0.0.1:5190</code></pre>
+      <p class="muted">
+        Updating, backups and building from source are in the <a href={`${REPO}#quick-start`}>README's Quick start</a>.
+      </p>
+
+      <aside class="card got-it">
+        <h2>Got it running?</h2>
+        <p class="muted">
+          A star is the quickest way to help other researchers find PaperLab, and it puts each new release in your GitHub
+          feed. If something broke on the way, <a href={`${REPO}/issues/new`}>open an issue</a>: install problems get fixed
+          first.
+        </p>
+        <StarButton where="download-success" />
+      </aside>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .steps {
+    padding-left: 1.25rem;
+    margin: 2rem 0 3rem;
+  }
+  .steps li {
+    margin-bottom: 2rem;
+  }
+  .steps h2 {
+    font-size: 1.5rem;
+  }
+  h2 {
+    font-size: 1.6rem;
+    margin-top: 2rem;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.95rem;
+  }
+  th,
+  td {
+    text-align: left;
+    padding: 0.6rem 0.5rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  td code {
+    word-break: break-all;
+  }
+  ul li {
+    margin-bottom: 0.5rem;
+  }
+  .got-it {
+    margin-top: 3rem;
+  }
+  .got-it h2 {
+    margin-top: 0;
+  }
+</style>

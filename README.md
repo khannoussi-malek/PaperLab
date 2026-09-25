@@ -5,6 +5,16 @@
 
 # PaperLab
 
+[![GitHub stars](https://img.shields.io/github/stars/khannoussi-malek/PaperLab?style=social)](https://github.com/khannoussi-malek/PaperLab/stargazers)
+[![Latest release](https://img.shields.io/github/v/release/khannoussi-malek/PaperLab)](https://github.com/khannoussi-malek/PaperLab/releases/latest)
+[![License: Apache-2.0](https://img.shields.io/github/license/khannoussi-malek/PaperLab)](LICENSE)
+[![Follow on LinkedIn](https://img.shields.io/badge/LinkedIn-Follow-0A66C2?logo=linkedin)](https://www.linkedin.com/company/os-paperlab)
+
+**[Website](https://paperlab.tn)** ·
+**[Download](https://github.com/khannoussi-malek/PaperLab/releases/latest)** ·
+**[⭐ Star it](https://github.com/khannoussi-malek/PaperLab/stargazers)** to get new releases in your GitHub feed ·
+**[Follow on LinkedIn](https://www.linkedin.com/company/os-paperlab)** for a weekly breakdown of how one feature works
+
 PaperLab is a research reading tool that runs on your own machine. You drop in PDFs, read them, highlight passages,
 and write notes that stay attached to the exact spot they came from. You can ask a paper questions and get answers
 that cite the passages they used, then keep the useful parts as notes.
@@ -434,8 +444,9 @@ and it has been what I work on every day since.
 I would be glad to hear from you. A pointer to an opening, an introduction, or an honest opinion on the work would all
 help, and any of them would mean a lot.
 
-I post updates on [LinkedIn](https://www.linkedin.com/in/khannoussi-malek/), but this repository usually runs a few
-months ahead of what is posted there, so what you see here is the newest state.
+The [PaperLab page on LinkedIn](https://www.linkedin.com/company/os-paperlab) posts a weekly breakdown of how one
+feature works: follow along there. This repository usually runs a few months ahead of what is posted, so what you see
+here is the newest state, and a ⭐ puts each new release in your GitHub feed.
 
 ## Contributing
 

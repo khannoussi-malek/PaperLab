@@ -1,0 +1,59 @@
+---
+import GuideLayout from '../../../layouts/GuideLayout.astro'
+import { href } from '../../../lib/site'
+---
+
+<GuideLayout
+  path="guides/map-your-literature/"
+  title="How to map the literature on a topic: citation graphs explained"
+  description="Map a research field with citation graphs: backward and forward citations, co-citation, bibliographic coupling and similar papers, plus tools that draw the map."
+  question="How do you map the literature on a research topic?"
+  answer="Start from a few papers you know are central, then follow their citations both ways: the older papers they cite and the newer papers citing them. Papers that are often cited together (co-citation) or that cite the same sources (bibliographic coupling) belong to the same conversation. A citation graph draws this as a network, where clusters show sub-topics and heavily linked papers show the foundations."
+  updated="2026-09-25"
+  faqs={[
+    {
+      q: 'What is co-citation?',
+      a: 'Two papers are co-cited when a third paper cites both. The more often that happens, the more the field treats them as related.',
+    },
+    {
+      q: 'What is bibliographic coupling?',
+      a: 'Two papers are coupled when they cite the same sources. It links recent papers well, because it doesn’t need them to have been cited yet.',
+    },
+    {
+      q: 'Which tools draw literature maps?',
+      a: 'Connected Papers, ResearchRabbit and Litmaps build maps from online databases, each with its own free and paid limits. PaperLab draws a graph of the papers already in your library, on your machine.',
+    },
+    {
+      q: 'How many seed papers should I start with?',
+      a: 'Three to five strong, well-cited papers usually give a stable map. Too few and the map follows one author’s view; too many and it loses focus.',
+    },
+  ]}
+  paperlab="PaperLab's Graph page shows your library as a network: citations, shared workspaces, notes anchored on two papers, shared authors and topics, and papers that read alike, each a layer you switch on or off. View it in 2D, 3D, as a Matrix a screen reader can read, as a Timeline, or as Rings around one paper. The References tab ranks what your papers cite for import."
+>
+  <h2>The four links that matter</h2>
+  <table>
+    <thead><tr><th scope="col">Link</th><th scope="col">What it tells you</th></tr></thead>
+    <tbody>
+      <tr><td>Backward citation</td><td>What a paper builds on: its foundations</td></tr>
+      <tr><td>Forward citation</td><td>Who built on it since: where the field went</td></tr>
+      <tr><td><a href={href('glossary/co-citation/')}>Co-citation</a></td><td>Papers the field reads together</td></tr>
+      <tr><td><a href={href('glossary/bibliographic-coupling/')}>Bibliographic coupling</a></td><td>Recent papers working on the same problem</td></tr>
+    </tbody>
+  </table>
+
+  <h2>A mapping routine</h2>
+  <ol>
+    <li>Pick three to five seed papers.</li>
+    <li>Collect their references and the papers citing them.</li>
+    <li>Keep papers that several seeds point to: they're central.</li>
+    <li>Look at clusters, and name each one in a sentence.</li>
+    <li>Read one or two papers per cluster before going deeper.</li>
+  </ol>
+
+  <h2>Reading the map</h2>
+  <ul>
+    <li><strong>Big, central nodes</strong> are foundations: cite them, don't necessarily read them first.</li>
+    <li><strong>Bridges between clusters</strong> are often the most interesting papers.</li>
+    <li><strong>Recent nodes with few links</strong> may be new directions, or noise.</li>
+  </ul>
+</GuideLayout>

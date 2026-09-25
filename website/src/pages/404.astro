@@ -1,0 +1,65 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro'
+import { GUIDES } from '../lib/guides'
+import { href } from '../lib/site'
+
+// GitHub Pages serves this for any missing path. It keeps the visitor on the site instead of losing them.
+const ways = [
+  { path: '', label: 'Home', note: 'What PaperLab is' },
+  { path: 'features/', label: 'Features', note: 'Everything it does, one page each' },
+  { path: 'guides/', label: 'Guides', note: 'Reading, notes, free PDFs, AI answers' },
+  { path: 'download/', label: 'Download', note: 'macOS, Windows and Linux' },
+]
+---
+
+<BaseLayout
+  title="Page not found — PaperLab"
+  description="This page doesn't exist, or it moved. Find your way back to PaperLab's features, guides and download."
+  noindex
+>
+  <section class="section">
+    <div class="wrap prose">
+      <p class="eyebrow dot-yellow">404</p>
+      <h1>This page isn't here</h1>
+      <p class="lead">It may have moved, or the link had a typo. One of these will get you where you were going.</p>
+      <ul class="ways">
+        {
+          ways.map((way) => (
+            <li class="card">
+              <a href={href(way.path)}>{way.label}</a>
+              <span class="muted">{way.note}</span>
+            </li>
+          ))
+        }
+      </ul>
+      <h2>Popular guides</h2>
+      <ul>
+        {
+          GUIDES.slice(0, 4).map((guide) => (
+            <li>
+              <a href={href(guide.path)}>{guide.title}</a>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .ways {
+    list-style: none;
+    padding: 0;
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+    margin: 2rem 0;
+  }
+  .ways li {
+    display: grid;
+    gap: 0.25rem;
+  }
+  .ways a {
+    font-weight: 700;
+  }
+</style>

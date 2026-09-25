@@ -1,0 +1,57 @@
+---
+import GuideLayout from '../../../layouts/GuideLayout.astro'
+import { href } from '../../../lib/site'
+---
+
+<GuideLayout
+  path="guides/check-ai-answers-against-sources/"
+  title="Can you trust AI with research papers? How to check its answers"
+  description="AI can invent citations and misstate papers. How to check an answer: ask for the passage, open the source, verify DOIs, use tools that cite the page."
+  question="Can you trust an AI's answers about research papers?"
+  answer="Not without checking. Language models can state things a paper never says and can invent references that look real. Trust an answer only when you can see the passage it relied on: ask for exact quotes with page numbers, open the source and read the surrounding text, and verify every reference's DOI. Tools that ground answers in your own PDFs and cite the passage make that check take seconds."
+  updated="2026-09-25"
+  faqs={[
+    {
+      q: 'Why does ChatGPT make up references?',
+      a: 'A model generates text that looks likely, and a reference is just text to it. Without retrieving a real source, it can combine plausible authors, titles and journals into a paper that doesn’t exist.',
+    },
+    {
+      q: 'How do I check whether a citation is real?',
+      a: 'Search the exact title in Google Scholar or Crossref, and resolve the DOI at doi.org. A missing DOI, a title no database knows, or a journal that never published that volume are warning signs.',
+    },
+    {
+      q: 'Is it acceptable to use AI in academic writing?',
+      a: 'Policies vary by university and journal. Most require you to disclose AI use and take responsibility for every claim. Keeping AI text visibly separate from your own makes disclosure honest and easy.',
+    },
+    {
+      q: 'What is retrieval-augmented generation (RAG)?',
+      a: 'A setup where a system first retrieves passages from real documents, then asks the model to answer from them. It reduces invented content, and lets the answer point to its sources.',
+    },
+  ]}
+  paperlab="PaperLab answers from the passages of your own PDFs and cites each one, like [C1]; click it and the paper scrolls to that passage and flashes it. Every AI answer and note keeps the model and prompt version behind it and stays marked AI, so months later you can still tell it from your own writing."
+>
+  <h2>Where AI answers go wrong</h2>
+  <ul>
+    <li><strong>Invented references:</strong> real-looking citations to papers that don't exist, the classic <a href={href('glossary/hallucination/')}>hallucination</a>.</li>
+    <li><strong>Misattribution:</strong> a real claim, credited to the wrong paper.</li>
+    <li><strong>Overstatement:</strong> a hedged finding reported as certain, or limitations dropped.</li>
+    <li><strong>Missing context:</strong> an answer from one section that another section contradicts.</li>
+  </ul>
+
+  <h2>A five-step check</h2>
+  <ol>
+    <li>Ask for the exact passage and page the answer relies on.</li>
+    <li>Open the paper and read that passage and the paragraph around it.</li>
+    <li>Verify every reference: title in a database, <a href={href('glossary/doi/')}>DOI</a> resolving to the right paper.</li>
+    <li>Check numbers against the table or figure they came from.</li>
+    <li>Keep what you checked, with the passage, and mark what the model wrote.</li>
+  </ol>
+
+  <h2>What makes a tool trustworthy</h2>
+  <ul>
+    <li>It answers from documents you provide, not from memory (<a href={href('glossary/rag/')}>RAG</a>).</li>
+    <li>Each claim links to a passage you can open.</li>
+    <li>It says when the documents don't contain the answer.</li>
+    <li>AI text is labelled and stored apart from yours.</li>
+  </ul>
+</GuideLayout>

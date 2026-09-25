@@ -1,0 +1,110 @@
+---
+import { href } from '../lib/site'
+import StarButton from './StarButton.astro'
+
+const links = [
+  { path: 'features/', label: 'Features' },
+  { path: 'systematic-reviews/', label: 'Systematic reviews' },
+  { path: 'guides/', label: 'Guides' },
+  { path: 'download/', label: 'Download' },
+  { path: 'faq/', label: 'FAQ' },
+]
+const current = Astro.url.pathname
+---
+
+<header class="site-header">
+  <div class="wrap bar">
+    <a class="brand" href={href()}>
+      <img src={href('favicon.svg')} alt="" width="28" height="28" />
+      PaperLab
+    </a>
+    <nav aria-label="Main">
+      <ul>
+        {
+          links.map(({ path, label }) => (
+            <li>
+              <a href={href(path)} aria-current={current === href(path) ? 'page' : undefined}>
+                {label}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </nav>
+    <StarButton where="header" label="Star" />
+  </div>
+</header>
+
+<style>
+  .site-header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    /* Glass, like the app's toolbar. */
+    background: var(--glass);
+    backdrop-filter: blur(16px) saturate(1.4);
+    border-bottom: 1px solid var(--glass-border);
+  }
+  .bar {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    min-height: 4rem;
+    flex-wrap: wrap;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: 'Crimson Pro Variable', Georgia, serif;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--foreground);
+    text-decoration: none;
+  }
+  nav {
+    margin-left: auto;
+  }
+  ul {
+    display: flex;
+    gap: 1.25rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  nav a {
+    color: var(--muted-foreground);
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.95rem;
+  }
+  nav a:hover,
+  nav a[aria-current='page'] {
+    color: var(--foreground);
+  }
+  .bar :global(.btn) {
+    padding: 0.45rem 0.8rem;
+    font-size: 0.9rem;
+  }
+  /* Phones: brand and Star on one line, the page links scroll on the next. */
+  @media (max-width: 760px) {
+    .bar {
+      gap: 0.25rem 1rem;
+      padding-top: 0.5rem;
+      justify-content: space-between;
+    }
+    nav {
+      order: 3;
+      width: 100%;
+      margin: 0;
+      overflow-x: auto;
+      padding-bottom: 0.5rem;
+    }
+    ul {
+      gap: 1rem;
+    }
+    nav a {
+      white-space: nowrap;
+    }
+  }
+</style>

@@ -1,0 +1,58 @@
+---
+import GuideLayout from '../../../layouts/GuideLayout.astro'
+import { href } from '../../../lib/site'
+---
+
+<GuideLayout
+  path="guides/extract-data-from-papers/"
+  title="How to extract data from research papers, and keep its source"
+  description="Extract tables and results from research PDFs for a review or a comparison: capture them, keep the page each number came from, and chart them with your own."
+  question="How do you extract data from research papers reliably?"
+  answer="Use a fixed extraction form decided in advance, capture tables directly from the PDF instead of retyping them, and record for every value the paper, page and table it came from, with its uncertainty. Have a second person check a sample. Keeping the source of each number lets you verify it later and answer reviewers who ask where it came from."
+  updated="2026-09-25"
+  faqs={[
+    {
+      q: 'Can I copy a table from a PDF?',
+      a: 'From a PDF with a text layer, usually yes, though columns can shift. Check the captured table against the page before using it.',
+    },
+    {
+      q: 'What should a data extraction form include?',
+      a: 'Study identifiers, design, population or dataset, the measures you compare, results with uncertainty, and the page each came from.',
+    },
+    {
+      q: 'Should I extract the ± values?',
+      a: 'Yes. A mean without its standard deviation or confidence interval can’t be compared fairly or pooled in a meta-analysis.',
+    },
+  ]}
+  paperlab="PaperLab captures a table when you draw a box over it, or a single number like 88.5 ± 0.3 when you select it. Add your own results from a CSV and chart them together; click any point and the paper opens at the table on its page."
+>
+  <h2>Plan the extraction</h2>
+  <ul>
+    <li>Decide the fields before reading, and pilot the form on three papers.</li>
+    <li>Define units and how you'll handle missing values.</li>
+    <li>In a <a href={href('glossary/systematic-review/')}>systematic review</a>, write the form into your protocol.</li>
+  </ul>
+
+  <h2>Capture, don't retype</h2>
+  <p>
+    Retyping numbers introduces errors that are hard to spot. Capture tables from the PDF, then check them against the
+    page. Keep the original value and unit next to anything you convert.
+  </p>
+
+  <h2>Keep the trail</h2>
+  <table>
+    <thead><tr><th scope="col">Record</th><th scope="col">Why</th></tr></thead>
+    <tbody>
+      <tr><td>Paper and <a href={href('glossary/doi/')}>DOI</a></td><td>To find the source again</td></tr>
+      <tr><td>Page and table</td><td>To verify the value in seconds</td></tr>
+      <tr><td>Uncertainty (±, CI)</td><td>To compare fairly</td></tr>
+      <tr><td>Who extracted it</td><td>To check a sample twice</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Compare with your own results</h2>
+  <p>
+    Put published numbers and your runs on the same chart, with the same units and uncertainty. A point that links back
+    to its page makes the comparison easy to defend.
+  </p>
+</GuideLayout>

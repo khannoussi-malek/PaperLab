@@ -1,0 +1,154 @@
+---
+import Shot from '../../components/Shot.astro'
+import BaseLayout from '../../layouts/BaseLayout.astro'
+import { FEATURES } from '../../lib/features'
+import { breadcrumbs } from '../../lib/schema'
+import { BASE, REPO, SITE, href } from '../../lib/site'
+
+const jsonLd = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    name: 'PaperLab features',
+    itemListElement: FEATURES.map((feature, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      name: feature.name,
+      url: `${SITE}${BASE}features/${feature.slug}/`,
+    })),
+  },
+  breadcrumbs([['Features', 'features/']]),
+]
+// Cards with a screenshot first; the rest in a compact grid, so no card sits half empty.
+const pictured = FEATURES.filter((feature) => feature.shot)
+const textOnly = FEATURES.filter((feature) => !feature.shot)
+---
+
+<BaseLayout
+  title="Features — library, reader, notes, graph, cited answers"
+  description="Every PaperLab feature: PDF library, find papers, highlights, anchored notes, cited answers, workspaces, citation graph, charts, any model, Claude Desktop."
+  jsonLd={jsonLd}
+>
+  <section class="section">
+    <div class="wrap">
+      <p class="eyebrow">Features</p>
+      <h1>Everything PaperLab does</h1>
+      <p class="lead">
+        From the first PDF to the chart in your thesis, on your own computer. The{' '}
+        <a href={`${REPO}#principles`}>README</a> lists what each setting sends and where.
+      </p>
+      <ul class="cards">
+        {
+          pictured.map((feature) => (
+            <li class="card feature">
+              {feature.shot && feature.shotAlt && <Shot name={feature.shot} alt={feature.shotAlt} crop />}
+              <div class="text">
+                {feature.next && <span class="badge">Next release</span>}
+                <h2>
+                  <a href={href(`features/${feature.slug}/`)}>{feature.name}</a>
+                </h2>
+                <p class="muted">{feature.tagline}</p>
+              </div>
+            </li>
+          ))
+        }
+      </ul>
+      <h2 class="more-heading">More features</h2>
+      <ul class="cards compact">
+        {
+          textOnly.map((feature) => (
+            <li class="card feature">
+              <div class="text">
+                {feature.next && <span class="badge">Next release</span>}
+                <h3>
+                  <a href={href(`features/${feature.slug}/`)}>{feature.name}</a>
+                </h3>
+                <p class="muted">{feature.tagline}</p>
+              </div>
+            </li>
+          ))
+        }
+        <li class="card feature">
+          <div class="text">
+            <h3><a href={href('systematic-reviews/')}>Systematic reviews</a></h3>
+            <p class="muted">Search free sources, screen in two stages, snowball and count for PRISMA.</p>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .cards {
+    list-style: none;
+    padding: 0;
+    margin-top: 2.5rem;
+    display: grid;
+    gap: 1.25rem;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
+  }
+  .feature {
+    padding: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    transition: transform 150ms ease;
+  }
+  .feature:hover {
+    transform: translateY(-2px);
+  }
+  .feature :global(.shot) {
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    border-bottom: 1px solid var(--glass-border);
+  }
+  .text {
+    padding: 1.1rem 1.25rem 1.25rem;
+  }
+  .feature h2,
+  .feature h3 {
+    font-size: 1.35rem;
+    margin-bottom: 0.3rem;
+  }
+  .more-heading {
+    margin-top: 3.5rem;
+  }
+  .compact {
+    margin-top: 1.25rem;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
+  }
+  /* The whole card is the link's target area. */
+  .feature a {
+    color: var(--foreground);
+    text-decoration: none;
+  }
+  .feature a::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+  }
+  .feature:hover a {
+    color: var(--primary);
+  }
+  .text p {
+    margin: 0;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+    background: var(--ai-surface);
+    color: var(--ai);
+    margin-bottom: 0.4rem;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .feature {
+      transition: none;
+    }
+  }
+</style>

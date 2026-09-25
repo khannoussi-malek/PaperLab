@@ -1,0 +1,62 @@
+---
+import GuideLayout from '../../../layouts/GuideLayout.astro'
+import { href } from '../../../lib/site'
+---
+
+<GuideLayout
+  path="guides/local-llm-for-research/"
+  title="Running a local LLM for research on your own laptop"
+  description="Use a local language model for research privately: what hardware you need, installing Ollama, picking a model, and what local models do well and badly."
+  question="Can you run an AI model locally for research work?"
+  answer="Yes. Tools like Ollama and LM Studio run open language models on your own laptop, so papers, drafts and data never leave it and each question costs nothing. A laptop with 16 GB of memory runs models of about 7–8 billion parameters comfortably. They answer questions about a supplied passage well, but are weaker than the largest cloud models at long reasoning, so give them the right passages and check their answers."
+  updated="2026-09-25"
+  faqs={[
+    {
+      q: 'Which local model should I start with?',
+      a: 'A recent 7–8 billion parameter instruction model, such as a Qwen or Llama variant served by Ollama. Try a few on questions you know the answers to.',
+    },
+    {
+      q: 'Do I need a GPU?',
+      a: 'No. Apple silicon Macs run local models well on their unified memory, and modern CPUs work, more slowly. A GPU makes answers faster.',
+    },
+    {
+      q: 'Is a local model good enough for research?',
+      a: 'For answering from passages you provide, often yes. For long reasoning without sources, the largest cloud models are still stronger.',
+    },
+    {
+      q: 'Is it really private?',
+      a: 'The model runs on your machine, so your text isn’t sent anywhere by it. Check that the app around it doesn’t send data elsewhere either.',
+    },
+  ]}
+  paperlab="PaperLab connects to Ollama and other local servers, lets you pull and delete Ollama models from Settings with live progress, and picks the model per question. Its built-in search model also runs locally, so reading, search and chat can all stay on your machine."
+>
+  <h2>What you need</h2>
+  <table>
+    <thead><tr><th scope="col">Memory</th><th scope="col">What runs well</th></tr></thead>
+    <tbody>
+      <tr><td>8 GB</td><td>Small models (3–4 billion parameters): short answers, simple questions</td></tr>
+      <tr><td>16 GB</td><td>7–8 billion parameter models: good answers from supplied passages</td></tr>
+      <tr><td>32 GB or more</td><td>Larger models, longer context, faster answers</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Set it up in three steps</h2>
+  <ol>
+    <li>Install <a href="https://ollama.com/">Ollama</a>.</li>
+    <li>Pull a model, for example <code>ollama pull qwen3:8b</code>.</li>
+    <li>Connect an app that sends your papers' passages to it, and cites them.</li>
+  </ol>
+
+  <h2>Make a small model do well</h2>
+  <ul>
+    <li>Give it the right passages: <a href={href('glossary/rag/')}>retrieval</a> matters more than model size.</li>
+    <li>Ask one clear question at a time.</li>
+    <li>Ask for the passage it relied on, and check it.</li>
+    <li>Use a cloud model only for what the local one can't do, and only on text you can share.</li>
+  </ul>
+
+  <p>
+    New to the terms? See <a href={href('glossary/local-llm/')}>local LLM</a> and
+    <a href={href('glossary/embeddings/')}>embeddings</a> in the glossary.
+  </p>
+</GuideLayout>
