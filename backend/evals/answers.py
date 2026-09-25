@@ -7,12 +7,15 @@ Every case in evals/answers.yaml is asked of the default model (chosen in Settin
 - none: no passages, only the paper's name. Shows which answers the model already knows without reading.
 - retrieval: chat as it is.
 - whole: every paper sent whole, with a context big enough to hold it.
+- workspace: workspace chat over a workspace of every eval paper, made in the case's rolled-back session. Follow-ups
+  are skipped (workspace chat has none); a `scope: workspace` case is asked only here.
 
 `--with-paper-notes` saves the file's paper_notes on their papers before every question (rolled back after), to
 see whether a reader's notes change ordinary answers. One JSONL row per answer goes to evals/results/<label>.jsonl,
 then a summary is printed. A rerun only asks what is
 missing or failed. Manual, never in CI. Exits 2 on a malformed cases file, an ambiguous or unknown paper, or ground
 truth that isn't on its page; 1 when the model or a paper can't answer.
+`--prompts previous` asks with chat's prompts from before note suggestions (chat v2, workspace v1), to compare with.
 """
 
 import argparse
@@ -37,11 +40,11 @@ from sqlalchemy import insert, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 
 from app.config import settings
-from app.core import chat, llm_connections
+from app.core import chat, llm_connections, prompts
 from app.core.errors import DomainError
-from app.core.notes import normalize_quote
+from app.core.notes import _CITATION, normalize_quote, note_blocks
 from app.core.retrieval import RetrievedChunk
-from app.models import Chunk, Note, Provenance, note_anchors, note_papers
+from app.models import Chunk, Note, Provenance, Workspace, note_anchors, note_papers, workspace_papers
 from app.providers import embedding
 from app.providers import llm as llm_provider
 from app.providers.base import LLM, LLMError, LLMUnavailable
@@ -50,10 +53,11 @@ from evals.run import EvalError, Expected, is_hit, normalize, resolve_papers
 
 CASES = Path(__file__).with_name("answers.yaml")
 RESULTS = Path(__file__).with_name("results")
-CONFIGS = ("none", "retrieval", "whole")
-KINDS = ("fact", "overview", "followup", "notes", "refusal")
+CONFIGS = ("none", "retrieval", "whole", "workspace")
+KINDS = ("fact", "overview", "followup", "notes", "refusal", "write_notes")
 # Only these can be known without reading: a follow-up or a note's answer isn't in anything the model was trained on.
 MEMORY_CHECKED = {"fact", "overview"}
+PREVIOUS_PROMPTS = {"chat": 2, "chat_workspace": 1}  # before note suggestions (M20)
 # Every eval paper is under 100k characters (~25k tokens), so `whole` sends each one whole; 32k tokens holds that
 # plus the answer, and qwen3:8b supports it.
 WHOLE_PAPER_CHARS = 100_000
@@ -90,7 +94,8 @@ class PaperNotes(BaseModel):
 
 class Case(BaseModel):
     id: str = Field(min_length=1)
-    kind: Literal["fact", "overview", "followup", "notes", "refusal"]
+    kind: Literal["fact", "overview", "followup", "notes", "refusal", "write_notes"]
+    scope: Literal["paper", "workspace"] = "paper"  # workspace: asked only in the workspace config
     paper: str = Field(min_length=1)  # a title prefix, as in questions.yaml
     question: str = Field(min_length=1)
     points: list[Annotated[list[str], Field(min_length=1)]] = []  # a point is met by any phrasing; refusal: REFUSALS
@@ -160,6 +165,24 @@ def grounded(content: str, sources: list[RetrievedChunk], evidence: list[Expecte
     return is_hit([sources[i - 1] for i in chat.parse_citations(content, len(sources))], evidence)
 
 
+def blocks_right(content: str, kind: str, sources: int) -> bool:
+    """write_notes: at least one :::note block, none empty, and every [C…] inside one a real source. Any other kind: no
+    block at all (D99)."""
+    blocks = note_blocks(content)
+    if kind != "write_notes":
+        return not blocks
+    cited = [int(number) for block in blocks for label, number in _CITATION.findall(block) if label == "C"]
+    return bool(blocks) and all(blocks) and all(1 <= number <= sources for number in cited)
+
+
+def asked_in(config: str, case: Case) -> bool:
+    """none: only what can be known without reading; workspace: everything but follow-ups (workspace chat has none,
+    D62); the other configs: every case about one paper."""
+    if config == "workspace":
+        return case.kind != "followup"
+    return case.scope == "paper" and (config != "none" or case.kind in MEMORY_CHECKED)
+
+
 async def _chunk_holding(session: AsyncSession, paper_id: uuid.UUID, page: int, phrase: str):
     """The first chunk on `page` holding `phrase`, compared as run.is_hit compares; None when there is none."""
     query = select(Chunk.text, Chunk.bbox).where(Chunk.paper_id == paper_id, Chunk.page == page)
@@ -201,6 +224,16 @@ async def add_note(session: AsyncSession, paper_id: uuid.UUID, fixture: NoteFixt
     )
 
 
+async def scratch_workspace(session: AsyncSession, paper_ids: Iterable[uuid.UUID]) -> uuid.UUID:
+    """A workspace of every eval paper, in the case's rolled-back session."""
+    workspace = Workspace(name=f"answers eval {uuid.uuid4().hex[:8]}")
+    session.add(workspace)
+    await session.flush()
+    rows = [{"workspace_id": workspace.id, "paper_id": paper_id} for paper_id in paper_ids]
+    await session.execute(insert(workspace_papers), rows)
+    return workspace.id
+
+
 @asynccontextmanager
 async def rolled_back(engine: AsyncEngine):
     """A session whose writes, commits included, are all rolled back when it closes."""
@@ -228,14 +261,38 @@ def limits(config: str) -> Iterator[None]:
         yield
 
 
+@contextmanager
+def prompt_set(which: str) -> Iterator[None]:
+    """`previous` asks with chat's prompts from before note suggestions (chat v2, workspace v1) and puts the current
+    ones back afterwards; `current` changes nothing."""
+    if which == "current":
+        yield
+        return
+    system, template = prompts.load("chat", PREVIOUS_PROMPTS["chat"]).split(chat.PROMPT_MARKER)
+    workspace_system, workspace_template = prompts.load(
+        "chat_workspace", PREVIOUS_PROMPTS["chat_workspace"]
+    ).split(chat.PROMPT_MARKER)
+    with (
+        patch.object(chat, "SYSTEM_PROMPT", system),
+        patch.object(chat, "PROMPT_TEMPLATE", template),
+        patch.object(chat, "WORKSPACE_SYSTEM_PROMPT", workspace_system),
+        patch.object(chat, "WORKSPACE_PROMPT_TEMPLATE", workspace_template),
+    ):
+        yield
+
+
 async def prepare_case(
-    session: AsyncSession, case: Case, config: str, paper_id: uuid.UUID, embedder, notes: Iterable[NoteFixture] = ()
+    session: AsyncSession, case: Case, config: str, paper_id: uuid.UUID, embedder, notes: Iterable[NoteFixture] = (),
+    library: Iterable[uuid.UUID] = (),
 ) -> chat.Prepared:
     if config == "none":
         prompt = f"Paper: {case.paper}\n\nQuestion: {case.question}"
         return chat.Prepared(sources=[], system=NO_PASSAGES_SYSTEM, prompt=prompt, whole_paper=False)
     for note in [*notes, *([case.note] if case.note else [])]:
         await add_note(session, paper_id, note)
+    if config == "workspace":
+        scope = chat.Scope(workspace_id=await scratch_workspace(session, library))
+        return await chat.prepare(session, scope, case.question, embedder)
     scope, thread = chat.Scope(paper_id=paper_id), None
     if case.before:
         # The earlier question is prepared but never asked: a follow-up carries its passages, not its answer.
@@ -276,6 +333,10 @@ def score(
         "points": points_hit(answer.content, case.points), "need": case.required, "of": len(case.points),
         "grounded": grounded(answer.content, prepared.sources, case.evidence) if ok else None,
         "citations_valid": not citation_problems(answer.content, prepared) if ok and config != "none" else None,
+        "blocks": len(note_blocks(answer.content)) if ok else None,
+        "blocks_right": (
+            blocks_right(answer.content, case.kind, len(prepared.sources)) if ok and config != "none" else None
+        ),
         "ttft": answer.ttft, "total": answer.total, "prompt_chars": len(prepared.system) + len(prepared.prompt),
         "sources": len(prepared.sources), "whole_paper": prepared.whole_paper, "notes": len(prepared.notes),
         "first_on_paper": first_on_paper, "error": answer.error, "content": answer.content,
@@ -326,7 +387,7 @@ async def evaluate(
             (case, repeat)
             for case in sorted(cases, key=lambda c: c.paper)
             for repeat in range(1 if config == "none" else repeats)
-            if (config != "none" or case.kind in MEMORY_CHECKED) and (label, config, case.id, repeat) not in done
+            if asked_in(config, case) and (label, config, case.id, repeat) not in done
         ]
         if not pending:
             continue
@@ -338,7 +399,9 @@ async def evaluate(
             for case, repeat in pending:
                 async with scratch() as session:
                     notes = notes_on.get(case.paper, [])
-                    prepared = await prepare_case(session, case, config, paper_ids[case.paper], embedder, notes)
+                    prepared = await prepare_case(
+                        session, case, config, paper_ids[case.paper], embedder, notes, paper_ids.values()
+                    )
                 answer = await stream(llm, prepared.system, prepared.prompt)
                 row = score(label, config, case, repeat, prepared, answer, llm.model, case.paper not in asked)
                 asked.add(case.paper)
@@ -374,6 +437,7 @@ def summary(rows: list[dict]) -> list[dict]:
             "coverage": _mean(r["points"] / r["of"] for r in ok),
             "grounded": _mean(r["grounded"] for r in ok),
             "citations_valid": _mean(r["citations_valid"] for r in ok),
+            "blocks_right": _mean(r.get("blocks_right") for r in ok),  # older result files have no such column
             # Timings count a question's first ask only: a repeat reuses the model's cache of the identical prompt.
             "median_ttft": _median(r["ttft"] for r in ok if r["repeat"] == 0),
             # A whole-paper prompt pays for reading the paper once; later questions on it reuse the model's cache.
@@ -388,11 +452,12 @@ def summary(rows: list[dict]) -> list[dict]:
 COLUMNS = {
     "label": "label", "config": "config", "kind": "kind", "answers": "answers", "errors": "errors",
     "correct": "correct", "correct_unseen": "correct, not known before", "coverage": "key points hit",
-    "grounded": "cites the evidence", "citations_valid": "citations valid", "median_ttft": "s to first word",
+    "grounded": "cites the evidence", "citations_valid": "citations valid", "blocks_right": "blocks right",
+    "median_ttft": "s to first word",
     "median_ttft_first": "s to first word, paper's first question", "median_total": "s total",
     "median_prompt_chars": "prompt chars",
 }
-RATES = {"correct", "correct_unseen", "coverage", "grounded", "citations_valid"}
+RATES = {"correct", "correct_unseen", "coverage", "grounded", "citations_valid", "blocks_right"}
 
 
 def format_summary(stats: list[dict]) -> str:
@@ -414,6 +479,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--only", help="comma-separated case ids")
     parser.add_argument("--kinds", help=f"comma-separated, from {', '.join(KINDS)}")
     parser.add_argument("--with-paper-notes", action="store_true", help="save the file's paper_notes first")
+    parser.add_argument(
+        "--prompts", choices=("current", "previous"), default="current",
+        help="previous: chat's prompts before note suggestions",
+    )
     parser.add_argument("--cases", type=Path, default=CASES)
     parser.add_argument("--out", type=Path, help="default: evals/results/<label>.jsonl")
     parser.add_argument("--summarize", nargs="+", type=Path, metavar="JSONL", help="summarize these files and exit")
@@ -459,10 +528,11 @@ async def main(argv: list[str] | None = None) -> int:
             llm = llm_provider.build_llm(connection, model.name)
         if problems:
             raise EvalError("ground truth isn't in the papers:\n  " + "\n  ".join(problems))
-        await evaluate(
-            cases, paper_ids=paper_ids, configs=configs, repeats=args.repeats, label=args.label, out=out,
-            scratch=scratch, llm=llm, embedder=embedding.load(), paper_notes=paper_notes,
-        )
+        with prompt_set(args.prompts):
+            await evaluate(
+                cases, paper_ids=paper_ids, configs=configs, repeats=args.repeats, label=args.label, out=out,
+                scratch=scratch, llm=llm, embedder=embedding.load(), paper_notes=paper_notes,
+            )
     except EvalError as exc:
         print(f"eval error: {exc}", file=sys.stderr)
         return 2
