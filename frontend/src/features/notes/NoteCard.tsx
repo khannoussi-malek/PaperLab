@@ -1,4 +1,4 @@
-import { Check, ChartColumn, Copy } from 'lucide-react'
+import { Check, ChartColumn, Copy, Files } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { Note } from '@/api/client'
 import { usePapers } from '@/api/queries'
@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { noteHref } from '@/lib/route'
 import { cn } from '@/lib/utils'
 import { AttachChartDialog } from './AttachChartDialog'
+import { EditPapersDialog } from './EditPapersDialog'
 import { HighlightColorPicker } from './HighlightColorPicker'
 import { NoteCharts } from './NoteCharts'
 import { ProvenanceBadge } from './ProvenanceBadge'
@@ -29,6 +30,8 @@ type Props = {
   onDelete: () => Promise<void>
   /** Told the note's id and whether it's editing, whenever editing starts or stops, and "stopped" on unmount. */
   onEditingChange?: (noteId: string, editing: boolean) => void
+  /** Told the saved note after its papers change: the reader says so when it left this paper. */
+  onPapersSaved?: (note: Note) => void
   className?: string
 }
 
@@ -43,11 +46,13 @@ export function NoteCard({
   onColorChange,
   onDelete,
   onEditingChange,
+  onPapersSaved,
   className,
 }: Props) {
   const [editing, setEditing] = useState(startEditing)
   const [body, setBody] = useState(note.body)
   const [attachingChart, setAttachingChart] = useState(false)
+  const [editingPapers, setEditingPapers] = useState(false)
   const [copied, setCopied] = useState(false)
   const [copyError, setCopyError] = useState<string | null>(null)
   const anchor = paperId === undefined ? undefined : note.anchors.find((a) => a.paper_id === paperId)
@@ -139,7 +144,7 @@ export function NoteCard({
           <HighlightColorPicker value={note.color} onChange={(hex) => void onColorChange(hex)} />
         </CardContent>
 
-        <CardFooter className="justify-end gap-2">
+        <CardFooter className="flex-wrap justify-end gap-2">
           <span className="sr-only" role="status">
             {copied ? 'Quote copied.' : ''}
           </span>
@@ -175,6 +180,12 @@ export function NoteCard({
                   Attach chart
                 </Button>
               )}
+              {!compact && (
+                <Button variant="ghost" size="sm" onClick={() => setEditingPapers(true)}>
+                  <Files aria-hidden />
+                  Papers
+                </Button>
+              )}
               <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
                 Edit
               </Button>
@@ -186,6 +197,9 @@ export function NoteCard({
         </CardFooter>
       </Card>
       {!compact && <AttachChartDialog note={note} open={attachingChart} onOpenChange={setAttachingChart} />}
+      {editingPapers && (
+        <EditPapersDialog note={note} onClose={() => setEditingPapers(false)} onSaved={onPapersSaved} />
+      )}
     </Root>
   )
 }
