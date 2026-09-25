@@ -4,6 +4,7 @@ import uuid
 
 import pytest
 from sqlalchemy import insert
+from test_note_papers import paper_only_note
 from test_search_rebuild import OLLAMA_NAME, switched
 
 from app.core import graph, paper_links, workspaces
@@ -301,3 +302,13 @@ async def test_related_follows_similar_for_the_first_hop_only(session):
 
     assert two[member.title] == (1, ["same_workspace"])
     assert lookalike.title not in two
+
+
+async def test_one_note_on_two_whole_papers_links_them_and_marks_both_noted(session):
+    left, right = await add_papers(session, f"Left {RUN}", f"Right {RUN}")
+    await paper_only_note(session, left, right)
+
+    result = await graph.library_graph(session)
+
+    assert links_between(result, [left, right]) == [("co_anchored", f"Left {RUN}", f"Right {RUN}")]
+    assert [node.has_notes for node in result.nodes if node.id in (left.id, right.id)] == [True, True]

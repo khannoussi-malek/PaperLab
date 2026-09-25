@@ -1,7 +1,7 @@
 """A note's papers (D95): note_papers is the one list of them, and a passage can only sit on a linked paper."""
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
 from pdf_papers import TWO_LINE_QUOTE, chunked_paper
@@ -145,3 +145,24 @@ async def test_one_block_of_one_answer_is_saved_once_and_null_blocks_never_clash
     session.add(Note(body="d", provenance="llm", source_id=output.id, source_block=0))
     with pytest.raises(IntegrityError, match="notes_source_block"):
         await session.flush()
+
+
+async def test_a_note_lists_its_papers_by_title_then_id(session):
+    zeta, alpha = await make_paper(session, "Zeta"), await make_paper(session, "Alpha")
+    note = await paper_only_note(session, zeta, alpha)
+
+    [view] = await notes.list_notes_for_paper(session, zeta.id)
+
+    assert (view.id, view.paper_ids, view.anchors) == (note.id, [alpha.id, zeta.id], [])
+
+
+async def test_a_papers_notes_on_the_whole_paper_come_first_newest_first_then_the_rest_in_reading_order(session):
+    paper = await make_paper(session)
+    low = await notes.create_human_note(session, "low", notes.Anchor(paper.id, 1, [(72.0, 500.0, 290.0, 510.0)], "q"))
+    high = await notes.create_human_note(session, "high", notes.Anchor(paper.id, 1, [(72.0, 90.0, 290.0, 99.0)], "q"))
+    older = await paper_only_note(session, paper, body="older", created=NOW - timedelta(days=2))
+    newer = await paper_only_note(session, paper, body="newer", created=NOW - timedelta(days=1))
+
+    listed = await notes.list_notes_for_paper(session, paper.id)
+
+    assert [n.id for n in listed] == [newer.id, older.id, high.id, low.id]

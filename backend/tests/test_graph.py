@@ -4,6 +4,7 @@ import uuid
 
 import pytest
 from sqlalchemy import insert
+from test_note_papers import paper_only_note
 
 from app.core import graph, workspaces
 from app.core.errors import InvalidInput, NotFound
@@ -145,3 +146,10 @@ async def test_hops_must_be_one_to_three_and_the_paper_must_exist(session):
     with pytest.raises(NotFound):
         await graph.related(session, uuid.uuid4())
     assert await graph.related(session, paper.id) == []
+
+
+async def test_one_note_linked_to_two_papers_relates_them_with_no_passage_on_either(session):
+    a, b = await add_papers(session, "A", "B")
+    await paper_only_note(session, a, b)
+
+    assert listed(await graph.related(session, a.id)) == [("B", 1, ["co_anchored"])]

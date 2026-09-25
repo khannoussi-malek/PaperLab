@@ -62,4 +62,5 @@ class NoteOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     anchors: list[AnchorOut]
+    paper_ids: list[uuid.UUID]  # its papers by title, then id (D95); empty: the note is on no paper
     charts: list[ChartRefOut]  # charts shown in the note, by title
