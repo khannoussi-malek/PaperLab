@@ -12,7 +12,11 @@ const event = (name: string, data: object) => `event: ${name}\ndata: ${JSON.stri
 test.describe('with no search model @no-search-model', () => {
   test.beforeEach(async ({ request }) => {
     const status = await (await request.get('/api/embedding')).json()
-    test.skip(status.model_present, 'this stack has a search model: start it with MODELS_DIR=/models/none')
+    // Built-in only (spec D159): with another source there is no download to offer.
+    test.skip(
+      status.model_present || status.source.kind !== 'builtin',
+      'needs Built-in without its model: start the stack with MODELS_DIR=/models/none, on Built-in',
+    )
   })
 
   test('a PDF uploads to ready, and can be read, highlighted and noted', async ({ page, request, paperId }) => {
@@ -45,6 +49,7 @@ test.describe('with no search model @no-search-model', () => {
     const refused = page.locator('.chat-error')
     await expect(refused).toContainText("Search isn't set up, so this can't be searched yet.")
     await expect(refused.getByRole('button', { name: DOWNLOAD })).toBeVisible()
+    await expect(refused.getByRole('link', { name: 'Use another search source' })).toHaveAttribute('href', '#/settings')
     await expect(refused.getByRole('button', { name: 'Retry' })).toHaveCount(0)
   })
 
