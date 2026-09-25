@@ -17,7 +17,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import Conflict, InvalidInput, NotFound
-from app.models import LLMConnection, LLMModel
+from app.models import EmbeddingSource, LLMConnection, LLMModel
 from app.providers.llm import host_of
 
 logger = logging.getLogger(__name__)
@@ -27,6 +27,9 @@ KEY_HINT_CHARS = 4
 KEY_HINT_MIN_LENGTH = 8
 LOCAL_HOSTS = {"localhost", "host.docker.internal"}
 SEED_LABELS = {"ollama": "Ollama", "anthropic": "Anthropic"}
+
+# D151: embedding_source's foreign key would refuse the delete anyway, as a 500; this says why and where to go.
+SEARCH_USES = "Search uses this connection. Choose another search source in Settings → Search first."
 
 
 @dataclass(frozen=True)
@@ -205,8 +208,13 @@ async def update_connection(session: AsyncSession, connection_id: uuid.UUID, cha
 
 
 async def delete_connection(session: AsyncSession, connection_id: uuid.UUID) -> None:
-    """Its models go too (ON DELETE CASCADE); if one was the default, there is no default afterwards."""
-    await session.delete(await _row(session, connection_id))
+    """Its models go too (ON DELETE CASCADE); if one was the default, there is no default afterwards. Refused while
+    search uses it (Conflict(SEARCH_USES))."""
+    connection = await _row(session, connection_id)
+    in_use = select(EmbeddingSource.id).where(EmbeddingSource.connection_id == connection_id)
+    if await session.scalar(in_use) is not None:
+        raise Conflict(SEARCH_USES)
+    await session.delete(connection)
     await session.commit()
 
 

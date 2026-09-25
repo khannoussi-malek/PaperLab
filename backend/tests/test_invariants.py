@@ -37,7 +37,14 @@ def test_mcp_server_has_no_sql_and_imports_only_core_services():
 
 
 @pytest.mark.parametrize(
-    "module", ["app.providers.llm", "app.providers.embedding", "app.core.retrieval", "app.core.chat"]
+    "module",
+    [
+        "app.providers.llm",
+        "app.providers.embedding",
+        "app.core.retrieval",
+        "app.core.embedding_sources",
+        "app.core.chat",
+    ],
 )
 def test_each_module_imports_first_without_a_cycle(module):
     """Providers never import core at module level (M25): whichever of these a process imports first, it loads."""
