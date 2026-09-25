@@ -10,19 +10,21 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { createBody, hostOf, KIND_NAMES, updateBody, type ConnectionForm, type ConnectionKind } from './connectionForm'
-import { applyPreset, OLLAMA_BASE_URL, PRESETS } from './presets'
+import { applyPreset, OLLAMA_BASE_URL, presetForm, PRESETS } from './presets'
 
 type Props = {
   open: boolean
   onOpenChange: (open: boolean) => void
   /** Omitted: "Add connection". Set: "Edit connection", starting from its saved values. */
   connection?: LLMConnection
+  /** A new connection starting from this preset: Settings → Search's "Add OpenAI key", "Add Gemini key", "Add Ollama". */
+  preset?: string
   /** Called with the connection this dialog just created (the first-run setup then asks for its model). */
   onCreated?: (connection: LLMConnection) => void
 }
 
-function initialForm(connection?: LLMConnection): ConnectionForm {
-  if (!connection) return { kind: 'openai_compatible', label: '', baseUrl: '', apiKey: '', keyChange: 'replace' }
+function initialForm(connection?: LLMConnection, preset?: string): ConnectionForm {
+  if (!connection) return presetForm(preset)
   return {
     kind: connection.kind as ConnectionKind,
     label: connection.label,
@@ -31,6 +33,9 @@ function initialForm(connection?: LLMConnection): ConnectionForm {
     keyChange: 'keep',
   }
 }
+
+/** The Preset select's starting value: an OpenAI-compatible preset, else Custom (Ollama has no Preset select). */
+const presetSelection = (preset?: string) => (preset && preset !== 'Ollama' ? preset : 'Custom')
 
 type KeyFieldProps = {
   form: ConnectionForm
@@ -80,16 +85,16 @@ function KeyField({ form, set, connection, showNotice }: KeyFieldProps) {
 }
 
 /** Add or edit an Ollama, Anthropic or OpenAI-compatible connection. Never calls the provider: Test connection does that. */
-export function ConnectionDialog({ open, onOpenChange, connection, onCreated }: Props) {
+export function ConnectionDialog({ open, onOpenChange, connection, preset: startPreset, onCreated }: Props) {
   const { create, update } = useConnectionMutations()
-  const [form, setForm] = useState<ConnectionForm>(() => initialForm(connection))
-  const [preset, setPreset] = useState('Custom')
+  const [form, setForm] = useState<ConnectionForm>(() => initialForm(connection, startPreset))
+  const [preset, setPreset] = useState(() => presetSelection(startPreset))
   const set = (patch: Partial<ConnectionForm>) => setForm((current) => ({ ...current, ...patch }))
 
   function openChange(next: boolean) {
     if (next) {
-      setForm(initialForm(connection))
-      setPreset('Custom')
+      setForm(initialForm(connection, startPreset))
+      setPreset(presetSelection(startPreset))
     } else {
       // A typed key is never left sitting in the field, nor in the mutation's own `variables`.
       set({ apiKey: '' })
