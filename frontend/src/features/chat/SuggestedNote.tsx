@@ -37,7 +37,7 @@ export function SuggestedNote({ index, save, children }: Props) {
       <div className="space-y-2">{children}</div>
       <div data-chrome className="flex items-center justify-end gap-2 text-xs">
         {save?.saved ? (
-          <p className="text-muted-foreground">
+          <p className="flex h-6 items-center text-muted-foreground">
             Saved ·{' '}
             <a href={savedNoteHref(save.saved, chatPaperId)} className="text-primary hover:underline">
               Open
@@ -56,7 +56,7 @@ export function SuggestedNote({ index, save, children }: Props) {
         )}
       </div>
       {problem && (
-        <p data-chrome role="alert" className="text-xs text-destructive">
+        <p data-chrome role="alert" className="text-xs text-red-700 dark:text-destructive">
           {problem}
         </p>
       )}
