@@ -1,4 +1,5 @@
 import uuid
+from typing import Literal
 
 from fastapi import APIRouter, Response
 
@@ -6,7 +7,7 @@ from app.api.deps import LLMByModelIdDep, SessionDep
 from app.core import note_suggestions, notes
 from app.schemas.chat import PromoteRequest
 from app.schemas.note_suggestions import NoteSuggestionOut, NoteSuggestionsOut
-from app.schemas.notes import NoteCreate, NoteOut, NoteUpdate
+from app.schemas.notes import NoteCreate, NoteOut, NotePapersIn, NoteUpdate
 
 router = APIRouter(tags=["notes"])
 
@@ -14,6 +15,21 @@ router = APIRouter(tags=["notes"])
 @router.get("/api/papers/{paper_id}/notes")
 async def list_paper_notes(paper_id: uuid.UUID, session: SessionDep) -> list[NoteOut]:
     return await notes.list_notes_for_paper(session, paper_id)
+
+
+@router.get("/api/notes")
+async def list_notes(session: SessionDep, paper: uuid.UUID | Literal["none"] | None = None) -> list[NoteOut]:
+    """Every note, newest first. `paper=<id>`: the notes linked to that paper (404 when there is none); `paper=none`:
+    the notes on no paper. Any other value is a 422."""
+    if paper == "none":
+        return await notes.list_notes(session, unlinked=True)
+    return await notes.list_notes(session, paper)
+
+
+@router.put("/api/notes/{note_id}/papers")
+async def set_note_papers(note_id: uuid.UUID, payload: NotePapersIn, session: SessionDep) -> NoteOut:
+    """Replaces the note's papers. 404 for the note or `unknown_paper`; 422 over 100 papers."""
+    return await notes.set_papers(session, note_id, payload.paper_ids)
 
 
 @router.post("/api/papers/{paper_id}/notes/suggest")
@@ -27,7 +43,11 @@ async def suggest_notes(paper_id: uuid.UUID, session: SessionDep, llm: LLMByMode
         output_id=output_id,
         suggestions=[
             NoteSuggestionOut(
-                body=s.body, chunk_id=s.source.id, page=s.source.page, section=s.source.section, bbox=s.source.bbox,
+                body=s.body,
+                chunk_id=s.source.id,
+                page=s.source.page,
+                section=s.source.section,
+                bbox=s.source.bbox,
             )
             for s in suggested.suggestions
         ],

@@ -51,6 +51,11 @@ class NoteUpdate(BaseModel):
         return self
 
 
+class NotePapersIn(BaseModel):
+    # All of the note's papers: the list replaces them, and [] takes the note off every paper.
+    paper_ids: list[uuid.UUID] = Field(max_length=100)
+
+
 class NoteOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

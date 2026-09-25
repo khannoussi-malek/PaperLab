@@ -4,6 +4,7 @@
 - Promoting an LLM fragment creates a note with provenance='llm' + source_id. (here)
 - Editing an 'llm' note flips it to 'llm_edited'.                          (here)
 - Changing a note's colour never changes its provenance.                     (here)
+- Changing a note's papers never changes its provenance (D97).                (here)
 - Notes created through MCP get provenance='llm' and source_id = an llm_outputs row of kind 'mcp'.  (here)
 - Showing a chart in a note never changes its provenance, and a note made from a chart is the owner's
   ('human'): a chart holds no generated text, only the owner's choice of data.  (here)
@@ -197,6 +198,38 @@ async def list_notes_for_paper(session: AsyncSession, paper_id: uuid.UUID) -> li
     whole = sorted((v for v in views if not _placed_on(v, paper_id)), key=lambda v: v.created_at, reverse=True)
     placed = sorted((v for v in views if _placed_on(v, paper_id)), key=lambda v: reading_position(v, paper_id))
     return whole + placed
+
+
+async def list_notes(
+    session: AsyncSession, paper_id: uuid.UUID | None = None, unlinked: bool = False
+) -> list[NoteView]:
+    """Newest first (D98): every note; with `paper_id`, the notes linked to that paper (NotFound when there is no such
+    paper); with `unlinked`, the notes linked to no paper."""
+    query = select(Note).order_by(Note.created_at.desc(), Note.id)
+    if paper_id is not None:
+        await get_paper(session, paper_id)
+        query = query.where(Note.id.in_(select(note_papers.c.note_id).where(note_papers.c.paper_id == paper_id)))
+    elif unlinked:
+        query = query.where(Note.id.not_in(select(note_papers.c.note_id)))
+    return await _with_anchors(session, list(await session.scalars(query)))
+
+
+async def set_papers(session: AsyncSession, note_id: uuid.UUID, paper_ids: list[uuid.UUID]) -> NoteView:
+    """Links the note to exactly these papers (D95). A link not listed goes, and the note's passages on that paper go
+    with it (the database cascades); a new link is to the whole paper. Duplicates count once. Provenance never changes
+    (D97), and updated_at moves only when the set does. Raises NotFound (the note), NotFound("unknown_paper")."""
+    note = await _get_note(session, note_id)
+    wanted = set(paper_ids)
+    if set(await session.scalars(select(Paper.id).where(Paper.id.in_(list(wanted))))) != wanted:
+        raise NotFound("unknown_paper")
+    current = set(await session.scalars(select(note_papers.c.paper_id).where(note_papers.c.note_id == note_id)))
+    if current != wanted:
+        gone = note_papers.c.paper_id.not_in(list(wanted))  # an empty list takes the note off every paper
+        await session.execute(delete(note_papers).where(note_papers.c.note_id == note_id, gone))
+        await _link(session, note_id, wanted - current)
+        await session.execute(update(Note).where(Note.id == note_id).values(updated_at=func.now()))
+        await session.commit()
+    return await _view(session, note)
 
 
 async def update_note(

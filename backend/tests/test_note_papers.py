@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from test_chart_notes import bar, two_columns
 
 from app.core import charts, datasets, notes
+from app.core.errors import NotFound
 from app.models import Chunk, LLMOutput, Note, Paper, Provenance, note_anchors, note_papers
 
 pytestmark = pytest.mark.anyio
@@ -166,3 +167,59 @@ async def test_a_papers_notes_on_the_whole_paper_come_first_newest_first_then_th
     listed = await notes.list_notes_for_paper(session, paper.id)
 
     assert [n.id for n in listed] == [newer.id, older.id, high.id, low.id]
+
+
+async def test_set_papers_adds_and_removes_links_and_drops_the_passages_on_a_removed_paper_only(session):
+    kept, dropped = await make_paper(session, "Kept"), await make_paper(session, "Dropped")
+    added = await make_paper(session, "Added")
+    note = await notes.create_human_note(session, "mine", notes.Anchor(kept.id, 1, [tuple(RECT[0])], "q"))
+    await session.execute(insert(note_papers).values(note_id=note.id, paper_id=dropped.id))
+    await session.execute(insert(note_anchors).values(anchor_row(note.id, dropped.id, page=2)))
+
+    view = await notes.set_papers(session, note.id, [kept.id, added.id, added.id])
+
+    assert view.paper_ids == [added.id, kept.id]  # by title; the duplicate counted once
+    assert [(a.paper_id, a.page) for a in view.anchors] == [(kept.id, 1)]
+
+
+async def test_set_papers_refuses_an_unknown_note_or_paper_and_changes_nothing(session):
+    paper = await make_paper(session)
+    note = await paper_only_note(session, paper)
+
+    with pytest.raises(NotFound, match="^note .* not found$"):
+        await notes.set_papers(session, uuid.uuid4(), [paper.id])
+    with pytest.raises(NotFound, match="^unknown_paper$"):
+        await notes.set_papers(session, note.id, [paper.id, uuid.uuid4()])
+
+    assert await linked(session, note.id) == {paper.id}
+
+
+async def test_set_papers_keeps_provenance_and_moves_updated_at_only_when_the_papers_change(session):
+    paper, other = await make_paper(session, "P"), await make_paper(session, "O")
+    note = await paper_only_note(session, paper, provenance=Provenance.LLM, created=NOW - timedelta(days=30))
+    [before] = await notes.list_notes_for_paper(session, paper.id)
+
+    same = await notes.set_papers(session, note.id, [paper.id])
+    moved = await notes.set_papers(session, note.id, [other.id])
+
+    assert (same.provenance, same.updated_at) == (Provenance.LLM, before.updated_at)
+    assert (moved.provenance, moved.paper_ids) == (Provenance.LLM, [other.id])
+    assert moved.updated_at > before.updated_at
+
+
+async def test_list_notes_gives_every_note_a_papers_notes_or_the_notes_on_no_paper_newest_first(session):
+    paper, other = await make_paper(session, "P"), await make_paper(session, "O")
+    oldest = await paper_only_note(session, paper, created=NOW - timedelta(days=3))
+    middle = await paper_only_note(session, other, created=NOW - timedelta(days=2))
+    newest = await paper_only_note(session, created=NOW - timedelta(days=1))
+    mine = {oldest.id, middle.id, newest.id}  # the dev database holds the owner's notes too (D15)
+
+    every = [n.id for n in await notes.list_notes(session) if n.id in mine]
+    on_paper = [n.id for n in await notes.list_notes(session, paper.id)]
+    unlinked = [n.id for n in await notes.list_notes(session, unlinked=True) if n.id in mine]
+
+    assert every == [newest.id, middle.id, oldest.id]
+    assert on_paper == [oldest.id]
+    assert unlinked == [newest.id]
+    with pytest.raises(NotFound):
+        await notes.list_notes(session, uuid.uuid4())
