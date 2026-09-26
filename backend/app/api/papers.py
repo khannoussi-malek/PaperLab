@@ -9,7 +9,7 @@ from app.config import settings
 from app.core import discovery, enrichment, papers, workspaces
 from app.models import PaperStatus
 from app.schemas.discovery import CandidateOut
-from app.schemas.papers import ChunkOut, PaperOut, PaperUpdate
+from app.schemas.papers import ChunkOut, PaperOut, PaperUpdate, ReadingIn
 
 router = APIRouter(prefix="/api/papers", tags=["papers"])
 
@@ -48,6 +48,13 @@ async def get_paper(paper_id: uuid.UUID, session: SessionDep) -> PaperOut:
 @router.patch("/{paper_id}")
 async def correct_paper(paper_id: uuid.UUID, payload: PaperUpdate, session: SessionDep) -> PaperOut:
     return await enrichment.correct_metadata(session, paper_id, payload.model_dump(exclude_unset=True))
+
+
+@router.put("/{paper_id}/reading")
+async def set_reading(paper_id: uuid.UUID, payload: ReadingIn, session: SessionDep) -> PaperOut:
+    """The reader's passes finished and decision (D119). Only the fields sent change. 404 unknown paper; 422 for an
+    empty body, a level outside 0–3, a null level, an unknown decision or any other field."""
+    return await papers.set_reading(session, paper_id, payload.model_dump(exclude_unset=True))
 
 
 @router.delete("/{paper_id}", status_code=204)

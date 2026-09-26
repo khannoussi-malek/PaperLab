@@ -177,3 +177,17 @@ async def test_correcting_a_paper_abstract(client):
 
     cleared = await client.patch(f"/api/papers/{created['id']}", json={"abstract": None})
     assert (cleared.status_code, cleared.json()["abstract"]) == (200, None)
+
+
+async def test_patch_refuses_the_reading_state_even_beside_a_real_correction(client, session):
+    """D163: {"reading_pass": 2} alone already answers 422 (nothing to correct), so each body carries a real title."""
+    created = (await upload(client)).json()
+    url = f"/api/papers/{created['id']}"
+    assert (await client.put(f"{url}/reading", json={"reading_pass": 1})).status_code == 200
+
+    for field, value in (("reading_pass", 2), ("triage", "keep")):
+        response = await client.patch(url, json={"title": created["title"], field: value})
+        assert response.status_code == 422, field
+
+    paper = await session.get(Paper, uuid.UUID(created["id"]), populate_existing=True)
+    assert (paper.reading_pass, paper.triage, paper.manual_fields) == (1, None, [])
