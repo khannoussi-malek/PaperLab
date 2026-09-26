@@ -31,6 +31,8 @@ class ExternalRef(Base):
     title_embed_model: Mapped[str | None] = mapped_column(Text)
     # Set once on import: every paper citing this reference then shows it in the library.
     imported_as: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("papers.id", ondelete="SET NULL"))
+    # M21 (D120, D164): when the reader marked it To read. A fold keeps the earliest; an import clears it.
+    queued_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()"))
     core_id: Mapped[str | None] = mapped_column(Text, default=None)
     # Every provider that has ever matched this paper, trust-order first (Candidate.sources' own convention) —
