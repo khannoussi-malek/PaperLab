@@ -51,6 +51,11 @@ class NoteUpdate(BaseModel):
         return self
 
 
+class NotePapersIn(BaseModel):
+    # All of the note's papers: the list replaces them, and [] takes the note off every paper.
+    paper_ids: list[uuid.UUID] = Field(max_length=100)
+
+
 class NoteOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -62,4 +67,5 @@ class NoteOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     anchors: list[AnchorOut]
+    paper_ids: list[uuid.UUID]  # its papers by title, then id (D95); empty: the note is on no paper
     charts: list[ChartRefOut]  # charts shown in the note, by title

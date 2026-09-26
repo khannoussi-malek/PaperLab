@@ -8,10 +8,11 @@ import pytest
 from conftest import unit_vector
 from pdf_papers import TWO_LINE_QUOTE, chunked_paper
 from sqlalchemy import delete
+from test_note_papers import paper_only_note
 
 from app.core import library, notes, workspaces
 from app.core.errors import Conflict, InvalidInput, NotFound
-from app.models import Chunk, Paper
+from app.models import Chunk, Paper, Provenance
 
 pytestmark = pytest.mark.anyio
 
@@ -151,3 +152,14 @@ async def test_the_card_has_details_outline_workspaces_and_every_note(session, t
 async def test_the_card_of_an_unknown_paper_is_not_found(session):
     with pytest.raises(NotFound):
         await library.paper_card(session, uuid.uuid4())
+
+
+async def test_the_card_gives_a_note_on_the_whole_paper_no_page_or_quote(session):
+    paper = Paper(title="Card paper", file_path="/nonexistent.pdf", status="ready", page_count=2)
+    session.add(paper)
+    await session.commit()
+    note = await paper_only_note(session, paper, body="The whole paper, in one line.", provenance=Provenance.LLM)
+
+    card = await library.paper_card(session, paper.id)
+
+    assert card.notes == [library.NoteBrief(note.id, "llm", "The whole paper, in one line.", None, None)]

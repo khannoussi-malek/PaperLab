@@ -76,8 +76,8 @@ export function ChartPage({ chartId }: { chartId: string }) {
       {noteResult &&
         ('note' in noteResult ? (
           <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
-            Added to a note in {plural(new Set(noteResult.note.anchors.map((a) => a.paper_id)).size, 'paper')}.
-            <a href={noteHref(noteResult.note.anchors[0].paper_id, noteResult.note.id)} className="text-primary hover:underline">
+            Added to a note in {plural(noteResult.note.paper_ids.length, 'paper')}.
+            <a href={noteHref(noteResult.note.paper_ids[0], noteResult.note.id)} className="text-primary hover:underline">
               Open the note
             </a>
           </p>

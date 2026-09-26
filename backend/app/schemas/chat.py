@@ -25,8 +25,8 @@ class ChatSource(BaseModel):
 class NoteSource(BaseModel):
     label: str  # "N1": the marker the answer cites
     note_id: uuid.UUID
-    paper_id: uuid.UUID  # the anchor the prompt quoted
-    page: int
+    paper_id: uuid.UUID  # the paper the prompt named it by
+    page: int | None  # null: the note is on the whole paper
     provenance: Literal["human", "llm", "llm_edited"]
 
 
@@ -56,6 +56,12 @@ class ErrorEvent(BaseModel):
     retryable: bool
 
 
+class SavedNoteOut(BaseModel):
+    index: int  # the answer's :::note block it was saved from, from 0
+    note_id: uuid.UUID
+    paper_ids: list[uuid.UUID]  # the note's papers now, by title: where the card's Open goes
+
+
 class ChatAnswer(BaseModel):
     id: uuid.UUID
     question: str
@@ -67,14 +73,19 @@ class ChatAnswer(BaseModel):
     whole_paper: bool
     # sources[i] is C{i+1}. null: a re-ingest replaced that chunk, so its marker renders as plain text.
     sources: list[ChatSource | None]
-    # notes[i] is N{i+1}. null: the note (or its paper) was deleted.
+    # notes[i] is N{i+1}. null: the note was deleted, or is no longer linked to a paper in scope.
     notes: list[NoteSource | None]
     notes_used: int | None
     notes_total: int | None
     parent_id: uuid.UUID | None  # the answer this one follows up; null for a question asked on its own
+    saved_notes: list[SavedNoteOut]  # its suggested notes already saved, by block
 
 
 class PromoteRequest(BaseModel):
     output_id: uuid.UUID
     body: str = Field(max_length=50_000)
     chunk_ids: list[uuid.UUID] = Field(min_length=1, max_length=100)
+
+
+class SaveSuggestion(BaseModel):
+    index: int = Field(ge=0)  # the answer's :::note block, from 0

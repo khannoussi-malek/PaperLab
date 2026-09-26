@@ -1,6 +1,7 @@
 import uuid
 
 import pytest
+from test_note_papers import paper_only_note
 
 from app.models import Paper
 
@@ -60,3 +61,44 @@ async def test_note_and_file_errors_map_to_status_codes(client, session):
     assert page_out_of_range.status_code == 422
     assert unknown_paper.status_code == 404
     assert missing_file.status_code == 404
+
+
+async def test_a_papers_notes_include_one_on_the_whole_paper_with_its_papers(client, session):
+    paper = await make_paper(session, "/nonexistent.pdf")
+    note = await paper_only_note(session, paper)
+
+    listed = (await client.get(f"/api/papers/{paper.id}/notes")).json()
+
+    assert [(n["id"], n["paper_ids"], n["anchors"]) for n in listed] == [(str(note.id), [str(paper.id)], [])]
+
+
+async def test_the_notes_list_gives_every_note_a_papers_notes_or_those_on_no_paper(client, session):
+    paper = await make_paper(session, "/nonexistent.pdf")
+    on_paper, loose = await paper_only_note(session, paper), await paper_only_note(session)
+
+    every = {n["id"] for n in (await client.get("/api/notes")).json()}
+    by_paper = (await client.get(f"/api/notes?paper={paper.id}")).json()
+    unlinked = {n["id"] for n in (await client.get("/api/notes?paper=none")).json()}
+    unknown = await client.get(f"/api/notes?paper={uuid.uuid4()}")
+    bogus = await client.get("/api/notes?paper=bogus")
+
+    assert {str(on_paper.id), str(loose.id)} <= every
+    assert [(n["id"], n["paper_ids"]) for n in by_paper] == [(str(on_paper.id), [str(paper.id)])]
+    assert str(loose.id) in unlinked and str(on_paper.id) not in unlinked
+    assert (unknown.status_code, bogus.status_code) == (404, 422)
+
+
+async def test_putting_a_notes_papers_replaces_them(client, session):
+    first, second = await make_paper(session, "/a.pdf"), await make_paper(session, "/b.pdf")
+    note = await paper_only_note(session, first)
+    url = f"/api/notes/{note.id}/papers"
+
+    moved = await client.put(url, json={"paper_ids": [str(second.id)]})
+    unknown_note = await client.put(f"/api/notes/{uuid.uuid4()}/papers", json={"paper_ids": []})
+    unknown_paper = await client.put(url, json={"paper_ids": [str(uuid.uuid4())]})
+    too_many = await client.put(url, json={"paper_ids": [str(uuid.uuid4()) for _ in range(101)]})
+
+    assert (moved.status_code, moved.json()["paper_ids"]) == (200, [str(second.id)])
+    assert unknown_note.status_code == 404
+    assert (unknown_paper.status_code, unknown_paper.json()) == (404, {"detail": "unknown_paper"})
+    assert too_many.status_code == 422

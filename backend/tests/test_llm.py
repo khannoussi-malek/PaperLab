@@ -5,7 +5,8 @@ import httpx2
 import pytest
 
 from app.config import settings
-from app.core.chat import WORKSPACE_SYSTEM_PROMPT
+from app.core import notes
+from app.core.chat import SYSTEM_PROMPT, WORKSPACE_SYSTEM_PROMPT
 from app.providers import llm
 from app.providers.base import LLMError, LLMUnavailable
 
@@ -504,3 +505,18 @@ async def test_list_models_in_fake_mode_is_a_fixed_list_and_rejects_bad_key(monk
     assert await llm.list_models(Row("ollama", "Ollama", OLLAMA_URL)) == llm.FAKE_MODELS
     with pytest.raises(LLMUnavailable, match="^Key rejected by Groq$"):
         await llm.list_models(Row("openai_compatible", "Groq", COMPATIBLE_URL, "bad-key"))
+
+
+async def test_fake_llm_answers_a_question_asking_for_notes_with_two_suggested_notes_in_either_chat():
+    fake = llm.FakeLLM()
+    # The prompt always says "Notes (newest first)": only the question decides.
+    asked = "Notes (newest first):\n\n(none)\n\nQuestion: Create notes to help me understand this paper\n"
+    plain = "Notes (newest first):\n\n(none)\n\nQuestion: What anchors a note?\n"
+
+    for system in (SYSTEM_PROMPT, WORKSPACE_SYSTEM_PROMPT):
+        assert "".join([token async for token in fake.stream(system, asked)]) == llm.FAKE_NOTES_ANSWER
+    assert "".join([token async for token in fake.stream(SYSTEM_PROMPT, plain)]) == llm.FAKE_ANSWER
+    assert notes.note_blocks(llm.FAKE_NOTES_ANSWER) == [
+        "The method anchors every note on a passage [C1].",
+        "Keep one idea per note.",
+    ]

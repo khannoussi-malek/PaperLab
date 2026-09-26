@@ -5,6 +5,7 @@ import pytest
 from conftest import unit_vector
 from sqlalchemy import delete, func, select
 from test_chat_workspace import NOW, add_note
+from test_note_papers import paper_only_note
 
 from app.core import chat, prompts
 from app.core.errors import Conflict, NotFound
@@ -13,6 +14,36 @@ from app.models import Chunk, LLMOutput, Note, Paper
 from app.providers import embedding
 
 pytestmark = pytest.mark.anyio
+
+OLD_N_RULE = (
+    '- [N#] only ever labels a note already listed below. Never invent a new [N#] to number or head something you '
+    'write yourself — if the question asks you to summarize, list key points, or "generate notes," just answer in '
+    'cited prose or a dash list; saving anything as an actual note happens separately, outside this answer.'
+)
+NEW_N_RULE = (
+    '- [N#] only ever labels a note already listed below. Never invent a new [N#] to number or head something you '
+    'write yourself — if the question asks you to summarize or list key points, just answer in cited prose or a '
+    'dash list.'
+)
+NOTE_RULE = (
+    '- Only when the question asks you to write notes, write each note as its own block: a line ":::note", the note '
+    'with its citations, then a line ":::". One idea per note, kept short. Otherwise never write these blocks.'
+)
+NOTE_RULE_V2 = (
+    '- Only when the question asks you to write notes, write each note as its own block, in exactly this shape '
+    '(example):\n:::note\nThe note, with its citations [C1].\n:::\nA line with only ":::note" opens a block and a '
+    'line with only ":::" closes it — exactly three colons, nothing else (not "<::note>", not "-::note"). One idea '
+    'per note, kept short. Otherwise never write these blocks.'
+)
+NOTE_RULE_V3 = (
+    '- Write a ":::note" block only when the question itself explicitly asks you to write, take, or make notes — '
+    'never because the answer happens to contain a good, note-worthy point. When it does apply, use exactly this '
+    'shape (example):\n:::note\nThe note, with its citations [C1].\n:::\nA line with only ":::note" opens a block '
+    'and a line with only ":::" closes it — exactly three colons, nothing else (not "<::note>", not "-::note"). '
+    'One idea per note, kept short. For every other question, including follow-ups, do not write one of these '
+    'blocks at all.'
+)
+PROSE = "- Answer in concise plain prose."
 
 
 async def make_paper(session, texts: list[str], *, status="ready", embedded=True, **fields) -> Paper:
@@ -129,7 +160,7 @@ async def test_save_answer_fills_every_column_and_inserts_no_note(session):
     ids = [s.id for s in prepared.sources]
     assert (row.paper_id, row.kind, row.question, row.content) == (paper.id, "chat", "why?", answer)
     assert (row.source_chunks, row.cited_chunks) == (ids, [ids[2], ids[0]])
-    assert (row.model, row.prompt_version, row.whole_paper) == ("qwen3:8b", 3, True)
+    assert (row.model, row.prompt_version, row.whole_paper) == ("qwen3:8b", 6, True)
     assert await session.scalar(select(func.count()).select_from(Note)) == notes_before
 
 
@@ -142,7 +173,7 @@ async def test_prepare_gives_a_paper_its_own_notes_newest_first_after_the_passag
 
     prepared = await chat.prepare(session, paper.id, "What do my notes say?")
 
-    assert (prepared.system, prepared.prompt_version) == (chat.SYSTEM_PROMPT, 3)
+    assert (prepared.system, prepared.prompt_version) == (chat.SYSTEM_PROMPT, 6)
     assert "[N1]" in prepared.system
     notes_block = '[N1] (AI · Devlin 2019 p.1) "quote Uses NSP." — Uses NSP.\n[N2] (You · Devlin 2019 p.2)'
     assert notes_block in prepared.prompt and "Not this paper" not in prepared.prompt
@@ -277,3 +308,36 @@ async def test_papers_needing_search_are_the_ready_ones_too_long_to_send_whole(s
     await make_paper(session, ["x" * 25_000], status="chunking")  # not ready yet
 
     assert await chat.papers_needing_search(session) - before == 2
+
+
+async def test_paper_chat_sends_a_note_on_the_whole_paper_without_a_page(session):
+    paper = await make_paper(session, ["one"], authors=["Jacob Devlin"], year=2019)
+    note = await paper_only_note(session, paper, body="The whole paper argues for grounding.")
+
+    prepared = await chat.prepare(session, paper.id, "What do I think?")
+
+    assert "[N1] (You · Devlin 2019) — The whole paper argues for grounding." in prepared.prompt
+    assert prepared.notes == [chat.NoteSource(id=note.id, paper_id=paper.id, page=None, provenance="human")]
+
+
+def test_the_note_block_rule_is_new_in_chat_v4_and_workspace_v3_and_the_older_prompts_stay():
+    expected_chat = prompts.load("chat", 3).replace(OLD_N_RULE, NEW_N_RULE).replace(PROSE, f"{NOTE_RULE}\n{PROSE}")
+    assert prompts.load("chat", 4) == expected_chat
+    expected_workspace = (
+        prompts.load("chat_workspace", 2).replace(OLD_N_RULE, NEW_N_RULE).replace(PROSE, f"{NOTE_RULE}\n{PROSE}")
+    )
+    assert prompts.load("chat_workspace", 3) == expected_workspace
+    assert NOTE_RULE not in prompts.load("chat", 3) + prompts.load("chat_workspace", 2)
+
+
+def test_the_note_block_rule_is_sharpened_in_chat_v5_and_workspace_v4_after_the_eval_found_a_bad_marker():
+    assert prompts.load("chat", 5) == prompts.load("chat", 4).replace(NOTE_RULE, NOTE_RULE_V2)
+    assert prompts.load("chat_workspace", 4) == prompts.load("chat_workspace", 3).replace(NOTE_RULE, NOTE_RULE_V2)
+    assert NOTE_RULE_V2 not in prompts.load("chat", 4) + prompts.load("chat_workspace", 3)
+
+
+def test_the_note_block_rule_leads_with_never_in_chat_v6_and_workspace_v5_after_a_stray_block_on_a_follow_up():
+    assert prompts.load("chat", 6) == prompts.load("chat", 5).replace(NOTE_RULE_V2, NOTE_RULE_V3)
+    assert prompts.load("chat_workspace", 5) == prompts.load("chat_workspace", 4).replace(NOTE_RULE_V2, NOTE_RULE_V3)
+    assert NOTE_RULE_V3 not in prompts.load("chat", 5) + prompts.load("chat_workspace", 4)
+    assert (chat.CHAT_PROMPT_VERSION, chat.WORKSPACE_PROMPT_VERSION) == (6, 5)

@@ -1,20 +1,25 @@
-import { Check, ChartColumn, Copy } from 'lucide-react'
+import { Check, ChartColumn, Copy, Files } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { Note } from '@/api/client'
+import { usePapers } from '@/api/queries'
 import { isFresh, slideUpIn } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { copyText } from '@/lib/clipboard'
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
+import { noteHref } from '@/lib/route'
 import { cn } from '@/lib/utils'
 import { AttachChartDialog } from './AttachChartDialog'
+import { EditPapersDialog } from './EditPapersDialog'
 import { HighlightColorPicker } from './HighlightColorPicker'
 import { NoteCharts } from './NoteCharts'
 import { ProvenanceBadge } from './ProvenanceBadge'
 
 type Props = {
   note: Note
-  paperId: string
+  /** The paper the card is shown on (the reader). Without one (the Notes page), the card shows the note's papers as
+   * links instead of a quote and a page. */
+  paperId?: string
   active?: boolean
   /** The hover card's version: no quote or page link (the highlight is right there), and not an `article.note`. */
   compact?: boolean
@@ -25,6 +30,8 @@ type Props = {
   onDelete: () => Promise<void>
   /** Told the note's id and whether it's editing, whenever editing starts or stops, and "stopped" on unmount. */
   onEditingChange?: (noteId: string, editing: boolean) => void
+  /** Told the saved note after its papers change: the reader says so when it left this paper. */
+  onPapersSaved?: (note: Note) => void
   className?: string
 }
 
@@ -39,14 +46,16 @@ export function NoteCard({
   onColorChange,
   onDelete,
   onEditingChange,
+  onPapersSaved,
   className,
 }: Props) {
   const [editing, setEditing] = useState(startEditing)
   const [body, setBody] = useState(note.body)
   const [attachingChart, setAttachingChart] = useState(false)
+  const [editingPapers, setEditingPapers] = useState(false)
   const [copied, setCopied] = useState(false)
   const [copyError, setCopyError] = useState<string | null>(null)
-  const anchor = note.anchors.find((a) => a.paper_id === paperId)
+  const anchor = paperId === undefined ? undefined : note.anchors.find((a) => a.paper_id === paperId)
 
   useEffect(() => {
     onEditingChange?.(note.id, editing)
@@ -102,6 +111,7 @@ export function NoteCard({
         </CardHeader>
 
         <CardContent className="flex flex-col gap-2">
+          {paperId === undefined && <NotePapers note={note} />}
           {!compact && anchor && (
             // Two lines are enough to recognise the passage; the rest is in the title and on the highlight itself.
             <blockquote
@@ -134,7 +144,7 @@ export function NoteCard({
           <HighlightColorPicker value={note.color} onChange={(hex) => void onColorChange(hex)} />
         </CardContent>
 
-        <CardFooter className="justify-end gap-2">
+        <CardFooter className="flex-wrap justify-end gap-2">
           <span className="sr-only" role="status">
             {copied ? 'Quote copied.' : ''}
           </span>
@@ -170,6 +180,12 @@ export function NoteCard({
                   Attach chart
                 </Button>
               )}
+              {!compact && (
+                <Button variant="ghost" size="sm" onClick={() => setEditingPapers(true)}>
+                  <Files aria-hidden />
+                  Papers
+                </Button>
+              )}
               <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
                 Edit
               </Button>
@@ -181,6 +197,31 @@ export function NoteCard({
         </CardFooter>
       </Card>
       {!compact && <AttachChartDialog note={note} open={attachingChart} onOpenChange={setAttachingChart} />}
+      {editingPapers && (
+        <EditPapersDialog note={note} onClose={() => setEditingPapers(false)} onSaved={onPapersSaved} />
+      )}
     </Root>
+  )
+}
+
+/** The note's papers as links to the reader focused on the note, or "No paper" (D95). */
+function NotePapers({ note }: { note: Note }) {
+  const papers = usePapers()
+  if (note.paper_ids.length === 0) return <p className="text-xs text-muted-foreground">No paper</p>
+  const titles = new Map((papers.data ?? []).map((paper) => [paper.id, paper.title]))
+  return (
+    <ul aria-label="Linked papers" className="flex flex-wrap gap-1">
+      {note.paper_ids.map((paperId) => (
+        <li key={paperId} className="min-w-0">
+          <a
+            href={noteHref(paperId, note.id)}
+            title={titles.get(paperId)}
+            className="note-paper block max-w-60 truncate rounded-full bg-muted px-2 py-0.5 text-xs text-foreground outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            {titles.get(paperId) ?? 'Loading…'}
+          </a>
+        </li>
+      ))}
+    </ul>
   )
 }

@@ -2,10 +2,11 @@ import uuid
 
 import pytest
 from sqlalchemy import func, insert, select, text, update
+from test_note_papers import paper_only_note
 
 from app.core import notes, workspaces
 from app.core.errors import Conflict, InvalidInput, NotFound
-from app.models import Note, Paper, Provenance, note_anchors, workspace_papers
+from app.models import Note, Paper, Provenance, note_anchors, note_papers, workspace_papers
 
 pytestmark = pytest.mark.anyio
 
@@ -39,6 +40,7 @@ async def test_create_strips_the_name_and_lists_alphabetically_with_counts(sessi
     await note_on(session, second)
     both = await note_on(session, first, page=2)
     # One note anchored on two workspace papers counts once.
+    await session.execute(insert(note_papers).values(note_id=both.id, paper_id=second.id))
     await session.execute(
         insert(note_anchors).values(note_id=both.id, paper_id=second.id, page=3, bbox=[[1, 2, 3, 4]], quoted_text="q")
     )
@@ -144,6 +146,9 @@ async def test_notes_appear_once_by_paper_title_then_reading_order(session):
     session.add(shared)
     await session.flush()
     await session.execute(
+        insert(note_papers), [{"note_id": shared.id, "paper_id": pid} for pid in (bert.id, attention.id)]
+    )
+    await session.execute(
         insert(note_anchors),
         [
             {"note_id": shared.id, "paper_id": pid, "page": 1, "bbox": [[1, 50, 3, 60]], "quoted_text": "q"}
@@ -175,3 +180,17 @@ async def test_by_name_for_an_unknown_name_lists_every_name(session):
     available = unknown.value.details["available"]
     assert unknown.value.details == {"available": available}
     assert f"Alpha review {RUN}" in available  # the database's collation, not Python's sort, orders the names
+
+
+async def test_a_note_on_a_whole_workspace_paper_is_counted_and_listed_first_under_it(session):
+    workspace = await workspaces.create(session, f"Whole papers {RUN}")
+    bert = await make_paper(session, "BERT")
+    await workspaces.add_paper(session, workspace.id, bert.id)
+    placed = await note_on(session, bert, page=1)
+    whole = await paper_only_note(session, bert)
+
+    listed = await workspaces.notes(session, workspace.id)
+
+    assert [n.id for n in listed] == [whole.id, placed.id]
+    assert listed[0].paper_ids == [bert.id]
+    assert (await workspaces.get(session, workspace.id)).note_count == 2

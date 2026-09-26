@@ -42,8 +42,8 @@ class NoteBrief:
     id: uuid.UUID
     provenance: str  # human | llm | llm_edited: an AI note must never be quoted as the owner's own words (D90)
     body: str
-    page: int  # its first anchor on this paper
-    quoted_text: str
+    page: int | None  # its first passage on this paper; None for a note on the whole paper
+    quoted_text: str | None
 
 
 @dataclass(frozen=True)
@@ -60,7 +60,7 @@ class PaperCard:
     is_retracted: bool
     workspaces: list[str]  # names, alphabetical
     sections: list[Section]  # in reading order
-    notes: list[NoteBrief]  # in reading order
+    notes: list[NoteBrief]  # notes on the whole paper first, newest first; then in reading order
 
 
 async def search(
@@ -81,9 +81,7 @@ async def search(
         workspace_id = await workspaces.by_name(session, workspace)
         scope = [paper.id for paper in await workspaces.papers(session, workspace_id)]
     embedder = await searchable(session, scope, embedder)  # not set up, then rebuilding, then stale vectors (D156)
-    found = await retrieve(
-        session, query, workspace_id=workspace_id, k=k, embedder=embedder, per_paper=MAX_PER_PAPER
-    )
+    found = await retrieve(session, query, workspace_id=workspace_id, k=k, embedder=embedder, per_paper=MAX_PER_PAPER)
     titles = await session.execute(
         select(Paper.id, Paper.title, Paper.year).where(Paper.id.in_({chunk.paper_id for chunk in found}))
     )
@@ -118,8 +116,9 @@ async def paper_card(session: AsyncSession, paper_id: uuid.UUID) -> PaperCard:
     notes = []
     for note in await list_notes_for_paper(session, paper_id):
         here = [anchor for anchor in note.anchors if anchor.paper_id == paper_id]
-        first = min(here, key=lambda anchor: (anchor.page, min(rect[1] for rect in anchor.bbox)))
-        notes.append(NoteBrief(note.id, note.provenance, note.body, first.page, first.quoted_text))
+        first = min(here, key=lambda anchor: (anchor.page, min(rect[1] for rect in anchor.bbox)), default=None)
+        page, quote = (None, None) if first is None else (first.page, first.quoted_text)
+        notes.append(NoteBrief(note.id, note.provenance, note.body, page, quote))
     return PaperCard(
         id=paper.id,
         title=paper.title,

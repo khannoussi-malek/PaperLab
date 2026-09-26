@@ -4,8 +4,9 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from conftest import parse_sse, unit_vector
 from sqlalchemy import delete, insert, select
+from test_chat import NOTE_RULE_V3
 
-from app.core import notes
+from app.core import chat, notes
 from app.main import create_app
 from app.models import Chunk, LLMOutput, Note, Paper, Workspace, workspace_papers
 from app.providers import embedding
@@ -75,7 +76,7 @@ async def test_workspace_chat_streams_sources_with_notes_then_tokens_then_done(c
     [output] = await session.scalars(select(LLMOutput).where(LLMOutput.workspace_id == workspace.id))
     chunk_ids = [uuid.UUID(s["chunk_id"]) for s in sources["sources"]]
     done = {
-        "output_id": str(output.id), "model": "fake", "connection_name": "Fake", "prompt_version": 2,
+        "output_id": str(output.id), "model": "fake", "connection_name": "Fake", "prompt_version": 5,
         "cited": ["C1", "C2", "N1"],
     }
     assert events[-1][1] == done
@@ -186,3 +187,27 @@ def test_workspace_schemas_are_in_openapi():
     for name in ["NoteSource", "WorkspaceOut", "WorkspaceCreate", "WorkspaceRename"]:
         assert name in schemas
     assert "workspace_ids" in schemas["PaperOut"]["required"]
+
+
+async def test_the_workspace_history_lists_its_saved_suggestions(client, session):
+    workspace = await make_workspace(session, [])
+    output = LLMOutput(workspace_id=workspace.id, kind="chat", question="notes?", content=":::note\nA loose idea.\n:::",
+                       model="m", prompt_version=2)  # fmt: skip
+    session.add(output)
+    await session.commit()
+    workspace_id, output_id = workspace.id, output.id
+
+    note = await notes.save_suggestion(session, output_id, 0)
+
+    [answer] = (await client.get(f"/api/workspaces/{workspace_id}/chat")).json()
+    assert answer["saved_notes"] == [{"index": 0, "note_id": str(note.id), "paper_ids": []}]
+
+
+async def test_workspace_chat_asks_with_the_note_block_rule(client, session, fake_llm, query_model):
+    paper = await make_paper(session, "Rule paper")
+    workspace = await make_workspace(session, [paper])
+
+    await client.post(f"/api/workspaces/{workspace.id}/chat", json={"question": "Compare the methods"})
+
+    system, _ = fake_llm.calls[0]
+    assert system == chat.WORKSPACE_SYSTEM_PROMPT and NOTE_RULE_V3 in system

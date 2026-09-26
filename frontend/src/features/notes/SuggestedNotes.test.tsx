@@ -40,7 +40,7 @@ test('clicking "Suggest notes" shows each suggestion as its own card', async () 
 
 const promotedNote: Note = {
   id: 'note-1', body: 'First suggested note.', provenance: 'llm', color: '#fff', source_id: 'output-1',
-  created_at: '2026-09-24T00:00:00Z', updated_at: '2026-09-24T00:00:00Z', anchors: [], charts: [],
+  created_at: '2026-09-24T00:00:00Z', updated_at: '2026-09-24T00:00:00Z', anchors: [], paper_ids: [], charts: [],
 }
 
 test('accepting a suggestion promotes it through the existing endpoint and removes its card', async () => {

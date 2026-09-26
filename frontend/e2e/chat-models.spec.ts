@@ -28,7 +28,7 @@ test('switching the model in paper chat answers with it, marks a cloud model, an
   // The closed trigger shows a clean truncated label, not the whole selected item: no Cloud badge leaks into it.
   await expect(page.getByRole('combobox', { name: 'Model' }).locator('.cloud-tag')).toHaveCount(0)
   const answer = await ask(page, 'Second model?')
-  await expect(answer.locator('.chat-answer-footer')).toHaveText(`AI · fake:e2e-second · ${llmConnection.label} · prompt v2`)
+  await expect(answer.locator('.chat-answer-footer')).toHaveText(`AI · fake:e2e-second · ${llmConnection.label} · prompt v6`)
 
   await page.reload()
   await expect(page.getByRole('combobox', { name: 'Model' })).toContainText(`e2e-second · ${llmConnection.label}`)
@@ -43,7 +43,7 @@ test('the same switch works in workspace chat', async ({ page, request, paperId,
   await chooseModel(page, `e2e-second · ${llmConnection.label}`)
   const answer = await ask(page, 'Second model here too?', 45_000)
 
-  await expect(answer.locator('.chat-answer-footer')).toHaveText(`AI · fake:e2e-second · ${llmConnection.label} · prompt v1`)
+  await expect(answer.locator('.chat-answer-footer')).toHaveText(`AI · fake:e2e-second · ${llmConnection.label} · prompt v5`)
 })
 
 test('a model removed while it is picked says so, and the dropdown falls back to the default', async ({
@@ -95,7 +95,7 @@ test('a model added by name and made the default answers the next question, and 
   await openReader(page, paperId)
   await page.getByRole('tab', { name: 'Chat' }).click()
   const answer = await ask(page, 'Which model answers?')
-  const footer = `AI · fake:${name} · ${llmConnection.label} · prompt v2`
+  const footer = `AI · fake:${name} · ${llmConnection.label} · prompt v6`
   await expect(answer.locator('.chat-answer-footer')).toHaveText(footer)
 
   await page.reload()

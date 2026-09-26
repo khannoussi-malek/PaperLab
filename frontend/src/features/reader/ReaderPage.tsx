@@ -110,13 +110,15 @@ export function ReaderPage({ paperId, tab, target }: Props) {
   const { doc, error: pdfError } = usePdfDocument(api.paperFileUrl(paperId))
   const paper = usePaper(paperId)
   const notesQuery = useNotes(paperId)
-  const mutations = useNoteMutations(paperId)
+  const mutations = useNoteMutations()
   const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX)
   const scale = ZOOM_STEPS[zoomIndex]
   const [draft, setDraft] = useState<SelectionAnchor | null>(null)
   const [numberDraft, setNumberDraft] = useState<SelectionAnchor | null>(null)
   const [draftColor, setDraftColor] = useState(() => loadLastColor(browserStorage()))
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null)
+  // A Papers save took a note off this paper; it stays said until a save keeps one here (Spec note 17).
+  const [movedToNotes, setMovedToNotes] = useState(false)
   // Ids of hover-card notes being edited; the card stays open while any is.
   const [editingNoteIds, setEditingNoteIds] = useState<string[]>([])
   const setNoteEditing = useCallback((noteId: string, editing: boolean) => {
@@ -269,7 +271,12 @@ export function ReaderPage({ paperId, tab, target }: Props) {
 
   function focusNote(note: Pick<Note, 'id'>) {
     setActiveNoteId(note.id)
-    scrollToElement(`.highlight[data-note-id="${note.id}"]`, 'center')
+    const highlighted = notes.some((n) => n.id === note.id && n.anchors.some((a) => a.paper_id === paperId))
+    if (highlighted) return scrollToElement(`.highlight[data-note-id="${note.id}"]`, 'center')
+    // A note on the whole paper has no highlight: its card in the Notes tab is where it is.
+    if (tab === 'notes') return scrollToElement(`article.note[data-note-id="${note.id}"]`, 'nearest')
+    promotedNoteId.current = note.id // the effect on `tab` scrolls to it once the Notes tab shows
+    showTab('notes')
   }
 
   function showPromotedNote(note: Note) {
@@ -566,6 +573,8 @@ export function ReaderPage({ paperId, tab, target }: Props) {
             onUpdateNote={updateNoteBody}
             onColorNote={recolorNote}
             onDeleteNote={deleteNote}
+            movedToNotes={movedToNotes}
+            onPapersSaved={(saved) => setMovedToNotes(!saved.paper_ids.includes(paperId))}
           />
         }
         chat={

@@ -158,6 +158,10 @@ Fonts: body `Atkinson Hyperlegible Next Variable` (`font-sans`), headings `Crims
   Also the names "Connect Claude" / "Open Connect Claude" / "Your system" (tabs "macOS" / "Windows" / "Windows + WSL" /
   "Linux") / "PaperLab folder" / "Copy" / "Copied" / "Check the server", and the regions "Claude Desktop" / "Claude
   Code" / "Check PaperLab's side".
+  Also `.suggested-note` (with `data-note-index`), `[data-chrome]`, `.note-paper`, `.unlink-warning`, `.moved-notice`
+  and `.notes-empty`, and the names "Suggested note" / "Save" / "Saved · Open" / "Open" / "Papers" (the card action
+  and the dialog) / "Search papers" / "Paper" (the Notes page filter) / "Notes" (the library link, and the link in
+  "Moved to Notes").
   Style with utility classes next to them.
 - **Notes filter.** The top of the Notes tab has two filter chips in a `role="group"` "Show notes from": `aria-pressed`
   rounded-full buttons "You" and "AI", each with a count (`tabular-nums`). On: filled in the provenance badge's colours
@@ -218,6 +222,14 @@ it arrives instead of a long spinner, and label AI output clearly (severity High
 - **Save as note:** selecting text inside one saved answer floats a small primary "Save as note" button (`Sparkles`)
   just below the selection. With nothing to anchor on it is disabled, and a `Tooltip` on a focusable wrapper says
   "Include a cited passage [C…] to anchor this note" (a disabled button gets no pointer or focus events).
+- **Suggested notes** (D94): asked to write notes, the model writes `:::note` blocks, and each shows inside its answer
+  as a card on the same surface, `rounded-xl bg-provenance-llm-surface p-3 ring-1 ring-provenance-llm/40`: a `Sparkles`
+  "Suggested note" label in `text-provenance-llm`, the note's text (markdown and citation pills as in the answer), and
+  an outline `xs` **Save** at the bottom right. Save is disabled while the answer streams and until its saved copy is
+  listed; it reads `Saving…`, then `Saved · Open` (Open is a link: the reader on the note, or the Notes page's No paper
+  list). A refusal is one `text-destructive` line under the card. The marker lines stay in the DOM, `hidden`, and the
+  card's label, button and refusal carry `data-chrome`, so Save as note still counts offsets in the answer's own text,
+  and a selection is kept inside the prose or card it starts in. An empty block shows nothing.
 - **Input:** one rounded-xl `bg-glass-strong` box pinned under the list, holding a borderless auto-growing `Textarea`
   ("Question", up to `max-h-40`) and an `icon-sm` primary `ArrowUp` button ("Ask"); the focus ring is on the box
   (`focus-within`). Under it, the hint "Enter to send · Shift+Enter for a new line" (`aria-describedby`). Enter sends,
@@ -361,6 +373,30 @@ Input with a custom dropdown; Dialog for modal content, High).
   Back returns to the answer): `[C…]` to the reader flashing the passage, `[N…]` to the reader focusing the note. The
   empty chat is "Ask this workspace" with starters that look across its papers. An empty workspace disables the
   starters and the question box, and the hint under the box says "Add papers to chat with this workspace."
+
+## Notes page
+
+Patterns from ui-ux-pro-max (`--domain ux`): *Empty States* ("filter select list page empty state"), *No Results*
+("checkbox list dialog search"), *Submit Feedback* ("inline status notice"), *Back Button*.
+
+- **Where:** `#/notes`, from a **Notes** rail item (`StickyNote`) in `NavRail`, right after Charts. The shell is
+  `AppShell`'s standard pattern (see Shell): title "Notes", no `back` (a top-level view, not a drill-down), a
+  `Label`led "Paper" `Select` (`w-64`: All notes, No paper, then the library's papers by title) in the toolbar's
+  actions, and a note-count line in the status bar. Content is capped `max-w-5xl`, left-aligned, not centred.
+- **Cards:** the reader's `NoteCard` in a two-column grid, with no paper context: instead of a quote and a page, the
+  note's papers as `.note-paper` chips (`rounded-full bg-muted px-2 py-0.5 text-xs`, truncated at `max-w-60` with the
+  title in `title`), each opening the reader focused on the note, or a muted "No paper". Edit, colour, Attach chart,
+  Papers and Delete work as in the reader.
+- **Empty and failed:** one muted sentence per filter (`.notes-empty`), never a blank page; a failed load is
+  `LoadError` with Retry.
+- **Papers dialog:** the "Add papers" pattern — glass `DialogContent`, title "Papers", a cmdk search ("Search papers",
+  "Search your library…") over the library, each option a title and its year (`tabular-nums`) with the shared check
+  mark (`aria-checked`, `data-checked`). Unticking a paper the note is highlighted on shows an `Alert` (`.unlink-warning`)
+  "Its highlight on p. {page} in {title} will be removed." before Save. Footer: outline Cancel, primary Save. A failed
+  save stays in the dialog as a destructive `Alert`. Not on the hover card: the panel and the Notes page have it.
+- **Moved to Notes:** when a Papers save takes a note off the paper open in the reader, its card leaves the panel and a
+  `role="status"` line (`.moved-notice`, `rounded-lg bg-muted px-3 py-2 text-sm`) at the top of the panel says "Moved
+  to Notes", Notes linking to `#/notes`. No toast library.
 
 ## Data and charts
 

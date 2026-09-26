@@ -4,6 +4,7 @@ import uuid
 
 import pytest
 from sqlalchemy import insert
+from test_note_papers import paper_only_note
 from test_search_rebuild import OLLAMA_NAME, switched
 
 from app.core import graph, paper_links, workspaces
@@ -15,6 +16,7 @@ from app.models import (
     Note,
     Paper,
     note_anchors,
+    note_papers,
     paper_authors,
     paper_references,
     paper_topics,
@@ -80,6 +82,9 @@ async def test_every_kind_appears_once_per_pair_and_cites_keeps_its_direction(se
     note = Note(body="one note on two papers", provenance="human")
     session.add(note)
     await session.flush()
+    await session.execute(
+        insert(note_papers), [{"note_id": note.id, "paper_id": paper.id} for paper in (noted, coauthor)]
+    )
     await session.execute(insert(note_anchors), [
         {"note_id": note.id, "paper_id": paper.id, "page": 1, "bbox": [[1, 2, 3, 4]], "quoted_text": "q"}
         for paper in (noted, coauthor)
@@ -182,6 +187,7 @@ async def test_a_paper_with_no_link_is_still_a_node_and_carries_its_workspaces_n
     note = Note(body="a note", provenance="human")
     session.add(note)
     await session.flush()
+    await session.execute(insert(note_papers).values(note_id=note.id, paper_id=lonely.id))
     await session.execute(
         insert(note_anchors),
         [{"note_id": note.id, "paper_id": lonely.id, "page": 1, "bbox": [[1, 2, 3, 4]], "quoted_text": "q"}],
@@ -296,3 +302,13 @@ async def test_related_follows_similar_for_the_first_hop_only(session):
 
     assert two[member.title] == (1, ["same_workspace"])
     assert lookalike.title not in two
+
+
+async def test_one_note_on_two_whole_papers_links_them_and_marks_both_noted(session):
+    left, right = await add_papers(session, f"Left {RUN}", f"Right {RUN}")
+    await paper_only_note(session, left, right)
+
+    result = await graph.library_graph(session)
+
+    assert links_between(result, [left, right]) == [("co_anchored", f"Left {RUN}", f"Right {RUN}")]
+    assert [node.has_notes for node in result.nodes if node.id in (left.id, right.id)] == [True, True]

@@ -17,7 +17,8 @@ import { ChatAnswer } from './ChatAnswer'
 import { loadChatModel, saveChatModel } from './chatModel'
 import { splitCitations } from './citations'
 import { ModelPicker } from './ModelPicker'
-import { promoteErrorMessage, promoteSelection, type PromoteDraft } from './promote'
+import { promoteInPart } from './noteBlocks'
+import { promoteErrorMessage, type PromoteDraft } from './promote'
 import type { ChatProblem } from './refusals'
 import { saveButtonPosition } from './saveButton'
 import { SaveAsNoteButton } from './SaveAsNoteButton'
@@ -127,7 +128,7 @@ export function ChatPanel({ scope, unavailable, paperLabel, onCite, onPromoted }
   function captureSelection() {
     const selected = readAnswerSelection()
     const answer = answers.find((a) => a.id === selected?.outputId)
-    const draft = selected && answer && promoteSelection(answer.content, answer.sources, selected.anchor, selected.focus)
+    const draft = selected && answer && promoteInPart(answer.content, answer.sources, selected.anchor, selected.focus)
     const box = rootRef.current?.getBoundingClientRect()
     if (!selected || !draft || !box) {
       setPromote(null)
@@ -256,6 +257,7 @@ export function ChatPanel({ scope, unavailable, paperLabel, onCite, onPromoted }
               paperLabel={paperLabel}
               onCite={onCite}
               followUp={scope.kind === 'paper' ? { onClick: () => followUp(answer.id), disabled: closed } : undefined}
+              suggestions={{ scope, saved: answer.saved_notes }}
             />
           </Fragment>
         ))}

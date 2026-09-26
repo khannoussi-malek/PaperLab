@@ -5,7 +5,10 @@
 # evidence: a passage the answer cites must be on that page and hold that phrase (checked before any question).
 #   On a summary it checks that citations land on a passage behind a key point, not on a wrong label.
 # kind: fact | overview | followup (`before` is the question it follows) | notes (`note` is saved, then rolled back)
-#   | refusal (the paper doesn't answer it: correct when the answer says so; `points` default to answers.REFUSALS).
+#   | refusal (the paper doesn't answer it: correct when the answer says so; `points` default to answers.REFUSALS)
+#   | write_notes (the reader asks for notes: scored on the :::note blocks, see answers.blocks_right).
+# scope: workspace asks a case only in the workspace config (a question about several papers); paper is then only
+#   its order.
 # paper_notes: a reader's notes, saved on their paper before every question when run with --with-paper-notes.
 # Attention and BERT predate the model, so the `none` config shows which of their answers it already knows.
 cases:
@@ -537,6 +540,67 @@ cases:
     kind: refusal
     paper: Rethinking the Value
     question: What was the average wall-clock time per task, in minutes?
+
+  # The reader asks chat to write notes (M20): scored on the blocks, and on points the notes should cover.
+  - id: att-write-notes
+    kind: write_notes
+    paper: Attention Is All You Need
+    question: Create notes to help me understand how attention works in this paper.
+    need: 1
+    points:
+      - ["scaled dot-product", "dot-product", "dot product"]
+      - ["multi-head", "multiple heads", "heads"]
+  - id: bert-write-notes
+    kind: write_notes
+    paper: "BERT: Pre-training"
+    question: Write notes on how BERT is pre-trained.
+    need: 1
+    points:
+      - ["masked language model", "masked lm", "mlm", "masking", "masked"]
+      - ["next sentence prediction", "nsp", "next sentence"]
+  - id: fail-write-notes
+    kind: write_notes
+    paper: How Coding Agents Fail
+    question: Make notes on the ways coding agents fail in this study.
+    need: 1
+    points:
+      - ["seven", "7"]
+      - ["misalignment", "misaligned", "constraint violation", "constraint violations"]
+  - id: tests-write-notes
+    kind: write_notes
+    paper: Rethinking the Value
+    question: Create study notes on what this paper finds about agent-written tests.
+    need: 1
+    points:
+      - ["print", "prints", "print statements"]
+      - ["cost", "costs", "tokens"]
+  - id: ws-write-notes-compare
+    kind: write_notes
+    scope: workspace
+    paper: How Coding Agents Fail
+    question: Write notes comparing what these papers find about AI coding tools.
+    need: 1
+    points:
+      - ["agent", "agents", "ai-generated", "ai generated", "coding assistant", "coding assistants"]
+  - id: ws-write-notes-methods
+    kind: write_notes
+    scope: workspace
+    paper: Attention Is All You Need
+    question: Create notes on the methods these papers use, one idea per note.
+    need: 1
+    points:
+      - ["attention", "transformer", "transformers", "pre-training", "pretraining"]
+  # The shipped workspace starter question: not asking for notes, so it must not spontaneously write a block.
+  - id: ws-notes-starter
+    kind: notes
+    scope: workspace
+    paper: How Coding Agents Fail
+    question: What do my notes say about them?
+    points: [["misalignment pattern", "misalignment patterns"]]
+    note:
+      page: 1
+      quote: "observational study of 20,574 coding-agent sessions from 1,639 repositories"
+      body: "Our own agents show the same misalignment pattern week after week."
 
 # A reader's notes as a real library holds them: remarks, questions to self, and a note saved from an AI answer.
 paper_notes:

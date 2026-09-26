@@ -2,7 +2,7 @@
 
 Link kinds, each read from the table that already holds it:
 - same_workspace: both papers are in one workspace (workspace_papers)
-- co_anchored: one note is anchored on both (note_anchors)
+- co_anchored: one note is linked to both (note_papers, D95). The kind keeps its name: the MCP tool returns it
 - co_authored: they share an author (paper_authors)
 - shares_topic: they share a topic label, any source, ignoring case (paper_topics)
 - cites / cited_by: one paper's reference is the other (paper_references + external_refs, M7.5). A reference is a
@@ -74,8 +74,8 @@ RECURSIVE in_library(ref_id, paper_id) AS (
 ), edges(src, dst, via) AS (
   SELECT a.paper_id, b.paper_id, 'same_workspace' FROM workspace_papers a
     JOIN workspace_papers b ON b.workspace_id = a.workspace_id AND b.paper_id <> a.paper_id
-  UNION SELECT a.paper_id, b.paper_id, 'co_anchored' FROM note_anchors a
-    JOIN note_anchors b ON b.note_id = a.note_id AND b.paper_id <> a.paper_id
+  UNION SELECT a.paper_id, b.paper_id, 'co_anchored' FROM note_papers a
+    JOIN note_papers b ON b.note_id = a.note_id AND b.paper_id <> a.paper_id
   UNION SELECT a.paper_id, b.paper_id, 'co_authored' FROM paper_authors a
     JOIN paper_authors b ON b.author_id = a.author_id AND b.paper_id <> a.paper_id
   UNION SELECT a.paper_id, b.paper_id, 'shares_topic' FROM paper_topics a
@@ -151,7 +151,7 @@ _GRAPH_NODES = text(
            coalesce((SELECT array_agg(w.name ORDER BY wp.added_at)
                        FROM workspace_papers wp JOIN workspaces w ON w.id = wp.workspace_id
                       WHERE wp.paper_id = p.id), '{}') AS workspaces,
-           EXISTS (SELECT 1 FROM note_anchors na WHERE na.paper_id = p.id) AS has_notes
+           EXISTS (SELECT 1 FROM note_papers np WHERE np.paper_id = p.id) AS has_notes
       FROM papers p
      WHERE CAST(:workspace AS uuid) IS NULL
         OR EXISTS (SELECT 1 FROM workspace_papers wp WHERE wp.paper_id = p.id AND wp.workspace_id = :workspace)
