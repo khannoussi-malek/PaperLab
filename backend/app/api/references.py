@@ -8,7 +8,7 @@ from app.api.deps import DiscoveryDep, SessionDep
 from app.config import settings
 from app.core import references, workspaces
 from app.schemas.papers import PaperOut
-from app.schemas.references import Direction, ImportReferenceIn, ReferencesOut, RefreshOut
+from app.schemas.references import Direction, ImportReferenceIn, QueueOut, ReferencesOut, RefreshOut
 
 router = APIRouter(tags=["references"])
 
@@ -40,3 +40,16 @@ async def import_reference(
         await workspaces.add_paper(session, payload.workspace_id, paper.id)
     await request.app.state.arq.enqueue_job("ingest_paper", str(paper.id))
     return paper
+
+
+@router.put("/api/references/{ref_id}/queue")
+async def queue_reference(ref_id: uuid.UUID, session: SessionDep) -> QueueOut:
+    """Marks a reference To read (D164). A second call keeps the first time. 404 unknown reference."""
+    return QueueOut(queued_at=await references.queue(session, ref_id))
+
+
+@router.delete("/api/references/{ref_id}/queue")
+async def unqueue_reference(ref_id: uuid.UUID, session: SessionDep) -> QueueOut:
+    """Takes a reference off To read; harmless when it isn't on it. 404 unknown reference."""
+    await references.unqueue(session, ref_id)
+    return QueueOut(queued_at=None)

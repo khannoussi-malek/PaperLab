@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
@@ -27,6 +28,7 @@ class ReferenceOut(BaseModel):
     cocitation: int
     paper_id: uuid.UUID | None
     position: int
+    queued_at: datetime | None
 
 
 class ReferencesSummary(BaseModel):
@@ -53,3 +55,9 @@ class RefreshOut(BaseModel):
 class ImportReferenceIn(BaseModel):
     # Also file the new paper in this workspace (404 before any download when it's unknown).
     workspace_id: uuid.UUID | None = None
+
+
+class QueueOut(BaseModel):
+    """When the reference was marked To read; null once it's taken off."""
+
+    queued_at: datetime | None
