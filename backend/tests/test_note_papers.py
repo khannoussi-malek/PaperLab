@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 
 import pytest
 from pdf_papers import TWO_LINE_QUOTE, chunked_paper
-from sqlalchemy import delete, func, insert, select
+from sqlalchemy import delete, func, insert, select, update
 from sqlalchemy.exc import IntegrityError
 from test_chart_notes import bar, two_columns
 
@@ -180,6 +180,23 @@ async def test_set_papers_adds_and_removes_links_and_drops_the_passages_on_a_rem
 
     assert view.paper_ids == [added.id, kept.id]  # by title; the duplicate counted once
     assert [(a.paper_id, a.page) for a in view.anchors] == [(kept.id, 1)]
+
+
+async def test_set_papers_with_an_empty_list_removes_every_link_and_the_passages_they_held(session):
+    paper = await make_paper(session)
+    note = await notes.create_human_note(session, "mine", notes.Anchor(paper.id, 1, [tuple(RECT[0])], "q"))
+    # The test transaction freezes now(): backdate so set_papers' own now() reads as later.
+    old = NOW - timedelta(days=1)
+    await session.execute(update(Note).where(Note.id == note.id).values(created_at=old, updated_at=old))
+    [before] = await notes.list_notes_for_paper(session, paper.id)
+
+    view = await notes.set_papers(session, note.id, [])
+
+    assert view.paper_ids == [] and view.anchors == []
+    assert await linked(session, note.id) == set()
+    left = select(func.count()).select_from(note_anchors).where(note_anchors.c.note_id == note.id)
+    assert await session.scalar(left) == 0
+    assert view.updated_at > before.updated_at
 
 
 async def test_set_papers_refuses_an_unknown_note_or_paper_and_changes_nothing(session):

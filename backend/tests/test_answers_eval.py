@@ -396,8 +396,8 @@ def test_previous_prompts_ask_as_chat_did_before_note_blocks_and_are_put_back():
 
     before = current()
     with answers.prompt_set("previous"):
-        assert chat.SYSTEM_PROMPT + chat.PROMPT_TEMPLATE == prompts.load("chat", 2).replace(chat.PROMPT_MARKER, "")
-        old_workspace = prompts.load("chat_workspace", 1).replace(chat.PROMPT_MARKER, "")
+        assert chat.SYSTEM_PROMPT + chat.PROMPT_TEMPLATE == prompts.load("chat", 3).replace(chat.PROMPT_MARKER, "")
+        old_workspace = prompts.load("chat_workspace", 2).replace(chat.PROMPT_MARKER, "")
         assert chat.WORKSPACE_SYSTEM_PROMPT + chat.WORKSPACE_PROMPT_TEMPLATE == old_workspace
         assert ":::note" not in chat.SYSTEM_PROMPT + chat.WORKSPACE_SYSTEM_PROMPT
     with answers.prompt_set("current"):

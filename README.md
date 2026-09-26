@@ -126,8 +126,8 @@ CSV, and chart them side by side. Click any point on a chart to open its page in
 </picture>
 
 - Every note keeps the page and position of its passage. Click a note to jump back to it in the paper.
-- A note can also sit on a whole paper, on several papers, or on none. Press **Papers** on any note to choose its
-papers; untick one and the note's highlight there goes too.
+- A note can also sit on a whole paper, on several papers, or on none. Press **Papers** on a note in the reader or
+on the Notes page to choose its papers; untick one and the note's highlight there goes too.
 - The **Notes** page lists every note, and filters them by paper or by "No paper".
 - Each note shows who wrote it: **You**, **AI**, or **AI · edited**.
 - Filter the notes list to show only your notes, only AI notes, or both.
