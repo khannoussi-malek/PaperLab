@@ -15,7 +15,7 @@ see whether a reader's notes change ordinary answers. One JSONL row per answer g
 then a summary is printed. A rerun only asks what is
 missing or failed. Manual, never in CI. Exits 2 on a malformed cases file, an ambiguous or unknown paper, or ground
 truth that isn't on its page; 1 when the model or a paper can't answer.
-`--prompts previous` asks with chat's prompts from before note suggestions (chat v2, workspace v1), to compare with.
+`--prompts previous` asks with chat's prompts from before note suggestions (chat v3, workspace v2), to compare with.
 """
 
 import argparse
@@ -57,7 +57,7 @@ CONFIGS = ("none", "retrieval", "whole", "workspace")
 KINDS = ("fact", "overview", "followup", "notes", "refusal", "write_notes")
 # Only these can be known without reading: a follow-up or a note's answer isn't in anything the model was trained on.
 MEMORY_CHECKED = {"fact", "overview"}
-PREVIOUS_PROMPTS = {"chat": 2, "chat_workspace": 1}  # before note suggestions (M20)
+PREVIOUS_PROMPTS = {"chat": 3, "chat_workspace": 2}  # before note suggestions (M20)
 # Every eval paper is under 100k characters (~25k tokens), so `whole` sends each one whole; 32k tokens holds that
 # plus the answer, and qwen3:8b supports it.
 WHOLE_PAPER_CHARS = 100_000

@@ -143,15 +143,15 @@ describe('embeddingPollInterval', () => {
 })
 
 describe('isNotesList', () => {
-  it('is true for a paper’s notes and for every workspace query, whose Notes tabs and counts list notes', () => {
+  it('is true for a paper’s notes, its chat history, and for every workspace query, whose Notes tabs and counts list notes', () => {
     expect(isNotesList(['papers', 'p1', 'notes'])).toBe(true)
+    expect(isNotesList(['papers', 'p1', 'chat'])).toBe(true)
     expect(isNotesList(['workspaces'])).toBe(true)
     expect(isNotesList(['workspaces', 'w1', 'notes'])).toBe(true)
   })
 
-  it('is false for a paper, its chunks or its chat', () => {
+  it('is false for a paper or its chunks', () => {
     expect(isNotesList(['papers', 'p1'])).toBe(false)
-    expect(isNotesList(['papers', 'p1', 'chat'])).toBe(false)
     expect(isNotesList(['papers', 'p1', 'chunks', 2])).toBe(false)
   })
 

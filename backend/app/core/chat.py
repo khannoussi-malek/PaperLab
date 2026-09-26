@@ -17,8 +17,9 @@ from app.core.papers import get_paper
 from app.core.retrieval import RetrievedChunk, _to_chunk, retrieve, searchable
 from app.models import Chunk, LLMOutput, Note, Paper, PaperStatus, Provenance
 
-# v6: the note-block rule leads with "never", to stop it firing on an unasked follow-up; v5: a literal example
-# fixed the delimiter syntax; v4: asked for notes, the model writes each as a :::note block (M20)
+# v6: the note-block rule leads with its condition and names "never" explicitly, to stop it firing on an unasked
+# follow-up; v5: a literal example fixed the delimiter syntax; v4: asked for notes, the model writes each as a
+# :::note block (M20)
 CHAT_PROMPT_VERSION = 6
 WORKSPACE_PROMPT_VERSION = 5  # v5: the same reordered :::note rule
 # Each file holds the system prompt, then the user prompt template after this marker line.
