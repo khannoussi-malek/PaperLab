@@ -203,3 +203,22 @@ async def test_an_unexpected_error_marks_failed_with_a_generic_message(library, 
 
     reader = await library.get(Paper, reader_id, populate_existing=True)
     assert (reader.references_state, reader.references_error) == ("failed", references.FETCH_FAILED)
+
+
+# --- To read (D164) ----------------------------------------------------------------------------------------------
+
+
+async def test_the_queue_routes_mark_and_unmark_a_reference_and_a_second_call_is_harmless(client, library):
+    reader, free, _ = await reader_with_references(library)
+    url = f"/api/references/{free.id}/queue"
+
+    first, second = await client.put(url), await client.put(url)
+    assert (first.status_code, second.status_code) == (200, 200)
+    assert first.json()["queued_at"] is not None and second.json() == first.json()
+    [row] = (await client.get(f"/api/papers/{reader.id}/references")).json()["rows"]
+    assert row["queued_at"] == first.json()["queued_at"]
+
+    gone, again = await client.delete(url), await client.delete(url)
+    assert (gone.status_code, gone.json(), again.status_code) == (200, {"queued_at": None}, 200)
+    for method in (client.put, client.delete):
+        assert (await method(f"/api/references/{uuid.uuid4()}/queue")).status_code == 404

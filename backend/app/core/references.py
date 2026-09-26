@@ -58,6 +58,7 @@ class ReferenceRow:
     cocitation: int  # library papers citing it (or, for citing works, library papers it cites)
     paper_id: uuid.UUID | None  # set when the library holds it
     position: int
+    queued_at: datetime | None  # when the reader marked it To read (D164)
 
 
 @dataclass(frozen=True)
@@ -190,6 +191,9 @@ async def _upsert(session: AsyncSession, candidate: Candidate) -> uuid.UUID:
         *candidate.pdf_urls,
         *(url for row in [*duplicates, keeper] for url in row.pdf_urls),
     )
+    earliest = min((row.queued_at for row in duplicates if row.queued_at is not None), default=None)
+    if earliest is not None:  # D120: a fold keeps the earliest To read; the keeper's own value is read in SQL
+        fields = {**fields, "queued_at": func.least(ExternalRef.queued_at, earliest)}
     await session.execute(update(ExternalRef).where(ExternalRef.id == keeper.id).values(**fields, **ids))
     return keeper.id
 
@@ -247,6 +251,34 @@ async def set_state(session: AsyncSession, paper_id: uuid.UUID, state: str, erro
     await session.execute(
         update(Paper).where(Paper.id == paper_id).values(references_state=state, references_error=error)
     )
+    await session.commit()
+
+
+# --- To read (D164) ----------------------------------------------------------------------------------------------
+
+
+async def queue(session: AsyncSession, ref_id: uuid.UUID) -> datetime:
+    """Marks a reference To read. A second call keeps the first time. Nothing but this, a fold and an import writes
+    queued_at, so a Refresh keeps it. Raises NotFound."""
+    queued_at = await session.scalar(
+        update(ExternalRef)
+        .where(ExternalRef.id == ref_id)
+        .values(queued_at=func.coalesce(ExternalRef.queued_at, func.now()))
+        .returning(ExternalRef.queued_at)
+    )
+    if queued_at is None:
+        raise NotFound(f"reference {ref_id} not found")
+    await session.commit()
+    return queued_at
+
+
+async def unqueue(session: AsyncSession, ref_id: uuid.UUID) -> None:
+    """Takes a reference off To read. Harmless when it isn't on it. Raises NotFound."""
+    found = await session.scalar(
+        update(ExternalRef).where(ExternalRef.id == ref_id).values(queued_at=None).returning(ExternalRef.id)
+    )
+    if found is None:
+        raise NotFound(f"reference {ref_id} not found")
     await session.commit()
 
 
@@ -317,7 +349,7 @@ _LISTING = text(
                  OR lower(p.doi) = lower(r.doi)
                  OR lower(p.doi) = '10.48550/arxiv.' || lower(r.arxiv_id)
               LIMIT 1)) AS paper_id,
-           pr.position
+           pr.position, r.queued_at
       FROM paper_references pr
       JOIN external_refs r ON r.id = pr.ref_id
      WHERE pr.paper_id = :paper_id AND pr.direction = :direction
@@ -373,6 +405,7 @@ async def import_reference(
     )  # fmt: skip
     paper = await discovery.add(session, providers, candidate, pdf_dir)
     same_paper = [ExternalRef.id == ref_id, *_same_reference(None, None, ref.doi, ref.arxiv_id)]
-    await session.execute(update(ExternalRef).where(or_(*same_paper)).values(imported_as=paper.id))
+    # Dealt with: deleting the paper later won't put it back in To read (D164).
+    await session.execute(update(ExternalRef).where(or_(*same_paper)).values(imported_as=paper.id, queued_at=None))
     await session.commit()
     return paper
