@@ -1,8 +1,8 @@
-import { ChartColumn, Library, Plug, Settings, Share2, type LucideIcon } from 'lucide-react'
+import { ChartColumn, Library, Plug, Settings, Share2, StickyNote, type LucideIcon } from 'lucide-react'
 import { glass } from '@/components/glass'
 import { activeNav, activeWorkspaceId, railItem, type NavKey } from '@/components/nav'
 import { WorkspaceSidebar } from '@/features/workspaces/WorkspaceSidebar'
-import { chartsHref, connectClaudeHref, graphHref, settingsHref, useRoute } from '@/lib/route'
+import { chartsHref, connectClaudeHref, graphHref, notesHref, settingsHref, useRoute } from '@/lib/route'
 import { cn } from '@/lib/utils'
 
 function RailLink({ href, icon: Icon, label, active }: { href: string; icon: LucideIcon; label: string; active: boolean }) {
@@ -31,6 +31,7 @@ export function NavRail() {
         <RailLink href="#/" icon={Library} label="Library" active={active === 'library'} />
         <RailLink href={graphHref} icon={Share2} label="Graph" active={active === 'graph'} />
         <RailLink href={chartsHref} icon={ChartColumn} label="Charts" active={active === 'charts'} />
+        <RailLink href={notesHref()} icon={StickyNote} label="Notes" active={active === 'notes'} />
       </div>
 
       {/* The one part that can outgrow the rail, so it takes the scroll and the pinned items below stay put. */}

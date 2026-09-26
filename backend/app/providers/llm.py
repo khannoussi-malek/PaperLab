@@ -6,6 +6,7 @@ the connection and its host, never the key: some providers echo a rejected key i
 
 import asyncio
 import json
+import re
 from collections.abc import AsyncIterator
 from urllib.parse import urlsplit
 
@@ -170,12 +171,15 @@ class AnthropicLLM:
         # connection pool alive for every question ever asked.
         client = anthropic.AsyncAnthropic(api_key=self._api_key, http_client=self._http_client)
         try:
-            async with client, client.messages.stream(
-                model=self.model,
-                max_tokens=settings.anthropic_max_tokens,
-                system=system,
-                messages=[{"role": "user", "content": prompt}],
-            ) as stream:
+            async with (
+                client,
+                client.messages.stream(
+                    model=self.model,
+                    max_tokens=settings.anthropic_max_tokens,
+                    system=system,
+                    messages=[{"role": "user", "content": prompt}],
+                ) as stream,
+            ):
                 async for text in stream.text_stream:
                     yield text
         except anthropic.APIConnectionError as exc:
@@ -200,13 +204,62 @@ FAKE_TOKENS = ["Fake ", "answer: ", "the ", "method ", "is ", "described ", "her
 # end-to-end spec expects.
 FAKE_WORKSPACE_ANSWER = "Fake workspace answer: both papers describe the method [C1][C2], as your note says [N1]."
 FAKE_WORKSPACE_TOKENS = [
-    "Fake ", "workspace ", "answer: ", "both ", "papers ", "describe ", "the ", "method ",
-    "[C", "1]", "[C", "2]", ", ", "as ", "your ", "note ", "says ", "[N", "1]", ".",
+    "Fake ",
+    "workspace ",
+    "answer: ",
+    "both ",
+    "papers ",
+    "describe ",
+    "the ",
+    "method ",
+    "[C",
+    "1]",
+    "[C",
+    "2]",
+    ", ",
+    "as ",
+    "your ",
+    "note ",
+    "says ",
+    "[N",
+    "1]",
+    ".",
 ]
 # note_suggestions.py's format: one "[C{i}]: body" line per passage — a middle one deliberately skipped, so the
 # E2E stack exercises "the model covered fewer passages than it was given" too, not just the happy count.
 FAKE_NOTE_SUGGESTIONS = "[C1]: Fake first passage note.\n[C3]: Fake third passage note."
-FAKE_NOTE_SUGGESTIONS_TOKENS = ["[C1]: Fake ", "first ", "passage ", "note.\n[C3]: Fake ", "third ", "passage ", "note."]
+FAKE_NOTE_SUGGESTIONS_TOKENS = [
+    "[C1]: Fake ",
+    "first ",
+    "passage ",
+    "note.\n[C3]: Fake ",
+    "third ",
+    "passage ",
+    "note.",
+]
+# Asked for notes, in either chat: two suggested notes, the first citing a passage and the second nothing, then a line
+# after them, as the note-suggestion end-to-end spec expects.
+FAKE_NOTES_TOKENS = [
+    "Here ", "are ", "two ", "notes.\n",
+    ":::note\n",
+    "The ", "method ", "anchors ", "every ", "note ", "on ", "a ", "passage ", "[C", "1].\n",
+    ":::\n",
+    ":::note\n",
+    "Keep ", "one ", "idea ", "per ", "note.\n",
+    ":::\n",
+    "Both ", "come ", "from ", "the ", "method ", "section ", "[C", "1].",
+]  # fmt: skip
+FAKE_NOTES_ANSWER = "".join(FAKE_NOTES_TOKENS)
+_NOTES_WORD = re.compile(r"\bnotes\b", re.IGNORECASE)
+
+
+def asks_for_notes(prompt: str) -> bool:
+    """Whether the question asks for notes: the word "notes" after the prompt's last "Question: ". The prompt above
+    it always says "Notes (newest first)", whatever was asked."""
+    _, found, question = prompt.rpartition("Question: ")
+    return bool(found) and _NOTES_WORD.search(question) is not None
+
+
 # What every connection lists on the fake stack, and the key its Test connection rejects.
 FAKE_MODELS = ["fake-large", "fake-small"]
 FAKE_BAD_KEY = "bad-key"
@@ -237,7 +290,9 @@ class FakeLLM:
         from app.core.note_suggestions import SYSTEM_PROMPT as NOTE_SUGGESTIONS_SYSTEM_PROMPT
 
         self.calls.append((system, prompt))
-        if system == WORKSPACE_SYSTEM_PROMPT:
+        if asks_for_notes(prompt):
+            tokens = FAKE_NOTES_TOKENS
+        elif system == WORKSPACE_SYSTEM_PROMPT:
             tokens = FAKE_WORKSPACE_TOKENS
         elif system == NOTE_SUGGESTIONS_SYSTEM_PROMPT:
             tokens = FAKE_NOTE_SUGGESTIONS_TOKENS

@@ -126,6 +126,9 @@ CSV, and chart them side by side. Click any point on a chart to open its page in
 </picture>
 
 - Every note keeps the page and position of its passage. Click a note to jump back to it in the paper.
+- A note can also sit on a whole paper, on several papers, or on none. Press **Papers** on a note in the reader or
+on the Notes page to choose its papers; untick one and the note's highlight there goes too.
+- The **Notes** page lists every note, and filters them by paper or by "No paper".
 - Each note shows who wrote it: **You**, **AI**, or **AI · edited**.
 - Filter the notes list to show only your notes, only AI notes, or both.
 
@@ -149,6 +152,8 @@ Click one to jump to that note.
 used, never its own earlier answers. Follow-ups stay under the first question, and your next questions keep following
 the newest answer until you press ×.
 - Select part of an answer and click **Save as note**. The note is anchored on the passage it cites and marked AI.
+- Ask for notes ("create notes to help me understand the method") and each note the answer suggests shows as a card
+with **Save**. A saved note is marked AI, keeps the answer's exact words, and belongs to the papers it cites.
 
 **Use your library from Claude Desktop**
 
@@ -438,9 +443,10 @@ with the other one once it is downloaded. Run it twice after a re-ingest before 
 with vectors recorded from the torch model it replaced. It runs when `MODELS_DIR` points at a folder that holds it
 (`docker compose cp api:/models/nomic-embed-text-v1.5 <folder>/`) and is skipped otherwise.
 - **Answer eval:** `docker compose exec api python -m evals.answers --label <name>` asks the default model the
-questions in `backend/evals/answers.yaml` (facts, summaries, follow-ups, notes, questions a paper can't answer) and
-scores each answer. `--summarize` compares saved runs in `backend/evals/results/`. It takes a while on a local model:
-don't restart the API while it runs.
+questions in `backend/evals/answers.yaml` (facts, summaries, follow-ups, notes, asking for notes, questions a paper
+can't answer) and scores each answer, in paper chat and, with `--configs workspace`, in a workspace of the eval papers.
+`--prompts previous` asks with the chat prompts from before note suggestions, to compare. `--summarize` compares saved
+runs in `backend/evals/results/`. It takes a while on a local model: don't restart the API while it runs.
 - **UI changes** follow `frontend/design-system/MASTER.md`: shadcn/ui components, Tailwind tokens, both themes, and the  
 stable test hooks listed there.
 

@@ -96,4 +96,10 @@ describe('describeSource', () => {
     expect(describeSource(note, 'BERT')).toBe('N1 · You · BERT p.4')
     expect(describeSource({ ...note, label: 'N2', provenance: 'llm_edited' }, 'BERT')).toBe('N2 · AI · edited · BERT p.4')
   })
+
+  it('names a note on the whole paper by its paper alone, with no page', () => {
+    const whole = { label: 'N2', note_id: 'n', paper_id: 'p', page: null, provenance: 'llm' as const }
+    expect(describeSource(whole, 'Devlin 2019')).toBe('N2 · AI · Devlin 2019')
+    expect(describeSource(whole)).toBe('N2 · AI')
+  })
 })

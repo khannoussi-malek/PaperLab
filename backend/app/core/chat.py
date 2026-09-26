@@ -1,9 +1,9 @@
 """Chat over one paper or one workspace: choose the sources, build the prompt, store answers.
 
-Never writes notes: an answer becomes a note only through notes.promote_llm_fragment.
+Never writes notes: an answer becomes a note through notes.promote_llm_fragment or notes.save_suggestion, both a
+click by the reader.
 """
 
-import re
 import uuid
 from dataclasses import dataclass, field
 
@@ -12,17 +12,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import prompts, workspaces
 from app.core.errors import Conflict, NotFound
-from app.core.notes import Anchor, NoteView, _with_anchors, list_notes_for_paper
+from app.core.notes import _CITATION, Anchor, NoteView, _with_anchors, list_notes_for_paper, papers_of, parse_citations
 from app.core.papers import get_paper
 from app.core.retrieval import RetrievedChunk, _to_chunk, retrieve, searchable
 from app.models import Chunk, LLMOutput, Note, Paper, PaperStatus, Provenance
 
-CHAT_PROMPT_VERSION = 3  # v3: [N#] is explicitly citation-only, so "generate notes" can't get mislabeled as one
-WORKSPACE_PROMPT_VERSION = 2
-# Each file holds the system prompt, then the user prompt template after the marker line.
-SYSTEM_PROMPT, PROMPT_TEMPLATE = prompts.load("chat", CHAT_PROMPT_VERSION).split("\n<!-- prompt -->\n")
+# v6: the note-block rule leads with its condition and names "never" explicitly, to stop it firing on an unasked
+# follow-up; v5: a literal example fixed the delimiter syntax; v4: asked for notes, the model writes each as a
+# :::note block (M20)
+CHAT_PROMPT_VERSION = 6
+WORKSPACE_PROMPT_VERSION = 5  # v5: the same reordered :::note rule
+# Each file holds the system prompt, then the user prompt template after this marker line.
+PROMPT_MARKER = "\n<!-- prompt -->\n"
+SYSTEM_PROMPT, PROMPT_TEMPLATE = prompts.load("chat", CHAT_PROMPT_VERSION).split(PROMPT_MARKER)
 WORKSPACE_SYSTEM_PROMPT, WORKSPACE_PROMPT_TEMPLATE = prompts.load("chat_workspace", WORKSPACE_PROMPT_VERSION).split(
-    "\n<!-- prompt -->\n"
+    PROMPT_MARKER
 )
 # ponytail: characters stand in for tokens. Revisit with the eval numbers or a model's real context size.
 SMALL_PAPER_CHARS = 24_000
@@ -42,7 +46,6 @@ NOTES_CHAR_BUDGET = 16_000
 # too much like a plausible answer to a weak model. A full sentence doesn't.
 NO_NOTES_PLACEHOLDER = "No notes have been written yet."
 BADGES = {Provenance.HUMAN: "You", Provenance.LLM: "AI", Provenance.LLM_EDITED: "AI · edited"}
-_CITATION = re.compile(r"\[([CN])(\d+)\]")
 _SOURCE_COLUMNS = (Chunk.id, Chunk.paper_id, Chunk.page, Chunk.section_title, Chunk.bbox, Chunk.text)
 
 
@@ -65,8 +68,8 @@ def _scope(scope: uuid.UUID | Scope) -> Scope:
 @dataclass(frozen=True)
 class NoteSource:
     id: uuid.UUID
-    paper_id: uuid.UUID  # the anchor the notes block quoted
-    page: int
+    paper_id: uuid.UUID  # the paper the notes block named it by
+    page: int | None  # its first passage there; None for a note on the whole paper
     provenance: str
 
 
@@ -97,10 +100,20 @@ class Thread:
 
 
 @dataclass(frozen=True)
+class SavedNote:
+    """A suggested note saved from an answer (D96): its block, the note, and the note's papers now, by title."""
+
+    index: int
+    note_id: uuid.UUID
+    paper_ids: list[uuid.UUID]
+
+
+@dataclass(frozen=True)
 class Answer:
     output: LLMOutput
     sources: list[RetrievedChunk | None]  # None: a re-ingest replaced that chunk
     notes: list[NoteSource | None] = field(default_factory=list)  # None: the note was deleted
+    saved_notes: list[SavedNote] = field(default_factory=list)  # by block index
 
 
 async def chunk_sources(session: AsyncSession, *where) -> list[RetrievedChunk]:
@@ -164,9 +177,7 @@ async def load_thread(session: AsyncSession, paper_id: uuid.UUID, parent_id: uui
         for output, older in zip(chain, [*chain[1:], None])
     ]
     source_ids = [*(chunk_id for ids in own for chunk_id in ids), *(i for o in chain for i in o.source_chunks)]
-    return Thread(
-        questions=[output.question for output in reversed(chain)], source_ids=list(dict.fromkeys(source_ids))
-    )
+    return Thread(questions=[output.question for output in reversed(chain)], source_ids=list(dict.fromkeys(source_ids)))
 
 
 async def _earlier_sources(session: AsyncSession, thread: Thread, paper_id: uuid.UUID) -> list[RetrievedChunk]:
@@ -211,31 +222,49 @@ def _cut(text: str, limit: int) -> str:
 
 
 def _first_anchor(note: NoteView, paper_ids) -> Anchor | None:
-    """The note's first anchor in reading order, preferring anchors on the given papers."""
-    anchors = [a for a in note.anchors if a.paper_id in paper_ids] or note.anchors
+    """The note's first passage on these papers in reading order; None when it has none there."""
+    anchors = [a for a in note.anchors if a.paper_id in paper_ids]
     return min(anchors, key=lambda a: (a.page, min(r[1] for r in a.bbox), str(a.paper_id)), default=None)
+
+
+def _source(note: NoteView, paper_ids) -> NoteSource | None:
+    """The note as chat names it: by its first passage on these papers; else by its first linked paper among them, with
+    no page (D95); None when it is linked to none of them."""
+    anchor = _first_anchor(note, paper_ids)
+    if anchor is not None:
+        return NoteSource(id=note.id, paper_id=anchor.paper_id, page=anchor.page, provenance=note.provenance)
+    paper_id = next((pid for pid in note.paper_ids if pid in paper_ids), None)
+    if paper_id is None:
+        return None
+    return NoteSource(id=note.id, paper_id=paper_id, page=None, provenance=note.provenance)
 
 
 def format_notes_block(notes: list[NoteView], papers: dict[uuid.UUID, Paper]) -> tuple[str, list[NoteSource]]:
     """One [N{i}] line per note, newest first, while the block fits NOTES_CHAR_BUDGET. A line is never split.
 
-    Returns the block and the notes it holds (N{i} is the i-th); every note must be anchored on one of `papers`.
+    A note with a passage on one of `papers` is named by its first one, with its page and quote. A note with none there
+    is named by its first linked paper among them, with no page or quote, and left out if it has no body either.
+    Returns the block and the notes it holds (N{i} is the i-th).
     """
     lines: list[str] = []
     used: list[NoteSource] = []
     for note in sorted(notes, key=lambda n: n.updated_at, reverse=True):
-        anchor = _first_anchor(note, papers)
-        label = f"{BADGES[note.provenance]} · {source_label(papers[anchor.paper_id])} p.{anchor.page}"
+        source, anchor = _source(note, papers), _first_anchor(note, papers)
         # A promoted AI note's body/quote is a verbatim answer slice and may still carry that answer's own
         # [C#]/[N#] markers; strip them first so the model can't echo one that now points elsewhere.
-        quote = _cut(_CITATION.sub("", anchor.quoted_text), NOTE_QUOTE_CHARS)
-        line = f'[N{len(lines) + 1}] ({label}) "{quote}"'
-        if body := _cut(_CITATION.sub("", note.body), NOTE_BODY_CHARS):
+        body = _cut(_CITATION.sub("", note.body), NOTE_BODY_CHARS)
+        if source is None or (anchor is None and not body):
+            continue
+        where = source_label(papers[source.paper_id]) + ("" if source.page is None else f" p.{source.page}")
+        line = f"[N{len(lines) + 1}] ({BADGES[note.provenance]} · {where})"
+        if anchor is not None:
+            line += f' "{_cut(_CITATION.sub("", anchor.quoted_text), NOTE_QUOTE_CHARS)}"'
+        if body:
             line += f" — {body}"
         if sum(map(len, lines)) + len(lines) + len(line) > NOTES_CHAR_BUDGET:  # len(lines): the newlines
             break
         lines.append(line)
-        used.append(NoteSource(id=note.id, paper_id=anchor.paper_id, page=anchor.page, provenance=note.provenance))
+        used.append(source)
     return "\n".join(lines), used
 
 
@@ -307,17 +336,17 @@ async def prepare(
     block, used = format_notes_block(every_note, {paper_id: paper})
     context = format_context(paper, sources)
     earlier = _earlier_block(thread)
-    prompt = PROMPT_TEMPLATE.format(context=context, notes=block or NO_NOTES_PLACEHOLDER, earlier=earlier, question=question)
+    prompt = PROMPT_TEMPLATE.format(
+        context=context, notes=block or NO_NOTES_PLACEHOLDER, earlier=earlier, question=question
+    )
     return Prepared(
-        sources=sources, system=SYSTEM_PROMPT, prompt=prompt, whole_paper=whole_paper, notes=used,
+        sources=sources,
+        system=SYSTEM_PROMPT,
+        prompt=prompt,
+        whole_paper=whole_paper,
+        notes=used,
         notes_total=len(every_note),
     )
-
-
-def parse_citations(text: str, n: int, kind: str = "C") -> list[int]:
-    """[C{i}] (or [N{i}]) numbers cited in the final text: first-seen order, no repeats, unknown labels dropped."""
-    cited = (int(number) for label, number in _CITATION.findall(text) if label == kind)
-    return list(dict.fromkeys(i for i in cited if 1 <= i <= n))
 
 
 async def save_answer(
@@ -356,15 +385,8 @@ async def save_answer(
     return output.id
 
 
-def _note_source(note: NoteView | None, paper_ids) -> NoteSource | None:
-    anchor = _first_anchor(note, paper_ids) if note is not None else None
-    if anchor is None:  # the note was deleted, or its paper was
-        return None
-    return NoteSource(id=note.id, paper_id=anchor.paper_id, page=anchor.page, provenance=note.provenance)
-
-
 async def list_answers(session: AsyncSession, paper_id: uuid.UUID | Scope) -> list[Answer]:
-    """Saved Q&As, oldest first, each source resolved to its chunk and each note to its current anchor."""
+    """Saved Q&As, oldest first, each source resolved to its chunk and each note to how chat names it now."""
     scope = _scope(paper_id)
     if scope.workspace_id is not None:
         members = {p.id for p in await workspaces.papers(session, scope.workspace_id)}
@@ -379,11 +401,24 @@ async def list_answers(session: AsyncSession, paper_id: uuid.UUID | Scope) -> li
     note_ids = {note_id for output in outputs for note_id in output.source_notes}
     notes = await _with_anchors(session, list(await session.scalars(select(Note).where(Note.id.in_(note_ids)))))
     by_id = {n.id: n for n in notes}
+    saved = (
+        await session.execute(
+            select(Note.source_id, Note.source_block, Note.id)
+            .where(Note.source_id.in_([o.id for o in outputs]), Note.source_block.is_not(None))
+            .order_by(Note.source_block)
+        )
+    ).all()
+    saved_papers = await papers_of(session, [note_id for *_, note_id in saved])
+    saved_notes: dict[uuid.UUID, list[SavedNote]] = {}
+    for output_id, index, note_id in saved:
+        saved_notes.setdefault(output_id, []).append(SavedNote(index, note_id, saved_papers.get(note_id, [])))
     return [
         Answer(
             output=o,
             sources=[chunks.get(chunk_id) for chunk_id in o.source_chunks],
-            notes=[_note_source(by_id.get(note_id), members) for note_id in o.source_notes],
+            # None: the note was deleted, or is no longer linked to a paper in scope (spec §4.3).
+            notes=[None if note_id not in by_id else _source(by_id[note_id], members) for note_id in o.source_notes],
+            saved_notes=saved_notes.get(o.id, []),
         )
         for o in outputs
     ]

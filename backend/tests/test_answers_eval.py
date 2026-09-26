@@ -3,14 +3,14 @@ import uuid
 from contextlib import asynccontextmanager
 
 import pytest
-from conftest import TEST_DATABASE_URL
+from conftest import TEST_DATABASE_URL, unit_vector
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
 
-from app.core import chat
+from app.core import chat, prompts
 from app.core.retrieval import RetrievedChunk
-from app.models import Chunk, Note, Paper
+from app.models import Chunk, Note, Paper, Workspace
 from app.providers import llm as llm_provider
 from evals import answers
 from evals.run import Expected
@@ -39,6 +39,28 @@ paper_notes:
     notes:
       - {page: 1, quote: "a stack of 6 identical layers", body: "Compare with BERT's encoder."}
       - {page: 2, quote: "Decoder text", body: "The decoder mirrors the encoder.", provenance: llm}
+"""
+
+WRITE_NOTES = """
+  - id: notes-paper
+    kind: write_notes
+    paper: answers fixture
+    question: Create notes on the encoder.
+    points: [["layers"]]
+  - id: notes-workspace
+    kind: write_notes
+    scope: workspace
+    paper: answers fixture
+    question: Write notes comparing these papers.
+    points: [["layers"]]
+"""
+FOLLOW_UP = """
+  - id: next
+    kind: followup
+    paper: answers fixture
+    before: What is the encoder?
+    question: And how many layers?
+    points: [["6 layers"]]
 """
 
 
@@ -137,13 +159,13 @@ def test_grounded_needs_a_cited_passage_that_holds_the_evidence():
     assert answers.grounded("It is 42.", sources, []) is None
 
 
-async def seed_paper(session, texts_by_page: dict[int, str]) -> Paper:
+async def seed_paper(session, texts_by_page: dict[int, str], embedded=False) -> Paper:
     paper = Paper(title="Answers Fixture Paper", file_path="/nonexistent.pdf", status="ready")
     session.add(paper)
     await session.flush()
     session.add_all(
         Chunk(paper_id=paper.id, ordinal=i, page=page, bbox=[[1, 2, 3, 4]], text=text, embed_model="test",
-              strategy_ver=1)
+              strategy_ver=1, embedding=unit_vector(text) if embedded else None)
         for i, (page, text) in enumerate(texts_by_page.items())
     )
     await session.flush()
@@ -355,3 +377,57 @@ def test_rescore_updates_what_depends_only_on_the_answer_text(tmp_path):
     assert changed == 1
     assert (rescored["correct"], rescored["points"], rescored["grounded"]) == (True, 1, None)
     assert kept == unknown  # a case no longer in the file stays as it was
+
+
+def test_blocks_are_right_when_notes_are_asked_for_and_absent_otherwise():
+    two = ":::note\nSix layers [C1].\n:::\n:::note\nThe decoder mirrors it [C2].\n:::"
+
+    assert answers.blocks_right(two, "write_notes", 2) is True
+    assert answers.blocks_right(two, "write_notes", 1) is False  # [C2] is not one of the sources
+    assert answers.blocks_right(":::note\n\n:::", "write_notes", 1) is False  # an empty block
+    assert answers.blocks_right("Six layers [C1].", "write_notes", 1) is False  # no block at all
+    assert answers.blocks_right("Six layers [C1].", "fact", 1) is True
+    assert answers.blocks_right(two, "fact", 2) is False
+
+
+def test_previous_prompts_ask_as_chat_did_before_note_blocks_and_are_put_back():
+    def current():
+        return chat.SYSTEM_PROMPT, chat.PROMPT_TEMPLATE, chat.WORKSPACE_SYSTEM_PROMPT, chat.WORKSPACE_PROMPT_TEMPLATE
+
+    before = current()
+    with answers.prompt_set("previous"):
+        assert chat.SYSTEM_PROMPT + chat.PROMPT_TEMPLATE == prompts.load("chat", 3).replace(chat.PROMPT_MARKER, "")
+        old_workspace = prompts.load("chat_workspace", 2).replace(chat.PROMPT_MARKER, "")
+        assert chat.WORKSPACE_SYSTEM_PROMPT + chat.WORKSPACE_PROMPT_TEMPLATE == old_workspace
+        assert ":::note" not in chat.SYSTEM_PROMPT + chat.WORKSPACE_SYSTEM_PROMPT
+    with answers.prompt_set("current"):
+        assert current() == before
+    assert current() == before and ":::note" in chat.SYSTEM_PROMPT and ":::note" in chat.WORKSPACE_SYSTEM_PROMPT
+
+
+async def test_the_workspace_config_asks_across_the_eval_papers_skips_follow_ups_and_scores_blocks(
+    session, embedder, tmp_path
+):
+    run = uuid.uuid4().hex  # unique vectors per run (D37)
+    texts = {1: f"{run} The encoder is a stack of 6 identical layers.", 2: f"{run} Decoder text."}
+    paper_id = (await seed_paper(session, texts, embedded=True)).id
+    cases = write_cases(tmp_path, CASES + FOLLOW_UP + WRITE_NOTES)
+    llm = ScriptedLLM(":::note\nSix layers [C1].\n:::")
+    out = tmp_path / "workspace.jsonl"
+
+    await answers.evaluate(
+        cases, paper_ids={"answers fixture": paper_id}, configs=["workspace", "retrieval"], repeats=1, label="ws",
+        out=out, scratch=savepoints(session), llm=llm, embedder=embedder,
+    )
+
+    rows = answers.read_rows(out)
+    assert [(r["config"], r["case"]) for r in rows] == [
+        ("workspace", "layers"), ("workspace", "tool"), ("workspace", "notes-paper"), ("workspace", "notes-workspace"),
+        ("retrieval", "layers"), ("retrieval", "tool"), ("retrieval", "next"), ("retrieval", "notes-paper"),
+    ]  # fmt: skip
+    assert [call[0] for call in llm.calls[1:5]] == [chat.WORKSPACE_SYSTEM_PROMPT] * 4  # calls[0] is the warm-up
+    assert {(r["case"], r["blocks"], r["blocks_right"]) for r in rows if r["config"] == "workspace"} == {
+        ("layers", 1, False), ("tool", 1, False), ("notes-paper", 1, True), ("notes-workspace", 1, True),
+    }  # fmt: skip
+    left = select(func.count()).select_from(Workspace).where(Workspace.name.like("answers eval %"))
+    assert await session.scalar(left) == 0  # the scratch workspaces were rolled back

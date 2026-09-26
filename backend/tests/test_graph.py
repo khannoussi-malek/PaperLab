@@ -4,10 +4,21 @@ import uuid
 
 import pytest
 from sqlalchemy import insert
+from test_note_papers import paper_only_note
 
 from app.core import graph, workspaces
 from app.core.errors import InvalidInput, NotFound
-from app.models import Author, ExternalRef, Note, Paper, note_anchors, paper_authors, paper_references, paper_topics
+from app.models import (
+    Author,
+    ExternalRef,
+    Note,
+    Paper,
+    note_anchors,
+    note_papers,
+    paper_authors,
+    paper_references,
+    paper_topics,
+)
 
 pytestmark = pytest.mark.anyio
 
@@ -72,6 +83,7 @@ async def test_each_kind_of_link(session):
     note = Note(body="links two papers", provenance="human")
     session.add(note)
     await session.flush()
+    await session.execute(insert(note_papers), [{"note_id": note.id, "paper_id": paper.id} for paper in (me, noted)])
     await session.execute(insert(note_anchors), [
         {"note_id": note.id, "paper_id": paper.id, "page": 1, "bbox": [[1, 2, 3, 4]], "quoted_text": "q"}
         for paper in (me, noted)
@@ -134,3 +146,10 @@ async def test_hops_must_be_one_to_three_and_the_paper_must_exist(session):
     with pytest.raises(NotFound):
         await graph.related(session, uuid.uuid4())
     assert await graph.related(session, paper.id) == []
+
+
+async def test_one_note_linked_to_two_papers_relates_them_with_no_passage_on_either(session):
+    a, b = await add_papers(session, "A", "B")
+    await paper_only_note(session, a, b)
+
+    assert listed(await graph.related(session, a.id)) == [("B", 1, ["co_anchored"])]

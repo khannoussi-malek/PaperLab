@@ -9,6 +9,7 @@ import {
   type InfiniteData,
 } from '@tanstack/react-query'
 import { sameCandidate } from '@/features/discovery/candidateMeta'
+import { ALREADY_SAVED } from '@/features/chat/noteBlocks'
 import {
   api,
   type Candidate,
@@ -95,7 +96,19 @@ const keys = {
   // Its own key: the graph is one payload, refetched when the owner's own links change, not when the library polls.
   graph: ['graph'] as const,
   libraryGraph: (workspaceId: string | null) => ['graph', workspaceId ?? 'library'] as const,
+  // The Notes page's lists: every note, one paper's, or those on no paper.
+  allNotes: (paper: string | null) => ['notes', paper ?? 'all'] as const,
 }
+
+/** Every list that shows notes: the Notes page's, a paper's, every workspace query (its Notes tab and count), and
+ * paper chat's history (a saved suggestion's card lives there too). */
+export const isNotesList = (queryKey: readonly unknown[]) =>
+  queryKey[0] === 'notes' || queryKey[2] === 'notes' || queryKey[2] === 'chat' || queryKey[0] === 'workspaces'
+
+/** Refetches every list that shows notes: after a note is saved, edited, moved between papers or deleted, or a chart
+ * it shows changes. */
+const refreshNotes = (client: QueryClient) =>
+  client.invalidateQueries({ predicate: (query) => isNotesList(query.queryKey) })
 
 /** Poll the library only while a paper is still ingesting. */
 export function papersPollInterval(papers: Paper[] | undefined): number | false {
@@ -118,6 +131,10 @@ export const usePaper = (id: string) => useQuery({ queryKey: keys.paper(id), que
 
 export const useNotes = (paperId: string) =>
   useQuery({ queryKey: keys.notes(paperId), queryFn: () => api.listNotes(paperId) })
+
+/** The Notes page: every note, one paper's, or those on no paper, newest first. */
+export const useAllNotes = (paper: string | null) =>
+  useQuery({ queryKey: keys.allNotes(paper), queryFn: () => api.listAllNotes(paper) })
 
 /** One page's chunks, fetched only when `page` is set: the reader's `?chunk=` target needs its rects. */
 export const useChunksOnPage = (paperId: string, page: number | null) =>
@@ -159,11 +176,21 @@ export function usePromoteNote() {
   return useMutation({
     mutationFn: (promote: PromoteRequest) => api.promoteNote(promote),
     // A workspace answer can anchor the note on several papers, and workspace Notes tabs and counts list it too.
-    onSuccess: (note) =>
-      Promise.all([
-        ...note.anchors.map((anchor) => client.invalidateQueries({ queryKey: keys.notes(anchor.paper_id) })),
-        client.invalidateQueries({ queryKey: keys.workspaces }),
-      ]),
+    onSuccess: () => refreshNotes(client),
+  })
+}
+
+/** Saves a suggested note from a saved answer. Resolves once the answer's history knows it (its card then reads Saved)
+ * and the notes lists have refetched. On `already_saved` the history is refetched too: it names the note. */
+export function useSaveSuggestion() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ outputId, index }: { scope: ChatScope; outputId: string; index: number }) =>
+      api.saveSuggestion(outputId, index),
+    onSuccess: (_note, { scope }) =>
+      Promise.all([client.invalidateQueries({ queryKey: keys.chat(scope) }), refreshNotes(client)]),
+    onError: (error, { scope }) =>
+      error.message === ALREADY_SAVED ? client.invalidateQueries({ queryKey: keys.chat(scope) }) : undefined,
   })
 }
 
@@ -605,9 +632,11 @@ export function usePrismaExport(workspaceId: string, runs: string) {
   })
 }
 
-export function useNoteMutations(paperId: string) {
+/** Create, edit, recolour and delete a note: any of them can change what every notes list shows (reader, workspace
+ * Notes tabs and counts, the Notes page). */
+export function useNoteMutations() {
   const client = useQueryClient()
-  const onSuccess = () => client.invalidateQueries({ queryKey: keys.notes(paperId) })
+  const onSuccess = () => refreshNotes(client)
   return {
     create: useMutation({ mutationFn: (note: NoteCreate) => api.createNote(note), onSuccess }),
     update: useMutation({
@@ -616,6 +645,16 @@ export function useNoteMutations(paperId: string) {
     }),
     remove: useMutation({ mutationFn: api.deleteNote, onSuccess }),
   }
+}
+
+/** Replaces a note's papers. Every notes list can change (a paper's, a workspace's, the Notes page), and the graph's
+ * noted papers and "noted together" links with them. Resolves once the lists shown have refetched. */
+export function useSetNotePapers() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ noteId, paperIds }: { noteId: string; paperIds: string[] }) => api.setNotePapers(noteId, paperIds),
+    onSuccess: () => Promise.all([refreshNotes(client), client.invalidateQueries({ queryKey: keys.graph })]),
+  })
 }
 
 /** A paper's datasets (captured tables and its numbers), in page order. */
@@ -678,10 +717,6 @@ export const useResolvedChart = (spec: ChartSpec | null) =>
     enabled: spec !== null,
     placeholderData: keepPreviousData,
   })
-
-/** Notes show their charts: refetch every notes list (reader and workspaces) after a chart or an embed changes. */
-const refreshNotes = (client: QueryClient) =>
-  client.invalidateQueries({ predicate: (query) => query.queryKey[2] === 'notes' || query.queryKey[0] === 'workspaces' })
 
 export function useChartMutations() {
   const client = useQueryClient()

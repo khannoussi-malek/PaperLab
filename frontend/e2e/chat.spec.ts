@@ -98,7 +98,7 @@ test('an answer streams in after its sources are shown, and is saved', async ({ 
   // FakeLLM's fixed answer, streamed with the marker split into "[C" and "1]".
   await expect(answer.locator('.chat-answer-text')).toHaveText(FAKE_ANSWER)
   await expect(answer.locator('.chat-cite')).toHaveText(['[C1]'])
-  await expect(answer.locator('.chat-answer-footer')).toHaveText(`AI · fake:e2e-model · ${llmConnection.label} · prompt v2`)
+  await expect(answer.locator('.chat-answer-footer')).toHaveText(`AI · fake:e2e-model · ${llmConnection.label} · prompt v6`)
   const saved = await (await request.get(`/api/papers/${paperId}/chat`)).json()
   expect(saved.map((a: { content: string }) => a.content)).toEqual([FAKE_ANSWER])
 })

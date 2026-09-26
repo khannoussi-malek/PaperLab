@@ -9,6 +9,7 @@ import {
   graphHref,
   newChartHref,
   noteHref,
+  notesHref,
   parseRoute,
   readerHref,
   regionHref,
@@ -203,6 +204,15 @@ describe('parseRoute', () => {
   it('opens the first-run setup', () => {
     expect(setupHref).toBe('#/setup')
     expect(parseRoute(setupHref)).toEqual({ name: 'setup' })
+  })
+
+  it('opens the Notes page on every note, one paper or no paper, and ignores any other filter', () => {
+    expect([notesHref(), notesHref(id), notesHref('none')]).toEqual(['#/notes', `#/notes?paper=${id}`, '#/notes?paper=none'])
+    expect(parseRoute(notesHref())).toEqual({ name: 'notes', paper: null })
+    expect(parseRoute(notesHref(id))).toEqual({ name: 'notes', paper: id })
+    expect(parseRoute(notesHref('none'))).toEqual({ name: 'notes', paper: 'none' })
+    expect(parseRoute('#/notes?paper=bogus')).toEqual({ name: 'notes', paper: null })
+    expect(parseRoute('#/notesX')).toEqual({ name: 'library' })
   })
 })
 

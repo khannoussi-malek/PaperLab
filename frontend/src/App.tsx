@@ -5,6 +5,7 @@ import { ConnectClaudePage } from './features/connect-claude/ConnectClaudePage'
 import { DatasetPage } from './features/data/DatasetPage'
 import { GraphPage } from './features/graph/GraphPage'
 import { LibraryPage } from './features/library/LibraryPage'
+import { NotesPage } from './features/notes/NotesPage.tsx'
 import { ReaderPage } from './features/reader/ReaderPage'
 import { downloadAnnouncement } from './features/settings/searchModel'
 import { SettingsPage } from './features/settings/SettingsPage'
@@ -62,6 +63,9 @@ function Page() {
   }
   if (route.name === 'setup') {
     return <SetupPage />
+  }
+  if (route.name === 'notes') {
+    return <NotesPage paper={route.paper} />
   }
   if (route.name === 'graph') {
     return <GraphPage />

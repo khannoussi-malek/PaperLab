@@ -5,7 +5,7 @@ from app.models.embedding_source import EmbeddingSource
 from app.models.graph import PaperLink
 from app.models.llm_connection import LLMConnection, LLMModel
 from app.models.llm_output import LLMOutput
-from app.models.note import Note, Provenance, note_anchors
+from app.models.note import Note, Provenance, note_anchors, note_papers
 from app.models.paper import Chunk, Paper, PaperStatus
 from app.models.paper_sources import PaperSources
 from app.models.references import ExternalRef, NoteEmbedding, paper_references
@@ -38,6 +38,7 @@ __all__ = [
     "chart_datasets",
     "note_anchors",
     "note_charts",
+    "note_papers",
     "paper_references",
     "paper_authors",
     "paper_topics",
