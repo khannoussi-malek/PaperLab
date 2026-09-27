@@ -1,4 +1,6 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://paperlab.tn/sitemap-index.xml
+# TEMPORARY (2026-09-27): paperlab.tn's registration is stuck pending documents; see the matching note in
+# src/lib/site.ts. Revert this line alongside that file once the domain is active again.
+Sitemap: https://khannoussi-malek.github.io/PaperLab/sitemap-index.xml

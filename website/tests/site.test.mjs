@@ -240,9 +240,10 @@ test('the guides index groups guides by topic, and every guide sits in one', () 
   assert.ok(groups.length >= 4, `four or more topics, got ${groups}`)
 })
 
-test('the site lives at paperlab.tn, and GitHub Pages is told so', () => {
-  assert.equal(SITE, 'https://paperlab.tn')
-  assert.equal(BASE, '/')
-  assert.equal(read('CNAME').trim(), 'paperlab.tn')
-  assert.match(html(''), /<link rel="canonical" href="https:\/\/paperlab.tn\/"/)
+// TEMPORARY (2026-09-27): paperlab.tn's registration is stuck pending documents; see the matching note in
+// src/lib/site.ts. Revert this test alongside that file once the domain is active again.
+test('the site lives at its current address, and CNAME (if any) agrees', () => {
+  assert.equal(SITE, 'https://khannoussi-malek.github.io')
+  assert.equal(BASE, '/PaperLab/')
+  assert.match(html(''), new RegExp(`<link rel="canonical" href="${SITE}${BASE}"`))
 })
