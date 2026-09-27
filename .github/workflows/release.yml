@@ -192,6 +192,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" --draft --title "PaperLab $VERSION" \
+          # v0.1.1 and an earlier v0.1.2 attempt both silently landed as an orphaned "untagged-<hash>" release
+          # instead of one attached to $GITHUB_REF_NAME, for reasons never pinned down (gh exited 0 either way).
+          # --target pins the commit explicitly; the readback after makes a repeat impossible to miss.
+          gh release create "$GITHUB_REF_NAME" --target "$GITHUB_SHA" --draft --title "PaperLab $VERSION" \
             --notes "Installers for macOS, Windows and Linux, and paperlab-$VERSION.tar.gz for the two-command install: see the README's Quick start." \
             out/*
+          gh release view "$GITHUB_REF_NAME" >/dev/null || {
+            echo "::error::gh release create reported success but no release exists at $GITHUB_REF_NAME - it likely landed as an orphaned untagged-* release instead. Check the run's own output above for the URL it actually printed, and clean that one up by hand."
+            exit 1
+          }
