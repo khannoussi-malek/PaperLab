@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { Hit, HitReviewUpdate, SearchRun } from '@/api/client'
 import {
@@ -12,13 +12,26 @@ import {
   useSearchHits,
   useUploadHitPdf,
 } from '@/api/queries'
+import { PanelResizeHandle } from '@/components/PanelResizeHandle'
+import { loadPanelWidth, panelTrack, savePanelWidth, type PanelLimits } from '@/components/panelWidth'
 import { Button } from '@/components/ui/button'
+import { browserStorage } from '@/features/notes/highlightColors'
 import { cn } from '@/lib/utils'
 import { HitContextMenu, HitMenu } from './HitMenu'
 import { sourceLabel } from './hitReview'
 import { HitPreview } from './HitPreview'
 
 const ROW_HEIGHT = 44
+/** `AppShell`'s `p-3` on the view pane, between the preview's right edge and the window's. */
+const PANE_PADDING_PX = 12
+
+/** The hit preview column: 352px was the old fixed 22rem. Half the window at most, so the hit list keeps the larger part. */
+const HIT_PREVIEW: PanelLimits = {
+  storageKey: 'paperlab-hit-preview-width',
+  defaultWidth: 352,
+  minWidth: 280,
+  maxShare: 0.5,
+}
 
 function hasPdfOrAbstract(hit: Hit): boolean {
   return hit.acquisition_status === 'imported' || hit.acquisition_status === 'manual' || Boolean(hit.abstract)
@@ -63,6 +76,8 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
   const parentRef = useRef<HTMLDivElement>(null)
   const [previewId, setPreviewId] = useState<string | null>(null)
   const [filterText, setFilterText] = useState('')
+  const [previewWidth, setPreviewWidth] = useState(() => loadPanelWidth(HIT_PREVIEW, browserStorage()))
+  useEffect(() => savePanelWidth(HIT_PREVIEW, browserStorage(), previewWidth), [previewWidth])
 
   const rows = data?.pages.flatMap((page) => page.items) ?? []
   const rawFound = totalRawFound(run)
@@ -200,7 +215,10 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
       {filter && visibleRows.length === 0 && (
         <p className="px-3 py-1 text-xs text-muted-foreground">No hits match “{filterText.trim()}”.</p>
       )}
-      <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(0,1fr)_22rem]">
+      <div
+        className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(0,1fr)_var(--preview-track)]"
+        style={{ '--preview-track': panelTrack(HIT_PREVIEW, previewWidth) } as CSSProperties}
+      >
         <div
           ref={parentRef}
           aria-label="Hit pool"
@@ -245,7 +263,14 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
         {/* Desktop only: the preview panel follows the click/arrow-key selection, which a touch screen doesn't
             have arrow keys for anyway — same split as PaperPreview. */}
         {previewed && (
-          <div className="hidden min-h-0 lg:block">
+          <div className="relative hidden min-h-0 min-w-0 lg:block">
+            <PanelResizeHandle
+              limits={HIT_PREVIEW}
+              width={previewWidth}
+              onWidthChange={setPreviewWidth}
+              label="Resize preview"
+              inset={PANE_PADDING_PX}
+            />
             <HitPreview
               hit={previewed}
               onReview={onReview}

@@ -571,3 +571,16 @@ test('a failed clear shows an error message', async () => {
 
   expect(await screen.findByRole('alert')).toHaveTextContent('Clear failed')
 })
+
+test('the preview panel can be dragged wider with its resize handle, and remembers the width', async () => {
+  localStorage.removeItem('paperlab-hit-preview-width')
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  await preview()
+  const handle = screen.getByRole('separator', { name: 'Resize preview' })
+  expect(handle).toHaveAttribute('aria-valuenow', '352')
+
+  fireEvent.keyDown(handle, { key: 'ArrowLeft' })
+
+  expect(handle).toHaveAttribute('aria-valuenow', '368')
+  expect(localStorage.getItem('paperlab-hit-preview-width')).toBe('368')
+})

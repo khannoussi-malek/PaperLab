@@ -61,7 +61,7 @@ export function HitPreview({ hit, onReview, onAddPdf, addPdfPending, onUpload, u
       // available height) instead of respecting the bounded height its parent already has — its own
       // overflow-y-auto then has nothing left to actually clip, and content spills past the panel instead of
       // scrolling inside it.
-      className={cn('hit-preview flex h-full flex-col gap-2 overflow-y-auto rounded-xl p-4 ring-1 ring-glass-border', glass)}
+      className={cn('hit-preview flex h-full flex-col gap-2 overflow-x-hidden overflow-y-auto rounded-xl p-4 ring-1 ring-glass-border', glass)}
     >
       <h2 className="font-heading text-lg leading-snug font-semibold wrap-anywhere">{title}</h2>
       {byline && <p className="text-sm text-muted-foreground">{byline}</p>}
@@ -92,7 +92,7 @@ export function HitPreview({ hit, onReview, onAddPdf, addPdfPending, onUpload, u
             value={reason}
             onChange={(event) => setReason(event.target.value as ExcludeReason | '')}
             aria-label="Exclusion reason"
-            className="h-8 flex-1 rounded-lg border bg-background px-2 text-sm"
+            className="h-8 min-w-0 flex-1 rounded-lg border bg-background px-2 text-sm"
           >
             <option value="">Select a reason…</option>
             {EXCLUDE_REASONS.map((r) => (
@@ -133,11 +133,13 @@ export function HitPreview({ hit, onReview, onAddPdf, addPdfPending, onUpload, u
               </Button>
             )}
           </div>
-          <label className="w-fit">
+          {/* A native file input has a fixed intrinsic width (~250px) that overflows a narrow panel; w-full lets it shrink. */}
+          <label className="min-w-0">
             <span className="sr-only">{`Upload PDF for ${title}`}</span>
             <input
               type="file"
               accept="application/pdf"
+              className="w-full min-w-0 text-xs"
               aria-label={`Upload PDF for ${title}`}
               disabled={uploadPending}
               onChange={(event) => {

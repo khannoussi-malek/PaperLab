@@ -13,3 +13,5 @@ frontend/design-system/
 .gstack/
 backend/evals/results/
 marketing/
+graphify-out/
+.obsidian/

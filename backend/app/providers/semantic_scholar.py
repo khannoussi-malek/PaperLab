@@ -4,6 +4,7 @@ Probed on 2026-09-16 without an API key: recommendations take a `DOI:<doi>` or `
 404), an unknown paper answers 404 with a JSON body, and the shared unauthenticated pool answers 429 when busy.
 """
 
+import asyncio
 from urllib.parse import quote
 
 import httpx
@@ -16,14 +17,35 @@ PAPER_FIELDS = "title,year,venue,authors,externalIds,openAccessPdf,citationCount
 # The default pool is recent papers only, and its picks for BERT were weak. all-cs also served a biology DOI.
 RECOMMENDATION_POOL = "all-cs"
 PAGE = 100  # references/citations page size (M7.5 D79)
+# Waits before asking again after a 429. The shared keyless pool is often busy for a moment, then answers.
+RETRY_DELAYS = (2.0, 5.0)
+
+
+class _RetryOn429(httpx.AsyncBaseTransport):
+    def __init__(self, inner: httpx.AsyncBaseTransport):
+        self.inner = inner
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        for delay in RETRY_DELAYS:
+            response = await self.inner.handle_async_request(request)
+            if response.status_code != 429:
+                return response
+            await response.aclose()
+            await asyncio.sleep(delay)
+        return await self.inner.handle_async_request(request)
+
+    async def aclose(self) -> None:
+        await self.inner.aclose()
 
 
 def new_client(api_key: str | None, transport: httpx.AsyncBaseTransport | None = None) -> httpx.AsyncClient:
     headers = {"x-api-key": api_key} if api_key else {}
-    return httpx.AsyncClient(base_url=BASE_URL, headers=headers, timeout=TIMEOUT, transport=transport)
+    retrying = _RetryOn429(transport or httpx.AsyncHTTPTransport())
+    return httpx.AsyncClient(base_url=BASE_URL, headers=headers, timeout=TIMEOUT, transport=retrying)
 
 
-# ponytail: no retry on 429, as in openalex.py. A key saved in Settings → Paper sources lifts the shared pool's limit.
+# ponytail: a fixed 2s then 5s retry on 429, Retry-After ignored (S2 doesn't send one). Still busy after that raises;
+# a key saved in Settings → Paper sources lifts the shared pool's limit.
 
 
 async def recommend(http: httpx.AsyncClient, key: str, limit: int) -> list[dict] | None:
