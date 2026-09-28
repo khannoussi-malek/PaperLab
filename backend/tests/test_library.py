@@ -10,7 +10,7 @@ from pdf_papers import TWO_LINE_QUOTE, chunked_paper
 from sqlalchemy import delete
 from test_note_papers import paper_only_note
 
-from app.core import library, notes, workspaces
+from app.core import library, notes, papers, workspaces
 from app.core.errors import Conflict, InvalidInput, NotFound
 from app.models import Chunk, Paper, Provenance
 
@@ -163,3 +163,12 @@ async def test_the_card_gives_a_note_on_the_whole_paper_no_page_or_quote(session
     card = await library.paper_card(session, paper.id)
 
     assert card.notes == [library.NoteBrief(note.id, "llm", "The whole paper, in one line.", None, None)]
+
+
+async def test_the_card_shows_reading_pass_and_triage(session, tmp_path):
+    paper, _, _ = await chunked_paper(session, tmp_path, title="Card paper")
+    await papers.set_reading(session, paper.id, {"reading_pass": 1, "triage": "keep"})
+
+    card = await library.paper_card(session, paper.id)
+
+    assert (card.reading_pass, card.triage) == (1, "keep")

@@ -138,7 +138,7 @@ _GRAPH_LINKS = text(
 
 _GRAPH_NODES = text(
     """
-    SELECT p.id, p.title, p.year, p.status, p.created_at AS added_at,
+    SELECT p.id, p.title, p.year, p.status, p.created_at AS added_at, p.reading_pass,
            coalesce((SELECT array_agg(w.name ORDER BY wp.added_at)
                        FROM workspace_papers wp JOIN workspaces w ON w.id = wp.workspace_id
                       WHERE wp.paper_id = p.id), '{}') AS workspaces,
@@ -169,6 +169,7 @@ class Node:
     has_notes: bool
     status: str
     added_at: datetime  # when it came into the library (papers.created_at): the Timeline's Date added axis
+    reading_pass: int  # 0–3, the reader's own count (D119); triage never travels here
 
 
 @dataclass(frozen=True)
@@ -212,7 +213,9 @@ async def library_graph(session: AsyncSession, workspace_id: uuid.UUID | None = 
         await get_workspace(session, workspace_id)
     scope = {"workspace": workspace_id}
     nodes = [
-        Node(row.id, row.title, row.year, list(row.workspaces), row.has_notes, row.status, row.added_at)
+        Node(
+            row.id, row.title, row.year, list(row.workspaces), row.has_notes, row.status, row.added_at, row.reading_pass
+        )
         for row in await session.execute(_GRAPH_NODES, scope)
     ]
     rows = list(
