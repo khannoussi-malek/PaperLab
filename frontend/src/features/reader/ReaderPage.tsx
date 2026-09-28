@@ -522,7 +522,6 @@ export function ReaderPage({ paperId, tab, target }: Props) {
                 renderCard={(citation) => (
                   <CitationCard
                     citation={citation}
-                    paperId={paperId}
                     references={references}
                     style={hoverCardPosition([citation.rect], scale)}
                     onPointerEnter={hoverCard.stay}

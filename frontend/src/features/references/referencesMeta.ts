@@ -27,3 +27,21 @@ export function rowAction(reference: Pick<Reference, 'paper_id' | 'has_pdf'>): '
   if (reference.has_pdf) return 'import'
   return null
 }
+
+/** The page's coverage line: how many of the scope's papers have been looked up. */
+export function coverageLine(fetched: number, total: number, inWorkspace: boolean): string {
+  if (total === 0) return inWorkspace ? 'This workspace has no papers yet.' : 'No papers yet.'
+  return `From the references of ${fetched} of your ${total} papers.`
+}
+
+/** What a shared-reference section says once looked-up papers exist but share nothing (or too few are looked up). */
+export function sectionEmptyText(section: 'cited' | 'citing', fetched: number): string {
+  if (fetched < 2) {
+    return section === 'cited'
+      ? 'Fetch the references of two or more papers to see what they share.'
+      : 'Fetch the references of two or more papers to see what cites them.'
+  }
+  return section === 'cited'
+    ? "The papers looked up don't cite any work in common."
+    : 'No work cites two or more of the papers looked up.'
+}

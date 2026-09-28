@@ -96,13 +96,7 @@ export function ReferencesTab({ paperId, active, workspaceId }: { paperId: strin
           ) : (
             <ul className="reference-list divide-y divide-glass-border rounded-xl border border-glass-border">
               {data.rows.map((row) => (
-                <ReferenceRow
-                  key={row.id}
-                  paperId={paperId}
-                  reference={row}
-                  direction={data.direction}
-                  workspaceId={workspaceId}
-                />
+                <ReferenceRow key={row.id} reference={row} direction={data.direction} workspaceId={workspaceId} />
               ))}
             </ul>
           )}

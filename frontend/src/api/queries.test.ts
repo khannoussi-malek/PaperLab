@@ -3,13 +3,14 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { renderHook, waitFor } from '@testing-library/react'
 import { createElement, type ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { api, type Hit, type Paper, type SearchRun } from './client'
+import { api, type Hit, type Paper, type ReferencePage, type SearchRun } from './client'
 import {
   PAPERS_POLL_MS,
   embeddingPollInterval,
   isNotesList,
   matchesEligibleHit,
   papersPollInterval,
+  referencePagePollInterval,
   searchRunPollInterval,
   useSetEligibility,
   useSnowball,
@@ -158,5 +159,15 @@ describe('isNotesList', () => {
   it('is true for the Notes page’s lists', () => {
     expect(isNotesList(['notes', 'all'])).toBe(true)
     expect(isNotesList(['notes', 'none'])).toBe(true)
+  })
+})
+
+describe('referencePagePollInterval', () => {
+  const page = (state: string) => ({ coverage: { unfetched: [{ state }] } }) as ReferencePage
+
+  it('polls only while an unfetched paper is fetching', () => {
+    expect(referencePagePollInterval(page('fetching'))).toBe(PAPERS_POLL_MS)
+    expect(referencePagePollInterval(page('none'))).toBe(false)
+    expect(referencePagePollInterval(undefined)).toBe(false)
   })
 })

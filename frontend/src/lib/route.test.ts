@@ -12,6 +12,7 @@ import {
   notesHref,
   parseRoute,
   readerHref,
+  referencesHref,
   regionHref,
   samePage,
   settingsHref,
@@ -213,6 +214,13 @@ describe('parseRoute', () => {
     expect(parseRoute(notesHref('none'))).toEqual({ name: 'notes', paper: 'none' })
     expect(parseRoute('#/notes?paper=bogus')).toEqual({ name: 'notes', paper: null })
     expect(parseRoute('#/notesX')).toEqual({ name: 'library' })
+  })
+
+  it('opens the References page on the whole library or one workspace', () => {
+    expect([referencesHref(), referencesHref(id)]).toEqual(['#/references', `#/references?workspace=${id}`])
+    expect(parseRoute(referencesHref())).toEqual({ name: 'references', workspaceId: null })
+    expect(parseRoute(referencesHref(id))).toEqual({ name: 'references', workspaceId: id })
+    expect(parseRoute('#/references?workspace=bogus')).toEqual({ name: 'references', workspaceId: null })
   })
 })
 
