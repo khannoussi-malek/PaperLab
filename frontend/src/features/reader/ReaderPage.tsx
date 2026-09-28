@@ -411,6 +411,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
           onZoomChange={setZoomIndex}
           capturing={capturing}
           onCaptureChange={captureDrag.setCapturing}
+          onOpenReferences={() => showTab('references')}
         />
         {paper.data?.is_retracted && <RetractionBanner paper={paper.data} />}
       </div>

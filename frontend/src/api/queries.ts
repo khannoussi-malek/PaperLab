@@ -30,6 +30,7 @@ import {
   type PaperSourcesUpdate,
   type PaperUpdate,
   type PromoteRequest,
+  type ReadingIn,
   type References,
   type ReferencesDirection,
   type SearchResult,
@@ -202,6 +203,23 @@ export function useUpdatePaper(paperId: string) {
     onSuccess: (paper) => {
       client.setQueryData(keys.paper(paperId), paper)
       return client.invalidateQueries({ queryKey: keys.papers, exact: true })
+    },
+  })
+}
+
+/** The reader's own record of a paper (D118, D119): sets one field or both. Every notes list, workspace and the
+ * graph can show it (the library chip, a workspace's Papers tab, the graph panel and tooltip). */
+export function useSetReading() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ paperId, changes }: { paperId: string; changes: ReadingIn }) => api.setReading(paperId, changes),
+    onSuccess: (paper, { paperId }) => {
+      client.setQueryData(keys.paper(paperId), paper)
+      return Promise.all([
+        client.invalidateQueries({ queryKey: keys.papers, exact: true }),
+        client.invalidateQueries({ queryKey: keys.workspaces }),
+        client.invalidateQueries({ queryKey: keys.graph }),
+      ])
     },
   })
 }

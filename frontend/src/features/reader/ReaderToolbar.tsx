@@ -5,6 +5,7 @@ import { ModeToggle } from '@/components/mode-toggle'
 import { delayedIn } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { ReadingControl } from '../reading/ReadingControl'
 import { PaperDetailsDialog } from './PaperDetailsDialog'
 import { ZOOM_STEPS } from './zoom'
 
@@ -15,9 +16,10 @@ type Props = {
   /** Whether dragging on the pages draws a box to capture a table. */
   capturing: boolean
   onCaptureChange: (on: boolean) => void
+  onOpenReferences: () => void
 }
 
-export function ReaderToolbar({ paper, zoomIndex, onZoomChange, capturing, onCaptureChange }: Props) {
+export function ReaderToolbar({ paper, zoomIndex, onZoomChange, capturing, onCaptureChange, onOpenReferences }: Props) {
   const title = paper?.title
   return (
     <header className={cn('col-span-full flex h-11 items-center gap-1 border-b border-glass-border px-2', glass)}>
@@ -27,6 +29,7 @@ export function ReaderToolbar({ paper, zoomIndex, onZoomChange, capturing, onCap
       <h1 className={cn('mx-1.5 min-w-0 flex-1 truncate font-heading text-base leading-none font-semibold', title === undefined && delayedIn)} title={title}>
         {title ?? 'Loading…'}
       </h1>
+      {paper && <ReadingControl paper={paper} onOpenReferences={onOpenReferences} />}
       <Button
         variant="ghost"
         size="sm"
