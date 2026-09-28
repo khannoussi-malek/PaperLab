@@ -75,3 +75,25 @@ export function readingChip(pass: number, triage: Triage | null): string | null 
   const decision = triage ? TRIAGES.find((t) => t.value === triage)!.chip : null
   return level && decision ? `${level} · ${decision}` : level ?? decision
 }
+
+export type ReadingFilter = 'all' | 'unread' | 'keep' | 'later' | 'drop'
+export const READING_FILTERS = [
+  { value: 'all', label: 'All papers' }, { value: 'unread', label: 'Not read yet' },
+  { value: 'keep', label: 'Keep' }, { value: 'later', label: 'Later' }, { value: 'drop', label: 'Dropped' },
+] as const
+
+/** Q1 (b), the owner's answer (D177): "unread" is pass 0 and not dropped — a paper decided is no longer waiting. */
+export function matchesReading(paper: { reading_pass: number; triage: Triage | null }, filter: ReadingFilter): boolean {
+  if (filter === 'all') return true
+  if (filter === 'unread') return paper.reading_pass === 0 && paper.triage !== 'drop'
+  return paper.triage === filter
+}
+
+/** What the library says when the filter (and maybe a search) leaves nothing: how notes get there, never blank. */
+export function emptyListText(query: string, filter: ReadingFilter): string {
+  if (query.trim()) {
+    const label = READING_FILTERS.find((f) => f.value === filter)!.label
+    return `No papers match “${query.trim()}”` + (filter === 'all' ? '' : ` in ${label}`)
+  }
+  return { all: 'No unread papers.', unread: 'No unread papers.', keep: 'No papers marked Keep.', later: 'No papers marked Later.', drop: 'No dropped papers.' }[filter]
+}
