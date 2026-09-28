@@ -202,8 +202,8 @@ email goes to Crossref, Unpaywall and OpenAlex (when on), never to the others or
 API keys stay in your local database and are never sent back to the browser. Adding a paper downloads its PDF from the
 free link found. None of them send a paper's text.
 An MCP client you connect, such as Claude Desktop, receives what its tools return: passages from your papers, paper
-details and workspace names, and every note on a paper marked as yours or AI. Claude Desktop and Claude Code send what
-the tools return to Anthropic.
+details (with your reading pass and decision) and workspace names, and every note on a paper marked as yours or AI.
+Claude Desktop and Claude Code send what the tools return to Anthropic.
 - **Updates are announced, never installed.** Each time it opens, the desktop app asks GitHub whether a newer version
 is out and offers a download link when there is one. It is the only request the app makes on its own; turn it off in
 **Settings → Desktop app**.
@@ -349,7 +349,8 @@ the folder you unpacked):
 
 The server has four tools:
 - `search_library`: passages closest to a question, in the whole library or one workspace;
-- `get_paper`: a paper's details, section outline, workspaces and every note with who wrote it;
+- `get_paper`: a paper's details, your reading pass and decision (`reading_pass`, `triage`), section outline,
+  workspaces and every note with who wrote it;
 - `related_papers`: library papers connected to one, up to three links away;
 - `create_note`: a note on a passage it quotes exactly.
 
