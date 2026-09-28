@@ -102,3 +102,21 @@ async def test_a_batch_answer_that_is_not_a_list_raises_an_http_error(s2):
 
     with pytest.raises(httpx.HTTPError):
         await semantic_scholar.get_papers(s2.client, ["DOI:10.18653/v1/n19-1423"])
+
+
+async def test_a_busy_shared_pool_is_asked_again_after_a_short_wait(monkeypatch):
+    monkeypatch.setattr(semantic_scholar, "RETRY_DELAYS", (0, 0))
+    answers = iter([httpx.Response(429), httpx.Response(429), httpx.Response(200, json={"data": [{"paperId": "abc"}]})])
+    transport = httpx.MockTransport(lambda request: next(answers))
+    async with semantic_scholar.new_client(None, transport=transport) as client:
+        assert await semantic_scholar.match_title(client, "Predictive modeling AI agent") == "abc"
+
+
+async def test_a_pool_still_busy_after_every_retry_raises(monkeypatch):
+    monkeypatch.setattr(semantic_scholar, "RETRY_DELAYS", (0, 0))
+    calls = []
+    transport = httpx.MockTransport(lambda request: calls.append(request) or httpx.Response(429))
+    async with semantic_scholar.new_client(None, transport=transport) as client:
+        with pytest.raises(httpx.HTTPStatusError):
+            await semantic_scholar.match_title(client, "Predictive modeling AI agent")
+    assert len(calls) == 3
