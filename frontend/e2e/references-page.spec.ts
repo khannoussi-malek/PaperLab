@@ -15,16 +15,30 @@ async function removeImportedFixtures(request: APIRequestContext) {
   }
 }
 
+// A run killed after marking a fake To read (e.g. mid-test, before its own unmark) would otherwise linger on
+// the owner's real To-read list until some other test's cleanup happened to catch it. Scoped to the whole
+// library (no workspace param), so it finds a leftover mark regardless of which workspace queued it.
+async function unqueueFakeReferences(request: APIRequestContext) {
+  const page = await request.get('/api/references')
+  if (!page.ok()) return
+  const { to_read } = await page.json()
+  for (const ref of to_read as { id: string; doi: string | null }[]) {
+    if (ref.doi?.startsWith(FAKE_DOI_PREFIX)) await request.delete(`/api/references/${ref.id}/queue`)
+  }
+}
+
 let owners: SourceSettings
 
 test.beforeEach(async ({ request }) => {
   await removeImportedFixtures(request)
+  await unqueueFakeReferences(request)
   owners = await readSourceSettings(request)
   await setSourceSettings(request, { enabled: FREE_SOURCES_ON })
 })
 
 test.afterEach(async ({ request }) => {
   await removeImportedFixtures(request)
+  await unqueueFakeReferences(request)
   await setSourceSettings(request, owners)
 })
 

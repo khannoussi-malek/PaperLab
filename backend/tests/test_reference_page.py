@@ -131,7 +131,15 @@ async def graph_matches(session, citing: Paper, paper: Paper, ref: ExternalRef) 
     return any((link.source, link.target, link.kind) == (citing.id, paper.id, "cites") for link in links)
 
 
-CALLERS = {"tab": tab_matches, "graph": graph_matches}
+async def page_matches(session, citing: Paper, paper: Paper, ref: ExternalRef) -> bool:
+    """The page (unlike the tab) never lists a matched reference at all — `_PAGE`'s own `NOT EXISTS` over the
+    same `in_library` CTE drops it from every section, since it's already in the library under `paper`."""
+    page = await references.library_listing(session)
+    listed = {row.id for row in page.to_read + page.cited_by_several + page.citing_several}
+    return ref.id not in listed
+
+
+CALLERS = {"tab": tab_matches, "graph": graph_matches, "page": page_matches}
 
 
 @pytest.mark.parametrize("caller", list(CALLERS))
