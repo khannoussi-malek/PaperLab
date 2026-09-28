@@ -3,6 +3,7 @@
 - Semantic Scholar answers both directions; OpenAlex is merged in when it's ticked (D77). Stored in `external_refs`
   and `paper_references`, so ranking can count how many library papers share a reference (D78).
 - Ranking is tiers (D80): co-citation inside the library, closeness to the reader's notes, a free PDF, citation count.
+  A reference is in the library by `IN_LIBRARY`, the one match the tab, the References page and the graph share.
 - Importing downloads a free PDF exactly as Find papers' Add does (D84); nothing is fetched for the new paper (P5).
 """
 
@@ -333,28 +334,42 @@ async def embed_new(session: AsyncSession, embedder) -> None:
 
 # --- listing -----------------------------------------------------------------------------------------------------
 
+# The one in-library match (D121, D165): the tab, the References page and the graph all compose this. A reference is a
+# library paper when it was imported as one, or a paper has its OpenAlex ID, its DOI in any case, or its arXiv DOI.
+IN_LIBRARY = """in_library(ref_id, paper_id) AS (
+  SELECT id, imported_as FROM external_refs WHERE imported_as IS NOT NULL
+  UNION SELECT r.id, p.id FROM external_refs r JOIN papers p ON p.openalex_id = r.openalex_id
+         WHERE r.imported_as IS NULL
+  UNION SELECT r.id, p.id FROM external_refs r JOIN papers p ON lower(p.doi) = lower(r.doi)
+         WHERE r.imported_as IS NULL
+  UNION SELECT r.id, p.id FROM external_refs r
+           JOIN papers p ON lower(p.doi) = '10.48550/arxiv.' || lower(r.arxiv_id)
+         WHERE r.imported_as IS NULL
+)"""
+
 # ponytail: no vector index; at library scale (hundreds of refs, tens of notes) a scan beats an HNSW build. Add one
 # when a library passes ~50k references.
+NOTE_SIMILARITY = """(SELECT max(1 - (r.title_embedding <=> n.embedding)) FROM note_embeddings n
+             WHERE n.embed_model = r.title_embed_model)"""
+
+# D80's tiers, written once. Bare output-column names, so Postgres reads them as the SELECT's own columns in both
+# statements (pr.position in the tab, l.position on the page).
+RANK = "cocitation DESC, note_similarity DESC NULLS LAST, has_pdf DESC, cited_by_count DESC NULLS LAST, position"
+
 _LISTING = text(
-    """
+    f"""
+    WITH {IN_LIBRARY}
     SELECT r.id, r.title, r.authors, r.year, r.venue, r.doi, r.arxiv_id, r.openalex_id, r.s2_id, r.cited_by_count,
            jsonb_array_length(r.pdf_urls) > 0 AS has_pdf,
            (SELECT count(DISTINCT other.paper_id) FROM paper_references other
              WHERE other.ref_id = r.id AND other.direction = pr.direction) AS cocitation,
-           (SELECT max(1 - (r.title_embedding <=> n.embedding)) FROM note_embeddings n
-             WHERE n.embed_model = r.title_embed_model) AS note_similarity,
-           coalesce(r.imported_as, (
-             SELECT p.id FROM papers p
-              WHERE p.openalex_id = r.openalex_id
-                 OR lower(p.doi) = lower(r.doi)
-                 OR lower(p.doi) = '10.48550/arxiv.' || lower(r.arxiv_id)
-              LIMIT 1)) AS paper_id,
+           {NOTE_SIMILARITY} AS note_similarity,
+           (SELECT il.paper_id FROM in_library il WHERE il.ref_id = r.id ORDER BY il.paper_id LIMIT 1) AS paper_id,
            pr.position, r.queued_at
       FROM paper_references pr
       JOIN external_refs r ON r.id = pr.ref_id
      WHERE pr.paper_id = :paper_id AND pr.direction = :direction
-     ORDER BY cocitation DESC, note_similarity DESC NULLS LAST, has_pdf DESC, r.cited_by_count DESC NULLS LAST,
-              pr.position
+     ORDER BY {RANK}
     """
 )
 
