@@ -6,8 +6,7 @@ Link kinds, each read from the table that already holds it:
 - co_authored: they share an author (paper_authors)
 - shares_topic: they share a topic label, any source, ignoring case (paper_topics)
 - cites / cited_by: one paper's reference is the other (paper_references + external_refs, M7.5). A reference is a
-  library paper the way the References tab shows it In library: its imported_as, else a paper with the same
-  openalex_id, DOI or arXiv DOI.
+  library paper by references.IN_LIBRARY, the match the References tab and page use.
 - similar: either paper is among the other's SIMILAR_NEIGHBOURS nearest by content (D107), cosine between the
   averages of their chunk vectors
 - manual: the owner drew it (paper_links, D110). It is the one stored kind; the graph also carries its label.
@@ -23,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import embedding_sources
 from app.core.errors import InvalidInput
 from app.core.papers import get_paper
+from app.core.references import IN_LIBRARY
 from app.core.workspaces import get as get_workspace
 
 MAX_HOPS = 3
@@ -47,17 +47,8 @@ def _similarity(name: str) -> dict:
 # averaged vector defeats the HNSW index on chunks), so each graph load and each related() call costs about 15 us per
 # chunk plus 0.7 us per pair. At the owner's real density (~69 chunks a paper) that is ~0.5 s at 300 papers, ~0.75 s
 # at 500, and tens of seconds at 5,000. Store one vector per paper, and index it, before the library reaches ~300.
-_EDGES = """
-RECURSIVE in_library(ref_id, paper_id) AS (
-  SELECT id, imported_as FROM external_refs WHERE imported_as IS NOT NULL
-  UNION SELECT r.id, p.id FROM external_refs r JOIN papers p ON p.openalex_id = r.openalex_id
-         WHERE r.imported_as IS NULL
-  UNION SELECT r.id, p.id FROM external_refs r JOIN papers p ON lower(p.doi) = lower(r.doi)
-         WHERE r.imported_as IS NULL
-  UNION SELECT r.id, p.id FROM external_refs r
-           JOIN papers p ON lower(p.doi) = '10.48550/arxiv.' || lower(r.arxiv_id)
-         WHERE r.imported_as IS NULL
-), citations(citing, cited) AS (
+_EDGES = f"""
+RECURSIVE {IN_LIBRARY}, citations(citing, cited) AS (
   SELECT pr.paper_id, l.paper_id FROM paper_references pr JOIN in_library l ON l.ref_id = pr.ref_id
    WHERE pr.direction = 'cites'
   UNION SELECT l.paper_id, pr.paper_id FROM paper_references pr JOIN in_library l ON l.ref_id = pr.ref_id
