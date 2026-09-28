@@ -140,7 +140,11 @@ function MenuItems({ parts: M, paper, workspaceId, onMembershipChange, onReading
 /** A paper row's ⋮ menu: workspaces with check marks that toggle membership. */
 export function PaperMenu(props: Props) {
   return (
-    <DropdownMenu>
+    // Non-modal: the Reading submenu deliberately stays open across several picks (its radio items call
+    // event.preventDefault() on select), and Radix's modal default would otherwise aria-hide the rest of the
+    // page (hideOthers) for as long as it's open, locking out the library's own Reading filter and everything
+    // else until this menu is explicitly dismissed.
+    <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
@@ -162,7 +166,8 @@ export function PaperMenu(props: Props) {
 /** The same menu on right-click, opened where the pointer is. `children` is the row it wraps. */
 export function PaperContextMenu({ children, ...props }: Props & { children: ReactNode }) {
   return (
-    <ContextMenu>
+    // Non-modal for the same reason as PaperMenu above.
+    <ContextMenu modal={false}>
       <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
       <ContextMenuContent className={menuSurface}>
         <MenuItems parts={contextParts} {...props} />
