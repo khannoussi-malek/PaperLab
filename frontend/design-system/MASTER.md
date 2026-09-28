@@ -154,7 +154,9 @@ Fonts: body `Atkinson Hyperlegible Next Variable` (`font-sans`), headings `Crims
   <N> MB" / "Downloading the search model" / "Search source" / "Connection" / "Model" / "Switch search to <label>" /
   "Switch search to <label>?" / "Switch" / "Rebuilding search" / "Try again" / "Pull nomic-embed-text · 274 MB" /
   "Use another search source". Also `.reference-row`, `.references-summary`
-  and `.reference-list`.
+  and `.reference-list`. Also `.reading-chip`, `.reading-popover`, `li.paper-row[data-paper-id]`, and the names
+  "Reading" (the button, the library menu's submenu and the rail item), "Passes finished", "Decision", "None yet",
+  "Pass 1"–"Pass 3", "Keep", "Later", "Drop", "Not decided", "Open References".
   Also the names "Connect Claude" / "Open Connect Claude" / "Your system" (tabs "macOS" / "Windows" / "Windows + WSL" /
   "Linux") / "PaperLab folder" / "Copy" / "Copied" / "Check the server", and the regions "Claude Desktop" / "Claude
   Code" / "Check PaperLab's side".
@@ -658,6 +660,28 @@ submit.
 - **Similar tab:** the reader's fourth tab, after Data. An `aside` labelled "Similar papers": a muted one-line
   explanation, the candidate rows, and `LoadError` with Retry when Semantic Scholar refuses. It asks only once the tab
   has been opened; suggestions stay fresh for an hour.
+
+## Reading
+
+Patterns from ui-ux-pro-max (`--domain ux`): *Deep Linking*, *Back Button*, *Active State*, *Disabled States* (§10, References).
+
+- **The reader's control:** an outline `sm` **Reading** button in `ReaderToolbar`, right after the title, `BookOpenCheck`
+  plus a `Badge variant="secondary" reading-chip` when the paper has a level or a decision — so its accessible name is
+  "Reading" or "Reading Pass 2 · Later", the badge text after `aria-label`, never from content alone. It opens a
+  non-modal `Popover` (`reading-popover`, `w-96`, `bg-glass-strong`): two `RadioGroup`s side by side, **Passes
+  finished** and **Decision**, each saving on change; then the next pass's guide from `features/reading/passes.ts`
+  (steps, "Done when", the five Cs and the decision line at pass 1, an **Open References** button at passes 1–2); at
+  level 3, one line saying every pass is finished. A last, muted line: "Only you set this. PaperLab never marks a
+  pass for you." (D118). Escape returns focus to the button (Radix).
+- **The library:** every paper row gets the same chip (`reading-chip`, before the `.status` badge, `sr-only` "Reading:
+  " ahead of the text) and a **Reading** submenu on its ⋮ menu and right-click menu (the same two radio groups as
+  radio menu items, staying open on select). A `Select` beside the search bar (`sr-only` labelled "Reading") filters
+  by **All papers**, **Not read yet** (pass 0, not dropped — D177 Q1 (b)), **Keep**, **Later** or **Dropped**; the
+  search count line ("3 of 20") shows while either narrows the list, and the empty state offers **Clear search** and
+  **Show all papers** as each applies. `PaperList` is shared, so a workspace's Papers tab gets all of this too.
+- **The graph:** every hover, tooltip and label a paper shows (`graphModel.nodeLabel`) reads "{title} · Pass {n}"
+  once a level is set; the panel's row shows "Pass {n}" before its link count. The decision never appears on the
+  canvas (D119): fill, size and opacity keep their existing meanings.
 
 ## References
 
