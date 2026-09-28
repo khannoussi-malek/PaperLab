@@ -57,6 +57,7 @@ async def test_the_payload_carries_every_paper_its_links_and_no_vectors(session,
         "workspaces": [f"API {RUN}"],
         "has_notes": False,
         "status": "ready",
+        "reading_pass": 0,
     }
     ours = [link for link in body["links"] if {link["source"], link["target"]} == {str(left.id), str(right.id)}]
     assert [link["kind"] for link in ours] == ["same_workspace"]

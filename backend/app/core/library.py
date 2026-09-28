@@ -58,6 +58,8 @@ class PaperCard:
     status: str
     page_count: int | None
     is_retracted: bool
+    reading_pass: int
+    triage: str | None
     workspaces: list[str]  # names, alphabetical
     sections: list[Section]  # in reading order
     notes: list[NoteBrief]  # notes on the whole paper first, newest first; then in reading order
@@ -130,6 +132,8 @@ async def paper_card(session: AsyncSession, paper_id: uuid.UUID) -> PaperCard:
         status=paper.status,
         page_count=paper.page_count,
         is_retracted=paper.is_retracted,
+        reading_pass=paper.reading_pass,
+        triage=paper.triage,
         workspaces=sorted(await session.scalars(names)),
         sections=list(sections.values()),
         notes=notes,

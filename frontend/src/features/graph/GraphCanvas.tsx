@@ -3,7 +3,7 @@ import type { GraphLink, GraphNode } from '@/api/client'
 import { Button } from '@/components/ui/button'
 import { ErrorAlert } from '@/features/library/ErrorAlert'
 import { CHART_INK, type ChartTheme } from '@/features/charts/palette'
-import { carryPositions, endId, FADED, sizedNodes, tooltipFor, withAlpha, type SizedNode } from './graphModel'
+import { carryPositions, endId, FADED, nodeLabel, sizedNodes, tooltipFor, withAlpha, type SizedNode } from './graphModel'
 import { OUTER_RING, type RingPlace } from './ringsModel'
 import { useBoxSize } from './useBoxSize'
 
@@ -105,7 +105,7 @@ export function GraphCanvas({ nodes, links, theme, colors, focused, onSelect, ri
           // react-force-graph-2d's TooltipContent type says a React element, but the force-graph it wraps declares
           // `Label = string | HTMLElement` and float-tooltip actually appends a raw HTMLElement — the wrapper's
           // .d.ts is wrong here, not the runtime.
-          nodeLabel={(node: CanvasNode) => tooltipFor(node.title) as unknown as string}
+          nodeLabel={(node: CanvasNode) => tooltipFor(nodeLabel(node)) as unknown as string}
           nodeRelSize={1}
           nodeVal={(node: CanvasNode) => node.radius * node.radius}
           nodeColor={(node: CanvasNode) =>

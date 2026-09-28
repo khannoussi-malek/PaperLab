@@ -18,6 +18,7 @@ const node = (id: string, title = id.toUpperCase(), workspaces: string[] = []): 
   has_notes: false,
   status: 'ready',
   added_at: '2026-09-13T10:00:00Z',
+  reading_pass: 0,
 })
 
 // c is the hub: a–c, b–c, c–d, then a chain d–e–f; g is alone.

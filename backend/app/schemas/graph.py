@@ -20,6 +20,7 @@ class GraphNode(BaseModel):
     has_notes: bool
     status: str
     added_at: datetime
+    reading_pass: int
 
 
 class GraphLink(BaseModel):

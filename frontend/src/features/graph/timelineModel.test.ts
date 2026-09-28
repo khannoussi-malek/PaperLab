@@ -18,6 +18,7 @@ const node = (id: string, title: string, year: number | null, addedAt = '2026-09
   has_notes: false,
   status: 'ready',
   added_at: addedAt,
+  reading_pass: 0,
 })
 
 // 1000 wide: 48 px each side, so the axis runs over 904 px. 400 high: the axis at 368, papers 16 px apart above it.

@@ -13,6 +13,9 @@ from app.models import Chunk, Paper, PaperStatus
 
 PDF_MAGIC = b"%PDF-"
 
+READING_PASSES = range(4)
+TRIAGES = ("keep", "later", "drop")
+
 
 async def create_paper(
     session: AsyncSession, filename: str, data: bytes, pdf_dir: Path, *, prefill: dict[str, Any] | None = None
@@ -41,6 +44,24 @@ async def get_paper(session: AsyncSession, paper_id: uuid.UUID) -> Paper:
     paper = await session.get(Paper, paper_id)
     if paper is None:
         raise NotFound(f"paper {paper_id} not found")
+    return paper
+
+
+async def set_reading(session: AsyncSession, paper_id: uuid.UUID, changes: dict[str, Any]) -> Paper:
+    """The reader's own record of a paper: passes finished and their decision (D118, D119). Only the keys sent change.
+    Never touches manual_fields. Raises NotFound, InvalidInput("reading_pass_out_of_range", allowed=[0, 3]),
+    InvalidInput("unknown_triage", allowed=[...]), InvalidInput("nothing_to_set")."""
+    values = {key: changes[key] for key in ("reading_pass", "triage") if key in changes}
+    if not values:
+        raise InvalidInput("nothing_to_set")
+    if "reading_pass" in values and values["reading_pass"] not in READING_PASSES:
+        raise InvalidInput("reading_pass_out_of_range", allowed=[READING_PASSES[0], READING_PASSES[-1]])
+    if values.get("triage") is not None and values["triage"] not in TRIAGES:
+        raise InvalidInput("unknown_triage", allowed=list(TRIAGES))
+    paper = await get_paper(session, paper_id)
+    await session.execute(update(Paper).where(Paper.id == paper_id).values(**values))
+    await session.commit()
+    await session.refresh(paper)
     return paper
 
 

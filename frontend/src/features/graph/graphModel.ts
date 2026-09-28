@@ -125,6 +125,12 @@ export function workspaceColors(names: readonly string[], theme: ChartTheme): Ma
 export const nodeColor = (node: GraphNode, colors: Map<string, string>, theme: ChartTheme): string =>
   colors.get(node.workspaces[0] ?? '') ?? CHART_INK[theme].muted
 
+/** Every hover, tooltip and label the graph shows for a paper (D119): the title alone at pass 0, with the pass
+ * otherwise. Never the decision (triage stays off the canvas). */
+export function nodeLabel(node: Pick<GraphNode, 'title' | 'reading_pass'>): string {
+  return node.reading_pass > 0 ? `${node.title} · Pass ${node.reading_pass}` : node.title
+}
+
 export const NO_WORKSPACE = 'No workspace'
 
 export type LegendEntry = { name: string; color: string }

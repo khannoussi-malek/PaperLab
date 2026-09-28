@@ -67,6 +67,27 @@ export interface paths {
         patch: operations["correct_paper_api_papers__paper_id__patch"];
         trace?: never;
     };
+    "/api/papers/{paper_id}/reading": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Reading
+         * @description The reader's passes finished and decision (D119). Only the fields sent change. 404 unknown paper; 422 for an
+         *     empty body, a level outside 0–3, a null level, an unknown decision or any other field.
+         */
+        put: operations["set_reading_api_papers__paper_id__reading_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/papers/{paper_id}/file": {
         parameters: {
             query?: never;
@@ -1246,6 +1267,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/references": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * References Page
+         * @description The whole library's, or one workspace's, To read list, the works several of its papers cite, and the recent
+         *     works that cite several of them (D121, D166, D177). 404 an unknown workspace.
+         */
+        get: operations["references_page_api_references_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/references/{ref_id}/queue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Queue Reference
+         * @description Marks a reference To read (D164). A second call keeps the first time. 404 unknown reference.
+         */
+        put: operations["queue_reference_api_references__ref_id__queue_put"];
+        post?: never;
+        /**
+         * Unqueue Reference
+         * @description Takes a reference off To read; harmless when it isn't on it. 404 unknown reference.
+         */
+        delete: operations["unqueue_reference_api_references__ref_id__queue_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/links": {
         parameters: {
             query?: never;
@@ -1860,6 +1926,15 @@ export interface components {
             /** Api Key */
             api_key?: string | null;
         };
+        /** CoverageOut */
+        CoverageOut: {
+            /** Fetched */
+            fetched: number;
+            /** Total */
+            total: number;
+            /** Unfetched */
+            unfetched: components["schemas"]["UnfetchedPaperOut"][];
+        };
         /** DatasetCreate */
         DatasetCreate: {
             /** Name */
@@ -2134,6 +2209,8 @@ export interface components {
              * Format: date-time
              */
             added_at: string;
+            /** Reading Pass */
+            reading_pass: number;
         };
         /** GraphOut */
         GraphOut: {
@@ -2606,6 +2683,10 @@ export interface components {
             created_at: string;
             /** Workspace Ids */
             workspace_ids: string[];
+            /** Reading Pass */
+            reading_pass: number;
+            /** Triage */
+            triage: ("keep" | "later" | "drop") | null;
         };
         /**
          * PaperSourceOut
@@ -2761,6 +2842,24 @@ export interface components {
              */
             add_to_chat: boolean;
         };
+        /**
+         * QueueOut
+         * @description When the reference was marked To read; null once it's taken off.
+         */
+        QueueOut: {
+            /** Queued At */
+            queued_at: string | null;
+        };
+        /**
+         * ReadingIn
+         * @description The reader's own record of a paper (D119). Only the fields sent change; `triage: null` clears the decision.
+         */
+        ReadingIn: {
+            /** Reading Pass */
+            reading_pass?: number | null;
+            /** Triage */
+            triage?: ("keep" | "later" | "drop") | null;
+        };
         /** RebuildOut */
         RebuildOut: {
             /** Done */
@@ -2805,6 +2904,18 @@ export interface components {
             paper_id: string | null;
             /** Position */
             position: number;
+            /** Queued At */
+            queued_at: string | null;
+        };
+        /** ReferencePageOut */
+        ReferencePageOut: {
+            coverage: components["schemas"]["CoverageOut"];
+            /** To Read */
+            to_read: components["schemas"]["ReferenceOut"][];
+            /** Cited By Several */
+            cited_by_several: components["schemas"]["ReferenceOut"][];
+            /** Citing Several */
+            citing_several: components["schemas"]["ReferenceOut"][];
         };
         /** ReferencesOut */
         ReferencesOut: {
@@ -3304,6 +3415,20 @@ export interface components {
             /** Text */
             text: string;
         };
+        /** UnfetchedPaperOut */
+        UnfetchedPaperOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** State */
+            state: string;
+            /** Error */
+            error: string | null;
+        };
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -3502,6 +3627,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["PaperUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaperOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_reading_api_papers__paper_id__reading_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                paper_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadingIn"];
             };
         };
         responses: {
@@ -6109,6 +6269,99 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PaperOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    references_page_api_references_get: {
+        parameters: {
+            query?: {
+                workspace?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReferencePageOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    queue_reference_api_references__ref_id__queue_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ref_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueueOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unqueue_reference_api_references__ref_id__queue_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ref_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueueOut"];
                 };
             };
             /** @description Validation Error */

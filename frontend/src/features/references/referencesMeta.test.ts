@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Reference } from '@/api/client'
-import { cocitationBadge, rowAction, summaryLine } from './referencesMeta'
+import { cocitationBadge, coverageLine, rowAction, sectionEmptyText, summaryLine } from './referencesMeta'
 
 describe('summaryLine', () => {
   it('joins both halves when both counts are positive', () => {
@@ -53,5 +53,22 @@ describe('rowAction', () => {
 
   it('is null when not in the library and no free PDF is listed', () => {
     expect(rowAction(reference({}))).toBeNull()
+  })
+})
+
+describe('coverageLine', () => {
+  it('names the counts, or says there are none yet', () => {
+    expect(coverageLine(4, 20, false)).toBe('From the references of 4 of your 20 papers.')
+    expect(coverageLine(0, 0, false)).toBe('No papers yet.')
+    expect(coverageLine(0, 0, true)).toBe('This workspace has no papers yet.')
+  })
+})
+
+describe('sectionEmptyText', () => {
+  it('asks to fetch more with fewer than two papers looked up, else says nothing was shared', () => {
+    expect(sectionEmptyText('cited', 1)).toBe('Fetch the references of two or more papers to see what they share.')
+    expect(sectionEmptyText('cited', 2)).toBe("The papers looked up don't cite any work in common.")
+    expect(sectionEmptyText('citing', 1)).toBe('Fetch the references of two or more papers to see what cites them.')
+    expect(sectionEmptyText('citing', 2)).toBe('No work cites two or more of the papers looked up.')
   })
 })

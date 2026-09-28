@@ -4,7 +4,7 @@ from enum import StrEnum
 from typing import Any
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import DateTime, ForeignKey, Text, func, select, text
+from sqlalchemy import DateTime, ForeignKey, SmallInteger, Text, func, select, text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, aggregate_order_by
 from sqlalchemy.orm import Mapped, column_property, mapped_column
 
@@ -54,6 +54,10 @@ class Paper(Base):
     references_state: Mapped[str] = mapped_column(Text, server_default=text("'none'"))
     references_error: Mapped[str | None] = mapped_column(Text)
     references_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # M21 (D119): the reader's own record, written only by papers.set_reading. Passes finished, 0–3, and keep / later /
+    # drop or None. Never in manual_fields, never a workspace, never written by ingest, enrichment or MCP.
+    reading_pass: Mapped[int] = mapped_column(SmallInteger, server_default=text("0"))
+    triage: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
     # Loaded with every paper, so paper cards can tick their workspaces. Oldest membership first.
     workspace_ids: Mapped[list[uuid.UUID]] = column_property(

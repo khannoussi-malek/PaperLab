@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { FADED, nodeColor } from './graphModel'
+import { FADED, nodeColor, nodeLabel } from './graphModel'
 import { DIAGONAL, matrix, MATRIX_CAP_LINE, MATRIX_CAPTION } from './matrixModel'
 import type { ViewProps } from './viewModel'
 
@@ -27,7 +27,7 @@ export function MatrixView({ nodes, links, theme, colors, inFocus, onSelect }: V
                 <th
                   key={paper.id}
                   scope="col"
-                  title={paper.title}
+                  title={nodeLabel(paper)}
                   className="sticky top-0 z-10 bg-background px-0.5 pb-1 align-bottom font-normal text-muted-foreground"
                   style={fade(paper.id)}
                 >
@@ -42,7 +42,7 @@ export function MatrixView({ nodes, links, theme, colors, inFocus, onSelect }: V
                 <th scope="row" className="sticky left-0 z-10 bg-background p-0 text-left font-normal">
                   <button
                     type="button"
-                    title={row.title}
+                    title={nodeLabel(row)}
                     className="flex w-48 items-center gap-2 rounded-md px-2 py-1 text-left transition-colors duration-150 outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
                     onClick={() => onSelect(row.id)}
                   >

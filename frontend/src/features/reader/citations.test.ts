@@ -36,6 +36,7 @@ const fake = (title: string, slug: string, position: number): Reference => ({
   cocitation: 1,
   paper_id: null,
   position,
+  queued_at: null,
 })
 const [FREE, LANDING, CLOSED] = [
   fake('PaperLab Find Papers Fixture', 'free', 0),

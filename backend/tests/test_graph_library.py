@@ -7,7 +7,7 @@ from sqlalchemy import insert
 from test_note_papers import paper_only_note
 from test_search_rebuild import OLLAMA_NAME, switched
 
-from app.core import graph, paper_links, workspaces
+from app.core import graph, paper_links, papers, workspaces
 from app.core.errors import NotFound
 from app.models import (
     Author,
@@ -312,3 +312,13 @@ async def test_one_note_on_two_whole_papers_links_them_and_marks_both_noted(sess
 
     assert links_between(result, [left, right]) == [("co_anchored", f"Left {RUN}", f"Right {RUN}")]
     assert [node.has_notes for node in result.nodes if node.id in (left.id, right.id)] == [True, True]
+
+
+async def test_a_nodes_reading_pass_shows_on_the_graph(session):
+    [paper] = await add_papers(session, f"Reading pass {RUN}")
+    await papers.set_reading(session, paper.id, {"reading_pass": 2, "triage": "later"})
+
+    result = await graph.library_graph(session)
+
+    node = next(n for n in result.nodes if n.id == paper.id)
+    assert node.reading_pass == 2  # triage is never on the graph (D119): only the level travels

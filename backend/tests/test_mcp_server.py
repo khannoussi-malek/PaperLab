@@ -9,7 +9,7 @@ from pdf_papers import TWO_LINE_QUOTE, chunked_paper
 from sqlalchemy import delete
 from test_search_rebuild import OLLAMA_NAME, paper_with, switched
 
-from app.core import workspaces
+from app.core import papers, workspaces
 from app.models import Chunk, LLMOutput, Note, Paper
 from app.providers import embedding
 from mcp_server import server
@@ -170,6 +170,15 @@ async def test_get_paper_sends_every_note_with_its_provenance(session, tmp_path)
 
     assert (card["title"], [s["title"] for s in card["sections"]]) == ("Carded paper", ["1 Introduction", "2 Method"])
     assert [(n["provenance"], n["body"], n["page"]) for n in card["notes"]] == [("llm", "Claims can be checked.", 1)]
+
+
+async def test_get_paper_shows_reading_pass_and_triage(session, tmp_path):
+    paper, _, _ = await chunked_paper(session, tmp_path, title="Carded paper")
+    await papers.set_reading(session, paper.id, {"reading_pass": 3, "triage": "drop"})
+
+    card = (await call("get_paper", paper_id=str(paper.id))).structured_content
+
+    assert (card["reading_pass"], card["triage"]) == (3, "drop")
 
 
 async def test_related_papers_respects_hops(session):
