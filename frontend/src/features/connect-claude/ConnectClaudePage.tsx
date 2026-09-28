@@ -83,7 +83,10 @@ export function ConnectClaudePage() {
       <Section id="claude-can-heading" title="What Claude can do">
         <ul className="list-disc space-y-1 pl-5 text-sm">
           <li>Search your library for the passages closest to a question, in every paper or one workspace.</li>
-          <li>Read a paper's details, section outline, workspaces and notes, with who wrote each note.</li>
+          <li>
+            Read a paper's details, your reading pass and decision, section outline, workspaces and notes, with who
+            wrote each note.
+          </li>
           <li>Find the papers in your library connected to one, up to three links away.</li>
           <li>Save a note on a passage it quotes exactly.</li>
         </ul>
@@ -94,8 +97,9 @@ export function ConnectClaudePage() {
 
       <Section id="claude-receives-heading" title="What Claude receives">
         <p className="text-sm">
-          Passages from your papers, paper details and workspace names, and every note on a paper, marked as yours or
-          AI. Claude Desktop and Claude Code send what the tools return to Anthropic.
+          Passages from your papers, paper details (with your reading pass and decision) and workspace names, and
+          every note on a paper, marked as yours or AI. Claude Desktop and Claude Code send what the tools return to
+          Anthropic.
         </p>
       </Section>
 

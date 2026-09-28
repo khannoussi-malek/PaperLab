@@ -33,7 +33,7 @@ changing work areas. Don't replace the whole shell for every feature."*
 | Part | Size | Holds |
 |---|---|---|
 | Toolbar | `h-11`, glass, hairline under | An optional back button, the view's `h1` (`shellTitle`: `font-heading text-base`), the view's actions, `ModeToggle` |
-| Rail (`NavRail`) | `14rem`, glass, hairline right | Library / Graph / Charts, then the workspaces, then Connect Claude / Settings pinned to the bottom |
+| Rail (`NavRail`) | `14rem`, glass, hairline right | Library / Graph / Charts / Notes / References, then the workspaces, then Connect Claude / Settings pinned to the bottom |
 | View | the rest | The route's page, and the only part that changes |
 | Status bar | `.status-bar`, `h-6`, `text-xs text-muted-foreground` | This view's counts: "24 papers", "1 paper · 0 notes", "24 papers, 57 links" |
 
@@ -718,6 +718,15 @@ Patterns from ui-ux-pro-max (`--domain ux`): *Deep Linking*, *Back Button*, *Act
   count is zero; the whole line is left out when both are.
 - The switch keeps whichever direction the reader was viewing; both directions share one fetch state (the worker
   fills `cites` and `cited_by` together), so switching mid-fetch or mid-failure shows the same state either way.
+
+**The References page** (`#/references`, D121, D166): the tab's own ranking without its per-paper filter, in
+`AppShell` like every other top-level view (see Shell) — no drill-down, so no `back`; a **Workspace** `Select` in the
+toolbar's actions (`w-56`: **Whole library** first, then the workspaces by name); the coverage line
+(`.references-coverage`, `aria-live="polite"`), a bounded, scrolling **Not looked up yet** list
+(`.unfetched-papers`/`.unfetched-paper`, each with its own **Fetch** or **Try again**), then **To read**, **Cited by
+several of your papers** and **Citing several of your papers** (D177), each `ReferenceRow`s with a per-row **To
+read** toggle (`Bookmark`/`BookmarkCheck`, `aria-pressed`, never colour alone). A workspace no longer in the list
+gets an alert and a way back to the whole library; the listing itself is never asked for in that case.
 
 ## Citation card
 
