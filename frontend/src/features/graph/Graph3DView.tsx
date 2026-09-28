@@ -2,7 +2,7 @@ import { Component, useEffect, useMemo, useRef, useState, type ReactNode } from 
 import type { ForceGraphMethods, LinkObject, NodeObject } from 'react-force-graph-3d'
 import { CHART_INK } from '@/features/charts/palette'
 import { GraphLoadError } from './GraphCanvas'
-import { carryPositions, endId, FADED, sizedNodes, tooltipFor, withAlpha, type SizedNode } from './graphModel'
+import { carryPositions, endId, FADED, nodeLabel, sizedNodes, tooltipFor, withAlpha, type SizedNode } from './graphModel'
 import { useBoxSize } from './useBoxSize'
 import { hasWebGL, WEBGL_FAILED, WEBGL_OFF, type ViewProps } from './viewModel'
 
@@ -127,7 +127,7 @@ export function Graph3DView({ nodes, links, theme, colors, inFocus, onSelect }: 
                 controlType="orbit"
                 nodeId="id"
                 // As in 2D: float-tooltip sets a string label as innerHTML, so a title only ever goes in as an element.
-                nodeLabel={(node: Node3D) => tooltipFor(node.title) as unknown as string}
+                nodeLabel={(node: Node3D) => tooltipFor(nodeLabel(node)) as unknown as string}
                 nodeRelSize={1}
                 nodeVal={(node: Node3D) => node.radius ** 3}
                 nodeOpacity={1}
