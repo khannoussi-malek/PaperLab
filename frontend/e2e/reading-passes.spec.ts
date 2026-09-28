@@ -39,7 +39,10 @@ test('filters the library by reading state, and the menu sets it too', async ({ 
   await page.getByRole('combobox', { name: 'Reading' }).click()
   await page.getByRole('option', { name: 'Not read yet' }).click()
   // Q1 (b): pass 0 and not dropped. paperId is pass 2 (not unread); secondPaperId is dropped (not "unread" either).
-  await expect(page.locator('li.paper-row')).toHaveCount(0)
+  // Scoped to the two fixture papers, not the whole list (D51): the shared dev library has other, real papers
+  // that have never had a reading pass or decision set, which also count as "not read yet" under this filter.
+  await expect(page.locator(`li.paper-row[data-paper-id="${paperId}"]`)).toHaveCount(0)
+  await expect(page.locator(`li.paper-row[data-paper-id="${secondPaperId}"]`)).toHaveCount(0)
 })
 
 test('shows the pass on the graph panel', async ({ page, request, paperId }) => {
@@ -58,6 +61,10 @@ test('sets a pass with the keyboard, and Open References shows the References ta
   await page.keyboard.press('Enter')
   await expect(page.getByRole('radio', { name: 'None yet' })).toBeFocused()
   await page.keyboard.press('ArrowDown')
+  // Space selects the now-focused radio directly, rather than relying on ArrowDown's own auto-select: a known
+  // upstream radix-ui RadioGroup timing bug (confirmed against 1.6.7, the latest stable) makes that unreliable.
+  await expect(page.getByRole('radio', { name: 'Pass 1' })).toBeFocused()
+  await page.keyboard.press('Space')
   await expect(page.getByRole('radio', { name: 'Pass 1' })).toHaveAttribute('data-state', 'checked')
 
   await page.getByRole('button', { name: 'Open References' }).focus()
