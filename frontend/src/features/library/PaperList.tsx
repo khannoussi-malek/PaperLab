@@ -1,13 +1,16 @@
-import { FileText, LoaderCircle, Trash2 } from 'lucide-react'
+import { BookOpenCheck, FileText, LoaderCircle, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import type { Paper } from '@/api/client'
-import { useDeletePaper, useWorkspaceMembership } from '@/api/queries'
+import type { Paper, ReadingIn } from '@/api/client'
+import { useDeletePaper, useSetReading, useWorkspaceMembership } from '@/api/queries'
 import { glass } from '@/components/glass'
 import { fadeIn } from '@/components/motion'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { matchesReading, READING_FILTERS, readingChip, type ReadingFilter } from '@/features/reading/passes'
 import { readerHref } from '@/lib/route'
 import { cn } from '@/lib/utils'
 import { PaperContextMenu, PaperMenu } from './PaperMenu'
@@ -32,17 +35,20 @@ type RowProps = {
   onPreview: (id: string, immediate: boolean) => void
   onDelete: (paper: Paper) => void
   onMembershipChange: (paper: Paper, workspaceId: string, member: boolean) => void
+  onReadingChange: (paper: Paper, changes: ReadingIn) => void
 }
 
-function PaperRow({ paper, previewed, enterDelayMs, workspaceId, onPreview, onDelete, onMembershipChange }: RowProps) {
+function PaperRow({ paper, previewed, enterDelayMs, workspaceId, onPreview, onDelete, onMembershipChange, onReadingChange }: RowProps) {
   // Decided once, at mount: a row that stays on screen while the query changes must not replay it. Cleared once played,
   // so a tab panel shown again (display: none restarts animations) doesn't replay it either.
   const [enterDelay, setEnterDelay] = useState(enterDelayMs)
   const meta = [byline(paper), pageCountLabel(paper.page_count)].filter(Boolean).join(' · ')
   const onMembership = (id: string, member: boolean) => onMembershipChange(paper, id, member)
+  const onReading = (changes: ReadingIn) => onReadingChange(paper, changes)
   return (
-    <PaperContextMenu paper={paper} workspaceId={workspaceId} onMembershipChange={onMembership}>
+    <PaperContextMenu paper={paper} workspaceId={workspaceId} onMembershipChange={onMembership} onReadingChange={onReading}>
       <li
+        data-paper-id={paper.id}
         className={cn(
           'paper-row group relative flex items-start gap-3 px-4 py-3 transition-colors duration-150 hover:bg-foreground/5',
           previewed && 'lg:bg-primary/5 lg:shadow-[inset_3px_0_0_var(--color-primary)]',
@@ -67,6 +73,13 @@ function PaperRow({ paper, previewed, enterDelayMs, workspaceId, onPreview, onDe
           {meta && <p className="mt-0.5 truncate text-sm text-muted-foreground">{meta}</p>}
           {paper.status_error && <p className="mt-0.5 text-xs text-destructive">{paper.status_error}</p>}
         </div>
+        {readingChip(paper.reading_pass, paper.triage) && (
+          <Badge variant="secondary" className="reading-chip mt-1 font-normal">
+            <BookOpenCheck aria-hidden />
+            <span className="sr-only">Reading: </span>
+            {readingChip(paper.reading_pass, paper.triage)}
+          </Badge>
+        )}
         {/* Ready is the normal state: announced, not shown. Only in-progress and failed papers get a visible badge. */}
         <Badge
           variant={paper.status === 'failed' ? 'destructive' : 'outline'}
@@ -75,7 +88,7 @@ function PaperRow({ paper, previewed, enterDelayMs, workspaceId, onPreview, onDe
           {isIngesting(paper) && <LoaderCircle aria-hidden className="motion-safe:animate-spin" />}
           {paper.status}
         </Badge>
-        <PaperMenu paper={paper} workspaceId={workspaceId} onMembershipChange={onMembership} />
+        <PaperMenu paper={paper} workspaceId={workspaceId} onMembershipChange={onMembership} onReadingChange={onReading} />
         <Button
           variant="ghost"
           size="icon-sm"
@@ -105,11 +118,13 @@ type Props = {
 export function PaperList({ papers, workspaceId }: Props) {
   const remove = useDeletePaper()
   const membership = useWorkspaceMembership()
+  const reading = useSetReading()
+  const [filter, setFilter] = useState<ReadingFilter>('all')
   const hoverTimer = useRef<number | undefined>(undefined)
   const [previewId, setPreviewId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const searchInput = useRef<HTMLInputElement>(null)
-  const shown = papers.filter((paper) => matchesPaper(paper, query))
+  const shown = papers.filter((paper) => matchesPaper(paper, query) && matchesReading(paper, filter))
   // The paper list as it was at the last keystroke. A row mounting while the list is still that one was brought back by
   // the search, and fades in; rows arriving from the server (first load, an upload) come with a new list, and stay still.
   const [typedOver, setTypedOver] = useState<Paper[] | null>(null)
@@ -139,7 +154,7 @@ export function PaperList({ papers, workspaceId }: Props) {
     remove.mutate(paper.id)
   }
 
-  const error = remove.error ?? membership.error
+  const error = remove.error ?? membership.error ?? reading.error
   // Falls back to the first paper, so the panel is never empty and a deleted paper's preview goes away.
   const previewed = shown.find((paper) => paper.id === previewId) ?? shown[0]
 
@@ -152,9 +167,38 @@ export function PaperList({ papers, workspaceId }: Props) {
       )}
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="flex min-w-0 flex-col gap-3">
-          <PaperSearch query={query} shown={shown.length} total={papers.length} inputRef={searchInput} onQueryChange={search} onClear={clearSearch} />
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <PaperSearch
+                query={query}
+                shown={shown.length}
+                total={papers.length}
+                narrowed={query.trim() !== '' || filter !== 'all'}
+                inputRef={searchInput}
+                onQueryChange={search}
+                onClear={clearSearch}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="reading-filter" className="sr-only">
+                Reading
+              </Label>
+              <Select value={filter} onValueChange={(value) => setFilter(value as ReadingFilter)}>
+                <SelectTrigger id="reading-filter" className="w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {READING_FILTERS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
           {shown.length === 0 ? (
-            <NoMatches query={query} onClear={clearSearch} />
+            <NoMatches query={query} filter={filter} onClear={clearSearch} onShowAll={() => setFilter('all')} />
           ) : (
             <Card className={cn('gap-0 py-0 ring-glass-border', glass)}>
               <ul className="divide-y divide-border">
@@ -168,6 +212,7 @@ export function PaperList({ papers, workspaceId }: Props) {
                     onPreview={preview}
                     onDelete={onDelete}
                     onMembershipChange={(row, id, member) => membership.mutate({ workspaceId: id, paperIds: [row.id], member })}
+                    onReadingChange={(row, changes) => reading.mutate({ paperId: row.id, changes })}
                   />
                 ))}
               </ul>

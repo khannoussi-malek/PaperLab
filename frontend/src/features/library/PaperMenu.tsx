@@ -1,6 +1,6 @@
-import { EllipsisVertical, FolderMinus, FolderPlus } from 'lucide-react'
+import { BookOpenCheck, EllipsisVertical, FolderMinus, FolderPlus } from 'lucide-react'
 import type { ReactNode } from 'react'
-import type { Paper } from '@/api/client'
+import type { Paper, ReadingIn } from '@/api/client'
 import { useWorkspaces } from '@/api/queries'
 import { glass } from '@/components/glass'
 import { Button } from '@/components/ui/button'
@@ -9,6 +9,10 @@ import {
   ContextMenuCheckboxItem,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuRadioGroup,
+  ContextMenuRadioItem,
+  ContextMenuSeparator,
   ContextMenuSub,
   ContextMenuSubContent,
   ContextMenuSubTrigger,
@@ -19,11 +23,16 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { LEVELS, TRIAGES, UNDECIDED_LABEL, type Triage } from '@/features/reading/passes'
 import { cn } from '@/lib/utils'
 
 // Wide enough for "Add to workspace…" and a typical workspace name on one line.
@@ -36,6 +45,10 @@ const dropdownParts = {
   Sub: DropdownMenuSub,
   SubTrigger: DropdownMenuSubTrigger,
   SubContent: DropdownMenuSubContent,
+  RadioGroup: DropdownMenuRadioGroup,
+  RadioItem: DropdownMenuRadioItem,
+  Label: DropdownMenuLabel,
+  Separator: DropdownMenuSeparator,
 }
 const contextParts = {
   Item: ContextMenuItem,
@@ -43,6 +56,10 @@ const contextParts = {
   Sub: ContextMenuSub,
   SubTrigger: ContextMenuSubTrigger,
   SubContent: ContextMenuSubContent,
+  RadioGroup: ContextMenuRadioGroup,
+  RadioItem: ContextMenuRadioItem,
+  Label: ContextMenuLabel,
+  Separator: ContextMenuSeparator,
 }
 
 type Props = {
@@ -50,9 +67,10 @@ type Props = {
   /** The workspace being shown, if any: its row also offers "Remove from workspace". */
   workspaceId?: string
   onMembershipChange: (workspaceId: string, member: boolean) => void
+  onReadingChange: (changes: ReadingIn) => void
 }
 
-function MenuItems({ parts: M, paper, workspaceId, onMembershipChange }: Props & { parts: typeof dropdownParts | typeof contextParts }) {
+function MenuItems({ parts: M, paper, workspaceId, onMembershipChange, onReadingChange }: Props & { parts: typeof dropdownParts | typeof contextParts }) {
   const workspaces = useWorkspaces()
   // The API already orders workspaces by name (Postgres collation); no client re-sort.
   const sorted = workspaces.data ?? []
@@ -76,6 +94,37 @@ function MenuItems({ parts: M, paper, workspaceId, onMembershipChange }: Props &
               {workspace.name}
             </M.CheckboxItem>
           ))}
+        </M.SubContent>
+      </M.Sub>
+      <M.Sub>
+        <M.SubTrigger>
+          <BookOpenCheck aria-hidden />
+          Reading
+        </M.SubTrigger>
+        <M.SubContent className={menuSurface}>
+          <M.Label>Passes finished</M.Label>
+          <M.RadioGroup
+            value={String(paper.reading_pass)}
+            onValueChange={(value) => onReadingChange({ reading_pass: Number(value) })}
+          >
+            {LEVELS.map((level) => (
+              <M.RadioItem key={level.value} value={String(level.value)} onSelect={(event) => event.preventDefault()}>
+                {level.label}
+              </M.RadioItem>
+            ))}
+          </M.RadioGroup>
+          <M.Separator />
+          <M.Label>Decision</M.Label>
+          <M.RadioGroup
+            value={paper.triage ?? 'undecided'}
+            onValueChange={(value) => onReadingChange({ triage: value === 'undecided' ? null : (value as Triage) })}
+          >
+            {[...TRIAGES, { value: 'undecided' as const, label: UNDECIDED_LABEL }].map((option) => (
+              <M.RadioItem key={option.value} value={option.value} onSelect={(event) => event.preventDefault()}>
+                {option.label}
+              </M.RadioItem>
+            ))}
+          </M.RadioGroup>
         </M.SubContent>
       </M.Sub>
       {workspaceId && (

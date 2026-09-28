@@ -4,12 +4,15 @@ import { glass } from '@/components/glass'
 import { popIn, pressable } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group'
+import { emptyListText, type ReadingFilter } from '@/features/reading/passes'
 import { cn } from '@/lib/utils'
 
 type SearchProps = {
   query: string
   shown: number
   total: number
+  /** Whether to show "N of M": a search or the reading filter narrows the list. */
+  narrowed: boolean
   inputRef: Ref<HTMLInputElement>
   onQueryChange: (query: string) => void
   /** Empties the query and puts the cursor back in the field (the clear button unmounts with the query). */
@@ -17,7 +20,7 @@ type SearchProps = {
 }
 
 /** The paper list's search bar: glass, with "3 of 18" and a clear button popping in while a search is on. */
-export function PaperSearch({ query, shown, total, inputRef, onQueryChange, onClear }: SearchProps) {
+export function PaperSearch({ query, shown, total, narrowed, inputRef, onQueryChange, onClear }: SearchProps) {
   const searching = query.trim() !== ''
   return (
     <InputGroup
@@ -44,7 +47,7 @@ export function PaperSearch({ query, shown, total, inputRef, onQueryChange, onCl
         {/* Mounted before any search, so screen readers announce each new count. No aria-label: some would read it
             instead of the count. */}
         <span role="status" className="search-count text-xs tabular-nums">
-          {searching && (
+          {narrowed && (
             <span className={cn('inline-block origin-right', popIn)}>
               {`${shown} of ${total}`}
               <span className="sr-only"> papers</span>
@@ -68,7 +71,7 @@ export function PaperSearch({ query, shown, total, inputRef, onQueryChange, onCl
 }
 
 /** Shown in place of the rows when nothing matches: says so, suggests what to try, and offers the way back. */
-export function NoMatches({ query, onClear }: { query: string; onClear: () => void }) {
+export function NoMatches({ query, filter, onClear, onShowAll }: { query: string; filter: ReadingFilter; onClear: () => void; onShowAll: () => void }) {
   return (
     <div
       className={cn(
@@ -78,12 +81,21 @@ export function NoMatches({ query, onClear }: { query: string; onClear: () => vo
     >
       <SearchX aria-hidden className="size-8 text-muted-foreground" />
       <div className="flex flex-col gap-1">
-        <p className="font-medium wrap-anywhere">No papers match “{query.trim()}”</p>
-        <p className="text-sm text-muted-foreground">Check the spelling, or try an author's surname or a year.</p>
+        <p className="font-medium wrap-anywhere">{emptyListText(query, filter)}</p>
+        {query.trim() && <p className="text-sm text-muted-foreground">Check the spelling, or try an author's surname or a year.</p>}
       </div>
-      <Button variant="outline" size="sm" className={pressable} onClick={onClear}>
-        Clear search
-      </Button>
+      <div className="flex gap-2">
+        {query.trim() && (
+          <Button variant="outline" size="sm" className={pressable} onClick={onClear}>
+            Clear search
+          </Button>
+        )}
+        {filter !== 'all' && (
+          <Button variant="outline" size="sm" className={pressable} onClick={onShowAll}>
+            Show all papers
+          </Button>
+        )}
+      </div>
     </div>
   )
 }
