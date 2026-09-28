@@ -222,3 +222,25 @@ async def test_the_queue_routes_mark_and_unmark_a_reference_and_a_second_call_is
     assert (gone.status_code, gone.json(), again.status_code) == (200, {"queued_at": None}, 200)
     for method in (client.put, client.delete):
         assert (await method(f"/api/references/{uuid.uuid4()}/queue")).status_code == 404
+
+
+# --- the References page (D166, D177) -----------------------------------------------------------------------------
+
+
+async def test_the_references_page_answers_its_four_parts_and_scopes_to_a_workspace(client, library):
+    reader, free, _ = await reader_with_references(library)
+    await client.put(f"/api/references/{free.id}/queue")
+
+    page = (await client.get("/api/references")).json()
+    assert set(page) == {"coverage", "to_read", "cited_by_several", "citing_several"}
+    assert page["coverage"]["total"] >= 1
+    assert any(row["id"] == str(free.id) for row in page["to_read"])
+    assert "note_similarity" not in str(page)  # no ranking internals leak into the body
+
+    workspace = (await client.post("/api/workspaces", json={"name": f"m21 {uuid.uuid4().hex[:8]}"})).json()
+    await client.put(f"/api/workspaces/{workspace['id']}/papers/{reader.id}")
+    scoped = await client.get(f"/api/references?workspace={workspace['id']}")
+    assert scoped.status_code == 200
+
+    assert (await client.get(f"/api/references?workspace={uuid.uuid4()}")).status_code == 404
+    assert (await client.get("/api/references?workspace=not-a-uuid")).status_code == 422
