@@ -61,3 +61,23 @@ class QueueOut(BaseModel):
     """When the reference was marked To read; null once it's taken off."""
 
     queued_at: datetime | None
+
+
+class UnfetchedPaperOut(BaseModel):
+    id: uuid.UUID
+    title: str
+    state: str
+    error: str | None
+
+
+class CoverageOut(BaseModel):
+    fetched: int
+    total: int
+    unfetched: list[UnfetchedPaperOut]
+
+
+class ReferencePageOut(BaseModel):
+    coverage: CoverageOut
+    to_read: list[ReferenceOut]
+    cited_by_several: list[ReferenceOut]
+    citing_several: list[ReferenceOut]
