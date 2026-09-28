@@ -2,6 +2,7 @@ import type { components } from './schema'
 
 export type Paper = components['schemas']['PaperOut']
 export type PaperUpdate = components['schemas']['PaperUpdate']
+export type ReadingIn = components['schemas']['ReadingIn']
 export type Chunk = components['schemas']['ChunkOut']
 export type Note = components['schemas']['NoteOut']
 export type NoteCreate = components['schemas']['NoteCreate']
@@ -138,6 +139,9 @@ export const api = {
     return request<Paper>('/api/papers', { method: 'POST', body: form })
   },
   updatePaper: (id: string, update: PaperUpdate) => request<Paper>(`/api/papers/${id}`, sendJson('PATCH', update)),
+  /** The reader's own record (D118, D119): passes finished, keep/later/drop, or both. A field left out keeps its
+   * value. 422 for an out-of-range pass, an unknown decision, or an empty body. */
+  setReading: (id: string, changes: ReadingIn) => request<Paper>(`/api/papers/${id}/reading`, sendJson('PUT', changes)),
   deletePaper: (id: string) => request<void>(`/api/papers/${id}`, { method: 'DELETE' }),
   reingestPaper: (id: string) => request<Paper>(`/api/papers/${id}/reingest`, { method: 'POST' }),
   paperFileUrl: (id: string) => `/api/papers/${id}/file`,
