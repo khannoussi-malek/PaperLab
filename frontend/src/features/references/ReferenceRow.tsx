@@ -1,6 +1,6 @@
-import { ExternalLink, LoaderCircle, Plus } from 'lucide-react'
+import { Bookmark, BookmarkCheck, ExternalLink, LoaderCircle, Plus } from 'lucide-react'
 import type { Reference, ReferencesDirection } from '@/api/client'
-import { useImportReference } from '@/api/queries'
+import { useImportReference, useQueueReference } from '@/api/queries'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { citationsLabel, pageLink } from '@/features/discovery/candidateMeta'
@@ -9,16 +9,18 @@ import { byline } from '@/features/library/paperMeta'
 import { readerHref } from '@/lib/route'
 import { cocitationBadge, rowAction } from './referencesMeta'
 
-type Props = { paperId: string; reference: Reference; direction: ReferencesDirection; workspaceId?: string }
+type Props = { reference: Reference; direction: ReferencesDirection; workspaceId?: string; onUnqueued?: () => void }
 
 /** One reference or citing work: what it is, ranking badges, and Import, In library or Open page. */
-export function ReferenceRow({ paperId, reference, direction, workspaceId }: Props) {
-  const importRef = useImportReference(paperId)
+export function ReferenceRow({ reference, direction, workspaceId, onUnqueued }: Props) {
+  const importRef = useImportReference()
+  const queueRef = useQueueReference(onUnqueued)
   const inLibraryId = importRef.data?.id ?? reference.paper_id
   const action = rowAction({ ...reference, paper_id: inLibraryId })
   const link = pageLink({ ...reference, core_id: null })
   const meta = [byline(reference), citationsLabel(reference.cited_by_count)].filter(Boolean).join(' · ')
   const badge = cocitationBadge(reference.cocitation, direction)
+  const queued = queueRef.isPending ? queueRef.variables.queue : reference.queued_at !== null
   return (
     <li className="reference-row flex flex-col gap-2 px-4 py-3">
       <div className="flex items-start gap-3">
@@ -54,6 +56,20 @@ export function ReferenceRow({ paperId, reference, direction, workspaceId }: Pro
             {importRef.isPending ? 'Importing…' : 'Import'}
           </Button>
         )}
+        {action !== 'in-library' && (
+          <Button
+            size="sm"
+            variant="outline"
+            aria-pressed={queued}
+            aria-label={`To read: ${reference.title}`}
+            aria-disabled={queueRef.isPending}
+            className="aria-pressed:border-primary aria-pressed:bg-primary/10 aria-pressed:text-primary aria-disabled:opacity-50"
+            onClick={() => !queueRef.isPending && queueRef.mutate({ refId: reference.id, queue: !queued })}
+          >
+            {queued ? <BookmarkCheck aria-hidden /> : <Bookmark aria-hidden />}
+            To read
+          </Button>
+        )}
         {link && (
           <Button size="sm" variant="ghost" asChild>
             <a href={link} target="_blank" rel="noreferrer">
@@ -64,6 +80,7 @@ export function ReferenceRow({ paperId, reference, direction, workspaceId }: Pro
         )}
       </div>
       {importRef.error && <ErrorAlert message={importRef.error.message} />}
+      {queueRef.error && <ErrorAlert message={queueRef.error.message} />}
     </li>
   )
 }

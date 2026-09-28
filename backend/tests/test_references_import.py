@@ -1,6 +1,7 @@
 """Importing a reference: the free PDF becomes a library paper (M7.5, D84)."""
 
 import uuid
+from datetime import datetime, timezone
 
 import pytest
 from sqlalchemy import delete, select
@@ -113,3 +114,27 @@ async def test_importing_marks_every_stored_row_for_the_same_paper(library, disc
     await library.refresh(by_arxiv)
     assert by_doi.imported_as == paper.id
     assert by_arxiv.imported_as == paper.id
+
+
+async def test_importing_takes_every_row_for_that_paper_off_to_read(library, discovery_fakes, pdf_dir):
+    doi, arxiv_id = f"10.5555/m21-{uuid.uuid4().hex[:8]}", f"2609.{uuid.uuid4().hex[:5]}"
+    at = datetime(2026, 9, 1, tzinfo=timezone.utc)
+    imported = ExternalRef(
+        title="Queued", doi=doi, arxiv_id=arxiv_id, pdf_urls=["https://pdf.example/queued.pdf"], queued_at=at
+    )
+    same_doi = ExternalRef(title="Same DOI", doi=doi.upper(), queued_at=at)
+    same_arxiv = ExternalRef(title="Same arXiv ID", arxiv_id=arxiv_id, queued_at=at)
+    other = ExternalRef(title="Another paper", doi="10.5555/m21-another", queued_at=at)
+    library.add_all([imported, same_doi, same_arxiv, other])
+    await library.flush()
+    discovery_fakes.pdf_host.reply("/queued.pdf", 200, content=PDF)
+
+    paper = await references.import_reference(library, discovery_fakes.providers, imported.id, pdf_dir)
+
+    rows = await library.execute(select(ExternalRef.title, ExternalRef.imported_as, ExternalRef.queued_at))
+    assert {title: (imported_as, queued_at) for title, imported_as, queued_at in rows} == {
+        "Queued": (paper.id, None),
+        "Same DOI": (paper.id, None),
+        "Same arXiv ID": (paper.id, None),
+        "Another paper": (None, at),
+    }

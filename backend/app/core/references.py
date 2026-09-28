@@ -3,9 +3,11 @@
 - Semantic Scholar answers both directions; OpenAlex is merged in when it's ticked (D77). Stored in `external_refs`
   and `paper_references`, so ranking can count how many library papers share a reference (D78).
 - Ranking is tiers (D80): co-citation inside the library, closeness to the reader's notes, a free PDF, citation count.
+  A reference is in the library by `IN_LIBRARY`, the one match the tab, the References page and the graph share.
 - Importing downloads a free PDF exactly as Find papers' Add does (D84); nothing is fetched for the new paper (P5).
 """
 
+import dataclasses
 import logging
 import uuid
 from collections.abc import Sequence
@@ -18,7 +20,7 @@ from sqlalchemy import delete, func, insert, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core import discovery, papers
+from app.core import discovery, papers, workspaces
 from app.core.candidates import Candidate, from_s2, from_work, merge, ordered_pdf_urls
 from app.core.errors import Conflict, NotFound
 from app.models import ExternalRef, Note, NoteEmbedding, Paper, paper_references
@@ -29,6 +31,7 @@ logger = logging.getLogger(__name__)
 REFS_CAP = 500
 CITING_CAP = 200
 CO_CITATION_SUMMARY = 3
+COCITED_MIN = 2  # D166, D177: the References page's threshold for both directions
 # A fetch the worker never finished (a restart mid-job) can be asked for again after this long.
 FETCH_STALE = timedelta(minutes=10)
 
@@ -58,6 +61,7 @@ class ReferenceRow:
     cocitation: int  # library papers citing it (or, for citing works, library papers it cites)
     paper_id: uuid.UUID | None  # set when the library holds it
     position: int
+    queued_at: datetime | None  # when the reader marked it To read (D164)
 
 
 @dataclass(frozen=True)
@@ -190,6 +194,9 @@ async def _upsert(session: AsyncSession, candidate: Candidate) -> uuid.UUID:
         *candidate.pdf_urls,
         *(url for row in [*duplicates, keeper] for url in row.pdf_urls),
     )
+    earliest = min((row.queued_at for row in duplicates if row.queued_at is not None), default=None)
+    if earliest is not None:  # D120: a fold keeps the earliest To read; the keeper's own value is read in SQL
+        fields = {**fields, "queued_at": func.least(ExternalRef.queued_at, earliest)}
     await session.execute(update(ExternalRef).where(ExternalRef.id == keeper.id).values(**fields, **ids))
     return keeper.id
 
@@ -250,6 +257,34 @@ async def set_state(session: AsyncSession, paper_id: uuid.UUID, state: str, erro
     await session.commit()
 
 
+# --- To read (D164) ----------------------------------------------------------------------------------------------
+
+
+async def queue(session: AsyncSession, ref_id: uuid.UUID) -> datetime:
+    """Marks a reference To read. A second call keeps the first time. Nothing but this, a fold and an import writes
+    queued_at, so a Refresh keeps it. Raises NotFound."""
+    queued_at = await session.scalar(
+        update(ExternalRef)
+        .where(ExternalRef.id == ref_id)
+        .values(queued_at=func.coalesce(ExternalRef.queued_at, func.now()))
+        .returning(ExternalRef.queued_at)
+    )
+    if queued_at is None:
+        raise NotFound(f"reference {ref_id} not found")
+    await session.commit()
+    return queued_at
+
+
+async def unqueue(session: AsyncSession, ref_id: uuid.UUID) -> None:
+    """Takes a reference off To read. Harmless when it isn't on it. Raises NotFound."""
+    found = await session.scalar(
+        update(ExternalRef).where(ExternalRef.id == ref_id).values(queued_at=None).returning(ExternalRef.id)
+    )
+    if found is None:
+        raise NotFound(f"reference {ref_id} not found")
+    await session.commit()
+
+
 # --- embeddings --------------------------------------------------------------------------------------------------
 
 
@@ -301,30 +336,52 @@ async def embed_new(session: AsyncSession, embedder) -> None:
 
 # --- listing -----------------------------------------------------------------------------------------------------
 
+# The one in-library match (D121, D165): the tab, the References page and the graph all compose this. A reference is a
+# library paper when it was imported as one, or a paper has its OpenAlex ID, its DOI in any case, or its arXiv DOI.
+IN_LIBRARY = """in_library(ref_id, paper_id) AS (
+  SELECT id, imported_as FROM external_refs WHERE imported_as IS NOT NULL
+  UNION SELECT r.id, p.id FROM external_refs r JOIN papers p ON p.openalex_id = r.openalex_id
+         WHERE r.imported_as IS NULL
+  UNION SELECT r.id, p.id FROM external_refs r JOIN papers p ON lower(p.doi) = lower(r.doi)
+         WHERE r.imported_as IS NULL
+  UNION SELECT r.id, p.id FROM external_refs r
+           JOIN papers p ON lower(p.doi) = '10.48550/arxiv.' || lower(r.arxiv_id)
+         WHERE r.imported_as IS NULL
+)"""
+
 # ponytail: no vector index; at library scale (hundreds of refs, tens of notes) a scan beats an HNSW build. Add one
 # when a library passes ~50k references.
+NOTE_SIMILARITY = """(SELECT max(1 - (r.title_embedding <=> n.embedding)) FROM note_embeddings n
+             WHERE n.embed_model = r.title_embed_model)"""
+
+# D80's tiers, written once. Bare output-column names, so Postgres reads them as the SELECT's own columns in both
+# statements (pr.position in the tab, l.position on the page).
+RANK = "cocitation DESC, note_similarity DESC NULLS LAST, has_pdf DESC, cited_by_count DESC NULLS LAST, position"
+
 _LISTING = text(
-    """
+    f"""
+    WITH {IN_LIBRARY}
     SELECT r.id, r.title, r.authors, r.year, r.venue, r.doi, r.arxiv_id, r.openalex_id, r.s2_id, r.cited_by_count,
            jsonb_array_length(r.pdf_urls) > 0 AS has_pdf,
            (SELECT count(DISTINCT other.paper_id) FROM paper_references other
              WHERE other.ref_id = r.id AND other.direction = pr.direction) AS cocitation,
-           (SELECT max(1 - (r.title_embedding <=> n.embedding)) FROM note_embeddings n
-             WHERE n.embed_model = r.title_embed_model) AS note_similarity,
-           coalesce(r.imported_as, (
-             SELECT p.id FROM papers p
-              WHERE p.openalex_id = r.openalex_id
-                 OR lower(p.doi) = lower(r.doi)
-                 OR lower(p.doi) = '10.48550/arxiv.' || lower(r.arxiv_id)
-              LIMIT 1)) AS paper_id,
-           pr.position
+           {NOTE_SIMILARITY} AS note_similarity,
+           (SELECT il.paper_id FROM in_library il WHERE il.ref_id = r.id ORDER BY il.paper_id LIMIT 1) AS paper_id,
+           pr.position, r.queued_at
       FROM paper_references pr
       JOIN external_refs r ON r.id = pr.ref_id
      WHERE pr.paper_id = :paper_id AND pr.direction = :direction
-     ORDER BY cocitation DESC, note_similarity DESC NULLS LAST, has_pdf DESC, r.cited_by_count DESC NULLS LAST,
-              pr.position
+     ORDER BY {RANK}
     """
 )
+
+
+def shown_state(state: str, error: str | None, requested_at: datetime | None) -> tuple[str, str | None]:
+    """The 10-minute stale rule (a lost job, e.g. a worker restart mid-fetch): shown as failed, so Try again claims
+    it as request_fetch does. Shared by the tab's listing and the References page's coverage."""
+    if state == "fetching" and (requested_at is None or requested_at < datetime.now(timezone.utc) - FETCH_STALE):
+        return "failed", FETCH_FAILED
+    return state, error
 
 
 async def listing(session: AsyncSession, paper_id: uuid.UUID, direction: str) -> Listing:
@@ -333,11 +390,7 @@ async def listing(session: AsyncSession, paper_id: uuid.UUID, direction: str) ->
         ReferenceRow(**{key: value for key, value in row._mapping.items() if key != "note_similarity"})
         for row in await session.execute(_LISTING, {"paper_id": paper_id, "direction": direction})
     ]
-    state, error = paper.references_state, paper.references_error
-    requested_at = paper.references_requested_at
-    if state == "fetching" and (requested_at is None or requested_at < datetime.now(timezone.utc) - FETCH_STALE):
-        # The job was lost (a worker restart mid-fetch): shown as failed, so Try again claims it as request_fetch does.
-        state, error = "failed", FETCH_FAILED
+    state, error = shown_state(paper.references_state, paper.references_error, paper.references_requested_at)
     return Listing(
         state=state,
         error=error,
@@ -351,6 +404,110 @@ def summarize(rows: Sequence[ReferenceRow]) -> Summary:
     return Summary(
         cited_by_3plus=sum(row.cocitation >= CO_CITATION_SUMMARY for row in rows),
         with_pdf=sum(row.has_pdf for row in rows),
+    )
+
+
+@dataclass(frozen=True)
+class UnfetchedPaper:
+    id: uuid.UUID
+    title: str
+    state: str  # none | fetching | failed (shown state)
+    error: str | None
+
+
+@dataclass(frozen=True)
+class Coverage:
+    fetched: int
+    total: int
+    unfetched: list[UnfetchedPaper]  # by title, then id
+
+
+@dataclass(frozen=True)
+class ReferencePage:
+    coverage: Coverage
+    to_read: list[ReferenceRow]  # newest queued_at first
+    cited_by_several: list[ReferenceRow]  # D80 order
+    citing_several: list[ReferenceRow]  # newest first (D177); cocitation = scope papers it cites
+
+
+_PAGE = text(
+    f"""
+    WITH {IN_LIBRARY}, scope(paper_id) AS (
+      SELECT p.id FROM papers p
+       WHERE CAST(:workspace AS uuid) IS NULL
+          OR EXISTS (SELECT 1 FROM workspace_papers wp WHERE wp.paper_id = p.id AND wp.workspace_id = :workspace)
+    ), linked(ref_id, cocitation, citing, position) AS (
+      SELECT pr.ref_id,
+             count(DISTINCT pr.paper_id) FILTER (WHERE pr.direction = 'cites'),
+             count(DISTINCT pr.paper_id) FILTER (WHERE pr.direction = 'cited_by'),
+             min(pr.position)
+        FROM paper_references pr JOIN scope s ON s.paper_id = pr.paper_id
+       GROUP BY pr.ref_id
+    )
+    SELECT r.id, r.title, r.authors, r.year, r.venue, r.doi, r.arxiv_id, r.openalex_id, r.s2_id, r.cited_by_count,
+           jsonb_array_length(r.pdf_urls) > 0 AS has_pdf, coalesce(l.cocitation, 0) AS cocitation,
+           coalesce(l.citing, 0) AS citing, {NOTE_SIMILARITY} AS note_similarity,
+           NULL::uuid AS paper_id, coalesce(l.position, 0) AS position, r.queued_at
+      FROM external_refs r LEFT JOIN linked l ON l.ref_id = r.id
+     WHERE NOT EXISTS (SELECT 1 FROM in_library il WHERE il.ref_id = r.id)
+       AND (l.ref_id IS NOT NULL OR (r.queued_at IS NOT NULL AND CAST(:workspace AS uuid) IS NULL))
+       AND (r.queued_at IS NOT NULL OR l.cocitation >= :cocited_min OR l.citing >= :cocited_min)
+     ORDER BY {RANK}, r.id
+    """
+)
+
+
+async def library_listing(session: AsyncSession, workspace_id: uuid.UUID | None = None) -> ReferencePage:
+    """The References page (D121, D166): To read, works several scope papers cite, and recent works that cite
+    several of them (D177), across the library or one workspace. Raises NotFound for an unknown workspace."""
+    if workspace_id is not None:
+        await workspaces.get(session, workspace_id)
+    raw = list(await session.execute(_PAGE, {"workspace": workspace_id, "cocited_min": COCITED_MIN}))
+    rows = [
+        ReferenceRow(**{key: value for key, value in row._mapping.items() if key not in ("note_similarity", "citing")})
+        for row in raw
+    ]
+    citing_by_id = {row.id: row.citing for row in raw}
+    to_read = sorted((r for r in rows if r.queued_at is not None), key=lambda r: (-r.queued_at.timestamp(), r.id))
+    cited_by_several = [r for r in rows if r.cocitation >= COCITED_MIN]
+    citing_several = sorted(
+        (dataclasses.replace(r, cocitation=citing_by_id[r.id]) for r in rows if citing_by_id[r.id] >= COCITED_MIN),
+        key=lambda r: (-(r.year or -1), -r.cocitation, r.id),
+    )
+    coverage_rows = list(
+        await session.execute(
+            text(
+                """
+                SELECT p.id, p.title, p.references_state, p.references_error, p.references_requested_at,
+                       p.references_state = 'ready' OR EXISTS (
+                           SELECT 1 FROM paper_references pr WHERE pr.paper_id = p.id
+                       ) AS fetched
+                  FROM papers p
+                 WHERE CAST(:workspace AS uuid) IS NULL
+                    OR EXISTS (
+                        SELECT 1 FROM workspace_papers wp WHERE wp.paper_id = p.id AND wp.workspace_id = :workspace
+                    )
+                """
+            ),
+            {"workspace": workspace_id},
+        )
+    )
+    unfetched = sorted(
+        (row for row in coverage_rows if not row.fetched),
+        key=lambda row: (row.title, row.id),
+    )
+    coverage = Coverage(
+        fetched=sum(1 for row in coverage_rows if row.fetched),
+        total=len(coverage_rows),
+        unfetched=[
+            UnfetchedPaper(
+                row.id, row.title, *shown_state(row.references_state, row.references_error, row.references_requested_at)
+            )
+            for row in unfetched
+        ],
+    )
+    return ReferencePage(
+        coverage=coverage, to_read=to_read, cited_by_several=cited_by_several, citing_several=citing_several
     )
 
 
@@ -373,6 +530,7 @@ async def import_reference(
     )  # fmt: skip
     paper = await discovery.add(session, providers, candidate, pdf_dir)
     same_paper = [ExternalRef.id == ref_id, *_same_reference(None, None, ref.doi, ref.arxiv_id)]
-    await session.execute(update(ExternalRef).where(or_(*same_paper)).values(imported_as=paper.id))
+    # Dealt with: deleting the paper later won't put it back in To read (D164).
+    await session.execute(update(ExternalRef).where(or_(*same_paper)).values(imported_as=paper.id, queued_at=None))
     await session.commit()
     return paper

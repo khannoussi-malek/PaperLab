@@ -62,6 +62,9 @@ function PapersList({
               <span className="truncate" title={node.title}>
                 {node.title}
               </span>
+              {node.reading_pass > 0 && (
+                <span className="shrink-0 text-xs text-muted-foreground">Pass {node.reading_pass}</span>
+              )}
               <span className="ml-auto shrink-0 text-muted-foreground">{degree.get(node.id) ?? 0}</span>
             </button>
           </li>

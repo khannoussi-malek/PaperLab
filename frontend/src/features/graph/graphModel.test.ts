@@ -15,6 +15,7 @@ import {
   layerCounts,
   legendEntries,
   nodeColor,
+  nodeLabel,
   sizedNodes,
   tooltipFor,
   visibleLinks,
@@ -37,6 +38,7 @@ const node = (id: string, workspaces: string[] = []): GraphNode => ({
   has_notes: false,
   status: 'ready',
   added_at: '2026-09-13T10:00:00Z',
+  reading_pass: 0,
 })
 
 describe('layers', () => {
@@ -301,5 +303,14 @@ describe('the panel', () => {
   it('keys a mutual citation\'s two rows apart, and a manual link by its own id', () => {
     expect(connectionKey(link('a', 'b', 'cites'))).not.toBe(connectionKey(link('b', 'a', 'cites')))
     expect(connectionKey({ ...link('a', 'b', 'manual'), id: 'l1' })).toBe('manual-l1')
+  })
+})
+
+describe('nodeLabel', () => {
+  const node = (reading_pass: number) => ({ title: 'A Paper', reading_pass }) as Pick<GraphNode, 'title' | 'reading_pass'>
+
+  it('is the title alone at pass 0, and the title with the pass otherwise', () => {
+    expect(nodeLabel(node(0))).toBe('A Paper')
+    expect(nodeLabel(node(2))).toBe('A Paper · Pass 2')
   })
 })

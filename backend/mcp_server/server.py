@@ -70,8 +70,10 @@ async def search_library(query: str, workspace: str | None = None) -> list[libra
 @mcp.tool(annotations=READ_ONLY)
 @recoverable
 async def get_paper(paper_id: uuid.UUID) -> library.PaperCard:
-    """A paper's details, its section outline with start pages, its workspaces, and every note on it. Each note has a
-    provenance: `human` is the owner's own writing; `llm` and `llm_edited` were written by an AI."""
+    """A paper's details, its section outline with start pages, its workspaces, and every note on it. reading_pass is
+    how many of Keshav's three passes the owner has finished (0–3), and triage their keep / later / drop decision, or
+    null. Only the owner sets them. Each note has a provenance: `human` is the owner's own writing; `llm` and
+    `llm_edited` were written by an AI."""
     async with sessions() as session:
         return await library.paper_card(session, paper_id)
 

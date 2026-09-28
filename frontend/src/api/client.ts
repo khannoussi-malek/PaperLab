@@ -2,6 +2,7 @@ import type { components } from './schema'
 
 export type Paper = components['schemas']['PaperOut']
 export type PaperUpdate = components['schemas']['PaperUpdate']
+export type ReadingIn = components['schemas']['ReadingIn']
 export type Chunk = components['schemas']['ChunkOut']
 export type Note = components['schemas']['NoteOut']
 export type NoteCreate = components['schemas']['NoteCreate']
@@ -63,6 +64,7 @@ export type PaperSourcesUpdate = components['schemas']['PaperSourcesUpdate']
 export type References = components['schemas']['ReferencesOut']
 export type Reference = components['schemas']['ReferenceOut']
 export type ReferencesDirection = References['direction']
+export type ReferencePage = components['schemas']['ReferencePageOut']
 export type RefreshOut = components['schemas']['RefreshOut']
 export type McpSetup = components['schemas']['McpSetupOut']
 export type McpCheck = components['schemas']['McpCheckOut']
@@ -138,6 +140,9 @@ export const api = {
     return request<Paper>('/api/papers', { method: 'POST', body: form })
   },
   updatePaper: (id: string, update: PaperUpdate) => request<Paper>(`/api/papers/${id}`, sendJson('PATCH', update)),
+  /** The reader's own record (D118, D119): passes finished, keep/later/drop, or both. A field left out keeps its
+   * value. 422 for an out-of-range pass, an unknown decision, or an empty body. */
+  setReading: (id: string, changes: ReadingIn) => request<Paper>(`/api/papers/${id}/reading`, sendJson('PUT', changes)),
   deletePaper: (id: string) => request<void>(`/api/papers/${id}`, { method: 'DELETE' }),
   reingestPaper: (id: string) => request<Paper>(`/api/papers/${id}/reingest`, { method: 'POST' }),
   paperFileUrl: (id: string) => `/api/papers/${id}/file`,
@@ -261,6 +266,13 @@ export const api = {
   /** Downloads a reference's free PDF into the library; with a `workspaceId` it also joins that workspace. */
   importReference: (refId: string, workspaceId?: string) =>
     request<Paper>(`/api/references/${refId}/import`, sendJson('POST', { workspace_id: workspaceId ?? null })),
+  /** The whole library's, or one workspace's, To read list and shared references (D121, D166). 404 unknown workspace. */
+  referencePage: (workspaceId: string | null) =>
+    request<ReferencePage>(workspaceId ? `/api/references?workspace=${workspaceId}` : '/api/references'),
+  /** Marks a reference To read; a second call keeps the first time. 404 unknown reference. */
+  queueReference: (refId: string) => request<{ queued_at: string | null }>(`/api/references/${refId}/queue`, sendJson('PUT', undefined)),
+  /** Takes a reference off To read; harmless when it isn't on it. 404 unknown reference. */
+  unqueueReference: (refId: string) => request<{ queued_at: string | null }>(`/api/references/${refId}/queue`, { method: 'DELETE' }),
   /** The folder `docker compose up` ran in, to prefill Connect Claude; null outside Compose. */
   mcpSetup: () => request<McpSetup>('/api/mcp/setup'),
   /** Starts the MCP server as a client would and reads the library through it. Takes up to 30 s. */

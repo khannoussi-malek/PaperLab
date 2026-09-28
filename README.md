@@ -107,6 +107,13 @@ references several of your papers cite come first, then ones close to what you w
 free PDF. Import a reference in a click when a free PDF exists.
 - Open a paper's **Similar** tab for papers like it, suggested by [Semantic Scholar](https://www.semanticscholar.org/),
 and add them the same way.
+- Record how far you've read each paper, following S. Keshav's three-pass method ("How to Read a Paper", 2007): mark
+passes 1, 2 and 3 as you finish them, and keep, defer or drop a paper, from its **Reading** button in the reader or
+its menu in the library. The Reading button shows what each pass covers and when it's done; the library shows where
+each paper stands and filters by it. Only you set this: PaperLab never marks a pass for you.
+- Mark references **To read** in a paper's References tab. The **References** page lists them, with the works
+several of your papers cite and the works that cite several of them, newest first, across the library or one
+workspace, and says how many papers' references it has looked up so far.
 
 **Capture data and chart it**
 
@@ -158,9 +165,9 @@ with **Save**. A saved note is marked AI, keeps the answer's exact words, and be
 **Use your library from Claude Desktop**
 
 - Connect Claude Desktop, Claude Code or another MCP client to PaperLab
-([how](#use-paperlab-from-claude-desktop)). It can search your papers, read a paper's details, outline and notes, find
-the papers in your library connected to one (a shared workspace, note, author or topic, or a citation), and save a note
-on a passage it quotes.
+([how](#use-paperlab-from-claude-desktop)). It can search your papers, read a paper's details, reading pass, outline
+and notes, find the papers in your library connected to one (a shared workspace, note, author or topic, or a
+citation), and save a note on a passage it quotes.
 - A note it saves is marked AI, like a note saved from chat, and is highlighted on the lines it quoted.
 
 **Install it as an app**
@@ -187,15 +194,16 @@ the text of every chunk of every paper and of every note when you switch to it, 
 search question. PaperLab asks before the first send, with an estimate of the cost.
 Metadata lookups on OpenAlex are off unless you tick OpenAlex, and they send a paper's DOI or title, never its text.
 Find papers sends what you type to every paper source that is on and can answer it, then the results' DOIs to Semantic
-Scholar and, for results without a free PDF, to Unpaywall. The Similar and References tabs send Semantic Scholar the
-paper's DOI (its arXiv ID when the DOI is an arXiv one), or its title when it has none. With OpenAlex ticked, the
+Scholar and, for results without a free PDF, to Unpaywall. The Similar and References tabs, and Fetch on the
+References page, send Semantic Scholar the paper's DOI (its arXiv ID when the DOI is an arXiv one), or its title when
+it has none. With OpenAlex ticked, the
 References tab also sends OpenAlex the paper's OpenAlex ID and the OpenAlex IDs of the works it cites. Your contact
 email goes to Crossref, Unpaywall and OpenAlex (when on), never to the others or to PDF hosts.
 API keys stay in your local database and are never sent back to the browser. Adding a paper downloads its PDF from the
 free link found. None of them send a paper's text.
 An MCP client you connect, such as Claude Desktop, receives what its tools return: passages from your papers, paper
-details and workspace names, and every note on a paper marked as yours or AI. Claude Desktop and Claude Code send what
-the tools return to Anthropic.
+details (with your reading pass and decision) and workspace names, and every note on a paper marked as yours or AI.
+Claude Desktop and Claude Code send what the tools return to Anthropic.
 - **Updates are announced, never installed.** Each time it opens, the desktop app asks GitHub whether a newer version
 is out and offers a download link when there is one. It is the only request the app makes on its own; turn it off in
 **Settings → Desktop app**.
@@ -341,7 +349,8 @@ the folder you unpacked):
 
 The server has four tools:
 - `search_library`: passages closest to a question, in the whole library or one workspace;
-- `get_paper`: a paper's details, section outline, workspaces and every note with who wrote it;
+- `get_paper`: a paper's details, your reading pass and decision (`reading_pass`, `triage`), section outline,
+  workspaces and every note with who wrote it;
 - `related_papers`: library papers connected to one, up to three links away;
 - `create_note`: a note on a passage it quotes exactly.
 

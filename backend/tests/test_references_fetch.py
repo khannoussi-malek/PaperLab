@@ -352,3 +352,56 @@ async def test_vectors_are_written_under_the_references_lock(library, embedder, 
     await references.embed_new(library, embedder)
 
     assert locked == [True]
+
+
+# --- To read across a fold and a Refresh (D120, D164) ------------------------------------------------------------
+
+EARLIER, LATER = datetime(2026, 9, 1, tzinfo=timezone.utc), datetime(2026, 9, 10, tzinfo=timezone.utc)
+
+
+@pytest.mark.parametrize("case", ["keeper_queued_later", "only_the_duplicate_queued", "keeper_imported_unqueued"])
+async def test_a_fold_keeps_the_earliest_to_read_whichever_row_survives(library, discovery_fakes, case):
+    reader = await add_paper(library, doi=READER_DOI)
+    imported = await add_paper(library, doi="10.5555/m21-imported") if case == "keeper_imported_unqueued" else None
+    keeper = ExternalRef(
+        s2_id="e" * 40,
+        title="Kept",
+        fetched_at=datetime.now(timezone.utc) - timedelta(days=2),
+        queued_at=LATER if case == "keeper_queued_later" else None,
+        imported_as=imported.id if imported else None,
+    )
+    duplicate = ExternalRef(doi="10.5555/m21-fold", title="Folded", queued_at=EARLIER)
+    library.add_all([keeper, duplicate])
+    await library.flush()
+    discovery_fakes.s2.reply(REFS, 200, json=page("citedPaper", s2("One paper", "10.5555/m21-fold", paper_id="e" * 40)))
+    discovery_fakes.s2.reply(CITING, 200, json=page("citingPaper"))
+
+    await references.fetch(library, discovery_fakes.providers, reader)
+
+    [(row_id, queued_at)] = (await library.execute(select(ExternalRef.id, ExternalRef.queued_at))).all()
+    assert (row_id, queued_at) == (keeper.id, EARLIER)
+
+
+async def test_a_refresh_keeps_to_read_even_when_it_was_pressed_mid_refresh(library, discovery_fakes):
+    reader = await add_paper(library, doi=READER_DOI)
+    discovery_fakes.s2.reply(REFS, 200, json=page("citedPaper", s2("Kept To read", "10.5555/m21-kept")))
+    discovery_fakes.s2.reply(CITING, 200, json=page("citingPaper"))
+    await references.fetch(library, discovery_fakes.providers, reader)
+    [ref_id] = await library.scalars(select(ExternalRef.id))
+    first = await references.queue(library, ref_id)
+
+    await references.fetch(library, discovery_fakes.providers, reader)  # a plain Refresh
+    assert await library.scalar(select(ExternalRef.queued_at).where(ExternalRef.id == ref_id)) == first
+
+    # To read pressed while a Refresh runs: the Refresh's session loaded the row before the press, so its copy still
+    # says NULL. text(), not update(ExternalRef): the ORM would synchronise the loaded copy and hide the bug.
+    await references.unqueue(library, ref_id)
+    stale = await library.get(ExternalRef, ref_id)
+    assert stale.queued_at is None
+    await library.execute(
+        text("UPDATE external_refs SET queued_at = :at WHERE id = :id"), {"at": EARLIER, "id": ref_id}
+    )
+
+    await references.fetch(library, discovery_fakes.providers, reader)
+
+    assert await library.scalar(select(ExternalRef.queued_at).where(ExternalRef.id == ref_id)) == EARLIER

@@ -1,11 +1,13 @@
 import uuid
 from datetime import datetime
-from typing import Annotated, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # PDF points, top-left origin: (x0, y0, x1, y1). A tuple so OpenAPI (and the TS types) say 4 numbers.
 Rect = tuple[float, float, float, float]
+
+Triage = Literal["keep", "later", "drop"]
 
 
 class PaperOut(BaseModel):
@@ -31,6 +33,8 @@ class PaperOut(BaseModel):
     status_error: str | None
     created_at: datetime
     workspace_ids: list[uuid.UUID]
+    reading_pass: int
+    triage: Triage | None
 
 
 AuthorName = Annotated[str, Field(min_length=1, max_length=300)]
@@ -39,7 +43,8 @@ AuthorName = Annotated[str, Field(min_length=1, max_length=300)]
 class PaperUpdate(BaseModel):
     """A manual correction. Only the fields sent change; null clears venue, doi, abstract or year."""
 
-    model_config = ConfigDict(str_strip_whitespace=True)
+    # D163: the reading state is not a correction; PATCH answers 422 to it instead of dropping it with a 200.
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     title: str | None = Field(default=None, min_length=1, max_length=1000)
     authors: list[AuthorName] | None = Field(default=None, max_length=500)
@@ -58,6 +63,23 @@ class PaperUpdate(BaseModel):
         nulled = sorted(field for field in required if getattr(self, field) is None)
         if nulled:
             raise ValueError(f"{', '.join(nulled)} can't be null")
+        return self
+
+
+class ReadingIn(BaseModel):
+    """The reader's own record of a paper (D119). Only the fields sent change; `triage: null` clears the decision."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    reading_pass: int | None = Field(None, ge=0, le=3)
+    triage: Triage | None = None
+
+    @model_validator(mode="after")
+    def sets_something(self) -> Self:
+        if not self.model_fields_set:
+            raise ValueError("send reading_pass, triage or both")
+        if "reading_pass" in self.model_fields_set and self.reading_pass is None:
+            raise ValueError("reading_pass can't be null")
         return self
 
 

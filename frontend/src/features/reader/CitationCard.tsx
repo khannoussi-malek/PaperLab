@@ -59,8 +59,8 @@ function Details({ view }: { view: Matched }) {
 }
 
 /** In library, Free PDF and Details only (D146): the cited paper, and what the reader can do with it. */
-function MatchedBody({ view, paperId }: { view: Matched; paperId: string }) {
-  const importRef = useImportReference(paperId)
+function MatchedBody({ view }: { view: Matched }) {
+  const importRef = useImportReference()
   const { reference } = view
   const link = pageLink({ ...reference, core_id: null })
   const fileUrl = reference.paper_id ? api.paperFileUrl(reference.paper_id) : null
@@ -149,7 +149,6 @@ function UnmatchedBody({ view, onOpenReferences }: { view: Unmatched; onOpenRefe
 
 type Props = {
   citation: Citation
-  paperId: string
   /** The paper's `cites` listing, shared with the References tab. */
   references: Pick<UseQueryResult<References>, 'data' | 'isError'>
   /** Position inside the page overlay, in CSS pixels of the page. */
@@ -160,7 +159,7 @@ type Props = {
 }
 
 /** D146: which paper `[N]` is, and whether it is in the library. No card ever shows both details and the raw entry. */
-export function CitationCard({ citation, paperId, references, style, onPointerEnter, onPointerLeave, onOpenReferences }: Props) {
+export function CitationCard({ citation, references, style, onPointerEnter, onPointerLeave, onOpenReferences }: Props) {
   const { data, isError } = references
   // Matching runs only for the open card, and again only when the listing changes (D149).
   const view = useMemo(() => cardView(citation, { data, isError }), [citation, data, isError])
@@ -181,7 +180,7 @@ export function CitationCard({ citation, paperId, references, style, onPointerEn
         </p>
       )}
       {view.kind === 'unmatched' && <UnmatchedBody view={view} onOpenReferences={onOpenReferences} />}
-      {'reference' in view && <MatchedBody view={view} paperId={paperId} />}
+      {'reference' in view && <MatchedBody view={view} />}
     </section>
   )
 }

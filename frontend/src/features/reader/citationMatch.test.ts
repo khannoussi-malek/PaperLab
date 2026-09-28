@@ -18,6 +18,7 @@ const row = (fields: Partial<Reference>): Reference => ({
   cocitation: 1,
   paper_id: null,
   position: 0,
+  queued_at: null,
   ...fields,
 })
 
