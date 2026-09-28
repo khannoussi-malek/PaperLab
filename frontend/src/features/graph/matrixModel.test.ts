@@ -19,6 +19,7 @@ const node = (id: string, title: string, workspaces: string[] = []): GraphNode =
   has_notes: false,
   status: 'ready',
   added_at: '2026-09-13T10:00:00Z',
+  reading_pass: 0,
 })
 
 describe('the matrix', () => {

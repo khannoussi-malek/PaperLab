@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { CHART_INK } from '@/features/charts/palette'
-import { FADED, nodeColor } from './graphModel'
+import { FADED, nodeColor, nodeLabel } from './graphModel'
 import { MISSING_YEARS_HINT, timelineLayout, type TimeAxis } from './timelineModel'
 import { useBoxSize } from './useBoxSize'
 import type { ViewProps } from './viewModel'
@@ -78,7 +78,7 @@ export function TimelineView({ nodes, links, theme, colors, inFocus, onSelect, a
                 className="cursor-pointer"
                 onClick={() => onSelect(dot.node.id)}
               >
-                <title>{dot.node.title}</title>
+                <title>{nodeLabel(dot.node)}</title>
               </circle>
             ))}
           </svg>
