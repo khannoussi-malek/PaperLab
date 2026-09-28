@@ -16,7 +16,7 @@ function UnfetchedRow({ paper }: { paper: { id: string; title: string; state: st
   return (
     <li className="unfetched-paper flex items-center gap-3 px-3 py-2">
       <div className="min-w-0 flex-1">
-        <a href={readerHref(paper.id)} title={paper.title} className="truncate text-sm">
+        <a href={readerHref(paper.id)} title={paper.title} className="block truncate text-sm">
           {paper.title}
         </a>
         {paper.state === 'failed' && paper.error && <p className="text-xs text-destructive">{paper.error}</p>}
