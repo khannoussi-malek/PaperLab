@@ -64,6 +64,7 @@ export type PaperSourcesUpdate = components['schemas']['PaperSourcesUpdate']
 export type References = components['schemas']['ReferencesOut']
 export type Reference = components['schemas']['ReferenceOut']
 export type ReferencesDirection = References['direction']
+export type ReferencePage = components['schemas']['ReferencePageOut']
 export type RefreshOut = components['schemas']['RefreshOut']
 export type McpSetup = components['schemas']['McpSetupOut']
 export type McpCheck = components['schemas']['McpCheckOut']
@@ -265,6 +266,13 @@ export const api = {
   /** Downloads a reference's free PDF into the library; with a `workspaceId` it also joins that workspace. */
   importReference: (refId: string, workspaceId?: string) =>
     request<Paper>(`/api/references/${refId}/import`, sendJson('POST', { workspace_id: workspaceId ?? null })),
+  /** The whole library's, or one workspace's, To read list and shared references (D121, D166). 404 unknown workspace. */
+  referencePage: (workspaceId: string | null) =>
+    request<ReferencePage>(workspaceId ? `/api/references?workspace=${workspaceId}` : '/api/references'),
+  /** Marks a reference To read; a second call keeps the first time. 404 unknown reference. */
+  queueReference: (refId: string) => request<{ queued_at: string | null }>(`/api/references/${refId}/queue`, sendJson('PUT', undefined)),
+  /** Takes a reference off To read; harmless when it isn't on it. 404 unknown reference. */
+  unqueueReference: (refId: string) => request<{ queued_at: string | null }>(`/api/references/${refId}/queue`, { method: 'DELETE' }),
   /** The folder `docker compose up` ran in, to prefill Connect Claude; null outside Compose. */
   mcpSetup: () => request<McpSetup>('/api/mcp/setup'),
   /** Starts the MCP server as a client would and reads the library through it. Takes up to 30 s. */

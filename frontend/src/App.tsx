@@ -7,6 +7,7 @@ import { GraphPage } from './features/graph/GraphPage'
 import { LibraryPage } from './features/library/LibraryPage'
 import { NotesPage } from './features/notes/NotesPage.tsx'
 import { ReaderPage } from './features/reader/ReaderPage'
+import { ReferencesPage } from './features/references/ReferencesPage'
 import { downloadAnnouncement } from './features/settings/searchModel'
 import { SettingsPage } from './features/settings/SettingsPage'
 import { useSearchModelDownload } from './features/settings/useSearchModelDownload'
@@ -66,6 +67,9 @@ function Page() {
   }
   if (route.name === 'notes') {
     return <NotesPage paper={route.paper} />
+  }
+  if (route.name === 'references') {
+    return <ReferencesPage workspaceId={route.workspaceId} />
   }
   if (route.name === 'graph') {
     return <GraphPage />

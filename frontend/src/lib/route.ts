@@ -28,6 +28,7 @@ export type Route =
   | { name: 'connect-claude' }
   | { name: 'graph' }
   | { name: 'notes'; paper: string | null } // a paper id, 'none' for no paper, or null for every note
+  | { name: 'references'; workspaceId: string | null } // a workspace id, or null for the whole library
   | { name: 'setup' }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -40,6 +41,7 @@ const SETTINGS_SECTIONS: readonly SettingsSection[] = ['models', 'sources', 'sea
 const CONNECT_CLAUDE_HASH = '#/connect-claude'
 const GRAPH_HASH = '#/graph'
 const NOTES_HASH = /^#\/notes(?:\?(.*))?$/i
+const REFERENCES_HASH = /^#\/references(?:\?(.*))?$/i
 const SETUP_HASH = '#/setup'
 
 function pageOf(params: URLSearchParams): number | null {
@@ -88,6 +90,11 @@ export function parseRoute(hash: string): Route {
   if (notes) {
     const paper = new URLSearchParams(notes[1]).get('paper') ?? ''
     return { name: 'notes', paper: paper === 'none' || UUID.test(paper) ? paper : null }
+  }
+  const references = REFERENCES_HASH.exec(hash)
+  if (references) {
+    const workspaceId = new URLSearchParams(references[1]).get('workspace') ?? ''
+    return { name: 'references', workspaceId: UUID.test(workspaceId) ? workspaceId : null }
   }
   if (hash === SETUP_HASH) return { name: 'setup' }
   const charts = CHARTS_HASH.exec(hash)
@@ -148,6 +155,9 @@ export const connectClaudeHref = CONNECT_CLAUDE_HASH
 export const graphHref = GRAPH_HASH
 /** The Notes page: every note, one paper's (its id), or the notes on no paper ('none'). */
 export const notesHref = (paper?: string | null) => (paper ? `#/notes?paper=${paper}` : '#/notes')
+/** The References page: the whole library, or one workspace's To read and shared references. */
+export const referencesHref = (workspaceId?: string | null) =>
+  workspaceId ? `#/references?workspace=${workspaceId}` : '#/references'
 export const setupHref = SETUP_HASH
 export const chartsHref = '#/charts'
 export const chartHref = (chartId: string) => `#/charts/${chartId}`
