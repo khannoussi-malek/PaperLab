@@ -106,6 +106,16 @@ describe('parseRoute', () => {
     })
   })
 
+  it('workspaceHref builds a reading tab url', () => {
+    expect(workspaceHref(id, 'reading')).toBe(`#/workspaces/${id}?tab=reading`)
+    expect(parseRoute(workspaceHref(id, 'reading'))).toEqual({
+      name: 'workspace', workspaceId: id, tab: 'reading', runId: null,
+    })
+    expect(parseRoute(`#/workspaces/${id}?tab=reading`)).toEqual({
+      name: 'workspace', workspaceId: id, tab: 'reading', runId: null,
+    })
+  })
+
   it('workspaceHref round-trips an active run id (I1), so a reload on the Search tab keeps it', () => {
     expect(workspaceHref(id, 'search', other)).toBe(`#/workspaces/${id}?tab=search&run=${other}`)
     expect(parseRoute(workspaceHref(id, 'search', other))).toEqual({
