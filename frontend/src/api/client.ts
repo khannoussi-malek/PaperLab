@@ -91,6 +91,8 @@ export type SnowballOut = components['schemas']['SnowballOut']
 export type EligibilityUpdate = components['schemas']['EligibilityUpdate']
 export type EligibilityOut = components['schemas']['EligibilityOut']
 export type PrismaExportOut = components['schemas']['PrismaExportOut']
+export type ReadingContextList = components['schemas']['ReadingContextListOut']
+export type ReadingQueue = components['schemas']['ReadingQueueOut']
 
 /** Where a chat lives: the reader's paper, or a workspace. */
 export type ChatScope = { kind: 'paper' | 'workspace'; id: string }
@@ -330,4 +332,7 @@ export const api = {
   /** `runs`: a single run id, or `'all'` to combine every run in the workspace. */
   prismaExport: (workspaceId: string, runs: string) =>
     request<PrismaExportOut>(`/api/workspaces/${workspaceId}/search/prisma?runs=${runs}`),
+  readingContext: (paperId: string) => request<ReadingContextList>(`/api/papers/${paperId}/reading-context`),
+  readingQueue: (workspaceId: string, runId: string) =>
+    request<ReadingQueue>(`/api/workspaces/${workspaceId}/search/reading-queue?run=${runId}`),
 }

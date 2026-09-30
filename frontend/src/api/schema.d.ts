@@ -159,6 +159,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/papers/{paper_id}/reading-context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Reading Context
+         * @description 404 for an unknown paper; an empty list (200) for a real paper never pulled into a search.
+         */
+        get: operations["get_reading_context_api_papers__paper_id__reading_context_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/search/reading-queue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Reading Queue */
+        get: operations["get_reading_queue_api_workspaces__workspace_id__search_reading_queue_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/papers/{paper_id}/notes": {
         parameters: {
             query?: never;
@@ -2850,6 +2887,27 @@ export interface components {
             /** Queued At */
             queued_at: string | null;
         };
+        /** ReadingContextListOut */
+        ReadingContextListOut: {
+            /** Contexts */
+            contexts: components["schemas"]["ReadingContextOut"][];
+        };
+        /** ReadingContextOut */
+        ReadingContextOut: {
+            /**
+             * Workspace Id
+             * Format: uuid
+             */
+            workspace_id: string;
+            /** Workspace Name */
+            workspace_name: string;
+            /** Priority */
+            priority: number | null;
+            /** Note */
+            note: string | null;
+            /** Stage2 Status */
+            stage2_status: string | null;
+        };
         /**
          * ReadingIn
          * @description The reader's own record of a paper (D119). Only the fields sent change; `triage: null` clears the decision.
@@ -2859,6 +2917,29 @@ export interface components {
             reading_pass?: number | null;
             /** Triage */
             triage?: ("keep" | "later" | "drop") | null;
+        };
+        /** ReadingQueueOut */
+        ReadingQueueOut: {
+            /** Rows */
+            rows: components["schemas"]["ReadingQueueRowOut"][];
+        };
+        /** ReadingQueueRowOut */
+        ReadingQueueRowOut: {
+            /**
+             * Paper Id
+             * Format: uuid
+             */
+            paper_id: string;
+            /** Title */
+            title: string;
+            /** Priority */
+            priority: number | null;
+            /** Reading Pass */
+            reading_pass: number;
+            /** Triage */
+            triage: string | null;
+            /** Note Count */
+            note_count: number;
         };
         /** RebuildOut */
         RebuildOut: {
@@ -3796,6 +3877,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PaperOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_reading_context_api_papers__paper_id__reading_context_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                paper_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingContextListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_reading_queue_api_workspaces__workspace_id__search_reading_queue_get: {
+        parameters: {
+            query: {
+                run: string;
+            };
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingQueueOut"];
                 };
             };
             /** @description Validation Error */

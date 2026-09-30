@@ -100,6 +100,8 @@ const keys = {
   libraryGraph: (workspaceId: string | null) => ['graph', workspaceId ?? 'library'] as const,
   // The Notes page's lists: every note, one paper's, or those on no paper.
   allNotes: (paper: string | null) => ['notes', paper ?? 'all'] as const,
+  readingContext: (paperId: string) => ['papers', paperId, 'reading-context'] as const,
+  readingQueue: (workspaceId: string, runId: string) => ['workspaces', workspaceId, 'search', 'reading-queue', runId] as const,
 }
 
 /** Every list that shows notes: the Notes page's, a paper's, every workspace query (its Notes tab and count), and
@@ -994,3 +996,13 @@ export function useFinishSetup() {
     onSuccess: (setup) => client.setQueryData(keys.setup, setup),
   })
 }
+
+export const useReadingContext = (paperId: string) =>
+  useQuery({ queryKey: keys.readingContext(paperId), queryFn: () => api.readingContext(paperId) })
+
+export const useReadingQueue = (workspaceId: string, runId: string | null, enabled = true) =>
+  useQuery({
+    queryKey: keys.readingQueue(workspaceId, runId ?? 'none'),
+    queryFn: () => api.readingQueue(workspaceId, runId as string),
+    enabled: enabled && runId != null,
+  })

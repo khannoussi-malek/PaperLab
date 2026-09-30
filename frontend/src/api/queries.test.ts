@@ -171,3 +171,49 @@ describe('referencePagePollInterval', () => {
     expect(referencePagePollInterval(undefined)).toBe(false)
   })
 })
+
+describe('useReadingContext', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  it('fetches and returns reading context for a paper', async () => {
+    vi.spyOn(api, 'readingContext').mockResolvedValue({ contexts: [] })
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+
+    // Import the hook inside the test to fail if it's not defined
+    const { useReadingContext } = await import('./queries')
+
+    const { result } = renderHook(() => useReadingContext('paper-1'), { wrapper: withQueryClient(client) })
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(result.current.data).toEqual({ contexts: [] })
+  })
+})
+
+describe('useReadingQueue', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  it('fetches and returns reading queue for a run', async () => {
+    vi.spyOn(api, 'readingQueue').mockResolvedValue({ rows: [] })
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+
+    const { useReadingQueue } = await import('./queries')
+
+    const { result } = renderHook(() => useReadingQueue('ws-1', 'run-1'), { wrapper: withQueryClient(client) })
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(result.current.data).toEqual({ rows: [] })
+  })
+
+  it('is disabled when runId is null', async () => {
+    vi.spyOn(api, 'readingQueue').mockResolvedValue({ rows: [] })
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+
+    const { useReadingQueue } = await import('./queries')
+
+    const { result } = renderHook(() => useReadingQueue('ws-1', null), { wrapper: withQueryClient(client) })
+
+    // Query should not fire when runId is null
+    expect(result.current.data).toBeUndefined()
+    expect(vi.mocked(api.readingQueue)).not.toHaveBeenCalled()
+  })
+})
