@@ -29,7 +29,7 @@ const POSES: Record<Kind, Pose> = {
   rules: { ...base, rules: 1, cluster: 1, fit: 7.4, az: 6 },
   claude: { ...base, claude: 1, cluster: 1, fit: 7.6, ty: 0.3, az: -10 },
   ambient: { ...base, fade: 0.35, fit: 8 },
-  open: { ...base, open: 1, mark: 1, fade: 0.15, fit: 6, el: 2 },
+  open: { ...base, open: 1, mark: 1, fade: 0, fit: 6, el: 2 },
 }
 const KEYS = Object.keys(base) as (keyof Pose)[]
 // The part of each section whose moment clock the extras read.

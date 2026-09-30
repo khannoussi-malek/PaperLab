@@ -121,7 +121,7 @@ export function swarm(scene: THREE.Scene) {
       pos.set([p.x, p.y, p.z], i * 3)
     })
     geo.attributes.position.needsUpdate = true
-    dustMat.size = lerp(0.05, 0.075, pose.mark)
+    dustMat.size = lerp(0.05, 0.1, pose.mark)
     dustMat.opacity = Math.max(pose.fade, pose.mark)
   }
   return { update, edges, graph }

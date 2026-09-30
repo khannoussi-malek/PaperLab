@@ -441,4 +441,63 @@ const jsonLd = [
       padding-top: 2.5rem;
     }
   }
+
+  /* While the scroll scene runs (html.scene-live, set by HeroScene), the 3D carries each story section's picture:
+     the words keep the left column and the right is the scene's. The screenshots, the tools card and the carousel
+     stay in the markup for browsers without the scene, and are only hidden here. */
+  :global(.scene-live) .row :global(.shot),
+  :global(.scene-live) .tools,
+  :global(.scene-live) .carousel {
+    display: none;
+  }
+  :global(.scene-live) .row {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 85svh;
+    align-content: center;
+  }
+  :global(.scene-live) .row.flip .row-copy {
+    order: 0;
+  }
+  :global(.scene-live) [data-scene='rules'],
+  :global(.scene-live) [data-scene='claude'],
+  :global(.scene-live) [data-scene='open'] {
+    min-height: 100svh;
+    display: grid;
+    align-content: center;
+  }
+  :global(.scene-live) [data-scene='rules'] .grid,
+  :global(.scene-live) .split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /* A grid item with auto margins shrinks to fit: keep the wrap full width, so its words stay in the left column. */
+  :global(.scene-live) [data-scene] > .wrap {
+    width: 100%;
+    box-sizing: border-box;
+  }
+  @media (min-width: 881px) {
+    :global(.scene-live) .row-copy,
+    :global(.scene-live) [data-scene='rules'] .section-head,
+    :global(.scene-live) [data-scene='rules'] .grid {
+      max-width: 46%;
+    }
+    /* .split is the wrap itself here: narrow its one column, not the wrap (which would centre it). */
+    :global(.scene-live) .split {
+      grid-template-columns: minmax(0, 46%);
+    }
+  }
+  /* On phones the scene runs under the words, so each block of words sits on a glass card, near the top of its
+     screen, leaving the lower half to the scene. */
+  @media (max-width: 880px) {
+    :global(.scene-live) .row {
+      align-content: start;
+    }
+    :global(.scene-live) .row-copy,
+    :global(.scene-live) .split > div:first-child {
+      padding: 1.25rem;
+      border-radius: 1.25rem;
+      background: var(--glass-strong);
+      border: 1px solid var(--glass-border);
+      backdrop-filter: blur(14px);
+    }
+  }
 </style>
