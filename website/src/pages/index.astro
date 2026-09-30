@@ -269,6 +269,10 @@ const jsonLd = [
   /* The 3D hero's canvas fills this section, behind the words. */
   .hero {
     position: relative;
+    /* The first screen, under the sticky header (about 4rem). */
+    min-height: calc(100svh - 4rem);
+    display: grid;
+    align-items: center;
     padding: 4rem 0 3rem;
     overflow: clip;
   }

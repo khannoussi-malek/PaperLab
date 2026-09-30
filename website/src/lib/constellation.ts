@@ -21,6 +21,7 @@ const LOOP = 9 // seconds: highlight, wire, note, chip, hold, rewind
 const SWARM = 110
 const DUST = 700
 const PAGE_W = 3.2
+const NOTE = { w: 2.6, h: 2.6 * (360 / 900) }
 const BAND = { x0: -1.3, w: 2.6, y: (0.5 - 407 / 840) * 4.2, h: (66 / 840) * 4.2 }
 
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x))
@@ -31,9 +32,12 @@ function seeded(seed: number) {
   return () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646
 }
 
-function canvasTexture(w: number, h: number, paint: (c: CanvasRenderingContext2D, w: number, h: number) => void) {
-  const canvas = Object.assign(document.createElement('canvas'), { width: w, height: h })
-  paint(canvas.getContext('2d')!, w, h)
+// Painted at `sharp` times its size, so text and edges stay crisp up close; paint() still draws in w x h units.
+function canvasTexture(w: number, h: number, paint: (c: CanvasRenderingContext2D, w: number, h: number) => void, sharp = 1) {
+  const canvas = Object.assign(document.createElement('canvas'), { width: w * sharp, height: h * sharp })
+  const c = canvas.getContext('2d')!
+  c.scale(sharp, sharp)
+  paint(c, w, h)
   const tex = new THREE.CanvasTexture(canvas)
   tex.colorSpace = THREE.SRGBColorSpace
   tex.anisotropy = 8
@@ -92,15 +96,16 @@ const noteTexture = () =>
     c.fill()
     c.stroke()
     c.fillStyle = '#f1f5f9'
-    pill(c, 44, 44, 150, 64, 32)
+    pill(c, 80, 44, 150, 64, 32)
     c.fillStyle = C.ink
     c.textBaseline = 'middle'
     c.font = `700 36px ${FONT}`
-    c.fillText('You', 82, 77)
+    c.fillText('You', 118, 77)
     c.font = `400 44px ${FONT}`
-    c.fillText('Why 15%? Try 10% and', 48, 180)
-    c.fillText('20% on my runs.', 48, 240)
-  })
+    // Text starts clear of the left edge, where the wire's light lands.
+    c.fillText('Why 15%? Try 10% and', 84, 180)
+    c.fillText('20% on my runs.', 84, 240)
+  }, 2)
 
 const chipTexture = (text: string) =>
   canvasTexture(360, 110, (c, w, h) => {
@@ -116,29 +121,73 @@ const chipTexture = (text: string) =>
     c.textAlign = 'center'
     c.textBaseline = 'middle'
     c.fillText(text, w / 2, h / 2 + 2)
-  })
+  }, 2)
 
-// The page you are reading: a card, a band that sweeps on and glows, and the dark line in front of it.
+// A highlighter stroke: a translucent yellow pill drawn p of the way across, repainted as it sweeps so its rounded
+// end moves with the pen instead of stretching.
+const PEN = { w: 1040, h: 66, pad: 26 } // canvas px: the stroke, and room around it for its glow
+function highlighter() {
+  const w = PEN.w + PEN.pad * 2, h = PEN.h + PEN.pad * 2
+  const canvas = Object.assign(document.createElement('canvas'), { width: w, height: h })
+  const c = canvas.getContext('2d')!
+  const tex = new THREE.CanvasTexture(canvas)
+  tex.colorSpace = THREE.SRGBColorSpace
+  tex.anisotropy = 8
+  let drawn = -1
+  const paint = (p: number) => {
+    if (Math.abs(p - drawn) < 0.002) return
+    drawn = p
+    c.clearRect(0, 0, w, h)
+    if (p <= 0) return
+    c.shadowColor = 'rgba(250, 204, 21, 0.75)'
+    c.shadowBlur = 22
+    c.fillStyle = 'rgba(250, 204, 21, 0.8)'
+    pill(c, PEN.pad, PEN.pad, Math.max(PEN.h, PEN.w * p), PEN.h, PEN.h * 0.22)
+    tex.needsUpdate = true
+  }
+  return { tex, paint }
+}
+
+// A soft yellow halo behind the note, lit when the wire lands while the dot swells. The note itself never goes past
+// white: the bloom would blow the whole card out.
+function noteGlow(width: number, height: number) {
+  const pad = 60
+  const tex = canvasTexture(900 + pad * 2, 360 + pad * 2, (c, w, h) => {
+    c.shadowColor = C.yellow
+    c.shadowBlur = 44
+    c.fillStyle = C.yellow
+    pill(c, pad, pad, w - pad * 2, h - pad * 2, 28)
+  })
+  const glow = new THREE.Mesh(
+    new THREE.PlaneGeometry(width * (1 + (pad * 2) / 900), height * (1 + (pad * 2) / 360)),
+    new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, toneMapped: false }),
+  )
+  glow.position.z = -0.02
+  return glow
+}
+
+// The page you are reading: a card, a highlighter stroke that sweeps on and glows, and the text line under it.
 function heroPage(scene: THREE.Scene) {
   const g = new THREE.Group()
-  g.add(card(canvasTexture(640, 840, (c, w) => paintPage(c, w, false)), PAGE_W))
-  const bandGeo = new THREE.BoxGeometry(BAND.w, BAND.h, 0.02).translate(BAND.w / 2, 0, 0)
-  const band = new THREE.Mesh(bandGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color(C.yellow).multiplyScalar(1.12) }))
-  band.position.set(BAND.x0, BAND.y, 0.012)
+  g.add(card(canvasTexture(640, 840, (c, w) => paintPage(c, w, false), 2), PAGE_W))
   const line = new THREE.Mesh(
     new THREE.PlaneGeometry(2.4, (18 / 840) * 4.2),
     new THREE.MeshBasicMaterial({ color: C.muted, toneMapped: false }),
   )
-  line.position.set(0, BAND.y + 0.012, 0.03)
-  g.add(band, line)
+  line.position.set(0, BAND.y, 0.01)
+  const pen = highlighter()
+  // The brand yellow as is (pushing it past white for bloom clips it to lemon); its glow is painted in the texture.
+  const band = new THREE.Mesh(
+    new THREE.PlaneGeometry(BAND.w * (1 + (PEN.pad * 2) / PEN.w), BAND.h * (1 + (PEN.pad * 2) / PEN.h)),
+    new THREE.MeshBasicMaterial({ map: pen.tex, transparent: true, depthWrite: false, toneMapped: false }),
+  )
+  band.position.set(BAND.x0 + BAND.w / 2, BAND.y, 0.02)
+  g.add(line, band)
   g.position.set(-0.9, -1.1, 0)
   g.rotation.set(-0.06, 0.28, 0)
   scene.add(g)
   g.updateMatrixWorld()
-  const setBand = (p: number) => {
-    band.scale.x = Math.max(0.0001, p)
-    band.visible = p > 0
-  }
+  const setBand = pen.paint
   return { g, setBand }
 }
 
@@ -159,11 +208,12 @@ function wire(scene: THREE.Scene, from: THREE.Vector3, to: THREE.Vector3) {
     new THREE.MeshPhysicalMaterial({ color: yellow, emissive: yellow, emissiveIntensity: 2.2, roughness: 0.3 }),
   )
   scene.add(tube, dot)
-  return (p: number) => {
+  const draw = (p: number) => {
     geo.setDrawRange(0, Math.floor(p * segments) * radial * 6)
     tube.visible = dot.visible = p > 0
     return dot.position.copy(curve.getPointAt(clamp01(p)))
   }
+  return { draw, dot }
 }
 
 // White pages (the mark, with its band) streaming toward the camera through the fog, across the whole section,
@@ -217,8 +267,9 @@ const pageBackground = () =>
 // The film's stage: studio environment map, key and fill light, fog, and bloom on the few over-bright things.
 function stage(canvas: HTMLCanvasElement) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
-  // ponytail: bloom at 1.5x pixels at most; 2x doubles the GPU cost on retina for no visible gain.
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5))
+  // ponytail: capped at 1.75x pixels; the canvas spans the whole hero, and full 2x retina with bloom is heavy on
+  // laptop GPUs. Raise it if the note's text ever looks soft.
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75))
   renderer.toneMapping = THREE.NoToneMapping // tone mapping greys the brand whites
   const scene = new THREE.Scene()
   scene.fog = new THREE.Fog(pageBackground(), 12, 36)
@@ -229,11 +280,13 @@ function stage(canvas: HTMLCanvasElement) {
   key.position.set(-4, 8, 6)
   scene.add(key)
   const camera = new THREE.PerspectiveCamera(42, 1, 0.05, 400)
-  const composer = new EffectComposer(renderer)
+  // The bloom chain renders off-screen, where the canvas's own antialiasing does not apply: multisample it.
+  const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 }))
   const pass = new RenderPass(scene, camera)
   pass.clearAlpha = 0
   composer.addPass(pass)
-  composer.addPass(new UnrealBloomPass(new THREE.Vector2(1, 1), 0.8, 0.55, 1.0))
+  // Threshold just above white: only the wire's light and the note's landing flash bloom; paper never hazes.
+  composer.addPass(new UnrealBloomPass(new THREE.Vector2(1, 1), 0.7, 0.45, 1.02))
   composer.addPass(new OutputPass())
   return { renderer, scene, camera, composer }
 }
@@ -251,26 +304,41 @@ export async function startConstellation(canvas: HTMLCanvasElement, anchor: HTML
   const drift = dust(scene, rand)
   const page = heroPage(scene)
   const from = new THREE.Vector3(BAND.x0 + BAND.w, BAND.y, 0.02).applyMatrix4(page.g.matrixWorld)
-  const noteEnd = new THREE.Vector3(0.1, 2.3, 0.9)
-  const drawWire = wire(scene, from, noteEnd)
-  const note = card(noteTexture(), 2.6)
-  const chip = card(chipTexture('p. 4'), 0.9)
+  const noteEnd = new THREE.Vector3(0.1, 2.2, 0.9)
+  const cable = wire(scene, from, noteEnd)
+  const note = card(noteTexture(), NOTE.w)
   note.rotation.set(-0.05, -0.22, 0.04)
-  chip.rotation.copy(note.rotation)
-  scene.add(note, chip)
+  const glow = noteGlow(NOTE.w, NOTE.h)
+  const glowShade = glow.material as THREE.MeshBasicMaterial
+  // The chip rides on the note, at its top-right corner.
+  const chip = card(chipTexture('p. 4'), 0.9)
+  chip.position.set(NOTE.w / 2 - 0.35, NOTE.h / 2 + 0.05, 0.03)
+  note.add(glow, chip)
+  scene.add(note)
+  // The wire lands on the middle of the note's left edge: this is where the note's centre sits from there.
+  const toCentre = new THREE.Vector3(NOTE.w / 2, 0, 0).applyEuler(note.rotation)
 
-  // One loop: the band sweeps on, the wire pulls the note off it, the page chip lands, it holds, then rewinds.
+  // One loop: the highlighter sweeps, the wire pulls the note off it and its light lands on the note, the page chip
+  // drops in, it holds, then rewinds.
+  const LAND = 2.6
   const story = (u: number) => {
     const keep = 1 - out(progress(u, LOOP - 1.2, 1))
     page.setBand(out(progress(u, 0.3, 0.8)) * keep)
-    const w = out(progress(u, 1.2, 1.4)) * keep
-    const head = drawWire(w)
-    note.position.set(head.x + 0.9, head.y + 0.45, head.z)
-    note.scale.setScalar(lerp(0.4, 1, w))
+    const w = out(progress(u, 1.2, LAND - 1.2)) * keep
+    const head = cable.draw(w)
+    const scale = lerp(0.4, 1, w)
+    note.scale.setScalar(scale)
+    note.position.copy(head).addScaledVector(toCentre, scale)
     note.visible = w > 0.02
-    const c = out(progress(u, 2.8, 0.3)) * keep
-    chip.position.set(noteEnd.x + 1.55, noteEnd.y - 0.1 + (1 - c) * 0.8, noteEnd.z + 0.05)
-    chip.scale.setScalar(lerp(1.6, 1, c))
+    // The landing: a quick flash that settles into a faint halo while the note holds.
+    const flash = progress(u, LAND - 0.1, 0.15) * (1 - out(progress(u, LAND + 0.05, 1.1)))
+    const halo = progress(u, LAND - 0.1, 0.3) * keep
+    glowShade.opacity = 0.3 * halo + 0.45 * flash
+    glow.visible = glowShade.opacity > 0.01
+    cable.dot.scale.setScalar(1 + 0.9 * flash)
+    const c = out(progress(u, LAND + 0.35, 0.3)) * keep
+    chip.position.y = NOTE.h / 2 + 0.05 + (1 - c) * 0.6
+    chip.scale.setScalar(lerp(1.5, 1, c))
     chip.visible = c > 0.02
   }
 
@@ -294,6 +362,8 @@ export async function startConstellation(canvas: HTMLCanvasElement, anchor: HTML
     const fit = STORY_H * (height / Math.max(slot.height, 1))
     radius = fit / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)))
     scene.fog = new THREE.Fog(pageBackground(), radius + 2, radius + 34)
+    // Where the picture's slot starts, for the stylesheet's fade behind the words on narrow screens.
+    canvas.style.setProperty('--slot-top', `${(((slot.top - box.top) / height) * 100).toFixed(1)}%`)
     const cx = slot.left + slot.width / 2 - box.left
     const cy = slot.top + slot.height / 2 - box.top
     camera.setViewOffset(width, height, width / 2 - cx, height / 2 - cy, width, height)
