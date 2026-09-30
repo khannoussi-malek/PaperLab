@@ -2,9 +2,9 @@ import { Component, useCallback, useEffect, useMemo, useRef, useState, type Reac
 import type { ForceGraphMethods, LinkObject, NodeObject } from 'react-force-graph-3d'
 import { CHART_INK } from '@/features/charts/palette'
 import { GraphLoadError } from './GraphCanvas'
-import { carryPositions, degrees, endId, FADED, nodeLabel, sizedNodes, tooltipFor, withAlpha, type SizedNode } from './graphModel'
+import { carryPositions, degrees, FADED, nodeLabel, sizedNodes, tooltipFor, withAlpha, type SizedNode } from './graphModel'
 import { useBoxSize } from './useBoxSize'
-import { emphasis, labelledIds, shortTitle } from './paperModel'
+import { emphasis, labelledIds, linkState, shortTitle } from './paperModel'
 import { hasWebGL, WEBGL_FAILED, WEBGL_OFF, type ViewProps } from './viewModel'
 
 // Loaded the first time 3D is picked, like 2D: react-force-graph-3d brings three.js, which no other view needs. This
@@ -54,6 +54,9 @@ class CanvasBoundary extends Component<{ children: ReactNode }, BoundaryState> {
     return this.props.children
   }
 }
+
+/** The gold of the selected paper's glow, for its own links. */
+const ACTIVE_LINK = '#eab308'
 
 /** react-force-graph-3d writes x/y/z and velocities onto the objects it is given, so it gets its own copies. */
 type Node3D = SizedNode & { x?: number; y?: number; z?: number }
@@ -134,8 +137,8 @@ export function Graph3DView({ nodes, links, theme, colors, focusId, inFocus, onS
   if (failed) return <GraphLoadError />
 
   const ink = CHART_INK[theme]
-  const fadedLink = (link: Link3D) =>
-    inFocus !== null && !(inFocus.has(endId(link.source)) && inFocus.has(endId(link.target)))
+  // The selected paper's own links are drawn thick and gold, like its glow; links leaving the focus fade.
+  const state = (link: Link3D) => linkState(link, focusId, inFocus)
 
   return (
     <div data-view="3d" data-ready={Graph !== null} className="flex min-h-0 flex-1 flex-col">
@@ -166,11 +169,13 @@ export function Graph3DView({ nodes, links, theme, colors, focusId, inFocus, onS
                 }
                 linkOpacity={1}
                 linkColor={(link: Link3D) =>
-                  withAlpha(link.kind === 'manual' ? ink.text : ink.muted, fadedLink(link) ? FADED : 0.55)
+                  state(link) === 'active'
+                    ? ACTIVE_LINK
+                    : withAlpha(link.kind === 'manual' ? ink.text : ink.muted, state(link) === 'faded' ? FADED : 0.55)
                 }
                 // 0 draws a one-pixel line, the 2D view's 1; text along a 3D link would need another dependency, so
                 // a `manual` link's label is its hover label instead.
-                linkWidth={(link: Link3D) => (link.kind === 'manual' ? 2.5 : 0)}
+                linkWidth={(link: Link3D) => (state(link) === 'active' ? 1.8 : link.kind === 'manual' ? 2.5 : 0)}
                 linkLabel={(link: Link3D) => (link.label ? tooltipFor(link.label) : null) as unknown as string}
                 linkDirectionalArrowLength={(link: Link3D) => (link.kind === 'cites' || link.kind === 'manual' ? 4 : 0)}
                 linkDirectionalArrowRelPos={1}
