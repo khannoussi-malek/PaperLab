@@ -32,16 +32,23 @@ export function extras(scene: THREE.Scene, bandPoint: THREE.Vector3, edges: THRE
   const rules = new THREE.Group()
   const dome = new THREE.Mesh(
     new THREE.SphereGeometry(2.1, 64, 32),
-    new THREE.MeshPhysicalMaterial({ color: '#dbeafe', roughness: 0.06, metalness: 0, clearcoat: 1, transparent: true, opacity: 0.18, depthWrite: false }),
+    new THREE.MeshPhysicalMaterial({ color: '#bfdbfe', roughness: 0.06, metalness: 0, clearcoat: 1, transparent: true, depthWrite: false }),
   )
-  ;(dome.material as THREE.Material).userData.alpha = 0.18
+  ;(dome.material as THREE.Material).userData.alpha = 0.3
+  // A thin blue rim around the dome's middle, so the glass reads on a white page too.
+  const rim = new THREE.Mesh(
+    new THREE.TorusGeometry(2.1, 0.02, 12, 160),
+    new THREE.MeshPhysicalMaterial({ color: C.blue, roughness: 0.2, clearcoat: 1, transparent: true }),
+  )
+  rim.rotation.x = Math.PI / 2 - 0.25
+  ;(rim.material as THREE.Material).userData.alpha = 0.6
   const you = card(noteTexture(['Why 15%? Try 10% and', '20% on my runs.']), 2.3)
   you.position.set(-2.9, 1.7, 0.4)
   you.rotation.set(0, 0.25, 0.03)
   const ai = card(noteTexture(['Masking 15% keeps the', 'task hard. [C1]'], true), 2.3)
   ai.position.set(2.2, -1.9, 0.6)
   ai.rotation.set(0, -0.28, -0.03)
-  rules.add(dome, you, ai)
+  rules.add(dome, rim, you, ai)
   scene.add(rules)
 
   // Claude: four tool chips orbit the library, wired to the Claude card; create_note drops a note marked AI.
@@ -90,7 +97,7 @@ export function extras(scene: THREE.Scene, bandPoint: THREE.Vector3, edges: THRE
 
     // Rules: the dome turns slowly, and spins a glint when the section arrives.
     dome.rotation.y = t * 0.1 + out(progress(m.rules, 0, 1.4)) * Math.PI * 2
-    ;(dome.material as THREE.Material).userData.alpha = 0.18 + 0.25 * flashAt(m.rules, 0.4)
+    ;(dome.material as THREE.Material).userData.alpha = 0.3 + 0.25 * flashAt(m.rules, 0.4)
     you.position.x = -2.9 - (1 - w.rules) * 1.5
     ai.position.x = 2.2 + (1 - w.rules) * 1.5
     fadeAll(rules, w.rules)
