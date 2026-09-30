@@ -216,6 +216,22 @@ async def test_reading_queue_dedupes_a_paper_with_two_hits_in_the_same_run(sessi
     assert [(r.paper_id, r.priority) for r in rows] == [(paper.id, 2)]
 
 
+async def test_reading_queue_dedupes_null_and_set_priority_on_the_same_paper(session):
+    """MIN() ignores NULLs in SQL — a paper with one hit lacking a priority and another hit with priority=3
+    must show priority 3, not NULL, not the dropped hit."""
+    workspace = await workspaces.create(session, f"MixedPrio {RUN}")
+    run = await add_run(session, workspace.id)
+    paper = await add_paper(session, title=f"Mixed priority {RUN}")
+    await workspaces.add_paper(session, workspace.id, paper.id)
+    await add_hit(session, workspace.id, run.id, paper.id, priority=None)
+    await add_hit(session, workspace.id, run.id, paper.id, priority=3)
+    await workspace_search.set_eligibility(session, workspace.id, paper.id, run.id, "include", None)
+
+    rows = await reading_bridge.reading_queue(session, workspace.id, run.id)
+
+    assert [(r.paper_id, r.priority) for r in rows] == [(paper.id, 3)]
+
+
 async def test_reading_queue_sorts_null_priority_after_any_set_priority(session):
     """nulls_last() is asserted in the query but needs a paper with no priority alongside one that has it to
     actually exercise the ordering."""
