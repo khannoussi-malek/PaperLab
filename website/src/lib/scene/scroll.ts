@@ -20,3 +20,17 @@ export function blendAt(values: number[], index: number) {
   const j = Math.min(i + 1, last)
   return values[i] + (values[j] - values[i]) * (at - i)
 }
+
+const REST = 3 // px: closer than this to a stop counts as resting on it
+
+/**
+ * Where the page should glide once a scroll stops at `y` (moving in `dir`: 1 down, -1 up): the next stop that way,
+ * or null to leave it. `stops` are scroll positions (ascending) where a section sits just right; `free` are
+ * [top, bottom] ranges inside sections taller than the screen, where the reader scrolls freely.
+ */
+export function settleTarget(stops: number[], free: [number, number][], y: number, dir: number): number | null {
+  if (!stops.length || stops.some((s) => Math.abs(s - y) < REST)) return null
+  if (free.some(([a, b]) => y > a && y < b)) return null
+  const ahead = dir > 0 ? stops.find((s) => s > y) : [...stops].reverse().find((s) => s < y)
+  return ahead ?? (dir > 0 ? stops[stops.length - 1] : stops[0])
+}

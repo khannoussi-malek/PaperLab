@@ -117,7 +117,7 @@ const jsonLd = [
 
   <section class="section" aria-labelledby="what-heading">
     <div class="wrap">
-      <div class="section-head">
+      <div class="section-head" data-scene="highlight">
         <h2 id="what-heading">The note is the main thing, not the chat</h2>
         <p class="lead">Every tool in PaperLab ends in something you keep, with a trail back to where it came from.</p>
       </div>
@@ -456,6 +456,22 @@ const jsonLd = [
     clip-path: inset(50%);
     white-space: nowrap;
   }
+  /* When a scroll stops, the scene glides the page to the next section (src/lib/scene/settle.ts), centred in the
+     screen below the sticky header (about 4rem): exactly where the scene holds its pose. */
+  :global(html.scene-live) {
+    scroll-padding-top: 4rem;
+  }
+  :global(.scene-live) [data-scene='rules'],
+  :global(.scene-live) [data-scene='claude'],
+  :global(.scene-live) [data-scene='open'] {
+    min-height: calc(100svh - 4rem);
+  }
+  /* The features heading is a stop of its own: a chapter title with the page beside it. */
+  :global(.scene-live) .section-head[data-scene] {
+    min-height: 60svh;
+    display: grid;
+    align-content: center;
+  }
   :global(.scene-live) .row {
     grid-template-columns: minmax(0, 1fr);
     min-height: 85svh;
@@ -467,7 +483,6 @@ const jsonLd = [
   :global(.scene-live) [data-scene='rules'],
   :global(.scene-live) [data-scene='claude'],
   :global(.scene-live) [data-scene='open'] {
-    min-height: 100svh;
     display: grid;
     align-content: center;
   }
