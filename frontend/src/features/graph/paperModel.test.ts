@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { GraphLink } from '@/api/client'
-import { emphasis, labelledIds, LABEL_CAP, shortTitle } from './paperModel'
+import { emphasis, labelledIds, LABEL_CAP, linkState, shortTitle } from './paperModel'
 
 const link = (source: string, target: string): GraphLink => ({ source, target, kind: 'cites' })
 
@@ -42,5 +42,23 @@ describe('shortTitle', () => {
     expect(cut.endsWith('…')).toBe(true)
     expect(cut.length).toBeLessThanOrEqual(43)
     expect(cut).toBe('Homogenization Effects of Large Language…')
+  })
+})
+
+describe('linkState', () => {
+  const inFocus = new Set(['a', 'b', 'c'])
+
+  it('marks the links of the selected paper as active, either way round', () => {
+    expect(linkState(link('a', 'b'), 'a', inFocus)).toBe('active')
+    expect(linkState(link('c', 'a'), 'a', inFocus)).toBe('active')
+  })
+
+  it('keeps other links inside the focus plain, and fades the ones outside it', () => {
+    expect(linkState(link('b', 'c'), 'a', inFocus)).toBe('plain')
+    expect(linkState(link('b', 'z'), 'a', inFocus)).toBe('faded')
+  })
+
+  it('leaves every link plain when nothing is selected', () => {
+    expect(linkState(link('a', 'b'), null, null)).toBe('plain')
   })
 })

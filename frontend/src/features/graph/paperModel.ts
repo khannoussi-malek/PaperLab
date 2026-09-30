@@ -38,3 +38,14 @@ export function shortTitle(title: string): string {
   const space = cut.lastIndexOf(' ')
   return `${(space > 20 ? cut.slice(0, space) : cut).replace(/[\s,:;.-]+$/, '')}…`
 }
+
+export type LinkState = 'active' | 'plain' | 'faded'
+type Ends = { source: string | { id: string }; target: string | { id: string } }
+
+/** A link of the selected paper is active (drawn thick and gold); one leaving the focus fades; the rest stay plain. */
+export function linkState(link: Ends, focusId: string | null, inFocus: Set<string> | null): LinkState {
+  if (focusId === null || inFocus === null) return 'plain'
+  const [a, b] = [endId(link.source), endId(link.target)]
+  if (a === focusId || b === focusId) return 'active'
+  return inFocus.has(a) && inFocus.has(b) ? 'plain' : 'faded'
+}
