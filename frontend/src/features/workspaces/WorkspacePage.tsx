@@ -7,6 +7,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ManualAcquisitionTab } from '@/features/workspace-search/ManualAcquisitionTab'
 import { PrismaTab } from '@/features/workspace-search/PrismaTab'
+import { ReadingQueueTab } from '@/features/workspace-search/ReadingQueueTab'
 import { ScreeningTab } from '@/features/workspace-search/ScreeningTab'
 import { SearchTab } from '@/features/workspace-search/SearchTab'
 import { workspaceHref, type WorkspaceTab } from '@/lib/route'
@@ -78,6 +79,7 @@ export function WorkspacePage({ workspaceId, tab, runId }: { workspaceId: string
             <TabsTrigger value="acquisition">Manual acquisition</TabsTrigger>
             <TabsTrigger value="screening">Screening</TabsTrigger>
             <TabsTrigger value="prisma">PRISMA</TabsTrigger>
+            <TabsTrigger value="reading">Reading</TabsTrigger>
           </TabsList>
           <TabsContent value="papers" forceMount className={panel}>
             <WorkspacePapers workspaceId={workspaceId} />
@@ -109,6 +111,9 @@ export function WorkspacePage({ workspaceId, tab, runId }: { workspaceId: string
           </TabsContent>
           <TabsContent value="prisma" forceMount className={cn(panel, 'flex flex-col overflow-hidden')}>
             <PrismaTab workspaceId={workspaceId} />
+          </TabsContent>
+          <TabsContent value="reading" forceMount className={panel}>
+            <ReadingQueueTab workspaceId={workspaceId} runId={runId} />
           </TabsContent>
         </Tabs>
       )}
