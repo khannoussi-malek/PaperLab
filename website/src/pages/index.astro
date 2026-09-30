@@ -266,10 +266,15 @@ const jsonLd = [
 </BaseLayout>
 
 <style>
+  /* The 3D hero's canvas fills this section, behind the words. */
   .hero {
+    position: relative;
     padding: 4rem 0 3rem;
-    /* The 3D hero bleeds past its column; never into a sideways scroll. */
-    overflow-x: clip;
+    overflow: clip;
+  }
+  .hero-copy {
+    position: relative;
+    z-index: 1;
   }
   .hero-grid {
     display: grid;
