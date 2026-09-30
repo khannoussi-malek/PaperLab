@@ -6,6 +6,7 @@ import { extras } from './extras'
 import { blendAt, sceneIndex } from './scroll'
 import { pageBackground, stage } from './stage'
 import { LOOP, fadeAll, flashAt, story } from './story'
+import { settleScroll } from './settle'
 import { swarm } from './swarm'
 import { FONT } from './paint'
 
@@ -48,6 +49,7 @@ export async function startScene(canvas: HTMLCanvasElement, slot: HTMLElement) {
   const more = extras(scene, tale.bandPoint, flock.edges, flock.graph)
   const sections = [...document.querySelectorAll<HTMLElement>('[data-scene]')]
   const kinds = sections.map((el) => (el.dataset.scene as Kind) in POSES ? (el.dataset.scene as Kind) : 'ambient')
+  const unsettle = settleScroll(sections)
   const values = Object.fromEntries(KEYS.map((k) => [k, kinds.map((kind) => POSES[kind][k])])) as Record<keyof Pose, number[]>
 
   const pointer = new THREE.Vector2()
@@ -55,7 +57,12 @@ export async function startScene(canvas: HTMLCanvasElement, slot: HTMLElement) {
   const onPointer = (e: PointerEvent) => pointer.set(e.clientX / innerWidth - 0.5, e.clientY / innerHeight - 0.5)
   addEventListener('pointermove', onPointer, { passive: true })
 
+  // The screen's middle below the sticky header (the page's scroll-padding-top): where a snapped section's centre
+  // sits, so a section at rest is exactly on its pose.
+  let middle = innerHeight / 2
   const resize = () => {
+    const pad = parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop) || 0
+    middle = (innerHeight + pad) / 2
     renderer.setSize(innerWidth, innerHeight, false)
     composer.setPixelRatio(renderer.getPixelRatio())
     composer.setSize(innerWidth, innerHeight)
@@ -75,7 +82,7 @@ export async function startScene(canvas: HTMLCanvasElement, slot: HTMLElement) {
       return { x: r.left + r.width / 2, y: r.top + r.height / 2, h: r.height }
     }
     const wide = innerWidth > 880
-    return wide ? { x: innerWidth * 0.73, y: innerHeight * 0.52, h: innerHeight * 0.72 } : { x: innerWidth / 2, y: innerHeight * 0.6, h: innerHeight * 0.5 }
+    return wide ? { x: innerWidth * 0.73, y: middle, h: innerHeight * 0.72 } : { x: innerWidth / 2, y: innerHeight * 0.6, h: innerHeight * 0.5 }
   }
 
   const started = new Map<number, number>() // section index → when its moment started (seconds)
@@ -86,7 +93,7 @@ export async function startScene(canvas: HTMLCanvasElement, slot: HTMLElement) {
     const t = (performance.now() - start) / 1000
     // Section centres and the viewport's, re-read every frame, so resizes and jumps just work.
     const rects = sections.map((el) => el.getBoundingClientRect())
-    const index = sceneIndex(rects.map((r) => r.top + r.height / 2), innerHeight / 2)
+    const index = sceneIndex(rects.map((r) => r.top + r.height / 2), middle)
     const at = (k: keyof Pose) => blendAt(values[k], index)
     const whole = Math.round(index)
     if (whole !== lastWhole) started.set(whole, t)
@@ -135,6 +142,7 @@ export async function startScene(canvas: HTMLCanvasElement, slot: HTMLElement) {
   renderer.setAnimationLoop(frame)
 
   return () => {
+    unsettle()
     removeEventListener('pointermove', onPointer)
     removeEventListener('resize', resize)
     scheme.removeEventListener('change', refog)
