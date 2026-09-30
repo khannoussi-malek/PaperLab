@@ -16,12 +16,19 @@ import ReadingDesk from './ReadingDesk.astro'
   const box = document.querySelector<HTMLElement>('[data-hero-scene]')
   const canvas = box?.querySelector('canvas')
   const still = matchMedia('(prefers-reduced-motion: reduce)').matches
-  if (box && canvas && !still) {
-    // Three.js loads after the page has drawn, so the words and the download button come first.
+  const webgl = !!document.createElement('canvas').getContext('webgl2')
+  const root = document.documentElement
+  if (box && canvas && !still && webgl) {
+    // The scene's layout (html.scene-live) applies at once, so the page does not jump under a reader once Three.js
+    // arrives; the canvas itself fades in when the scene runs (html.scene-ready). If it fails, the layout goes back.
+    root.classList.add('scene-live')
     import('../lib/scene')
       .then(({ startScene }) => startScene(canvas, box))
-      .then(() => document.documentElement.classList.add('scene-live'))
-      .catch((error) => console.warn('PaperLab: 3D scene unavailable, showing the page without it.', error))
+      .then(() => root.classList.add('scene-ready'))
+      .catch((error) => {
+        root.classList.remove('scene-live')
+        console.warn('PaperLab: 3D scene unavailable, showing the page without it.', error)
+      })
   }
 </script>
 
@@ -40,10 +47,10 @@ import ReadingDesk from './ReadingDesk.astro'
     width: 100%;
     height: 100%;
   }
-  :global(.scene-live) .scene-layer {
+  :global(.scene-ready) .scene-layer {
     opacity: 1;
   }
-  :global(.scene-live) :global(.desk) {
+  :global(.scene-ready) :global(.desk) {
     visibility: hidden;
   }
   /* Behind the words (the left column on desktop) the scene is only a faint trace, so the words keep full contrast. */

@@ -259,3 +259,11 @@ test('the home page marks every section of the scroll scene, in story order', ()
   const scenes = [...html('').matchAll(/data-scene="([a-z]+)"/g)].map((m) => m[1])
   assert.deepEqual(scenes, ['hero', 'highlight', 'ask', 'graph', 'rules', 'claude', 'ambient', 'ambient', 'open'])
 })
+
+test('while the scroll scene runs, the tools list, carousel and screenshots stay readable by screen readers', () => {
+  const home = html('')
+  const css = [home, ...[...home.matchAll(/href="[^"]*?(_astro\/[^"]+\.css)"/g)].map((m) => read(m[1]))].join('\n')
+  const rules = [...css.matchAll(/([^{}]*scene-live[^{}]*)\{([^}]*)\}/g)]
+  const hiding = rules.filter(([, sel, body]) => /\.tools|\.carousel|\.shot/.test(sel) && /display:\s*none/.test(body))
+  assert.deepEqual(hiding.map(([, sel]) => sel.trim()), [], 'hidden visually, not removed from the accessibility tree')
+})

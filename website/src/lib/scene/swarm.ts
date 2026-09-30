@@ -98,6 +98,7 @@ export function swarm(scene: THREE.Scene) {
   scene.add(new THREE.Points(geo, dustMat))
 
   const p = new THREE.Vector3()
+  const q = new THREE.Vector3() // scratch, so a frame allocates nothing
   const update = (t: number, pose: SwarmPose) => {
     graph.rotation.y = t * 0.08
     wireMat.opacity = clamp01((pose.graph - 0.55) / 0.45) * pose.fade
@@ -105,9 +106,9 @@ export function swarm(scene: THREE.Scene) {
     pages.forEach((pg, i) => {
       p.set(pg.x, pg.y, ((pg.z0 + t * 2.4 * pg.sp) % 40) - 42)
       const g = i < GRAPH_NODES ? pose.graph : 0
-      if (g > 0) p.lerp(nodes[i].clone().applyEuler(graph.rotation), g)
+      if (g > 0) p.lerp(q.copy(nodes[i]).applyEuler(graph.rotation), g)
       const k = i < CLUSTER ? pose.cluster : 0
-      if (k > 0) p.lerp(cluster[i].clone().applyAxisAngle(THREE.Object3D.DEFAULT_UP, t * 0.15), k)
+      if (k > 0) p.lerp(q.copy(cluster[i]).applyAxisAngle(THREE.Object3D.DEFAULT_UP, t * 0.15), k)
       pg.m.position.copy(p)
       const settle = 1 - Math.max(g, k) * 0.85 // formed pages stop tumbling and face the camera
       pg.m.rotation.set(Math.sin(pg.rx + t * 0.7) * 0.5 * settle, Math.sin(pg.ry + t * 0.5) * 0.8 * settle, Math.sin(pg.rx + t) * 0.3 * settle)
@@ -118,7 +119,9 @@ export function swarm(scene: THREE.Scene) {
     seeds.forEach(([x, y, z], i) => {
       p.set(x + Math.sin(t * 0.4 + i) * 0.3, ((y + t * 0.12 + 8) % 16) - 8, z)
       if (pose.mark > 0) p.lerp(mark[i], pose.mark)
-      pos.set([p.x, p.y, p.z], i * 3)
+      pos[i * 3] = p.x
+      pos[i * 3 + 1] = p.y
+      pos[i * 3 + 2] = p.z
     })
     geo.attributes.position.needsUpdate = true
     dustMat.size = lerp(0.05, 0.1, pose.mark)
