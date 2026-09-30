@@ -42,15 +42,15 @@ import ReadingDesk from './ReadingDesk.astro'
   .live .constellation {
     opacity: 1;
   }
-  /* Behind the words the pages still fly, but faint, so white text on a white page stays readable. */
+  /* Behind the words the pages still fly, but only as a faint trace, so the words keep full contrast. */
   @media (min-width: 881px) {
     .constellation {
-      mask-image: linear-gradient(to right, rgb(0 0 0 / 0.3) 0 42%, #000 56%);
+      mask-image: linear-gradient(to right, rgb(0 0 0 / 0.07) 0 40%, #000 60%);
     }
   }
   @media (max-width: 880px) {
     .constellation {
-      mask-image: linear-gradient(rgb(0 0 0 / 0.3) 0 42%, #000 58%);
+      mask-image: linear-gradient(rgb(0 0 0 / 0.07) 0 calc(var(--slot-top, 70%) - 10%), #000 var(--slot-top, 70%));
     }
   }
   .live :global(.desk) {
