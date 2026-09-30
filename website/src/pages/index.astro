@@ -1,7 +1,7 @@
 ---
 import DownloadButton from '../components/DownloadButton.astro'
 import FollowButton from '../components/FollowButton.astro'
-import ReadingDesk from '../components/ReadingDesk.astro'
+import HeroScene from '../components/HeroScene.astro'
 import Shot from '../components/Shot.astro'
 import StarButton from '../components/StarButton.astro'
 import BaseLayout from '../layouts/BaseLayout.astro'
@@ -107,7 +107,7 @@ const jsonLd = [
         </div>
         <p class="fine muted">macOS, Windows and Linux · needs Docker Desktop · reading and notes work without any AI model</p>
       </div>
-      <ReadingDesk />
+      <HeroScene />
     </div>
   </section>
 
@@ -268,6 +268,8 @@ const jsonLd = [
 <style>
   .hero {
     padding: 4rem 0 3rem;
+    /* The 3D hero bleeds past its column; never into a sideways scroll. */
+    overflow-x: clip;
   }
   .hero-grid {
     display: grid;
