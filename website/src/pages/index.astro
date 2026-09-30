@@ -444,11 +444,17 @@ const jsonLd = [
 
   /* While the scroll scene runs (html.scene-live, set by HeroScene), the 3D carries each story section's picture:
      the words keep the left column and the right is the scene's. The screenshots, the tools card and the carousel
-     stay in the markup for browsers without the scene, and are only hidden here. */
+     stay in the markup for browsers without the scene, and are only hidden from sight here: screen readers still
+     read the tools list, the carousel and every screenshot's alt text. */
   :global(.scene-live) .row :global(.shot),
   :global(.scene-live) .tools,
   :global(.scene-live) .carousel {
-    display: none;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
   :global(.scene-live) .row {
     grid-template-columns: minmax(0, 1fr);

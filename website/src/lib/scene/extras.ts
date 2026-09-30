@@ -8,9 +8,11 @@ import { fadeAll, flashAt } from './story'
 
 const TOOLS = ['search_library', 'get_paper', 'related_papers', 'create_note']
 
-// Arc from a to b that lifts toward the camera, u in 0..1.
-const arc = (a: THREE.Vector3, b: THREE.Vector3, u: number, lift = 0.8) =>
-  a.clone().lerp(b, u).add(new THREE.Vector3(0, Math.sin(u * Math.PI) * lift * 0.6, Math.sin(u * Math.PI) * lift))
+// Writes into `out` the arc from a to b that lifts toward the camera, u in 0..1.
+const arc = (out: THREE.Vector3, a: THREE.Vector3, b: THREE.Vector3, u: number, lift = 0.8) => {
+  const s = Math.sin(u * Math.PI)
+  return out.copy(a).lerp(b, u).set(out.x, out.y + s * lift * 0.6, out.z + s * lift)
+}
 
 export function extras(scene: THREE.Scene, bandPoint: THREE.Vector3, edges: THREE.CatmullRomCurve3[], graph: THREE.Group) {
   const glowTex = dotTexture()
@@ -88,7 +90,7 @@ export function extras(scene: THREE.Scene, bandPoint: THREE.Vector3, edges: THRE
   const update = (t: number, w: { ask: number; rules: number; claude: number; graph: number; open: number }, m: { ask: number; rules: number; claude: number; graph: number; open: number }) => {
     // Ask.
     const fly = out(progress(m.ask, 0.3, 0.9))
-    c1.position.copy(arc(c1From, bandPoint, fly))
+    arc(c1.position, c1From, bandPoint, fly)
     c1.rotation.copy(answer.rotation)
     c1.scale.setScalar(lerp(1, 0.7, fly))
     ;(bandFlash.material as THREE.Material).userData.alpha = 0.8 * flashAt(m.ask, 1.25)

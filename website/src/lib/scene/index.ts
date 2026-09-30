@@ -128,8 +128,9 @@ export async function startScene(canvas: HTMLCanvasElement, slot: HTMLElement) {
 
     // Past the last section the scene fades out, so the footer sits on the plain page.
     const last = rects[rects.length - 1]
-    canvas.style.opacity = last ? String(Math.min(1, Math.max(0, last.bottom / (innerHeight * 0.6)))) : '1'
-    composer.render()
+    const shown = last ? Math.min(1, Math.max(0, last.bottom / (innerHeight * 0.6))) : 1
+    canvas.style.opacity = String(shown)
+    if (shown > 0) composer.render() // on the footer nothing shows: skip the bloom chain
   }
   renderer.setAnimationLoop(frame)
 
