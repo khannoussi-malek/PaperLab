@@ -1,6 +1,6 @@
 // The home page's scroll scene: one Three.js stage fixed behind the whole page. Every section marks itself with
 // data-scene; as you scroll, each object blends between the poses of the sections around you (scrolling back plays
-// it backwards), and when a section arrives its moment plays once. See docs/superpowers/specs (local) for the story.
+// it backwards), and when a section arrives its moment plays once.
 import * as THREE from 'three'
 import { extras } from './extras'
 import { blendAt, sceneIndex } from './scroll'
