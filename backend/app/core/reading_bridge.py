@@ -63,7 +63,13 @@ class ReadingQueueRow:
 
 async def reading_queue(session: AsyncSession, workspace_id: uuid.UUID, run_id: uuid.UUID) -> list[ReadingQueueRow]:
     """Every stage-2-included, already-imported paper for this run (Review Focus #2: excludes an included hit with
-    no paper_id yet — that's still acquisition, not reading), with its reading progress and note count."""
+    no paper_id yet — that's still acquisition, not reading), with its reading progress and note count.
+
+    A paper can have more than one WorkspaceSearchHit row in the same run: import_hits attaches a second
+    ExternalRef's hit to a paper already imported via an earlier hit in the same batch (its own docstring), and
+    there's no DB constraint preventing that (unlike (workspace_id, external_ref_id), (workspace_id, run_id,
+    paper_id) isn't unique). Grouped down to one row per paper, keeping the most urgent (lowest) priority across
+    its hits — matching this app's "1 = highest priority" convention and the .asc().nulls_last() ordering below."""
     await get_run(session, run_id, workspace_id)
     note_count = (
         select(func.count(func.distinct(note_papers.c.note_id)))
@@ -71,12 +77,13 @@ async def reading_queue(session: AsyncSession, workspace_id: uuid.UUID, run_id: 
         .correlate(Paper)
         .scalar_subquery()
     )
+    best_priority = func.min(WorkspaceSearchHit.priority)
     rows = (
         await session.execute(
             select(
                 Paper.id,
                 Paper.title,
-                WorkspaceSearchHit.priority,
+                best_priority.label("priority"),
                 Paper.reading_pass,
                 Paper.triage,
                 note_count.label("note_count"),
@@ -94,7 +101,8 @@ async def reading_queue(session: AsyncSession, workspace_id: uuid.UUID, run_id: 
                 SearchRunEligibility.stage2_status == "include",
                 WorkspaceSearchHit.paper_id.is_not(None),
             )
-            .order_by(WorkspaceSearchHit.priority.asc().nulls_last(), Paper.title)
+            .group_by(Paper.id, Paper.title, Paper.reading_pass, Paper.triage)
+            .order_by(best_priority.asc().nulls_last(), Paper.title)
         )
     ).all()
     return [

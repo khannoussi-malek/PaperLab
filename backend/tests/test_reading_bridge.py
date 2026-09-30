@@ -197,3 +197,47 @@ async def test_reading_queue_route_404s_for_a_run_from_another_workspace(session
     response = await client.get(f"/api/workspaces/{workspace.id}/search/reading-queue?run={run.id}")
 
     assert response.status_code == 404
+
+
+async def test_reading_queue_dedupes_a_paper_with_two_hits_in_the_same_run(session):
+    """import_hits's own docstring names the real scenario: a second ExternalRef's hit gets attached to a paper
+    already imported via an earlier hit in the same run, leaving two WorkspaceSearchHit rows for one paper. The
+    queue must still show that paper once, keeping the most urgent (lowest) priority across its hits."""
+    workspace = await workspaces.create(session, f"Dup {RUN}")
+    run = await add_run(session, workspace.id)
+    paper = await add_paper(session, title=f"Dup paper {RUN}")
+    await workspaces.add_paper(session, workspace.id, paper.id)
+    await add_hit(session, workspace.id, run.id, paper.id, priority=5)
+    await add_hit(session, workspace.id, run.id, paper.id, priority=2)
+    await workspace_search.set_eligibility(session, workspace.id, paper.id, run.id, "include", None)
+
+    rows = await reading_bridge.reading_queue(session, workspace.id, run.id)
+
+    assert [(r.paper_id, r.priority) for r in rows] == [(paper.id, 2)]
+
+
+async def test_reading_queue_sorts_null_priority_after_any_set_priority(session):
+    """nulls_last() is asserted in the query but needs a paper with no priority alongside one that has it to
+    actually exercise the ordering."""
+    workspace = await workspaces.create(session, f"NullPrio {RUN}")
+    run = await add_run(session, workspace.id)
+    no_priority = await add_paper(session, title=f"No priority {RUN}")
+    await workspaces.add_paper(session, workspace.id, no_priority.id)
+    await add_hit(session, workspace.id, run.id, no_priority.id, priority=None)
+    await workspace_search.set_eligibility(session, workspace.id, no_priority.id, run.id, "include", None)
+
+    has_priority = await add_paper(session, title=f"Has priority {RUN}")
+    await workspaces.add_paper(session, workspace.id, has_priority.id)
+    await add_hit(session, workspace.id, run.id, has_priority.id, priority=5)
+    await workspace_search.set_eligibility(session, workspace.id, has_priority.id, run.id, "include", None)
+
+    rows = await reading_bridge.reading_queue(session, workspace.id, run.id)
+
+    assert [r.paper_id for r in rows] == [has_priority.id, no_priority.id]
+
+
+async def test_reading_queue_is_empty_for_a_run_with_no_included_papers(session):
+    workspace = await workspaces.create(session, f"Empty {RUN}")
+    run = await add_run(session, workspace.id)
+
+    assert await reading_bridge.reading_queue(session, workspace.id, run.id) == []
