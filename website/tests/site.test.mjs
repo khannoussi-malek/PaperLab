@@ -247,3 +247,10 @@ test('the site lives at its current address, and CNAME (if any) agrees', () => {
   assert.equal(BASE, '/PaperLab/')
   assert.match(html(''), new RegExp(`<link rel="canonical" href="${SITE}${BASE}"`))
 })
+
+test('the home hero draws the 3D library, and keeps the drawn picture for browsers without WebGL', () => {
+  const home = html('')
+  assert.match(home, /<canvas[^>]*class="constellation"/, 'has the 3D canvas')
+  assert.match(home, /class="desk"/, 'keeps the drawn picture as the fallback')
+  assert.match(home, /aria-hidden="true"[^>]*class="constellation"|class="constellation"[^>]*aria-hidden="true"/, 'the canvas is decoration')
+})

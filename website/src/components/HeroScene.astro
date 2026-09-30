@@ -1,0 +1,51 @@
+---
+// The hero picture: the drawn reading desk, and on browsers with WebGL and motion allowed, the 3D library over it.
+// The desk keeps its place in the layout, so nothing moves when the 3D takes over.
+import ReadingDesk from './ReadingDesk.astro'
+---
+
+<div class="hero-scene" data-hero-scene>
+  <ReadingDesk />
+  <canvas class="constellation" aria-hidden="true"></canvas>
+</div>
+
+<script>
+  const box = document.querySelector<HTMLElement>('[data-hero-scene]')
+  const canvas = box?.querySelector('canvas')
+  const still = matchMedia('(prefers-reduced-motion: reduce)').matches
+  if (box && canvas && !still) {
+    // Three.js loads after the page has drawn, so the words and the download button come first.
+    import('../lib/constellation')
+      .then(({ startConstellation }) => {
+        startConstellation(canvas)
+        box.classList.add('live')
+      })
+      .catch((error) => console.warn('PaperLab: 3D hero unavailable, showing the drawn one.', error))
+  }
+</script>
+
+<style>
+  .hero-scene {
+    position: relative;
+  }
+  .constellation {
+    position: absolute;
+    inset: -12% -8%;
+    width: 116%;
+    height: 124%;
+    opacity: 0;
+    transition: opacity 0.9s ease;
+    pointer-events: none;
+    /* Soft edges, so a page drifting out of frame fades instead of being cut. */
+    mask-image:
+      linear-gradient(to right, transparent, #000 7%, #000 93%, transparent),
+      linear-gradient(transparent, #000 7%, #000 93%, transparent);
+    mask-composite: intersect;
+  }
+  .live .constellation {
+    opacity: 1;
+  }
+  .live :global(.desk) {
+    visibility: hidden;
+  }
+</style>
