@@ -10,8 +10,10 @@ import { GUIDES } from '../lib/guides'
 import { CONTRIBUTING, LINKEDIN, RELEASES, REPO, href } from '../lib/site'
 
 // Each dot keeps the brand's colour meaning: yellow = highlight, violet = AI, blue = citations and links.
+// scene: the scroll scene's pose for each row (src/lib/scene).
 const features = [
   {
+    scene: 'highlight',
     dot: 'dot-yellow',
     tag: 'Read and highlight',
     slug: 'pdf-highlighter',
@@ -21,6 +23,7 @@ const features = [
     alt: 'A page of the BERT paper highlighted in five colours, with the note card that opens when you hover a highlight.',
   },
   {
+    scene: 'ask',
     dot: 'dot-violet',
     tag: 'Ask a paper',
     slug: 'ask-a-paper',
@@ -30,6 +33,7 @@ const features = [
     alt: 'An AI answer citing [C1] and [C2]; hovering [C1] shows its page and section, and a line leads to that passage on the page.',
   },
   {
+    scene: 'graph',
     dot: '',
     tag: 'Connect papers',
     slug: 'citation-graph',
@@ -92,7 +96,7 @@ const jsonLd = [
   description="Read papers on your own machine. Highlights become notes anchored to the page, and AI answers cite the passage they came from. Free and open source."
   jsonLd={jsonLd}
 >
-  <section class="hero">
+  <section class="hero" data-scene="hero">
     <div class="wrap hero-grid">
       <div class="hero-copy">
         <p class="eyebrow dot-yellow">Free and open source · runs on your computer</p>
@@ -120,7 +124,7 @@ const jsonLd = [
       <div class="rows">
         {
           features.map((feature, i) => (
-            <article class:list={['row', { flip: i % 2 === 1 }]}>
+            <article class:list={['row', { flip: i % 2 === 1 }]} data-scene={feature.scene}>
               <div class="row-copy">
                 <p class:list={['eyebrow', feature.dot]}>{feature.tag}</p>
                 <h3>{feature.title}</h3>
@@ -138,7 +142,7 @@ const jsonLd = [
     </div>
   </section>
 
-  <section class="section" aria-labelledby="rules-heading">
+  <section class="section" aria-labelledby="rules-heading" data-scene="rules">
     <div class="wrap">
       <div class="section-head">
         <h2 id="rules-heading">Three rules it doesn't bend</h2>
@@ -158,7 +162,7 @@ const jsonLd = [
     </div>
   </section>
 
-  <section class="section" aria-labelledby="claude-heading">
+  <section class="section" aria-labelledby="claude-heading" data-scene="claude">
     <div class="wrap split">
       <div>
         <p class="eyebrow dot-violet">Works with Claude</p>
@@ -192,7 +196,7 @@ const jsonLd = [
     </div>
   </section>
 
-  <section class="section" aria-labelledby="guides-heading">
+  <section class="section" aria-labelledby="guides-heading" data-scene="ambient">
     <div class="wrap">
       <div class="section-head">
         <h2 id="guides-heading">Guides for reading research well</h2>
@@ -212,7 +216,7 @@ const jsonLd = [
     </div>
   </section>
 
-  <section class="section" aria-labelledby="for-heading">
+  <section class="section" aria-labelledby="for-heading" data-scene="ambient">
     <div class="wrap">
       <div class="section-head">
         <h2 id="for-heading">Who it's for</h2>
@@ -231,7 +235,7 @@ const jsonLd = [
     </div>
   </section>
 
-  <section class="section" aria-labelledby="who-heading">
+  <section class="section" aria-labelledby="who-heading" data-scene="open">
     <div class="wrap split">
       <div>
         <p class="eyebrow">Who builds this</p>

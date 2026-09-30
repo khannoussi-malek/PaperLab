@@ -254,3 +254,8 @@ test('the home hero draws the 3D library, and keeps the drawn picture for browse
   assert.match(home, /class="desk"/, 'keeps the drawn picture as the fallback')
   assert.match(home, /aria-hidden="true"[^>]*class="constellation"|class="constellation"[^>]*aria-hidden="true"/, 'the canvas is decoration')
 })
+
+test('the home page marks every section of the scroll scene, in story order', () => {
+  const scenes = [...html('').matchAll(/data-scene="([a-z]+)"/g)].map((m) => m[1])
+  assert.deepEqual(scenes, ['hero', 'highlight', 'ask', 'graph', 'rules', 'claude', 'ambient', 'ambient', 'open'])
+})
