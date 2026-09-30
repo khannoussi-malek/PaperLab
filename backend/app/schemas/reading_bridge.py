@@ -13,3 +13,16 @@ class ReadingContextOut(BaseModel):
 
 class ReadingContextListOut(BaseModel):
     contexts: list[ReadingContextOut]
+
+
+class ReadingQueueRowOut(BaseModel):
+    paper_id: uuid.UUID
+    title: str
+    priority: int | None
+    reading_pass: int
+    triage: str | None
+    note_count: int
+
+
+class ReadingQueueOut(BaseModel):
+    rows: list[ReadingQueueRowOut]

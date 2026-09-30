@@ -123,3 +123,77 @@ async def test_reading_context_route_404s_for_an_unknown_paper(client):
     response = await client.get(f"/api/papers/{uuid.uuid4()}/reading-context")
 
     assert response.status_code == 404
+
+
+async def test_reading_queue_lists_only_stage_2_included_and_imported_papers(session):
+    workspace = await workspaces.create(session, f"Queue {RUN}")
+    run = await add_run(session, workspace.id)
+    included_and_imported = await add_paper(session, title=f"Included {RUN}")
+    await workspaces.add_paper(session, workspace.id, included_and_imported.id)
+    await add_hit(session, workspace.id, run.id, included_and_imported.id, priority=1)
+    await workspace_search.set_eligibility(session, workspace.id, included_and_imported.id, run.id, "include", None)
+
+    excluded = await add_paper(session, title=f"Excluded {RUN}")
+    await workspaces.add_paper(session, workspace.id, excluded.id)
+    await add_hit(session, workspace.id, run.id, excluded.id, priority=2)
+    await workspace_search.set_eligibility(session, workspace.id, excluded.id, run.id, "exclude", "wrong_topic")
+
+    # Review Focus #2: included in stage 2 but never actually imported (no paper_id on the hit) — must not appear.
+    await add_hit(session, workspace.id, run.id, None, priority=1)
+
+    rows = await reading_bridge.reading_queue(session, workspace.id, run.id)
+
+    assert [r.paper_id for r in rows] == [included_and_imported.id]
+
+
+async def test_reading_queue_orders_by_priority_then_title(session):
+    workspace = await workspaces.create(session, f"Order {RUN}")
+    run = await add_run(session, workspace.id)
+    for title, priority in [("Z low priority", 3), ("A high priority", 1), ("B also high", 1)]:
+        paper = await add_paper(session, title=f"{title} {RUN}")
+        await workspaces.add_paper(session, workspace.id, paper.id)
+        await add_hit(session, workspace.id, run.id, paper.id, priority=priority)
+        await workspace_search.set_eligibility(session, workspace.id, paper.id, run.id, "include", None)
+
+    rows = await reading_bridge.reading_queue(session, workspace.id, run.id)
+
+    assert [r.title.split(" ", 1)[0] for r in rows] == ["A", "B", "Z"]  # priority 1s before priority 3, A before B
+
+
+async def test_reading_queue_shows_not_started_as_pass_zero_no_triage(session):
+    """Review Focus #5: a never-opened included paper is a normal state, not a gap."""
+    workspace = await workspaces.create(session, f"Fresh {RUN}")
+    run = await add_run(session, workspace.id)
+    paper = await add_paper(session, title=f"Fresh paper {RUN}")
+    await workspaces.add_paper(session, workspace.id, paper.id)
+    await add_hit(session, workspace.id, run.id, paper.id, priority=1)
+    await workspace_search.set_eligibility(session, workspace.id, paper.id, run.id, "include", None)
+
+    [row] = await reading_bridge.reading_queue(session, workspace.id, run.id)
+
+    assert (row.reading_pass, row.triage, row.note_count) == (0, None, 0)
+
+
+async def test_reading_queue_route_200s_with_the_right_rows(session, client):
+    workspace = await workspaces.create(session, f"RouteQ {RUN}")
+    run = await add_run(session, workspace.id)
+    paper = await add_paper(session, title=f"Routed {RUN}")
+    await workspaces.add_paper(session, workspace.id, paper.id)
+    await add_hit(session, workspace.id, run.id, paper.id, priority=1)
+    await workspace_search.set_eligibility(session, workspace.id, paper.id, run.id, "include", None)
+
+    response = await client.get(f"/api/workspaces/{workspace.id}/search/reading-queue?run={run.id}")
+
+    assert response.status_code == 200
+    [row] = response.json()["rows"]
+    assert row["paper_id"] == str(paper.id)
+
+
+async def test_reading_queue_route_404s_for_a_run_from_another_workspace(session, client):
+    workspace = await workspaces.create(session, f"Wrong {RUN}")
+    other = await workspaces.create(session, f"Other {RUN}")
+    run = await add_run(session, other.id)
+
+    response = await client.get(f"/api/workspaces/{workspace.id}/search/reading-queue?run={run.id}")
+
+    assert response.status_code == 404

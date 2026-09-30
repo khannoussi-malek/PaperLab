@@ -84,6 +84,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(papers.router)
     app.include_router(reading_bridge_api.router)
+    app.include_router(reading_bridge_api.workspace_router)
     app.include_router(notes.router)
     app.include_router(chat.router)
     app.include_router(workspaces.router)
