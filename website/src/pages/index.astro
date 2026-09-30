@@ -1,7 +1,7 @@
 ---
 import DownloadButton from '../components/DownloadButton.astro'
 import FollowButton from '../components/FollowButton.astro'
-import ReadingDesk from '../components/ReadingDesk.astro'
+import HeroScene from '../components/HeroScene.astro'
 import Shot from '../components/Shot.astro'
 import StarButton from '../components/StarButton.astro'
 import BaseLayout from '../layouts/BaseLayout.astro'
@@ -10,8 +10,10 @@ import { GUIDES } from '../lib/guides'
 import { CONTRIBUTING, LINKEDIN, RELEASES, REPO, href } from '../lib/site'
 
 // Each dot keeps the brand's colour meaning: yellow = highlight, violet = AI, blue = citations and links.
+// scene: the scroll scene's pose for each row (src/lib/scene).
 const features = [
   {
+    scene: 'highlight',
     dot: 'dot-yellow',
     tag: 'Read and highlight',
     slug: 'pdf-highlighter',
@@ -21,6 +23,7 @@ const features = [
     alt: 'A page of the BERT paper highlighted in five colours, with the note card that opens when you hover a highlight.',
   },
   {
+    scene: 'ask',
     dot: 'dot-violet',
     tag: 'Ask a paper',
     slug: 'ask-a-paper',
@@ -30,6 +33,7 @@ const features = [
     alt: 'An AI answer citing [C1] and [C2]; hovering [C1] shows its page and section, and a line leads to that passage on the page.',
   },
   {
+    scene: 'graph',
     dot: '',
     tag: 'Connect papers',
     slug: 'citation-graph',
@@ -92,7 +96,7 @@ const jsonLd = [
   description="Read papers on your own machine. Highlights become notes anchored to the page, and AI answers cite the passage they came from. Free and open source."
   jsonLd={jsonLd}
 >
-  <section class="hero">
+  <section class="hero" data-scene="hero">
     <div class="wrap hero-grid">
       <div class="hero-copy">
         <p class="eyebrow dot-yellow">Free and open source · runs on your computer</p>
@@ -107,20 +111,20 @@ const jsonLd = [
         </div>
         <p class="fine muted">macOS, Windows and Linux · needs Docker Desktop · reading and notes work without any AI model</p>
       </div>
-      <ReadingDesk />
+      <HeroScene />
     </div>
   </section>
 
   <section class="section" aria-labelledby="what-heading">
     <div class="wrap">
-      <div class="section-head">
+      <div class="section-head" data-scene="highlight">
         <h2 id="what-heading">The note is the main thing, not the chat</h2>
         <p class="lead">Every tool in PaperLab ends in something you keep, with a trail back to where it came from.</p>
       </div>
       <div class="rows">
         {
           features.map((feature, i) => (
-            <article class:list={['row', { flip: i % 2 === 1 }]}>
+            <article class:list={['row', { flip: i % 2 === 1 }]} data-scene={feature.scene}>
               <div class="row-copy">
                 <p class:list={['eyebrow', feature.dot]}>{feature.tag}</p>
                 <h3>{feature.title}</h3>
@@ -138,7 +142,7 @@ const jsonLd = [
     </div>
   </section>
 
-  <section class="section" aria-labelledby="rules-heading">
+  <section class="section" aria-labelledby="rules-heading" data-scene="rules">
     <div class="wrap">
       <div class="section-head">
         <h2 id="rules-heading">Three rules it doesn't bend</h2>
@@ -158,7 +162,7 @@ const jsonLd = [
     </div>
   </section>
 
-  <section class="section" aria-labelledby="claude-heading">
+  <section class="section" aria-labelledby="claude-heading" data-scene="claude">
     <div class="wrap split">
       <div>
         <p class="eyebrow dot-violet">Works with Claude</p>
@@ -192,7 +196,7 @@ const jsonLd = [
     </div>
   </section>
 
-  <section class="section" aria-labelledby="guides-heading">
+  <section class="section" aria-labelledby="guides-heading" data-scene="ambient">
     <div class="wrap">
       <div class="section-head">
         <h2 id="guides-heading">Guides for reading research well</h2>
@@ -212,7 +216,7 @@ const jsonLd = [
     </div>
   </section>
 
-  <section class="section" aria-labelledby="for-heading">
+  <section class="section" aria-labelledby="for-heading" data-scene="ambient">
     <div class="wrap">
       <div class="section-head">
         <h2 id="for-heading">Who it's for</h2>
@@ -231,7 +235,7 @@ const jsonLd = [
     </div>
   </section>
 
-  <section class="section" aria-labelledby="who-heading">
+  <section class="section" aria-labelledby="who-heading" data-scene="open">
     <div class="wrap split">
       <div>
         <p class="eyebrow">Who builds this</p>
@@ -266,8 +270,19 @@ const jsonLd = [
 </BaseLayout>
 
 <style>
+  /* The 3D hero's canvas fills this section, behind the words. */
   .hero {
+    position: relative;
+    /* The first screen, under the sticky header (about 4rem). */
+    min-height: calc(100svh - 4rem);
+    display: grid;
+    align-items: center;
     padding: 4rem 0 3rem;
+    overflow: clip;
+  }
+  .hero-copy {
+    position: relative;
+    z-index: 1;
   }
   .hero-grid {
     display: grid;
@@ -424,6 +439,86 @@ const jsonLd = [
     }
     .hero {
       padding-top: 2.5rem;
+    }
+  }
+
+  /* While the scroll scene runs (html.scene-live, set by HeroScene), the 3D carries each story section's picture:
+     the words keep the left column and the right is the scene's. The screenshots, the tools card and the carousel
+     stay in the markup for browsers without the scene, and are only hidden from sight here: screen readers still
+     read the tools list, the carousel and every screenshot's alt text. */
+  :global(.scene-live) .row :global(.shot),
+  :global(.scene-live) .tools,
+  :global(.scene-live) .carousel {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  /* When a scroll stops, the scene glides the page to the next section (src/lib/scene/settle.ts), centred in the
+     screen below the sticky header (about 4rem): exactly where the scene holds its pose. */
+  :global(html.scene-live) {
+    scroll-padding-top: 4rem;
+  }
+  :global(.scene-live) [data-scene='rules'],
+  :global(.scene-live) [data-scene='claude'],
+  :global(.scene-live) [data-scene='open'] {
+    min-height: calc(100svh - 4rem);
+  }
+  /* The features heading is a stop of its own: a chapter title with the page beside it. */
+  :global(.scene-live) .section-head[data-scene] {
+    min-height: 60svh;
+    display: grid;
+    align-content: center;
+  }
+  :global(.scene-live) .row {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 85svh;
+    align-content: center;
+  }
+  :global(.scene-live) .row.flip .row-copy {
+    order: 0;
+  }
+  :global(.scene-live) [data-scene='rules'],
+  :global(.scene-live) [data-scene='claude'],
+  :global(.scene-live) [data-scene='open'] {
+    display: grid;
+    align-content: center;
+  }
+  :global(.scene-live) [data-scene='rules'] .grid,
+  :global(.scene-live) .split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /* A grid item with auto margins shrinks to fit: keep the wrap full width, so its words stay in the left column. */
+  :global(.scene-live) [data-scene] > .wrap {
+    width: 100%;
+    box-sizing: border-box;
+  }
+  @media (min-width: 881px) {
+    :global(.scene-live) .row-copy,
+    :global(.scene-live) [data-scene='rules'] .section-head,
+    :global(.scene-live) [data-scene='rules'] .grid {
+      max-width: 46%;
+    }
+    /* .split is the wrap itself here: narrow its one column, not the wrap (which would centre it). */
+    :global(.scene-live) .split {
+      grid-template-columns: minmax(0, 46%);
+    }
+  }
+  /* On phones the scene runs under the words, so each block of words sits on a glass card, near the top of its
+     screen, leaving the lower half to the scene. */
+  @media (max-width: 880px) {
+    :global(.scene-live) .row {
+      align-content: start;
+    }
+    :global(.scene-live) .row-copy,
+    :global(.scene-live) .split > div:first-child {
+      padding: 1.25rem;
+      border-radius: 1.25rem;
+      background: var(--glass-strong);
+      border: 1px solid var(--glass-border);
+      backdrop-filter: blur(14px);
     }
   }
 </style>
