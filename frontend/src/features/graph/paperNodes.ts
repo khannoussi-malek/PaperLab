@@ -1,48 +1,9 @@
 import * as THREE from 'three'
-import { FADED } from './graphModel'
+import type { ChartTheme } from '@/features/charts/palette'
+import type { Emphasis } from './paperModel'
 
-// The 3D view's papers drawn like the website's scroll scene: a small white page with a title bar, text lines and one
-// highlighted line in the paper's workspace colour. Loaded with react-force-graph-3d (Graph3DView), never before.
-
-const PAGE = { w: 128, h: 168 } // texture px; the paper's colour is its highlight
-const textures = new Map<string, THREE.CanvasTexture>()
-
-// One texture per colour (a library has a handful of workspace colours), kept for the page's life.
-function pageTexture(color: string): THREE.CanvasTexture {
-  const cached = textures.get(color)
-  if (cached) return cached
-  const canvas = Object.assign(document.createElement('canvas'), { width: PAGE.w * 2, height: PAGE.h * 2 })
-  const c = canvas.getContext('2d')!
-  c.scale(2, 2)
-  const bar = (x: number, y: number, w: number, h: number, fill: string) => {
-    c.fillStyle = fill
-    c.beginPath()
-    c.roundRect(x, y, w, h, h / 2)
-    c.fill()
-  }
-  c.fillStyle = '#ffffff'
-  c.strokeStyle = '#cbd5e1'
-  c.lineWidth = 2
-  c.beginPath()
-  c.roundRect(1, 1, PAGE.w - 2, PAGE.h - 2, 12)
-  c.fill()
-  c.stroke()
-  bar(16, 18, 88, 8, '#334155')
-  ;[92, 88, 96, 80, 94, 90, 60, 92, 84, 70].forEach((width, i) => {
-    const y = 40 + i * 12
-    if (i === 3) {
-      c.globalAlpha = 0.85
-      bar(12, y - 4, 104, 12, color)
-      c.globalAlpha = 1
-    }
-    bar(16, y, width, 4, i === 3 ? '#475569' : '#e2e8f0')
-  })
-  const texture = new THREE.CanvasTexture(canvas)
-  texture.colorSpace = THREE.SRGBColorSpace
-  texture.anisotropy = 4
-  textures.set(color, texture)
-  return texture
-}
+// What the 3D view adds on top of the library's spheres (loaded with react-force-graph-3d, never before): a yellow
+// glow around the selected paper and a softer one around the papers it links to, and a name over each of them.
 
 let haloTexture: THREE.CanvasTexture | null = null
 function halo(): THREE.CanvasTexture {
@@ -59,40 +20,63 @@ function halo(): THREE.CanvasTexture {
   return haloTexture
 }
 
-/**
- * A paper as a page that always faces the camera, sized by its radius (its number of links). `faded`: out of the
- * current focus. `lit`: in focus while a paper is selected, so it sits in a soft yellow glow.
- */
-export function paperObject(color: string, radius: number, faded: boolean, lit: boolean): THREE.Object3D {
-  const group = new THREE.Group()
-  const page = new THREE.Sprite(
-    new THREE.SpriteMaterial({ map: pageTexture(color), transparent: true, opacity: faded ? FADED : 1 }),
+const LABEL = { font: 28, padX: 18, height: 52 } // canvas px, drawn at 2x
+const INK: Record<ChartTheme, { card: string; text: string; border: string }> = {
+  light: { card: '#ffffff', text: '#0f172a', border: '#cbd5e1' },
+  dark: { card: '#1e293b', text: '#f1f5f9', border: '#475569' },
+}
+
+// A paper's name on a small card, always facing the camera and drawn over everything, so it's never hidden.
+function label(text: string, selected: boolean, theme: ChartTheme): THREE.Sprite {
+  const ink = INK[theme]
+  const font = `${selected ? 700 : 500} ${LABEL.font}px "Atkinson Hyperlegible Next Variable", system-ui, sans-serif`
+  const probe = document.createElement('canvas').getContext('2d')!
+  probe.font = font
+  const width = Math.ceil(probe.measureText(text).width) + LABEL.padX * 2
+  const canvas = Object.assign(document.createElement('canvas'), { width: width * 2, height: LABEL.height * 2 })
+  const c = canvas.getContext('2d')!
+  c.scale(2, 2)
+  c.fillStyle = ink.card
+  c.strokeStyle = selected ? '#eab308' : ink.border
+  c.lineWidth = selected ? 3 : 1.5
+  c.beginPath()
+  c.roundRect(2, 2, width - 4, LABEL.height - 4, 12)
+  c.fill()
+  c.stroke()
+  c.fillStyle = ink.text
+  c.font = font
+  c.textBaseline = 'middle'
+  c.fillText(text, LABEL.padX, LABEL.height / 2 + 1)
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.colorSpace = THREE.SRGBColorSpace
+  // A fixed size on screen (no size attenuation), so a name stays readable however far the camera is: the scale is
+  // a share of the view's height: about 26 px tall for the selected paper and 20 px for the others.
+  const sprite = new THREE.Sprite(
+    new THREE.SpriteMaterial({ map: texture, depthTest: false, transparent: true, sizeAttenuation: false }),
   )
-  const height = radius * 4.4
-  page.scale.set((height * PAGE.w) / PAGE.h, height, 1)
-  group.add(page)
-  if (lit) {
-    const glow = new THREE.Sprite(
-      new THREE.SpriteMaterial({ map: halo(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
-    )
-    glow.scale.setScalar(height * 1.8)
-    glow.renderOrder = -1
-    group.add(glow)
+  sprite.renderOrder = 10
+  const screenHeight = selected ? 0.036 : 0.028
+  sprite.scale.set((screenHeight * width) / LABEL.height, screenHeight, 1)
+  return sprite
+}
+
+/**
+ * The glow and name for one paper, added to its sphere (an empty group leaves the plain sphere). `name`: its short
+ * title, when it is one of the papers named around the selection.
+ */
+export function emphasisObject(kind: Emphasis, name: string | null, radius: number, theme: ChartTheme): THREE.Object3D {
+  const group = new THREE.Group()
+  if (kind !== 'selected' && kind !== 'connected') return group
+  const selected = kind === 'selected'
+  const glow = new THREE.Sprite(
+    new THREE.SpriteMaterial({ map: halo(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: selected ? 1 : 0.6 }),
+  )
+  glow.scale.setScalar(radius * (selected ? 6 : 4))
+  group.add(glow)
+  if (name) {
+    const tag = label(name, selected, theme)
+    tag.position.y = radius + (selected ? 6 : 5)
+    group.add(tag)
   }
   return group
-}
-
-/** The app's --background as a three.js colour, whatever CSS colour syntax the theme uses (read back as a pixel). */
-export function pageBackground(): THREE.Color {
-  const css = getComputedStyle(document.documentElement).getPropertyValue('--background').trim() || '#f8fafc'
-  const c = Object.assign(document.createElement('canvas'), { width: 1, height: 1 }).getContext('2d')!
-  c.fillStyle = css
-  c.fillRect(0, 0, 1, 1)
-  const [r, g, b] = c.getImageData(0, 0, 1, 1).data
-  return new THREE.Color().setRGB(r / 255, g / 255, b / 255, THREE.SRGBColorSpace)
-}
-
-/** Fog from the camera's distance outward, into the page's background, so far papers fade instead of cluttering. */
-export function fogFor(distance: number): THREE.Fog {
-  return new THREE.Fog(pageBackground(), distance * 0.9, distance * 2.4)
 }

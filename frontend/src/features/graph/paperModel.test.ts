@@ -1,22 +1,46 @@
 import { describe, expect, it } from 'vitest'
-import { drawsPapers, PAPER_NODE_LIMIT, particlesFor } from './paperModel'
+import type { GraphLink } from '@/api/client'
+import { emphasis, labelledIds, LABEL_CAP, shortTitle } from './paperModel'
 
-describe('drawsPapers', () => {
-  it('draws each paper as a page up to the limit, and falls back to dots above it', () => {
-    expect(drawsPapers(1)).toBe(true)
-    expect(drawsPapers(PAPER_NODE_LIMIT)).toBe(true)
-    expect(drawsPapers(PAPER_NODE_LIMIT + 1)).toBe(false)
+const link = (source: string, target: string): GraphLink => ({ source, target, kind: 'cites' })
+
+describe('emphasis', () => {
+  it('singles out the selected paper, then the papers around it, and fades the rest', () => {
+    const inFocus = new Set(['a', 'b'])
+    expect(emphasis('a', 'a', inFocus)).toBe('selected')
+    expect(emphasis('b', 'a', inFocus)).toBe('connected')
+    expect(emphasis('c', 'a', inFocus)).toBe('faded')
+  })
+
+  it('leaves every paper plain when nothing is selected', () => {
+    expect(emphasis('a', null, null)).toBe('plain')
   })
 })
 
-describe('particlesFor', () => {
-  it('runs pulses along citations only', () => {
-    expect(particlesFor('cites', false)).toBe(2)
-    expect(particlesFor('similar', false)).toBe(0)
-    expect(particlesFor('manual', false)).toBe(0)
+describe('labelledIds', () => {
+  it('names the selected paper and the papers it links to directly', () => {
+    const links = [link('a', 'b'), link('c', 'a'), link('b', 'd')]
+    expect(labelledIds(links, 'a')).toEqual(new Set(['a', 'b', 'c']))
   })
 
-  it('stops the pulses on a citation faded out of focus', () => {
-    expect(particlesFor('cites', true)).toBe(0)
+  it('names nothing when no paper is selected', () => {
+    expect(labelledIds([link('a', 'b')], null)).toEqual(new Set())
+  })
+
+  it('keeps to a readable number of names around a busy paper, the selected one always first', () => {
+    const links = Array.from({ length: 30 }, (_, i) => link('hub', `p${i}`))
+    const ids = labelledIds(links, 'hub')
+    expect(ids.size).toBe(LABEL_CAP)
+    expect(ids.has('hub')).toBe(true)
+  })
+})
+
+describe('shortTitle', () => {
+  it('keeps a short title whole and cuts a long one at a word, with an ellipsis', () => {
+    expect(shortTitle('BERT')).toBe('BERT')
+    const cut = shortTitle('Homogenization Effects of Large Language Models on Human Creative Ideation')
+    expect(cut.endsWith('…')).toBe(true)
+    expect(cut.length).toBeLessThanOrEqual(43)
+    expect(cut).toBe('Homogenization Effects of Large Language…')
   })
 })

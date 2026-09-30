@@ -1,10 +1,40 @@
-import type { LinkKind } from './graphModel'
+import type { GraphLink } from '@/api/client'
+import { endId } from './graphModel'
 
-// The 3D view draws each paper as a small white page, like the website's scroll scene. A page is a textured sprite:
-// cheap, but past a few hundred papers the plain spheres read better and keep the frame rate up.
-export const PAPER_NODE_LIMIT = 600
+// What the 3D view makes stand out, so the owner always knows which paper they are looking at: the selected paper
+// glows brightest and is named, the papers it links to directly glow softer and are named too, the rest fade.
 
-export const drawsPapers = (paperCount: number): boolean => paperCount <= PAPER_NODE_LIMIT
+export type Emphasis = 'selected' | 'connected' | 'faded' | 'plain'
 
-/** Pulses running from the citing paper to the cited one, on citations still in focus. */
-export const particlesFor = (kind: LinkKind, faded: boolean): number => (kind === 'cites' && !faded ? 2 : 0)
+export function emphasis(id: string, focusId: string | null, inFocus: Set<string> | null): Emphasis {
+  if (focusId === null || inFocus === null) return 'plain'
+  if (id === focusId) return 'selected'
+  return inFocus.has(id) ? 'connected' : 'faded'
+}
+
+/** How many papers carry a name at once, the selected one included: more and the names cover each other. */
+export const LABEL_CAP = 10
+
+/** The selected paper and the papers it links to directly (either way), up to LABEL_CAP. */
+export function labelledIds(links: GraphLink[], focusId: string | null): Set<string> {
+  const ids = new Set<string>()
+  if (focusId === null) return ids
+  ids.add(focusId)
+  for (const link of links) {
+    if (ids.size >= LABEL_CAP) break
+    const [a, b] = [endId(link.source), endId(link.target)]
+    if (a === focusId) ids.add(b)
+    else if (b === focusId) ids.add(a)
+  }
+  return ids
+}
+
+const TITLE_MAX = 42
+
+/** A title short enough for a label over a paper, cut at a word. */
+export function shortTitle(title: string): string {
+  if (title.length <= TITLE_MAX) return title
+  const cut = title.slice(0, TITLE_MAX)
+  const space = cut.lastIndexOf(' ')
+  return `${(space > 20 ? cut.slice(0, space) : cut).replace(/[\s,:;.-]+$/, '')}…`
+}
