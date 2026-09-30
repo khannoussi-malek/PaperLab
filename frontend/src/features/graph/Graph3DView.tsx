@@ -1,18 +1,21 @@
-import { Component, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Component, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { ForceGraphMethods, LinkObject, NodeObject } from 'react-force-graph-3d'
 import { CHART_INK } from '@/features/charts/palette'
 import { GraphLoadError } from './GraphCanvas'
 import { carryPositions, endId, FADED, nodeLabel, sizedNodes, tooltipFor, withAlpha, type SizedNode } from './graphModel'
 import { useBoxSize } from './useBoxSize'
+import { drawsPapers, particlesFor } from './paperModel'
 import { hasWebGL, WEBGL_FAILED, WEBGL_OFF, type ViewProps } from './viewModel'
 
 // Loaded the first time 3D is picked, like 2D: react-force-graph-3d brings three.js, which no other view needs. This
 // file is the only one that imports it. A failed dynamic import is cached for the page's lifetime, so the cache is
 // cleared on failure and the error offers a reload.
-let forceGraph3d: Promise<typeof import('react-force-graph-3d')> | null = null
+// The paper pages (paperNodes, three.js) come in the same load, so three.js still stays out of every other view.
+type Loaded = [typeof import('react-force-graph-3d'), typeof import('./paperNodes')]
+let forceGraph3d: Promise<Loaded> | null = null
 function loadForceGraph3d() {
   if (!forceGraph3d) {
-    forceGraph3d = import('react-force-graph-3d').catch((error: unknown) => {
+    forceGraph3d = Promise.all([import('react-force-graph-3d'), import('./paperNodes')] as const).catch((error: unknown) => {
       forceGraph3d = null
       throw error
     })
@@ -64,6 +67,7 @@ type Link3D = {
 /** Which clusters overlap in 2D (spec §5.2): free physics in three dimensions, orbit by dragging, zoom by scrolling. */
 export function Graph3DView({ nodes, links, theme, colors, inFocus, onSelect }: ViewProps) {
   const [Graph, setGraph] = useState<typeof import('react-force-graph-3d').default | null>(null)
+  const [papers, setPapers] = useState<typeof import('./paperNodes') | null>(null)
   const [failed, setFailed] = useState(false)
   // Asked once, before the canvas mounts: without WebGL three.js would throw inside React.
   const [webglSupported] = useState(() => (webgl ??= hasWebGL()))
@@ -78,7 +82,11 @@ export function Graph3DView({ nodes, links, theme, colors, inFocus, onSelect }: 
   useEffect(() => {
     let cancelled = false
     loadForceGraph3d()
-      .then((module) => !cancelled && setGraph(() => module.default))
+      .then(([module, paperNodes]) => {
+        if (cancelled) return
+        setGraph(() => module.default)
+        setPapers(paperNodes)
+      })
       .catch(() => !cancelled && setFailed(true))
     return () => {
       cancelled = true
@@ -100,6 +108,27 @@ export function Graph3DView({ nodes, links, theme, colors, inFocus, onSelect }: 
   useEffect(() => {
     previous.current = data.nodes
   }, [data])
+
+  // Each paper drawn as a small page in its workspace colour; the papers around a selected one glow. Above the
+  // limit the plain spheres stay (undefined keeps the library's default).
+  const paperObject = useCallback(
+    (node: Node3D) => papers!.paperObject(node.color, node.radius, inFocus !== null && !inFocus.has(node.id), inFocus !== null && inFocus.has(node.id)),
+    [papers, inFocus],
+  )
+  const showPapers = papers !== null && drawsPapers(data.nodes.length)
+
+  // Fog into the app's background, from the fitted camera's distance: far papers fade. Theme changes recolour it.
+  const fogged = useRef(false)
+  const addFog = () => {
+    const graph = graphRef.current
+    if (!graph || !papers) return
+    graph.scene().fog = papers.fogFor(graph.camera().position.length())
+    fogged.current = true
+  }
+  useEffect(() => {
+    const fog = graphRef.current?.scene().fog
+    if (fogged.current && fog && papers) fog.color.copy(papers.pageBackground())
+  }, [theme, papers])
 
   if (failed) return <GraphLoadError />
 
@@ -144,11 +173,19 @@ export function Graph3DView({ nodes, links, theme, colors, inFocus, onSelect }: 
                 linkLabel={(link: Link3D) => (link.label ? tooltipFor(link.label) : null) as unknown as string}
                 linkDirectionalArrowLength={(link: Link3D) => (link.kind === 'cites' || link.kind === 'manual' ? 4 : 0)}
                 linkDirectionalArrowRelPos={1}
+                nodeThreeObject={showPapers ? paperObject : undefined}
+                // Pulses run along citations, from the citing paper to the cited one (blue: the brand's citations).
+                linkDirectionalParticles={(link: Link3D) => particlesFor(link.kind, fadedLink(link))}
+                linkDirectionalParticleWidth={1.8}
+                linkDirectionalParticleSpeed={0.006}
+                linkDirectionalParticleColor={() => (theme === 'dark' ? '#60a5fa' : '#2563eb')}
                 onNodeClick={(node: Node3D) => onSelect(node.id)}
                 onEngineStop={() => {
                   if (fitted.current) return
                   fitted.current = true
                   graphRef.current?.zoomToFit(400, 40)
+                  // After the fit's 400 ms flight, so the fog starts where the camera settled.
+                  window.setTimeout(addFog, 450)
                 }}
                 cooldownTicks={120}
               />
