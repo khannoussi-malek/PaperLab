@@ -1,18 +1,21 @@
-import { Component, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Component, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { ForceGraphMethods, LinkObject, NodeObject } from 'react-force-graph-3d'
 import { CHART_INK } from '@/features/charts/palette'
 import { GraphLoadError } from './GraphCanvas'
-import { carryPositions, endId, FADED, nodeLabel, sizedNodes, tooltipFor, withAlpha, type SizedNode } from './graphModel'
+import { carryPositions, degrees, FADED, nodeLabel, sizedNodes, tooltipFor, withAlpha, type SizedNode } from './graphModel'
 import { useBoxSize } from './useBoxSize'
+import { emphasis, labelledIds, linkState, shortTitle } from './paperModel'
 import { hasWebGL, WEBGL_FAILED, WEBGL_OFF, type ViewProps } from './viewModel'
 
 // Loaded the first time 3D is picked, like 2D: react-force-graph-3d brings three.js, which no other view needs. This
 // file is the only one that imports it. A failed dynamic import is cached for the page's lifetime, so the cache is
 // cleared on failure and the error offers a reload.
-let forceGraph3d: Promise<typeof import('react-force-graph-3d')> | null = null
+// The glow and names (paperNodes, three.js) come in the same load, so three.js still stays out of every other view.
+type Loaded = [typeof import('react-force-graph-3d'), typeof import('./paperNodes')]
+let forceGraph3d: Promise<Loaded> | null = null
 function loadForceGraph3d() {
   if (!forceGraph3d) {
-    forceGraph3d = import('react-force-graph-3d').catch((error: unknown) => {
+    forceGraph3d = Promise.all([import('react-force-graph-3d'), import('./paperNodes')] as const).catch((error: unknown) => {
       forceGraph3d = null
       throw error
     })
@@ -52,6 +55,9 @@ class CanvasBoundary extends Component<{ children: ReactNode }, BoundaryState> {
   }
 }
 
+/** The gold of the selected paper's glow, for its own links. */
+const ACTIVE_LINK = '#eab308'
+
 /** react-force-graph-3d writes x/y/z and velocities onto the objects it is given, so it gets its own copies. */
 type Node3D = SizedNode & { x?: number; y?: number; z?: number }
 type Link3D = {
@@ -62,8 +68,9 @@ type Link3D = {
 }
 
 /** Which clusters overlap in 2D (spec §5.2): free physics in three dimensions, orbit by dragging, zoom by scrolling. */
-export function Graph3DView({ nodes, links, theme, colors, inFocus, onSelect }: ViewProps) {
+export function Graph3DView({ nodes, links, theme, colors, focusId, inFocus, onSelect }: ViewProps) {
   const [Graph, setGraph] = useState<typeof import('react-force-graph-3d').default | null>(null)
+  const [papers, setPapers] = useState<typeof import('./paperNodes') | null>(null)
   const [failed, setFailed] = useState(false)
   // Asked once, before the canvas mounts: without WebGL three.js would throw inside React.
   const [webglSupported] = useState(() => (webgl ??= hasWebGL()))
@@ -78,7 +85,11 @@ export function Graph3DView({ nodes, links, theme, colors, inFocus, onSelect }: 
   useEffect(() => {
     let cancelled = false
     loadForceGraph3d()
-      .then((module) => !cancelled && setGraph(() => module.default))
+      .then(([module, paperNodes]) => {
+        if (cancelled) return
+        setGraph(() => module.default)
+        setPapers(paperNodes)
+      })
       .catch(() => !cancelled && setFailed(true))
     return () => {
       cancelled = true
@@ -101,11 +112,33 @@ export function Graph3DView({ nodes, links, theme, colors, inFocus, onSelect }: 
     previous.current = data.nodes
   }, [data])
 
+  // The selected paper glows and is named, the papers it links to directly glow softer and are named too, so the
+  // owner always knows which paper they are looking at. The spheres stay the library's own (extended, not replaced).
+  const named = useMemo(() => labelledIds(links, focusId), [links, focusId])
+  const emphasisObject = useCallback(
+    (node: Node3D) =>
+      papers!.emphasisObject(emphasis(node.id, focusId, inFocus), named.has(node.id) ? shortTitle(node.title) : null, node.radius, theme),
+    [papers, focusId, inFocus, named, theme],
+  )
+
+  // Selecting a paper flies the camera to it, so it sits in the middle of the view, close enough to read its name.
+  useEffect(() => {
+    const graph = graphRef.current
+    const node = focusId === null ? undefined : data.nodes.find((n) => n.id === focusId)
+    if (!graph || !node || node.x === undefined) return
+    const { x = 0, y = 0, z = 0 } = node
+    const away = 1 + 190 / Math.max(Math.hypot(x, y, z), 1)
+    graph.cameraPosition({ x: x * away, y: y * away, z: z * away }, { x, y, z }, 900)
+  }, [focusId, data])
+
+  // The first fit frames the linked papers: one with no links at all, far off on its own, would shrink the rest.
+  const linked = useMemo(() => new Set([...degrees(links)].filter(([, n]) => n > 0).map(([id]) => id)), [links])
+
   if (failed) return <GraphLoadError />
 
   const ink = CHART_INK[theme]
-  const fadedLink = (link: Link3D) =>
-    inFocus !== null && !(inFocus.has(endId(link.source)) && inFocus.has(endId(link.target)))
+  // The selected paper's own links are drawn thick and gold, like its glow; links leaving the focus fade.
+  const state = (link: Link3D) => linkState(link, focusId, inFocus)
 
   return (
     <div data-view="3d" data-ready={Graph !== null} className="flex min-h-0 flex-1 flex-col">
@@ -136,19 +169,23 @@ export function Graph3DView({ nodes, links, theme, colors, inFocus, onSelect }: 
                 }
                 linkOpacity={1}
                 linkColor={(link: Link3D) =>
-                  withAlpha(link.kind === 'manual' ? ink.text : ink.muted, fadedLink(link) ? FADED : 0.55)
+                  state(link) === 'active'
+                    ? ACTIVE_LINK
+                    : withAlpha(link.kind === 'manual' ? ink.text : ink.muted, state(link) === 'faded' ? FADED : 0.55)
                 }
                 // 0 draws a one-pixel line, the 2D view's 1; text along a 3D link would need another dependency, so
                 // a `manual` link's label is its hover label instead.
-                linkWidth={(link: Link3D) => (link.kind === 'manual' ? 2.5 : 0)}
+                linkWidth={(link: Link3D) => (state(link) === 'active' ? 1.8 : link.kind === 'manual' ? 2.5 : 0)}
                 linkLabel={(link: Link3D) => (link.label ? tooltipFor(link.label) : null) as unknown as string}
                 linkDirectionalArrowLength={(link: Link3D) => (link.kind === 'cites' || link.kind === 'manual' ? 4 : 0)}
                 linkDirectionalArrowRelPos={1}
+                nodeThreeObject={papers ? emphasisObject : undefined}
+                nodeThreeObjectExtend
                 onNodeClick={(node: Node3D) => onSelect(node.id)}
                 onEngineStop={() => {
                   if (fitted.current) return
                   fitted.current = true
-                  graphRef.current?.zoomToFit(400, 40)
+                  graphRef.current?.zoomToFit(400, 40, (node) => linked.size === 0 || linked.has(String(node.id)))
                 }}
                 cooldownTicks={120}
               />
