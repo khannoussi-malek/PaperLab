@@ -1,0 +1,62 @@
+---
+// The hero picture, and the home page's scroll scene. The drawn reading desk holds the picture's place; on browsers
+// with WebGL and motion allowed, one Three.js scene runs fixed behind the whole page (src/lib/scene), its story on
+// this slot in the hero and then on each section marked with data-scene. Without it the page is unchanged.
+import ReadingDesk from './ReadingDesk.astro'
+---
+
+<div class="hero-scene" data-hero-scene>
+  <ReadingDesk />
+  <div class="scene-layer">
+    <canvas class="constellation" aria-hidden="true"></canvas>
+  </div>
+</div>
+
+<script>
+  const box = document.querySelector<HTMLElement>('[data-hero-scene]')
+  const canvas = box?.querySelector('canvas')
+  const still = matchMedia('(prefers-reduced-motion: reduce)').matches
+  const webgl = !!document.createElement('canvas').getContext('webgl2')
+  const root = document.documentElement
+  if (box && canvas && !still && webgl) {
+    // The scene's layout (html.scene-live) applies at once, so the page does not jump under a reader once Three.js
+    // arrives; the canvas itself fades in when the scene runs (html.scene-ready). If it fails, the layout goes back.
+    root.classList.add('scene-live')
+    import('../lib/scene')
+      .then(({ startScene }) => startScene(canvas, box))
+      .then(() => root.classList.add('scene-ready'))
+      .catch((error) => {
+        root.classList.remove('scene-live')
+        console.warn('PaperLab: 3D scene unavailable, showing the page without it.', error)
+      })
+  }
+</script>
+
+<style>
+  /* Fixed behind everything (above the body's own background), so the scene runs under every section. */
+  .scene-layer {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    opacity: 0;
+    transition: opacity 0.9s ease;
+    pointer-events: none;
+  }
+  .constellation {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  :global(.scene-ready) .scene-layer {
+    opacity: 1;
+  }
+  :global(.scene-ready) :global(.desk) {
+    visibility: hidden;
+  }
+  /* Behind the words (the left column on desktop) the scene is only a faint trace, so the words keep full contrast. */
+  @media (min-width: 881px) {
+    .scene-layer {
+      mask-image: linear-gradient(to right, rgb(0 0 0 / 0.07) 0 40%, #000 58%);
+    }
+  }
+</style>

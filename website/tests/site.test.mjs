@@ -247,3 +247,30 @@ test('the site lives at its current address, and CNAME (if any) agrees', () => {
   assert.equal(BASE, '/PaperLab/')
   assert.match(html(''), new RegExp(`<link rel="canonical" href="${SITE}${BASE}"`))
 })
+
+test('the home hero draws the 3D library, and keeps the drawn picture for browsers without WebGL', () => {
+  const home = html('')
+  assert.match(home, /<canvas[^>]*class="constellation"/, 'has the 3D canvas')
+  assert.match(home, /class="desk"/, 'keeps the drawn picture as the fallback')
+  assert.match(home, /aria-hidden="true"[^>]*class="constellation"|class="constellation"[^>]*aria-hidden="true"/, 'the canvas is decoration')
+})
+
+test('the home page marks every section of the scroll scene, in story order', () => {
+  const scenes = [...html('').matchAll(/data-scene="([a-z]+)"/g)].map((m) => m[1])
+  // The features heading holds the highlight pose too, so scrolling can rest on it without a half-blended scene.
+  assert.deepEqual(scenes, ['hero', 'highlight', 'highlight', 'ask', 'graph', 'rules', 'claude', 'ambient', 'ambient', 'open'])
+})
+
+test('while the scroll scene runs, the tools list, carousel and screenshots stay readable by screen readers', () => {
+  const home = html('')
+  const css = [home, ...[...home.matchAll(/href="[^"]*?(_astro\/[^"]+\.css)"/g)].map((m) => read(m[1]))].join('\n')
+  const rules = [...css.matchAll(/([^{}]*scene-live[^{}]*)\{([^}]*)\}/g)]
+  const hiding = rules.filter(([, sel, body]) => /\.tools|\.carousel|\.shot/.test(sel) && /display:\s*none/.test(body))
+  assert.deepEqual(hiding.map(([, sel]) => sel.trim()), [], 'hidden visually, not removed from the accessibility tree')
+})
+
+test('while the scroll scene runs, sections settle below the sticky header', () => {
+  const home = html('')
+  const css = [home, ...[...home.matchAll(/href="[^"]*?(_astro\/[^"]+\.css)"/g)].map((m) => read(m[1]))].join('\n')
+  assert.match(css, /scene-live[^{}]*\{[^}]*scroll-padding-top/, 'room for the header when a section settles')
+})
