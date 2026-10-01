@@ -23,15 +23,28 @@ class ReadingContext:
 
 async def reading_context(session: AsyncSession, paper_id: uuid.UUID) -> list[ReadingContext]:
     """Every workspace this paper has a search hit in (Review Focus #1: never just one), newest first. A paper
-    never pulled in through a systematic search returns an empty list — the common case, not an error."""
+    never pulled in through a systematic search returns an empty list — the common case, not an error.
+
+    Excludes a workspace where the paper was explicitly screened out at stage 2 (`stage2_status == 'exclude'`) —
+    showing the full "why this paper is here" banner for a paper that was in fact rejected would look identical to
+    an included one. Unscreened (`None`) and `'include'` still show, same as before.
+
+    Like `reading_queue` below, a paper can have more than one `WorkspaceSearchHit` row in the same workspace (an
+    earlier run plus a later one, or a second `ExternalRef`'s hit attached to an already-imported paper within one
+    run — `import_hits`'s own docstring) — grouped down to one row per workspace here too, or the banner's
+    `key={context.workspace_id}` in `ReadingContextBanner` collides and silently drops one. `priority` keeps the
+    most urgent (lowest) value across the workspace's hits, matching `reading_queue`'s own convention; `note` has
+    no "more correct" pick across duplicate hits, so `max()` just breaks the tie deterministically."""
     rows = (
         await session.execute(
             select(
                 Workspace.id,
                 Workspace.name,
-                WorkspaceSearchHit.priority,
-                WorkspaceSearchHit.stage1_note,
-                SearchRunEligibility.stage2_status,
+                func.min(WorkspaceSearchHit.priority).label("priority"),
+                func.max(WorkspaceSearchHit.stage1_note).label("note"),
+                # Not currently read by the frontend banner — same arbitrary-but-deterministic tie-break as `note`
+                # above, needed only so Postgres accepts an otherwise-ungrouped column in a GROUP BY query.
+                func.max(SearchRunEligibility.stage2_status).label("stage2_status"),
             )
             .select_from(WorkspaceSearchHit)
             .join(Workspace, Workspace.id == WorkspaceSearchHit.workspace_id)
@@ -41,8 +54,12 @@ async def reading_context(session: AsyncSession, paper_id: uuid.UUID) -> list[Re
                 & (SearchRunEligibility.search_run_id == WorkspaceSearchHit.run_id),
                 isouter=True,
             )
-            .where(WorkspaceSearchHit.paper_id == paper_id)
-            .order_by(WorkspaceSearchHit.first_seen_at.desc())
+            .where(
+                WorkspaceSearchHit.paper_id == paper_id,
+                (SearchRunEligibility.stage2_status.is_(None)) | (SearchRunEligibility.stage2_status != "exclude"),
+            )
+            .group_by(Workspace.id, Workspace.name)
+            .order_by(func.max(WorkspaceSearchHit.first_seen_at).desc())
         )
     ).all()
     return [

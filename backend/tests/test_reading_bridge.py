@@ -111,6 +111,44 @@ async def test_a_papers_reading_context_includes_the_stage_2_verdict_when_one_ex
     assert context.stage2_status == "include"
 
 
+async def test_reading_context_dedupes_a_paper_with_two_hits_in_the_same_workspace(session):
+    """Mirrors test_reading_queue_dedupes_a_paper_with_two_hits_in_the_same_run below: a paper can have more than
+    one WorkspaceSearchHit row in the same workspace, and the banner's `key={context.workspace_id}` would collide
+    (silently dropping one) if this returned two rows for it. Must still show that workspace once, keeping the
+    most urgent (lowest) priority across its hits."""
+    paper = await add_paper(session)
+    workspace = await workspaces.create(session, f"CtxDup {RUN}")
+    run = await add_run(session, workspace.id)
+    await add_hit(session, workspace.id, run.id, paper.id, priority=5)
+    await add_hit(session, workspace.id, run.id, paper.id, priority=2)
+
+    contexts = await reading_bridge.reading_context(session, paper.id)
+
+    assert [(c.workspace_id, c.priority) for c in contexts] == [(workspace.id, 2)]
+
+
+async def test_reading_context_excludes_a_workspace_where_the_paper_was_screened_out(session):
+    """A paper explicitly EXCLUDED at stage 2 in a workspace must not show that workspace's banner at all — it
+    would otherwise look identical to a genuinely included paper. A different workspace where the same paper
+    isn't excluded still shows normally."""
+    paper = await add_paper(session)
+    excluded_ws = await workspaces.create(session, f"CtxExcl {RUN}")
+    await workspaces.add_paper(session, excluded_ws.id, paper.id)
+    excluded_run = await add_run(session, excluded_ws.id)
+    await add_hit(session, excluded_ws.id, excluded_run.id, paper.id, priority=1)
+    await workspace_search.set_eligibility(session, excluded_ws.id, paper.id, excluded_run.id, "exclude", "wrong_topic")
+
+    included_ws = await workspaces.create(session, f"CtxIncl {RUN}")
+    await workspaces.add_paper(session, included_ws.id, paper.id)
+    included_run = await add_run(session, included_ws.id)
+    await add_hit(session, included_ws.id, included_run.id, paper.id, priority=3)
+    await workspace_search.set_eligibility(session, included_ws.id, paper.id, included_run.id, "include", None)
+
+    contexts = await reading_bridge.reading_context(session, paper.id)
+
+    assert [c.workspace_id for c in contexts] == [included_ws.id]
+
+
 async def test_reading_context_route_returns_empty_for_a_paper_with_no_hits(session, client):
     paper = await add_paper(session)
 

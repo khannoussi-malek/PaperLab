@@ -17,6 +17,7 @@ import {
 } from './queries'
 
 const prismaRootKey = (workspaceId: string) => ['workspaces', workspaceId, 'search', 'prisma']
+const readingQueueRootKey = (workspaceId: string) => ['workspaces', workspaceId, 'search', 'reading-queue']
 const searchHitsAllKey = (workspaceId: string) => ['workspaces', workspaceId, 'search', 'hits', 'all', 'all']
 
 function withQueryClient(client: QueryClient) {
@@ -67,9 +68,10 @@ describe('matchesEligibleHit', () => {
   })
 })
 
-// Controller ruling (Task 10): PrismaTab stays mounted forever (WorkspacePage's forceMount), so its
-// usePrismaExport query never refetches on its own once data changes underneath it. These prove the fix
-// targets only the small prisma cache — never `searchHitsRoot`'s multi-thousand-row unfiltered pool, which is
+// Controller ruling (Task 10, extended by the reading-bridge fix round): PrismaTab and ReadingQueueTab both stay
+// mounted forever (WorkspacePage's forceMount), so their own queries never refetch on their own once data changes
+// underneath them. These prove the fix targets only those small caches — never `searchHitsRoot`'s multi-thousand-row
+// unfiltered pool, which is
 // the exact request-storm `patchMatchingHits`'s own docstring warns against re-triggering wholesale.
 describe('prisma cache invalidation', () => {
   afterEach(() => vi.restoreAllMocks())
@@ -92,7 +94,7 @@ describe('prisma cache invalidation', () => {
     expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({ queryKey: prismaRootKey('ws-1') }))
   })
 
-  it('useSnowball invalidates only the prisma root, never searchHitsRoot wholesale', async () => {
+  it('useSnowball invalidates only the prisma and reading-queue roots, never searchHitsRoot wholesale', async () => {
     vi.spyOn(api, 'snowball').mockResolvedValue({ new_hits: 2, skipped_seeds: [], errors: {} })
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
@@ -101,8 +103,9 @@ describe('prisma cache invalidation', () => {
     result.current.mutate({ seed_paper_ids: ['p1'], backward: true, forward: true })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
 
-    expect(invalidateSpy).toHaveBeenCalledTimes(1)
+    expect(invalidateSpy).toHaveBeenCalledTimes(2)
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: prismaRootKey('ws-1') })
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: readingQueueRootKey('ws-1') })
   })
 
   // Task 3: snowballed hits were invisible in the Search tab until an unrelated refetch or a full page reload —
