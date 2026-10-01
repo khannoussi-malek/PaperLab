@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { usePrismaExport } from '@/api/queries'
 import type { PrismaExportOut } from '@/api/client'
+import { asPrismaRunMeta } from './prismaRunMeta'
 
 type StageKey =
   | 'identified'
@@ -30,21 +31,6 @@ const STAGES: [StageKey, string][] = [
 const REASON_FIELD: Partial<Record<StageKey, 'stage1_excluded_by_reason' | 'stage2_excluded_by_reason'>> = {
   stage1_excluded: 'stage1_excluded_by_reason',
   stage2_excluded: 'stage2_excluded_by_reason',
-}
-
-/** `PrismaExportOut.runs` comes back as `Record<string, unknown>[]` — the backend returns `list[dict]` (see
- * `prisma_export` in `backend/app/core/prisma_export.py`), so openapi-typescript can't infer a precise shape.
- * This is the slice of each run dict's real keys the combined/per-run <select> and the per-run detail panel
- * below actually need. */
-type PrismaRunMeta = { id: string; query_text: string; filters_json: Record<string, unknown>; started_at: string }
-
-function asPrismaRunMeta(runs: PrismaExportOut['runs']): PrismaRunMeta[] {
-  return runs.map((r) => ({
-    id: String(r.id),
-    query_text: String(r.query_text),
-    filters_json: (r.filters_json as Record<string, unknown> | undefined) ?? {},
-    started_at: String(r.started_at),
-  }))
 }
 
 /** Read-only PRISMA funnel view: counts from `usePrismaExport`, combined across the workspace or scoped to one

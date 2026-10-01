@@ -1,6 +1,6 @@
 import type { Note, Paper } from '@/api/client'
 
-const counted = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`
+export const counted = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`
 
 /** "6 papers · 31 notes", or "6 papers (1 not indexed) · 31 notes" when some papers can't be searched yet. */
 export function countsLine(papers: number, notes: number, notIndexed = 0): string {

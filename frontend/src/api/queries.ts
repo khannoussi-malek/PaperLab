@@ -100,6 +100,11 @@ const keys = {
   libraryGraph: (workspaceId: string | null) => ['graph', workspaceId ?? 'library'] as const,
   // The Notes page's lists: every note, one paper's, or those on no paper.
   allNotes: (paper: string | null) => ['notes', paper ?? 'all'] as const,
+  readingContext: (paperId: string) => ['papers', paperId, 'reading-context'] as const,
+  // A prefix of every readingQueue key below (whatever `runId`), like prismaRoot above — small and cheap to
+  // invalidate wholesale whenever a screening/import action could change which papers (or priorities) it lists.
+  readingQueueRoot: (workspaceId: string) => ['workspaces', workspaceId, 'search', 'reading-queue'] as const,
+  readingQueue: (workspaceId: string, runId: string) => [...keys.readingQueueRoot(workspaceId), runId] as const,
 }
 
 /** Every list that shows notes: the Notes page's, a paper's, every workspace query (its Notes tab and count), and
@@ -490,7 +495,9 @@ export function useRefreshHits(workspaceId: string) {
  * - Also invalidate `prismaRoot`: review/import/upload/eligibility can all shift the PRISMA funnel's counts, and
  *   PrismaTab stays mounted forever (`WorkspacePage`'s `forceMount`), so its export query never refetches on its
  *   own without this. `prismaRoot`'s pool is tiny (a handful of runs), unlike `searchHitsRoot` above, so a
- *   wholesale invalidate here needs no predicate. */
+ *   wholesale invalidate here needs no predicate.
+ * - Also invalidate `readingQueueRoot`, same reasoning: an import can add a paper to the reading queue, and an
+ *   eligibility change can add/remove one from it, but ReadingQueueTab stays mounted forever too. Also tiny. */
 function patchMatchingHits(
   client: QueryClient,
   workspaceId: string,
@@ -513,6 +520,7 @@ function patchMatchingHits(
     predicate: (query) => query.queryKey[4] !== 'all' || query.queryKey[5] !== 'all',
   })
   client.invalidateQueries({ queryKey: keys.prismaRoot(workspaceId) })
+  client.invalidateQueries({ queryKey: keys.readingQueueRoot(workspaceId) })
 }
 
 function patchHitFields(client: QueryClient, workspaceId: string, hitId: string, fields: Partial<Hit>) {
@@ -567,6 +575,7 @@ export function useImportAllHits(workspaceId: string) {
           predicate: (query) => query.queryKey[4] !== 'all' || query.queryKey[5] !== 'all',
         }),
         client.invalidateQueries({ queryKey: keys.prismaRoot(workspaceId) }),
+        client.invalidateQueries({ queryKey: keys.readingQueueRoot(workspaceId) }),
       ]),
   })
 }
@@ -586,6 +595,7 @@ export function useClearSearchHits(workspaceId: string) {
           predicate: (query) => query.queryKey[4] !== 'all' || query.queryKey[5] !== 'all',
         }),
         client.invalidateQueries({ queryKey: keys.prismaRoot(workspaceId) }),
+        client.invalidateQueries({ queryKey: keys.readingQueueRoot(workspaceId) }),
       ]),
   })
 }
@@ -621,8 +631,9 @@ export function useSetEligibility(workspaceId: string) {
  * from this mutation's own `.data`/`.isSuccess`/`.isError` by ScreeningTab, the same way `HitTable` already
  * reads `useImportSearchHits`'s `failed` count from mutation state without any cache patching.
  *
- * `onSuccess` always invalidates `prismaRoot`: a snowballed hit can shift the PRISMA funnel's counts, and
- * PrismaTab stays mounted forever (`WorkspacePage`'s `forceMount`), so its export query never refetches on its
+ * `onSuccess` always invalidates `prismaRoot` and `readingQueueRoot`: a snowballed hit can shift the PRISMA
+ * funnel's counts and, once screened and imported, the reading queue's rows, and both PrismaTab and
+ * ReadingQueueTab stay mounted forever (`WorkspacePage`'s `forceMount`), so neither query ever refetches on its
  * own without this.
  *
  * When `new_hits > 0`, it also *resets* — `exact: true`, one query, never the whole family — the unfiltered
@@ -639,7 +650,10 @@ export function useSnowball(workspaceId: string) {
   return useMutation({
     mutationFn: (body: SnowballRequest) => api.snowball(workspaceId, body),
     onSuccess: (result) => {
-      const work = [client.invalidateQueries({ queryKey: keys.prismaRoot(workspaceId) })]
+      const work = [
+        client.invalidateQueries({ queryKey: keys.prismaRoot(workspaceId) }),
+        client.invalidateQueries({ queryKey: keys.readingQueueRoot(workspaceId) }),
+      ]
       if (result.new_hits > 0) {
         work.push(client.resetQueries({ queryKey: keys.searchHits(workspaceId, 'all', 'all'), exact: true }))
       }
@@ -994,3 +1008,13 @@ export function useFinishSetup() {
     onSuccess: (setup) => client.setQueryData(keys.setup, setup),
   })
 }
+
+export const useReadingContext = (paperId: string) =>
+  useQuery({ queryKey: keys.readingContext(paperId), queryFn: () => api.readingContext(paperId) })
+
+export const useReadingQueue = (workspaceId: string, runId: string | null, enabled = true) =>
+  useQuery({
+    queryKey: keys.readingQueue(workspaceId, runId ?? 'none'),
+    queryFn: () => api.readingQueue(workspaceId, runId as string),
+    enabled: enabled && runId != null,
+  })
