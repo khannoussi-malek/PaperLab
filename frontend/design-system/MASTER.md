@@ -682,6 +682,15 @@ Patterns from ui-ux-pro-max (`--domain ux`): *Deep Linking*, *Back Button*, *Act
 - **The graph:** every hover, tooltip and label a paper shows (`graphModel.nodeLabel`) reads "{title} · Pass {n}"
   once a level is set; the panel's row shows "Pass {n}" before its link count. The decision never appears on the
   canvas (D119): fill, size and opacity keep their existing meanings.
+- **The reading bridge (M30 §12):** the reader's `ReadingContextBanner` (`.reading-context-banner`, a glass `Alert`
+  right under the toolbar) answers "why is this paper here" — every workspace a systematic search pulled it into
+  (never just one), each workspace name linking to that workspace's Screening tab, with its stage-1 priority and
+  note when set. Nothing renders for the common case of a paper never searched for. A workspace's own **Reading**
+  tab (last, after PRISMA) is the mirror view: `.reading-queue`, one row per stage-2-included, already-imported
+  paper of the active run (`?run=` in the URL, same convention as Search) — a title link to the reader, its
+  priority, and a `.reading-chip` (the library's own `readingChip()`, reading "Not started" once nothing is set
+  yet) so a survey's progress reads at a glance. A hit included in stage-2 but not yet imported never shows a row
+  here — that's still acquisition, not reading.
 
 ## References
 
