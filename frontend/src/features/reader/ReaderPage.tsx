@@ -40,6 +40,7 @@ import { PdfPage } from './PdfPage'
 import { SelectionCopyButton } from './SelectionCopyButton'
 import { ReaderContextMenu, type ContextMenuState } from './ReaderContextMenu'
 import { ReaderToolbar } from './ReaderToolbar'
+import { ReadingContextBanner } from './ReadingContextBanner'
 import { RetractionBanner } from './RetractionBanner'
 import { RightPanel } from './RightPanel'
 import { readSelection, type SelectionAnchor } from './selection'
@@ -414,6 +415,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
           onOpenReferences={() => showTab('references')}
         />
         {paper.data?.is_retracted && <RetractionBanner paper={paper.data} />}
+        {paper.data && <ReadingContextBanner paperId={paperId} />}
       </div>
 
       {/* Hidden until focused: hundreds of citation buttons sit between the toolbar and the side panel in tab order,

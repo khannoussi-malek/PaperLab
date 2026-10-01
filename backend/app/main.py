@@ -15,6 +15,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from app.api import charts, chat, datasets, discovery, embedding, graph, health, links, llm, notes, papers, workspaces
 from app.api import mcp as mcp_api
 from app.api import paper_sources as paper_sources_api
+from app.api import reading_bridge as reading_bridge_api
 from app.api import references as references_api
 from app.api import setup as setup_api
 from app.api import workspace_search as workspace_search_api
@@ -82,6 +83,8 @@ def create_app() -> FastAPI:
     app = FastAPI(title="PaperLab", lifespan=lifespan)
     app.include_router(health.router)
     app.include_router(papers.router)
+    app.include_router(reading_bridge_api.router)
+    app.include_router(reading_bridge_api.workspace_router)
     app.include_router(notes.router)
     app.include_router(chat.router)
     app.include_router(workspaces.router)
