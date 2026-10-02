@@ -21,10 +21,10 @@ export function DownloadSearchModel({ alwaysShowStatus = false, scene = false }:
   const { state, start } = useSearchModelDownload()
   if (status.data === undefined) return null
   const present = status.data.model_present
-  const percent = state.status === 'downloading' ? downloadPercent(state) : state.status === 'done' ? 100 : 0
+  const percent = state.status === 'downloading' ? downloadPercent(state) : state.status === 'done' || present ? 100 : 0
   return (
     <div className="flex flex-col gap-2">
-      {scene && <Scene3D load={loadDownloadScene} input={{ status: state.status, percent }} className="h-40 w-full max-w-sm" />}
+      {scene && <Scene3D load={loadDownloadScene} input={{ status: present && state.status === 'idle' ? 'ready' : state.status, percent }} className="h-40 w-full max-w-sm" />}
       {(alwaysShowStatus || state.status !== 'idle') && (
         <p className="search-model-status text-sm tabular-nums text-muted-foreground">{statusLine(present, state)}</p>
       )}

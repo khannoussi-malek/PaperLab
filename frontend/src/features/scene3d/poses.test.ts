@@ -22,4 +22,10 @@ describe('downloadPose', () => {
   it('scatters the dust again on an error', () => {
     expect(downloadPose({ status: 'error', percent: 60 }, 0)).toMatchObject({ gather: 0, card: 0, sweep: 0 })
   })
+
+  it('shows the formed mark at once when the model was already there', () => {
+    const pose = downloadPose({ status: 'ready', percent: 100 }, 0)
+    expect(pose).toMatchObject({ gather: 1, card: 1, sweep: 1 })
+    expect(pose.flash).toBeCloseTo(0, 1)
+  })
 })
