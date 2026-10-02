@@ -290,7 +290,6 @@ class FakeLLM:
 
         # Same reason: note_suggestions → core.chat → retrieval → embedding → http_embedders → this module.
         from app.core.note_suggestions import SYSTEM_PROMPT as NOTE_SUGGESTIONS_SYSTEM_PROMPT
-
         from app.core.screening_suggest import SYSTEM_PROMPT as SCREENING_SYSTEM_PROMPT
 
         self.calls.append((system, prompt))
