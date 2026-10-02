@@ -90,6 +90,22 @@ class RankedHitsOut(BaseModel):
     show_stop_hint: bool
 
 
+class ScreeningStateOut(BaseModel):
+    criteria: str | None
+    ranked_used: bool
+    suggest_status: Literal["idle", "running", "stopping"]
+    suggest_done: int
+    suggest_total: int
+    suggest_error: str | None
+    model_label: str | None
+    model_is_local: bool | None
+    model_host: str | None
+
+
+class ScreeningCriteriaUpdate(BaseModel):
+    criteria: str | None = Field(default=None, max_length=4000)  # core.screening.CRITERIA_MAX_CHARS
+
+
 def _reason_required_on_exclude(status: str | None, reason: str | None) -> None:
     if status == "not_relevant" and not reason:
         raise ValueError("stage1_exclude_reason is required when stage1_status is not_relevant")

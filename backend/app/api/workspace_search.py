@@ -20,6 +20,8 @@ from app.schemas.workspace_search import (
     ImportHitsRequest,
     PrismaExportOut,
     RankedHitsOut,
+    ScreeningCriteriaUpdate,
+    ScreeningStateOut,
     SearchRunCreate,
     SearchRunOut,
     SnowballOut,
@@ -89,6 +91,18 @@ async def ranked_hits(
     workspace_id: uuid.UUID, session: SessionDep, limit: Annotated[int, Query(gt=0, le=RANKED_LIMIT_MAX)] = 200,
 ) -> RankedHitsOut:
     return await screening.ranked_hits(session, workspace_id, limit)
+
+
+@router.get("/screening")
+async def get_screening(workspace_id: uuid.UUID, session: SessionDep) -> ScreeningStateOut:
+    return await screening.get_state(session, workspace_id)
+
+
+@router.put("/screening")
+async def put_screening(
+    workspace_id: uuid.UUID, payload: ScreeningCriteriaUpdate, session: SessionDep
+) -> ScreeningStateOut:
+    return await screening.set_criteria(session, workspace_id, payload.criteria)
 
 
 @router.delete("/hits")
