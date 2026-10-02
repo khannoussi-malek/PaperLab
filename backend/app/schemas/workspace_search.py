@@ -79,6 +79,17 @@ class HitListOut(BaseModel):
     next_cursor: str | None
 
 
+class RankedHitsOut(BaseModel):
+    """Unscreened hits, most likely relevant first (M31a). No cursor: the order changes after every decision."""
+
+    items: list[HitOut]
+    trained: bool
+    total_unscreened: int
+    streak: int
+    threshold: int
+    show_stop_hint: bool
+
+
 def _reason_required_on_exclude(status: str | None, reason: str | None) -> None:
     if status == "not_relevant" and not reason:
         raise ValueError("stage1_exclude_reason is required when stage1_status is not_relevant")
