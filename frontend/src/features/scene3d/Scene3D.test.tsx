@@ -65,3 +65,19 @@ test('a director that fails to load or start leaves the fallback, and throws not
   await act(() => Promise.resolve())
   expect(screen.getByText('still plain')).toBeInTheDocument()
 })
+
+test('refogs a running scene when the app theme (the dark class on html) changes', async () => {
+  const { running, load } = fakeDirector()
+  render(<Scene3D load={load} input={{ n: 1 }} canDraw={() => true} />)
+  await act(() => Promise.resolve())
+  running.refog.mockClear()
+  try {
+    await act(async () => {
+      document.documentElement.classList.add('dark')
+      await Promise.resolve()
+    })
+    expect(running.refog).toHaveBeenCalled()
+  } finally {
+    document.documentElement.classList.remove('dark')
+  }
+})
