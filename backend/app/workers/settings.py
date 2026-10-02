@@ -6,6 +6,7 @@ from arq.connections import RedisSettings
 from app.config import settings
 from app.workers.ingest import ingest_paper, reembed_paper
 from app.workers.references import fetch_references
+from app.workers.screening_suggest import SUGGEST_JOB_TIMEOUT, suggest_screening
 from app.workers.workspace_search import SEARCH_RUN_JOB_TIMEOUT, run_workspace_search
 
 logging.basicConfig(level=logging.INFO)
@@ -21,5 +22,6 @@ class WorkerSettings:
         reembed_paper,
         fetch_references,
         func(run_workspace_search, timeout=SEARCH_RUN_JOB_TIMEOUT),
+        func(suggest_screening, timeout=SUGGEST_JOB_TIMEOUT),
     ]
     redis_settings = RedisSettings.from_dsn(settings.redis_url)

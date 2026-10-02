@@ -129,3 +129,45 @@ async def set_criteria(session: AsyncSession, workspace_id: uuid.UUID, criteria:
         )
     await session.commit()
     return await get_state(session, workspace_id)
+
+
+def suggestion_queue(pool: Pool) -> list[uuid.UUID]:
+    """Unscreened hits still without a suggestion and with some text to judge, in ranked order (§4.2)."""
+    order, _ = ranked_order(pool)
+    by_id = {hit.id: (hit, ref) for hit, ref in pool.rows}
+    return [
+        hit_id for hit_id in order
+        if by_id[hit_id][0].suggestion is None and hit_text(*by_id[hit_id]).strip()
+    ]
+
+
+async def start_suggestions(session: AsyncSession, workspace_id: uuid.UUID, confirm_remote: bool) -> dict:
+    """Marks the job running; the route enqueues it. Suggest only (D189): the job never writes stage1_status."""
+    pool = await load_pool(session, workspace_id)
+    workspace = pool.workspace
+    if not workspace.screening_criteria:
+        raise Conflict("Write the inclusion and exclusion criteria first")
+    if workspace.suggest_status != "idle":
+        raise Conflict("Suggestions are already running")
+    model = await _default_model(session)
+    if model is None:
+        raise Conflict("no_model")
+    label, local, host = model
+    if not local and not confirm_remote:
+        raise Conflict(f"Abstracts will be sent to {host} and may cost money")
+    workspace.suggest_status = "running"
+    workspace.suggest_done = 0
+    workspace.suggest_total = len(suggestion_queue(pool))
+    workspace.suggest_error = None
+    await session.commit()
+    return await get_state(session, workspace_id)
+
+
+async def stop_suggestions(session: AsyncSession, workspace_id: uuid.UUID) -> dict:
+    workspace = await session.get(Workspace, workspace_id)
+    if workspace is None:
+        raise NotFound(f"workspace {workspace_id} not found")
+    if workspace.suggest_status == "running":
+        workspace.suggest_status = "stopping"  # the job reads this before each hit
+        await session.commit()
+    return await get_state(session, workspace_id)

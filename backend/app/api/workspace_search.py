@@ -27,6 +27,7 @@ from app.schemas.workspace_search import (
     SnowballOut,
     SnowballRequest,
     Stage1Status,
+    SuggestStart,
 )
 
 router = APIRouter(prefix="/api/workspaces/{workspace_id}/search", tags=["workspace-search"])
@@ -103,6 +104,20 @@ async def put_screening(
     workspace_id: uuid.UUID, payload: ScreeningCriteriaUpdate, session: SessionDep
 ) -> ScreeningStateOut:
     return await screening.set_criteria(session, workspace_id, payload.criteria)
+
+
+@router.post("/suggestions")
+async def start_suggestions(
+    workspace_id: uuid.UUID, payload: SuggestStart, request: Request, session: SessionDep
+) -> ScreeningStateOut:
+    state = await screening.start_suggestions(session, workspace_id, payload.confirm_remote)
+    await request.app.state.arq.enqueue_job("suggest_screening", str(workspace_id))
+    return state
+
+
+@router.post("/suggestions/stop")
+async def stop_suggestions(workspace_id: uuid.UUID, session: SessionDep) -> ScreeningStateOut:
+    return await screening.stop_suggestions(session, workspace_id)
 
 
 @router.delete("/hits")
