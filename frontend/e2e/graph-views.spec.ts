@@ -59,6 +59,9 @@ test.describe('the graph views', () => {
     await expect(page.locator('[data-view="2d"][data-ready="true"]')).toBeVisible()
 
     // 3D loads its own module on first pick; the page itself says whether it can draw WebGL (Spec note 4).
+    // Registered before the click, so an error during the entrance is caught too.
+    const errors: string[] = []
+    page.on('pageerror', (error) => errors.push(String(error)))
     await tabs.getByRole('tab', { name: '3D' }).click()
     await expect(page.locator('[data-view="3d"][data-ready="true"]')).toBeVisible({ timeout: 20_000 })
     const webgl = await page.evaluate(() => {
@@ -67,6 +70,9 @@ test.describe('the graph views', () => {
     })
     await expect(page.getByText(WEBGL_OFF)).toHaveCount(webgl ? 0 : 1)
     if (webgl) await expect(page.locator('[data-view="3d"] canvas')).toBeVisible()
+    // The entrance starts the papers on the logo and lets them spring out; the page must stay error-free through it.
+    await page.waitForTimeout(1500)
+    expect(errors).toEqual([])
 
     // The Matrix: a real table, a name on each linked cell, and a row header that focuses its paper.
     await tabs.getByRole('tab', { name: 'Matrix' }).click()
