@@ -24,6 +24,7 @@ export function RankSortBar({
         >
           <option value="found">Found order</option>
           <option value="ranked">Most likely relevant first</option>
+          <option value="year">Newest publication first</option>
         </select>
       </label>
       {sort === 'ranked' && ranked && !ranked.trained && (
