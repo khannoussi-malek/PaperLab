@@ -85,6 +85,7 @@ export type HitReviewUpdate = components['schemas']['HitReviewUpdate']
 export type BulkHitReviewUpdate = components['schemas']['BulkHitReviewUpdate']
 export type BulkUpdateOut = components['schemas']['BulkUpdateOut']
 export type ImportHitsOut = components['schemas']['ImportHitsOut']
+export type RankedHits = components['schemas']['RankedHitsOut']
 export type ClearHitsOut = components['schemas']['ClearHitsOut']
 export type SnowballRequest = components['schemas']['SnowballRequest']
 export type SnowballOut = components['schemas']['SnowballOut']
@@ -309,6 +310,8 @@ export const api = {
     request<Hit>(`/api/workspaces/${workspaceId}/search/hits/${hitId}`, sendJson('PATCH', body)),
   bulkPatchSearchHits: (workspaceId: string, body: BulkHitReviewUpdate) =>
     request<BulkUpdateOut>(`/api/workspaces/${workspaceId}/search/hits/bulk`, sendJson('PATCH', body)),
+  rankedSearchHits: (workspaceId: string, limit = 200) =>
+    request<RankedHits>(`/api/workspaces/${workspaceId}/search/hits/ranked?limit=${limit}`),
   /** `hitIds` omitted imports every hit still pending acquisition. */
   importSearchHits: (workspaceId: string, hitIds?: string[]) =>
     request<ImportHitsOut>(

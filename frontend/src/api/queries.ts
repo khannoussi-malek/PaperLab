@@ -64,6 +64,7 @@ const keys = {
     ['workspaces', workspaceId, 'search', 'hits', stage1Status, acquisitionStatus] as const,
   // A prefix of every searchHits key above (whatever the filters), for invalidating them all at once.
   searchHitsRoot: (workspaceId: string) => ['workspaces', workspaceId, 'search', 'hits'] as const,
+  rankedHits: (workspaceId: string) => ['workspaces', workspaceId, 'search', 'ranked'] as const,
   // A prefix of every usePrismaExport key (whatever `runs`) — small and cheap to invalidate wholesale, unlike
   // searchHitsRoot's multi-thousand-row pool above.
   prismaRoot: (workspaceId: string) => ['workspaces', workspaceId, 'search', 'prisma'] as const,
@@ -429,6 +430,10 @@ export const useSearchHits = (workspaceId: string, stage1Status?: string, acquis
     getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
   })
 
+/** Unscreened hits, most likely relevant first (M31a); refetched after every decision, since each one retrains it. */
+export const useRankedHits = (workspaceId: string, enabled: boolean) =>
+  useQuery({ queryKey: keys.rankedHits(workspaceId), queryFn: () => api.rankedSearchHits(workspaceId), enabled })
+
 /** Every source's raw, pre-dedup count of what it's found so far, summed (`run.stats_json.per_source_raw_count`)
  * — "how many papers we found," before removing the ones more than one source turned up. `undefined` before the
  * run has reported any progress yet. */
@@ -538,7 +543,10 @@ export function usePatchSearchHit(workspaceId: string) {
   return useMutation({
     mutationFn: ({ hitId, body }: { hitId: string; body: HitReviewUpdate }) =>
       api.patchSearchHit(workspaceId, hitId, body),
-    onSuccess: (hit) => patchHitFields(client, workspaceId, hit.id, hit),
+    onSuccess: (hit) => {
+      patchHitFields(client, workspaceId, hit.id, hit)
+      client.invalidateQueries({ queryKey: keys.rankedHits(workspaceId) })
+    },
   })
 }
 

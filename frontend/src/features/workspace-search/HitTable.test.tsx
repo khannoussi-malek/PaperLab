@@ -48,6 +48,9 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks()
+  // The sort choice persists to localStorage (hitSort.ts) keyed by workspace id; every test here uses 'ws-1', so
+  // without this a sort change in one test (e.g. the ranked-order test below) leaks into the next one.
+  localStorage.clear()
 })
 
 test('renders hit titles from the paginated query', async () => {
@@ -570,6 +573,28 @@ test('a failed clear shows an error message', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Clear old results' }))
 
   expect(await screen.findByRole('alert')).toHaveTextContent('Clear failed')
+})
+
+test('lists hits in ranked order when "Most likely relevant first" is chosen', async () => {
+  // hitA has an abstract, hitB none: found order's hasPdfOrAbstract sort puts hitA first, so only the ranked
+  // order (server-supplied, unsorted client-side) puts hitB first — the thing this test actually exercises.
+  const hitA: Hit = { ...baseHit, id: 'h1', title: 'Has Abstract', abstract: 'A summary.' }
+  const hitB: Hit = { ...baseHit, id: 'h2', title: 'No Abstract' }
+  vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: [hitA, hitB], next_cursor: null })
+  vi.spyOn(api, 'rankedSearchHits').mockResolvedValue({
+    items: [hitB, hitA], trained: true, total_unscreened: 2, streak: 0, threshold: 50, show_stop_hint: false,
+  })
+
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  await pool().findByText('Has Abstract')
+
+  fireEvent.change(screen.getByLabelText('Sort hits'), { target: { value: 'ranked' } })
+
+  await waitFor(() => {
+    const titles = [...document.querySelectorAll('[data-slot="context-menu-trigger"]')].map((r) => r.textContent)
+    expect(titles[0]).toContain(hitB.title)
+    expect(titles[1]).toContain(hitA.title)
+  })
 })
 
 test('the preview panel can be dragged wider with its resize handle, and remembers the width', async () => {
