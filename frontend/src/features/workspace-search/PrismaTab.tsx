@@ -92,6 +92,20 @@ export function PrismaTab({ workspaceId }: { workspaceId: string }) {
           ))}
         </dl>
       )}
+      {data && (data.automation.length > 0 || data.screening_criteria) && (
+        <section aria-label="Methods notes" className="mt-4 space-y-2 text-sm">
+          <h3 className="font-medium">Methods notes</h3>
+          {data.screening_criteria && (
+            <div>
+              <div className="text-muted-foreground">Eligibility criteria</div>
+              <p className="whitespace-pre-wrap">{data.screening_criteria}</p>
+            </div>
+          )}
+          {data.automation.map((line) => (
+            <p key={line}>{line}</p>
+          ))}
+        </section>
+      )}
     </div>
   )
 }

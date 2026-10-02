@@ -181,3 +181,5 @@ class PrismaExportOut(BaseModel):
     stage2_excluded_by_reason: dict[str, int]
     included: int
     runs: list[dict]
+    automation: list[str] = []
+    screening_criteria: str | None = None
