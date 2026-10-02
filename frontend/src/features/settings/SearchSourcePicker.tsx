@@ -95,7 +95,7 @@ export function SearchSourcePicker({ status }: { status: EmbeddingStatus }) {
       )}
       {chosen.kind !== 'builtin' && <ModelField picks={chosen} onModel={(model) => setPicks({ ...chosen, model })} />}
       {/* Picking Built-in never downloads by itself (D133): the block shows its status and the Download button. */}
-      {chosen.kind === 'builtin' && <DownloadSearchModel alwaysShowStatus />}
+      {chosen.kind === 'builtin' && <DownloadSearchModel alwaysShowStatus scene />}
 
       {!samePicks(chosen, picksOf(status.source)) && (
         <div>
