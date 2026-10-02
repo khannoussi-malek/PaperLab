@@ -4,9 +4,10 @@ from typing import Annotated
 from fastapi import APIRouter, File, Query, Request, UploadFile
 
 from app.api.deps import DiscoveryDep, SessionDep
-from app.core import workspace_search
+from app.core import screening, workspace_search
 from app.core.errors import InvalidInput
 from app.core.prisma_export import prisma_export
+from app.core.screening import RANKED_LIMIT_MAX
 from app.schemas.workspace_search import (
     AcquisitionStatus,
     BulkHitReviewUpdate,
@@ -18,6 +19,7 @@ from app.schemas.workspace_search import (
     ImportHitsOut,
     ImportHitsRequest,
     PrismaExportOut,
+    RankedHitsOut,
     SearchRunCreate,
     SearchRunOut,
     SnowballOut,
@@ -80,6 +82,13 @@ async def list_hits(
         session, workspace_id, limit, after, stage1_status, acquisition_status
     )
     return HitListOut(items=items, next_cursor=next_cursor)
+
+
+@router.get("/hits/ranked")
+async def ranked_hits(
+    workspace_id: uuid.UUID, session: SessionDep, limit: Annotated[int, Query(gt=0, le=RANKED_LIMIT_MAX)] = 200,
+) -> RankedHitsOut:
+    return await screening.ranked_hits(session, workspace_id, limit)
 
 
 @router.delete("/hits")
