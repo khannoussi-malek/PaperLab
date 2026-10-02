@@ -4,15 +4,17 @@ state of the local-model suggestion job. Suggest only: nothing here ever writes 
 import uuid
 from dataclasses import dataclass
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import NotFound
+from app.core import llm_connections
+from app.core.errors import Conflict, NotFound
 from app.core.screening_rank import Doc, rank, stop_hint
 from app.core.workspace_search import _hit_out_dict
 from app.models.references import ExternalRef
 from app.models.workspace import Workspace
 from app.models.workspace_search import WorkspaceSearchHit
+from app.providers.llm import ANTHROPIC_HOST, host_of
 
 RANKED_LIMIT_MAX = 500
 _POSITIVE = {"relevant", "maybe"}
@@ -73,3 +75,57 @@ async def ranked_hits(session: AsyncSession, workspace_id: uuid.UUID, limit: int
         "threshold": hint.threshold,
         "show_stop_hint": hint.show,
     }
+
+
+CRITERIA_MAX_CHARS = 4000
+
+
+async def _default_model(session: AsyncSession) -> tuple[str, bool, str] | None:
+    """(label, is_local, host) of the default chat model, or None when there is none (spec §4.3)."""
+    try:
+        connection, model = await llm_connections.resolve(session, None)
+    except Conflict:
+        return None
+    return (
+        f"{connection.label} · {model.name}",
+        llm_connections.is_local(connection.kind, connection.base_url),
+        host_of(connection.base_url) if connection.base_url else ANTHROPIC_HOST,
+    )
+
+
+async def get_state(session: AsyncSession, workspace_id: uuid.UUID) -> dict:
+    workspace = await session.get(Workspace, workspace_id)
+    if workspace is None:
+        raise NotFound(f"workspace {workspace_id} not found")
+    model = await _default_model(session)
+    return {
+        "criteria": workspace.screening_criteria,
+        "ranked_used": workspace.screening_ranked_used,
+        "suggest_status": workspace.suggest_status,
+        "suggest_done": workspace.suggest_done,
+        "suggest_total": workspace.suggest_total,
+        "suggest_error": workspace.suggest_error,
+        "model_label": model[0] if model else None,
+        "model_is_local": model[1] if model else None,
+        "model_host": model[2] if model else None,
+    }
+
+
+async def set_criteria(session: AsyncSession, workspace_id: uuid.UUID, criteria: str | None) -> dict:
+    """Saves the workspace's criteria; a change clears every stored suggestion, judged against the old ones (§4.1)."""
+    workspace = await session.get(Workspace, workspace_id)
+    if workspace is None:
+        raise NotFound(f"workspace {workspace_id} not found")
+    if workspace.suggest_status != "idle":
+        raise Conflict("Stop the suggestions before changing the criteria")
+    criteria = (criteria or "").strip() or None
+    if criteria != workspace.screening_criteria:
+        workspace.screening_criteria = criteria
+        await session.execute(
+            update(WorkspaceSearchHit)
+            .where(WorkspaceSearchHit.workspace_id == workspace_id)
+            .values(suggestion=None, suggestion_reason=None, suggestion_note=None, suggestion_model=None,
+                    suggested_at=None)
+        )
+    await session.commit()
+    return await get_state(session, workspace_id)
