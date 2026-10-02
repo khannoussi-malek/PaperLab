@@ -93,10 +93,16 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
   // title with neither is the hardest to judge relevance from. Stable sort (native since ES2019), so hits within
   // each group keep their existing (first_seen_at, id) order from the server. Ranked order is already sorted by
   // the server (most likely relevant first) and must stay that way — sorting it again here would undo the point.
+  // ponytail: "year" sorts only the already-loaded found-order page(s) client-side, same data source as found
+  // order (no new endpoint) — a hit with no year sorts last. Rows already on screen can shift as more pages load
+  // in behind them; fine for this quick screening-helper view, upgrade to a server-sorted endpoint (like ranked)
+  // if that ever matters.
   const visibleRows =
     sort === 'ranked'
       ? filteredRows
-      : filteredRows.slice().sort((a, b) => Number(hasPdfOrAbstract(b)) - Number(hasPdfOrAbstract(a)))
+      : sort === 'year'
+        ? filteredRows.slice().sort((a, b) => (b.year ?? -Infinity) - (a.year ?? -Infinity))
+        : filteredRows.slice().sort((a, b) => Number(hasPdfOrAbstract(b)) - Number(hasPdfOrAbstract(a)))
   // Falls back to the first loaded row, so the panel is never empty on first paint (mirrors PaperList) — and to
   // whichever row is first once a filter drops the previously selected one out of view.
   const previewed = visibleRows.find((hit) => hit.id === previewId) ?? visibleRows[0]

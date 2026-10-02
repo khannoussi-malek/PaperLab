@@ -597,6 +597,25 @@ test('lists hits in ranked order when "Most likely relevant first" is chosen', a
   })
 })
 
+test('lists hits newest publication first when "Newest publication first" is chosen, with no year last', async () => {
+  const older: Hit = { ...baseHit, id: 'h1', title: 'Older Paper', year: 2018 }
+  const newer: Hit = { ...baseHit, id: 'h2', title: 'Newer Paper', year: 2023 }
+  const noYear: Hit = { ...baseHit, id: 'h3', title: 'No Year Paper', year: null }
+  vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: [older, newer, noYear], next_cursor: null })
+
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  await pool().findByText('Older Paper')
+
+  fireEvent.change(screen.getByLabelText('Sort hits'), { target: { value: 'year' } })
+
+  await waitFor(() => {
+    const titles = [...document.querySelectorAll('[data-slot="context-menu-trigger"]')].map((r) => r.textContent)
+    expect(titles[0]).toContain(newer.title)
+    expect(titles[1]).toContain(older.title)
+    expect(titles[2]).toContain(noYear.title)
+  })
+})
+
 test('the preview panel can be dragged wider with its resize handle, and remembers the width', async () => {
   localStorage.removeItem('paperlab-hit-preview-width')
   renderWithClient(<HitTable workspaceId="ws-1" />)
