@@ -1,0 +1,75 @@
+import pytest
+from sqlalchemy import delete, update
+
+from app.models import LLMConnection, LLMModel
+from tests.screening_pool import make_pool
+
+pytestmark = pytest.mark.anyio
+
+
+def _url(workspace, tail=""):
+    return f"/api/workspaces/{workspace.id}/search/suggestions{tail}"
+
+
+async def _with_criteria(session, rows=(("a", None),)):
+    workspace, hits = await make_pool(session, list(rows))
+    workspace.screening_criteria = "RCTs"
+    await session.flush()
+    return workspace, hits
+
+
+async def test_start_enqueues_the_job_and_counts_what_is_left(client, session, arq):
+    workspace, _ = await _with_criteria(session, [("a", None), ("b", None), ("c", "relevant")])
+    resp = await client.post(_url(workspace), json={"confirm_remote": False})
+    assert resp.status_code == 200
+    assert (resp.json()["suggest_status"], resp.json()["suggest_total"]) == ("running", 2)
+    assert arq.jobs == [("suggest_screening", str(workspace.id))]
+
+
+async def test_start_without_criteria_is_409(client, session):
+    workspace, _ = await make_pool(session, [("a", None)])
+    assert (await client.post(_url(workspace), json={})).status_code == 409
+
+
+async def test_start_while_running_is_409(client, session):
+    workspace, _ = await _with_criteria(session)
+    workspace.suggest_status = "running"
+    await session.flush()
+    assert (await client.post(_url(workspace), json={})).status_code == 409
+
+
+async def test_start_without_a_default_model_is_409(client, session):
+    await session.execute(delete(LLMModel))
+    workspace, _ = await _with_criteria(session)
+    resp = await client.post(_url(workspace), json={})
+    assert resp.status_code == 409
+
+
+async def test_a_cloud_model_needs_confirmation(client, session, arq):
+    await session.execute(update(LLMConnection).values(kind="openai_compatible", base_url="https://api.example.com/v1"))
+    workspace, _ = await _with_criteria(session)
+    refused = await client.post(_url(workspace), json={"confirm_remote": False})
+    assert refused.status_code == 409
+    assert "api.example.com" in refused.json()["detail"]
+    assert arq.jobs == []
+    assert (await client.post(_url(workspace), json={"confirm_remote": True})).status_code == 200
+
+
+async def test_stop_marks_a_running_job_stopping(client, session):
+    workspace, _ = await _with_criteria(session)
+    workspace.suggest_status = "running"
+    await session.flush()
+    assert (await client.post(_url(workspace, "/stop"))).json()["suggest_status"] == "stopping"
+
+
+async def test_stop_when_idle_is_a_no_op(client, session):
+    workspace, _ = await _with_criteria(session)
+    assert (await client.post(_url(workspace, "/stop"))).json()["suggest_status"] == "idle"
+
+
+async def test_hits_carry_their_suggestion(client, session):
+    workspace, [hit] = await _with_criteria(session)
+    hit.suggestion, hit.suggestion_reason, hit.suggestion_note = "exclude", "language", "Not English."
+    await session.flush()
+    item = (await client.get(f"/api/workspaces/{workspace.id}/search/hits")).json()["items"][0]
+    assert (item["suggestion"], item["suggestion_reason"], item["suggestion_note"]) == ("exclude", "language", "Not English.")
