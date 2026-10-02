@@ -75,9 +75,23 @@ test.describe('with no search model @no-search-model', () => {
     await section.getByRole('button', { name: DOWNLOAD }).click()
     await expect(status).toHaveText('Search model: downloading… 0%')
     await expect(section.getByRole('progressbar', { name: 'Downloading the search model' })).toBeVisible()
+    // The 3D moment sits above the bar when this browser can draw it; the bar is there either way.
+    const webgl = await page.evaluate(() => document.createElement('canvas').getContext('webgl2') !== null)
+    await expect(section.locator('canvas[aria-hidden="true"]')).toHaveCount(webgl ? 1 : 0)
     release()
 
     await expect(status).toHaveText('Search model: ready')
     await expect(section.getByRole('button', { name: DOWNLOAD })).toHaveCount(0)
+  })
+
+  test.describe('with reduced motion', () => {
+    // test.use keeps the project's baseURL; a hand-made browser.newContext() would not.
+    test.use({ reducedMotion: 'reduce' })
+    test('Settings → Search has no 3D, only the download controls', async ({ page }) => {
+      await page.goto('/#/settings/search')
+      const section = page.getByRole('region', { name: 'Search' })
+      await expect(section.getByRole('button', { name: DOWNLOAD })).toBeVisible()
+      await expect(section.locator('canvas')).toHaveCount(0)
+    })
   })
 })
