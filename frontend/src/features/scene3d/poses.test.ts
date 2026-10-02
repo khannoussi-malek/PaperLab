@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { downloadPose } from './poses'
+import { downloadPose, libraryPose } from './poses'
 
 describe('downloadPose', () => {
   it('gathers the dust with the percent, short of the full mark until the download is done', () => {
@@ -27,5 +27,23 @@ describe('downloadPose', () => {
     const pose = downloadPose({ status: 'ready', percent: 100 }, 0)
     expect(pose).toMatchObject({ gather: 1, card: 1, sweep: 1 })
     expect(pose.flash).toBeCloseTo(0, 1)
+  })
+})
+
+describe('libraryPose', () => {
+  it('crosses the sheen every 6 s and stacks nothing while idle', () => {
+    expect(libraryPose(0.5, null)).toEqual({ sheen: 0, landed: [0, 0, 0] })
+    expect(libraryPose(5.3, null).sheen).toBeCloseTo(0.5, 9)
+  })
+
+  it('lands three cards one after another while uploading, and starts again for a long upload', () => {
+    expect(libraryPose(0, 0).landed).toEqual([0, 0, 0])
+    const mid = libraryPose(0, 0.7).landed
+    expect(mid[0]).toBeGreaterThan(mid[1])
+    expect(mid[1]).toBeGreaterThanOrEqual(mid[2])
+    expect(libraryPose(0, 2.0).landed).toEqual([1, 1, 1])
+    // 3.1 % 2.4 is 0.7000000000000002: compare closely, not exactly.
+    const again = libraryPose(0, 2.4 + 0.7).landed
+    libraryPose(0, 0.7).landed.forEach((k, i) => expect(again[i]).toBeCloseTo(k, 9))
   })
 })
