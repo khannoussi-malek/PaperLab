@@ -54,6 +54,9 @@ test.describe('with no search model @no-search-model', () => {
   })
 
   test('Settings → Search shows the status, and the download runs in place', async ({ page }) => {
+    const errors: string[] = []
+    page.on('pageerror', (e) => errors.push(e.message))
+    page.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
     let release = () => {}
     const held = new Promise<void>((resolve) => (release = resolve))
     await page.route('**/api/embedding/model', async (route) => {
@@ -77,11 +80,14 @@ test.describe('with no search model @no-search-model', () => {
     await expect(section.getByRole('progressbar', { name: 'Downloading the search model' })).toBeVisible()
     // The 3D moment sits above the bar when this browser can draw it; the bar is there either way.
     const webgl = await page.evaluate(() => document.createElement('canvas').getContext('webgl2') !== null)
-    await expect(section.locator('canvas[aria-hidden="true"]')).toHaveCount(webgl ? 1 : 0)
+    const canvas = section.locator('canvas[aria-hidden="true"]')
+    if (webgl) await expect(canvas).toBeVisible() // hidden until the director runs, so this proves it drew
+    else await expect(canvas).toHaveCount(0)
     release()
 
     await expect(status).toHaveText('Search model: ready')
     await expect(section.getByRole('button', { name: DOWNLOAD })).toHaveCount(0)
+    expect(errors).toEqual([])
   })
 
   test.describe('with reduced motion', () => {
