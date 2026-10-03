@@ -1,6 +1,9 @@
+import { ClipboardList } from 'lucide-react'
 import { useState } from 'react'
 import { usePrismaExport } from '@/api/queries'
 import type { PrismaExportOut } from '@/api/client'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
 import { asPrismaRunMeta } from './prismaRunMeta'
 
 type StageKey =
@@ -14,16 +17,33 @@ type StageKey =
   | 'stage2_excluded'
   | 'included'
 
-const STAGES: [StageKey, string][] = [
-  ['identified', 'Identified'],
-  ['duplicates_removed', 'Duplicates removed'],
-  ['stage1_screened', 'Stage-1 screened'],
-  ['stage1_excluded', 'Stage-1 excluded'],
-  ['sought', 'Reports sought'],
-  ['not_retrieved', 'Not retrieved'],
-  ['stage2_assessed', 'Stage-2 assessed'],
-  ['stage2_excluded', 'Stage-2 excluded'],
-  ['included', 'Included'],
+// PRISMA's own flow-diagram phases, so the funnel reads as the methodology a systematic-review author already
+// knows, not an arbitrary 9-row table.
+const PHASES: [string, [StageKey, string][]][] = [
+  [
+    'Identification',
+    [
+      ['identified', 'Identified'],
+      ['duplicates_removed', 'Duplicates removed'],
+    ],
+  ],
+  [
+    'Screening',
+    [
+      ['stage1_screened', 'Stage-1 screened'],
+      ['stage1_excluded', 'Stage-1 excluded'],
+    ],
+  ],
+  [
+    'Eligibility',
+    [
+      ['sought', 'Reports sought'],
+      ['not_retrieved', 'Not retrieved'],
+      ['stage2_assessed', 'Stage-2 assessed'],
+      ['stage2_excluded', 'Stage-2 excluded'],
+    ],
+  ],
+  ['Included', [['included', 'Included']]],
 ]
 
 // A stage whose count has a reason breakdown (spec §13): reason -> count, straight off PrismaExportOut, no
@@ -53,7 +73,7 @@ export function PrismaTab({ workspaceId }: { workspaceId: string }) {
         <select
           value={runs}
           onChange={(e) => setRuns(e.target.value)}
-          className="w-fit rounded border px-2 py-1 text-sm"
+          className="w-fit rounded-md border border-input bg-background px-2 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
         >
           <option value="all">All runs (combined)</option>
           {allRuns.map((r) => (
@@ -62,7 +82,10 @@ export function PrismaTab({ workspaceId }: { workspaceId: string }) {
         </select>
       </label>
       {selectedRun && (
-        <dl aria-label="Selected run details" className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+        <dl
+          aria-label="Selected run details"
+          className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 rounded-lg border bg-muted/30 p-3 text-sm"
+        >
           <dt className="text-muted-foreground">Query</dt>
           <dd>{selectedRun.query_text}</dd>
           <dt className="text-muted-foreground">Filters</dt>
@@ -75,26 +98,38 @@ export function PrismaTab({ workspaceId }: { workspaceId: string }) {
       )}
       {isPending && <p className="text-sm text-muted-foreground">Loading…</p>}
       {isError && (
-        <p role="alert" className="text-xs text-destructive">
-          {error.message}
-        </p>
+        <Alert variant="destructive" className="border-glass-border">
+          <AlertDescription>{error.message}</AlertDescription>
+        </Alert>
       )}
       {data && (
-        <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-          {STAGES.map(([key, label]) => (
-            <div key={key} className="contents">
-              <dt className="text-muted-foreground">{label}</dt>
-              <dd>
-                {data[key]}
-                <ReasonBreakdown reasons={reasonBreakdown(data, key)} />
-              </dd>
+        <div className="flex flex-col gap-3 rounded-lg border p-3">
+          {PHASES.map(([phase, stages]) => (
+            <div key={phase} className="flex flex-col gap-1.5">
+              {stages.length > 1 && (
+                <h4 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{phase}</h4>
+              )}
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
+                {stages.map(([key, label]) => (
+                  <div key={key} className="contents">
+                    <dt className="text-muted-foreground">{label}</dt>
+                    <dd className="flex flex-wrap items-center gap-1.5">
+                      <span className="tabular-nums">{data[key]}</span>
+                      <ReasonBreakdown reasons={reasonBreakdown(data, key)} />
+                    </dd>
+                  </div>
+                ))}
+              </dl>
             </div>
           ))}
-        </dl>
+        </div>
       )}
       {data && (data.automation.length > 0 || data.screening_criteria) && (
-        <section aria-label="Methods notes" className="mt-4 space-y-2 text-sm">
-          <h3 className="font-medium">Methods notes</h3>
+        <section aria-label="Methods notes" className="flex flex-col gap-2 rounded-lg border p-3 text-sm">
+          <h3 className="flex items-center gap-1.5 font-medium">
+            <ClipboardList aria-hidden className="size-4" />
+            Methods notes
+          </h3>
           {data.screening_criteria && (
             <div>
               <div className="text-muted-foreground">Eligibility criteria</div>
@@ -102,7 +137,9 @@ export function PrismaTab({ workspaceId }: { workspaceId: string }) {
             </div>
           )}
           {data.automation.map((line) => (
-            <p key={line}>{line}</p>
+            <p key={line} className="text-muted-foreground">
+              {line}
+            </p>
           ))}
         </section>
       )}
@@ -118,12 +155,12 @@ function reasonBreakdown(data: PrismaExportOut, key: StageKey): Record<string, n
 function ReasonBreakdown({ reasons }: { reasons: Record<string, number> | null }) {
   if (!reasons || Object.keys(reasons).length === 0) return null
   return (
-    <ul className="mt-1 list-disc pl-4 text-xs text-muted-foreground">
+    <>
       {Object.entries(reasons).map(([reason, count]) => (
-        <li key={reason}>
+        <Badge key={reason} variant="outline" className="font-normal text-muted-foreground">
           {reason}: {count}
-        </li>
+        </Badge>
       ))}
-    </ul>
+    </>
   )
 }

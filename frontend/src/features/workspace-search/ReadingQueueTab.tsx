@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { usePrismaExport, useReadingQueue } from '@/api/queries'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
 import { readingChip } from '@/features/reading/passes'
 import { counted } from '@/features/workspaces/workspaceMeta'
 import { readerHref } from '@/lib/route'
@@ -39,7 +41,7 @@ export function ReadingQueueTab({ workspaceId, runId }: { workspaceId: string; r
         <select
           value={selectedRunId ?? ''}
           onChange={(e) => setManualRunId(e.target.value)}
-          className="w-fit rounded border px-2 py-1 text-sm"
+          className="w-fit rounded-md border border-input bg-background px-2 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
         >
           {allRuns.map((r) => (
             <option key={r.id} value={r.id}>{r.query_text}</option>
@@ -47,9 +49,9 @@ export function ReadingQueueTab({ workspaceId, runId }: { workspaceId: string; r
         </select>
       </label>
       {queue.isError && (
-        <p role="alert" className="text-xs text-destructive">
-          {queue.error.message}
-        </p>
+        <Alert variant="destructive" className="border-glass-border">
+          <AlertDescription>{queue.error.message}</AlertDescription>
+        </Alert>
       )}
       {!queue.isError && queue.data === undefined && (
         <p className="text-sm text-muted-foreground">Loading…</p>
@@ -58,17 +60,23 @@ export function ReadingQueueTab({ workspaceId, runId }: { workspaceId: string; r
         <p className="text-sm text-muted-foreground">No included papers have been imported into the library yet.</p>
       )}
       {queue.data && queue.data.rows.length > 0 && (
-        <ul className="reading-queue divide-y divide-glass-border">
+        <ul className="reading-queue divide-y divide-glass-border rounded-lg border">
           {queue.data.rows.map((row) => (
-            <li key={row.paper_id} className="flex items-center gap-3 px-4 py-2">
+            <li key={row.paper_id} className="flex items-center gap-3 px-4 py-2 transition-colors hover:bg-muted/40">
               <a href={readerHref(row.paper_id)} className="min-w-0 flex-1 truncate text-sm font-medium hover:underline">
                 {row.title}
               </a>
-              {row.priority != null && <span className="text-xs text-muted-foreground">Priority {row.priority}</span>}
-              <span className="reading-chip text-xs text-muted-foreground">
+              {row.priority != null && (
+                <Badge variant="outline" className="shrink-0 font-normal text-muted-foreground">
+                  Priority {row.priority}
+                </Badge>
+              )}
+              <Badge variant="outline" className="reading-chip shrink-0 font-normal text-muted-foreground">
                 {readingChip(row.reading_pass, row.triage as 'keep' | 'later' | 'drop' | null) ?? 'Not started'}
+              </Badge>
+              <span className="shrink-0 tabular-nums text-xs text-muted-foreground">
+                {counted(row.note_count, 'note')}
               </span>
-              <span className="tabular-nums text-xs text-muted-foreground">{counted(row.note_count, 'note')}</span>
             </li>
           ))}
         </ul>
