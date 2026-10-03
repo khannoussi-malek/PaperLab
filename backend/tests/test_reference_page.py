@@ -8,7 +8,7 @@ from sqlalchemy import delete, select, text
 
 from app.core import graph, references
 from app.core.errors import NotFound
-from app.models import ExternalRef, Note, NoteEmbedding, Paper, Workspace, paper_references, workspace_papers
+from app.models import ExternalRef, Paper, Workspace, paper_references, workspace_papers
 
 # Every test here hides the owner's rows (below), as the other references tests do: one worker for all of them.
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("references")]
@@ -19,10 +19,15 @@ T0 = datetime(2026, 9, 1, tzinfo=timezone.utc)  # the test transaction freezes n
 
 @pytest.fixture
 async def library(session):
-    """The dev database (D15) holds the owner's papers, references, note vectors and notes: hide them in this test's
-    rolled-back transaction, so every count is the test's own."""
-    for model in (paper_references, NoteEmbedding, ExternalRef, Note, Paper):
-        await session.execute(delete(model))
+    """The dev database (D15) holds the owner's papers, references, note vectors and notes: hide them with a
+    temp-table shadow (same trick as conftest.py's SHADOW_SEARCH_SOURCE), so every count is the test's own — not a
+    DELETE, which on a 38k+ row external_refs forces a sequential scan of workspace_search_hits per deleted row to
+    enforce its ON DELETE SET NULL foreign key (confirmed via EXPLAIN), and holds real locks other workers wait on
+    until the rollback. workspace_papers is shadowed too, not because it needs hiding, but because a shadowed
+    papers row's real FK partner must also be a shadow (a shadow copies no foreign keys, so the real
+    workspace_papers_paper_id_fkey would otherwise check a new paper against the real, untouched public.papers)."""
+    for table in ("paper_references", "note_embeddings", "external_refs", "notes", "papers", "workspace_papers"):
+        await session.execute(text(f"CREATE TEMP TABLE {table} (LIKE public.{table} INCLUDING ALL)"))
     return session
 
 
