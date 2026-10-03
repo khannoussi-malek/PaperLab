@@ -67,6 +67,17 @@ async def test_stop_when_idle_is_a_no_op(client, session):
     assert (await client.post(_url(workspace, "/stop"))).json()["suggest_status"] == "idle"
 
 
+async def test_stop_on_an_already_stopping_job_forces_it_idle(client, session):
+    """A live incident on 2026-10-03 left a job stuck at "stopping" forever (its worker lost, no job behind it
+    to ever finish the transition) — the only way back was a manual database fix. The advisory lock, not this
+    status column, is what actually keeps two jobs from working a workspace at once, so a second Stop click is
+    safe to treat as "force it idle" and gives the owner a self-service recovery path."""
+    workspace, _ = await _with_criteria(session)
+    workspace.suggest_status = "stopping"
+    await session.flush()
+    assert (await client.post(_url(workspace, "/stop"))).json()["suggest_status"] == "idle"
+
+
 async def test_hits_carry_their_suggestion(client, session):
     workspace, [hit] = await _with_criteria(session)
     hit.suggestion, hit.suggestion_reason, hit.suggestion_note = "exclude", "language", "Not English."

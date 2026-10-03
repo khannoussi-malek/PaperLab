@@ -170,4 +170,11 @@ async def stop_suggestions(session: AsyncSession, workspace_id: uuid.UUID) -> di
     if workspace.suggest_status == "running":
         workspace.suggest_status = "stopping"  # the job reads this before each hit
         await session.commit()
+    elif workspace.suggest_status == "stopping":
+        # A second Stop click on an already-stopping job: either it's about to finish on its own (harmless,
+        # redundant) or it's stuck (lost worker, no job left to ever make the transition) — found live on
+        # 2026-10-03, where the only way back was a manual database fix. The advisory lock, not this column, is
+        # what actually keeps two jobs from working a workspace at once, so forcing this to idle is safe either way.
+        workspace.suggest_status = "idle"
+        await session.commit()
     return await get_state(session, workspace_id)

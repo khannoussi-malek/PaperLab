@@ -1,11 +1,19 @@
+import asyncio
 from contextlib import asynccontextmanager
+from types import SimpleNamespace
 
 import pytest
+from sqlalchemy import delete, text
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.screening_suggest import SYSTEM_PROMPT
+from app.models.references import ExternalRef
+from app.models.workspace import Workspace
+from app.models.workspace_search import WorkspaceSearchHit, WorkspaceSearchRun
 from app.providers.base import LLMError, LLMUnavailable
 from app.providers.llm import FakeLLM
 from app.workers import screening_suggest as worker_module
+from tests.conftest import TEST_DATABASE_URL
 from tests.screening_pool import make_pool
 
 pytestmark = pytest.mark.anyio
@@ -32,13 +40,36 @@ class ScriptedLLM(FakeLLM):
         yield reply
 
 
+class _LockConnStub:
+    """Forwards the lock statements to the test's own pinned connection, but no-ops `commit()`: that connection's
+    real transaction boundary belongs to the `session` fixture (rolled back at teardown), and the advisory lock
+    functions don't need a commit to take effect anyway."""
+
+    def __init__(self, connection):
+        self._connection = connection
+
+    async def scalar(self, *args, **kwargs):
+        return await self._connection.scalar(*args, **kwargs)
+
+    async def execute(self, *args, **kwargs):
+        return await self._connection.execute(*args, **kwargs)
+
+    async def commit(self):
+        pass
+
+
 @pytest.fixture
 def worker(session, monkeypatch):
     @asynccontextmanager
     async def shared_session():
         yield session
 
+    @asynccontextmanager
+    async def shared_connection():
+        yield _LockConnStub(await session.connection())
+
     monkeypatch.setattr(worker_module, "SessionLocal", shared_session)
+    monkeypatch.setattr(worker_module, "engine", SimpleNamespace(connect=shared_connection))
 
     def use(llm):
         monkeypatch.setattr(worker_module, "build_llm", lambda connection, name, transport=None: llm)
@@ -144,42 +175,69 @@ async def test_resume_only_asks_about_hits_without_a_suggestion(session, worker)
     assert len(llm.calls) == 1
 
 
-async def test_the_advisory_lock_is_released_even_when_the_final_status_commit_fails(session, worker, monkeypatch):
+async def test_the_advisory_lock_survives_its_own_session_rotating_connections(monkeypatch):
     """A live-check run on 2026-10-03 found a stuck job: suggest_status froze at "stopping" and the advisory lock
     stayed held forever, blocking every future suggestion run on that workspace until someone manually restarted
-    the worker and reset the row. Root cause: `finally`'s `workspace.suggest_status = "idle"; await
-    session.commit()` and the `_UNLOCK` call right after it were not independently guaranteed — if the commit
-    raised or was cancelled (the live run's own `async with SessionLocal()` connection is pooled and reused, so a
-    lock left unreleased here leaks into whatever request borrows that connection next), `_UNLOCK` was never
-    reached at all."""
-    workspace, hits = await _running(session, [("a", None)])
-    worker(ScriptedLLM(["INCLUDE\nx"]))
+    the worker and reset the row. Root cause: the advisory lock is session-level (tied to one physical Postgres
+    connection), but the old code took and released it through the ORM `session`, whose own connection can rotate
+    to a *different* pooled connection on every `session.commit()` under real concurrent load (e.g. the frontend
+    polling GET /screening while the job runs). The lock-holding connection drifted away mid-job and went idle in
+    the pool, still holding the lock, forever.
 
-    real_commit = session.commit
-    commit_calls = {"n": 0}
+    `test_screening_suggest_worker.py`'s own `session` fixture can't reproduce this: it pins every statement to
+    one connection via `AsyncSession(bind=connection, ...)`, so it never rotates. This test instead runs the
+    worker against a real small connection pool, with concurrent "noise" queries racing the job's own per-hit
+    commits to force genuine rotation — the same way real production traffic does — and then proves the lock is
+    actually free afterward by taking it from a separate connection, not just that some statement was executed."""
+    test_engine = create_async_engine(TEST_DATABASE_URL, pool_size=2, max_overflow=3)
+    TestSessionLocal = async_sessionmaker(test_engine, expire_on_commit=False)
 
-    async def flaky_commit():
-        commit_calls["n"] += 1
-        if commit_calls["n"] == 2:  # the loop's own per-hit commit is call 1; finally's status="idle" commit is 2
-            raise RuntimeError("simulated commit failure")
-        await real_commit()
+    async with TestSessionLocal() as setup:
+        workspace, hits = await make_pool(setup, [(f"paper {i}", None) for i in range(8)])
+        workspace.screening_criteria, workspace.suggest_status = "RCTs on sleep in adults", "running"
+        await setup.commit()
+        wid, run_id = workspace.id, hits[0].run_id
+        ref_ids = [hit.external_ref_id for hit in hits]
 
-    monkeypatch.setattr(session, "commit", flaky_commit)
+    monkeypatch.setattr(worker_module, "SessionLocal", TestSessionLocal)
+    monkeypatch.setattr(worker_module, "engine", test_engine, raising=False)
+    monkeypatch.setattr(worker_module, "build_llm", lambda *a, **k: ScriptedLLM(["INCLUDE\nx"] * len(hits)))
 
-    real_execute = session.execute
-    executed_unlock = {"called": False}
+    async def noise():
+        for _ in range(40):
+            async with TestSessionLocal() as s:
+                await s.execute(text("SELECT 1"))
+                await s.commit()
+            await asyncio.sleep(0)
 
-    async def spy_execute(stmt, *args, **kwargs):
-        if stmt is worker_module._UNLOCK:
-            executed_unlock["called"] = True
-        return await real_execute(stmt, *args, **kwargs)
+    try:
+        noise_task = asyncio.create_task(noise())
+        await worker_module.suggest_screening({}, str(wid))
+        await noise_task
 
-    monkeypatch.setattr(session, "execute", spy_execute)
+        key = worker_module._lock_key(wid)
+        async with test_engine.connect() as probe:
+            reacquired = await probe.scalar(text("SELECT pg_try_advisory_lock(:k)"), {"k": key})
+            if reacquired:
+                await probe.execute(text("SELECT pg_advisory_unlock(:k)"), {"k": key})
+            await probe.commit()
+        assert reacquired is True, "the advisory lock was still held after the job finished"
 
-    with pytest.raises(RuntimeError, match="simulated commit failure"):
-        await worker_module.suggest_screening({}, str(workspace.id))
-
-    assert executed_unlock["called"] is True
+        async with TestSessionLocal() as check:
+            status = await check.scalar(text("SELECT suggest_status FROM workspaces WHERE id = :id"), {"id": wid})
+            done = await check.scalar(
+                text("SELECT count(*) FROM workspace_search_hits WHERE workspace_id = :id AND suggestion IS NOT NULL"),
+                {"id": wid},
+            )
+        assert (status, done) == ("idle", len(hits))
+    finally:
+        async with TestSessionLocal() as cleanup:
+            await cleanup.execute(delete(WorkspaceSearchHit).where(WorkspaceSearchHit.workspace_id == wid))
+            await cleanup.execute(delete(WorkspaceSearchRun).where(WorkspaceSearchRun.id == run_id))
+            await cleanup.execute(delete(ExternalRef).where(ExternalRef.id.in_(ref_ids)))
+            await cleanup.execute(delete(Workspace).where(Workspace.id == wid))
+            await cleanup.commit()
+        await test_engine.dispose()
 
 
 async def test_a_job_for_an_idle_workspace_does_nothing(session, worker):
