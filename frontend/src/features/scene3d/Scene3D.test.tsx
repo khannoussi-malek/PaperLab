@@ -81,3 +81,51 @@ test('refogs a running scene when the app theme (the dark class on html) changes
     document.documentElement.classList.remove('dark')
   }
 })
+
+test('a rejected load shows the fallback and leaves no canvas behind', async () => {
+  render(<Scene3D load={() => Promise.reject(new Error('chunk'))} input={{}} fallback={<p>plain</p>} canDraw={() => true} />)
+  await act(() => Promise.resolve())
+  expect(screen.getByText('plain')).toBeInTheDocument()
+  expect(document.querySelector('canvas')).toBeNull()
+})
+
+test('a lost WebGL context disposes the scene once and falls back to the plain UI', async () => {
+  const { running, load } = fakeDirector()
+  render(<Scene3D load={load} input={{ n: 1 }} fallback={<p>plain</p>} canDraw={() => true} />)
+  await act(() => Promise.resolve())
+  act(() => void document.querySelector('canvas')!.dispatchEvent(new Event('webglcontextlost')))
+  expect(running.dispose).toHaveBeenCalledOnce()
+  expect(screen.getByText('plain')).toBeInTheDocument()
+  expect(document.querySelector('canvas')).toBeNull()
+})
+
+test('a director whose frame throws is disposed and replaced by the fallback', async () => {
+  const { running, load } = fakeDirector()
+  running.frame.mockImplementation(() => {
+    throw new Error('boom')
+  })
+  const cancel = vi.fn()
+  vi.stubGlobal('cancelAnimationFrame', cancel)
+  render(<Scene3D load={load} input={{ n: 1 }} fallback={<p>plain</p>} canDraw={() => true} />)
+  await act(() => Promise.resolve())
+  tick(1000)
+  expect(running.dispose).toHaveBeenCalledOnce()
+  expect(screen.getByText('plain')).toBeInTheDocument()
+  expect(cancel).toHaveBeenCalled() // the loop stopped
+})
+
+test('unmounting a live scene disposes it once and never takes the lost-context path', async () => {
+  const { running, load } = fakeDirector()
+  const { unmount } = render(<Scene3D load={load} input={{ n: 1 }} canDraw={() => true} />)
+  await act(() => Promise.resolve())
+  const canvas = document.querySelector('canvas')!
+  running.dispose.mockImplementation(() => void canvas.dispatchEvent(new Event('webglcontextlost')))
+  unmount()
+  expect(running.dispose).toHaveBeenCalledOnce()
+})
+
+test('the wrapper centres the fallback while the scene loads', () => {
+  const { load } = fakeDirector()
+  const { container } = render(<Scene3D load={load} input={{ n: 1 }} className="x" canDraw={() => true} />)
+  expect(container.firstElementChild).toHaveClass('grid', 'place-items-center', 'x')
+})
