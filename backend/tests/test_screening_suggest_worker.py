@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 from sqlalchemy import delete, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from app.core.screening_suggest import SYSTEM_PROMPT
 from app.models.references import ExternalRef
@@ -175,6 +176,26 @@ async def test_resume_only_asks_about_hits_without_a_suggestion(session, worker)
     assert len(llm.calls) == 1
 
 
+async def test_suggest_screening_opens_the_lock_connection_exactly_once(session, worker, monkeypatch):
+    """The fix holds one dedicated connection (`engine.connect()`) for the lock/unlock pair's entire lifetime,
+    specifically so they can never land on two different physical connections (see the test below). This pins
+    that mechanism directly and deterministically: a future change that re-opens the connection mid-job — even
+    one that happens to still pass the probabilistic test below on a given run — fails this one every time."""
+    workspace, hits = await _running(session, [("a", None), ("b", None), ("c", None)])
+    worker(ScriptedLLM(["INCLUDE\nx"] * 3))
+
+    real_connect = worker_module.engine.connect
+    calls = {"n": 0}
+
+    def counting_connect():
+        calls["n"] += 1
+        return real_connect()
+
+    monkeypatch.setattr(worker_module.engine, "connect", counting_connect)
+    await worker_module.suggest_screening({}, str(workspace.id))
+    assert calls["n"] == 1
+
+
 async def test_the_advisory_lock_survives_its_own_session_rotating_connections(monkeypatch):
     """A live-check run on 2026-10-03 found a stuck job: suggest_status froze at "stopping" and the advisory lock
     stayed held forever, blocking every future suggestion run on that workspace until someone manually restarted
@@ -188,7 +209,14 @@ async def test_the_advisory_lock_survives_its_own_session_rotating_connections(m
     one connection via `AsyncSession(bind=connection, ...)`, so it never rotates. This test instead runs the
     worker against a real small connection pool, with concurrent "noise" queries racing the job's own per-hit
     commits to force genuine rotation — the same way real production traffic does — and then proves the lock is
-    actually free afterward by taking it from a separate connection, not just that some statement was executed."""
+    actually free afterward by taking it from a separate connection, not just that some statement was executed.
+
+    This one is probabilistic, not deterministic: forcing a specific connection-pool checkout order depends on
+    real asyncio/asyncpg scheduling, not on anything this test controls directly. Measured empirically against
+    the pre-fix code (a scratch run, not this suite): roughly 25-35% of runs actually hit the leak: under, not
+    over, rotation starves the bug of a chance to happen, and over-rotation gives everyone their own connection
+    back with no contention either. The test above is the deterministic guard; this one is corroborating
+    evidence for the property that actually matters in production, not the sole gate on it."""
     test_engine = create_async_engine(TEST_DATABASE_URL, pool_size=2, max_overflow=3)
     TestSessionLocal = async_sessionmaker(test_engine, expire_on_commit=False)
 
@@ -215,12 +243,21 @@ async def test_the_advisory_lock_survives_its_own_session_rotating_connections(m
         await worker_module.suggest_screening({}, str(wid))
         await noise_task
 
+        # The probe must come from a connection pool_size's engine can never hand back: advisory locks are
+        # re-entrant within one backend, so if `probe` happened to draw the very (leaked) connection that still
+        # holds the lock, `pg_try_advisory_lock` would return True for that same session and mask the leak.
+        # NullPool guarantees a brand-new physical connection every time, never one `test_engine`'s pool is
+        # holding onto.
         key = worker_module._lock_key(wid)
-        async with test_engine.connect() as probe:
-            reacquired = await probe.scalar(text("SELECT pg_try_advisory_lock(:k)"), {"k": key})
-            if reacquired:
-                await probe.execute(text("SELECT pg_advisory_unlock(:k)"), {"k": key})
-            await probe.commit()
+        probe_engine = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)
+        try:
+            async with probe_engine.connect() as probe:
+                reacquired = await probe.scalar(text("SELECT pg_try_advisory_lock(:k)"), {"k": key})
+                if reacquired:
+                    await probe.execute(text("SELECT pg_advisory_unlock(:k)"), {"k": key})
+                await probe.commit()
+        finally:
+            await probe_engine.dispose()
         assert reacquired is True, "the advisory lock was still held after the job finished"
 
         async with TestSessionLocal() as check:

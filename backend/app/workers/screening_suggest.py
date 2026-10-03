@@ -64,11 +64,12 @@ async def suggest_screening(ctx: dict, workspace_id: str) -> None:
             if not await lock_conn.scalar(_LOCK, {"key": _lock_key(wid)}):
                 logger.info("suggestions for workspace %s already running elsewhere", wid)
                 return
-            # End lock_conn's own implicit transaction now: the advisory lock itself isn't transactional (it
-            # survives commit/rollback either way), but leaving this open would sit "idle in transaction" for up
-            # to SUGGEST_JOB_TIMEOUT, holding back autovacuum the whole time.
-            await lock_conn.commit()
             try:
+                # End lock_conn's own implicit transaction now, inside the try so a failure here still reaches
+                # the finally's unlock below: the advisory lock itself isn't transactional (it survives
+                # commit/rollback either way), but leaving this open would sit "idle in transaction" for up to
+                # SUGGEST_JOB_TIMEOUT, holding back autovacuum the whole time.
+                await lock_conn.commit()
                 connection, model = await llm_connections.resolve(session, None)
                 llm = build_llm(connection, model.name, transport=ctx.get("transport"))
                 label = f"{connection.label} · {model.name}"
