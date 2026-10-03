@@ -6,12 +6,12 @@ from datetime import datetime, timedelta, timezone
 
 import httpx
 import pytest
-from sqlalchemy import delete, func, select, text
+from sqlalchemy import func, select, text
 from test_references_providers import PagedS2, recorded_references
 
 from app.core import references
 from app.core.errors import Conflict
-from app.models import ExternalRef, Note, NoteEmbedding, Paper, paper_references
+from app.models import ExternalRef, Paper, paper_references
 from app.providers import embedding, semantic_scholar
 
 # Fetches and embeds take one advisory lock (core/references.py); in a test it lasts until the rollback, so these
@@ -29,10 +29,13 @@ NO_IDS = {"paperId": None, "title": "Corpus of linguistic acceptability", "year"
 
 @pytest.fixture
 async def library(session):
-    """The dev database (D15) may hold the owner's references, note vectors and notes; hide them in this test's
-    rolled-back transaction so counts and similarities are this test's own."""
-    for model in (paper_references, NoteEmbedding, ExternalRef, Note):
-        await session.execute(delete(model))
+    """The dev database (D15) may hold the owner's references, note vectors and notes; hide them with a temp-table
+    shadow (same trick as conftest.py's SHADOW_SEARCH_SOURCE) so counts and similarities are this test's own — not
+    a DELETE, which on a 38k+ row external_refs forces a sequential scan of workspace_search_hits per deleted row
+    to enforce its ON DELETE SET NULL foreign key (confirmed via EXPLAIN), and holds real locks other workers wait
+    on until the rollback."""
+    for table in ("paper_references", "note_embeddings", "external_refs", "notes"):
+        await session.execute(text(f"CREATE TEMP TABLE {table} (LIKE public.{table} INCLUDING ALL)"))
     return session
 
 
