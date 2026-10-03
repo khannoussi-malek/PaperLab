@@ -29,3 +29,17 @@ export function libraryPose(t: number, sinceUpload: number | null): { sheen: num
   const land = (i: number) => (u < 0 ? 0 : out(progress(u, i * 0.45, 0.6)))
   return { sheen: sheenEvery(t), landed: [land(0), land(1), land(2)] }
 }
+
+export type ChatInput = { phase: 'sources' | 'thinking' }
+/** Seconds per loop: quicker while finding sources, calmer while the model writes. */
+export const CHAT_LOOP = { sources: 1.6, thinking: 2.4 }
+
+export function chatPose(phase: ChatInput['phase'], t: number) {
+  const u = (t % CHAT_LOOP[phase]) / CHAT_LOOP[phase]
+  return {
+    wire: out(progress(u, 0, 0.35)), // the wire lifts off the highlighted line
+    note: out(progress(u, 0.3, 0.35)), // and pulls a note up
+    light: Math.sin(Math.PI * progress(u, 0.6, 0.3)), // the light lands on it
+    fade: 1 - progress(u, 0.9, 0.1), // and it all fades before the next loop
+  }
+}
