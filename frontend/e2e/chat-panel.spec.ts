@@ -338,3 +338,22 @@ test('a markdown answer shows as a list with bold text, and a selection in it st
   await page.getByRole('button', { name: 'Save as note' }).click()
   expect((await promote).postDataJSON()).toEqual({ output_id: saved.id, body: 'Metrics**: AI code is similar [C1]', chunk_ids: [chunkId] })
 })
+
+test('a small 3D page shows while the answer has no words yet, and goes when the first words arrive', async ({ page, paperId }) => {
+  // Sources at once, the first token 3 s later: long enough to see the waiting state.
+  const errors: string[] = []
+  page.on('pageerror', (e) => errors.push(e.message))
+  page.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
+  await installFakeChatStream(page, { lines: ['The first words.'], delayMs: 3000, done: null })
+  await openChat(page, paperId)
+  await askWithoutWaiting(page, 'Still waiting?')
+  const live = page.locator('article.chat-answer', { hasText: 'Still waiting?' })
+  await expect(live.getByRole('status')).toHaveText('Writing the answer…') // the words screen readers hear, unchanged
+  const webgl = await page.evaluate(() => document.createElement('canvas').getContext('webgl2') !== null)
+  const canvas = live.locator('canvas[aria-hidden="true"]')
+  if (webgl) await expect(canvas).toBeVisible() // hidden until the director runs, so this proves it drew
+  else await expect(canvas).toHaveCount(0)
+  await expect(live.locator('.chat-answer-text')).toContainText('The first words.')
+  await expect(live.locator('canvas')).toHaveCount(0)
+  expect(errors).toEqual([])
+})

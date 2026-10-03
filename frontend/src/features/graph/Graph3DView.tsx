@@ -2,6 +2,7 @@ import { Component, useCallback, useEffect, useMemo, useRef, useState, type Reac
 import type { ForceGraphMethods, LinkObject, NodeObject } from 'react-force-graph-3d'
 import { CHART_INK } from '@/features/charts/palette'
 import { GraphLoadError } from './GraphCanvas'
+import { entranceScale, logoStart } from './logoStart'
 import { carryPositions, degrees, FADED, nodeLabel, sizedNodes, tooltipFor, withAlpha, type SizedNode } from './graphModel'
 import { useBoxSize } from './useBoxSize'
 import { emphasis, labelledIds, linkState, shortTitle } from './paperModel'
@@ -98,7 +99,11 @@ export function Graph3DView({ nodes, links, theme, colors, focusId, inFocus, onS
 
   const data = useMemo(() => {
     // oxlint-disable-next-line react/refs -- read once per rebuild, for where the simulation left each paper
-    const graphNodes: Node3D[] = carryPositions(sizedNodes(nodes, links, colors, theme), previous.current)
+    const carried: Node3D[] = carryPositions(sizedNodes(nodes, links, colors, theme), previous.current)
+    // The first layout only, with motion allowed: papers start on the logo and spring out (logoStart).
+    // oxlint-disable-next-line react/refs -- same read as above
+    const first = previous.current.length === 0 && !matchMedia('(prefers-reduced-motion: reduce)').matches
+    const graphNodes = first ? logoStart(carried, entranceScale(carried.length)) : carried
     const graphLinks = links.map((link) => ({
       source: link.source,
       target: link.target,
