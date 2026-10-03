@@ -13,7 +13,7 @@ NUMPY_DOI = "10.1038/s41586-020-2649-2"
 @pytest.fixture
 async def unpaywall_api():
     fake = FakeProvider()
-    fake.client = unpaywall.new_client(EMAIL, transport=fake.transport)
+    fake.client = unpaywall.new_client(email=EMAIL, transport=fake.transport)
     yield fake
     await fake.client.aclose()
 

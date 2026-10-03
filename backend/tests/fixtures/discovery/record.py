@@ -84,7 +84,7 @@ async def s2_post(http: httpx.AsyncClient, path: str, body: dict, **params) -> h
 
 
 async def record_openalex(mailto: str) -> None:
-    async with openalex.new_client(mailto) as oa:
+    async with openalex.new_client(email=mailto) as oa:
         works = await openalex.search_works(oa, BERT_TITLE, per_page=2)
         save("openalex_search_bert", {"results": trim(works, WORK)})
         preprint = await openalex.get_work(oa, f"doi:10.48550/arxiv.{PREPRINT_ARXIV_ID}")
@@ -92,7 +92,7 @@ async def record_openalex(mailto: str) -> None:
 
 
 async def record_s2() -> None:
-    async with semantic_scholar.new_client("") as s2:
+    async with semantic_scholar.new_client(api_key="") as s2:
         fields = semantic_scholar.PAPER_FIELDS
         pool = semantic_scholar.RECOMMENDATION_POOL
         recs = await s2_get(
@@ -139,7 +139,7 @@ async def record_arxiv() -> None:
 
 async def record_crossref() -> None:
     # No mailto: two requests fit the public pool's one a second.
-    async with crossref.new_client(None) as cr:
+    async with crossref.new_client(email=None) as cr:
         items = await crossref.search(cr, ATTENTION_TITLE.lower(), 5)
         save("crossref_search_attention", {"message": {"items": trim(items, CROSSREF_ITEM)}})
         await asyncio.sleep(1)
@@ -147,13 +147,13 @@ async def record_crossref() -> None:
 
 
 async def record_core() -> None:
-    async with core_ac.new_client(None) as core:
+    async with core_ac.new_client(api_key=None) as core:
         works = await core_ac.search(core, ATTENTION_TITLE, 5)
         save("core_search_attention", {"results": trim(works, CORE_WORK)})
 
 
 async def record_unpaywall(email: str) -> None:
-    async with unpaywall.new_client(email) as up:
+    async with unpaywall.new_client(email=email) as up:
         for name, doi in [("unpaywall_numpy", NUMPY_DOI), ("unpaywall_bert", BERT_DOI)]:
             response = await up.get(f"/v2/{doi}")
             save(name, trim(json_body(response.raise_for_status()), UNPAYWALL))

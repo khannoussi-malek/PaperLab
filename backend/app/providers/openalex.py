@@ -34,10 +34,10 @@ AUTHOR_FIELDS = ",".join(
 
 
 def new_client(
-    mailto: str | None, transport: httpx.AsyncBaseTransport | None = None, api_key: str | None = None
+    *, email: str | None = None, api_key: str | None = None, transport: httpx.AsyncBaseTransport | None = None
 ) -> httpx.AsyncClient:
     # Client-level params are merged into every request, so no call can leave out mailto once it's set.
-    params = {"mailto": mailto} if mailto else {}
+    params = {"mailto": email} if email else {}
     # The key rides in a header, never the query string: httpx puts the URL in its error messages, which enrichment
     # logs with logger.exception.
     headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}

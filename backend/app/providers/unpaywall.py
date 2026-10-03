@@ -14,7 +14,9 @@ BASE_URL = "https://api.unpaywall.org"
 TIMEOUT = httpx.Timeout(10.0)
 
 
-def new_client(email: str, transport: httpx.AsyncBaseTransport | None = None) -> httpx.AsyncClient:
+def new_client(
+    *, email: str | None = None, api_key: str | None = None, transport: httpx.AsyncBaseTransport | None = None
+) -> httpx.AsyncClient:
     return httpx.AsyncClient(base_url=BASE_URL, params={"email": email}, timeout=TIMEOUT, transport=transport)
 
 

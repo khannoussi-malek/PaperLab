@@ -24,7 +24,9 @@ STOPWORDS = frozenset(
 _ABS_ID = re.compile(r"arxiv\.org/abs/(.+?)(?:v\d+)?$")
 
 
-def new_client(transport: httpx.AsyncBaseTransport | None = None) -> httpx.AsyncClient:
+def new_client(
+    *, email: str | None = None, api_key: str | None = None, transport: httpx.AsyncBaseTransport | None = None
+) -> httpx.AsyncClient:
     return httpx.AsyncClient(base_url=BASE_URL, timeout=TIMEOUT, transport=transport)
 
 

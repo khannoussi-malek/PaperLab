@@ -24,7 +24,7 @@ async def _enrich(session, transport, paper_id: uuid.UUID, doc: ExtractedDoc) ->
             await enrichment.enrich_paper(session, None, paper_id, hints)
             return
         key = sources.api_keys["openalex"]
-        async with openalex.new_client(sources.contact_email, transport, api_key=key) as http:
+        async with openalex.new_client(email=sources.contact_email, transport=transport, api_key=key) as http:
             await enrichment.enrich_paper(session, http, paper_id, hints)
     except Exception:
         logger.exception("enrichment failed for %s; the paper stays usable", paper_id)

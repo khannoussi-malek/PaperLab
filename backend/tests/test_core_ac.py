@@ -13,7 +13,7 @@ SEARCH = "/v3/search/works/"
 @pytest.fixture
 async def core_api():
     fake = FakeProvider()
-    fake.client = core_ac.new_client(None, transport=fake.transport)
+    fake.client = core_ac.new_client(api_key=None, transport=fake.transport)
     yield fake
     await fake.client.aclose()
 
@@ -50,7 +50,7 @@ async def test_a_title_with_no_search_words_sends_nothing(core_api, title):
 async def test_an_api_key_is_sent_as_a_bearer_header():
     fake = FakeProvider()
     fake.reply(SEARCH, 200, json={"results": []})
-    async with core_ac.new_client("core-secret-key", transport=fake.transport) as client:
+    async with core_ac.new_client(api_key="core-secret-key", transport=fake.transport) as client:
         await core_ac.search(client, "BERT", 5)
 
     assert fake.requests[0].headers["authorization"] == "Bearer core-secret-key"

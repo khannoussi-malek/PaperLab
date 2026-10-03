@@ -38,7 +38,9 @@ class _RetryOn429(httpx.AsyncBaseTransport):
         await self.inner.aclose()
 
 
-def new_client(api_key: str | None, transport: httpx.AsyncBaseTransport | None = None) -> httpx.AsyncClient:
+def new_client(
+    *, email: str | None = None, api_key: str | None = None, transport: httpx.AsyncBaseTransport | None = None
+) -> httpx.AsyncClient:
     headers = {"x-api-key": api_key} if api_key else {}
     retrying = _RetryOn429(transport or httpx.AsyncHTTPTransport())
     return httpx.AsyncClient(base_url=BASE_URL, headers=headers, timeout=TIMEOUT, transport=retrying)

@@ -12,7 +12,7 @@ BERT_DOI = "10.18653/v1/n19-1423"
 @pytest.fixture
 async def crossref_api():
     fake = FakeProvider()
-    fake.client = crossref.new_client(None, transport=fake.transport)
+    fake.client = crossref.new_client(email=None, transport=fake.transport)
     yield fake
     await fake.client.aclose()
 
@@ -34,7 +34,7 @@ async def test_search_asks_for_a_bibliographic_match_with_only_the_fields_the_ma
 async def test_the_contact_email_is_sent_as_mailto_when_set():
     fake = FakeProvider()
     fake.reply("/works", 200, json={"message": {"items": []}})
-    async with crossref.new_client("reader@example.org", transport=fake.transport) as client:
+    async with crossref.new_client(email="reader@example.org", transport=fake.transport) as client:
         await crossref.search(client, "BERT", 5)
 
     assert fake.requests[0].url.params["mailto"] == "reader@example.org"
