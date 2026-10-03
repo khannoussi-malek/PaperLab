@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { matchesReading, READING_FILTERS, readingChip, type ReadingFilter } from '@/features/reading/passes'
 import { readerHref } from '@/lib/route'
 import { cn } from '@/lib/utils'
+import { EmbeddingFlight, isEmbedding } from './EmbeddingFlight'
 import { PaperContextMenu, PaperMenu } from './PaperMenu'
 import { NoMatches, PaperSearch } from './PaperSearch'
 import { PaperPreview } from './PaperPreview'
@@ -50,7 +51,7 @@ function PaperRow({ paper, previewed, enterDelayMs, workspaceId, onPreview, onDe
       <li
         data-paper-id={paper.id}
         className={cn(
-          'paper-row group relative flex items-start gap-3 px-4 py-3 transition-colors duration-150 hover:bg-foreground/5',
+          'paper-row group relative isolate flex items-start gap-3 px-4 py-3 transition-colors duration-150 hover:bg-foreground/5',
           previewed && 'lg:bg-primary/5 lg:shadow-[inset_3px_0_0_var(--color-primary)]',
           enterDelay !== null && [fadeIn, 'motion-safe:fill-mode-backwards'],
         )}
@@ -60,6 +61,7 @@ function PaperRow({ paper, previewed, enterDelayMs, workspaceId, onPreview, onDe
         onMouseEnter={() => onPreview(paper.id, false)}
         onFocus={() => onPreview(paper.id, true)}
       >
+        {isEmbedding(paper) && <EmbeddingFlight />}
         <FileText aria-hidden className="mt-1 size-4 shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1">
           {/* The link's ::after covers the row, so the whole row opens the reader. */}
