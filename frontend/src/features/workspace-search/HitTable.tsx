@@ -23,6 +23,7 @@ import { sourceLabel } from './hitReview'
 import { loadHitSort, saveHitSort, type HitSort } from './hitSort'
 import { HitPreview } from './HitPreview'
 import { RankSortBar } from './RankSortBar'
+import { SuggestionChip } from './SuggestionChip'
 
 const ROW_HEIGHT = 44
 /** `AppShell`'s `p-3` on the view pane, between the preview's right edge and the window's. */
@@ -268,6 +269,7 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
                         {sourceLabel(hit.sources[0])}
                       </span>
                     )}
+                    <SuggestionChip hit={hit} />
                     <span className="text-xs text-muted-foreground">{hit.stage1_status ?? 'unreviewed'}</span>
                     <HitMenu hit={hit} onReview={onReview} />
                   </div>
