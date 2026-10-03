@@ -29,7 +29,7 @@ export function SetupSearch({ onFinish }: { onFinish: () => void }) {
         <div className="flex flex-col gap-2">
           <p className="text-sm font-medium">Built-in</p>
           <p className="text-sm text-muted-foreground">{BUILT_IN_SEARCH}</p>
-          <DownloadSearchModel alwaysShowStatus />
+          <DownloadSearchModel alwaysShowStatus scene />
         </div>
       ) : status.isError ? (
         <Alert variant="destructive" className="border-glass-border">

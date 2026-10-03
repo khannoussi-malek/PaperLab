@@ -11,6 +11,9 @@ import { describeSource, splitCitations, type Segment } from './citations'
 import { markdownPieces, type Piece, type Tag } from './markdown'
 import { splitNoteBlocks } from './noteBlocks'
 import { SuggestedNote } from './SuggestedNote'
+import { Scene3D } from '@/features/scene3d/Scene3D'
+
+const loadChatScene = () => import('@/features/scene3d/directors/chat')
 
 type Props = {
   question: string
@@ -105,7 +108,10 @@ export function ChatAnswer(props: Props) {
         <TooltipProvider disableHoverableContent>
           <div className="flex flex-col gap-3 rounded-2xl bg-provenance-llm-surface p-3.5">
             {waiting ? (
-              <TypingIndicator label={sources === null ? 'Finding sources…' : 'Writing the answer…'} />
+              <TypingIndicator
+                label={sources === null ? 'Finding sources…' : 'Writing the answer…'}
+                phase={sources === null ? 'sources' : 'thinking'}
+              />
             ) : (
               // The text content is exactly the answer, markers and hidden markdown syntax included (promote.ts counts
               // offsets in it); a suggested note's label and buttons are data-chrome, which answerSelection.ts leaves out.
@@ -200,15 +206,24 @@ function renderPieces(pieces: Piece[], renderText: (text: string) => ReactNode):
   })
 }
 
-/** Three pulsing dots while nothing has streamed yet; screen readers hear the label instead. */
-function TypingIndicator({ label }: { label: string }) {
-  return (
-    <p role="status" className="flex h-6 items-center gap-1">
-      <span className="sr-only">{label}</span>
+/**
+ * While nothing has streamed yet: a small 3D page with the wire pulling a note off it (or, without WebGL or with
+ * reduced motion, three pulsing dots). Screen readers hear the label either way. It unmounts with the first words,
+ * so only the answer being written ever holds a WebGL context.
+ */
+function TypingIndicator({ label, phase }: { label: string; phase: 'sources' | 'thinking' }) {
+  const dots = (
+    <span className="flex h-6 items-center gap-1">
       {['[animation-delay:-0.3s]', '[animation-delay:-0.15s]', ''].map((delay) => (
         <span key={delay} aria-hidden className={cn('size-1.5 rounded-full bg-provenance-llm motion-safe:animate-bounce', delay)} />
       ))}
-    </p>
+    </span>
+  )
+  return (
+    <div role="status" className="flex items-center">
+      <span className="sr-only">{label}</span>
+      <Scene3D load={loadChatScene} input={{ phase }} fallback={dots} className="h-[72px] w-[120px]" />
+    </div>
   )
 }
 
