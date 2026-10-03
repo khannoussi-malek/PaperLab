@@ -1,10 +1,10 @@
 import pytest
-from sqlalchemy import delete
+from sqlalchemy import delete, text
 
 from app.core import discovery, references
 from app.core.errors import Conflict
 from app.core.paper_sources import SOURCES, SourceSettings
-from app.models import Paper, paper_references
+from app.models import Paper
 from app.providers import arxiv, core_ac, crossref, discovery_fake, openalex, semantic_scholar
 from app.providers.extraction import extract
 
@@ -65,7 +65,9 @@ async def test_the_e2e_fake_answers_identifier_lookups_with_its_free_paper(sessi
 
 
 async def test_the_e2e_fake_gives_any_paper_three_references_and_one_citing_work(session, fake_providers):
-    await session.execute(delete(paper_references))  # the owner's links would change nothing here, but stay out
+    # Shadow, not delete (same trick as conftest.py's SHADOW_SEARCH_SOURCE) — the owner's links would change
+    # nothing here, but a DELETE on a large paper_references table would still take a real row lock per row.
+    await session.execute(text("CREATE TEMP TABLE paper_references (LIKE public.paper_references INCLUDING ALL)"))
     reader = Paper(title="A reader's paper", file_path="/x.pdf")
     session.add(reader)
     await session.flush()
