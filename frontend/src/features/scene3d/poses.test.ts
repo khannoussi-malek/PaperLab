@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { downloadPose, libraryPose } from './poses'
+import { CHAT_LOOP, chatPose, downloadPose, libraryPose } from './poses'
 
 describe('downloadPose', () => {
   it('gathers the dust with the percent, short of the full mark until the download is done', () => {
@@ -45,5 +45,20 @@ describe('libraryPose', () => {
     // 3.1 % 2.4 is 0.7000000000000002: compare closely, not exactly.
     const again = libraryPose(0, 2.4 + 0.7).landed
     libraryPose(0, 0.7).landed.forEach((k, i) => expect(again[i]).toBeCloseTo(k, 9))
+  })
+})
+
+describe('chatPose', () => {
+  it('lifts the wire, then the note, then lands the light, on a loop', () => {
+    const at = (u: number) => chatPose('thinking', u * CHAT_LOOP.thinking)
+    expect(at(0)).toMatchObject({ wire: 0, note: 0, light: 0 })
+    expect(at(0.33).wire).toBeGreaterThan(at(0.33).note)
+    expect(at(0.75).light).toBeGreaterThan(0)
+    expect(chatPose('thinking', 0.4 + CHAT_LOOP.thinking).wire).toBeCloseTo(chatPose('thinking', 0.4).wire, 9)
+  })
+
+  it('runs faster while finding sources than while writing', () => {
+    expect(CHAT_LOOP.sources).toBeLessThan(CHAT_LOOP.thinking)
+    expect(chatPose('sources', 0.5).wire).toBeGreaterThan(chatPose('thinking', 0.5).wire)
   })
 })
