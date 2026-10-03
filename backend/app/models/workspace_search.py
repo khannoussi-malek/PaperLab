@@ -52,6 +52,14 @@ class WorkspaceSearchHit(Base):
     topic_fit: Mapped[str | None] = mapped_column(String, default=None)
     acquisition_status: Mapped[str] = mapped_column(String, default="not_attempted")
     paper_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("papers.id", ondelete="SET NULL"), default=None)
+    # M31: when stage1_status was last set (NULL when unset or decided before M31), for the stop hint (spec §3.2).
+    stage1_decided_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), default=None)
+    # M31b: the model's suggestion; never a decision (spec §4.5).
+    suggestion: Mapped[str | None] = mapped_column(String, default=None)
+    suggestion_reason: Mapped[str | None] = mapped_column(String, default=None)
+    suggestion_note: Mapped[str | None] = mapped_column(Text, default=None)
+    suggestion_model: Mapped[str | None] = mapped_column(Text, default=None)
+    suggested_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), default=None)
 
 
 class SearchRunEligibility(Base):

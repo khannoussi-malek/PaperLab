@@ -237,6 +237,8 @@ FAKE_NOTE_SUGGESTIONS_TOKENS = [
     "passage ",
     "note.",
 ]
+# The screening suggestion on the fake stack (M31b): an exclude with a reason, as the E2E spec expects.
+FAKE_SCREENING_TOKENS = ["EXCLUDE ", "wrong_study_type\n", "A review, ", "not a primary study."]
 # Asked for notes, in either chat: two suggested notes, the first citing a passage and the second nothing, then a line
 # after them, as the note-suggestion end-to-end spec expects.
 FAKE_NOTES_TOKENS = [
@@ -288,6 +290,7 @@ class FakeLLM:
 
         # Same reason: note_suggestions → core.chat → retrieval → embedding → http_embedders → this module.
         from app.core.note_suggestions import SYSTEM_PROMPT as NOTE_SUGGESTIONS_SYSTEM_PROMPT
+        from app.core.screening_suggest import SYSTEM_PROMPT as SCREENING_SYSTEM_PROMPT
 
         self.calls.append((system, prompt))
         if asks_for_notes(prompt):
@@ -296,6 +299,8 @@ class FakeLLM:
             tokens = FAKE_WORKSPACE_TOKENS
         elif system == NOTE_SUGGESTIONS_SYSTEM_PROMPT:
             tokens = FAKE_NOTE_SUGGESTIONS_TOKENS
+        elif system == SCREENING_SYSTEM_PROMPT:
+            tokens = FAKE_SCREENING_TOKENS
         else:
             tokens = FAKE_TOKENS
         for index, token in enumerate(tokens):

@@ -34,6 +34,7 @@ import {
   type ReferencePage,
   type References,
   type ReferencesDirection,
+  type ScreeningState,
   type SearchResult,
   type SearchRun,
   type SearchRunCreate,
@@ -48,7 +49,7 @@ export const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false } },
 })
 
-const keys = {
+export const keys = {
   papers: ['papers'] as const,
   paper: (id: string) => ['papers', id] as const,
   notes: (paperId: string) => ['papers', paperId, 'notes'] as const,
@@ -64,6 +65,8 @@ const keys = {
     ['workspaces', workspaceId, 'search', 'hits', stage1Status, acquisitionStatus] as const,
   // A prefix of every searchHits key above (whatever the filters), for invalidating them all at once.
   searchHitsRoot: (workspaceId: string) => ['workspaces', workspaceId, 'search', 'hits'] as const,
+  rankedHits: (workspaceId: string) => ['workspaces', workspaceId, 'search', 'ranked'] as const,
+  screening: (workspaceId: string) => ['workspaces', workspaceId, 'search', 'screening'] as const,
   // A prefix of every usePrismaExport key (whatever `runs`) — small and cheap to invalidate wholesale, unlike
   // searchHitsRoot's multi-thousand-row pool above.
   prismaRoot: (workspaceId: string) => ['workspaces', workspaceId, 'search', 'prisma'] as const,
@@ -429,6 +432,38 @@ export const useSearchHits = (workspaceId: string, stage1Status?: string, acquis
     getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
   })
 
+/** Unscreened hits, most likely relevant first (M31a); refetched after every decision, since each one retrains it. */
+export const useRankedHits = (workspaceId: string, enabled: boolean) =>
+  useQuery({ queryKey: keys.rankedHits(workspaceId), queryFn: () => api.rankedSearchHits(workspaceId), enabled })
+
+/** The workspace's screening criteria and suggestion-job state (M31b). Polls only while a suggestion job is
+ * running or stopping; the hit pool itself refreshes separately once the job goes back to idle. */
+export const useScreeningState = (workspaceId: string) =>
+  useQuery({
+    queryKey: keys.screening(workspaceId),
+    queryFn: () => api.screeningState(workspaceId),
+    refetchInterval: (query) => (query.state.data?.suggest_status === 'idle' ? false : 2000),
+  })
+
+function useScreeningMutation<T>(workspaceId: string, fn: (arg: T) => Promise<ScreeningState>) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: (state) => {
+      client.setQueryData(keys.screening(workspaceId), state)
+      client.invalidateQueries({ queryKey: keys.searchHitsRoot(workspaceId) })
+      client.invalidateQueries({ queryKey: keys.rankedHits(workspaceId) })
+    },
+  })
+}
+
+export const useSaveCriteria = (workspaceId: string) =>
+  useScreeningMutation(workspaceId, (criteria: string | null) => api.saveScreeningCriteria(workspaceId, criteria))
+export const useStartSuggestions = (workspaceId: string) =>
+  useScreeningMutation(workspaceId, (confirmRemote: boolean) => api.startSuggestions(workspaceId, confirmRemote))
+export const useStopSuggestions = (workspaceId: string) =>
+  useScreeningMutation(workspaceId, () => api.stopSuggestions(workspaceId))
+
 /** Every source's raw, pre-dedup count of what it's found so far, summed (`run.stats_json.per_source_raw_count`)
  * — "how many papers we found," before removing the ones more than one source turned up. `undefined` before the
  * run has reported any progress yet. */
@@ -538,7 +573,10 @@ export function usePatchSearchHit(workspaceId: string) {
   return useMutation({
     mutationFn: ({ hitId, body }: { hitId: string; body: HitReviewUpdate }) =>
       api.patchSearchHit(workspaceId, hitId, body),
-    onSuccess: (hit) => patchHitFields(client, workspaceId, hit.id, hit),
+    onSuccess: (hit) => {
+      patchHitFields(client, workspaceId, hit.id, hit)
+      client.invalidateQueries({ queryKey: keys.rankedHits(workspaceId) })
+    },
   })
 }
 

@@ -8,6 +8,7 @@ import {
   useImportSearchHits,
   useNewHitsAvailable,
   usePatchSearchHit,
+  useRankedHits,
   useRefreshHits,
   useSearchHits,
   useUploadHitPdf,
@@ -19,7 +20,10 @@ import { browserStorage } from '@/features/notes/highlightColors'
 import { cn } from '@/lib/utils'
 import { HitContextMenu, HitMenu } from './HitMenu'
 import { sourceLabel } from './hitReview'
+import { loadHitSort, saveHitSort, type HitSort } from './hitSort'
 import { HitPreview } from './HitPreview'
+import { RankSortBar } from './RankSortBar'
+import { SuggestionChip } from './SuggestionChip'
 
 const ROW_HEIGHT = 44
 /** `AppShell`'s `p-3` on the view pane, between the preview's right edge and the window's. */
@@ -78,17 +82,28 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
   const [filterText, setFilterText] = useState('')
   const [previewWidth, setPreviewWidth] = useState(() => loadPanelWidth(HIT_PREVIEW, browserStorage()))
   useEffect(() => savePanelWidth(HIT_PREVIEW, browserStorage(), previewWidth), [previewWidth])
+  const [sort, setSort] = useState<HitSort>(() => loadHitSort(browserStorage(), workspaceId))
+  useEffect(() => saveHitSort(browserStorage(), workspaceId, sort), [workspaceId, sort])
+  const ranked = useRankedHits(workspaceId, sort === 'ranked')
 
-  const rows = data?.pages.flatMap((page) => page.items) ?? []
+  const rows = sort === 'ranked' ? (ranked.data?.items ?? []) : (data?.pages.flatMap((page) => page.items) ?? [])
   const rawFound = totalRawFound(run)
   const filter = filterText.trim().toLowerCase()
   const filteredRows = filter ? rows.filter((hit) => matchesFilter(hit, filter)) : rows
   // A hit with an abstract to read or a PDF already in the corpus is the one worth looking at first — a bare
   // title with neither is the hardest to judge relevance from. Stable sort (native since ES2019), so hits within
-  // each group keep their existing (first_seen_at, id) order from the server.
-  const visibleRows = filteredRows
-    .slice()
-    .sort((a, b) => Number(hasPdfOrAbstract(b)) - Number(hasPdfOrAbstract(a)))
+  // each group keep their existing (first_seen_at, id) order from the server. Ranked order is already sorted by
+  // the server (most likely relevant first) and must stay that way — sorting it again here would undo the point.
+  // ponytail: "year" sorts only the already-loaded found-order page(s) client-side, same data source as found
+  // order (no new endpoint) — a hit with no year sorts last. Rows already on screen can shift as more pages load
+  // in behind them; fine for this quick screening-helper view, upgrade to a server-sorted endpoint (like ranked)
+  // if that ever matters.
+  const visibleRows =
+    sort === 'ranked'
+      ? filteredRows
+      : sort === 'year'
+        ? filteredRows.slice().sort((a, b) => (b.year ?? -Infinity) - (a.year ?? -Infinity))
+        : filteredRows.slice().sort((a, b) => Number(hasPdfOrAbstract(b)) - Number(hasPdfOrAbstract(a)))
   // Falls back to the first loaded row, so the panel is never empty on first paint (mirrors PaperList) — and to
   // whichever row is first once a filter drops the previously selected one out of view.
   const previewed = visibleRows.find((hit) => hit.id === previewId) ?? visibleRows[0]
@@ -133,6 +148,7 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
   // a filter that's currently showing only a few matches should still be able to page in more of the pool looking
   // for further matches, the same way scrolling the unfiltered list does.
   useEffect(() => {
+    if (sort === 'ranked') return // ranked order has its own, unpaginated query — nothing more to page in
     const lastItem = virtualItems.at(-1)
     if (!lastItem || lastItem.index < visibleRows.length - 1 || isFetchingNextPage) return
     if (hasNextPage) {
@@ -141,7 +157,7 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
       newHits.acknowledge()
       refreshHits()
     }
-  }, [virtualItems, hasNextPage, isFetchingNextPage, fetchNextPage, visibleRows.length, newHits, refreshHits])
+  }, [sort, virtualItems, hasNextPage, isFetchingNextPage, fetchNextPage, visibleRows.length, newHits, refreshHits])
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -179,6 +195,7 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
           Clear old results
         </Button>
       </div>
+      <RankSortBar sort={sort} onSortChange={setSort} ranked={ranked.data} />
       {importHits.isError && (
         <p role="alert" className="px-3 py-1 text-xs text-destructive">
           {importHits.error.message}
@@ -252,6 +269,7 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
                         {sourceLabel(hit.sources[0])}
                       </span>
                     )}
+                    <SuggestionChip hit={hit} />
                     <span className="text-xs text-muted-foreground">{hit.stage1_status ?? 'unreviewed'}</span>
                     <HitMenu hit={hit} onReview={onReview} />
                   </div>
