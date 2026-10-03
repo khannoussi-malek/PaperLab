@@ -94,6 +94,7 @@ export type EligibilityOut = components['schemas']['EligibilityOut']
 export type PrismaExportOut = components['schemas']['PrismaExportOut']
 export type ReadingContextList = components['schemas']['ReadingContextListOut']
 export type ReadingQueue = components['schemas']['ReadingQueueOut']
+export type ScreeningState = components['schemas']['ScreeningStateOut']
 
 /** Where a chat lives: the reader's paper, or a workspace. */
 export type ChatScope = { kind: 'paper' | 'workspace'; id: string }
@@ -338,4 +339,13 @@ export const api = {
   readingContext: (paperId: string) => request<ReadingContextList>(`/api/papers/${paperId}/reading-context`),
   readingQueue: (workspaceId: string, runId: string) =>
     request<ReadingQueue>(`/api/workspaces/${workspaceId}/search/reading-queue?run=${runId}`),
+  screeningState: (workspaceId: string) => request<ScreeningState>(`/api/workspaces/${workspaceId}/search/screening`),
+  saveScreeningCriteria: (workspaceId: string, criteria: string | null) =>
+    request<ScreeningState>(`/api/workspaces/${workspaceId}/search/screening`, sendJson('PUT', { criteria })),
+  startSuggestions: (workspaceId: string, confirmRemote: boolean) =>
+    request<ScreeningState>(
+      `/api/workspaces/${workspaceId}/search/suggestions`, sendJson('POST', { confirm_remote: confirmRemote }),
+    ),
+  stopSuggestions: (workspaceId: string) =>
+    request<ScreeningState>(`/api/workspaces/${workspaceId}/search/suggestions/stop`, { method: 'POST' }),
 }

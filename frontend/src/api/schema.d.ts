@@ -570,6 +570,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/workspaces/{workspace_id}/search/screening": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Screening */
+        get: operations["get_screening_api_workspaces__workspace_id__search_screening_get"];
+        /** Put Screening */
+        put: operations["put_screening_api_workspaces__workspace_id__search_screening_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/search/suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start Suggestions */
+        post: operations["start_suggestions_api_workspaces__workspace_id__search_suggestions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/search/suggestions/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stop Suggestions */
+        post: operations["stop_suggestions_api_workspaces__workspace_id__search_suggestions_stop_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/workspaces/{workspace_id}/search/hits/bulk": {
         parameters: {
             query?: never;
@@ -2383,6 +2435,16 @@ export interface components {
             stage2_status?: string | null;
             /** Stage2 Exclude Reason */
             stage2_exclude_reason?: string | null;
+            /** Suggestion */
+            suggestion?: string | null;
+            /** Suggestion Reason */
+            suggestion_reason?: string | null;
+            /** Suggestion Note */
+            suggestion_note?: string | null;
+            /** Suggestion Model */
+            suggestion_model?: string | null;
+            /** Suggested At */
+            suggested_at?: string | null;
         };
         /** HitReviewUpdate */
         HitReviewUpdate: {
@@ -3222,6 +3284,35 @@ export interface components {
             /** Paper Ids */
             paper_ids: string[];
         };
+        /** ScreeningCriteriaUpdate */
+        ScreeningCriteriaUpdate: {
+            /** Criteria */
+            criteria?: string | null;
+        };
+        /** ScreeningStateOut */
+        ScreeningStateOut: {
+            /** Criteria */
+            criteria: string | null;
+            /** Ranked Used */
+            ranked_used: boolean;
+            /**
+             * Suggest Status
+             * @enum {string}
+             */
+            suggest_status: "idle" | "running" | "stopping";
+            /** Suggest Done */
+            suggest_done: number;
+            /** Suggest Total */
+            suggest_total: number;
+            /** Suggest Error */
+            suggest_error: string | null;
+            /** Model Label */
+            model_label: string | null;
+            /** Model Is Local */
+            model_is_local: boolean | null;
+            /** Model Host */
+            model_host: string | null;
+        };
         /**
          * SearchOut
          * @description `notices` name the sources that failed, whose results are missing.
@@ -3475,6 +3566,14 @@ export interface components {
             notes_used: number | null;
             /** Notes Total */
             notes_total: number | null;
+        };
+        /** SuggestStart */
+        SuggestStart: {
+            /**
+             * Confirm Remote
+             * @default false
+             */
+            confirm_remote: boolean;
         };
         /**
          * SurfaceChart
@@ -4918,6 +5017,138 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RankedHitsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_screening_api_workspaces__workspace_id__search_screening_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScreeningStateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_screening_api_workspaces__workspace_id__search_screening_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScreeningCriteriaUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScreeningStateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_suggestions_api_workspaces__workspace_id__search_suggestions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SuggestStart"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScreeningStateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stop_suggestions_api_workspaces__workspace_id__search_suggestions_stop_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScreeningStateOut"];
                 };
             };
             /** @description Validation Error */

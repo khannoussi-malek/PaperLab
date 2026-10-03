@@ -1,6 +1,7 @@
 import { useSearchRun, useStartSearchRun, useStopSearchRun } from '@/api/queries'
 import { SearchControls } from './SearchControls'
 import { HitTable } from './HitTable'
+import { ScreeningAssist } from './ScreeningAssist'
 
 /** `runId` lives in the URL (I1), not local state, so a reload keeps the active run instead of losing it — the
  * caller (WorkspacePage) reads it from the route and reports a new one back via `onRunIdChange`. */
@@ -24,6 +25,7 @@ export function SearchTab({
         onStart={(args) => startRun.mutate(args, { onSuccess: (created) => onRunIdChange(created.id) })}
         onStop={() => runId && stopRun.mutate(runId)}
       />
+      <ScreeningAssist workspaceId={workspaceId} />
       {run.data && (
         <div className="border-b px-3 py-1 text-sm text-muted-foreground">
           {run.data.status} · {(run.data.stats_json?.last_batch_new_hits as number | undefined) ?? 0} new in last
