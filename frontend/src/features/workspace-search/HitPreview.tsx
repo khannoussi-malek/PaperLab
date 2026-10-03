@@ -6,6 +6,7 @@ import { pageLink } from '@/features/discovery/candidateMeta'
 import { copyText } from '@/lib/clipboard'
 import { cn } from '@/lib/utils'
 import { EXCLUDE_REASONS, sourceLabel } from './hitReview'
+import { SuggestionChip } from './SuggestionChip'
 
 type ExcludeReason = (typeof EXCLUDE_REASONS)[number]
 
@@ -72,6 +73,11 @@ export function HitPreview({ hit, onReview, onAddPdf, addPdfPending, onUpload, u
         <p className="mt-2 text-sm whitespace-pre-line">{hit.abstract}</p>
       ) : (
         <p className="mt-2 text-sm text-muted-foreground">No abstract available for this hit.</p>
+      )}
+      {hit.suggestion && (
+        <p className="text-xs text-muted-foreground">
+          <SuggestionChip hit={hit} /> {hit.suggestion_note}
+        </p>
       )}
 
       <div className="mt-2 flex flex-col gap-2 border-t border-glass-border pt-3">

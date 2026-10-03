@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, ForeignKey, Table, Text, text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, Table, Text, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -14,6 +14,13 @@ class Workspace(Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, server_default=text("gen_random_uuid()"))
     name: Mapped[str] = mapped_column(Text, unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+    # M31 (spec §3.5, §4.1, §4.2).
+    screening_criteria: Mapped[str | None] = mapped_column(Text, default=None)
+    screening_ranked_used: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    suggest_status: Mapped[str] = mapped_column(Text, server_default=text("'idle'"))
+    suggest_done: Mapped[int] = mapped_column(Integer, server_default=text("0"))
+    suggest_total: Mapped[int] = mapped_column(Integer, server_default=text("0"))
+    suggest_error: Mapped[str | None] = mapped_column(Text, default=None)
 
 
 # A Core Table like note_anchors: a pure link, only inserted (ON CONFLICT DO NOTHING), deleted and read in bulk.

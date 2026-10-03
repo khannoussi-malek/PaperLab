@@ -39,6 +39,8 @@ const runsData: PrismaExportOut = {
     { id: 'run-1', query_text: 'transformer efficiency', filters_json: {}, started_at: '2026-09-24T00:00:00Z' },
     { id: 'run-2', query_text: 'llm evaluation', filters_json: {}, started_at: '2026-09-24T00:05:00Z' },
   ],
+  automation: [],
+  screening_criteria: null,
 }
 
 function mockRuns(data: PrismaExportOut | undefined, isPending = false) {

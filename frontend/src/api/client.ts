@@ -85,6 +85,7 @@ export type HitReviewUpdate = components['schemas']['HitReviewUpdate']
 export type BulkHitReviewUpdate = components['schemas']['BulkHitReviewUpdate']
 export type BulkUpdateOut = components['schemas']['BulkUpdateOut']
 export type ImportHitsOut = components['schemas']['ImportHitsOut']
+export type RankedHits = components['schemas']['RankedHitsOut']
 export type ClearHitsOut = components['schemas']['ClearHitsOut']
 export type SnowballRequest = components['schemas']['SnowballRequest']
 export type SnowballOut = components['schemas']['SnowballOut']
@@ -93,6 +94,7 @@ export type EligibilityOut = components['schemas']['EligibilityOut']
 export type PrismaExportOut = components['schemas']['PrismaExportOut']
 export type ReadingContextList = components['schemas']['ReadingContextListOut']
 export type ReadingQueue = components['schemas']['ReadingQueueOut']
+export type ScreeningState = components['schemas']['ScreeningStateOut']
 
 /** Where a chat lives: the reader's paper, or a workspace. */
 export type ChatScope = { kind: 'paper' | 'workspace'; id: string }
@@ -309,6 +311,8 @@ export const api = {
     request<Hit>(`/api/workspaces/${workspaceId}/search/hits/${hitId}`, sendJson('PATCH', body)),
   bulkPatchSearchHits: (workspaceId: string, body: BulkHitReviewUpdate) =>
     request<BulkUpdateOut>(`/api/workspaces/${workspaceId}/search/hits/bulk`, sendJson('PATCH', body)),
+  rankedSearchHits: (workspaceId: string, limit = 200) =>
+    request<RankedHits>(`/api/workspaces/${workspaceId}/search/hits/ranked?limit=${limit}`),
   /** `hitIds` omitted imports every hit still pending acquisition. */
   importSearchHits: (workspaceId: string, hitIds?: string[]) =>
     request<ImportHitsOut>(
@@ -335,4 +339,13 @@ export const api = {
   readingContext: (paperId: string) => request<ReadingContextList>(`/api/papers/${paperId}/reading-context`),
   readingQueue: (workspaceId: string, runId: string) =>
     request<ReadingQueue>(`/api/workspaces/${workspaceId}/search/reading-queue?run=${runId}`),
+  screeningState: (workspaceId: string) => request<ScreeningState>(`/api/workspaces/${workspaceId}/search/screening`),
+  saveScreeningCriteria: (workspaceId: string, criteria: string | null) =>
+    request<ScreeningState>(`/api/workspaces/${workspaceId}/search/screening`, sendJson('PUT', { criteria })),
+  startSuggestions: (workspaceId: string, confirmRemote: boolean) =>
+    request<ScreeningState>(
+      `/api/workspaces/${workspaceId}/search/suggestions`, sendJson('POST', { confirm_remote: confirmRemote }),
+    ),
+  stopSuggestions: (workspaceId: string) =>
+    request<ScreeningState>(`/api/workspaces/${workspaceId}/search/suggestions/stop`, { method: 'POST' }),
 }

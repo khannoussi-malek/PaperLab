@@ -4,9 +4,10 @@ from typing import Annotated
 from fastapi import APIRouter, File, Query, Request, UploadFile
 
 from app.api.deps import DiscoveryDep, SessionDep
-from app.core import workspace_search
+from app.core import screening, workspace_search
 from app.core.errors import InvalidInput
 from app.core.prisma_export import prisma_export
+from app.core.screening import RANKED_LIMIT_MAX
 from app.schemas.workspace_search import (
     AcquisitionStatus,
     BulkHitReviewUpdate,
@@ -18,11 +19,15 @@ from app.schemas.workspace_search import (
     ImportHitsOut,
     ImportHitsRequest,
     PrismaExportOut,
+    RankedHitsOut,
+    ScreeningCriteriaUpdate,
+    ScreeningStateOut,
     SearchRunCreate,
     SearchRunOut,
     SnowballOut,
     SnowballRequest,
     Stage1Status,
+    SuggestStart,
 )
 
 router = APIRouter(prefix="/api/workspaces/{workspace_id}/search", tags=["workspace-search"])
@@ -80,6 +85,39 @@ async def list_hits(
         session, workspace_id, limit, after, stage1_status, acquisition_status
     )
     return HitListOut(items=items, next_cursor=next_cursor)
+
+
+@router.get("/hits/ranked")
+async def ranked_hits(
+    workspace_id: uuid.UUID, session: SessionDep, limit: Annotated[int, Query(gt=0, le=RANKED_LIMIT_MAX)] = 200,
+) -> RankedHitsOut:
+    return await screening.ranked_hits(session, workspace_id, limit)
+
+
+@router.get("/screening")
+async def get_screening(workspace_id: uuid.UUID, session: SessionDep) -> ScreeningStateOut:
+    return await screening.get_state(session, workspace_id)
+
+
+@router.put("/screening")
+async def put_screening(
+    workspace_id: uuid.UUID, payload: ScreeningCriteriaUpdate, session: SessionDep
+) -> ScreeningStateOut:
+    return await screening.set_criteria(session, workspace_id, payload.criteria)
+
+
+@router.post("/suggestions")
+async def start_suggestions(
+    workspace_id: uuid.UUID, payload: SuggestStart, request: Request, session: SessionDep
+) -> ScreeningStateOut:
+    state = await screening.start_suggestions(session, workspace_id, payload.confirm_remote)
+    await request.app.state.arq.enqueue_job("suggest_screening", str(workspace_id))
+    return state
+
+
+@router.post("/suggestions/stop")
+async def stop_suggestions(workspace_id: uuid.UUID, session: SessionDep) -> ScreeningStateOut:
+    return await screening.stop_suggestions(session, workspace_id)
 
 
 @router.delete("/hits")

@@ -653,6 +653,9 @@ async def review_hit(session: AsyncSession, hit_id, workspace_id, update: "HitRe
 
     for field_name, value in update.model_dump(exclude_unset=True).items():
         setattr(hit, field_name, value)
+    if "stage1_status" in fields:
+        # The stop hint's streak reads decisions by this time (M31 spec §3.2); an undone decision has none.
+        hit.stage1_decided_at = _now() if hit.stage1_status is not None else None
     await session.commit()
     ref = await session.get(ExternalRef, hit.external_ref_id) if hit.external_ref_id else None
     return _hit_out_dict(hit, ref)
@@ -671,8 +674,10 @@ async def bulk_review_hits(
         )
     )
     hits = result.scalars().all()
+    decided_at = _now()  # one time for the whole batch
     for hit in hits:
         hit.stage1_status = stage1_status
+        hit.stage1_decided_at = decided_at
         if stage1_exclude_reason:
             hit.stage1_exclude_reason = stage1_exclude_reason
         if priority is not None:

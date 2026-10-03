@@ -21,6 +21,8 @@ const combinedData: PrismaExportOut = {
     { id: 'run-1', query_text: 'transformer efficiency', filters_json: {}, started_at: '2026-09-24T00:00:00Z' },
     { id: 'run-2', query_text: 'llm evaluation', filters_json: {}, started_at: '2026-09-24T00:05:00Z' },
   ],
+  automation: [],
+  screening_criteria: null,
 }
 
 // Per-run export, mirroring the real backend (workspace_search.py:784): `runs` is always [] on this branch,
@@ -151,4 +153,29 @@ test('shows an alert with the error message when the export request fails', () =
   render(<PrismaTab workspaceId="ws-1" />)
 
   expect(screen.getByRole('alert')).toHaveTextContent('Could not load the PRISMA export.')
+})
+
+test('lists methods notes: criteria and automation lines', () => {
+  vi.spyOn(queries, 'usePrismaExport').mockReturnValue(
+    {
+      data: {
+        ...combinedData,
+        automation: ['Screening order was prioritised…'],
+        screening_criteria: 'RCTs on sleep in adults',
+      },
+    } as ReturnType<typeof queries.usePrismaExport>,
+  )
+  render(<PrismaTab workspaceId="ws-1" />)
+
+  const notes = screen.getByRole('region', { name: 'Methods notes' })
+  expect(within(notes).getByText('RCTs on sleep in adults')).toBeInTheDocument()
+  expect(within(notes).getByText('Screening order was prioritised…')).toBeInTheDocument()
+})
+
+test('shows no methods notes when there is nothing to report', () => {
+  mockPrismaExport()
+  render(<PrismaTab workspaceId="ws-1" />)
+
+  expect(screen.getByText('Identified')).toBeInTheDocument()
+  expect(screen.queryByRole('region', { name: 'Methods notes' })).toBeNull()
 })

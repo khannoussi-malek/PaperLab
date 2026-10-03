@@ -72,11 +72,48 @@ class HitOut(BaseModel):
     # (Task 4). None when no verdict has been recorded yet for this hit's own run.
     stage2_status: str | None = None
     stage2_exclude_reason: str | None = None
+    # M31b: the local model's suggestion, never a decision (spec §4.5).
+    suggestion: str | None = None
+    suggestion_reason: str | None = None
+    suggestion_note: str | None = None
+    suggestion_model: str | None = None
+    suggested_at: datetime | None = None
 
 
 class HitListOut(BaseModel):
     items: list[HitOut]
     next_cursor: str | None
+
+
+class RankedHitsOut(BaseModel):
+    """Unscreened hits, most likely relevant first (M31a). No cursor: the order changes after every decision."""
+
+    items: list[HitOut]
+    trained: bool
+    total_unscreened: int
+    streak: int
+    threshold: int
+    show_stop_hint: bool
+
+
+class ScreeningStateOut(BaseModel):
+    criteria: str | None
+    ranked_used: bool
+    suggest_status: Literal["idle", "running", "stopping"]
+    suggest_done: int
+    suggest_total: int
+    suggest_error: str | None
+    model_label: str | None
+    model_is_local: bool | None
+    model_host: str | None
+
+
+class ScreeningCriteriaUpdate(BaseModel):
+    criteria: str | None = Field(default=None, max_length=4000)  # core.screening.CRITERIA_MAX_CHARS
+
+
+class SuggestStart(BaseModel):
+    confirm_remote: bool = False
 
 
 def _reason_required_on_exclude(status: str | None, reason: str | None) -> None:
@@ -170,3 +207,5 @@ class PrismaExportOut(BaseModel):
     stage2_excluded_by_reason: dict[str, int]
     included: int
     runs: list[dict]
+    automation: list[str] = []
+    screening_criteria: str | None = None
