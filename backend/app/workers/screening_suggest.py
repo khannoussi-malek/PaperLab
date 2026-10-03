@@ -82,6 +82,13 @@ async def suggest_screening(ctx: dict, workspace_id: str) -> None:
             await session.rollback()  # a failed flush leaves the session unusable until rolled back
             workspace.suggest_error = "Suggestions stopped after an unexpected error"
         finally:
+            # The unlock must run even if this commit fails or is cancelled: `async with SessionLocal()` returns
+            # its connection to the pool on exit, not closes it, so a lock left behind here leaks into whatever
+            # request borrows that same connection next — found live on 2026-10-03, a stuck "stopping" job that
+            # blocked every future suggestion run on the workspace until the worker was restarted by hand.
             workspace.suggest_status = "idle"
-            await session.commit()
-            await session.execute(_UNLOCK, {"key": _lock_key(wid)})
+            try:
+                await session.commit()
+            finally:
+                await session.execute(_UNLOCK, {"key": _lock_key(wid)})
+                await session.commit()
