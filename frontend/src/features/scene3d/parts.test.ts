@@ -7,7 +7,7 @@ import { dustField, logoMark, pageStream, stage } from './parts'
 HTMLCanvasElement.prototype.getContext = vi.fn(() => new Proxy({}, { get: () => () => ({ addColorStop() {} }) })) as never
 
 it('disposes every geometry, material and texture the parts made, and the renderer', () => {
-  const renderer = { setPixelRatio() {}, setSize() {}, render() {}, dispose: vi.fn(), toneMapping: 0 } as never
+  const renderer = { setPixelRatio() {}, setSize() {}, render() {}, dispose: vi.fn(), forceContextLoss: vi.fn(), toneMapping: 0 } as never
   const s = stage(document.createElement('canvas'), renderer)
   s.scene.add(logoMark().group, dustField(50, 3).points, pageStream(5, 4).group)
   // Distinct geometries (the flying pages share one), each watched for its dispose event.
@@ -23,4 +23,5 @@ it('disposes every geometry, material and texture the parts made, and the render
   expect(freed.size).toBe(geometries.size)
   expect(s.scene.children).toHaveLength(0) // the scene is emptied too
   expect((renderer as { dispose: ReturnType<typeof vi.fn> }).dispose).toHaveBeenCalled()
+  expect((renderer as { forceContextLoss: ReturnType<typeof vi.fn> }).forceContextLoss).toHaveBeenCalled()
 })

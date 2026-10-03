@@ -49,6 +49,7 @@ export function stage(canvas: HTMLCanvasElement, renderer = new THREE.WebGLRende
       textures.forEach((t) => t.dispose())
       scene.clear()
       renderer.dispose()
+      renderer.forceContextLoss() // free the GPU context now, not at GC (browsers cap live contexts)
     },
   }
 }
