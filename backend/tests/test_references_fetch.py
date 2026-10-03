@@ -269,7 +269,7 @@ async def test_recorded_references_with_no_id_are_skipped_and_every_other_one_is
     records = [item["citedPaper"] for body in pages for item in body["data"]]
     with_an_id = [record["title"] for record in records if record["paperId"]]
 
-    async with semantic_scholar.new_client(None, transport=fake.transport) as client:
+    async with semantic_scholar.new_client(api_key=None, transport=fake.transport) as client:
         providers = replace(discovery_fakes.providers, s2=client, openalex=None)
         notices = await references.fetch(library, providers, reader)
 

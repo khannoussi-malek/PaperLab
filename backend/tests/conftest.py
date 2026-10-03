@@ -193,7 +193,7 @@ class FakeOpenAlex:
         self.requests: list[httpx.Request] = []
         # The worker opens its own client per ingest (D74): tests hand it this transport in ctx["transport"].
         self.transport = httpx.MockTransport(self._handle)
-        self.client = openalex.new_client(self.MAILTO, transport=self.transport)
+        self.client = openalex.new_client(email=self.MAILTO, transport=self.transport)
 
     def route(self, key: str, *replies) -> None:
         self.routes[key] = [
@@ -346,14 +346,14 @@ async def discovery_fakes(fake_openalex):
     Semantic Scholar and the PDF host on, so a test asks exactly the sources it routes; `turned_on` adds others."""
     s2, pdf_host, crossref_host, arxiv_host, core_host, unpaywall_host = (FakeProvider() for _ in range(6))
     clients = {
-        "crossref": crossref.new_client(FakeOpenAlex.MAILTO, crossref_host.transport),
-        "arxiv": arxiv.new_client(arxiv_host.transport),
-        "core": core_ac.new_client(None, core_host.transport),
-        "unpaywall": unpaywall.new_client(FakeOpenAlex.MAILTO, unpaywall_host.transport),
+        "crossref": crossref.new_client(email=FakeOpenAlex.MAILTO, transport=crossref_host.transport),
+        "arxiv": arxiv.new_client(transport=arxiv_host.transport),
+        "core": core_ac.new_client(api_key=None, transport=core_host.transport),
+        "unpaywall": unpaywall.new_client(email=FakeOpenAlex.MAILTO, transport=unpaywall_host.transport),
     }
     providers = discovery.Providers(
         openalex=fake_openalex.client,
-        s2=semantic_scholar.new_client(None, transport=s2.transport),
+        s2=semantic_scholar.new_client(api_key=None, transport=s2.transport),
         pdf=httpx.AsyncClient(transport=pdf_host.transport, follow_redirects=True),
     )
     yield DiscoveryFakes(

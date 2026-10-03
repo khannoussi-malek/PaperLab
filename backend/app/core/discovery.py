@@ -101,12 +101,18 @@ def build_providers(sources: SourceSettings, transport: httpx.AsyncBaseTransport
         pdf=httpx.AsyncClient(
             timeout=PDF_TIMEOUT, follow_redirects=True, headers={"User-Agent": "PaperLab"}, transport=transport
         ),
-        openalex=openalex.new_client(email, transport, api_key=keys["openalex"]) if on["openalex"] else None,
-        crossref=crossref.new_client(email, transport) if on["crossref"] else None,
-        s2=semantic_scholar.new_client(keys["semantic_scholar"], transport) if on["semantic_scholar"] else None,
-        arxiv=arxiv.new_client(transport) if on["arxiv"] else None,
-        core=core_ac.new_client(keys["core"], transport) if on["core"] else None,
-        unpaywall=unpaywall.new_client(email, transport) if sources.unpaywall_on else None,
+        openalex=(
+            openalex.new_client(email=email, transport=transport, api_key=keys["openalex"]) if on["openalex"] else None
+        ),
+        crossref=crossref.new_client(email=email, transport=transport) if on["crossref"] else None,
+        s2=(
+            semantic_scholar.new_client(api_key=keys["semantic_scholar"], transport=transport)
+            if on["semantic_scholar"]
+            else None
+        ),
+        arxiv=arxiv.new_client(transport=transport) if on["arxiv"] else None,
+        core=core_ac.new_client(api_key=keys["core"], transport=transport) if on["core"] else None,
+        unpaywall=unpaywall.new_client(email=email, transport=transport) if sources.unpaywall_on else None,
     )
 
 

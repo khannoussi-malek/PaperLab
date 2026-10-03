@@ -58,7 +58,7 @@ def write(name: str, body: dict) -> None:
 
 
 async def main(mailto: str) -> None:
-    async with openalex.new_client(mailto) as http:
+    async with openalex.new_client(email=mailto) as http:
         write("work_bert", trim(await openalex.get_work(http, "doi:10.18653/v1/n19-1423"), WORK))
         write("work_retracted", trim(await openalex.get_work(http, "doi:10.1016/j.ijantimicag.2020.105949"), WORK))
         write("search_bert", {"results": trim(await openalex.search_works(http, BERT_TITLE), WORK)})

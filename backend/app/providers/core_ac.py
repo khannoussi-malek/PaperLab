@@ -14,7 +14,9 @@ BASE_URL = "https://api.core.ac.uk"
 TIMEOUT = httpx.Timeout(10.0)
 
 
-def new_client(api_key: str | None, transport: httpx.AsyncBaseTransport | None = None) -> httpx.AsyncClient:
+def new_client(
+    *, email: str | None = None, api_key: str | None = None, transport: httpx.AsyncBaseTransport | None = None
+) -> httpx.AsyncClient:
     # The key rides in a header: httpx puts the URL, query string included, in its error messages.
     headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
     return httpx.AsyncClient(base_url=BASE_URL, headers=headers, timeout=TIMEOUT, transport=transport)

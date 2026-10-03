@@ -68,7 +68,7 @@ def trim_page(body: dict) -> dict:
 
 async def record_s2() -> None:
     fields = semantic_scholar.PAPER_FIELDS
-    async with semantic_scholar.new_client("") as s2:
+    async with semantic_scholar.new_client(api_key="") as s2:
         # limit=40 splits BERT's 63 references into two real pages: one with `next`, one the tail.
         page1 = await s2_get(s2, f"/graph/v1/paper/DOI:{BERT_DOI}/references", fields=fields, limit=40, offset=0)
         page1 = page1.raise_for_status().json()
@@ -86,7 +86,7 @@ async def record_s2() -> None:
 
 
 async def record_openalex(mailto: str) -> None:
-    async with openalex.new_client(mailto) as oa:
+    async with openalex.new_client(email=mailto) as oa:
         work = await oa.get(f"/works/{BERT_OPENALEX_ID}", params={"select": "referenced_works"})
         body = work.raise_for_status().json()
         save("openalex_referenced_works_bert", {"referenced_works": body["referenced_works"]})

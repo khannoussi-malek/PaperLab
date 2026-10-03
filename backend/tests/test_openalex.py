@@ -123,7 +123,7 @@ def test_works_are_fetched_with_their_locations_for_discovery():
 async def test_without_an_email_no_mailto_is_sent():
     fake = FakeProvider()
     fake.reply("/works/W1", 200, json=recorded("work_bert"))
-    async with openalex.new_client(None, transport=fake.transport) as client:
+    async with openalex.new_client(email=None, transport=fake.transport) as client:
         await openalex.get_work(client, "W1")
 
     assert "mailto" not in fake.requests[0].url.params
@@ -136,7 +136,7 @@ async def test_an_api_key_travels_only_in_the_bearer_header_never_in_a_url():
     fake = FakeProvider()
     fake.reply("/works", 200, json=recorded("search_bert"))
     fake.reply("/works/W1", 401, json={"error": "Invalid or missing API key"})
-    async with openalex.new_client(FakeOpenAlex.MAILTO, transport=fake.transport, api_key=key) as client:
+    async with openalex.new_client(email=FakeOpenAlex.MAILTO, transport=fake.transport, api_key=key) as client:
         await openalex.search_works(client, "BERT")
         with pytest.raises(httpx.HTTPStatusError) as caught:
             await openalex.get_work(client, "W1")

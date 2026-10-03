@@ -16,8 +16,10 @@ TIMEOUT = httpx.Timeout(10.0)
 FIELDS = "DOI,title,author,issued,container-title,is-referenced-by-count,type"
 
 
-def new_client(mailto: str | None, transport: httpx.AsyncBaseTransport | None = None) -> httpx.AsyncClient:
-    params = {"mailto": mailto} if mailto else {}
+def new_client(
+    *, email: str | None = None, api_key: str | None = None, transport: httpx.AsyncBaseTransport | None = None
+) -> httpx.AsyncClient:
+    params = {"mailto": email} if email else {}
     return httpx.AsyncClient(base_url=BASE_URL, params=params, timeout=TIMEOUT, transport=transport)
 
 

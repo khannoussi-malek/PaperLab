@@ -51,7 +51,7 @@ class PagedS2:
 @pytest.fixture
 async def s2():
     fake = FakeProvider()
-    fake.client = semantic_scholar.new_client("", transport=fake.transport)
+    fake.client = semantic_scholar.new_client(api_key="", transport=fake.transport)
     yield fake
     await fake.client.aclose()
 
@@ -59,7 +59,7 @@ async def s2():
 @pytest.fixture
 async def paged_s2():
     fake = PagedS2()
-    client = semantic_scholar.new_client("", transport=fake.transport)
+    client = semantic_scholar.new_client(api_key="", transport=fake.transport)
     yield fake, client
     await client.aclose()
 
