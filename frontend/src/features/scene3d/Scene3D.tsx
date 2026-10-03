@@ -35,6 +35,7 @@ type Props<I> = {
 export function Scene3D<I>({ load, input, fallback = null, className, canDraw = allowed }: Props<I>) {
   const [ok] = useState(canDraw)
   const [live, setLive] = useState(false)
+  const [failed, setFailed] = useState(false)
   const theme = useChartTheme()
   const [box, size] = useBoxSize<HTMLDivElement>()
   const canvas = useRef<HTMLCanvasElement>(null)
@@ -59,8 +60,19 @@ export function Scene3D<I>({ load, input, fallback = null, className, canDraw = 
       const dt = last === null ? 0 : Math.min((now - last) / 1000, MAX_DT)
       last = now
       t += dt
-      running.current?.frame(t, dt, latest.current)
+      try {
+        running.current?.frame(t, dt, latest.current)
+      } catch {
+        fail() // a throwing director must not throw every frame
+      }
     }
+    const fail = () => {
+      cancelAnimationFrame(raf)
+      running.current?.dispose()
+      running.current = null
+      setFailed(true)
+    }
+    const lost = () => fail()
     const seen = typeof IntersectionObserver === 'undefined'
       ? null
       : new IntersectionObserver(([entry]) => void (visible = entry.isIntersecting))
@@ -69,14 +81,16 @@ export function Scene3D<I>({ load, input, fallback = null, className, canDraw = 
       .then(({ default: director }) => {
         if (stopped) return
         running.current = director(element)
+        element.addEventListener('webglcontextlost', lost)
         setLive(true)
         raf = requestAnimationFrame(step)
       })
-      .catch(() => undefined) // ponytail: decoration only; the fallback stays and nothing is logged, as in Graph3DView
+      .catch(() => void (!stopped && setFailed(true))) // ponytail: decoration only; nothing is logged, as in Graph3DView
     return () => {
       stopped = true
       cancelAnimationFrame(raf)
       seen?.disconnect()
+      element.removeEventListener('webglcontextlost', lost) // before dispose, which loses the context on purpose
       running.current?.dispose()
       running.current = null
     }
@@ -91,9 +105,9 @@ export function Scene3D<I>({ load, input, fallback = null, className, canDraw = 
     if (size.width > 0) running.current?.resize(size.width, size.height)
   }, [size, live])
 
-  if (!ok) return <>{fallback}</>
+  if (!ok || failed) return <>{fallback}</>
   return (
-    <div ref={box} className={cn('relative', className)}>
+    <div ref={box} className={cn('relative grid place-items-center', className)}>
       {!live && fallback}
       <canvas ref={canvas} aria-hidden="true" className={cn('absolute inset-0 size-full', !live && 'invisible')} />
     </div>
