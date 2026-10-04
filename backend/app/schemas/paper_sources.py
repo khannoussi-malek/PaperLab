@@ -36,8 +36,8 @@ SourceSwitches = create_model(
 # A missing source keeps its key, null removes it. SecretStr keeps keys out of reprs and tracebacks; the key rules
 # are checked in core, whose messages never quote a key. One field per keyed registry source.
 SourceKeys = create_model(
-	"SourceKeys", __config__=ConfigDict(extra="forbid"),
-	**{source: (SecretStr | None, None) for source in KEYED_IDS},
+    "SourceKeys", __config__=ConfigDict(extra="forbid"),
+    **{source: (SecretStr | None, None) for source in KEYED_IDS},
 )  # fmt: skip
 
 

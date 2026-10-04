@@ -72,15 +72,8 @@ async def test_null_removes_a_key_and_the_email(client, no_row):
         {"surprise": True},
     ],
     ids=[
-        "bad-email",
-        "blank-key",
-        "empty-key",
-        "non-ascii-key",
-        "keyless-source",
-        "unknown-source",
-        "null-switch",
-        "not-a-bool",
-        "unknown-field",
+        "bad-email", "blank-key", "empty-key", "non-ascii-key", "keyless-source", "unknown-source", "null-switch",
+        "not-a-bool", "unknown-field",
     ],  # fmt: skip
 )
 async def test_a_bad_patch_is_422_and_never_echoes_a_key(client, no_row, body):
