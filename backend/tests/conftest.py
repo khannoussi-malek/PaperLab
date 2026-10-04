@@ -332,11 +332,11 @@ class DiscoveryFakes:
     core: FakeProvider
     unpaywall: FakeProvider
     providers: discovery.Providers  # OpenAlex, Semantic Scholar and the PDF host; the other sources off
-    clients: dict[str, httpx.AsyncClient]
+    off_clients: dict[str, httpx.AsyncClient]  # built but not yet attached to `providers`
 
     def turned_on(self, *sources: str) -> discovery.Providers:
         """`providers` with these sources on too: "crossref", "arxiv", "core", "unpaywall"."""
-        return replace(self.providers, **{source: self.clients[source] for source in sources})
+        return replace(self.providers, clients={**self.providers.clients, **{s: self.off_clients[s] for s in sources}})
 
 
 @pytest.fixture
@@ -345,21 +345,23 @@ async def discovery_fakes(fake_openalex):
     fake_openalex, the rest FakeProviders (routed by path; an unrouted request fails). `providers` has only OpenAlex,
     Semantic Scholar and the PDF host on, so a test asks exactly the sources it routes; `turned_on` adds others."""
     s2, pdf_host, crossref_host, arxiv_host, core_host, unpaywall_host = (FakeProvider() for _ in range(6))
-    clients = {
+    off_clients = {
         "crossref": crossref.new_client(email=FakeOpenAlex.MAILTO, transport=crossref_host.transport),
         "arxiv": arxiv.new_client(transport=arxiv_host.transport),
         "core": core_ac.new_client(api_key=None, transport=core_host.transport),
         "unpaywall": unpaywall.new_client(email=FakeOpenAlex.MAILTO, transport=unpaywall_host.transport),
     }
     providers = discovery.Providers(
-        openalex=fake_openalex.client,
-        s2=semantic_scholar.new_client(api_key=None, transport=s2.transport),
+        clients={
+            "openalex": fake_openalex.client,
+            "semantic_scholar": semantic_scholar.new_client(api_key=None, transport=s2.transport),
+        },
         pdf=httpx.AsyncClient(transport=pdf_host.transport, follow_redirects=True),
     )
     yield DiscoveryFakes(
-        fake_openalex, s2, pdf_host, crossref_host, arxiv_host, core_host, unpaywall_host, providers, clients
+        fake_openalex, s2, pdf_host, crossref_host, arxiv_host, core_host, unpaywall_host, providers, off_clients
     )
-    for client in (providers.s2, providers.pdf, *clients.values()):
+    for client in (providers.pdf, *providers.clients.values(), *off_clients.values()):
         await client.aclose()
 
 

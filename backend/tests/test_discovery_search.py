@@ -1,6 +1,5 @@
 """Search across every paper source that is on (M19.5, D72, D73, P7)."""
 
-from dataclasses import replace
 from urllib.parse import parse_qs, urlsplit
 
 import httpx
@@ -103,7 +102,7 @@ async def test_a_doi_asks_only_openalex_and_crossref(session, discovery_fakes):
 async def test_an_arxiv_id_asks_semantic_scholar_and_arxiv(session, discovery_fakes):
     discovery_fakes.s2.reply("/graph/v1/paper/arXiv:1810.04805", 404, json={"error": "Paper not found"})
     discovery_fakes.arxiv.reply("/api/query", 200, text=atom(("1810.04805v2", BERT, "Jacob Devlin")))
-    providers = replace(discovery_fakes.turned_on("arxiv", "crossref"), openalex=None)
+    providers = discovery_fakes.turned_on("arxiv", "crossref").without("openalex")
 
     [result] = (await discovery.search(session, providers, "arXiv:1810.04805")).results
 
@@ -211,7 +210,7 @@ async def test_an_unreachable_unpaywall_stops_asking_after_the_first_refusal(ses
 async def test_without_semantic_scholar_no_batch_is_sent(session, discovery_fakes):
     discovery_fakes.openalex.route("/works", {"results": [work(BERT, BERT_DOI)]})
 
-    found = await discovery.search(session, replace(discovery_fakes.providers, s2=None), "BERT")
+    found = await discovery.search(session, discovery_fakes.providers.without("semantic_scholar"), "BERT")
 
     assert [r.doi for r in found.results] == [BERT_DOI]
     assert discovery_fakes.s2.requests == []
@@ -219,7 +218,9 @@ async def test_without_semantic_scholar_no_batch_is_sent(session, discovery_fake
 
 async def test_similar_papers_need_semantic_scholar(session, discovery_fakes):
     with pytest.raises(Conflict, match="Semantic Scholar is off"):
-        await discovery.similar(session, replace(discovery_fakes.providers, s2=None), Paper(title="x", doi=BERT_DOI))
+        await discovery.similar(
+            session, discovery_fakes.providers.without("semantic_scholar"), Paper(title="x", doi=BERT_DOI)
+        )
 
 
 async def test_suggestions_without_a_pdf_get_unpaywall_links(session, discovery_fakes):
@@ -259,18 +260,19 @@ async def test_each_source_that_is_on_gets_a_client_and_keys_travel_in_headers()
 
     providers = discovery.build_providers(sources)
 
-    assert providers.crossref is None
-    assert providers.openalex.headers["Authorization"] == "Bearer oa-key-0123456789"
-    assert "oa-key" not in str(providers.openalex.params)
-    assert providers.core.headers["Authorization"] == "Bearer core-key-0123456789"
-    assert "x-api-key" not in providers.s2.headers
-    assert providers.unpaywall.params["email"] == "me@example.org"
+    assert providers.client("crossref") is None
+    assert providers.client("openalex").headers["Authorization"] == "Bearer oa-key-0123456789"
+    assert "oa-key" not in str(providers.client("openalex").params)
+    assert providers.client("core").headers["Authorization"] == "Bearer core-key-0123456789"
+    assert "x-api-key" not in providers.client("semantic_scholar").headers
+    assert providers.client("unpaywall").params["email"] == "me@example.org"
     await providers.aclose()
 
 
 async def test_unpaywall_and_openalex_stay_off_by_default_and_without_an_email():
     providers = discovery.build_providers(SourceSettings())
 
-    assert (providers.openalex, providers.unpaywall) == (None, None)
-    assert None not in (providers.crossref, providers.s2, providers.arxiv, providers.core)
+    assert (providers.client("openalex"), providers.client("unpaywall")) == (None, None)
+    for source in ("crossref", "semantic_scholar", "arxiv", "core"):
+        assert providers.client(source) is not None
     await providers.aclose()

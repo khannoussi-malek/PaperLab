@@ -90,66 +90,76 @@ async def test_the_e2e_fake_gives_any_paper_three_references_and_one_citing_work
 
 
 async def test_the_e2e_fakes_arxiv_search_page_has_two_pages_then_exhausts(fake_providers):
-    page1, cursor1 = await arxiv.search_page(fake_providers.arxiv, "anything", page_size=2, cursor=0)
+    page1, cursor1 = await arxiv.search_page(fake_providers.client("arxiv"), "anything", page_size=2, cursor=0)
     assert len(page1) == 2
     assert cursor1 == 2
 
-    page2, cursor2 = await arxiv.search_page(fake_providers.arxiv, "anything", page_size=2, cursor=cursor1)
+    page2, cursor2 = await arxiv.search_page(fake_providers.client("arxiv"), "anything", page_size=2, cursor=cursor1)
     assert len(page2) == 1
     assert cursor2 is None
     assert {e["title"] for e in page1}.isdisjoint({e["title"] for e in page2})
 
 
 async def test_the_e2e_fakes_arxiv_search_page_id_does_not_collide_with_the_free_papers_id(fake_providers):
-    [entry], _ = await arxiv.search_page(fake_providers.arxiv, "anything", page_size=1, cursor=0)
+    [entry], _ = await arxiv.search_page(fake_providers.client("arxiv"), "anything", page_size=1, cursor=0)
     assert entry["arxiv_id"] != discovery_fake.FREE_ARXIV_ID
 
 
 async def test_the_e2e_fakes_crossref_search_page_has_two_pages_then_exhausts(fake_providers):
-    page1, cursor1 = await crossref.search_page(fake_providers.crossref, "anything", page_size=2, cursor=0)
+    page1, cursor1 = await crossref.search_page(fake_providers.client("crossref"), "anything", page_size=2, cursor=0)
     assert len(page1) == 2
     assert cursor1 == 2
 
-    page2, cursor2 = await crossref.search_page(fake_providers.crossref, "anything", page_size=2, cursor=cursor1)
+    page2, cursor2 = await crossref.search_page(
+        fake_providers.client("crossref"), "anything", page_size=2, cursor=cursor1
+    )
     assert len(page2) == 1
     assert cursor2 is None
     assert {i["title"][0] for i in page1}.isdisjoint({i["title"][0] for i in page2})
 
 
 async def test_the_e2e_fakes_core_search_page_has_two_pages_then_exhausts(fake_providers):
-    page1, cursor1 = await core_ac.search_page(fake_providers.core, "anything", page_size=2, cursor=0)
+    page1, cursor1 = await core_ac.search_page(fake_providers.client("core"), "anything", page_size=2, cursor=0)
     assert len(page1) == 2
     assert cursor1 == 2
 
-    page2, cursor2 = await core_ac.search_page(fake_providers.core, "anything", page_size=2, cursor=cursor1)
+    page2, cursor2 = await core_ac.search_page(fake_providers.client("core"), "anything", page_size=2, cursor=cursor1)
     assert len(page2) == 1
     assert cursor2 is None
     assert {r["title"] for r in page1}.isdisjoint({r["title"] for r in page2})
 
 
 async def test_the_e2e_fakes_semantic_scholar_search_page_has_two_pages_then_exhausts(fake_providers):
-    page1, cursor1 = await semantic_scholar.search_page(fake_providers.s2, "anything", page_size=2, cursor=0)
+    page1, cursor1 = await semantic_scholar.search_page(
+        fake_providers.client("semantic_scholar"), "anything", page_size=2, cursor=0
+    )
     assert len(page1) == 2
     assert cursor1 == 2
 
-    page2, cursor2 = await semantic_scholar.search_page(fake_providers.s2, "anything", page_size=2, cursor=cursor1)
+    page2, cursor2 = await semantic_scholar.search_page(
+        fake_providers.client("semantic_scholar"), "anything", page_size=2, cursor=cursor1
+    )
     assert len(page2) == 1
     assert cursor2 is None
     assert {p["title"] for p in page1}.isdisjoint({p["title"] for p in page2})
 
 
 async def test_the_e2e_fakes_s2_search_page_ids_do_not_collide_with_the_original_papers_ids(fake_providers):
-    page, _ = await semantic_scholar.search_page(fake_providers.s2, "anything", page_size=3, cursor=0)
+    page, _ = await semantic_scholar.search_page(
+        fake_providers.client("semantic_scholar"), "anything", page_size=3, cursor=0
+    )
     original_paper_ids = {f"{i + 1:040x}" for i in range(3)}  # PAPERS' s2_id, via _s2_paper(0|1|2, ...)
     assert {p["paperId"] for p in page}.isdisjoint(original_paper_ids)
 
 
 async def test_the_e2e_fakes_openalex_search_page_has_two_pages_then_exhausts(fake_providers):
-    page1, cursor1 = await openalex.search_page(fake_providers.openalex, "anything", page_size=2, cursor=1)
+    page1, cursor1 = await openalex.search_page(fake_providers.client("openalex"), "anything", page_size=2, cursor=1)
     assert len(page1) == 2
     assert cursor1 == 2
 
-    page2, cursor2 = await openalex.search_page(fake_providers.openalex, "anything", page_size=2, cursor=cursor1)
+    page2, cursor2 = await openalex.search_page(
+        fake_providers.client("openalex"), "anything", page_size=2, cursor=cursor1
+    )
     assert len(page2) == 1
     assert cursor2 is None
     assert {r["title"] for r in page1}.isdisjoint({r["title"] for r in page2})

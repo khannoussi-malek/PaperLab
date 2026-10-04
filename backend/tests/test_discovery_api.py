@@ -1,6 +1,5 @@
 import uuid
 from contextlib import aclosing
-from dataclasses import replace
 
 import pytest
 from conftest import recorded_discovery
@@ -50,7 +49,7 @@ async def test_search_rejects_a_blank_or_huge_query(client, discovery_api, q, st
 
 
 async def test_search_says_no_source_that_is_on_can_answer(app, client, discovery_api):
-    app.dependency_overrides[get_discovery] = lambda: replace(discovery_api.providers, openalex=None)
+    app.dependency_overrides[get_discovery] = lambda: discovery_api.providers.without("openalex")
 
     response = await client.get("/api/discovery/search", params={"q": "BERT"})
 
@@ -62,7 +61,7 @@ async def test_similar_says_semantic_scholar_is_off(app, client, discovery_api, 
     paper = Paper(title="BERT", file_path="/nonexistent.pdf", doi="10.18653/v1/n19-1423")
     session.add(paper)
     await session.flush()
-    app.dependency_overrides[get_discovery] = lambda: replace(discovery_api.providers, s2=None)
+    app.dependency_overrides[get_discovery] = lambda: discovery_api.providers.without("semantic_scholar")
 
     response = await client.get(f"/api/papers/{paper.id}/similar")
 
@@ -184,12 +183,13 @@ async def test_the_discovery_dependency_serves_the_fake_offline_and_closes_its_c
 
     async with aclosing(get_discovery(no_sources_row)) as dependency:
         providers = await anext(dependency)
-        assert providers.openalex is None  # off by default, fake or not
-        assert providers.s2.headers["x-api-key"] == "secret-key"
-        assert providers.unpaywall.params["email"] == discovery_fake.MAILTO  # the fake stands in for the email
+        assert providers.client("openalex") is None  # off by default, fake or not
+        assert providers.client("semantic_scholar").headers["x-api-key"] == "secret-key"
+        assert providers.client("unpaywall").params["email"] == discovery_fake.MAILTO  # fake stands in for the email
         assert (await providers.pdf.get(f"{discovery_fake.PDF_HOST}/paper.pdf")).content.startswith(b"%PDF")
 
-    assert providers.s2.is_closed and providers.pdf.is_closed and providers.unpaywall.is_closed
+    assert providers.client("semantic_scholar").is_closed and providers.pdf.is_closed
+    assert providers.client("unpaywall").is_closed
 
 
 async def test_the_live_discovery_dependency_follows_settings(no_sources_row):
@@ -197,6 +197,6 @@ async def test_the_live_discovery_dependency_follows_settings(no_sources_row):
 
     async with aclosing(get_discovery(no_sources_row)) as dependency:
         providers = await anext(dependency)
-        assert (providers.openalex, providers.crossref) == (None, None)
-        assert providers.unpaywall.params["email"] == "me@example.org"
-        assert "x-api-key" not in providers.s2.headers
+        assert (providers.client("openalex"), providers.client("crossref")) == (None, None)
+        assert providers.client("unpaywall").params["email"] == "me@example.org"
+        assert "x-api-key" not in providers.client("semantic_scholar").headers

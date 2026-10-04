@@ -114,7 +114,7 @@ async def test_openalex_is_not_asked_when_it_is_off(library, discovery_fakes):
     discovery_fakes.s2.reply(REFS, 200, json=page("citedPaper", s2("A reference")))
     discovery_fakes.s2.reply(CITING, 200, json=page("citingPaper"))
 
-    await references.fetch(library, replace(discovery_fakes.providers, openalex=None), reader)
+    await references.fetch(library, discovery_fakes.providers.without("openalex"), reader)
 
     assert discovery_fakes.openalex.requests == []
     assert await stored(library, reader.id) == ["A reference"]
@@ -142,9 +142,9 @@ async def test_one_failing_source_is_a_notice_beside_the_other_sources_rows(libr
 )
 async def test_no_answer_at_all_is_a_conflict_that_says_why(library, discovery_fakes, setup, message):
     reader = await add_paper(library, doi=READER_DOI)
-    providers = replace(discovery_fakes.providers, openalex=None)
+    providers = discovery_fakes.providers.without("openalex")
     if setup == "off":
-        providers = replace(providers, s2=None)
+        providers = providers.without("semantic_scholar")
     elif setup == "unknown":
         discovery_fakes.s2.reply(REFS, 404, json={"error": "Paper not found"})
     else:
@@ -273,7 +273,10 @@ async def test_recorded_references_with_no_id_are_skipped_and_every_other_one_is
     with_an_id = [record["title"] for record in records if record["paperId"]]
 
     async with semantic_scholar.new_client(api_key=None, transport=fake.transport) as client:
-        providers = replace(discovery_fakes.providers, s2=client, openalex=None)
+        providers = replace(
+            discovery_fakes.providers,
+            clients={**discovery_fakes.providers.clients, "semantic_scholar": client, "openalex": None},
+        )
         notices = await references.fetch(library, providers, reader)
 
     assert (notices, len(records), len(with_an_id)) == ([], 63, 59)

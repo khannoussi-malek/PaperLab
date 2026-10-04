@@ -168,7 +168,7 @@ async def test_snowball_keeps_one_directions_hits_when_the_other_direction_error
         return discovery_fake._handle(request)
 
     mixed_s2_client = semantic_scholar.new_client(api_key=None, transport=httpx.MockTransport(handle))
-    providers = replace(fake_providers, s2=mixed_s2_client)
+    providers = replace(fake_providers, clients={**fake_providers.clients, "semantic_scholar": mixed_s2_client})
 
     workspace = Workspace(name=f"snowball-mixed-{uuid.uuid4().hex[:8]}")
     session.add(workspace)
@@ -210,7 +210,7 @@ async def test_snowball_skips_a_seed_semantic_scholar_does_not_know_but_still_pr
         return discovery_fake._handle(request)
 
     unknown_s2_client = semantic_scholar.new_client(api_key=None, transport=httpx.MockTransport(handle))
-    providers = replace(fake_providers, s2=unknown_s2_client)
+    providers = replace(fake_providers, clients={**fake_providers.clients, "semantic_scholar": unknown_s2_client})
 
     workspace = Workspace(name=f"snowball-unknown-seed-{uuid.uuid4().hex[:8]}")
     session.add(workspace)
@@ -293,7 +293,7 @@ async def test_snowball_does_not_duplicate_or_overwrite_an_existing_hit(session,
 
 async def test_search_batch_records_source_error_without_failing_run(session, fake_providers):
     broken_arxiv = arxiv.new_client(transport=httpx.MockTransport(lambda request: httpx.Response(429)))
-    providers = replace(fake_providers, arxiv=broken_arxiv)
+    providers = replace(fake_providers, clients={**fake_providers.clients, "arxiv": broken_arxiv})
     run = await _new_run(session, ["arxiv"])
 
     try:
@@ -394,7 +394,7 @@ async def test_search_batch_marks_a_disabled_source_cursor_exhausted(session):
     fresh-database default) has nothing to fetch. Its cursor must still flip to exhausted immediately, or the
     worker's `all(c.exhausted for c in cursors)` check can never become true (M30a Task 17 E2E bug: a source
     stuck at exhausted=False forever turns the worker's paging loop into a busy-loop)."""
-    providers = discovery.Providers(pdf=httpx.AsyncClient())  # every other client left at its None default
+    providers = discovery.Providers(pdf=httpx.AsyncClient())  # every source left off (clients defaults to {})
     try:
         run = await _new_run(session, ["unpaywall"])
         result = await search_batch(session, providers, run)
