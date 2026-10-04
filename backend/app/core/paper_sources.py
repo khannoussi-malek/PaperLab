@@ -16,17 +16,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import InvalidInput
 from app.core.llm_connections import key_hint
+from app.core.source_registry import ENABLED_BY_DEFAULT, NAMES
+from app.core.source_registry import KEYED_IDS as KEYED
+from app.core.source_registry import SOURCE_IDS as SOURCES
 from app.models import PaperSources
 
 logger = logging.getLogger(__name__)
 
-# Also the trust order when results are merged (D73). Unpaywall only adds PDF links.
-SOURCES = ("openalex", "crossref", "semantic_scholar", "arxiv", "core", "unpaywall")
-NAMES = {
-    "openalex": "OpenAlex", "crossref": "Crossref", "semantic_scholar": "Semantic Scholar", "arxiv": "arXiv",
-    "core": "CORE", "unpaywall": "Unpaywall",
-}  # fmt: skip
-KEYED = ("openalex", "semantic_scholar", "core")
+# Also the trust order when results are merged (D73). Unpaywall only adds PDF links. (Phase 0: the registry is now
+# the single source of truth; these names are kept so every existing `from app.core.paper_sources import SOURCES`
+# etc. needs no change.)
+
 MAX_EMAIL = 254
 _EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
@@ -38,7 +38,7 @@ NOT_PLAIN_KEY = "an API key can only contain plain ASCII characters"
 @dataclass(frozen=True)
 class SourceSettings:
     contact_email: str | None = None
-    enabled: Mapping[str, bool] = field(default_factory=lambda: {source: source != "openalex" for source in SOURCES})
+    enabled: Mapping[str, bool] = field(default_factory=lambda: dict(ENABLED_BY_DEFAULT))
     api_keys: Mapping[str, str | None] = field(default_factory=lambda: dict.fromkeys(KEYED))
 
     @property
