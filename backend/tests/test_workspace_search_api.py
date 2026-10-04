@@ -1087,6 +1087,45 @@ async def test_snowball_route_rejects_an_empty_seed_paper_ids_list(client):
     assert resp.status_code == 422
 
 
+async def test_snowball_route_with_seed_hit_ids_only_returns_200(session, client, fake_providers_all):
+    """POST /search/snowball with only seed_hit_ids (no seed_paper_ids) returns 200 with new_hits > 0 — the one
+    test that actually exercises the route's positional wiring of payload.seed_hit_ids through to
+    workspace_search.snowball, as opposed to the engine-level tests that call snowball() directly."""
+    from app.models.references import ExternalRef
+    from app.models.workspace_search import WorkspaceSearchHit, WorkspaceSearchRun
+
+    ws = await client.post("/api/workspaces", json={"name": f"Snowball hit seed route test {uuid.uuid4().hex[:8]}"})
+    workspace_id = ws.json()["id"]
+
+    free_title, free_doi, _ = discovery_fake.PAPERS[0]
+    ref = ExternalRef(title=free_title, doi=free_doi)
+    session.add(ref)
+    await session.flush()
+    run = WorkspaceSearchRun(
+        workspace_id=uuid.UUID(workspace_id), query_text="prior database search", sources_json=["arxiv"],
+        status="exhausted", started_at=datetime.now(timezone.utc), stats_json={},
+    )
+    session.add(run)
+    await session.flush()
+    hit = WorkspaceSearchHit(
+        workspace_id=uuid.UUID(workspace_id), run_id=run.id, external_ref_id=ref.id, source_method="database_search",
+        normalized_title=free_title.lower(), first_seen_at=datetime.now(timezone.utc),
+    )
+    session.add(hit)
+    await session.commit()
+
+    resp = await client.post(
+        f"/api/workspaces/{workspace_id}/search/snowball",
+        json={"seed_hit_ids": [str(hit.id)], "backward": True, "forward": False},
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["new_hits"] > 0
+    assert body["skipped_seeds"] == []
+    assert body["errors"] == {}
+
+
 async def test_snowball_route_rejects_when_both_seed_lists_are_empty(client):
     """Neither seed_paper_ids nor seed_hit_ids has anything to hop from — the model_validator added for
     seed_hit_ids rejects this combination with a 422, same convention as the paper-only case above."""
