@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { DESCRIPTIONS, keyLine, OPENALEX_PRICE } from './paperSources'
+import { DESCRIPTIONS, keyLine, PREREQUISITE_HINTS, PRICE_WARNINGS } from './paperSources'
 
 type Props = { source: PaperSource; hasEmail: boolean }
 
@@ -50,7 +50,7 @@ export function PaperSourceRow({ source, hasEmail }: Props) {
         <Label htmlFor={switchId} className="font-heading text-base font-semibold">
           {source.name}
         </Label>
-        {source.id === 'openalex' && (
+        {PRICE_WARNINGS[source.id] && (
           <Badge variant="outline">
             <CircleDollarSign aria-hidden />
             May cost money
@@ -60,11 +60,11 @@ export function PaperSourceRow({ source, hasEmail }: Props) {
       {/* Indented under the name: the checkbox (size-4) plus the row's gap. */}
       <div className="flex flex-col gap-1.5 pl-6.5">
         <p className="text-sm text-muted-foreground">{DESCRIPTIONS[source.id]}</p>
-        {source.id === 'openalex' && <p className="text-xs text-muted-foreground">{OPENALEX_PRICE}</p>}
-        {source.id === 'unpaywall' && !hasEmail && (
+        {PRICE_WARNINGS[source.id] && <p className="text-xs text-muted-foreground">{PRICE_WARNINGS[source.id]}</p>}
+        {PREREQUISITE_HINTS[source.id]?.(hasEmail) && (
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Info aria-hidden className="size-3.5 shrink-0" />
-            Add a contact email to use Unpaywall.
+            {PREREQUISITE_HINTS[source.id]?.(hasEmail)}
           </p>
         )}
 

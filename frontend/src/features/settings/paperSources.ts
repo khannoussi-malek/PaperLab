@@ -10,8 +10,19 @@ export const DESCRIPTIONS: Record<PaperSourceId, string> = {
   unpaywall: 'Free, legal PDF links for papers with a DOI. Free; needs the contact email.',
 }
 
-export const OPENALEX_PRICE =
-  'Free up to $0.10 of use a day without a key, or $1 a day with a free key from openalex.org. More needs a paid plan there.'
+/** The "May cost money" badge plus its price line, for sources that can charge even without a key. Only OpenAlex
+ * today; a future gated/paid source (Scopus, Web of Science, IEEE Xplore) adds its own entry here instead of a
+ * new hardcoded conditional in PaperSourceRow. */
+export const PRICE_WARNINGS: Partial<Record<PaperSourceId, string>> = {
+  openalex:
+    'Free up to $0.10 of use a day without a key, or $1 a day with a free key from openalex.org. More needs a paid plan there.',
+}
+
+/** A short hint shown under a source's description when something besides its own switch must be true for it to
+ * actually run — today, only Unpaywall (needs the contact email). Returns null when there is nothing to show. */
+export const PREREQUISITE_HINTS: Partial<Record<PaperSourceId, (hasEmail: boolean) => string | null>> = {
+  unpaywall: (hasEmail) => (hasEmail ? null : 'Add a contact email to use Unpaywall.'),
+}
 
 // The server's rule for the contact email (core/paper_sources.py), so a typo is caught before it is sent.
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
