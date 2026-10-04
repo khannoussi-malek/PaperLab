@@ -1,7 +1,12 @@
 import { useSearchRun, useStartSearchRun, useStopSearchRun } from '@/api/queries'
+import { Scene3D } from '@/features/scene3d/Scene3D'
+import type { SearchRunStatus } from '@/features/scene3d/poses'
 import { SearchControls } from './SearchControls'
 import { HitTable } from './HitTable'
 import { ScreeningAssist } from './ScreeningAssist'
+
+// Module level, so the scene never restarts on a re-render.
+const loadSearchRunScene = () => import('@/features/scene3d/directors/searchRun')
 
 /** `runId` lives in the URL (I1), not local state, so a reload keeps the active run instead of losing it — the
  * caller (WorkspacePage) reads it from the route and reports a new one back via `onRunIdChange`. */
@@ -27,7 +32,13 @@ export function SearchTab({
       />
       <ScreeningAssist workspaceId={workspaceId} />
       {run.data && (
-        <div className="border-b px-3 py-1 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2 border-b px-3 py-1 text-sm text-muted-foreground">
+          <Scene3D
+            load={loadSearchRunScene}
+            input={{ status: run.data.status as SearchRunStatus }}
+            fallback={null}
+            className="size-8"
+          />
           {run.data.status} · {(run.data.stats_json?.last_batch_new_hits as number | undefined) ?? 0} new in last
           batch
         </div>

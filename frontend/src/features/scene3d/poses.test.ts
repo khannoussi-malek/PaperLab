@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CHAT_LOOP, chatPose, downloadPose, libraryPose } from './poses'
+import { CHAT_LOOP, chatPose, downloadPose, libraryPose, searchRunPose } from './poses'
 
 describe('downloadPose', () => {
   it('gathers the dust with the percent, short of the full mark until the download is done', () => {
@@ -60,5 +60,29 @@ describe('chatPose', () => {
   it('runs faster while finding sources than while writing', () => {
     expect(CHAT_LOOP.sources).toBeLessThan(CHAT_LOOP.thinking)
     expect(chatPose('sources', 0.5).wire).toBeGreaterThan(chatPose('thinking', 0.5).wire)
+  })
+})
+
+describe('searchRunPose', () => {
+  it('breathes while running, with no percent to imply: gather oscillates (neither constant nor monotonic), scatter stays 0', () => {
+    const samples = [0, 0.5, 1, 1.5, 2, 2.5, 3].map((t) => searchRunPose('running', t).gather)
+    expect(new Set(samples.map((v) => v.toFixed(6))).size).toBeGreaterThan(1) // not constant
+    expect(samples.some((v, i) => i > 0 && v < samples[i - 1])).toBe(true) // not monotonic: it comes back down
+    expect(searchRunPose('running', 0.3).scatter).toBe(0)
+  })
+
+  it('settles near the full mark once a run ends cleanly, reading identically for exhausted and stopped', () => {
+    const exhausted = searchRunPose('exhausted', 4)
+    const stopped = searchRunPose('stopped', 4)
+    expect(exhausted.gather).toBeGreaterThan(0.9)
+    expect(exhausted.scatter).toBe(0)
+    expect(exhausted).toEqual(stopped)
+  })
+
+  it('settles low and scatters the dust back out on a failure', () => {
+    const pose = searchRunPose('failed', 4)
+    expect(pose.gather).toBeLessThan(0.3)
+    expect(pose.scatter).toBeCloseTo(1, 1)
+    expect(pose.sheen).toBe(0)
   })
 })

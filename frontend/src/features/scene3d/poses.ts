@@ -43,3 +43,17 @@ export function chatPose(phase: ChatInput['phase'], t: number) {
     fade: 1 - progress(u, 0.9, 0.1), // and it all fades before the next loop
   }
 }
+
+export type SearchRunStatus = 'running' | 'exhausted' | 'stopped' | 'failed'
+
+/**
+ * A search run has no percent to show (the backend pages sources until each is exhausted, with no "total expected"
+ * to divide by) — so this is ambient, not a fill level: a slow breathing while it runs, a calm rest once it ends
+ * cleanly (exhausted and stopped read the same — both are a benign "done"), and the dust drifting back out on a
+ * failure. The director glides toward these targets with `approach`, the same as `downloadPose`'s percent.
+ */
+export function searchRunPose(status: SearchRunStatus, t: number): { gather: number; sheen: number; scatter: number } {
+  if (status === 'running') return { gather: 0.5 + 0.15 * Math.sin(t * 0.8), sheen: Math.max(0, Math.sin(t * 0.5)), scatter: 0 }
+  if (status === 'failed') return { gather: 0.15, sheen: 0, scatter: 1 } // mirrors downloadPose's own error: dust scatters back out
+  return { gather: 0.97, sheen: 0, scatter: 0 } // exhausted/stopped: a calm resting state, no transition needed
+}
