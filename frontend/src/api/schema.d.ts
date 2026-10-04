@@ -3335,7 +3335,7 @@ export interface components {
                 [key: string]: unknown;
             };
             /** Sources */
-            sources: ("arxiv" | "crossref" | "core" | "semantic_scholar" | "openalex")[];
+            sources: ("openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core")[];
             /**
              * Query Overrides
              * @default {}
@@ -3523,11 +3523,7 @@ export interface components {
              */
             forward: boolean;
         };
-        /**
-         * SourceKeys
-         * @description A missing source keeps its key, null removes it. SecretStr keeps keys out of reprs and tracebacks; the key rules
-         *     are checked in core, whose messages never quote a key.
-         */
+        /** SourceKeys */
         SourceKeys: {
             /** Openalex */
             openalex?: string | null;
@@ -3536,10 +3532,7 @@ export interface components {
             /** Core */
             core?: string | null;
         };
-        /**
-         * SourceSwitches
-         * @description Only the sources sent change.
-         */
+        /** SourceSwitches */
         SourceSwitches: {
             /** Openalex */
             openalex?: boolean;

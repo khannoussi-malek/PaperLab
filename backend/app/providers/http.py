@@ -1,6 +1,7 @@
 """Transport wrappers shared across providers: retry-on-429 (today only Semantic Scholar's unauthenticated pool
 needs it) and a minimum-interval pacer (not yet used by any of today's 5 sources; a future source with a
-documented per-second limit — e.g. arXiv's own 3-second rule — can turn it on via its SourceSpec)."""
+documented per-second limit — e.g. arXiv's own 3-second rule — could wire this in by extending its registry
+entry (app/core/source_registry.py's SourceSpec) to carry one)."""
 
 import asyncio
 import time

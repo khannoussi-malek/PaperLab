@@ -24,6 +24,10 @@ from app.core import discovery
 from app.core.candidates import Candidate, from_s2, merge, normal_title
 from app.core.discovery import Providers, _add_unpaywall_links, download_pdf
 from app.core.references import _same_reference
+from app.core.source_registry import MAPPERS as _MAPPERS
+from app.core.source_registry import PAGE_FUNCS as _PAGE_FUNCS
+from app.core.source_registry import PAGE_SIZE_BY_SOURCE
+from app.core.source_registry import STARTING_CURSOR_VALUE as _STARTING_CURSOR_VALUE
 from app.models.references import ExternalRef
 from app.models.workspace_search import (
     SearchRunEligibility,
@@ -35,11 +39,6 @@ from app.providers import semantic_scholar
 
 if TYPE_CHECKING:
     from app.schemas.workspace_search import HitReviewUpdate
-
-from app.core.source_registry import MAPPERS as _MAPPERS
-from app.core.source_registry import PAGE_FUNCS as _PAGE_FUNCS
-from app.core.source_registry import PAGE_SIZE_BY_SOURCE
-from app.core.source_registry import STARTING_CURSOR_VALUE as _STARTING_CURSOR_VALUE
 
 # A source stuck on httpx errors (spec §16: unauthenticated S2 search 429s by default) retries this many times
 # before its cursor is marked exhausted instead of spinning forever (C2 part 1) — small enough that a real outage
@@ -217,6 +216,8 @@ async def search_batch(session: AsyncSession, providers: Providers, run: Workspa
                     "retry_after": (now + timedelta(seconds=backoff)).isoformat(),
                 }
             continue
+        # `from_crossref` returns `None` for a non-paper record (D73's Crossref filter); the other four mappers
+        # always return a Candidate. `is not None` below is a no-op for those four and the real filter for crossref.
         found[source] = [c for raw in raw_items if (c := _MAPPERS[source](raw)) is not None]
         raw_counts[source] = len(raw_items)
         cursor.last_error = None
@@ -430,9 +431,9 @@ async def snowball(
     created once per call (status="exhausted" immediately: there's nothing to page) and used as every resulting
     hit's run_id, which also gives PRISMA's later per-run reporting a real row to point at.
 
-    Semantic Scholar entirely off (providers.s2 is None) raises Conflict once, up front, mirroring
-    references.fetch()'s "nothing enabled" check — with no source configured at all there's no useful
-    per-seed distinction to make (every seed would just land in skipped_seeds for the same reason)."""
+    Semantic Scholar entirely off (providers.client("semantic_scholar") is None) raises Conflict once, up
+    front, mirroring references.fetch()'s "nothing enabled" check — with no source configured at all there's no
+    useful per-seed distinction to make (every seed would just land in skipped_seeds for the same reason)."""
     if providers.client("semantic_scholar") is None:
         raise Conflict("Semantic Scholar is off. Turn it on in Settings → Paper sources to snowball.")
 
@@ -726,8 +727,8 @@ async def import_hits(
         if ref is not None and not ref.pdf_urls and ref.doi:
             # Unpaywall's real role (spec §6): DOI-only PDF enrichment for a candidate missing one, applied
             # post-merge — never a discovery source. import_hits only ever looked at pdf_urls as already stored;
-            # try this once before giving up (I5). providers.unpaywall may be None (source off) — the helper
-            # already treats that as a no-op, same as discovery.add()'s own callers do.
+            # try this once before giving up (I5). providers.client("unpaywall") may be None (source off) — the
+            # helper already treats that as a no-op, same as discovery.add()'s own callers do.
             [enriched] = await _add_unpaywall_links(
                 providers.client("unpaywall"), [Candidate(title=ref.title, doi=ref.doi, arxiv_id=ref.arxiv_id)]
             )
