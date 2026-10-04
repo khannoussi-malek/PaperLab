@@ -120,6 +120,44 @@
     }
 }
 
+/* Pages drifting behind a Library row while its paper embeds (EmbeddingFlight.tsx). Decorative only: base opacity
+   is 0, so only `motion-safe:animate-embedding-fly` (skipped under prefers-reduced-motion) ever makes them move. */
+@keyframes embedding-fly {
+  0% {
+    transform: translateX(0) rotateY(-35deg) rotateZ(var(--tilt));
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.85;
+  }
+  70% {
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(-70cqw) rotateY(35deg) rotateZ(calc(var(--tilt) * -1));
+    opacity: 0;
+  }
+}
+
+.embedding-page {
+  position: absolute;
+  right: -24px;
+  opacity: 0;
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 2px;
+  /* A single yellow line near the top, standing in for a highlighted heading. */
+  background-image: linear-gradient(#facc15, #facc15);
+  background-size: 60% 2px;
+  background-position: 20% 22%;
+  background-repeat: no-repeat;
+}
+
+.dark .embedding-page {
+  background-color: var(--card);
+  border-color: var(--border);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
