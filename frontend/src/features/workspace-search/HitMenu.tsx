@@ -1,4 +1,4 @@
-import { CircleHelp, CircleX, EllipsisVertical, ThumbsUp } from 'lucide-react'
+import { CircleHelp, CircleX, EllipsisVertical, ThumbsUp, Waves } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { glass } from '@/components/glass'
 import { Button } from '@/components/ui/button'
@@ -6,6 +6,7 @@ import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuSeparator,
   ContextMenuSub,
   ContextMenuSubContent,
   ContextMenuSubTrigger,
@@ -15,6 +16,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
@@ -29,15 +31,24 @@ const menuSurface = cn(glass, 'w-56 bg-glass-strong ring-glass-border')
 // The ⋮ dropdown and the right-click menu show the same items, built from their own Radix parts — same split as
 // PaperMenu/PaperContextMenu. Actions only: the title/byline/abstract read happens in HitPreview's side panel
 // (hover/focus), the same split PaperMenu/PaperPreview already use for papers.
-const dropdownParts = { Item: DropdownMenuItem, Sub: DropdownMenuSub, SubTrigger: DropdownMenuSubTrigger, SubContent: DropdownMenuSubContent }
-const contextParts = { Item: ContextMenuItem, Sub: ContextMenuSub, SubTrigger: ContextMenuSubTrigger, SubContent: ContextMenuSubContent }
+const dropdownParts = {
+  Item: DropdownMenuItem, Sub: DropdownMenuSub, SubTrigger: DropdownMenuSubTrigger,
+  SubContent: DropdownMenuSubContent, Separator: DropdownMenuSeparator,
+}
+const contextParts = {
+  Item: ContextMenuItem, Sub: ContextMenuSub, SubTrigger: ContextMenuSubTrigger,
+  SubContent: ContextMenuSubContent, Separator: ContextMenuSeparator,
+}
 
 type Props = {
   hit: Hit
   onReview: (hitId: string, body: HitReviewUpdate) => void
+  // Seeds a one-hop citation-graph lookup from this hit directly — no import (free PDF) required first, since
+  // Semantic Scholar only ever needs the hit's own doi/title (see workspace_search.snowball's docstring).
+  onSnowball: (hitId: string) => void
 }
 
-function MenuItems({ parts: M, hit, onReview }: Props & { parts: typeof dropdownParts | typeof contextParts }) {
+function MenuItems({ parts: M, hit, onReview, onSnowball }: Props & { parts: typeof dropdownParts | typeof contextParts }) {
   return (
     <>
       <M.Item onSelect={() => onReview(hit.id, { stage1_status: 'relevant' })}>
@@ -61,6 +72,11 @@ function MenuItems({ parts: M, hit, onReview }: Props & { parts: typeof dropdown
           ))}
         </M.SubContent>
       </M.Sub>
+      <M.Separator />
+      <M.Item onSelect={() => onSnowball(hit.id)}>
+        <Waves aria-hidden />
+        Snowball
+      </M.Item>
     </>
   )
 }

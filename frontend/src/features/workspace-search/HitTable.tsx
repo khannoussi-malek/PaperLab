@@ -11,6 +11,7 @@ import {
   useRankedHits,
   useRefreshHits,
   useSearchHits,
+  useSnowball,
   useUploadHitPdf,
 } from '@/api/queries'
 import { PanelResizeHandle } from '@/components/PanelResizeHandle'
@@ -23,6 +24,7 @@ import { sourceLabel } from './hitReview'
 import { loadHitSort, saveHitSort, type HitSort } from './hitSort'
 import { HitPreview } from './HitPreview'
 import { RankSortBar } from './RankSortBar'
+import { snowballMessage } from './ScreeningTab'
 import { SuggestionChip } from './SuggestionChip'
 
 const ROW_HEIGHT = 44
@@ -75,6 +77,7 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
   const clearHits = useClearSearchHits(workspaceId)
   const reviewHit = usePatchSearchHit(workspaceId)
   const uploadHitPdf = useUploadHitPdf(workspaceId)
+  const snowball = useSnowball(workspaceId)
   const newHits = useNewHitsAvailable(run)
   const refreshHits = useRefreshHits(workspaceId)
   const parentRef = useRef<HTMLDivElement>(null)
@@ -120,6 +123,8 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
   })
   const virtualItems = virtualizer.getVirtualItems()
   const onReview = (hitId: string, body: HitReviewUpdate) => reviewHit.mutate({ hitId, body })
+  // Seeds a snowball hop straight from this hit — no import required first (see HitMenu's onSnowball docstring).
+  const onSnowball = (hitId: string) => snowball.mutate({ seed_hit_ids: [hitId], backward: true, forward: true })
 
   // ↑/↓ moves the selected row by one, wrapping never — the top/bottom just stop. Works from the filter box too
   // (arrow keys do nothing useful in a single-line input, so hijacking them here doesn't lose anything), and
@@ -229,6 +234,16 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
           {uploadHitPdf.error.message}
         </p>
       )}
+      {snowball.isError && (
+        <p role="alert" className="px-3 py-1 text-xs text-destructive">
+          {snowball.error.message}
+        </p>
+      )}
+      {snowball.isSuccess && (
+        <p role="status" className="px-3 py-1 text-xs text-muted-foreground">
+          {snowballMessage(snowball.data)}
+        </p>
+      )}
       {filter && visibleRows.length === 0 && (
         <p className="px-3 py-1 text-xs text-muted-foreground">No hits match “{filterText.trim()}”.</p>
       )}
@@ -249,7 +264,7 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
               const byline = [hit.authors?.slice(0, 3).join(', '), hit.year].filter(Boolean).join(' · ')
               const selected = hit.id === previewed?.id
               return (
-                <HitContextMenu key={hit.id} hit={hit} onReview={onReview}>
+                <HitContextMenu key={hit.id} hit={hit} onReview={onReview} onSnowball={onSnowball}>
                   <div
                     className={cn(
                       'flex w-full cursor-pointer items-center gap-2 border-b px-3 text-sm hover:bg-muted',
@@ -271,7 +286,7 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
                     )}
                     <SuggestionChip hit={hit} />
                     <span className="text-xs text-muted-foreground">{hit.stage1_status ?? 'unreviewed'}</span>
-                    <HitMenu hit={hit} onReview={onReview} />
+                    <HitMenu hit={hit} onReview={onReview} onSnowball={onSnowball} />
                   </div>
                 </HitContextMenu>
               )

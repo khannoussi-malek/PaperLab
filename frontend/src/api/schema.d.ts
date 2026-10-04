@@ -3511,7 +3511,9 @@ export interface components {
         /** SnowballRequest */
         SnowballRequest: {
             /** Seed Paper Ids */
-            seed_paper_ids: string[];
+            seed_paper_ids?: string[];
+            /** Seed Hit Ids */
+            seed_hit_ids?: string[];
             /**
              * Backward
              * @default true
