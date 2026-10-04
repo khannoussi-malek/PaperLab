@@ -8,6 +8,8 @@ and the E2E stack's setting) the badges match M19's. arxiv.org serves no PDF, so
 """
 
 import json
+from collections.abc import Callable
+from dataclasses import dataclass
 from functools import cache
 
 import httpx
@@ -170,54 +172,100 @@ def _s2_search_page(params: httpx.QueryParams) -> httpx.Response:
     return httpx.Response(200, json=body)
 
 
-def _handle(request: httpx.Request) -> httpx.Response:
-    host, path = request.url.host, request.url.path
-    s2_papers = [_s2_paper(i, *paper) for i, paper in enumerate(PAPERS)]
-    if host == "api.openalex.org" and path == "/works":
-        if "page" in request.url.params:
-            return _openalex_search_page(request.url.params)
-        return httpx.Response(200, json={"results": [_work(*paper) for paper in PAPERS]})
-    if host == "api.openalex.org" and path.startswith("/works/"):
+@dataclass(frozen=True)
+class FakeAdapter:
+    """One source's fake: `host` plus a `match(path, params)` predicate decide whether this adapter answers a
+    request; `handle` builds the response. `_handle` below is pure dispatch over a list of these."""
+
+    host: str
+    match: Callable[[str, httpx.QueryParams], bool]
+    handle: Callable[[httpx.Request], httpx.Response]
+
+
+def _openalex_handle(request: httpx.Request) -> httpx.Response:
+    if "page" in request.url.params:
+        return _openalex_search_page(request.url.params)
+    if request.url.path.startswith("/works/"):
         return httpx.Response(200, json=_work(*PAPERS[0]))
-    if host == "api.semanticscholar.org":
-        # References (M7.5): any library paper cites the three papers and is cited by the free one.
-        if path.endswith("/references"):
-            return httpx.Response(200, json={"offset": 0, "data": [{"citedPaper": p} for p in s2_papers]})
-        if path.endswith("/citations"):
-            return httpx.Response(200, json={"offset": 0, "data": [{"citingPaper": s2_papers[0]}]})
-        if path.startswith("/recommendations/"):
-            return httpx.Response(200, json={"recommendedPapers": s2_papers})
-        if path == "/graph/v1/paper/search/match":
-            return httpx.Response(200, json={"data": [{"paperId": "f" * 40}]})
-        if path == "/graph/v1/paper/search":
-            return _s2_search_page(request.url.params)
-        if path == "/graph/v1/paper/batch":
-            return httpx.Response(200, json=[None] * len(json.loads(request.read())["ids"]))
-        if path.startswith("/graph/v1/paper/"):
-            return httpx.Response(200, json=s2_papers[0])
-    if host == "api.crossref.org" and path == "/works":
-        if "offset" in request.url.params:
-            return _crossref_search_page(request.url.params)
-        return httpx.Response(200, json={"message": {"items": [_crossref_item(*paper) for paper in PAPERS]}})
-    if host == "api.crossref.org" and path.startswith("/works/"):
+    return httpx.Response(200, json={"results": [_work(*paper) for paper in PAPERS]})
+
+
+def _s2_handle(request: httpx.Request) -> httpx.Response:
+    s2_papers = [_s2_paper(i, *paper) for i, paper in enumerate(PAPERS)]
+    path = request.url.path
+    if path.endswith("/references"):
+        return httpx.Response(200, json={"offset": 0, "data": [{"citedPaper": p} for p in s2_papers]})
+    if path.endswith("/citations"):
+        return httpx.Response(200, json={"offset": 0, "data": [{"citingPaper": s2_papers[0]}]})
+    if path.startswith("/recommendations/"):
+        return httpx.Response(200, json={"recommendedPapers": s2_papers})
+    if path == "/graph/v1/paper/search/match":
+        return httpx.Response(200, json={"data": [{"paperId": "f" * 40}]})
+    if path == "/graph/v1/paper/search":
+        return _s2_search_page(request.url.params)
+    if path == "/graph/v1/paper/batch":
+        return httpx.Response(200, json=[None] * len(json.loads(request.read())["ids"]))
+    return httpx.Response(200, json=s2_papers[0])
+
+
+def _crossref_handle(request: httpx.Request) -> httpx.Response:
+    if "offset" in request.url.params:
+        return _crossref_search_page(request.url.params)
+    if request.url.path.startswith("/works/"):
         return httpx.Response(200, json={"message": _crossref_item(*PAPERS[0])})
-    if host == "export.arxiv.org" and path == "/api/query":
-        if "start" in request.url.params:
-            return httpx.Response(200, text=_arxiv_search_page_feed(request.url.params),
-                                   headers={"content-type": "application/atom+xml"})  # fmt: skip
-        return httpx.Response(200, text=_arxiv_feed(), headers={"content-type": "application/atom+xml"})
-    if host == "api.core.ac.uk" and path == "/v3/search/works/":
-        if "offset" in request.url.params:
-            return _core_search_page(request.url.params)
-        return httpx.Response(200, json={"results": [_core_work()]})
-    if host == "api.unpaywall.org":
-        pdf_url = next((url for _, doi, url in PAPERS if path == f"/v2/{doi}"), None)
-        if pdf_url:
-            return httpx.Response(200, json={"best_oa_location": {"url_for_pdf": pdf_url}, "oa_locations": []})
-    if host == "pdf.paperlab.test" and path == "/paper.pdf":
+    return httpx.Response(200, json={"message": {"items": [_crossref_item(*paper) for paper in PAPERS]}})
+
+
+def _arxiv_handle(request: httpx.Request) -> httpx.Response:
+    if "start" in request.url.params:
+        return httpx.Response(
+            200, text=_arxiv_search_page_feed(request.url.params), headers={"content-type": "application/atom+xml"}
+        )
+    return httpx.Response(200, text=_arxiv_feed(), headers={"content-type": "application/atom+xml"})
+
+
+def _core_handle(request: httpx.Request) -> httpx.Response:
+    if "offset" in request.url.params:
+        return _core_search_page(request.url.params)
+    return httpx.Response(200, json={"results": [_core_work()]})
+
+
+def _unpaywall_handle(request: httpx.Request) -> httpx.Response:
+    pdf_url = next((url for _, doi, url in PAPERS if request.url.path == f"/v2/{doi}"), None)
+    if pdf_url:
+        return httpx.Response(200, json={"best_oa_location": {"url_for_pdf": pdf_url}, "oa_locations": []})
+    return httpx.Response(404, json={"error": f"the discovery fake has no {request.url}"})
+
+
+def _pdf_handle(request: httpx.Request) -> httpx.Response:
+    if request.url.path == "/paper.pdf":
         return httpx.Response(200, content=pdf_bytes(), headers={"content-type": "application/pdf"})
-    if host == "pdf.paperlab.test" and path == "/page.html":
-        return httpx.Response(200, text="<html><body>A landing page, not a PDF</body></html>")
+    return httpx.Response(200, text="<html><body>A landing page, not a PDF</body></html>")
+
+
+ADAPTERS: tuple[FakeAdapter, ...] = (
+    FakeAdapter(
+        "api.openalex.org",
+        lambda path, params: path == "/works" or path.startswith("/works/"),
+        _openalex_handle,
+    ),
+    FakeAdapter("api.semanticscholar.org", lambda path, params: True, _s2_handle),
+    FakeAdapter(
+        "api.crossref.org",
+        lambda path, params: path == "/works" or path.startswith("/works/"),
+        _crossref_handle,
+    ),
+    FakeAdapter("export.arxiv.org", lambda path, params: path == "/api/query", _arxiv_handle),
+    FakeAdapter("api.core.ac.uk", lambda path, params: path == "/v3/search/works/", _core_handle),
+    FakeAdapter("api.unpaywall.org", lambda path, params: True, _unpaywall_handle),
+    FakeAdapter("pdf.paperlab.test", lambda path, params: True, _pdf_handle),
+)  # fmt: skip
+
+
+def _handle(request: httpx.Request) -> httpx.Response:
+    for adapter in ADAPTERS:
+        if request.url.host == adapter.host and adapter.match(request.url.path, request.url.params):
+            return adapter.handle(request)
     return httpx.Response(404, json={"error": f"the discovery fake has no {request.url}"})
 
 
