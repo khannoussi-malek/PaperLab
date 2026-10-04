@@ -406,6 +406,28 @@ test('marking relevant from the ⋮ menu sends only stage1_status', async () => 
   await waitFor(() => expect(api.patchSearchHit).toHaveBeenCalledWith('ws-1', 'h1', { stage1_status: 'relevant' }))
 })
 
+test('clicking Snowball from the ⋮ menu seeds the mutation with this hit, not a paper id', async () => {
+  const snowballSpy = vi.spyOn(api, 'snowball').mockResolvedValue({ new_hits: 0, skipped_seeds: [], errors: {} })
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  await pool().findByText('a paper about llms')
+  fireEvent.pointerDown(pool().getByRole('button', { name: 'Hit actions' }))
+  fireEvent.click(await screen.findByRole('menuitem', { name: 'Snowball' }))
+
+  await waitFor(() =>
+    expect(snowballSpy).toHaveBeenCalledWith('ws-1', { seed_hit_ids: ['h1'], backward: true, forward: true }),
+  )
+})
+
+test('a successful snowball from the hit menu reports the new-hit count near the pool', async () => {
+  vi.spyOn(api, 'snowball').mockResolvedValue({ new_hits: 2, skipped_seeds: [], errors: {} })
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  await pool().findByText('a paper about llms')
+  fireEvent.pointerDown(pool().getByRole('button', { name: 'Hit actions' }))
+  fireEvent.click(await screen.findByRole('menuitem', { name: 'Snowball' }))
+
+  expect(await screen.findByRole('status')).toHaveTextContent('Found 2 new papers')
+})
+
 test('reviewing a hit patches it into the pool in place, without re-fetching the pool', async () => {
   renderWithClient(<HitTable workspaceId="ws-1" />)
   await pool().findByText('a paper about llms')
