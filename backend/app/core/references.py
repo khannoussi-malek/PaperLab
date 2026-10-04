@@ -84,7 +84,7 @@ class Listing:
 
 async def _from_semantic_scholar(providers: discovery.Providers, paper: Paper) -> dict[str, list[Candidate]] | None:
     """None when Semantic Scholar doesn't know the paper."""
-    key = await discovery.s2_key(providers.client("semantic_scholar"), paper)
+    key = await discovery.s2_key(providers.client("semantic_scholar"), paper.doi, paper.title)
     if key is None:
         return None
     cites = await semantic_scholar.references(providers.client("semantic_scholar"), key, REFS_CAP)

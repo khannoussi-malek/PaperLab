@@ -167,11 +167,20 @@ class ClearHitsOut(BaseModel):
 
 
 class SnowballRequest(BaseModel):
-    # An empty list has no seed to hop from, so it would produce a run with zero results and nothing recorded —
-    # reject it instead (same "reject rather than silently do nothing" convention as SearchRunCreate.sources).
-    seed_paper_ids: list[uuid.UUID] = Field(min_length=1)
+    # An empty seed_paper_ids AND empty seed_hit_ids has no seed to hop from, so it would produce a run with zero
+    # results and nothing recorded — reject it instead (same "reject rather than silently do nothing" convention
+    # as SearchRunCreate.sources). Neither list alone is required (min_length=1 on just one would make the other
+    # mandatory) — the model_validator below checks the combination.
+    seed_paper_ids: list[uuid.UUID] = Field(default_factory=list)
+    seed_hit_ids: list[uuid.UUID] = Field(default_factory=list)
     backward: bool = True
     forward: bool = True
+
+    @model_validator(mode="after")
+    def at_least_one_seed(self):
+        if not self.seed_paper_ids and not self.seed_hit_ids:
+            raise ValueError("at least one seed_paper_id or seed_hit_id is required")
+        return self
 
 
 class SnowballOut(BaseModel):

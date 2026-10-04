@@ -380,11 +380,12 @@ class SnowballResult:
 
 
 async def _snowball_from_s2(
-    providers: Providers, paper: Paper, backward: bool, forward: bool
+    providers: Providers, doi: str | None, title: str, backward: bool, forward: bool
 ) -> tuple[dict[str, list[Candidate]], dict[str, str]] | None:
-    """None when Semantic Scholar doesn't know `paper` (a 404 on any direction asked for — same signal
+    """None when Semantic Scholar doesn't know the doi/title (a 404 on any direction asked for — same signal
     references.py's _from_semantic_scholar uses). Mirrors that function, scoped to just the requested
-    direction(s).
+    direction(s). Takes doi/title directly rather than a Paper, so this serves either an imported library paper or
+    a not-yet-imported hit's own ExternalRef (snowball's point, below).
 
     Otherwise returns whatever direction(s) succeeded, plus a per-direction message for whichever raised
     httpx.HTTPError (e.g. an unauthenticated S2 429 — spec §16's default, not an edge case). Each direction is
@@ -392,7 +393,7 @@ async def _snowball_from_s2(
     hits (fix-round finding — /citations 429ing used to wipe out a successful /references call for the same
     seed, because the exception used to propagate out of this whole function to snowball()'s per-seed
     try/except)."""
-    key = await discovery.s2_key(providers.client("semantic_scholar"), paper)
+    key = await discovery.s2_key(providers.client("semantic_scholar"), doi, title)
     if key is None:
         return None
     out: dict[str, list[Candidate]] = {}
@@ -420,9 +421,13 @@ async def _snowball_from_s2(
 
 async def snowball(
     session: AsyncSession, providers: Providers, workspace_id: uuid.UUID, seed_paper_ids: list[uuid.UUID],
-    backward: bool, forward: bool,
+    seed_hit_ids: list[uuid.UUID], backward: bool, forward: bool,
 ) -> SnowballResult:
-    """One hop, from each seed paper, via Semantic Scholar. New hits land in the same pool as database-search
+    """One hop, from each seed, via Semantic Scholar. A seed can be an already-imported library paper
+    (seed_paper_ids) or a not-yet-imported workspace hit (seed_hit_ids) — citation-graph discovery only ever
+    needs a doi/title (discovery.s2_key), which a hit's own ExternalRef already has, so snowballing from it
+    never requires a free PDF to have been found first (that's import_hits' separate concern: acquiring a copy
+    of the paper, not discovering what it cites/is cited by). New hits land in the same pool as database-search
     hits (spec P8, §9), tagged snowball_backward/snowball_forward, deduped by (workspace_id, external_ref_id)
     through the same `_store_candidates_as_hits` path search_batch uses — a seed's reference already in the pool
     keeps its existing screening state.
@@ -438,7 +443,8 @@ async def snowball(
         raise Conflict("Semantic Scholar is off. Turn it on in Settings → Paper sources to snowball.")
 
     run = WorkspaceSearchRun(
-        workspace_id=workspace_id, query_text=f"snowball ({len(seed_paper_ids)} seed paper(s))",
+        workspace_id=workspace_id,
+        query_text=f"snowball ({len(seed_paper_ids) + len(seed_hit_ids)} seed paper(s))",
         filters_json={}, query_overrides_json={}, sources_json=["semantic_scholar"], status="exhausted",
         started_at=datetime.now(timezone.utc), stats_json={},
     )
@@ -460,7 +466,7 @@ async def snowball(
             raise NotFound(f"paper {paper_id} not in workspace {workspace_id}")
         paper = await session.get(Paper, paper_id)
         try:
-            result = await _snowball_from_s2(providers, paper, backward, forward)
+            result = await _snowball_from_s2(providers, paper.doi, paper.title, backward, forward)
         except httpx.HTTPError as exc:
             # A failure before either direction's own try/except could run (e.g. the s2_key title-match lookup
             # itself 429ing) — not a per-direction error, so no direction-specific key to give it.
@@ -476,6 +482,33 @@ async def snowball(
             new_hits += await _store_candidates_as_hits(
                 session, run, source_method, {"semantic_scholar": candidates},
                 seed_paper_id=paper_id, snowball_round=1,
+            )
+
+    for hit_id in seed_hit_ids:
+        hit = await session.get(WorkspaceSearchHit, hit_id)
+        if hit is None or hit.workspace_id != workspace_id:
+            raise NotFound(f"hit {hit_id} not found in workspace {workspace_id}")
+        ref = await session.get(ExternalRef, hit.external_ref_id) if hit.external_ref_id else None
+        if ref is None:
+            skipped.append(hit_id)
+            continue
+        try:
+            result = await _snowball_from_s2(providers, ref.doi, ref.title, backward, forward)
+        except httpx.HTTPError as exc:
+            errors["semantic_scholar"] = str(exc)
+            continue
+        if result is None:
+            skipped.append(hit_id)
+            continue
+        found, direction_errors = result
+        errors.update(direction_errors)
+        for direction, candidates in found.items():
+            source_method = "snowball_backward" if direction == "backward" else "snowball_forward"
+            # ponytail: no seed_hit_id column on WorkspaceSearchHit — seed_paper_id stays unset for a hit-seeded
+            # hop (nothing to attribute to a Paper row that doesn't exist yet). Add one if that provenance is
+            # ever needed; grep confirms nothing reads seed_paper_id downstream today.
+            new_hits += await _store_candidates_as_hits(
+                session, run, source_method, {"semantic_scholar": candidates}, snowball_round=1,
             )
 
     await session.commit()

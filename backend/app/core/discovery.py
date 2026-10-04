@@ -227,15 +227,17 @@ def _same_paper_keys(title: str, *ids: str | None) -> set[str]:
     return {i.lower() for i in ids if i} | {normal_title(title)}
 
 
-async def s2_key(http: httpx.AsyncClient, paper: Paper) -> str | None:
-    """The key Semantic Scholar knows a library paper by: `arXiv:<id>` for an arXiv DOI, `DOI:<doi>`, else its best
-    title match (one request). None when it has no match. Raises httpx.HTTPError."""
-    doi = (paper.doi or "").lower()
+async def s2_key(http: httpx.AsyncClient, doi: str | None, title: str) -> str | None:
+    """The key Semantic Scholar knows something by: `arXiv:<id>` for an arXiv DOI, `DOI:<doi>`, else its best
+    title match (one request). None when it has no match. Raises httpx.HTTPError. Takes doi/title directly (not a
+    Paper) so it works for anything with these two fields — an imported Paper or a not-yet-imported hit's own
+    ExternalRef alike (snowball's own use, workspace_search.py)."""
+    doi = (doi or "").lower()
     if arxiv_id := arxiv_from_doi(doi):
         return f"arXiv:{arxiv_id}"
     if doi:
         return f"DOI:{doi}"
-    return await semantic_scholar.match_title(http, paper.title)
+    return await semantic_scholar.match_title(http, title)
 
 
 async def similar(
@@ -246,7 +248,7 @@ async def similar(
     doi = (paper.doi or "").lower()
     arxiv_id = arxiv_from_doi(doi)
     try:
-        key = await s2_key(s2, paper)
+        key = await s2_key(s2, paper.doi, paper.title)
         found = await semantic_scholar.recommend(s2, key, limit + 1) if key else None
     except httpx.HTTPError as exc:
         if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code in (401, 403):
