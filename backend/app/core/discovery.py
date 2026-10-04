@@ -11,7 +11,6 @@
 import asyncio
 import logging
 import re
-from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
@@ -25,11 +24,7 @@ from app.core.candidates import (
     ARXIV_ID,
     Candidate,
     arxiv_from_doi,
-    from_arxiv,
-    from_core,
-    from_crossref,
     from_s2,
-    from_work,
     merge,
     normal_title,
     ordered_pdf_urls,
@@ -38,12 +33,12 @@ from app.core.candidates import (
 from app.core.enrichment import ARXIV_DOI_PREFIX
 from app.core.errors import Conflict
 from app.core.paper_sources import KEYED, NAMES, SourceSettings
+from app.core.source_registry import ASKS
 from app.models import Paper
-from app.providers import arxiv, core_ac, crossref, openalex, semantic_scholar, unpaywall
+from app.providers import semantic_scholar, unpaywall
 
 logger = logging.getLogger(__name__)
 
-PER_SOURCE = 10
 SEARCH_LIMIT = 20
 SIMILAR_LIMIT = 10
 UNPAYWALL_CONCURRENCY = 5
@@ -125,44 +120,6 @@ def classify_query(query: str) -> tuple[str, str]:
         return "doi", value
     return "title", text
 
-
-async def _openalex(http: httpx.AsyncClient, kind: str, value: str) -> list[Candidate]:
-    if kind == "title":
-        return [from_work(w) for w in await openalex.search_works(http, value, per_page=PER_SOURCE)]
-    work = await openalex.get_work(http, f"doi:{value}" if kind == "doi" else value)
-    return [from_work(work)] if work else []
-
-
-async def _crossref(http: httpx.AsyncClient, kind: str, value: str) -> list[Candidate]:
-    items = (
-        await crossref.search(http, value, PER_SOURCE) if kind == "title" else [await crossref.get_work(http, value)]
-    )
-    return [candidate for item in items if item and (candidate := from_crossref(item))]
-
-
-async def _semantic_scholar(http: httpx.AsyncClient, kind: str, value: str) -> list[Candidate]:
-    # OpenAlex's arXiv location filter returned a wrongly merged record for BERT; Semantic Scholar's lookup didn't.
-    paper = await semantic_scholar.get_paper(http, f"arXiv:{value}")
-    return [from_s2(paper)] if paper else []
-
-
-async def _arxiv(http: httpx.AsyncClient, kind: str, value: str) -> list[Candidate]:
-    entries = await arxiv.search(http, value, PER_SOURCE) if kind == "title" else [await arxiv.get(http, value)]
-    return [from_arxiv(entry) for entry in entries if entry]
-
-
-async def _core(http: httpx.AsyncClient, kind: str, value: str) -> list[Candidate]:
-    return [from_core(work) for work in await core_ac.search(http, value, PER_SOURCE)]
-
-
-Ask = Callable[[httpx.AsyncClient, str, str], Awaitable[list[Candidate]]]
-# D72: the sources each kind of query asks, most trusted first (the order results merge in).
-ASKS: dict[str, dict[str, Ask]] = {
-    "title": {"openalex": _openalex, "crossref": _crossref, "arxiv": _arxiv, "core": _core},
-    "doi": {"openalex": _openalex, "crossref": _crossref},
-    "arxiv": {"semantic_scholar": _semantic_scholar, "arxiv": _arxiv},
-    "openalex": {"openalex": _openalex},
-}
 
 
 def notice(source: str, error: httpx.HTTPError) -> str:
