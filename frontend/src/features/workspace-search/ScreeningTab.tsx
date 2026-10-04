@@ -86,7 +86,8 @@ export function ScreeningTab({ workspaceId }: { workspaceId: string }) {
   )
 }
 
-function snowballMessage(result: { new_hits: number; skipped_seeds: string[]; errors: Record<string, string> }) {
+/** Shared with HitTable's own per-hit Snowball action, so both read the same result the same way. */
+export function snowballMessage(result: { new_hits: number; skipped_seeds: string[]; errors: Record<string, string> }) {
   const parts = [
     result.new_hits > 0 ? `Found ${result.new_hits} new paper${result.new_hits === 1 ? '' : 's'}.` : 'No new papers found.',
   ]
