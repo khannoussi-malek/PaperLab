@@ -6,11 +6,14 @@ import type { SearchRunCreate, SearchRunSource } from '@/api/client'
 
 // Search/discovery sources only (spec §6) — mirrors the backend's SearchSource Literal. Unpaywall is DOI-only PDF
 // enrichment, never fanned out to by search_batch, so it's excluded here regardless of its own settings switch
-// (C1: sending it used to 422 every Start click).
-const SEARCH_SOURCE_IDS: readonly SearchRunSource[] = ['arxiv', 'crossref', 'core', 'semantic_scholar', 'openalex']
+// (C1: sending it used to 422 every Start click). A Record, not an array: adding a search source to the backend's
+// SearchRunSource union without adding it here is now a compiler error, not a silent no-op.
+const SEARCH_SOURCES: Record<SearchRunSource, true> = {
+  arxiv: true, crossref: true, core: true, semantic_scholar: true, openalex: true,
+}
 
 function isSearchSource(id: string): id is SearchRunSource {
-  return (SEARCH_SOURCE_IDS as readonly string[]).includes(id)
+  return id in SEARCH_SOURCES
 }
 
 export function SearchControls({
