@@ -74,8 +74,8 @@ class Providers:
         return self.clients.get(source)
 
     def without(self, *sources: str) -> "Providers":
-        """A copy with these sources' clients set to None — for tests simulating a source being off."""
-        return replace(self, clients={**self.clients, **dict.fromkeys(sources)})
+        """A copy with these sources' clients removed — for tests simulating a source being off."""
+        return replace(self, clients={k: v for k, v in self.clients.items() if k not in sources})
 
     async def aclose(self) -> None:
         await self.pdf.aclose()

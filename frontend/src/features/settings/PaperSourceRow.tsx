@@ -19,6 +19,7 @@ export function PaperSourceRow({ source, hasEmail }: Props) {
   const [key, setKey] = useState('')
   const switchId = `paper-source-${source.id}`
   const keyId = `paper-source-${source.id}-key`
+  const prerequisiteHint = PREREQUISITE_HINTS[source.id]?.(hasEmail)
 
   async function saveKey(event: FormEvent) {
     event.preventDefault()
@@ -61,10 +62,10 @@ export function PaperSourceRow({ source, hasEmail }: Props) {
       <div className="flex flex-col gap-1.5 pl-6.5">
         <p className="text-sm text-muted-foreground">{DESCRIPTIONS[source.id]}</p>
         {PRICE_WARNINGS[source.id] && <p className="text-xs text-muted-foreground">{PRICE_WARNINGS[source.id]}</p>}
-        {PREREQUISITE_HINTS[source.id]?.(hasEmail) && (
+        {prerequisiteHint && (
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Info aria-hidden className="size-3.5 shrink-0" />
-            {PREREQUISITE_HINTS[source.id]?.(hasEmail)}
+            {prerequisiteHint}
           </p>
         )}
 
