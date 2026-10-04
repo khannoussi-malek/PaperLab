@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core import discovery
-from app.core.candidates import Candidate, from_arxiv, from_core, from_crossref, from_s2, from_work, merge, normal_title
+from app.core.candidates import Candidate, from_s2, merge, normal_title
 from app.core.discovery import Providers, _add_unpaywall_links, download_pdf
 from app.core.references import _same_reference
 from app.models.references import ExternalRef
@@ -31,14 +31,15 @@ from app.models.workspace_search import (
     WorkspaceSearchHit,
     WorkspaceSearchRun,
 )
-from app.providers import arxiv, core_ac, crossref, openalex, semantic_scholar
+from app.providers import semantic_scholar
 
 if TYPE_CHECKING:
     from app.schemas.workspace_search import HitReviewUpdate
 
-# Provider request page sizes. No source publishes a "max" beyond what its own search_page tests exercise, so
-# these mirror discovery.py's PER_SOURCE ballpark, generous enough that most runs exhaust a source in one page.
-PAGE_SIZE_BY_SOURCE = {"openalex": 100, "crossref": 30, "arxiv": 20, "core": 20, "semantic_scholar": 75}
+from app.core.source_registry import MAPPERS as _MAPPERS
+from app.core.source_registry import PAGE_FUNCS as _PAGE_FUNCS
+from app.core.source_registry import PAGE_SIZE_BY_SOURCE
+from app.core.source_registry import STARTING_CURSOR_VALUE as _STARTING_CURSOR_VALUE
 
 # A source stuck on httpx errors (spec §16: unauthenticated S2 search 429s by default) retries this many times
 # before its cursor is marked exhausted instead of spinning forever (C2 part 1) — small enough that a real outage
@@ -53,24 +54,6 @@ PAGE_SIZE_BY_SOURCE = {"openalex": 100, "crossref": 30, "arxiv": 20, "core": 20,
 # 429, expected by default per spec §16) still gives up for good once every backoff step is spent.
 SOURCE_ERROR_CAP = 6
 _ERROR_BACKOFF_SECONDS = (10, 30, 90, 180, 300)
-
-_PAGE_FUNCS = {
-    "arxiv": arxiv.search_page,
-    "crossref": crossref.search_page,
-    "core": core_ac.search_page,
-    "semantic_scholar": semantic_scholar.search_page,
-    "openalex": openalex.search_page,
-}
-
-# from_crossref returns None for a non-paper record (D73's Crossref filter); the other four mappers always
-# return a Candidate. `is not None` below is a no-op for those four and the real filter for crossref.
-_MAPPERS = {
-    "arxiv": from_arxiv,
-    "crossref": from_crossref,
-    "core": from_core,
-    "semantic_scholar": from_s2,
-    "openalex": from_work,
-}
 
 
 @dataclass(frozen=True)
@@ -321,8 +304,6 @@ from app.models import Paper, workspace_papers
 # OpenAlex's `page` cursor is 1-based; every other source's is a 0-based offset (Task 2's convention — the
 # engine tests' own START_CURSOR already knows this). Seeding OpenAlex at 0 asked its fake for a negative offset
 # and got nothing back "by coincidence," hiding the bug (I4).
-_STARTING_CURSOR_VALUE = {"openalex": 1}
-
 
 async def start_run(
     session: AsyncSession, workspace_id, query_text: str, filters: dict, sources: list[str],
