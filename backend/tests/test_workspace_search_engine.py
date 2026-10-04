@@ -320,6 +320,25 @@ async def test_snowball_from_a_hit_seed_with_no_paper_ever_created(session, fake
     assert result.new_hits > 0
     assert result.skipped_seeds == []
     assert result.errors == {}
+    # The one piece of behavior unique to a hit-seeded hop (review finding): the stored rows must look like any
+    # other snowball hit — tagged snowball_backward/round 1 — and must NOT carry seed_paper_id, since there's no
+    # Paper row to attribute them to (the seed's own pre-existing hit, excluded below, is the only non-snowball
+    # row in this workspace).
+    new_rows = (
+        (
+            await session.execute(
+                select(WorkspaceSearchHit).where(
+                    WorkspaceSearchHit.workspace_id == workspace.id, WorkspaceSearchHit.id != hit.id
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(new_rows) == result.new_hits
+    assert all(row.source_method == "snowball_backward" for row in new_rows)  # backward=True, forward=False
+    assert all(row.snowball_round == 1 for row in new_rows)
+    assert all(row.seed_paper_id is None for row in new_rows)
 
 
 async def test_snowball_hit_seed_with_no_external_ref_id_is_skipped(session, fake_providers):
@@ -375,19 +394,50 @@ async def test_snowball_hit_seed_in_different_workspace_raises_not_found(session
 
 async def test_snowball_mixes_paper_and_hit_seeds_in_one_call(session, fake_providers):
     """One paper seed (already imported) and one hit seed (never imported) in the same call produce combined
-    results — the two seed kinds aren't separate code paths from the caller's point of view."""
+    results — the two seed kinds aren't separate code paths from the caller's point of view.
+
+    discovery_fake's own /references handler answers every key with the same PAPERS fixture, so a naive version
+    of this test (both seeds, assert new_hits > 0) would pass even if the seed_hit_ids loop silently did nothing:
+    the paper seed's backward hits alone are already > 0. A custom transport gives each seed's own key a
+    DISTINCT, otherwise-unused candidate instead (review finding), so the only way to reach new_hits == 2 (an
+    exact count, not just "> 0") is for both the seed_paper_ids loop AND the seed_hit_ids loop to each store
+    their own one new hit."""
     from app.models import Paper
+
+    free_title, free_doi, _ = discovery_fake.PAPERS[0]
+    landing_title, landing_doi, _ = discovery_fake.PAPERS[1]
+    paper_seed_ref_doi = "10.5555/paperlab-mixed-from-paper-seed"
+    hit_seed_ref_doi = "10.5555/paperlab-mixed-from-hit-seed"
+
+    def _s2_paper(paper_id: str, title: str, doi: str) -> dict:
+        return {
+            "paperId": paper_id, "title": title, "year": 2026, "venue": "Journal of Fixtures",
+            "authors": [{"name": "Ada Fixture"}], "externalIds": {"DOI": doi},
+            "openAccessPdf": {"url": ""}, "citationCount": 3,
+        }
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        if request.url.path.endswith("/references"):
+            if free_doi in url:  # the paper seed's own key
+                cited = _s2_paper("a" * 40, "Paper Seed's Own Backward Reference", paper_seed_ref_doi)
+                return httpx.Response(200, json={"offset": 0, "data": [{"citedPaper": cited}]})
+            if landing_doi in url:  # the hit seed's own key
+                cited = _s2_paper("b" * 40, "Hit Seed's Own Backward Reference", hit_seed_ref_doi)
+                return httpx.Response(200, json={"offset": 0, "data": [{"citedPaper": cited}]})
+        return discovery_fake._handle(request)
+
+    mixed_s2_client = semantic_scholar.new_client(api_key=None, transport=httpx.MockTransport(handle))
+    providers = replace(fake_providers, clients={**fake_providers.clients, "semantic_scholar": mixed_s2_client})
 
     workspace = Workspace(name=f"snowball-mixed-seeds-{uuid.uuid4().hex[:8]}")
     session.add(workspace)
     await session.flush()
-    free_title, free_doi, _ = discovery_fake.PAPERS[0]
     paper_seed = Paper(title=free_title, doi=free_doi, file_path="/nonexistent.pdf")
     session.add(paper_seed)
     await session.flush()
     await workspaces.add_paper(session, workspace.id, paper_seed.id)
 
-    landing_title, landing_doi, _ = discovery_fake.PAPERS[1]
     ref = ExternalRef(title=landing_title, doi=landing_doi)
     session.add(ref)
     await session.flush()
@@ -404,13 +454,27 @@ async def test_snowball_mixes_paper_and_hit_seeds_in_one_call(session, fake_prov
     session.add(hit_seed)
     await session.commit()
 
-    result = await snowball(
-        session, fake_providers, workspace.id, [paper_seed.id], [hit_seed.id], backward=True, forward=False
-    )
+    try:
+        result = await snowball(
+            session, providers, workspace.id, [paper_seed.id], [hit_seed.id], backward=True, forward=False
+        )
+    finally:
+        await mixed_s2_client.aclose()
 
-    assert result.new_hits > 0
+    assert result.new_hits == 2  # exactly one new hit per seed's own distinct reference — not just "> 0"
     assert result.skipped_seeds == []
     assert result.errors == {}
+
+    new_refs = (
+        await session.execute(
+            select(ExternalRef.doi).join(
+                WorkspaceSearchHit, WorkspaceSearchHit.external_ref_id == ExternalRef.id
+            ).where(WorkspaceSearchHit.workspace_id == workspace.id, WorkspaceSearchHit.id != hit_seed.id)
+        )
+    ).scalars().all()
+    # Both the paper seed's and the hit seed's own distinct reference made it into the pool — proof the
+    # seed_hit_ids loop actually ran and stored its own candidate, not just the seed_paper_ids loop's.
+    assert set(new_refs) == {paper_seed_ref_doi, hit_seed_ref_doi}
 
 
 async def test_search_batch_records_source_error_without_failing_run(session, fake_providers):
