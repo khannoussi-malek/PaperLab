@@ -148,7 +148,7 @@ async def test_snowball_backward_stores_the_seeds_references_as_hits(session, fa
     await session.flush()
     await workspaces.add_paper(session, workspace.id, seed.id)
 
-    result = await snowball(session, fake_providers, workspace.id, [seed.id], backward=True, forward=False)
+    result = await snowball(session, fake_providers, workspace.id, [seed.id], [], backward=True, forward=False)
 
     assert result.new_hits > 0
     assert result.skipped_seeds == []
@@ -178,7 +178,7 @@ async def test_snowball_keeps_one_directions_hits_when_the_other_direction_error
     await workspaces.add_paper(session, workspace.id, seed.id)
 
     try:
-        result = await snowball(session, providers, workspace.id, [seed.id], backward=True, forward=True)
+        result = await snowball(session, providers, workspace.id, [seed.id], [], backward=True, forward=True)
     finally:
         await mixed_s2_client.aclose()
 
@@ -228,7 +228,7 @@ async def test_snowball_skips_a_seed_semantic_scholar_does_not_know_but_still_pr
 
     try:
         result = await snowball(
-            session, providers, workspace.id, [unknown_seed.id, known_seed.id], backward=True, forward=False
+            session, providers, workspace.id, [unknown_seed.id, known_seed.id], [], backward=True, forward=False
         )
     finally:
         await unknown_s2_client.aclose()
@@ -276,7 +276,7 @@ async def test_snowball_does_not_duplicate_or_overwrite_an_existing_hit(session,
     session.add(existing_hit)
     await session.commit()
 
-    result = await snowball(session, fake_providers, workspace.id, [seed.id], backward=True, forward=False)
+    result = await snowball(session, fake_providers, workspace.id, [seed.id], [], backward=True, forward=False)
 
     hits = (
         (await session.execute(select(WorkspaceSearchHit).where(WorkspaceSearchHit.external_ref_id == ref.id)))
@@ -289,6 +289,128 @@ async def test_snowball_does_not_duplicate_or_overwrite_an_existing_hit(session,
     assert hits[0].priority == 2
     assert hits[0].source_method == "database_search"  # not relabeled snowball_backward
     assert result.new_hits == 2  # the other 2 PAPERS fixtures (landing, closed) are still new
+
+
+async def test_snowball_from_a_hit_seed_with_no_paper_ever_created(session, fake_providers):
+    """The feature's whole point: a hit never imported (no free PDF, so import_hits left it with no Paper row at
+    all) can still seed a snowball hop, because Semantic Scholar's citation lookup only ever needs doi/title
+    (discovery.s2_key), both already on the hit's own ExternalRef — no Paper required."""
+    workspace = Workspace(name=f"snowball-hit-seed-{uuid.uuid4().hex[:8]}")
+    session.add(workspace)
+    await session.flush()
+    free_title, free_doi, _ = discovery_fake.PAPERS[0]
+    ref = ExternalRef(title=free_title, doi=free_doi)
+    session.add(ref)
+    await session.flush()
+    run = WorkspaceSearchRun(
+        workspace_id=workspace.id, query_text="prior database search", sources_json=["arxiv"], status="exhausted",
+        started_at=datetime.now(timezone.utc), stats_json={},
+    )
+    session.add(run)
+    await session.flush()
+    hit = WorkspaceSearchHit(
+        workspace_id=workspace.id, run_id=run.id, external_ref_id=ref.id, source_method="database_search",
+        normalized_title=normal_title(free_title), first_seen_at=datetime.now(timezone.utc),
+    )
+    session.add(hit)
+    await session.commit()
+
+    result = await snowball(session, fake_providers, workspace.id, [], [hit.id], backward=True, forward=False)
+
+    assert result.new_hits > 0
+    assert result.skipped_seeds == []
+    assert result.errors == {}
+
+
+async def test_snowball_hit_seed_with_no_external_ref_id_is_skipped(session, fake_providers):
+    """A hit with no linked ExternalRef has no doi/title to hop from — lands in skipped_seeds, not an error."""
+    workspace = Workspace(name=f"snowball-hit-no-ref-{uuid.uuid4().hex[:8]}")
+    session.add(workspace)
+    await session.flush()
+    run = WorkspaceSearchRun(
+        workspace_id=workspace.id, query_text="prior database search", sources_json=["arxiv"], status="exhausted",
+        started_at=datetime.now(timezone.utc), stats_json={},
+    )
+    session.add(run)
+    await session.flush()
+    hit = WorkspaceSearchHit(
+        workspace_id=workspace.id, run_id=run.id, external_ref_id=None, source_method="database_search",
+        normalized_title="no ref hit", first_seen_at=datetime.now(timezone.utc),
+    )
+    session.add(hit)
+    await session.commit()
+
+    result = await snowball(session, fake_providers, workspace.id, [], [hit.id], backward=True, forward=False)
+
+    assert result.skipped_seeds == [hit.id]
+    assert result.new_hits == 0
+    assert result.errors == {}
+
+
+async def test_snowball_hit_seed_in_different_workspace_raises_not_found(session, fake_providers):
+    """Same ownership scoping as a paper seed (ownership check lives right next to it in `snowball`): a hit_id
+    from another workspace must 404, not silently hop from a seed this workspace doesn't own."""
+    from app.core.errors import NotFound
+
+    workspace_a = Workspace(name=f"snowball-hit-ws-a-{uuid.uuid4().hex[:8]}")
+    workspace_b = Workspace(name=f"snowball-hit-ws-b-{uuid.uuid4().hex[:8]}")
+    session.add_all([workspace_a, workspace_b])
+    await session.flush()
+    run = WorkspaceSearchRun(
+        workspace_id=workspace_a.id, query_text="prior database search", sources_json=["arxiv"], status="exhausted",
+        started_at=datetime.now(timezone.utc), stats_json={},
+    )
+    session.add(run)
+    await session.flush()
+    hit = WorkspaceSearchHit(
+        workspace_id=workspace_a.id, run_id=run.id, external_ref_id=None, source_method="database_search",
+        normalized_title="cross-workspace hit", first_seen_at=datetime.now(timezone.utc),
+    )
+    session.add(hit)
+    await session.commit()
+
+    with pytest.raises(NotFound):
+        await snowball(session, fake_providers, workspace_b.id, [], [hit.id], backward=True, forward=False)
+
+
+async def test_snowball_mixes_paper_and_hit_seeds_in_one_call(session, fake_providers):
+    """One paper seed (already imported) and one hit seed (never imported) in the same call produce combined
+    results — the two seed kinds aren't separate code paths from the caller's point of view."""
+    from app.models import Paper
+
+    workspace = Workspace(name=f"snowball-mixed-seeds-{uuid.uuid4().hex[:8]}")
+    session.add(workspace)
+    await session.flush()
+    free_title, free_doi, _ = discovery_fake.PAPERS[0]
+    paper_seed = Paper(title=free_title, doi=free_doi, file_path="/nonexistent.pdf")
+    session.add(paper_seed)
+    await session.flush()
+    await workspaces.add_paper(session, workspace.id, paper_seed.id)
+
+    landing_title, landing_doi, _ = discovery_fake.PAPERS[1]
+    ref = ExternalRef(title=landing_title, doi=landing_doi)
+    session.add(ref)
+    await session.flush()
+    run = WorkspaceSearchRun(
+        workspace_id=workspace.id, query_text="prior database search", sources_json=["arxiv"], status="exhausted",
+        started_at=datetime.now(timezone.utc), stats_json={},
+    )
+    session.add(run)
+    await session.flush()
+    hit_seed = WorkspaceSearchHit(
+        workspace_id=workspace.id, run_id=run.id, external_ref_id=ref.id, source_method="database_search",
+        normalized_title=normal_title(landing_title), first_seen_at=datetime.now(timezone.utc),
+    )
+    session.add(hit_seed)
+    await session.commit()
+
+    result = await snowball(
+        session, fake_providers, workspace.id, [paper_seed.id], [hit_seed.id], backward=True, forward=False
+    )
+
+    assert result.new_hits > 0
+    assert result.skipped_seeds == []
+    assert result.errors == {}
 
 
 async def test_search_batch_records_source_error_without_failing_run(session, fake_providers):

@@ -1087,6 +1087,20 @@ async def test_snowball_route_rejects_an_empty_seed_paper_ids_list(client):
     assert resp.status_code == 422
 
 
+async def test_snowball_route_rejects_when_both_seed_lists_are_empty(client):
+    """Neither seed_paper_ids nor seed_hit_ids has anything to hop from — the model_validator added for
+    seed_hit_ids rejects this combination with a 422, same convention as the paper-only case above."""
+    ws = await client.post("/api/workspaces", json={"name": f"Snowball both empty {uuid.uuid4().hex[:8]}"})
+    workspace_id = ws.json()["id"]
+
+    resp = await client.post(
+        f"/api/workspaces/{workspace_id}/search/snowball",
+        json={"seed_paper_ids": [], "seed_hit_ids": [], "backward": True, "forward": False},
+    )
+
+    assert resp.status_code == 422
+
+
 async def test_list_hits_surfaces_stage2_eligibility(session, client):
     """A hit whose paper has a stage-2 eligibility verdict for its own run shows stage2_status/
     stage2_exclude_reason in the GET /search/hits response; a hit with no verdict yet shows both as null."""
