@@ -91,6 +91,20 @@ async def test_start_run_rejects_an_empty_sources_list(client):
     assert resp.status_code == 422
 
 
+async def test_unpaywall_is_rejected_as_a_search_source_not_asked_at_all(client):
+    """Pins the exact C1 bug the registry closes structurally: "unpaywall" must stay a clean 422 at the schema
+    layer, never reach search_batch's _PAGE_FUNCS/PAGE_FUNCS and crash with a KeyError."""
+    ws = await client.post("/api/workspaces", json={"name": "Unpaywall not a source test"})
+    workspace_id = ws.json()["id"]
+
+    resp = await client.post(
+        f"/api/workspaces/{workspace_id}/search/runs",
+        json={"query": "bert", "filters": {}, "sources": ["unpaywall"], "query_overrides": {}},
+    )
+
+    assert resp.status_code == 422
+
+
 async def test_start_run_enqueues_the_worker_job(client, arq):
     ws = await client.post("/api/workspaces", json={"name": "Enqueue test"})
     workspace_id = ws.json()["id"]
