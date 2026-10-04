@@ -4,11 +4,11 @@ Probed on 2026-09-16 without an API key: recommendations take a `DOI:<doi>` or `
 404), an unknown paper answers 404 with a JSON body, and the shared unauthenticated pool answers 429 when busy.
 """
 
-import asyncio
 from urllib.parse import quote
 
 import httpx
 
+from app.providers.http import RetryOn429
 from app.providers.openalex import json_body
 
 BASE_URL = "https://api.semanticscholar.org"
@@ -21,28 +21,13 @@ PAGE = 100  # references/citations page size (M7.5 D79)
 RETRY_DELAYS = (2.0, 5.0)
 
 
-class _RetryOn429(httpx.AsyncBaseTransport):
-    def __init__(self, inner: httpx.AsyncBaseTransport):
-        self.inner = inner
-
-    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
-        for delay in RETRY_DELAYS:
-            response = await self.inner.handle_async_request(request)
-            if response.status_code != 429:
-                return response
-            await response.aclose()
-            await asyncio.sleep(delay)
-        return await self.inner.handle_async_request(request)
-
-    async def aclose(self) -> None:
-        await self.inner.aclose()
-
-
 def new_client(
     *, email: str | None = None, api_key: str | None = None, transport: httpx.AsyncBaseTransport | None = None
 ) -> httpx.AsyncClient:
     headers = {"x-api-key": api_key} if api_key else {}
-    retrying = _RetryOn429(transport or httpx.AsyncHTTPTransport())
+    # RETRY_DELAYS is read here, not captured as a default argument, so a test's monkeypatch of this module's own
+    # RETRY_DELAYS (done before calling new_client) still takes effect.
+    retrying = RetryOn429(transport or httpx.AsyncHTTPTransport(), RETRY_DELAYS)
     return httpx.AsyncClient(base_url=BASE_URL, headers=headers, timeout=TIMEOUT, transport=retrying)
 
 
