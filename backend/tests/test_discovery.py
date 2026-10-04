@@ -1,5 +1,4 @@
 import json
-from dataclasses import replace
 
 import httpx
 import pytest
@@ -35,6 +34,24 @@ def test_the_pdf_client_never_sends_the_owners_email():
 
     assert agent == "PaperLab"
     assert "@" not in agent
+
+
+def test_providers_client_returns_none_for_an_off_source():
+    providers = discovery.Providers(pdf=httpx.AsyncClient())
+    assert providers.client("openalex") is None
+
+
+def test_providers_client_returns_none_for_an_unknown_id_instead_of_raising():
+    providers = discovery.Providers(pdf=httpx.AsyncClient())
+    assert providers.client("not-a-real-source") is None
+
+
+async def test_providers_client_returns_the_configured_client():
+    http = httpx.AsyncClient()
+    providers = discovery.Providers(pdf=httpx.AsyncClient(), clients={"arxiv": http})
+    assert providers.client("arxiv") is http
+    await http.aclose()
+    await providers.pdf.aclose()
 
 
 # --- mark_in_library ---
@@ -97,7 +114,7 @@ async def test_an_unknown_doi_finds_nothing(session, discovery_fakes):
 
 
 async def test_an_arxiv_id_is_looked_up_on_semantic_scholar_even_with_openalex_off(session, discovery_fakes):
-    providers = replace(discovery_fakes.providers, openalex=None)
+    providers = discovery_fakes.providers.without("openalex")
     discovery_fakes.s2.reply("/graph/v1/paper/arXiv:1810.04805", 200, json=recorded_discovery("s2_paper_arxiv_bert"))
 
     [result] = (await discovery.search(session, providers, "arXiv:1810.04805v2")).results
@@ -114,7 +131,7 @@ async def test_an_arxiv_id_semantic_scholar_does_not_know_finds_nothing(session,
 
 
 async def test_a_query_no_source_that_is_on_can_answer_says_so(session, discovery_fakes):
-    providers = replace(discovery_fakes.providers, openalex=None)  # and Crossref, arXiv and CORE are off too
+    providers = discovery_fakes.providers.without("openalex")  # and Crossref, arXiv and CORE are off too
 
     for query in ("BERT", BERT_DOI, "W2963341956"):
         with pytest.raises(Conflict, match="No paper source that can look this up is on"):

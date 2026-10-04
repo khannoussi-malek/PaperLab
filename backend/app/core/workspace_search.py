@@ -410,14 +410,14 @@ async def _snowball_from_s2(
     hits (fix-round finding — /citations 429ing used to wipe out a successful /references call for the same
     seed, because the exception used to propagate out of this whole function to snowball()'s per-seed
     try/except)."""
-    key = await discovery.s2_key(providers.s2, paper)
+    key = await discovery.s2_key(providers.client("semantic_scholar"), paper)
     if key is None:
         return None
     out: dict[str, list[Candidate]] = {}
     errors: dict[str, str] = {}
     if backward:
         try:
-            cites = await semantic_scholar.references(providers.s2, key, SNOWBALL_REFS_CAP)
+            cites = await semantic_scholar.references(providers.client("semantic_scholar"), key, SNOWBALL_REFS_CAP)
         except httpx.HTTPError as exc:
             errors["semantic_scholar_backward"] = str(exc)
         else:
@@ -426,7 +426,7 @@ async def _snowball_from_s2(
             out["backward"] = [from_s2(p) for p in cites]
     if forward:
         try:
-            cited_by = await semantic_scholar.citations(providers.s2, key, SNOWBALL_CITING_CAP)
+            cited_by = await semantic_scholar.citations(providers.client("semantic_scholar"), key, SNOWBALL_CITING_CAP)
         except httpx.HTTPError as exc:
             errors["semantic_scholar_forward"] = str(exc)
         else:
@@ -452,7 +452,7 @@ async def snowball(
     Semantic Scholar entirely off (providers.s2 is None) raises Conflict once, up front, mirroring
     references.fetch()'s "nothing enabled" check — with no source configured at all there's no useful
     per-seed distinction to make (every seed would just land in skipped_seeds for the same reason)."""
-    if providers.s2 is None:
+    if providers.client("semantic_scholar") is None:
         raise Conflict("Semantic Scholar is off. Turn it on in Settings → Paper sources to snowball.")
 
     run = WorkspaceSearchRun(
@@ -748,7 +748,7 @@ async def import_hits(
             # try this once before giving up (I5). providers.unpaywall may be None (source off) — the helper
             # already treats that as a no-op, same as discovery.add()'s own callers do.
             [enriched] = await _add_unpaywall_links(
-                providers.unpaywall, [Candidate(title=ref.title, doi=ref.doi, arxiv_id=ref.arxiv_id)]
+                providers.client("unpaywall"), [Candidate(title=ref.title, doi=ref.doi, arxiv_id=ref.arxiv_id)]
             )
             if enriched.pdf_urls:
                 ref.pdf_urls = enriched.pdf_urls

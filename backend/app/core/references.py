@@ -84,20 +84,20 @@ class Listing:
 
 async def _from_semantic_scholar(providers: discovery.Providers, paper: Paper) -> dict[str, list[Candidate]] | None:
     """None when Semantic Scholar doesn't know the paper."""
-    key = await discovery.s2_key(providers.s2, paper)
+    key = await discovery.s2_key(providers.client("semantic_scholar"), paper)
     if key is None:
         return None
-    cites = await semantic_scholar.references(providers.s2, key, REFS_CAP)
+    cites = await semantic_scholar.references(providers.client("semantic_scholar"), key, REFS_CAP)
     if cites is None:
         return None
-    cited_by = await semantic_scholar.citations(providers.s2, key, CITING_CAP) or []
+    cited_by = await semantic_scholar.citations(providers.client("semantic_scholar"), key, CITING_CAP) or []
     return {"cites": [from_s2(p) for p in cites], "cited_by": [from_s2(p) for p in cited_by]}
 
 
 async def _from_openalex(providers: discovery.Providers, paper: Paper) -> dict[str, list[Candidate]]:
-    ids = await openalex.referenced_works(providers.openalex, paper.openalex_id)
-    cites = await openalex.works_by_ids(providers.openalex, ids[:REFS_CAP])
-    cited_by = await openalex.citing_works(providers.openalex, paper.openalex_id, CITING_CAP)
+    ids = await openalex.referenced_works(providers.client("openalex"), paper.openalex_id)
+    cites = await openalex.works_by_ids(providers.client("openalex"), ids[:REFS_CAP])
+    cited_by = await openalex.citing_works(providers.client("openalex"), paper.openalex_id, CITING_CAP)
     return {"cites": [from_work(w) for w in cites], "cited_by": [from_work(w) for w in cited_by]}
 
 
@@ -108,9 +108,9 @@ async def fetch(session: AsyncSession, providers: discovery.Providers, paper: Pa
     notices: list[str] = []
     unknown = False
     asks = []
-    if providers.openalex is not None and paper.openalex_id:
+    if providers.client("openalex") is not None and paper.openalex_id:
         asks.append(("openalex", _from_openalex))
-    if providers.s2 is not None:
+    if providers.client("semantic_scholar") is not None:
         asks.append(("semantic_scholar", _from_semantic_scholar))
     if not asks:
         raise Conflict(REFERENCES_OFF)

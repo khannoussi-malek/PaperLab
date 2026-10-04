@@ -12,7 +12,7 @@ import asyncio
 import logging
 import re
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -20,7 +20,7 @@ import httpx
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core import papers
+from app.core import papers, source_registry
 from app.core.candidates import (
     ARXIV_ID,
     Candidate,
@@ -68,23 +68,24 @@ _OPENALEX_QUERY = re.compile(r"^(?:https?://(?:api\.)?openalex\.org/(?:works/)?)
 
 @dataclass(frozen=True)
 class Providers:
-    """The clients one request uses. A source that is off has none; Unpaywall also needs the contact email."""
+    """The clients one request uses. A source that is off, or lacks a key it needs, has none in `clients`; a PDF
+    host (arxiv.org, a publisher, a repository, or a redirect target) never agreed to receive the owner's email,
+    so `pdf` is separate and always present."""
 
     pdf: httpx.AsyncClient
-    openalex: httpx.AsyncClient | None = None
-    crossref: httpx.AsyncClient | None = None
-    s2: httpx.AsyncClient | None = None
-    arxiv: httpx.AsyncClient | None = None
-    core: httpx.AsyncClient | None = None
-    unpaywall: httpx.AsyncClient | None = None
+    clients: dict[str, httpx.AsyncClient] = field(default_factory=dict)
 
     def client(self, source: str) -> httpx.AsyncClient | None:
-        return self.s2 if source == "semantic_scholar" else getattr(self, source)
+        return self.clients.get(source)
+
+    def without(self, *sources: str) -> "Providers":
+        """A copy with these sources' clients set to None — for tests simulating a source being off."""
+        return replace(self, clients={**self.clients, **dict.fromkeys(sources)})
 
     async def aclose(self) -> None:
-        for client in (self.pdf, self.openalex, self.crossref, self.s2, self.arxiv, self.core, self.unpaywall):
-            if client is not None:
-                await client.aclose()
+        await self.pdf.aclose()
+        for client in self.clients.values():
+            await client.aclose()
 
 
 @dataclass(frozen=True)
@@ -95,24 +96,18 @@ class SearchResult:
 
 def build_providers(sources: SourceSettings, transport: httpx.AsyncBaseTransport | None = None) -> Providers:
     on, email, keys = sources.enabled, sources.contact_email, sources.api_keys
+    clients = {
+        spec.id: spec.new_client(email=email, api_key=keys.get(spec.id), transport=transport)
+        for spec in source_registry.REGISTRY
+        if (sources.unpaywall_on if spec.id == "unpaywall" else on[spec.id])
+    }
     return Providers(
         # No email: unlike the sources, a PDF host (arxiv.org, a publisher, a repository, or a redirect target) never
         # agreed to receive the owner's email.
         pdf=httpx.AsyncClient(
             timeout=PDF_TIMEOUT, follow_redirects=True, headers={"User-Agent": "PaperLab"}, transport=transport
         ),
-        openalex=(
-            openalex.new_client(email=email, transport=transport, api_key=keys["openalex"]) if on["openalex"] else None
-        ),
-        crossref=crossref.new_client(email=email, transport=transport) if on["crossref"] else None,
-        s2=(
-            semantic_scholar.new_client(api_key=keys["semantic_scholar"], transport=transport)
-            if on["semantic_scholar"]
-            else None
-        ),
-        arxiv=arxiv.new_client(transport=transport) if on["arxiv"] else None,
-        core=core_ac.new_client(api_key=keys["core"], transport=transport) if on["core"] else None,
-        unpaywall=unpaywall.new_client(email=email, transport=transport) if sources.unpaywall_on else None,
+        clients=clients,
     )
 
 
@@ -223,9 +218,9 @@ async def search(session: AsyncSession, providers: Providers, query: str) -> Sea
     if not found:
         raise Conflict(" ".join(notices))
     candidates = merge(found, SEARCH_LIMIT)
-    if providers.s2 is not None:
-        candidates = await _add_s2_links(providers.s2, candidates)
-    candidates = await _add_unpaywall_links(providers.unpaywall, candidates)
+    if (s2 := providers.client("semantic_scholar")) is not None:
+        candidates = await _add_s2_links(s2, candidates)
+    candidates = await _add_unpaywall_links(providers.client("unpaywall"), candidates)
     return SearchResult(await mark_in_library(session, candidates), notices)
 
 
@@ -289,13 +284,13 @@ async def s2_key(http: httpx.AsyncClient, paper: Paper) -> str | None:
 async def similar(
     session: AsyncSession, providers: Providers, paper: Paper, limit: int = SIMILAR_LIMIT
 ) -> list[Candidate]:
-    if providers.s2 is None:
+    if (s2 := providers.client("semantic_scholar")) is None:
         raise Conflict(S2_OFF)
     doi = (paper.doi or "").lower()
     arxiv_id = arxiv_from_doi(doi)
     try:
-        key = await s2_key(providers.s2, paper)
-        found = await semantic_scholar.recommend(providers.s2, key, limit + 1) if key else None
+        key = await s2_key(s2, paper)
+        found = await semantic_scholar.recommend(s2, key, limit + 1) if key else None
     except httpx.HTTPError as exc:
         if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code in (401, 403):
             raise Conflict(KEY_REFUSED.format(name=NAMES["semantic_scholar"])) from exc
@@ -304,7 +299,7 @@ async def similar(
         raise Conflict(S2_UNKNOWN)
     own = _same_paper_keys(paper.title, doi, arxiv_id, paper.openalex_id)
     candidates = [c for c in map(from_s2, found) if not own & _same_paper_keys(c.title, c.doi, c.arxiv_id)]
-    return await mark_in_library(session, await _add_unpaywall_links(providers.unpaywall, candidates[:limit]))
+    return await mark_in_library(session, await _add_unpaywall_links(providers.client("unpaywall"), candidates[:limit]))
 
 
 async def _fetch_pdf(http: httpx.AsyncClient, url: str) -> bytes | None:
