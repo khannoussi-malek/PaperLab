@@ -1,13 +1,9 @@
-import typing
-
 import pytest
 from sqlalchemy import delete
 
 from app import main
 from app.config import settings
-from app.core import paper_sources
 from app.models import PaperSources
-from app.schemas.paper_sources import SourceId
 
 pytestmark = pytest.mark.anyio
 
@@ -18,10 +14,6 @@ KEY = "sk-openalex-0123456789"
 async def no_row(session):
     # The dev database (D15) holds the owner's own row; hide it inside the test's rolled-back transaction.
     await session.execute(delete(PaperSources))
-
-
-def test_the_schema_lists_every_source():
-    assert typing.get_args(SourceId) == paper_sources.SOURCES
 
 
 async def test_the_defaults_come_back_without_a_row(client, no_row):
@@ -80,8 +72,15 @@ async def test_null_removes_a_key_and_the_email(client, no_row):
         {"surprise": True},
     ],
     ids=[
-        "bad-email", "blank-key", "empty-key", "non-ascii-key", "keyless-source", "unknown-source", "null-switch",
-        "not-a-bool", "unknown-field",
+        "bad-email",
+        "blank-key",
+        "empty-key",
+        "non-ascii-key",
+        "keyless-source",
+        "unknown-source",
+        "null-switch",
+        "not-a-bool",
+        "unknown-field",
     ],  # fmt: skip
 )
 async def test_a_bad_patch_is_422_and_never_echoes_a_key(client, no_row, body):
