@@ -44,7 +44,7 @@ async def test_retry_on_429_does_not_retry_a_non_429_response():
 
 async def test_rate_limited_waits_at_least_the_minimum_interval_between_requests(monkeypatch):
     clock = iter([0.0, 0.1])  # first request at t=0, second at t=0.1 (too soon) — one monotonic() read per request
-    monkeypatch.setattr(time, "monotonic", lambda: next(clock))
+    monkeypatch.setattr(time, "monotonic", lambda: next(clock, 0.1))
     sleeps = []
 
     async def fake_sleep(seconds):
@@ -62,7 +62,7 @@ async def test_rate_limited_waits_at_least_the_minimum_interval_between_requests
 
 async def test_rate_limited_does_not_wait_when_enough_time_already_passed(monkeypatch):
     clock = iter([0.0, 1.0])
-    monkeypatch.setattr(time, "monotonic", lambda: next(clock))
+    monkeypatch.setattr(time, "monotonic", lambda: next(clock, 1.0))
     sleeps = []
 
     async def fake_sleep(seconds):
