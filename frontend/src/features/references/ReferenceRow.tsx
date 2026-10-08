@@ -17,7 +17,15 @@ export function ReferenceRow({ reference, direction, workspaceId, onUnqueued }: 
   const queueRef = useQueueReference(onUnqueued)
   const inLibraryId = importRef.data?.id ?? reference.paper_id
   const action = rowAction({ ...reference, paper_id: inLibraryId })
-  const link = pageLink({ ...reference, core_id: null })
+  // ReferenceOut still carries flat id fields (not yet migrated to external_ids); translate for pageLink.
+  const link = pageLink({
+    doi: reference.doi,
+    external_ids: {
+      ...(reference.arxiv_id ? { arxiv: reference.arxiv_id } : {}),
+      ...(reference.openalex_id ? { openalex: reference.openalex_id } : {}),
+      ...(reference.s2_id ? { semantic_scholar: reference.s2_id } : {}),
+    },
+  })
   const meta = [byline(reference), citationsLabel(reference.cited_by_count)].filter(Boolean).join(' · ')
   const badge = cocitationBadge(reference.cocitation, direction)
   const queued = queueRef.isPending ? queueRef.variables.queue : reference.queued_at !== null

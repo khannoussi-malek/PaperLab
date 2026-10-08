@@ -38,7 +38,7 @@ export function ManualAcquisitionTab({ workspaceId }: { workspaceId: string }) {
         const byline = [hit.authors?.join(', ') || null, hit.year, hit.venue].filter(Boolean).join(' · ')
         // Only doi ever reaches HitOut, so pageLink's other identifiers are always null here — still the same
         // "Open page" logic the References panel uses, just fed less to work with.
-        const openPage = pageLink({ doi: hit.doi ?? null, arxiv_id: null, openalex_id: null, s2_id: null, core_id: null })
+        const openPage = pageLink({ doi: hit.doi ?? null, external_ids: {} })
         return (
           <div key={hit.id} className="flex items-center justify-between gap-3 border-b pb-2 text-sm">
             <div className="min-w-0 flex-1">

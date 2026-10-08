@@ -62,7 +62,15 @@ function Details({ view }: { view: Matched }) {
 function MatchedBody({ view }: { view: Matched }) {
   const importRef = useImportReference()
   const { reference } = view
-  const link = pageLink({ ...reference, core_id: null })
+  // ReferenceOut still carries flat id fields (not yet migrated to external_ids); translate for pageLink.
+  const link = pageLink({
+    doi: reference.doi,
+    external_ids: {
+      ...(reference.arxiv_id ? { arxiv: reference.arxiv_id } : {}),
+      ...(reference.openalex_id ? { openalex: reference.openalex_id } : {}),
+      ...(reference.s2_id ? { semantic_scholar: reference.s2_id } : {}),
+    },
+  })
   const fileUrl = reference.paper_id ? api.paperFileUrl(reference.paper_id) : null
 
   // A keyboard user's focus was on Add to library; once that add turns this card into In library, that button
