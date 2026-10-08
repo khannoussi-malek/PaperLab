@@ -22,8 +22,8 @@ const ID_URL_BUILDERS: Record<string, (id: string) => string> = {
   semantic_scholar: (id) => `https://www.semanticscholar.org/paper/${id}`,
   core: (id) => `https://core.ac.uk/works/${id}`,
 }
-/** Preference order for pageLink/candidateKey/sameCandidate — doi is handled separately since it isn't a key in
- * external_ids. */
+/** Preference order for candidateKey/sameCandidate (pageLink has its own order, defined inline above) — doi is
+ * handled separately in each since it isn't a key in external_ids. */
 const ID_PRIORITY = ['openalex', 'semantic_scholar', 'arxiv', 'core']
 
 /** Where "Open page" goes: the DOI, else arXiv, OpenAlex, Semantic Scholar, then CORE; null with no identifier. */
