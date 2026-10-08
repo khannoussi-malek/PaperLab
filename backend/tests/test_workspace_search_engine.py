@@ -788,14 +788,16 @@ async def test_find_or_create_external_ref_prefers_the_doi_match_over_a_weaker_i
     ref_a must win deterministically, and the fix must still not crash or cross-write onto ref_b (this exact
     backfill mechanism corrupted a real row once — the ledger's "Closed Access Fixture" incident)."""
     ref_a = ExternalRef(title="Ref A", doi="10.5555/paperlab-i3-a")
-    ref_b = ExternalRef(title="Ref B", doi="10.5555/paperlab-i3-b", s2_id="i3-shared-s2-id")
+    ref_b = ExternalRef(
+        title="Ref B", doi="10.5555/paperlab-i3-b", external_ids={"semantic_scholar": "i3-shared-s2-id"}
+    )
     session.add_all([ref_a, ref_b])
     await session.commit()
 
     candidate = Candidate(
         title="New candidate",
         doi="10.5555/paperlab-i3-a",
-        s2_id="i3-shared-s2-id",
+        external_ids={"semantic_scholar": "i3-shared-s2-id"},
         pdf_urls=["https://example.test/candidate.pdf"],
     )
 
@@ -806,7 +808,9 @@ async def test_find_or_create_external_ref_prefers_the_doi_match_over_a_weaker_i
 
     # "i3-shared-s2-id" must still belong to exactly one row — never duplicated onto ref_a.
     holders = (
-        await session.execute(select(ExternalRef.id).where(ExternalRef.s2_id == "i3-shared-s2-id"))
+        await session.execute(
+            select(ExternalRef.id).where(ExternalRef.external_ids["semantic_scholar"].astext == "i3-shared-s2-id")
+        )
     ).scalars().all()
     assert holders == [ref_b.id]
 
