@@ -1,12 +1,22 @@
+import re
 import uuid
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, model_validator
 
 from app.core.candidates import MAX_AUTHORS, MAX_PDF_URLS, Candidate
 from app.schemas.paper_sources import SourceId
 
 AuthorName = Annotated[str, Field(min_length=1, max_length=300)]
+
+# One generic dict field instead of one field per source, so a new source needs one new entry here, not a new
+# CandidateIn/CandidateOut field. The openalex pattern caps the total length at 20 characters, as the old field did.
+SOURCE_ID_PATTERNS: dict[str, re.Pattern[str]] = {
+    "arxiv": re.compile(r"^(\d{4}\.\d{4,5}|[A-Za-z-]+(\.[A-Za-z]{2})?/\d{7})$"),
+    "openalex": re.compile(r"^W\d{1,19}$"),
+    "semantic_scholar": re.compile(r"^[0-9a-f]{40}$"),
+    "core": re.compile(r"^\d{1,20}$"),
+}
 
 
 class CandidateOut(BaseModel):
@@ -20,10 +30,7 @@ class CandidateOut(BaseModel):
     year: int | None
     venue: str | None
     doi: str | None
-    arxiv_id: str | None
-    openalex_id: str | None
-    s2_id: str | None
-    core_id: str | None
+    external_ids: dict[str, str]
     cited_by_count: int | None
     pdf_urls: list[str]
     sources: list[SourceId]
@@ -48,12 +55,17 @@ class CandidateIn(BaseModel):
     year: int | None = Field(default=None, ge=1000, le=2100)
     venue: str | None = Field(default=None, max_length=1000)
     doi: str | None = Field(default=None, pattern=r"^10\.\d{4,9}/\S+$", max_length=300)
-    arxiv_id: str | None = Field(default=None, pattern=r"^(\d{4}\.\d{4,5}|[A-Za-z-]+(\.[A-Za-z]{2})?/\d{7})$")
-    openalex_id: str | None = Field(default=None, pattern=r"^W\d+$", max_length=20)
-    s2_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
-    core_id: str | None = Field(default=None, pattern=r"^\d{1,20}$")
+    external_ids: dict[str, str] = Field(default_factory=dict)
     cited_by_count: int | None = Field(default=None, ge=0)
     pdf_urls: list[HttpUrl] = Field(default_factory=list, max_length=MAX_PDF_URLS)
+
+    @model_validator(mode="after")
+    def _external_ids_are_known_and_well_formed(self) -> "CandidateIn":
+        for source, value in self.external_ids.items():
+            pattern = SOURCE_ID_PATTERNS.get(source)
+            if pattern is None or not pattern.fullmatch(value):
+                raise ValueError(f"'{value}' is not a valid {source} id")
+        return self
 
     def to_candidate(self) -> Candidate:
         return Candidate(**self.model_dump(exclude={"pdf_urls"}), pdf_urls=[str(url) for url in self.pdf_urls])
