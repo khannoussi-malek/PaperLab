@@ -1644,14 +1644,10 @@ export interface components {
             venue?: string | null;
             /** Doi */
             doi?: string | null;
-            /** Arxiv Id */
-            arxiv_id?: string | null;
-            /** Openalex Id */
-            openalex_id?: string | null;
-            /** S2 Id */
-            s2_id?: string | null;
-            /** Core Id */
-            core_id?: string | null;
+            /** External Ids */
+            external_ids?: {
+                [key: string]: string;
+            };
             /** Cited By Count */
             cited_by_count?: number | null;
             /** Pdf Urls */
@@ -1673,14 +1669,10 @@ export interface components {
             venue: string | null;
             /** Doi */
             doi: string | null;
-            /** Arxiv Id */
-            arxiv_id: string | null;
-            /** Openalex Id */
-            openalex_id: string | null;
-            /** S2 Id */
-            s2_id: string | null;
-            /** Core Id */
-            core_id: string | null;
+            /** External Ids */
+            external_ids: {
+                [key: string]: string;
+            };
             /** Cited By Count */
             cited_by_count: number | null;
             /** Pdf Urls */

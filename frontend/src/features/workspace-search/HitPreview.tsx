@@ -37,7 +37,7 @@ export function HitPreview({ hit, onReview, onAddPdf, addPdfPending, onUpload, u
   const [copyError, setCopyError] = useState<string | null>(null)
   // Only doi ever reaches HitOut, so pageLink's other identifiers are always null here — same as
   // ManualAcquisitionTab, just fed less to work with.
-  const openPage = pageLink({ doi: hit.doi ?? null, arxiv_id: null, openalex_id: null, s2_id: null, core_id: null })
+  const openPage = pageLink({ doi: hit.doi ?? null, external_ids: {} })
   const needsAcquisition = hit.acquisition_status !== 'imported' && hit.acquisition_status !== 'manual'
 
   const markNotRelevant = () => {

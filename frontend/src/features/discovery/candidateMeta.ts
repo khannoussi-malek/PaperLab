@@ -14,28 +14,43 @@ export const SOURCE_NAMES: Record<PaperSourceId, string> = {
 export const citationsLabel = (count: number | null): string =>
   count === null ? '' : `${count.toLocaleString('en-US')} ${count === 1 ? 'citation' : 'citations'}`
 
+/** "Open page" link builders, most preferred first, per source id (Phase 0b) — a new source's link needs one
+ * entry here, not a new branch in pageLink itself. */
+const ID_URL_BUILDERS: Record<string, (id: string) => string> = {
+  arxiv: (id) => `https://arxiv.org/abs/${id}`,
+  openalex: (id) => `https://openalex.org/${id}`,
+  semantic_scholar: (id) => `https://www.semanticscholar.org/paper/${id}`,
+  core: (id) => `https://core.ac.uk/works/${id}`,
+}
+/** Preference order for pageLink/candidateKey/sameCandidate — doi is handled separately since it isn't a key in
+ * external_ids. */
+const ID_PRIORITY = ['openalex', 'semantic_scholar', 'arxiv', 'core']
+
 /** Where "Open page" goes: the DOI, else arXiv, OpenAlex, Semantic Scholar, then CORE; null with no identifier. */
-export function pageLink(
-  candidate: Pick<Candidate, 'doi' | 'arxiv_id' | 'openalex_id' | 's2_id' | 'core_id'>,
-): string | null {
+export function pageLink(candidate: Pick<Candidate, 'doi' | 'external_ids'>): string | null {
   if (candidate.doi) return `https://doi.org/${candidate.doi}`
-  if (candidate.arxiv_id) return `https://arxiv.org/abs/${candidate.arxiv_id}`
-  if (candidate.openalex_id) return `https://openalex.org/${candidate.openalex_id}`
-  if (candidate.s2_id) return `https://www.semanticscholar.org/paper/${candidate.s2_id}`
-  if (candidate.core_id) return `https://core.ac.uk/works/${candidate.core_id}`
+  for (const source of ['arxiv', 'openalex', 'semantic_scholar', 'core']) {
+    const id = candidate.external_ids[source]
+    if (id) return ID_URL_BUILDERS[source](id)
+  }
   return null
 }
 
 /** A React key that survives a refetch: the first identifier the candidate has, else its position. */
-export const candidateKey = (candidate: Candidate, index: number): string =>
-  candidate.openalex_id ?? candidate.s2_id ?? candidate.doi ?? candidate.core_id ?? `row-${index}`
+export function candidateKey(candidate: Candidate, index: number): string {
+  for (const source of ID_PRIORITY) {
+    const id = candidate.external_ids[source]
+    if (id) return id
+  }
+  return candidate.doi ?? `row-${index}`
+}
 
-/** Whether `candidate` is the paper `added` names: by openalex_id, else doi (any case), s2_id, arxiv_id or core_id. */
+/** Whether `candidate` is the paper `added` names: by openalex id, else doi (any case), semantic_scholar, arxiv or core. */
 export function sameCandidate(candidate: Candidate, added: Candidate): boolean {
-  if (added.openalex_id) return candidate.openalex_id === added.openalex_id
+  for (const source of ID_PRIORITY) {
+    const addedId = added.external_ids[source]
+    if (addedId) return candidate.external_ids[source] === addedId
+  }
   if (added.doi) return candidate.doi?.toLowerCase() === added.doi.toLowerCase()
-  if (added.s2_id) return candidate.s2_id === added.s2_id
-  if (added.arxiv_id) return candidate.arxiv_id === added.arxiv_id
-  if (added.core_id) return candidate.core_id === added.core_id
   return false
 }
