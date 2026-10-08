@@ -131,7 +131,7 @@ async def fetch(session: AsyncSession, providers: discovery.Providers, paper: Pa
     for direction, cap in (("cites", REFS_CAP), ("cited_by", CITING_CAP)):
         # A record with no id at all (Semantic Scholar lists some) can't be matched, imported or co-cited: not stored.
         identified = {
-            source: [c for c in lists[direction] if _same_reference(c.s2_id, c.openalex_id, c.doi, c.arxiv_id)]
+            source: [c for c in lists[direction] if _same_reference(c.external_ids, c.doi)]
             for source, lists in found.items()
         }
         merged = merge(identified, cap)
@@ -154,7 +154,7 @@ async def fetch(session: AsyncSession, providers: discovery.Providers, paper: Pa
 async def _upsert(session: AsyncSession, candidate: Candidate) -> uuid.UUID:
     """The stored reference for `candidate`, created or refreshed. Rows that turn out to be the same paper (one known
     by its Semantic Scholar id, another by its DOI) fold into the oldest, and an imported row always wins."""
-    matches = _same_reference(candidate.s2_id, candidate.openalex_id, candidate.doi, candidate.arxiv_id)
+    matches = _same_reference(candidate.external_ids, candidate.doi)
     existing = []
     if matches:  # or_() of nothing compiles to no WHERE, which would fold every stored reference into this one
         existing = list(
@@ -171,47 +171,48 @@ async def _upsert(session: AsyncSession, candidate: Candidate) -> uuid.UUID:
         "venue": candidate.venue,
         "cited_by_count": candidate.cited_by_count,
     }
-    ids = {"s2_id": candidate.s2_id, "openalex_id": candidate.openalex_id, "doi": candidate.doi,
-           "arxiv_id": candidate.arxiv_id}  # fmt: skip
     if not existing:
         return await session.scalar(
-            insert(ExternalRef).values(**fields, pdf_urls=candidate.pdf_urls, **ids).returning(ExternalRef.id)
+            insert(ExternalRef)
+            .values(**fields, pdf_urls=candidate.pdf_urls, doi=candidate.doi, external_ids=dict(candidate.external_ids))
+            .returning(ExternalRef.id)
         )
     keeper, *duplicates = existing
+    # Candidate's own value wins; a duplicate fills what's still missing; the keeper's pre-existing value fills
+    # what's still missing after that — the same three-tier precedence the old per-field `ids[name] = ids[name]
+    # or getattr(duplicate, name)` loop gave, now as dict merges since "key absent" replaces "value is None".
+    external_ids = dict(candidate.external_ids)
+    doi = candidate.doi
     for duplicate in duplicates:
-        for name in ids:
-            ids[name] = ids[name] or getattr(duplicate, name)
+        external_ids = {**duplicate.external_ids, **external_ids}
+        doi = doi or duplicate.doi
         await _repoint(session, duplicate.id, keeper.id)
         await session.delete(duplicate)
     await session.flush()
-    for name, value in ids.items():
-        ids[name] = value or getattr(keeper, name)
+    external_ids = {**keeper.external_ids, **external_ids}
+    doi = doi or keeper.doi
     if candidate.title != keeper.title:  # a new title needs a new vector
         fields |= {"title_embedding": None, "title_embed_model": None}
     # Preserve PDF URLs from candidate, duplicates, and keeper when folding
     fields["pdf_urls"] = ordered_pdf_urls(
-        ids["arxiv_id"],
+        external_ids.get("arxiv"),
         *candidate.pdf_urls,
         *(url for row in [*duplicates, keeper] for url in row.pdf_urls),
     )
     earliest = min((row.queued_at for row in duplicates if row.queued_at is not None), default=None)
     if earliest is not None:  # D120: a fold keeps the earliest To read; the keeper's own value is read in SQL
         fields = {**fields, "queued_at": func.least(ExternalRef.queued_at, earliest)}
-    await session.execute(update(ExternalRef).where(ExternalRef.id == keeper.id).values(**fields, **ids))
+    await session.execute(
+        update(ExternalRef).where(ExternalRef.id == keeper.id).values(**fields, doi=doi, external_ids=external_ids)
+    )
     return keeper.id
 
 
-def _same_reference(s2_id: str | None, openalex_id: str | None, doi: str | None, arxiv_id: str | None) -> list:
+def _same_reference(external_ids: dict[str, str], doi: str | None) -> list:
     """Conditions matching any stored reference that shares an id; [] when there is no id to match on."""
-    conditions = []
-    if s2_id:
-        conditions.append(ExternalRef.s2_id == s2_id)
-    if openalex_id:
-        conditions.append(ExternalRef.openalex_id == openalex_id)
+    conditions = [ExternalRef.external_ids[source].astext == value for source, value in external_ids.items()]
     if doi:
         conditions.append(func.lower(ExternalRef.doi) == doi.lower())
-    if arxiv_id:
-        conditions.append(ExternalRef.arxiv_id == arxiv_id)
     return conditions
 
 
@@ -525,11 +526,13 @@ async def import_reference(
     if ref.imported_as is not None:
         raise Conflict(discovery.ALREADY_IN_LIBRARY)
     candidate = Candidate(
-        title=ref.title, authors=ref.authors, year=ref.year, venue=ref.venue, doi=ref.doi, arxiv_id=ref.arxiv_id,
-        openalex_id=ref.openalex_id, s2_id=ref.s2_id, cited_by_count=ref.cited_by_count, pdf_urls=ref.pdf_urls,
+        title=ref.title, authors=ref.authors, year=ref.year, venue=ref.venue, doi=ref.doi,
+        external_ids=dict(ref.external_ids), cited_by_count=ref.cited_by_count, pdf_urls=ref.pdf_urls,
     )  # fmt: skip
     paper = await discovery.add(session, providers, candidate, pdf_dir)
-    same_paper = [ExternalRef.id == ref_id, *_same_reference(None, None, ref.doi, ref.arxiv_id)]
+    # Only doi/arxiv matter for this match, same as before — not every identifier, deliberately.
+    arxiv_only = {"arxiv": ref.external_ids["arxiv"]} if "arxiv" in ref.external_ids else {}
+    same_paper = [ExternalRef.id == ref_id, *_same_reference(arxiv_only, ref.doi)]
     # Dealt with: deleting the paper later won't put it back in To read (D164).
     await session.execute(update(ExternalRef).where(or_(*same_paper)).values(imported_as=paper.id, queued_at=None))
     await session.commit()

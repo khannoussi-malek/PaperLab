@@ -782,8 +782,9 @@ async def import_hits(
             # post-merge — never a discovery source. import_hits only ever looked at pdf_urls as already stored;
             # try this once before giving up (I5). providers.client("unpaywall") may be None (source off) — the
             # helper already treats that as a no-op, same as discovery.add()'s own callers do.
+            arxiv_only = {"arxiv": ref.external_ids["arxiv"]} if "arxiv" in ref.external_ids else {}
             [enriched] = await _add_unpaywall_links(
-                providers.client("unpaywall"), [Candidate(title=ref.title, doi=ref.doi, arxiv_id=ref.arxiv_id)]
+                providers.client("unpaywall"), [Candidate(title=ref.title, doi=ref.doi, external_ids=arxiv_only)]
             )
             if enriched.pdf_urls:
                 ref.pdf_urls = enriched.pdf_urls
@@ -796,7 +797,7 @@ async def import_hits(
             session, f"{hit.normalized_title}.pdf", data, settings.pdf_dir, prefill={"title": ref.title}
         )
         await workspaces.add_paper(session, workspace_id, paper.id)
-        same_paper = [ExternalRef.id == ref.id, *_same_reference(ref.s2_id, ref.openalex_id, ref.doi, ref.arxiv_id)]
+        same_paper = [ExternalRef.id == ref.id, *_same_reference(ref.external_ids, ref.doi)]
         await session.execute(update(ExternalRef).where(or_(*same_paper)).values(imported_as=paper.id))
         hit.acquisition_status = "imported"
         hit.paper_id = paper.id
@@ -840,7 +841,7 @@ async def upload_hit_pdf(
     )
     await workspaces.add_paper(session, workspace_id, paper.id)
     if ref is not None:
-        same_paper = [ExternalRef.id == ref.id, *_same_reference(ref.s2_id, ref.openalex_id, ref.doi, ref.arxiv_id)]
+        same_paper = [ExternalRef.id == ref.id, *_same_reference(ref.external_ids, ref.doi)]
         await session.execute(update(ExternalRef).where(or_(*same_paper)).values(imported_as=paper.id))
     hit.acquisition_status = "manual"
     hit.paper_id = paper.id

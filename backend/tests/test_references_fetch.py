@@ -106,7 +106,9 @@ async def test_openalex_is_merged_when_on_and_one_paper_is_one_row(library, disc
 
     assert sorted(await stored(library, reader.id)) == ["Only in S2", "Shared"]
     [row] = await library.scalars(select(ExternalRef).where(ExternalRef.title == "Shared"))
-    assert (row.openalex_id, row.s2_id is not None, row.doi) == ("W9000000751", True, "10.5555/shared")
+    assert (row.external_ids.get("openalex"), row.external_ids.get("semantic_scholar") is not None, row.doi) == (
+        "W9000000751", True, "10.5555/shared",
+    )  # fmt: skip
 
 
 async def test_openalex_is_not_asked_when_it_is_off(library, discovery_fakes):
@@ -172,7 +174,10 @@ async def test_a_second_fetch_replaces_the_links_without_duplicating_references(
 async def test_two_stored_rows_found_to_be_one_paper_fold_into_the_oldest(library, discovery_fakes):
     reader = await add_paper(library, doi=READER_DOI)
     other = await add_paper(library, doi="10.5555/m75-other")
-    by_s2 = ExternalRef(s2_id="a" * 40, title="Known by id", fetched_at=datetime.now(timezone.utc) - timedelta(days=1))
+    by_s2 = ExternalRef(
+        external_ids={"semantic_scholar": "a" * 40}, title="Known by id",
+        fetched_at=datetime.now(timezone.utc) - timedelta(days=1),
+    )  # fmt: skip
     by_doi = ExternalRef(doi="10.5555/fold", title="Known by DOI")
     library.add_all([by_s2, by_doi])
     await library.flush()
@@ -185,7 +190,7 @@ async def test_two_stored_rows_found_to_be_one_paper_fold_into_the_oldest(librar
     await references.fetch(library, discovery_fakes.providers, reader)
 
     [row] = await library.scalars(select(ExternalRef))
-    assert (row.id, row.s2_id, row.doi) == (by_s2.id, "a" * 40, "10.5555/fold")
+    assert (row.id, row.external_ids.get("semantic_scholar"), row.doi) == (by_s2.id, "a" * 40, "10.5555/fold")
     assert await stored(library, other.id) == ["One paper"]  # the other paper's link moved to the kept row
 
 
@@ -194,7 +199,7 @@ async def test_duplicate_fold_preserves_pdf_urls_from_all_rows(library, discover
     reader = await add_paper(library, doi=READER_DOI)
     # One row known by s2_id, holds a PDF URL
     by_s2 = ExternalRef(
-        s2_id="b" * 40,
+        external_ids={"semantic_scholar": "b" * 40},
         doi="10.5555/m75-pdf-keep",
         title="Known by id with URL",
         pdf_urls=["https://example.org/kept.pdf"],
@@ -214,7 +219,7 @@ async def test_duplicate_fold_preserves_pdf_urls_from_all_rows(library, discover
 
     # After folding, exactly one row remains, and it still has the PDF URL
     [row] = await library.scalars(select(ExternalRef))
-    assert row.s2_id == "b" * 40
+    assert row.external_ids.get("semantic_scholar") == "b" * 40
     assert row.doi == "10.5555/m75-pdf-keep"
     assert "https://example.org/kept.pdf" in row.pdf_urls
 
@@ -225,15 +230,14 @@ async def test_imported_row_wins_fold_and_keeps_imported_as(library, discovery_f
     imported_paper = await add_paper(library, doi="10.5555/m75-imported-winner")
     # Older row without import
     older_unimported = ExternalRef(
-        s2_id="c" * 40,
+        external_ids={"semantic_scholar": "c" * 40},
         doi="10.5555/m75-same-paper",
         title="Older, not imported",
         fetched_at=datetime.now(timezone.utc) - timedelta(days=2),
     )
     # Newer row with import (should win despite being newer due to import status)
     newer_imported = ExternalRef(
-        s2_id=None,
-        openalex_id="W9999999",
+        external_ids={"openalex": "W9999999"},
         doi="10.5555/m75-same-paper",
         title="Newer, imported",
         imported_as=imported_paper.id,
@@ -258,8 +262,8 @@ async def test_imported_row_wins_fold_and_keeps_imported_as(library, discovery_f
     [row] = await library.scalars(select(ExternalRef))
     assert row.id == newer_imported.id
     assert row.imported_as == imported_paper.id
-    assert row.s2_id == "c" * 40  # merged from older row
-    assert row.openalex_id == "W9999999"  # from newer row
+    assert row.external_ids.get("semantic_scholar") == "c" * 40  # merged from older row
+    assert row.external_ids.get("openalex") == "W9999999"  # from newer row
 
 
 async def test_recorded_references_with_no_id_are_skipped_and_every_other_one_is_stored(library, discovery_fakes):
@@ -285,7 +289,7 @@ async def test_recorded_references_with_no_id_are_skipped_and_every_other_one_is
 
 async def test_a_record_with_no_id_leaves_other_papers_references_alone(library, discovery_fakes):
     other = await add_paper(library, doi="10.5555/m75-other")
-    theirs = [ExternalRef(s2_id=c * 40, title=f"Their reference {c}") for c in "de"]
+    theirs = [ExternalRef(external_ids={"semantic_scholar": c * 40}, title=f"Their reference {c}") for c in "de"]
     library.add_all(theirs)
     await library.flush()
     await library.execute(
@@ -305,7 +309,10 @@ async def test_a_record_with_no_id_leaves_other_papers_references_alone(library,
 
 async def test_a_row_stored_earlier_in_the_same_fetch_can_fold_into_an_older_one(library, discovery_fakes):
     reader = await add_paper(library, doi=READER_DOI)
-    older = ExternalRef(s2_id="y" * 40, title="Beta", fetched_at=datetime.now(timezone.utc) - timedelta(days=1))
+    older = ExternalRef(
+        external_ids={"semantic_scholar": "y" * 40}, title="Beta",
+        fetched_at=datetime.now(timezone.utc) - timedelta(days=1),
+    )  # fmt: skip
     library.add(older)
     await library.flush()
     # The two Alpha records (same title and author) merge into one candidate, stored first as a new row with the DOI.
@@ -370,7 +377,7 @@ async def test_a_fold_keeps_the_earliest_to_read_whichever_row_survives(library,
     reader = await add_paper(library, doi=READER_DOI)
     imported = await add_paper(library, doi="10.5555/m21-imported") if case == "keeper_imported_unqueued" else None
     keeper = ExternalRef(
-        s2_id="e" * 40,
+        external_ids={"semantic_scholar": "e" * 40},
         title="Kept",
         fetched_at=datetime.now(timezone.utc) - timedelta(days=2),
         queued_at=LATER if case == "keeper_queued_later" else None,

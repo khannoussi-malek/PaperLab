@@ -120,10 +120,11 @@ async def test_importing_takes_every_row_for_that_paper_off_to_read(library, dis
     doi, arxiv_id = f"10.5555/m21-{uuid.uuid4().hex[:8]}", f"2609.{uuid.uuid4().hex[:5]}"
     at = datetime(2026, 9, 1, tzinfo=timezone.utc)
     imported = ExternalRef(
-        title="Queued", doi=doi, arxiv_id=arxiv_id, pdf_urls=["https://pdf.example/queued.pdf"], queued_at=at
+        title="Queued", doi=doi, external_ids={"arxiv": arxiv_id}, pdf_urls=["https://pdf.example/queued.pdf"],
+        queued_at=at,
     )
     same_doi = ExternalRef(title="Same DOI", doi=doi.upper(), queued_at=at)
-    same_arxiv = ExternalRef(title="Same arXiv ID", arxiv_id=arxiv_id, queued_at=at)
+    same_arxiv = ExternalRef(title="Same arXiv ID", external_ids={"arxiv": arxiv_id}, queued_at=at)
     other = ExternalRef(title="Another paper", doi="10.5555/m21-another", queued_at=at)
     library.add_all([imported, same_doi, same_arxiv, other])
     await library.flush()
