@@ -36,7 +36,9 @@ async def test_search_returns_candidates(client, discovery_api):
     assert response.json()["notices"] == []
     bert = response.json()["results"][0]
     assert bert["sources"] == ["openalex"]
-    assert (bert["openalex_id"], bert["arxiv_id"], bert["paper_id"]) == ("W2963341956", "1810.04805", None)
+    assert (bert["external_ids"]["openalex"], bert["external_ids"]["arxiv"], bert["paper_id"]) == (
+        "W2963341956", "1810.04805", None,
+    )  # fmt: skip
     assert bert["pdf_urls"][0] == "https://arxiv.org/pdf/1810.04805"
 
 
@@ -157,8 +159,8 @@ async def test_add_a_paper_already_in_the_library_is_409(client, discovery_api, 
         {"pdf_urls": ["file:///etc/passwd"]},
         {"pdf_urls": [f"https://pdf.example/{i}.pdf" for i in range(11)]},
         {"doi": "not-a-doi"},
-        {"arxiv_id": "1810.04805v2"},
-        {"s2_id": "short"},
+        {"external_ids": {"arxiv": "1810.04805v2"}},
+        {"external_ids": {"semantic_scholar": "short"}},
         {"title": ""},
     ],
     ids=["non-http-url", "eleven-urls", "bad-doi", "versioned-arxiv-id", "bad-s2-id", "empty-title"],
