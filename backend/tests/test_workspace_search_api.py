@@ -622,7 +622,10 @@ async def test_bulk_patch_hits_only_updates_hits_in_the_workspace(session, clien
     assert other.stage1_status is None
 
 
-async def _make_importable_hit(session, pdf_urls: list[str], workspace_id=None, imported_as=None):
+async def _make_importable_hit(
+    session, pdf_urls: list[str], workspace_id=None, imported_as=None,
+    source_method="database_search", seed_paper_id=None,
+):
     import uuid as uuid_mod
     from datetime import datetime, timezone
 
@@ -645,7 +648,8 @@ async def _make_importable_hit(session, pdf_urls: list[str], workspace_id=None, 
     session.add(run)
     await session.flush()
     hit = WorkspaceSearchHit(
-        workspace_id=workspace_id, run_id=run.id, external_ref_id=ref.id, source_method="database_search",
+        workspace_id=workspace_id, run_id=run.id, external_ref_id=ref.id, source_method=source_method,
+        seed_paper_id=seed_paper_id,
         normalized_title="importable paper", stage1_status="relevant", first_seen_at=datetime.now(timezone.utc),
     )
     session.add(hit)
@@ -819,6 +823,134 @@ async def test_import_hits_new_import_sets_external_ref_imported_as(session, cli
     ref = await session.get(ExternalRef, ref_id)
     await session.refresh(ref)
     assert ref.imported_as == hit.paper_id
+
+
+async def test_import_hits_from_snowball_backward_records_a_cites_edge_in_the_graph(
+    session, client, discovery_api
+):
+    """Owner's choice (2026-10-04): once a snowball-discovered hit is imported, the existing Graph picks up the
+    hop as a citation edge — no separate "snowball graph" view needed. Backward = the seed's own references, so
+    the seed cites the newly imported paper."""
+    from app.core import graph, workspaces
+    from app.models import Paper
+    from app.models.workspace_search import WorkspaceSearchHit
+
+    seed = Paper(title="Backward Seed", file_path="/nonexistent.pdf")
+    session.add(seed)
+    await session.flush()
+    discovery_api.pdf_host.reply("/backward.pdf", 200, content=b"%PDF-1.4 backward content")
+    hit_id = await _make_importable_hit(
+        session, pdf_urls=["https://pdf.example/backward.pdf"],
+        source_method="snowball_backward", seed_paper_id=seed.id,
+    )
+    hit = await session.get(WorkspaceSearchHit, hit_id)
+    await workspaces.add_paper(session, hit.workspace_id, seed.id)
+
+    resp = await client.post(f"/api/workspaces/{hit.workspace_id}/search/hits/import", json={"hit_ids": [str(hit_id)]})
+
+    assert resp.status_code == 200
+    assert resp.json() == {"imported": 1, "failed": 0}
+    await session.refresh(hit)
+
+    result = await graph.library_graph(session)
+    assert any(
+        link.kind == "cites" and link.source == seed.id and link.target == hit.paper_id for link in result.links
+    )
+
+
+async def test_import_hits_from_snowball_forward_records_a_cited_by_edge(session, client, discovery_api):
+    """Forward = works that cite the seed, so the newly imported paper cites the seed — recorded from the seed's
+    own side as `cited_by`, same convention references.py's own fetch uses."""
+    from sqlalchemy import select
+
+    from app.models import Paper
+    from app.models.references import paper_references
+    from app.models.workspace_search import WorkspaceSearchHit
+
+    seed = Paper(title="Forward Seed", file_path="/nonexistent.pdf")
+    session.add(seed)
+    await session.flush()
+    discovery_api.pdf_host.reply("/forward.pdf", 200, content=b"%PDF-1.4 forward content")
+    hit_id = await _make_importable_hit(
+        session, pdf_urls=["https://pdf.example/forward.pdf"],
+        source_method="snowball_forward", seed_paper_id=seed.id,
+    )
+    hit = await session.get(WorkspaceSearchHit, hit_id)
+
+    resp = await client.post(f"/api/workspaces/{hit.workspace_id}/search/hits/import", json={"hit_ids": [str(hit_id)]})
+
+    assert resp.status_code == 200
+    await session.refresh(hit)
+    row = (
+        await session.execute(
+            select(paper_references).where(
+                paper_references.c.paper_id == seed.id, paper_references.c.ref_id == hit.external_ref_id
+            )
+        )
+    ).first()
+    assert row is not None and row.direction == "cited_by"
+
+
+async def test_import_hits_already_imported_snowball_hit_still_records_the_citation_edge(
+    session, client, discovery_api
+):
+    """The already-in-library branch (ExternalRef.imported_as already set) must also record the edge — a seed's
+    reference can already be in the library from an earlier import."""
+    from sqlalchemy import select
+
+    from app.models import Paper
+    from app.models.references import paper_references
+    from app.models.workspace_search import WorkspaceSearchHit
+
+    seed = Paper(title="Already-imported-edge seed", file_path="/nonexistent.pdf")
+    existing = Paper(title="Already in the library", file_path="/nonexistent.pdf")
+    session.add_all([seed, existing])
+    await session.flush()
+    hit_id = await _make_importable_hit(
+        session, pdf_urls=["https://pdf.example/should-not-be-fetched.pdf"], imported_as=existing.id,
+        source_method="snowball_backward", seed_paper_id=seed.id,
+    )
+    hit = await session.get(WorkspaceSearchHit, hit_id)
+
+    resp = await client.post(f"/api/workspaces/{hit.workspace_id}/search/hits/import", json={"hit_ids": [str(hit_id)]})
+
+    assert resp.status_code == 200
+    assert resp.json() == {"imported": 1, "failed": 0}
+    row = (
+        await session.execute(
+            select(paper_references).where(
+                paper_references.c.paper_id == seed.id, paper_references.c.ref_id == hit.external_ref_id
+            )
+        )
+    ).first()
+    assert row is not None and row.direction == "cites"
+
+
+async def test_import_hits_non_snowball_hit_records_no_citation_edge(session, client, discovery_api):
+    """A database-search hit never gets a citation edge, even if it happens to carry a seed_paper_id — the check
+    is on source_method, not merely on seed_paper_id being set."""
+    from sqlalchemy import select
+
+    from app.models import Paper
+    from app.models.references import paper_references
+
+    seed = Paper(title="Not a snowball seed", file_path="/nonexistent.pdf")
+    session.add(seed)
+    await session.flush()
+    discovery_api.pdf_host.reply("/plain.pdf", 200, content=b"%PDF-1.4 plain content")
+    hit_id = await _make_importable_hit(
+        session, pdf_urls=["https://pdf.example/plain.pdf"],
+        source_method="database_search", seed_paper_id=seed.id,
+    )
+    from app.models.workspace_search import WorkspaceSearchHit
+
+    hit = await session.get(WorkspaceSearchHit, hit_id)
+
+    resp = await client.post(f"/api/workspaces/{hit.workspace_id}/search/hits/import", json={"hit_ids": [str(hit_id)]})
+
+    assert resp.status_code == 200
+    rows = (await session.execute(select(paper_references).where(paper_references.c.paper_id == seed.id))).all()
+    assert rows == []
 
 
 async def test_import_hits_skips_a_manually_acquired_hit(session, client, discovery_api):
