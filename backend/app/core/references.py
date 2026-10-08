@@ -339,14 +339,17 @@ async def embed_new(session: AsyncSession, embedder) -> None:
 
 # The one in-library match (D121, D165): the tab, the References page and the graph all compose this. A reference is a
 # library paper when it was imported as one, or a paper has its OpenAlex ID, its DOI in any case, or its arXiv DOI.
+# openalex_id/arxiv_id come from external_ids (Phase 0b), not the legacy columns of the same name — those stay
+# mapped on the model but are no longer written by anything, so a reference discovered after this migration would
+# never match here if this still joined on them directly.
 IN_LIBRARY = """in_library(ref_id, paper_id) AS (
   SELECT id, imported_as FROM external_refs WHERE imported_as IS NOT NULL
-  UNION SELECT r.id, p.id FROM external_refs r JOIN papers p ON p.openalex_id = r.openalex_id
+  UNION SELECT r.id, p.id FROM external_refs r JOIN papers p ON p.openalex_id = r.external_ids->>'openalex'
          WHERE r.imported_as IS NULL
   UNION SELECT r.id, p.id FROM external_refs r JOIN papers p ON lower(p.doi) = lower(r.doi)
          WHERE r.imported_as IS NULL
   UNION SELECT r.id, p.id FROM external_refs r
-           JOIN papers p ON lower(p.doi) = '10.48550/arxiv.' || lower(r.arxiv_id)
+           JOIN papers p ON lower(p.doi) = '10.48550/arxiv.' || lower(r.external_ids->>'arxiv')
          WHERE r.imported_as IS NULL
 )"""
 
@@ -362,7 +365,9 @@ RANK = "cocitation DESC, note_similarity DESC NULLS LAST, has_pdf DESC, cited_by
 _LISTING = text(
     f"""
     WITH {IN_LIBRARY}
-    SELECT r.id, r.title, r.authors, r.year, r.venue, r.doi, r.arxiv_id, r.openalex_id, r.s2_id, r.cited_by_count,
+    SELECT r.id, r.title, r.authors, r.year, r.venue, r.doi,
+           r.external_ids->>'arxiv' AS arxiv_id, r.external_ids->>'openalex' AS openalex_id,
+           r.external_ids->>'semantic_scholar' AS s2_id, r.cited_by_count,
            jsonb_array_length(r.pdf_urls) > 0 AS has_pdf,
            (SELECT count(DISTINCT other.paper_id) FROM paper_references other
              WHERE other.ref_id = r.id AND other.direction = pr.direction) AS cocitation,
@@ -445,7 +450,9 @@ _PAGE = text(
         FROM paper_references pr JOIN scope s ON s.paper_id = pr.paper_id
        GROUP BY pr.ref_id
     )
-    SELECT r.id, r.title, r.authors, r.year, r.venue, r.doi, r.arxiv_id, r.openalex_id, r.s2_id, r.cited_by_count,
+    SELECT r.id, r.title, r.authors, r.year, r.venue, r.doi,
+           r.external_ids->>'arxiv' AS arxiv_id, r.external_ids->>'openalex' AS openalex_id,
+           r.external_ids->>'semantic_scholar' AS s2_id, r.cited_by_count,
            jsonb_array_length(r.pdf_urls) > 0 AS has_pdf, coalesce(l.cocitation, 0) AS cocitation,
            coalesce(l.citing, 0) AS citing, {NOTE_SIMILARITY} AS note_similarity,
            NULL::uuid AS paper_id, coalesce(l.position, 0) AS position, r.queued_at

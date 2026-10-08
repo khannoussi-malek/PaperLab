@@ -102,8 +102,8 @@ async def test_each_kind_of_link(session):
     refs = [
         ExternalRef(title="imported", imported_as=imported.id),
         ExternalRef(title="matched by DOI", doi=f"10.5555/M6-CITED-{RUN}"),
-        ExternalRef(title="matched by OpenAlex", openalex_id=f"W-m6-{RUN}"),
-        ExternalRef(title="matched by arXiv", arxiv_id=f"{RUN}.00001"),
+        ExternalRef(title="matched by OpenAlex", external_ids={"openalex": f"W-m6-{RUN}"}),
+        ExternalRef(title="matched by arXiv", external_ids={"arxiv": f"{RUN}.00001"}),
         ExternalRef(title="me, as the citer lists me", doi=f"10.5555/m6-me-{RUN}"),
         ExternalRef(title="not in the library", doi=f"10.5555/m6-elsewhere-{RUN}"),
     ]
