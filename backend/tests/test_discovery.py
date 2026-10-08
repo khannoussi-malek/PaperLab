@@ -62,10 +62,12 @@ async def test_candidates_are_marked_by_openalex_id_doi_in_any_case_or_arxiv_doi
     by_doi = await add_paper(session, doi="10.5555/M19-Case")
     by_arxiv = await add_paper(session, doi="10.48550/arxiv.2411.18021")
     candidates = [
-        Candidate(title="a", openalex_id="W9000000001"),
+        Candidate(title="a", external_ids={"openalex": "W9000000001"}),
         Candidate(title="b", doi="10.5555/m19-case"),
-        Candidate(title="c", arxiv_id="2411.18021"),
-        Candidate(title="d", doi="10.5555/m19-elsewhere", openalex_id="W9000000002", arxiv_id="9999.00001"),
+        Candidate(title="c", external_ids={"arxiv": "2411.18021"}),
+        Candidate(
+            title="d", doi="10.5555/m19-elsewhere", external_ids={"openalex": "W9000000002", "arxiv": "9999.00001"}
+        ),
     ]
 
     marked = await discovery.mark_in_library(session, candidates)
@@ -88,7 +90,7 @@ async def test_a_title_search_asks_openalex_then_one_semantic_scholar_batch(sess
     assert openalex_request.url.params["per-page"] == "10"
     [batch] = discovery_fakes.s2.requests
     assert json.loads(batch.read()) == {"ids": [f"DOI:{BERT_DOI}"]}  # the second result has no DOI
-    assert results[0].arxiv_id == "1810.04805"
+    assert results[0].external_ids.get("arxiv") == "1810.04805"
     assert results[0].pdf_urls[0] == "https://arxiv.org/pdf/1810.04805"
     assert len(results) == 2
 
@@ -102,7 +104,7 @@ async def test_a_doi_is_looked_up_not_searched(session, discovery_fakes):
         await discovery.search(session, discovery_fakes.providers, f"https://doi.org/{BERT_DOI.upper()}")
     ).results
 
-    assert result.openalex_id == "W2963341956"
+    assert result.external_ids.get("openalex") == "W2963341956"
     assert [r.url.path for r in discovery_fakes.openalex.requests] == [f"/works/doi:{BERT_DOI}"]
 
 
@@ -119,7 +121,11 @@ async def test_an_arxiv_id_is_looked_up_on_semantic_scholar_even_with_openalex_o
 
     [result] = (await discovery.search(session, providers, "arXiv:1810.04805v2")).results
 
-    assert (result.doi, result.arxiv_id, result.s2_id) == (BERT_DOI, "1810.04805", BERT_S2_ID)
+    assert (result.doi, result.external_ids.get("arxiv"), result.external_ids.get("semantic_scholar")) == (
+        BERT_DOI,
+        "1810.04805",
+        BERT_S2_ID,
+    )
     assert result.pdf_urls[0] == "https://arxiv.org/pdf/1810.04805"
     assert discovery_fakes.openalex.requests == []
 
@@ -262,4 +268,4 @@ async def test_suggestions_already_in_the_library_are_marked(session, discovery_
 
     results = await discovery.similar(session, discovery_fakes.providers, paper)
 
-    assert {r.arxiv_id: r.paper_id for r in results}["2003.07000"] == owned.id
+    assert {r.external_ids.get("arxiv"): r.paper_id for r in results}["2003.07000"] == owned.id
