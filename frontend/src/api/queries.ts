@@ -12,6 +12,7 @@ import { sameCandidate } from '@/features/discovery/candidateMeta'
 import { ALREADY_SAVED } from '@/features/chat/noteBlocks'
 import {
   api,
+  type BulkHitReviewUpdate,
   type Candidate,
   type ChartSpec,
   type ChatScope,
@@ -575,6 +576,28 @@ export function usePatchSearchHit(workspaceId: string) {
       api.patchSearchHit(workspaceId, hitId, body),
     onSuccess: (hit) => {
       patchHitFields(client, workspaceId, hit.id, hit)
+      client.invalidateQueries({ queryKey: keys.rankedHits(workspaceId) })
+    },
+  })
+}
+
+/** Bulk stage-1 triage (HitTable's multi-select action bar): applies the same relevant/not_relevant/maybe decision
+ * to every selected hit in one request, instead of one at a time via the per-row kebab menu. Unlike
+ * useImportAllHits/useClearSearchHits, we already know every id this changed — we built `hit_ids` ourselves — so
+ * this patches them directly via `patchMatchingHits` (which already invalidates prismaRoot/readingQueueRoot, same
+ * as a single patch) instead of resetting/refetching the pool. Mirrors bulk_review_hits' own field semantics
+ * exactly: stage1_exclude_reason/priority are only touched when sent, never cleared by omission. */
+export function useBulkPatchSearchHits(workspaceId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (body: BulkHitReviewUpdate) => api.bulkPatchSearchHits(workspaceId, body),
+    onSuccess: (_result, body) => {
+      const ids = new Set(body.hit_ids)
+      patchMatchingHits(client, workspaceId, (hit) => ids.has(hit.id), {
+        stage1_status: body.stage1_status,
+        ...(body.stage1_exclude_reason ? { stage1_exclude_reason: body.stage1_exclude_reason } : {}),
+        ...(body.priority != null ? { priority: body.priority } : {}),
+      })
       client.invalidateQueries({ queryKey: keys.rankedHits(workspaceId) })
     },
   })

@@ -1,8 +1,10 @@
+import { CircleHelp, CircleX, ThumbsUp } from 'lucide-react'
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { Hit, HitReviewUpdate, SearchRun } from '@/api/client'
 import {
   totalRawFound,
+  useBulkPatchSearchHits,
   useClearSearchHits,
   useImportAllHits,
   useImportSearchHits,
@@ -17,15 +19,19 @@ import {
 import { PanelResizeHandle } from '@/components/PanelResizeHandle'
 import { loadPanelWidth, panelTrack, savePanelWidth, type PanelLimits } from '@/components/panelWidth'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { browserStorage } from '@/features/notes/highlightColors'
 import { cn } from '@/lib/utils'
 import { HitContextMenu, HitMenu } from './HitMenu'
-import { sourceLabel } from './hitReview'
+import { EXCLUDE_REASONS, matchesFilter, sourceLabel } from './hitReview'
 import { loadHitSort, saveHitSort, type HitSort } from './hitSort'
 import { HitPreview } from './HitPreview'
 import { RankSortBar } from './RankSortBar'
 import { snowballMessage } from './ScreeningTab'
+import { StatusDot } from './StatusDot'
 import { SuggestionChip } from './SuggestionChip'
+
+type ExcludeReason = (typeof EXCLUDE_REASONS)[number]
 
 const ROW_HEIGHT = 44
 /** `AppShell`'s `p-3` on the view pane, between the preview's right edge and the window's. */
@@ -41,14 +47,6 @@ const HIT_PREVIEW: PanelLimits = {
 
 function hasPdfOrAbstract(hit: Hit): boolean {
   return hit.acquisition_status === 'imported' || hit.acquisition_status === 'manual' || Boolean(hit.abstract)
-}
-
-/** Matches the filter box against title and abstract — whichever provider supplied it, a search term can turn up
- * in either, and a title-only match misses a hit whose title doesn't mention it but whose abstract does. */
-function matchesFilter(hit: Hit, filter: string): boolean {
-  const title = (hit.title ?? hit.normalized_title).toLowerCase()
-  const abstract = hit.abstract?.toLowerCase() ?? ''
-  return title.includes(filter) || abstract.includes(filter)
 }
 
 /** The hit pool for a search run: a virtualized list (rows can run into the thousands) beside a preview of the
@@ -77,12 +75,15 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
   const clearHits = useClearSearchHits(workspaceId)
   const reviewHit = usePatchSearchHit(workspaceId)
   const uploadHitPdf = useUploadHitPdf(workspaceId)
+  const bulkPatch = useBulkPatchSearchHits(workspaceId)
   const snowball = useSnowball(workspaceId)
   const newHits = useNewHitsAvailable(run)
   const refreshHits = useRefreshHits(workspaceId)
   const parentRef = useRef<HTMLDivElement>(null)
   const [previewId, setPreviewId] = useState<string | null>(null)
   const [filterText, setFilterText] = useState('')
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set())
+  const [bulkReason, setBulkReason] = useState<ExcludeReason | ''>('')
   const [previewWidth, setPreviewWidth] = useState(() => loadPanelWidth(HIT_PREVIEW, browserStorage()))
   useEffect(() => savePanelWidth(HIT_PREVIEW, browserStorage(), previewWidth), [previewWidth])
   const [sort, setSort] = useState<HitSort>(() => loadHitSort(browserStorage(), workspaceId))
@@ -126,6 +127,37 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
   // Seeds a snowball hop straight from this hit — no import required first (see HitMenu's onSnowball docstring).
   const onSnowball = (hitId: string) => snowball.mutate({ seed_hit_ids: [hitId], backward: true, forward: true })
 
+  // Multi-select stage-1 triage: the same decision HitMenu/HitPreview apply one hit at a time, applied to every
+  // checked row in a single request (useBulkPatchSearchHits). Selection is cleared optimistically on click, same
+  // as ScreeningTab's confirmExclude — a failed request shows via bulkPatch.isError and the rows stay re-selectable.
+  const allVisibleChecked = visibleRows.length > 0 && visibleRows.every((hit) => checkedIds.has(hit.id))
+  const someVisibleChecked = visibleRows.some((hit) => checkedIds.has(hit.id))
+
+  function toggleChecked(hitId: string) {
+    setCheckedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(hitId)) next.delete(hitId)
+      else next.add(hitId)
+      return next
+    })
+  }
+
+  function toggleCheckAllVisible() {
+    setCheckedIds(allVisibleChecked ? new Set() : new Set(visibleRows.map((hit) => hit.id)))
+  }
+
+  function bulkMark(stage1_status: 'relevant' | 'maybe') {
+    bulkPatch.mutate({ hit_ids: [...checkedIds], stage1_status })
+    setCheckedIds(new Set())
+  }
+
+  function bulkMarkNotRelevant() {
+    if (!bulkReason) return
+    bulkPatch.mutate({ hit_ids: [...checkedIds], stage1_status: 'not_relevant', stage1_exclude_reason: bulkReason })
+    setCheckedIds(new Set())
+    setBulkReason('')
+  }
+
   // ↑/↓ moves the selected row by one, wrapping never — the top/bottom just stop. Works from the filter box too
   // (arrow keys do nothing useful in a single-line input, so hijacking them here doesn't lose anything), and
   // scrolls the new selection into view since it can be off-screen in a long, virtualized list.
@@ -167,6 +199,13 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center justify-between gap-3 border-b px-3 py-2 text-sm">
+        <Checkbox
+          aria-label="Select all visible hits"
+          checked={someVisibleChecked && !allVisibleChecked ? 'indeterminate' : allVisibleChecked}
+          onCheckedChange={toggleCheckAllVisible}
+          disabled={visibleRows.length === 0}
+          className="shrink-0"
+        />
         <label className="flex flex-1 items-center gap-2">
           <span className="sr-only">Search hits</span>
           <input
@@ -200,7 +239,55 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
           Clear old results
         </Button>
       </div>
+      {checkedIds.size > 0 && (
+        <div className="flex flex-wrap items-center gap-2 border-b bg-muted/50 px-3 py-2 text-sm">
+          <span className="font-medium">{checkedIds.size} selected</span>
+          <Button type="button" size="sm" disabled={bulkPatch.isPending} onClick={() => bulkMark('relevant')}>
+            <ThumbsUp aria-hidden />
+            Mark relevant
+          </Button>
+          <Button type="button" size="sm" variant="outline" disabled={bulkPatch.isPending} onClick={() => bulkMark('maybe')}>
+            <CircleHelp aria-hidden />
+            Mark maybe
+          </Button>
+          <label htmlFor="bulk-exclude-reason" className="sr-only">
+            Exclusion reason for selected hits
+          </label>
+          <select
+            id="bulk-exclude-reason"
+            value={bulkReason}
+            onChange={(event) => setBulkReason(event.target.value as ExcludeReason | '')}
+            aria-label="Exclusion reason for selected hits"
+            className="h-8 rounded-lg border bg-background px-2 text-sm"
+          >
+            <option value="">Select a reason…</option>
+            {EXCLUDE_REASONS.map((r) => (
+              <option key={r} value={r}>
+                {r}
+              </option>
+            ))}
+          </select>
+          <Button
+            type="button"
+            size="sm"
+            variant="destructive"
+            disabled={!bulkReason || bulkPatch.isPending}
+            onClick={bulkMarkNotRelevant}
+          >
+            <CircleX aria-hidden />
+            Mark not relevant
+          </Button>
+          <Button type="button" size="sm" variant="ghost" className="text-muted-foreground" onClick={() => setCheckedIds(new Set())}>
+            Clear selection
+          </Button>
+        </div>
+      )}
       <RankSortBar sort={sort} onSortChange={setSort} ranked={ranked.data} />
+      {bulkPatch.isError && (
+        <p role="alert" className="px-3 py-1 text-xs text-destructive">
+          {bulkPatch.error.message}
+        </p>
+      )}
       {importHits.isError && (
         <p role="alert" className="px-3 py-1 text-xs text-destructive">
           {importHits.error.message}
@@ -275,6 +362,13 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
                     onClick={() => setPreviewId(hit.id)}
                     onFocus={() => setPreviewId(hit.id)}
                   >
+                    <Checkbox
+                      aria-label={`Select ${hit.title ?? hit.normalized_title}`}
+                      checked={checkedIds.has(hit.id)}
+                      onCheckedChange={() => toggleChecked(hit.id)}
+                      onClick={(event) => event.stopPropagation()}
+                      className="shrink-0"
+                    />
                     <span className="flex-1 truncate">
                       {hit.title ?? hit.normalized_title}
                       {byline && <span className="text-muted-foreground"> · {byline}</span>}
@@ -285,7 +379,10 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
                       </span>
                     )}
                     <SuggestionChip hit={hit} />
-                    <span className="text-xs text-muted-foreground">{hit.stage1_status ?? 'unreviewed'}</span>
+                    <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <StatusDot status={hit.stage1_status} />
+                      {hit.stage1_status ?? 'unreviewed'}
+                    </span>
                     <HitMenu hit={hit} onReview={onReview} onSnowball={onSnowball} />
                   </div>
                 </HitContextMenu>

@@ -2,6 +2,8 @@ import { useState } from 'react'
 import type { EligibilityUpdate, Hit } from '@/api/client'
 import { useSearchHits, useSetEligibility, useSnowball } from '@/api/queries'
 import { Button } from '@/components/ui/button'
+import { matchesFilter } from './hitReview'
+import { StatusDot } from './StatusDot'
 
 /** Stage-2 (full-text) eligibility screening for papers already acquired via a search run (imported
  * automatically, or uploaded manually via ManualAcquisitionTab), plus one-hop snowballing from any of them.
@@ -25,18 +27,40 @@ export function ScreeningTab({ workspaceId }: { workspaceId: string }) {
   const manual = useSearchHits(workspaceId, 'relevant', 'manual')
   const setEligibility = useSetEligibility(workspaceId)
   const snowball = useSnowball(workspaceId)
+  const [filterText, setFilterText] = useState('')
 
   const rows = [
     ...(imported.data?.pages.flatMap((page) => page.items) ?? []),
     ...(manual.data?.pages.flatMap((page) => page.items) ?? []),
   ]
+  // Client-side, over whatever's already loaded — same approach HitTable's own filter box uses, no new request.
+  const filter = filterText.trim().toLowerCase()
+  const visibleRows = filter ? rows.filter((hit) => matchesFilter(hit, filter)) : rows
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2 p-3">
-      {rows.length === 0 && (
+      {rows.length === 0 ? (
         <p className="text-sm text-muted-foreground">Nothing to screen yet — import or upload a paper first.</p>
+      ) : (
+        <label className="flex items-center gap-2">
+          <span className="sr-only">Search hits to screen</span>
+          <input
+            type="text"
+            value={filterText}
+            onChange={(event) => setFilterText(event.target.value)}
+            placeholder="Search by title or abstract…"
+            aria-label="Search hits to screen"
+            className="h-8 w-full max-w-xs rounded-lg border bg-background px-2 text-sm"
+          />
+          <span className="shrink-0 text-xs text-muted-foreground">
+            {filter ? `${visibleRows.length} of ${rows.length}` : `${rows.length} to screen`}
+          </span>
+        </label>
       )}
-      {rows.map((hit) => (
+      {filter && visibleRows.length === 0 && (
+        <p className="text-xs text-muted-foreground">No hits match “{filterText.trim()}”.</p>
+      )}
+      {visibleRows.map((hit) => (
         <ScreeningRow
           key={hit.id}
           hit={hit}
@@ -136,7 +160,10 @@ function ScreeningRow({
   return (
     <div className="flex items-center justify-between gap-3 border-b pb-2 text-sm">
       <span className="flex-1 truncate">{title}</span>
-      <span className="text-xs text-muted-foreground">{hit.stage2_status ?? 'not assessed'}</span>
+      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <StatusDot status={hit.stage2_status ?? null} />
+        {hit.stage2_status ?? 'not assessed'}
+      </span>
       {paperId ? (
         <>
           <Button

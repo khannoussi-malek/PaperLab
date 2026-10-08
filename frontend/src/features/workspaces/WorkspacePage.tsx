@@ -75,8 +75,11 @@ export function WorkspacePage({ workspaceId, tab, runId }: { workspaceId: string
             <TabsTrigger value="papers">Papers</TabsTrigger>
             <TabsTrigger value="notes">Notes</TabsTrigger>
             <TabsTrigger value="chat">Chat</TabsTrigger>
+            {/* Everything left of here is a library tool; everything right is one pipeline, in order:
+                find hits, get a PDF, screen it, export the funnel, read what made it through. */}
+            <div aria-hidden className="mx-1 w-px self-stretch bg-border" />
             <TabsTrigger value="search">Search</TabsTrigger>
-            <TabsTrigger value="acquisition">Manual acquisition</TabsTrigger>
+            <TabsTrigger value="acquisition">Acquisition</TabsTrigger>
             <TabsTrigger value="screening">Screening</TabsTrigger>
             <TabsTrigger value="prisma">PRISMA</TabsTrigger>
             <TabsTrigger value="reading">Reading</TabsTrigger>
