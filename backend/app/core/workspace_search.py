@@ -68,31 +68,25 @@ class BatchResult:
 
 async def _find_or_create_external_ref(session: AsyncSession, candidate: Candidate) -> ExternalRef:
     """The OR-match below can hit more than one row (e.g. one row shares the candidate's DOI, a different row
-    shares its s2_id) — `.first()` on an unordered result would pick one arbitrarily, and a wrong pick doesn't
-    just risk a bad backfill (handled below), it attaches this hit to the wrong paper outright (Important 2 from
-    the fix-round review: a candidate importable later would then download/attach the WRONG row's PDF). DOI is
-    the strongest identifier, so when the candidate has one, a DOI-matching row is ordered first — ties among
-    several DOI matches (shouldn't happen; doi has no DB-level uniqueness) or candidates with no DOI fall back to
-    whatever order the DB happens to return, same as before.
+    shares its semantic_scholar id) — `.first()` on an unordered result would pick one arbitrarily, and a wrong
+    pick doesn't just risk a bad backfill (handled below), it attaches this hit to the wrong paper outright
+    (Important 2 from the fix-round review: a candidate importable later would then download/attach the WRONG
+    row's PDF). DOI is the strongest identifier, so when the candidate has one, a DOI-matching row is ordered
+    first — ties among several DOI matches (shouldn't happen; doi has no DB-level uniqueness) or candidates with
+    no DOI fall back to whatever order the DB happens to return, same as before.
 
     Backfilling an identifier onto whichever row is picked is only safe when no OTHER row already owns the same
-    value: otherwise it either violates external_refs' UNIQUE(s2_id)/UNIQUE(openalex_id) constraint, or — for
-    doi/arxiv_id/core_id, which have no DB uniqueness — silently mis-attributes an identifier to the wrong paper
-    (spec review I3; this exact mechanism corrupted a real row once, see the ledger's "Closed Access Fixture"
-    incident). `pdf_urls` gets its own, stricter check: it only crosses over when the matched row's own DOI
-    doesn't contradict the candidate's, so a match found only via a weaker/shared identifier never hands one
-    paper's PDF link to a different paper."""
+    value: otherwise it either violates the partial unique indexes on external_ids->>'openalex'/'semantic_scholar'
+    (Phase 0b), or — for doi/arxiv/core, which have no DB uniqueness — silently mis-attributes an identifier to
+    the wrong paper (spec review I3; this exact mechanism corrupted a real row once, see the ledger's "Closed
+    Access Fixture" incident). `pdf_urls` gets its own, stricter check: it only crosses over when the matched
+    row's own DOI doesn't contradict the candidate's, so a match found only via a weaker/shared identifier never
+    hands one paper's PDF link to a different paper."""
     conditions = [
-        column == value
-        for value, column in (
-            (candidate.doi, ExternalRef.doi),
-            (candidate.arxiv_id, ExternalRef.arxiv_id),
-            (candidate.s2_id, ExternalRef.s2_id),
-            (candidate.openalex_id, ExternalRef.openalex_id),
-            (candidate.core_id, ExternalRef.core_id),
-        )
-        if value
+        ExternalRef.external_ids[source].astext == value for source, value in candidate.external_ids.items()
     ]
+    if candidate.doi:
+        conditions.append(ExternalRef.doi == candidate.doi)
     existing = None
     if conditions:
         query = select(ExternalRef).where(or_(*conditions))
@@ -102,16 +96,25 @@ async def _find_or_create_external_ref(session: AsyncSession, candidate: Candida
             query = query.order_by((ExternalRef.doi == candidate.doi).is_(True).desc())
         existing = (await session.execute(query)).scalars().first()
     if existing is not None:
-        for field_name in ("doi", "arxiv_id", "s2_id", "openalex_id", "core_id"):
-            value = getattr(candidate, field_name, None)
-            if not value or getattr(existing, field_name, None):
-                continue  # nothing to backfill, or `existing` already has its own value for this field
-            column = getattr(ExternalRef, field_name)
+        external_ids = dict(existing.external_ids)
+        for source, value in candidate.external_ids.items():
+            if source in external_ids:
+                continue  # `existing` already has its own value for this source
             owned_elsewhere = await session.scalar(
-                select(ExternalRef.id).where(column == value, ExternalRef.id != existing.id)
+                select(ExternalRef.id).where(
+                    ExternalRef.external_ids[source].astext == value, ExternalRef.id != existing.id
+                )
             )
             if owned_elsewhere is None:
-                setattr(existing, field_name, value)
+                external_ids[source] = value
+        if external_ids != existing.external_ids:
+            existing.external_ids = external_ids
+        if candidate.doi and not existing.doi:
+            owned_elsewhere = await session.scalar(
+                select(ExternalRef.id).where(ExternalRef.doi == candidate.doi, ExternalRef.id != existing.id)
+            )
+            if owned_elsewhere is None:
+                existing.doi = candidate.doi
         if candidate.pdf_urls and not existing.pdf_urls:
             doi_conflict = existing.doi and candidate.doi and existing.doi != candidate.doi
             if not doi_conflict:
@@ -129,10 +132,7 @@ async def _find_or_create_external_ref(session: AsyncSession, candidate: Candida
     ref = ExternalRef(
         title=candidate.title,
         doi=candidate.doi,
-        arxiv_id=candidate.arxiv_id,
-        s2_id=candidate.s2_id,
-        openalex_id=candidate.openalex_id,
-        core_id=candidate.core_id,
+        external_ids=dict(candidate.external_ids),
         authors=candidate.authors,
         year=candidate.year,
         venue=candidate.venue,
