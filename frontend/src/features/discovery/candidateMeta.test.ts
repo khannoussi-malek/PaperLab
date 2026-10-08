@@ -76,6 +76,17 @@ describe('sameCandidate', () => {
     expect(sameCandidate(candidate({ external_ids: { core: '43' } }), candidate({ external_ids: { core: '42' } }))).toBe(false)
   })
 
+  it('matches by doi even when added also carries a semantic_scholar id the other row lacks', () => {
+    // Pins doi ranking second (right after openalex), not last: a row that never got an S2 match must still
+    // dedup against one that did, as long as they share a doi — otherwise the UI shows a stale "Add" button.
+    expect(
+      sameCandidate(
+        candidate({ doi: '10.1/x' }),
+        candidate({ doi: '10.1/x', external_ids: { semantic_scholar: 'a'.repeat(40) } }),
+      ),
+    ).toBe(true)
+  })
+
   it('is false when the added candidate has no identifier to match on', () => {
     expect(sameCandidate(candidate({ external_ids: { openalex: 'W1' } }), candidate({}))).toBe(false)
   })
