@@ -22,7 +22,7 @@ async def test_the_first_url_whose_body_is_a_pdf_wins(session, discovery_fakes, 
     discovery_fakes.pdf_host.reply("/copy.pdf", 200, content=PDF)
     discovery_fakes.pdf_host.reply("/later.pdf", 200, content=PDF)
     found = candidate(
-        openalex_id="W9000000003",
+        external_ids={"openalex": "W9000000003"},
         doi="10.5555/m19-found",
         venue="Proceedings of Tests",
         cited_by_count=7,
@@ -47,7 +47,10 @@ async def test_a_paper_found_without_openalex_locks_its_doi_so_enrichment_trusts
         session, discovery_fakes.providers, candidate(doi="10.5555/m19-s2", pdf_urls=[f"{HOST}/copy.pdf"]), pdf_dir
     )
     by_arxiv = await discovery.add(
-        session, discovery_fakes.providers, candidate(arxiv_id="2003.07000", pdf_urls=[f"{HOST}/copy.pdf"]), pdf_dir
+        session,
+        discovery_fakes.providers,
+        candidate(external_ids={"arxiv": "2003.07000"}, pdf_urls=[f"{HOST}/copy.pdf"]),
+        pdf_dir,
     )
 
     assert (by_doi.doi, by_doi.openalex_id, by_doi.manual_fields) == ("10.5555/m19-s2", None, ["doi", "title"])

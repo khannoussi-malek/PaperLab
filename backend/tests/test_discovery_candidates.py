@@ -5,7 +5,6 @@ from app.core.candidates import (
     MAX_AUTHORS,
     MAX_PDF_URLS,
     Candidate,
-    from_arxiv,
     from_core,
     from_crossref,
     from_s2,
@@ -50,8 +49,8 @@ def test_a_published_paper_without_a_free_copy_in_openalex_has_no_pdf_urls():
 
     assert candidate.title.startswith("BERT")
     assert candidate.doi == "10.18653/v1/n19-1423"
-    assert candidate.openalex_id == "W2963341956"
-    assert candidate.arxiv_id is None
+    assert candidate.external_ids.get("openalex") == "W2963341956"
+    assert candidate.external_ids.get("arxiv") is None
     assert candidate.pdf_urls == []  # its OA landing page is not a PDF link (D68)
     assert candidate.authors[0] == "Jacob Devlin"
     assert candidate.year == 2019
@@ -60,7 +59,7 @@ def test_a_published_paper_without_a_free_copy_in_openalex_has_no_pdf_urls():
 def test_an_arxiv_preprint_takes_its_id_from_its_doi_and_lists_its_pdf_once():
     candidate = from_work(recorded_discovery("openalex_work_arxiv_preprint"))
 
-    assert candidate.arxiv_id == "2411.18021"
+    assert candidate.external_ids.get("arxiv") == "2411.18021"
     assert candidate.pdf_urls == ["https://arxiv.org/pdf/2411.18021"]
 
 
@@ -84,7 +83,7 @@ def test_an_arxiv_location_gives_a_published_paper_its_arxiv_pdf_first():
 
     candidate = from_work(work)
 
-    assert candidate.arxiv_id == "2003.07000"
+    assert candidate.external_ids.get("arxiv") == "2003.07000"
     assert candidate.pdf_urls == [
         "https://arxiv.org/pdf/2003.07000",
         "https://publisher.example/pub.pdf",
@@ -104,9 +103,9 @@ def test_semantic_scholar_papers_build_the_arxiv_pdf_even_when_their_pdf_link_is
 
     candidate = from_s2(arxiv_only)
 
-    assert candidate.arxiv_id == arxiv_only["externalIds"]["ArXiv"]
-    assert candidate.pdf_urls == [f"https://arxiv.org/pdf/{candidate.arxiv_id}"]
-    assert candidate.s2_id == arxiv_only["paperId"]
+    assert candidate.external_ids.get("arxiv") == arxiv_only["externalIds"]["ArXiv"]
+    assert candidate.pdf_urls == [f"https://arxiv.org/pdf/{candidate.external_ids['arxiv']}"]
+    assert candidate.external_ids.get("semantic_scholar") == arxiv_only["paperId"]
     assert candidate.authors == [a["name"] for a in arxiv_only["authors"]]
 
 
@@ -123,10 +122,14 @@ def test_semantic_scholar_adds_the_arxiv_copy_openalex_lacks():
 
     candidate = with_s2(bert, s2_bert)
 
-    assert candidate.arxiv_id == "1810.04805"
+    assert candidate.external_ids.get("arxiv") == "1810.04805"
     assert candidate.pdf_urls[0] == "https://arxiv.org/pdf/1810.04805"
-    assert candidate.s2_id == s2_bert["paperId"]
-    assert (candidate.title, candidate.doi, candidate.openalex_id) == (bert.title, bert.doi, bert.openalex_id)
+    assert candidate.external_ids.get("semantic_scholar") == s2_bert["paperId"]
+    assert (candidate.title, candidate.doi, candidate.external_ids.get("openalex")) == (
+        bert.title,
+        bert.doi,
+        bert.external_ids.get("openalex"),
+    )
 
 
 def test_no_semantic_scholar_record_leaves_the_candidate_as_it_is():
@@ -229,7 +232,9 @@ def test_merge_keeps_the_abstract_from_the_most_trusted_source_that_has_one():
     """merge()'s trust order follows paper_sources.SOURCES (D73): openalex, crossref, semantic_scholar, arxiv,
     core. An OpenAlex record with no abstract should still pick up S2's, not lose it because OpenAlex ran first."""
     openalex_candidate = Candidate(title="Shared Paper", doi="10.1/shared", sources=("openalex",), abstract=None)
-    s2_candidate = Candidate(title="Shared Paper", doi="10.1/shared", sources=("semantic_scholar",), abstract="The real abstract.")
+    s2_candidate = Candidate(
+        title="Shared Paper", doi="10.1/shared", sources=("semantic_scholar",), abstract="The real abstract."
+    )
 
     [merged] = merge({"openalex": [openalex_candidate], "semantic_scholar": [s2_candidate]}, limit=10)
 

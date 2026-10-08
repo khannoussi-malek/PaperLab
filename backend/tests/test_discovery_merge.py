@@ -22,7 +22,7 @@ CORE_WORK = {
 def test_an_arxiv_entry_is_a_candidate_with_its_pdf():
     candidate = from_arxiv(ARXIV_ENTRY)
 
-    assert (candidate.arxiv_id, candidate.year, candidate.sources) == ("1706.03762", 2017, ("arxiv",))
+    assert (candidate.external_ids.get("arxiv"), candidate.year, candidate.sources) == ("1706.03762", 2017, ("arxiv",))
     assert candidate.pdf_urls == ["https://arxiv.org/pdf/1706.03762"]
 
 
@@ -49,7 +49,7 @@ def test_a_crossref_item_without_optional_fields_still_maps():
 def test_a_core_work_lists_only_its_download_url_and_not_its_citation_count():
     candidate = from_core(CORE_WORK)
 
-    assert (candidate.title, candidate.core_id, candidate.sources) == (
+    assert (candidate.title, candidate.external_ids.get("core"), candidate.sources) == (
         "Attention Is All You Need",
         "42873602",
         ("core",),
@@ -79,10 +79,14 @@ def found(source: str, **fields) -> Candidate:
 def test_results_sharing_a_doi_arxiv_id_or_source_id_merge_whatever_their_titles():
     merged = merge(
         {
-            "openalex": [found("openalex", title="BERT", doi="10.5555/bert", openalex_id="W1")],
+            "openalex": [found("openalex", title="BERT", doi="10.5555/bert", external_ids={"openalex": "W1"})],
             "crossref": [found("crossref", title="BERT: Pre-training", doi="10.5555/BERT")],
-            "arxiv": [found("arxiv", title="Other title", arxiv_id="1810.04805", doi="10.48550/arxiv.1810.04805")],
-            "core": [found("core", title="Yet another", arxiv_id="1810.04805", core_id="7")],
+            "arxiv": [
+                found(
+                    "arxiv", title="Other title", external_ids={"arxiv": "1810.04805"}, doi="10.48550/arxiv.1810.04805"
+                )
+            ],
+            "core": [found("core", title="Yet another", external_ids={"arxiv": "1810.04805", "core": "7"})],
         },
         limit=20,
     )
@@ -125,14 +129,19 @@ def test_fields_come_from_the_most_trusted_source_that_has_them():
             "openalex": [found("openalex", title="BERT", doi="10.5555/bert", venue=None, cited_by_count=10)],
             "crossref": [found("crossref", title="BERT!", doi="10.5555/bert", venue="NAACL", cited_by_count=8811)],
             "arxiv": [
-                found("arxiv", doi="10.5555/bert", arxiv_id="1810.04805", pdf_urls=["https://arxiv.org/pdf/1810.04805"])
+                found("arxiv", doi="10.5555/bert", external_ids={"arxiv": "1810.04805"}, pdf_urls=["https://arxiv.org/pdf/1810.04805"])
             ],
-            "core": [found("core", doi="10.5555/bert", core_id="9", pdf_urls=["https://core.ac.uk/download/9.pdf"])],
+            "core": [found("core", doi="10.5555/bert", external_ids={"core": "9"}, pdf_urls=["https://core.ac.uk/download/9.pdf"])],
         },
         limit=20,
     )
 
-    assert (merged.title, merged.venue, merged.cited_by_count, merged.core_id) == ("BERT", "NAACL", 8811, "9")
+    assert (merged.title, merged.venue, merged.cited_by_count, merged.external_ids.get("core")) == (
+        "BERT",
+        "NAACL",
+        8811,
+        "9",
+    )
     assert merged.pdf_urls == ["https://arxiv.org/pdf/1810.04805", "https://core.ac.uk/download/9.pdf"]
 
 

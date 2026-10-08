@@ -32,17 +32,16 @@ _ARXIV_VERSION = re.compile(r"v\d+$")
 @dataclass(frozen=True)
 class Candidate:
     """A paper found outside the library. `sources` lists every source that found it, most trusted first; `paper_id`
-    is set when the library already holds it."""
+    is set when the library already holds it. `external_ids` (Phase 0b) is keyed by the registry's own source ids
+    ("openalex", "semantic_scholar", "arxiv", "core") — a source with no id for this paper has no key, never a
+    key mapped to None."""
 
     title: str
     authors: list[str] = field(default_factory=list)
     year: int | None = None
     venue: str | None = None
     doi: str | None = None
-    arxiv_id: str | None = None
-    openalex_id: str | None = None
-    s2_id: str | None = None
-    core_id: str | None = None
+    external_ids: dict[str, str] = field(default_factory=dict)
     cited_by_count: int | None = None
     abstract: str | None = None
     pdf_urls: list[str] = field(default_factory=list)
@@ -76,14 +75,14 @@ def from_work(work: dict[str, Any]) -> Candidate:
     arxiv_id = arxiv_from_doi(doi) or next(filter(None, map(_arxiv_from_url, location_urls)), None)
     source = (work.get("primary_location") or {}).get("source") or {}
     authors = [a["author"]["display_name"] for a in work.get("authorships") or [] if a.get("author")]
+    external_ids = {k: v for k, v in {"openalex": short_id(work.get("id")), "arxiv": arxiv_id}.items() if v}
     return Candidate(
         title=work.get("title") or "Untitled",
         authors=authors[:MAX_AUTHORS],
         year=work.get("publication_year"),
         venue=source.get("display_name"),
         doi=doi,
-        arxiv_id=arxiv_id,
-        openalex_id=short_id(work.get("id")),
+        external_ids=external_ids,
         cited_by_count=work.get("cited_by_count"),
         abstract=abstract_text(work.get("abstract_inverted_index")),
         pdf_urls=ordered_pdf_urls(arxiv_id, best.get("pdf_url"), *(place.get("pdf_url") for place in locations)),
@@ -95,14 +94,14 @@ def from_s2(paper: dict[str, Any]) -> Candidate:
     ids = paper.get("externalIds") or {}
     doi = (ids.get("DOI") or "").lower() or None
     arxiv_id = (ids.get("ArXiv") or "").lower() or arxiv_from_doi(doi)
+    external_ids = {k: v for k, v in {"semantic_scholar": paper.get("paperId"), "arxiv": arxiv_id}.items() if v}
     return Candidate(
         title=paper.get("title") or "Untitled",
         authors=[a["name"] for a in paper.get("authors") or [] if a.get("name")][:MAX_AUTHORS],
         year=paper.get("year"),
         venue=paper.get("venue") or None,
         doi=doi,
-        arxiv_id=arxiv_id,
-        s2_id=paper.get("paperId"),
+        external_ids=external_ids,
         cited_by_count=paper.get("citationCount"),
         abstract=paper.get("abstract") or None,
         pdf_urls=ordered_pdf_urls(arxiv_id, (paper.get("openAccessPdf") or {}).get("url")),
@@ -115,23 +114,26 @@ def with_s2(candidate: Candidate, paper: dict[str, Any] | None) -> Candidate:
     if paper is None:
         return candidate
     found = from_s2(paper)
-    arxiv_id = candidate.arxiv_id or found.arxiv_id
+    arxiv_id = candidate.external_ids.get("arxiv") or found.external_ids.get("arxiv")
+    external_ids = {**candidate.external_ids, "semantic_scholar": found.external_ids.get("semantic_scholar")}
+    if arxiv_id:
+        external_ids["arxiv"] = arxiv_id
     return replace(
         candidate,
-        arxiv_id=arxiv_id,
-        s2_id=found.s2_id,
+        external_ids={k: v for k, v in external_ids.items() if v},
         pdf_urls=ordered_pdf_urls(arxiv_id, *found.pdf_urls, *candidate.pdf_urls),
     )
 
 
 def from_arxiv(entry: Mapping[str, Any]) -> Candidate:
-    """An entry from providers/arxiv.py: its arXiv ID already has no version."""
+    """An entry from providers/arxiv.py: its arXiv ID already has no version, and is always present (a parsed
+    entry with no id is filtered out by providers/arxiv.py's own _entry())."""
     return Candidate(
         title=entry["title"] or "Untitled",
         authors=list(entry["authors"])[:MAX_AUTHORS],
         year=entry["year"],
         doi=entry["doi"],
-        arxiv_id=entry["arxiv_id"],
+        external_ids={"arxiv": entry["arxiv_id"]},
         abstract=entry.get("abstract"),
         pdf_urls=ordered_pdf_urls(entry["arxiv_id"]),
         sources=("arxiv",),
@@ -156,7 +158,7 @@ def from_crossref(item: Mapping[str, Any]) -> Candidate | None:
         year=year,
         venue=next(iter(item.get("container-title") or []), None),
         doi=doi,
-        arxiv_id=arxiv_id,
+        external_ids={"arxiv": arxiv_id} if arxiv_id else {},
         cited_by_count=item.get("is-referenced-by-count"),
         pdf_urls=ordered_pdf_urls(arxiv_id),
         sources=("crossref",),
@@ -168,13 +170,14 @@ def from_core(work: Mapping[str, Any]) -> Candidate:
     is left out, since CORE counted 0 for a paper cited 100,000 times."""
     doi = (work.get("doi") or "").lower() or None
     arxiv_id = _ARXIV_VERSION.sub("", (work.get("arxivId") or "").lower()) or arxiv_from_doi(doi)
+    core_id = str(work["id"]) if work.get("id") is not None else None
+    external_ids = {k: v for k, v in {"arxiv": arxiv_id, "core": core_id}.items() if v}
     return Candidate(
         title=" ".join((work.get("title") or "").split()) or "Untitled",
         authors=[a["name"] for a in work.get("authors") or [] if a.get("name")][:MAX_AUTHORS],
         year=work.get("yearPublished"),
         doi=doi,
-        arxiv_id=arxiv_id,
-        core_id=str(work["id"]) if work.get("id") is not None else None,
+        external_ids=external_ids,
         abstract=work.get("abstract") or None,
         pdf_urls=ordered_pdf_urls(arxiv_id, work.get("downloadUrl")),
         sources=("core",),
@@ -192,13 +195,13 @@ def surname(name: str) -> str:
 
 
 def _ids(candidate: Candidate) -> set[str]:
-    arxiv_id = candidate.arxiv_id or arxiv_from_doi(candidate.doi)
+    arxiv_id = candidate.external_ids.get("arxiv") or arxiv_from_doi(candidate.doi)
     keys = {
         "doi": None if arxiv_from_doi(candidate.doi) else candidate.doi,
         "arxiv": arxiv_id,
-        "openalex": candidate.openalex_id,
-        "s2": candidate.s2_id,
-        "core": candidate.core_id,
+        "openalex": candidate.external_ids.get("openalex"),
+        "s2": candidate.external_ids.get("semantic_scholar"),
+        "core": candidate.external_ids.get("core"),
     }
     return {f"{kind}:{value.lower()}" for kind, value in keys.items() if value}
 
@@ -219,7 +222,18 @@ def _combined(records: list[Candidate]) -> Candidate:
     def first(attribute: str):
         return next((value for r in records if (value := getattr(r, attribute))), None)
 
-    arxiv_id = first("arxiv_id")
+    def first_id(source: str) -> str | None:
+        return next((value for r in records if (value := r.external_ids.get(source))), None)
+
+    arxiv_id = first_id("arxiv")
+    external_ids = {
+        k: v
+        for k, v in {
+            "arxiv": arxiv_id, "openalex": first_id("openalex"), "semantic_scholar": first_id("semantic_scholar"),
+            "core": first_id("core"),
+        }.items()
+        if v
+    }
     counts = [r.cited_by_count for r in records if r.cited_by_count is not None]
     return Candidate(
         title=records[0].title,
@@ -227,10 +241,7 @@ def _combined(records: list[Candidate]) -> Candidate:
         year=first("year"),
         venue=first("venue"),
         doi=first("doi"),
-        arxiv_id=arxiv_id,
-        openalex_id=first("openalex_id"),
-        s2_id=first("s2_id"),
-        core_id=first("core_id"),
+        external_ids=external_ids,
         cited_by_count=max(counts, default=None),
         abstract=first("abstract"),
         pdf_urls=ordered_pdf_urls(arxiv_id, *(url for r in records for url in r.pdf_urls)),
