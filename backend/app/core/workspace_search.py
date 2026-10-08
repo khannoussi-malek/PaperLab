@@ -28,7 +28,7 @@ from app.core.source_registry import MAPPERS as _MAPPERS
 from app.core.source_registry import PAGE_FUNCS as _PAGE_FUNCS
 from app.core.source_registry import PAGE_SIZE_BY_SOURCE
 from app.core.source_registry import STARTING_CURSOR_VALUE as _STARTING_CURSOR_VALUE
-from app.models.references import ExternalRef
+from app.models.references import ExternalRef, paper_references
 from app.models.workspace_search import (
     SearchRunEligibility,
     WorkspaceSearchCursor,
@@ -724,6 +724,25 @@ class ImportResult:
     paper_ids: list[uuid.UUID] = field(default_factory=list)
 
 
+async def _record_snowball_citation(session: AsyncSession, hit: WorkspaceSearchHit, ref_id: uuid.UUID) -> None:
+    """Owner's choice (2026-10-04): once a snowball-discovered hit is acquired, record the hop as a citation edge
+    so the existing Graph (paper_references + external_refs, graph.py) shows it — no separate "snowball graph"
+    view needed. Only a paper-seeded hop (seed_paper_id set) has a library paper to link from; a hit-seeded hop's
+    seed_paper_id stays unset (snowball()'s own ponytail note) so there's nothing to record yet.
+
+    ponytail: this row can be overwritten by a later real references.fetch() for the seed paper (it deletes and
+    replaces every row for that paper_id+direction) — acceptable, since that fetch's own Semantic Scholar/OpenAlex
+    data would include the same edge anyway if it's still a real citation."""
+    if hit.source_method not in ("snowball_backward", "snowball_forward") or hit.seed_paper_id is None:
+        return
+    direction = "cites" if hit.source_method == "snowball_backward" else "cited_by"
+    await session.execute(
+        pg_insert(paper_references)
+        .values(paper_id=hit.seed_paper_id, ref_id=ref_id, direction=direction, position=0)
+        .on_conflict_do_nothing()
+    )
+
+
 async def import_hits(
     session: AsyncSession, providers: Providers, workspace_id: uuid.UUID, hit_ids: list[uuid.UUID] | None
 ) -> ImportResult:
@@ -755,6 +774,7 @@ async def import_hits(
             await workspaces.add_paper(session, workspace_id, ref.imported_as)
             hit.acquisition_status = "imported"
             hit.paper_id = ref.imported_as
+            await _record_snowball_citation(session, hit, ref.id)
             imported += 1
             continue
         if ref is not None and not ref.pdf_urls and ref.doi:
@@ -780,6 +800,7 @@ async def import_hits(
         await session.execute(update(ExternalRef).where(or_(*same_paper)).values(imported_as=paper.id))
         hit.acquisition_status = "imported"
         hit.paper_id = paper.id
+        await _record_snowball_citation(session, hit, ref.id)
         imported += 1
         paper_ids.append(paper.id)
 
@@ -809,6 +830,7 @@ async def upload_hit_pdf(
         await workspaces.add_paper(session, workspace_id, ref.imported_as)
         hit.acquisition_status = "manual"
         hit.paper_id = ref.imported_as
+        await _record_snowball_citation(session, hit, ref.id)
         await session.commit()
         return _hit_out_dict(hit, ref), False
 
@@ -822,5 +844,7 @@ async def upload_hit_pdf(
         await session.execute(update(ExternalRef).where(or_(*same_paper)).values(imported_as=paper.id))
     hit.acquisition_status = "manual"
     hit.paper_id = paper.id
+    if ref is not None:
+        await _record_snowball_citation(session, hit, ref.id)
     await session.commit()
     return _hit_out_dict(hit, ref), True
