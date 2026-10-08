@@ -117,9 +117,9 @@ async def matched_reference(session, identifier: str) -> tuple[Paper, Paper, Ext
     [paper] = await add_papers(session, "The reference itself", **paper_fields)
     ref_fields = {
         "imported_as": {"imported_as": paper.id},
-        "openalex_id": {"openalex_id": f"W21{tag}"},
+        "openalex_id": {"external_ids": {"openalex": f"W21{tag}"}},
         "doi_upper_cased": {"doi": f"10.5555/M21-{tag.upper()}"},
-        "arxiv_doi": {"arxiv_id": f"2609.{tag.upper()}"},
+        "arxiv_doi": {"external_ids": {"arxiv": f"2609.{tag.upper()}"}},
     }[identifier]
     ref = await add_ref(session, "R", queued_at=T0, **ref_fields)
     await link(session, ref, citing, other)
@@ -166,7 +166,9 @@ async def test_two_library_papers_matching_one_reference_show_as_the_lower_id(li
         library.add(paper)  # so a LIMIT 1 with no ORDER BY would most likely return it
         await library.flush()
     [citing] = await add_papers(library, "Citing")
-    ref = await add_ref(library, "One paper, two copies", openalex_id=f"W21{RUN}9", doi=f"10.5555/M21-{RUN.upper()}-9")
+    ref = await add_ref(
+        library, "One paper, two copies", external_ids={"openalex": f"W21{RUN}9"}, doi=f"10.5555/M21-{RUN.upper()}-9"
+    )
     await link(library, ref, citing)
 
     [row] = (await references.listing(library, citing.id, "cites")).rows
@@ -174,7 +176,24 @@ async def test_two_library_papers_matching_one_reference_show_as_the_lower_id(li
     assert row.paper_id == low
 
 
-# --- the References page (D166, D177) -----------------------------------------------------------------------------
+@pytest.mark.parametrize("caller", ["tab", "page"])
+async def test_each_listing_returns_a_references_identifiers_from_external_ids(library, caller):
+    """The tab and the page each alias arxiv_id/openalex_id/s2_id out of external_ids in their own SELECT; a wrong
+    key there reads as None, which the reader's citation match (by arxiv_id) would silently miss."""
+    ids = {"arxiv": f"2609.{RUN}", "openalex": f"W21{RUN}ids", "semantic_scholar": f"s2-{RUN}"}
+    [citing] = await add_papers(library, "Citing")
+    ref = await add_ref(library, "Not in the library", external_ids=ids, queued_at=T0)  # queued: on the page's To read
+    await link(library, ref, citing)
+
+    if caller == "tab":
+        [row] = (await references.listing(library, citing.id, "cites")).rows
+    else:
+        [row] = (await references.library_listing(library)).to_read
+
+    assert (row.arxiv_id, row.openalex_id, row.s2_id) == (ids["arxiv"], ids["openalex"], ids["semantic_scholar"])
+
+
+# --- the References page (D166, D177)-----------------------------------------------------------------------------
 
 
 async def test_cited_by_several_ranks_by_cocitation_and_leaves_a_singly_cited_reference_out(library):
