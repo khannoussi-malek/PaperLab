@@ -56,7 +56,7 @@ test('search, screen, import a hit, then upload its PDF manually', async ({ page
   ])
 
   // fixture 2 has no free PDF, so the import fails and it needs manual acquisition.
-  await page.getByRole('tab', { name: 'Manual acquisition' }).click()
+  await page.getByRole('tab', { name: 'Acquisition' }).click()
   // Every tab stays mounted (forceMount, for I1's runId preservation), inactive ones hidden by CSS alone, not
   // the `hidden` attribute — the Search tab's own preview panel can render an upload control with the same
   // label for this same hit, so scope to the one active tabpanel rather than a bare page-wide getByLabel.

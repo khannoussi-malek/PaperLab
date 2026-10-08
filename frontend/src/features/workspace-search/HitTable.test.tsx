@@ -39,6 +39,7 @@ beforeEach(() => {
   vi.spyOn(api, 'importSearchHits')
   vi.spyOn(api, 'uploadHitPdf')
   vi.spyOn(api, 'clearSearchHits')
+  vi.spyOn(api, 'bulkPatchSearchHits').mockResolvedValue({ updated: 1 })
   vi.spyOn(window, 'confirm').mockReturnValue(true)
   // jsdom never lays anything out, so offsetHeight is always 0 — the virtualizer treats a zero-height
   // scroll container as "nothing visible" and renders no rows at all. Give it a plausible viewport.
@@ -463,6 +464,66 @@ test('a failed review shows an error message', async () => {
   fireEvent.click(await screen.findByRole('menuitem', { name: 'Maybe' }))
 
   expect(await screen.findByRole('alert')).toHaveTextContent('Review failed')
+})
+
+test('checking a hit and clicking Mark relevant bulk-reviews just that one and clears the selection', async () => {
+  const hits: Hit[] = [
+    { ...baseHit, id: 'h1', title: 'First', normalized_title: 'first' },
+    { ...baseHit, id: 'h2', title: 'Second', normalized_title: 'second' },
+  ]
+  vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: hits, next_cursor: null })
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  await pool().findByText('First')
+
+  fireEvent.click(pool().getByRole('checkbox', { name: 'Select First' }))
+  expect(screen.getByText('1 selected')).toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Mark relevant' }))
+
+  await waitFor(() =>
+    expect(api.bulkPatchSearchHits).toHaveBeenCalledWith('ws-1', { hit_ids: ['h1'], stage1_status: 'relevant' }),
+  )
+  expect(screen.queryByText('1 selected')).not.toBeInTheDocument() // selection bar is gone once cleared
+})
+
+test('select-all-visible checks every row, and Mark not relevant is disabled until a reason is picked', async () => {
+  const hits: Hit[] = [
+    { ...baseHit, id: 'h1', title: 'First', normalized_title: 'first' },
+    { ...baseHit, id: 'h2', title: 'Second', normalized_title: 'second' },
+  ]
+  vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: hits, next_cursor: null })
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  await pool().findByText('First')
+
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Select all visible hits' }))
+  expect(screen.getByText('2 selected')).toBeInTheDocument()
+
+  const notRelevantButton = screen.getByRole('button', { name: /Mark not relevant/ })
+  expect(notRelevantButton).toBeDisabled()
+
+  fireEvent.change(screen.getByRole('combobox', { name: 'Exclusion reason for selected hits' }), {
+    target: { value: 'duplicate' },
+  })
+  fireEvent.click(notRelevantButton)
+
+  await waitFor(() =>
+    expect(api.bulkPatchSearchHits).toHaveBeenCalledWith('ws-1', {
+      hit_ids: ['h1', 'h2'],
+      stage1_status: 'not_relevant',
+      stage1_exclude_reason: 'duplicate',
+    }),
+  )
+})
+
+test('a failed bulk review shows an error message', async () => {
+  vi.spyOn(api, 'bulkPatchSearchHits').mockRejectedValue(new Error('Bulk review failed'))
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  await pool().findByText('a paper about llms')
+
+  fireEvent.click(pool().getByRole('checkbox', { name: 'Select a paper about llms' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Mark relevant' }))
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('Bulk review failed')
 })
 
 test('stays virtualized: a large hit pool renders far fewer rows than it has hits', async () => {

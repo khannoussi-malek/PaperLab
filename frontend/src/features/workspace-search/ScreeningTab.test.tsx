@@ -87,6 +87,26 @@ test('merges imported and manual hits from the two separate useSearchHits calls'
   expect(screen.getByText('Manually Uploaded Paper')).toBeInTheDocument()
 })
 
+test('the filter box narrows the already-loaded rows by title, client-side', () => {
+  mockHits({ imported: { items: [importedHit] }, manual: { items: [manualHit] } })
+  renderWithClient(<ScreeningTab workspaceId="ws-1" />)
+
+  fireEvent.change(screen.getByLabelText('Search hits to screen'), { target: { value: 'manually' } })
+
+  expect(screen.queryByText('Imported Paper')).not.toBeInTheDocument()
+  expect(screen.getByText('Manually Uploaded Paper')).toBeInTheDocument()
+  expect(screen.getByText('1 of 2')).toBeInTheDocument()
+})
+
+test('a filter matching nothing shows a "no match" message instead of an empty list', () => {
+  mockHits({ imported: { items: [importedHit] }, manual: { items: [] } })
+  renderWithClient(<ScreeningTab workspaceId="ws-1" />)
+
+  fireEvent.change(screen.getByLabelText('Search hits to screen'), { target: { value: 'nothing matches this' } })
+
+  expect(screen.getByText(/No hits match/)).toBeInTheDocument()
+})
+
 test("clicking Include calls setEligibility with status 'include' and the hit's own paper/run id", async () => {
   const setEligibilitySpy = vi.spyOn(api, 'setEligibility').mockResolvedValue({
     paper_id: 'p1', search_run_id: 'run-1', stage2_status: 'include', stage2_exclude_reason: null, assessed_at: '2026-09-24T00:00:00Z',

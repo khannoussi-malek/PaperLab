@@ -12,6 +12,7 @@ import {
   papersPollInterval,
   referencePagePollInterval,
   searchRunPollInterval,
+  useBulkPatchSearchHits,
   useSetEligibility,
   useSnowball,
 } from './queries'
@@ -19,6 +20,7 @@ import {
 const prismaRootKey = (workspaceId: string) => ['workspaces', workspaceId, 'search', 'prisma']
 const readingQueueRootKey = (workspaceId: string) => ['workspaces', workspaceId, 'search', 'reading-queue']
 const searchHitsAllKey = (workspaceId: string) => ['workspaces', workspaceId, 'search', 'hits', 'all', 'all']
+const rankedHitsKey = (workspaceId: string) => ['workspaces', workspaceId, 'search', 'ranked']
 
 function withQueryClient(client: QueryClient) {
   return ({ children }: { children: ReactNode }) => createElement(QueryClientProvider, { client }, children)
@@ -134,6 +136,41 @@ describe('prisma cache invalidation', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
 
     expect(resetSpy).not.toHaveBeenCalled()
+  })
+
+  // HitTable's multi-select action bar: bulk_review_hits' response carries no ids back, but the mutation already
+  // knows every hit_id it sent, so useBulkPatchSearchHits patches them directly instead of refetching the pool.
+  it('useBulkPatchSearchHits patches every selected hit in the cached pool, leaving others untouched', async () => {
+    vi.spyOn(api, 'bulkPatchSearchHits').mockResolvedValue({ updated: 2 })
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const row = (id: string) => ({ ...hit(null, 'run-1'), id, stage1_status: null })
+    client.setQueryData(searchHitsAllKey('ws-1'), {
+      pages: [{ items: [row('h1'), row('h2'), row('h3')], next_cursor: null }],
+      pageParams: [undefined],
+    })
+
+    const { result } = renderHook(() => useBulkPatchSearchHits('ws-1'), { wrapper: withQueryClient(client) })
+    result.current.mutate({ hit_ids: ['h1', 'h2'], stage1_status: 'relevant' })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    const items = (client.getQueryData(searchHitsAllKey('ws-1')) as { pages: { items: Hit[] }[] }).pages[0].items
+    expect(items.find((h) => h.id === 'h1')?.stage1_status).toBe('relevant')
+    expect(items.find((h) => h.id === 'h2')?.stage1_status).toBe('relevant')
+    expect(items.find((h) => h.id === 'h3')?.stage1_status).toBeNull()
+  })
+
+  it('useBulkPatchSearchHits invalidates ranked hits, the prisma root, and the reading queue root', async () => {
+    vi.spyOn(api, 'bulkPatchSearchHits').mockResolvedValue({ updated: 2 })
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
+
+    const { result } = renderHook(() => useBulkPatchSearchHits('ws-1'), { wrapper: withQueryClient(client) })
+    result.current.mutate({ hit_ids: ['h1'], stage1_status: 'relevant' })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: rankedHitsKey('ws-1') })
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: prismaRootKey('ws-1') })
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: readingQueueRootKey('ws-1') })
   })
 })
 
