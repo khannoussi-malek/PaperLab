@@ -1,5 +1,6 @@
 import pytest
 from conftest import recorded_discovery
+from pydantic import ValidationError
 
 from app.core.candidates import (
     MAX_AUTHORS,
@@ -194,6 +195,24 @@ def test_every_recorded_candidate_round_trips_through_the_api_schemas(candidate)
     dumped = CandidateOut.model_validate(candidate, from_attributes=True).model_dump(mode="json")
 
     CandidateIn.model_validate(dumped)
+
+
+@pytest.mark.parametrize(
+    "external_ids",
+    [{"arxiv": "not-an-arxiv-id"}, {"openalex": "12345"}, {"openalex": "W" + "1" * 20},
+     {"semantic_scholar": "too-short"}, {"core": "abc"}, {"dblp": "anything"}],
+    ids=["bad-arxiv", "bad-openalex", "openalex-over-20-chars", "bad-s2", "bad-core", "unknown-source"],
+)  # fmt: skip
+def test_candidate_in_rejects_a_malformed_or_unknown_external_id(external_ids):
+    with pytest.raises(ValidationError):
+        CandidateIn(title="T", external_ids=external_ids)
+
+
+def test_candidate_in_accepts_every_known_source_in_its_real_shape():
+    CandidateIn(
+        title="T",
+        external_ids={"arxiv": "1810.04805", "openalex": "W123", "semantic_scholar": "a" * 40, "core": "42"},
+    )
 
 
 def test_openalex_abstract_is_reconstructed_from_the_inverted_index():
