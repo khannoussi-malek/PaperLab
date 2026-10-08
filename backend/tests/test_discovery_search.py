@@ -74,7 +74,7 @@ async def test_a_title_search_asks_every_title_source_that_is_on_and_merges_what
     found = await discovery.search(session, fakes.turned_on("crossref", "arxiv", "core"), "BERT pre-training")
 
     assert found.notices == []
-    assert [(r.sources, r.doi, r.core_id) for r in found.results] == [
+    assert [(r.sources, r.doi, r.external_ids.get("core")) for r in found.results] == [
         (("openalex", "crossref", "arxiv", "core"), BERT_DOI, "1"),
         (("core",), None, "2"),  # same title, no shared author: another paper
     ]
@@ -106,7 +106,7 @@ async def test_an_arxiv_id_asks_semantic_scholar_and_arxiv(session, discovery_fa
 
     [result] = (await discovery.search(session, providers, "arXiv:1810.04805")).results
 
-    assert (result.sources, result.arxiv_id) == (("arxiv",), "1810.04805")
+    assert (result.sources, result.external_ids.get("arxiv")) == (("arxiv",), "1810.04805")
     assert params(discovery_fakes.arxiv.requests[0])["id_list"] == "1810.04805"
     assert discovery_fakes.crossref.requests == []
 
@@ -142,7 +142,7 @@ async def test_a_refused_semantic_scholar_key_is_a_notice_beside_arxiv_results(s
 
     found = await discovery.search(session, discovery_fakes.turned_on("arxiv"), "1810.04805")
 
-    assert [r.arxiv_id for r in found.results] == ["1810.04805"]
+    assert [r.external_ids.get("arxiv") for r in found.results] == ["1810.04805"]
     assert found.notices == ["Semantic Scholar refused its API key. Check it in Settings → Paper sources."]
 
 

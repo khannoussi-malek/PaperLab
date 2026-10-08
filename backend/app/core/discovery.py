@@ -132,13 +132,14 @@ def notice(source: str, error: httpx.HTTPError) -> str:
 
 def _library_dois(candidate: Candidate) -> list[str]:
     """Lowercase: a candidate the API received may spell its DOI in any case."""
-    arxiv_doi = candidate.arxiv_id and f"{ARXIV_DOI_PREFIX}{candidate.arxiv_id}"
+    arxiv_id = candidate.external_ids.get("arxiv")
+    arxiv_doi = arxiv_id and f"{ARXIV_DOI_PREFIX}{arxiv_id}"
     return [doi.lower() for doi in (candidate.doi, arxiv_doi) if doi]
 
 
 async def mark_in_library(session: AsyncSession, candidates: list[Candidate]) -> list[Candidate]:
     """New candidates with `paper_id` set where the library holds the paper, by OpenAlex ID or DOI (any case)."""
-    ids = [c.openalex_id for c in candidates if c.openalex_id]
+    ids = [oa for c in candidates if (oa := c.external_ids.get("openalex"))]
     dois = [doi for c in candidates for doi in _library_dois(c)]
     rows = (
         await session.execute(
@@ -149,7 +150,12 @@ async def mark_in_library(session: AsyncSession, candidates: list[Candidate]) ->
     ).all()
     library = {key: paper_id for paper_id, doi, openalex_id in rows for key in (doi, openalex_id) if key}
     return [
-        replace(c, paper_id=next((library[k] for k in (c.openalex_id, *_library_dois(c)) if k in library), None))
+        replace(
+            c,
+            paper_id=next(
+                (library[k] for k in (c.external_ids.get("openalex"), *_library_dois(c)) if k in library), None
+            ),
+        )
         for c in candidates
     ]
 
@@ -184,7 +190,7 @@ async def search(session: AsyncSession, providers: Providers, query: str) -> Sea
 async def _add_s2_links(http: httpx.AsyncClient, candidates: list[Candidate]) -> list[Candidate]:
     """One batch request for the candidates Semantic Scholar didn't find itself. Never fatal: when it fails, the
     results show as they are."""
-    with_doi = [c for c in candidates if c.doi and not c.s2_id]
+    with_doi = [c for c in candidates if c.doi and not c.external_ids.get("semantic_scholar")]
     try:
         found = await semantic_scholar.get_papers(http, [f"DOI:{c.doi}" for c in with_doi])
     except httpx.HTTPError as exc:
@@ -218,7 +224,7 @@ async def _add_unpaywall_links(http: httpx.AsyncClient | None, candidates: list[
         except httpx.HTTPError as exc:
             logger.info("no Unpaywall links for %s: %s", candidate.doi, exc)
             return candidate
-        return replace(candidate, pdf_urls=ordered_pdf_urls(candidate.arxiv_id, *urls))
+        return replace(candidate, pdf_urls=ordered_pdf_urls(candidate.external_ids.get("arxiv"), *urls))
 
     return list(await asyncio.gather(*map(with_links, candidates)))
 
@@ -257,7 +263,9 @@ async def similar(
     if found is None:
         raise Conflict(S2_UNKNOWN)
     own = _same_paper_keys(paper.title, doi, arxiv_id, paper.openalex_id)
-    candidates = [c for c in map(from_s2, found) if not own & _same_paper_keys(c.title, c.doi, c.arxiv_id)]
+    candidates = [
+        c for c in map(from_s2, found) if not own & _same_paper_keys(c.title, c.doi, c.external_ids.get("arxiv"))
+    ]
     return await mark_in_library(session, await _add_unpaywall_links(providers.client("unpaywall"), candidates[:limit]))
 
 
@@ -294,6 +302,7 @@ def _prefill(candidate: Candidate) -> dict[str, Any]:
     ingest's PDF-font heuristic and enrichment's metadata are both worse than the title the source already gave us,
     so it must survive both (M7.5)."""
     doi = next(iter(_library_dois(candidate)), None)
+    openalex_id = candidate.external_ids.get("openalex")
     fields = {
         "title": candidate.title,
         "authors": candidate.authors,
@@ -301,9 +310,9 @@ def _prefill(candidate: Candidate) -> dict[str, Any]:
         "venue": candidate.venue,
         "cited_by_count": candidate.cited_by_count,
         "doi": doi,
-        "openalex_id": candidate.openalex_id,
+        "openalex_id": openalex_id,
     }
-    locked = ["doi", "title"] if doi and not candidate.openalex_id else ["title"]
+    locked = ["doi", "title"] if doi and not openalex_id else ["title"]
     return fields | {"manual_fields": locked}
 
 
