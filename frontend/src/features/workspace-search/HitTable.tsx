@@ -196,6 +196,27 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
     }
   }, [sort, virtualItems, hasNextPage, isFetchingNextPage, fetchNextPage, visibleRows.length, newHits, refreshHits])
 
+  // Collapses every mutation's own isError/isSuccess into the single line actually shown (see the render site
+  // below for why) — errors first, bulk/global actions before single-row ones, success notices last.
+  const statusMessage: { tone: 'error' | 'status'; text: string } | null =
+    (bulkPatch.isError && { tone: 'error' as const, text: bulkPatch.error.message }) ||
+    (importHits.isError && { tone: 'error' as const, text: importHits.error.message }) ||
+    (importAllHits.isError && { tone: 'error' as const, text: importAllHits.error.message }) ||
+    (clearHits.isError && { tone: 'error' as const, text: clearHits.error.message }) ||
+    (reviewHit.isError && { tone: 'error' as const, text: reviewHit.error.message }) ||
+    (uploadHitPdf.isError && { tone: 'error' as const, text: uploadHitPdf.error.message }) ||
+    (snowball.isError && { tone: 'error' as const, text: snowball.error.message }) ||
+    // A "failed" import is a resolved response (see useImportSearchHits), not a rejected mutation — no free
+    // copy was found automatically, which isn't an error so much as a cue to use the manual options already
+    // in the preview panel.
+    (importHits.isSuccess &&
+      importHits.data.failed > 0 && {
+        tone: 'status' as const,
+        text: 'No PDF found automatically for that paper — try the options below, or upload one.',
+      }) ||
+    (snowball.isSuccess && { tone: 'status' as const, text: snowballMessage(snowball.data) }) ||
+    null
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center justify-between gap-3 border-b px-3 py-2 text-sm">
@@ -283,52 +304,16 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
         </div>
       )}
       <RankSortBar sort={sort} onSortChange={setSort} ranked={ranked.data} />
-      {bulkPatch.isError && (
-        <p role="alert" className="px-3 py-1 text-xs text-destructive">
-          {bulkPatch.error.message}
-        </p>
-      )}
-      {importHits.isError && (
-        <p role="alert" className="px-3 py-1 text-xs text-destructive">
-          {importHits.error.message}
-        </p>
-      )}
-      {importAllHits.isError && (
-        <p role="alert" className="px-3 py-1 text-xs text-destructive">
-          {importAllHits.error.message}
-        </p>
-      )}
-      {clearHits.isError && (
-        <p role="alert" className="px-3 py-1 text-xs text-destructive">
-          {clearHits.error.message}
-        </p>
-      )}
-      {/* A "failed" import is a resolved response (see useImportSearchHits), not a rejected mutation — no free
-          copy was found automatically, which isn't an error so much as a cue to use the manual options already
-          in the preview panel. */}
-      {importHits.isSuccess && importHits.data.failed > 0 && (
-        <p role="status" className="px-3 py-1 text-xs text-muted-foreground">
-          No PDF found automatically for that paper — try the options below, or upload one.
-        </p>
-      )}
-      {reviewHit.isError && (
-        <p role="alert" className="px-3 py-1 text-xs text-destructive">
-          {reviewHit.error.message}
-        </p>
-      )}
-      {uploadHitPdf.isError && (
-        <p role="alert" className="px-3 py-1 text-xs text-destructive">
-          {uploadHitPdf.error.message}
-        </p>
-      )}
-      {snowball.isError && (
-        <p role="alert" className="px-3 py-1 text-xs text-destructive">
-          {snowball.error.message}
-        </p>
-      )}
-      {snowball.isSuccess && (
-        <p role="status" className="px-3 py-1 text-xs text-muted-foreground">
-          {snowballMessage(snowball.data)}
+      {/* One status line, not one paragraph per mutation: with up to 9 independent isError/isSuccess flags on
+          this screen, stacking them all would both clutter the view and shift the hit list up/down as each one
+          comes and goes. Errors win over a success notice, in roughly the order a reader would expect to act on
+          them (bulk/global actions before single-row ones). */}
+      {statusMessage && (
+        <p
+          role={statusMessage.tone === 'error' ? 'alert' : 'status'}
+          className={cn('px-3 py-1 text-xs', statusMessage.tone === 'error' ? 'text-destructive' : 'text-muted-foreground')}
+        >
+          {statusMessage.text}
         </p>
       )}
       {filter && visibleRows.length === 0 && (
