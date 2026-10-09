@@ -606,6 +606,23 @@ test('a failed import shows an error message', async () => {
   expect(await screen.findByRole('alert')).toHaveTextContent('Import failed')
 })
 
+test('two simultaneous mutation errors collapse to one status line, not a stack of two', async () => {
+  vi.spyOn(api, 'bulkPatchSearchHits').mockRejectedValue(new Error('Bulk review failed'))
+  vi.spyOn(api, 'importSearchHits').mockRejectedValue(new Error('Import failed'))
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  const panel = await preview()
+  await panel.findByText('a paper about llms')
+  fireEvent.click(panel.getByRole('button', { name: 'Add PDF' }))
+  await screen.findByRole('alert') // the import error lands first
+
+  fireEvent.click(pool().getByRole('checkbox', { name: 'Select a paper about llms' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Mark relevant' }))
+
+  // bulkPatch outranks importHits in the priority order, and only one alert is ever on screen at once.
+  await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Bulk review failed'))
+  expect(screen.getAllByRole('alert')).toHaveLength(1)
+})
+
 test('"Import all with PDF in this filter" imports every hit still pending in the pool, not just one', async () => {
   vi.spyOn(api, 'importSearchHits').mockResolvedValue({ imported: 1, failed: 0 })
   renderWithClient(<HitTable workspaceId="ws-1" />)
