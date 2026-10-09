@@ -32,6 +32,8 @@ async def test_the_defaults_come_back_without_a_row(client, no_row):
         ("pubmed", "PubMed", True, False),
         ("pmc", "PMC", True, False),
         ("europe_pmc", "Europe PMC", True, None),
+        ("zenodo", "Zenodo", True, False),
+        ("hal", "HAL", True, None),
     ]
 
 

@@ -22,10 +22,13 @@ class PaperSources(Base):
     pubmed_enabled: Mapped[bool] = mapped_column(server_default=text("true"))
     pmc_enabled: Mapped[bool] = mapped_column(server_default=text("true"))
     europe_pmc_enabled: Mapped[bool] = mapped_column(server_default=text("true"))
+    zenodo_enabled: Mapped[bool] = mapped_column(server_default=text("true"))
+    hal_enabled: Mapped[bool] = mapped_column(server_default=text("true"))
     # Never returned by a route; views carry has_key and key_hint.
     openalex_api_key: Mapped[str | None] = mapped_column(Text)
     semantic_scholar_api_key: Mapped[str | None] = mapped_column(Text)
     core_api_key: Mapped[str | None] = mapped_column(Text)
     pubmed_api_key: Mapped[str | None] = mapped_column(Text)
     pmc_api_key: Mapped[str | None] = mapped_column(Text)
+    zenodo_api_key: Mapped[str | None] = mapped_column(Text)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()"))
