@@ -33,14 +33,29 @@ class _Pacer:
     """Shared timing state: waits at least `min_interval_seconds` since the LAST CALLER's turn (not this
     object's own creation) before letting the next one through. A lock makes this safe when two coroutines
     (e.g. two different provider clients' concurrent requests, fired by asyncio.gather) call it at once --
-    without it, both could read "no wait needed" before either updates the shared clock."""
+    without it, both could read "no wait needed" before either updates the shared clock.
+
+    The lock is rebuilt whenever the running event loop changes (tracked via `_lock_loop`), not just built
+    once in `__init__`: `shared_pacer` caches a `_Pacer` at module level, so the SAME instance outlives any
+    one event loop (each independent `asyncio.run()` -- every pytest-anyio test gets its own -- starts a
+    new loop). An `asyncio.Lock()` binds to whichever loop first awaits it; reusing one from a prior,
+    already-finished loop raises "bound to a different event loop" instead of just working. Rebuilding on
+    loop change keeps real within-one-loop concurrent callers (the actual case this lock protects:
+    asyncio.gather over several sources) correctly serialized, while never handing a stale lock across a
+    loop boundary (confirmed this was a real crash, not just slower tests: the full backend suite hit it
+    via pytest-anyio's per-test event loops)."""
 
     def __init__(self, min_interval_seconds: float):
         self.min_interval_seconds = min_interval_seconds
         self._last_request_at: float | None = None
         self._lock = asyncio.Lock()
+        self._lock_loop: asyncio.AbstractEventLoop | None = None
 
     async def wait_turn(self) -> None:
+        loop = asyncio.get_running_loop()
+        if loop is not self._lock_loop:
+            self._lock = asyncio.Lock()
+            self._lock_loop = loop
         async with self._lock:
             now = time.monotonic()
             if self._last_request_at is not None:

@@ -108,3 +108,17 @@ def test_shared_pacer_returns_the_same_pacer_for_the_same_group_and_key():
     c = shared_pacer("test-group-2", "different-key", 1.0)
     assert a is b
     assert a is not c
+
+
+def test_shared_pacer_survives_reuse_across_separate_event_loops():
+    """Regression: a _Pacer cached at module level (shared_pacer) outlives any one event loop -- each
+    independent asyncio.run() call (exactly what every pytest-anyio test gets, one loop each) starts a
+    fresh loop, and an asyncio.Lock() bound to a prior, already-closed loop raises "bound to a different
+    event loop" on reuse unless the lock is rebuilt per loop. This crashed the full backend suite (not
+    just slowed it down) before _Pacer.wait_turn() started rebuilding its lock on loop change. Plain
+    `def`, not `async def`: it drives two separate asyncio.run() loops itself, so the bug reproduces
+    deterministically in one test, independent of pytest-xdist's own test-to-test scheduling."""
+    pacer = shared_pacer("cross-loop-regression", None, 0.0)
+
+    asyncio.run(pacer.wait_turn())  # first event loop
+    asyncio.run(pacer.wait_turn())  # a brand-new event loop; must not raise

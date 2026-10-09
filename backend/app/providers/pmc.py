@@ -41,10 +41,13 @@ def new_client(
 ) -> httpx.AsyncClient:
     params = {k: v for k, v in {"tool": "paperlab", "email": email, "api_key": api_key}.items() if v}
     min_interval = _MIN_INTERVAL_WITH_KEY if api_key else _MIN_INTERVAL_NO_KEY
-    # Shared with PubMed under the "eutils" group, keyed by api_key -- see pubmed.py's own new_client
-    # for why (NCBI's rate limit is per IP/key, not per httpx client).
-    pacer = shared_pacer("eutils", api_key, min_interval)
-    limited = RateLimited(transport or httpx.AsyncHTTPTransport(), pacer=pacer)
+    if transport is None:
+        # Real network traffic only -- see pubmed.py's own new_client for why (NCBI's rate limit is per
+        # IP/key, not per httpx client, but a shared pacer must never leak into a test's own fake/mock
+        # transport).
+        limited = RateLimited(httpx.AsyncHTTPTransport(), pacer=shared_pacer("eutils", api_key, min_interval))
+    else:
+        limited = RateLimited(transport, min_interval)
     return httpx.AsyncClient(base_url=BASE_URL, params=params, timeout=TIMEOUT, transport=limited)
 
 

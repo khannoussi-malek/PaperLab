@@ -32,11 +32,17 @@ def new_client(
     # query string, same as NCBI's own documented usage (unlike OpenAlex's key-in-header convention).
     params = {k: v for k, v in {"tool": "paperlab", "email": email, "api_key": api_key}.items() if v}
     min_interval = _MIN_INTERVAL_WITH_KEY if api_key else _MIN_INTERVAL_NO_KEY
-    # Shared with every other eutils-based provider (PMC) under the "eutils" group, keyed by api_key --
-    # NCBI's limit is per IP/key, not per httpx client (confirmed live: concurrent PubMed+PMC searches
-    # reliably 429 one of them when each client paces only itself).
-    pacer = shared_pacer("eutils", api_key, min_interval)
-    limited = RateLimited(transport or httpx.AsyncHTTPTransport(), pacer=pacer)
+    if transport is None:
+        # Real network traffic only: share one pacer across every eutils-based provider (PMC) under this
+        # process, keyed by api_key -- NCBI's rate limit is per IP/key, not per httpx client (confirmed
+        # live: concurrent PubMed+PMC searches reliably 429 one of them when each paces only itself). A
+        # caller supplying its own transport (every test's fake/mock transport) gets a private pacer
+        # instead -- tests must stay isolated from each other's pacing state and from real wall-clock
+        # delays, and from each other's event loops (a shared pacer's lock reused across pytest's
+        # separate per-test loops crashed the backend suite before this split existed).
+        limited = RateLimited(httpx.AsyncHTTPTransport(), pacer=shared_pacer("eutils", api_key, min_interval))
+    else:
+        limited = RateLimited(transport, min_interval)
     return httpx.AsyncClient(base_url=BASE_URL, params=params, timeout=TIMEOUT, transport=limited)
 
 
