@@ -1,7 +1,7 @@
 import httpx
 import pytest
 
-from app.providers import arxiv, crossref, core_ac, semantic_scholar, openalex
+from app.providers import arxiv, crossref, core_ac, semantic_scholar, openalex, pubmed
 
 pytestmark = pytest.mark.anyio
 
@@ -106,6 +106,56 @@ async def test_core_ac_next_cursor_when_exhausted(monkeypatch):
 
     assert len(entries) == 1
     assert next_cursor is None  # cursor + page_size >= totalHits
+
+
+# --- pubmed ------------------------------------
+
+
+async def test_pubmed_search_page_advances_retstart(monkeypatch):
+    seen_starts = []
+
+    async def fake_get(self, url, params=None, **kwargs):
+        request = httpx.Request("GET", url, params=params)
+        seen_starts.append(params["retstart"])
+        return httpx.Response(200, json={"esearchresult": {"count": "100", "idlist": []}}, request=request)
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    async with httpx.AsyncClient() as http:
+        await pubmed.search_page(http, "cancer", page_size=20, cursor=0)
+        await pubmed.search_page(http, "cancer", page_size=20, cursor=20)
+    assert seen_starts == [0, 20]
+
+
+async def test_pubmed_next_cursor_when_more_remain_per_ncbis_own_count(monkeypatch):
+    """Unlike arXiv (page-fullness heuristic), PubMed trusts esearch's own reported total directly."""
+    calls = []
+
+    async def fake_get(self, url, params=None, **kwargs):
+        request = httpx.Request("GET", url, params=params)
+        calls.append(params)
+        if "id" not in params:  # esearch
+            return httpx.Response(200, json={"esearchresult": {"count": "45", "idlist": ["1", "2"]}}, request=request)
+        return httpx.Response(200, text="<PubmedArticleSet></PubmedArticleSet>", request=request)  # efetch
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    async with httpx.AsyncClient() as http:
+        _, next_cursor = await pubmed.search_page(http, "cancer", page_size=20, cursor=20)
+
+    assert next_cursor == 40  # 20 + 20 < 45
+
+
+async def test_pubmed_next_cursor_is_none_once_the_count_is_exhausted(monkeypatch):
+    async def fake_get(self, url, params=None, **kwargs):
+        request = httpx.Request("GET", url, params=params)
+        if "id" not in params:  # esearch
+            return httpx.Response(200, json={"esearchresult": {"count": "45", "idlist": ["1"]}}, request=request)
+        return httpx.Response(200, text="<PubmedArticleSet></PubmedArticleSet>", request=request)  # efetch
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    async with httpx.AsyncClient() as http:
+        _, next_cursor = await pubmed.search_page(http, "cancer", page_size=20, cursor=40)
+
+    assert next_cursor is None  # 40 + 20 = 60, not < 45
 
 
 # --- crossref ------------------------------------
