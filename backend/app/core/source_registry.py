@@ -22,7 +22,10 @@ from app.providers import arxiv, core_ac, crossref, openalex, pubmed, semantic_s
 PER_SOURCE = 10
 
 Ask = Callable[[httpx.AsyncClient, str, str], Awaitable[list[Candidate]]]
-PageFunc = Callable[[httpx.AsyncClient, str, int, int], Awaitable[tuple[list[Any], int | None]]]
+# int | str: every source but Europe PMC uses a numeric offset; Europe PMC's cursorMark is an opaque
+# string token (Batch 2) -- this widening is a type hint only (no static type checker runs in this
+# project), so no existing provider's own narrower `cursor: int` signature needs to change.
+PageFunc = Callable[[httpx.AsyncClient, str, int, int | str], Awaitable[tuple[list[Any], int | str | None]]]
 Mapper = Callable[[Any], Candidate | None]
 NewClient = Callable[..., httpx.AsyncClient]
 
@@ -78,7 +81,7 @@ class SourceSpec:
     page: PageFunc | None = None
     mapper: Mapper | None = None
     page_size: int = 20
-    starting_cursor: int = 0
+    starting_cursor: int | str = 0
 
 
 REGISTRY: tuple[SourceSpec, ...] = (
@@ -131,4 +134,4 @@ ASKS: dict[str, dict[str, Ask]] = {
 PAGE_SIZE_BY_SOURCE: dict[str, int] = {spec.id: spec.page_size for spec in REGISTRY if spec.is_discovery_source}
 PAGE_FUNCS: dict[str, PageFunc] = {spec.id: spec.page for spec in REGISTRY if spec.page}
 MAPPERS: dict[str, Mapper] = {spec.id: spec.mapper for spec in REGISTRY if spec.mapper}
-STARTING_CURSOR_VALUE: dict[str, int] = {spec.id: spec.starting_cursor for spec in REGISTRY if spec.starting_cursor}
+STARTING_CURSOR_VALUE: dict[str, int | str] = {spec.id: spec.starting_cursor for spec in REGISTRY if spec.starting_cursor}

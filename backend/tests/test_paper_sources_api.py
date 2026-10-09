@@ -30,6 +30,8 @@ async def test_the_defaults_come_back_without_a_row(client, no_row):
         ("core", "CORE", True, False),
         ("unpaywall", "Unpaywall", True, None),
         ("pubmed", "PubMed", True, False),
+        ("pmc", "PMC", True, False),
+        ("europe_pmc", "Europe PMC", True, False),
     ]
 
 
