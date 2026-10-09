@@ -25,6 +25,10 @@ describe('pageLink', () => {
   it('falls back to PubMed when nothing else is set', () => {
     expect(pageLink({ ...ids, external_ids: { pubmed: '42825172' } })).toBe('https://pubmed.ncbi.nlm.nih.gov/42825172/')
   })
+
+  it('falls back to PMC when nothing else is set', () => {
+    expect(pageLink({ ...ids, external_ids: { pmc: '9876543' } })).toBe('https://pmc.ncbi.nlm.nih.gov/articles/PMC9876543/')
+  })
 })
 
 describe('citationsLabel', () => {
@@ -101,6 +105,15 @@ describe('sameCandidate', () => {
     ).toBe(true)
     expect(
       sameCandidate(candidate({ external_ids: { pubmed: '1' } }), candidate({ external_ids: { pubmed: '2' } })),
+    ).toBe(false)
+  })
+
+  it('matches by pmc id when nothing stronger is set', () => {
+    expect(
+      sameCandidate(candidate({ external_ids: { pmc: '9876543' } }), candidate({ external_ids: { pmc: '9876543' } })),
+    ).toBe(true)
+    expect(
+      sameCandidate(candidate({ external_ids: { pmc: '1' } }), candidate({ external_ids: { pmc: '2' } })),
     ).toBe(false)
   })
 })
