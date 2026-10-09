@@ -1678,7 +1678,7 @@ export interface components {
             /** Pdf Urls */
             pdf_urls: string[];
             /** Sources */
-            sources: ("openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core" | "unpaywall")[];
+            sources: ("openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core" | "unpaywall" | "pubmed")[];
             /** Paper Id */
             paper_id: string | null;
         };
@@ -2805,7 +2805,7 @@ export interface components {
              * Id
              * @enum {string}
              */
-            id: "openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core" | "unpaywall";
+            id: "openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core" | "unpaywall" | "pubmed";
             /** Name */
             name: string;
             /** Enabled */
@@ -3327,7 +3327,7 @@ export interface components {
                 [key: string]: unknown;
             };
             /** Sources */
-            sources: ("openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core")[];
+            sources: ("openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core" | "pubmed")[];
             /**
              * Query Overrides
              * @default {}
@@ -3525,6 +3525,8 @@ export interface components {
             semantic_scholar?: string | null;
             /** Core */
             core?: string | null;
+            /** Pubmed */
+            pubmed?: string | null;
         };
         /** SourceSwitches */
         SourceSwitches: {
@@ -3540,6 +3542,8 @@ export interface components {
             core?: boolean;
             /** Unpaywall */
             unpaywall?: boolean;
+            /** Pubmed */
+            pubmed?: boolean;
         };
         /** SourcesEvent */
         SourcesEvent: {

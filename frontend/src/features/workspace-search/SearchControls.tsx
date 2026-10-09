@@ -9,7 +9,7 @@ import type { SearchRunCreate, SearchRunSource } from '@/api/client'
 // (C1: sending it used to 422 every Start click). A Record, not an array: adding a search source to the backend's
 // SearchRunSource union without adding it here is now a compiler error, not a silent no-op.
 const SEARCH_SOURCES: Record<SearchRunSource, true> = {
-  arxiv: true, crossref: true, core: true, semantic_scholar: true, openalex: true,
+  arxiv: true, crossref: true, core: true, semantic_scholar: true, openalex: true, pubmed: true,
 }
 
 function isSearchSource(id: string): id is SearchRunSource {

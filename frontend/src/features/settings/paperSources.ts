@@ -8,6 +8,7 @@ export const DESCRIPTIONS: Record<PaperSourceId, string> = {
   arxiv: 'arXiv preprints and their PDFs. Free.',
   core: 'Open-access papers from university repositories, with PDFs. Free; a free key raises its limit.',
   unpaywall: 'Free, legal PDF links for papers with a DOI. Free; needs the contact email.',
+  pubmed: 'Biomedical literature search via PubMed (NCBI). Free; a free key raises its rate limit.',
 }
 
 /** The "May cost money" badge plus its price line, for sources that can charge even without a key. Only OpenAlex
