@@ -1678,7 +1678,7 @@ export interface components {
             /** Pdf Urls */
             pdf_urls: string[];
             /** Sources */
-            sources: ("openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core" | "unpaywall" | "pubmed")[];
+            sources: ("openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core" | "unpaywall" | "pubmed" | "pmc" | "europe_pmc")[];
             /** Paper Id */
             paper_id: string | null;
         };
@@ -2805,7 +2805,7 @@ export interface components {
              * Id
              * @enum {string}
              */
-            id: "openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core" | "unpaywall" | "pubmed";
+            id: "openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core" | "unpaywall" | "pubmed" | "pmc" | "europe_pmc";
             /** Name */
             name: string;
             /** Enabled */
@@ -3327,7 +3327,7 @@ export interface components {
                 [key: string]: unknown;
             };
             /** Sources */
-            sources: ("openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core" | "pubmed")[];
+            sources: ("openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core" | "pubmed" | "pmc" | "europe_pmc")[];
             /**
              * Query Overrides
              * @default {}
@@ -3527,6 +3527,8 @@ export interface components {
             core?: string | null;
             /** Pubmed */
             pubmed?: string | null;
+            /** Pmc */
+            pmc?: string | null;
         };
         /** SourceSwitches */
         SourceSwitches: {
@@ -3544,6 +3546,10 @@ export interface components {
             unpaywall?: boolean;
             /** Pubmed */
             pubmed?: boolean;
+            /** Pmc */
+            pmc?: boolean;
+            /** Europe Pmc */
+            europe_pmc?: boolean;
         };
         /** SourcesEvent */
         SourcesEvent: {

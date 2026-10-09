@@ -9,6 +9,8 @@ export const DESCRIPTIONS: Record<PaperSourceId, string> = {
   core: 'Open-access papers from university repositories, with PDFs. Free; a free key raises its limit.',
   unpaywall: 'Free, legal PDF links for papers with a DOI. Free; needs the contact email.',
   pubmed: 'Biomedical literature search via PubMed (NCBI). Free; a free key raises its rate limit.',
+  pmc: 'Full-text biomedical literature via PMC (NCBI). Free; a free key raises its rate limit.',
+  europe_pmc: 'Biomedical and life-science literature via Europe PMC. Free, no key needed.',
 }
 
 /** The "May cost money" badge plus its price line, for sources that can charge even without a key. Only OpenAlex
