@@ -33,8 +33,8 @@ _ARXIV_VERSION = re.compile(r"v\d+$")
 class Candidate:
     """A paper found outside the library. `sources` lists every source that found it, most trusted first; `paper_id`
     is set when the library already holds it. `external_ids` (Phase 0b) is keyed by the registry's own source ids
-    ("openalex", "semantic_scholar", "arxiv", "core") — a source with no id for this paper has no key, never a
-    key mapped to None."""
+    ("openalex", "semantic_scholar", "arxiv", "core", "pubmed") — a source with no id for this paper has no key,
+    never a key mapped to None."""
 
     title: str
     authors: list[str] = field(default_factory=list)
@@ -213,7 +213,7 @@ def surname(name: str) -> str:
 
 
 def _ids(candidate: Candidate) -> set[str]:
-    # ponytail: hardcodes today's 5 sources — can't derive this list from source_registry (it imports
+    # ponytail: hardcodes today's id kinds — can't derive this list from source_registry (it imports
     # *from* this module, so importing it back would be circular). Add one line here per future source;
     # restructure only if that becomes its own recurring chore across several sources at once.
     arxiv_id = candidate.external_ids.get("arxiv") or arxiv_from_doi(candidate.doi)
