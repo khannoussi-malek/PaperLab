@@ -44,13 +44,15 @@ async def epmc_api():
     await fake.client.aclose()
 
 
-async def test_search_asks_for_relevance_sort_and_core_result_type(epmc_api):
+async def test_search_sends_no_sort_param_and_asks_for_core_result_type(epmc_api):
+    """No sort param: Europe PMC's default is already relevance, and "relevance" isn't a field EBI
+    actually accepts -- sending it gets a 503 (confirmed live), not a worse ranking."""
     epmc_api.reply("/europepmc/webservices/rest/search", 200, json=ZERO_RESULTS)
 
     await europe_pmc.search(epmc_api.client, "gene editing", 10)
 
     request = epmc_api.requests[0]
-    assert request.url.params["sort"] == "relevance"
+    assert "sort" not in request.url.params
     assert request.url.params["resultType"] == "core"
     assert request.url.params["cursorMark"] == "*"
 
@@ -124,3 +126,37 @@ async def test_failures_raise_an_httpx_error(epmc_api, status, body):
 
     with pytest.raises(httpx.HTTPError):
         await europe_pmc.search(epmc_api.client, "x", 1)
+
+
+async def test_clean_preserves_comparison_operators_not_markup(epmc_api):
+    """"P<0.05" is ordinary biomedical text, not a tag -- the naive r"<[^>]+>" pattern used to delete
+    everything between it and the next ">", losing real results text."""
+    result = {
+        "hitCount": 1,
+        "resultList": {
+            "result": [{
+                "id": "1",
+                "title": "A trial",
+                "abstractText": "Response improved (P<0.05). The ESR did not change (P>0.05).",
+            }]
+        },
+    }
+    epmc_api.reply("/europepmc/webservices/rest/search", 200, json=result)
+
+    [entry] = await europe_pmc.search(epmc_api.client, "x", 1)
+
+    assert entry["abstract"] == "Response improved (P<0.05). The ESR did not change (P>0.05)."
+
+
+async def test_clean_unescapes_html_entities_then_strips_real_tags(epmc_api):
+    result = {
+        "hitCount": 1,
+        "resultList": {
+            "result": [{"id": "1", "title": "&lt;i&gt;In Every River&lt;/i&gt;: a study"}]
+        },
+    }
+    epmc_api.reply("/europepmc/webservices/rest/search", 200, json=result)
+
+    [entry] = await europe_pmc.search(epmc_api.client, "x", 1)
+
+    assert entry["title"] == "In Every River: a study"

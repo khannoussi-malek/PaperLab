@@ -4,7 +4,7 @@ import time
 import httpx
 import pytest
 
-from app.providers.http import RateLimited, RetryOn429
+from app.providers.http import RateLimited, RetryOn429, shared_pacer
 
 pytestmark = pytest.mark.anyio
 
@@ -76,3 +76,35 @@ async def test_rate_limited_does_not_wait_when_enough_time_already_passed(monkey
     await wrapped.handle_async_request(httpx.Request("GET", "https://example.test"))
 
     assert sleeps == []
+
+
+async def test_shared_pacer_paces_two_different_transports_together(monkeypatch):
+    """The whole point of shared_pacer: two RateLimited instances wrapping two DIFFERENT inner
+    transports (simulating two different provider clients) still wait on each other, because they share
+    one _Pacer's clock instead of each starting its own."""
+    clock = iter([0.0, 0.1])
+    monkeypatch.setattr(time, "monotonic", lambda: next(clock, 0.1))
+    sleeps = []
+
+    async def fake_sleep(seconds):
+        sleeps.append(seconds)
+
+    monkeypatch.setattr(asyncio, "sleep", fake_sleep)
+    inner_a = httpx.MockTransport(lambda request: httpx.Response(200))
+    inner_b = httpx.MockTransport(lambda request: httpx.Response(200))
+    pacer = shared_pacer("test-group", "test-key", 0.5)
+    client_a = RateLimited(inner_a, pacer=pacer)
+    client_b = RateLimited(inner_b, pacer=pacer)
+
+    await client_a.handle_async_request(httpx.Request("GET", "https://example.test"))
+    await client_b.handle_async_request(httpx.Request("GET", "https://example.test"))
+
+    assert sleeps == [0.4]  # client_b waits on client_a's turn, exactly like two calls on one client
+
+
+def test_shared_pacer_returns_the_same_pacer_for_the_same_group_and_key():
+    a = shared_pacer("test-group-2", "same-key", 1.0)
+    b = shared_pacer("test-group-2", "same-key", 1.0)
+    c = shared_pacer("test-group-2", "different-key", 1.0)
+    assert a is b
+    assert a is not c

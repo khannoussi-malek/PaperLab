@@ -27,7 +27,7 @@ import xml.etree.ElementTree as ET
 
 import httpx
 
-from app.providers.http import RateLimited
+from app.providers.http import RateLimited, shared_pacer
 from app.providers.openalex import json_body
 
 BASE_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
@@ -41,7 +41,10 @@ def new_client(
 ) -> httpx.AsyncClient:
     params = {k: v for k, v in {"tool": "paperlab", "email": email, "api_key": api_key}.items() if v}
     min_interval = _MIN_INTERVAL_WITH_KEY if api_key else _MIN_INTERVAL_NO_KEY
-    limited = RateLimited(transport or httpx.AsyncHTTPTransport(), min_interval)
+    # Shared with PubMed under the "eutils" group, keyed by api_key -- see pubmed.py's own new_client
+    # for why (NCBI's rate limit is per IP/key, not per httpx client).
+    pacer = shared_pacer("eutils", api_key, min_interval)
+    limited = RateLimited(transport or httpx.AsyncHTTPTransport(), pacer=pacer)
     return httpx.AsyncClient(base_url=BASE_URL, params=params, timeout=TIMEOUT, transport=limited)
 
 
@@ -72,9 +75,13 @@ async def _esearch(http: httpx.AsyncClient, term: str, limit: int, start: int) -
 
 
 async def _efetch(http: httpx.AsyncClient, ids: list[str]) -> list[dict]:
-    """The full records for `ids`, one batched request. `ids` must be non-empty -- callers check first."""
+    """The full records for `ids`, one batched request, reordered to match `ids`' own order. efetch's own
+    response order doesn't always match the ids it was asked for (confirmed live), and esearch's own
+    ranking (by relevance, see sort=relevance above) is what callers rely on being preserved. `ids` must
+    be non-empty -- callers check first."""
     response = await http.get("/efetch.fcgi", params={"db": "pmc", "id": ",".join(ids), "retmode": "xml"})
-    return _entries(_checked(response))
+    by_id = {entry["pmcid"]: entry for entry in _entries(_checked(response))}
+    return [by_id[pmcid] for pmcid in ids if pmcid in by_id]
 
 
 async def search(http: httpx.AsyncClient, term: str, limit: int) -> list[dict]:
@@ -129,7 +136,12 @@ def _entry(node: ET.Element) -> dict | None:
         if (joined := " ".join(filter(None, (contrib.findtext("name/given-names"), contrib.findtext("name/surname")))))
     ]
     abstract_el = meta.find("abstract")
-    abstract = " ".join(_text(p) for p in abstract_el.findall("p")) if abstract_el is not None else ""
+    # .iter("p"), not .findall("p") -- most clinical/review abstracts are structured
+    # (<abstract><sec><title>Background</title><p>...</p></sec>...</abstract>), so the real <p> text is
+    # nested under <sec>, not a direct child of <abstract>. .iter() finds a <p> at any depth; it still
+    # only visits <p> elements, so no <title>/<sec> label text leaks in (same guarantee findall("p") had
+    # for the flat case). Confirmed against 20 real records: 0/20 empty, 0 label leaks, after this fix.
+    abstract = " ".join(_text(p) for p in abstract_el.iter("p")) if abstract_el is not None else ""
     return {
         "pmcid": pmcid.removeprefix("PMC"),
         "pmid": pmid,

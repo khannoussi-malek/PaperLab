@@ -1,7 +1,6 @@
 """Transport wrappers shared across providers: retry-on-429 (today only Semantic Scholar's unauthenticated pool
-needs it) and a minimum-interval pacer (not yet used by any of today's 5 sources; a future source with a
-documented per-second limit — e.g. arXiv's own 3-second rule — could wire this in by extending its registry
-entry (app/core/source_registry.py's SourceSpec) to carry one)."""
+needs it) and a minimum-interval pacer, either private to one client or shared across several (two different
+providers hitting one externally rate-limited host, e.g. NCBI's eutils, shared by PubMed and PMC)."""
 
 import asyncio
 import time
@@ -30,24 +29,57 @@ class RetryOn429(httpx.AsyncBaseTransport):
         await self.inner.aclose()
 
 
-class RateLimited(httpx.AsyncBaseTransport):
-    """Waits at least `min_interval_seconds` since this transport's last request before sending the next one.
-    Reads the clock exactly once per request, and measures the next wait from that reading (not from when any
-    sleep actually finished) — a small, deliberate simplification (ponytail: paces from scheduled time, not
-    actual-send time; a sub-millisecond drift under real load is not worth a second clock read to avoid)."""
+class _Pacer:
+    """Shared timing state: waits at least `min_interval_seconds` since the LAST CALLER's turn (not this
+    object's own creation) before letting the next one through. A lock makes this safe when two coroutines
+    (e.g. two different provider clients' concurrent requests, fired by asyncio.gather) call it at once --
+    without it, both could read "no wait needed" before either updates the shared clock."""
 
-    def __init__(self, inner: httpx.AsyncBaseTransport, min_interval_seconds: float):
-        self.inner = inner
+    def __init__(self, min_interval_seconds: float):
         self.min_interval_seconds = min_interval_seconds
         self._last_request_at: float | None = None
+        self._lock = asyncio.Lock()
+
+    async def wait_turn(self) -> None:
+        async with self._lock:
+            now = time.monotonic()
+            if self._last_request_at is not None:
+                wait = self.min_interval_seconds - (now - self._last_request_at)
+                if wait > 0:
+                    await asyncio.sleep(wait)
+                    now = time.monotonic()
+            self._last_request_at = now
+
+
+_shared_pacers: dict[tuple[str, str | None], _Pacer] = {}
+
+
+def shared_pacer(group: str, key: str | None, min_interval_seconds: float) -> _Pacer:
+    """One _Pacer per (group, key), reused across every call -- for two or more httpx clients (different
+    transports, different lifecycles) that must share one rate budget against a common externally-enforced
+    limit, e.g. NCBI's eutils limit shared by PubMed and PMC, enforced per IP or per API key, not per httpx
+    client."""
+    cache_key = (group, key)
+    if cache_key not in _shared_pacers:
+        _shared_pacers[cache_key] = _Pacer(min_interval_seconds)
+    return _shared_pacers[cache_key]
+
+
+class RateLimited(httpx.AsyncBaseTransport):
+    """Waits at least `min_interval_seconds` since the pacer's last request before sending the next one.
+    By default (`pacer` omitted) builds a private pacer from `min_interval_seconds` -- today's behavior,
+    for a source with no cross-client sharing need. Pass a pre-built `_Pacer` via `pacer=` instead (from
+    `shared_pacer`) to share one rate budget across multiple clients that hit the same externally-limited
+    host."""
+
+    def __init__(
+        self, inner: httpx.AsyncBaseTransport, min_interval_seconds: float = 0.0, *, pacer: _Pacer | None = None
+    ):
+        self.inner = inner
+        self._pacer = pacer if pacer is not None else _Pacer(min_interval_seconds)
 
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
-        now = time.monotonic()
-        if self._last_request_at is not None:
-            wait = self.min_interval_seconds - (now - self._last_request_at)
-            if wait > 0:
-                await asyncio.sleep(wait)
-        self._last_request_at = now
+        await self._pacer.wait_turn()
         return await self.inner.handle_async_request(request)
 
     async def aclose(self) -> None:
