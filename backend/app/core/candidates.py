@@ -184,6 +184,24 @@ def from_core(work: Mapping[str, Any]) -> Candidate:
     )
 
 
+def from_pubmed(entry: Mapping[str, Any]) -> Candidate:
+    """An entry from providers/pubmed.py. PubMed never lists a free PDF (PMC's own job, a later milestone)
+    and never a citation count (not a MEDLINE field)."""
+    doi = entry.get("doi")
+    arxiv_id = arxiv_from_doi(doi)
+    external_ids = {k: v for k, v in {"pubmed": entry["pmid"], "arxiv": arxiv_id}.items() if v}
+    return Candidate(
+        title=entry["title"] or "Untitled",
+        authors=list(entry["authors"])[:MAX_AUTHORS],
+        year=entry["year"],
+        doi=doi,
+        external_ids=external_ids,
+        abstract=entry.get("abstract"),
+        pdf_urls=ordered_pdf_urls(arxiv_id),
+        sources=("pubmed",),
+    )
+
+
 def normal_title(title: str) -> str:
     return re.sub(r"\W+", " ", title).strip().casefold()
 
@@ -195,6 +213,9 @@ def surname(name: str) -> str:
 
 
 def _ids(candidate: Candidate) -> set[str]:
+    # ponytail: hardcodes today's 5 sources — can't derive this list from source_registry (it imports
+    # *from* this module, so importing it back would be circular). Add one line here per future source;
+    # restructure only if that becomes its own recurring chore across several sources at once.
     arxiv_id = candidate.external_ids.get("arxiv") or arxiv_from_doi(candidate.doi)
     keys = {
         "doi": None if arxiv_from_doi(candidate.doi) else candidate.doi,
@@ -202,6 +223,7 @@ def _ids(candidate: Candidate) -> set[str]:
         "openalex": candidate.external_ids.get("openalex"),
         "s2": candidate.external_ids.get("semantic_scholar"),
         "core": candidate.external_ids.get("core"),
+        "pubmed": candidate.external_ids.get("pubmed"),
     }
     return {f"{kind}:{value.lower()}" for kind, value in keys.items() if value}
 
@@ -230,7 +252,7 @@ def _combined(records: list[Candidate]) -> Candidate:
         k: v
         for k, v in {
             "arxiv": arxiv_id, "openalex": first_id("openalex"), "semantic_scholar": first_id("semantic_scholar"),
-            "core": first_id("core"),
+            "core": first_id("core"), "pubmed": first_id("pubmed"),
         }.items()
         if v
     }
