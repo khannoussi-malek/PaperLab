@@ -8,6 +8,7 @@ from app.core.candidates import (
     Candidate,
     from_core,
     from_crossref,
+    from_pubmed,
     from_s2,
     from_work,
     merge,
@@ -258,3 +259,47 @@ def test_merge_keeps_the_abstract_from_the_most_trusted_source_that_has_one():
     [merged] = merge({"openalex": [openalex_candidate], "semantic_scholar": [s2_candidate]}, limit=10)
 
     assert merged.abstract == "The real abstract."
+
+
+def test_from_pubmed_maps_every_field():
+    entry = {
+        "pmid": "42825172",
+        "title": "Are You PREPAREd?",
+        "authors": ["Anique Baten", "Inge A Pool"],
+        "year": 2026,
+        "doi": "10.5334/pme.2504",
+        "abstract": "Early after-hours work represents a demanding transition.",
+    }
+
+    candidate = from_pubmed(entry)
+
+    assert candidate.title == "Are You PREPAREd?"
+    assert candidate.authors == ["Anique Baten", "Inge A Pool"]
+    assert candidate.year == 2026
+    assert candidate.doi == "10.5334/pme.2504"
+    assert candidate.external_ids == {"pubmed": "42825172"}
+    assert candidate.abstract == "Early after-hours work represents a demanding transition."
+    assert candidate.pdf_urls == []  # PubMed never lists a free PDF (PMC's own job, a later milestone)
+    assert candidate.sources == ("pubmed",)
+
+
+def test_from_pubmed_with_no_doi_or_abstract_still_maps():
+    entry = {"pmid": "1", "title": "Bare Record", "authors": ["Jo Smith"], "year": 2020, "doi": None, "abstract": None}
+
+    candidate = from_pubmed(entry)
+
+    assert candidate.doi is None
+    assert candidate.abstract is None
+    assert candidate.external_ids == {"pubmed": "1"}  # key present even with every other field absent
+
+
+def test_two_candidates_sharing_a_pubmed_id_are_the_same_paper():
+    from app.core.candidates import _same_paper
+
+    def record(title: str) -> dict:
+        return {"pmid": "42825172", "title": title, "authors": [], "year": None, "doi": None, "abstract": None}
+
+    a = from_pubmed(record("A"))
+    b = from_pubmed(record("A, Revised"))
+
+    assert _same_paper(a, b)
