@@ -128,11 +128,9 @@ async def test_pubmed_search_page_advances_retstart(monkeypatch):
 
 async def test_pubmed_next_cursor_when_more_remain_per_ncbis_own_count(monkeypatch):
     """Unlike arXiv (page-fullness heuristic), PubMed trusts esearch's own reported total directly."""
-    calls = []
 
     async def fake_get(self, url, params=None, **kwargs):
         request = httpx.Request("GET", url, params=params)
-        calls.append(params)
         if "id" not in params:  # esearch
             return httpx.Response(200, json={"esearchresult": {"count": "45", "idlist": ["1", "2"]}}, request=request)
         return httpx.Response(200, text="<PubmedArticleSet></PubmedArticleSet>", request=request)  # efetch
@@ -145,6 +143,8 @@ async def test_pubmed_next_cursor_when_more_remain_per_ncbis_own_count(monkeypat
 
 
 async def test_pubmed_next_cursor_is_none_once_the_count_is_exhausted(monkeypatch):
+    """PubMed signals no more data once cursor + page_size reaches NCBI's own reported count."""
+
     async def fake_get(self, url, params=None, **kwargs):
         request = httpx.Request("GET", url, params=params)
         if "id" not in params:  # esearch
