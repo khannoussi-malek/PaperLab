@@ -202,6 +202,50 @@ def from_pubmed(entry: Mapping[str, Any]) -> Candidate:
     )
 
 
+def from_pmc(entry: Mapping[str, Any]) -> Candidate:
+    """An entry from providers/pmc.py. No free PDF: PMC's own OA Web Service that used to provide one is
+    confirmed shut down, and the obvious constructed path is a JS proof-of-work interstitial, not a file
+    (probed live 2026-10-09)."""
+    doi = entry.get("doi")
+    arxiv_id = arxiv_from_doi(doi)
+    external_ids = {
+        k: v for k, v in {"pmc": entry["pmcid"], "pubmed": entry.get("pmid"), "arxiv": arxiv_id}.items() if v
+    }
+    return Candidate(
+        title=entry["title"] or "Untitled",
+        authors=list(entry["authors"])[:MAX_AUTHORS],
+        year=entry["year"],
+        doi=doi,
+        external_ids=external_ids,
+        abstract=entry.get("abstract"),
+        sources=("pmc",),
+    )
+
+
+def from_europe_pmc(entry: Mapping[str, Any]) -> Candidate:
+    """An entry from providers/europe_pmc.py. Reuses PubMed's and PMC's own external_ids keys ("pubmed",
+    "pmc") rather than inventing a third "europe_pmc" id kind -- Europe PMC never natively owns an
+    identifier, it aggregates records PubMed/PMC already key, so a paper it finds dedupes against the
+    same paper found via PubMed or PMC automatically, with no extra matching code. No free PDF: the
+    website's own direct PDF link is confirmed behind a Cloudflare bot challenge on every probe
+    (2026-10-09), not a file this module can reliably fetch."""
+    doi = entry.get("doi")
+    arxiv_id = arxiv_from_doi(doi)
+    external_ids = {
+        k: v for k, v in {"pubmed": entry.get("pmid"), "pmc": entry.get("pmcid"), "arxiv": arxiv_id}.items() if v
+    }
+    return Candidate(
+        title=entry["title"] or "Untitled",
+        authors=list(entry["authors"])[:MAX_AUTHORS],
+        year=entry["year"],
+        doi=doi,
+        external_ids=external_ids,
+        cited_by_count=entry.get("cited_by_count"),
+        abstract=entry.get("abstract"),
+        sources=("europe_pmc",),
+    )
+
+
 def normal_title(title: str) -> str:
     return re.sub(r"\W+", " ", title).strip().casefold()
 
@@ -224,6 +268,7 @@ def _ids(candidate: Candidate) -> set[str]:
         "s2": candidate.external_ids.get("semantic_scholar"),
         "core": candidate.external_ids.get("core"),
         "pubmed": candidate.external_ids.get("pubmed"),
+        "pmc": candidate.external_ids.get("pmc"),
     }
     return {f"{kind}:{value.lower()}" for kind, value in keys.items() if value}
 
@@ -252,7 +297,7 @@ def _combined(records: list[Candidate]) -> Candidate:
         k: v
         for k, v in {
             "arxiv": arxiv_id, "openalex": first_id("openalex"), "semantic_scholar": first_id("semantic_scholar"),
-            "core": first_id("core"), "pubmed": first_id("pubmed"),
+            "core": first_id("core"), "pubmed": first_id("pubmed"), "pmc": first_id("pmc"),
         }.items()
         if v
     }
