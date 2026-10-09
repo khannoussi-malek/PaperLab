@@ -15,8 +15,18 @@ from typing import Any
 
 import httpx
 
-from app.core.candidates import Candidate, from_arxiv, from_core, from_crossref, from_pubmed, from_s2, from_work
-from app.providers import arxiv, core_ac, crossref, openalex, pubmed, semantic_scholar, unpaywall
+from app.core.candidates import (
+    Candidate,
+    from_arxiv,
+    from_core,
+    from_crossref,
+    from_europe_pmc,
+    from_pmc,
+    from_pubmed,
+    from_s2,
+    from_work,
+)
+from app.providers import arxiv, core_ac, crossref, europe_pmc, openalex, pmc, pubmed, semantic_scholar, unpaywall
 
 # How many results Find Papers/Similar asks each source for, per query (was discovery.py's PER_SOURCE).
 PER_SOURCE = 10
@@ -61,6 +71,14 @@ async def _core(http: httpx.AsyncClient, kind: str, value: str) -> list[Candidat
 
 async def _pubmed(http: httpx.AsyncClient, kind: str, value: str) -> list[Candidate]:
     return [from_pubmed(entry) for entry in await pubmed.search(http, value, PER_SOURCE)]
+
+
+async def _pmc(http: httpx.AsyncClient, kind: str, value: str) -> list[Candidate]:
+    return [from_pmc(entry) for entry in await pmc.search(http, value, PER_SOURCE)]
+
+
+async def _europe_pmc(http: httpx.AsyncClient, kind: str, value: str) -> list[Candidate]:
+    return [from_europe_pmc(entry) for entry in await europe_pmc.search(http, value, PER_SOURCE)]
 
 
 @dataclass(frozen=True)
@@ -119,6 +137,16 @@ REGISTRY: tuple[SourceSpec, ...] = (
         new_client=pubmed.new_client, ask=_pubmed, ask_kinds=("title",),
         page=pubmed.search_page, mapper=from_pubmed, page_size=20,
     ),
+    SourceSpec(
+        id="pmc", name="PMC", keyed=True, enabled_by_default=True, is_discovery_source=True,
+        new_client=pmc.new_client, ask=_pmc, ask_kinds=("title",),
+        page=pmc.search_page, mapper=from_pmc, page_size=20,
+    ),
+    SourceSpec(
+        id="europe_pmc", name="Europe PMC", keyed=False, enabled_by_default=True, is_discovery_source=True,
+        new_client=europe_pmc.new_client, ask=_europe_pmc, ask_kinds=("title",),
+        page=europe_pmc.search_page, mapper=from_europe_pmc, page_size=25, starting_cursor="*",
+    ),
 )
 
 BY_ID: dict[str, SourceSpec] = {spec.id: spec for spec in REGISTRY}
@@ -134,4 +162,6 @@ ASKS: dict[str, dict[str, Ask]] = {
 PAGE_SIZE_BY_SOURCE: dict[str, int] = {spec.id: spec.page_size for spec in REGISTRY if spec.is_discovery_source}
 PAGE_FUNCS: dict[str, PageFunc] = {spec.id: spec.page for spec in REGISTRY if spec.page}
 MAPPERS: dict[str, Mapper] = {spec.id: spec.mapper for spec in REGISTRY if spec.mapper}
-STARTING_CURSOR_VALUE: dict[str, int | str] = {spec.id: spec.starting_cursor for spec in REGISTRY if spec.starting_cursor}
+STARTING_CURSOR_VALUE: dict[str, int | str] = {
+    spec.id: spec.starting_cursor for spec in REGISTRY if spec.starting_cursor
+}
