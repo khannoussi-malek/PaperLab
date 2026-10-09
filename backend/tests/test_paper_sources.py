@@ -23,10 +23,11 @@ async def test_without_a_row_every_source_is_on_but_openalex(no_row):
     sources = await paper_sources.get(no_row)
 
     assert sources.enabled == {
-        "openalex": False, "crossref": True, "semantic_scholar": True, "arxiv": True, "core": True, "unpaywall": True
+        "openalex": False, "crossref": True, "semantic_scholar": True, "arxiv": True, "core": True,
+        "unpaywall": True, "pubmed": True,
     }  # fmt: skip
     assert sources.contact_email is None
-    assert sources.api_keys == {"openalex": None, "semantic_scholar": None, "core": None}
+    assert sources.api_keys == {"openalex": None, "semantic_scholar": None, "core": None, "pubmed": None}
     assert not sources.unpaywall_on  # ticked, but Unpaywall refuses requests without an email
 
 
