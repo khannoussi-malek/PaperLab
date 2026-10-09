@@ -1,7 +1,7 @@
 import httpx
 import pytest
 
-from app.providers import arxiv, crossref, core_ac, semantic_scholar, openalex, pubmed
+from app.providers import arxiv, core_ac, crossref, europe_pmc, openalex, pmc, pubmed, semantic_scholar
 
 pytestmark = pytest.mark.anyio
 
@@ -343,3 +343,116 @@ async def test_openalex_next_cursor_when_exhausted(monkeypatch):
 
     assert len(entries) == 1
     assert next_cursor is None  # 3 * 20 >= 50
+
+
+# --- pmc ------------------------------------
+
+
+async def test_pmc_search_page_advances_retstart(monkeypatch):
+    seen_starts = []
+
+    async def fake_get(self, url, params=None, **kwargs):
+        request = httpx.Request("GET", url, params=params)
+        seen_starts.append(params["retstart"])
+        return httpx.Response(200, json={"esearchresult": {"count": "100", "idlist": []}}, request=request)
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    async with httpx.AsyncClient() as http:
+        await pmc.search_page(http, "cancer", page_size=20, cursor=0)
+        await pmc.search_page(http, "cancer", page_size=20, cursor=20)
+    assert seen_starts == [0, 20]
+
+
+async def test_pmc_next_cursor_when_more_remain_per_ncbis_own_count(monkeypatch):
+    async def fake_get(self, url, params=None, **kwargs):
+        request = httpx.Request("GET", url, params=params)
+        if "id" not in params:  # esearch
+            return httpx.Response(200, json={"esearchresult": {"count": "45", "idlist": ["1", "2"]}}, request=request)
+        return httpx.Response(200, text="<pmc-articleset></pmc-articleset>", request=request)  # efetch
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    async with httpx.AsyncClient() as http:
+        _, next_cursor = await pmc.search_page(http, "cancer", page_size=20, cursor=20)
+
+    assert next_cursor == 40  # 20 + 20 < 45
+
+
+async def test_pmc_next_cursor_is_none_once_the_count_is_exhausted(monkeypatch):
+    async def fake_get(self, url, params=None, **kwargs):
+        request = httpx.Request("GET", url, params=params)
+        if "id" not in params:
+            return httpx.Response(200, json={"esearchresult": {"count": "45", "idlist": ["1"]}}, request=request)
+        return httpx.Response(200, text="<pmc-articleset></pmc-articleset>", request=request)
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    async with httpx.AsyncClient() as http:
+        _, next_cursor = await pmc.search_page(http, "cancer", page_size=20, cursor=40)
+
+    assert next_cursor is None  # 40 + 20 = 60, not < 45
+
+
+async def test_pmc_next_cursor_never_exceeds_ncbis_9999_retstart_ceiling(monkeypatch):
+    async def fake_get(self, url, params=None, **kwargs):
+        request = httpx.Request("GET", url, params=params)
+        if "id" not in params:
+            return httpx.Response(
+                200, json={"esearchresult": {"count": "5700000", "idlist": ["1"]}}, request=request
+            )
+        return httpx.Response(200, text="<pmc-articleset></pmc-articleset>", request=request)
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    async with httpx.AsyncClient() as http:
+        _, next_cursor = await pmc.search_page(http, "cancer", page_size=20, cursor=9980)
+
+    assert next_cursor is None  # 9980 + 20 = 10000, past NCBI's 9999 ceiling
+
+
+# --- europe_pmc ------------------------------------
+
+
+async def test_europe_pmc_search_page_sends_the_cursor_mark_it_was_given(monkeypatch):
+    seen_cursors = []
+
+    async def fake_get(self, url, params=None, **kwargs):
+        seen_cursors.append(params["cursorMark"])
+        request = httpx.Request("GET", url, params=params)
+        return httpx.Response(200, json={"hitCount": 0, "resultList": {"result": []}}, request=request)
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    async with httpx.AsyncClient() as http:
+        await europe_pmc.search_page(http, "cancer", page_size=20, cursor="*")
+        await europe_pmc.search_page(http, "cancer", page_size=20, cursor="AoIIQDaIlCg1NjQ3MDk5NA==")
+    assert seen_cursors == ["*", "AoIIQDaIlCg1NjQ3MDk5NA=="]
+
+
+async def test_europe_pmc_next_cursor_is_the_servers_own_nextcursormark(monkeypatch):
+    async def fake_get(self, url, params=None, **kwargs):
+        request = httpx.Request("GET", url, params=params)
+        return httpx.Response(
+            200,
+            json={
+                "hitCount": 45, "nextCursorMark": "AoIIQDaIlCg1NjQ3MDk5NA==",
+                "resultList": {"result": [{"id": "1", "title": "x"}]},
+            },
+            request=request,
+        )
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    async with httpx.AsyncClient() as http:
+        _, next_cursor = await europe_pmc.search_page(http, "cancer", page_size=20, cursor="*")
+
+    assert next_cursor == "AoIIQDaIlCg1NjQ3MDk5NA=="
+
+
+async def test_europe_pmc_next_cursor_is_none_once_nextcursormark_disappears(monkeypatch):
+    async def fake_get(self, url, params=None, **kwargs):
+        request = httpx.Request("GET", url, params=params)
+        return httpx.Response(
+            200, json={"hitCount": 45, "resultList": {"result": [{"id": "1", "title": "x"}]}}, request=request
+        )
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    async with httpx.AsyncClient() as http:
+        _, next_cursor = await europe_pmc.search_page(http, "cancer", page_size=20, cursor="*")
+
+    assert next_cursor is None
