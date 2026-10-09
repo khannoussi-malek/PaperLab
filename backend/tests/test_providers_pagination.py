@@ -158,6 +158,25 @@ async def test_pubmed_next_cursor_is_none_once_the_count_is_exhausted(monkeypatc
     assert next_cursor is None  # 40 + 20 = 60, not < 45
 
 
+async def test_pubmed_next_cursor_never_exceeds_ncbis_9999_retstart_ceiling(monkeypatch):
+    """NCBI's ESearch hard ceiling: retstart can't exceed 9998. A count far past it must not produce a
+    next_cursor past the ceiling, even though cursor + page_size < count would otherwise say there's more."""
+
+    async def fake_get(self, url, params=None, **kwargs):
+        request = httpx.Request("GET", url, params=params)
+        if "id" not in params:  # esearch
+            return httpx.Response(
+                200, json={"esearchresult": {"count": "5700000", "idlist": ["1"]}}, request=request
+            )
+        return httpx.Response(200, text="<PubmedArticleSet></PubmedArticleSet>", request=request)  # efetch
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    async with httpx.AsyncClient() as http:
+        _, next_cursor = await pubmed.search_page(http, "cancer", page_size=20, cursor=9980)
+
+    assert next_cursor is None  # 9980 + 20 = 10000, past NCBI's 9999 ceiling, even though count says there's more
+
+
 # --- crossref ------------------------------------
 
 

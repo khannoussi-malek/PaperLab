@@ -187,7 +187,8 @@ test('with every source that searches titles off, Find papers says to turn one o
   page,
   request,
 }) => {
-  await setSourceSettings(request, { enabled: { crossref: false, arxiv: false, core: false } }) // OpenAlex is off already
+  // OpenAlex is off already; PubMed searches titles too and is on by default, so it needs turning off here as well
+  await setSourceSettings(request, { enabled: { crossref: false, arxiv: false, core: false, pubmed: false } })
   await page.goto('/')
   await page.getByRole('button', { name: 'Find papers' }).click()
   const dialog = page.getByRole('dialog', { name: 'Find papers' })

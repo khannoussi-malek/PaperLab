@@ -10,6 +10,7 @@ from app.workers.screening_suggest import SUGGEST_JOB_TIMEOUT, suggest_screening
 from app.workers.workspace_search import SEARCH_RUN_JOB_TIMEOUT, run_workspace_search
 
 logging.basicConfig(level=logging.INFO)
+logging.getLogger("httpx").setLevel(logging.WARNING)
 # SEARCH_RUN_JOB_TIMEOUT lives in workers/workspace_search.py, not here — the worker's own wall-clock deadline
 # check (C2 Important 1) is computed from that same constant, so importing it (rather than redefining a second
 # copy here) means the registered job_timeout and the loop's own backstop can never drift apart.

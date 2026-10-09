@@ -28,7 +28,8 @@ const ID_URL_BUILDERS: Record<string, (id: string) => string> = {
  * handled separately in each since it isn't a key in external_ids. */
 const ID_PRIORITY = ['openalex', 'semantic_scholar', 'arxiv', 'core', 'pubmed']
 
-/** Where "Open page" goes: the DOI, else arXiv, OpenAlex, Semantic Scholar, then CORE; null with no identifier. */
+/** Where "Open page" goes: the DOI, else arXiv, OpenAlex, Semantic Scholar, CORE, then PubMed; null with no
+ * identifier. */
 export function pageLink(candidate: Pick<Candidate, 'doi' | 'external_ids'>): string | null {
   if (candidate.doi) return `https://doi.org/${candidate.doi}`
   for (const source of ['arxiv', 'openalex', 'semantic_scholar', 'core', 'pubmed']) {
@@ -47,8 +48,8 @@ export function candidateKey(candidate: Candidate, index: number): string {
   return candidate.doi ?? `row-${index}`
 }
 
-/** Whether `candidate` is the paper `added` names: by openalex id, else doi (any case), semantic_scholar, arxiv or
- * core. Doi ranks second here (not last, unlike candidateKey/pageLink) because this drives "already in your
+/** Whether `candidate` is the paper `added` names: by openalex id, else doi (any case), semantic_scholar, arxiv,
+ * core or pubmed. Doi ranks second here (not last, unlike candidateKey/pageLink) because this drives "already in your
  * library" dedup across cached search results — ranking it last reintroduced a real gap: two rows for the same
  * paper that share a doi but not a semantic_scholar id (e.g. one row never got an S2 match) would stop matching,
  * leaving a stale "Add" button that 409s on click. */

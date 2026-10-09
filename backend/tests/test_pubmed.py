@@ -21,6 +21,13 @@ TWO_ARTICLES = ONE_ARTICLE.replace(
 
 EMPTY_SET = "<PubmedArticleSet></PubmedArticleSet>"
 
+# Carries inline markup PubMed uses for species/genes (<i>) and a DOI recorded only in PubmedData's own
+# ArticleIdList (not ELocationID) — the two real shapes Fix 1 (C1) and Fix 3 (I3) exist to handle. Not
+# itself a live-recorded record; built from the live-verified shapes the final review found.
+MARKED_UP_ARTICLE = """<PubmedArticleSet>
+<PubmedArticle><MedlineCitation><PMID>5</PMID><Article><Journal><JournalIssue><PubDate><Year>2005</Year></PubDate></JournalIssue></Journal><ArticleTitle>Engineering <i>Escherichia coli</i> for Improved Yield</ArticleTitle><Abstract><AbstractText>Expression of <i>lacZ</i> under control of P<sub>tac</sub> increased yield.</AbstractText></Abstract><AuthorList><Author><LastName>Lee</LastName><ForeName>Grace</ForeName></Author></AuthorList></Article></MedlineCitation><PubmedData><ArticleIdList><ArticleId IdType="pubmed">5</ArticleId><ArticleId IdType="doi">10.1000/marked.5</ArticleId></ArticleIdList></PubmedData></PubmedArticle>
+</PubmedArticleSet>"""
+
 
 @pytest.fixture
 async def pubmed_api():
@@ -86,6 +93,43 @@ async def test_a_record_with_no_doi_or_abstract_maps_without_them(pubmed_api):
     assert entry == {
         "pmid": "1", "title": "Bare Record.", "authors": ["Jo Smith"], "year": 2020, "doi": None, "abstract": None,
     }  # fmt: skip
+
+
+async def test_inline_markup_in_title_and_abstract_is_flattened_not_truncated(pubmed_api):
+    pubmed_api.reply("/entrez/eutils/efetch.fcgi", 200, text=MARKED_UP_ARTICLE)
+
+    entry = await pubmed.get(pubmed_api.client, "5")
+
+    assert entry["title"] == "Engineering Escherichia coli for Improved Yield"
+    assert entry["abstract"] == "Expression of lacZ under control of Ptac increased yield."
+
+
+async def test_doi_falls_back_to_pubmeddata_articleidlist_when_elocationid_has_none(pubmed_api):
+    pubmed_api.reply("/entrez/eutils/efetch.fcgi", 200, text=MARKED_UP_ARTICLE)
+
+    entry = await pubmed.get(pubmed_api.client, "5")
+
+    assert entry["doi"] == "10.1000/marked.5"
+
+
+async def test_search_asks_for_relevance_sort(pubmed_api):
+    pubmed_api.reply("/entrez/eutils/esearch.fcgi", 200, json={"esearchresult": {"count": "0", "idlist": []}})
+
+    await pubmed.search(pubmed_api.client, "x", 1)
+
+    assert pubmed_api.requests[0].url.params["sort"] == "relevance"
+
+
+async def test_an_esearch_error_reply_raises_httpx_error_not_keyerror(pubmed_api):
+    """NCBI answers HTTP 200 with an ERROR key (no idlist/count) for a malformed query, an empty term, or
+    retstart past its 9,999-record ceiling — this must not escape as a bare KeyError, since discovery.py
+    and workspace_search.py only catch httpx.HTTPError."""
+    pubmed_api.reply(
+        "/entrez/eutils/esearch.fcgi", 200, json={"esearchresult": {"ERROR": "Empty term provided."}}
+    )
+
+    with pytest.raises(httpx.HTTPError):
+        await pubmed.search(pubmed_api.client, "", 1)
 
 
 async def test_new_client_sends_the_api_key_as_a_query_param_when_set(pubmed_api):

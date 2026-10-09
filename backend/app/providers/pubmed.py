@@ -36,12 +36,32 @@ def new_client(
     return httpx.AsyncClient(base_url=BASE_URL, params=params, timeout=TIMEOUT, transport=limited)
 
 
+def _checked(response: httpx.Response) -> httpx.Response:
+    """Like response.raise_for_status(), but the message never embeds the request URL (which carries the
+    NCBI api_key query param) — that message ends up in cursor.last_error and worker logs."""
+    if response.status_code >= 400:
+        raise httpx.HTTPStatusError(
+            f"PubMed answered HTTP {response.status_code}", request=response.request, response=response
+        )
+    return response
+
+
 async def _esearch(http: httpx.AsyncClient, term: str, limit: int, start: int) -> tuple[list[str], int]:
     """PMIDs matching `term` (at most `limit`, from `start`), and NCBI's own total count for the query."""
     response = await http.get(
-        "/esearch.fcgi", params={"db": "pubmed", "term": term, "retmax": limit, "retstart": start, "retmode": "json"}
+        "/esearch.fcgi",
+        params={
+            "db": "pubmed", "term": term, "retmax": limit, "retstart": start, "retmode": "json",
+            "sort": "relevance",
+        },
     )
-    result = json_body(response.raise_for_status())["esearchresult"]
+    result = json_body(_checked(response))["esearchresult"]
+    if "ERROR" in result:
+        # Documented NCBI behavior: HTTP 200 with no idlist/count on a malformed query, an empty term, or
+        # retstart past the 9,999-record ceiling. Raising an httpx.HTTPError here (not letting the bare
+        # KeyError escape) is what lets discovery.search/workspace_search.search_batch treat this source
+        # as "failed for this request", same as any other provider error, instead of crashing the whole run.
+        raise httpx.DecodingError(result["ERROR"], request=response.request)
     return result["idlist"], int(result["count"])
 
 
@@ -49,7 +69,7 @@ async def _efetch(http: httpx.AsyncClient, pmids: list[str]) -> list[dict]:
     """The full records for `pmids`, one batched request. `pmids` must be non-empty — callers check first,
     so a term with zero matches never spends a second request fetching nothing."""
     response = await http.get("/efetch.fcgi", params={"db": "pubmed", "id": ",".join(pmids), "retmode": "xml"})
-    return _entries(response.raise_for_status())
+    return _entries(_checked(response))
 
 
 async def search(http: httpx.AsyncClient, term: str, limit: int) -> list[dict]:
@@ -69,7 +89,9 @@ async def search_page(http: httpx.AsyncClient, term: str, page_size: int, cursor
     whether this page happened to be full-sized."""
     ids, count = await _esearch(http, term, page_size, start=cursor)
     entries = await _efetch(http, ids) if ids else []
-    next_cursor = cursor + page_size if cursor + page_size < count else None
+    # ponytail: NCBI's ESearch hard ceiling (retstart can't exceed 9998); usehistory=y would lift it, not
+    # needed yet since no run has hit this in practice.
+    next_cursor = cursor + page_size if cursor + page_size < min(count, 9999) else None
     return entries, next_cursor
 
 
@@ -83,22 +105,32 @@ def _entries(response: httpx.Response) -> list[dict]:
     return [entry for node in root.findall("PubmedArticle") if (entry := _entry(node))]
 
 
+def _text(el: ET.Element) -> str:
+    return " ".join("".join(el.itertext()).split())
+
+
 def _entry(node: ET.Element) -> dict | None:
     pmid = node.findtext("MedlineCitation/PMID")
     article = node.find("MedlineCitation/Article")
     if not pmid or article is None:
         return None
     doi = next((el.text for el in article.findall("ELocationID") if el.get("EIdType") == "doi"), None)
+    if not doi:
+        # Fall back to PubmedData's own ArticleIdList (a sibling of MedlineCitation, read from `node` not
+        # `article` so this never picks up a ReferenceList's own, unrelated ArticleIdList entries) — most
+        # older records carry their DOI only here, not in ELocationID.
+        doi = node.findtext("PubmedData/ArticleIdList/ArticleId[@IdType='doi']")
     year = article.findtext("Journal/JournalIssue/PubDate/Year")
     authors = [
         joined
         for author in article.findall("AuthorList/Author")
         if (joined := " ".join(filter(None, (author.findtext("ForeName"), author.findtext("LastName")))))
     ]
-    abstract_parts = [text for el in article.findall("Abstract/AbstractText") if (text := (el.text or "").strip())]
+    abstract_parts = [text for el in article.findall("Abstract/AbstractText") if (text := _text(el))]
+    title_el = article.find("ArticleTitle")
     return {
         "pmid": pmid,
-        "title": " ".join((article.findtext("ArticleTitle") or "").split()),
+        "title": _text(title_el) if title_el is not None else "",
         "authors": authors,
         "year": int(year) if year and year.isdigit() else None,
         "doi": doi.strip().lower() if doi else None,
