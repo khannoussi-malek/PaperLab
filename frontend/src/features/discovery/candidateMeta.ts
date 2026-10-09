@@ -8,6 +8,7 @@ export const SOURCE_NAMES: Record<PaperSourceId, string> = {
   arxiv: 'arXiv',
   core: 'CORE',
   unpaywall: 'Unpaywall',
+  pubmed: 'PubMed',
 }
 
 /** "1,234 citations", "1 citation", or '' when the count is unknown. */
@@ -21,15 +22,16 @@ const ID_URL_BUILDERS: Record<string, (id: string) => string> = {
   openalex: (id) => `https://openalex.org/${id}`,
   semantic_scholar: (id) => `https://www.semanticscholar.org/paper/${id}`,
   core: (id) => `https://core.ac.uk/works/${id}`,
+  pubmed: (id) => `https://pubmed.ncbi.nlm.nih.gov/${id}/`,
 }
 /** Preference order for candidateKey/sameCandidate (pageLink has its own order, defined inline above) — doi is
  * handled separately in each since it isn't a key in external_ids. */
-const ID_PRIORITY = ['openalex', 'semantic_scholar', 'arxiv', 'core']
+const ID_PRIORITY = ['openalex', 'semantic_scholar', 'arxiv', 'core', 'pubmed']
 
 /** Where "Open page" goes: the DOI, else arXiv, OpenAlex, Semantic Scholar, then CORE; null with no identifier. */
 export function pageLink(candidate: Pick<Candidate, 'doi' | 'external_ids'>): string | null {
   if (candidate.doi) return `https://doi.org/${candidate.doi}`
-  for (const source of ['arxiv', 'openalex', 'semantic_scholar', 'core']) {
+  for (const source of ['arxiv', 'openalex', 'semantic_scholar', 'core', 'pubmed']) {
     const id = candidate.external_ids[source]
     if (id) return ID_URL_BUILDERS[source](id)
   }
@@ -53,7 +55,7 @@ export function candidateKey(candidate: Candidate, index: number): string {
 export function sameCandidate(candidate: Candidate, added: Candidate): boolean {
   if (added.external_ids.openalex) return candidate.external_ids.openalex === added.external_ids.openalex
   if (added.doi) return candidate.doi?.toLowerCase() === added.doi.toLowerCase()
-  for (const source of ['semantic_scholar', 'arxiv', 'core']) {
+  for (const source of ['semantic_scholar', 'arxiv', 'core', 'pubmed']) {
     const addedId = added.external_ids[source]
     if (addedId) return candidate.external_ids[source] === addedId
   }

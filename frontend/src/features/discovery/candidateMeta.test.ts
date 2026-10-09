@@ -21,6 +21,10 @@ describe('pageLink', () => {
   it('is null without any identifier', () => {
     expect(pageLink(ids)).toBeNull()
   })
+
+  it('falls back to PubMed when nothing else is set', () => {
+    expect(pageLink({ ...ids, external_ids: { pubmed: '42825172' } })).toBe('https://pubmed.ncbi.nlm.nih.gov/42825172/')
+  })
 })
 
 describe('citationsLabel', () => {
@@ -89,5 +93,14 @@ describe('sameCandidate', () => {
 
   it('is false when the added candidate has no identifier to match on', () => {
     expect(sameCandidate(candidate({ external_ids: { openalex: 'W1' } }), candidate({}))).toBe(false)
+  })
+
+  it('matches by pubmed id when nothing stronger is set', () => {
+    expect(
+      sameCandidate(candidate({ external_ids: { pubmed: '42825172' } }), candidate({ external_ids: { pubmed: '42825172' } })),
+    ).toBe(true)
+    expect(
+      sameCandidate(candidate({ external_ids: { pubmed: '1' } }), candidate({ external_ids: { pubmed: '2' } })),
+    ).toBe(false)
   })
 })
