@@ -226,6 +226,90 @@ def _pubmed_handle(request: httpx.Request) -> httpx.Response:
     return _pubmed_efetch_response([(str(_PMID_BASE + i), title, doi) for i, (title, doi, _) in enumerate(PAPERS)])
 
 
+# PMC shares PubMed's exact esearch/efetch request shape (just db=pmc) and so mirrors _pubmed_handle almost
+# line for line below -- own id bases, offset past PubMed's 800000/810000, so fixture ids never collide.
+_PMC_PMID_BASE = 820_000       # PAPERS[0..2] -> 820000..820002
+_PAGE_PMC_PMID_BASE = 830_000  # PAGE_PAPERS[0..2] -> 830000..830002
+FREE_PMC_ID = str(_PMC_PMID_BASE)
+
+
+def _pmc_article(pmcid: str, title: str, doi: str) -> str:
+    return (
+        f'<article><front><article-meta>'
+        f'<article-id pub-id-type="pmcid">PMC{pmcid}</article-id>'
+        f'<article-id pub-id-type="doi">{doi}</article-id>'
+        f"<title-group><article-title>{title}</article-title></title-group>"
+        f"<pub-date><year>2026</year></pub-date>"
+        f'<contrib-group><contrib contrib-type="author">'
+        f"<name><surname>Fixture</surname><given-names>Ada</given-names></name></contrib></contrib-group>"
+        f"</article-meta></front></article>"
+    )
+
+
+def _pmc_efetch_response(entries: list[tuple[str, str, str]]) -> httpx.Response:
+    articles = "".join(_pmc_article(pmcid, title, doi) for pmcid, title, doi in entries)
+    return httpx.Response(
+        200, text=f"<pmc-articleset>{articles}</pmc-articleset>", headers={"content-type": "application/xml"}
+    )
+
+
+def _pmc_handle(request: httpx.Request) -> httpx.Response:
+    if request.url.path.endswith("/esearch.fcgi"):
+        retmax = int(request.url.params["retmax"])
+        if retmax < len(PAPERS):  # a direct search_page() pagination test (page_size=2), same convention as PubMed
+            offset = int(request.url.params["retstart"])
+            items = _page_slice(offset, retmax)
+            ids = [str(_PAGE_PMC_PMID_BASE + offset + i) for i in range(len(items))]
+            return _pubmed_esearch_response(ids, len(PAGE_PAPERS))
+        ids = [str(_PMC_PMID_BASE + i) for i in range(len(PAPERS))]
+        return _pubmed_esearch_response(ids, len(PAPERS))
+    ids = request.url.params["id"].split(",")
+    if int(ids[0]) >= _PAGE_PMC_PMID_BASE:
+        offset = int(ids[0]) - _PAGE_PMC_PMID_BASE
+        items = _page_slice(offset, len(ids))
+        return _pmc_efetch_response([(pmcid, title, doi) for pmcid, (title, doi) in zip(ids, items)])
+    return _pmc_efetch_response([(str(_PMC_PMID_BASE + i), title, doi) for i, (title, doi, _) in enumerate(PAPERS)])
+
+
+# Europe PMC is structurally simpler: one request per page, no esearch/efetch split, and its cursorMark is an
+# opaque string token (not an offset) -- this fake mints its own cursorMark values (just the next offset as a
+# string) since it's the only side that ever has to read them back.
+_EUROPE_PMC_ID_BASE = 840_000       # PAPERS[0..2] -> 840000..840002
+_PAGE_EUROPE_PMC_ID_BASE = 850_000  # PAGE_PAPERS[0..2] -> 850000..850002
+FREE_EUROPE_PMC_ID = str(_EUROPE_PMC_ID_BASE)
+
+
+def _europe_pmc_result(ext_id: int, title: str, doi: str) -> dict:
+    return {
+        "pmid": str(ext_id),
+        "title": title,
+        "authorList": {"author": [{"fullName": "Ada Fixture"}]},
+        "pubYear": "2026",
+        "doi": doi,
+        "citedByCount": 3,
+    }
+
+
+def _europe_pmc_handle(request: httpx.Request) -> httpx.Response:
+    params = request.url.params
+    page_size = int(params["pageSize"])
+    cursor_mark = params["cursorMark"]
+    if page_size < len(PAPERS):  # a direct search_page() pagination test (page_size=2), same convention as PubMed
+        offset = 0 if cursor_mark == "*" else int(cursor_mark)
+        items = _page_slice(offset, page_size)
+        results = [
+            _europe_pmc_result(_PAGE_EUROPE_PMC_ID_BASE + offset + i, title, doi)
+            for i, (title, doi) in enumerate(items)
+        ]
+        body: dict = {"hitCount": len(PAGE_PAPERS), "resultList": {"result": results}}
+        next_offset = offset + page_size
+        if next_offset < len(PAGE_PAPERS):
+            body["nextCursorMark"] = str(next_offset)
+        return httpx.Response(200, json=body)
+    results = [_europe_pmc_result(_EUROPE_PMC_ID_BASE + i, title, doi) for i, (title, doi, _) in enumerate(PAPERS)]
+    return httpx.Response(200, json={"hitCount": len(PAPERS), "resultList": {"result": results}})
+
+
 @dataclass(frozen=True)
 class FakeAdapter:
     """One source's fake: `host` plus a `match(path, params)` predicate decide whether this adapter answers a
@@ -314,9 +398,20 @@ ADAPTERS: tuple[FakeAdapter, ...] = (
     FakeAdapter("api.unpaywall.org", lambda path, params: True, _unpaywall_handle),
     FakeAdapter(
         "eutils.ncbi.nlm.nih.gov",
-        lambda path, params: path.endswith("esearch.fcgi") or path.endswith("efetch.fcgi"),
+        # PMC shares this exact host with PubMed (same eutils, same esearch.fcgi/efetch.fcgi paths) -- the two
+        # FakeAdapter entries below both match on this host, and dispatch between them is each one's own `db=`
+        # check, not a path difference, mirroring how pubmed.py/pmc.py themselves only differ by that one param.
+        lambda path, params: (path.endswith("esearch.fcgi") or path.endswith("efetch.fcgi"))
+        and params.get("db") == "pubmed",
         _pubmed_handle,
     ),
+    FakeAdapter(
+        "eutils.ncbi.nlm.nih.gov",
+        lambda path, params: (path.endswith("esearch.fcgi") or path.endswith("efetch.fcgi"))
+        and params.get("db") == "pmc",
+        _pmc_handle,
+    ),
+    FakeAdapter("www.ebi.ac.uk", lambda path, params: path.endswith("/search"), _europe_pmc_handle),
     FakeAdapter("pdf.paperlab.test", lambda path, params: True, _pdf_handle),
 )  # fmt: skip
 
