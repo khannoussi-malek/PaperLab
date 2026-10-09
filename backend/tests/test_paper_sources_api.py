@@ -29,6 +29,7 @@ async def test_the_defaults_come_back_without_a_row(client, no_row):
         ("arxiv", "arXiv", True, None),
         ("core", "CORE", True, False),
         ("unpaywall", "Unpaywall", True, None),
+        ("pubmed", "PubMed", True, False),
     ]
 
 
