@@ -172,6 +172,60 @@ def _s2_search_page(params: httpx.QueryParams) -> httpx.Response:
     return httpx.Response(200, json=body)
 
 
+def _pubmed_article(pmid: str, title: str, doi: str) -> str:
+    return (
+        f"<PubmedArticle><MedlineCitation><PMID>{pmid}</PMID><Article>"
+        f"<Journal><JournalIssue><PubDate><Year>2026</Year></PubDate></JournalIssue></Journal>"
+        f"<ArticleTitle>{title}</ArticleTitle>"
+        f'<ELocationID EIdType="doi">{doi}</ELocationID>'
+        f"<AuthorList><Author><LastName>Fixture</LastName><ForeName>Ada</ForeName></Author></AuthorList>"
+        f"</Article></MedlineCitation></PubmedArticle>"
+    )
+
+
+def _pubmed_esearch_response(ids: list[str], count: int) -> httpx.Response:
+    return httpx.Response(200, json={"esearchresult": {"count": str(count), "idlist": ids}})
+
+
+def _pubmed_efetch_response(entries: list[tuple[str, str, str]]) -> httpx.Response:
+    articles = "".join(_pubmed_article(pmid, title, doi) for pmid, title, doi in entries)
+    return httpx.Response(
+        200, text=f"<PubmedArticleSet>{articles}</PubmedArticleSet>", headers={"content-type": "application/xml"}
+    )
+
+
+# PMIDs are fabricated positionally, in two disjoint ranges so a request's own `id` list says which fixture
+# set (PAPERS, for the one-shot ask flow, or PAGE_PAPERS, for a search_page pagination test) it belongs to —
+# offset well clear of the other fixtures' own ids (core_id 900000s, s2 paperId hex 1-3, arxiv 10000s above).
+_PMID_BASE = 800_000       # PAPERS[0..2] -> 800000..800002
+_PAGE_PMID_BASE = 810_000  # PAGE_PAPERS[0..2] -> 810000..810002
+FREE_PUBMED_ID = str(_PMID_BASE)  # PAPERS[0]'s own pmid — mirrors FREE_ARXIV_ID above
+
+
+def _pubmed_handle(request: httpx.Request) -> httpx.Response:
+    if request.url.path.endswith("/esearch.fcgi"):
+        retmax = int(request.url.params["retmax"])
+        # Unlike arxiv.py's plain search() (which sends no `start` at all, letting _arxiv_handle tell the two
+        # cases apart by presence alone), pubmed.search() and search_page() both always send retstart/retmax
+        # — so this tells them apart by size instead: the one-shot ask flow always asks PER_SOURCE=10 (> the
+        # 3-item PAPERS fixture), while every pagination test in this file deliberately uses page_size=2 (this
+        # file's own documented convention). Never call pubmed.search()/search_page() with a limit/page_size
+        # that straddles len(PAPERS)==3 in a new test, or this stops being able to tell them apart.
+        if retmax < len(PAPERS):  # a direct search_page() pagination test in this file (page_size=2)
+            offset = int(request.url.params["retstart"])
+            items = _page_slice(offset, retmax)
+            ids = [str(_PAGE_PMID_BASE + offset + i) for i in range(len(items))]
+            return _pubmed_esearch_response(ids, len(PAGE_PAPERS))
+        ids = [str(_PMID_BASE + i) for i in range(len(PAPERS))]
+        return _pubmed_esearch_response(ids, len(PAPERS))
+    ids = request.url.params["id"].split(",")
+    if int(ids[0]) >= _PAGE_PMID_BASE:
+        offset = int(ids[0]) - _PAGE_PMID_BASE
+        items = _page_slice(offset, len(ids))
+        return _pubmed_efetch_response([(pmid, title, doi) for pmid, (title, doi) in zip(ids, items)])
+    return _pubmed_efetch_response([(str(_PMID_BASE + i), title, doi) for i, (title, doi, _) in enumerate(PAPERS)])
+
+
 @dataclass(frozen=True)
 class FakeAdapter:
     """One source's fake: `host` plus a `match(path, params)` predicate decide whether this adapter answers a
@@ -258,6 +312,11 @@ ADAPTERS: tuple[FakeAdapter, ...] = (
     FakeAdapter("export.arxiv.org", lambda path, params: path == "/api/query", _arxiv_handle),
     FakeAdapter("api.core.ac.uk", lambda path, params: path == "/v3/search/works/", _core_handle),
     FakeAdapter("api.unpaywall.org", lambda path, params: True, _unpaywall_handle),
+    FakeAdapter(
+        "eutils.ncbi.nlm.nih.gov",
+        lambda path, params: path.endswith("esearch.fcgi") or path.endswith("efetch.fcgi"),
+        _pubmed_handle,
+    ),
     FakeAdapter("pdf.paperlab.test", lambda path, params: True, _pdf_handle),
 )  # fmt: skip
 
