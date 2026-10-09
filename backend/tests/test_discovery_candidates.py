@@ -6,8 +6,11 @@ from app.core.candidates import (
     MAX_AUTHORS,
     MAX_PDF_URLS,
     Candidate,
+    _ids,
     from_core,
     from_crossref,
+    from_europe_pmc,
+    from_pmc,
     from_pubmed,
     from_s2,
     from_work,
@@ -312,3 +315,61 @@ def test_two_candidates_sharing_a_pubmed_id_are_the_same_paper():
     b = from_pubmed(record("A, Revised"))
 
     assert _same_paper(a, b)
+
+
+def test_from_pmc_maps_every_field():
+    entry = {
+        "pmcid": "13647476", "pmid": "42847424", "title": "Protein-Ratio Rheostats",
+        "authors": ["Subbaya Subramanian"], "year": 2026, "doi": "10.1002/bies.70195",
+        "abstract": "Cellular function depends on protein ratios.",
+    }
+
+    candidate = from_pmc(entry)
+
+    assert candidate.external_ids == {"pmc": "13647476", "pubmed": "42847424"}
+    assert candidate.sources == ("pmc",)
+    assert candidate.doi == "10.1002/bies.70195"
+    assert candidate.abstract == "Cellular function depends on protein ratios."
+
+
+def test_from_pmc_with_no_pmid_has_only_a_pmc_id():
+    entry = {
+        "pmcid": "1", "pmid": None, "title": "Bare", "authors": [], "year": 2020, "doi": None, "abstract": None,
+    }
+
+    assert from_pmc(entry).external_ids == {"pmc": "1"}
+
+
+def test_from_europe_pmc_reuses_pubmed_and_pmc_keys_not_its_own():
+    entry = {
+        "pmid": "42428244", "pmcid": "13346171", "title": "CRISPR review", "authors": ["Zhang X"],
+        "year": 2026, "doi": "10.3389/fgeed.2026.1844919", "abstract": "An abstract.", "cited_by_count": 3,
+    }
+
+    candidate = from_europe_pmc(entry)
+
+    assert candidate.external_ids == {"pubmed": "42428244", "pmc": "13346171"}
+    assert "europe_pmc" not in candidate.external_ids
+    assert candidate.sources == ("europe_pmc",)
+    assert candidate.cited_by_count == 3
+
+
+def test_from_europe_pmc_with_no_pmid_or_pmcid_has_no_external_ids():
+    entry = {
+        "pmid": None, "pmcid": None, "title": "Bare", "authors": [], "year": None, "doi": None,
+        "abstract": None, "cited_by_count": None,
+    }
+
+    assert from_europe_pmc(entry).external_ids == {}
+
+
+def test_a_paper_found_via_both_pubmed_and_europe_pmc_is_the_same_candidate():
+    from_pubmed_candidate = from_pubmed(
+        {"pmid": "42428244", "title": "CRISPR review", "authors": [], "year": 2026, "doi": None, "abstract": None}
+    )
+    from_epmc_candidate = from_europe_pmc(
+        {"pmid": "42428244", "pmcid": None, "title": "CRISPR review (Europe PMC's own copy)", "authors": [],
+         "year": 2026, "doi": None, "abstract": None, "cited_by_count": None}
+    )
+
+    assert _ids(from_pubmed_candidate) & _ids(from_epmc_candidate)  # share the "pubmed:42428244" key
