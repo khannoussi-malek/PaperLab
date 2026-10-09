@@ -3,9 +3,11 @@ failures, timeouts and error statuses (429 included) raise httpx.HTTPError.
 
 Probed live on 2026-10-09: one-step search (GET /search?query=...&resultType=core), unlike PubMed/PMC's
 esearch-then-efetch dance -- resultType=core returns title, authors, abstractText, doi, pmid, pmcid and
-citedByCount all in the one response. Default sort is also newest-first, the same trap PubMed/PMC have
-(confirmed live: "attention is all you need" without sort=relevance returns unrelated recent papers
-first) -- sort=relevance is requested explicitly. cursorMark pagination is count-aware, not
+citedByCount all in the one response. Unlike NCBI (PubMed/PMC's own host), Europe PMC's default sort IS
+relevance -- no sort param is sent here. (An earlier version of this module sent sort=relevance, copying
+NCBI's own lesson that newest-first needs overriding; that lesson doesn't transfer, "relevance" isn't a
+valid Europe PMC sort field, and EBI answers any invalid sort value with a generic 503 that looks exactly
+like a real outage. Confirmed live before fixing it.) cursorMark pagination is count-aware, not
 page-fullness-based: nextCursorMark is present in the response if and only if there is a next page
 (confirmed live at an exact page/hitCount boundary: pageSize=1 with hitCount=1 omits it even though the
 page is "full") -- search_page just checks for that key, no retstart-style arithmetic needed. A `page=N`
@@ -37,6 +39,7 @@ EBI publishes no documented rate limit for this endpoint; this stays as polite a
 source in this codebase (ponytail: raise the pace if a real throttle response is ever seen).
 """
 
+import html
 import re
 
 import httpx
@@ -47,7 +50,10 @@ BASE_URL = "https://www.ebi.ac.uk/europepmc/webservices/rest"
 TIMEOUT = httpx.Timeout(10.0)
 _MIN_INTERVAL = 1 / 3
 
-_TAG = re.compile(r"<[^>]+>")
+# Matches only tag-SHAPED spans (a letter right after the optional slash) -- not "P<0.05 ... P>0.05",
+# which is ordinary biomedical text, not markup. Confirmed live: the naive r"<[^>]+>" pattern was
+# deleting real results-section text across 1-71% of sampled abstracts depending on the query.
+_TAG = re.compile(r"</?[A-Za-z][\w:-]*(?:\s[^<>]*)?/?>")
 
 
 def new_client(
@@ -60,7 +66,10 @@ def new_client(
 
 
 def _clean(text: str | None) -> str:
-    return " ".join(_TAG.sub("", text or "").split())
+    # Unescape first: some records carry HTML-escaped markup (e.g. "&lt;i&gt;...&lt;/i&gt;") that would
+    # otherwise pass through as literal text; unescaping first turns it into a real "<i>...</i>" shape
+    # the strict _TAG pattern above then correctly strips.
+    return " ".join(_TAG.sub("", html.unescape(text or "")).split())
 
 
 def _json_body(response: httpx.Response) -> dict:
@@ -70,27 +79,37 @@ def _json_body(response: httpx.Response) -> dict:
         raise httpx.DecodingError(str(exc), request=response.request) from exc
 
 
+def _checked(response: httpx.Response) -> httpx.Response:
+    """Like response.raise_for_status(), but the message never embeds the request URL -- same convention
+    as pmc.py's own _checked (this project's Global Constraint: no provider's error message leaks the
+    request URL, even though Europe PMC itself has no secret to leak -- the rule applies uniformly)."""
+    if response.status_code >= 400:
+        raise httpx.HTTPStatusError(
+            f"Europe PMC answered HTTP {response.status_code}", request=response.request, response=response
+        )
+    return response
+
+
 async def _search(http: httpx.AsyncClient, term: str, page_size: int, cursor_mark: str) -> httpx.Response:
+    # No sort param: Europe PMC's default order is already relevance (confirmed live -- the top results
+    # and nextCursorMark are identical whether sort is omitted or set to the documented "score desc").
+    # sort=relevance is NOT a valid field here (that was PubMed/PMC's own lesson, which doesn't transfer:
+    # NCBI and EBI are different services with different sort vocabularies) -- EBI answers ANY invalid
+    # sort value with a generic 503 "Search service is temporarily unavailable", which looks exactly like
+    # a real outage but isn't one. Confirmed live: "RELEVANCE", "FOOBARFIELD" and "nonsense desc" all get
+    # the identical 503 body; "score desc", "CITED desc" and no sort param at all all get HTTP 200.
     return await http.get(
         "/search",
         params={
-            "query": term, "format": "json", "resultType": "core", "pageSize": page_size,
-            "cursorMark": cursor_mark, "sort": "relevance",
+            "query": term, "format": "json", "resultType": "core", "pageSize": page_size, "cursorMark": cursor_mark,
         },
     )
 
 
 async def search(http: httpx.AsyncClient, term: str, limit: int) -> list[dict]:
     response = await _search(http, term, limit, "*")
-    body = _json_body(response.raise_for_status())
+    body = _json_body(_checked(response))
     return [_entry(r) for r in body["resultList"]["result"]]
-
-
-async def get(http: httpx.AsyncClient, ext_id: str) -> dict | None:
-    """One paper by a PMID or bare PMC id (Europe PMC's own EXT_ID query field matches either), or None
-    when Europe PMC has no such record."""
-    entries = await search(http, f"EXT_ID:{ext_id}", 1)
-    return entries[0] if entries else None
 
 
 async def search_page(
@@ -101,7 +120,7 @@ async def search_page(
     (entries, next_cursor_or_None): Europe PMC says directly whether there's a next page by whether
     nextCursorMark is present at all, so there's no count/page-size arithmetic to get wrong."""
     response = await _search(http, term, page_size, cursor)
-    body = _json_body(response.raise_for_status())
+    body = _json_body(_checked(response))
     entries = [_entry(r) for r in body["resultList"]["result"]]
     return entries, body.get("nextCursorMark")
 

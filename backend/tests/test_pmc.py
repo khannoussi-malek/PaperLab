@@ -22,6 +22,13 @@ TWO_ARTICLES = ONE_ARTICLE.replace(
 
 UNKNOWN_ID = '<pmc-articleset><error id="999999999999">The following PMCID is not available: 999999999999</error></pmc-articleset>'
 
+# A structured abstract (<abstract><sec><title>...</title><p>...</p></sec>...) -- the shape most real
+# clinical/review records use. The flat ONE_ARTICLE fixture above never exercised this; that's exactly
+# why the structured-abstract bug (dropping the whole abstract) shipped without a test catching it.
+STRUCTURED_ABSTRACT_ARTICLE = """<pmc-articleset>
+<article><front><article-meta><article-id pub-id-type="pmcid">PMC2</article-id><title-group><article-title>Structured Abstract Trial</article-title></title-group><contrib-group><contrib contrib-type="author"><name><surname>Lee</surname><given-names>Grace</given-names></name></contrib></contrib-group><pub-date><year>2024</year></pub-date><abstract><sec><title>Background</title><p>Diabetes affects many patients.</p></sec><sec><title>Methods</title><p>A randomized trial was run.</p></sec><sec><title>Results</title><p>Outcomes improved significantly.</p></sec></abstract></article-meta></front></article>
+</pmc-articleset>"""
+
 
 @pytest.fixture
 async def pmc_api():
@@ -67,6 +74,28 @@ async def test_get_parses_the_full_record_and_skips_the_abstract_title_label(pmc
         "doi": "10.1002/bies.70195",
         "abstract": "Cellular function depends on protein ratios.",  # not "ABSTRACT Cellular function..."
     }
+
+
+async def test_a_structured_abstract_is_not_dropped(pmc_api):
+    pmc_api.reply("/entrez/eutils/efetch.fcgi", 200, text=STRUCTURED_ABSTRACT_ARTICLE)
+
+    entry = await pmc.get(pmc_api.client, "2")
+
+    assert entry["abstract"] == (
+        "Diabetes affects many patients. A randomized trial was run. Outcomes improved significantly."
+    )
+    assert "Background" not in entry["abstract"]  # section <title> labels still don't leak
+
+
+async def test_efetch_reorders_entries_to_match_esearchs_own_id_order(pmc_api):
+    """efetch's own response order doesn't always match the ids it was asked for -- callers rely on
+    esearch's relevance ranking being preserved, not efetch's own (arbitrary) order."""
+    out_of_order = TWO_ARTICLES  # PMC13647476 first in the XML, PMC13646509 second
+    pmc_api.reply("/entrez/eutils/efetch.fcgi", 200, text=out_of_order)
+
+    entries = await pmc._efetch(pmc_api.client, ["13646509", "13647476"])  # requested in the OTHER order
+
+    assert [e["pmcid"] for e in entries] == ["13646509", "13647476"]
 
 
 async def test_a_pmc_id_pmc_does_not_know_is_none(pmc_api):
