@@ -15,8 +15,8 @@ from typing import Any
 
 import httpx
 
-from app.core.candidates import Candidate, from_arxiv, from_core, from_crossref, from_s2, from_work
-from app.providers import arxiv, core_ac, crossref, openalex, semantic_scholar, unpaywall
+from app.core.candidates import Candidate, from_arxiv, from_core, from_crossref, from_pubmed, from_s2, from_work
+from app.providers import arxiv, core_ac, crossref, openalex, pubmed, semantic_scholar, unpaywall
 
 # How many results Find Papers/Similar asks each source for, per query (was discovery.py's PER_SOURCE).
 PER_SOURCE = 10
@@ -54,6 +54,10 @@ async def _arxiv(http: httpx.AsyncClient, kind: str, value: str) -> list[Candida
 
 async def _core(http: httpx.AsyncClient, kind: str, value: str) -> list[Candidate]:
     return [from_core(work) for work in await core_ac.search(http, value, PER_SOURCE)]
+
+
+async def _pubmed(http: httpx.AsyncClient, kind: str, value: str) -> list[Candidate]:
+    return [from_pubmed(entry) for entry in await pubmed.search(http, value, PER_SOURCE)]
 
 
 @dataclass(frozen=True)
@@ -106,6 +110,11 @@ REGISTRY: tuple[SourceSpec, ...] = (
     SourceSpec(
         id="unpaywall", name="Unpaywall", keyed=False, enabled_by_default=True, is_discovery_source=False,
         new_client=unpaywall.new_client,
+    ),
+    SourceSpec(
+        id="pubmed", name="PubMed", keyed=True, enabled_by_default=True, is_discovery_source=True,
+        new_client=pubmed.new_client, ask=_pubmed, ask_kinds=("title",),
+        page=pubmed.search_page, mapper=from_pubmed, page_size=20,
     ),
 )
 

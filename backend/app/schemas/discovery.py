@@ -16,6 +16,7 @@ SOURCE_ID_PATTERNS: dict[str, re.Pattern[str]] = {
     "openalex": re.compile(r"^W\d{1,19}$"),
     "semantic_scholar": re.compile(r"^[0-9a-f]{40}$"),
     "core": re.compile(r"^\d{1,20}$"),
+    "pubmed": re.compile(r"^\d{1,20}$"),
 }
 
 

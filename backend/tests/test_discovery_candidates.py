@@ -216,6 +216,15 @@ def test_candidate_in_accepts_every_known_source_in_its_real_shape():
     )
 
 
+def test_candidate_in_accepts_a_pubmed_id():
+    CandidateIn(title="T", external_ids={"pubmed": "42825172"})
+
+
+def test_candidate_in_rejects_a_non_numeric_pubmed_id():
+    with pytest.raises(ValidationError):
+        CandidateIn(title="T", external_ids={"pubmed": "not-a-pmid"})
+
+
 def test_openalex_abstract_is_reconstructed_from_the_inverted_index():
     # OpenAlex never gives plain abstract text, only a word -> positions map (abstract_text, app/core/enrichment.py,
     # already used for library-paper enrichment; reused here for search candidates).
