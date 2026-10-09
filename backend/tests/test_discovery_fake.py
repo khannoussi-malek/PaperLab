@@ -5,7 +5,7 @@ from app.core import discovery, references
 from app.core.errors import Conflict
 from app.core.paper_sources import SOURCES, SourceSettings
 from app.models import Paper
-from app.providers import arxiv, core_ac, crossref, discovery_fake, openalex, semantic_scholar
+from app.providers import arxiv, core_ac, crossref, discovery_fake, openalex, pubmed, semantic_scholar
 from app.providers.extraction import extract
 
 # Fetches and embeds take one advisory lock (core/references.py); in a test it lasts until the rollback, so these
@@ -31,8 +31,10 @@ async def test_the_e2e_fake_finds_three_papers_and_suggests_the_same_three(sessi
     assert ([c.title for c in found.results], found.notices) == (titles, [])
     assert [c.title for c in suggested] == titles
     assert [c.sources for c in found.results] == [
-        ("openalex", "crossref", "arxiv", "core"), ("openalex", "crossref"), ("openalex", "crossref")
-    ]  # fmt: skip
+        ("openalex", "crossref", "arxiv", "core", "pubmed"),
+        ("openalex", "crossref", "pubmed"),
+        ("openalex", "crossref", "pubmed"),
+    ]
     assert [bool(c.pdf_urls) for c in found.results] == [True, True, False]
 
 
@@ -43,7 +45,9 @@ async def test_with_openalex_off_as_on_the_e2e_stack_the_badges_are_m19s(session
     found = await discovery.search(session, providers, "anything")
     await providers.aclose()
 
-    assert [c.sources for c in found.results] == [("crossref", "arxiv", "core"), ("crossref",), ("crossref",)]
+    assert [c.sources for c in found.results] == [
+        ("crossref", "arxiv", "core", "pubmed"), ("crossref", "pubmed"), ("crossref", "pubmed")
+    ]  # fmt: skip
     assert [bool(c.pdf_urls) for c in found.results] == [True, True, False]  # the landing page's link from Unpaywall
 
 
@@ -163,3 +167,19 @@ async def test_the_e2e_fakes_openalex_search_page_has_two_pages_then_exhausts(fa
     assert len(page2) == 1
     assert cursor2 is None
     assert {r["title"] for r in page1}.isdisjoint({r["title"] for r in page2})
+
+
+async def test_the_e2e_fakes_pubmed_search_page_has_two_pages_then_exhausts(fake_providers):
+    page1, cursor1 = await pubmed.search_page(fake_providers.client("pubmed"), "anything", page_size=2, cursor=0)
+    assert len(page1) == 2
+    assert cursor1 == 2
+
+    page2, cursor2 = await pubmed.search_page(fake_providers.client("pubmed"), "anything", page_size=2, cursor=cursor1)
+    assert len(page2) == 1
+    assert cursor2 is None
+    assert {e["title"] for e in page1}.isdisjoint({e["title"] for e in page2})
+
+
+async def test_the_e2e_fakes_pubmed_search_page_ids_do_not_collide_with_the_free_papers_id(fake_providers):
+    [entry], _ = await pubmed.search_page(fake_providers.client("pubmed"), "anything", page_size=1, cursor=0)
+    assert entry["pmid"] != discovery_fake.FREE_PUBMED_ID
