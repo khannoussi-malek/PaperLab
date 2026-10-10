@@ -92,7 +92,7 @@ class SearchResult:
 def build_providers(sources: SourceSettings, transport: httpx.AsyncBaseTransport | None = None) -> Providers:
     on, email, keys = sources.enabled, sources.contact_email, sources.api_keys
     clients = {
-        spec.id: spec.new_client(email=email, api_key=keys.get(spec.id), transport=transport)
+        spec.id: spec.new_client(email=email, api_key=keys.get(spec.key_source or spec.id), transport=transport)
         for spec in source_registry.REGISTRY
         if (sources.unpaywall_on if spec.id == "unpaywall" else on[spec.id])
     }

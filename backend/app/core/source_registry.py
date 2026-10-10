@@ -135,6 +135,9 @@ class SourceSpec:
     mapper: Mapper | None = None
     page_size: int = 20
     starting_cursor: int | str = 0
+    key_source: str | None = None  # None: use this source's own id for the key lookup. Set when a source
+    # rides a different source's client/key entirely (e.g. SSRN reuses OpenAlex's own metered client and
+    # key) -- `build_providers` looks the key up under `key_source` instead of `id` when this is set.
 
 
 REGISTRY: tuple[SourceSpec, ...] = (
@@ -198,9 +201,9 @@ REGISTRY: tuple[SourceSpec, ...] = (
         page=acm_dl.search_page, mapper=from_acm_dl, page_size=30,
     ),
     SourceSpec(
-        id="ssrn", name="SSRN", keyed=False, enabled_by_default=True, is_discovery_source=True,
+        id="ssrn", name="SSRN", keyed=False, enabled_by_default=False, is_discovery_source=True,
         new_client=openalex.new_client, ask=_ssrn, ask_kinds=("title",),
-        page=ssrn.search_page, mapper=from_ssrn, page_size=25,
+        page=ssrn.search_page, mapper=from_ssrn, page_size=25, key_source="openalex",
     ),
 )
 

@@ -25,7 +25,7 @@ class PaperSources(Base):
     zenodo_enabled: Mapped[bool] = mapped_column(server_default=text("true"))
     hal_enabled: Mapped[bool] = mapped_column(server_default=text("true"))
     acm_dl_enabled: Mapped[bool] = mapped_column(server_default=text("true"))
-    ssrn_enabled: Mapped[bool] = mapped_column(server_default=text("true"))
+    ssrn_enabled: Mapped[bool] = mapped_column(server_default=text("false"))
     # Never returned by a route; views carry has_key and key_hint.
     openalex_api_key: Mapped[str | None] = mapped_column(Text)
     semantic_scholar_api_key: Mapped[str | None] = mapped_column(Text)
