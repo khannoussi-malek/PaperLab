@@ -34,6 +34,8 @@ async def test_the_defaults_come_back_without_a_row(client, no_row):
         ("europe_pmc", "Europe PMC", True, None),
         ("zenodo", "Zenodo", True, False),
         ("hal", "HAL", True, None),
+        ("acm_dl", "ACM DL", True, None),
+        ("ssrn", "SSRN", True, None),
     ]
 
 
