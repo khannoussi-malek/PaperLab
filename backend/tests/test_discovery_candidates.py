@@ -323,6 +323,18 @@ def test_two_candidates_sharing_a_pubmed_id_are_the_same_paper():
     assert _same_paper(a, b)
 
 
+def test_doaj_and_openaire_ids_merge_different_sources_into_one_paper():
+    """Same paper from two sources sharing a doaj/openaire id, with titles that differ on purpose: the match
+    must come from the id alone, and the merged record keeps that id."""
+    from_doaj_side = Candidate(title="Paper (DOAJ)", external_ids={"doaj": "abc"}, sources=("doaj",))
+    from_openaire_side = Candidate(title="Paper (OpenAIRE)", external_ids={"doaj": "abc"}, sources=("openaire",))
+
+    [merged] = merge({"doaj": [from_doaj_side], "openaire": [from_openaire_side]}, limit=10)
+
+    assert merged.external_ids["doaj"] == "abc"
+    assert set(merged.sources) == {"doaj", "openaire"}
+
+
 def test_from_pmc_maps_every_field():
     entry = {
         "pmcid": "13647476", "pmid": "42847424", "title": "Protein-Ratio Rheostats",

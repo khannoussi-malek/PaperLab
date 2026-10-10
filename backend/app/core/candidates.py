@@ -380,6 +380,8 @@ def _ids(candidate: Candidate) -> set[str]:
         "pmc": candidate.external_ids.get("pmc"),
         "zenodo": candidate.external_ids.get("zenodo"),
         "hal": candidate.external_ids.get("hal"),
+        "doaj": candidate.external_ids.get("doaj"),
+        "openaire": candidate.external_ids.get("openaire"),
     }
     return {f"{kind}:{value.lower()}" for kind, value in keys.items() if value}
 
@@ -409,7 +411,8 @@ def _combined(records: list[Candidate]) -> Candidate:
         for k, v in {
             "arxiv": arxiv_id, "openalex": first_id("openalex"), "semantic_scholar": first_id("semantic_scholar"),
             "core": first_id("core"), "pubmed": first_id("pubmed"), "pmc": first_id("pmc"),
-            "zenodo": first_id("zenodo"), "hal": first_id("hal"),
+            "zenodo": first_id("zenodo"), "hal": first_id("hal"), "doaj": first_id("doaj"),
+            "openaire": first_id("openaire"),
         }.items()
         if v
     }
