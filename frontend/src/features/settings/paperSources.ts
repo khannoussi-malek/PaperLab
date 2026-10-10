@@ -14,7 +14,7 @@ export const DESCRIPTIONS: Record<PaperSourceId, string> = {
   zenodo: 'General-purpose open-access repository via Zenodo (CERN). Free; an optional key can be saved but isn\'t used yet.',
   hal: 'French open-access repository via HAL. Free, no key needed.',
   acm_dl: 'ACM Digital Library papers, via Crossref. Free, no key needed.',
-  ssrn: 'Working papers and preprints via SSRN (an Elsevier company), via OpenAlex. Free, no key needed.',
+  ssrn: 'Working papers and preprints via SSRN (an Elsevier company), via OpenAlex. Shares OpenAlex\'s own usage budget and key below.',
 }
 
 /** The "May cost money" badge plus its price line, for sources that can charge even without a key. Only OpenAlex
@@ -23,6 +23,7 @@ export const DESCRIPTIONS: Record<PaperSourceId, string> = {
 export const PRICE_WARNINGS: Partial<Record<PaperSourceId, string>> = {
   openalex:
     'Free up to $0.10 of use a day without a key, or $1 a day with a free key from openalex.org. More needs a paid plan there.',
+  ssrn: 'Uses OpenAlex\'s own budget and key (set above under OpenAlex) -- off by default for the same reason OpenAlex is.',
 }
 
 /** A short hint shown under a source's description when something besides its own switch must be true for it to

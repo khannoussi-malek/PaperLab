@@ -54,6 +54,7 @@ test('OpenAlex says it may cost money, and Unpaywall asks for a contact email', 
 
   await expect(rowOf(page, 'openalex')).toContainText('May cost money')
   await expect(rowOf(page, 'openalex')).toContainText('Free up to $0.10 of use a day without a key')
+  await expect(rowOf(page, 'ssrn')).toContainText('May cost money')
   await expect(rowOf(page, 'crossref')).not.toContainText('May cost money')
   await expect(rowOf(page, 'unpaywall')).toContainText(UNPAYWALL_NOTE)
 })
