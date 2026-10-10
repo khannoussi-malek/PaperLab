@@ -335,6 +335,18 @@ def test_doaj_and_openaire_ids_merge_different_sources_into_one_paper():
     assert set(merged.sources) == {"doaj", "openaire"}
 
 
+def test_doaj_and_openaire_ids_merge_different_sources_into_one_paper_via_openaire_too():
+    """Same shape as the doaj-key version above, but with a shared openaire id instead -- removing the
+    openaire line from _ids()/_combined() would still pass that test undetected without this one."""
+    from_doaj_side = Candidate(title="Paper (DOAJ)", external_ids={"openaire": "xyz"}, sources=("doaj",))
+    from_openaire_side = Candidate(title="Paper (OpenAIRE)", external_ids={"openaire": "xyz"}, sources=("openaire",))
+
+    [merged] = merge({"doaj": [from_doaj_side], "openaire": [from_openaire_side]}, limit=10)
+
+    assert merged.external_ids["openaire"] == "xyz"
+    assert set(merged.sources) == {"doaj", "openaire"}
+
+
 def test_from_pmc_maps_every_field():
     entry = {
         "pmcid": "13647476", "pmid": "42847424", "title": "Protein-Ratio Rheostats",
