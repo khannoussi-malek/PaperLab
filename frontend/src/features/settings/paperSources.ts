@@ -11,7 +11,7 @@ export const DESCRIPTIONS: Record<PaperSourceId, string> = {
   pubmed: 'Biomedical literature search via PubMed (NCBI). Free; a free key raises its rate limit.',
   pmc: 'Full-text biomedical literature via PMC (NCBI). Free; a free key raises its rate limit.',
   europe_pmc: 'Biomedical and life-science literature via Europe PMC. Free, no key needed.',
-  zenodo: 'General-purpose open-access repository via Zenodo (CERN). Free; an optional token raises its page-size limit.',
+  zenodo: 'General-purpose open-access repository via Zenodo (CERN). Free; an optional key can be saved but isn\'t used yet.',
   hal: 'French open-access repository via HAL. Free, no key needed.',
 }
 
