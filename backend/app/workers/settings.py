@@ -2,8 +2,10 @@ import logging
 
 from arq import func
 from arq.connections import RedisSettings
+from arq.cron import cron
 
 from app.config import settings
+from app.workers.harvest import HARVEST_JOB_TIMEOUT, harvest_iacr_eprint
 from app.workers.ingest import ingest_paper, reembed_paper
 from app.workers.references import fetch_references
 from app.workers.screening_suggest import SUGGEST_JOB_TIMEOUT, suggest_screening
@@ -24,5 +26,8 @@ class WorkerSettings:
         fetch_references,
         func(run_workspace_search, timeout=SEARCH_RUN_JOB_TIMEOUT),
         func(suggest_screening, timeout=SUGGEST_JOB_TIMEOUT),
+    ]
+    cron_jobs = [
+        cron(harvest_iacr_eprint, hour={3}, minute={0}, run_at_startup=True, timeout=HARVEST_JOB_TIMEOUT),
     ]
     redis_settings = RedisSettings.from_dsn(settings.redis_url)
