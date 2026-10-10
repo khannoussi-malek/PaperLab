@@ -176,3 +176,30 @@ async def test_malformed_xml_in_a_200_response_raises_an_httpx_error(iacr_api):
 
     with pytest.raises(httpx.HTTPError):
         await iacr_eprint.fetch_page(iacr_api.client, from_date="2026-10-01", until_date="2026-10-10")
+
+
+async def test_no_records_match_is_not_an_error(iacr_api):
+    """noRecordsMatch is a legitimate "nothing found" signal (e.g. an empty date range), not a failure."""
+    no_records = """<?xml version="1.0" encoding="UTF-8"?>
+<OAI-PMH xmlns="http://www.openarchives.org/OAI/2.0/">
+  <error code="noRecordsMatch">No matching records</error>
+</OAI-PMH>"""
+    iacr_api.reply("/oai", 200, text=no_records)
+
+    entries, token = await iacr_eprint.fetch_page(iacr_api.client, from_date="2026-10-01", until_date="2026-10-02")
+
+    assert entries == []
+    assert token is None
+
+
+async def test_any_other_oai_error_code_raises_an_httpx_error(iacr_api):
+    """A bad resumption token (or any other OAI-PMH protocol error) arrives as HTTP 200 with an <error>
+    element -- confirmed live -- and must not be mistaken for "zero results"."""
+    bad_token = """<?xml version="1.0" encoding="UTF-8"?>
+<OAI-PMH xmlns="http://www.openarchives.org/OAI/2.0/">
+  <error code="badResumptionToken">The resumptionToken is invalid or expired</error>
+</OAI-PMH>"""
+    iacr_api.reply("/oai", 200, text=bad_token)
+
+    with pytest.raises(httpx.HTTPStatusError, match="badResumptionToken"):
+        await iacr_eprint.fetch_page(iacr_api.client, resumption_token="stale-token")

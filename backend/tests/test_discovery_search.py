@@ -311,12 +311,15 @@ async def test_unpaywall_and_openalex_stay_off_by_default_and_without_an_email()
 
 
 async def test_iacr_eprints_search_page_preserves_year_through_from_iacr_eprint(session, monkeypatch):
-    """Regression: search_page's own entry dict used to hardcode datestamp=None, which from_iacr_eprint's
-    year parsing (datestamp[:4]) can't recover a year from -- even though the harvested row's own `year`
-    column (set correctly at harvest time) has it. search_page now synthesizes a datestamp whose first 4
-    characters are the real year."""
+    """Regression guard: a harvested row re-served through search_page must keep its own `year` once
+    round-tripped back through from_iacr_eprint. from_iacr_eprint derives year from the eprint id's own
+    4-digit prefix (final review fix 4), not from search_page's entry dict -- which carries a real id
+    either way -- so this holds regardless of what search_page puts in "datestamp"."""
+    # A deliberately nonsense title: this shares the dev DB with ~27k real harvested rows (see conftest's
+    # own TEST_DATABASE_URL comment), and Fix 5's word-AND matching (title OR abstract) would otherwise
+    # risk colliding with a real paper's own words.
     candidate = Candidate(
-        title="A Searchable Eprint About Lattices", authors=["Ada Fixture"], year=2025,
+        title="Zzyxqplorp Fixturewidget Lattices", authors=["Ada Fixture"], year=2025,
         external_ids={"iacr_eprint": "2025/1234"}, abstract="An abstract.", sources=("iacr_eprint",),
     )
     await harvest_ingest_candidate(session, candidate)
@@ -328,7 +331,7 @@ async def test_iacr_eprints_search_page_preserves_year_through_from_iacr_eprint(
 
     monkeypatch.setattr(iacr_eprint, "SessionLocal", lambda: _reuse_test_session(session))
 
-    entries, _ = await iacr_eprint.search_page(None, "Searchable Eprint", 10, 0)
+    entries, _ = await iacr_eprint.search_page(None, "Zzyxqplorp Fixturewidget", 10, 0)
 
     [entry] = entries
     assert from_iacr_eprint(entry).year == 2025

@@ -62,7 +62,7 @@ async def _sync_iacr_eprint(session: AsyncSession) -> None:
     http = iacr_eprint.new_client()
     try:
         token: str | None = None
-        for page in range(MAX_HARVEST_PAGES):
+        for _ in range(MAX_HARVEST_PAGES):
             entries, token = (
                 await iacr_eprint.fetch_page(http, resumption_token=token)
                 if token
@@ -73,10 +73,18 @@ async def _sync_iacr_eprint(session: AsyncSession) -> None:
             await session.flush()
             if token is None:
                 break
+        else:
+            # The loop exhausted its page budget with more pages still pending -- raise rather than
+            # silently truncate the harvest; harvest_iacr_eprint's own except/rollback then keeps the
+            # cursor from advancing, so the next run resumes from the last successfully-finished point
+            # instead of losing the un-fetched remainder.
+            raise RuntimeError(
+                f"IACR ePrint harvest hit MAX_HARVEST_PAGES ({MAX_HARVEST_PAGES}) with more pages pending"
+            )
     finally:
         await http.aclose()
 
-    cursor.last_synced_at = datetime.now(UTC)
+    cursor.last_synced_at = datetime.strptime(until_date, "%Y-%m-%d").replace(tzinfo=UTC)
 
 
 async def harvest_iacr_eprint(ctx: dict) -> None:

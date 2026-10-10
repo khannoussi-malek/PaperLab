@@ -5,6 +5,7 @@ from sqlalchemy import select
 
 from app.core.candidates import Candidate
 from app.models import ExternalRef
+from app.models.harvest import HarvestCursor
 from app.workers.harvest import harvest_ingest_candidate
 
 pytestmark = pytest.mark.anyio
@@ -93,6 +94,39 @@ async def test_running_the_harvest_twice_does_not_duplicate_rows(session, monkey
     assert call_count == 2  # the second run made exactly one fetch_page call, not a full re-harvest
     assert from_dates[0] == "1996-01-01"  # first run starts from the beginning of time (no prior cursor)
     assert from_dates[1] != "1996-01-01"  # second run resumed from the advanced cursor, not from scratch
+
+
+async def test_hitting_the_page_ceiling_with_a_pending_token_raises_and_does_not_advance_the_cursor(
+    session, monkeypatch
+):
+    """If the loop exhausts MAX_HARVEST_PAGES while a resumption token is still pending, silently falling
+    through would truncate the harvest and still advance the cursor, losing the un-fetched remainder for
+    good. It must raise instead, so harvest_iacr_eprint's own except/rollback keeps the cursor from
+    advancing and the next run resumes from the same point."""
+    from app.providers import iacr_eprint
+    from app.workers import harvest
+
+    monkeypatch.setattr(harvest, "MAX_HARVEST_PAGES", 2)
+
+    async def fake_fetch_page(http, *, from_date=None, until_date=None, resumption_token=None):
+        # every page still returns a token: the chain never finishes within the lowered page budget
+        return ([{"identifier": "oai:eprint.iacr.org:2026/7001", "datestamp": "2026-01-01T00:00:00Z",
+                   "title": "Page", "creators": [], "description": None}], "always-more")  # fmt: skip
+
+    monkeypatch.setattr(iacr_eprint, "fetch_page", fake_fetch_page)
+    monkeypatch.setattr(harvest, "SessionLocal", lambda: _reuse_test_session(session))
+
+    # This shares the dev DB with real harvest runs (see conftest's own TEST_DATABASE_URL comment), so a
+    # real cursor row may already exist here -- compare before/after rather than assuming None.
+    before = await session.get(HarvestCursor, "iacr_eprint")
+    before_synced_at = before.last_synced_at if before else None
+
+    with pytest.raises(RuntimeError, match="MAX_HARVEST_PAGES"):
+        await harvest.harvest_iacr_eprint({})
+
+    session.expire_all()
+    after = await session.get(HarvestCursor, "iacr_eprint")
+    assert (after.last_synced_at if after else None) == before_synced_at
 
 
 async def test_the_harvest_follows_a_multi_page_resumption_chain_to_completion(session, monkeypatch):

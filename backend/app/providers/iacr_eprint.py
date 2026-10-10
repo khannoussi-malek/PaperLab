@@ -17,10 +17,11 @@ signaled, never silently dropped) and earliestDatestamp 1996-01-01. No key, no d
 from xml.etree import ElementTree
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 
 from app.db import SessionLocal
 from app.models import ExternalRef
+from app.providers.arxiv import title_words
 
 BASE_URL = "https://eprint.iacr.org"
 TIMEOUT = httpx.Timeout(30.0)  # a full ListRecords page can be a few hundred KB; generous on purpose.
@@ -65,6 +66,14 @@ def _parse_page(response: httpx.Response) -> tuple[list[dict], str | None]:
         root = ElementTree.fromstring(response.text)
     except ElementTree.ParseError as exc:
         raise httpx.DecodingError(str(exc), request=response.request) from exc
+    error = root.find("oai:error", _NS)
+    if error is not None:
+        code = error.get("code")
+        if code == "noRecordsMatch":  # a legitimate "nothing found" signal, not a failure
+            return [], None
+        raise httpx.HTTPStatusError(
+            f"IACR ePrint OAI-PMH error: {code}", request=response.request, response=response
+        )
     entries: list[dict] = []
     for record in root.findall(".//oai:record", _NS):
         header = record.find("oai:header", _NS)
@@ -121,21 +130,28 @@ async def search_page(
     codebase already opens its own session independently of FastAPI's request-scoped injection (see
     app/workers/ingest.py, app/workers/workspace_search.py). Scoped to only this source's own harvested
     rows via the external_ids->>'iacr_eprint' IS NOT NULL filter -- a bare title match against the whole
-    external_refs table would also return every OTHER source's own papers."""
+    external_refs table would also return every OTHER source's own papers. Words ANDed, matched against
+    either title or abstract, the same shape as arxiv.py's/core_ac.py's own title_words() usage -- a plain
+    whole-string substring check (the prior version of this function) gave near-zero recall on realistic
+    multi-word queries (confirmed live: 887 single-word matches dropped to 0 once a second word was ANDed
+    in)."""
+    words = title_words(term)
+    if not words:
+        return [], None
     async with SessionLocal() as session:
         query = (
             select(ExternalRef)
             .where(ExternalRef.external_ids["iacr_eprint"].astext.isnot(None))
-            .where(ExternalRef.title.ilike(f"%{term}%"))
+            .where(and_(*(or_(ExternalRef.title.icontains(w, autoescape=True),
+                              ExternalRef.abstract.icontains(w, autoescape=True)) for w in words)))
             .order_by(ExternalRef.id)
             .offset(cursor)
             .limit(page_size)
-        )
+        )  # fmt: skip
         rows = (await session.execute(query)).scalars().all()
         entries = [
             {"identifier": f"oai:eprint.iacr.org:{r.external_ids['iacr_eprint']}",
-             "datestamp": f"{r.year}-01-01T00:00:00Z" if r.year else None,
-             "title": r.title, "creators": r.authors, "description": r.abstract}
+             "datestamp": None, "title": r.title, "creators": r.authors, "description": r.abstract}
             for r in rows
         ]  # fmt: skip
         next_cursor = cursor + page_size if len(rows) == page_size else None

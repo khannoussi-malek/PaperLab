@@ -16,4 +16,6 @@ class HarvestCursor(Base):
 
     source: Mapped[str] = mapped_column(Text, primary_key=True)
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()"), onupdate=text("now()")
+    )
