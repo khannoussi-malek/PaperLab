@@ -18,6 +18,8 @@ SOURCE_ID_PATTERNS: dict[str, re.Pattern[str]] = {
     "core": re.compile(r"^\d{1,20}$"),
     "pubmed": re.compile(r"^\d{1,20}$"),
     "pmc": re.compile(r"^\d{1,20}$"),
+    "zenodo": re.compile(r"^\d{1,20}$"),
+    "hal": re.compile(r"^\d{1,20}$"),
 }
 
 
