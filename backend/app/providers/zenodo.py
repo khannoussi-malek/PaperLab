@@ -28,6 +28,7 @@ import re
 import httpx
 
 from app.providers.http import RateLimited
+from app.providers.openalex import json_body
 
 BASE_URL = "https://zenodo.org/api"
 TIMEOUT = httpx.Timeout(10.0)
@@ -75,7 +76,7 @@ async def _search(http: httpx.AsyncClient, term: str, page_size: int, page: int)
 
 async def search(http: httpx.AsyncClient, term: str, limit: int) -> list[dict]:
     response = await _search(http, term, min(limit, MAX_PAGE_SIZE), 1)
-    body = _checked(response).json()
+    body = json_body(_checked(response))
     return [_entry(hit) for hit in body["hits"]["hits"]]
 
 
@@ -84,7 +85,7 @@ async def get(http: httpx.AsyncClient, record_id: str) -> dict | None:
     response = await http.get(f"/records/{record_id}")
     if response.status_code == 404:
         return None
-    return _entry(_checked(response).json())
+    return _entry(json_body(_checked(response)))
 
 
 async def search_page(
@@ -95,7 +96,7 @@ async def search_page(
     whether the response's own links.next key is present, so there's no count/page-size arithmetic to
     get wrong."""
     response = await _search(http, term, page_size, cursor)
-    body = _checked(response).json()
+    body = json_body(_checked(response))
     entries = [_entry(hit) for hit in body["hits"]["hits"]]
     next_cursor = cursor + 1 if "next" in body.get("links", {}) else None
     return entries, next_cursor

@@ -85,6 +85,13 @@ async def test_a_record_with_no_files_doi_or_description_maps_without_them(zenod
     }  # fmt: skip
 
 
+async def test_a_malformed_200_body_raises_an_httpx_error_not_a_bare_json_error(zenodo_api):
+    zenodo_api.reply("/api/records", 200, text="<html>not json</html>")
+
+    with pytest.raises(httpx.HTTPError):
+        await zenodo.search(zenodo_api.client, "x", 1)
+
+
 async def test_get_parses_a_single_record(zenodo_api):
     zenodo_api.reply("/api/records/22132605", 200, json=ONE_RECORD["hits"]["hits"][0])
 
