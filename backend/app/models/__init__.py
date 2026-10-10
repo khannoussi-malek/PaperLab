@@ -3,6 +3,7 @@ from app.models.base import Base
 from app.models.dataset import Chart, Dataset, DatasetColumn, DatasetRow, cell_table, chart_datasets, note_charts
 from app.models.embedding_source import EmbeddingSource
 from app.models.graph import PaperLink
+from app.models.harvest import HarvestCursor
 from app.models.llm_connection import LLMConnection, LLMModel
 from app.models.llm_output import LLMOutput
 from app.models.note import Note, Provenance, note_anchors, note_papers
@@ -22,6 +23,7 @@ __all__ = [
     "DatasetRow",
     "EmbeddingSource",
     "ExternalRef",
+    "HarvestCursor",
     "LLMConnection",
     "LLMModel",
     "LLMOutput",
