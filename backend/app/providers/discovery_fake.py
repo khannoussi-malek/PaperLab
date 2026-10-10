@@ -447,6 +447,10 @@ def _unpaywall_handle(request: httpx.Request) -> httpx.Response:
     return httpx.Response(404, json={"error": f"the discovery fake has no {request.url}"})
 
 
+def _no_results_handle(request: httpx.Request) -> httpx.Response:
+    return httpx.Response(200, json={"results": []})
+
+
 def _pdf_handle(request: httpx.Request) -> httpx.Response:
     if request.url.path == "/paper.pdf":
         return httpx.Response(200, content=pdf_bytes(), headers={"content-type": "application/pdf"})
@@ -486,6 +490,9 @@ ADAPTERS: tuple[FakeAdapter, ...] = (
     FakeAdapter("www.ebi.ac.uk", lambda path, params: path.endswith("/search"), _europe_pmc_handle),
     FakeAdapter("zenodo.org", lambda path, params: path == "/api/records", _zenodo_handle),
     FakeAdapter("api.archives-ouvertes.fr", lambda path, params: path == "/search/", _hal_handle),
+    # DOAJ and OpenAIRE answer with no papers: the badges and suggestions above stay exactly as they were.
+    FakeAdapter("doaj.org", lambda path, params: path.startswith("/api/search/articles/"), _no_results_handle),
+    FakeAdapter("api.openaire.eu", lambda path, params: path == "/graph/v3/research-products", _no_results_handle),
     FakeAdapter("pdf.paperlab.test", lambda path, params: True, _pdf_handle),
 )  # fmt: skip
 
