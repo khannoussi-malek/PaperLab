@@ -252,6 +252,23 @@ On Linux:
   `Environment="OLLAMA_HOST=0.0.0.0"` under `[Service]`, then `sudo systemctl restart ollama`. Other machines on your
   network can then reach Ollama too, unless a firewall stops them.
 
+### With Homebrew (macOS)
+
+If you use [Homebrew](https://brew.sh/), it can install the desktop app for you. Install Docker Desktop first
+(`brew install --cask docker-desktop`) and open it once. Then:
+
+```sh
+brew tap khannoussi-malek/paperlab https://github.com/khannoussi-malek/PaperLab
+brew install --cask paperlab
+```
+
+Homebrew picks the right download for Apple silicon or Intel, and macOS opens PaperLab without the Open Anyway step.
+Run `brew upgrade --cask paperlab` when the app says a new version is out, and `brew uninstall --cask paperlab` to
+remove the app; your library stays either way.
+
+Each release also has its own cask, for example `brew install --cask paperlab@0.1.0`. Install one version at a
+time, and keep in mind that an older version can't open a library a newer one has used.
+
 ### Without the app
 
 With Docker Compose 2.24 or later, two commands install the same release, with no clone and no build:
