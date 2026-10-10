@@ -5,6 +5,7 @@
   are records with the same title and a shared author surname. Fields come from the most trusted record that has them.
 """
 
+import html
 import re
 import unicodedata
 import uuid
@@ -301,6 +302,18 @@ def from_ssrn(work: Mapping[str, Any]) -> Candidate:
     return replace(from_work(work), sources=("ssrn",))
 
 
+_TAG = re.compile(r"</?[A-Za-z][\w:-]*(?:\s[^<>]*)?/?>")
+
+
+def _clean_markup(text: str | None) -> str | None:
+    """Strips HTML/JATS tags and unescapes entities, the same pattern zenodo.py's and europe_pmc.py's own
+    private _clean() already use -- DOAJ and OpenAIRE both confirmed live to carry raw markup in their
+    abstract text (ponytail: a fourth near-identical copy; extract a shared helper if a fifth source ever
+    needs this too, not before)."""
+    cleaned = " ".join(_TAG.sub("", html.unescape(text or "")).split())
+    return cleaned or None
+
+
 def from_doaj(entry: Mapping[str, Any]) -> Candidate:
     """An entry from providers/doaj.py. Not every article carries a DOI (confirmed live: some only have
     an ISSN) -- doaj's own native id becomes this source's own external_ids key. Only a link whose
@@ -323,7 +336,7 @@ def from_doaj(entry: Mapping[str, Any]) -> Candidate:
         year=int(year_str) if year_str.isdigit() else None,
         doi=doi,
         external_ids={"doaj": entry["id"]},
-        abstract=bibjson.get("abstract") or None,
+        abstract=_clean_markup(bibjson.get("abstract")),
         pdf_urls=ordered_pdf_urls(arxiv_id, pdf_url),
         sources=("doaj",),
     )
@@ -349,7 +362,7 @@ def from_openaire(entry: Mapping[str, Any]) -> Candidate | None:
         year=year,
         doi=doi,
         external_ids={"openaire": entry["id"]},
-        abstract=descriptions[0] if descriptions else None,
+        abstract=_clean_markup(descriptions[0]) if descriptions else None,
         pdf_urls=ordered_pdf_urls(arxiv_id),
         sources=("openaire",),
     )
