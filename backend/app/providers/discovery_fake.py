@@ -404,7 +404,7 @@ def _doaj_handle(request: httpx.Request) -> httpx.Response:
     params = request.url.params
     page_size = int(params["pageSize"])
     page = int(params["page"])
-    if page_size < len(PAPERS):  # a direct search_page() pagination test (page_size=1), same convention as PubMed
+    if page_size < len(PAPERS):  # a direct search_page() pagination test, same convention as PubMed
         offset = (page - 1) * page_size
         items = _page_slice(offset, page_size)
         results = [
@@ -438,7 +438,7 @@ def _openaire_handle(request: httpx.Request) -> httpx.Response:
     params = request.url.params
     page_size = int(params["pageSize"])
     page = int(params["page"])
-    if page_size < len(PAPERS):  # a direct search_page() pagination test (page_size=1), same convention as PubMed
+    if page_size < len(PAPERS):  # a direct search_page() pagination test, same convention as PubMed
         offset = (page - 1) * page_size
         items = _page_slice(offset, page_size)
         results = [
