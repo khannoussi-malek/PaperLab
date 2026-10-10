@@ -1,7 +1,20 @@
 import httpx
 import pytest
 
-from app.providers import arxiv, core_ac, crossref, europe_pmc, hal, openalex, pmc, pubmed, semantic_scholar, zenodo
+from app.providers import (
+    acm_dl,
+    arxiv,
+    core_ac,
+    crossref,
+    europe_pmc,
+    hal,
+    openalex,
+    pmc,
+    pubmed,
+    semantic_scholar,
+    ssrn,
+    zenodo,
+)
 
 pytestmark = pytest.mark.anyio
 
@@ -562,3 +575,114 @@ async def test_hal_search_page_has_no_artificial_ceiling_past_10000(monkeypatch)
         _, next_cursor = await hal.search_page(http, "cancer", page_size=20, cursor=80000)
 
     assert next_cursor == 80020  # no cap -- 80000 + 20 < 89136
+
+
+# --- acm_dl ------------------------------------
+
+
+async def test_acm_dl_search_page_sends_the_offset_it_was_given(monkeypatch):
+    seen_offsets = []
+
+    async def fake_get(self, url, params=None, **kwargs):
+        seen_offsets.append(params["offset"])
+        request = httpx.Request("GET", url, params=params)
+        return httpx.Response(200, json={"message": {"items": []}}, request=request)
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    async with httpx.AsyncClient() as http:
+        await acm_dl.search_page(http, "credential leakage", page_size=5, cursor=0)
+        await acm_dl.search_page(http, "credential leakage", page_size=5, cursor=5)
+    assert seen_offsets == [0, 5]
+
+
+async def test_acm_dl_search_page_keeps_the_acm_filter_on_every_request(monkeypatch):
+    seen_filters = []
+
+    async def fake_get(self, url, params=None, **kwargs):
+        seen_filters.append(params["filter"])
+        request = httpx.Request("GET", url, params=params)
+        return httpx.Response(200, json={"message": {"items": []}}, request=request)
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    async with httpx.AsyncClient() as http:
+        await acm_dl.search_page(http, "x", page_size=5, cursor=0)
+        await acm_dl.search_page(http, "x", page_size=5, cursor=5)
+    assert seen_filters == ["prefix:10.1145", "prefix:10.1145"]
+
+
+async def test_acm_dl_next_cursor_is_none_once_a_short_page_comes_back(monkeypatch):
+    async def fake_get(self, url, params=None, **kwargs):
+        request = httpx.Request("GET", url, params=params)
+        item = {"DOI": "10.1145/1", "type": "journal-article", "title": ["One"]}
+        return httpx.Response(200, json={"message": {"items": [item]}}, request=request)
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    async with httpx.AsyncClient() as http:
+        _, next_cursor = await acm_dl.search_page(http, "x", page_size=5, cursor=0)
+
+    assert next_cursor is None  # 1 item came back for a page_size=5 request: Crossref's own "no more" signal
+
+
+# --- ssrn ------------------------------------
+
+
+async def test_ssrn_search_page_converts_the_offset_to_a_page_number(monkeypatch):
+    seen_pages = []
+
+    async def fake_get(self, url, params=None, **kwargs):
+        seen_pages.append(params["page"])
+        request = httpx.Request("GET", url, params=params)
+        return httpx.Response(200, json={"meta": {"count": 100}, "results": []}, request=request)
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    async with httpx.AsyncClient() as http:
+        await ssrn.search_page(http, "x", page_size=25, cursor=0)
+        await ssrn.search_page(http, "x", page_size=25, cursor=50)
+    assert seen_pages == [1, 3]  # offset 0 -> page 1; offset 50 / page_size 25 + 1 -> page 3
+
+
+async def test_ssrn_search_page_keeps_the_ssrn_filter_on_every_request(monkeypatch):
+    seen_filters = []
+
+    async def fake_get(self, url, params=None, **kwargs):
+        seen_filters.append(params["filter"])
+        request = httpx.Request("GET", url, params=params)
+        return httpx.Response(200, json={"meta": {"count": 0}, "results": []}, request=request)
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    async with httpx.AsyncClient() as http:
+        await ssrn.search_page(http, "diffusion innovation", page_size=25, cursor=0)
+        await ssrn.search_page(http, "diffusion innovation", page_size=25, cursor=25)
+
+    assert seen_filters == [
+        "title.search:diffusion innovation,locations.source.id:S4210172589",
+        "title.search:diffusion innovation,locations.source.id:S4210172589",
+    ]
+
+
+async def test_ssrn_next_cursor_when_more_remain_per_openalexs_own_count(monkeypatch):
+    async def fake_get(self, url, params=None, **kwargs):
+        request = httpx.Request("GET", url, params=params)
+        return httpx.Response(
+            200, json={"meta": {"count": 10}, "results": [{"id": "https://openalex.org/W1"}]}, request=request
+        )
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    async with httpx.AsyncClient() as http:
+        _, next_cursor = await ssrn.search_page(http, "x", page_size=1, cursor=0)
+
+    assert next_cursor == 1
+
+
+async def test_ssrn_next_cursor_is_none_once_count_is_exhausted(monkeypatch):
+    async def fake_get(self, url, params=None, **kwargs):
+        request = httpx.Request("GET", url, params=params)
+        return httpx.Response(
+            200, json={"meta": {"count": 1}, "results": [{"id": "https://openalex.org/W1"}]}, request=request
+        )
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    async with httpx.AsyncClient() as http:
+        _, next_cursor = await ssrn.search_page(http, "x", page_size=1, cursor=0)
+
+    assert next_cursor is None
