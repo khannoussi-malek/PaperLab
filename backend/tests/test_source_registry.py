@@ -31,8 +31,13 @@ def test_enabled_by_default_turns_everything_on_except_openalex():
     assert reg.ENABLED_BY_DEFAULT == {
         "openalex": False, "crossref": True, "semantic_scholar": True, "arxiv": True, "core": True,
         "unpaywall": True, "pubmed": True, "pmc": True, "europe_pmc": True,
-        "zenodo": True, "hal": True, "acm_dl": True, "ssrn": True,
+        "zenodo": True, "hal": True, "acm_dl": True, "ssrn": False,
     }  # fmt: skip
+
+
+def test_key_source_defaults_to_none_except_for_ssrn():
+    assert reg.BY_ID["ssrn"].key_source == "openalex"
+    assert all(spec.key_source is None for spec in reg.REGISTRY if spec.id != "ssrn")
 
 
 def test_asks_match_todays_classify_query_kinds():
