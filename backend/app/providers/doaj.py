@@ -47,9 +47,13 @@ def _checked(response: httpx.Response) -> httpx.Response:
 
 
 def _query(term: str) -> str:
-    # DOAJ's query syntax is Elasticsearch-style: a phrase with whitespace needs quoting to search as one
-    # unit, a single word doesn't (confirmed live).
-    return f'title:"{term}"' if " " in term else f"title:{term}"
+    # DOAJ's query syntax is Elasticsearch-style: always quote as a phrase (confirmed live this is
+    # equivalent to leaving a single word unquoted, and avoids two confirmed-live failure modes of the
+    # unquoted form -- a reserved term like "AND"/"!"/"[test]" sent bare hangs until this module's own
+    # 10s timeout, and a literal '"' inside the term breaks the phrase either escaped or not, so it's
+    # stripped here rather than passed through).
+    words = term.replace('"', " ").split()
+    return f'title:"{" ".join(words)}"'
 
 
 async def _search(http: httpx.AsyncClient, term: str, page_size: int, page: int) -> httpx.Response:
