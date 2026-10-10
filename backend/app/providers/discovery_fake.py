@@ -310,6 +310,78 @@ def _europe_pmc_handle(request: httpx.Request) -> httpx.Response:
     return httpx.Response(200, json={"hitCount": len(PAPERS), "resultList": {"result": results}})
 
 
+# Zenodo is one-step like Europe PMC, but paginates with a 1-based `page` number (not an offset) and signals
+# "is there more" via links.next's presence, same as zenodo.py's own search_page() -- own id bases, offset past
+# Europe PMC's 840000/850000, so fixture ids never collide with any other source's.
+_ZENODO_ID_BASE = 860_000       # PAPERS[0..2] -> 860000..860002
+_PAGE_ZENODO_ID_BASE = 870_000  # PAGE_PAPERS[0..2] -> 870000..870002
+FREE_ZENODO_ID = str(_ZENODO_ID_BASE)
+
+
+def _zenodo_hit(record_id: int, title: str, doi: str, pdf_url: str | None) -> dict:
+    files = [{"key": "paper.pdf", "links": {"self": pdf_url}}] if pdf_url else []
+    return {
+        "id": record_id,
+        "doi": doi,
+        "metadata": {
+            "title": title,
+            "creators": [{"name": "Ada Fixture"}],
+            "publication_date": "2026-01-05",
+            "description": "An overview of fixtures.",
+        },
+        "files": files,
+    }
+
+
+def _zenodo_handle(request: httpx.Request) -> httpx.Response:
+    params = request.url.params
+    size = int(params["size"])
+    if size < len(PAPERS):  # a direct search_page() pagination test (page_size=2), same convention as PubMed
+        page = int(params["page"])
+        offset = (page - 1) * size
+        items = _page_slice(offset, size)
+        hits = [
+            _zenodo_hit(_PAGE_ZENODO_ID_BASE + offset + i, title, doi, None) for i, (title, doi) in enumerate(items)
+        ]
+        body: dict = {"hits": {"hits": hits}}
+        if offset + size < len(PAGE_PAPERS):
+            body["links"] = {"next": "https://zenodo.org/api/records?page=2"}
+        return httpx.Response(200, json=body)
+    hits = [_zenodo_hit(_ZENODO_ID_BASE + i, title, doi, pdf_url) for i, (title, doi, pdf_url) in enumerate(PAPERS)]
+    return httpx.Response(200, json={"hits": {"hits": hits}})
+
+
+# HAL shares PubMed/PMC's exact offset shape (0-based start/rows), just with Solr field-list values instead of
+# XML -- own id bases, offset past Zenodo's 860000/870000, so fixture ids never collide with any other source's.
+_HAL_ID_BASE = 880_000       # PAPERS[0..2] -> 880000..880002
+_PAGE_HAL_ID_BASE = 890_000  # PAGE_PAPERS[0..2] -> 890000..890002
+FREE_HAL_ID = str(_HAL_ID_BASE)
+
+
+def _hal_doc(docid: int, title: str, doi: str, pdf_url: str | None) -> dict:
+    return {
+        "docid": str(docid),
+        "title_s": [title],
+        "abstract_s": ["An overview of fixtures."],
+        "authFullName_s": ["Ada Fixture"],
+        "doiId_s": doi,
+        "producedDate_s": "2026-01-05",
+        "files_s": [pdf_url] if pdf_url else [],
+    }
+
+
+def _hal_handle(request: httpx.Request) -> httpx.Response:
+    params = request.url.params
+    rows = int(params["rows"])
+    start = int(params["start"])
+    if rows < len(PAPERS):  # a direct search_page() pagination test (page_size=2), same convention as PubMed
+        items = _page_slice(start, rows)
+        docs = [_hal_doc(_PAGE_HAL_ID_BASE + start + i, title, doi, None) for i, (title, doi) in enumerate(items)]
+        return httpx.Response(200, json={"response": {"numFound": len(PAGE_PAPERS), "docs": docs}})
+    docs = [_hal_doc(_HAL_ID_BASE + i, title, doi, pdf_url) for i, (title, doi, pdf_url) in enumerate(PAPERS)]
+    return httpx.Response(200, json={"response": {"numFound": len(PAPERS), "docs": docs}})
+
+
 @dataclass(frozen=True)
 class FakeAdapter:
     """One source's fake: `host` plus a `match(path, params)` predicate decide whether this adapter answers a
@@ -412,6 +484,8 @@ ADAPTERS: tuple[FakeAdapter, ...] = (
         _pmc_handle,
     ),
     FakeAdapter("www.ebi.ac.uk", lambda path, params: path.endswith("/search"), _europe_pmc_handle),
+    FakeAdapter("zenodo.org", lambda path, params: path == "/api/records", _zenodo_handle),
+    FakeAdapter("api.archives-ouvertes.fr", lambda path, params: path == "/search/", _hal_handle),
     FakeAdapter("pdf.paperlab.test", lambda path, params: True, _pdf_handle),
 )  # fmt: skip
 
