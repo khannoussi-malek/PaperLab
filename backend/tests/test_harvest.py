@@ -65,10 +65,12 @@ async def test_running_the_harvest_twice_does_not_duplicate_rows(session, monkey
     from app.workers import harvest
 
     call_count = 0
+    from_dates = []
 
     async def fake_fetch_page(http, *, from_date=None, until_date=None, resumption_token=None):
         nonlocal call_count
         call_count += 1
+        from_dates.append(from_date)
         if call_count == 1:
             return [{"identifier": "oai:eprint.iacr.org:2026/5001", "datestamp": "2026-01-01T00:00:00Z",
                       "title": "Only Paper", "creators": [], "description": None}], None
@@ -89,6 +91,8 @@ async def test_running_the_harvest_twice_does_not_duplicate_rows(session, monkey
     ).scalars().all()
     assert len(rows) == 1
     assert call_count == 2  # the second run made exactly one fetch_page call, not a full re-harvest
+    assert from_dates[0] == "1996-01-01"  # first run starts from the beginning of time (no prior cursor)
+    assert from_dates[1] != "1996-01-01"  # second run resumed from the advanced cursor, not from scratch
 
 
 async def test_the_harvest_follows_a_multi_page_resumption_chain_to_completion(session, monkeypatch):
