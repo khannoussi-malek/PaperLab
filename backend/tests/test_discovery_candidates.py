@@ -10,8 +10,10 @@ from app.core.candidates import (
     from_acm_dl,
     from_core,
     from_crossref,
+    from_doaj,
     from_europe_pmc,
     from_hal,
+    from_openaire,
     from_pmc,
     from_pubmed,
     from_s2,
@@ -489,3 +491,91 @@ def test_from_ssrn_with_no_doi_or_authors_maps_without_them():
     assert candidate.doi is None
     assert candidate.authors == []
     assert candidate.sources == ("ssrn",)
+
+
+def test_from_doaj_maps_every_field():
+    entry = {
+        "id": "000122f776cb4f27b0f575971a4bed38",
+        "bibjson": {
+            "title": "A feature selection scheme", "abstract": "Selection of important features is vital.",
+            "year": "2025", "author": [{"name": "Philemon Uten Emmoh"}],
+            "identifier": [{"id": "10.46481/jnsps.2025.2273", "type": "doi"}, {"id": "2714-2817", "type": "pissn"}],
+            "link": [
+                {"content_type": "pdf", "type": "fulltext", "url": "https://example.org/paper.pdf"},
+                {"content_type": "HTML", "type": "fulltext", "url": "https://example.org/landing"},
+            ],
+        },
+    }
+
+    candidate = from_doaj(entry)
+
+    assert candidate.external_ids == {"doaj": "000122f776cb4f27b0f575971a4bed38"}
+    assert candidate.sources == ("doaj",)
+    assert candidate.doi == "10.46481/jnsps.2025.2273"
+    assert candidate.title == "A feature selection scheme"
+    assert candidate.authors == ["Philemon Uten Emmoh"]
+    assert candidate.year == 2025
+    assert candidate.abstract == "Selection of important features is vital."
+    assert candidate.pdf_urls == ["https://example.org/paper.pdf"]
+
+
+def test_from_doaj_with_no_doi_pdf_or_abstract_maps_without_them():
+    entry = {
+        "id": "0" * 32,
+        "bibjson": {"title": "Bare", "year": None, "author": [], "identifier": [{"id": "1234-5678", "type": "eissn"}]},
+    }
+
+    candidate = from_doaj(entry)
+
+    assert candidate.doi is None
+    assert candidate.abstract is None
+    assert candidate.pdf_urls == []
+    assert candidate.external_ids == {"doaj": "0" * 32}
+
+
+def test_from_openaire_maps_every_field():
+    entry = {
+        "id": "openaire____::ad7636681cefebfbde101792892e3c1a",
+        "type": "publication",
+        "mainTitle": "CRISPR gene editing in enzyme development",
+        "descriptions": ["An overview of CRISPR applications."],
+        "pids": [{"scheme": "doi", "value": "10.1016/j.enzmictec.2025.110799"}],
+        "authors": [{"fullName": "Youmin Zhu"}],
+        "publicationDate": "2026-04-01",
+        "instances": [{"urls": ["https://doi.org/10.1016/j.enzmictec.2025.110799"]}],
+    }
+
+    candidate = from_openaire(entry)
+
+    assert candidate.external_ids == {"openaire": "openaire____::ad7636681cefebfbde101792892e3c1a"}
+    assert candidate.sources == ("openaire",)
+    assert candidate.doi == "10.1016/j.enzmictec.2025.110799"
+    assert candidate.title == "CRISPR gene editing in enzyme development"
+    assert candidate.authors == ["Youmin Zhu"]
+    assert candidate.year == 2026
+    assert candidate.abstract == "An overview of CRISPR applications."
+    assert candidate.pdf_urls == []  # instances[].urls are landing pages, never a direct PDF (confirmed live)
+
+
+def test_from_openaire_with_no_doi_description_or_authors_maps_without_them():
+    entry = {
+        "id": "x" * 32, "type": "publication", "mainTitle": "Bare", "descriptions": None, "pids": None,
+        "authors": None, "publicationDate": None, "instances": None,
+    }
+
+    candidate = from_openaire(entry)
+
+    assert candidate.doi is None
+    assert candidate.abstract is None
+    assert candidate.authors == []
+    assert candidate.year is None
+    assert candidate.external_ids == {"openaire": "x" * 32}
+
+
+def test_from_openaire_filters_non_publication_types():
+    """type=publication is sent on every request (Review Focus #3), but this is defense in depth in
+    case a non-publication record (software, dataset) ever slips through -- matching from_acm_dl's own
+    None-filtering precedent for a non-paper Crossref type."""
+    entry = {"id": "y" * 32, "type": "software", "mainTitle": "Not a paper"}
+
+    assert from_openaire(entry) is None
