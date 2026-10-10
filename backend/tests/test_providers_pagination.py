@@ -768,11 +768,12 @@ async def test_openaire_next_cursor_when_more_remain_per_its_own_numfound(monkey
 async def test_openaire_next_cursor_is_none_once_numfound_is_exhausted(monkeypatch):
     async def fake_get(self, url, params=None, **kwargs):
         request = httpx.Request("GET", url, params=params)
-        body = {"header": {"numFound": 1, "page": 1, "pageSize": 1}, "results": [{"id": "x" * 32}]}
+        body = {"header": {"numFound": 3, "page": 2, "pageSize": 2}, "results": [{"id": "x" * 32}]}
         return httpx.Response(200, json=body, request=request)
 
     monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
     async with httpx.AsyncClient() as http:
-        _, next_cursor = await openaire.search_page(http, "CRISPR", page_size=1, cursor=1)
+        # 2 * 2 = 4 is not < 3, so None. Without the page_size factor, 2 < 3 would wrongly return a cursor.
+        _, next_cursor = await openaire.search_page(http, "CRISPR", page_size=2, cursor=2)
 
     assert next_cursor is None
