@@ -1678,7 +1678,7 @@ export interface components {
             /** Pdf Urls */
             pdf_urls: string[];
             /** Sources */
-            sources: ("openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core" | "unpaywall" | "pubmed" | "pmc" | "europe_pmc" | "zenodo" | "hal")[];
+            sources: ("openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core" | "unpaywall" | "pubmed" | "pmc" | "europe_pmc" | "zenodo" | "hal" | "acm_dl" | "ssrn")[];
             /** Paper Id */
             paper_id: string | null;
         };
@@ -2805,7 +2805,7 @@ export interface components {
              * Id
              * @enum {string}
              */
-            id: "openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core" | "unpaywall" | "pubmed" | "pmc" | "europe_pmc" | "zenodo" | "hal";
+            id: "openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core" | "unpaywall" | "pubmed" | "pmc" | "europe_pmc" | "zenodo" | "hal" | "acm_dl" | "ssrn";
             /** Name */
             name: string;
             /** Enabled */
@@ -3327,7 +3327,7 @@ export interface components {
                 [key: string]: unknown;
             };
             /** Sources */
-            sources: ("openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core" | "pubmed" | "pmc" | "europe_pmc" | "zenodo" | "hal")[];
+            sources: ("openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core" | "pubmed" | "pmc" | "europe_pmc" | "zenodo" | "hal" | "acm_dl" | "ssrn")[];
             /**
              * Query Overrides
              * @default {}
@@ -3556,6 +3556,10 @@ export interface components {
             zenodo?: boolean;
             /** Hal */
             hal?: boolean;
+            /** Acm Dl */
+            acm_dl?: boolean;
+            /** Ssrn */
+            ssrn?: boolean;
         };
         /** SourcesEvent */
         SourcesEvent: {
