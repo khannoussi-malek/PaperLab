@@ -382,7 +382,7 @@ def from_iacr_eprint(entry: Mapping[str, Any]) -> Candidate:
     return Candidate(
         title=entry.get("title") or "Untitled",
         authors=list(entry.get("creators") or [])[:MAX_AUTHORS],
-        year=int(eprint_id[:4]),
+        year=int(eprint_id[:4]) if eprint_id[:4].isdigit() else None,
         external_ids={"iacr_eprint": eprint_id},
         abstract=entry.get("description") or None,
         sources=("iacr_eprint",),

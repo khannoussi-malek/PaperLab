@@ -8,9 +8,11 @@ import type { SearchRunCreate, SearchRunSource } from '@/api/client'
 // enrichment, never fanned out to by search_batch, so it's excluded here regardless of its own settings switch
 // (C1: sending it used to 422 every Start click). A Record, not an array: adding a search source to the backend's
 // SearchRunSource union without adding it here is now a compiler error, not a silent no-op. IACR ePrint DOES belong
-// here, even though it has no live one-shot `ask` (that's why FindPapersButton.tsx's own one-shot search excludes
-// it): it has a `page` function, and search_page is only ever reached through a Workspace Search run, so this
-// Start-button source list is the one place IACR's harvested rows can actually surface (M32 batch6a final review,
+// here: its backend SourceSpec (source_registry.py) has no one-shot `ask` at all, so it never participates in any
+// one-shot lookup path (including FindPapersButton.tsx, which has no source list of its own to exclude it from --
+// it just calls useSearchPapers with no per-source enumeration). It DOES have a `page` function, and search_page
+// is only ever reached through a Workspace Search run, so this Start-button source list is the one place IACR's
+// harvested rows can actually surface (M32 batch6a final review,
 // fix 1 -- the prior exclusion here, following Task 8's own brief, made the whole feature unreachable from the UI).
 const SEARCH_SOURCES: Record<SearchRunSource, true> = {
   arxiv: true, crossref: true, core: true, semantic_scholar: true, openalex: true, pubmed: true,
