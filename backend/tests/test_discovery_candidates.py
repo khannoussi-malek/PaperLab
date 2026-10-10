@@ -545,6 +545,15 @@ def test_from_doaj_with_no_doi_pdf_or_abstract_maps_without_them():
     assert candidate.external_ids == {"doaj": "0" * 32}
 
 
+def test_from_doaj_strips_html_markup_from_the_abstract():
+    entry = {
+        "id": "0" * 32,
+        "bibjson": {"title": "X", "abstract": "<p>Selection of &amp; features</p>", "author": [], "identifier": []},
+    }
+
+    assert from_doaj(entry).abstract == "Selection of & features"
+
+
 def test_from_openaire_maps_every_field():
     entry = {
         "id": "openaire____::ad7636681cefebfbde101792892e3c1a",
@@ -582,6 +591,15 @@ def test_from_openaire_with_no_doi_description_or_authors_maps_without_them():
     assert candidate.authors == []
     assert candidate.year is None
     assert candidate.external_ids == {"openaire": "x" * 32}
+
+
+def test_from_openaire_strips_jats_markup_from_the_abstract():
+    entry = {
+        "id": "x" * 32, "type": "publication", "mainTitle": "X",
+        "descriptions": ["<jats:title>Abstract</jats:title> <jats:p>An overview.</jats:p>"],
+    }
+
+    assert from_openaire(entry).abstract == "Abstract An overview."
 
 
 def test_from_openaire_filters_non_publication_types():
