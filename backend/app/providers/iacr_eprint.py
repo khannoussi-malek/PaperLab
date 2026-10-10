@@ -17,6 +17,10 @@ signaled, never silently dropped) and earliestDatestamp 1996-01-01. No key, no d
 from xml.etree import ElementTree
 
 import httpx
+from sqlalchemy import select
+
+from app.db import SessionLocal
+from app.models import ExternalRef
 
 BASE_URL = "https://eprint.iacr.org"
 TIMEOUT = httpx.Timeout(30.0)  # a full ListRecords page can be a few hundred KB; generous on purpose.
@@ -97,3 +101,33 @@ async def fetch_page(
             params["until"] = until_date
     response = await http.get("/oai", params=params)
     return _parse_page(_checked(response))
+
+
+async def search_page(
+    http: httpx.AsyncClient, term: str, page_size: int, cursor: int
+) -> tuple[list[dict], int | None]:
+    """Unlike every other source's own search_page, this one never touches the network -- `http` is
+    unused (satisfying the uniform PageFunc signature every registry entry shares), and the real work
+    is a local Postgres query against external_refs, the same way every background worker in this
+    codebase already opens its own session independently of FastAPI's request-scoped injection (see
+    app/workers/ingest.py, app/workers/workspace_search.py). Scoped to only this source's own harvested
+    rows via the external_ids->>'iacr_eprint' IS NOT NULL filter -- a bare title match against the whole
+    external_refs table would also return every OTHER source's own papers."""
+    async with SessionLocal() as session:
+        query = (
+            select(ExternalRef)
+            .where(ExternalRef.external_ids["iacr_eprint"].astext.isnot(None))
+            .where(ExternalRef.title.ilike(f"%{term}%"))
+            .order_by(ExternalRef.id)
+            .offset(cursor)
+            .limit(page_size)
+        )
+        rows = (await session.execute(query)).scalars().all()
+        entries = [
+            {"identifier": f"oai:eprint.iacr.org:{r.external_ids['iacr_eprint']}",
+             "datestamp": f"{r.year}-01-01T00:00:00Z" if r.year else None,
+             "title": r.title, "creators": r.authors, "description": r.abstract}
+            for r in rows
+        ]  # fmt: skip
+        next_cursor = cursor + page_size if len(rows) == page_size else None
+        return entries, next_cursor

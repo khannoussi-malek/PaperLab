@@ -22,6 +22,7 @@ SOURCE_ID_PATTERNS: dict[str, re.Pattern[str]] = {
     "hal": re.compile(r"^\d{1,20}$"),
     "doaj": re.compile(r"^[0-9a-f]{32}$"),
     "openaire": re.compile(r"^[0-9a-z_]{1,20}::[0-9a-f]{32}$"),
+    "iacr_eprint": re.compile(r"^\d{4}/\d{1,6}$"),
 }
 
 
