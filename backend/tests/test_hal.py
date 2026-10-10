@@ -53,6 +53,16 @@ async def test_search_asks_for_structured_fields_and_sends_no_sort(hal_api):
     assert entry["pdf_url"] == "https://hal.science/hal-04020890/file/paper.pdf"
 
 
+async def test_search_strips_punctuation_that_breaks_hals_solr_syntax(hal_api):
+    hal_api.reply("/search/", 200, json=ONE_DOC)
+
+    await hal.search(hal_api.client, "The CRISPR-Cas9 System: A New Dawn in Gene Editing", 10)
+
+    sent_query = hal_api.requests[0].url.params["q"]
+    assert ":" not in sent_query
+    assert "(" not in sent_query
+
+
 async def test_a_doc_with_no_abstract_doi_or_files_maps_without_them(hal_api):
     bare = {"response": {"numFound": 1, "docs": [{"docid": "1", "title_s": ["Bare"]}]}}
     hal_api.reply("/search/", 200, json=bare)
@@ -100,6 +110,13 @@ async def test_a_malformed_query_raises_an_httpx_error_not_keyerror(hal_api):
 
     with pytest.raises(httpx.HTTPError):
         await hal.search(hal_api.client, "(((unbalanced", 1)
+
+
+async def test_a_malformed_200_body_raises_an_httpx_error_not_a_bare_json_error(hal_api):
+    hal_api.reply("/search/", 200, text="<html>not json</html>")
+
+    with pytest.raises(httpx.HTTPError):
+        await hal.search(hal_api.client, "x", 1)
 
 
 @pytest.mark.parametrize(

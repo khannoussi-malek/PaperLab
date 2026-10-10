@@ -30,7 +30,9 @@ application/pdf, HTTP 200, no interstitial).
 
 import httpx
 
+from app.providers.arxiv import title_words
 from app.providers.http import RateLimited
+from app.providers.openalex import json_body
 
 BASE_URL = "https://api.archives-ouvertes.fr/search"
 TIMEOUT = httpx.Timeout(10.0)
@@ -60,7 +62,7 @@ def _checked_body(response: httpx.Response) -> dict:
         raise httpx.HTTPStatusError(
             f"HAL answered HTTP {response.status_code}", request=response.request, response=response
         )
-    body = response.json()
+    body = json_body(response)
     if "error" in body:
         raise httpx.DecodingError(str(body["error"].get("msg", body["error"])), request=response.request)
     return body
@@ -71,7 +73,10 @@ async def _search(http: httpx.AsyncClient, term: str, rows: int, start: int) -> 
 
 
 async def search(http: httpx.AsyncClient, term: str, limit: int) -> list[dict]:
-    response = await _search(http, term, limit, 0)
+    words = title_words(term)
+    if not words:
+        return []
+    response = await _search(http, " ".join(words), limit, 0)
     body = _checked_body(response)
     return [_entry(doc) for doc in body["response"]["docs"]]
 
