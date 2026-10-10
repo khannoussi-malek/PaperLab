@@ -4,12 +4,14 @@ from app.core import source_registry as reg
 def test_source_ids_preserve_d73s_trust_order():
     assert reg.SOURCE_IDS == (
         "openalex", "crossref", "semantic_scholar", "arxiv", "core", "unpaywall", "pubmed", "pmc", "europe_pmc",
+        "zenodo", "hal",
     )
 
 
 def test_discovery_source_ids_exclude_unpaywall_but_keep_the_trust_order():
     assert reg.DISCOVERY_SOURCE_IDS == (
         "openalex", "crossref", "semantic_scholar", "arxiv", "core", "pubmed", "pmc", "europe_pmc",
+        "zenodo", "hal",
     )
 
 
@@ -17,23 +19,25 @@ def test_names():
     assert reg.NAMES == {
         "openalex": "OpenAlex", "crossref": "Crossref", "semantic_scholar": "Semantic Scholar", "arxiv": "arXiv",
         "core": "CORE", "unpaywall": "Unpaywall", "pubmed": "PubMed", "pmc": "PMC", "europe_pmc": "Europe PMC",
+        "zenodo": "Zenodo", "hal": "HAL",
     }  # fmt: skip
 
 
 def test_keyed_ids():
-    assert reg.KEYED_IDS == ("openalex", "semantic_scholar", "core", "pubmed", "pmc")
+    assert reg.KEYED_IDS == ("openalex", "semantic_scholar", "core", "pubmed", "pmc", "zenodo")
 
 
 def test_enabled_by_default_turns_everything_on_except_openalex():
     assert reg.ENABLED_BY_DEFAULT == {
         "openalex": False, "crossref": True, "semantic_scholar": True, "arxiv": True, "core": True,
         "unpaywall": True, "pubmed": True, "pmc": True, "europe_pmc": True,
+        "zenodo": True, "hal": True,
     }  # fmt: skip
 
 
 def test_asks_match_todays_classify_query_kinds():
     assert {kind: set(sources) for kind, sources in reg.ASKS.items()} == {
-        "title": {"openalex", "crossref", "arxiv", "core", "pubmed", "pmc", "europe_pmc"},
+        "title": {"openalex", "crossref", "arxiv", "core", "pubmed", "pmc", "europe_pmc", "zenodo", "hal"},
         "doi": {"openalex", "crossref"},
         "arxiv": {"semantic_scholar", "arxiv"},
         "openalex": {"openalex"},
@@ -48,7 +52,7 @@ def test_unpaywall_has_no_ask_and_is_not_a_discovery_source():
 def test_page_size_by_source_matches_todays_workspace_search_constant():
     assert reg.PAGE_SIZE_BY_SOURCE == {
         "openalex": 100, "crossref": 30, "arxiv": 20, "core": 20, "semantic_scholar": 75, "pubmed": 20,
-        "pmc": 20, "europe_pmc": 25,
+        "pmc": 20, "europe_pmc": 25, "zenodo": 25, "hal": 25,
     }  # fmt: skip
 
 
@@ -58,7 +62,7 @@ def test_page_funcs_and_mappers_cover_every_discovery_source():
 
 
 def test_starting_cursor_value_only_overrides_openalex():
-    assert reg.STARTING_CURSOR_VALUE == {"openalex": 1, "europe_pmc": "*"}
+    assert reg.STARTING_CURSOR_VALUE == {"openalex": 1, "europe_pmc": "*", "zenodo": 1}
 
 
 def test_starting_cursor_value_also_covers_europe_pmcs_opaque_cursor():
