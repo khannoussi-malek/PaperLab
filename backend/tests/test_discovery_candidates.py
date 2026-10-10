@@ -422,3 +422,14 @@ def test_from_hal_with_no_pdf_doi_or_abstract_maps_without_them():
     assert candidate.external_ids == {"hal": "1"}
     assert candidate.pdf_urls == []
     assert candidate.abstract is None
+
+
+def test_from_hal_coerces_a_non_string_docid_to_str():
+    entry = {
+        "docid": 4020890, "title": "Bare", "authors": [], "year": None, "doi": None, "abstract": None,
+        "pdf_url": None,
+    }
+
+    candidate = from_hal(entry)
+
+    assert candidate.external_ids == {"hal": "4020890"}
