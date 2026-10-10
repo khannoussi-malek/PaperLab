@@ -21,8 +21,10 @@ from app.core.candidates import (
     from_arxiv,
     from_core,
     from_crossref,
+    from_doaj,
     from_europe_pmc,
     from_hal,
+    from_openaire,
     from_pmc,
     from_pubmed,
     from_s2,
@@ -35,8 +37,10 @@ from app.providers import (
     arxiv,
     core_ac,
     crossref,
+    doaj,
     europe_pmc,
     hal,
+    openaire,
     openalex,
     pmc,
     pubmed,
@@ -114,6 +118,15 @@ async def _acm_dl(http: httpx.AsyncClient, kind: str, value: str) -> list[Candid
 
 async def _ssrn(http: httpx.AsyncClient, kind: str, value: str) -> list[Candidate]:
     return [from_ssrn(work) for work in await ssrn.search(http, value, PER_SOURCE)]
+
+
+async def _doaj(http: httpx.AsyncClient, kind: str, value: str) -> list[Candidate]:
+    return [from_doaj(entry) for entry in await doaj.search(http, value, PER_SOURCE)]
+
+
+async def _openaire(http: httpx.AsyncClient, kind: str, value: str) -> list[Candidate]:
+    items = await openaire.search(http, value, PER_SOURCE)
+    return [candidate for item in items if item and (candidate := from_openaire(item))]
 
 
 @dataclass(frozen=True)
@@ -204,6 +217,16 @@ REGISTRY: tuple[SourceSpec, ...] = (
         id="ssrn", name="SSRN", keyed=False, enabled_by_default=False, is_discovery_source=True,
         new_client=openalex.new_client, ask=_ssrn, ask_kinds=("title",),
         page=ssrn.search_page, mapper=from_ssrn, page_size=25, key_source="openalex",
+    ),
+    SourceSpec(
+        id="doaj", name="DOAJ", keyed=False, enabled_by_default=True, is_discovery_source=True,
+        new_client=doaj.new_client, ask=_doaj, ask_kinds=("title",),
+        page=doaj.search_page, mapper=from_doaj, page_size=100, starting_cursor=1,
+    ),
+    SourceSpec(
+        id="openaire", name="OpenAIRE", keyed=False, enabled_by_default=True, is_discovery_source=True,
+        new_client=openaire.new_client, ask=_openaire, ask_kinds=("title",),
+        page=openaire.search_page, mapper=from_openaire, page_size=20, starting_cursor=1,
     ),
 )
 

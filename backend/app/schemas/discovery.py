@@ -20,6 +20,8 @@ SOURCE_ID_PATTERNS: dict[str, re.Pattern[str]] = {
     "pmc": re.compile(r"^\d{1,20}$"),
     "zenodo": re.compile(r"^\d{1,20}$"),
     "hal": re.compile(r"^\d{1,20}$"),
+    "doaj": re.compile(r"^[0-9a-f]{32}$"),
+    "openaire": re.compile(r"^[a-z_]{1,20}::[0-9a-f]{32}$"),
 }
 
 
