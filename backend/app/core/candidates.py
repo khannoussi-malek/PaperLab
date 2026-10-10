@@ -371,15 +371,18 @@ def from_openaire(entry: Mapping[str, Any]) -> Candidate | None:
 def from_iacr_eprint(entry: Mapping[str, Any]) -> Candidate:
     """An entry from providers/iacr_eprint.py's own fetch_page(). The bare eprint id (e.g. "2026/2368")
     is extracted from the OAI identifier ("oai:eprint.iacr.org:2026/2368") and becomes this source's own
-    external_ids key -- most eprints have no DOI at all. Never a PDF: constructing one
+    external_ids key -- most eprints have no DOI at all. `year` comes from the id's own 4-digit year
+    prefix, not the OAI `datestamp` -- confirmed live, `datestamp` is the record's last-MODIFIED time, so
+    a revised eprint's datestamp can land a year after its actual publication year (roughly a quarter of
+    real harvested records). The id's year prefix is always present and always valid: the id format is
+    already enforced elsewhere as ^\\d{4}/\\d{1,6}$. Never a PDF: constructing one
     (https://eprint.iacr.org/<id>.pdf) is deliberately not attempted here; this plan's own scope is
     getting IACR searchable, not fetching its files."""
     eprint_id = entry["identifier"].removeprefix("oai:eprint.iacr.org:")
-    datestamp = entry.get("datestamp") or ""
     return Candidate(
         title=entry.get("title") or "Untitled",
         authors=list(entry.get("creators") or [])[:MAX_AUTHORS],
-        year=int(datestamp[:4]) if datestamp[:4].isdigit() else None,
+        year=int(eprint_id[:4]),
         external_ids={"iacr_eprint": eprint_id},
         abstract=entry.get("description") or None,
         sources=("iacr_eprint",),

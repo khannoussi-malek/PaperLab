@@ -673,7 +673,9 @@ def test_from_iacr_eprint_maps_every_field():
     assert candidate.pdf_urls == []  # IACR's own PDF link construction is not attempted in this plan
 
 
-def test_from_iacr_eprint_with_no_creators_description_or_date_maps_without_them():
+def test_from_iacr_eprint_with_no_creators_or_description_maps_without_them():
+    """`year` comes from the eprint id's own 4-digit prefix, not `datestamp` (final review fix 4) -- so
+    it's always present even when datestamp is None."""
     entry = {
         "identifier": "oai:eprint.iacr.org:2026/0003", "datestamp": None, "title": "Bare", "creators": [],
         "description": None,
@@ -683,5 +685,5 @@ def test_from_iacr_eprint_with_no_creators_description_or_date_maps_without_them
 
     assert candidate.authors == []
     assert candidate.abstract is None
-    assert candidate.year is None
+    assert candidate.year == 2026
     assert candidate.external_ids == {"iacr_eprint": "2026/0003"}
