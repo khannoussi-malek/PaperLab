@@ -77,6 +77,15 @@ async def test_search_page_advances_the_page_number_then_stops(openaire_api):
     assert cursor_2 is None
 
 
+async def test_search_page_stops_at_the_hard_result_cap_even_if_more_remain(openaire_api):
+    body = {"header": {"numFound": 50000, "page": 500, "pageSize": 20}, "results": [{"id": "x" * 32}]}
+    openaire_api.reply("/graph/v3/research-products", 200, json=body)
+
+    _, next_cursor = await openaire.search_page(openaire_api.client, "x", 20, 500)
+
+    assert next_cursor is None  # page 500 at page_size 20 = 10000 results already reached; real numFound is ignored
+
+
 @pytest.mark.parametrize(
     ("status", "body"), [(503, "busy"), (429, "Rate exceeded.")], ids=["server error", "rate limited"]
 )

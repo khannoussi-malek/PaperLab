@@ -23,6 +23,9 @@ from app.providers.openalex import json_body
 
 BASE_URL = "https://api.openaire.eu/graph/v3"
 TIMEOUT = httpx.Timeout(10.0)
+MAX_RESULTS = 10000  # OpenAIRE's own hard ceiling (confirmed live: page=501 at pageSize=20 answers a
+# real HTTP 400, "Page * pageSize must be less than or equal to 10000") -- search_page stops signaling
+# "more" once a page would cross this line, instead of letting a broad query eventually hit the 400.
 
 
 def new_client(
@@ -73,5 +76,5 @@ async def search_page(
     next_page_or_None); "is there more" is cursor * page_size < the response's own reported numFound."""
     response = await _search(http, term, page_size, cursor)
     body = json_body(_checked(response))
-    next_cursor = cursor + 1 if cursor * page_size < body["header"]["numFound"] else None
+    next_cursor = cursor + 1 if cursor * page_size < min(body["header"]["numFound"], MAX_RESULTS) else None
     return body["results"], next_cursor

@@ -23,6 +23,9 @@ from app.providers.openalex import json_body
 BASE_URL = "https://doaj.org/api"
 TIMEOUT = httpx.Timeout(10.0)
 MAX_PAGE_SIZE = 100  # DOAJ's own silent cap (confirmed live) -- this module always requests at most 100.
+MAX_RESULTS = 1000  # DOAJ's own hard ceiling (confirmed live: page 11 at pageSize=100 answers a real
+# HTTP 400, "You cannot access results beyond 1000 records via this API") -- search_page stops signaling
+# "more" once a page would cross this line, instead of letting a broad query eventually hit the 400.
 
 
 def new_client(
@@ -77,5 +80,5 @@ async def search_page(
     wrong."""
     response = await _search(http, term, page_size, cursor)
     body = json_body(_checked(response))
-    next_cursor = cursor + 1 if "next" in body else None
+    next_cursor = cursor + 1 if "next" in body and cursor * page_size < MAX_RESULTS else None
     return body["results"], next_cursor
