@@ -368,6 +368,24 @@ def from_openaire(entry: Mapping[str, Any]) -> Candidate | None:
     )
 
 
+def from_iacr_eprint(entry: Mapping[str, Any]) -> Candidate:
+    """An entry from providers/iacr_eprint.py's own fetch_page(). The bare eprint id (e.g. "2026/2368")
+    is extracted from the OAI identifier ("oai:eprint.iacr.org:2026/2368") and becomes this source's own
+    external_ids key -- most eprints have no DOI at all. Never a PDF: constructing one
+    (https://eprint.iacr.org/<id>.pdf) is deliberately not attempted here; this plan's own scope is
+    getting IACR searchable, not fetching its files."""
+    eprint_id = entry["identifier"].removeprefix("oai:eprint.iacr.org:")
+    datestamp = entry.get("datestamp") or ""
+    return Candidate(
+        title=entry.get("title") or "Untitled",
+        authors=list(entry.get("creators") or [])[:MAX_AUTHORS],
+        year=int(datestamp[:4]) if datestamp[:4].isdigit() else None,
+        external_ids={"iacr_eprint": eprint_id},
+        abstract=entry.get("description") or None,
+        sources=("iacr_eprint",),
+    )
+
+
 def normal_title(title: str) -> str:
     return re.sub(r"\W+", " ", title).strip().casefold()
 
@@ -395,6 +413,7 @@ def _ids(candidate: Candidate) -> set[str]:
         "hal": candidate.external_ids.get("hal"),
         "doaj": candidate.external_ids.get("doaj"),
         "openaire": candidate.external_ids.get("openaire"),
+        "iacr_eprint": candidate.external_ids.get("iacr_eprint"),
     }
     return {f"{kind}:{value.lower()}" for kind, value in keys.items() if value}
 
@@ -425,7 +444,7 @@ def _combined(records: list[Candidate]) -> Candidate:
             "arxiv": arxiv_id, "openalex": first_id("openalex"), "semantic_scholar": first_id("semantic_scholar"),
             "core": first_id("core"), "pubmed": first_id("pubmed"), "pmc": first_id("pmc"),
             "zenodo": first_id("zenodo"), "hal": first_id("hal"), "doaj": first_id("doaj"),
-            "openaire": first_id("openaire"),
+            "openaire": first_id("openaire"), "iacr_eprint": first_id("iacr_eprint"),
         }.items()
         if v
     }
