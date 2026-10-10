@@ -48,6 +48,10 @@ describe('pageLink', () => {
       `https://explore.openaire.eu/search/publication?articleId=${encodeURIComponent(id)}`,
     )
   })
+
+  it('falls back to IACR ePrint when nothing else is set', () => {
+    expect(pageLink({ ...ids, external_ids: { iacr_eprint: '2026/2368' } })).toBe('https://eprint.iacr.org/2026/2368')
+  })
 })
 
 describe('citationsLabel', () => {

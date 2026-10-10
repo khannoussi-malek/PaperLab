@@ -1678,7 +1678,7 @@ export interface components {
             /** Pdf Urls */
             pdf_urls: string[];
             /** Sources */
-            sources: ("openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core" | "unpaywall" | "pubmed" | "pmc" | "europe_pmc" | "zenodo" | "hal" | "acm_dl" | "ssrn" | "doaj" | "openaire")[];
+            sources: ("openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core" | "unpaywall" | "pubmed" | "pmc" | "europe_pmc" | "zenodo" | "hal" | "acm_dl" | "ssrn" | "doaj" | "openaire" | "iacr_eprint")[];
             /** Paper Id */
             paper_id: string | null;
         };
@@ -2805,7 +2805,7 @@ export interface components {
              * Id
              * @enum {string}
              */
-            id: "openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core" | "unpaywall" | "pubmed" | "pmc" | "europe_pmc" | "zenodo" | "hal" | "acm_dl" | "ssrn" | "doaj" | "openaire";
+            id: "openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core" | "unpaywall" | "pubmed" | "pmc" | "europe_pmc" | "zenodo" | "hal" | "acm_dl" | "ssrn" | "doaj" | "openaire" | "iacr_eprint";
             /** Name */
             name: string;
             /** Enabled */
@@ -3327,7 +3327,7 @@ export interface components {
                 [key: string]: unknown;
             };
             /** Sources */
-            sources: ("openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core" | "pubmed" | "pmc" | "europe_pmc" | "zenodo" | "hal" | "acm_dl" | "ssrn" | "doaj" | "openaire")[];
+            sources: ("openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core" | "pubmed" | "pmc" | "europe_pmc" | "zenodo" | "hal" | "acm_dl" | "ssrn" | "doaj" | "openaire" | "iacr_eprint")[];
             /**
              * Query Overrides
              * @default {}
@@ -3564,6 +3564,8 @@ export interface components {
             doaj?: boolean;
             /** Openaire */
             openaire?: boolean;
+            /** Iacr Eprint */
+            iacr_eprint?: boolean;
         };
         /** SourcesEvent */
         SourcesEvent: {

@@ -7,8 +7,11 @@ import type { SearchRunCreate, SearchRunSource } from '@/api/client'
 // Search/discovery sources only (spec §6) — mirrors the backend's SearchSource Literal. Unpaywall is DOI-only PDF
 // enrichment, never fanned out to by search_batch, so it's excluded here regardless of its own settings switch
 // (C1: sending it used to 422 every Start click). A Record, not an array: adding a search source to the backend's
-// SearchRunSource union without adding it here is now a compiler error, not a silent no-op.
-const SEARCH_SOURCES: Record<SearchRunSource, true> = {
+// SearchRunSource union without adding it here is now a compiler error, not a silent no-op. IACR ePrint is
+// excluded via `Exclude` rather than listed `true`/`false`: it's in SearchRunSource because its `page` function
+// serves Workspace Search's own paginated harvest, but it has no live one-shot lookup, so it never belongs in this
+// Start-button source list (M32 batch 6a, task 8).
+const SEARCH_SOURCES: Record<Exclude<SearchRunSource, 'iacr_eprint'>, true> = {
   arxiv: true, crossref: true, core: true, semantic_scholar: true, openalex: true, pubmed: true,
   pmc: true, europe_pmc: true, zenodo: true, hal: true, acm_dl: true, ssrn: true, doaj: true, openaire: true,
 }
