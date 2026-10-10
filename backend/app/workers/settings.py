@@ -28,6 +28,13 @@ class WorkerSettings:
         func(suggest_screening, timeout=SUGGEST_JOB_TIMEOUT),
     ]
     cron_jobs = [
-        cron(harvest_iacr_eprint, hour={3}, minute={0}, run_at_startup=True, timeout=HARVEST_JOB_TIMEOUT),
+        cron(
+            harvest_iacr_eprint,
+            name="harvest_iacr_eprint",
+            hour={3},
+            minute={0},
+            run_at_startup=True,
+            timeout=HARVEST_JOB_TIMEOUT,
+        ),
     ]
     redis_settings = RedisSettings.from_dsn(settings.redis_url)
