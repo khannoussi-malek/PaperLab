@@ -1,14 +1,18 @@
 """Search across every paper source that is on (M19.5, D72, D73, P7)."""
 
+from contextlib import asynccontextmanager
 from urllib.parse import parse_qs, urlsplit
 
 import httpx
 import pytest
 
 from app.core import discovery
+from app.core.candidates import Candidate, from_iacr_eprint
 from app.core.errors import Conflict
 from app.core.paper_sources import SourceSettings
 from app.models import Paper
+from app.providers import iacr_eprint
+from app.workers.harvest import harvest_ingest_candidate
 
 pytestmark = pytest.mark.anyio
 
@@ -263,6 +267,7 @@ async def test_each_source_that_is_on_gets_a_client_and_keys_travel_in_headers()
             "ssrn": False,
             "doaj": False,
             "openaire": False,
+            "iacr_eprint": False,
         },
         api_keys={"openalex": "oa-key-0123456789", "semantic_scholar": None, "core": "core-key-0123456789"},
     )
@@ -299,7 +304,31 @@ async def test_unpaywall_and_openalex_stay_off_by_default_and_without_an_email()
     assert (providers.client("openalex"), providers.client("unpaywall")) == (None, None)
     for source in (
         "crossref", "semantic_scholar", "arxiv", "core", "pubmed", "pmc", "europe_pmc", "zenodo", "hal", "doaj",
-        "openaire",
+        "openaire", "iacr_eprint",
     ):
         assert providers.client(source) is not None
     await providers.aclose()
+
+
+async def test_iacr_eprints_search_page_preserves_year_through_from_iacr_eprint(session, monkeypatch):
+    """Regression: search_page's own entry dict used to hardcode datestamp=None, which from_iacr_eprint's
+    year parsing (datestamp[:4]) can't recover a year from -- even though the harvested row's own `year`
+    column (set correctly at harvest time) has it. search_page now synthesizes a datestamp whose first 4
+    characters are the real year."""
+    candidate = Candidate(
+        title="A Searchable Eprint About Lattices", authors=["Ada Fixture"], year=2025,
+        external_ids={"iacr_eprint": "2025/1234"}, abstract="An abstract.", sources=("iacr_eprint",),
+    )
+    await harvest_ingest_candidate(session, candidate)
+    await session.flush()
+
+    @asynccontextmanager
+    async def _reuse_test_session(session):
+        yield session  # never closes it -- the `session` fixture's own teardown does that
+
+    monkeypatch.setattr(iacr_eprint, "SessionLocal", lambda: _reuse_test_session(session))
+
+    entries, _ = await iacr_eprint.search_page(None, "Searchable Eprint", 10, 0)
+
+    [entry] = entries
+    assert from_iacr_eprint(entry).year == 2025

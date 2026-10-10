@@ -24,6 +24,7 @@ from app.core.candidates import (
     from_doaj,
     from_europe_pmc,
     from_hal,
+    from_iacr_eprint,
     from_openaire,
     from_pmc,
     from_pubmed,
@@ -40,6 +41,7 @@ from app.providers import (
     doaj,
     europe_pmc,
     hal,
+    iacr_eprint,
     openaire,
     openalex,
     pmc,
@@ -227,6 +229,10 @@ REGISTRY: tuple[SourceSpec, ...] = (
         id="openaire", name="OpenAIRE", keyed=False, enabled_by_default=True, is_discovery_source=True,
         new_client=openaire.new_client, ask=_openaire, ask_kinds=("title",),
         page=openaire.search_page, mapper=from_openaire, page_size=20, starting_cursor=1,
+    ),
+    SourceSpec(
+        id="iacr_eprint", name="IACR ePrint", keyed=False, enabled_by_default=True, is_discovery_source=True,
+        new_client=iacr_eprint.new_client, page=iacr_eprint.search_page, mapper=from_iacr_eprint, page_size=50,
     ),
 )
 
