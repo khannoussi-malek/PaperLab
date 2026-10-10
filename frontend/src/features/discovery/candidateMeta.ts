@@ -11,6 +11,8 @@ export const SOURCE_NAMES: Record<PaperSourceId, string> = {
   pubmed: 'PubMed',
   pmc: 'PMC',
   europe_pmc: 'Europe PMC',
+  zenodo: 'Zenodo',
+  hal: 'HAL',
 }
 
 /** "1,234 citations", "1 citation", or '' when the count is unknown. */
@@ -26,16 +28,18 @@ const ID_URL_BUILDERS: Record<string, (id: string) => string> = {
   core: (id) => `https://core.ac.uk/works/${id}`,
   pubmed: (id) => `https://pubmed.ncbi.nlm.nih.gov/${id}/`,
   pmc: (id) => `https://pmc.ncbi.nlm.nih.gov/articles/PMC${id}/`,
+  zenodo: (id) => `https://zenodo.org/records/${id}`,
+  hal: (id) => `https://hal.science/hal-${id}`,
 }
 /** Preference order for candidateKey/sameCandidate (pageLink has its own order, defined inline above) — doi is
  * handled separately in each since it isn't a key in external_ids. */
-const ID_PRIORITY = ['openalex', 'semantic_scholar', 'arxiv', 'core', 'pubmed', 'pmc']
+const ID_PRIORITY = ['openalex', 'semantic_scholar', 'arxiv', 'core', 'pubmed', 'pmc', 'zenodo', 'hal']
 
-/** Where "Open page" goes: the DOI, else arXiv, OpenAlex, Semantic Scholar, CORE, then PubMed, then PMC; null with
- * no identifier. */
+/** Where "Open page" goes: the DOI, else arXiv, OpenAlex, Semantic Scholar, CORE, then PubMed, then PMC, then
+ * Zenodo, then HAL; null with no identifier. */
 export function pageLink(candidate: Pick<Candidate, 'doi' | 'external_ids'>): string | null {
   if (candidate.doi) return `https://doi.org/${candidate.doi}`
-  for (const source of ['arxiv', 'openalex', 'semantic_scholar', 'core', 'pubmed', 'pmc']) {
+  for (const source of ['arxiv', 'openalex', 'semantic_scholar', 'core', 'pubmed', 'pmc', 'zenodo', 'hal']) {
     const id = candidate.external_ids[source]
     if (id) return ID_URL_BUILDERS[source](id)
   }
@@ -52,14 +56,14 @@ export function candidateKey(candidate: Candidate, index: number): string {
 }
 
 /** Whether `candidate` is the paper `added` names: by openalex id, else doi (any case), semantic_scholar, arxiv,
- * core or pubmed, pmc. Doi ranks second here (not last, unlike candidateKey/pageLink) because this drives "already in your
+ * core or pubmed, pmc, zenodo, hal. Doi ranks second here (not last, unlike candidateKey/pageLink) because this drives "already in your
  * library" dedup across cached search results — ranking it last reintroduced a real gap: two rows for the same
  * paper that share a doi but not a semantic_scholar id (e.g. one row never got an S2 match) would stop matching,
  * leaving a stale "Add" button that 409s on click. */
 export function sameCandidate(candidate: Candidate, added: Candidate): boolean {
   if (added.external_ids.openalex) return candidate.external_ids.openalex === added.external_ids.openalex
   if (added.doi) return candidate.doi?.toLowerCase() === added.doi.toLowerCase()
-  for (const source of ['semantic_scholar', 'arxiv', 'core', 'pubmed', 'pmc']) {
+  for (const source of ['semantic_scholar', 'arxiv', 'core', 'pubmed', 'pmc', 'zenodo', 'hal']) {
     const addedId = added.external_ids[source]
     if (addedId) return candidate.external_ids[source] === addedId
   }

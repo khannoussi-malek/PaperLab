@@ -1678,7 +1678,7 @@ export interface components {
             /** Pdf Urls */
             pdf_urls: string[];
             /** Sources */
-            sources: ("openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core" | "unpaywall" | "pubmed" | "pmc" | "europe_pmc")[];
+            sources: ("openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core" | "unpaywall" | "pubmed" | "pmc" | "europe_pmc" | "zenodo" | "hal")[];
             /** Paper Id */
             paper_id: string | null;
         };
@@ -2805,7 +2805,7 @@ export interface components {
              * Id
              * @enum {string}
              */
-            id: "openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core" | "unpaywall" | "pubmed" | "pmc" | "europe_pmc";
+            id: "openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core" | "unpaywall" | "pubmed" | "pmc" | "europe_pmc" | "zenodo" | "hal";
             /** Name */
             name: string;
             /** Enabled */
@@ -3327,7 +3327,7 @@ export interface components {
                 [key: string]: unknown;
             };
             /** Sources */
-            sources: ("openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core" | "pubmed" | "pmc" | "europe_pmc")[];
+            sources: ("openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core" | "pubmed" | "pmc" | "europe_pmc" | "zenodo" | "hal")[];
             /**
              * Query Overrides
              * @default {}
@@ -3529,6 +3529,8 @@ export interface components {
             pubmed?: string | null;
             /** Pmc */
             pmc?: string | null;
+            /** Zenodo */
+            zenodo?: string | null;
         };
         /** SourceSwitches */
         SourceSwitches: {
@@ -3550,6 +3552,10 @@ export interface components {
             pmc?: boolean;
             /** Europe Pmc */
             europe_pmc?: boolean;
+            /** Zenodo */
+            zenodo?: boolean;
+            /** Hal */
+            hal?: boolean;
         };
         /** SourcesEvent */
         SourcesEvent: {

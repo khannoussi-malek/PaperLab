@@ -191,7 +191,12 @@ test('with every source that searches titles off, Find papers says to turn one o
   // needs turning off here as well
   await setSourceSettings(
     request,
-    { enabled: { crossref: false, arxiv: false, core: false, pubmed: false, pmc: false, europe_pmc: false } },
+    {
+      enabled: {
+        crossref: false, arxiv: false, core: false, pubmed: false, pmc: false, europe_pmc: false,
+        zenodo: false, hal: false,
+      },
+    },
   )
   await page.goto('/')
   await page.getByRole('button', { name: 'Find papers' }).click()

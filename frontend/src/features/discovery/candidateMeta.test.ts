@@ -29,6 +29,14 @@ describe('pageLink', () => {
   it('falls back to PMC when nothing else is set', () => {
     expect(pageLink({ ...ids, external_ids: { pmc: '9876543' } })).toBe('https://pmc.ncbi.nlm.nih.gov/articles/PMC9876543/')
   })
+
+  it('falls back to Zenodo when nothing else is set', () => {
+    expect(pageLink({ ...ids, external_ids: { zenodo: '123456' } })).toBe('https://zenodo.org/records/123456')
+  })
+
+  it('falls back to HAL when nothing else is set', () => {
+    expect(pageLink({ ...ids, external_ids: { hal: '01234567' } })).toBe('https://hal.science/hal-01234567')
+  })
 })
 
 describe('citationsLabel', () => {
@@ -114,6 +122,15 @@ describe('sameCandidate', () => {
     ).toBe(true)
     expect(
       sameCandidate(candidate({ external_ids: { pmc: '1' } }), candidate({ external_ids: { pmc: '2' } })),
+    ).toBe(false)
+  })
+
+  it('matches by zenodo id when nothing stronger is set', () => {
+    expect(
+      sameCandidate(candidate({ external_ids: { zenodo: '123456' } }), candidate({ external_ids: { zenodo: '123456' } })),
+    ).toBe(true)
+    expect(
+      sameCandidate(candidate({ external_ids: { zenodo: '1' } }), candidate({ external_ids: { zenodo: '2' } })),
     ).toBe(false)
   })
 })

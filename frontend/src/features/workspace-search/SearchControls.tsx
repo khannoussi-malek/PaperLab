@@ -10,7 +10,7 @@ import type { SearchRunCreate, SearchRunSource } from '@/api/client'
 // SearchRunSource union without adding it here is now a compiler error, not a silent no-op.
 const SEARCH_SOURCES: Record<SearchRunSource, true> = {
   arxiv: true, crossref: true, core: true, semantic_scholar: true, openalex: true, pubmed: true,
-  pmc: true, europe_pmc: true,
+  pmc: true, europe_pmc: true, zenodo: true, hal: true,
 }
 
 function isSearchSource(id: string): id is SearchRunSource {
