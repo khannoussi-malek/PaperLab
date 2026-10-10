@@ -15,6 +15,8 @@ from functools import cache
 import httpx
 import pymupdf
 
+from app.providers.ssrn import SSRN_SOURCE_ID
+
 MAILTO = "e2e@paperlab.test"
 PDF_HOST = "https://pdf.paperlab.test"
 FREE_TITLE = "PaperLab Find Papers Fixture"
@@ -393,6 +395,9 @@ class FakeAdapter:
 
 
 def _openalex_handle(request: httpx.Request) -> httpx.Response:
+    if SSRN_SOURCE_ID in request.url.params.get("filter", ""):
+        # Only the SSRN provider filters OpenAlex to its source id, and no fixture paper is an SSRN record.
+        return httpx.Response(200, json={"meta": {"count": 0}, "results": []})
     if "page" in request.url.params:
         return _openalex_search_page(request.url.params)
     if request.url.path.startswith("/works/"):
@@ -419,6 +424,9 @@ def _s2_handle(request: httpx.Request) -> httpx.Response:
 
 
 def _crossref_handle(request: httpx.Request) -> httpx.Response:
+    if "filter" in request.url.params:
+        # Only the ACM DL provider filters Crossref (to the 10.1145 prefix), and no fixture paper has that prefix.
+        return httpx.Response(200, json={"message": {"items": []}})
     if "offset" in request.url.params:
         return _crossref_search_page(request.url.params)
     if request.url.path.startswith("/works/"):

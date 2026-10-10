@@ -4,14 +4,14 @@ from app.core import source_registry as reg
 def test_source_ids_preserve_d73s_trust_order():
     assert reg.SOURCE_IDS == (
         "openalex", "crossref", "semantic_scholar", "arxiv", "core", "unpaywall", "pubmed", "pmc", "europe_pmc",
-        "zenodo", "hal",
+        "zenodo", "hal", "acm_dl", "ssrn",
     )
 
 
 def test_discovery_source_ids_exclude_unpaywall_but_keep_the_trust_order():
     assert reg.DISCOVERY_SOURCE_IDS == (
         "openalex", "crossref", "semantic_scholar", "arxiv", "core", "pubmed", "pmc", "europe_pmc",
-        "zenodo", "hal",
+        "zenodo", "hal", "acm_dl", "ssrn",
     )
 
 
@@ -19,7 +19,7 @@ def test_names():
     assert reg.NAMES == {
         "openalex": "OpenAlex", "crossref": "Crossref", "semantic_scholar": "Semantic Scholar", "arxiv": "arXiv",
         "core": "CORE", "unpaywall": "Unpaywall", "pubmed": "PubMed", "pmc": "PMC", "europe_pmc": "Europe PMC",
-        "zenodo": "Zenodo", "hal": "HAL",
+        "zenodo": "Zenodo", "hal": "HAL", "acm_dl": "ACM DL", "ssrn": "SSRN",
     }  # fmt: skip
 
 
@@ -31,13 +31,15 @@ def test_enabled_by_default_turns_everything_on_except_openalex():
     assert reg.ENABLED_BY_DEFAULT == {
         "openalex": False, "crossref": True, "semantic_scholar": True, "arxiv": True, "core": True,
         "unpaywall": True, "pubmed": True, "pmc": True, "europe_pmc": True,
-        "zenodo": True, "hal": True,
+        "zenodo": True, "hal": True, "acm_dl": True, "ssrn": True,
     }  # fmt: skip
 
 
 def test_asks_match_todays_classify_query_kinds():
     assert {kind: set(sources) for kind, sources in reg.ASKS.items()} == {
-        "title": {"openalex", "crossref", "arxiv", "core", "pubmed", "pmc", "europe_pmc", "zenodo", "hal"},
+        "title": {
+            "openalex", "crossref", "arxiv", "core", "pubmed", "pmc", "europe_pmc", "zenodo", "hal", "acm_dl", "ssrn",
+        },
         "doi": {"openalex", "crossref"},
         "arxiv": {"semantic_scholar", "arxiv"},
         "openalex": {"openalex"},
@@ -52,7 +54,7 @@ def test_unpaywall_has_no_ask_and_is_not_a_discovery_source():
 def test_page_size_by_source_matches_todays_workspace_search_constant():
     assert reg.PAGE_SIZE_BY_SOURCE == {
         "openalex": 100, "crossref": 30, "arxiv": 20, "core": 20, "semantic_scholar": 75, "pubmed": 20,
-        "pmc": 20, "europe_pmc": 25, "zenodo": 25, "hal": 25,
+        "pmc": 20, "europe_pmc": 25, "zenodo": 25, "hal": 25, "acm_dl": 30, "ssrn": 25,
     }  # fmt: skip
 
 

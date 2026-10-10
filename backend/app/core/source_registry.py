@@ -17,6 +17,7 @@ import httpx
 
 from app.core.candidates import (
     Candidate,
+    from_acm_dl,
     from_arxiv,
     from_core,
     from_crossref,
@@ -25,10 +26,12 @@ from app.core.candidates import (
     from_pmc,
     from_pubmed,
     from_s2,
+    from_ssrn,
     from_work,
     from_zenodo,
 )
 from app.providers import (
+    acm_dl,
     arxiv,
     core_ac,
     crossref,
@@ -38,6 +41,7 @@ from app.providers import (
     pmc,
     pubmed,
     semantic_scholar,
+    ssrn,
     unpaywall,
     zenodo,
 )
@@ -101,6 +105,15 @@ async def _zenodo(http: httpx.AsyncClient, kind: str, value: str) -> list[Candid
 
 async def _hal(http: httpx.AsyncClient, kind: str, value: str) -> list[Candidate]:
     return [from_hal(entry) for entry in await hal.search(http, value, PER_SOURCE)]
+
+
+async def _acm_dl(http: httpx.AsyncClient, kind: str, value: str) -> list[Candidate]:
+    items = await acm_dl.search(http, value, PER_SOURCE)
+    return [candidate for item in items if item and (candidate := from_acm_dl(item))]
+
+
+async def _ssrn(http: httpx.AsyncClient, kind: str, value: str) -> list[Candidate]:
+    return [from_ssrn(work) for work in await ssrn.search(http, value, PER_SOURCE)]
 
 
 @dataclass(frozen=True)
@@ -178,6 +191,16 @@ REGISTRY: tuple[SourceSpec, ...] = (
         id="hal", name="HAL", keyed=False, enabled_by_default=True, is_discovery_source=True,
         new_client=hal.new_client, ask=_hal, ask_kinds=("title",),
         page=hal.search_page, mapper=from_hal, page_size=25,
+    ),
+    SourceSpec(
+        id="acm_dl", name="ACM DL", keyed=False, enabled_by_default=True, is_discovery_source=True,
+        new_client=crossref.new_client, ask=_acm_dl, ask_kinds=("title",),
+        page=acm_dl.search_page, mapper=from_acm_dl, page_size=30,
+    ),
+    SourceSpec(
+        id="ssrn", name="SSRN", keyed=False, enabled_by_default=True, is_discovery_source=True,
+        new_client=openalex.new_client, ask=_ssrn, ask_kinds=("title",),
+        page=ssrn.search_page, mapper=from_ssrn, page_size=25,
     ),
 )
 
