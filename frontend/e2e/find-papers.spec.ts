@@ -187,8 +187,8 @@ test('with every source that searches titles off, Find papers says to turn one o
   page,
   request,
 }) => {
-  // OpenAlex is off already; PubMed/PMC/Europe PMC all search titles too and are on by default, so each
-  // needs turning off here as well
+  // OpenAlex is off already; PubMed/PMC/Europe PMC/Zenodo/HAL all search titles too and are on by
+  // default, so each needs turning off here as well
   await setSourceSettings(
     request,
     {
