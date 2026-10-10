@@ -6,6 +6,7 @@ from app.core.errors import Conflict
 from app.core.paper_sources import SOURCES, SourceSettings
 from app.models import Paper
 from app.providers import (
+    acm_dl,
     arxiv,
     core_ac,
     crossref,
@@ -16,6 +17,7 @@ from app.providers import (
     pmc,
     pubmed,
     semantic_scholar,
+    ssrn,
     zenodo,
 )
 from app.providers.extraction import extract
@@ -43,9 +45,9 @@ async def test_the_e2e_fake_finds_three_papers_and_suggests_the_same_three(sessi
     assert ([c.title for c in found.results], found.notices) == (titles, [])
     assert [c.title for c in suggested] == titles
     assert [c.sources for c in found.results] == [
-        ("openalex", "crossref", "arxiv", "core", "pubmed", "pmc", "europe_pmc", "zenodo", "hal"),
-        ("openalex", "crossref", "pubmed", "pmc", "europe_pmc", "zenodo", "hal"),
-        ("openalex", "crossref", "pubmed", "pmc", "europe_pmc", "zenodo", "hal"),
+        ("openalex", "crossref", "arxiv", "core", "pubmed", "pmc", "europe_pmc", "zenodo", "hal", "acm_dl", "ssrn"),
+        ("openalex", "crossref", "pubmed", "pmc", "europe_pmc", "zenodo", "hal", "acm_dl", "ssrn"),
+        ("openalex", "crossref", "pubmed", "pmc", "europe_pmc", "zenodo", "hal", "acm_dl", "ssrn"),
     ]
     assert [bool(c.pdf_urls) for c in found.results] == [True, True, False]
 
@@ -58,9 +60,9 @@ async def test_with_openalex_off_as_on_the_e2e_stack_the_badges_are_m19s(session
     await providers.aclose()
 
     assert [c.sources for c in found.results] == [
-        ("crossref", "arxiv", "core", "pubmed", "pmc", "europe_pmc", "zenodo", "hal"),
-        ("crossref", "pubmed", "pmc", "europe_pmc", "zenodo", "hal"),
-        ("crossref", "pubmed", "pmc", "europe_pmc", "zenodo", "hal"),
+        ("crossref", "arxiv", "core", "pubmed", "pmc", "europe_pmc", "zenodo", "hal", "acm_dl", "ssrn"),
+        ("crossref", "pubmed", "pmc", "europe_pmc", "zenodo", "hal", "acm_dl", "ssrn"),
+        ("crossref", "pubmed", "pmc", "europe_pmc", "zenodo", "hal", "acm_dl", "ssrn"),
     ]  # fmt: skip
     assert [bool(c.pdf_urls) for c in found.results] == [True, True, False]  # the landing page's link from Unpaywall
 
@@ -265,3 +267,23 @@ async def test_the_e2e_fakes_hal_search_page_has_two_pages_then_exhausts(fake_pr
 async def test_the_e2e_fakes_hal_search_page_ids_do_not_collide_with_the_free_papers_id(fake_providers):
     [entry], _ = await hal.search_page(fake_providers.client("hal"), "anything", page_size=1, cursor=0)
     assert entry["docid"] != discovery_fake.FREE_HAL_ID
+
+
+async def test_the_e2e_fakes_acm_dl_search_page_has_two_pages_then_exhausts(fake_providers):
+    page_1, cursor_1 = await acm_dl.search_page(fake_providers.client("acm_dl"), "x", 2, 0)
+    page_2, cursor_2 = await acm_dl.search_page(fake_providers.client("acm_dl"), "x", 2, cursor_1)
+
+    assert len(page_1) == 2
+    assert cursor_1 == 2
+    assert len(page_2) == 1
+    assert cursor_2 is None
+
+
+async def test_the_e2e_fakes_ssrn_search_page_has_two_pages_then_exhausts(fake_providers):
+    page_1, cursor_1 = await ssrn.search_page(fake_providers.client("ssrn"), "x", 2, 0)
+    page_2, cursor_2 = await ssrn.search_page(fake_providers.client("ssrn"), "x", 2, cursor_1)
+
+    assert len(page_1) == 2
+    assert cursor_1 == 2
+    assert len(page_2) == 1
+    assert cursor_2 is None
