@@ -1,0 +1,42 @@
+# Keeps the Homebrew casks in Casks/ in step with the releases. Publishing a release (or a manual run) rewrites them
+# with scripts/homebrew-casks and commits them to main. A pull request that changes the script or this file is a dry
+# run: it generates and checks the casks and commits nothing.
+name: Homebrew
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/homebrew.yml
+      - scripts/homebrew-casks
+
+permissions:
+  contents: write
+
+concurrency: homebrew-casks
+
+jobs:
+  casks:
+    runs-on: ubuntu-latest
+    steps:
+      # A release event checks out the tag; the casks belong on main.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.sha || 'main' }}
+      - run: scripts/homebrew-casks
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Check the casks
+        run: |
+          eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          brew style Casks/*.rb
+      - name: Commit to main
+        if: github.event_name != 'pull_request'
+        run: |
+          git add Casks
+          git diff --cached --quiet && { echo "casks unchanged"; exit 0; }
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -m "chore: update the Homebrew casks"
+          git push origin HEAD:main
