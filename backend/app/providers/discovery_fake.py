@@ -382,6 +382,79 @@ def _hal_handle(request: httpx.Request) -> httpx.Response:
     return httpx.Response(200, json={"response": {"numFound": len(PAPERS), "docs": docs}})
 
 
+# DOAJ is one-step like Zenodo, with a 1-based page cursor and a "next" key presence signal, same as
+# doaj.py's own search_page() -- own id bases, offset past HAL's 880000/890000.
+_DOAJ_ID_BASE = 900_000       # PAPERS[0..2] -> 900000..900002, zero-padded to doaj's own 32-hex id shape
+_PAGE_DOAJ_ID_BASE = 910_000  # PAGE_PAPERS[0..2] -> 910000..910002
+FREE_DOAJ_ID = f"{_DOAJ_ID_BASE:032d}"
+
+
+def _doaj_article(article_id: int, title: str, doi: str, pdf_url: str | None) -> dict:
+    links = [{"content_type": "pdf", "type": "fulltext", "url": pdf_url}] if pdf_url else []
+    return {
+        "id": f"{article_id:032d}",
+        "bibjson": {
+            "title": title, "year": "2026", "author": [{"name": "Ada Fixture"}],
+            "identifier": [{"id": doi, "type": "doi"}], "link": links,
+        },
+    }
+
+
+def _doaj_handle(request: httpx.Request) -> httpx.Response:
+    params = request.url.params
+    page_size = int(params["pageSize"])
+    page = int(params["page"])
+    if page_size < len(PAPERS):  # a direct search_page() pagination test (page_size=1), same convention as PubMed
+        offset = (page - 1) * page_size
+        items = _page_slice(offset, page_size)
+        results = [
+            _doaj_article(_PAGE_DOAJ_ID_BASE + offset + i, title, doi, None) for i, (title, doi) in enumerate(items)
+        ]
+        body: dict = {"total": len(PAGE_PAPERS), "page": page, "results": results}
+        if offset + page_size < len(PAGE_PAPERS):
+            body["next"] = f"https://doaj.org/api/v4/search/articles/x?page={page + 1}"
+        return httpx.Response(200, json=body)
+    results = [_doaj_article(_DOAJ_ID_BASE + i, title, doi, pdf_url) for i, (title, doi, pdf_url) in enumerate(PAPERS)]
+    return httpx.Response(200, json={"total": len(PAPERS), "page": 1, "results": results})
+
+
+# OpenAIRE is one-step with a 1-based page cursor and a numFound-based "more" signal, same as
+# openaire.py's own search_page() -- own id bases, offset past DOAJ's 900000/910000.
+_OPENAIRE_ID_BASE = 920_000       # PAPERS[0..2] -> 920000..920002
+_PAGE_OPENAIRE_ID_BASE = 930_000  # PAGE_PAPERS[0..2] -> 930000..930002
+FREE_OPENAIRE_ID = f"openaire____::{_OPENAIRE_ID_BASE:032d}"
+
+
+def _openaire_record(record_id: str, title: str, doi: str) -> dict:
+    return {
+        "id": record_id, "type": "publication", "mainTitle": title,
+        "descriptions": ["An overview of fixtures."], "pids": [{"scheme": "doi", "value": doi}],
+        "authors": [{"fullName": "Ada Fixture"}], "publicationDate": "2026-01-05",
+        "instances": [{"urls": [f"https://doi.org/{doi}"]}],
+    }
+
+
+def _openaire_handle(request: httpx.Request) -> httpx.Response:
+    params = request.url.params
+    page_size = int(params["pageSize"])
+    page = int(params["page"])
+    if page_size < len(PAPERS):  # a direct search_page() pagination test (page_size=1), same convention as PubMed
+        offset = (page - 1) * page_size
+        items = _page_slice(offset, page_size)
+        results = [
+            _openaire_record(f"openaire____::{_PAGE_OPENAIRE_ID_BASE + offset + i:032d}", title, doi)
+            for i, (title, doi) in enumerate(items)
+        ]
+        body = {"header": {"numFound": len(PAGE_PAPERS), "page": page, "pageSize": page_size}, "results": results}
+        return httpx.Response(200, json=body)
+    results = [
+        _openaire_record(f"openaire____::{_OPENAIRE_ID_BASE + i:032d}", title, doi)
+        for i, (title, doi, _) in enumerate(PAPERS)
+    ]
+    body = {"header": {"numFound": len(PAPERS), "page": 1, "pageSize": 20}, "results": results}
+    return httpx.Response(200, json=body)
+
+
 @dataclass(frozen=True)
 class FakeAdapter:
     """One source's fake: `host` plus a `match(path, params)` predicate decide whether this adapter answers a
@@ -486,6 +559,8 @@ ADAPTERS: tuple[FakeAdapter, ...] = (
     FakeAdapter("www.ebi.ac.uk", lambda path, params: path.endswith("/search"), _europe_pmc_handle),
     FakeAdapter("zenodo.org", lambda path, params: path == "/api/records", _zenodo_handle),
     FakeAdapter("api.archives-ouvertes.fr", lambda path, params: path == "/search/", _hal_handle),
+    FakeAdapter("doaj.org", lambda path, params: path.startswith("/api/search/articles/"), _doaj_handle),
+    FakeAdapter("api.openaire.eu", lambda path, params: path == "/graph/v3/research-products", _openaire_handle),
     FakeAdapter("pdf.paperlab.test", lambda path, params: True, _pdf_handle),
 )  # fmt: skip
 

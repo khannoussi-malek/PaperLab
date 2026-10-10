@@ -11,8 +11,10 @@ from app.providers import (
     core_ac,
     crossref,
     discovery_fake,
+    doaj,
     europe_pmc,
     hal,
+    openaire,
     openalex,
     pmc,
     pubmed,
@@ -45,10 +47,13 @@ async def test_the_e2e_fake_finds_three_papers_and_suggests_the_same_three(sessi
     assert ([c.title for c in found.results], found.notices) == (titles, [])
     assert [c.title for c in suggested] == titles
     assert [c.sources for c in found.results] == [
-        ("openalex", "crossref", "arxiv", "core", "pubmed", "pmc", "europe_pmc", "zenodo", "hal", "acm_dl", "ssrn"),
-        ("openalex", "crossref", "pubmed", "pmc", "europe_pmc", "zenodo", "hal", "acm_dl", "ssrn"),
-        ("openalex", "crossref", "pubmed", "pmc", "europe_pmc", "zenodo", "hal", "acm_dl", "ssrn"),
-    ]
+        (
+            "openalex", "crossref", "arxiv", "core", "pubmed", "pmc", "europe_pmc", "zenodo", "hal", "acm_dl",
+            "ssrn", "doaj", "openaire",
+        ),
+        ("openalex", "crossref", "pubmed", "pmc", "europe_pmc", "zenodo", "hal", "acm_dl", "ssrn", "doaj", "openaire"),
+        ("openalex", "crossref", "pubmed", "pmc", "europe_pmc", "zenodo", "hal", "acm_dl", "ssrn", "doaj", "openaire"),
+    ]  # fmt: skip
     assert [bool(c.pdf_urls) for c in found.results] == [True, True, False]
 
 
@@ -60,9 +65,9 @@ async def test_with_openalex_off_as_on_the_e2e_stack_the_badges_are_m19s(session
     await providers.aclose()
 
     assert [c.sources for c in found.results] == [
-        ("crossref", "arxiv", "core", "pubmed", "pmc", "europe_pmc", "zenodo", "hal", "acm_dl"),
-        ("crossref", "pubmed", "pmc", "europe_pmc", "zenodo", "hal", "acm_dl"),
-        ("crossref", "pubmed", "pmc", "europe_pmc", "zenodo", "hal", "acm_dl"),
+        ("crossref", "arxiv", "core", "pubmed", "pmc", "europe_pmc", "zenodo", "hal", "acm_dl", "doaj", "openaire"),
+        ("crossref", "pubmed", "pmc", "europe_pmc", "zenodo", "hal", "acm_dl", "doaj", "openaire"),
+        ("crossref", "pubmed", "pmc", "europe_pmc", "zenodo", "hal", "acm_dl", "doaj", "openaire"),
     ]  # fmt: skip
     assert [bool(c.pdf_urls) for c in found.results] == [True, True, False]  # the landing page's link from Unpaywall
 
@@ -287,3 +292,35 @@ async def test_the_e2e_fakes_ssrn_search_page_has_two_pages_then_exhausts(fake_p
     assert cursor_1 == 2
     assert len(page_2) == 1
     assert cursor_2 is None
+
+
+async def test_the_e2e_fakes_doaj_search_page_has_two_pages_then_exhausts(fake_providers):
+    page_1, cursor_1 = await doaj.search_page(fake_providers.client("doaj"), "x", 2, 1)
+    page_2, cursor_2 = await doaj.search_page(fake_providers.client("doaj"), "x", 2, cursor_1)
+
+    assert len(page_1) == 2
+    assert cursor_1 == 2
+    assert len(page_2) == 1
+    assert cursor_2 is None
+
+
+async def test_the_e2e_fakes_doaj_search_page_id_does_not_collide_with_the_free_papers_id(fake_providers):
+    page_1, _ = await doaj.search_page(fake_providers.client("doaj"), "x", 1, 1)
+
+    assert page_1[0]["id"] != discovery_fake.FREE_DOAJ_ID
+
+
+async def test_the_e2e_fakes_openaire_search_page_has_two_pages_then_exhausts(fake_providers):
+    page_1, cursor_1 = await openaire.search_page(fake_providers.client("openaire"), "x", 2, 1)
+    page_2, cursor_2 = await openaire.search_page(fake_providers.client("openaire"), "x", 2, cursor_1)
+
+    assert len(page_1) == 2
+    assert cursor_1 == 2
+    assert len(page_2) == 1
+    assert cursor_2 is None
+
+
+async def test_the_e2e_fakes_openaire_search_page_id_does_not_collide_with_the_free_papers_id(fake_providers):
+    page_1, _ = await openaire.search_page(fake_providers.client("openaire"), "x", 1, 1)
+
+    assert page_1[0]["id"] != discovery_fake.FREE_OPENAIRE_ID
