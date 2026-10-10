@@ -35,7 +35,7 @@ const ID_URL_BUILDERS: Record<string, (id: string) => string> = {
   zenodo: (id) => `https://zenodo.org/records/${id}`,
   hal: (id) => `https://hal.science/view/index/docid/${id}`,
   doaj: (id) => `https://doaj.org/article/${id}`,
-  openaire: (id) => `https://explore.openaire.eu/search/publication?pid=${id}`,
+  openaire: (id) => `https://explore.openaire.eu/search/publication?articleId=${encodeURIComponent(id)}`,
 }
 /** Preference order for candidateKey/sameCandidate (pageLink has its own order, defined inline above) — doi is
  * handled separately in each since it isn't a key in external_ids. */
