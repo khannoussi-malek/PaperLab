@@ -9,6 +9,7 @@ from app.providers import (
     doaj,
     europe_pmc,
     hal,
+    iacr_eprint,
     openaire,
     openalex,
     pmc,
@@ -777,3 +778,53 @@ async def test_openaire_next_cursor_is_none_once_numfound_is_exhausted(monkeypat
         _, next_cursor = await openaire.search_page(http, "CRISPR", page_size=2, cursor=2)
 
     assert next_cursor is None
+
+
+# --- iacr_eprint ------------------------------------
+
+
+async def test_iacr_eprint_search_page_only_returns_rows_this_source_harvested(session, monkeypatch):
+    from contextlib import asynccontextmanager
+
+    from app.models import ExternalRef
+
+    @asynccontextmanager
+    async def _reuse_test_session():
+        yield session  # never closes it -- the `session` fixture's own teardown does that
+
+    monkeypatch.setattr(iacr_eprint, "SessionLocal", _reuse_test_session)
+
+    session.add(ExternalRef(title="An IACR Paper", external_ids={"iacr_eprint": "2026/7001"}, sources=["iacr_eprint"]))
+    session.add(ExternalRef(title="A Different Source's Paper", external_ids={"doaj": "0" * 32}, sources=["doaj"]))
+    await session.flush()
+
+    entries, _ = await iacr_eprint.search_page(None, "Paper", 10, 0)
+
+    assert len(entries) == 1
+    assert entries[0]["identifier"] == "oai:eprint.iacr.org:2026/7001"
+
+
+async def test_iacr_eprint_search_page_paginates_with_a_plain_offset(session, monkeypatch):
+    from contextlib import asynccontextmanager
+
+    from app.models import ExternalRef
+
+    @asynccontextmanager
+    async def _reuse_test_session():
+        yield session
+
+    monkeypatch.setattr(iacr_eprint, "SessionLocal", _reuse_test_session)
+
+    for i in range(3):
+        session.add(
+            ExternalRef(title=f"Paper {i}", external_ids={"iacr_eprint": f"2026/800{i}"}, sources=["iacr_eprint"])
+        )
+    await session.flush()
+
+    page_1, cursor_1 = await iacr_eprint.search_page(None, "Paper", 2, 0)
+    page_2, cursor_2 = await iacr_eprint.search_page(None, "Paper", 2, cursor_1)
+
+    assert len(page_1) == 2
+    assert cursor_1 == 2
+    assert len(page_2) == 1
+    assert cursor_2 is None
