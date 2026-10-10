@@ -62,7 +62,7 @@ export function candidateKey(candidate: Candidate, index: number): string {
 }
 
 /** Whether `candidate` is the paper `added` names: by openalex id, else doi (any case), semantic_scholar, arxiv,
- * core or pubmed, pmc, zenodo, hal. Doi ranks second here (not last, unlike candidateKey/pageLink) because this drives "already in your
+ * core, pubmed, pmc, zenodo, hal, doaj or openaire. Doi ranks second here (not last, unlike candidateKey/pageLink) because this drives "already in your
  * library" dedup across cached search results — ranking it last reintroduced a real gap: two rows for the same
  * paper that share a doi but not a semantic_scholar id (e.g. one row never got an S2 match) would stop matching,
  * leaving a stale "Add" button that 409s on click. */
