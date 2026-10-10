@@ -24,7 +24,7 @@ from app.core.candidates import (
     with_s2,
 )
 from app.core.discovery import classify_query
-from app.schemas.discovery import CandidateIn, CandidateOut
+from app.schemas.discovery import SOURCE_ID_PATTERNS, CandidateIn, CandidateOut
 
 
 @pytest.mark.parametrize(
@@ -591,3 +591,15 @@ def test_from_openaire_filters_non_publication_types():
     entry = {"id": "y" * 32, "type": "software", "mainTitle": "Not a paper"}
 
     assert from_openaire(entry) is None
+
+
+def test_openaire_id_pattern_accepts_a_hex_prefix_not_just_letters():
+    """Real OpenAIRE ids aren't always letters-and-underscores before the "::" (confirmed live:
+    e.g. "06cdd3ff4700::..."), not just "openaire____"/"lens_dedup__" -- this pattern must accept both
+    shapes."""
+    pattern = SOURCE_ID_PATTERNS["openaire"]
+
+    assert pattern.fullmatch("06cdd3ff4700::0174e8f8b12ef0b96659eaf8451882d5")
+    assert pattern.fullmatch("openaire____::ad7636681cefebfbde101792892e3c1a")
+    assert not pattern.fullmatch("abc")
+    assert not pattern.fullmatch("0" * 32)  # a bare DOAJ-shaped id, no "::" separator, must not match
