@@ -17,6 +17,7 @@ export const SOURCE_NAMES: Record<PaperSourceId, string> = {
   ssrn: 'SSRN',
   doaj: 'DOAJ',
   openaire: 'OpenAIRE',
+  iacr_eprint: 'IACR ePrint',
 }
 
 /** "1,234 citations", "1 citation", or '' when the count is unknown. */
@@ -36,16 +37,17 @@ const ID_URL_BUILDERS: Record<string, (id: string) => string> = {
   hal: (id) => `https://hal.science/view/index/docid/${id}`,
   doaj: (id) => `https://doaj.org/article/${id}`,
   openaire: (id) => `https://explore.openaire.eu/search/publication?articleId=${encodeURIComponent(id)}`,
+  iacr_eprint: (id) => `https://eprint.iacr.org/${id}`,
 }
 /** Preference order for candidateKey/sameCandidate (pageLink has its own order, defined inline above) — doi is
  * handled separately in each since it isn't a key in external_ids. */
-const ID_PRIORITY = ['openalex', 'semantic_scholar', 'arxiv', 'core', 'pubmed', 'pmc', 'zenodo', 'hal', 'doaj', 'openaire']
+const ID_PRIORITY = ['openalex', 'semantic_scholar', 'arxiv', 'core', 'pubmed', 'pmc', 'zenodo', 'hal', 'doaj', 'openaire', 'iacr_eprint']
 
 /** Where "Open page" goes: the DOI, else arXiv, OpenAlex, Semantic Scholar, CORE, then PubMed, then PMC, then
- * Zenodo, then HAL, then DOAJ, then OpenAIRE; null with no identifier. */
+ * Zenodo, then HAL, then DOAJ, then OpenAIRE, then IACR ePrint; null with no identifier. */
 export function pageLink(candidate: Pick<Candidate, 'doi' | 'external_ids'>): string | null {
   if (candidate.doi) return `https://doi.org/${candidate.doi}`
-  for (const source of ['arxiv', 'openalex', 'semantic_scholar', 'core', 'pubmed', 'pmc', 'zenodo', 'hal', 'doaj', 'openaire']) {
+  for (const source of ['arxiv', 'openalex', 'semantic_scholar', 'core', 'pubmed', 'pmc', 'zenodo', 'hal', 'doaj', 'openaire', 'iacr_eprint']) {
     const id = candidate.external_ids[source]
     if (id) return ID_URL_BUILDERS[source](id)
   }
@@ -62,14 +64,14 @@ export function candidateKey(candidate: Candidate, index: number): string {
 }
 
 /** Whether `candidate` is the paper `added` names: by openalex id, else doi (any case), semantic_scholar, arxiv,
- * core, pubmed, pmc, zenodo, hal, doaj or openaire. Doi ranks second here (not last, unlike candidateKey/pageLink) because this drives "already in your
+ * core, pubmed, pmc, zenodo, hal, doaj, openaire or iacr_eprint. Doi ranks second here (not last, unlike candidateKey/pageLink) because this drives "already in your
  * library" dedup across cached search results — ranking it last reintroduced a real gap: two rows for the same
  * paper that share a doi but not a semantic_scholar id (e.g. one row never got an S2 match) would stop matching,
  * leaving a stale "Add" button that 409s on click. */
 export function sameCandidate(candidate: Candidate, added: Candidate): boolean {
   if (added.external_ids.openalex) return candidate.external_ids.openalex === added.external_ids.openalex
   if (added.doi) return candidate.doi?.toLowerCase() === added.doi.toLowerCase()
-  for (const source of ['semantic_scholar', 'arxiv', 'core', 'pubmed', 'pmc', 'zenodo', 'hal', 'doaj', 'openaire']) {
+  for (const source of ['semantic_scholar', 'arxiv', 'core', 'pubmed', 'pmc', 'zenodo', 'hal', 'doaj', 'openaire', 'iacr_eprint']) {
     const addedId = added.external_ids[source]
     if (addedId) return candidate.external_ids[source] === addedId
   }
