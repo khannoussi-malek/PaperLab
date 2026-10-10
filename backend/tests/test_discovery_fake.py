@@ -60,9 +60,9 @@ async def test_with_openalex_off_as_on_the_e2e_stack_the_badges_are_m19s(session
     await providers.aclose()
 
     assert [c.sources for c in found.results] == [
-        ("crossref", "arxiv", "core", "pubmed", "pmc", "europe_pmc", "zenodo", "hal", "acm_dl", "ssrn"),
-        ("crossref", "pubmed", "pmc", "europe_pmc", "zenodo", "hal", "acm_dl", "ssrn"),
-        ("crossref", "pubmed", "pmc", "europe_pmc", "zenodo", "hal", "acm_dl", "ssrn"),
+        ("crossref", "arxiv", "core", "pubmed", "pmc", "europe_pmc", "zenodo", "hal", "acm_dl"),
+        ("crossref", "pubmed", "pmc", "europe_pmc", "zenodo", "hal", "acm_dl"),
+        ("crossref", "pubmed", "pmc", "europe_pmc", "zenodo", "hal", "acm_dl"),
     ]  # fmt: skip
     assert [bool(c.pdf_urls) for c in found.results] == [True, True, False]  # the landing page's link from Unpaywall
 
