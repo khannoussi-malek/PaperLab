@@ -6,8 +6,10 @@ from app.providers import (
     arxiv,
     core_ac,
     crossref,
+    doaj,
     europe_pmc,
     hal,
+    openaire,
     openalex,
     pmc,
     pubmed,
@@ -684,5 +686,93 @@ async def test_ssrn_next_cursor_is_none_once_count_is_exhausted(monkeypatch):
     monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
     async with httpx.AsyncClient() as http:
         _, next_cursor = await ssrn.search_page(http, "x", page_size=1, cursor=0)
+
+    assert next_cursor is None
+
+
+# --- doaj ------------------------------------
+
+
+async def test_doaj_search_page_sends_the_page_it_was_given(monkeypatch):
+    seen_pages = []
+
+    async def fake_get(self, url, params=None, **kwargs):
+        seen_pages.append(params["page"])
+        request = httpx.Request("GET", url, params=params)
+        return httpx.Response(200, json={"total": 0, "page": params["page"], "results": []}, request=request)
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    async with httpx.AsyncClient() as http:
+        await doaj.search_page(http, "cancer", page_size=20, cursor=1)
+        await doaj.search_page(http, "cancer", page_size=20, cursor=2)
+    assert seen_pages == [1, 2]
+
+
+async def test_doaj_next_cursor_is_the_next_page_when_next_is_present(monkeypatch):
+    async def fake_get(self, url, params=None, **kwargs):
+        request = httpx.Request("GET", url, params=params)
+        body = {"total": 2, "page": 1, "results": [{"id": "1" * 32}], "next": "https://doaj.org/api/v4/x?page=2"}
+        return httpx.Response(200, json=body, request=request)
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    async with httpx.AsyncClient() as http:
+        _, next_cursor = await doaj.search_page(http, "cancer", page_size=1, cursor=1)
+
+    assert next_cursor == 2
+
+
+async def test_doaj_next_cursor_is_none_once_next_disappears(monkeypatch):
+    async def fake_get(self, url, params=None, **kwargs):
+        request = httpx.Request("GET", url, params=params)
+        return httpx.Response(200, json={"total": 2, "page": 2, "results": [{"id": "2" * 32}]}, request=request)
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    async with httpx.AsyncClient() as http:
+        _, next_cursor = await doaj.search_page(http, "cancer", page_size=1, cursor=2)
+
+    assert next_cursor is None
+
+
+# --- openaire ------------------------------------
+
+
+async def test_openaire_search_page_sends_the_page_it_was_given(monkeypatch):
+    seen_pages = []
+
+    async def fake_get(self, url, params=None, **kwargs):
+        seen_pages.append(params["page"])
+        request = httpx.Request("GET", url, params=params)
+        body = {"header": {"numFound": 0, "page": params["page"], "pageSize": params["pageSize"]}, "results": []}
+        return httpx.Response(200, json=body, request=request)
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    async with httpx.AsyncClient() as http:
+        await openaire.search_page(http, "CRISPR", page_size=20, cursor=1)
+        await openaire.search_page(http, "CRISPR", page_size=20, cursor=2)
+    assert seen_pages == [1, 2]
+
+
+async def test_openaire_next_cursor_when_more_remain_per_its_own_numfound(monkeypatch):
+    async def fake_get(self, url, params=None, **kwargs):
+        request = httpx.Request("GET", url, params=params)
+        body = {"header": {"numFound": 10, "page": 1, "pageSize": 1}, "results": [{"id": "x" * 32}]}
+        return httpx.Response(200, json=body, request=request)
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    async with httpx.AsyncClient() as http:
+        _, next_cursor = await openaire.search_page(http, "CRISPR", page_size=1, cursor=1)
+
+    assert next_cursor == 2
+
+
+async def test_openaire_next_cursor_is_none_once_numfound_is_exhausted(monkeypatch):
+    async def fake_get(self, url, params=None, **kwargs):
+        request = httpx.Request("GET", url, params=params)
+        body = {"header": {"numFound": 1, "page": 1, "pageSize": 1}, "results": [{"id": "x" * 32}]}
+        return httpx.Response(200, json=body, request=request)
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    async with httpx.AsyncClient() as http:
+        _, next_cursor = await openaire.search_page(http, "CRISPR", page_size=1, cursor=1)
 
     assert next_cursor is None
