@@ -94,8 +94,10 @@ const NAMES: Record<SourceId, string> = {
   pubmed: 'PubMed',
   pmc: 'PMC',
   europe_pmc: 'Europe PMC',
+  zenodo: 'Zenodo',
+  hal: 'HAL',
 }
-const KEYED: SourceId[] = ['openalex', 'semantic_scholar', 'core', 'pubmed', 'pmc']
+const KEYED: SourceId[] = ['openalex', 'semantic_scholar', 'core', 'pubmed', 'pmc', 'zenodo']
 
 /** GET /api/paper-sources as the API answers it, with CORE's key saved (`coreHint`: its last 4 characters) or not. */
 function stubbedSources(coreHint: string | null) {
