@@ -12,6 +12,7 @@ import re
 import httpx
 
 from app.providers.openalex import WORK_FIELDS, json_body
+from app.providers.openalex import get_work as openalex_get_work
 
 SSRN_SOURCE_ID = "S4210172589"
 
@@ -42,9 +43,7 @@ async def search_page(
 
 
 async def get_work(http: httpx.AsyncClient, key: str) -> dict | None:
-    """One work by its OpenAlex id (e.g. "W1990513740"). None when OpenAlex has no such work. No filter
-    applied here: a direct id lookup already names one exact record."""
-    response = await http.get(f"/works/{key}")
-    if response.status_code == 404:
-        return None
-    return json_body(response.raise_for_status())
+    """One work by its OpenAlex id (e.g. "W1990513740"). A thin passthrough to openalex.get_work -- an
+    SSRN work IS an OpenAlex work, so there is nothing SSRN-specific to add here, and no filter to apply
+    (a direct id lookup already names one exact record)."""
+    return await openalex_get_work(http, key)
