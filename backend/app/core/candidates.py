@@ -282,6 +282,25 @@ def from_hal(entry: Mapping[str, Any]) -> Candidate:
     )
 
 
+def from_acm_dl(item: Mapping[str, Any]) -> Candidate | None:
+    """ACM DL records, found via Crossref filtered to the 10.1145 DOI prefix (confirmed live to be solely
+    ACM's own). An ACM DL record IS a Crossref record -- just a narrower slice of the same data -- so
+    this reuses from_crossref's own type filter, field reading and "no PDF" rule verbatim; only the
+    sources tag differs."""
+    candidate = from_crossref(item)
+    return replace(candidate, sources=("acm_dl",)) if candidate else None
+
+
+def from_ssrn(work: Mapping[str, Any]) -> Candidate:
+    """SSRN records, found via OpenAlex filtered to its own SSRN source id (confirmed live). An SSRN
+    record IS an OpenAlex work -- just a narrower slice of the same data -- so this reuses from_work's
+    own field reading verbatim; only the sources tag differs. OpenAlex's pdf_url fields are consistently
+    null for SSRN even when flagged open-access (confirmed live, 2026-10-10): only a landing-page link is
+    ever present, and from_work already never reads that field, so pdf_urls comes back empty here with no
+    extra code."""
+    return replace(from_work(work), sources=("ssrn",))
+
+
 def normal_title(title: str) -> str:
     return re.sub(r"\W+", " ", title).strip().casefold()
 

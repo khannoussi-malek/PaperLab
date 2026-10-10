@@ -7,6 +7,7 @@ from app.core.candidates import (
     MAX_PDF_URLS,
     Candidate,
     _ids,
+    from_acm_dl,
     from_core,
     from_crossref,
     from_europe_pmc,
@@ -14,6 +15,7 @@ from app.core.candidates import (
     from_pmc,
     from_pubmed,
     from_s2,
+    from_ssrn,
     from_work,
     from_zenodo,
     merge,
@@ -433,3 +435,57 @@ def test_from_hal_coerces_a_non_string_docid_to_str():
     candidate = from_hal(entry)
 
     assert candidate.external_ids == {"hal": "4020890"}
+
+
+def test_from_acm_dl_reuses_crossrefs_own_mapping_but_tags_the_acm_dl_source():
+    item = {
+        "DOI": "10.1145/3577923.3583658", "type": "proceedings-article",
+        "title": ["AutoSpill: Credential Leakage from Mobile Password Managers"],
+        "author": [{"given": "Andrea", "family": "Possemato"}],
+        "issued": {"date-parts": [[2026]]}, "container-title": ["Proceedings of the ACM"],
+        "is-referenced-by-count": 12,
+    }
+
+    candidate = from_acm_dl(item)
+
+    assert candidate.sources == ("acm_dl",)
+    assert candidate.doi == "10.1145/3577923.3583658"
+    assert candidate.title == "AutoSpill: Credential Leakage from Mobile Password Managers"
+    assert candidate.pdf_urls == []
+    assert candidate.abstract is None
+
+
+def test_from_acm_dl_filters_non_paper_types_the_same_way_from_crossref_does():
+    item = {"DOI": "10.1145/x", "type": "dataset", "title": ["Not a paper"]}
+
+    assert from_acm_dl(item) is None
+
+
+def test_from_ssrn_reuses_from_works_own_mapping_but_tags_the_ssrn_source():
+    work = {
+        "id": "https://openalex.org/W1990513740", "doi": "https://doi.org/10.2139/ssrn.1496176",
+        "title": "Diffusion of Innovations 1", "publication_year": 2026, "best_oa_location": None,
+        "primary_location": {"source": {"display_name": "SSRN Electronic Journal"}}, "locations": [],
+        "authorships": [{"author": {"display_name": "Ada Fixture"}}], "cited_by_count": 9,
+    }
+
+    candidate = from_ssrn(work)
+
+    assert candidate.sources == ("ssrn",)
+    assert candidate.external_ids == {"openalex": "W1990513740"}
+    assert candidate.doi == "10.2139/ssrn.1496176"
+    assert candidate.pdf_urls == []  # confirmed live: SSRN never has one, best_oa_location is None here
+
+
+def test_from_ssrn_with_no_doi_or_authors_maps_without_them():
+    work = {
+        "id": "https://openalex.org/W2", "doi": None, "title": "Bare", "publication_year": None,
+        "best_oa_location": None, "primary_location": None, "locations": [], "authorships": [],
+        "cited_by_count": None,
+    }
+
+    candidate = from_ssrn(work)
+
+    assert candidate.doi is None
+    assert candidate.authors == []
+    assert candidate.sources == ("ssrn",)
