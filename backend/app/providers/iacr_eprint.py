@@ -25,6 +25,13 @@ from app.models import ExternalRef
 BASE_URL = "https://eprint.iacr.org"
 TIMEOUT = httpx.Timeout(30.0)  # a full ListRecords page can be a few hundred KB; generous on purpose.
 
+# Confirmed live on 2026-10-10: IACR's OAI-PMH endpoint sits behind Cloudflare, which returns an HTTP 403
+# "Attention Required!" bot-challenge page -- not the real OAI-PMH XML -- specifically for httpx's own
+# default User-Agent (python-httpx/<version>). curl's default UA, and httpx with ANY non-default UA, both
+# get a real 200 on verb=Identify and verb=ListRecords. Sending an honest User-Agent both clears the
+# block and follows standard OAI-PMH harvesting etiquette (identifying the harvester to the operator).
+_USER_AGENT = "PaperLab/1.0 (+https://github.com/khannoussi-malek/PaperLab; OAI-PMH harvester)"
+
 _NS = {"oai": "http://www.openarchives.org/OAI/2.0/", "dc": "http://purl.org/dc/elements/1.1/"}
 
 
@@ -34,7 +41,9 @@ def new_client(
     # IACR's OAI-PMH endpoint takes neither a contact email nor a key; both parameters exist only to
     # satisfy the uniform new_client(*, email=None, api_key=None, transport=None) signature every
     # provider shares.
-    return httpx.AsyncClient(base_url=BASE_URL, timeout=TIMEOUT, transport=transport)
+    return httpx.AsyncClient(
+        base_url=BASE_URL, timeout=TIMEOUT, transport=transport, headers={"User-Agent": _USER_AGENT}
+    )
 
 
 def _checked(response: httpx.Response) -> httpx.Response:
