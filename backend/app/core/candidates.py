@@ -269,7 +269,7 @@ def from_hal(entry: Mapping[str, Any]) -> Candidate:
     every record has a file -- hal.py's own entry["pdf_url"] is already None when absent."""
     doi = entry.get("doi")
     arxiv_id = arxiv_from_doi(doi)
-    external_ids = {k: v for k, v in {"hal": entry["docid"], "arxiv": arxiv_id}.items() if v}
+    external_ids = {k: v for k, v in {"hal": str(entry["docid"]), "arxiv": arxiv_id}.items() if v}
     return Candidate(
         title=entry["title"] or "Untitled",
         authors=list(entry["authors"])[:MAX_AUTHORS],
