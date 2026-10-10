@@ -10,10 +10,12 @@ from app.core.candidates import (
     from_core,
     from_crossref,
     from_europe_pmc,
+    from_hal,
     from_pmc,
     from_pubmed,
     from_s2,
     from_work,
+    from_zenodo,
     merge,
     with_s2,
 )
@@ -373,3 +375,50 @@ def test_a_paper_found_via_both_pubmed_and_europe_pmc_is_the_same_candidate():
     )
 
     assert _ids(from_pubmed_candidate) & _ids(from_epmc_candidate)  # share the "pubmed:42428244" key
+
+
+def test_from_zenodo_maps_every_field():
+    entry = {
+        "id": "22132605", "title": "CRISPR Review", "authors": ["Dar, Shehneela"], "year": 2026,
+        "doi": "10.5281/zenodo.22132605", "abstract": "An overview.",
+        "pdf_url": "https://zenodo.org/api/records/22132605/files/paper.pdf/content",
+    }
+
+    candidate = from_zenodo(entry)
+
+    assert candidate.external_ids == {"zenodo": "22132605"}
+    assert candidate.sources == ("zenodo",)
+    assert candidate.pdf_urls == ["https://zenodo.org/api/records/22132605/files/paper.pdf/content"]
+
+
+def test_from_zenodo_with_no_pdf_has_no_pdf_urls():
+    entry = {
+        "id": "1", "title": "Bare", "authors": [], "year": None, "doi": None, "abstract": None,
+        "pdf_url": None,
+    }
+
+    assert from_zenodo(entry).pdf_urls == []
+
+
+def test_from_hal_maps_every_field():
+    entry = {
+        "docid": "4020890", "title": "CRISPR Review", "authors": ["Shafie, Nurul"], "year": 2014,
+        "doi": "10.4172/1948-593x.1000109", "abstract": "A review.",
+        "pdf_url": "https://hal.science/hal-04020890/file/paper.pdf",
+    }
+
+    candidate = from_hal(entry)
+
+    assert candidate.external_ids == {"hal": "4020890"}
+    assert candidate.sources == ("hal",)
+    assert candidate.pdf_urls == ["https://hal.science/hal-04020890/file/paper.pdf"]
+
+
+def test_from_hal_with_no_pdf_doi_or_abstract_maps_without_them():
+    entry = {"docid": "1", "title": "Bare", "authors": [], "year": None, "doi": None, "abstract": None, "pdf_url": None}
+
+    candidate = from_hal(entry)
+
+    assert candidate.external_ids == {"hal": "1"}
+    assert candidate.pdf_urls == []
+    assert candidate.abstract is None

@@ -246,6 +246,42 @@ def from_europe_pmc(entry: Mapping[str, Any]) -> Candidate:
     )
 
 
+def from_zenodo(entry: Mapping[str, Any]) -> Candidate:
+    """An entry from providers/zenodo.py. Direct PDF links are real (confirmed live 2026-10-09), unlike
+    Europe PMC's own equivalent claim, which turned out to be Cloudflare-blocked."""
+    doi = entry.get("doi")
+    arxiv_id = arxiv_from_doi(doi)
+    external_ids = {k: v for k, v in {"zenodo": entry["id"], "arxiv": arxiv_id}.items() if v}
+    return Candidate(
+        title=entry["title"] or "Untitled",
+        authors=list(entry["authors"])[:MAX_AUTHORS],
+        year=entry["year"],
+        doi=doi,
+        external_ids=external_ids,
+        abstract=entry.get("abstract"),
+        pdf_urls=ordered_pdf_urls(arxiv_id, entry.get("pdf_url")),
+        sources=("zenodo",),
+    )
+
+
+def from_hal(entry: Mapping[str, Any]) -> Candidate:
+    """An entry from providers/hal.py. Direct PDF links are real (confirmed live 2026-10-09) but not
+    every record has a file -- hal.py's own entry["pdf_url"] is already None when absent."""
+    doi = entry.get("doi")
+    arxiv_id = arxiv_from_doi(doi)
+    external_ids = {k: v for k, v in {"hal": entry["docid"], "arxiv": arxiv_id}.items() if v}
+    return Candidate(
+        title=entry["title"] or "Untitled",
+        authors=list(entry["authors"])[:MAX_AUTHORS],
+        year=entry["year"],
+        doi=doi,
+        external_ids=external_ids,
+        abstract=entry.get("abstract"),
+        pdf_urls=ordered_pdf_urls(arxiv_id, entry.get("pdf_url")),
+        sources=("hal",),
+    )
+
+
 def normal_title(title: str) -> str:
     return re.sub(r"\W+", " ", title).strip().casefold()
 
@@ -269,6 +305,8 @@ def _ids(candidate: Candidate) -> set[str]:
         "core": candidate.external_ids.get("core"),
         "pubmed": candidate.external_ids.get("pubmed"),
         "pmc": candidate.external_ids.get("pmc"),
+        "zenodo": candidate.external_ids.get("zenodo"),
+        "hal": candidate.external_ids.get("hal"),
     }
     return {f"{kind}:{value.lower()}" for kind, value in keys.items() if value}
 
@@ -298,6 +336,7 @@ def _combined(records: list[Candidate]) -> Candidate:
         for k, v in {
             "arxiv": arxiv_id, "openalex": first_id("openalex"), "semantic_scholar": first_id("semantic_scholar"),
             "core": first_id("core"), "pubmed": first_id("pubmed"), "pmc": first_id("pmc"),
+            "zenodo": first_id("zenodo"), "hal": first_id("hal"),
         }.items()
         if v
     }
