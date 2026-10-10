@@ -169,3 +169,10 @@ async def test_failures_raise_an_httpx_error(iacr_api, status, body):
 
     with pytest.raises(httpx.HTTPError):
         await iacr_eprint.fetch_page(iacr_api.client, from_date="2026-10-01", until_date="2026-10-10")
+
+
+async def test_malformed_xml_in_a_200_response_raises_an_httpx_error(iacr_api):
+    iacr_api.reply("/oai", 200, text="<not valid xml")
+
+    with pytest.raises(httpx.HTTPError):
+        await iacr_eprint.fetch_page(iacr_api.client, from_date="2026-10-01", until_date="2026-10-10")

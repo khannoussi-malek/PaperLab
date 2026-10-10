@@ -47,8 +47,11 @@ def _text(record_elem: ElementTree.Element, tag: str) -> list[str]:
     return [el.text for el in record_elem.findall(f".//dc:{tag}", _NS) if el.text]
 
 
-def _parse_page(xml_text: str) -> tuple[list[dict], str | None]:
-    root = ElementTree.fromstring(xml_text)
+def _parse_page(response: httpx.Response) -> tuple[list[dict], str | None]:
+    try:
+        root = ElementTree.fromstring(response.text)
+    except ElementTree.ParseError as exc:
+        raise httpx.DecodingError(str(exc), request=response.request) from exc
     entries: list[dict] = []
     for record in root.findall(".//oai:record", _NS):
         header = record.find("oai:header", _NS)
@@ -93,4 +96,4 @@ async def fetch_page(
         if until_date:
             params["until"] = until_date
     response = await http.get("/oai", params=params)
-    return _parse_page(_checked(response).text)
+    return _parse_page(_checked(response))
