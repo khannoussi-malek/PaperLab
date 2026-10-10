@@ -91,6 +91,15 @@ async def test_search_page_follows_the_next_key_then_stops(doaj_api):
     assert cursor_2 is None
 
 
+async def test_search_page_stops_at_the_hard_result_cap_even_if_next_is_present(doaj_api):
+    body = {"total": 50000, "page": 10, "results": [{"id": "1" * 32}], "next": "https://doaj.org/api/v4/x?page=11"}
+    doaj_api.reply('/api/search/articles/title:x', 200, json=body)
+
+    _, next_cursor = await doaj.search_page(doaj_api.client, "x", 100, 10)
+
+    assert next_cursor is None  # page 10 at page_size 100 = 1000 results already reached; "next" is ignored
+
+
 @pytest.mark.parametrize(
     ("status", "body"), [(503, "busy"), (429, "Rate exceeded.")], ids=["server error", "rate limited"]
 )
