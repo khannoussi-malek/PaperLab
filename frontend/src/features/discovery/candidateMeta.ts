@@ -29,7 +29,7 @@ const ID_URL_BUILDERS: Record<string, (id: string) => string> = {
   pubmed: (id) => `https://pubmed.ncbi.nlm.nih.gov/${id}/`,
   pmc: (id) => `https://pmc.ncbi.nlm.nih.gov/articles/PMC${id}/`,
   zenodo: (id) => `https://zenodo.org/records/${id}`,
-  hal: (id) => `https://hal.science/hal-${id}`,
+  hal: (id) => `https://hal.science/view/index/docid/${id}`,
 }
 /** Preference order for candidateKey/sameCandidate (pageLink has its own order, defined inline above) — doi is
  * handled separately in each since it isn't a key in external_ids. */
