@@ -1,7 +1,7 @@
 import httpx
 import pytest
 
-from app.providers import arxiv, core_ac, crossref, europe_pmc, openalex, pmc, pubmed, semantic_scholar
+from app.providers import arxiv, core_ac, crossref, europe_pmc, hal, openalex, pmc, pubmed, semantic_scholar, zenodo
 
 pytestmark = pytest.mark.anyio
 
@@ -456,3 +456,109 @@ async def test_europe_pmc_next_cursor_is_none_once_nextcursormark_disappears(mon
         _, next_cursor = await europe_pmc.search_page(http, "cancer", page_size=20, cursor="*")
 
     assert next_cursor is None
+
+
+# --- zenodo ------------------------------------
+
+
+async def test_zenodo_search_page_sends_the_page_it_was_given(monkeypatch):
+    seen_pages = []
+
+    async def fake_get(self, url, params=None, **kwargs):
+        seen_pages.append(params["page"])
+        request = httpx.Request("GET", url, params=params)
+        return httpx.Response(200, json={"hits": {"hits": []}, "links": {}}, request=request)
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    async with httpx.AsyncClient() as http:
+        await zenodo.search_page(http, "cancer", page_size=20, cursor=1)
+        await zenodo.search_page(http, "cancer", page_size=20, cursor=2)
+    assert seen_pages == [1, 2]
+
+
+async def test_zenodo_next_cursor_is_the_next_page_when_links_next_is_present(monkeypatch):
+    async def fake_get(self, url, params=None, **kwargs):
+        request = httpx.Request("GET", url, params=params)
+        return httpx.Response(
+            200, json={"hits": {"hits": [{"id": 1}]}, "links": {"next": "https://zenodo.org/api/records?page=2"}},
+            request=request,
+        )
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    async with httpx.AsyncClient() as http:
+        _, next_cursor = await zenodo.search_page(http, "cancer", page_size=20, cursor=1)
+
+    assert next_cursor == 2
+
+
+async def test_zenodo_next_cursor_is_none_once_links_next_disappears(monkeypatch):
+    async def fake_get(self, url, params=None, **kwargs):
+        request = httpx.Request("GET", url, params=params)
+        return httpx.Response(200, json={"hits": {"hits": [{"id": 1}]}, "links": {}}, request=request)
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    async with httpx.AsyncClient() as http:
+        _, next_cursor = await zenodo.search_page(http, "cancer", page_size=20, cursor=5)
+
+    assert next_cursor is None
+
+
+# --- hal ------------------------------------
+
+
+async def test_hal_search_page_advances_start(monkeypatch):
+    seen_starts = []
+
+    async def fake_get(self, url, params=None, **kwargs):
+        seen_starts.append(params["start"])
+        request = httpx.Request("GET", url, params=params)
+        return httpx.Response(200, json={"response": {"numFound": 100, "docs": []}}, request=request)
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    async with httpx.AsyncClient() as http:
+        await hal.search_page(http, "cancer", page_size=20, cursor=0)
+        await hal.search_page(http, "cancer", page_size=20, cursor=20)
+    assert seen_starts == [0, 20]
+
+
+async def test_hal_next_cursor_when_more_remain_per_hals_own_numfound(monkeypatch):
+    async def fake_get(self, url, params=None, **kwargs):
+        request = httpx.Request("GET", url, params=params)
+        return httpx.Response(
+            200, json={"response": {"numFound": 45, "docs": [{"docid": "1"}, {"docid": "2"}]}}, request=request
+        )
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    async with httpx.AsyncClient() as http:
+        _, next_cursor = await hal.search_page(http, "cancer", page_size=20, cursor=20)
+
+    assert next_cursor == 40  # 20 + 20 < 45
+
+
+async def test_hal_next_cursor_is_none_once_numfound_is_exhausted(monkeypatch):
+    async def fake_get(self, url, params=None, **kwargs):
+        request = httpx.Request("GET", url, params=params)
+        return httpx.Response(200, json={"response": {"numFound": 45, "docs": [{"docid": "1"}]}}, request=request)
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    async with httpx.AsyncClient() as http:
+        _, next_cursor = await hal.search_page(http, "cancer", page_size=20, cursor=40)
+
+    assert next_cursor is None  # 40 + 20 = 60, not < 45
+
+
+async def test_hal_search_page_has_no_artificial_ceiling_past_10000(monkeypatch):
+    """The architecture doc's claimed 10,000-result cap does not exist (confirmed live) -- a huge
+    numFound keeps paging normally well past where PubMed/PMC's own real 9999 NCBI ceiling would stop."""
+
+    async def fake_get(self, url, params=None, **kwargs):
+        request = httpx.Request("GET", url, params=params)
+        return httpx.Response(
+            200, json={"response": {"numFound": 89136, "docs": [{"docid": "1"}]}}, request=request
+        )
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    async with httpx.AsyncClient() as http:
+        _, next_cursor = await hal.search_page(http, "cancer", page_size=20, cursor=80000)
+
+    assert next_cursor == 80020  # no cap -- 80000 + 20 < 89136
