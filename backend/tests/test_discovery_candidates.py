@@ -13,6 +13,7 @@ from app.core.candidates import (
     from_doaj,
     from_europe_pmc,
     from_hal,
+    from_iacr_eprint,
     from_openaire,
     from_pmc,
     from_pubmed,
@@ -347,6 +348,22 @@ def test_doaj_and_openaire_ids_merge_different_sources_into_one_paper_via_openai
     assert set(merged.sources) == {"doaj", "openaire"}
 
 
+def test_iacr_eprint_id_merges_different_sources_into_one_paper():
+    """Same paper harvested via iacr_eprint and also found live by another source sharing the same
+    iacr_eprint id, with titles that differ on purpose: the match must come from the shared id, not the title."""
+    from_iacr_side = Candidate(
+        title="Paper (IACR)", external_ids={"iacr_eprint": "2026/2368"}, sources=("iacr_eprint",)
+    )
+    from_other_side = Candidate(
+        title="Paper (Other)", external_ids={"iacr_eprint": "2026/2368"}, sources=("openalex",)
+    )
+
+    [merged] = merge({"iacr_eprint": [from_iacr_side], "openalex": [from_other_side]}, limit=10)
+
+    assert merged.external_ids["iacr_eprint"] == "2026/2368"
+    assert set(merged.sources) == {"iacr_eprint", "openalex"}
+
+
 def test_from_pmc_maps_every_field():
     entry = {
         "pmcid": "13647476", "pmid": "42847424", "title": "Protein-Ratio Rheostats",
@@ -633,3 +650,38 @@ def test_openaire_id_pattern_accepts_a_hex_prefix_not_just_letters():
     assert pattern.fullmatch("openaire____::ad7636681cefebfbde101792892e3c1a")
     assert not pattern.fullmatch("abc")
     assert not pattern.fullmatch("0" * 32)  # a bare DOAJ-shaped id, no "::" separator, must not match
+
+
+def test_from_iacr_eprint_maps_every_field():
+    entry = {
+        "identifier": "oai:eprint.iacr.org:2026/2368",
+        "datestamp": "2026-10-05T23:52:42Z",
+        "title": "Low-Latency Parallel Digit Decomposition",
+        "creators": ["Jung Hee Cheon", "Kyungah Cho"],
+        "description": "An overview of digit decomposition.",
+    }
+
+    candidate = from_iacr_eprint(entry)
+
+    assert candidate.external_ids == {"iacr_eprint": "2026/2368"}
+    assert candidate.sources == ("iacr_eprint",)
+    assert candidate.title == "Low-Latency Parallel Digit Decomposition"
+    assert candidate.authors == ["Jung Hee Cheon", "Kyungah Cho"]
+    assert candidate.year == 2026
+    assert candidate.abstract == "An overview of digit decomposition."
+    assert candidate.doi is None
+    assert candidate.pdf_urls == []  # IACR's own PDF link construction is not attempted in this plan
+
+
+def test_from_iacr_eprint_with_no_creators_description_or_date_maps_without_them():
+    entry = {
+        "identifier": "oai:eprint.iacr.org:2026/0003", "datestamp": None, "title": "Bare", "creators": [],
+        "description": None,
+    }
+
+    candidate = from_iacr_eprint(entry)
+
+    assert candidate.authors == []
+    assert candidate.abstract is None
+    assert candidate.year is None
+    assert candidate.external_ids == {"iacr_eprint": "2026/0003"}
