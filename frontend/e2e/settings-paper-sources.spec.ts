@@ -96,6 +96,8 @@ const NAMES: Record<SourceId, string> = {
   europe_pmc: 'Europe PMC',
   zenodo: 'Zenodo',
   hal: 'HAL',
+  acm_dl: 'ACM DL',
+  ssrn: 'SSRN',
 }
 const KEYED: SourceId[] = ['openalex', 'semantic_scholar', 'core', 'pubmed', 'pmc', 'zenodo']
 

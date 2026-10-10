@@ -187,14 +187,14 @@ test('with every source that searches titles off, Find papers says to turn one o
   page,
   request,
 }) => {
-  // OpenAlex is off already; PubMed/PMC/Europe PMC/Zenodo/HAL all search titles too and are on by
-  // default, so each needs turning off here as well
+  // OpenAlex is off already; PubMed/PMC/Europe PMC/Zenodo/HAL/ACM DL/SSRN all search titles too and are
+  // on by default, so each needs turning off here as well
   await setSourceSettings(
     request,
     {
       enabled: {
         crossref: false, arxiv: false, core: false, pubmed: false, pmc: false, europe_pmc: false,
-        zenodo: false, hal: false,
+        zenodo: false, hal: false, acm_dl: false, ssrn: false,
       },
     },
   )

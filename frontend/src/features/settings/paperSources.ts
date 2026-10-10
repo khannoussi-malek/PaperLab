@@ -13,6 +13,8 @@ export const DESCRIPTIONS: Record<PaperSourceId, string> = {
   europe_pmc: 'Biomedical and life-science literature via Europe PMC. Free, no key needed.',
   zenodo: 'General-purpose open-access repository via Zenodo (CERN). Free; an optional key can be saved but isn\'t used yet.',
   hal: 'French open-access repository via HAL. Free, no key needed.',
+  acm_dl: 'ACM Digital Library papers, via Crossref. Free, no key needed.',
+  ssrn: 'Working papers and preprints via SSRN (an Elsevier company), via OpenAlex. Free, no key needed.',
 }
 
 /** The "May cost money" badge plus its price line, for sources that can charge even without a key. Only OpenAlex

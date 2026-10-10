@@ -13,6 +13,8 @@ export const SOURCE_NAMES: Record<PaperSourceId, string> = {
   europe_pmc: 'Europe PMC',
   zenodo: 'Zenodo',
   hal: 'HAL',
+  acm_dl: 'ACM DL',
+  ssrn: 'SSRN',
 }
 
 /** "1,234 citations", "1 citation", or '' when the count is unknown. */
