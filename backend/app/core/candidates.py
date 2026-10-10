@@ -301,6 +301,60 @@ def from_ssrn(work: Mapping[str, Any]) -> Candidate:
     return replace(from_work(work), sources=("ssrn",))
 
 
+def from_doaj(entry: Mapping[str, Any]) -> Candidate:
+    """An entry from providers/doaj.py. Not every article carries a DOI (confirmed live: some only have
+    an ISSN) -- doaj's own native id becomes this source's own external_ids key. Only a link whose
+    content_type is "pdf" (case-insensitive) counts as a real PDF; DOAJ's own content_type field is
+    otherwise messy and inconsistent (confirmed live), and an HTML landing-page link must never be
+    mistaken for one."""
+    bibjson = entry.get("bibjson") or {}
+    doi = next(
+        (ident["id"].lower() for ident in bibjson.get("identifier") or [] if ident.get("type") == "doi"), None
+    )
+    arxiv_id = arxiv_from_doi(doi)
+    pdf_url = next(
+        (link["url"] for link in bibjson.get("link") or [] if (link.get("content_type") or "").lower() == "pdf"),
+        None,
+    )
+    year_str = bibjson.get("year") or ""
+    return Candidate(
+        title=bibjson.get("title") or "Untitled",
+        authors=[a["name"] for a in bibjson.get("author") or [] if a.get("name")][:MAX_AUTHORS],
+        year=int(year_str) if year_str.isdigit() else None,
+        doi=doi,
+        external_ids={"doaj": entry["id"]},
+        abstract=bibjson.get("abstract") or None,
+        pdf_urls=ordered_pdf_urls(arxiv_id, pdf_url),
+        sources=("doaj",),
+    )
+
+
+def from_openaire(entry: Mapping[str, Any]) -> Candidate | None:
+    """An entry from providers/openaire.py. None for a record that isn't a publication -- search()/
+    search_page() already send type=publication on every request (Review Focus #3), so this is defense
+    in depth for the rare record that slips through anyway, the same role from_crossref's own type
+    filter plays for ACM DL. Never a PDF: instances[].urls are DOI-resolver landing-page links,
+    confirmed live to never be a direct file, matching crossref.py's own "no PDF" rule. OpenAIRE's own
+    native id (a "<tag>::<32-hex>" string) becomes this source's own external_ids key."""
+    if entry.get("type") != "publication":
+        return None
+    doi = next((pid["value"].lower() for pid in entry.get("pids") or [] if pid.get("scheme") == "doi"), None)
+    arxiv_id = arxiv_from_doi(doi)
+    descriptions = entry.get("descriptions") or []
+    pub_date = entry.get("publicationDate") or ""
+    year = int(pub_date[:4]) if pub_date[:4].isdigit() else None
+    return Candidate(
+        title=entry.get("mainTitle") or "Untitled",
+        authors=[a["fullName"] for a in entry.get("authors") or [] if a.get("fullName")][:MAX_AUTHORS],
+        year=year,
+        doi=doi,
+        external_ids={"openaire": entry["id"]},
+        abstract=descriptions[0] if descriptions else None,
+        pdf_urls=ordered_pdf_urls(arxiv_id),
+        sources=("openaire",),
+    )
+
+
 def normal_title(title: str) -> str:
     return re.sub(r"\W+", " ", title).strip().casefold()
 
