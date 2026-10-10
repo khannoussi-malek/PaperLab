@@ -28,6 +28,7 @@ class PaperSources(Base):
     ssrn_enabled: Mapped[bool] = mapped_column(server_default=text("false"))
     doaj_enabled: Mapped[bool] = mapped_column(server_default=text("true"))
     openaire_enabled: Mapped[bool] = mapped_column(server_default=text("true"))
+    iacr_eprint_enabled: Mapped[bool] = mapped_column(server_default=text("true"))
     # Never returned by a route; views carry has_key and key_hint.
     openalex_api_key: Mapped[str | None] = mapped_column(Text)
     semantic_scholar_api_key: Mapped[str | None] = mapped_column(Text)
