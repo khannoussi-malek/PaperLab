@@ -37,6 +37,16 @@ describe('pageLink', () => {
   it('falls back to HAL when nothing else is set', () => {
     expect(pageLink({ ...ids, external_ids: { hal: '4020890' } })).toBe('https://hal.science/view/index/docid/4020890')
   })
+
+  it('falls back to DOAJ when nothing else is set', () => {
+    expect(pageLink({ ...ids, external_ids: { doaj: '0'.repeat(32) } })).toBe(`https://doaj.org/article/${'0'.repeat(32)}`)
+  })
+
+  it('falls back to OpenAIRE when nothing else is set', () => {
+    expect(pageLink({ ...ids, external_ids: { openaire: 'openaire____::' + '0'.repeat(32) } })).toBe(
+      `https://explore.openaire.eu/search/publication?pid=openaire____::${'0'.repeat(32)}`,
+    )
+  })
 })
 
 describe('citationsLabel', () => {

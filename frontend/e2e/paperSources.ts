@@ -2,7 +2,7 @@ import { expect, type APIRequestContext } from '@playwright/test'
 
 export type SourceId =
   | 'openalex' | 'crossref' | 'semantic_scholar' | 'arxiv' | 'core' | 'unpaywall' | 'pubmed' | 'pmc' | 'europe_pmc'
-  | 'zenodo' | 'hal' | 'acm_dl' | 'ssrn'
+  | 'zenodo' | 'hal' | 'acm_dl' | 'ssrn' | 'doaj' | 'openaire'
 export type Switches = Record<SourceId, boolean>
 
 /**
@@ -32,6 +32,8 @@ export const FREE_SOURCES_ON: Switches = {
   hal: false,
   acm_dl: false,
   ssrn: false,
+  doaj: false,
+  openaire: false,
 }
 
 /** The owner's switches and email, to put back after the test (E2E runs on the owner's database). */

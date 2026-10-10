@@ -15,6 +15,8 @@ export const DESCRIPTIONS: Record<PaperSourceId, string> = {
   hal: 'French open-access repository via HAL. Free, no key needed.',
   acm_dl: 'ACM Digital Library papers, via Crossref. Free, no key needed.',
   ssrn: 'Working papers and preprints via SSRN (an Elsevier company), via OpenAlex. Shares OpenAlex\'s own usage budget and key below.',
+  doaj: 'Peer-reviewed open-access journal articles via the Directory of Open Access Journals. Free, no key needed.',
+  openaire: 'Open-access research and data via OpenAIRE, aggregating European repositories. Free, no key needed.',
 }
 
 /** The "May cost money" badge plus its price line, for sources that can charge even without a key. Only OpenAlex
