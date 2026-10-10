@@ -35,7 +35,7 @@ describe('pageLink', () => {
   })
 
   it('falls back to HAL when nothing else is set', () => {
-    expect(pageLink({ ...ids, external_ids: { hal: '01234567' } })).toBe('https://hal.science/hal-01234567')
+    expect(pageLink({ ...ids, external_ids: { hal: '4020890' } })).toBe('https://hal.science/view/index/docid/4020890')
   })
 })
 
