@@ -43,8 +43,9 @@ describe('pageLink', () => {
   })
 
   it('falls back to OpenAIRE when nothing else is set', () => {
-    expect(pageLink({ ...ids, external_ids: { openaire: 'openaire____::' + '0'.repeat(32) } })).toBe(
-      `https://explore.openaire.eu/search/publication?pid=openaire____::${'0'.repeat(32)}`,
+    const id = 'openaire____::' + '0'.repeat(32)
+    expect(pageLink({ ...ids, external_ids: { openaire: id } })).toBe(
+      `https://explore.openaire.eu/search/publication?articleId=${encodeURIComponent(id)}`,
     )
   })
 })
