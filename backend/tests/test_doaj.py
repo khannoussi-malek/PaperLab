@@ -57,7 +57,7 @@ async def test_search_returns_doajs_own_bibjson_records(doaj_api):
 
 
 async def test_search_clamps_the_page_size_to_doajs_own_cap(doaj_api):
-    doaj_api.reply('/api/search/articles/title:x', 200, json={"total": 0, "page": 1, "pageSize": 100, "results": []})
+    doaj_api.reply('/api/search/articles/title:"x"', 200, json={"total": 0, "page": 1, "pageSize": 100, "results": []})
 
     await doaj.search(doaj_api.client, "x", 1000)
 
@@ -79,10 +79,10 @@ async def test_an_unknown_article_id_is_none(doaj_api):
 
 
 async def test_search_page_follows_the_next_key_then_stops(doaj_api):
-    doaj_api.reply('/api/search/articles/title:x', 200, json=TWO_PAGE_1)
+    doaj_api.reply('/api/search/articles/title:"x"', 200, json=TWO_PAGE_1)
     entries_1, cursor_1 = await doaj.search_page(doaj_api.client, "x", 1, 1)
 
-    doaj_api.reply('/api/search/articles/title:x', 200, json=TWO_PAGE_2)
+    doaj_api.reply('/api/search/articles/title:"x"', 200, json=TWO_PAGE_2)
     entries_2, cursor_2 = await doaj.search_page(doaj_api.client, "x", 1, cursor_1)
 
     assert [e["id"] for e in entries_1] == ["1" * 32]
@@ -93,18 +93,29 @@ async def test_search_page_follows_the_next_key_then_stops(doaj_api):
 
 async def test_search_page_stops_at_the_hard_result_cap_even_if_next_is_present(doaj_api):
     body = {"total": 50000, "page": 10, "results": [{"id": "1" * 32}], "next": "https://doaj.org/api/v4/x?page=11"}
-    doaj_api.reply('/api/search/articles/title:x', 200, json=body)
+    doaj_api.reply('/api/search/articles/title:"x"', 200, json=body)
 
     _, next_cursor = await doaj.search_page(doaj_api.client, "x", 100, 10)
 
     assert next_cursor is None  # page 10 at page_size 100 = 1000 results already reached; "next" is ignored
 
 
+async def test_search_quotes_a_reserved_term_so_it_does_not_hang(doaj_api):
+    # Sent bare, a reserved Elasticsearch term like "AND" hangs until this module's own 10s timeout
+    # (confirmed live); registering the reply at the quoted path and getting a routed response at all
+    # (FakeProvider raises AssertionError on an unrouted request) is the proof the term was quoted.
+    doaj_api.reply('/api/search/articles/title:"AND"', 200, json={"total": 0, "page": 1, "results": []})
+
+    results = await doaj.search(doaj_api.client, "AND", 1)
+
+    assert results == []
+
+
 @pytest.mark.parametrize(
     ("status", "body"), [(503, "busy"), (429, "Rate exceeded.")], ids=["server error", "rate limited"]
 )
 async def test_failures_raise_an_httpx_error(doaj_api, status, body):
-    doaj_api.reply('/api/search/articles/title:x', status, text=body)
+    doaj_api.reply('/api/search/articles/title:"x"', status, text=body)
 
     with pytest.raises(httpx.HTTPError):
         await doaj.search(doaj_api.client, "x", 1)
