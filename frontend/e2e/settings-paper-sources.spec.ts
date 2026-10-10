@@ -99,6 +99,8 @@ const NAMES: Record<SourceId, string> = {
   hal: 'HAL',
   acm_dl: 'ACM DL',
   ssrn: 'SSRN',
+  doaj: 'DOAJ',
+  openaire: 'OpenAIRE',
 }
 const KEYED: SourceId[] = ['openalex', 'semantic_scholar', 'core', 'pubmed', 'pmc', 'zenodo']
 
