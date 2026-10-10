@@ -276,6 +276,21 @@ async def test_each_source_that_is_on_gets_a_client_and_keys_travel_in_headers()
     await providers.aclose()
 
 
+async def test_ssrn_client_uses_the_saved_openalex_key():
+    """The regression this fix exists for: SSRN rides openalex.new_client but is keyed=False, so without
+    key_source (source_registry.py) build_providers looked the key up under "ssrn" and never found it --
+    a saved OpenAlex key never reached SSRN's requests."""
+    sources = SourceSettings(
+        enabled={**{s: False for s in SourceSettings().enabled}, "ssrn": True},
+        api_keys={"openalex": "oa-key-0123456789", "semantic_scholar": None, "core": None},
+    )
+
+    providers = discovery.build_providers(sources)
+
+    assert providers.client("ssrn").headers["Authorization"] == "Bearer oa-key-0123456789"
+    await providers.aclose()
+
+
 async def test_unpaywall_and_openalex_stay_off_by_default_and_without_an_email():
     providers = discovery.build_providers(SourceSettings())
 
