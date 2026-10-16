@@ -25,6 +25,10 @@ function setup(tags: string[], match: 'any' | 'all' = 'any') {
   vi.spyOn(queries, 'useWorkspacePapers').mockReturnValue({ data: papers } as any)
   vi.spyOn(queries, 'useTags').mockReturnValue({ data: [tagSummary('rct', 1), tagSummary('cohort', 2)] } as any)
   vi.spyOn(queries, 'usePaperTags').mockReturnValue({ data: map } as any)
+  vi.spyOn(queries, 'useApplyTag').mockReturnValue({ mutate: vi.fn(), error: null } as any)
+  vi.spyOn(queries, 'useRemoveTag').mockReturnValue({ mutate: vi.fn(), error: null } as any)
+  vi.spyOn(queries, 'useRenameTag').mockReturnValue({ mutate: vi.fn(), reset: vi.fn() } as any)
+  vi.spyOn(queries, 'useDeleteTag').mockReturnValue({ mutate: vi.fn(), reset: vi.fn() } as any)
   const onTagsChange = vi.fn()
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
@@ -109,4 +113,32 @@ test('the Library list has no chips and no checkboxes', () => {
   render(<QueryClientProvider client={client}><PaperList papers={papers} /></QueryClientProvider>)
   expect(screen.queryByRole('button', { name: /Filter by tag/ })).toBeNull()
   expect(screen.queryByRole('checkbox')).toBeNull()
+})
+
+test('selecting rows shows the bar, Clear empties it, and the bar is absent with nothing selected', () => {
+  setup([])
+  expect(screen.queryByText(/selected$/)).toBeNull()
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Select Alpha trial' }))
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Select Beta cohort' }))
+  expect(screen.getByText('2 selected')).toBeTruthy()
+  expect(screen.getByRole('button', { name: 'Tag…' })).toBeTruthy()
+  expect(screen.getByRole('button', { name: 'Remove tag…' })).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
+  expect(screen.queryByText(/selected$/)).toBeNull()
+})
+
+test('a filter change that hides a selected paper drops it from the selection', () => {
+  const onTagsChange = vi.fn()
+  const client = new QueryClient()
+  setup([])
+  const view = (tags: string[]) => (
+    <QueryClientProvider client={client}><WorkspacePapers workspaceId="w1" tags={tags} match="any" onTagsChange={onTagsChange} /></QueryClientProvider>
+  )
+  cleanup()
+  const { rerender } = render(view([]))
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Select Alpha trial' }))
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Select Gamma study' }))
+  expect(screen.getByText('2 selected')).toBeTruthy()
+  rerender(view(['cohort']))
+  expect(screen.getByText('1 selected')).toBeTruthy()
 })

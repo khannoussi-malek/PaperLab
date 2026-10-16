@@ -1,0 +1,83 @@
+import { MoreHorizontal } from 'lucide-react'
+import { useState } from 'react'
+import { useDeleteTag, useRenameTag } from '@/api/queries'
+import type { TagSummary } from '@/api/client'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { Input } from '@/components/ui/input'
+import { plural } from '@/features/charts/chartMeta'
+import { tagErrorText } from './tagErrors'
+
+type Props = {
+  workspaceId: string
+  tag: TagSummary
+  onRenamed: (oldName: string, newName: string) => void
+  onDeleted: (name: string) => void
+}
+
+/** The "…" menu of a tag: rename it in a dialog, or delete it after a confirmation. */
+export function TagActionsMenu({ workspaceId, tag, onRenamed, onDeleted }: Props) {
+  const [dialog, setDialog] = useState<'rename' | 'delete' | null>(null)
+  const [name, setName] = useState(tag.name)
+  const rename = useRenameTag(workspaceId)
+  const del = useDeleteTag(workspaceId)
+
+  function close() {
+    setDialog(null)
+    rename.reset()
+    del.reset()
+  }
+
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon-sm" aria-label={`Actions for tag ${tag.name}`}>
+            <MoreHorizontal aria-hidden />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onSelect={() => { setName(tag.name); setDialog('rename') }}>Rename</DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setDialog('delete')}>Delete</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <Dialog open={dialog === 'rename'} onOpenChange={(next) => !next && close()}>
+        <DialogContent>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault()
+              rename.mutate({ tagId: tag.id, newName: name }, { onSuccess: (done) => { close(); onRenamed(tag.name, done.new) } })
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle>Rename tag</DialogTitle>
+              <DialogDescription className="sr-only">Give the tag a new name.</DialogDescription>
+            </DialogHeader>
+            <Input aria-label="Tag name" value={name} onChange={(event) => setName(event.target.value)} autoFocus />
+            {rename.error && <p role="alert" className="text-sm text-destructive">{tagErrorText(rename.error.message)}</p>}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={close}>Cancel</Button>
+              <Button type="submit">Save</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={dialog === 'delete'} onOpenChange={(next) => !next && close()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete tag "{tag.name}"?</DialogTitle>
+            <DialogDescription>The tag is removed from {plural(tag.papers, 'paper')}. No papers are deleted.</DialogDescription>
+          </DialogHeader>
+          {del.error && <p role="alert" className="text-sm text-destructive">{tagErrorText(del.error.message)}</p>}
+          <DialogFooter>
+            <Button variant="outline" onClick={close}>Cancel</Button>
+            <Button variant="destructive" onClick={() => del.mutate(tag.id, { onSuccess: () => { close(); onDeleted(tag.name) } })}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}

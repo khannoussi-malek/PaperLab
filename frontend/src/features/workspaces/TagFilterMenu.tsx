@@ -6,6 +6,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Switch } from '@/components/ui/switch'
+import { plural } from '@/features/charts/chartMeta'
 import { cn } from '@/lib/utils'
 import { toggled } from './tagFilter'
 import type { TagFilterProps } from './TagSidebar'
@@ -33,7 +34,7 @@ export function TagFilterMenu({ workspaceId, selected, match, onChange }: TagFil
                   <CommandItem
                     key={tag.id}
                     value={tag.name}
-                    aria-label={`${tag.name}, ${tag.papers} papers`}
+                    aria-label={`${tag.name}, ${plural(tag.papers, 'paper')}`}
                     aria-checked={selected.includes(tag.name)}
                     onSelect={() => onChange(toggled(selected, tag.name), match)}>
                     <Check aria-hidden className={cn(!selected.includes(tag.name) && 'invisible')} />
