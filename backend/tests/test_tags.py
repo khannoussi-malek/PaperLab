@@ -164,3 +164,10 @@ async def test_tagged_export_keeps_workspace_order(session):
     name = (await workspaces.get(session, ws)).name
     out = await pipeline.export_citations_as(session, name, "csljson", ["x"])
     assert [i["title"] for i in json.loads(out.text)] == ["T2", "T1", "T0"]
+
+
+async def test_summaries_carry_the_tag_id(session):
+    ws = (await workspaces.create(session, f"ids {RUN}")).id
+    tag = await tags.get_or_create(session, ws, "q")
+
+    assert [r.id for r in await tags.summaries(session, ws)] == [tag.id]
