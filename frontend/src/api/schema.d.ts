@@ -159,6 +159,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/papers/{paper_id}/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Paper Tags */
+        get: operations["paper_tags_api_papers__paper_id__tags_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/papers/{paper_id}/reading-context": {
         parameters: {
             query?: never;
@@ -268,7 +285,7 @@ export interface paths {
          * Suggest Notes
          * @description One-click suggestions, not automatic notes (P1 of this feature): the caller shows each as a card the
          *     reader accepts or dismisses individually, via the unchanged POST /api/notes/promote and this response's
-         *     own output_id.
+         *     own output_id. A model failure is a 502 with the provider's message, which is written to be shown.
          */
         post: operations["suggest_notes_api_papers__paper_id__notes_suggest_post"];
         delete?: never;
@@ -545,6 +562,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/workspaces/{workspace_id}/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Tags */
+        get: operations["list_tags_api_workspaces__workspace_id__tags_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/paper-tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Paper Tags */
+        get: operations["paper_tags_api_workspaces__workspace_id__paper_tags_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/tags/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply Tag */
+        post: operations["apply_tag_api_workspaces__workspace_id__tags_apply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/tags/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Remove Tag */
+        post: operations["remove_tag_api_workspaces__workspace_id__tags_remove_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/tags/{tag_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Tag */
+        delete: operations["delete_tag_api_workspaces__workspace_id__tags__tag_id__delete"];
+        options?: never;
+        head?: never;
+        /** Rename Tag */
+        patch: operations["rename_tag_api_workspaces__workspace_id__tags__tag_id__patch"];
+        trace?: never;
+    };
     "/api/citations/export": {
         parameters: {
             query?: never;
@@ -572,7 +675,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List Runs */
+        get: operations["list_runs_api_workspaces__workspace_id__search_runs_get"];
         put?: never;
         /** Start Run */
         post: operations["start_run_api_workspaces__workspace_id__search_runs_post"];
@@ -592,8 +696,8 @@ export interface paths {
         /** Get Run */
         get: operations["get_run_api_workspaces__workspace_id__search_runs__run_id__get"];
         put?: never;
-        /** Restart Run */
-        post: operations["restart_run_api_workspaces__workspace_id__search_runs__run_id__post"];
+        /** Continue Run */
+        post: operations["continue_run_api_workspaces__workspace_id__search_runs__run_id__post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2712,6 +2816,18 @@ export interface components {
              * @default []
              */
             sources: string[];
+            /** Source Type */
+            source_type?: string | null;
+            /** Published Doi */
+            published_doi?: string | null;
+            /** Published Venue */
+            published_venue?: string | null;
+            /**
+             * Peer Review
+             * @default unknown
+             * @enum {string}
+             */
+            peer_review: "true" | "false" | "unknown";
             /** Stage2 Status */
             stage2_status?: string | null;
             /** Stage2 Exclude Reason */
@@ -3074,6 +3190,8 @@ export interface components {
             peer_reviewed: "true" | "false" | "unknown";
             /** Published Doi */
             published_doi: string | null;
+            /** Published Venue */
+            published_venue: string | null;
             /**
              * Evidence Access
              * @enum {string}
@@ -3144,6 +3262,18 @@ export interface components {
             contact_email?: string | null;
             enabled?: components["schemas"]["SourceSwitches"];
             api_keys?: components["schemas"]["SourceKeys"];
+        };
+        /** PaperTagGroup */
+        PaperTagGroup: {
+            /**
+             * Workspace Id
+             * Format: uuid
+             */
+            workspace_id: string;
+            /** Workspace Name */
+            workspace_name: string;
+            /** Tags */
+            tags: string[];
         };
         /**
          * PaperUpdate
@@ -3231,8 +3361,11 @@ export interface components {
              * @default []
              */
             automation: string[];
-            /** Notes */
-            notes?: string[];
+            /**
+             * Notes
+             * @default []
+             */
+            notes: string[];
             /** Screening Criteria */
             screening_criteria?: string | null;
         };
@@ -3819,6 +3952,68 @@ export interface components {
             stats_json: {
                 [key: string]: unknown;
             };
+            /**
+             * Can Continue
+             * @default false
+             */
+            can_continue: boolean;
+            /**
+             * Sources Left
+             * @default []
+             */
+            sources_left: string[];
+            /**
+             * Paused Sources
+             * @default []
+             */
+            paused_sources: string[];
+        };
+        /**
+         * SearchRunSummary
+         * @description A run without its full stats_json, so a list of them stays small.
+         */
+        SearchRunSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Query Text */
+            query_text: string;
+            /** Status */
+            status: string;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Stopped At */
+            stopped_at: string | null;
+            /** Sources Json */
+            sources_json: string[];
+            /** Per Source Raw Count */
+            per_source_raw_count: {
+                [key: string]: number;
+            };
+            /** Failed Sources */
+            failed_sources: string[];
+            /** Hit Count */
+            hit_count: number;
+            /**
+             * Can Continue
+             * @default false
+             */
+            can_continue: boolean;
+            /**
+             * Sources Left
+             * @default []
+             */
+            sources_left: string[];
+            /**
+             * Paused Sources
+             * @default []
+             */
+            paused_sources: string[];
         };
         /** SearchSourceIn */
         SearchSourceIn: {
@@ -4096,6 +4291,67 @@ export interface components {
                 number,
                 number
             ];
+        };
+        /** TagApply */
+        TagApply: {
+            /** Tag */
+            tag: string;
+            /** Paper Ids */
+            paper_ids: string[];
+        };
+        /** TagDeleted */
+        TagDeleted: {
+            /** Tag */
+            tag: string;
+            /** Papers */
+            papers: number;
+        };
+        /** TagOut */
+        TagOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Papers */
+            papers: number;
+            /** Peer Reviewed */
+            peer_reviewed: number;
+            /** Preprint */
+            preprint: number;
+            /** Unknown Review */
+            unknown_review: number;
+            /** Full Text */
+            full_text: number;
+            /** Abstract */
+            abstract: number;
+            /** Metadata */
+            metadata: number;
+        };
+        /** TagRename */
+        TagRename: {
+            /** New Name */
+            new_name: string;
+        };
+        /** TagRenamed */
+        TagRenamed: {
+            /** Old */
+            old: string;
+            /** New */
+            new: string;
+        };
+        /** TagResultOut */
+        TagResultOut: {
+            /** Tag */
+            tag: string;
+            /** Changed */
+            changed: number;
+            /** Unchanged */
+            unchanged: number;
+            /** Skipped */
+            skipped: string[];
         };
         /** TokenEvent */
         TokenEvent: {
@@ -4485,6 +4741,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PaperOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    paper_tags_api_papers__paper_id__tags_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                paper_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaperTagGroup"][];
                 };
             };
             /** @description Validation Error */
@@ -5365,6 +5652,208 @@ export interface operations {
             };
         };
     };
+    list_tags_api_workspaces__workspace_id__tags_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    paper_tags_api_workspaces__workspace_id__paper_tags_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string[];
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    apply_tag_api_workspaces__workspace_id__tags_apply_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TagApply"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_tag_api_workspaces__workspace_id__tags_remove_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TagApply"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_tag_api_workspaces__workspace_id__tags__tag_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                tag_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagDeleted"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rename_tag_api_workspaces__workspace_id__tags__tag_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                tag_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TagRename"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagRenamed"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     export_selection_api_citations_export_post: {
         parameters: {
             query?: never;
@@ -5385,6 +5874,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_runs_api_workspaces__workspace_id__search_runs_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchRunSummary"][];
                 };
             };
             /** @description Validation Error */
@@ -5465,7 +5987,7 @@ export interface operations {
             };
         };
     };
-    restart_run_api_workspaces__workspace_id__search_runs__run_id__post: {
+    continue_run_api_workspaces__workspace_id__search_runs__run_id__post: {
         parameters: {
             query?: never;
             header?: never;

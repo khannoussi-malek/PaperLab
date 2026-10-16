@@ -14,12 +14,14 @@ export type ReaderTarget =
   | { kind: 'note'; id: string }
   | { kind: 'region'; id: string; page: number; rects: Rect[] }
   | null
+export type TagMatch = 'any' | 'all'
+
 export type Route =
   | { name: 'library' }
   | { name: 'reader'; paperId: string; tab: ReaderTab; target: ReaderTarget }
   // `runId` is the active search run, round-tripped through the URL (I1) so a page reload doesn't lose track of
   // it — null when there's none, same convention as `target` above.
-  | { name: 'workspace'; workspaceId: string; tab: WorkspaceTab; runId: string | null }
+  | { name: 'workspace'; workspaceId: string; tab: WorkspaceTab; runId: string | null; tags: string[]; match: TagMatch }
   | { name: 'charts' }
   | { name: 'chart'; chartId: string }
   | { name: 'chart-builder'; chartId: string | null; datasetId: string | null }
@@ -128,6 +130,8 @@ export function parseRoute(hash: string): Route {
           ? tab
           : 'papers',
       runId: UUID.test(run) ? run : null,
+      tags: parseTags(params.get('tags')),
+      match: params.get('match') === 'all' ? 'all' : 'any',
     }
   }
   const readerTab = tab === 'chat' || tab === 'data' || tab === 'similar' || tab === 'references' || tab === 'evidence' ? tab : 'notes'
@@ -147,11 +151,33 @@ export const noteHref = (paperId: string, noteId: string) => `#/papers/${paperId
 export const regionHref = (paperId: string, page: number, rects: Rect[]) =>
   `#/papers/${paperId}?tab=data&page=${page}&rects=${rects.map((r) => r.join(',')).join(';')}`
 
+/** Tag names are free text, so each is encoded before the comma join and decoded after the split. */
+const parseTags = (value: string | null) =>
+  (value ?? '')
+    .split(',')
+    .filter(Boolean)
+    .map((t) => {
+      try {
+        return decodeURIComponent(t)
+      } catch {
+        return t
+      }
+    })
+
 /** `runId` round-trips the active search run through the URL (I1); omit it (or pass null) when there's none. */
-export const workspaceHref = (workspaceId: string, tab: WorkspaceTab = 'papers', runId?: string | null) => {
+export const workspaceHref = (
+  workspaceId: string,
+  tab: WorkspaceTab = 'papers',
+  runId?: string | null,
+  filter?: { tags: string[]; match: TagMatch },
+) => {
   const params = new URLSearchParams()
   if (tab !== 'papers') params.set('tab', tab)
   if (runId) params.set('run', runId)
+  if (tab === 'papers' && filter) {
+    if (filter.tags.length) params.set('tags', filter.tags.map(encodeURIComponent).join(','))
+    if (filter.match === 'all') params.set('match', 'all')
+  }
   const query = params.toString()
   return query ? `#/workspaces/${workspaceId}?${query}` : `#/workspaces/${workspaceId}`
 }

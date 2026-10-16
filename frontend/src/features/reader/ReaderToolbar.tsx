@@ -18,9 +18,11 @@ type Props = {
   capturing: boolean
   onCaptureChange: (on: boolean) => void
   onOpenReferences: () => void
+  /** The paper's tag chips; the page supplies them so the toolbar stays free of data hooks. */
+  tags?: React.ReactNode
 }
 
-export function ReaderToolbar({ paper, zoomIndex, onZoomChange, capturing, onCaptureChange, onOpenReferences }: Props) {
+export function ReaderToolbar({ paper, zoomIndex, onZoomChange, capturing, onCaptureChange, onOpenReferences, tags }: Props) {
   const title = paper?.title
   return (
     <>
@@ -32,7 +34,7 @@ export function ReaderToolbar({ paper, zoomIndex, onZoomChange, capturing, onCap
         {title ?? 'Loading…'}
       </h1>
       {paper && (
-        <div className="hidden shrink-0 items-center gap-1 md:flex">
+        <div className="hidden shrink-0 items-center gap-1 whitespace-nowrap md:flex">
           <SourceBadges paper={paper} />
         </div>
       )}
@@ -72,8 +74,12 @@ export function ReaderToolbar({ paper, zoomIndex, onZoomChange, capturing, onCap
       <ModeToggle />
     </header>
     {paper && (
-      <div className={cn('flex flex-wrap items-center gap-1 border-b border-glass-border px-3 py-1.5 md:hidden', glass)}>
-        <SourceBadges paper={paper} />
+      /* Tags wrap in their own row so they never squeeze the title; on wide screens the row only shows when there are tag chips (links). */
+      <div className={cn('flex flex-wrap items-center gap-1 border-b border-glass-border px-3 py-1.5 md:hidden md:has-[a]:flex', glass)}>
+        <span className="flex gap-1 md:hidden">
+          <SourceBadges paper={paper} />
+        </span>
+        {tags}
       </div>
     )}
     </>

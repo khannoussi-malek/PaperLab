@@ -12,8 +12,10 @@ import {
   papersPollInterval,
   referencePagePollInterval,
   searchRunPollInterval,
+  useApplyTag,
   useBulkPatchSearchHits,
   useSetEligibility,
+  useWorkspaceMutations,
   useSnowball,
 } from './queries'
 
@@ -75,6 +77,18 @@ describe('matchesEligibleHit', () => {
 // underneath them. These prove the fix targets only those small caches — never `searchHitsRoot`'s multi-thousand-row
 // unfiltered pool, which is
 // the exact request-storm `patchMatchingHits`'s own docstring warns against re-triggering wholesale.
+describe('workspace rename', () => {
+  it('also invalidates the paper-page tag groups, which carry the workspace name', async () => {
+    vi.spyOn(api, 'renameWorkspace').mockResolvedValue({} as never)
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    client.setQueryData(['papers', 'p1', 'tags'], [])
+    const { result } = renderHook(() => useWorkspaceMutations(), { wrapper: withQueryClient(client) })
+    result.current.rename.mutate({ id: 'w1', name: 'New' })
+    await waitFor(() => expect(result.current.rename.isSuccess).toBe(true))
+    expect(client.getQueryState(['papers', 'p1', 'tags'])?.isInvalidated).toBe(true)
+  })
+})
+
 describe('prisma cache invalidation', () => {
   afterEach(() => vi.restoreAllMocks())
 
@@ -255,5 +269,26 @@ describe('useReadingQueue', () => {
     // Query should not fire when runId is null
     expect(result.current.data).toBeUndefined()
     expect(vi.mocked(api.readingQueue)).not.toHaveBeenCalled()
+  })
+})
+
+describe('useApplyTag', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  it('invalidates the tag list, the paper-tag map and the per-paper tag groups', async () => {
+    vi.spyOn(api, 'applyTag').mockResolvedValue({ tag: 'x', changed: 1, unchanged: 0, skipped: [] })
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
+
+    const { result } = renderHook(() => useApplyTag('ws-1'), { wrapper: withQueryClient(client) })
+    result.current.mutate({ tag: 'x', paperIds: ['p1'] })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    expect(api.applyTag).toHaveBeenCalledWith('ws-1', 'x', ['p1'])
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['workspaces', 'ws-1', 'tags'] })
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['workspaces', 'ws-1', 'paper-tags'] })
+    const perPaper = invalidateSpy.mock.calls.find(([f]) => f?.predicate)?.[0]
+    expect(perPaper?.predicate?.({ queryKey: ['papers', 'p1', 'tags'] } as never)).toBe(true)
+    expect(perPaper?.predicate?.({ queryKey: ['papers', 'p1', 'notes'] } as never)).toBe(false)
   })
 })

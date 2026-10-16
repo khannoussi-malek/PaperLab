@@ -16,8 +16,8 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.enrichment import normalize_doi
-from app.core.errors import Conflict, InvalidInput
-from app.models import Paper, WorkspaceTag, hit_tags, paper_tags, workspace_papers
+from app.core.errors import Conflict, InvalidInput, NotFound
+from app.models import Paper, Workspace, WorkspaceTag, hit_tags, paper_tags, workspace_papers
 from app.models.workspace_search import WorkspaceSearchHit
 
 NAME_MAX_CHARS = 64
@@ -34,6 +34,7 @@ class TagResult:
 
 @dataclass(frozen=True)
 class TagSummary:
+    id: uuid.UUID
     name: str
     papers: int
     peer_reviewed: int
@@ -183,6 +184,7 @@ async def summaries(session: AsyncSession, ws: uuid.UUID) -> list[TagSummary]:
 
     query = (
         select(
+            WorkspaceTag.id,
             WorkspaceTag.name,
             func.count(Paper.id),
             count(peer),
@@ -258,3 +260,52 @@ async def tag_hits(session: AsyncSession, ws: uuid.UUID, names: list[str], hit_i
     await session.execute(insert(hit_tags).from_select(["hit_id", "tag_id"], mine).on_conflict_do_nothing())
     await _copy_to_papers(session, ws, hit_ids)
     await session.commit()
+
+
+async def _name_of(session: AsyncSession, ws: uuid.UUID, tag_id: uuid.UUID) -> str:
+    name = await session.scalar(
+        select(WorkspaceTag.name).where(WorkspaceTag.id == tag_id, WorkspaceTag.workspace_id == ws)
+    )
+    if name is None:
+        raise NotFound(f"tag {tag_id} not found")
+    return name
+
+
+async def rename_by_id(session: AsyncSession, ws: uuid.UUID, tag_id: uuid.UUID, new_name: str) -> tuple[str, str]:
+    old = await _name_of(session, ws, tag_id)
+    return old, await rename(session, ws, old, new_name)
+
+
+async def delete_by_id(session: AsyncSession, ws: uuid.UUID, tag_id: uuid.UUID) -> tuple[str, int]:
+    name = await _name_of(session, ws, tag_id)
+    return name, await delete(session, ws, name)
+
+
+async def paper_tag_map(session: AsyncSession, ws: uuid.UUID) -> dict[uuid.UUID, list[str]]:
+    """Paper id -> its tag names (case-insensitive order), for the papers that have any."""
+    query = (
+        select(paper_tags.c.paper_id, WorkspaceTag.name)
+        .join(WorkspaceTag, WorkspaceTag.id == paper_tags.c.tag_id)
+        .where(paper_tags.c.workspace_id == ws)
+        .order_by(func.lower(WorkspaceTag.name))
+    )
+    out: dict[uuid.UUID, list[str]] = {}
+    for paper_id, name in await session.execute(query):
+        out.setdefault(paper_id, []).append(name)
+    return out
+
+
+async def tags_of_paper(session: AsyncSession, paper_id: uuid.UUID) -> list[tuple[uuid.UUID, str, list[str]]]:
+    """(workspace id, workspace name, tag names) for each workspace where the paper has a tag."""
+    query = (
+        select(Workspace.id, Workspace.name, WorkspaceTag.name)
+        .select_from(paper_tags)
+        .join(WorkspaceTag, WorkspaceTag.id == paper_tags.c.tag_id)
+        .join(Workspace, Workspace.id == paper_tags.c.workspace_id)
+        .where(paper_tags.c.paper_id == paper_id)
+        .order_by(Workspace.name, func.lower(WorkspaceTag.name))
+    )
+    groups: dict[uuid.UUID, tuple[str, list[str]]] = {}
+    for ws_id, ws_name, tag in await session.execute(query):
+        groups.setdefault(ws_id, (ws_name, []))[1].append(tag)
+    return [(ws_id, name, tags) for ws_id, (name, tags) in groups.items()]
