@@ -283,8 +283,6 @@ async def _link_by_doi(session, providers, link, tried, workspace_uuid) -> AddPa
 
 async def _add_link(session, providers, link, workspace_uuid) -> AddPaperResult:
     await pdf_links.check_url(link)
-    if pdf_links.guard not in providers.pdf.event_hooks["request"]:
-        providers.pdf.event_hooks["request"].append(pdf_links.guard)  # this call's own client, closed after it
     data, tried = await discovery.download_pdf(providers.pdf, [link])
     if data is None:
         if tried[0]["outcome"] == "unsafe_url":  # a redirect to a private address is refused, as the link itself is

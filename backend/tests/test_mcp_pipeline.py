@@ -202,7 +202,9 @@ async def test_a_redirect_to_a_private_address_is_refused_and_never_requested(mo
 
     @asynccontextmanager
     async def redirecting(_session):
-        client = httpx.AsyncClient(transport=httpx.MockTransport(handle), follow_redirects=True)
+        client = httpx.AsyncClient(
+            transport=httpx.MockTransport(handle), follow_redirects=True, event_hooks={"request": [pdf_links.guard]}
+        )
         providers = discovery.Providers(pdf=client)
         try:
             yield providers
@@ -325,7 +327,9 @@ def serve(monkeypatch, handle):
 
     @asynccontextmanager
     async def served(_session):
-        client = httpx.AsyncClient(transport=httpx.MockTransport(handle), follow_redirects=True)
+        client = httpx.AsyncClient(
+            transport=httpx.MockTransport(handle), follow_redirects=True, event_hooks={"request": [pdf_links.guard]}
+        )
         providers = discovery.Providers(pdf=client)
         try:
             yield providers

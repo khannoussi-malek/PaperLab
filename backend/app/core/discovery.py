@@ -106,7 +106,8 @@ def build_providers(sources: SourceSettings, transport: httpx.AsyncBaseTransport
         # No email: unlike the sources, a PDF host (arxiv.org, a publisher, a repository, or a redirect target) never
         # agreed to receive the owner's email.
         pdf=httpx.AsyncClient(
-            timeout=PDF_TIMEOUT, follow_redirects=True, headers={"User-Agent": PDF_USER_AGENT}, transport=transport
+            timeout=PDF_TIMEOUT, follow_redirects=True, headers={"User-Agent": PDF_USER_AGENT}, transport=transport,
+            event_hooks={"request": [pdf_links.guard]},  # every hop, redirects included
         ),
         clients=clients,
     )
@@ -123,6 +124,8 @@ async def open_providers(session: AsyncSession) -> AsyncIterator[Providers]:
         # The fake answers Unpaywall offline, so its placeholder can stand in for the email Unpaywall needs.
         sources = replace(sources, contact_email=sources.contact_email or discovery_fake.MAILTO)
     providers = build_providers(sources, transport)
+    if transport is not None:
+        providers.pdf.event_hooks["request"].clear()  # the fake's hosts never resolve, and nothing leaves the process
     try:
         yield providers
     finally:
