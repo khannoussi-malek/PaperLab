@@ -166,7 +166,7 @@ async def test_a_bug_in_one_source_is_raised_not_hidden_as_a_notice(session, dis
         await discovery.search(session, discovery_fakes.turned_on("core"), "BERT")
 
 
-async def test_unpaywall_is_asked_only_for_results_with_a_doi_and_no_pdf(session, discovery_fakes):
+async def test_unpaywall_is_asked_for_every_result_with_a_doi_and_merged_with_what_it_had(session, discovery_fakes):
     discovery_fakes.openalex.route("/works", {"results": [
         work("No copy yet", "10.5555/none"), work("Has a copy", "10.5555/copy", "https://example.org/copy.pdf"),
         work("No DOI"),
@@ -175,13 +175,43 @@ async def test_unpaywall_is_asked_only_for_results_with_a_doi_and_no_pdf(session
     discovery_fakes.unpaywall.reply("/v2/10.5555/none", 200, json={
         "best_oa_location": {"url_for_pdf": "https://repository.example.org/none.pdf"}, "oa_locations": []
     })  # fmt: skip
+    discovery_fakes.unpaywall.reply("/v2/10.5555/copy", 200, json={
+        "best_oa_location": {"url_for_pdf": "https://repository.example.org/copy.pdf"}, "oa_locations": []
+    })  # fmt: skip
 
     found = await discovery.search(session, discovery_fakes.turned_on("unpaywall"), "copy")
 
     assert [r.pdf_urls for r in found.results] == [
-        ["https://repository.example.org/none.pdf"], ["https://example.org/copy.pdf"], []
+        ["https://repository.example.org/none.pdf"],
+        ["https://example.org/copy.pdf", "https://repository.example.org/copy.pdf"],
+        [],
     ]  # fmt: skip
-    assert [r.url.path for r in discovery_fakes.unpaywall.requests] == ["/v2/10.5555/none"]
+    assert sorted(r.url.path for r in discovery_fakes.unpaywall.requests) == ["/v2/10.5555/copy", "/v2/10.5555/none"]
+
+
+async def test_a_bot_checked_publisher_comes_after_the_unpaywall_repository_copy(session, discovery_fakes):
+    publisher = "https://dl.acm.org/doi/pdf/10.5555/acm"
+    discovery_fakes.openalex.route("/works", {"results": [work("ACM paper", "10.5555/acm", publisher)]})
+    discovery_fakes.s2.reply(BATCH, 200, json=[None])
+    discovery_fakes.unpaywall.reply("/v2/10.5555/acm", 200, json={
+        "best_oa_location": {"url_for_pdf": publisher}, "oa_locations": [{"url_for_pdf": "https://repo.example.org/a.pdf"}]
+    })  # fmt: skip
+
+    found = await discovery.search(session, discovery_fakes.turned_on("unpaywall"), "ACM paper")
+
+    assert found.results[0].pdf_urls == ["https://repo.example.org/a.pdf", publisher]
+
+
+async def test_semantic_scholars_open_access_pdf_is_kept_beside_openalexs(session, discovery_fakes):
+    discovery_fakes.openalex.route("/works", {"results": [work("S2 paper", "10.5555/s2", "https://example.org/oa.pdf")]})
+    discovery_fakes.s2.reply(BATCH, 200, json=[{
+        "paperId": "abc", "title": "S2 paper", "externalIds": {"DOI": "10.5555/s2"},
+        "openAccessPdf": {"url": "https://s2.example.org/free.pdf"},
+    }])  # fmt: skip
+
+    found = await discovery.search(session, discovery_fakes.providers, "S2 paper")
+
+    assert found.results[0].pdf_urls == ["https://s2.example.org/free.pdf", "https://example.org/oa.pdf"]
 
 
 async def test_a_failing_unpaywall_lookup_leaves_its_result_as_it_is(session, discovery_fakes):

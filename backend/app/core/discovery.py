@@ -222,8 +222,8 @@ async def _add_s2_links(http: httpx.AsyncClient, candidates: list[Candidate]) ->
 
 
 async def _add_unpaywall_links(http: httpx.AsyncClient | None, candidates: list[Candidate]) -> list[Candidate]:
-    """Free PDF links for candidates with a DOI and none yet: one request each, so only where a badge can change
-    (D72). Never fatal: a failed lookup leaves its candidate as it is."""
+    """Unpaywall's free PDF links merged into every candidate with a DOI, one request each (M63: OpenAlex alone
+    often lists only a bot-checked publisher). Never fatal: a failed lookup leaves its candidate as it is."""
     if http is None:
         return candidates
     limit = asyncio.Semaphore(UNPAYWALL_CONCURRENCY)
@@ -231,7 +231,7 @@ async def _add_unpaywall_links(http: httpx.AsyncClient | None, candidates: list[
 
     async def with_links(candidate: Candidate) -> Candidate:
         nonlocal unreachable
-        if not candidate.doi or candidate.pdf_urls or unreachable:
+        if not candidate.doi or unreachable:
             return candidate
         try:
             async with limit:
@@ -245,7 +245,8 @@ async def _add_unpaywall_links(http: httpx.AsyncClient | None, candidates: list[
         except httpx.HTTPError as exc:
             logger.info("no Unpaywall links for %s: %s", candidate.doi, exc)
             return candidate
-        return replace(candidate, pdf_urls=ordered_pdf_urls(candidate.external_ids.get("arxiv"), *urls))
+        merged = ordered_pdf_urls(candidate.external_ids.get("arxiv"), *candidate.pdf_urls, *urls)
+        return replace(candidate, pdf_urls=merged)
 
     return list(await asyncio.gather(*map(with_links, candidates)))
 
