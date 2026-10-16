@@ -104,7 +104,7 @@ async def test_a_source_switch_mid_embed_stops_further_writes(worker_session, em
     assert len(written) == 64
 
 
-async def test_each_slice_is_a_cancellation_point(worker_session):
+async def test_a_deadline_between_slices_keeps_earlier_slices(worker_session):
     paper = await paper_with_chunks(worker_session, 150)
 
     with pytest.raises(TimeoutError):
@@ -173,6 +173,8 @@ async def test_reembed_past_its_deadline_stops_without_failing_the_paper(
     assert f"re-embedding {paper.id} ran past" in caplog.text  # it was the deadline that stopped it
     assert writes == [1]  # the second slice never landed
     assert (paper.status, paper.status_error) == ("ready", None)
+    error = (await embedding_sources.active(worker_session)).error  # what Settings shows beside Try again
+    assert error is not None and "took longer than 0 minutes; Try again" in error
 
 
 async def test_a_reembed_timeout_that_is_not_the_deadline_propagates(worker_session, sample_pdf, monkeypatch):

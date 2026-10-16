@@ -21,7 +21,10 @@ logger = logging.getLogger(__name__)
 # mid-ingest forever, as 67 did when ten ingests at once ran the worker out of memory (2026-10-13).
 MAX_TRIES = 5
 EMBED_WRITE_BATCH = 64  # chunks per encode and per write
-# Enforced inside the job: arq's wait_for can't stop a thread, so it only gets a longer backstop (settings.py).
+# Enforced inside the job, not by arq: arq's cancel is a CancelledError, which `except Exception` doesn't catch, so
+# the paper would sit at "embedding" forever. This deadline ends it failed, with the copy below and no partial
+# vectors. Neither can stop a thread already running (extract, an encode), so arq only gets a longer backstop
+# (settings.py).
 INGEST_JOB_TIMEOUT = 20 * 60
 INTERRUPTED = (
     "Ingesting stopped before it finished {times} times (the worker restarted or ran out of memory). "
@@ -78,9 +81,9 @@ async def search_embedder(ctx: dict, session):
 
 async def _embed(session, pid: uuid.UUID, embedder) -> bool:
     """Embeds the paper's chunks in slices of EMBED_WRITE_BATCH, writing each as it is done and only while `embedder`
-    is still the search source: every slice is a point where a deadline can stop the job, and the vectors written so
-    far stay. A failing source never fails a paper: the old vectors stay and the error is kept for Settings' Try again
-    (D155). True when all were written."""
+    is still the search source. A slice is the most a thread left running after a deadline can still do, and the
+    progress anyone can see; the vectors written so far stay. A failing source never fails a paper: the old vectors
+    stay and the error is kept for Settings' Try again (D155). True when all were written."""
     chunks = await papers.list_chunks(session, pid)
     for start in range(0, len(chunks), EMBED_WRITE_BATCH):
         batch = chunks[start : start + EMBED_WRITE_BATCH]
@@ -157,7 +160,8 @@ async def ingest_paper(ctx: dict, paper_id: str) -> None:
             # Only the deadline's own timeout, not another one (a database command's, say).
             if isinstance(exc, TimeoutError) and deadline.expired():
                 logger.warning("ingest of %s ran past %d s and was stopped", pid, INGEST_JOB_TIMEOUT)
-                # Search doesn't look at status, so the slices already written must not answer for half a paper.
+                # Search doesn't look at status, so on a deadline the slices already written are cleared: they must not
+                # answer for half a paper. (An embed error mid-ingest and a re-embed timeout leave earlier slices.)
                 await session.execute(update(Chunk).where(Chunk.paper_id == pid).values(embedding=None))
                 error = timed_out(INGEST_JOB_TIMEOUT)
             else:
@@ -191,6 +195,12 @@ async def reembed_paper(ctx: dict, paper_id: str, missing_only: bool = False) ->
                 raise
             await session.rollback()
             logger.warning("re-embedding %s ran past %d s and was stopped", pid, INGEST_JOB_TIMEOUT)
+            paper = await papers.get_paper(session, pid)
+            minutes = int(INGEST_JOB_TIMEOUT // 60)
+            # The paper stays pending in a rebuild; this is what puts Try again in Settings.
+            await embedding_sources.record_error(
+                session, f"Embedding {paper.title or pid} took longer than {minutes} minutes; Try again"
+            )
             return
         if embedded:
             logger.info("re-embedded %s with %s", pid, embedder.name)

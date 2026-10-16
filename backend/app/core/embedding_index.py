@@ -105,8 +105,8 @@ async def rebuild(session: AsyncSession, source) -> Rebuild | None:
     - rebuild_model isn't the source's name (a release renamed the built-in model: Settings shows its Re-index prompt,
       D137, rather than a rebuild nobody started);
     - or no paper of the rebuild is pending.
-    No flag to clear: it ends when set_embeddings writes the last paper, one transaction per paper. Papers added after
-    it started don't count, so a new upload never pauses search."""
+    No flag to clear: it ends when set_embeddings writes the last paper's last slice (one transaction per slice of
+    its chunks). Papers added after it started don't count, so a new upload never pauses search."""
     if source.rebuild_model != source.name or source.rebuild_started_at is None:
         return None
     per_paper = (
