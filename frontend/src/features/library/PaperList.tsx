@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { matchesReading, READING_FILTERS, readingChip, type ReadingFilter } from '@/features/reading/passes'
@@ -34,13 +35,16 @@ type RowProps = {
   /** Fade in when mounted, this many ms late; null keeps the row still. */
   enterDelayMs: number | null
   workspaceId?: string
+  tags?: string[]
+  onTagClick?: (name: string) => void
+  selection?: Selection
   onPreview: (id: string, immediate: boolean) => void
   onDelete: (paper: Paper) => void
   onMembershipChange: (paper: Paper, workspaceId: string, member: boolean) => void
   onReadingChange: (paper: Paper, changes: ReadingIn) => void
 }
 
-function PaperRow({ paper, previewed, enterDelayMs, workspaceId, onPreview, onDelete, onMembershipChange, onReadingChange }: RowProps) {
+function PaperRow({ paper, previewed, enterDelayMs, workspaceId, tags, onTagClick, selection, onPreview, onDelete, onMembershipChange, onReadingChange }: RowProps) {
   // Decided once, at mount: a row that stays on screen while the query changes must not replay it. Cleared once played,
   // so a tab panel shown again (display: none restarts animations) doesn't replay it either.
   const [enterDelay, setEnterDelay] = useState(enterDelayMs)
@@ -63,7 +67,16 @@ function PaperRow({ paper, previewed, enterDelayMs, workspaceId, onPreview, onDe
         onFocus={() => onPreview(paper.id, true)}
       >
         {isEmbedding(paper) && <EmbeddingFlight />}
-        <FileText aria-hidden className="mt-1 size-4 shrink-0 text-muted-foreground" />
+        {selection ? (
+          <Checkbox
+            aria-label={`Select ${paper.title}`}
+            checked={selection.selected.has(paper.id)}
+            onCheckedChange={() => selection.onToggle(paper.id)}
+            className="relative z-10 mt-1.5"
+          />
+        ) : (
+          <FileText aria-hidden className="mt-1 size-4 shrink-0 text-muted-foreground" />
+        )}
         <div className="min-w-0 flex-1">
           {/* The link's ::after covers the row, so the whole row opens the reader. */}
           <a
@@ -76,6 +89,18 @@ function PaperRow({ paper, previewed, enterDelayMs, workspaceId, onPreview, onDe
           {meta && <p className="mt-0.5 truncate text-sm text-muted-foreground">{meta}</p>}
           <div className="mt-1 flex flex-wrap items-center gap-1">
             <SourceBadges paper={paper} />
+            {tags?.map((name) => (
+              <button
+                key={name}
+                type="button"
+                aria-label={`Filter by tag ${name}`}
+                // Above the title link's ::after overlay, which would otherwise take the click.
+                className="relative z-10 rounded-md focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+                onClick={() => onTagClick?.(name)}
+              >
+                <Badge variant="secondary" className="font-normal">{name}</Badge>
+              </button>
+            ))}
           </div>
           {paper.status_error && <p className="mt-0.5 text-xs text-destructive">{paper.status_error}</p>}
         </div>
@@ -111,17 +136,24 @@ function PaperRow({ paper, previewed, enterDelayMs, workspaceId, onPreview, onDe
   )
 }
 
+type Selection = { selected: Set<string>; onToggle: (id: string) => void }
+
 type Props = {
   papers: Paper[]
   /** Set on a workspace home: rows then offer "Remove from workspace". */
   workspaceId?: string
+  /** Workspace only: paper id to tag names. Without it (the library) rows show no chips. */
+  tagsByPaper?: Record<string, string[]>
+  onTagClick?: (name: string) => void
+  /** Workspace only: rows get a checkbox. */
+  selection?: Selection
 }
 
 /**
  * A search bar over paper rows, beside a preview of the hovered or focused one. The library and each workspace's Papers
  * tab use it.
  */
-export function PaperList({ papers, workspaceId }: Props) {
+export function PaperList({ papers, workspaceId, tagsByPaper, onTagClick, selection }: Props) {
   const remove = useDeletePaper()
   const membership = useWorkspaceMembership()
   const reading = useSetReading()
@@ -215,6 +247,9 @@ export function PaperList({ papers, workspaceId }: Props) {
                     previewed={paper.id === previewed?.id}
                     enterDelayMs={searchBringsBack ? Math.min(index, MAX_STAGGER_STEPS) * STAGGER_MS : null}
                     workspaceId={workspaceId}
+                    tags={tagsByPaper?.[paper.id]}
+                    onTagClick={onTagClick}
+                    selection={selection}
                     onPreview={preview}
                     onDelete={onDelete}
                     onMembershipChange={(row, id, member) => membership.mutate({ workspaceId: id, paperIds: [row.id], member })}
