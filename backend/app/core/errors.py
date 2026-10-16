@@ -25,7 +25,7 @@ class Conflict(DomainError):
     """The request is valid but the resource isn't in a state that allows it (e.g. paper_not_ready)."""
 
 
-CODE = re.compile(r"[a-z]+(?:_[a-z]+)+")  # a message like unknown_workspace is itself the error code
+CODE = re.compile(r"[a-z]+(?:_[a-z0-9]+)+")  # a message like unknown_workspace is itself the error code
 KINDS = {NotFound: "not_found", InvalidInput: "invalid_input", Conflict: "conflict"}
 
 

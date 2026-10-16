@@ -5,7 +5,10 @@ every read and write is an existing service's. Results are the API's own schemas
 fields.
 """
 
+import base64
+import binascii
 import logging
+import math
 import uuid
 from dataclasses import dataclass, fields
 from datetime import datetime
@@ -13,6 +16,7 @@ from pathlib import PurePosixPath
 from typing import Literal
 from urllib.parse import urlsplit
 
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -20,6 +24,7 @@ from app.core import (
     citations_export,
     claims,
     discovery,
+    enrichment,
     evidence_cards,
     hit_enrichment,
     notes,
@@ -38,7 +43,7 @@ from app.core import (
 )
 from app.core.errors import Conflict, DomainError, InvalidInput, NotFound, error_code
 from app.core.source_registry import DISCOVERY_SOURCE_IDS
-from app.models import PaperStatus
+from app.models import Paper, PaperStatus
 from app.providers.base import LLMError, LLMUnavailable
 from app.schemas.papers import PaperOut
 from app.schemas.workspace_search import HitOut, ScreeningStateOut, SearchRunOut, SearchRunSummary
@@ -125,10 +130,59 @@ async def remove_paper_from_workspace(session: AsyncSession, workspace: str, pap
 
 @dataclass(frozen=True)
 class AddPaperResult:
-    status: Literal["queued", "ingested", "no_free_pdf"]
+    status: Literal["queued", "ingested", "already_in_library", "no_free_pdf"]
     paper_id: uuid.UUID | None = None
     landing_url: str | None = None
     title: str | None = None
+
+
+MAX_UPLOAD_PDF_BYTES = 30 * 1024 * 1024  # decoded, as the app's upload allows
+MAX_UPLOAD_BASE64_CHARS = 4 * math.ceil(MAX_UPLOAD_PDF_BYTES / 3) + 4  # refused before decoding allocates anything
+
+
+def _decode_pdf(pdf_base64: str) -> bytes:
+    if len(pdf_base64) > MAX_UPLOAD_BASE64_CHARS:
+        raise InvalidInput("pdf_too_large", max_mb=MAX_UPLOAD_PDF_BYTES // 1024 // 1024)
+    try:
+        data = base64.b64decode(pdf_base64, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise InvalidInput("invalid_base64") from exc
+    if len(data) > MAX_UPLOAD_PDF_BYTES:
+        raise InvalidInput("pdf_too_large", max_mb=MAX_UPLOAD_PDF_BYTES // 1024 // 1024)
+    if not data.startswith(papers.PDF_MAGIC):
+        raise InvalidInput("not_a_pdf")
+    return data
+
+
+async def upload_paper(
+    session: AsyncSession,
+    workspace: str,
+    filename: str,
+    pdf_base64: str,
+    doi: str | None = None,
+    tag_names: list[str] | None = None,
+) -> AddPaperResult:
+    """The twin of POST /api/papers for a PDF Claude holds: filed in `workspace`, tagged, ingest queued. A `doi` already
+    in the library reuses that paper (no second copy); otherwise it is kept on the new paper as a locked field.
+    Everything is checked before the first write."""
+    ws = await workspace_id(session, workspace)
+    names = [tags.normalize(name) for name in tag_names or []]
+    clean_doi = None
+    if doi is not None and (clean_doi := enrichment.normalize_doi(doi)) is None:
+        raise InvalidInput("invalid_doi")
+    data = _decode_pdf(pdf_base64)
+    existing = await session.scalar(select(Paper).where(func.lower(Paper.doi) == clean_doi)) if clean_doi else None
+    if existing:
+        paper, status = existing, "already_in_library"
+    else:
+        prefill = {"doi": clean_doi, "manual_fields": ["doi"]} if clean_doi else None
+        paper, status = await papers.create_paper(session, filename, data, settings.pdf_dir, prefill=prefill), "queued"
+    await workspaces.add_paper(session, ws, paper.id)
+    for name in names:
+        await tags.tag_papers(session, ws, name, paper_ids=[paper.id])
+    if status == "queued":
+        await queue.enqueue("ingest_paper", str(paper.id))
+    return AddPaperResult(status=status, paper_id=paper.id, title=paper.title)
 
 
 DOI_ARXIV_HOSTS = ("doi.org", "dx.doi.org", "arxiv.org", "www.arxiv.org")
