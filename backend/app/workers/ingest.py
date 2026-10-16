@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 # ends the paper failed instead of starting again: a paper that stops the worker every time would otherwise sit
 # mid-ingest forever, as 67 did when ten ingests at once ran the worker out of memory (2026-10-13).
 MAX_TRIES = 5
+EMBED_WRITE_BATCH = 64  # chunks per encode and per write
 INTERRUPTED = (
     "Ingesting stopped before it finished {times} times (the worker restarted or ran out of memory). "
     "Re-ingest to try again."
@@ -58,21 +59,25 @@ async def search_embedder(ctx: dict, session):
 
 
 async def _embed(session, pid: uuid.UUID, embedder) -> bool:
-    """Embeds the paper's chunks and writes them if `embedder` is still the search source. A failing source never
-    fails a paper: the old vectors stay and the error is kept for Settings' Try again (D155). True when written."""
+    """Embeds the paper's chunks in slices of EMBED_WRITE_BATCH, writing each as it is done and only while `embedder`
+    is still the search source: every slice is a point where a deadline can stop the job, and the vectors written so
+    far stay. A failing source never fails a paper: the old vectors stay and the error is kept for Settings' Try again
+    (D155). True when all were written."""
     chunks = await papers.list_chunks(session, pid)
-    try:
-        vectors = await embedding.embed_documents(embedder, [c.text for c in chunks])
-    except (LLMUnavailable, LLMError) as exc:
-        logger.warning("embedding %s with %s failed: %s", pid, embedder.label, exc)
-        await embedding_sources.record_error(session, str(exc))
-        return False
-    # ponytail: a switch landing between this check and the commit leaves one paper on the old source; Try again
-    # fixes it.
-    if await embedding_sources.active_name(session) != embedder.name:
-        logger.info("the search source changed while embedding %s; the newer job embeds it", pid)
-        return False
-    await papers.set_embeddings(session, [c.id for c in chunks], vectors, embedder.name)
+    for start in range(0, len(chunks), EMBED_WRITE_BATCH):
+        batch = chunks[start : start + EMBED_WRITE_BATCH]
+        try:
+            vectors = await embedding.embed_documents(embedder, [c.text for c in batch])
+        except (LLMUnavailable, LLMError) as exc:
+            logger.warning("embedding %s with %s failed: %s", pid, embedder.label, exc)
+            await embedding_sources.record_error(session, str(exc))
+            return False
+        # ponytail: a switch landing between this check and the commit leaves one slice on the old source; Try again
+        # fixes it.
+        if await embedding_sources.active_name(session) != embedder.name:
+            logger.info("the search source changed while embedding %s; the newer job embeds it", pid)
+            return False
+        await papers.set_embeddings(session, [c.id for c in batch], vectors, embedder.name)
     return True
 
 
