@@ -12,6 +12,7 @@ import {
   papersPollInterval,
   referencePagePollInterval,
   searchRunPollInterval,
+  useApplyTag,
   useBulkPatchSearchHits,
   useSetEligibility,
   useSnowball,
@@ -255,5 +256,26 @@ describe('useReadingQueue', () => {
     // Query should not fire when runId is null
     expect(result.current.data).toBeUndefined()
     expect(vi.mocked(api.readingQueue)).not.toHaveBeenCalled()
+  })
+})
+
+describe('useApplyTag', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  it('invalidates the tag list, the paper-tag map and the per-paper tag groups', async () => {
+    vi.spyOn(api, 'applyTag').mockResolvedValue({ tag: 'x', changed: 1, unchanged: 0, skipped: [] })
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
+
+    const { result } = renderHook(() => useApplyTag('ws-1'), { wrapper: withQueryClient(client) })
+    result.current.mutate({ tag: 'x', paperIds: ['p1'] })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    expect(api.applyTag).toHaveBeenCalledWith('ws-1', 'x', ['p1'])
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['workspaces', 'ws-1', 'tags'] })
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['workspaces', 'ws-1', 'paper-tags'] })
+    const perPaper = invalidateSpy.mock.calls.find(([f]) => f?.predicate)?.[0]
+    expect(perPaper?.predicate?.({ queryKey: ['papers', 'p1', 'tags'] } as never)).toBe(true)
+    expect(perPaper?.predicate?.({ queryKey: ['papers', 'p1', 'notes'] } as never)).toBe(false)
   })
 })

@@ -74,58 +74,58 @@ describe('parseRoute', () => {
 
   it('opens a workspace on its Papers tab by default, and keeps another tab in the hash', () => {
     expect(workspaceHref(id)).toBe(`#/workspaces/${id}`)
-    expect(parseRoute(workspaceHref(id))).toEqual({ name: 'workspace', workspaceId: id, tab: 'papers', runId: null })
+    expect(parseRoute(workspaceHref(id))).toEqual({ name: 'workspace', workspaceId: id, tab: 'papers', runId: null, tags: [], match: 'any' })
     expect(workspaceHref(id, 'chat')).toBe(`#/workspaces/${id}?tab=chat`)
-    expect(parseRoute(workspaceHref(id, 'notes'))).toEqual({ name: 'workspace', workspaceId: id, tab: 'notes', runId: null })
-    expect(parseRoute(`#/workspaces/${id}?tab=graph`)).toEqual({ name: 'workspace', workspaceId: id, tab: 'papers', runId: null })
+    expect(parseRoute(workspaceHref(id, 'notes'))).toEqual({ name: 'workspace', workspaceId: id, tab: 'notes', runId: null, tags: [], match: 'any' })
+    expect(parseRoute(`#/workspaces/${id}?tab=graph`)).toEqual({ name: 'workspace', workspaceId: id, tab: 'papers', runId: null, tags: [], match: 'any' })
   })
 
   it('workspaceHref builds a search tab url', () => {
     expect(workspaceHref(id, 'search')).toBe(`#/workspaces/${id}?tab=search`)
-    expect(parseRoute(workspaceHref(id, 'search'))).toEqual({ name: 'workspace', workspaceId: id, tab: 'search', runId: null })
+    expect(parseRoute(workspaceHref(id, 'search'))).toEqual({ name: 'workspace', workspaceId: id, tab: 'search', runId: null, tags: [], match: 'any' })
   })
 
   it('workspaceHref builds an acquisition tab url', () => {
     expect(workspaceHref(id, 'acquisition')).toBe(`#/workspaces/${id}?tab=acquisition`)
     expect(parseRoute(workspaceHref(id, 'acquisition'))).toEqual({
-      name: 'workspace', workspaceId: id, tab: 'acquisition', runId: null,
+      name: 'workspace', workspaceId: id, tab: 'acquisition', runId: null, tags: [], match: 'any',
     })
   })
 
   it('workspaceHref builds a screening tab url', () => {
     expect(workspaceHref(id, 'screening')).toBe(`#/workspaces/${id}?tab=screening`)
     expect(parseRoute(workspaceHref(id, 'screening'))).toEqual({
-      name: 'workspace', workspaceId: id, tab: 'screening', runId: null,
+      name: 'workspace', workspaceId: id, tab: 'screening', runId: null, tags: [], match: 'any',
     })
   })
 
   it('workspaceHref builds a prisma tab url', () => {
     expect(workspaceHref(id, 'prisma')).toBe(`#/workspaces/${id}?tab=prisma`)
     expect(parseRoute(workspaceHref(id, 'prisma'))).toEqual({
-      name: 'workspace', workspaceId: id, tab: 'prisma', runId: null,
+      name: 'workspace', workspaceId: id, tab: 'prisma', runId: null, tags: [], match: 'any',
     })
   })
 
   it('workspaceHref builds a reading tab url', () => {
     expect(workspaceHref(id, 'reading')).toBe(`#/workspaces/${id}?tab=reading`)
     expect(parseRoute(workspaceHref(id, 'reading'))).toEqual({
-      name: 'workspace', workspaceId: id, tab: 'reading', runId: null,
+      name: 'workspace', workspaceId: id, tab: 'reading', runId: null, tags: [], match: 'any',
     })
     expect(parseRoute(`#/workspaces/${id}?tab=reading`)).toEqual({
-      name: 'workspace', workspaceId: id, tab: 'reading', runId: null,
+      name: 'workspace', workspaceId: id, tab: 'reading', runId: null, tags: [], match: 'any',
     })
   })
 
   it('workspaceHref round-trips an active run id (I1), so a reload on the Search tab keeps it', () => {
     expect(workspaceHref(id, 'search', other)).toBe(`#/workspaces/${id}?tab=search&run=${other}`)
     expect(parseRoute(workspaceHref(id, 'search', other))).toEqual({
-      name: 'workspace', workspaceId: id, tab: 'search', runId: other,
+      name: 'workspace', workspaceId: id, tab: 'search', runId: other, tags: [], match: 'any',
     })
   })
 
   it('ignores a malformed run id in the hash', () => {
     expect(parseRoute(`#/workspaces/${id}?tab=search&run=not-a-real-id`)).toEqual({
-      name: 'workspace', workspaceId: id, tab: 'search', runId: null,
+      name: 'workspace', workspaceId: id, tab: 'search', runId: null, tags: [], match: 'any',
     })
   })
 
@@ -247,5 +247,22 @@ describe('samePage', () => {
     expect(samePage(at('#/'), at(readerHref(id)))).toBe(false)
     expect(samePage(at(readerHref(id)), at(readerHref(other)))).toBe(false)
     expect(samePage(at(chartHref(id)), at(editChartHref(id)))).toBe(false)
+  })
+})
+
+describe('workspace tags in the URL', () => {
+  const tagged = (tags: string[], match: 'any' | 'all' = 'any') => ({ tags, match })
+
+  it('round-trips names with commas, spaces, slashes and percents, only on the papers tab', () => {
+    const tags = ['a,b', 'RQ1/RQ2 %x', 'plain']
+    const href = workspaceHref(id, 'papers', null, { tags, match: 'all' })
+    expect(href).toBe(`#/workspaces/${id}?tags=a%252Cb%2CRQ1%252FRQ2%2520%2525x%2Cplain&match=all`)
+    expect(parseRoute(href)).toEqual({ name: 'workspace', workspaceId: id, tab: 'papers', runId: null, ...tagged(tags, 'all') })
+  })
+
+  it('writes nothing when empty or off the papers tab, and defaults match to any', () => {
+    expect(workspaceHref(id, 'papers', null, tagged([], 'all'))).toBe(`#/workspaces/${id}`)
+    expect(workspaceHref(id, 'notes', null, tagged(['x']))).toBe(`#/workspaces/${id}?tab=notes`)
+    expect(parseRoute(`#/workspaces/${id}?tags=x&match=bogus`)).toMatchObject({ tags: ['x'], match: 'any' })
   })
 })
