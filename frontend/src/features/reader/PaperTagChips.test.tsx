@@ -22,6 +22,12 @@ test('tags are grouped per workspace and each chip links to that workspace filte
   expect(href('Show papers tagged rct in Beta')).toBe('#/workspaces/w2?tags=rct')
 })
 
+test('a tag name with a space and a comma is encoded in the link', () => {
+  groups([{ workspace_id: 'w1', workspace_name: 'Alpha', tags: ['a b,c'] }])
+  render(<PaperTagChips paperId="p1" />)
+  expect(screen.getByRole('link', { name: 'Show papers tagged a b,c in Alpha' }).getAttribute('href')).toBe('#/workspaces/w1?tags=a%2520b%252Cc')
+})
+
 test('a paper with no tags renders nothing', () => {
   groups([])
   const { container } = render(<PaperTagChips paperId="p1" />)

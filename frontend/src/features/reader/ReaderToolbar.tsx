@@ -6,7 +6,6 @@ import { delayedIn } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { ReadingControl } from '../reading/ReadingControl'
-import { PaperTagChips } from './PaperTagChips'
 import { PaperDetailsDialog } from './PaperDetailsDialog'
 import { SourceBadges } from './SourceBadges'
 import { ZOOM_STEPS } from './zoom'
@@ -19,9 +18,11 @@ type Props = {
   capturing: boolean
   onCaptureChange: (on: boolean) => void
   onOpenReferences: () => void
+  /** The paper's tag chips; the page supplies them so the toolbar stays free of data hooks. */
+  tags?: React.ReactNode
 }
 
-export function ReaderToolbar({ paper, zoomIndex, onZoomChange, capturing, onCaptureChange, onOpenReferences }: Props) {
+export function ReaderToolbar({ paper, zoomIndex, onZoomChange, capturing, onCaptureChange, onOpenReferences, tags }: Props) {
   const title = paper?.title
   return (
     <>
@@ -33,9 +34,10 @@ export function ReaderToolbar({ paper, zoomIndex, onZoomChange, capturing, onCap
         {title ?? 'Loading…'}
       </h1>
       {paper && (
-        <div className="hidden shrink-0 items-center gap-1 md:flex">
+        /* Capped and clipped so many tags or a long workspace name can't squeeze the title to nothing; the md:hidden row below shows them all. */
+        <div className="hidden max-w-[40%] min-w-0 items-center gap-1 overflow-hidden whitespace-nowrap md:flex">
           <SourceBadges paper={paper} />
-          <PaperTagChips paperId={paper.id} />
+          {tags}
         </div>
       )}
       {paper && <ReadingControl paper={paper} onOpenReferences={onOpenReferences} />}
@@ -76,7 +78,7 @@ export function ReaderToolbar({ paper, zoomIndex, onZoomChange, capturing, onCap
     {paper && (
       <div className={cn('flex flex-wrap items-center gap-1 border-b border-glass-border px-3 py-1.5 md:hidden', glass)}>
         <SourceBadges paper={paper} />
-        <PaperTagChips paperId={paper.id} />
+        {tags}
       </div>
     )}
     </>
