@@ -5,11 +5,11 @@ import * as queries from '@/api/queries'
 import { TagActionsMenu } from './TagActionsMenu'
 import { tagSummary } from './tagFixtures'
 
-function setup(opts: { renameError?: Error | null } = {}) {
+function setup(opts: { renameError?: Error | null; pending?: boolean } = {}) {
   const rename = vi.fn((_v: unknown, o?: { onSuccess?: (r: { old: string; new: string }) => void }) => o?.onSuccess?.({ old: 'rct', new: 'trial' }))
   const del = vi.fn((_v: unknown, o?: { onSuccess?: () => void }) => o?.onSuccess?.())
-  vi.spyOn(queries, 'useRenameTag').mockReturnValue({ mutate: rename, error: opts.renameError ?? null, reset: vi.fn() } as any)
-  vi.spyOn(queries, 'useDeleteTag').mockReturnValue({ mutate: del, error: null, reset: vi.fn() } as any)
+  vi.spyOn(queries, 'useRenameTag').mockReturnValue({ mutate: rename, error: opts.renameError ?? null, isPending: opts.pending ?? false, reset: vi.fn() } as any)
+  vi.spyOn(queries, 'useDeleteTag').mockReturnValue({ mutate: del, error: null, isPending: opts.pending ?? false, reset: vi.fn() } as any)
   const onRenamed = vi.fn()
   const onDeleted = vi.fn()
   render(<TagActionsMenu workspaceId="w1" tag={tagSummary('rct', 3)} onRenamed={onRenamed} onDeleted={onDeleted} />)
@@ -65,4 +65,22 @@ test('closing the rename dialog with Escape puts focus back on the tag\'s action
   fireEvent.keyDown(await screen.findByRole('textbox'), { key: 'Escape' })
   await waitFor(() => expect(screen.queryByText('Rename tag')).toBeNull())
   await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Actions for tag rct' })))
+})
+
+test('closing the delete dialog with Escape puts focus back on the tag\'s actions button', async () => {
+  setup()
+  await open('Delete')
+  fireEvent.keyDown(await screen.findByRole('dialog'), { key: 'Escape' })
+  await waitFor(() => expect(screen.queryByText(/Delete tag/)).toBeNull())
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Actions for tag rct' })))
+})
+
+test('Delete and Save are disabled while the change is in flight', async () => {
+  setup({ pending: true })
+  await open('Delete')
+  expect((await screen.findByRole('button', { name: 'Delete' }) as HTMLButtonElement).disabled).toBe(true)
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+  await waitFor(() => expect(screen.queryByText(/Delete tag/)).toBeNull())
+  await open('Rename')
+  expect((await screen.findByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(true)
 })

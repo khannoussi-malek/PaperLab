@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useApplyTag, usePaperTags, useRemoveTag, useTags } from '@/api/queries'
 import { Button } from '@/components/ui/button'
-import { Command, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { tagErrorText } from './tagErrors'
 
@@ -37,7 +37,7 @@ export function TagPicker({ workspaceId, mode, paperIds, onDone }: Props) {
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={(next) => { setOpen(next); if (!next) action.reset() }}>
       <PopoverTrigger asChild>
         <Button variant="outline" size="sm">{mode === 'add' ? 'Tag…' : 'Remove tag…'}</Button>
       </PopoverTrigger>
@@ -46,14 +46,15 @@ export function TagPicker({ workspaceId, mode, paperIds, onDone }: Props) {
         <Command shouldFilter={false} label="Tag name">
           <CommandInput placeholder={mode === 'add' ? 'Find or create a tag' : 'Find a tag'} value={text} onValueChange={setText} />
           <CommandList>
+            {mode === 'remove' && names.length === 0 && <CommandEmpty>The selected papers have no tags.</CommandEmpty>}
             <CommandGroup>
               {shown.map((name) => (
-                <CommandItem key={name} value={name} onSelect={() => choose(name)}>
+                <CommandItem key={name} value={name} disabled={action.isPending} onSelect={() => choose(name)}>
                   {name}
                 </CommandItem>
               ))}
               {canCreate && (
-                <CommandItem value={`create:${needle}`} onSelect={() => choose(text.trim())}>
+                <CommandItem value={`create:${needle}`} disabled={action.isPending} onSelect={() => choose(text.trim())}>
                   Create "{text.trim()}"
                 </CommandItem>
               )}

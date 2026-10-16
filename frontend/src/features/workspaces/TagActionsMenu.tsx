@@ -66,7 +66,7 @@ export function TagActionsMenu({ workspaceId, tag, onRenamed, onDeleted }: Props
             {rename.error && <p role="alert" className="text-sm text-destructive">{tagErrorText(rename.error.message)}</p>}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={close}>Cancel</Button>
-              <Button type="submit">Save</Button>
+              <Button type="submit" disabled={rename.isPending}>Save</Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -81,7 +81,7 @@ export function TagActionsMenu({ workspaceId, tag, onRenamed, onDeleted }: Props
           {del.error && <p role="alert" className="text-sm text-destructive">{tagErrorText(del.error.message)}</p>}
           <DialogFooter>
             <Button variant="outline" onClick={close}>Cancel</Button>
-            <Button variant="destructive" onClick={() => del.mutate(tag.id, { onSuccess: () => { close(); onDeleted(tag.name) } })}>Delete</Button>
+            <Button variant="destructive" disabled={del.isPending} onClick={() => del.mutate(tag.id, { onSuccess: () => { close(); onDeleted(tag.name) } })}>Delete</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

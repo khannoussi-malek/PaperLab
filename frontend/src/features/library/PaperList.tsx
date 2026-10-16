@@ -153,13 +153,15 @@ type Props = {
   emptyMessage?: string
   /** Workspace only: rows get a checkbox. */
   selection?: Selection
+  /** Called with the ids of the rows the list's own search and reading filter leave showing. */
+  onVisibleChange?: (ids: string[]) => void
 }
 
 /**
  * A search bar over paper rows, beside a preview of the hovered or focused one. The library and each workspace's Papers
  * tab use it.
  */
-export function PaperList({ papers, workspaceId, tagsByPaper, onTagClick, activeTags, emptyMessage, selection }: Props) {
+export function PaperList({ papers, workspaceId, tagsByPaper, onTagClick, activeTags, emptyMessage, selection, onVisibleChange }: Props) {
   const remove = useDeletePaper()
   const membership = useWorkspaceMembership()
   const reading = useSetReading()
@@ -171,6 +173,8 @@ export function PaperList({ papers, workspaceId, tagsByPaper, onTagClick, active
   const shown = papers.filter((paper) => matchesPaper(paper, query) && matchesReading(paper, filter))
   // The paper list as it was at the last keystroke. A row mounting while the list is still that one was brought back by
   // the search, and fades in; rows arriving from the server (first load, an upload) come with a new list, and stay still.
+  const shownKey = shown.map((paper) => paper.id).join(',')
+  useEffect(() => onVisibleChange?.(shownKey ? shownKey.split(',') : []), [shownKey]) // eslint-disable-line react-hooks/exhaustive-deps
   const [typedOver, setTypedOver] = useState<Paper[] | null>(null)
   const searchBringsBack = typedOver === papers
 

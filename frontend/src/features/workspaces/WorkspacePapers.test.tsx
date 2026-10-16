@@ -12,6 +12,7 @@ vi.mock('@/features/library/PaperPreview', () => ({ PaperPreview: () => null }))
 vi.mock('@/features/discovery/FindPapersButton', () => ({ FindPapersButton: () => null }))
 vi.stubGlobal('matchMedia', () => ({ matches: false }))
 vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
+Element.prototype.scrollIntoView = () => {}
 
 const paper = (id: string, title: string) => ({
   id, title, authors: [], year: null, venue: null, page_count: null, status: 'ready', status_error: null,
@@ -141,4 +142,21 @@ test('a filter change that hides a selected paper drops it from the selection', 
   expect(screen.getByText('2 selected')).toBeTruthy()
   rerender(view(['cohort']))
   expect(screen.getByText('1 selected')).toBeTruthy()
+})
+
+test('papers hidden by the list\'s own search are no longer selected, counted or tagged', () => {
+  const apply = vi.fn()
+  setup([])
+  vi.spyOn(queries, 'useApplyTag').mockReturnValue({ mutate: apply, error: null, reset: vi.fn() } as any)
+  cleanup()
+  const client = new QueryClient()
+  render(<QueryClientProvider client={client}><WorkspacePapers workspaceId="w1" tags={[]} match="any" onTagsChange={vi.fn()} /></QueryClientProvider>)
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Select Alpha trial' }))
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Select Beta cohort' }))
+  expect(screen.getByText('2 selected')).toBeTruthy()
+  fireEvent.change(screen.getByRole('searchbox', { name: 'Search papers' }), { target: { value: 'Alpha' } })
+  expect(screen.getByText('1 selected')).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: 'Tag…' }))
+  fireEvent.click(screen.getByRole('option', { name: /rct/ }))
+  expect(apply).toHaveBeenCalledWith({ tag: 'rct', paperIds: ['p1'] }, expect.anything())
 })
