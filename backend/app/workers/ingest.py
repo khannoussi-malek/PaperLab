@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 import uuid
 from contextlib import AsyncExitStack
 
@@ -30,6 +31,15 @@ INTERRUPTED = (
 
 def timed_out(seconds: float) -> str:
     return f"Ingesting took longer than {int(seconds // 60)} minutes; Re-ingest to try again"
+
+
+def _timings(pid: uuid.UUID, marks: list[tuple[str, float]], started: float, chunks: int, pages: int) -> str:
+    """One line with how long each stage ran, for the stages reached so far (a stage not reached shows 0.0s)."""
+    now = time.monotonic()
+    ends = [at for _, at in marks[1:]] + [now]
+    took = {name: end - at for (name, at), end in zip(marks, ends, strict=True)}
+    stages = " ".join(f"{n}={took.get(n, 0.0):.1f}s" for n in ("extracting", "chunking", "embedding", "enriching"))
+    return f"ingest timings for {pid}: {stages} total={now - started:.1f}s chunks={chunks} pages={pages}"
 
 
 async def _enrich(session, transport, paper_id: uuid.UUID, doc: ExtractedDoc) -> None:
@@ -105,6 +115,9 @@ async def ingest_paper(ctx: dict, paper_id: str) -> None:
         return
     async with SessionLocal() as session:
         paper = await papers.get_paper(session, pid)
+        started = time.monotonic()
+        marks: list[tuple[str, float]] = [("extracting", started)]  # each stage's start; a stage runs until the next
+        chunks = pages = 0
         try:
             async with asyncio.timeout(INGEST_JOB_TIMEOUT):
                 await papers.set_status(session, pid, PaperStatus.EXTRACTING)
@@ -115,17 +128,22 @@ async def ingest_paper(ctx: dict, paper_id: str) -> None:
                 # Enriched or corrected titles beat the font heuristic; don't overwrite them on re-runs.
                 keep = paper.openalex_id is not None or "title" in paper.manual_fields
                 title = {"title": doc.title} if doc.title and not keep else {}
+                marks.append(("chunking", time.monotonic()))
+                pages = doc.page_count
                 await papers.set_status(session, pid, PaperStatus.CHUNKING, page_count=doc.page_count, **title)
                 drafts = chunk_blocks(doc.blocks)
                 await papers.replace_chunks(session, pid, drafts)
+                chunks = len(drafts)
 
                 embedder = await search_embedder(ctx, session)
                 if embedder is None:
                     logger.info("no search model: %s is ready without vectors", pid)
                 else:
+                    marks.append(("embedding", time.monotonic()))
                     await papers.set_status(session, pid, PaperStatus.EMBEDDING)
                     await _embed(session, pid, embedder)
 
+                marks.append(("enriching", time.monotonic()))
                 await papers.set_status(session, pid, PaperStatus.ENRICHING)
                 await _enrich(session, ctx.get("transport"), pid, doc)
                 # Don't read paper's ORM attributes past this point: _enrich's rollback (on the failure path) expires
@@ -143,6 +161,8 @@ async def ingest_paper(ctx: dict, paper_id: str) -> None:
             logger.exception("ingest failed for %s", pid)
             await session.rollback()
             await papers.set_status(session, pid, PaperStatus.FAILED, error=f"{type(exc).__name__}: {exc}")
+        finally:  # the success, timeout and failure paths all say where the time went
+            logger.info(_timings(pid, marks, started, chunks, pages))
 
 
 async def reembed_paper(ctx: dict, paper_id: str, missing_only: bool = False) -> None:
