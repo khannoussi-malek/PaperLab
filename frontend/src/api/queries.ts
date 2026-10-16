@@ -65,6 +65,9 @@ export const keys = {
   // Every workspace query starts with this, so one invalidation refreshes the list, its counts and each home's tabs.
   workspaces: ['workspaces'] as const,
   workspacePapers: (id: string) => ['workspaces', id, 'papers'] as const,
+  tags: (ws: string) => ['workspaces', ws, 'tags'] as const,
+  paperTags: (ws: string) => ['workspaces', ws, 'paper-tags'] as const,
+  paperTagsOfPaper: (id: string) => ['papers', id, 'tags'] as const,
   workspaceNotes: (id: string) => ['workspaces', id, 'notes'] as const,
   searchRuns: (workspaceId: string) => ['workspaces', workspaceId, 'search', 'runs'] as const,
   evidenceCards: (workspaceId: string) => ['workspaces', workspaceId, 'evidence-cards'] as const,
@@ -363,7 +366,8 @@ export function useWorkspaceMutations() {
     create: useMutation({ mutationFn: api.createWorkspace, onSuccess }),
     rename: useMutation({
       mutationFn: ({ id, name }: { id: string; name: string }) => api.renameWorkspace(id, name),
-      onSuccess,
+      // The paper page's tag groups carry the workspace name.
+      onSuccess: () => Promise.all([onSuccess(), client.invalidateQueries({ predicate: (q) => q.queryKey[0] === 'papers' && q.queryKey[2] === 'tags' })]),
     }),
     remove: useMutation({
       mutationFn: api.deleteWorkspace,
@@ -1222,3 +1226,53 @@ export const useReadingQueue = (workspaceId: string, runId: string | null, enabl
     queryFn: () => api.readingQueue(workspaceId, runId as string),
     enabled: enabled && runId != null,
   })
+
+export const useTags = (ws: string) => useQuery({ queryKey: keys.tags(ws), queryFn: () => api.listTags(ws) })
+
+export const usePaperTags = (ws: string) => useQuery({ queryKey: keys.paperTags(ws), queryFn: () => api.paperTags(ws) })
+
+export const usePaperTagGroups = (paperId: string) =>
+  useQuery({ queryKey: keys.paperTagsOfPaper(paperId), queryFn: () => api.tagsOfPaper(paperId) })
+
+/** Every tag change can alter the sidebar counts, each paper's chips and the paper page's groups. */
+function invalidateTags(client: QueryClient, ws: string) {
+  return Promise.all([
+    client.invalidateQueries({ queryKey: keys.tags(ws) }),
+    client.invalidateQueries({ queryKey: keys.paperTags(ws) }),
+    client.invalidateQueries({ predicate: (q) => q.queryKey[0] === 'papers' && q.queryKey[2] === 'tags' }),
+  ])
+}
+
+type TagChange = { tag: string; paperIds: string[] }
+
+export function useApplyTag(ws: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ tag, paperIds }: TagChange) => api.applyTag(ws, tag, paperIds),
+    onSuccess: () => invalidateTags(client, ws),
+  })
+}
+
+export function useRemoveTag(ws: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ tag, paperIds }: TagChange) => api.removeTag(ws, tag, paperIds),
+    onSuccess: () => invalidateTags(client, ws),
+  })
+}
+
+export function useRenameTag(ws: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ tagId, newName }: { tagId: string; newName: string }) => api.renameTag(ws, tagId, newName),
+    onSuccess: () => invalidateTags(client, ws),
+  })
+}
+
+export function useDeleteTag(ws: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (tagId: string) => api.deleteTag(ws, tagId),
+    onSuccess: () => invalidateTags(client, ws),
+  })
+}

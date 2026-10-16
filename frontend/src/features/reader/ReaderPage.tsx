@@ -39,6 +39,7 @@ import { citationAt, clientPointToPdf, notesAt, rectContains } from './hitTest'
 import { PdfPage } from './PdfPage'
 import { SelectionCopyButton } from './SelectionCopyButton'
 import { ReaderContextMenu, type ContextMenuState } from './ReaderContextMenu'
+import { PaperTagChips } from './PaperTagChips'
 import { ReaderToolbar } from './ReaderToolbar'
 import { ReadingContextBanner } from './ReadingContextBanner'
 import { PublishedVersionBanner } from './PublishedVersionBanner'
@@ -415,6 +416,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
           capturing={capturing}
           onCaptureChange={captureDrag.setCapturing}
           onOpenReferences={() => showTab('references')}
+          tags={paper.data && <PaperTagChips paperId={paper.data.id} />}
         />
         {paper.data?.is_retracted && <RetractionBanner paper={paper.data} />}
         {paper.data?.published_doi && <PublishedVersionBanner paper={paper.data} />}

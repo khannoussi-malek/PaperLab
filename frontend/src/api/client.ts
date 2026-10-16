@@ -22,6 +22,11 @@ export type ChatErrorEvent = components['schemas']['ErrorEvent']
 export type PromoteRequest = components['schemas']['PromoteRequest']
 export type NoteSuggestion = components['schemas']['NoteSuggestionOut']
 export type NoteSuggestionsOut = components['schemas']['NoteSuggestionsOut']
+export type TagSummary = components['schemas']['TagOut']
+export type TagResult = components['schemas']['TagResultOut']
+export type TagRenamed = components['schemas']['TagRenamed']
+export type TagDeleted = components['schemas']['TagDeleted']
+export type PaperTagGroup = components['schemas']['PaperTagGroup']
 export type Workspace = components['schemas']['WorkspaceOut']
 export type ChartRef = components['schemas']['ChartRefOut']
 export type Dataset = components['schemas']['DatasetOut']
@@ -217,6 +222,17 @@ export const api = {
   renameWorkspace: (id: string, name: string) =>
     request<Workspace>(`/api/workspaces/${id}`, sendJson('PATCH', { name })),
   deleteWorkspace: (id: string) => request<void>(`/api/workspaces/${id}`, { method: 'DELETE' }),
+  listTags: (ws: string) => request<TagSummary[]>(`/api/workspaces/${ws}/tags`),
+  paperTags: (ws: string) => request<Record<string, string[]>>(`/api/workspaces/${ws}/paper-tags`),
+  tagsOfPaper: (paperId: string) => request<PaperTagGroup[]>(`/api/papers/${paperId}/tags`),
+  applyTag: (ws: string, tag: string, paperIds: string[]) =>
+    request<TagResult>(`/api/workspaces/${ws}/tags/apply`, sendJson('POST', { tag, paper_ids: paperIds })),
+  removeTag: (ws: string, tag: string, paperIds: string[]) =>
+    request<TagResult>(`/api/workspaces/${ws}/tags/remove`, sendJson('POST', { tag, paper_ids: paperIds })),
+  renameTag: (ws: string, tagId: string, newName: string) =>
+    request<TagRenamed>(`/api/workspaces/${ws}/tags/${tagId}`, sendJson('PATCH', { new_name: newName })),
+  deleteTag: (ws: string, tagId: string) =>
+    request<TagDeleted>(`/api/workspaces/${ws}/tags/${tagId}`, { method: 'DELETE' }),
   listWorkspacePapers: (id: string) => request<Paper[]>(`/api/workspaces/${id}/papers`),
   listWorkspaceNotes: (id: string) => request<Note[]>(`/api/workspaces/${id}/notes`),
   addToWorkspace: (workspaceId: string, paperId: string) =>
