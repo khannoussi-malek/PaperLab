@@ -14,8 +14,10 @@ import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field, replace
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
+from urllib.parse import urljoin
 
 import httpx
 from sqlalchemy import func, or_, select
@@ -104,7 +106,7 @@ def build_providers(sources: SourceSettings, transport: httpx.AsyncBaseTransport
         # No email: unlike the sources, a PDF host (arxiv.org, a publisher, a repository, or a redirect target) never
         # agreed to receive the owner's email.
         pdf=httpx.AsyncClient(
-            timeout=PDF_TIMEOUT, follow_redirects=True, headers={"User-Agent": "PaperLab"}, transport=transport
+            timeout=PDF_TIMEOUT, follow_redirects=True, headers={"User-Agent": PDF_USER_AGENT}, transport=transport
         ),
         clients=clients,
     )
@@ -308,40 +310,77 @@ async def _is_bot_check(response: httpx.Response) -> bool:
     return False
 
 
-async def _fetch_pdf(http: httpx.AsyncClient, url: str) -> tuple[bytes | None, str]:
-    """(the PDF or None, why): `pdf`, `http_<status>`, `bot_check`, `too_large` or `not_a_pdf`."""
+MAX_LANDING_BYTES = 2 * 1024 * 1024
+PDF_USER_AGENT = "PaperLab (+https://github.com/khannoussi-malek/PaperLab)"  # names the tool; never imitates a browser
+FOLLOWED = "not_a_pdf → followed citation_pdf_url"
+
+
+class _PdfMeta(HTMLParser):
+    """The first `<meta name="citation_pdf_url" content=…>`, its attributes in either order."""
+
+    def __init__(self):
+        super().__init__()
+        self.url: str | None = None
+
+    def handle_starttag(self, tag, attrs):
+        fields = dict(attrs)
+        if self.url is None and tag == "meta" and (fields.get("name") or "").lower() == "citation_pdf_url":
+            self.url = (fields.get("content") or "").strip() or None
+
+
+def _declared_pdf(page: str, base: str) -> str | None:
+    parser = _PdfMeta()
+    parser.feed(page)
+    return urljoin(base, parser.url) if parser.url else None
+
+
+async def _fetch_pdf(http: httpx.AsyncClient, url: str) -> tuple[bytes | None, str, str | None]:
+    """(the PDF or None, why, the page's declared PDF URL or None): why is `pdf`, `http_<status>`, `bot_check`,
+    `too_large` or `not_a_pdf`. Only a not_a_pdf page under MAX_LANDING_BYTES can declare a PDF."""
     async with http.stream("GET", url) as response:
         if response.status_code != 200:
             outcome = "bot_check" if await _is_bot_check(response) else f"http_{response.status_code}"
             logger.info("no PDF at %s: %s", redact(url), outcome)
-            return None, outcome
+            return None, outcome, None
+        final_url = str(response.url)
         body = bytearray()
         async for chunk in response.aiter_bytes():
             body += chunk
             if len(body) > MAX_PDF_BYTES:
                 logger.info("no PDF at %s: over %d bytes", redact(url), MAX_PDF_BYTES)
-                return None, "too_large"
+                return None, "too_large", None
     if not body.startswith(papers.PDF_MAGIC):
         logger.info("no PDF at %s: the body is not a PDF", redact(url))
-        return None, "not_a_pdf"
-    return bytes(body), "pdf"
+        declared = None
+        if len(body) < MAX_LANDING_BYTES:
+            declared = _declared_pdf(body.decode("utf-8", errors="replace"), final_url)
+        return None, "not_a_pdf", declared
+    return bytes(body), "pdf", None
+
+
+async def _try(http: httpx.AsyncClient, url: str) -> tuple[bytes | None, str, str | None]:
+    try:
+        return await _fetch_pdf(http, url)
+    except InvalidInput as exc:
+        if str(exc) != "unsafe_url":
+            raise
+        return None, "unsafe_url", None
+    except httpx.HTTPError as exc:
+        logger.info("no PDF at %s: %s", redact(url), redact(str(exc)))
+        return None, f"error: {type(exc).__name__}", None
 
 
 async def download_pdf(http: httpx.AsyncClient, urls: list[str]) -> tuple[bytes | None, list[dict[str, str]]]:
-    """(the first body that is a PDF, what each URL tried said), in order. A failing URL moves on to the next. The
-    URLs in `tried` have their key= query secrets hidden."""
+    """(the first body that is a PDF, what each URL tried said), in order. A failing URL moves on to the next; a page
+    that declares its PDF (citation_pdf_url) gets that one URL tried too, and a followed page is not followed again.
+    The URLs in `tried` have their query secrets hidden."""
     tried: list[dict[str, str]] = []
     for url in urls:
-        try:
-            data, outcome = await _fetch_pdf(http, url)
-        except InvalidInput as exc:
-            if str(exc) != "unsafe_url":
-                raise
-            data, outcome = None, "unsafe_url"
-        except httpx.HTTPError as exc:
-            logger.info("no PDF at %s: %s", redact(url), redact(str(exc)))
-            data, outcome = None, f"error: {type(exc).__name__}"
-        tried.append({"url": redact(url), "outcome": outcome})
+        data, outcome, declared = await _try(http, url)
+        tried.append({"url": redact(url), "outcome": FOLLOWED if declared else outcome})
+        if declared:
+            data, outcome, _ = await _try(http, declared)  # ponytail: one hop; the PDF's own page is not followed
+            tried.append({"url": redact(declared), "outcome": outcome})
         if data is not None:
             return data, tried
     return None, tried

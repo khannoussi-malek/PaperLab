@@ -1,9 +1,11 @@
+import httpx
 import pytest
 from sqlalchemy import select
 
-from app.core import discovery, enrichment
+from app.core import discovery, enrichment, pdf_links
 from app.core.discovery import Candidate
 from app.core.errors import Conflict
+from app.core.paper_sources import SourceSettings
 from app.models import Paper, PaperStatus
 from app.workers import ingest
 
@@ -195,3 +197,78 @@ async def test_no_free_pdf_carries_what_was_tried_and_the_repository_copies(sess
         "tried": [{"url": f"{HOST}/closed?key=***", "outcome": "bot_check"}],
         "free_copies": ["https://repo.example/handle/1?api_key=***", f"{HOST}/closed"],
     }
+
+
+# --- M63: a landing page's declared PDF is tried once ---
+
+PAGE = '<html><head><meta content="{url}" name="citation_pdf_url"></head></html>'
+
+
+async def test_a_landing_pages_declared_pdf_is_followed_once(discovery_fakes):
+    discovery_fakes.pdf_host.reply("/article", 200, text=PAGE.format(url="/article/pdf?k=SECRET&email=a@b.org"))
+    discovery_fakes.pdf_host.reply("/article/pdf", 200, content=PDF)
+
+    data, tried = await discovery.download_pdf(discovery_fakes.providers.pdf, [f"{HOST}/article"])
+
+    assert data == PDF
+    assert tried == [
+        {"url": f"{HOST}/article", "outcome": "not_a_pdf → followed citation_pdf_url"},
+        {"url": f"{HOST}/article/pdf?k=SECRET&email=***", "outcome": "pdf"},
+    ]
+
+
+async def test_the_followed_pdf_that_is_refused_is_recorded(discovery_fakes):
+    discovery_fakes.pdf_host.reply("/article", 200, text=PAGE.format(url=f"{HOST}/article/pdf"))
+    discovery_fakes.pdf_host.reply("/article/pdf", 503, text="unavailable")
+
+    data, tried = await discovery.download_pdf(discovery_fakes.providers.pdf, [f"{HOST}/article"])
+
+    assert data is None and [t["outcome"] for t in tried] == ["not_a_pdf → followed citation_pdf_url", "http_503"]
+
+
+async def test_a_page_without_the_tag_makes_no_second_request(discovery_fakes):
+    discovery_fakes.pdf_host.reply("/article", 200, text="<html><meta name='citation_title' content='x'></html>")
+
+    data, tried = await discovery.download_pdf(discovery_fakes.providers.pdf, [f"{HOST}/article"])
+
+    assert data is None and tried == [{"url": f"{HOST}/article", "outcome": "not_a_pdf"}]
+    assert len(discovery_fakes.pdf_host.requests) == 1
+
+
+async def test_a_followed_page_is_never_followed_again(discovery_fakes):
+    discovery_fakes.pdf_host.reply("/a", 200, text=PAGE.format(url="/b"))
+    discovery_fakes.pdf_host.reply("/b", 200, text=PAGE.format(url="/c"))
+
+    data, tried = await discovery.download_pdf(discovery_fakes.providers.pdf, [f"{HOST}/a"])
+
+    assert data is None and [t["outcome"] for t in tried] == ["not_a_pdf → followed citation_pdf_url", "not_a_pdf"]
+    assert [r.url.path for r in discovery_fakes.pdf_host.requests] == ["/a", "/b"]
+
+
+async def test_a_followed_url_the_guard_refuses_is_unsafe(discovery_fakes, monkeypatch):
+    async def resolve(host):
+        return ["10.0.0.5"] if host == "internal.example" else ["93.184.216.34"]
+
+    monkeypatch.setattr(pdf_links, "resolve_host", resolve)
+    http = discovery_fakes.providers.pdf
+    http.event_hooks["request"].append(pdf_links.guard)
+    discovery_fakes.pdf_host.reply("/article", 200, text=PAGE.format(url="http://internal.example/secret.pdf"))
+
+    data, tried = await discovery.download_pdf(http, [f"{HOST}/article"])
+
+    assert data is None and [t["outcome"] for t in tried] == ["not_a_pdf → followed citation_pdf_url", "unsafe_url"]
+    assert [r.url.path for r in discovery_fakes.pdf_host.requests] == ["/article"]
+
+
+async def test_the_pdf_client_names_the_tool_and_never_imitates_a_browser():
+    seen: list[str] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        seen.append(request.headers["user-agent"])
+        return httpx.Response(200, content=PDF)
+
+    providers = discovery.build_providers(SourceSettings(), httpx.MockTransport(handle))
+    await discovery.download_pdf(providers.pdf, [f"{HOST}/a.pdf"])
+    await providers.aclose()
+
+    assert seen == ["PaperLab (+https://github.com/khannoussi-malek/PaperLab)"]
