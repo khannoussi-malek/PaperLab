@@ -935,7 +935,7 @@ async def import_hits(
             )
             if enriched.pdf_urls:
                 ref.pdf_urls = enriched.pdf_urls
-        data = await download_pdf(providers.pdf, ref.pdf_urls) if ref and ref.pdf_urls else None
+        data = (await download_pdf(providers.pdf, ref.pdf_urls))[0] if ref and ref.pdf_urls else None
         if data is None:
             hit.acquisition_status = "failed"
             failed += 1

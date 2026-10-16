@@ -12,7 +12,7 @@ from pdf_papers import chunked_paper
 from app.core import discovery, papers, pdf_links, pipeline, workspaces
 from app.core.candidates import Candidate
 from app.models import Paper, PaperStatus
-from app.providers import discovery_fake
+from app.providers import discovery_fake, unpaywall
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("references")]
 RUN = uuid.uuid4().hex[:8]  # the owner's workspaces share the dev database (D37)
@@ -112,8 +112,33 @@ async def test_no_free_pdf_returns_the_landing_page_and_stores_nothing(session, 
         "paper_id": None,
         "title": added["title"],
         "landing_url": f"https://doi.org/{discovery_fake.DOI_PREFIX}{suffix}",
+        "tried": [{"url": url, "outcome": "not_a_pdf"} for url in page],
+        "free_copies": [],
     }
     assert jobs.jobs == []
+
+
+async def test_no_free_pdf_names_the_repository_copies_over_mcp(jobs, monkeypatch):
+    doi = f"{discovery_fake.DOI_PREFIX}landing"
+
+    async def search(_session, _providers, _query):
+        return discovery.SearchResult([Candidate(title="Closed", doi=doi, pdf_urls=[])], [])
+
+    async def repository_urls(_http, _doi):
+        return ["https://www.ncbi.nlm.nih.gov/pmc/articles/PMC1/"]
+
+    monkeypatch.setattr(discovery, "search", search)
+    monkeypatch.setattr(unpaywall, "repository_urls", repository_urls)
+    added = result(await call("add_paper", identifier=doi))
+
+    assert added["status"] == "no_free_pdf" and added["tried"] == []
+    assert added["free_copies"] == ["https://www.ncbi.nlm.nih.gov/pmc/articles/PMC1/"]
+
+
+async def test_a_link_that_is_no_pdf_says_what_it_answered(jobs):
+    link = f"{discovery_fake.PDF_HOST}/page.html?api_key=SECRET"
+    added = result(await call("add_paper", identifier=link))
+    assert added["tried"] == [{"url": f"{discovery_fake.PDF_HOST}/page.html?api_key=***", "outcome": "not_a_pdf"}]
 
 
 async def test_a_title_is_refused_with_a_hint():

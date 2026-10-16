@@ -10,7 +10,7 @@ import binascii
 import logging
 import math
 import uuid
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 from datetime import datetime
 from pathlib import PurePosixPath
 from typing import Literal
@@ -134,6 +134,9 @@ class AddPaperResult:
     paper_id: uuid.UUID | None = None
     landing_url: str | None = None
     title: str | None = None
+    # no_free_pdf only: what each PDF URL tried said ({"url", "outcome"}), and repository pages that may hold a copy.
+    tried: list[dict[str, str]] = field(default_factory=list)
+    free_copies: list[str] = field(default_factory=list)
 
 
 MAX_UPLOAD_PDF_BYTES = 30 * 1024 * 1024  # decoded, as the app's upload allows
@@ -240,7 +243,13 @@ async def _add_found(session, providers, kind, value, workspace_uuid) -> AddPape
     except Conflict as exc:
         if str(exc) != discovery.NO_FREE_PDF:
             raise
-        return AddPaperResult(status="no_free_pdf", landing_url=_landing_url(kind, value), title=match.title)
+        return AddPaperResult(
+            status="no_free_pdf",
+            landing_url=_landing_url(kind, value),
+            title=match.title,
+            tried=exc.details.get("tried", []),
+            free_copies=exc.details.get("free_copies", []),
+        )
     return await _queued(session, paper, workspace_uuid)
 
 
@@ -248,9 +257,11 @@ async def _add_link(session, providers, link, workspace_uuid) -> AddPaperResult:
     await pdf_links.check_url(link)
     if pdf_links.guard not in providers.pdf.event_hooks["request"]:
         providers.pdf.event_hooks["request"].append(pdf_links.guard)  # this call's own client, closed after it
-    data = await discovery.download_pdf(providers.pdf, [link])
+    data, tried = await discovery.download_pdf(providers.pdf, [link])
     if data is None:
-        return AddPaperResult(status="no_free_pdf", landing_url=link)
+        if tried[-1]["outcome"] == "unsafe_url":  # a redirect to a private address is refused, as the link itself is
+            raise InvalidInput("unsafe_url", url=link)
+        return AddPaperResult(status="no_free_pdf", landing_url=link, tried=tried)
     # Like an upload: extraction and enrichment find the metadata. A paper already in the library becomes a second
     # copy, exactly as uploading the same PDF twice does (enrichment drops a DOI another paper holds).
     name = PurePosixPath(urlsplit(link).path).name or "paper.pdf"

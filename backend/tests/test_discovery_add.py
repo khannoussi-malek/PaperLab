@@ -121,3 +121,77 @@ async def test_a_found_papers_title_survives_ingest_and_still_takes_a_hand_corre
 
     corrected = await enrichment.correct_metadata(worker_session, paper.id, {"title": "Hand-Corrected Title"})
     assert corrected.title == "Hand-Corrected Title"
+
+
+@pytest.mark.parametrize(
+    ("path", "reply", "outcome"),
+    [
+        ("/gone.pdf", dict(status=404, text="nope"), "http_404"),
+        ("/html", dict(status=200, text="<html>landing</html>"), "not_a_pdf"),
+        ("/huge.pdf", dict(status=200, content=PDF), "too_large"),
+        ("/cf-header", dict(status=403, headers={"cf-mitigated": "challenge"}), "bot_check"),
+        (
+            "/cf-page",
+            dict(status=503, headers={"server": "cloudflare"}, text="<title>Just a moment...</title>"),
+            "bot_check",
+        ),
+        ("/plain-403", dict(status=403, headers={"server": "cloudflare"}, text="forbidden"), "http_403"),
+        ("/down.pdf", None, "error: ConnectError"),
+    ],
+)
+async def test_download_pdf_says_why_each_url_failed(discovery_fakes, monkeypatch, path, reply, outcome):
+    monkeypatch.setattr(discovery, "MAX_PDF_BYTES", len(PDF) - 1)
+    if reply is None:
+        discovery_fakes.pdf_host.refuse(path)
+    else:
+        status = reply.pop("status")
+        discovery_fakes.pdf_host.reply(path, status, **reply)
+
+    data, tried = await discovery.download_pdf(discovery_fakes.providers.pdf, [f"{HOST}{path}"])
+
+    assert data is None and tried == [{"url": f"{HOST}{path}", "outcome": outcome}]
+
+
+async def test_download_pdf_lists_the_failures_before_the_pdf_and_hides_secrets(discovery_fakes):
+    discovery_fakes.pdf_host.reply("/closed", 403, text="no")
+    discovery_fakes.pdf_host.reply("/copy.pdf", 200, content=PDF)
+
+    data, tried = await discovery.download_pdf(
+        discovery_fakes.providers.pdf, [f"{HOST}/closed?api_key=SECRET1", f"{HOST}/copy.pdf?key=SECRET2&x=1"]
+    )
+
+    assert data == PDF
+    assert tried == [
+        {"url": f"{HOST}/closed?api_key=***", "outcome": "http_403"},
+        {"url": f"{HOST}/copy.pdf?key=***&x=1", "outcome": "pdf"},
+    ]
+
+
+async def test_no_free_pdf_carries_what_was_tried_and_the_repository_copies(session, discovery_fakes, pdf_dir):
+    doi = "10.5555/m63-repo"
+    discovery_fakes.pdf_host.reply("/closed", 403, headers={"cf-mitigated": "challenge"})
+    discovery_fakes.unpaywall.reply(
+        f"/v2/{doi}",
+        200,
+        json={
+            "best_oa_location": {"url": "https://pub.example/a", "host_type": "publisher"},
+            "oa_locations": [
+                {"url": "https://pub.example/a", "host_type": "publisher"},
+                {"url": "https://repo.example/handle/1?api_key=SECRET", "host_type": "repository"},
+                {"url": f"{HOST}/closed", "host_type": "repository"},
+            ],
+        },
+    )
+
+    with pytest.raises(Conflict) as caught:
+        await discovery.add(
+            session,
+            discovery_fakes.turned_on("unpaywall"),
+            candidate(doi=doi, pdf_urls=[f"{HOST}/closed?key=SECRET"]),
+            pdf_dir,
+        )
+
+    assert caught.value.details == {
+        "tried": [{"url": f"{HOST}/closed?key=***", "outcome": "bot_check"}],
+        "free_copies": ["https://repo.example/handle/1?api_key=***", f"{HOST}/closed"],
+    }
