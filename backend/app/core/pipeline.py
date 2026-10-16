@@ -5,6 +5,7 @@ every read and write is an existing service's. Results are the API's own schemas
 fields.
 """
 
+import asyncio
 import base64
 import binascii
 import logging
@@ -12,7 +13,7 @@ import math
 import uuid
 from dataclasses import dataclass, field, fields, replace
 from datetime import datetime
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from typing import Literal
 from urllib.parse import unquote, urlsplit
 
@@ -134,7 +135,8 @@ class AddPaperResult:
     paper_id: uuid.UUID | None = None
     landing_url: str | None = None
     title: str | None = None
-    # no_free_pdf only: what each PDF URL tried said ({"url", "outcome"}), and repository pages that may hold a copy.
+    # no_free_pdf, or a queued link that fell back to its DOI: what each PDF URL tried said ({"url", "outcome"}).
+    # no_free_pdf only: repository pages that may hold a copy.
     tried: list[dict[str, str]] = field(default_factory=list)
     free_copies: list[str] = field(default_factory=list)
 
@@ -177,6 +179,7 @@ async def upload_paper(
     existing = await session.scalar(select(Paper).where(func.lower(Paper.doi) == clean_doi)) if clean_doi else None
     if existing and existing.status == PaperStatus.FAILED:  # a retry, as _add_found does
         paper, status = existing, "queued"
+        await asyncio.to_thread(Path(paper.file_path).write_bytes, data)  # the upload replaces the broken file
         await papers.set_status(session, paper.id, PaperStatus.UPLOADED)
     elif existing:
         paper, status = existing, "already_in_library"
@@ -272,6 +275,8 @@ async def _link_by_doi(session, providers, link, tried, workspace_uuid) -> AddPa
             found = await _add_found(session, providers, "doi", doi, workspace_uuid, downloaded)
         except NotFound:
             continue
+        except Conflict:  # every source busy or off: the link's own answer stands
+            break
         return replace(found, tried=[*tried, *(found.tried or downloaded)])
     return AddPaperResult(status="no_free_pdf", landing_url=link, tried=tried)
 
@@ -282,7 +287,7 @@ async def _add_link(session, providers, link, workspace_uuid) -> AddPaperResult:
         providers.pdf.event_hooks["request"].append(pdf_links.guard)  # this call's own client, closed after it
     data, tried = await discovery.download_pdf(providers.pdf, [link])
     if data is None:
-        if tried[-1]["outcome"] == "unsafe_url":  # a redirect to a private address is refused, as the link itself is
+        if tried[0]["outcome"] == "unsafe_url":  # a redirect to a private address is refused, as the link itself is
             raise InvalidInput("unsafe_url", url=link)
         return await _link_by_doi(session, providers, link, tried, workspace_uuid)
     # Like an upload: extraction and enrichment find the metadata. A paper already in the library becomes a second

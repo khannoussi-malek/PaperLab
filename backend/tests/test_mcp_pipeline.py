@@ -11,6 +11,7 @@ from pdf_papers import chunked_paper
 
 from app.core import discovery, papers, pdf_links, pipeline, workspaces
 from app.core.candidates import Candidate
+from app.core.errors import Conflict
 from app.models import Paper, PaperStatus
 from app.providers import discovery_fake, unpaywall
 
@@ -384,3 +385,38 @@ async def test_a_failed_link_without_a_doi_does_not_search(jobs, monkeypatch):
     monkeypatch.setattr(discovery, "search", search)
     added = result(await call("add_paper", identifier="https://pdfs.example.org/a.pdf"))
     assert added["status"] == "no_free_pdf" and added["tried"][0]["outcome"] == "bot_check"
+
+
+async def test_a_link_fallback_that_finds_every_source_busy_keeps_its_own_no_free_pdf(jobs, monkeypatch):
+    serve(monkeypatch, blocked_publisher)
+
+    async def search(*_):
+        raise Conflict("search_unavailable")
+
+    monkeypatch.setattr(discovery, "search", search)
+    added = result(await call("add_paper", identifier=TACL_LINK))
+
+    assert added["status"] == "no_free_pdf" and added["landing_url"] == TACL_LINK
+    assert added["tried"] == [{"url": TACL_LINK, "outcome": "bot_check"}]
+
+
+async def test_a_safe_link_whose_page_declares_a_private_pdf_falls_back_to_the_doi(jobs, monkeypatch):
+    page = '<html><meta name="citation_pdf_url" content="http://10.0.0.5/secret.pdf"></html>'
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "arxiv.org":
+            return httpx.Response(200, content=b"%PDF-1.7\n%arxiv copy\n")
+        assert request.url.host != "10.0.0.5"
+        return httpx.Response(200, text=page)
+
+    serve(monkeypatch, handle)
+    paper = Candidate(title="TACL paper", doi=TACL_DOI, pdf_urls=[ARXIV_PDF])
+
+    async def search(_session, _providers, query):
+        return discovery.SearchResult([paper] if query == TACL_DOI else [], [])
+
+    monkeypatch.setattr(discovery, "search", search)
+    added = result(await call("add_paper", identifier=TACL_LINK))
+
+    assert added["status"] == "queued" and jobs.jobs == [("ingest_paper", added["paper_id"])]
+    assert [t["outcome"] for t in added["tried"]][:3] == ["not_a_pdf → followed citation_pdf_url", "unsafe_url", "pdf"]

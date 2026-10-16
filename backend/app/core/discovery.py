@@ -24,7 +24,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.core import paper_sources, papers, source_registry
+from app.core import paper_sources, papers, pdf_links, source_registry
 from app.core.candidates import (
     ARXIV_ID,
     Candidate,
@@ -223,9 +223,12 @@ async def _add_s2_links(http: httpx.AsyncClient, candidates: list[Candidate]) ->
     return [with_s2(c, by_doi.get(c.doi)) for c in candidates]
 
 
-async def _add_unpaywall_links(http: httpx.AsyncClient | None, candidates: list[Candidate]) -> list[Candidate]:
-    """Unpaywall's free PDF links merged into every candidate with a DOI, one request each (M63: OpenAlex alone
-    often lists only a bot-checked publisher). Never fatal: a failed lookup leaves its candidate as it is."""
+async def _add_unpaywall_links(
+    http: httpx.AsyncClient | None, candidates: list[Candidate], merge: bool = False
+) -> list[Candidate]:
+    """Unpaywall's free PDF links for candidates with a DOI and no PDF link (D72), one request each. `merge` also asks
+    for those that have one and merges the answer in (M63: OpenAlex alone often lists only a bot-checked publisher);
+    add() uses it for the one candidate being added. Never fatal: a failed lookup leaves its candidate as it is."""
     if http is None:
         return candidates
     limit = asyncio.Semaphore(UNPAYWALL_CONCURRENCY)
@@ -233,7 +236,7 @@ async def _add_unpaywall_links(http: httpx.AsyncClient | None, candidates: list[
 
     async def with_links(candidate: Candidate) -> Candidate:
         nonlocal unreachable
-        if not candidate.doi or unreachable:
+        if not candidate.doi or unreachable or (candidate.pdf_urls and not merge):
             return candidate
         try:
             async with limit:
@@ -358,8 +361,10 @@ async def _fetch_pdf(http: httpx.AsyncClient, url: str) -> tuple[bytes | None, s
     return bytes(body), "pdf", None
 
 
-async def _try(http: httpx.AsyncClient, url: str) -> tuple[bytes | None, str, str | None]:
+async def _try(http: httpx.AsyncClient, url: str, check: bool = False) -> tuple[bytes | None, str, str | None]:
     try:
+        if check:  # a URL a publisher page declared is not the caller's own link: never fetch a private address
+            await pdf_links.check_url(url)
         return await _fetch_pdf(http, url)
     except InvalidInput as exc:
         if str(exc) != "unsafe_url":
@@ -379,7 +384,8 @@ async def download_pdf(http: httpx.AsyncClient, urls: list[str]) -> tuple[bytes 
         data, outcome, declared = await _try(http, url)
         tried.append({"url": redact(url), "outcome": FOLLOWED if declared else outcome})
         if declared:
-            data, outcome, _ = await _try(http, declared)  # ponytail: one hop; the PDF's own page is not followed
+            # ponytail: one hop; the PDF's own page is not followed
+            data, outcome, _ = await _try(http, declared, check=True)
             tried.append({"url": redact(declared), "outcome": outcome})
         if data is not None:
             return data, tried
@@ -436,6 +442,8 @@ async def add(
         raise Conflict(ALREADY_IN_LIBRARY)
     # Release the connection (and its transaction) before a download that can take up to several 30s reads.
     await session.commit()
+    if candidate.doi and candidate.pdf_urls:  # one extra request: a repository copy beside a bot-checked publisher
+        [candidate] = await _add_unpaywall_links(providers.client("unpaywall"), [candidate], merge=True)
     data, tried = await download_pdf(providers.pdf, candidate.pdf_urls)
     if tried_out is not None:
         tried_out.extend(tried)

@@ -15,6 +15,14 @@ PDF = b"%PDF-1.7\n%a found paper\n"
 HOST = "https://pdf.example"
 
 
+@pytest.fixture(autouse=True)
+def public_dns(monkeypatch):
+    async def resolve(host):
+        return ["93.184.216.34"]
+
+    monkeypatch.setattr(pdf_links, "resolve_host", resolve)
+
+
 def candidate(**fields) -> Candidate:
     return Candidate(**{"title": "Found: A Paper / Part 2", "authors": ["Ada Lovelace"], "year": 2024, **fields})
 
@@ -199,6 +207,23 @@ async def test_no_free_pdf_carries_what_was_tried_and_the_repository_copies(sess
     }
 
 
+async def test_add_asks_unpaywall_once_and_tries_a_bot_checked_publisher_after_the_repository_copy(
+    session, discovery_fakes, pdf_dir
+):
+    publisher = "https://dl.acm.org/doi/pdf/10.5555/acm"
+    discovery_fakes.unpaywall.reply("/v2/10.5555/m63-acm", 200, json={
+        "best_oa_location": {"url_for_pdf": publisher}, "oa_locations": [{"url_for_pdf": f"{HOST}/repo.pdf"}]
+    })  # fmt: skip
+    discovery_fakes.pdf_host.reply("/repo.pdf", 200, content=PDF)
+
+    await discovery.add(
+        session, discovery_fakes.turned_on("unpaywall"), candidate(doi="10.5555/m63-acm", pdf_urls=[publisher]), pdf_dir
+    )
+
+    assert [r.url.path for r in discovery_fakes.unpaywall.requests] == ["/v2/10.5555/m63-acm"]
+    assert [r.url.path for r in discovery_fakes.pdf_host.requests] == ["/repo.pdf"]
+
+
 # --- M63: a landing page's declared PDF is tried once ---
 
 PAGE = '<html><head><meta content="{url}" name="citation_pdf_url"></head></html>'
@@ -255,6 +280,20 @@ async def test_a_followed_url_the_guard_refuses_is_unsafe(discovery_fakes, monke
     discovery_fakes.pdf_host.reply("/article", 200, text=PAGE.format(url="http://internal.example/secret.pdf"))
 
     data, tried = await discovery.download_pdf(http, [f"{HOST}/article"])
+
+    assert data is None and [t["outcome"] for t in tried] == ["not_a_pdf → followed citation_pdf_url", "unsafe_url"]
+    assert [r.url.path for r in discovery_fakes.pdf_host.requests] == ["/article"]
+
+
+async def test_a_declared_private_pdf_is_unsafe_on_a_client_without_the_guard(discovery_fakes, monkeypatch):
+    async def resolve(host):
+        return ["127.0.0.1"] if host == "localhost" else ["93.184.216.34"]
+
+    monkeypatch.setattr(pdf_links, "resolve_host", resolve)
+    discovery_fakes.pdf_host.reply("/article", 200, text=PAGE.format(url="http://127.0.0.1/x.pdf"))
+    discovery_fakes.pdf_host.reply("/x.pdf", 200, content=PDF)
+
+    data, tried = await discovery.download_pdf(discovery_fakes.providers.pdf, [f"{HOST}/article"])
 
     assert data is None and [t["outcome"] for t in tried] == ["not_a_pdf → followed citation_pdf_url", "unsafe_url"]
     assert [r.url.path for r in discovery_fakes.pdf_host.requests] == ["/article"]
