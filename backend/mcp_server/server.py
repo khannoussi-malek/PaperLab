@@ -255,9 +255,10 @@ async def upload_paper(
 @recoverable
 async def add_papers(identifiers: list[str], workspace: str | None = None) -> list[pipeline.AddPapersItem]:
     """Use to bring up to 50 papers into the library at once by DOI, arXiv ID or direct PDF link (free copies only).
-    Each item reports its own `status` (as add_paper) or `error` (the code add_paper would return), so one bad
-    identifier does not stop the rest. Repeated identifiers are added once. Give `workspace` to file them there too;
-    an unknown workspace fails the whole call. Use add_paper for a single identifier."""
+    Each item reports its own `status` (as add_paper, with `tried` and `free_copies` when no free PDF was found)
+    or `error` (the code add_paper would return), so one bad identifier does not stop the rest. Repeated
+    identifiers are added once. Give `workspace` to file them there too; an unknown workspace fails
+    the whole call. Use add_paper for a single identifier."""
     async with sessions() as session:
         return await pipeline.add_papers(session, identifiers, workspace)
 
