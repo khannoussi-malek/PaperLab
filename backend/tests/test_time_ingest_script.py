@@ -70,3 +70,10 @@ def test_the_live_api_port_is_refused_without_the_flag():
         time_ingest.check_not_live("http://localhost:8000", allowed=False)
     time_ingest.check_not_live("http://localhost:8000", allowed=True)
     time_ingest.check_not_live("http://localhost:8100", allowed=False)
+
+
+def test_an_api_without_a_scheme_is_still_checked():
+    assert time_ingest.normalise_api("localhost:8100") == "http://localhost:8100"
+    assert time_ingest.normalise_api("https://stack:1") == "https://stack:1"
+    with pytest.raises(SystemExit):
+        time_ingest.check_not_live(time_ingest.normalise_api("localhost:8000"), allowed=False)
