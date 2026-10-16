@@ -34,6 +34,7 @@ class TagResult:
 
 @dataclass(frozen=True)
 class TagSummary:
+    id: uuid.UUID
     name: str
     papers: int
     peer_reviewed: int
@@ -183,6 +184,7 @@ async def summaries(session: AsyncSession, ws: uuid.UUID) -> list[TagSummary]:
 
     query = (
         select(
+            WorkspaceTag.id,
             WorkspaceTag.name,
             func.count(Paper.id),
             count(peer),
@@ -258,11 +260,6 @@ async def tag_hits(session: AsyncSession, ws: uuid.UUID, names: list[str], hit_i
     await session.execute(insert(hit_tags).from_select(["hit_id", "tag_id"], mine).on_conflict_do_nothing())
     await _copy_to_papers(session, ws, hit_ids)
     await session.commit()
-
-
-async def tag_ids(session: AsyncSession, ws: uuid.UUID) -> dict[str, uuid.UUID]:
-    """Tag name -> id for the workspace."""
-    return {t.name: t.id for t in await _all(session, ws)}
 
 
 async def _name_of(session: AsyncSession, ws: uuid.UUID, tag_id: uuid.UUID) -> str:

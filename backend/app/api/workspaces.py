@@ -90,8 +90,7 @@ async def export_notes(workspace_id: uuid.UUID, request: Request, session: Sessi
 @router.get("/{workspace_id}/tags")
 async def list_tags(workspace_id: uuid.UUID, session: SessionDep) -> list[TagOut]:
     await workspaces.get(session, workspace_id)
-    ids = await tags.tag_ids(session, workspace_id)
-    return [TagOut(id=ids[s.name], **asdict(s)) for s in await tags.summaries(session, workspace_id)]
+    return [TagOut(**asdict(s)) for s in await tags.summaries(session, workspace_id)]
 
 
 @router.get("/{workspace_id}/paper-tags")

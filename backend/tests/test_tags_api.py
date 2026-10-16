@@ -128,3 +128,14 @@ async def test_not_found_and_invalid(client, session):
     bad = await _apply(client, ws, "   ", [a])
     assert bad.status_code == 422
     assert bad.json()["detail"] == "invalid_tag_name"
+
+
+async def test_apply_skips_a_paper_outside_the_workspace(client, session):
+    w1, w2 = await _ws(session, "Tags API h1"), await _ws(session, "Tags API h2")
+    mine, foreign = await _paper(session, w1, "Mine"), await _paper(session, w2, "Foreign")
+
+    body = (await _apply(client, w1, "t", [mine, foreign])).json()
+
+    assert body["changed"] == 1
+    assert body["skipped"] == [str(foreign.id)]
+    assert (await client.get(f"/api/workspaces/{w1}/paper-tags")).json() == {str(mine.id): ["t"]}

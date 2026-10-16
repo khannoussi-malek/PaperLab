@@ -24,6 +24,8 @@ export type NoteSuggestion = components['schemas']['NoteSuggestionOut']
 export type NoteSuggestionsOut = components['schemas']['NoteSuggestionsOut']
 export type TagSummary = components['schemas']['TagOut']
 export type TagResult = components['schemas']['TagResultOut']
+export type TagRenamed = components['schemas']['TagRenamed']
+export type TagDeleted = components['schemas']['TagDeleted']
 export type PaperTagGroup = components['schemas']['PaperTagGroup']
 export type Workspace = components['schemas']['WorkspaceOut']
 export type ChartRef = components['schemas']['ChartRefOut']
@@ -228,9 +230,9 @@ export const api = {
   removeTag: (ws: string, tag: string, paperIds: string[]) =>
     request<TagResult>(`/api/workspaces/${ws}/tags/remove`, sendJson('POST', { tag, paper_ids: paperIds })),
   renameTag: (ws: string, tagId: string, newName: string) =>
-    request<{ old: string; new: string }>(`/api/workspaces/${ws}/tags/${tagId}`, sendJson('PATCH', { new_name: newName })),
+    request<TagRenamed>(`/api/workspaces/${ws}/tags/${tagId}`, sendJson('PATCH', { new_name: newName })),
   deleteTag: (ws: string, tagId: string) =>
-    request<{ tag: string; papers: number }>(`/api/workspaces/${ws}/tags/${tagId}`, { method: 'DELETE' }),
+    request<TagDeleted>(`/api/workspaces/${ws}/tags/${tagId}`, { method: 'DELETE' }),
   listWorkspacePapers: (id: string) => request<Paper[]>(`/api/workspaces/${id}/papers`),
   listWorkspaceNotes: (id: string) => request<Note[]>(`/api/workspaces/${id}/notes`),
   addToWorkspace: (workspaceId: string, paperId: string) =>
