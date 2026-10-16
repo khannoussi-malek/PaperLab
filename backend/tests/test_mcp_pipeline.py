@@ -96,6 +96,9 @@ async def test_add_paper_already_in_library_returns_it_without_a_new_job(session
     assert len(jobs.jobs) == 1
 
 
+NO_ARXIV_MATCH = {"url": "arxiv.org (title search)", "outcome": "no_match"}  # the offline arXiv knows no such title
+
+
 @pytest.mark.parametrize("suffix", ["landing", "closed"])
 async def test_no_free_pdf_returns_the_landing_page_and_stores_nothing(session, jobs, monkeypatch, suffix):
     # The offline fake answers every DOI lookup with the free fixture, so serve the landing/closed one directly.
@@ -113,7 +116,7 @@ async def test_no_free_pdf_returns_the_landing_page_and_stores_nothing(session, 
         "paper_id": None,
         "title": added["title"],
         "landing_url": f"https://doi.org/{discovery_fake.DOI_PREFIX}{suffix}",
-        "tried": [{"url": url, "outcome": "not_a_pdf"} for url in page],
+        "tried": [{"url": url, "outcome": "not_a_pdf"} for url in page] + [NO_ARXIV_MATCH],
         "free_copies": [],
     }
     assert jobs.jobs == []
@@ -132,7 +135,7 @@ async def test_no_free_pdf_names_the_repository_copies_over_mcp(jobs, monkeypatc
     monkeypatch.setattr(unpaywall, "repository_urls", repository_urls)
     added = result(await call("add_paper", identifier=doi))
 
-    assert added["status"] == "no_free_pdf" and added["tried"] == []
+    assert added["status"] == "no_free_pdf" and added["tried"] == [NO_ARXIV_MATCH]
     assert added["free_copies"] == ["https://www.ncbi.nlm.nih.gov/pmc/articles/PMC1/"]
 
 

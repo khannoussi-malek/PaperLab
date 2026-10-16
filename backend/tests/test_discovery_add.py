@@ -330,3 +330,117 @@ async def test_a_declared_pdf_that_redirects_to_a_private_address_is_never_reque
 
     assert data is None and tried[-1]["outcome"] == "unsafe_url"
     assert not any("127.0.0.1" in url for url in seen)
+
+
+# --- M63b: a paper no source links to arXiv is looked up there by its exact title ---
+
+REAL_TITLE = "REAL Sampling: Boosting Factuality and Diversity of Open-Ended Generation via Asymptotic Entropy"
+REAL_AUTHORS = ["Haw-Shiuan Chang", "Nanyun Peng", "Mohit Bansal", "Anil Ramakrishna", "Tagyoung Chung"]
+ENTRY = """<entry><id>http://arxiv.org/abs/{id}v2</id><published>{year}-06-11T00:00:00Z</published>
+<title>{title}</title>{authors}</entry>"""
+
+
+def atom(*entries: str) -> str:
+    return '<feed xmlns="http://www.w3.org/2005/Atom" xmlns:arxiv="http://arxiv.org/schemas/atom">' + "".join(
+        entries
+    ) + "</feed>"  # fmt: skip
+
+
+def arxiv_entry(title=REAL_TITLE, authors=REAL_AUTHORS, id="2406.07735", year=2024) -> str:
+    names = "".join(f"<author><name>{name}</name></author>" for name in authors)
+    return ENTRY.format(id=id, year=year, title=title, authors=names)
+
+
+def tacl_like(**fields) -> Candidate:
+    base = {"title": REAL_TITLE, "authors": ["Chang, Haw-Shiuan", "Peng, Nanyun"], "year": 2025}
+    return candidate(**base | {"doi": "10.1162/tacl_a_00757", "pdf_urls": [f"{HOST}/closed"]} | fields)
+
+
+def arxiv_world(fakes, *entries):
+    fakes.pdf_host.reply("/closed", 403, headers={"cf-mitigated": "challenge"})
+    fakes.arxiv.reply("/api/query", 200, text=atom(*entries))
+    return fakes.turned_on("arxiv")
+
+
+async def test_tacl_like_paper_found_on_arxiv_by_exact_title(session, discovery_fakes, pdf_dir):
+    providers = arxiv_world(discovery_fakes, arxiv_entry(title="Another Paper", id="2401.00001"), arxiv_entry())
+    discovery_fakes.pdf_host.reply("/pdf/2406.07735", 200, content=PDF)
+    tried = []
+
+    paper = await discovery.add(session, providers, tacl_like(), pdf_dir, tried)
+
+    assert (pdf_dir / f"{paper.id}.pdf").read_bytes() == PDF
+    assert len(discovery_fakes.arxiv.requests) == 1
+    assert discovery_fakes.arxiv.requests[0].url.params["max_results"] == "5"
+    assert [t["outcome"] for t in tried] == ["bot_check", "arxiv_title_match", "pdf"]
+    assert "2406.07735" in tried[1]["url"]
+
+
+async def test_a_near_miss_title_is_not_accepted(session, discovery_fakes, pdf_dir):
+    near = arxiv_entry(title="REAL Sampling: Boosting Factuality and Diversity of Open-Ended Generation")
+    providers = arxiv_world(discovery_fakes, near)
+
+    with pytest.raises(Conflict) as caught:
+        await discovery.add(session, providers, tacl_like(), pdf_dir)
+
+    assert [r.url.path for r in discovery_fakes.pdf_host.requests] == ["/closed"]
+    assert caught.value.details["tried"][-1]["outcome"] == "no_match"
+
+
+async def test_an_author_mismatch_is_not_accepted(session, discovery_fakes, pdf_dir):
+    providers = arxiv_world(discovery_fakes, arxiv_entry(authors=["Someone Else"]))
+
+    with pytest.raises(Conflict) as caught:
+        await discovery.add(session, providers, tacl_like(), pdf_dir)
+
+    assert caught.value.details["tried"][-1]["outcome"] == "no_match"
+    assert [r.url.path for r in discovery_fakes.pdf_host.requests] == ["/closed"]
+
+
+async def test_no_authors_on_either_side_needs_the_year_within_one(session, discovery_fakes, pdf_dir):
+    providers = arxiv_world(discovery_fakes, arxiv_entry(authors=[], year=2020))
+    with pytest.raises(Conflict) as caught:
+        await discovery.add(session, providers, tacl_like(authors=[]), pdf_dir)
+    assert caught.value.details["tried"][-1]["outcome"] == "no_match"
+
+    discovery_fakes.arxiv.reply("/api/query", 200, text=atom(arxiv_entry(authors=[], year=2024)))
+    discovery_fakes.pdf_host.reply("/pdf/2406.07735", 200, content=PDF)
+    await discovery.add(session, providers, tacl_like(authors=[]), pdf_dir)
+
+
+async def test_no_arxiv_search_when_a_candidate_already_has_an_arxiv_id(session, discovery_fakes, pdf_dir):
+    providers = arxiv_world(discovery_fakes, arxiv_entry())
+    discovery_fakes.pdf_host.reply("/pdf/2406.00000", 404)
+
+    with pytest.raises(Conflict):
+        await discovery.add(session, providers, tacl_like(external_ids={"arxiv": "2406.00000"}), pdf_dir)
+
+    assert discovery_fakes.arxiv.requests == []
+
+
+async def test_at_most_one_arxiv_search_per_add(session, discovery_fakes, pdf_dir):
+    providers = arxiv_world(discovery_fakes, arxiv_entry(authors=["Someone Else"]))
+
+    with pytest.raises(Conflict):
+        await discovery.add(session, providers, tacl_like(), pdf_dir)
+
+    assert len(discovery_fakes.arxiv.requests) == 1
+
+
+async def test_no_match_is_recorded_in_tried(session, discovery_fakes, pdf_dir):
+    providers = arxiv_world(discovery_fakes)
+
+    with pytest.raises(Conflict) as caught:
+        await discovery.add(session, providers, tacl_like(), pdf_dir)
+
+    assert [t["outcome"] for t in caught.value.details["tried"]] == ["bot_check", "no_match"]
+
+
+async def test_a_disabled_arxiv_source_is_not_searched_and_records_nothing(session, discovery_fakes, pdf_dir):
+    discovery_fakes.pdf_host.reply("/closed", 403)
+
+    with pytest.raises(Conflict) as caught:
+        await discovery.add(session, discovery_fakes.providers, tacl_like(), pdf_dir)
+
+    assert [t["outcome"] for t in caught.value.details["tried"]] == ["http_403"]
+    assert discovery_fakes.arxiv.requests == []

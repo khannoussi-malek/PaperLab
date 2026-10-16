@@ -33,6 +33,7 @@ from app.core.candidates import (
     merge,
     normal_title,
     ordered_pdf_urls,
+    surname,
     with_s2,
 )
 from app.core.enrichment import ARXIV_DOI_PREFIX
@@ -41,7 +42,7 @@ from app.core.paper_sources import KEYED, NAMES, SourceSettings
 from app.core.redact import redact
 from app.core.source_registry import ASKS
 from app.models import Paper
-from app.providers import discovery_fake, semantic_scholar, unpaywall
+from app.providers import arxiv, discovery_fake, semantic_scholar, unpaywall
 
 logger = logging.getLogger(__name__)
 
@@ -435,6 +436,46 @@ async def free_copies(providers: Providers, doi: str | None, tried: list[dict[st
     return [redacted for url in urls if (redacted := redact(url)) not in seen]
 
 
+def _same_work(candidate: Candidate, entry: dict) -> bool:
+    """An arXiv entry is the candidate's preprint: the same title word for word, and a shared author surname (or, with
+    no authors on either side, a year within one)."""
+    if normal_title(entry["title"]) != normal_title(candidate.title):
+        return False
+    if candidate.authors or entry["authors"]:
+        return bool({surname(a) for a in candidate.authors} & {surname(a) for a in entry["authors"]})
+    return None not in (candidate.year, entry["year"]) and abs(candidate.year - entry["year"]) <= 1
+
+
+def _has_arxiv_id(candidate: Candidate) -> bool:
+    return bool(
+        candidate.external_ids.get("arxiv")
+        or arxiv_from_doi(candidate.doi)
+        or any("arxiv.org/" in url for url in candidate.pdf_urls)
+    )
+
+
+async def _arxiv_title_copy(
+    providers: Providers, candidate: Candidate, tried: list[dict[str, str]]
+) -> tuple[bytes | None, list[dict[str, str]]]:
+    """Last resort for a paper no source links to arXiv: one title search there, and the PDF of an exact match.
+    Returns (the PDF or None, `tried` plus what this step did). Nothing happens when arXiv is off."""
+    http = providers.client("arxiv")
+    if http is None or _has_arxiv_id(candidate):
+        return None, tried
+    try:
+        entries = await arxiv.search(http, candidate.title, 5)
+    except httpx.HTTPError as exc:
+        logger.info("no arXiv title search for %s: %s", redact(candidate.title), redact(str(exc)))
+        return None, tried
+    match = next((e for e in entries if _same_work(candidate, e)), None)
+    if match is None:
+        return None, [*tried, {"url": "arxiv.org (title search)", "outcome": "no_match"}]
+    arxiv_id = match["arxiv_id"]
+    found = [{"url": f"https://arxiv.org/abs/{arxiv_id}", "outcome": "arxiv_title_match"}]
+    data, more = await download_pdf(providers.pdf, ordered_pdf_urls(arxiv_id))
+    return data, [*tried, *found, *more]
+
+
 async def add(
     session: AsyncSession, providers: Providers, candidate: Candidate, pdf_dir: Path, tried_out: list | None = None
 ) -> Paper:
@@ -448,6 +489,8 @@ async def add(
     if candidate.doi and candidate.pdf_urls:  # one extra request: a repository copy beside a bot-checked publisher
         [candidate] = await _add_unpaywall_links(providers.client("unpaywall"), [candidate], merge=True)
     data, tried = await download_pdf(providers.pdf, candidate.pdf_urls)
+    if data is None:
+        data, tried = await _arxiv_title_copy(providers, candidate, tried)
     if tried_out is not None:
         tried_out.extend(tried)
     if data is None:
