@@ -6,11 +6,12 @@ from fastapi.responses import FileResponse
 
 from app.api.deps import DiscoveryDep, SessionDep
 from app.config import settings
-from app.core import discovery, enrichment, papers, workspaces
+from app.core import discovery, enrichment, papers, tags, workspaces
 from app.core.queue import INGEST_QUEUE
 from app.models import PaperStatus
 from app.schemas.discovery import CandidateOut
 from app.schemas.papers import ChunkOut, PaperOut, PaperUpdate, ReadingIn
+from app.schemas.tags import PaperTagGroup
 
 router = APIRouter(prefix="/api/papers", tags=["papers"])
 
@@ -89,3 +90,12 @@ async def reingest_paper(paper_id: uuid.UUID, request: Request, session: Session
     await session.refresh(paper)
     await _enqueue_ingest(request, paper.id)
     return paper
+
+
+@router.get("/{paper_id}/tags")
+async def paper_tags(paper_id: uuid.UUID, session: SessionDep) -> list[PaperTagGroup]:
+    await papers.get_paper(session, paper_id)
+    return [
+        PaperTagGroup(workspace_id=w, workspace_name=n, tags=t)
+        for w, n, t in await tags.tags_of_paper(session, paper_id)
+    ]
