@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 import httpx
 import pytest
 from sqlalchemy import select
@@ -405,7 +407,9 @@ async def test_no_authors_on_either_side_needs_the_year_within_one(session, disc
 
     discovery_fakes.arxiv.reply("/api/query", 200, text=atom(arxiv_entry(authors=[], year=2024)))
     discovery_fakes.pdf_host.reply("/pdf/2406.07735", 200, content=PDF)
-    await discovery.add(session, providers, tacl_like(authors=[]), pdf_dir)
+    tried = []
+    await discovery.add(session, providers, tacl_like(authors=[]), pdf_dir, tried)
+    assert [t["outcome"] for t in tried] == ["bot_check", "arxiv_title_match", "pdf"]
 
 
 async def test_no_arxiv_search_when_a_candidate_already_has_an_arxiv_id(session, discovery_fakes, pdf_dir):
@@ -542,3 +546,116 @@ async def test_at_most_three_diva_pdfs_are_tried(session, discovery_fakes, pdf_d
         await discovery.add(session, providers, candidate(doi="10.5555/cap", pdf_urls=[f"{HOST}/closed"]), pdf_dir)
 
     assert len(caught.value.details["tried"]) == 4  # the closed publisher and three DiVA PDFs
+
+
+# --- M63b review: busy arXiv, spacing, stricter authors ---
+
+
+@pytest.fixture(autouse=True)
+def fake_clock(monkeypatch):
+    """The arXiv spacing runs on a clock that stands still, and its sleeps are recorded, never waited."""
+    sleeps = []
+
+    async def sleep(seconds):
+        sleeps.append(seconds)
+
+    monkeypatch.setattr(discovery, "_sleep", sleep)
+    monkeypatch.setattr(discovery, "_now", lambda: 100.0)
+    return sleeps
+
+
+@pytest.mark.parametrize(
+    ("status", "outcome"), [(429, "busy"), (503, "busy"), (500, "http_500"), (404, "http_404")]
+)
+async def test_an_arxiv_error_is_recorded_in_tried(session, discovery_fakes, pdf_dir, status, outcome):
+    discovery_fakes.pdf_host.reply("/closed", 403, headers={"cf-mitigated": "challenge"})
+    discovery_fakes.arxiv.reply("/api/query", status)
+
+    with pytest.raises(Conflict) as caught:
+        await discovery.add(session, discovery_fakes.turned_on("arxiv"), tacl_like(), pdf_dir)
+
+    assert caught.value.details["tried"][-1] == {"url": "arxiv.org (title search)", "outcome": outcome}
+
+
+async def test_an_arxiv_connection_error_is_recorded_in_tried(session, discovery_fakes, pdf_dir):
+    discovery_fakes.pdf_host.reply("/closed", 403)
+    discovery_fakes.arxiv.refuse("/api/query")
+
+    with pytest.raises(Conflict) as caught:
+        await discovery.add(session, discovery_fakes.turned_on("arxiv"), tacl_like(), pdf_dir)
+
+    assert caught.value.details["tried"][-1]["outcome"] == "error: ConnectError"
+
+
+async def test_arxiv_title_searches_on_one_providers_are_spaced_three_seconds(
+    session, discovery_fakes, pdf_dir, fake_clock
+):
+    providers = arxiv_world(discovery_fakes)
+    for _ in range(2):
+        with pytest.raises(Conflict):
+            await discovery.add(session, providers, tacl_like(), pdf_dir)
+
+    assert fake_clock == [discovery.ARXIV_SPACING]  # the first search did not wait; the second waited the 3 s out
+    assert discovery.ARXIV_SPACING == 3
+
+
+async def test_a_search_on_a_fresh_providers_does_not_wait(session, discovery_fakes, pdf_dir, fake_clock):
+    with pytest.raises(Conflict):
+        await discovery.add(session, arxiv_world(discovery_fakes), tacl_like(), pdf_dir)
+    discovery_fakes.arxiv.reply("/api/query", 200, text=atom())
+    other = replace(discovery_fakes.turned_on("arxiv"), last_search=[])  # a fresh Providers object
+    with pytest.raises(Conflict):
+        await discovery.add(session, other, tacl_like(), pdf_dir)
+
+    assert fake_clock == []
+
+
+CHANG_PENG_WANG = ["Chang, Haw-Shiuan", "Peng, Nanyun", "Wang, Wei"]
+
+
+@pytest.mark.parametrize(
+    ("ours", "theirs", "year", "accepted"),
+    [
+        (["Wang, Wei", "Chang, Haw-Shiuan"], ["Zed Quux", "Wei Wang"], 2024, False),  # a lone shared non-first surname
+        (CHANG_PENG_WANG, ["Haw-Shiuan Chang", "Zed Quux"], 2024, True),  # the first author matches
+        (["Zed Quux", *CHANG_PENG_WANG], ["Q. Else", "Nanyun Peng", "Wei Wang"], 2024, True),  # two surnames overlap
+        (CHANG_PENG_WANG, ["Haw-Shiuan Chang"], 2027, False),  # the preprint cannot come 2 years after the paper
+    ],
+)
+async def test_the_author_and_year_rule(session, discovery_fakes, pdf_dir, ours, theirs, year, accepted):
+    providers = arxiv_world(discovery_fakes, arxiv_entry(authors=theirs, year=year))
+    discovery_fakes.pdf_host.reply("/pdf/2406.07735", 200, content=PDF)
+    found = tacl_like(authors=ours)
+
+    if accepted:
+        await discovery.add(session, providers, found, pdf_dir)
+    else:
+        with pytest.raises(Conflict):
+            await discovery.add(session, providers, found, pdf_dir)
+
+
+async def test_a_name_with_particles_matches_its_initialled_form(session, discovery_fakes, pdf_dir):
+    providers = arxiv_world(discovery_fakes, arxiv_entry(authors=["J. van der Berg"]))
+    discovery_fakes.pdf_host.reply("/pdf/2406.07735", 200, content=PDF)
+
+    await discovery.add(session, providers, tacl_like(authors=["Jan van der Berg"]), pdf_dir)
+
+
+async def test_a_title_with_an_extra_suffix_is_a_near_miss(session, discovery_fakes, pdf_dir):
+    providers = arxiv_world(discovery_fakes, arxiv_entry(title="REAL Sampling"))
+
+    with pytest.raises(Conflict) as caught:
+        await discovery.add(session, providers, tacl_like(title="REAL Sampling 2"), pdf_dir)
+
+    assert caught.value.details["tried"][-1]["outcome"] == "no_match"
+
+
+async def test_at_most_three_urn_kb_se_links_are_resolved(session, discovery_fakes, pdf_dir):
+    urns = [f"https://urn.kb.se/resolve?urn=urn:nbn:se:x:{n}" for n in range(5)]
+    providers = repositories(discovery_fakes, "10.5555/urns", *urns)
+    discovery_fakes.pdf_host.reply("/resolve", 302, headers={"location": "https://repo.example/x"})
+
+    with pytest.raises(Conflict):
+        await discovery.add(session, providers, candidate(doi="10.5555/urns", pdf_urls=[f"{HOST}/closed"]), pdf_dir)
+
+    assert [r.url.path for r in discovery_fakes.pdf_host.requests].count("/resolve") == 3

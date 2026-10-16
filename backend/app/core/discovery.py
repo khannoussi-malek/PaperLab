@@ -11,6 +11,7 @@
 import asyncio
 import logging
 import re
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field, replace
@@ -76,6 +77,8 @@ class Providers:
 
     pdf: httpx.AsyncClient
     clients: dict[str, httpx.AsyncClient] = field(default_factory=dict)
+    # When this Providers last searched arXiv by title (one slot, mutated): a bulk add spaces its searches by it.
+    last_search: list[float] = field(default_factory=list, compare=False)
 
     def client(self, source: str) -> httpx.AsyncClient | None:
         return self.clients.get(source)
@@ -436,14 +439,38 @@ async def free_copies(providers: Providers, doi: str | None, tried: list[dict[st
     return [redacted for url in urls if (redacted := redact(url)) not in seen]
 
 
+_PARTICLES = {"van", "von", "der", "den", "de", "del", "della", "di", "da", "dos", "du", "la", "le", "ter", "bin"}
+
+
+def _surname_forms(name: str) -> set[str]:
+    """The ways a surname may be written: its last token ("berg") and with its particles ("van der berg")."""
+    last = surname(name)
+    if "," in name:
+        return {last.split()[-1], last} if last else set()
+    tokens = [surname(token) for token in name.split()]
+    start = len(tokens) - 1
+    while start > 0 and tokens[start - 1] in _PARTICLES:
+        start -= 1
+    return {tokens[-1], " ".join(tokens[start:])} if tokens else set()
+
+
 def _same_work(candidate: Candidate, entry: dict) -> bool:
-    """An arXiv entry is the candidate's preprint: the same title word for word, and a shared author surname (or, with
-    no authors on either side, a year within one)."""
+    """An arXiv entry is the candidate's preprint: the same title word for word; the same first author or at least
+    two shared surnames (with no authors on either side, a year within one); and not posted more than a year after
+    the paper. A wrong match would ingest another paper, so this is strict."""
     if normal_title(entry["title"]) != normal_title(candidate.title):
         return False
-    if candidate.authors or entry["authors"]:
-        return bool({surname(a) for a in candidate.authors} & {surname(a) for a in entry["authors"]})
-    return None not in (candidate.year, entry["year"]) and abs(candidate.year - entry["year"]) <= 1
+    if None not in (candidate.year, entry["year"]) and entry["year"] > candidate.year + 1:
+        return False
+    ours, theirs = candidate.authors, entry["authors"]
+    if not ours and not theirs:
+        return None not in (candidate.year, entry["year"]) and abs(candidate.year - entry["year"]) <= 1
+    if not ours or not theirs:
+        return False
+    their_forms = [_surname_forms(name) for name in theirs]
+    if _surname_forms(ours[0]) & their_forms[0]:
+        return True
+    return sum(any(_surname_forms(name) & forms for forms in their_forms) for name in ours) >= 2
 
 
 def _has_arxiv_id(candidate: Candidate) -> bool:
@@ -454,6 +481,25 @@ def _has_arxiv_id(candidate: Candidate) -> bool:
     )
 
 
+ARXIV_SEARCH = "arxiv.org (title search)"
+ARXIV_SPACING = 3  # seconds between title searches on one Providers: arXiv asks for no more than one every 3 s
+_now = time.monotonic
+_sleep = asyncio.sleep  # both patchable, so tests need not wait
+
+
+async def _space_arxiv_searches(providers: Providers) -> None:
+    if providers.last_search and (wait := providers.last_search[0] + ARXIV_SPACING - _now()) > 0:
+        await _sleep(wait)
+    providers.last_search[:] = [_now()]
+
+
+def _search_outcome(exc: httpx.HTTPError) -> str:
+    if isinstance(exc, httpx.HTTPStatusError):
+        code = exc.response.status_code
+        return "busy" if code in (429, 503) else f"http_{code}"
+    return f"error: {type(exc).__name__}"
+
+
 async def _arxiv_title_copy(
     providers: Providers, candidate: Candidate, tried: list[dict[str, str]]
 ) -> tuple[bytes | None, list[dict[str, str]]]:
@@ -462,14 +508,15 @@ async def _arxiv_title_copy(
     http = providers.client("arxiv")
     if http is None or _has_arxiv_id(candidate):
         return None, tried
+    await _space_arxiv_searches(providers)
     try:
         entries = await arxiv.search(http, candidate.title, 5)
     except httpx.HTTPError as exc:
         logger.info("no arXiv title search for %s: %s", redact(candidate.title), redact(str(exc)))
-        return None, tried
+        return None, [*tried, {"url": ARXIV_SEARCH, "outcome": _search_outcome(exc)}]
     match = next((e for e in entries if _same_work(candidate, e)), None)
     if match is None:
-        return None, [*tried, {"url": "arxiv.org (title search)", "outcome": "no_match"}]
+        return None, [*tried, {"url": ARXIV_SEARCH, "outcome": "no_match"}]
     arxiv_id = match["arxiv_id"]
     found = [{"url": f"https://arxiv.org/abs/{arxiv_id}", "outcome": "arxiv_title_match"}]
     data, more = await download_pdf(providers.pdf, ordered_pdf_urls(arxiv_id))
@@ -477,6 +524,7 @@ async def _arxiv_title_copy(
 
 
 MAX_DIVA_PDFS = 3
+MAX_URN_LOOKUPS = 3
 _DIVA_ID = re.compile(r"diva2:(\d+)")
 
 
@@ -509,8 +557,12 @@ async def _diva_copy(
     """The DiVA records among the repository copies (a urn.kb.se link that leads to one too), tried as their
     FULLTEXT PDF: at most MAX_DIVA_PDFS, bar the ones already tried."""
     urls: list[str] = []
+    resolved = 0
     for copy in copies:
-        pdf = diva_pdf_url(copy) or diva_pdf_url(await resolve_kb_urn(providers.pdf, copy) or "")
+        pdf = diva_pdf_url(copy)
+        if pdf is None and urlsplit(copy).hostname == "urn.kb.se" and resolved < MAX_URN_LOOKUPS:
+            resolved += 1
+            pdf = diva_pdf_url(await resolve_kb_urn(providers.pdf, copy) or "")
         if pdf and pdf not in urls and pdf not in {t["url"] for t in tried}:
             urls.append(pdf)
         if len(urls) == MAX_DIVA_PDFS:
