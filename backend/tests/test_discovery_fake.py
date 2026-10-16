@@ -1,7 +1,7 @@
 import pytest
 from sqlalchemy import delete, text
 
-from app.core import discovery, references
+from app.core import discovery, pdf_links, references
 from app.core.errors import Conflict
 from app.core.paper_sources import SOURCES, SourceSettings
 from app.models import Paper
@@ -30,7 +30,11 @@ pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("references")]
 
 
 @pytest.fixture
-async def fake_providers(session):
+async def fake_providers(session, monkeypatch):
+    async def public(host):
+        return ["93.184.216.34"]  # the fake's hosts never resolve
+
+    monkeypatch.setattr(pdf_links, "resolve_host", public)
     # An E2E run killed mid-test can leave the fake's papers in the shared dev database (D15); hide them here.
     await session.execute(delete(Paper).where(Paper.doi.like(f"{discovery_fake.DOI_PREFIX}%")))
     every_source = SourceSettings(contact_email=discovery_fake.MAILTO, enabled=dict.fromkeys(SOURCES, True))

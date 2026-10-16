@@ -72,3 +72,8 @@ def test_metadata_gives_doi_year_authors_and_keywords():
 
 def test_missing_metadata_gives_empty_hints():
     assert pdf_hints("", {}) == PdfHints(doi=None, arxiv_id=None, years=frozenset(), text="\n", authors=[], keywords=[])
+
+
+def test_a_publisher_pdf_link_gives_the_doi_without_its_extension():
+    link = "https://link.springer.com/content/pdf/10.1007/s10869-023-09910-x.pdf"
+    assert normalize_doi(link) == "10.1007/s10869-023-09910-x"

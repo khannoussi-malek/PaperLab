@@ -11,8 +11,9 @@ from pdf_papers import chunked_paper
 
 from app.core import discovery, papers, pdf_links, pipeline, workspaces
 from app.core.candidates import Candidate
+from app.core.errors import Conflict
 from app.models import Paper, PaperStatus
-from app.providers import discovery_fake
+from app.providers import discovery_fake, unpaywall
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("references")]
 RUN = uuid.uuid4().hex[:8]  # the owner's workspaces share the dev database (D37)
@@ -112,8 +113,33 @@ async def test_no_free_pdf_returns_the_landing_page_and_stores_nothing(session, 
         "paper_id": None,
         "title": added["title"],
         "landing_url": f"https://doi.org/{discovery_fake.DOI_PREFIX}{suffix}",
+        "tried": [{"url": url, "outcome": "not_a_pdf"} for url in page],
+        "free_copies": [],
     }
     assert jobs.jobs == []
+
+
+async def test_no_free_pdf_names_the_repository_copies_over_mcp(jobs, monkeypatch):
+    doi = f"{discovery_fake.DOI_PREFIX}landing"
+
+    async def search(_session, _providers, _query):
+        return discovery.SearchResult([Candidate(title="Closed", doi=doi, pdf_urls=[])], [])
+
+    async def repository_urls(_http, _doi):
+        return ["https://www.ncbi.nlm.nih.gov/pmc/articles/PMC1/"]
+
+    monkeypatch.setattr(discovery, "search", search)
+    monkeypatch.setattr(unpaywall, "repository_urls", repository_urls)
+    added = result(await call("add_paper", identifier=doi))
+
+    assert added["status"] == "no_free_pdf" and added["tried"] == []
+    assert added["free_copies"] == ["https://www.ncbi.nlm.nih.gov/pmc/articles/PMC1/"]
+
+
+async def test_a_link_that_is_no_pdf_says_what_it_answered(jobs):
+    link = f"{discovery_fake.PDF_HOST}/page.html?api_key=SECRET"
+    added = result(await call("add_paper", identifier=link))
+    assert added["tried"] == [{"url": f"{discovery_fake.PDF_HOST}/page.html?api_key=***", "outcome": "not_a_pdf"}]
 
 
 async def test_a_title_is_refused_with_a_hint():
@@ -176,7 +202,9 @@ async def test_a_redirect_to_a_private_address_is_refused_and_never_requested(mo
 
     @asynccontextmanager
     async def redirecting(_session):
-        client = httpx.AsyncClient(transport=httpx.MockTransport(handle), follow_redirects=True)
+        client = httpx.AsyncClient(
+            transport=httpx.MockTransport(handle), follow_redirects=True, event_hooks={"request": [pdf_links.guard]}
+        )
         providers = discovery.Providers(pdf=client)
         try:
             yield providers
@@ -292,3 +320,107 @@ async def test_add_papers_carries_on_after_an_unexpected_failure(session, jobs, 
     assert outcomes == [("queued", None), (None, "failed"), (None, "no_matching_paper")]
     assert jobs.jobs[0] == ("ingest_paper", items[0]["paper_id"])
     assert await session.get(Paper, uuid.UUID(items[0]["paper_id"])) is not None
+
+
+def serve(monkeypatch, handle):
+    """Every provider call goes to `handle`: the PDF client and nothing else."""
+
+    @asynccontextmanager
+    async def served(_session):
+        client = httpx.AsyncClient(
+            transport=httpx.MockTransport(handle), follow_redirects=True, event_hooks={"request": [pdf_links.guard]}
+        )
+        providers = discovery.Providers(pdf=client)
+        try:
+            yield providers
+        finally:
+            await providers.aclose()
+
+    monkeypatch.setattr(discovery, "open_providers", served)
+
+
+TACL_LINK = "https://direct.mit.edu/tacl/article-pdf/doi/10.1162/tacl_a_00632/2325685/tacl_a_00632.pdf"
+TACL_DOI = "10.1162/tacl_a_00632"
+ARXIV_PDF = "https://arxiv.org/pdf/2301.13848"
+
+
+def blocked_publisher(request: httpx.Request) -> httpx.Response:
+    if request.url.host == "arxiv.org":
+        return httpx.Response(200, content=b"%PDF-1.7\n%arxiv copy\n")
+    return httpx.Response(403, headers={"cf-mitigated": "challenge"})
+
+
+async def test_a_blocked_publisher_link_falls_back_to_the_dois_free_copy(jobs, monkeypatch):
+    serve(monkeypatch, blocked_publisher)
+    paper = Candidate(title="TACL paper", doi=TACL_DOI, pdf_urls=[ARXIV_PDF, TACL_LINK])
+
+    async def search(_session, _providers, query):
+        return discovery.SearchResult([paper] if query == TACL_DOI else [], [])
+
+    monkeypatch.setattr(discovery, "search", search)
+    added = result(await call("add_paper", identifier=TACL_LINK))
+
+    assert added["status"] == "queued" and jobs.jobs == [("ingest_paper", added["paper_id"])]
+    assert added["tried"] == [
+        {"url": TACL_LINK, "outcome": "bot_check"},
+        {"url": ARXIV_PDF, "outcome": "pdf"},
+    ]
+
+
+async def test_a_link_whose_doi_matches_nothing_keeps_its_own_no_free_pdf(jobs, monkeypatch):
+    serve(monkeypatch, blocked_publisher)
+
+    async def search(_session, _providers, _query):
+        return discovery.SearchResult([], [])
+
+    monkeypatch.setattr(discovery, "search", search)
+    added = result(await call("add_paper", identifier=TACL_LINK))
+
+    assert added["status"] == "no_free_pdf" and added["landing_url"] == TACL_LINK
+    assert added["tried"] == [{"url": TACL_LINK, "outcome": "bot_check"}]
+
+
+async def test_a_failed_link_without_a_doi_does_not_search(jobs, monkeypatch):
+    serve(monkeypatch, blocked_publisher)
+
+    async def search(*_):
+        pytest.fail("searched for a link without a DOI")
+
+    monkeypatch.setattr(discovery, "search", search)
+    added = result(await call("add_paper", identifier="https://pdfs.example.org/a.pdf"))
+    assert added["status"] == "no_free_pdf" and added["tried"][0]["outcome"] == "bot_check"
+
+
+async def test_a_link_fallback_that_finds_every_source_busy_keeps_its_own_no_free_pdf(jobs, monkeypatch):
+    serve(monkeypatch, blocked_publisher)
+
+    async def search(*_):
+        raise Conflict("search_unavailable")
+
+    monkeypatch.setattr(discovery, "search", search)
+    added = result(await call("add_paper", identifier=TACL_LINK))
+
+    assert added["status"] == "no_free_pdf" and added["landing_url"] == TACL_LINK
+    assert added["tried"] == [{"url": TACL_LINK, "outcome": "bot_check"}]
+
+
+async def test_a_safe_link_whose_page_declares_a_private_pdf_falls_back_to_the_doi(jobs, monkeypatch):
+    page = '<html><meta name="citation_pdf_url" content="http://10.0.0.5/secret.pdf"></html>'
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "arxiv.org":
+            return httpx.Response(200, content=b"%PDF-1.7\n%arxiv copy\n")
+        assert request.url.host != "10.0.0.5"
+        return httpx.Response(200, text=page)
+
+    serve(monkeypatch, handle)
+    paper = Candidate(title="TACL paper", doi=TACL_DOI, pdf_urls=[ARXIV_PDF])
+
+    async def search(_session, _providers, query):
+        return discovery.SearchResult([paper] if query == TACL_DOI else [], [])
+
+    monkeypatch.setattr(discovery, "search", search)
+    added = result(await call("add_paper", identifier=TACL_LINK))
+
+    assert added["status"] == "queued" and jobs.jobs == [("ingest_paper", added["paper_id"])]
+    assert [t["outcome"] for t in added["tried"]][:3] == ["not_a_pdf → followed citation_pdf_url", "unsafe_url", "pdf"]

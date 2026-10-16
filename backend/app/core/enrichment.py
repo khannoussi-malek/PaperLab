@@ -57,7 +57,7 @@ def normalize_doi(value: str) -> str | None:
         return None
     doi = match.group().lower()
     while True:
-        trimmed = doi.rstrip(".,;")
+        trimmed = doi.rstrip(".,;").removesuffix(".pdf")  # a publisher's PDF URL ends in the file's extension
         # A DOI may contain balanced brackets ("s0140-6736(20)30367-6"); only an unbalanced closing one is prose.
         for open_ch, close_ch in ("()", "[]"):
             if trimmed.endswith(close_ch) and trimmed.count(close_ch) > trimmed.count(open_ch):

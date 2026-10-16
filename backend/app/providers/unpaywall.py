@@ -23,13 +23,24 @@ def new_client(
 # ponytail: no retry on 429, as in openalex.py.
 
 
-async def pdf_urls(http: httpx.AsyncClient, doi: str) -> list[str]:
-    """Free PDF links for `doi`, best location first, without repeats. [] when Unpaywall knows none."""
+async def _record(http: httpx.AsyncClient, doi: str) -> dict:
     response = await http.get(f"/v2/{quote(doi, safe='/:')}")
     if response.status_code == 404:
-        return []
-    record = json_body(response.raise_for_status())
+        return {}
+    return json_body(response.raise_for_status())
+
+
+async def pdf_urls(http: httpx.AsyncClient, doi: str) -> list[str]:
+    """Free PDF links for `doi`, best location first, without repeats. [] when Unpaywall knows none."""
+    record = await _record(http, doi)
     # url_for_pdf is null for a location that is only a landing page.
     places = [record.get("best_oa_location"), *(record.get("oa_locations") or [])]
     urls = (place.get("url_for_pdf") for place in places if place)
+    return list(dict.fromkeys(url for url in urls if url and url.startswith(("http://", "https://"))))
+
+
+async def repository_urls(http: httpx.AsyncClient, doi: str) -> list[str]:
+    """Landing pages of the repository copies (a preprint server, PMC, an institution) of `doi`, without repeats."""
+    places = (await _record(http, doi)).get("oa_locations") or []
+    urls = (place.get("url") for place in places if place.get("host_type") == "repository")
     return list(dict.fromkeys(url for url in urls if url and url.startswith(("http://", "https://"))))

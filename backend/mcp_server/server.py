@@ -28,6 +28,7 @@ mcp = MCPServer(
         "PaperLab is the owner's research library. Learn workspace names with list_workspaces. "
         "Library: search_library, get_paper, related_papers, list_papers; create_workspace makes a new one; add papers "
         "by DOI, arXiv ID or PDF link with add_paper (free copies only; add_papers takes up to 50 at once), "
+        "or upload_paper for a PDF you already hold, "
         "file them with add_paper_to_workspace and "
         "take them out with remove_paper_from_workspace. "
         "Systematic search: start_search_run, then get_search_run until it finishes "
@@ -230,10 +231,24 @@ async def remove_paper_from_workspace(workspace: str, paper_id: uuid.UUID) -> pi
 @recoverable
 async def add_paper(identifier: str, workspace: str | None = None) -> pipeline.AddPaperResult:
     """Use to bring one paper into the library by DOI, arXiv ID or a direct PDF link (free copies only). Returns
-    `queued` (ingesting now), `ingested` (already in the library and ready) or `no_free_pdf` with its landing page.
+    `queued` (ingesting now), `ingested` (already in the library and ready) or `no_free_pdf` with its landing page,
+    `tried` (each PDF URL tried and why it failed; a `queued` link that fell back to its DOI carries it too) and
+    `free_copies` (repository pages that may hold a free copy).
     Give `workspace` to file it there too."""
     async with sessions() as session:
         return await pipeline.add_paper(session, identifier, workspace)
+
+
+@mcp.tool()
+@recoverable
+async def upload_paper(
+    workspace: str, filename: str, pdf_base64: str, doi: str | None = None, tags: list[str] | None = None
+) -> pipeline.AddPaperResult:
+    """Use to add a PDF you already have (base64 with no line breaks, at most 30 MB) to a workspace; it is ingested
+    like an upload in the app. Give doi if you know it, so a paper already in the library is reused instead of
+    copied."""
+    async with sessions() as session:
+        return await pipeline.upload_paper(session, workspace, filename, pdf_base64, doi, tags)
 
 
 @mcp.tool()

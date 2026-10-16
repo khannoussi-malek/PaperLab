@@ -5,14 +5,19 @@ every read and write is an existing service's. Results are the API's own schemas
 fields.
 """
 
+import asyncio
+import base64
+import binascii
 import logging
+import math
 import uuid
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields, replace
 from datetime import datetime
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from typing import Literal
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -20,6 +25,7 @@ from app.core import (
     citations_export,
     claims,
     discovery,
+    enrichment,
     evidence_cards,
     hit_enrichment,
     notes,
@@ -38,7 +44,7 @@ from app.core import (
 )
 from app.core.errors import Conflict, DomainError, InvalidInput, NotFound, error_code
 from app.core.source_registry import DISCOVERY_SOURCE_IDS
-from app.models import PaperStatus
+from app.models import Paper, PaperStatus
 from app.providers.base import LLMError, LLMUnavailable
 from app.schemas.papers import PaperOut
 from app.schemas.workspace_search import HitOut, ScreeningStateOut, SearchRunOut, SearchRunSummary
@@ -125,10 +131,67 @@ async def remove_paper_from_workspace(session: AsyncSession, workspace: str, pap
 
 @dataclass(frozen=True)
 class AddPaperResult:
-    status: Literal["queued", "ingested", "no_free_pdf"]
+    status: Literal["queued", "ingested", "already_in_library", "no_free_pdf"]
     paper_id: uuid.UUID | None = None
     landing_url: str | None = None
     title: str | None = None
+    # no_free_pdf, or a queued link that fell back to its DOI: what each PDF URL tried said ({"url", "outcome"}).
+    # no_free_pdf only: repository pages that may hold a copy.
+    tried: list[dict[str, str]] = field(default_factory=list)
+    free_copies: list[str] = field(default_factory=list)
+
+
+MAX_UPLOAD_PDF_BYTES = 30 * 1024 * 1024  # decoded, as the app's upload allows
+MAX_UPLOAD_BASE64_CHARS = 4 * math.ceil(MAX_UPLOAD_PDF_BYTES / 3) + 4  # refused before decoding allocates anything
+
+
+def _decode_pdf(pdf_base64: str) -> bytes:
+    if len(pdf_base64) > MAX_UPLOAD_BASE64_CHARS:
+        raise InvalidInput("pdf_too_large", max_mb=MAX_UPLOAD_PDF_BYTES // 1024 // 1024)
+    try:
+        data = base64.b64decode(pdf_base64, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise InvalidInput("invalid_base64") from exc
+    if len(data) > MAX_UPLOAD_PDF_BYTES:
+        raise InvalidInput("pdf_too_large", max_mb=MAX_UPLOAD_PDF_BYTES // 1024 // 1024)
+    if not data.startswith(papers.PDF_MAGIC):
+        raise InvalidInput("not_a_pdf")
+    return data
+
+
+async def upload_paper(
+    session: AsyncSession,
+    workspace: str,
+    filename: str,
+    pdf_base64: str,
+    doi: str | None = None,
+    tag_names: list[str] | None = None,
+) -> AddPaperResult:
+    """The twin of POST /api/papers for a PDF Claude holds: filed in `workspace`, tagged, ingest queued. A `doi` already
+    in the library reuses that paper (no second copy); otherwise it is kept on the new paper as a locked field.
+    Everything is checked before the first write."""
+    ws = await workspace_id(session, workspace)
+    names = [tags.normalize(name) for name in tag_names or []]
+    clean_doi = None
+    if doi is not None and (clean_doi := enrichment.normalize_doi(doi)) is None:
+        raise InvalidInput("invalid_doi")
+    data = _decode_pdf(pdf_base64)
+    existing = await session.scalar(select(Paper).where(func.lower(Paper.doi) == clean_doi)) if clean_doi else None
+    if existing and existing.status == PaperStatus.FAILED:  # a retry, as _add_found does
+        paper, status = existing, "queued"
+        await asyncio.to_thread(Path(paper.file_path).write_bytes, data)  # the upload replaces the broken file
+        await papers.set_status(session, paper.id, PaperStatus.UPLOADED)
+    elif existing:
+        paper, status = existing, "already_in_library"
+    else:
+        prefill = {"doi": clean_doi, "manual_fields": ["doi"]} if clean_doi else None
+        paper, status = await papers.create_paper(session, filename, data, settings.pdf_dir, prefill=prefill), "queued"
+    await workspaces.add_paper(session, ws, paper.id)
+    for name in names:
+        await tags.tag_papers(session, ws, name, paper_ids=[paper.id])
+    if status == "queued":
+        await queue.enqueue("ingest_paper", str(paper.id))
+    return AddPaperResult(status=status, paper_id=paper.id, title=paper.title)
 
 
 DOI_ARXIV_HOSTS = ("doi.org", "dx.doi.org", "arxiv.org", "www.arxiv.org")
@@ -165,7 +228,7 @@ async def _queued(session: AsyncSession, paper, workspace_uuid: uuid.UUID | None
     return AddPaperResult(status="queued", paper_id=paper.id, title=paper.title)
 
 
-async def _add_found(session, providers, kind, value, workspace_uuid) -> AddPaperResult:
+async def _add_found(session, providers, kind, value, workspace_uuid, tried_out=None) -> AddPaperResult:
     found = await discovery.search(session, providers, value)
     match = next(
         (c for c in found.results if (c.doi or "").lower() == value or c.external_ids.get("arxiv") == value), None
@@ -182,21 +245,49 @@ async def _add_found(session, providers, kind, value, workspace_uuid) -> AddPape
         status = "ingested" if paper.status == PaperStatus.READY else "queued"
         return AddPaperResult(status=status, paper_id=paper.id, title=paper.title)
     try:
-        paper = await discovery.add(session, providers, match, settings.pdf_dir)
+        paper = await discovery.add(session, providers, match, settings.pdf_dir, tried_out)
     except Conflict as exc:
         if str(exc) != discovery.NO_FREE_PDF:
             raise
-        return AddPaperResult(status="no_free_pdf", landing_url=_landing_url(kind, value), title=match.title)
+        return AddPaperResult(
+            status="no_free_pdf",
+            landing_url=_landing_url(kind, value),
+            title=match.title,
+            tried=exc.details.get("tried", []),
+            free_copies=exc.details.get("free_copies", []),
+        )
     return await _queued(session, paper, workspace_uuid)
+
+
+def _link_dois(link: str) -> list[str]:
+    """The DOIs a publisher link's path may hold, longest first: a MIT path goes on after the DOI's own suffix."""
+    doi = enrichment.normalize_doi(unquote(urlsplit(link).path))
+    if doi is None:
+        return []
+    return list(dict.fromkeys([doi, "/".join(doi.split("/")[:2])]))
+
+
+async def _link_by_doi(session, providers, link, tried, workspace_uuid) -> AddPaperResult:
+    """A link that gave no PDF: its DOI's other free copies (arXiv, a repository) are tried, else the link's answer."""
+    for doi in _link_dois(link):
+        downloaded: list[dict[str, str]] = []
+        try:
+            found = await _add_found(session, providers, "doi", doi, workspace_uuid, downloaded)
+        except NotFound:
+            continue
+        except Conflict:  # every source busy or off: the link's own answer stands
+            break
+        return replace(found, tried=[*tried, *(found.tried or downloaded)])
+    return AddPaperResult(status="no_free_pdf", landing_url=link, tried=tried)
 
 
 async def _add_link(session, providers, link, workspace_uuid) -> AddPaperResult:
     await pdf_links.check_url(link)
-    if pdf_links.guard not in providers.pdf.event_hooks["request"]:
-        providers.pdf.event_hooks["request"].append(pdf_links.guard)  # this call's own client, closed after it
-    data = await discovery.download_pdf(providers.pdf, [link])
+    data, tried = await discovery.download_pdf(providers.pdf, [link])
     if data is None:
-        return AddPaperResult(status="no_free_pdf", landing_url=link)
+        if tried[0]["outcome"] == "unsafe_url":  # a redirect to a private address is refused, as the link itself is
+            raise InvalidInput("unsafe_url", url=link)
+        return await _link_by_doi(session, providers, link, tried, workspace_uuid)
     # Like an upload: extraction and enrichment find the metadata. A paper already in the library becomes a second
     # copy, exactly as uploading the same PDF twice does (enrichment drops a DOI another paper holds).
     name = PurePosixPath(urlsplit(link).path).name or "paper.pdf"

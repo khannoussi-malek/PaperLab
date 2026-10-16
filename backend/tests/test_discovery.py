@@ -32,7 +32,7 @@ def test_the_pdf_client_never_sends_the_owners_email():
 
     agent = providers.pdf.headers["User-Agent"]
 
-    assert agent == "PaperLab"
+    assert agent.startswith("PaperLab")
     assert "@" not in agent
 
 
