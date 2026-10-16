@@ -1,4 +1,4 @@
-import type { Paper } from '../../api/client'
+import type { Paper, TagSummary } from '../../api/client'
 import type { TagMatch } from '../../lib/route'
 
 /** `known` is every existing tag name (a tag with no papers is still known). Keeps the papers carrying any/all of the selected tags. Selected tags no paper carries (renamed or deleted) are
@@ -18,3 +18,10 @@ export function filterByTags(
     return match === 'all' ? wanted.every((t) => names.includes(t)) : wanted.some((t) => names.includes(t))
   })
 }
+
+export const toggled = (selected: string[], name: string) =>
+  selected.includes(name) ? selected.filter((t) => t !== name) : [...selected, name]
+
+export const coverageText = (t: TagSummary) =>
+  `${t.papers} papers · ${t.peer_reviewed} peer-reviewed, ${t.preprint} preprints, ${t.unknown_review} unknown · ` +
+  `${t.full_text} full text, ${t.abstract} abstract only, ${t.metadata} metadata only`

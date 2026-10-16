@@ -11,7 +11,7 @@ import { ReadingQueueTab } from '@/features/workspace-search/ReadingQueueTab'
 import { ScreeningTab } from '@/features/workspace-search/ScreeningTab'
 import { SearchTab } from '@/features/workspace-search/SearchTab'
 import { EvidenceTab } from '../evidence/EvidenceTab'
-import { workspaceHref, type WorkspaceTab } from '@/lib/route'
+import { workspaceHref, type TagMatch, type WorkspaceTab } from '@/lib/route'
 import { cn } from '@/lib/utils'
 import { WorkspaceChat } from './WorkspaceChat'
 import { ExportCitationsMenu } from './ExportCitationsMenu'
@@ -25,10 +25,14 @@ const panel = cn('min-h-0 flex-1 overflow-auto text-base data-[state=inactive]:h
 
 /** A workspace's home: its name and counts over Papers, Notes and Chat tabs, inside the app shell. `runId` is the
  * active search run, read from the URL (I1) so SearchTab survives a reload instead of resetting to no run. */
-export function WorkspacePage({ workspaceId, tab, runId }: { workspaceId: string; tab: WorkspaceTab; runId: string | null }) {
+type PageProps = { workspaceId: string; tab: WorkspaceTab; runId: string | null; tags: string[]; match: TagMatch }
+
+export function WorkspacePage({ workspaceId, tab, runId, tags, match }: PageProps) {
   const workspace = useWorkspace(workspaceId)
   // replace, not assign: switching tabs shouldn't add history entries for Back to walk through. Carries the
   // current runId along so switching tabs and back (or a reload from another tab) doesn't drop it.
+  const onTagsChange = (next: string[], nextMatch: TagMatch) =>
+    window.location.replace(workspaceHref(workspaceId, 'papers', undefined, { tags: next, match: nextMatch }))
   const showTab = (next: WorkspaceTab) => window.location.replace(workspaceHref(workspaceId, next, runId))
   // SearchTab reports a new run id here instead of holding it in local state, so the URL (and a reload) stays in
   // sync with whatever run is actually active.
@@ -89,7 +93,7 @@ export function WorkspacePage({ workspaceId, tab, runId }: { workspaceId: string
             <TabsTrigger value="evidence">Evidence</TabsTrigger>
           </TabsList>
           <TabsContent value="papers" forceMount className={panel}>
-            <WorkspacePapers workspaceId={workspaceId} />
+            <WorkspacePapers workspaceId={workspaceId} tags={tags} match={match} onTagsChange={onTagsChange} />
           </TabsContent>
           <TabsContent value="notes" forceMount className={panel}>
             <WorkspaceNotes workspaceId={workspaceId} />
