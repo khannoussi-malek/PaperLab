@@ -15,7 +15,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from app.core.enrichment import ARXIV_DOI_PREFIX, abstract_text, normalize_doi, short_id
-from app.core.source_types import source_type_of
+from app.core.source_types import PREPRINT_SERVERS, source_type_of
 
 # CandidateIn (app/schemas/discovery.py) rejects a candidate over either limit with 422; capping here first means
 # the Add button never shows for a candidate its own endpoint would then refuse.
@@ -88,9 +88,6 @@ S2_TYPES = {
     "JournalArticle": "journal_article", "Conference": "proceedings", "Review": "journal_article",
     "Book": "book", "BookSection": "chapter",
 }  # fmt: skip
-
-
-PREPRINT_SERVERS = re.compile(r"arxiv|biorxiv|medrxiv|ssrn|research square|preprints\.org", re.IGNORECASE)
 
 
 def s2_triage(paper: Mapping[str, Any]) -> tuple[str | None, str | None, str | None]:

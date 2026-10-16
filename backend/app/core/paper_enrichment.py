@@ -12,11 +12,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.candidates import s2_triage
-from app.core.enrichment import normalize_doi
+from app.core.enrichment import normalize_doi, openalex_published
 from app.core.hit_enrichment import CHUNK, batch_with_backoff
-from app.core.source_types import ARXIV_DOI_PREFIX, peer_reviewed_of
+from app.core.source_types import ARXIV_DOI_PREFIX, is_preprint_copy, peer_reviewed_of
 from app.models.paper import Paper
 from app.models.workspace import workspace_papers
+from app.providers import openalex
 
 logger = logging.getLogger(__name__)
 
@@ -55,10 +56,6 @@ def s2_id(paper: Paper) -> str | None:
     return f"DOI:{doi}"
 
 
-def is_preprint_copy(paper: Paper) -> bool:
-    return (paper.doi or "").lower().startswith(ARXIV_DOI_PREFIX) or paper.source_type == "preprint"
-
-
 def apply_s2(paper: Paper, answer: dict) -> bool:
     """Fills from an S2 paper; fields in manual_fields are skipped (a hand-set source_type also blocks peer_reviewed).
     Any paper: source_type when empty, peer_reviewed "true" when "unknown" and the type is peer-reviewed. A preprint
@@ -86,7 +83,47 @@ def apply_s2(paper: Paper, answer: dict) -> bool:
     return changed
 
 
-async def enrich(session: AsyncSession, http: httpx.AsyncClient, ws: uuid.UUID) -> PaperEnrichResult:
+def apply_openalex(paper: Paper, work: dict) -> bool:
+    """A preprint copy's OpenAlex work that is its published version: same write rules as apply_s2."""
+    doi, venue, _ = openalex_published(work)
+    if not is_preprint_copy(paper) or doi in (None, normalize_doi(paper.doi or "")):
+        return False
+    found = {"published_doi": doi, "published_venue": venue}
+    if "source_type" not in paper.manual_fields:
+        found["peer_reviewed"] = "true"
+    changed = False
+    for field, value in found.items():
+        if value and field not in paper.manual_fields and getattr(paper, field) != value:
+            setattr(paper, field, value)
+            changed = True
+    return changed
+
+
+async def _openalex_pass(session: AsyncSession, oa: httpx.AsyncClient, ws: uuid.UUID) -> int:
+    """After S2: preprint copies with an openalex_id and still no published_doi, 50 per request. A failing
+    request is logged and skipped. Returns how many papers were filled."""
+    query = (
+        select(Paper)
+        .join(workspace_papers, workspace_papers.c.paper_id == Paper.id)
+        .where(workspace_papers.c.workspace_id == ws, Paper.openalex_id.is_not(None), Paper.published_doi.is_(None))
+        .order_by(Paper.id)
+    )
+    papers = [p for p in (await session.execute(query.execution_options(populate_existing=True))).scalars()
+              if is_preprint_copy(p)]  # fmt: skip
+    try:
+        works = await openalex.works_by_ids(oa, [p.openalex_id for p in papers])
+    except httpx.HTTPError:
+        logger.exception("OpenAlex batch for %d papers failed; going on", len(papers))
+        return 0
+    by_id = {w["id"].rsplit("/", 1)[-1]: w for w in works}
+    filled = sum(apply_openalex(p, by_id[p.openalex_id]) for p in papers if p.openalex_id in by_id)
+    await session.commit()
+    return filled
+
+
+async def enrich(
+    session: AsyncSession, http: httpx.AsyncClient, ws: uuid.UUID, oa: httpx.AsyncClient | None = None
+) -> PaperEnrichResult:
     """Looks the papers up in chunks of CHUNK, one batch call each, committing per chunk. A chunk that fails is
     logged and counted as not found; four 429s in a row stop the job, with the count of papers left."""
     pending = await _unchecked(session, ws)
@@ -122,4 +159,6 @@ async def enrich(session: AsyncSession, http: httpx.AsyncClient, ws: uuid.UUID) 
             elif apply_s2(paper, answer):
                 filled += 1
         await session.commit()
+    if oa is not None:
+        filled += await _openalex_pass(session, oa, ws)
     return PaperEnrichResult(looked_up, filled, not_found)
