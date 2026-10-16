@@ -8,17 +8,18 @@ import { tagSummary } from './tagFixtures'
 vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
 Element.prototype.scrollIntoView = () => {}
 
-type Opts = { mode?: 'add' | 'remove'; error?: Error | null }
-function setup({ mode = 'add', error = null }: Opts = {}) {
+type Opts = { mode?: 'add' | 'remove'; error?: Error | null; isPending?: boolean; paperTags?: Record<string, string[]> }
+function setup({ mode = 'add', error = null, isPending = false, paperTags = { p1: ['rct'], p2: ['cohort'], p3: ['other'] } }: Opts = {}) {
   vi.spyOn(queries, 'useTags').mockReturnValue({ data: [tagSummary('rct', 2), tagSummary('cohort', 1), tagSummary('other', 1)] } as any)
-  vi.spyOn(queries, 'usePaperTags').mockReturnValue({ data: { p1: ['rct'], p2: ['cohort'], p3: ['other'] } } as any)
+  vi.spyOn(queries, 'usePaperTags').mockReturnValue({ data: paperTags } as any)
+  const reset = vi.fn()
   const apply = vi.fn((_v: unknown, o?: { onSuccess?: () => void }) => o?.onSuccess?.())
   const remove = vi.fn((_v: unknown, o?: { onSuccess?: () => void }) => o?.onSuccess?.())
-  vi.spyOn(queries, 'useApplyTag').mockReturnValue({ mutate: apply, error } as any)
-  vi.spyOn(queries, 'useRemoveTag').mockReturnValue({ mutate: remove, error } as any)
+  vi.spyOn(queries, 'useApplyTag').mockReturnValue({ mutate: apply, error, isPending, reset } as any)
+  vi.spyOn(queries, 'useRemoveTag').mockReturnValue({ mutate: remove, error, isPending, reset } as any)
   const onDone = vi.fn()
   render(<TagPicker workspaceId="w1" mode={mode} paperIds={['p1', 'p2']} onDone={onDone} />)
-  return { apply, remove, onDone }
+  return { apply, remove, onDone, reset }
 }
 
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
@@ -60,4 +61,23 @@ test('a failed tagging shows the plain-words message', () => {
   setup({ error: new Error('invalid_tag_name') })
   fireEvent.click(screen.getByRole('button', { name: 'Tag…' }))
   expect(screen.getByText('Tag names are 1 to 64 characters.')).toBeTruthy()
+})
+
+test('the tags cannot be chosen again while one is being applied', () => {
+  setup({ isPending: true })
+  fireEvent.click(screen.getByRole('button', { name: 'Tag…' }))
+  expect(screen.getAllByRole('option').every((o) => o.getAttribute('aria-disabled') === 'true')).toBe(true)
+})
+
+test('closing the picker clears a previous error', () => {
+  const { reset } = setup({ error: new Error('tag_exists') })
+  fireEvent.click(screen.getByRole('button', { name: 'Tag…' }))
+  fireEvent.keyDown(screen.getByRole('combobox', { name: 'Tag name' }), { key: 'Escape' })
+  expect(reset).toHaveBeenCalled()
+})
+
+test('remove mode says so when the selected papers carry no tags', () => {
+  setup({ mode: 'remove', paperTags: {} })
+  fireEvent.click(screen.getByRole('button', { name: 'Remove tag…' }))
+  expect(screen.getByText('The selected papers have no tags.')).toBeTruthy()
 })

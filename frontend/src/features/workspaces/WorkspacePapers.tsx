@@ -33,13 +33,14 @@ export function WorkspacePapers({
   const tagMap = paperTags.data ?? {}
   const upload = useUploadPapers(workspaceId)
   const [adding, setAdding] = useState(false)
+  const [visible, setVisible] = useState<string[] | null>(null)
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set())
 
   const all = papers.data
   // Until both tag queries have answered the list is unfiltered: an empty map would otherwise empty it.
   const list = all && (tagList.data && paperTags.data ? filterByTags(all, tagMap, tags, match, tagList.data.map((t) => t.name)) : all)
-  // Only papers the tag filter still shows stay selected (a search inside the list can still hide some).
-  const selectedIds = (list ?? []).filter((p) => picked.has(p.id)).map((p) => p.id)
+  // Only papers still on screen stay selected: the tag filter and the list's own search both can hide some.
+  const selectedIds = (list ?? []).filter((p) => picked.has(p.id) && (visible?.includes(p.id) ?? true)).map((p) => p.id)
   const toggle = (id: string) => setPicked((prev) => new Set(prev.has(id) ? [...prev].filter((x) => x !== id) : [...prev, id]))
   const filterProps = { workspaceId, selected: tags, match, onChange: onTagsChange }
   return (
@@ -82,6 +83,7 @@ export function WorkspacePapers({
             <PaperList
               selection={{ selected: new Set(selectedIds), onToggle: toggle }}
               papers={list}
+              onVisibleChange={setVisible}
               workspaceId={workspaceId}
               tagsByPaper={tagMap}
               activeTags={tags}
