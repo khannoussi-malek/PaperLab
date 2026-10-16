@@ -32,6 +32,7 @@ export function TagSidebar({ workspaceId, selected, match, onChange }: TagFilter
                   <TooltipTrigger asChild>
                     <button
                       type="button"
+                      aria-label={`${tag.name}, ${tag.papers} papers`}
                       aria-pressed={selected.includes(tag.name)}
                       onClick={() => onChange(toggled(selected, tag.name), match)}
                       className={cn(

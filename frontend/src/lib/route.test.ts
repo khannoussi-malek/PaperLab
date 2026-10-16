@@ -80,6 +80,12 @@ describe('parseRoute', () => {
     expect(parseRoute(`#/workspaces/${id}?tab=graph`)).toEqual({ name: 'workspace', workspaceId: id, tab: 'papers', runId: null, tags: [], match: 'any' })
   })
 
+  it('keeps match=all with no tags selected', () => {
+    expect(workspaceHref(id, 'papers', null, { tags: [], match: 'all' })).toBe(`#/workspaces/${id}?match=all`)
+    expect(parseRoute(workspaceHref(id, 'papers', null, { tags: [], match: 'all' }))).toMatchObject({ tags: [], match: 'all' })
+    expect(workspaceHref(id, 'papers', null, { tags: [], match: 'any' })).toBe(`#/workspaces/${id}`)
+  })
+
   it('workspaceHref builds a search tab url', () => {
     expect(workspaceHref(id, 'search')).toBe(`#/workspaces/${id}?tab=search`)
     expect(parseRoute(workspaceHref(id, 'search'))).toEqual({ name: 'workspace', workspaceId: id, tab: 'search', runId: null, tags: [], match: 'any' })
@@ -261,7 +267,7 @@ describe('workspace tags in the URL', () => {
   })
 
   it('writes nothing when empty or off the papers tab, and defaults match to any', () => {
-    expect(workspaceHref(id, 'papers', null, tagged([], 'all'))).toBe(`#/workspaces/${id}`)
+    expect(workspaceHref(id, 'papers', null, tagged([], 'any'))).toBe(`#/workspaces/${id}`)
     expect(workspaceHref(id, 'notes', null, tagged(['x']))).toBe(`#/workspaces/${id}?tab=notes`)
     expect(parseRoute(`#/workspaces/${id}?tags=x&match=bogus`)).toMatchObject({ tags: ['x'], match: 'any' })
   })

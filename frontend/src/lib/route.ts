@@ -174,8 +174,8 @@ export const workspaceHref = (
   const params = new URLSearchParams()
   if (tab !== 'papers') params.set('tab', tab)
   if (runId) params.set('run', runId)
-  if (tab === 'papers' && filter?.tags.length) {
-    params.set('tags', filter.tags.map(encodeURIComponent).join(','))
+  if (tab === 'papers' && filter) {
+    if (filter.tags.length) params.set('tags', filter.tags.map(encodeURIComponent).join(','))
     if (filter.match === 'all') params.set('match', 'all')
   }
   const query = params.toString()
