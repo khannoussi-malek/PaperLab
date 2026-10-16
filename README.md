@@ -463,6 +463,7 @@ Settings live in an optional `.env` beside `docker-compose.yml`: every one has a
 | `OPENALEX_MAILTO`                                           | empty (off)                         | Seeds Settings → Paper sources once, on first start: your contact email, with OpenAlex ticked. Change it in Settings afterwards     |
 | `SEMANTIC_SCHOLAR_API_KEY`                                  | empty                               | Seeds the Semantic Scholar key in Settings → Paper sources once, on first start. Change it in Settings afterwards                   |
 | `DISCOVERY_PROVIDER`                                        | `live`                              | `fake` answers Find papers and Similar with three fixed papers and no network (for tests); only on a test stack (`scripts/e2e-stack.sh`)                                           |
+| `EMBED_THREADS`                                             | `4` (or fewer cores)                | Most threads the built-in search model uses while embedding; set it in `docker-compose.yml` under the worker's environment          |
 | `POSTGRES_PASSWORD`, `DATABASE_URL`, `REDIS_URL`, `PDF_DIR` | see `.env.example`                  | Database, queue and PDF storage                                                                                                     |
 
 Ollama listens on IPv4 only by default. If you type `localhost` into a connection's base URL, some systems resolve

@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import pytest
@@ -67,3 +68,21 @@ def test_real_providers_run_on_any_stack(monkeypatch):
     monkeypatch.delenv("LLM_PROVIDER", raising=False)
     monkeypatch.delenv("DISCOVERY_PROVIDER", raising=False)
     assert Settings().llm_provider == "ollama"
+
+
+def test_embed_threads_default_and_env(monkeypatch):
+    monkeypatch.delenv("EMBED_THREADS", raising=False)
+    assert Settings().embed_threads == min(4, os.cpu_count() or 1)
+
+    monkeypatch.setenv("EMBED_THREADS", "2")
+    assert Settings().embed_threads == 2
+
+
+@pytest.mark.parametrize("bad", ["0", "-3", "many", "2.5"])
+def test_invalid_embed_threads_falls_back(monkeypatch, caplog, bad):
+    monkeypatch.setenv("EMBED_THREADS", bad)
+
+    with caplog.at_level("WARNING"):
+        assert Settings().embed_threads == min(4, os.cpu_count() or 1)
+
+    assert "EMBED_THREADS" in caplog.text

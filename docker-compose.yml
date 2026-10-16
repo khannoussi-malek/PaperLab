@@ -71,6 +71,8 @@ services:
       LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
       # The built-in search model's folder. E2E's no-search-model run points it at an empty one (README).
       MODELS_DIR: ${MODELS_DIR:-/models}
+      # Threads the search model may use; unset it takes min(4, cores). Uncomment to change that.
+      # EMBED_THREADS: 4
       PAPERLAB_STACK: ${COMPOSE_PROJECT_NAME}
       DEV_RELOAD: ${DEV_RELOAD:-} # see the api
     # With DEV_RELOAD, watchfiles, not `arq --watch`: that restarts the worker in-process and never re-imports changed
