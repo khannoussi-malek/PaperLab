@@ -9,6 +9,7 @@ from app.core import embedding_sources, papers
 from app.core.chunking import ChunkDraft
 from app.models import Chunk, Paper
 from app.workers import ingest
+from app.workers.settings import IngestWorkerSettings
 
 pytestmark = pytest.mark.anyio
 
@@ -90,3 +91,45 @@ async def test_each_slice_is_a_cancellation_point(worker_session):
 
     written = [c for c in await vectors_of(worker_session, paper.id) if c.embedding is not None]
     assert len(written) == 64
+
+
+async def slow_ingest(worker_session, sample_pdf, monkeypatch):
+    """An ingest whose embedding runs past a 0.5 s deadline: one chunk per slice, 0.3 s each."""
+    monkeypatch.setattr(ingest, "INGEST_JOB_TIMEOUT", 0.5)
+    monkeypatch.setattr(ingest, "EMBED_WRITE_BATCH", 1)
+    paper = Paper(file_path=str(sample_pdf), title="placeholder")
+    worker_session.add(paper)
+    await worker_session.commit()
+    return paper, SleepingEmbedder(0.3)
+
+
+async def test_an_ingest_past_its_deadline_is_marked_failed(worker_session, sample_pdf, monkeypatch):
+    paper, slow = await slow_ingest(worker_session, sample_pdf, monkeypatch)
+
+    assert await ingest.ingest_paper({"embedder": slow}, str(paper.id)) is None  # arq finishes the job
+    await worker_session.refresh(paper)
+
+    assert (paper.status, paper.status_error) == (
+        "failed",
+        "Ingesting took longer than 0 minutes; Re-ingest to try again",
+    )
+    chunks = await vectors_of(worker_session, paper.id)
+    assert len(chunks) > 1 and all(c.embedding is None for c in chunks)  # half a paper never reaches search
+
+
+async def test_the_deadline_message_names_the_minutes():
+    assert ingest.timed_out(20 * 60) == "Ingesting took longer than 20 minutes; Re-ingest to try again"
+
+
+async def test_reembed_past_its_deadline_stops_without_failing_the_paper(worker_session, sample_pdf, monkeypatch):
+    paper, slow = await slow_ingest(worker_session, sample_pdf, monkeypatch)
+    await ingest.ingest_paper({"embedder": FakeEmbedder()}, str(paper.id))
+
+    await ingest.reembed_paper({"embedder": slow}, str(paper.id))  # returns, doesn't raise
+    await worker_session.refresh(paper)
+
+    assert (paper.status, paper.status_error) == ("ready", None)
+
+
+def test_arq_backstop_is_longer_than_the_code_deadline():
+    assert IngestWorkerSettings.job_timeout == ingest.INGEST_JOB_TIMEOUT + 60
