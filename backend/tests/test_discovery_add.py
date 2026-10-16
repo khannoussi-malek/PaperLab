@@ -311,3 +311,22 @@ async def test_the_pdf_client_names_the_tool_and_never_imitates_a_browser():
     await providers.aclose()
 
     assert seen == ["PaperLab (+https://github.com/khannoussi-malek/PaperLab)"]
+
+
+async def test_a_declared_pdf_that_redirects_to_a_private_address_is_never_requested():
+    seen: list[str] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        seen.append(str(request.url))
+        if request.url.path == "/article":
+            return httpx.Response(200, text=PAGE.format(url=f"{HOST}/pdf"))
+        if request.url.path == "/pdf":
+            return httpx.Response(302, headers={"location": "http://127.0.0.1/x.pdf"})
+        return httpx.Response(200, content=PDF)
+
+    providers = discovery.build_providers(SourceSettings(), httpx.MockTransport(handle))
+    data, tried = await discovery.download_pdf(providers.pdf, [f"{HOST}/article"])
+    await providers.aclose()
+
+    assert data is None and tried[-1]["outcome"] == "unsafe_url"
+    assert not any("127.0.0.1" in url for url in seen)
