@@ -232,7 +232,8 @@ async def remove_paper_from_workspace(workspace: str, paper_id: uuid.UUID) -> pi
 async def add_paper(identifier: str, workspace: str | None = None) -> pipeline.AddPaperResult:
     """Use to bring one paper into the library by DOI, arXiv ID or a direct PDF link (free copies only). Returns
     `queued` (ingesting now), `ingested` (already in the library and ready) or `no_free_pdf` with its landing page,
-    `tried` (each PDF URL tried and why it failed) and `free_copies` (repository pages that may hold a free copy).
+    `tried` (each PDF URL tried and why it failed; a `queued` link that fell back to its DOI carries it too) and
+    `free_copies` (repository pages that may hold a free copy).
     Give `workspace` to file it there too."""
     async with sessions() as session:
         return await pipeline.add_paper(session, identifier, workspace)

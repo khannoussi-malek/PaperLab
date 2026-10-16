@@ -111,7 +111,10 @@ async def test_bad_tag_name_refuses_before_writing(session, jobs, pdf_dir):
 
 async def test_a_failed_library_paper_is_retried(session, jobs, pdf_dir):
     ws = await make_ws(session, "retry")
-    failed = Paper(title="Broke", file_path="x.pdf", doi="10.1234/failed", status=PaperStatus.FAILED)
+    pdf_dir.mkdir(exist_ok=True)
+    stored = pdf_dir / "broken.pdf"
+    stored.write_bytes(b"%PDF-1.7\n%the broken copy\n")
+    failed = Paper(title="Broke", file_path=str(stored), doi="10.1234/failed", status=PaperStatus.FAILED)
     session.add(failed)
     await session.commit()
 
@@ -121,3 +124,27 @@ async def test_a_failed_library_paper_is_retried(session, jobs, pdf_dir):
     assert jobs.jobs == [("ingest_paper", str(failed.id))]
     await session.refresh(failed)
     assert failed.status == PaperStatus.UPLOADED
+    assert stored.read_bytes() == PDF  # the upload replaced the broken file
+
+
+async def test_a_ready_library_paper_keeps_its_file(session, jobs, pdf_dir):
+    ws = await make_ws(session, "ready")
+    pdf_dir.mkdir(exist_ok=True)
+    stored = pdf_dir / "ready.pdf"
+    stored.write_bytes(b"%PDF-1.7\n%the good copy\n")
+    ready = Paper(title="Fine", file_path=str(stored), doi="10.1234/ready", status=PaperStatus.READY)
+    session.add(ready)
+    await session.commit()
+
+    added = result(await call("upload_paper", workspace=ws, filename="x.pdf", pdf_base64=b64(), doi="10.1234/ready"))
+
+    assert added["status"] == "already_in_library" and stored.read_bytes() == b"%PDF-1.7\n%the good copy\n"
+
+
+async def test_an_unknown_workspace_is_refused_before_any_write(session, jobs, pdf_dir):
+    before = await paper_count(session)
+
+    response = await call("upload_paper", workspace=f"Nope {RUN}", filename="x.pdf", pdf_base64=b64())
+
+    assert response.is_error and response.structured_content["error"] == "unknown_workspace"
+    assert await paper_count(session) == before and jobs.jobs == [] and list(pdf_dir.glob("*")) == []
