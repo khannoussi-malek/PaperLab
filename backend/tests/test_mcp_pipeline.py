@@ -96,6 +96,9 @@ async def test_add_paper_already_in_library_returns_it_without_a_new_job(session
     assert len(jobs.jobs) == 1
 
 
+NO_ARXIV_MATCH = {"url": "arxiv.org (title search)", "outcome": "no_match"}  # the offline arXiv knows no such title
+
+
 @pytest.mark.parametrize("suffix", ["landing", "closed"])
 async def test_no_free_pdf_returns_the_landing_page_and_stores_nothing(session, jobs, monkeypatch, suffix):
     # The offline fake answers every DOI lookup with the free fixture, so serve the landing/closed one directly.
@@ -113,7 +116,7 @@ async def test_no_free_pdf_returns_the_landing_page_and_stores_nothing(session, 
         "paper_id": None,
         "title": added["title"],
         "landing_url": f"https://doi.org/{discovery_fake.DOI_PREFIX}{suffix}",
-        "tried": [{"url": url, "outcome": "not_a_pdf"} for url in page],
+        "tried": [{"url": url, "outcome": "not_a_pdf"} for url in page] + [NO_ARXIV_MATCH],
         "free_copies": [],
     }
     assert jobs.jobs == []
@@ -132,7 +135,7 @@ async def test_no_free_pdf_names_the_repository_copies_over_mcp(jobs, monkeypatc
     monkeypatch.setattr(unpaywall, "repository_urls", repository_urls)
     added = result(await call("add_paper", identifier=doi))
 
-    assert added["status"] == "no_free_pdf" and added["tried"] == []
+    assert added["status"] == "no_free_pdf" and added["tried"] == [NO_ARXIV_MATCH]
     assert added["free_copies"] == ["https://www.ncbi.nlm.nih.gov/pmc/articles/PMC1/"]
 
 
@@ -289,6 +292,27 @@ async def test_add_papers_reports_each_item(session, jobs, monkeypatch):
     ]
     assert len(opened) == 1 and jobs.jobs == [("ingest_paper", items[0]["paper_id"])]
     assert [p.id for p in await workspaces.papers(session, ws.id)] == [uuid.UUID(items[0]["paper_id"])]
+
+
+async def test_add_papers_items_carry_tried_and_free_copies(jobs, monkeypatch):
+    doi = f"{discovery_fake.DOI_PREFIX}landing"
+    page = f"{discovery_fake.PDF_HOST}/page.html"
+
+    async def search(_session, _providers, _query):
+        return discovery.SearchResult([Candidate(title="Landing", doi=doi, pdf_urls=[page])], [])
+
+    async def repository_urls(_http, _doi):
+        return ["https://www.ncbi.nlm.nih.gov/pmc/articles/PMC1/"]
+
+    monkeypatch.setattr(discovery, "search", search)
+    monkeypatch.setattr(unpaywall, "repository_urls", repository_urls)
+    single = result(await call("add_paper", identifier=doi))
+    [item] = result(await call("add_papers", identifiers=[doi]))
+
+    assert single["tried"] and single["free_copies"]
+    assert item["tried"] == single["tried"] and item["free_copies"] == single["free_copies"]
+    bad = result(await call("add_papers", identifiers=["Attention is all you need"]))[0]
+    assert bad["tried"] == [] and bad["free_copies"] == []
 
 
 async def test_add_papers_unknown_workspace_adds_nothing(jobs):

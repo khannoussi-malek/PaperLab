@@ -321,6 +321,8 @@ class AddPapersItem:
     status: str | None = None
     paper_id: uuid.UUID | None = None
     error: str | None = None
+    tried: list[dict] = field(default_factory=list)
+    free_copies: list[str] = field(default_factory=list)
 
 
 def _distinct(identifiers: list[str]) -> list[tuple[str, tuple[str, str] | None, str | None]]:
@@ -351,7 +353,15 @@ async def add_papers(
             if parsed is not None:
                 try:
                     added = await _add(session, providers, *parsed, workspace_uuid)
-                    items.append(AddPapersItem(text, added.status, added.paper_id))
+                    items.append(
+                        AddPapersItem(
+                            text,
+                            status=added.status,
+                            paper_id=added.paper_id,
+                            tried=added.tried or [],
+                            free_copies=added.free_copies or [],
+                        )
+                    )
                     continue
                 except DomainError as exc:
                     error = error_code(exc)
