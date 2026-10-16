@@ -14,15 +14,17 @@ import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field, replace
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
+from urllib.parse import urljoin
 
 import httpx
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.core import paper_sources, papers, source_registry
+from app.core import paper_sources, papers, pdf_links, source_registry
 from app.core.candidates import (
     ARXIV_ID,
     Candidate,
@@ -34,8 +36,9 @@ from app.core.candidates import (
     with_s2,
 )
 from app.core.enrichment import ARXIV_DOI_PREFIX
-from app.core.errors import Conflict
+from app.core.errors import Conflict, InvalidInput
 from app.core.paper_sources import KEYED, NAMES, SourceSettings
+from app.core.redact import redact
 from app.core.source_registry import ASKS
 from app.models import Paper
 from app.providers import discovery_fake, semantic_scholar, unpaywall
@@ -103,7 +106,8 @@ def build_providers(sources: SourceSettings, transport: httpx.AsyncBaseTransport
         # No email: unlike the sources, a PDF host (arxiv.org, a publisher, a repository, or a redirect target) never
         # agreed to receive the owner's email.
         pdf=httpx.AsyncClient(
-            timeout=PDF_TIMEOUT, follow_redirects=True, headers={"User-Agent": "PaperLab"}, transport=transport
+            timeout=PDF_TIMEOUT, follow_redirects=True, headers={"User-Agent": PDF_USER_AGENT}, transport=transport,
+            event_hooks={"request": [pdf_links.guard]},  # every hop, redirects included
         ),
         clients=clients,
     )
@@ -120,6 +124,8 @@ async def open_providers(session: AsyncSession) -> AsyncIterator[Providers]:
         # The fake answers Unpaywall offline, so its placeholder can stand in for the email Unpaywall needs.
         sources = replace(sources, contact_email=sources.contact_email or discovery_fake.MAILTO)
     providers = build_providers(sources, transport)
+    if transport is not None:
+        providers.pdf.event_hooks["request"].clear()  # the fake's hosts never resolve, and nothing leaves the process
     try:
         yield providers
     finally:
@@ -220,9 +226,12 @@ async def _add_s2_links(http: httpx.AsyncClient, candidates: list[Candidate]) ->
     return [with_s2(c, by_doi.get(c.doi)) for c in candidates]
 
 
-async def _add_unpaywall_links(http: httpx.AsyncClient | None, candidates: list[Candidate]) -> list[Candidate]:
-    """Free PDF links for candidates with a DOI and none yet: one request each, so only where a badge can change
-    (D72). Never fatal: a failed lookup leaves its candidate as it is."""
+async def _add_unpaywall_links(
+    http: httpx.AsyncClient | None, candidates: list[Candidate], merge: bool = False
+) -> list[Candidate]:
+    """Unpaywall's free PDF links for candidates with a DOI and no PDF link (D72), one request each. `merge` also asks
+    for those that have one and merges the answer in (M63: OpenAlex alone often lists only a bot-checked publisher);
+    add() uses it for the one candidate being added. Never fatal: a failed lookup leaves its candidate as it is."""
     if http is None:
         return candidates
     limit = asyncio.Semaphore(UNPAYWALL_CONCURRENCY)
@@ -230,7 +239,7 @@ async def _add_unpaywall_links(http: httpx.AsyncClient | None, candidates: list[
 
     async def with_links(candidate: Candidate) -> Candidate:
         nonlocal unreachable
-        if not candidate.doi or candidate.pdf_urls or unreachable:
+        if not candidate.doi or unreachable or (candidate.pdf_urls and not merge):
             return candidate
         try:
             async with limit:
@@ -244,7 +253,8 @@ async def _add_unpaywall_links(http: httpx.AsyncClient | None, candidates: list[
         except httpx.HTTPError as exc:
             logger.info("no Unpaywall links for %s: %s", candidate.doi, exc)
             return candidate
-        return replace(candidate, pdf_urls=ordered_pdf_urls(candidate.external_ids.get("arxiv"), *urls))
+        merged = ordered_pdf_urls(candidate.external_ids.get("arxiv"), *candidate.pdf_urls, *urls)
+        return replace(candidate, pdf_urls=merged)
 
     return list(await asyncio.gather(*map(with_links, candidates)))
 
@@ -289,32 +299,100 @@ async def similar(
     return await mark_in_library(session, await _add_unpaywall_links(providers.client("unpaywall"), candidates[:limit]))
 
 
-async def _fetch_pdf(http: httpx.AsyncClient, url: str) -> bytes | None:
+BOT_CHECK_STATUSES = (403, 429, 503)
+CHALLENGE_MARKERS = (b"Just a moment", b"challenge-platform")
+
+
+async def _is_bot_check(response: httpx.Response) -> bool:
+    """A Cloudflare challenge: its `cf-mitigated` header, or its interstitial page. Recognised, never answered."""
+    if response.status_code not in BOT_CHECK_STATUSES:
+        return False
+    if "cf-mitigated" in response.headers:
+        return True
+    if "cloudflare" not in response.headers.get("server", "").lower():
+        return False
+    async for chunk in response.aiter_bytes():  # the first chunk holds the page's title
+        return any(marker in chunk for marker in CHALLENGE_MARKERS)
+    return False
+
+
+MAX_LANDING_BYTES = 2 * 1024 * 1024
+PDF_USER_AGENT = "PaperLab (+https://github.com/khannoussi-malek/PaperLab)"  # names the tool; never imitates a browser
+FOLLOWED = "not_a_pdf → followed citation_pdf_url"
+
+
+class _PdfMeta(HTMLParser):
+    """The first `<meta name="citation_pdf_url" content=…>`, its attributes in either order."""
+
+    def __init__(self):
+        super().__init__()
+        self.url: str | None = None
+
+    def handle_starttag(self, tag, attrs):
+        fields = dict(attrs)
+        if self.url is None and tag == "meta" and (fields.get("name") or "").lower() == "citation_pdf_url":
+            self.url = (fields.get("content") or "").strip() or None
+
+
+def _declared_pdf(page: str, base: str) -> str | None:
+    parser = _PdfMeta()
+    parser.feed(page)
+    return urljoin(base, parser.url) if parser.url else None
+
+
+async def _fetch_pdf(http: httpx.AsyncClient, url: str) -> tuple[bytes | None, str, str | None]:
+    """(the PDF or None, why, the page's declared PDF URL or None): why is `pdf`, `http_<status>`, `bot_check`,
+    `too_large` or `not_a_pdf`. Only a not_a_pdf page under MAX_LANDING_BYTES can declare a PDF."""
     async with http.stream("GET", url) as response:
         if response.status_code != 200:
-            logger.info("no PDF at %s: HTTP %d", url, response.status_code)
-            return None
+            outcome = "bot_check" if await _is_bot_check(response) else f"http_{response.status_code}"
+            logger.info("no PDF at %s: %s", redact(url), outcome)
+            return None, outcome, None
+        final_url = str(response.url)
         body = bytearray()
         async for chunk in response.aiter_bytes():
             body += chunk
             if len(body) > MAX_PDF_BYTES:
-                logger.info("no PDF at %s: over %d bytes", url, MAX_PDF_BYTES)
-                return None
+                logger.info("no PDF at %s: over %d bytes", redact(url), MAX_PDF_BYTES)
+                return None, "too_large", None
     if not body.startswith(papers.PDF_MAGIC):
-        logger.info("no PDF at %s: the body is not a PDF", url)
-        return None
-    return bytes(body)
+        logger.info("no PDF at %s: the body is not a PDF", redact(url))
+        declared = None
+        if len(body) < MAX_LANDING_BYTES:
+            declared = _declared_pdf(body.decode("utf-8", errors="replace"), final_url)
+        return None, "not_a_pdf", declared
+    return bytes(body), "pdf", None
 
 
-async def download_pdf(http: httpx.AsyncClient, urls: list[str]) -> bytes | None:
-    """The first URL whose body is a PDF, in order. A failing URL moves on to the next."""
+async def _try(http: httpx.AsyncClient, url: str, check: bool = False) -> tuple[bytes | None, str, str | None]:
+    try:
+        if check:  # a URL a publisher page declared is not the caller's own link: never fetch a private address
+            await pdf_links.check_url(url)
+        return await _fetch_pdf(http, url)
+    except InvalidInput as exc:
+        if str(exc) != "unsafe_url":
+            raise
+        return None, "unsafe_url", None
+    except httpx.HTTPError as exc:
+        logger.info("no PDF at %s: %s", redact(url), redact(str(exc)))
+        return None, f"error: {type(exc).__name__}", None
+
+
+async def download_pdf(http: httpx.AsyncClient, urls: list[str]) -> tuple[bytes | None, list[dict[str, str]]]:
+    """(the first body that is a PDF, what each URL tried said), in order. A failing URL moves on to the next; a page
+    that declares its PDF (citation_pdf_url) gets that one URL tried too, and a followed page is not followed again.
+    The URLs in `tried` have their query secrets hidden."""
+    tried: list[dict[str, str]] = []
     for url in urls:
-        try:
-            if (data := await _fetch_pdf(http, url)) is not None:
-                return data
-        except httpx.HTTPError as exc:
-            logger.info("no PDF at %s: %s", url, exc)
-    return None
+        data, outcome, declared = await _try(http, url)
+        tried.append({"url": redact(url), "outcome": FOLLOWED if declared else outcome})
+        if declared:
+            # ponytail: one hop; the PDF's own page is not followed
+            data, outcome, _ = await _try(http, declared, check=True)
+            tried.append({"url": redact(declared), "outcome": outcome})
+        if data is not None:
+            return data, tried
+    return None, tried
 
 
 def prefill(candidate: Candidate) -> dict[str, Any]:
@@ -341,16 +419,39 @@ def _filename(title: str) -> str:
     return f"{re.sub(r'[^\w\- ]+', '', title).strip()[:80] or 'paper'}.pdf"
 
 
-async def add(session: AsyncSession, providers: Providers, candidate: Candidate, pdf_dir: Path) -> Paper:
-    """Downloads the candidate's first free PDF and creates the paper. The caller enqueues ingest."""
+async def free_copies(providers: Providers, doi: str | None, tried: list[dict[str, str]]) -> list[str]:
+    """Where a free copy may be: the repository landing pages Unpaywall lists for `doi`, bar the ones just tried. One
+    request, only once a download has failed; the candidate need not carry them, so the app's Add button gets them
+    too. A lookup that fails is no copies."""
+    http = providers.client("unpaywall")
+    if http is None or not doi:
+        return []
+    try:
+        urls = await unpaywall.repository_urls(http, doi)
+    except httpx.HTTPError as exc:
+        logger.info("no Unpaywall repository copies for %s: %s", doi, redact(str(exc)))
+        return []
+    seen = {t["url"] for t in tried}
+    return [redacted for url in urls if (redacted := redact(url)) not in seen]
+
+
+async def add(
+    session: AsyncSession, providers: Providers, candidate: Candidate, pdf_dir: Path, tried_out: list | None = None
+) -> Paper:
+    """Downloads the candidate's first free PDF and creates the paper. The caller enqueues ingest. A caller that
+    wants to know what each URL said passes `tried_out` (a failure carries it on the Conflict anyway)."""
     [marked] = await mark_in_library(session, [candidate])
     if marked.paper_id is not None:
         raise Conflict(ALREADY_IN_LIBRARY)
     # Release the connection (and its transaction) before a download that can take up to several 30s reads.
     await session.commit()
-    data = await download_pdf(providers.pdf, candidate.pdf_urls)
+    if candidate.doi and candidate.pdf_urls:  # one extra request: a repository copy beside a bot-checked publisher
+        [candidate] = await _add_unpaywall_links(providers.client("unpaywall"), [candidate], merge=True)
+    data, tried = await download_pdf(providers.pdf, candidate.pdf_urls)
+    if tried_out is not None:
+        tried_out.extend(tried)
     if data is None:
-        raise Conflict(NO_FREE_PDF)
+        raise Conflict(NO_FREE_PDF, tried=tried, free_copies=await free_copies(providers, candidate.doi, tried))
     # ponytail: two adds of one paper racing past the check above hit papers' UNIQUE doi and 500. The buttons disable
     # while adding; catch IntegrityError here if it ever happens.
     return await papers.create_paper(session, _filename(candidate.title), data, pdf_dir, prefill=prefill(candidate))

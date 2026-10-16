@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import re
 import time
 import uuid
 from datetime import datetime, timezone
@@ -9,6 +8,7 @@ from sqlalchemy import select, text, update
 
 from app.config import settings
 from app.core import discovery, paper_sources, queue, screening
+from app.core.redact import redact
 from app.core.workspace_search import PER_SOURCE_PASS_LIMIT, SEARCH_RUN_JOB_TIMEOUT, get_run, search_batch
 from app.db import SessionLocal
 from app.models.workspace import Workspace
@@ -37,7 +37,6 @@ MAX_BATCH_ITERATIONS = 200
 # room for one in-flight batch's HTTP calls plus the final commit to finish after the deadline trips.
 SEARCH_RUN_SAFETY_MARGIN = 60
 
-_SECRET_PARAM = re.compile(r"(?i)((?:api_)?key=)[^&\s']+")
 _ERROR_MAX_CHARS = 200
 
 _TRY_LOCK = text("SELECT pg_try_advisory_xact_lock(:key)")
@@ -151,7 +150,7 @@ async def run_workspace_search(ctx: dict, run_id: str) -> None:
                         per_source_out[source] = per_source_out.get(source, 0) + count
                     per_source_error = dict(run.stats_json.get("per_source_error", {}))
                     for source, error in result.errors.items():
-                        per_source_error[source] = _SECRET_PARAM.sub(r"\1***", error)[:_ERROR_MAX_CHARS]
+                        per_source_error[source] = redact(error)[:_ERROR_MAX_CHARS]
                         logger.warning("workspace search run %s: %s failed: %s", rid, source, per_source_error[source])
                     capped = [s for s in result.sources_exhausted if s in result.errors]  # exhausted by the error cap
                     failed_sources = sorted({*run.stats_json.get("failed_sources", []), *capped})

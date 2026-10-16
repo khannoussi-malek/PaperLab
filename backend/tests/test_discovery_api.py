@@ -140,6 +140,8 @@ async def test_add_without_a_free_pdf_is_409_and_enqueues_nothing(client, discov
 
     assert response.status_code == 409
     assert response.json()["detail"].startswith("No free PDF was found")
+    assert response.json()["tried"] == [{"url": "https://pdf.example/landing", "outcome": "not_a_pdf"}]
+    assert response.json()["free_copies"] == []
     assert arq.jobs == []
 
 

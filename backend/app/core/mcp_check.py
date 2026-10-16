@@ -56,6 +56,7 @@ TOOLS = [
     "stop_search_run",
     "tag_papers",
     "untag_papers",
+    "upload_paper",
     "verify_claim",
     "verify_claims",
 ]

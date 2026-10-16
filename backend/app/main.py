@@ -109,7 +109,9 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(DomainError)
     async def domain_error(_: Request, exc: DomainError) -> JSONResponse:
-        return JSONResponse({"detail": str(exc)}, status_code=STATUS_BY_ERROR.get(type(exc), 400))
+        # no_free_pdf says what it tried and where a free copy may be (M63)
+        extra = {key: exc.details[key] for key in ("tried", "free_copies") if key in exc.details}
+        return JSONResponse({"detail": str(exc), **extra}, status_code=STATUS_BY_ERROR.get(type(exc), 400))
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(_: Request, exc: RequestValidationError) -> JSONResponse:

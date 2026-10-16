@@ -184,6 +184,29 @@ async def test_unpaywall_is_asked_only_for_results_with_a_doi_and_no_pdf(session
     assert [r.url.path for r in discovery_fakes.unpaywall.requests] == ["/v2/10.5555/none"]
 
 
+async def test_a_search_of_results_that_all_have_pdf_links_makes_no_unpaywall_request(session, discovery_fakes):
+    dois = ("10.5555/a", "10.5555/b", "10.5555/c")
+    works = [work(f"Paper {d}", d, f"https://example.org/{d[-1]}.pdf") for d in dois]
+    discovery_fakes.openalex.route("/works", {"results": works})
+    discovery_fakes.s2.reply(BATCH, 200, json=[None, None, None])
+
+    found = await discovery.search(session, discovery_fakes.turned_on("unpaywall"), "paper")
+
+    assert len(found.results) == 3 and discovery_fakes.unpaywall.requests == []
+
+
+async def test_semantic_scholars_open_access_pdf_is_kept_beside_openalexs(session, discovery_fakes):
+    discovery_fakes.openalex.route("/works", {"results": [work("S2 paper", "10.5555/s2", "https://example.org/oa.pdf")]})
+    discovery_fakes.s2.reply(BATCH, 200, json=[{
+        "paperId": "abc", "title": "S2 paper", "externalIds": {"DOI": "10.5555/s2"},
+        "openAccessPdf": {"url": "https://s2.example.org/free.pdf"},
+    }])  # fmt: skip
+
+    found = await discovery.search(session, discovery_fakes.providers, "S2 paper")
+
+    assert found.results[0].pdf_urls == ["https://s2.example.org/free.pdf", "https://example.org/oa.pdf"]
+
+
 async def test_a_failing_unpaywall_lookup_leaves_its_result_as_it_is(session, discovery_fakes):
     discovery_fakes.openalex.route("/works", {"results": [work(BERT, BERT_DOI)]})
     discovery_fakes.s2.reply(BATCH, 200, json=[None])
