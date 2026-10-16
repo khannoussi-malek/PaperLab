@@ -1,6 +1,7 @@
 import type { Paper } from '@/api/client'
 import { Badge } from '@/components/ui/badge'
 import { SOURCE_TYPES } from './paperForm'
+import { isPublishedCopy, publishedChipText } from './publishedChip'
 
 const EVIDENCE: Record<Paper['evidence_access'], string> = {
   full_text: 'Full text',
@@ -15,14 +16,30 @@ function peerReviewLabel(paper: Paper): string | null {
   return null
 }
 
+function PublishedChip({ paper }: { paper: Paper }) {
+  const label = `Published version: ${[paper.published_venue, paper.year].filter(Boolean).join(' ')}`.trimEnd()
+  const text = publishedChipText(paper.published_venue, paper.year)
+  return (
+    <Badge variant="outline" className="published-version font-normal" asChild={Boolean(paper.published_doi)}>
+      {paper.published_doi ? (
+        <a href={`https://doi.org/${paper.published_doi}`} target="_blank" rel="noreferrer" aria-label={label}>{text}</a>
+      ) : (
+        <span aria-label={label}>{text}</span>
+      )}
+    </Badge>
+  )
+}
+
 /** Where a paper comes from and how much of it the library can read; one set of chips for the list rows and the reader. */
 export function SourceBadges({ paper }: { paper: Paper }) {
+  const published = isPublishedCopy(paper)
   const type = SOURCE_TYPES.find((t) => t.value === paper.source_type)?.label
   const review = peerReviewLabel(paper)
   return (
     <>
-      {type && <Badge variant="secondary" className="source-type font-normal">{type}</Badge>}
-      {review && <Badge variant="outline" className="peer-review font-normal">{review}</Badge>}
+      {published && <PublishedChip paper={paper} />}
+      {!published && type && <Badge variant="secondary" className="source-type font-normal">{type}</Badge>}
+      {!published && review && <Badge variant="outline" className="peer-review font-normal">{review}</Badge>}
       <Badge variant="outline" className="evidence-access font-normal">{EVIDENCE[paper.evidence_access]}</Badge>
     </>
   )

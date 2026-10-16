@@ -75,3 +75,11 @@ describe('matchesPaper', () => {
     expect(matchesPaper({ title: 'Untitled draft', authors: [], year: null, venue: null }, 'draft')).toBe(true)
   })
 })
+
+describe('byline with a published venue', () => {
+  it('prefers published_venue over the arXiv venue', () => {
+    const paper = { authors: ['Ada'], year: 2025, venue: 'arXiv (Cornell University)', published_venue: 'STOC' }
+    expect(byline(paper)).toBe('Ada · 2025 · STOC')
+    expect(byline({ ...paper, published_venue: null })).toBe('Ada · 2025 · arXiv (Cornell University)')
+  })
+})
