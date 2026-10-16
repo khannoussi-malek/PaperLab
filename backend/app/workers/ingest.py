@@ -118,8 +118,9 @@ async def ingest_paper(ctx: dict, paper_id: str) -> None:
         started = time.monotonic()
         marks: list[tuple[str, float]] = [("extracting", started)]  # each stage's start; a stage runs until the next
         chunks = pages = 0
+        deadline = asyncio.timeout(INGEST_JOB_TIMEOUT)
         try:
-            async with asyncio.timeout(INGEST_JOB_TIMEOUT):
+            async with deadline:
                 await papers.set_status(session, pid, PaperStatus.EXTRACTING)
                 doc = await asyncio.to_thread(extract, paper.file_path)
                 # extract() can take seconds; re-read the lock right before deciding, in case a PATCH landed meanwhile.
@@ -151,16 +152,18 @@ async def ingest_paper(ctx: dict, paper_id: str) -> None:
 
                 await papers.set_status(session, pid, PaperStatus.READY)
                 logger.info("ingested %s: %d pages, %d chunks", pid, doc.page_count, len(drafts))
-        except TimeoutError:
-            logger.warning("ingest of %s ran past %d s and was stopped", pid, INGEST_JOB_TIMEOUT)
-            await session.rollback()
-            # Search doesn't look at status, so the slices already written must not answer for half a paper.
-            await session.execute(update(Chunk).where(Chunk.paper_id == pid).values(embedding=None))
-            await papers.set_status(session, pid, PaperStatus.FAILED, error=timed_out(INGEST_JOB_TIMEOUT))
         except Exception as exc:
-            logger.exception("ingest failed for %s", pid)
             await session.rollback()
-            await papers.set_status(session, pid, PaperStatus.FAILED, error=f"{type(exc).__name__}: {exc}")
+            # Only the deadline's own timeout, not another one (a database command's, say).
+            if isinstance(exc, TimeoutError) and deadline.expired():
+                logger.warning("ingest of %s ran past %d s and was stopped", pid, INGEST_JOB_TIMEOUT)
+                # Search doesn't look at status, so the slices already written must not answer for half a paper.
+                await session.execute(update(Chunk).where(Chunk.paper_id == pid).values(embedding=None))
+                error = timed_out(INGEST_JOB_TIMEOUT)
+            else:
+                logger.exception("ingest failed for %s", pid)
+                error = f"{type(exc).__name__}: {exc}"
+            await papers.set_status(session, pid, PaperStatus.FAILED, error=error)
         finally:  # the success, timeout and failure paths all say where the time went
             logger.info(_timings(pid, marks, started, chunks, pages))
 
