@@ -291,6 +291,27 @@ async def test_add_papers_reports_each_item(session, jobs, monkeypatch):
     assert [p.id for p in await workspaces.papers(session, ws.id)] == [uuid.UUID(items[0]["paper_id"])]
 
 
+async def test_add_papers_items_carry_tried_and_free_copies(jobs, monkeypatch):
+    doi = f"{discovery_fake.DOI_PREFIX}landing"
+    page = f"{discovery_fake.PDF_HOST}/page.html"
+
+    async def search(_session, _providers, _query):
+        return discovery.SearchResult([Candidate(title="Landing", doi=doi, pdf_urls=[page])], [])
+
+    async def repository_urls(_http, _doi):
+        return ["https://www.ncbi.nlm.nih.gov/pmc/articles/PMC1/"]
+
+    monkeypatch.setattr(discovery, "search", search)
+    monkeypatch.setattr(unpaywall, "repository_urls", repository_urls)
+    single = result(await call("add_paper", identifier=doi))
+    [item] = result(await call("add_papers", identifiers=[doi]))
+
+    assert single["tried"] and single["free_copies"]
+    assert item["tried"] == single["tried"] and item["free_copies"] == single["free_copies"]
+    bad = result(await call("add_papers", identifiers=["Attention is all you need"]))[0]
+    assert bad["tried"] == [] and bad["free_copies"] == []
+
+
 async def test_add_papers_unknown_workspace_adds_nothing(jobs):
     response = await call("add_papers", identifiers=[FREE_DOI], workspace=f"Nope {RUN}")
     assert response.is_error and response.structured_content["error"] == "unknown_workspace"
