@@ -9,7 +9,7 @@ from mcp_fixtures import call, result
 from sqlalchemy import func, select
 
 from app.core import pipeline, workspaces
-from app.models import Paper
+from app.models import Paper, PaperStatus
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("references")]
 RUN = uuid.uuid4().hex[:8]
@@ -107,3 +107,17 @@ async def test_bad_tag_name_refuses_before_writing(session, jobs, pdf_dir):
     response = await call("upload_paper", workspace=ws, filename="x.pdf", pdf_base64=b64(), tags=["ok", "x" * 200])
     assert response.is_error and response.structured_content["error"] == "invalid_tag_name"
     assert await paper_count(session) == before and jobs.jobs == [] and list(pdf_dir.glob('*')) == []
+
+
+async def test_a_failed_library_paper_is_retried(session, jobs, pdf_dir):
+    ws = await make_ws(session, "retry")
+    failed = Paper(title="Broke", file_path="x.pdf", doi="10.1234/failed", status=PaperStatus.FAILED)
+    session.add(failed)
+    await session.commit()
+
+    added = result(await call("upload_paper", workspace=ws, filename="x.pdf", pdf_base64=b64(), doi="10.1234/failed"))
+
+    assert added["status"] == "queued" and added["paper_id"] == str(failed.id)
+    assert jobs.jobs == [("ingest_paper", str(failed.id))]
+    await session.refresh(failed)
+    assert failed.status == PaperStatus.UPLOADED
