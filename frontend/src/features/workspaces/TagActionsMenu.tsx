@@ -1,5 +1,5 @@
 import { MoreHorizontal } from 'lucide-react'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useDeleteTag, useRenameTag } from '@/api/queries'
 import type { TagSummary } from '@/api/client'
 import { Button } from '@/components/ui/button'
@@ -20,6 +20,7 @@ type Props = {
 export function TagActionsMenu({ workspaceId, tag, onRenamed, onDeleted }: Props) {
   const [dialog, setDialog] = useState<'rename' | 'delete' | null>(null)
   const [name, setName] = useState(tag.name)
+  const triggerRef = useRef<HTMLButtonElement>(null)
   const rename = useRenameTag(workspaceId)
   const del = useDeleteTag(workspaceId)
 
@@ -29,11 +30,17 @@ export function TagActionsMenu({ workspaceId, tag, onRenamed, onDeleted }: Props
     del.reset()
   }
 
+  // The dialogs open from a menu item, not a trigger of their own, so Radix would hand focus to the body.
+  const returnFocus = (event: Event) => {
+    event.preventDefault()
+    triggerRef.current?.focus()
+  }
+
   return (
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon-sm" aria-label={`Actions for tag ${tag.name}`}>
+          <Button ref={triggerRef} variant="ghost" size="icon-sm" aria-label={`Actions for tag ${tag.name}`}>
             <MoreHorizontal aria-hidden />
           </Button>
         </DropdownMenuTrigger>
@@ -44,7 +51,7 @@ export function TagActionsMenu({ workspaceId, tag, onRenamed, onDeleted }: Props
       </DropdownMenu>
 
       <Dialog open={dialog === 'rename'} onOpenChange={(next) => !next && close()}>
-        <DialogContent>
+        <DialogContent onCloseAutoFocus={returnFocus}>
           <form
             onSubmit={(event) => {
               event.preventDefault()
@@ -66,7 +73,7 @@ export function TagActionsMenu({ workspaceId, tag, onRenamed, onDeleted }: Props
       </Dialog>
 
       <Dialog open={dialog === 'delete'} onOpenChange={(next) => !next && close()}>
-        <DialogContent>
+        <DialogContent onCloseAutoFocus={returnFocus}>
           <DialogHeader>
             <DialogTitle>Delete tag "{tag.name}"?</DialogTitle>
             <DialogDescription>The tag is removed from {plural(tag.papers, 'paper')}. No papers are deleted.</DialogDescription>

@@ -58,3 +58,11 @@ test('delete can be cancelled', async () => {
   fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }))
   expect(del).not.toHaveBeenCalled()
 })
+
+test('closing the rename dialog with Escape puts focus back on the tag\'s actions button', async () => {
+  setup()
+  await open('Rename')
+  fireEvent.keyDown(await screen.findByRole('textbox'), { key: 'Escape' })
+  await waitFor(() => expect(screen.queryByText('Rename tag')).toBeNull())
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Actions for tag rct' })))
+})
