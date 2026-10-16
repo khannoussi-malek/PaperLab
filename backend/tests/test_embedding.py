@@ -177,3 +177,25 @@ async def test_a_vector_that_is_not_768_long_is_refused_in_words():
         "stub-model gives vectors of 1,024 numbers, and PaperLab's search index holds 768. Choose a model that gives "
         "768, such as nomic-embed-text."
     )
+
+
+def test_onnx_session_gets_capped_threads(monkeypatch):
+    onnxruntime = pytest.importorskip("onnxruntime")
+    tokenizers = pytest.importorskip("tokenizers")
+    seen = {}
+
+    class Session(FakeSession):
+        def __init__(self, path, sess_options=None, providers=None):
+            seen["options"] = sess_options
+            super().__init__()
+
+    monkeypatch.setattr(search_model, "present", lambda *_: True)
+    monkeypatch.setattr(onnxruntime, "InferenceSession", Session)
+    monkeypatch.setattr(tokenizers, "Tokenizer", type("T", (), {"from_file": staticmethod(lambda _: tiny_tokenizer())}))
+    monkeypatch.setattr(settings, "embed_threads", 3)
+
+    REAL_LOAD()
+
+    options = seen["options"]
+    assert (options.intra_op_num_threads, options.inter_op_num_threads) == (3, 1)
+    assert options.execution_mode == onnxruntime.ExecutionMode.ORT_SEQUENTIAL
