@@ -1,13 +1,15 @@
 import uuid
+from dataclasses import asdict
 
 from fastapi import APIRouter, Request, Response
 
 from app.api.citations import download
 from app.api.deps import SessionDep
-from app.core import notes_markdown, pipeline, workspace_search, workspaces
+from app.core import notes_markdown, pipeline, tags, workspace_search, workspaces
 from app.core.citations_export import filename_slug
 from app.schemas.notes import NoteOut
 from app.schemas.papers import PaperOut
+from app.schemas.tags import TagApply, TagDeleted, TagOut, TagRename, TagRenamed, TagResultOut
 from app.schemas.workspace_search import EligibilityOut, EligibilityUpdate
 from app.schemas.workspaces import WorkspaceCreate, WorkspaceOut, WorkspaceRename
 
@@ -83,3 +85,40 @@ async def export_notes(workspace_id: uuid.UUID, request: Request, session: Sessi
     return Response(
         data, media_type="application/zip", headers={"Content-Disposition": f'attachment; filename="{slug}-notes.zip"'}
     )
+
+
+@router.get("/{workspace_id}/tags")
+async def list_tags(workspace_id: uuid.UUID, session: SessionDep) -> list[TagOut]:
+    await workspaces.get(session, workspace_id)
+    ids = await tags.tag_ids(session, workspace_id)
+    return [TagOut(id=ids[s.name], **asdict(s)) for s in await tags.summaries(session, workspace_id)]
+
+
+@router.get("/{workspace_id}/paper-tags")
+async def paper_tags(workspace_id: uuid.UUID, session: SessionDep) -> dict[str, list[str]]:
+    await workspaces.get(session, workspace_id)
+    return {str(k): v for k, v in (await tags.paper_tag_map(session, workspace_id)).items()}
+
+
+@router.post("/{workspace_id}/tags/apply")
+async def apply_tag(workspace_id: uuid.UUID, payload: TagApply, session: SessionDep) -> TagResultOut:
+    await workspaces.get(session, workspace_id)
+    return TagResultOut(**asdict(await tags.tag_papers(session, workspace_id, payload.tag, payload.paper_ids)))
+
+
+@router.post("/{workspace_id}/tags/remove")
+async def remove_tag(workspace_id: uuid.UUID, payload: TagApply, session: SessionDep) -> TagResultOut:
+    await workspaces.get(session, workspace_id)
+    return TagResultOut(**asdict(await tags.untag_papers(session, workspace_id, payload.tag, payload.paper_ids)))
+
+
+@router.patch("/{workspace_id}/tags/{tag_id}")
+async def rename_tag(workspace_id: uuid.UUID, tag_id: uuid.UUID, payload: TagRename, session: SessionDep) -> TagRenamed:
+    old, new = await tags.rename_by_id(session, workspace_id, tag_id, payload.new_name)
+    return TagRenamed(old=old, new=new)
+
+
+@router.delete("/{workspace_id}/tags/{tag_id}")
+async def delete_tag(workspace_id: uuid.UUID, tag_id: uuid.UUID, session: SessionDep) -> TagDeleted:
+    name, count = await tags.delete_by_id(session, workspace_id, tag_id)
+    return TagDeleted(tag=name, papers=count)
