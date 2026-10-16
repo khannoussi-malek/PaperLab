@@ -20,7 +20,7 @@ test('tag papers, filter by a tag, rename it, and delete another without deletin
   await row(paperId).getByRole('checkbox').check()
   await row(secondPaperId).getByRole('checkbox').check()
   await expect(page.getByText('2 selected')).toBeVisible()
-  await page.getByRole('button', { name: 'Tag…' }).click()
+  await page.getByRole('button', { name: 'Tag…', exact: true }).click()
   await page.getByPlaceholder('Find or create a tag').fill('Q1')
   await page.getByRole('option', { name: 'Create "Q1"' }).click()
   await expect(row(paperId).getByRole('button', { name: 'Filter by tag Q1' })).toBeVisible()
@@ -28,7 +28,7 @@ test('tag papers, filter by a tag, rename it, and delete another without deletin
 
   // Tag only the first paper Q2.
   await row(paperId).getByRole('checkbox').check()
-  await page.getByRole('button', { name: 'Tag…' }).click()
+  await page.getByRole('button', { name: 'Tag…', exact: true }).click()
   await page.getByPlaceholder('Find or create a tag').fill('Q2')
   await page.getByRole('option', { name: 'Create "Q2"' }).click()
   await expect(row(paperId).getByRole('button', { name: 'Filter by tag Q2' })).toBeVisible()
