@@ -37,7 +37,7 @@ test('choosing a tag in the list adds it; choosing a selected one drops it', () 
 test('selected items say so and names read name and count apart', () => {
   setup(['cohort'])
   fireEvent.click(screen.getByRole('button', { name: /Tags/ }))
-  expect(screen.getByRole('option', { name: 'cohort, 1 papers' }).getAttribute('aria-checked')).toBe('true')
+  expect(screen.getByRole('option', { name: 'cohort, 1 paper' }).getAttribute('aria-checked')).toBe('true')
   expect(screen.getByRole('option', { name: 'rct, 3 papers' }).getAttribute('aria-checked')).toBe('false')
 })
 

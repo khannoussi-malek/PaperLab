@@ -4,7 +4,9 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import type { TagMatch } from '@/lib/route'
+import { plural } from '@/features/charts/chartMeta'
 import { cn } from '@/lib/utils'
+import { TagActionsMenu } from './TagActionsMenu'
 import { coverageText, toggled } from './tagFilter'
 
 export type TagFilterProps = {
@@ -27,16 +29,16 @@ export function TagSidebar({ workspaceId, selected, match, onChange }: TagFilter
         <TooltipProvider>
           <ul className="flex flex-col gap-0.5">
             {tags.map((tag) => (
-              <li key={tag.id}>
+              <li key={tag.id} className="flex items-center gap-1">
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <button
                       type="button"
-                      aria-label={`${tag.name}, ${tag.papers} papers`}
+                      aria-label={`${tag.name}, ${plural(tag.papers, 'paper')}`}
                       aria-pressed={selected.includes(tag.name)}
                       onClick={() => onChange(toggled(selected, tag.name), match)}
                       className={cn(
-                        'flex w-full items-center justify-between gap-2 rounded-md px-2 py-1 text-left text-sm hover:bg-foreground/5',
+                        'flex min-w-0 flex-1 items-center justify-between gap-2 rounded-md px-2 py-1 text-left text-sm hover:bg-foreground/5',
                         selected.includes(tag.name) && 'bg-primary/10 font-medium',
                       )}
                     >
@@ -46,6 +48,12 @@ export function TagSidebar({ workspaceId, selected, match, onChange }: TagFilter
                   </TooltipTrigger>
                   <TooltipContent side="right">{coverageText(tag)}</TooltipContent>
                 </Tooltip>
+                <TagActionsMenu
+                  workspaceId={workspaceId}
+                  tag={tag}
+                  onRenamed={(from, to) => onChange(selected.map((t) => (t === from ? to : t)), match)}
+                  onDeleted={(name) => selected.includes(name) && onChange(selected.filter((t) => t !== name), match)}
+                />
               </li>
             ))}
           </ul>
