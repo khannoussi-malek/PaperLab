@@ -63,7 +63,12 @@ def load(variant: search_model.Variant | None = None) -> BuiltIn | None:
     from tokenizers import Tokenizer
 
     onnx, tokenizer = (str(search_model.path(settings.models_dir, f)) for f in (variant.onnx, variant.tokenizer))
-    session = onnxruntime.InferenceSession(onnx, providers=["CPUExecutionProvider"])
+    # ponytail: the default (every core, per op) is slower than a few on a busy machine; EMBED_THREADS caps it.
+    options = onnxruntime.SessionOptions()
+    options.intra_op_num_threads = settings.embed_threads
+    options.inter_op_num_threads = 1
+    options.execution_mode = onnxruntime.ExecutionMode.ORT_SEQUENTIAL
+    session = onnxruntime.InferenceSession(onnx, sess_options=options, providers=["CPUExecutionProvider"])
     name = settings.embed_model if variant == search_model.SHIPPED else variant.name
     return BuiltIn(Embedder(session, Tokenizer.from_file(tokenizer)), name)
 
