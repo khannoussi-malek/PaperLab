@@ -465,4 +465,5 @@ async def test_a_timed_out_ingest_logs_its_timings(worker_session, sample_pdf, c
     with caplog.at_level("INFO", logger="app.workers.ingest"):
         await ingest.ingest_paper({"embedder": SlowEmbedder()}, str(pid))
 
+    assert f"ingest of {pid} ran past" in caplog.text  # the deadline fired, not some other end
     assert re.search(f"ingest timings for {pid}: .*embedding=[\\d.]+s", caplog.text)
