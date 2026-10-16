@@ -386,14 +386,19 @@ async def free_copies(providers: Providers, doi: str | None, tried: list[dict[st
     return [redacted for url in urls if (redacted := redact(url)) not in seen]
 
 
-async def add(session: AsyncSession, providers: Providers, candidate: Candidate, pdf_dir: Path) -> Paper:
-    """Downloads the candidate's first free PDF and creates the paper. The caller enqueues ingest."""
+async def add(
+    session: AsyncSession, providers: Providers, candidate: Candidate, pdf_dir: Path, tried_out: list | None = None
+) -> Paper:
+    """Downloads the candidate's first free PDF and creates the paper. The caller enqueues ingest. A caller that
+    wants to know what each URL said passes `tried_out` (a failure carries it on the Conflict anyway)."""
     [marked] = await mark_in_library(session, [candidate])
     if marked.paper_id is not None:
         raise Conflict(ALREADY_IN_LIBRARY)
     # Release the connection (and its transaction) before a download that can take up to several 30s reads.
     await session.commit()
     data, tried = await download_pdf(providers.pdf, candidate.pdf_urls)
+    if tried_out is not None:
+        tried_out.extend(tried)
     if data is None:
         raise Conflict(NO_FREE_PDF, tried=tried, free_copies=await free_copies(providers, candidate.doi, tried))
     # ponytail: two adds of one paper racing past the check above hit papers' UNIQUE doi and 500. The buttons disable
