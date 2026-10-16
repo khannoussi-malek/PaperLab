@@ -444,3 +444,101 @@ async def test_a_disabled_arxiv_source_is_not_searched_and_records_nothing(sessi
 
     assert [t["outcome"] for t in caught.value.details["tried"]] == ["http_403"]
     assert discovery_fakes.arxiv.requests == []
+
+
+# --- M63b: DiVA repository records are tried as their FULLTEXT PDF ---
+
+DIVA_RECORD = "https://kth.diva-portal.org/smash/record.jsf?pid=diva2%3A1234567&dswid=-1"
+DIVA_PDF = "https://kth.diva-portal.org/smash/get/diva2:1234567/FULLTEXT01.pdf"
+
+
+def repositories(fakes, doi, *urls):
+    fakes.pdf_host.reply("/closed", 403, headers={"cf-mitigated": "challenge"})
+    fakes.unpaywall.reply(f"/v2/{doi}", 200, json={
+        "best_oa_location": None, "oa_locations": [{"url": url, "host_type": "repository"} for url in urls]
+    })  # fmt: skip
+    return fakes.turned_on("unpaywall")
+
+
+def test_diva_record_url_becomes_fulltext_pdf():
+    assert discovery.diva_pdf_url(DIVA_RECORD) == DIVA_PDF
+    assert discovery.diva_pdf_url("http://uu.diva-portal.org/smash/record.jsf?pid=diva2:55") == (
+        "https://uu.diva-portal.org/smash/get/diva2:55/FULLTEXT01.pdf"
+    )
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://repo.example/smash/record.jsf?pid=diva2:1",
+        "https://diva-portal.org.evil.example/smash/record.jsf?pid=diva2:1",
+        "https://evildiva-portal.org/smash/record.jsf?pid=diva2:1",
+        "https://kth.diva-portal.org/smash/record.jsf?pid=other:1",
+        "https://kth.diva-portal.org/smash/get/diva2:x/FULLTEXT01.pdf",
+        "not a url",
+    ],
+)
+def test_non_diva_url_is_not_rewritten(url):
+    assert discovery.diva_pdf_url(url) is None
+
+
+async def test_a_diva_copy_is_tried_as_its_fulltext_pdf(session, discovery_fakes, pdf_dir):
+    providers = repositories(discovery_fakes, "10.5555/diva", DIVA_RECORD, "https://repo.example/handle/1")
+    discovery_fakes.pdf_host.reply("/smash/get/diva2:1234567/FULLTEXT01.pdf", 200, content=PDF)
+    tried = []
+
+    await discovery.add(session, providers, candidate(doi="10.5555/diva", pdf_urls=[f"{HOST}/closed"]), pdf_dir, tried)
+
+    assert tried[-1] == {"url": DIVA_PDF, "outcome": "pdf"}
+    assert [r.url.path for r in discovery_fakes.pdf_host.requests][-1] == "/smash/get/diva2:1234567/FULLTEXT01.pdf"
+
+
+async def test_urn_kb_se_resolving_to_diva_is_tried(session, discovery_fakes, pdf_dir):
+    urn = "https://urn.kb.se/resolve?urn=urn:nbn:se:kth:diva-1"
+    providers = repositories(discovery_fakes, "10.5555/urn", urn)
+    discovery_fakes.pdf_host.reply("/resolve", 302, headers={"location": DIVA_RECORD})
+    discovery_fakes.pdf_host.reply("/smash/get/diva2:1234567/FULLTEXT01.pdf", 200, content=PDF)
+
+    await discovery.add(session, providers, candidate(doi="10.5555/urn", pdf_urls=[f"{HOST}/closed"]), pdf_dir)
+
+    assert [r.url.path for r in discovery_fakes.pdf_host.requests] == [
+        "/closed", "/resolve", "/smash/get/diva2:1234567/FULLTEXT01.pdf",
+    ]  # fmt: skip
+
+
+async def test_urn_kb_se_resolving_elsewhere_does_nothing(session, discovery_fakes, pdf_dir):
+    urn = "https://urn.kb.se/resolve?urn=urn:nbn:se:x:1"
+    providers = repositories(discovery_fakes, "10.5555/elsewhere", urn)
+    discovery_fakes.pdf_host.reply("/resolve", 302, headers={"location": "https://repo.example/handle/1"})
+
+    with pytest.raises(Conflict) as caught:
+        found = candidate(doi="10.5555/elsewhere", pdf_urls=[f"{HOST}/closed"])
+        await discovery.add(session, providers, found, pdf_dir)
+
+    assert [r.url.path for r in discovery_fakes.pdf_host.requests] == ["/closed", "/resolve"]
+    assert [t["outcome"] for t in caught.value.details["tried"]] == ["bot_check"]
+    assert caught.value.details["free_copies"] == [urn]
+
+
+async def test_a_diva_pdf_found_ends_the_search_with_pdf(session, discovery_fakes, pdf_dir):
+    records = [f"https://kth.diva-portal.org/smash/record.jsf?pid=diva2:{n}" for n in (1, 2, 3, 4)]
+    providers = repositories(discovery_fakes, "10.5555/many", *records)
+    discovery_fakes.pdf_host.reply("/smash/get/diva2:1/FULLTEXT01.pdf", 404)
+    discovery_fakes.pdf_host.reply("/smash/get/diva2:2/FULLTEXT01.pdf", 200, content=PDF)
+    tried = []
+
+    await discovery.add(session, providers, candidate(doi="10.5555/many", pdf_urls=[f"{HOST}/closed"]), pdf_dir, tried)
+
+    assert [t["outcome"] for t in tried] == ["bot_check", "http_404", "pdf"]
+
+
+async def test_at_most_three_diva_pdfs_are_tried(session, discovery_fakes, pdf_dir):
+    records = [f"https://kth.diva-portal.org/smash/record.jsf?pid=diva2:{n}" for n in (1, 2, 3, 4)]
+    providers = repositories(discovery_fakes, "10.5555/cap", *records)
+    for n in (1, 2, 3, 4):
+        discovery_fakes.pdf_host.reply(f"/smash/get/diva2:{n}/FULLTEXT01.pdf", 404)
+
+    with pytest.raises(Conflict) as caught:
+        await discovery.add(session, providers, candidate(doi="10.5555/cap", pdf_urls=[f"{HOST}/closed"]), pdf_dir)
+
+    assert len(caught.value.details["tried"]) == 4  # the closed publisher and three DiVA PDFs

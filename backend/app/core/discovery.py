@@ -17,7 +17,7 @@ from dataclasses import dataclass, field, replace
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
-from urllib.parse import urljoin
+from urllib.parse import unquote, urljoin, urlsplit
 
 import httpx
 from sqlalchemy import func, or_, select
@@ -476,6 +476,51 @@ async def _arxiv_title_copy(
     return data, [*tried, *found, *more]
 
 
+MAX_DIVA_PDFS = 3
+_DIVA_ID = re.compile(r"diva2:(\d+)")
+
+
+def diva_pdf_url(url: str) -> str | None:
+    """The FULLTEXT01.pdf of a DiVA record (any *.diva-portal.org URL naming a diva2:<digits> id), else None."""
+    parts = urlsplit(url)
+    host = (parts.hostname or "").lower()
+    found = _DIVA_ID.search(unquote(parts.path + "?" + parts.query))
+    if not host.endswith(".diva-portal.org") or parts.scheme not in ("http", "https") or not found:
+        return None
+    return f"https://{host}/smash/get/diva2:{found.group(1)}/FULLTEXT01.pdf"
+
+
+async def resolve_kb_urn(http: httpx.AsyncClient, url: str) -> str | None:
+    """Where a urn.kb.se link points, when that is a DiVA record: one GET, the redirect not followed."""
+    if urlsplit(url).hostname != "urn.kb.se":
+        return None
+    try:
+        response = await http.get(url, follow_redirects=False)
+    except (httpx.HTTPError, InvalidInput) as exc:  # InvalidInput: the PDF guard refused the address
+        logger.info("urn.kb.se did not resolve %s: %s", redact(url), redact(str(exc)))
+        return None
+    location = urljoin(url, response.headers.get("location", ""))
+    return location if response.is_redirect and diva_pdf_url(location) else None
+
+
+async def _diva_copy(
+    providers: Providers, copies: list[str], tried: list[dict[str, str]]
+) -> tuple[bytes | None, list[dict[str, str]]]:
+    """The DiVA records among the repository copies (a urn.kb.se link that leads to one too), tried as their
+    FULLTEXT PDF: at most MAX_DIVA_PDFS, bar the ones already tried."""
+    urls: list[str] = []
+    for copy in copies:
+        pdf = diva_pdf_url(copy) or diva_pdf_url(await resolve_kb_urn(providers.pdf, copy) or "")
+        if pdf and pdf not in urls and pdf not in {t["url"] for t in tried}:
+            urls.append(pdf)
+        if len(urls) == MAX_DIVA_PDFS:
+            break
+    if not urls:
+        return None, tried
+    data, more = await download_pdf(providers.pdf, urls)
+    return data, [*tried, *more]
+
+
 async def add(
     session: AsyncSession, providers: Providers, candidate: Candidate, pdf_dir: Path, tried_out: list | None = None
 ) -> Paper:
@@ -489,12 +534,16 @@ async def add(
     if candidate.doi and candidate.pdf_urls:  # one extra request: a repository copy beside a bot-checked publisher
         [candidate] = await _add_unpaywall_links(providers.client("unpaywall"), [candidate], merge=True)
     data, tried = await download_pdf(providers.pdf, candidate.pdf_urls)
+    copies: list[str] = []
     if data is None:
         data, tried = await _arxiv_title_copy(providers, candidate, tried)
+    if data is None:
+        copies = await free_copies(providers, candidate.doi, tried)
+        data, tried = await _diva_copy(providers, copies, tried)
     if tried_out is not None:
         tried_out.extend(tried)
     if data is None:
-        raise Conflict(NO_FREE_PDF, tried=tried, free_copies=await free_copies(providers, candidate.doi, tried))
+        raise Conflict(NO_FREE_PDF, tried=tried, free_copies=copies)
     # ponytail: two adds of one paper racing past the check above hit papers' UNIQUE doi and 500. The buttons disable
     # while adding; catch IntegrityError here if it ever happens.
     return await papers.create_paper(session, _filename(candidate.title), data, pdf_dir, prefill=prefill(candidate))
