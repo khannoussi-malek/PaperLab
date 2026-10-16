@@ -36,6 +36,7 @@ type RowProps = {
   enterDelayMs: number | null
   workspaceId?: string
   tags?: string[]
+  activeTags?: string[]
   onTagClick?: (name: string) => void
   selection?: Selection
   onPreview: (id: string, immediate: boolean) => void
@@ -44,7 +45,7 @@ type RowProps = {
   onReadingChange: (paper: Paper, changes: ReadingIn) => void
 }
 
-function PaperRow({ paper, previewed, enterDelayMs, workspaceId, tags, onTagClick, selection, onPreview, onDelete, onMembershipChange, onReadingChange }: RowProps) {
+function PaperRow({ paper, previewed, enterDelayMs, workspaceId, tags, activeTags, onTagClick, selection, onPreview, onDelete, onMembershipChange, onReadingChange }: RowProps) {
   // Decided once, at mount: a row that stays on screen while the query changes must not replay it. Cleared once played,
   // so a tab panel shown again (display: none restarts animations) doesn't replay it either.
   const [enterDelay, setEnterDelay] = useState(enterDelayMs)
@@ -94,11 +95,12 @@ function PaperRow({ paper, previewed, enterDelayMs, workspaceId, tags, onTagClic
                 key={name}
                 type="button"
                 aria-label={`Filter by tag ${name}`}
+                aria-pressed={activeTags?.includes(name) ?? false}
                 // Above the title link's ::after overlay, which would otherwise take the click.
                 className="relative z-10 rounded-md focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
                 onClick={() => onTagClick?.(name)}
               >
-                <Badge variant="secondary" className="font-normal">{name}</Badge>
+                <Badge variant={activeTags?.includes(name) ? 'secondary' : 'outline'} className="font-normal">{name}</Badge>
               </button>
             ))}
           </div>
@@ -145,6 +147,10 @@ type Props = {
   /** Workspace only: paper id to tag names. Without it (the library) rows show no chips. */
   tagsByPaper?: Record<string, string[]>
   onTagClick?: (name: string) => void
+  /** Workspace only: the tags in the filter, shown pressed on their chips. */
+  activeTags?: string[]
+  /** Workspace only: shown instead of the usual empty state when `papers` is empty (an outer filter removed them all). */
+  emptyMessage?: string
   /** Workspace only: rows get a checkbox. */
   selection?: Selection
 }
@@ -153,7 +159,7 @@ type Props = {
  * A search bar over paper rows, beside a preview of the hovered or focused one. The library and each workspace's Papers
  * tab use it.
  */
-export function PaperList({ papers, workspaceId, tagsByPaper, onTagClick, selection }: Props) {
+export function PaperList({ papers, workspaceId, tagsByPaper, onTagClick, activeTags, emptyMessage, selection }: Props) {
   const remove = useDeletePaper()
   const membership = useWorkspaceMembership()
   const reading = useSetReading()
@@ -235,7 +241,9 @@ export function PaperList({ papers, workspaceId, tagsByPaper, onTagClick, select
               </Select>
             </div>
           </div>
-          {shown.length === 0 ? (
+          {shown.length === 0 && emptyMessage && papers.length === 0 ? (
+            <p className="text-muted-foreground">{emptyMessage}</p>
+          ) : shown.length === 0 ? (
             <NoMatches query={query} filter={filter} onClear={clearSearch} onShowAll={() => setFilter('all')} />
           ) : (
             <Card className={cn('gap-0 py-0 ring-glass-border', glass)}>
@@ -248,6 +256,7 @@ export function PaperList({ papers, workspaceId, tagsByPaper, onTagClick, select
                     enterDelayMs={searchBringsBack ? Math.min(index, MAX_STAGGER_STEPS) * STAGGER_MS : null}
                     workspaceId={workspaceId}
                     tags={tagsByPaper?.[paper.id]}
+                    activeTags={activeTags}
                     onTagClick={onTagClick}
                     selection={selection}
                     onPreview={preview}

@@ -30,7 +30,12 @@ export function TagFilterMenu({ workspaceId, selected, match, onChange }: TagFil
               <CommandEmpty>No tags.</CommandEmpty>
               <CommandGroup>
                 {tags.map((tag) => (
-                  <CommandItem key={tag.id} value={tag.name} onSelect={() => onChange(toggled(selected, tag.name), match)}>
+                  <CommandItem
+                    key={tag.id}
+                    value={tag.name}
+                    aria-label={`${tag.name}, ${tag.papers} papers`}
+                    aria-checked={selected.includes(tag.name)}
+                    onSelect={() => onChange(toggled(selected, tag.name), match)}>
                     <Check aria-hidden className={cn(!selected.includes(tag.name) && 'invisible')} />
                     <span className="flex-1 truncate">{tag.name}</span>
                     <span className="text-muted-foreground tabular-nums">{tag.papers}</span>

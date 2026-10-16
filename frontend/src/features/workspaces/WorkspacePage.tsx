@@ -32,7 +32,7 @@ export function WorkspacePage({ workspaceId, tab, runId, tags, match }: PageProp
   // replace, not assign: switching tabs shouldn't add history entries for Back to walk through. Carries the
   // current runId along so switching tabs and back (or a reload from another tab) doesn't drop it.
   const onTagsChange = (next: string[], nextMatch: TagMatch) =>
-    window.location.replace(workspaceHref(workspaceId, 'papers', undefined, { tags: next, match: nextMatch }))
+    window.location.replace(workspaceHref(workspaceId, 'papers', runId, { tags: next, match: nextMatch }))
   const showTab = (next: WorkspaceTab) => window.location.replace(workspaceHref(workspaceId, next, runId))
   // SearchTab reports a new run id here instead of holding it in local state, so the URL (and a reload) stays in
   // sync with whatever run is actually active.

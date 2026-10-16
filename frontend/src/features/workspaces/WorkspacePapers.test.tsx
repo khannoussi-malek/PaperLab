@@ -48,6 +48,43 @@ test('chips sit in each row and clicking one adds the tag to the filter', () => 
   expect(onTagsChange).toHaveBeenCalledWith(['cohort', 'rct'], 'any')
 })
 
+test('a chip of a filtered tag is pressed and does nothing more', () => {
+  const onTagsChange = setup(['cohort'])
+  const chips = screen.getAllByRole('button', { name: 'Filter by tag cohort' })
+  expect(chips.every((c) => c.getAttribute('aria-pressed') === 'true')).toBe(true)
+  expect(screen.getByRole('button', { name: 'Filter by tag rct' }).getAttribute('aria-pressed')).toBe('false')
+  fireEvent.click(chips[0])
+  expect(onTagsChange).not.toHaveBeenCalled()
+})
+
+test('while tags are loading the list is unfiltered', () => {
+  vi.spyOn(queries, 'useWorkspacePapers').mockReturnValue({ data: papers } as any)
+  vi.spyOn(queries, 'useTags').mockReturnValue({ data: [tagSummary('rct', 1)] } as any)
+  vi.spyOn(queries, 'usePaperTags').mockReturnValue({ data: undefined } as any)
+  const client = new QueryClient()
+  render(<QueryClientProvider client={client}><WorkspacePapers workspaceId="w1" tags={['rct']} match="all" onTagsChange={vi.fn()} /></QueryClientProvider>)
+  expect(rows()).toHaveLength(3)
+  expect(screen.queryByText(/No papers carry/)).toBeNull()
+})
+
+test('an empty filter result keeps the search text', () => {
+  const onTagsChange = vi.fn()
+  vi.spyOn(queries, 'useWorkspacePapers').mockReturnValue({ data: papers } as any)
+  vi.spyOn(queries, 'useTags').mockReturnValue({ data: [tagSummary('rct', 1), tagSummary('cohort', 2)] } as any)
+  vi.spyOn(queries, 'usePaperTags').mockReturnValue({ data: { p1: ['rct'], p2: ['cohort'], p3: [] } } as any)
+  const client = new QueryClient()
+  const view = (match: 'any' | 'all') => (
+    <QueryClientProvider client={client}><WorkspacePapers workspaceId="w1" tags={['rct', 'cohort']} match={match} onTagsChange={onTagsChange} /></QueryClientProvider>
+  )
+  const { rerender } = render(view('any'))
+  fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'alpha' } })
+  rerender(view('all'))
+  expect(screen.getByText('No papers carry all of those tags.')).toBeTruthy()
+  rerender(view('any'))
+  expect((screen.getByRole('searchbox') as HTMLInputElement).value).toBe('alpha')
+  expect(rows()).toEqual(['Alpha trial'])
+})
+
 test('any shows papers with either tag, all only those with both', () => {
   setup(['rct', 'cohort'])
   expect(rows()).toEqual(['Alpha trial', 'Beta cohort'])

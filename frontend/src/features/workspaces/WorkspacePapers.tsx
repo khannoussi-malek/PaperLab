@@ -28,12 +28,14 @@ export function WorkspacePapers({
 }) {
   const papers = useWorkspacePapers(workspaceId)
   const tagList = useTags(workspaceId)
-  const tagMap = usePaperTags(workspaceId).data ?? {}
+  const paperTags = usePaperTags(workspaceId)
+  const tagMap = paperTags.data ?? {}
   const upload = useUploadPapers(workspaceId)
   const [adding, setAdding] = useState(false)
 
   const all = papers.data
-  const list = all && filterByTags(all, tagMap, tags, match, (tagList.data ?? []).map((t) => t.name))
+  // Until both tag queries have answered the list is unfiltered: an empty map would otherwise empty it.
+  const list = all && (tagList.data && paperTags.data ? filterByTags(all, tagMap, tags, match, tagList.data.map((t) => t.name)) : all)
   const filterProps = { workspaceId, selected: tags, match, onChange: onTagsChange }
   return (
     <div className="flex flex-col gap-4 py-2">
@@ -64,16 +66,14 @@ export function WorkspacePapers({
           <TagSidebar {...filterProps} />
           <div className="flex min-w-0 flex-1 flex-col gap-3">
             <TagFilterMenu {...filterProps} />
-            {list.length === 0 ? (
-              <p className="text-muted-foreground">No papers carry {match === 'all' ? 'all of' : 'any of'} those tags.</p>
-            ) : (
-              <PaperList
-                papers={list}
-                workspaceId={workspaceId}
-                tagsByPaper={tagMap}
-                onTagClick={(name) => !tags.includes(name) && onTagsChange(toggled(tags, name), match)}
-              />
-            )}
+            <PaperList
+              papers={list}
+              workspaceId={workspaceId}
+              tagsByPaper={tagMap}
+              activeTags={tags}
+              emptyMessage={`No papers carry ${match === 'all' ? 'all of' : 'any of'} those tags.`}
+              onTagClick={(name) => !tags.includes(name) && onTagsChange(toggled(tags, name), match)}
+            />
           </div>
         </div>
       )}
