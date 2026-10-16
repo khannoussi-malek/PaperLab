@@ -1,13 +1,20 @@
+import logging
+import os
 from pathlib import Path
 from typing import Literal
 
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 from app.providers.search_model import SHIPPED
 
 # A compose project whose name ends in this is a test stack (scripts/e2e-stack.sh): the only place fakes run (D273).
 TEST_STACK_SUFFIX = "-e2e"
+
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_EMBED_THREADS = min(4, os.cpu_count() or 1)
 
 
 class Settings(BaseSettings):
@@ -19,6 +26,10 @@ class Settings(BaseSettings):
     embed_model: str = SHIPPED.name
     # Where the built-in search model is downloaded (the `models` volume). Empty of it until the user downloads it.
     models_dir: Path = Path("/models")
+    # Threads the built-in search model's ONNX session may use (EMBED_THREADS). Unset, it takes up to four cores: left
+    # to itself it takes every core, which on a busy machine is slower than a few. Below 1 or not a whole number: the
+    # default, with a warning.
+    embed_threads: int = DEFAULT_EMBED_THREADS
     # `fake` swaps every provider call made through a model connection for a scripted one (the E2E stack).
     # With LLM_MODEL, OLLAMA_URL and ANTHROPIC_API_KEY it also seeds the first connection while there are none;
     # after that the database decides which model answers.
@@ -45,6 +56,18 @@ class Settings(BaseSettings):
     # files. Fake providers run only on a test stack, whose name ends in -e2e (D273): the owner's library lives in
     # `paperlab` (or `paperlab-app`) and must never hold a fake model's rows.
     paperlab_stack: str = ""
+
+    @field_validator("embed_threads", mode="before")
+    @classmethod
+    def _embed_threads_at_least_one(cls, value):
+        try:
+            threads = int(str(value).strip())
+        except ValueError:
+            threads = 0
+        if threads < 1:
+            logger.warning("EMBED_THREADS=%r is not a whole number from 1 up; using %d", value, DEFAULT_EMBED_THREADS)
+            return DEFAULT_EMBED_THREADS
+        return threads
 
     @model_validator(mode="after")
     def _fake_only_on_a_test_stack(self):

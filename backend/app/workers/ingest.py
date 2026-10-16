@@ -1,12 +1,15 @@
 import asyncio
 import logging
+import time
 import uuid
 from contextlib import AsyncExitStack
+
+from sqlalchemy import update
 
 from app.core import embedding_index, embedding_sources, enrichment, paper_sources, papers
 from app.core.chunking import chunk_blocks
 from app.db import SessionLocal
-from app.models import PaperStatus
+from app.models import Chunk, PaperStatus
 from app.providers import crossref, embedding, openalex
 from app.providers.base import LLMError, LLMUnavailable
 from app.providers.extraction import ExtractedDoc, extract
@@ -17,10 +20,29 @@ logger = logging.getLogger(__name__)
 # ends the paper failed instead of starting again: a paper that stops the worker every time would otherwise sit
 # mid-ingest forever, as 67 did when ten ingests at once ran the worker out of memory (2026-10-13).
 MAX_TRIES = 5
+EMBED_WRITE_BATCH = 64  # chunks per encode and per write
+# Enforced inside the job, not by arq: arq's cancel is a CancelledError, which `except Exception` doesn't catch, so
+# the paper would sit at "embedding" forever. This deadline ends it failed, with the copy below and no partial
+# vectors. Neither can stop a thread already running (extract, an encode), so arq only gets a longer backstop
+# (settings.py).
+INGEST_JOB_TIMEOUT = 20 * 60
 INTERRUPTED = (
     "Ingesting stopped before it finished {times} times (the worker restarted or ran out of memory). "
     "Re-ingest to try again."
 )
+
+
+def timed_out(seconds: float) -> str:
+    return f"Ingesting took longer than {int(seconds // 60)} minutes; Re-ingest to try again"
+
+
+def _timings(pid: uuid.UUID, marks: list[tuple[str, float]], started: float, chunks: int, pages: int) -> str:
+    """One line with how long each stage ran, for the stages reached so far (a stage not reached shows 0.0s)."""
+    now = time.monotonic()
+    ends = [at for _, at in marks[1:]] + [now]
+    took = {name: end - at for (name, at), end in zip(marks, ends, strict=True)}
+    stages = " ".join(f"{n}={took.get(n, 0.0):.1f}s" for n in ("extracting", "chunking", "embedding", "enriching"))
+    return f"ingest timings for {pid}: {stages} total={now - started:.1f}s chunks={chunks} pages={pages}"
 
 
 async def _enrich(session, transport, paper_id: uuid.UUID, doc: ExtractedDoc) -> None:
@@ -58,21 +80,25 @@ async def search_embedder(ctx: dict, session):
 
 
 async def _embed(session, pid: uuid.UUID, embedder) -> bool:
-    """Embeds the paper's chunks and writes them if `embedder` is still the search source. A failing source never
-    fails a paper: the old vectors stay and the error is kept for Settings' Try again (D155). True when written."""
+    """Embeds the paper's chunks in slices of EMBED_WRITE_BATCH, writing each as it is done and only while `embedder`
+    is still the search source. A slice is the most a thread left running after a deadline can still do, and the
+    progress anyone can see; the vectors written so far stay. A failing source never fails a paper: the old vectors
+    stay and the error is kept for Settings' Try again (D155). True when all were written."""
     chunks = await papers.list_chunks(session, pid)
-    try:
-        vectors = await embedding.embed_documents(embedder, [c.text for c in chunks])
-    except (LLMUnavailable, LLMError) as exc:
-        logger.warning("embedding %s with %s failed: %s", pid, embedder.label, exc)
-        await embedding_sources.record_error(session, str(exc))
-        return False
-    # ponytail: a switch landing between this check and the commit leaves one paper on the old source; Try again
-    # fixes it.
-    if await embedding_sources.active_name(session) != embedder.name:
-        logger.info("the search source changed while embedding %s; the newer job embeds it", pid)
-        return False
-    await papers.set_embeddings(session, [c.id for c in chunks], vectors, embedder.name)
+    for start in range(0, len(chunks), EMBED_WRITE_BATCH):
+        batch = chunks[start : start + EMBED_WRITE_BATCH]
+        try:
+            vectors = await embedding.embed_documents(embedder, [c.text for c in batch])
+        except (LLMUnavailable, LLMError) as exc:
+            logger.warning("embedding %s with %s failed: %s", pid, embedder.label, exc)
+            await embedding_sources.record_error(session, str(exc))
+            return False
+        # ponytail: a switch landing between this check and the commit leaves one slice on the old source; Try again
+        # fixes it.
+        if await embedding_sources.active_name(session) != embedder.name:
+            logger.info("the search source changed while embedding %s; the newer job embeds it", pid)
+            return False
+        await papers.set_embeddings(session, [c.id for c in batch], vectors, embedder.name)
     return True
 
 
@@ -92,37 +118,58 @@ async def ingest_paper(ctx: dict, paper_id: str) -> None:
         return
     async with SessionLocal() as session:
         paper = await papers.get_paper(session, pid)
+        started = time.monotonic()
+        marks: list[tuple[str, float]] = [("extracting", started)]  # each stage's start; a stage runs until the next
+        chunks = pages = 0
+        deadline = asyncio.timeout(INGEST_JOB_TIMEOUT)
         try:
-            await papers.set_status(session, pid, PaperStatus.EXTRACTING)
-            doc = await asyncio.to_thread(extract, paper.file_path)
-            # extract() can take seconds; re-read the lock right before deciding, in case a PATCH landed meanwhile.
-            await session.refresh(paper, ["openalex_id", "manual_fields"])
+            async with deadline:
+                await papers.set_status(session, pid, PaperStatus.EXTRACTING)
+                doc = await asyncio.to_thread(extract, paper.file_path)
+                # extract() can take seconds; re-read the lock right before deciding, in case a PATCH landed meanwhile.
+                await session.refresh(paper, ["openalex_id", "manual_fields"])
 
-            # Enriched or corrected titles beat the font heuristic; don't overwrite them on re-runs.
-            keep = paper.openalex_id is not None or "title" in paper.manual_fields
-            title = {"title": doc.title} if doc.title and not keep else {}
-            await papers.set_status(session, pid, PaperStatus.CHUNKING, page_count=doc.page_count, **title)
-            drafts = chunk_blocks(doc.blocks)
-            await papers.replace_chunks(session, pid, drafts)
+                # Enriched or corrected titles beat the font heuristic; don't overwrite them on re-runs.
+                keep = paper.openalex_id is not None or "title" in paper.manual_fields
+                title = {"title": doc.title} if doc.title and not keep else {}
+                marks.append(("chunking", time.monotonic()))
+                pages = doc.page_count
+                await papers.set_status(session, pid, PaperStatus.CHUNKING, page_count=doc.page_count, **title)
+                drafts = chunk_blocks(doc.blocks)
+                await papers.replace_chunks(session, pid, drafts)
+                chunks = len(drafts)
 
-            embedder = await search_embedder(ctx, session)
-            if embedder is None:
-                logger.info("no search model: %s is ready without vectors", pid)
-            else:
-                await papers.set_status(session, pid, PaperStatus.EMBEDDING)
-                await _embed(session, pid, embedder)
+                embedder = await search_embedder(ctx, session)
+                if embedder is None:
+                    logger.info("no search model: %s is ready without vectors", pid)
+                else:
+                    marks.append(("embedding", time.monotonic()))
+                    await papers.set_status(session, pid, PaperStatus.EMBEDDING)
+                    await _embed(session, pid, embedder)
 
-            await papers.set_status(session, pid, PaperStatus.ENRICHING)
-            await _enrich(session, ctx.get("transport"), pid, doc)
-            # Don't read paper's ORM attributes past this point: _enrich's rollback (on the failure path) expires
-            # them, and an async lazy load outside an awaited call raises MissingGreenlet, not a clean re-fetch.
+                marks.append(("enriching", time.monotonic()))
+                await papers.set_status(session, pid, PaperStatus.ENRICHING)
+                await _enrich(session, ctx.get("transport"), pid, doc)
+                # Don't read paper's ORM attributes past this point: _enrich's rollback (on the failure path) expires
+                # them, and an async lazy load outside an awaited call raises MissingGreenlet, not a clean re-fetch.
 
-            await papers.set_status(session, pid, PaperStatus.READY)
-            logger.info("ingested %s: %d pages, %d chunks", pid, doc.page_count, len(drafts))
+                await papers.set_status(session, pid, PaperStatus.READY)
+                logger.info("ingested %s: %d pages, %d chunks", pid, doc.page_count, len(drafts))
         except Exception as exc:
-            logger.exception("ingest failed for %s", pid)
             await session.rollback()
-            await papers.set_status(session, pid, PaperStatus.FAILED, error=f"{type(exc).__name__}: {exc}")
+            # Only the deadline's own timeout, not another one (a database command's, say).
+            if isinstance(exc, TimeoutError) and deadline.expired():
+                logger.warning("ingest of %s ran past %d s and was stopped", pid, INGEST_JOB_TIMEOUT)
+                # Search doesn't look at status, so on a deadline the slices already written are cleared: they must not
+                # answer for half a paper. (An embed error mid-ingest and a re-embed timeout leave earlier slices.)
+                await session.execute(update(Chunk).where(Chunk.paper_id == pid).values(embedding=None))
+                error = timed_out(INGEST_JOB_TIMEOUT)
+            else:
+                logger.exception("ingest failed for %s", pid)
+                error = f"{type(exc).__name__}: {exc}"
+            await papers.set_status(session, pid, PaperStatus.FAILED, error=error)
+        finally:  # the success, timeout and failure paths all say where the time went
+            logger.info(_timings(pid, marks, started, chunks, pages))
 
 
 async def reembed_paper(ctx: dict, paper_id: str, missing_only: bool = False) -> None:
@@ -139,5 +186,21 @@ async def reembed_paper(ctx: dict, paper_id: str, missing_only: bool = False) ->
         if missing_only and not await embedding_index.papers_to_embed(session, embedder.name, [pid]):
             logger.info("%s is already embedded with %s", pid, embedder.name)
             return
-        if await _embed(session, pid, embedder):
+        deadline = asyncio.timeout(INGEST_JOB_TIMEOUT)
+        try:
+            async with deadline:
+                embedded = await _embed(session, pid, embedder)
+        except TimeoutError:
+            if not deadline.expired():  # another timeout (a database command's): arq must see a real failure
+                raise
+            await session.rollback()
+            logger.warning("re-embedding %s ran past %d s and was stopped", pid, INGEST_JOB_TIMEOUT)
+            paper = await papers.get_paper(session, pid)
+            minutes = int(INGEST_JOB_TIMEOUT // 60)
+            # The paper stays pending in a rebuild; this is what puts Try again in Settings.
+            await embedding_sources.record_error(
+                session, f"Embedding {paper.title or pid} took longer than {minutes} minutes; Try again"
+            )
+            return
+        if embedded:
             logger.info("re-embedded %s with %s", pid, embedder.name)
