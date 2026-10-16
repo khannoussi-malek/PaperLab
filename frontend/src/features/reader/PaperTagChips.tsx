@@ -9,8 +9,8 @@ export function PaperTagChips({ paperId }: { paperId: string }) {
   return (
     <>
       {groups.map((group) => (
-        <span key={group.workspace_id} className="flex min-w-0 items-center gap-1">
-          <span className="truncate text-xs text-muted-foreground">{group.workspace_name}</span>
+        <span key={group.workspace_id} className="flex shrink-0 flex-wrap items-center gap-1">
+          <span className="text-xs text-muted-foreground">{group.workspace_name}</span>
           {group.tags.map((name) => (
             <a
               key={name}

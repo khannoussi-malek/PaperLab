@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, fireEvent, cleanup } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import * as queries from '@/api/queries'
 import { TagSidebar } from './TagSidebar'
@@ -89,4 +89,22 @@ test('renaming a selected tag swaps it in the filter; deleting drops it', async 
   fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }))
   fireEvent.click(await screen.findByRole('button', { name: 'Delete' }))
   expect(onChange).toHaveBeenLastCalledWith(['rct'], 'any')
+})
+
+test('the coverage line says "1 paper", not "1 papers"', async () => {
+  setup()
+  fireEvent.focus(screen.getByRole('button', { name: /^cohort,/ }))
+  expect((await screen.findAllByText(/^1 paper · /)).length).toBeGreaterThan(0)
+})
+
+test('deleting a tag moves focus to the Tags heading instead of dropping it to the page', async () => {
+  const del = vi.fn((_v: unknown, o?: { onSuccess?: () => void }) => o?.onSuccess?.())
+  setup()
+  vi.spyOn(queries, 'useDeleteTag').mockReturnValue({ mutate: del, reset: vi.fn() } as any)
+  cleanup()
+  render(<TagSidebar workspaceId="w1" selected={[]} match="any" onChange={vi.fn()} />)
+  fireEvent.keyDown(screen.getByRole('button', { name: 'Actions for tag rct' }), { key: 'Enter' })
+  fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Delete' }))
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Tags' })))
 })

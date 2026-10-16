@@ -12,19 +12,22 @@ const paper = { title: 'T', source_type: 'preprint', peer_reviewed: 'false', evi
 const renderToolbar = () =>
   render(<ReaderToolbar paper={paper} zoomIndex={0} onZoomChange={vi.fn()} capturing={false} onCaptureChange={vi.fn()} onOpenReferences={vi.fn()} tags={<i>chips</i>} />)
 
-it('renders the tags it is given in the header group and in the small-screen row', () => {
+it('shows the tags in their own wrapping row, and the header group only holds the source badges', () => {
   renderToolbar()
-  const chips = screen.getAllByText('chips')
-  expect(chips.some((c) => c.closest('header'))).toBe(true)
-  expect(chips.some((c) => c.closest('.md\\:hidden'))).toBe(true)
+  const chips = screen.getByText('chips')
+  expect(chips.closest('header')).toBeNull()
+  const row = chips.parentElement!
+  expect(row.className).toContain('flex-wrap')
+  expect(row.className).toContain('md:has-[a]:flex')
+  expect(row.className).toContain('md:hidden')
+  expect(row.querySelector('span.md\\:hidden')).not.toBeNull()
 })
 
-// jsdom has no layout, so the squeeze itself can't be measured: pin the classes that prevent it.
-it('caps and clips the header tag group so the title can shrink but never be squeezed out', () => {
+it('keeps the header badge group from shrinking and lets the title be the one that shrinks', () => {
   renderToolbar()
-  const group = screen.getAllByText('chips').find((c) => c.closest('header'))!.parentElement!
-  expect(group.className).toContain('max-w-[40%]')
-  expect(group.className).toContain('overflow-hidden')
-  expect(group.className).not.toContain('shrink-0')
+  const group = document.querySelector('header .md\\:flex')!
+  expect(group.className).toContain('shrink-0')
+  expect(group.className).not.toContain('max-w')
+  expect(group.textContent).not.toContain('chips')
   expect(screen.getByRole('heading', { level: 1 }).className).toContain('min-w-0')
 })
