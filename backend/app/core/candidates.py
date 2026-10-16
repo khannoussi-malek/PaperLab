@@ -12,6 +12,7 @@ import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from typing import Any
+from urllib.parse import urlsplit
 
 from app.core.enrichment import ARXIV_DOI_PREFIX, abstract_text, normalize_doi, short_id
 from app.core.source_types import source_type_of
@@ -64,11 +65,23 @@ def _arxiv_from_url(url: str | None) -> str | None:
     return match.group(1).lower() if match else None
 
 
+# Publishers that answer a script with a Cloudflare challenge: tried after every other copy, never skipped.
+BOT_CHECKED_HOSTS = ("dl.acm.org", "direct.mit.edu", "www.science.org", "science.org")
+
+
+def _bot_checked(url: str) -> bool:
+    try:
+        return urlsplit(url).hostname in BOT_CHECKED_HOSTS
+    except ValueError:  # malformed: the download refuses it as unsafe_url
+        return False
+
+
 def ordered_pdf_urls(arxiv_id: str | None, *links: str | None) -> list[str]:
-    """arXiv first, then `links` in order: deduplicated, http(s) only, capped at MAX_PDF_URLS (D68)."""
+    """arXiv first, then `links` in order with the bot-checked publishers moved last: deduplicated, http(s) only,
+    capped at MAX_PDF_URLS (D68)."""
     urls = [f"https://arxiv.org/pdf/{arxiv_id}" if arxiv_id else None, *links]
-    deduped = dict.fromkeys(url for url in urls if url and url.startswith(("http://", "https://")))
-    return list(deduped)[:MAX_PDF_URLS]
+    deduped = list(dict.fromkeys(url for url in urls if url and url.startswith(("http://", "https://"))))
+    return sorted(deduped, key=_bot_checked)[:MAX_PDF_URLS]  # sorted is stable
 
 
 S2_TYPES = {

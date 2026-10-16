@@ -25,6 +25,7 @@ from app.core.candidates import (
     from_work,
     from_zenodo,
     merge,
+    ordered_pdf_urls,
     with_s2,
 )
 from app.core.discovery import classify_query
@@ -787,3 +788,22 @@ def test_from_medrxiv_wraps_the_shared_mapper_for_the_registry():
     }
 
     assert from_medrxiv(entry) == from_biorxiv_entry(entry, server="medrxiv")
+
+
+def test_bot_checked_hosts_go_last_and_no_url_is_dropped():
+    urls = [
+        "https://dl.acm.org/doi/pdf/10.1/x",
+        "https://repo.example/a.pdf",
+        "https://www.science.org/doi/pdf/10.1/y",
+        "https://repo.example/a.pdf",
+        "https://direct.mit.edu/tacl/x.pdf",
+        "https://other.example/b.pdf",
+    ]
+    assert ordered_pdf_urls("2301.13848", *urls) == [
+        "https://arxiv.org/pdf/2301.13848",
+        "https://repo.example/a.pdf",
+        "https://other.example/b.pdf",
+        "https://dl.acm.org/doi/pdf/10.1/x",
+        "https://www.science.org/doi/pdf/10.1/y",
+        "https://direct.mit.edu/tacl/x.pdf",
+    ]
