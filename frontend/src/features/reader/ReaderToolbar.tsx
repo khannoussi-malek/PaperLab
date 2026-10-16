@@ -34,10 +34,8 @@ export function ReaderToolbar({ paper, zoomIndex, onZoomChange, capturing, onCap
         {title ?? 'Loading…'}
       </h1>
       {paper && (
-        /* Capped and clipped so many tags or a long workspace name can't squeeze the title to nothing; the md:hidden row below shows them all. */
-        <div className="hidden max-w-[40%] min-w-0 items-center gap-1 overflow-hidden whitespace-nowrap md:flex">
+        <div className="hidden shrink-0 items-center gap-1 whitespace-nowrap md:flex">
           <SourceBadges paper={paper} />
-          {tags}
         </div>
       )}
       {paper && <ReadingControl paper={paper} onOpenReferences={onOpenReferences} />}
@@ -76,8 +74,11 @@ export function ReaderToolbar({ paper, zoomIndex, onZoomChange, capturing, onCap
       <ModeToggle />
     </header>
     {paper && (
-      <div className={cn('flex flex-wrap items-center gap-1 border-b border-glass-border px-3 py-1.5 md:hidden', glass)}>
-        <SourceBadges paper={paper} />
+      /* Tags wrap in their own row so they never squeeze the title; on wide screens the row only shows when there are tag chips (links). */
+      <div className={cn('flex flex-wrap items-center gap-1 border-b border-glass-border px-3 py-1.5 md:hidden md:has-[a]:flex', glass)}>
+        <span className="flex gap-1 md:hidden">
+          <SourceBadges paper={paper} />
+        </span>
         {tags}
       </div>
     )}

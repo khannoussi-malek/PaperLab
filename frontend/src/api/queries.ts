@@ -366,7 +366,8 @@ export function useWorkspaceMutations() {
     create: useMutation({ mutationFn: api.createWorkspace, onSuccess }),
     rename: useMutation({
       mutationFn: ({ id, name }: { id: string; name: string }) => api.renameWorkspace(id, name),
-      onSuccess,
+      // The paper page's tag groups carry the workspace name.
+      onSuccess: () => Promise.all([onSuccess(), client.invalidateQueries({ predicate: (q) => q.queryKey[0] === 'papers' && q.queryKey[2] === 'tags' })]),
     }),
     remove: useMutation({
       mutationFn: api.deleteWorkspace,

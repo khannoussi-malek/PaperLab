@@ -1,3 +1,4 @@
+import { plural } from '../charts/chartMeta'
 import type { Paper, TagSummary } from '../../api/client'
 import type { TagMatch } from '../../lib/route'
 
@@ -23,5 +24,5 @@ export const toggled = (selected: string[], name: string) =>
   selected.includes(name) ? selected.filter((t) => t !== name) : [...selected, name]
 
 export const coverageText = (t: TagSummary) =>
-  `${t.papers} papers · ${t.peer_reviewed} peer-reviewed, ${t.preprint} preprints, ${t.unknown_review} unknown · ` +
+  `${plural(t.papers, 'paper')} · ${t.peer_reviewed} peer-reviewed, ${t.preprint} preprints, ${t.unknown_review} unknown · ` +
   `${t.full_text} full text, ${t.abstract} abstract only, ${t.metadata} metadata only`

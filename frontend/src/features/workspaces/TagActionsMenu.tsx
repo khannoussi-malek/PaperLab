@@ -14,13 +14,16 @@ type Props = {
   tag: TagSummary
   onRenamed: (oldName: string, newName: string) => void
   onDeleted: (name: string) => void
+  /** Where focus goes once the tag is deleted and its trigger is gone. */
+  focusAfterDelete?: () => void
 }
 
 /** The "…" menu of a tag: rename it in a dialog, or delete it after a confirmation. */
-export function TagActionsMenu({ workspaceId, tag, onRenamed, onDeleted }: Props) {
+export function TagActionsMenu({ workspaceId, tag, onRenamed, onDeleted, focusAfterDelete }: Props) {
   const [dialog, setDialog] = useState<'rename' | 'delete' | null>(null)
   const [name, setName] = useState(tag.name)
   const triggerRef = useRef<HTMLButtonElement>(null)
+  const deleted = useRef(false)
   const rename = useRenameTag(workspaceId)
   const del = useDeleteTag(workspaceId)
 
@@ -33,7 +36,9 @@ export function TagActionsMenu({ workspaceId, tag, onRenamed, onDeleted }: Props
   // The dialogs open from a menu item, not a trigger of their own, so Radix would hand focus to the body.
   const returnFocus = (event: Event) => {
     event.preventDefault()
-    triggerRef.current?.focus()
+    // After a delete the trigger is gone, so focus goes where the parent says.
+    if (deleted.current) focusAfterDelete?.()
+    else triggerRef.current?.focus()
   }
 
   return (
@@ -81,7 +86,7 @@ export function TagActionsMenu({ workspaceId, tag, onRenamed, onDeleted }: Props
           {del.error && <p role="alert" className="text-sm text-destructive">{tagErrorText(del.error.message)}</p>}
           <DialogFooter>
             <Button variant="outline" onClick={close}>Cancel</Button>
-            <Button variant="destructive" disabled={del.isPending} onClick={() => del.mutate(tag.id, { onSuccess: () => { close(); onDeleted(tag.name) } })}>Delete</Button>
+            <Button variant="destructive" disabled={del.isPending} onClick={() => del.mutate(tag.id, { onSuccess: () => { deleted.current = true; close(); onDeleted(tag.name) } })}>Delete</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

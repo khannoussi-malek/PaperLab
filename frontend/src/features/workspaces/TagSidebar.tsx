@@ -1,4 +1,4 @@
-import { useId } from 'react'
+import { useId, useRef } from 'react'
 import { useTags } from '@/api/queries'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
@@ -20,9 +20,10 @@ export type TagFilterProps = {
 export function TagSidebar({ workspaceId, selected, match, onChange }: TagFilterProps) {
   const tags = useTags(workspaceId).data ?? []
   const switchId = useId()
+  const headingRef = useRef<HTMLHeadingElement>(null)
   return (
     <aside className="hidden w-52 shrink-0 space-y-2 lg:block">
-      <h2 className="font-heading text-sm font-semibold">Tags</h2>
+      <h2 ref={headingRef} tabIndex={-1} className="font-heading text-sm font-semibold outline-none">Tags</h2>
       {tags.length === 0 ? (
         <p className="text-sm text-muted-foreground">No tags yet. Select papers and choose Tag… to add one.</p>
       ) : (
@@ -52,6 +53,7 @@ export function TagSidebar({ workspaceId, selected, match, onChange }: TagFilter
                   workspaceId={workspaceId}
                   tag={tag}
                   onRenamed={(from, to) => onChange(selected.map((t) => (t === from ? to : t)), match)}
+                  focusAfterDelete={() => headingRef.current?.focus()}
                   onDeleted={(name) => selected.includes(name) && onChange(selected.filter((t) => t !== name), match)}
                 />
               </li>

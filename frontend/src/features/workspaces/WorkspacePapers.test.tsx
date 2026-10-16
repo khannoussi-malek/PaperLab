@@ -122,6 +122,7 @@ test('selecting rows shows the bar, Clear empties it, and the bar is absent with
   fireEvent.click(screen.getByRole('checkbox', { name: 'Select Alpha trial' }))
   fireEvent.click(screen.getByRole('checkbox', { name: 'Select Beta cohort' }))
   expect(screen.getByText('2 selected')).toBeTruthy()
+  expect(screen.getByText('2 selected').getAttribute('role')).toBe('status')
   expect(screen.getByRole('button', { name: 'Tag…' })).toBeTruthy()
   expect(screen.getByRole('button', { name: 'Remove tag…' })).toBeTruthy()
   fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
