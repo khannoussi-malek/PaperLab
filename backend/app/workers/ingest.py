@@ -182,10 +182,13 @@ async def reembed_paper(ctx: dict, paper_id: str, missing_only: bool = False) ->
         if missing_only and not await embedding_index.papers_to_embed(session, embedder.name, [pid]):
             logger.info("%s is already embedded with %s", pid, embedder.name)
             return
+        deadline = asyncio.timeout(INGEST_JOB_TIMEOUT)
         try:
-            async with asyncio.timeout(INGEST_JOB_TIMEOUT):
+            async with deadline:
                 embedded = await _embed(session, pid, embedder)
         except TimeoutError:
+            if not deadline.expired():  # another timeout (a database command's): arq must see a real failure
+                raise
             await session.rollback()
             logger.warning("re-embedding %s ran past %d s and was stopped", pid, INGEST_JOB_TIMEOUT)
             return

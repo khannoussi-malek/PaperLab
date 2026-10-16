@@ -45,6 +45,10 @@ class HangingEmbedder(FakeEmbedder):
 DEADLINE = 2.0  # seconds: room for an extract, a chunking and a slice's write on a loaded machine
 
 
+def short_deadline(monkeypatch) -> None:
+    monkeypatch.setattr(ingest, "INGEST_JOB_TIMEOUT", DEADLINE)
+
+
 def record_writes(monkeypatch) -> list[int]:
     writes = []
     real = papers.set_embeddings
@@ -112,8 +116,8 @@ async def test_each_slice_is_a_cancellation_point(worker_session):
 
 
 async def slow_ingest(worker_session, sample_pdf, monkeypatch):
-    """An ingest whose embedding hangs after its first of two one-chunk slices, so it runs past the deadline."""
-    monkeypatch.setattr(ingest, "INGEST_JOB_TIMEOUT", DEADLINE)
+    """A paper and an embedder that hangs after its first of two one-chunk slices. The caller sets the short deadline
+    (`short_deadline`) when the hang should end the job, after any setup ingest that must not run under it."""
     monkeypatch.setattr(ingest, "EMBED_WRITE_BATCH", 1)
     paper = Paper(file_path=str(sample_pdf), title="placeholder")
     worker_session.add(paper)
@@ -123,6 +127,7 @@ async def slow_ingest(worker_session, sample_pdf, monkeypatch):
 
 async def test_an_ingest_past_its_deadline_is_marked_failed(worker_session, sample_pdf, monkeypatch):
     paper, slow = await slow_ingest(worker_session, sample_pdf, monkeypatch)
+    short_deadline(monkeypatch)
     writes = record_writes(monkeypatch)
 
     assert await ingest.ingest_paper({"embedder": slow}, str(paper.id)) is None  # arq finishes the job
@@ -157,7 +162,8 @@ async def test_reembed_past_its_deadline_stops_without_failing_the_paper(
     worker_session, sample_pdf, monkeypatch, caplog
 ):
     paper, slow = await slow_ingest(worker_session, sample_pdf, monkeypatch)
-    await ingest.ingest_paper({"embedder": FakeEmbedder()}, str(paper.id))
+    await ingest.ingest_paper({"embedder": FakeEmbedder()}, str(paper.id))  # setup, under the long deadline
+    short_deadline(monkeypatch)
     writes = record_writes(monkeypatch)
 
     with caplog.at_level("WARNING", logger="app.workers.ingest"):
@@ -167,6 +173,18 @@ async def test_reembed_past_its_deadline_stops_without_failing_the_paper(
     assert f"re-embedding {paper.id} ran past" in caplog.text  # it was the deadline that stopped it
     assert writes == [1]  # the second slice never landed
     assert (paper.status, paper.status_error) == ("ready", None)
+
+
+async def test_a_reembed_timeout_that_is_not_the_deadline_propagates(worker_session, sample_pdf, monkeypatch):
+    class CommandTimeout(FakeEmbedder):
+        async def encode(self, texts):
+            raise TimeoutError("command timed out")
+
+    paper, _ = await slow_ingest(worker_session, sample_pdf, monkeypatch)
+    await ingest.ingest_paper({"embedder": FakeEmbedder()}, str(paper.id))
+
+    with pytest.raises(TimeoutError, match="command timed out"):  # arq sees a real failure
+        await ingest.reembed_paper({"embedder": CommandTimeout()}, str(paper.id))
 
 
 def test_arq_backstop_is_longer_than_the_code_deadline():

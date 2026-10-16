@@ -28,6 +28,11 @@ class Timing:
     error: str | None
 
 
+def normalise_api(api: str) -> str:
+    """`localhost:8100` parses with no port (urlparse takes `localhost` for a scheme), so add the scheme first."""
+    return api if "://" in api else f"http://{api}"
+
+
 def check_not_live(api: str, allowed: bool) -> None:
     if urlparse(api).port == LIVE_PORT and not allowed:
         sys.exit(f"{api} is the live API (port {LIVE_PORT}); use a test stack, or pass --i-know-this-is-live")
@@ -60,6 +65,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--workspace-id", help="also add the paper to this workspace")
     parser.add_argument("--i-know-this-is-live", action="store_true", help="allow the live API's port (8000)")
     args = parser.parse_args(argv)
+    args.api = normalise_api(args.api)
     check_not_live(args.api, args.i_know_this_is_live)
     data = {"workspace_id": args.workspace_id} if args.workspace_id else {}
     with httpx.Client(base_url=args.api, timeout=60) as client:
