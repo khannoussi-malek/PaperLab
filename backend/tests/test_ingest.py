@@ -1,4 +1,5 @@
 import asyncio
+import re
 from pathlib import Path
 
 import httpx
@@ -420,3 +421,48 @@ async def test_an_imported_papers_title_and_doi_survive_ingest_when_the_pdf_titl
     await worker_session.refresh(paper)
 
     assert (paper.status, paper.title, paper.doi, paper.year) == ("ready", "Record Title", "10.1000/imported-keeps", 2025)
+
+
+TIMINGS = (
+    r"ingest timings for {pid}: extracting=[\d.]+s chunking=[\d.]+s embedding=[\d.]+s enriching=[\d.]+s "
+    r"total=[\d.]+s"
+)
+
+
+async def test_ingest_logs_how_long_each_stage_took(worker_session, sample_pdf, ctx, caplog):
+    paper = await add_paper(worker_session, sample_pdf)
+
+    with caplog.at_level("INFO", logger="app.workers.ingest"):
+        await ingest.ingest_paper(ctx, str(paper.id))
+
+    assert re.search(TIMINGS.format(pid=paper.id) + r" chunks=\d+ pages=2\b", caplog.text)
+
+
+async def test_a_failed_ingest_logs_the_stages_it_reached(worker_session, sample_pdf, caplog):
+    class ExplodingEmbedder:
+        document_prefix = query_prefix = ""
+
+        def encode(self, texts, **kwargs):
+            raise RuntimeError("model ran out of memory")
+
+    pid = (await add_paper(worker_session, sample_pdf)).id
+
+    with caplog.at_level("INFO", logger="app.workers.ingest"):
+        await ingest.ingest_paper({"embedder": ExplodingEmbedder()}, str(pid))
+
+    assert f"ingest timings for {pid}: extracting=" in caplog.text
+    assert "enriching=0.0s" in caplog.text
+
+
+async def test_a_timed_out_ingest_logs_its_timings(worker_session, sample_pdf, ctx, monkeypatch, caplog):
+    class SlowEmbedder(FakeEmbedder):
+        async def encode(self, texts):
+            await asyncio.sleep(5)
+
+    monkeypatch.setattr(ingest, "INGEST_JOB_TIMEOUT", 0.5)
+    pid = (await add_paper(worker_session, sample_pdf)).id
+
+    with caplog.at_level("INFO", logger="app.workers.ingest"):
+        await ingest.ingest_paper({"embedder": SlowEmbedder()}, str(pid))
+
+    assert re.search(f"ingest timings for {pid}: .*embedding=0\\.[4-9]", caplog.text)
