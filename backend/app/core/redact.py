@@ -2,7 +2,7 @@
 
 import re
 
-SECRET_PARAM = re.compile(r"(?i)((?:api_)?key=)[^&\s']+")
+SECRET_PARAM = re.compile(r"(?i)((?:api_)?key=|token=|email=|sig=|signature=)[^&\s']+")
 
 
 def redact(text: str) -> str:

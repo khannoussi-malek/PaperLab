@@ -175,7 +175,10 @@ async def upload_paper(
         raise InvalidInput("invalid_doi")
     data = _decode_pdf(pdf_base64)
     existing = await session.scalar(select(Paper).where(func.lower(Paper.doi) == clean_doi)) if clean_doi else None
-    if existing:
+    if existing and existing.status == PaperStatus.FAILED:  # a retry, as _add_found does
+        paper, status = existing, "queued"
+        await papers.set_status(session, paper.id, PaperStatus.UPLOADED)
+    elif existing:
         paper, status = existing, "already_in_library"
     else:
         prefill = {"doi": clean_doi, "manual_fields": ["doi"]} if clean_doi else None
