@@ -355,7 +355,11 @@ async def add_papers(
                     added = await _add(session, providers, *parsed, workspace_uuid)
                     items.append(
                         AddPapersItem(
-                            text, added.status, added.paper_id, None, added.tried or [], added.free_copies or []
+                            text,
+                            status=added.status,
+                            paper_id=added.paper_id,
+                            tried=added.tried or [],
+                            free_copies=added.free_copies or [],
                         )
                     )
                     continue
