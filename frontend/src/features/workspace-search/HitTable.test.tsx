@@ -182,7 +182,30 @@ test('a filter that matches nothing says so instead of showing an empty list', a
 
   fireEvent.change(screen.getByLabelText('Search hits'), { target: { value: 'nonexistent' } })
 
-  expect(await screen.findByText('No hits match “nonexistent”.')).toBeInTheDocument()
+  expect(await screen.findByRole('heading', { name: 'No results match these filters.' })).toBeInTheDocument()
+})
+
+test('Clear filters resets the text filter and brings the rows back', async () => {
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  await pool().findByText('a paper about llms')
+  fireEvent.change(screen.getByLabelText('Search hits'), { target: { value: 'nonexistent' } })
+  fireEvent.click(await screen.findByRole('button', { name: 'Clear filters' }))
+  expect(screen.getByLabelText('Search hits')).toHaveValue('')
+  expect(await pool().findByText('a paper about llms')).toBeInTheDocument()
+})
+
+test('while loading it shows a skeleton, not the empty copy', () => {
+  vi.spyOn(api, 'listSearchHits').mockReturnValue(new Promise(() => {}))
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  expect(screen.getByRole('status')).toHaveAttribute('aria-busy', 'true')
+  expect(screen.queryByText('No results yet: run a search above.')).not.toBeInTheDocument()
+})
+
+test('with no hits it says to run a search', async () => {
+  vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: [], next_cursor: null })
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  expect(await screen.findByRole('heading', { name: 'No results yet: run a search above.' })).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument()
 })
 
 test('the previewed hit shows its title, byline and abstract in the side panel', async () => {

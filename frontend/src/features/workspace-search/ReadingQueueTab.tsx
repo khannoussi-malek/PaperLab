@@ -3,6 +3,7 @@ import { usePrismaExport, useReadingQueue } from '@/api/queries'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { readingChip } from '@/features/reading/passes'
+import { EmptyState, TabSkeleton } from '@/features/workspaces/TabStates'
 import { counted } from '@/features/workspaces/workspaceMeta'
 import { readerHref } from '@/lib/route'
 import { asPrismaRunMeta } from './prismaRunMeta'
@@ -28,10 +29,10 @@ export function ReadingQueueTab({ workspaceId, runId }: { workspaceId: string; r
   const queue = useReadingQueue(workspaceId, selectedRunId, selectedRunId != null)
 
   if (runsPending) {
-    return <p className="p-4 text-sm text-muted-foreground">Loading…</p>
+    return <TabSkeleton label="Loading reading list" />
   }
   if (allRuns.length === 0) {
-    return <p className="p-4 text-sm text-muted-foreground">No search runs yet. Start one on the Search tab.</p>
+    return <EmptyState title="No included papers yet">No search runs yet. Start one on the Search tab.</EmptyState>
   }
 
   return (
@@ -53,11 +54,9 @@ export function ReadingQueueTab({ workspaceId, runId }: { workspaceId: string; r
           <AlertDescription>{queue.error.message}</AlertDescription>
         </Alert>
       )}
-      {!queue.isError && queue.data === undefined && (
-        <p className="text-sm text-muted-foreground">Loading…</p>
-      )}
+      {!queue.isError && queue.data === undefined && <TabSkeleton label="Loading reading list" />}
       {queue.data?.rows.length === 0 && (
-        <p className="text-sm text-muted-foreground">No included papers have been imported into the library yet.</p>
+        <EmptyState title="No included papers yet">No included papers have been imported into the library yet.</EmptyState>
       )}
       {queue.data && queue.data.rows.length > 0 && (
         <ul className="reading-queue divide-y divide-glass-border rounded-lg border">

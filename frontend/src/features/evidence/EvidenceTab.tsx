@@ -6,6 +6,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { EmptyState, TabSkeleton } from '@/features/workspaces/TabStates'
 import { Making } from './EvidenceBits'
 import { EvidenceCell } from './EvidenceCell'
 import { FIELDS, failureReason } from './evidenceFields'
@@ -40,8 +41,9 @@ export function EvidenceTab({ workspaceId }: { workspaceId: string }) {
         )}
       </div>
       {error && <Alert variant="destructive"><AlertDescription>{error.message}</AlertDescription></Alert>}
+      {rows.isPending && <TabSkeleton label="Loading evidence cards" />}
       {rows.data?.length === 0 && (
-        <p className="text-muted-foreground">Add papers to this workspace and their evidence cards will show up here.</p>
+        <EmptyState title="No evidence cards yet">Add papers to this workspace and their evidence cards will show up here.</EmptyState>
       )}
       {!!rows.data?.length && (
         <Table>

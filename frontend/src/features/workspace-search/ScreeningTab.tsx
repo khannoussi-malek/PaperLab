@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { EligibilityUpdate, Hit } from '@/api/client'
 import { useSearchHits, useSetEligibility, useSnowball } from '@/api/queries'
 import { Button } from '@/components/ui/button'
+import { EmptyState, GoToSearchAction, TabSkeleton } from '@/features/workspaces/TabStates'
 import { matchesFilter } from './hitReview'
 import { StatusDot } from './StatusDot'
 
@@ -39,8 +40,12 @@ export function ScreeningTab({ workspaceId }: { workspaceId: string }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2 p-3">
-      {rows.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Nothing to screen yet — import or upload a paper first.</p>
+      {imported.isPending || manual.isPending ? (
+        <TabSkeleton label="Loading papers to review" />
+      ) : rows.length === 0 ? (
+        <EmptyState title="Nothing to review yet" action={<GoToSearchAction workspaceId={workspaceId} />}>
+          Import relevant results with a PDF first.
+        </EmptyState>
       ) : (
         <label className="flex items-center gap-2">
           <span className="sr-only">Search hits to screen</span>

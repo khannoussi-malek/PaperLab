@@ -2,13 +2,14 @@ import { Download } from 'lucide-react'
 import { notesZipUrl, type Note } from '@/api/client'
 import { useWorkspaceNotes, useWorkspacePapers } from '@/api/queries'
 import { glass } from '@/components/glass'
-import { delayedIn, isFresh, slideUpIn } from '@/components/motion'
+import { isFresh, slideUpIn } from '@/components/motion'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { ProvenanceBadge } from '@/features/notes/ProvenanceBadge'
 import { noteHref } from '@/lib/route'
 import { cn } from '@/lib/utils'
+import { EmptyState, TabSkeleton } from './TabStates'
 import { notesByPaper } from './workspaceMeta'
 
 /** A read-only note: the whole card opens the reader focused on it. Editing happens there. */
@@ -72,15 +73,12 @@ export function WorkspaceNotes({ workspaceId }: { workspaceId: string }) {
       </Alert>
     )
   }
-  if (!notes.data || !papers.data) return <p className={cn('py-2 text-muted-foreground', delayedIn)}>Loading…</p>
+  if (!notes.data || !papers.data) return <TabSkeleton label="Loading notes" />
 
   const groups = notesByPaper(notes.data, papers.data)
   if (groups.length === 0) {
     return (
-      <div className="flex flex-col gap-3 py-2">
-        <p className="text-muted-foreground">No notes yet. Highlight a passage in one of these papers to add one.</p>
-        <ExportLink workspaceId={workspaceId} />
-      </div>
+      <EmptyState title="No notes yet">Highlight a passage in one of these papers to add one.</EmptyState>
     )
   }
   return (
