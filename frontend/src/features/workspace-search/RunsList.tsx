@@ -12,14 +12,21 @@ export function RunsList({
   workspaceId,
   runId,
   onSelect,
+  open: openProp,
+  onOpenChange,
 }: {
   workspaceId: string
   runId: string | null
   onSelect: (runId: string) => void
+  /** Optional control from the parent (e.g. "Change run"); without it the list tracks its own state. */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }) {
   const runs = useSearchRuns(workspaceId).data ?? []
   const cont = useContinueSearchRun(workspaceId)
-  const [open, setOpen] = useState(false)
+  const [ownOpen, setOwnOpen] = useState(false)
+  const open = openProp ?? ownOpen
+  const setOpen = onOpenChange ?? setOwnOpen
   if (runs.length === 0) return null
 
   return (
