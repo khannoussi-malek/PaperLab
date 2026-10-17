@@ -14,12 +14,6 @@ SAFE_SCHEMES = {"http", "https", "mailto"}
 HAS_TAGS = re.compile(r"</?[a-zA-Z][^>]*>")
 
 
-def escape(text: str) -> str:
-    """Make text inert markdown: no raw HTML (< >) and no link syntax ([ ]), so `[c](javascript:...)` can't form."""
-    escaped = text.replace("\\", "\\\\").replace("[", "\\[").replace("]", "\\]")
-    return escaped.replace("<", "&lt;").replace(">", "&gt;")
-
-
 class _Converter(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
@@ -93,13 +87,14 @@ class _Converter(HTMLParser):
 
     def handle_data(self, data):
         if not self.skip:
-            self._put(escape(re.sub(r"\s+", " ", data)))
+            self._put(re.sub(r"\s+", " ", data))
 
 
+# Note bodies are shown as plain text; any future markdown rendering of them must sanitise at render time.
 def html_to_markdown(text: str) -> str:
     """Markdown for a Zotero note. Plain text (no tags) is returned as it is, trimmed."""
     if not HAS_TAGS.search(text):
-        return escape(text.strip())
+        return text.strip()
     converter = _Converter()
     converter.feed(text)
     converter.close()
