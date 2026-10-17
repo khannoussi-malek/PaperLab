@@ -5,19 +5,28 @@ import { workspaceHref } from '@/lib/route'
 import { WorkspacePage } from './WorkspacePage'
 
 const counts = vi.hoisted(() => ({ paper_count: 1, note_count: 0 }))
+const seen = vi.hoisted(() => ({ reading: null as unknown, papers: null as unknown }))
+type Rows = { items: { stage2_status?: string | null }[] }
+const hits = vi.hoisted(() => ({
+  byKey: {} as Record<string, { rows: { stage2_status?: string | null }[]; more?: boolean }>,
+}))
 vi.mock('@/api/queries', () => ({
   useWorkspace: () => ({ data: { name: 'W', ...counts }, error: null }),
-  useSearchHits: () => ({ data: { pages: [{ items: [] }] }, hasNextPage: false }),
+  useSearchHits: (_w: string, stage1?: string, acq?: string) => {
+    const entry = hits.byKey[`${stage1 ?? ''}/${acq ?? ''}`] ?? { rows: [] }
+    return { data: { pages: [{ items: entry.rows } as Rows] }, hasNextPage: !!entry.more }
+  },
 }))
 vi.mock('@/components/AppShell', () => ({ AppShell: ({ children }: { children: React.ReactNode }) => <main>{children}</main>, shellTitle: () => null }))
 vi.mock('./WorkspacePapers', () => ({
-  WorkspacePapers: ({ onTagsChange }: { onTagsChange: (t: string[], m: 'any' | 'all') => void }) => (
-    <button onClick={() => onTagsChange(['rct'], 'all')}>pick</button>
-  ),
+  WorkspacePapers: (props: { onTagsChange: (t: string[], m: 'any' | 'all') => void }) => {
+    seen.papers = props
+    return <button onClick={() => props.onTagsChange(['rct'], 'all')}>pick</button>
+  },
 }))
 vi.mock('@/features/workspace-search/ManualAcquisitionTab', () => ({ ManualAcquisitionTab: () => null }))
 vi.mock('@/features/workspace-search/PrismaTab', () => ({ PrismaTab: () => null }))
-vi.mock('@/features/workspace-search/ReadingQueueTab', () => ({ ReadingQueueTab: () => null }))
+vi.mock('@/features/workspace-search/ReadingQueueTab', () => ({ ReadingQueueTab: (props: unknown) => { seen.reading = props; return null } }))
 vi.mock('@/features/workspace-search/ScreeningTab', () => ({ ScreeningTab: () => null }))
 vi.mock('@/features/workspace-search/SearchTab', () => ({ SearchTab: () => null }))
 vi.mock('../evidence/EvidenceTab', () => ({ EvidenceTab: () => null }))
@@ -27,6 +36,9 @@ vi.mock('./ExportCitationsMenu', () => ({ ExportCitationsMenu: () => null }))
 
 afterEach(() => {
   cleanup()
+  seen.reading = null
+  seen.papers = null
+  hits.byKey = {}
   vi.unstubAllGlobals()
   counts.paper_count = 1
   counts.note_count = 0
@@ -86,4 +98,39 @@ test('a tab switch adds a history entry; a tag change replaces', () => {
 test('old deep links still open their tab', () => {
   page('reading', 'r1')
   expect(screen.getByRole('tab', { name: 'Reading list, step 4 of 5' }).getAttribute('aria-selected')).toBe('true')
+})
+
+test('old deep links pass run, tags and match through unchanged', () => {
+  render(<WorkspacePage workspaceId="w1" tab="reading" runId="r1" tags={['a']} match="all" />)
+  expect(seen.reading).toMatchObject({ runId: 'r1' })
+  expect(seen.papers).toMatchObject({ tags: ['a'], match: 'all' })
+})
+
+const rows = (n: number, stage2: (string | null)[] = []) =>
+  Array.from({ length: n }, (_, i) => ({ stage2_status: stage2[i] ?? null }))
+
+test('Get PDFs badge counts the failed hits', () => {
+  hits.byKey['/failed'] = { rows: rows(3) }
+  page()
+  expect(screen.getByRole('tab', { name: 'Get PDFs, step 2 of 5, 3 to fetch' })).toBeTruthy()
+})
+
+test('Full-text review counts only hits without a stage-2 verdict', () => {
+  hits.byKey['relevant/imported'] = { rows: rows(3, ['include', null, null]) }
+  page()
+  expect(screen.getByRole('tab', { name: 'Full-text review, step 3 of 5, 2 to review' })).toBeTruthy()
+})
+
+test('a count is omitted while more pages remain', () => {
+  hits.byKey['/failed'] = { rows: rows(3), more: true }
+  hits.byKey['relevant/manual'] = { rows: rows(2), more: true }
+  page()
+  expect(screen.getByRole('tab', { name: 'Get PDFs, step 2 of 5' })).toBeTruthy()
+  expect(screen.getByRole('tab', { name: 'Full-text review, step 3 of 5' })).toBeTruthy()
+})
+
+test('a zero count shows no badge', () => {
+  page()
+  expect(screen.getByRole('tab', { name: 'Get PDFs, step 2 of 5' })).toBeTruthy()
+  expect(screen.getByRole('tab', { name: 'Full-text review, step 3 of 5' })).toBeTruthy()
 })
