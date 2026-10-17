@@ -23,11 +23,20 @@ ARXIV_URL = re.compile(rf"arxiv\.org/(?:abs|pdf)/({ARXIV_ID})(?:v\d+)?", re.IGNO
 PMID_LINE = re.compile(r"^\s*pmid:\s*(\d+)", re.IGNORECASE | re.MULTILINE)
 PMCID_LINE = re.compile(r"^\s*pmcid:\s*(PMC\d+)", re.IGNORECASE | re.MULTILINE)
 # What PaperLab's own export writes into a note; reading it back as a note would duplicate the metadata.
+_OWN_PART = (
+    r"(?:source: (?:journal article|proceedings|book|chapter|preprint|magazine|thesis|other)"
+    r"|(?:not )?peer-reviewed|(?:full text|abstract only|metadata only) in paperlab)"
+)
 OWN_NOTE = re.compile(
-    r"^\s*(preprint\.\s*)?(source:|(not )?peer-reviewed|(full text|abstract only|metadata only) in paperlab"
-    r"|arxiv:|pmid:|pmcid:|published version:)",
+    rf"(?:preprint\. )?{_OWN_PART}(?: \u00b7 {_OWN_PART})*|arxiv: \S+|pmid: \d+|pmcid: PMC\d+"
+    r"|published version: .*https://doi\.org/\S+",
     re.IGNORECASE,
 )
+# Longest text a field may have before LaTeX decoding (pylatexenc is superlinear); the file limit is 20 MB.
+BIG_FIELDS = {"abstract": 100_000, "annote": 100_000}
+LONG_FIELDS = {"author": 50_000, "editor": 50_000, "file": 50_000, "keywords": 50_000, "keyword": 50_000,
+               "note": 50_000, "collections": 50_000}  # fmt: skip
+FIELD_MAX = 2_000
 SUFFIX = re.compile(r"(Jr\.?|Sr\.?|II|III|IV)", re.IGNORECASE)
 MIME_TAIL = re.compile(r":(?:application|text|image|audio|video)/[\w.+-]+$")
 DRIVE = re.compile(r"[A-Za-z]:[\\/]")
@@ -87,6 +96,18 @@ def _tex(text: str | None) -> str:
     return unicodedata.normalize("NFC", " ".join(LATEX.latex_to_text(text).replace("\xa0", " ").split()))
 
 
+def _tex_block(text: str) -> str:
+    """Like _tex, per line, so a plain-text note keeps its line breaks."""
+    return "\n".join(_tex(line) for line in text.split("\n")).strip()
+
+
+def _check_sizes(label: str, values: dict[str, str | None]) -> None:
+    for key, value in values.items():
+        limit = BIG_FIELDS.get(key) or LONG_FIELDS.get(key) or FIELD_MAX
+        if value and len(value) > limit:
+            raise CitationsImportError(f"The {key} of {label} is too long to import, so nothing was imported.")
+
+
 def _split_top(text: str, pattern: str) -> list[str]:
     """Split on `pattern` outside braces."""
     depth, masked = 0, []
@@ -142,7 +163,7 @@ def _doi(value: str | None) -> str | None:
 
 def _arxiv(raw: str | None) -> str | None:
     match = re.fullmatch(rf"(?:arxiv:)?\s*({ARXIV_ID})(?:v\d+)?", (raw or "").strip(), re.IGNORECASE)
-    return match.group(1).lower() if match else None
+    return match.group(1) if match else None
 
 
 def _first(pattern: re.Pattern, *texts: str | None) -> str | None:
@@ -160,7 +181,7 @@ def _note(text: str) -> str | None:
     """A child note as markdown, or None when it is only the metadata PaperLab's own export writes."""
     markdown = html_to_markdown(text)
     lines = [ln for ln in markdown.split("\n") if ln.strip()]
-    return None if not lines or all(OWN_NOTE.match(ln) for ln in lines) else markdown
+    return None if not lines or all(OWN_NOTE.fullmatch(ln.strip()) for ln in lines) else markdown
 
 
 def _build(title: str, source_type: str, extra: str = "", url: str | None = None, **values) -> ImportEntry:
@@ -216,11 +237,13 @@ def _bibtex_files(raw: str | None) -> list[str]:
 
 def _bibtex_entry(entry) -> ImportEntry:
     f = {x.key.lower(): x.value for x in entry.fields}
+    label = f"the BibTeX entry '{entry.key}'"
+    _check_sizes(label, f)
     if not (title := _tex(f.get("title"))):
         raise CitationsImportError(f"The BibTeX entry '{entry.key}' has no title, so nothing was imported.")
     source_type = BIBTEX_TYPES.get(entry.entry_type.lower(), "other")
     extra = _tex(f.get("note"))
-    notes = [n for n in (_note(_tex(f["annote"])),) if n] if f.get("annote") else []
+    notes = [n for n in (_note(_tex_block(f["annote"])),) if n] if f.get("annote") else []
     arxiv = f.get("eprint") if f.get("archiveprefix", f.get("eprinttype", "arxiv")).lower() == "arxiv" else None
     return _build(
         title, source_type, extra=extra, url=f.get("url"),
@@ -238,10 +261,10 @@ def _bibtex_entry(entry) -> ImportEntry:
 def _parse_bibtex(text: str) -> list[ImportEntry]:
     library = bibtexparser.parse_string(text)
     if library.failed_blocks:
-        raise CitationsImportError(
-            "This BibTeX file has an entry PaperLab can't read (a missing brace or a repeated key), "
-            "so nothing was imported."
-        )
+        block = library.failed_blocks[0]
+        key = getattr(block, "key", None)
+        where = f"the entry '{key}' (a repeated key)" if key else f"the entry at line {block.start_line + 1}"
+        raise CitationsImportError(f"This BibTeX file has {where} that PaperLab can't read, so nothing was imported.")
     _check_count(library.entries)
     return [_bibtex_entry(e) for e in library.entries]
 
@@ -253,9 +276,13 @@ def _as_list(value) -> list[str]:
     return [value] if isinstance(value, str) else [str(v) for v in value or []]
 
 
-def _ris_entry(r: dict) -> ImportEntry:
+def _ris_entry(r: dict, number: int) -> ImportEntry:
+    label = f"reference #{number} in this RIS file"
     if not (title := r.get("title") or r.get("primary_title")):
-        raise CitationsImportError("A reference in this RIS file has no title, so nothing was imported.")
+        raise CitationsImportError(f"The {label} has no title, so nothing was imported.")
+    _check_sizes(label, {"title": title})
+    for name in _as_list(r.get("authors")) + _as_list(r.get("first_authors")) + _as_list(r.get("secondary_authors")):
+        _check_sizes(label, {"author name": name})
     texts = _as_list(r.get("notes")) + _as_list(r.get("note"))
     page = _pages("-".join(p for p in (r.get("start_page"), r.get("end_page")) if p))
     return _build(
@@ -281,41 +308,58 @@ def _parse_ris(text: str) -> list[ImportEntry]:
     except Exception:  # noqa: BLE001 - rispy raises assorted errors on malformed lines; the user gets one plain message
         raise CitationsImportError("PaperLab couldn't read this RIS file, so nothing was imported.") from None
     _check_count(records)
-    return [_ris_entry(r) for r in records]
+    return [_ris_entry(r, n) for n, r in enumerate(records, 1)]
 
 
 # ---- CSL-JSON ----
 
 
+def _s(value) -> str | None:
+    """A CSL value as text: the first item of a list (Crossref-shaped CSL), numbers as text, anything else None."""
+    while isinstance(value, list):
+        value = value[0] if value else None
+    if isinstance(value, bool) or not isinstance(value, str | int | float):
+        return None
+    return str(value).strip() or None
+
+
 def _csl_person(p: dict) -> str:
-    if p.get("literal"):
-        return p["literal"].strip()
-    family = " ".join(x for x in (p.get("non-dropping-particle"), p.get("dropping-particle"), p.get("family")) if x)
-    return _join_name(family.strip(), (p.get("given") or "").strip(), p.get("suffix") or "")
+    if literal := _s(p.get("literal")):
+        return literal
+    particles = (_s(p.get("non-dropping-particle")), _s(p.get("dropping-particle")), _s(p.get("family")))
+    return _join_name(" ".join(x for x in particles if x), _s(p.get("given")) or "", _s(p.get("suffix")) or "")
 
 
 def _csl_year(item: dict) -> int | None:
-    issued = item.get("issued") or {}
-    parts = issued.get("date-parts") or [[]]
-    return _year(parts[0][0] if parts and parts[0] else issued.get("raw") or issued.get("literal"))
+    issued = item.get("issued")
+    if not isinstance(issued, dict):
+        return _year(_s(issued))
+    parts = issued.get("date-parts")
+    first = parts[0][0] if isinstance(parts, list) and parts and isinstance(parts[0], list) and parts[0] else None
+    return _year(_s(first) or _s(issued.get("raw")) or _s(issued.get("literal")))
 
 
-def _csl_entry(item) -> ImportEntry:
-    if not isinstance(item, dict) or not (title := str(item.get("title") or "").strip()):
-        raise CitationsImportError("A reference in this CSL-JSON file has no title, so nothing was imported.")
-    people = lambda key: [n for p in item.get(key) or [] if isinstance(p, dict) and (n := _csl_person(p))]  # noqa: E731
+def _csl_people(item: dict, key: str) -> list[str]:
+    people = item.get(key)
+    return [n for p in people if isinstance(p, dict) and (n := _csl_person(p))] if isinstance(people, list) else []
+
+
+def _csl_keywords(value) -> list[str]:
+    return _split_words(", ".join(v for v in (_s(x) for x in value) if v) if isinstance(value, list) else _s(value))
+
+
+def _csl_entry(item, number: int) -> ImportEntry:
+    label = f"reference #{number} in this CSL-JSON file"
+    if not isinstance(item, dict) or not (title := _s(item.get("title"))):
+        raise CitationsImportError(f"The {label} has no title, so nothing was imported.")
     return _build(
-        title, CSL_TYPES.get(item.get("type"), "other"), extra=str(item.get("note") or ""), url=item.get("URL"),
-        authors=people("author"), editors=people("editor"), year=_csl_year(item), venue=item.get("container-title"),
-        publisher=item.get("publisher"), doi=item.get("DOI"), pmid=item.get("PMID"), pmcid=item.get("PMCID"),
-        issn=item.get("ISSN"), abstract=item.get("abstract"), volume=_str(item.get("volume")),
-        issue=_str(item.get("issue")), pages=_pages(_str(item.get("page"))),
-        tags=_split_words(item.get("keyword")),
+        title, CSL_TYPES.get(_s(item.get("type")) or "", "other"), extra=_s(item.get("note")) or "",
+        url=_s(item.get("URL")), authors=_csl_people(item, "author"), editors=_csl_people(item, "editor"),
+        year=_csl_year(item), venue=_s(item.get("container-title")), publisher=_s(item.get("publisher")),
+        doi=_s(item.get("DOI")), pmid=_s(item.get("PMID")), pmcid=_s(item.get("PMCID")), issn=_s(item.get("ISSN")),
+        abstract=_s(item.get("abstract")), volume=_s(item.get("volume")), issue=_s(item.get("issue")),
+        pages=_pages(_s(item.get("page"))), tags=_csl_keywords(item.get("keyword")),
     )  # fmt: skip
-
-
-def _str(value) -> str | None:
-    return str(value) if value not in (None, "") else None
 
 
 def _parse_csl(text: str) -> list[ImportEntry]:
@@ -326,7 +370,7 @@ def _parse_csl(text: str) -> list[ImportEntry]:
     if not isinstance(items, list):
         raise CitationsImportError("This JSON file isn't a CSL-JSON list of references.")
     _check_count(items)
-    return [_csl_entry(i) for i in items]
+    return [_csl_entry(item, n) for n, item in enumerate(items, 1)]
 
 
 # ---- entry point ----
@@ -352,4 +396,8 @@ def parse(name: str, data: bytes) -> list[ImportEntry]:
     """The references in a Zotero export. Raises CitationsImportError (plain message) for anything unreadable."""
     text = _decode(data)
     kind = _detect(name, text)
-    return {"bibtex": _parse_bibtex, "ris": _parse_ris, "json": _parse_csl}[kind](text)
+    try:
+        return {"bibtex": _parse_bibtex, "ris": _parse_ris, "json": _parse_csl}[kind](text)
+    except (RecursionError, TypeError, AttributeError, ValueError):
+        # hostile or oddly shaped input (deep nesting, wrong value types): one plain message, never a trace
+        raise CitationsImportError("PaperLab couldn't read this file, so nothing was imported.") from None

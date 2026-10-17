@@ -132,3 +132,91 @@ def test_papers_own_export_notes_are_not_read_back_as_notes():
     ris = b"TY  - JOUR\nTI  - T\nN1  - Source: journal article\nN1  - arXiv: 2406.07735\nN1  - mine\nER  - \n"
     entry = parse("a.ris", ris)[0]
     assert entry.notes == ["mine"] and entry.arxiv_id == "2406.07735"
+
+
+# ---- fix round 1 ----
+
+
+def _csl(**item) -> bytes:
+    return json.dumps([{"title": "T", **item}]).encode()
+
+
+def test_hostile_nesting_gives_a_plain_error():
+    for name, data in (
+        ("a.json", b"[" * 100000),
+        ("a.bib", b"@article{k, title={" + b"{" * 5000 + b"x" + b"}" * 5000 + b"}}"),
+    ):
+        with pytest.raises(CitationsImportError):
+            parse(name, data)
+
+
+def test_odd_csl_values_are_coerced_or_refused_never_a_crash():
+    entry = parse(
+        "a.json",
+        _csl(
+            type=["x"], DOI=5, keyword=["a", "b"], issued="2020", author=[{"literal": 5}, 7],
+            **{"container-title": ["J", "K"], "ISSN": ["1234-5678"], "page": 12},
+        ),
+    )[0]  # fmt: skip
+    assert (entry.venue, entry.issn, entry.pages, entry.year) == ("J", "1234-5678", "12", 2020)
+    assert (entry.tags, entry.authors, entry.source_type) == (["a", "b"], ["5"], "other")
+    for bad in ({"issued": {"date-parts": "x"}}, {"author": {"a": 1}}, {"issued": 5}, {"title": {"a": 1}}):
+        try:
+            parse("a.json", _csl(**bad))
+        except CitationsImportError:
+            pass
+
+
+def test_one_huge_field_is_refused_by_name():
+    big = "x" * 200_000
+    with pytest.raises(CitationsImportError, match="abstract.*'k'|'k'.*abstract"):
+        parse("a.bib", ("@book{k, title={T}, abstract={" + big + "}}").encode())
+    with pytest.raises(CitationsImportError, match="title"):
+        parse("a.bib", ("@book{k, title={" + "x" * 3000 + "}}").encode())
+    ok = ("@book{k, title={T}, abstract={" + "x" * 90_000 + "}}").encode()
+    assert len(parse("a.bib", ok)[0].abstract) == 90_000
+    with pytest.raises(CitationsImportError, match="#1"):
+        parse("a.ris", ("TY  - JOUR\nTI  - " + "x" * 3000 + "\nAU  - " + "y" * 3000 + "\nER  - \n").encode())
+
+
+def test_html_cannot_smuggle_markup_or_links():
+    out = html_to_markdown("<p>&lt;img src=x onerror=alert(1)&gt;</p>")
+    assert "<" not in out and ">" not in out
+    link = html_to_markdown("<a href='https://x.org/) [y](javascript:alert(1)'>t</a>")
+    assert link == "[t](https://x.org/%29%20%5By%5D%28javascript:alert%281%29)"
+    text = html_to_markdown("<p>[c](javascript:alert(1))</p>")
+    assert text == "\\[c\\](javascript:alert(1))"  # brackets escaped, so no link forms
+    assert html_to_markdown("[c](javascript:alert(1))") == text  # plain text too
+    assert html_to_markdown("<a href=' JavaScript:alert(1)'>t</a>") == "t"
+
+
+def test_errors_name_the_broken_entry():
+    with pytest.raises(CitationsImportError, match="line 3"):
+        parse("a.bib", b"@article{a, title={x}}\n\n@article{bad title={x}\n")
+    with pytest.raises(CitationsImportError, match="'k'"):
+        parse("a.bib", b"@article{k, title={x}}\n@article{k, title={y}}\n")
+    with pytest.raises(CitationsImportError, match="'nt'"):
+        parse("a.bib", b"@article{nt, journal={x}}")
+    with pytest.raises(CitationsImportError, match="#2"):
+        parse("a.ris", b"TY  - JOUR\nTI  - a\nER  - \nTY  - JOUR\nER  - \n")
+    with pytest.raises(CitationsImportError, match="#2"):
+        parse("a.json", json.dumps([{"title": "a"}, {"type": "book"}]).encode())
+
+
+def test_a_users_own_source_note_is_kept_but_the_exports_are_not():
+    ris = (
+        b"TY  - JOUR\nTI  - T\nN1  - Source: my interview notes\nN1  - Source: journal article \xc2\xb7 Peer-reviewed"
+        b" \xc2\xb7 Full text in PaperLab\nN1  - Preprint. Not peer-reviewed \xc2\xb7 full text in PaperLab\nER  - \n"
+    )
+    assert parse("a.ris", ris)[0].notes == ["Source: my interview notes"]
+
+
+def test_arxiv_ids_keep_their_case_and_lose_only_the_version():
+    bib = b"@misc{a, title={T}, eprint={math.GT/0309136v2}, archivePrefix={arXiv}}"
+    assert parse("a.bib", bib)[0].arxiv_id == "math.GT/0309136"
+    assert parse("a.json", _csl(note="arXiv: math.GT/0309136v3"))[0].arxiv_id == "math.GT/0309136"
+
+
+def test_plain_text_annote_keeps_its_line_breaks():
+    bib = b"@book{a, title={T}, annote={line one\n\nline two\nline three}}"
+    assert parse("a.bib", bib)[0].notes == ["line one\n\nline two\nline three"]
