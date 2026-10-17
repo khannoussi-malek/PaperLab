@@ -111,7 +111,7 @@ def _keywords(paper, extra: list[str]) -> list[str]:
     return [clean for w in words if w and (clean := CONTROL.sub(" ", w).strip())]
 
 
-def csl_item(paper, keywords: list[str] | None = None) -> dict:
+def csl_item(paper, keywords: list[str] | None = None, notes: list[str] | None = None) -> dict:
     """The CSL-JSON item for a paper-like object (no DB). `keywords` come first (a workspace's tags and screening
     decision); the source type and "peer-reviewed" follow. Optional biblio fields are read when present."""
     item: dict = {
@@ -147,6 +147,8 @@ def csl_item(paper, keywords: list[str] | None = None) -> dict:
     if words := _keywords(paper, keywords or []):
         item["keyword"] = ", ".join(words)
         item["_keywords"] = words  # private: RIS writes one KW per entry, a tag may itself contain ", "
+    if notes:
+        item["_notes"] = notes  # private: PaperLab notes as plain text; BibTeX annote, one RIS N1 each
     return item
 
 
@@ -266,6 +268,8 @@ def _bibtex_fields(item: dict) -> dict[str, str]:
         "pmid": item.get("PMID"),
         "pmcid": item.get("PMCID"),
         "keywords": item.get("keyword"),
+        "annote": "\n\n".join(item.get("_notes", [])),
+        "file": item.get("_file"),  # set by citations_bundle: the PDF's path inside the zip
     }
     escaped = {k: v if k in ("author", "editor") else _tex(v) for k, v in fields.items()}
     # DOIs, URLs and the arXiv id are verbatim in BibTeX; escaping their underscores or percents would break the link.
@@ -305,7 +309,8 @@ def _ris_entry(item: dict) -> dict:
         "end_page": last,
         "doi": item.get("DOI"),
         "urls": [item["URL"]] if item.get("URL") else None,
-        "notes": _note_lines(item),
+        "notes": [*_note_lines(item), *(" ".join(n.split()) for n in item.get("_notes", []))],  # RIS has no newlines
+        "file_attachments1": item.get("_file"),
         "abstract": item.get("abstract"),
         "issn": item.get("ISSN"),
         "keywords": item.get("_keywords"),
@@ -393,14 +398,13 @@ def _apa(items: list[dict], *, html: bool) -> str:
 MAX_SELECTION = 1000
 
 
-async def export_papers(
-    session: AsyncSession, *, workspace_id: uuid.UUID | None = None, paper_ids: list[uuid.UUID] | None = None, fmt: str
-) -> tuple[str, int]:
-    """The workspace's papers (its own order) or the selected ones (the order given, repeats dropped) rendered as `fmt`.
+async def load_items(
+    session: AsyncSession, *, workspace_id: uuid.UUID | None = None, paper_ids: list[uuid.UUID] | None = None,
+    notes: bool = False,
+) -> tuple[list, list[dict]]:  # fmt: skip
+    """(papers, CSL items) of the workspace (its own order) or the selected papers (the order given, repeats dropped).
     With a workspace, keywords add its tags and screening decision; ids plus a workspace select within it (any paper).
-    Raises InvalidInput unknown_format / no_papers / too_many_papers, NotFound for an unknown workspace or paper."""
-    if fmt not in FORMATS:
-        raise InvalidInput("unknown_format")
+    `notes` adds each paper's PaperLab notes. Raises InvalidInput no_papers / too_many_papers, NotFound."""
     if workspace_id is not None and paper_ids is None:
         papers = await workspaces.papers(session, workspace_id)
     else:
@@ -416,7 +420,26 @@ async def export_papers(
     if not papers:
         raise InvalidInput("no_papers")
     words = await workspace_keywords(session, workspace_id) if workspace_id is not None else {}
-    return render([csl_item(p, words.get(p.id)) for p in papers], fmt), len(papers)
+    texts = await _note_texts(session, papers) if notes else {}
+    return papers, [csl_item(p, words.get(p.id), texts.get(p.id)) for p in papers]
+
+
+async def _note_texts(session: AsyncSession, papers: list) -> dict[uuid.UUID, list[str]]:
+    from app.core import notes_markdown  # imported here: notes_markdown imports this module
+
+    by_paper = await notes_markdown._notes_by_paper(session, [p.id for p in papers])
+    return {pid: [notes_markdown.plain_note(pid, n) for n in items] for pid, items in by_paper.items()}
+
+
+async def export_papers(
+    session: AsyncSession, *, workspace_id: uuid.UUID | None = None, paper_ids: list[uuid.UUID] | None = None,
+    fmt: str, notes: bool = False,
+) -> tuple[str, int]:  # fmt: skip
+    """`load_items` rendered as `fmt`. Raises InvalidInput unknown_format too."""
+    if fmt not in FORMATS:
+        raise InvalidInput("unknown_format")
+    papers, items = await load_items(session, workspace_id=workspace_id, paper_ids=paper_ids, notes=notes)
+    return render(items, fmt), len(papers)
 
 
 def filename_slug(name: str) -> str:
