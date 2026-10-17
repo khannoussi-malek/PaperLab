@@ -63,14 +63,31 @@ def _heading(body: str) -> str:
     return neutralise(first.lstrip("#").strip() or "Note")[:HEADING_MAX]
 
 
+def paperlab_link(paper_id: uuid.UUID, page: int, chunk_id: uuid.UUID | None) -> str:
+    chunk = f"&chunk={chunk_id}" if chunk_id else ""
+    return f"paperlab://papers/{paper_id}?page={page}{chunk}"
+
+
+def _here(paper_id: uuid.UUID, n: NoteItem) -> list[AnchorItem]:
+    return sorted((a for a in n.anchors if a.paper_id == paper_id), key=lambda a: a.page)
+
+
+def plain_note(paper_id: uuid.UUID, n: NoteItem) -> str:
+    """One note as plain text for a citation manager: author label and page, each quote, the body, the links."""
+    here = _here(paper_id, n)
+    head = LABELS.get(n.provenance, "You") + (f" · p. {here[0].page}" if here else "")
+    quotes = [f"> {a.quoted_text}" for a in here if a.quoted_text]
+    links = [paperlab_link(paper_id, a.page, a.chunk_id) for a in here] or [f"paperlab://papers/{paper_id}"]
+    return "\n".join([head, *quotes, n.body, *links])
+
+
 def _block(paper_id: uuid.UUID, n: NoteItem, keys: dict[str, str]) -> str:
-    here = sorted((a for a in n.anchors if a.paper_id == paper_id), key=lambda a: a.page)
+    here = _here(paper_id, n)
     label = f"*{LABELS.get(n.provenance, 'You')}*" + (f" · p. {here[0].page}" if here else "")
     parts = [f"### {_heading(n.body)}", label]
     for a in here:
         quote = "\n".join(f"> {line}".rstrip() if line else ">" for line in a.quoted_text.splitlines())
-        chunk = f"&chunk={a.chunk_id}" if a.chunk_id else ""
-        parts += [quote, f"[Open in PaperLab](paperlab://papers/{paper_id}?page={a.page}{chunk})"]
+        parts += [quote, f"[Open in PaperLab]({paperlab_link(paper_id, a.page, a.chunk_id)})"]
     if others := [f"[[{keys[str(p)]}]]" for p in n.paper_ids if p != paper_id and str(p) in keys]:
         parts.append("Also on: " + ", ".join(others))
     parts.append(n.body)
