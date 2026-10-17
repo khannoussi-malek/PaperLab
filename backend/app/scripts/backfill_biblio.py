@@ -3,6 +3,8 @@ for the PubMed ids.
 
 Run once in the api container: `python -m app.scripts.backfill_biblio`. Paced (Crossref's polite pool allows about 3
 requests a second), idempotent (only NULL fields are filled), and never touches a field the owner set by hand.
+A paper with no PubMed record (most outside biomedicine) keeps a NULL pmid, so every rerun asks about it again:
+run it once after an upgrade, not on a schedule.
 """
 
 import asyncio
@@ -50,7 +52,8 @@ async def main() -> None:
         sources = await paper_sources.get(session)
         email = sources.contact_email
         cr = crossref.new_client(email=email) if sources.enabled["crossref"] else None
-        oa = openalex.new_client(email=email) if sources.enabled["openalex"] else None
+        key = sources.api_keys["openalex"]
+        oa = openalex.new_client(email=email, api_key=key) if sources.enabled["openalex"] else None
         try:
             summary = await run(session, cr, oa)
         finally:

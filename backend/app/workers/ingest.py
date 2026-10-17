@@ -59,7 +59,9 @@ async def _enrich(session, transport, paper_id: uuid.UUID, doc: ExtractedDoc) ->
                 http = await stack.enter_async_context(
                     openalex.new_client(email=sources.contact_email, transport=transport, api_key=key)
                 )
-            if sources.enabled["crossref"]:  # one polite-pool request at most, only for a paper OpenAlex left untyped
+            # One polite-pool Crossref request at most, shared by the source type and the citation fields (volume,
+            # issue, pages, editors), and skipped when OpenAlex already filled everything Crossref could add.
+            if sources.enabled["crossref"]:
                 cr = await stack.enter_async_context(
                     crossref.new_client(email=sources.contact_email, transport=transport)
                 )

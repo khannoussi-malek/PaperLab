@@ -125,3 +125,42 @@ async def test_backfill_ignores_papers_missing_only_editors(session):
     client, seen = fake_crossref(CROSSREF)
     summary = await backfill_biblio.run(session, client, None, delay=0, only=[paper.id])
     assert summary["checked"] == 0 and seen == []
+
+
+async def test_the_backfill_sends_openalex_its_api_key(monkeypatch):
+    # Keyless, a library-wide run hits OpenAlex's anonymous limits and PubMed ids quietly stay empty.
+    from contextlib import asynccontextmanager  # noqa: PLC0415
+    from types import SimpleNamespace  # noqa: PLC0415
+
+    from app.scripts import backfill_biblio  # noqa: PLC0415
+
+    built = {}
+
+    class Client:
+        async def aclose(self):
+            pass
+
+    def openalex_client(**kwargs):
+        built.update(kwargs)
+        return Client()
+
+    async def sources(_session):
+        return SimpleNamespace(
+            contact_email="me@example.org", enabled={"crossref": False, "openalex": True}, api_keys={"openalex": "k-1"}
+        )
+
+    @asynccontextmanager
+    async def fake_session():
+        yield None
+
+    async def run(_session, _cr, _oa):
+        return {}
+
+    monkeypatch.setattr(backfill_biblio, "SessionLocal", fake_session)
+    monkeypatch.setattr(backfill_biblio.paper_sources, "get", sources)
+    monkeypatch.setattr(backfill_biblio.openalex, "new_client", openalex_client)
+    monkeypatch.setattr(backfill_biblio, "run", run)
+
+    await backfill_biblio.main()
+
+    assert built == {"email": "me@example.org", "api_key": "k-1"}
