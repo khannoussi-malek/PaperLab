@@ -1,7 +1,7 @@
 import type { Paper } from '@/api/client'
 import { Badge } from '@/components/ui/badge'
 import { SOURCE_TYPES } from './paperForm'
-import { isPublishedCopy, publishedChipText } from './publishedChip'
+import { isPublishedCopy, venueShort } from './publishedChip'
 
 const EVIDENCE: Record<Paper['evidence_access'], string> = {
   full_text: 'Full text',
@@ -17,14 +17,25 @@ function peerReviewLabel(paper: Paper): string | null {
 }
 
 function PublishedChip({ paper }: { paper: Paper }) {
-  const label = `Published version: ${[paper.published_venue, paper.year].filter(Boolean).join(' ')}`.trimEnd()
-  const text = publishedChipText(paper.published_venue, paper.year)
+  const venue = paper.published_venue
+  const content = (
+    <>
+      Published:
+      {venue && (
+        <>
+          {' '}
+          <span className="inline-block max-w-[16rem] truncate align-bottom" title={venue}>{venueShort(venue)}</span>
+        </>
+      )}
+      {paper.year ? ` ${paper.year}` : ''}
+    </>
+  )
   return (
     <Badge variant="outline" className="published-version font-normal" asChild={Boolean(paper.published_doi)}>
       {paper.published_doi ? (
-        <a href={`https://doi.org/${paper.published_doi}`} target="_blank" rel="noreferrer" aria-label={label}>{text}</a>
+        <a href={`https://doi.org/${paper.published_doi}`} target="_blank" rel="noreferrer">{content}</a>
       ) : (
-        <span aria-label={label}>{text}</span>
+        <span>{content}</span>
       )}
     </Badge>
   )

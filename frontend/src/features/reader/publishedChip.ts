@@ -1,15 +1,18 @@
 import type { Paper } from '@/api/client'
 
-const VENUE_MAX = 40
+const ACRONYM = /\(([A-Z][A-Z0-9&-]{1,11}(?:\s?'?\d{2,4})?)\)\s*$/
+const BOILERPLATE = /^(?:Proceedings of the (?:\d+(?:st|nd|rd|th) )?(?:Annual )?|\d{4} )/i
 
-/** "Symposium on Theory of Computing (STOC)" -> "STOC"; any other venue is cut at 40 characters with "…". */
+/** "Symposium on Theory of Computing (STOC)" -> "STOC"; otherwise the full name minus "Proceedings of the 57th" and a
+ * leading year (the chip shows the year itself). CSS truncates what is still too long. */
 export function venueShort(venue: string): string {
-  const abbreviation = /\(([^()]+)\)\s*$/.exec(venue)?.[1]
-  if (abbreviation) return abbreviation
-  return venue.length > VENUE_MAX ? `${venue.slice(0, VENUE_MAX)}…` : venue
+  const acronym = ACRONYM.exec(venue)?.[1]
+  if (acronym) return acronym
+  const name = venue.replace(BOILERPLATE, '').replace(BOILERPLATE, '').trim()
+  return name || venue
 }
 
-/** "Published: STOC 2025"; either part may be missing. */
+/** The chip's visible text: "Published: STOC 2025". Either part may be missing. */
 export const publishedChipText = (venue: string | null | undefined, year: number | null | undefined): string => {
   const rest = [venue ? venueShort(venue) : null, year].filter(Boolean).join(' ')
   return rest ? `Published: ${rest}` : 'Published'
