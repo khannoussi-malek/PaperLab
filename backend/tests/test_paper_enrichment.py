@@ -303,3 +303,71 @@ async def test_a_doi_correction_asks_semantic_scholar_again(session):
     assert p.published_checked_at is not None
     await enrichment.correct_metadata(session, p.id, {"doi": f"10.1234/new-{uid()}"})
     assert p.published_checked_at is None
+
+
+def openalex_stoc(w_id: str, doi: str) -> dict:
+    return {
+        "id": f"https://openalex.org/{w_id}", "doi": f"https://doi.org/{doi}", "type": "conference-paper",
+        "primary_location": {"version": "publishedVersion", "source": {"display_name": "STOC"}},
+    }
+
+
+async def test_enrich_papers_uses_openalex_after_s2(session):
+    from app.providers import openalex
+
+    copy = arxiv_paper(openalex_id=f"W{uid()}")
+    done = arxiv_paper(openalex_id=f"W{uid()}", published_doi="10.1/already")
+    ws = await library(session, copy, done)
+    requests: list[httpx.Request] = []
+
+    def oa_handler(request):
+        requests.append(request)
+        assert copy.openalex_id in request.url.params["filter"] and done.openalex_id not in request.url.params["filter"]
+        return httpx.Response(200, json={"results": [openalex_stoc(copy.openalex_id, "10.1145/3717823.3718108")]})
+
+    async with s2_client(lambda r: httpx.Response(200, json=[ARXIV_ONLY, ARXIV_ONLY])) as http:
+        async with openalex.new_client(email="t@example.com", transport=httpx.MockTransport(oa_handler)) as oa:
+            await paper_enrichment.enrich(session, http, ws.id, oa)
+    assert len(requests) == 1
+    assert (copy.published_doi, copy.published_venue, copy.peer_reviewed) == ("10.1145/3717823.3718108", "STOC", "true")
+    assert done.published_doi == "10.1/already"
+
+
+async def test_openalex_still_runs_after_an_s2_rate_limit(session, monkeypatch):
+    from app.providers import openalex
+
+    p = arxiv_paper(openalex_id=f"W{uid()}")
+    ws = await library(session, p)
+
+    async def no_sleep(_):
+        pass
+
+    monkeypatch.setattr(hit_enrichment, "sleep", no_sleep)
+    oa_handler = lambda r: httpx.Response(200, json={"results": [openalex_stoc(p.openalex_id, "10.1145/1")]})  # noqa: E731
+    async with s2_client(lambda r: httpx.Response(429)) as http:
+        async with openalex.new_client(email="t@example.com", transport=httpx.MockTransport(oa_handler)) as oa:
+            out = await paper_enrichment.enrich(session, http, ws.id, oa)
+    assert out.rate_limited and p.published_doi == "10.1145/1"
+
+
+async def test_a_hand_edit_made_during_the_openalex_call_is_kept(session):
+    from app.providers import openalex
+
+    p = arxiv_paper(openalex_id=f"W{uid()}")
+    ws = await library(session, p)
+
+    def oa_handler(request):
+        return httpx.Response(200, json={"results": [openalex_stoc(p.openalex_id, "10.1145/1")]})
+
+    class Editing(httpx.AsyncBaseTransport):
+        async def handle_async_request(self, request):
+            await session.execute(
+                update(Paper).where(Paper.id == p.id).values(manual_fields=["published_venue"])
+                .execution_options(synchronize_session=False)
+            )
+            return oa_handler(request)
+
+    async with openalex.new_client(email="t@example.com", transport=Editing()) as oa:
+        await paper_enrichment._openalex_pass(session, oa, ws.id)
+    await session.refresh(p)
+    assert p.published_venue is None and p.published_doi == "10.1145/1"

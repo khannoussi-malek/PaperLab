@@ -22,7 +22,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import Conflict, InvalidInput
 from app.core.papers import get_paper
-from app.core.source_types import ARXIV_DOI_PREFIX, peer_reviewed_of, source_type_of
+from app.core.source_types import (
+    ARXIV_DOI_PREFIX,
+    PREPRINT_SERVERS,
+    is_preprint_copy,
+    peer_reviewed_of,
+    source_type_of,
+)
 from app.models import Author, Paper, paper_authors, paper_topics
 from app.providers import crossref, openalex
 
@@ -147,6 +153,35 @@ def work_fields(work: dict[str, Any]) -> dict[str, Any]:
         "referenced_works_count": work.get("referenced_works_count"),
     }
     return fields
+
+
+PUBLISHED_TYPES = frozenset({"article", "conference-paper", "proceedings-article", "book-chapter"})
+
+
+def openalex_published(work: dict[str, Any]) -> tuple[str | None, str | None, str | None]:
+    """(published_doi, published_venue, source_type) when the work is a published version: a non-arXiv DOI, a
+    published type (or a publishedVersion location) and a primary source that is no preprint server."""
+    location = work.get("primary_location") or {}
+    source = location.get("source") or {}
+    venue = source.get("display_name") or location.get("raw_source_name")
+    doi = normalize_doi(work.get("doi") or "")
+    published = location.get("version") == "publishedVersion" or (work.get("type") or "").lower() in PUBLISHED_TYPES
+    if not doi or doi.startswith(ARXIV_DOI_PREFIX) or not published:
+        return None, None, None
+    if source.get("type") == "repository" or (venue and PREPRINT_SERVERS.search(venue)):
+        return None, None, None
+    return doi, venue, source_type_of(work.get("type"), doi)
+
+
+async def record_published(session: AsyncSession, paper_id: uuid.UUID, work: dict[str, Any]) -> None:
+    """A preprint copy whose OpenAlex work is its published version gets published_doi, published_venue and
+    peer_reviewed "true" (never its own doi/venue; `_write` keeps manual_fields)."""
+    paper = await get_paper(session, paper_id)
+    await session.refresh(paper)
+    doi, venue, _ = openalex_published(work)
+    if not is_preprint_copy(paper) or doi in (None, normalize_doi(paper.doi or "")):
+        return
+    await _write(session, paper, {"published_doi": doi, "published_venue": venue, "peer_reviewed": "true"})
 
 
 def work_topics(work: dict[str, Any]) -> dict[str, float]:
@@ -345,6 +380,7 @@ async def enrich_paper(
 
     await _write(session, paper, work_fields(work))
     await _replace_topics(session, paper_id, "openalex", work_topics(work))
+    await record_published(session, paper_id, work)
     await session.commit()
     await fill_source_type(session, paper_id, work.get("type"), crossref_http)
     author_ids = await _replace_authorships(session, paper_id, work)

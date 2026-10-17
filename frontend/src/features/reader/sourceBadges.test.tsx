@@ -28,4 +28,47 @@ describe('SourceBadges', () => {
     expect(screen.queryByText(/peer-reviewed/i)).toBeNull()
     expect(document.querySelectorAll('[data-slot="badge"]')).toHaveLength(1)
   })
+
+  describe('a preprint copy with a published version', () => {
+    const copy = (over: Partial<Paper> = {}) =>
+      paper({
+        source_type: 'preprint', peer_reviewed: 'true', year: 2025, published_doi: '10.18653/v1/2025.emnlp-main.1',
+        published_venue: 'Conference on Empirical Methods in Natural Language Processing', ...over,
+      })
+
+    it('shows one Published chip with the full venue, truncated by CSS', () => {
+      render(<SourceBadges paper={copy()} />)
+      const chip = document.querySelector('.published-version')
+      expect(chip).toHaveTextContent(
+        'Published: Conference on Empirical Methods in Natural Language Processing 2025',
+      )
+      expect(screen.getByTitle('Conference on Empirical Methods in Natural Language Processing')).toHaveClass('truncate')
+      expect(screen.queryByText('Preprint')).toBeNull()
+      expect(screen.queryByText('Peer-reviewed')).toBeNull()
+    })
+
+    it('uses the acronym, links the DOI, and its accessible name is the visible text', () => {
+      render(<SourceBadges paper={copy({ published_venue: 'Symposium on Theory of Computing (STOC)', published_doi: '10.1145/3717823.3718108' })} />)
+      const link = screen.getByRole('link', { name: 'Published: STOC 2025' })
+      expect(link).toHaveAttribute('href', 'https://doi.org/10.1145/3717823.3718108')
+      expect(link).not.toHaveAttribute('aria-label')
+    })
+
+    it('is plain text without a DOI', () => {
+      render(<SourceBadges paper={copy({ published_doi: null })} />)
+      expect(screen.queryByRole('link')).toBeNull()
+    })
+  })
+
+  it('keeps Preprint for a pure arXiv copy', () => {
+    render(<SourceBadges paper={paper({ source_type: 'preprint', peer_reviewed: 'false' })} />)
+    expect(screen.getByText('Preprint')).toBeInTheDocument()
+    expect(screen.queryByText(/Published/)).toBeNull()
+  })
+
+  it('keeps Peer-reviewed for a journal paper with its own DOI', () => {
+    render(<SourceBadges paper={paper({ source_type: 'journal_article', peer_reviewed: 'true', published_doi: '10.1/x' })} />)
+    expect(screen.getByText('Peer-reviewed')).toBeInTheDocument()
+    expect(screen.queryByText(/Published:/)).toBeNull()
+  })
 })

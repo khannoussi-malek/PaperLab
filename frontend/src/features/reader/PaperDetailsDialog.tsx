@@ -114,6 +114,17 @@ export function PaperDetailsDialog({ paper }: { paper: Paper }) {
           <Field id="paper-doi" label="DOI">
             <Input id="paper-doi" value={form.doi} onChange={(e) => set({ doi: e.target.value })} />
           </Field>
+          {paper.published_venue || paper.published_doi ? (
+            <p className="text-sm text-muted-foreground">
+              Published version: {paper.published_venue}
+              {paper.published_venue && paper.published_doi ? ' · ' : ''}
+              {paper.published_doi && (
+                <a className="underline" href={`https://doi.org/${paper.published_doi}`} target="_blank" rel="noreferrer">
+                  {paper.published_doi}
+                </a>
+              )}
+            </p>
+          ) : null}
           <Field id="paper-abstract" label="Abstract">
             <Textarea
               id="paper-abstract"

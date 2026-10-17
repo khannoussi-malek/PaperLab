@@ -6,7 +6,7 @@ import uuid
 from app.config import settings
 from app.core import paper_enrichment, paper_sources
 from app.db import SessionLocal
-from app.providers import discovery_fake, semantic_scholar
+from app.providers import discovery_fake, openalex, semantic_scholar
 
 logger = logging.getLogger(__name__)
 
@@ -28,5 +28,10 @@ async def enrich_papers(ctx: dict, workspace_id: str) -> None:
             transport=transport,
             retry_429=False,
         ) as http:
-            outcome = await paper_enrichment.enrich(session, http, uuid.UUID(workspace_id))
+            if sources.enabled["openalex"]:  # built as ingest builds it
+                oa_key = sources.api_keys["openalex"]
+                async with openalex.new_client(email=sources.contact_email, transport=transport, api_key=oa_key) as oa:
+                    outcome = await paper_enrichment.enrich(session, http, uuid.UUID(workspace_id), oa)
+            else:
+                outcome = await paper_enrichment.enrich(session, http, uuid.UUID(workspace_id))
     logger.info("enrich_papers for %s: %s", workspace_id, outcome)
