@@ -39,7 +39,7 @@ import { SuggestionChip } from './SuggestionChip'
 type ExcludeReason = (typeof EXCLUDE_REASONS)[number]
 
 const ROW_HEIGHT = 44
-const NO_PDF_REASON = 'No results with a free PDF in this filter'
+const NO_IMPORT_REASON = 'No relevant results waiting to be imported'
 /** `AppShell`'s `p-3` on the view pane, between the preview's right edge and the window's. */
 const PANE_PADDING_PX = 12
 
@@ -66,7 +66,7 @@ function hasPdfOrAbstract(hit: Hit): boolean {
  * mention it. Stage-1 triage
  * is via a right-click menu or a trailing ⋮ button on each row, and there are two ways to get a PDF: one hit at a
  * time from the preview panel's "Add PDF" (fetching a PDF starts ingestion — chunking, embedding — for that paper,
- * so this is the cheap default), or "Import N with PDF" when the user has decided that cost is
+ * so this is the cheap default), or "Import N relevant results" when the user has decided that cost is
  * worth paying for everything currently in view at once. "Clear old results" is the other direction — every
  * search a workspace has ever run lands in this same shared pool, with no built-in way to remove anything, so
  * this wipes every not-yet-imported hit back to empty (confirmed first — it's destructive) when the accumulated
@@ -124,11 +124,16 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
         : filteredRows.slice().sort((a, b) => Number(hasPdfOrAbstract(b)) - Number(hasPdfOrAbstract(a)))
   // Falls back to the first loaded row, so the panel is never empty on first paint (mirrors PaperList) — and to
   // whichever row is first once a filter drops the previously selected one out of view.
-  // What "Import N with PDF" imports: the server (import_hits with no ids) takes every not-yet-imported hit marked
-  // relevant in the whole pool, with no filter and no PDF check, so count exactly that over the loaded rows.
-  const importable = rows.filter(
+  // What the import button imports: the server (import_hits with no ids) takes every not-yet-imported hit marked
+  // relevant in the whole workspace, whatever the filter, so count that from the plain, unfiltered pool query (same
+  // cache key as the default view, no extra request). 'failed' hits are retried by the backend, so they count.
+  const pool = useSearchHits(workspaceId)
+  const morePages = pool.hasNextPage
+  const importable = (pool.data?.pages.flatMap((page) => page.items) ?? []).filter(
     (hit) => hit.stage1_status === 'relevant' && hit.acquisition_status !== 'imported' && hit.acquisition_status !== 'manual',
   ).length
+  const importLabel = morePages ? 'Import all relevant results' : `Import ${importable} relevant result${importable === 1 ? '' : 's'}`
+  const importDisabled = !morePages && importable === 0
   const previewed = visibleRows.find((hit) => hit.id === previewId) ?? visibleRows[0]
 
   const virtualizer = useVirtualizer({
@@ -306,16 +311,16 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
           type="button"
           size="sm"
           variant="outline"
-          disabled={importable === 0 || importAllHits.isPending}
-          title={importable === 0 ? NO_PDF_REASON : undefined}
-          aria-describedby={importable === 0 ? 'import-none-reason' : undefined}
+          disabled={importDisabled || importAllHits.isPending}
+          title={importDisabled ? NO_IMPORT_REASON : undefined}
+          aria-describedby={importDisabled ? 'import-none-reason' : undefined}
           onClick={() => importAllHits.mutate()}
         >
-          Import {importable} with PDF
+          {importLabel}
         </Button>
-        {importable === 0 && (
+        {importDisabled && (
           <span id="import-none-reason" className="sr-only">
-            {NO_PDF_REASON}
+            {NO_IMPORT_REASON}
           </span>
         )}
         <Button

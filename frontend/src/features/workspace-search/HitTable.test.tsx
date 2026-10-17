@@ -651,29 +651,48 @@ test('two simultaneous mutation errors collapse to one status line, not a stack 
 })
 
 const relevantHit = (n: number): Hit => ({ ...baseHit, id: `r${n}`, normalized_title: `relevant paper ${n}`, stage1_status: 'relevant', peer_review: 'unknown' })
-const importButton = () => screen.findByRole('button', { name: /^Import \d+ with PDF/ })
+const importButton = () => screen.findByRole('button', { name: /^Import (\d+ relevant results?|all relevant results)$/ })
 
 test('import shows how many it will import', async () => {
-  const items = [1, 2, 3].map(relevantHit).concat({ ...relevantHit(9), acquisition_status: 'imported' })
+  const items = [1, 2, 3].map(relevantHit).concat({ ...relevantHit(9), acquisition_status: 'imported' }, { ...relevantHit(8), acquisition_status: 'failed' })
   vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items, next_cursor: null })
   renderWithClient(<HitTable workspaceId="ws-1" />)
-  await waitFor(async () => expect(await importButton()).toHaveTextContent('Import 3 with PDF'))
+  await waitFor(async () => expect(await importButton()).toHaveTextContent('Import 4 relevant results'))
   expect(await importButton()).toHaveAttribute('data-variant', 'outline')
+})
+
+test('import says "result" for one', async () => {
+  vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: [relevantHit(1)], next_cursor: null })
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  expect(await screen.findByRole('button', { name: 'Import 1 relevant result' })).toBeEnabled()
+})
+
+test('the text filter does not change the import count', async () => {
+  vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: [1, 2, 3].map(relevantHit), next_cursor: null })
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  await screen.findByRole('button', { name: 'Import 3 relevant results' })
+  fireEvent.change(screen.getByLabelText('Search results'), { target: { value: 'paper 1' } })
+  expect(screen.getByRole('button', { name: 'Import 3 relevant results' })).toBeInTheDocument()
+})
+
+test('with a next page the import has no number', async () => {
+  vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: [relevantHit(1)], next_cursor: 'c2' })
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  expect(await screen.findByRole('button', { name: 'Import all relevant results' })).toBeEnabled()
 })
 
 test('import is disabled with a reason at zero', async () => {
   renderWithClient(<HitTable workspaceId="ws-1" />)
   await pool().findByText('a paper about llms')
-  const button = await importButton()
+  const button = await screen.findByRole('button', { name: 'Import 0 relevant results' })
   expect(button).toBeDisabled()
-  expect(button).toHaveTextContent('Import 0 with PDF')
-  expect(button).toHaveAttribute('title', 'No results with a free PDF in this filter')
+  expect(button).toHaveAttribute('title', 'No relevant results waiting to be imported')
   expect(document.getElementById(button.getAttribute('aria-describedby')!)).toHaveTextContent(
-    'No results with a free PDF in this filter',
+    'No relevant results waiting to be imported',
   )
 })
 
-test('only one primary button', async () => {
+test('only one primary button: the HitTable toolbar has no primary of its own', async () => {
   vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: [relevantHit(1)], next_cursor: null })
   renderWithClient(<HitTable workspaceId="ws-1" />)
   const toolbar = (await importButton()).parentElement!
@@ -693,7 +712,7 @@ test('the toolbar wraps so 390 px has no horizontal scroll', async () => {
   expect((await importButton()).parentElement!).toHaveClass('flex-wrap')
 })
 
-test('"Import N with PDF" imports every hit still pending in the pool, not just one', async () => {
+test('"Import N relevant results" imports every hit still pending in the pool, not just one', async () => {
   vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: [relevantHit(1)], next_cursor: null })
   vi.spyOn(api, 'importSearchHits').mockResolvedValue({ imported: 1, failed: 0 })
   renderWithClient(<HitTable workspaceId="ws-1" />)

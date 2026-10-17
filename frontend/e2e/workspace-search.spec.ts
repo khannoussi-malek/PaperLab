@@ -60,7 +60,7 @@ test('search, screen, import a hit, then upload its PDF manually', async ({ page
 
   await Promise.all([
     page.waitForResponse((r) => r.url().endsWith('/search/hits/import') && r.request().method() === 'POST'),
-    page.getByRole('button', { name: /^Import \d+ with PDF/ }).click(),
+    page.getByRole('button', { name: /^Import (\d+ relevant results?|all relevant results)$/ }).click(),
   ])
 
   // fixture 2 has no free PDF, so the import fails and it needs manual acquisition.
