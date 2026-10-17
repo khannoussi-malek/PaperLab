@@ -35,6 +35,12 @@ class PaperOut(BaseModel):
     cited_by_count: int | None
     referenced_works_count: int | None
     issn: str | None
+    volume: str | None
+    issue: str | None
+    pages: str | None
+    editors: list[str] | None
+    pmid: str | None
+    pmcid: str | None
     page_count: int | None
     status: str
     status_error: str | None
