@@ -43,8 +43,12 @@ function mockPrismaExport() {
   )
 }
 
+const realClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
 afterEach(() => {
   vi.restoreAllMocks()
+  vi.useRealTimers()
+  if (realClipboard) Object.defineProperty(navigator, 'clipboard', realClipboard)
+  else delete (navigator as { clipboard?: unknown }).clipboard
 })
 
 test('shows the full funnel with counts from usePrismaExport', () => {
@@ -267,17 +271,28 @@ test.each([['rejects', vi.fn().mockRejectedValue(new Error('no'))], ['is missing
   },
 )
 
-test('Download CSV offers a csv file', () => {
+test('Download CSV offers a csv file', async () => {
+  vi.useFakeTimers()
   mockPrismaExport()
   const create = vi.fn(() => 'blob:x')
   const revoke = vi.fn()
   Object.assign(URL, { createObjectURL: create, revokeObjectURL: revoke })
+  let attached = false
   const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
     expect(this.download).toBe('prisma-ws-1-all.csv')
+    attached = document.body.contains(this)
   })
   render(<PrismaTab workspaceId="ws-1" />)
   fireEvent.click(screen.getByRole('button', { name: 'Download CSV' }))
   expect(click).toHaveBeenCalledTimes(1)
-  expect((create.mock.calls[0] as unknown as [Blob])[0].type).toContain('text/csv')
+  expect(attached).toBe(true)
+  expect(document.querySelector('a[download]')).toBeNull()
+  const blob = (create.mock.calls[0] as unknown as [Blob])[0]
+  expect(blob.type).toContain('text/csv')
+  expect(revoke).not.toHaveBeenCalled()
+  vi.advanceTimersByTime(1000)
   expect(revoke).toHaveBeenCalledWith('blob:x')
+  vi.useRealTimers()
+  // Blob.text() strips the BOM on decode, so check the raw bytes.
+  expect([...new Uint8Array(await blob.arrayBuffer()).slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf])
 })

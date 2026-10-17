@@ -69,7 +69,11 @@ export function prismaText(data: PrismaExportOut, runLabel: string): string {
   return [`PRISMA flow: ${runLabel}`, ...lines].join('\n')
 }
 
-const q = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`
+// Text fields starting with = + - @ get a leading ' so Excel doesn't run them as formulas; counts are numbers we wrote.
+const q = (v: string | number) => {
+  const t = typeof v === 'string' && /^[=+\-@]/.test(v) ? `'${v}` : String(v)
+  return `"${t.replace(/"/g, '""')}"`
+}
 
 /** RFC 4180: every field quoted, inner quotes doubled. Header, a run row, then one row per box. */
 export function prismaCsv(data: PrismaExportOut, runLabel: string): string {
