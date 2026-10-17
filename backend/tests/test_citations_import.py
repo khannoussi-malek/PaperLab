@@ -221,3 +221,41 @@ def test_arxiv_ids_keep_their_case_and_lose_only_the_version():
 def test_plain_text_annote_keeps_its_line_breaks():
     bib = b"@book{a, title={T}, annote={line one\n\nline two\nline three}}"
     assert parse("a.bib", bib)[0].notes == ["line one\n\nline two\nline three"]
+
+
+def ris(**tags) -> bytes:
+    lines = "".join(f"{tag}  - {value}\n" for tag, value in {"TY": "JOUR", "TI": "T", **tags}.items())
+    return (lines + "ER  - \n").encode()
+
+
+@pytest.mark.parametrize(
+    "tags, field",
+    [({"T2": "v" * 3000}, "secondary title"), ({"AB": "a" * 200_000}, "abstract"), ({"N1": "n" * 200_000}, "note"),
+     ({"KW": "k" * 60_000}, "keywords")],
+)  # fmt: skip
+def test_ris_fields_have_the_bibtex_limits(tags, field):
+    with pytest.raises(CitationsImportError, match=f"{field}.*#1"):
+        parse("a.ris", ris(**tags))
+    assert parse("a.ris", ris(AB="a" * 90_000))[0].abstract == "a" * 90_000
+
+
+@pytest.mark.parametrize(
+    "item, field",
+    [({"container-title": "v" * 3000}, "container-title"), ({"abstract": "a" * 200_000}, "abstract"),
+     ({"author": [{"family": "f" * 3000}]}, "author name"), ({"publisher": ["p" * 3000]}, "publisher")],
+)  # fmt: skip
+def test_csl_fields_have_the_bibtex_limits(item, field):
+    with pytest.raises(CitationsImportError, match=f"{field}.*#1"):
+        parse("a.json", json.dumps([{"title": "T", **item}]).encode())
+
+
+def test_an_unexpected_parse_error_is_logged_but_the_message_stays_plain(monkeypatch, caplog):
+    from app.core import citations_import
+
+    def broken(text):
+        raise TypeError("a bug")
+
+    monkeypatch.setattr(citations_import, "_parse_bibtex", broken)
+    with pytest.raises(CitationsImportError, match="couldn't read this file"):
+        parse("a.bib", b"@book{k, title={T}}")
+    assert "a bug" in caplog.text
