@@ -22,7 +22,7 @@ WORK_FIELDS = ",".join(
     [
         "id", "doi", "title", "publication_year", "type", "is_retracted", "open_access", "best_oa_location",
         "primary_location", "cited_by_count", "referenced_works_count", "authorships", "topics", "keywords",
-        "concepts", "abstract_inverted_index", "locations",
+        "concepts", "abstract_inverted_index", "locations", "biblio", "ids",
     ]
 )  # fmt: skip
 AUTHOR_FIELDS = ",".join(

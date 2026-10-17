@@ -233,6 +233,10 @@ class FakeOpenAlex:
         key = f"{path}?{request.url.params['filter']}" if "filter" in request.url.params else path
         replies = self.routes.get(key) or self.routes.get(path)
         if replies is None:
+            if request.url.host == "api.crossref.org":
+                # The ingest worker shares this transport with its Crossref client, which now asks for the citation
+                # fields (M40) of any DOI paper: a DOI Crossref doesn't know, unless a test routes it.
+                return httpx.Response(404, json={"status": "error", "message": "Resource not found."})
             raise AssertionError(f"unrouted OpenAlex request: {request.url}")
         reply = replies.pop(0) if len(replies) > 1 else replies[0]
         if isinstance(reply, Exception):

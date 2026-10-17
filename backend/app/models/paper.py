@@ -51,6 +51,13 @@ class Paper(Base):
     cited_by_count: Mapped[int | None]
     referenced_works_count: Mapped[int | None]
     issn: Mapped[str | None] = mapped_column(Text)
+    # M40: citation fields. editors is a list of names like authors; pmid and pmcid are bare ("123", "PMC456").
+    volume: Mapped[str | None] = mapped_column(Text)
+    issue: Mapped[str | None] = mapped_column(Text)
+    pages: Mapped[str | None] = mapped_column(Text)
+    editors: Mapped[list[str] | None] = mapped_column(JSONB)
+    pmid: Mapped[str | None] = mapped_column(Text)
+    pmcid: Mapped[str | None] = mapped_column(Text)
     # Columns the user corrected by hand. Extraction and enrichment never overwrite them.
     manual_fields: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default=text("'{}'"))
     file_path: Mapped[str] = mapped_column(Text)

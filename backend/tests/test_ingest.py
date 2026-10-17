@@ -388,8 +388,12 @@ async def test_the_worker_sends_the_openalex_key_in_a_header_never_in_a_url(
 
     await ingest.ingest_paper(openalex_on, str(paper.id))
 
-    assert fake_openalex.requests
-    assert all(r.headers["Authorization"] == "Bearer oa-key-0123456789" for r in fake_openalex.requests)
+    openalex = [r for r in fake_openalex.requests if r.url.host != "api.crossref.org"]
+    assert openalex
+    assert all(r.headers["Authorization"] == "Bearer oa-key-0123456789" for r in openalex)
+    # The citation-field lookup (M40) shares the transport: Crossref never gets the OpenAlex key.
+    crossref = [r for r in fake_openalex.requests if r not in openalex]
+    assert not any("oa-key" in str(r.url) or "Authorization" in r.headers for r in crossref)
     assert not any("oa-key" in str(r.url) for r in fake_openalex.requests)
 
 

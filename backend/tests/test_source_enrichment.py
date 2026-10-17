@@ -91,7 +91,10 @@ async def test_a_known_source_type_is_not_asked_again(session):
     paper = await add_paper(session, doi=DOI, source_type="book")
     client, seen = fake_crossref({"type": "journal-article"})
     await enrich(session, paper, client)
-    assert (paper.source_type, seen) == ("book", [])
+    assert paper.source_type == "book"
+    assert [r.url.path for r in seen] == [
+        f"/works/{DOI}"
+    ]  # the one fetch is for volume/issue; the type is not re-derived
 
 
 async def test_backfill_maps_from_type_or_crossref_skips_manual_and_is_idempotent(session):
