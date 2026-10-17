@@ -198,7 +198,20 @@ Scholar and, for results without a free PDF, to Unpaywall. The Similar and Refer
 References page, send Semantic Scholar the paper's DOI (its arXiv ID when the DOI is an arXiv one), or its title when
 it has none. With OpenAlex ticked, the
 References tab also sends OpenAlex the paper's OpenAlex ID and the OpenAlex IDs of the works it cites. Your contact
-email goes to Crossref, Unpaywall and OpenAlex (when on), never to the others or to PDF hosts.
+email goes to Crossref, Unpaywall, OpenAlex (when on), PubMed and PMC, never to the others or to PDF hosts.
+PubMed and PMC (NCBI E-utilities) are on by default. Find papers and Workspace Search send them the search text and
+paging, then the IDs of the matching records to fetch their details, with `tool=paperlab`, your contact email (NCBI
+asks every caller to identify itself) and your NCBI API key if you added one. Europe PMC is on by default and receives
+the search text and a paging cursor, never an email or key.
+HAL is on by default and receives the words of the search text (Find papers drops common stopwords) and paging, or a
+HAL document ID to fetch one record, never an email or key.
+OpenAIRE is on by default and receives the search text, a publications-only filter and paging, or a record ID to
+fetch one record, never an email or key.
+DOAJ is on by default and receives the search text and paging, or an article ID to fetch one record, never an email or
+key.
+Zenodo is on by default and receives the search text, a published-articles filter and paging, or a record ID to fetch
+one record, never an email or token (a Zenodo token is not used yet).
+None of these sources receive PDFs, notes or a paper's text.
 DBLP is off by default. When enabled, Find papers and Workspace Search send DBLP search title words
 and pagination parameters, never PDFs, notes, contact email or API keys. DBLP supplies no PDFs; existing
 arXiv and Unpaywall resolution still applies.
