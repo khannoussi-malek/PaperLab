@@ -32,6 +32,7 @@ const baseHit = {
   acquisition_status: 'pending',
   paper_id: null,
   sources: [],
+  peer_review: 'unknown',
 } satisfies Hit
 
 beforeEach(() => {

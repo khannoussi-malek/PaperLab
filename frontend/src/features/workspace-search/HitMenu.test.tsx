@@ -19,6 +19,7 @@ const hit: Hit = {
   acquisition_status: 'pending',
   paper_id: null,
   sources: [],
+  peer_review: 'unknown',
 }
 
 test('the ⋮ menu offers Relevant, Maybe, Not relevant… and Find citing & cited papers', async () => {

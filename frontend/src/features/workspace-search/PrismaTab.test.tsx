@@ -23,6 +23,7 @@ const combinedData: PrismaExportOut = {
   ],
   automation: [],
   screening_criteria: null,
+  notes: [],
 }
 
 // Per-run export, mirroring the real backend (workspace_search.py:784): `runs` is always [] on this branch,
