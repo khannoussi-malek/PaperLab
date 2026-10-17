@@ -903,6 +903,7 @@ async def import_hits(
         else query.where(WorkspaceSearchHit.stage1_status == "relevant")
     )
     hits = (await session.execute(query)).scalars().all()
+    targeted = [h for h in hits if h.acquisition_status not in ("imported", "manual")]
 
     imported, failed, paper_ids, done = 0, 0, [], []
     for hit in hits:
@@ -954,11 +955,13 @@ async def import_hits(
         paper_ids.append(paper.id)
         done.append(hit)
 
-    # A hit whose download failed but whose paper the workspace holds by another key (a title) is retrieved too.
-    relinked = len(set(await retrieved_hits.link(session, workspace_id)) & {h.id for h in hits})
+    # A hit whose download failed but whose paper the workspace holds by another key (a title) is retrieved too, here
+    # or by an add_paper above, so the counts come from where the targeted hits ended up, not from the loop.
+    await retrieved_hits.link(session, workspace_id)
     await tags.apply_hit_tags(session, workspace_id, done)  # only hits imported now: a removed tag stays removed
     await session.commit()
-    return ImportResult(imported + relinked, failed - relinked, paper_ids)
+    imported = sum(h.acquisition_status == "imported" for h in targeted)
+    return ImportResult(imported, len(targeted) - imported, paper_ids)
 
 
 async def upload_hit_pdf(

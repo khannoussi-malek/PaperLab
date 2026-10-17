@@ -4,12 +4,13 @@ import uuid
 from datetime import datetime, timezone
 
 import pytest
+from sqlalchemy import select
 
-from app.core import retrieved_hits, workspaces
+from app.core import retrieved_hits, tags, workspaces
 from app.core.candidates import normal_title
 from app.core.prisma_export import prisma_export
 from app.core.workspace_search import import_hits
-from app.models import Paper
+from app.models import Paper, paper_tags
 from app.models.references import ExternalRef
 from app.models.workspace import Workspace
 from app.models.workspace_search import WorkspaceSearchHit, WorkspaceSearchRun
@@ -145,7 +146,7 @@ async def test_the_repair_links_rows_already_wrong_and_is_idempotent(session):
     await session.commit()
     second = await retrieved_hits.repair(session)
 
-    assert hit.id in first and stays.id not in first
+    assert hit.id in {f.hit_id for f in first} and stays.id not in {f.hit_id for f in first}
     assert second == []
     assert (await reload(session, hit)).paper_id == held.id
     assert (await reload(session, stays)).acquisition_status == "failed"
@@ -161,3 +162,84 @@ async def test_import_hits_counts_a_hit_held_by_title_as_imported(session, disco
 
     assert (result.imported, result.failed) == (1, 0)
     assert (await reload(session, hit)).paper_id == held.id
+
+
+async def test_an_openalex_id_in_external_ids_retrieves_the_hit(session):
+    ws = await workspace(session)
+    hit = await failed_hit(session, ws, title="As the hit has it", external_ids={"openalex": "W4400000067"})
+    held = await paper(session, title="As the paper has it", openalex_id="W4400000067")
+
+    await workspaces.add_paper(session, ws.id, held.id)
+
+    assert (await reload(session, hit)).paper_id == held.id
+
+
+async def test_the_refs_published_doi_retrieves_the_hit(session):
+    ws = await workspace(session)
+    hit = await failed_hit(
+        session, ws, title="Preprint title", doi="10.48550/arxiv.2406.07735", published_doi="10.1162/tacl_a_00757"
+    )
+    held = await paper(session, title="Published title", doi="10.1162/tacl_a_00757")
+
+    await workspaces.add_paper(session, ws.id, held.id)
+
+    assert (await reload(session, hit)).paper_id == held.id
+
+
+async def test_a_title_match_links_the_hit_but_not_the_shared_reference(session):
+    ws = await workspace(session)
+    hit = await failed_hit(session, ws)
+    held = await paper(session)
+
+    await workspaces.add_paper(session, ws.id, held.id)
+
+    assert (await reload(session, hit)).paper_id == held.id
+    ref = await session.get(ExternalRef, hit.external_ref_id)
+    await session.refresh(ref)
+    assert ref.imported_as is None  # another workspace's hit must not inherit a title guess
+
+
+async def test_an_ambiguous_title_links_nothing(session):
+    ws = await workspace(session)
+    for title, year in [("Deep learning", 2015), ("Deep Learning", 2016)]:  # LeCun et al., then Goodfellow et al.
+        await workspaces.add_paper(session, ws.id, (await paper(session, title=title, year=year)).id)
+    hit = await failed_hit(session, ws, title="Deep Learning", year=2016)  # failed after both arrived
+
+    assert await retrieved_hits.repair(session) == []
+    assert (await reload(session, hit)).acquisition_status == "failed"
+
+
+async def test_the_hits_tags_reach_the_paper_when_it_is_linked(session):
+    ws = await workspace(session)
+    hit = await failed_hit(session, ws, doi="10.1126/sciadv.adu5251")
+    await tags.tag_hits(session, ws.id, ["Q4-cognition"], [hit.id])
+    await session.commit()
+    held = await paper(session, doi="10.1126/sciadv.adu5251")
+
+    await workspaces.add_paper(session, ws.id, held.id)
+
+    rows = (await session.execute(select(paper_tags.c.tag_id).where(paper_tags.c.paper_id == held.id))).all()
+    assert len(rows) == 1
+
+
+async def test_import_hits_counts_a_hit_linked_inside_the_batch(session, discovery_fakes, pdf_dir):
+    ws = await workspace(session)
+    discovery_fakes.pdf_host.reply("/ok.pdf", 200, content=b"%PDF-1.4 ok")
+    no_pdf = await failed_hit(session, ws, status="not_attempted")
+    with_pdf = await failed_hit(session, ws, status="not_attempted", pdf_urls=["https://pdf.example/ok.pdf"])
+
+    result = await import_hits(session, discovery_fakes.providers, ws.id, [no_pdf.id, with_pdf.id])
+
+    assert (result.imported, result.failed) == (2, 0)
+    assert (await reload(session, no_pdf)).paper_id == (await reload(session, with_pdf)).paper_id
+
+
+async def test_the_dry_run_names_each_link_and_its_rule(session):
+    ws = await workspace(session)
+    held = await paper(session, doi="10.1126/sciadv.adu5251")
+    await workspaces.add_paper(session, ws.id, held.id)
+    await failed_hit(session, ws, doi="10.1126/sciadv.adu5251")
+
+    [found] = await retrieved_hits.repair(session)
+
+    assert (found.paper_id, found.rule) == (held.id, "identifier")
