@@ -128,7 +128,7 @@ def test_a_tag_with_a_comma_is_one_ris_keyword_and_a_newline_cannot_inject_a_rec
     entries = rispy.loads(render([item], "ris"))
     assert len(entries) == 1
     assert entries[0]["keywords"] == ["Theory, models", "a TY  - JOUR", "journal article", "peer-reviewed"]
-    assert item["keyword"] == "Theory, models, a TY - JOUR, journal article, peer-reviewed"
+    assert item["keyword"] == "Theory, models, a TY  - JOUR, journal article, peer-reviewed"
 
 
 def test_csljson_output_has_no_private_keyword_list():
