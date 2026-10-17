@@ -42,6 +42,7 @@ const runsData: PrismaExportOut = {
   ],
   automation: [],
   screening_criteria: null,
+  notes: [],
 }
 
 function mockRuns(data: PrismaExportOut | undefined, isPending = false) {
