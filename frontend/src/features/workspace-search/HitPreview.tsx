@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { pageLink } from '@/features/discovery/candidateMeta'
 import { copyText } from '@/lib/clipboard'
 import { cn } from '@/lib/utils'
-import { EXCLUDE_REASONS, sourceLabel } from './hitReview'
+import { EXCLUDE_REASONS, reasonLabel, sourceLabel } from './hitReview'
 import { SuggestionChip, SuggestionWhy } from './SuggestionChip'
 
 type ExcludeReason = (typeof EXCLUDE_REASONS)[number]
@@ -57,7 +57,7 @@ export function HitPreview({ hit, onReview, onAddPdf, addPdfPending, onUpload, u
 
   return (
     <aside
-      aria-label="Hit preview"
+      aria-label="Result preview"
       // h-full: without it this grows to fit its own content (a long abstract easily exceeds the panel's
       // available height) instead of respecting the bounded height its parent already has — its own
       // overflow-y-auto then has nothing left to actually clip, and content spills past the panel instead of
@@ -72,7 +72,7 @@ export function HitPreview({ hit, onReview, onAddPdf, addPdfPending, onUpload, u
       {hit.abstract ? (
         <p className="mt-2 text-sm whitespace-pre-line">{hit.abstract}</p>
       ) : (
-        <p className="mt-2 text-sm text-muted-foreground">No abstract available for this hit.</p>
+        <p className="mt-2 text-sm text-muted-foreground">No abstract available for this result.</p>
       )}
       {hit.suggestion && (
         <p className="text-xs text-muted-foreground">
@@ -104,7 +104,7 @@ export function HitPreview({ hit, onReview, onAddPdf, addPdfPending, onUpload, u
             <option value="">Select a reason…</option>
             {EXCLUDE_REASONS.map((r) => (
               <option key={r} value={r}>
-                {r}
+                {reasonLabel(r)}
               </option>
             ))}
           </select>

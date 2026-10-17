@@ -24,7 +24,7 @@ test('the reader section shows the card and a page link jumps to the cited passa
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(<QueryClientProvider client={client}><EvidencePanel paperId="p1" onShowRegion={onShowRegion} /></QueryClientProvider>)
   expect(await screen.findByText('Does sleep help?')).toBeInTheDocument()
-  expect(screen.getByText('1 left out: no supporting quote')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'left out' }).parentElement).toHaveTextContent('1 left out: no supporting quote')
   fireEvent.click(screen.getByRole('button', { name: 'Go to page 4' }))
   await waitFor(() => expect(onShowRegion).toHaveBeenCalledWith(4, [[1, 2, 3, 4]]))
 })

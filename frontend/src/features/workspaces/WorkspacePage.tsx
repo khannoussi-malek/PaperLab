@@ -4,7 +4,7 @@ import { AppShell, shellTitle } from '@/components/AppShell'
 import { glass } from '@/components/glass'
 import { delayedIn, fadeIn } from '@/components/motion'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tabs, TabsContent } from '@/components/ui/tabs'
 import { ManualAcquisitionTab } from '@/features/workspace-search/ManualAcquisitionTab'
 import { PrismaTab } from '@/features/workspace-search/PrismaTab'
 import { ReadingQueueTab } from '@/features/workspace-search/ReadingQueueTab'
@@ -18,6 +18,8 @@ import { ExportCitationsMenu } from './ExportCitationsMenu'
 import { WorkspaceNotes } from './WorkspaceNotes'
 import { WorkspacePapers } from './WorkspacePapers'
 import { countsLine } from './workspaceMeta'
+import { useStepCounts } from './useStepCounts'
+import { WorkspaceTabBar } from './WorkspaceTabBar'
 
 // Every tab stays mounted, so each keeps its scroll position across a switch, and fades in each time it is shown,
 // like the reader's panels. `text-base` undoes TabsContent's `text-sm`.
@@ -29,11 +31,13 @@ type PageProps = { workspaceId: string; tab: WorkspaceTab; runId: string | null;
 
 export function WorkspacePage({ workspaceId, tab, runId, tags, match }: PageProps) {
   const workspace = useWorkspace(workspaceId)
-  // replace, not assign: switching tabs shouldn't add history entries for Back to walk through. Carries the
-  // current runId along so switching tabs and back (or a reload from another tab) doesn't drop it.
+  const stepCounts = useStepCounts(workspaceId)
+  // A tab switch is a history entry (assign), so Back returns to the previous tab; tag and run changes replace, so
+  // they don't flood history. Carries the current runId along so switching tabs and back (or a reload from another
+  // tab) doesn't drop it.
   const onTagsChange = (next: string[], nextMatch: TagMatch) =>
     window.location.replace(workspaceHref(workspaceId, 'papers', runId, { tags: next, match: nextMatch }))
-  const showTab = (next: WorkspaceTab) => window.location.replace(workspaceHref(workspaceId, next, runId))
+  const showTab = (next: WorkspaceTab) => window.location.assign(workspaceHref(workspaceId, next, runId))
   // SearchTab reports a new run id here instead of holding it in local state, so the URL (and a reload) stays in
   // sync with whatever run is actually active.
   const setRunId = (next: string) => window.location.replace(workspaceHref(workspaceId, 'search', next))
@@ -77,21 +81,8 @@ export function WorkspacePage({ workspaceId, tab, runId, tags, match }: PageProp
         <p className="text-muted-foreground">This workspace doesn't exist. It may have been deleted.</p>
       )}
       {workspace.data && (
-        <Tabs value={tab} onValueChange={(value) => showTab(value as WorkspaceTab)} className="min-h-0 min-w-0 flex-1 gap-3">
-          <TabsList>
-            <TabsTrigger value="papers">Papers</TabsTrigger>
-            <TabsTrigger value="notes">Notes</TabsTrigger>
-            <TabsTrigger value="chat">Chat</TabsTrigger>
-            {/* Everything left of here is a library tool; everything right is one pipeline, in order:
-                find hits, get a PDF, screen it, export the funnel, read what made it through. */}
-            <div aria-hidden className="mx-1 w-px self-stretch bg-border" />
-            <TabsTrigger value="search">Search</TabsTrigger>
-            <TabsTrigger value="acquisition">Acquisition</TabsTrigger>
-            <TabsTrigger value="screening">Screening</TabsTrigger>
-            <TabsTrigger value="prisma">PRISMA</TabsTrigger>
-            <TabsTrigger value="reading">Reading</TabsTrigger>
-            <TabsTrigger value="evidence">Evidence</TabsTrigger>
-          </TabsList>
+        <Tabs value={tab} onValueChange={(value) => showTab(value as WorkspaceTab)} className="min-h-0 min-w-0 flex-1 gap-4">
+          <WorkspaceTabBar active={tab} counts={{ ...stepCounts, papers: workspace.data.paper_count, notes: workspace.data.note_count }} />
           <TabsContent value="papers" forceMount className={panel}>
             <WorkspacePapers workspaceId={workspaceId} tags={tags} match={match} onTagsChange={onTagsChange} />
           </TabsContent>
@@ -102,12 +93,17 @@ export function WorkspacePage({ workspaceId, tab, runId, tags, match }: PageProp
           <TabsContent value="chat" forceMount className={cn(panel, 'flex flex-col overflow-hidden')}>
             <WorkspaceChat workspace={workspace.data} onShowNotes={() => showTab('notes')} />
           </TabsContent>
+          <TabsContent value="evidence" forceMount className={panel}>
+            <EvidenceTab workspaceId={workspaceId} />
+          </TabsContent>
           {/* SearchTab's HitTable virtualizes its own row list — it needs to measure a real, bounded viewport
               to know which rows are actually visible. Without flex/overflow-hidden here (mirroring the chat
               panel above), `panel`'s plain overflow-auto never actually clips anything: nothing constrains
               HitTable's own scroll container to a real pixel height, so it grows to fit every loaded row, the
               virtualizer renders all of them as real DOM nodes instead of just the visible ones, and "am I
-              scrolled to the bottom" is trivially always true. */}
+              scrolled to the bottom" is trivially always true.
+              The header stack can be taller than a short viewport, so SearchTab scrolls as a whole and HitTable keeps
+              a minimum height: the virtualizer always has a real viewport. */}
           <TabsContent value="search" forceMount className={cn(panel, 'flex flex-col overflow-hidden')}>
             <SearchTab workspaceId={workspaceId} runId={runId} onRunIdChange={setRunId} />
           </TabsContent>
@@ -118,16 +114,13 @@ export function WorkspacePage({ workspaceId, tab, runId, tags, match }: PageProp
               WorkspaceChat/SearchTab above), so they need the same bounded viewport here, not `panel`'s plain
               overflow-auto. */}
           <TabsContent value="screening" forceMount className={cn(panel, 'flex flex-col overflow-hidden')}>
-            <ScreeningTab workspaceId={workspaceId} />
-          </TabsContent>
-          <TabsContent value="prisma" forceMount className={cn(panel, 'flex flex-col overflow-hidden')}>
-            <PrismaTab workspaceId={workspaceId} />
+            <ScreeningTab workspaceId={workspaceId} runId={runId} />
           </TabsContent>
           <TabsContent value="reading" forceMount className={panel}>
             <ReadingQueueTab workspaceId={workspaceId} runId={runId} />
           </TabsContent>
-          <TabsContent value="evidence" forceMount className={panel}>
-            <EvidenceTab workspaceId={workspaceId} />
+          <TabsContent value="prisma" forceMount className={cn(panel, 'flex flex-col overflow-hidden')}>
+            <PrismaTab workspaceId={workspaceId} runId={runId} />
           </TabsContent>
         </Tabs>
       )}

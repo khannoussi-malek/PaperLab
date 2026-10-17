@@ -1,6 +1,6 @@
 import { FIXTURE_FILE, FIXTURE_TITLE, addNote, expect, removePaperAndNotes, test } from './fixtures'
 
-const EMPTY = 'No papers in this workspace yet'
+const EMPTY = 'No papers yet'
 
 test('a failed load of the workspace Papers tab can be retried', async ({ page, workspaceId }) => {
   await page.route(`**/api/workspaces/${workspaceId}/papers`, (route) => route.abort(), { times: 1 })
@@ -9,7 +9,7 @@ test('a failed load of the workspace Papers tab can be retried', async ({ page, 
   await expect(page.getByRole('alert')).toBeVisible()
   await page.getByRole('button', { name: 'Retry' }).click()
   await expect(page.getByRole('alert')).not.toBeVisible()
-  await expect(page.getByText(EMPTY)).toBeVisible()
+  await expect(page.getByRole('heading', { name: EMPTY })).toBeVisible()
 })
 
 test('the search box on the Papers tab narrows the workspace list', async ({ page, request, paperId, workspaceId }) => {
@@ -39,8 +39,8 @@ test("add two library papers to a workspace, see both papers' notes, and open on
   const second = await addNote(request, secondPaperId, 1, 'Note on the second paper')
   await page.goto(`/#/workspaces/${workspaceId}`)
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(workspaceName)
-  await expect(page.getByRole('tab', { name: 'Papers' })).toHaveAttribute('aria-selected', 'true')
-  await expect(page.getByText(EMPTY)).toBeVisible()
+  await expect(page.getByRole('tab', { name: /^Papers/ })).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByRole('heading', { name: EMPTY })).toBeVisible()
 
   await page.getByRole('button', { name: 'Add papers' }).click()
   const dialog = page.getByRole('dialog', { name: 'Add papers' })
@@ -82,7 +82,7 @@ test('a PDF uploaded on the Papers tab joins the workspace, and removing it from
   workspaceId,
 }) => {
   await page.goto(`/#/workspaces/${workspaceId}`)
-  await expect(page.getByText(EMPTY)).toBeVisible()
+  await expect(page.getByRole('heading', { name: EMPTY })).toBeVisible()
   const [uploaded] = await Promise.all([
     page.waitForResponse((r) => r.url().endsWith('/api/papers') && r.request().method() === 'POST'),
     page.locator('input[type="file"]').setInputFiles(FIXTURE_FILE),
@@ -98,7 +98,7 @@ test('a PDF uploaded on the Papers tab joins the workspace, and removing it from
     await row.getByRole('button', { name: 'Paper actions' }).click()
     await page.getByRole('menuitem', { name: 'Remove from workspace' }).click()
     await expect(row).toHaveCount(0)
-    await expect(page.getByText(EMPTY)).toBeVisible()
+    await expect(page.getByRole('heading', { name: EMPTY })).toBeVisible()
     expect((await request.get(`/api/papers/${id}`)).status()).toBe(200)
   } finally {
     await removePaperAndNotes(request, id)

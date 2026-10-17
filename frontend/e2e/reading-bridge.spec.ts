@@ -47,18 +47,18 @@ test('shows why a paper is here, its reading queue, and never a not-yet-imported
   const { id: runId } = await startResponse.json()
   await waitForRunToFinish(request, workspaceId, runId)
   await page.reload()
-  await expect(page.getByText(/[1-9]\d* in pool/)).toBeVisible()
+  await expect(page.getByText(/[1-9]\d* results \(after filters\)/)).toBeVisible()
 
   const title = 'paperlab pagination fixture 2'
   const row = page.locator('[data-slot="context-menu-trigger"]', { hasText: title })
-  await row.getByRole('button', { name: 'Hit actions' }).click()
+  await row.getByRole('button', { name: 'Result actions' }).click()
   // exact: true — Playwright's default substring name match makes plain 'Relevant' ambiguous against the
   // "Not relevant…" submenu trigger sharing the same open menu.
   await page.getByRole('menuitem', { name: 'Relevant', exact: true }).click()
   await expect(page.getByRole('menuitem', { name: 'Relevant', exact: true })).toHaveCount(0)
 
   await row.hover()
-  const preview = page.locator('aside[aria-label="Hit preview"]')
+  const preview = page.locator('aside[aria-label="Result preview"]')
   await expect(preview.getByRole('heading', { name: title })).toBeVisible()
   const [importResponse] = await Promise.all([
     page.waitForResponse((r) => r.url().endsWith('/search/hits/import') && r.request().method() === 'POST'),

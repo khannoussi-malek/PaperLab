@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import type { Hit, HitReviewUpdate } from '@/api/client'
-import { EXCLUDE_REASONS } from './hitReview'
+import { EXCLUDE_REASONS, reasonLabel } from './hitReview'
 
 const menuSurface = cn(glass, 'w-56 bg-glass-strong ring-glass-border')
 
@@ -67,7 +67,7 @@ function MenuItems({ parts: M, hit, onReview, onSnowball }: Props & { parts: typ
         <M.SubContent className={menuSurface}>
           {EXCLUDE_REASONS.map((reason) => (
             <M.Item key={reason} onSelect={() => onReview(hit.id, { stage1_status: 'not_relevant', stage1_exclude_reason: reason })}>
-              {reason}
+              {reasonLabel(reason)}
             </M.Item>
           ))}
         </M.SubContent>
@@ -75,7 +75,7 @@ function MenuItems({ parts: M, hit, onReview, onSnowball }: Props & { parts: typ
       <M.Separator />
       <M.Item onSelect={() => onSnowball(hit.id)}>
         <Waves aria-hidden />
-        Snowball
+        Find citing & cited papers
       </M.Item>
     </>
   )
@@ -90,8 +90,8 @@ export function HitMenu(props: Props) {
           type="button"
           variant="ghost"
           size="icon-sm"
-          aria-label="Hit actions"
-          title="Hit actions"
+          aria-label="Result actions"
+          title="Result actions"
           className="relative z-10 text-muted-foreground"
         >
           <EllipsisVertical aria-hidden />

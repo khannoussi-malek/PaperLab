@@ -6,6 +6,7 @@ import { ManualAcquisitionTab } from './ManualAcquisitionTab'
 import * as queries from '@/api/queries'
 import { api } from '@/api/client'
 import { copyText } from '@/lib/clipboard'
+import { workspaceHref } from '@/lib/route'
 
 vi.mock('@/lib/clipboard', () => ({ copyText: vi.fn() }))
 
@@ -157,4 +158,28 @@ test('Load more is disabled (and relabelled) while a page is already fetching', 
   renderWithClient(<ManualAcquisitionTab workspaceId="ws-1" />)
 
   expect(screen.getByRole('button', { name: 'Loading…' })).toBeDisabled()
+})
+
+test('while loading it shows a skeleton, not the empty copy', () => {
+  mockHits([], { data: undefined, isPending: true })
+  renderWithClient(<ManualAcquisitionTab workspaceId="ws-1" />)
+  expect(screen.getByRole('status')).toHaveAttribute('aria-busy', 'true')
+  expect(screen.queryByText('Nothing to fetch by hand')).not.toBeInTheDocument()
+})
+
+test('when empty it says so', () => {
+  mockHits([])
+  renderWithClient(<ManualAcquisitionTab workspaceId="ws-1" />)
+  expect(screen.getByRole('heading', { name: 'Nothing to fetch by hand' })).toBeInTheDocument()
+  expect(screen.getByText('Relevant papers land here only when no free PDF was found for them.')).toBeInTheDocument()
+  expect(workspaceHref('ws-1', 'search')).toContain('tab=search')
+})
+
+test('a failed query shows the error and Retry, not the empty copy', () => {
+  const refetch = vi.fn()
+  mockHits([], { data: undefined, isPending: false, isError: true, error: new Error('Nope.'), refetch })
+  renderWithClient(<ManualAcquisitionTab workspaceId="ws-1" />)
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+  expect(refetch).toHaveBeenCalled()
+  expect(screen.queryByText('Nothing to fetch by hand')).not.toBeInTheDocument()
 })

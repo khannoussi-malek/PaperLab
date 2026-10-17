@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { usePrismaExport, useReadingQueue } from '@/api/queries'
-import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { readingChip } from '@/features/reading/passes'
+import { LoadError } from '@/features/library/ErrorAlert'
+import { EmptyState, GoToSearchAction, TabSkeleton } from '@/features/workspaces/TabStates'
 import { counted } from '@/features/workspaces/workspaceMeta'
 import { readerHref } from '@/lib/route'
 import { asPrismaRunMeta } from './prismaRunMeta'
@@ -20,18 +21,25 @@ import { asPrismaRunMeta } from './prismaRunMeta'
  * needed — it's derived fresh every render. */
 export function ReadingQueueTab({ workspaceId, runId }: { workspaceId: string; runId: string | null }) {
   const [manualRunId, setManualRunId] = useState<string | null>(null)
-  const { data: allRunsData, isPending: runsPending } = usePrismaExport(workspaceId, 'all')
+  const { data: allRunsData, isPending: runsPending, isError: runsError, error: runsErr, refetch: refetchRuns } = usePrismaExport(workspaceId, 'all')
   const allRuns = allRunsData ? asPrismaRunMeta(allRunsData.runs) : []
   const mostRecent = allRuns.toSorted((a, b) => b.started_at.localeCompare(a.started_at))[0]
   const selectedRunId = manualRunId ?? runId ?? mostRecent?.id ?? null
 
   const queue = useReadingQueue(workspaceId, selectedRunId, selectedRunId != null)
 
+  if (runsError) {
+    return <LoadError message={runsErr.message} onRetry={() => void refetchRuns()} />
+  }
   if (runsPending) {
-    return <p className="p-4 text-sm text-muted-foreground">Loading…</p>
+    return <TabSkeleton label="Loading reading list" />
   }
   if (allRuns.length === 0) {
-    return <p className="p-4 text-sm text-muted-foreground">No search runs yet. Start one on the Search tab.</p>
+    return (
+      <EmptyState title="No search runs yet" action={<GoToSearchAction workspaceId={workspaceId} runId={runId} />}>
+        Start one on 1 · Search & screen.
+      </EmptyState>
+    )
   }
 
   return (
@@ -49,15 +57,11 @@ export function ReadingQueueTab({ workspaceId, runId }: { workspaceId: string; r
         </select>
       </label>
       {queue.isError && (
-        <Alert variant="destructive" className="border-glass-border">
-          <AlertDescription>{queue.error.message}</AlertDescription>
-        </Alert>
+        <LoadError message={queue.error.message} onRetry={() => void queue.refetch()} />
       )}
-      {!queue.isError && queue.data === undefined && (
-        <p className="text-sm text-muted-foreground">Loading…</p>
-      )}
+      {!queue.isError && queue.data === undefined && <TabSkeleton label="Loading reading list" />}
       {queue.data?.rows.length === 0 && (
-        <p className="text-sm text-muted-foreground">No included papers have been imported into the library yet.</p>
+        <EmptyState title="No included papers yet">No included papers have been imported into the library yet.</EmptyState>
       )}
       {queue.data && queue.data.rows.length > 0 && (
         <ul className="reading-queue divide-y divide-glass-border rounded-lg border">

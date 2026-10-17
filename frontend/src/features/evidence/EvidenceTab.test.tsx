@@ -48,7 +48,7 @@ test('never shows the text of an unsupported item, only a count', async () => {
   vi.spyOn(api, 'listEvidenceCards').mockResolvedValue([row(ready())])
   renderTab()
   await screen.findByRole('button', { name: 'Edit Findings for Sleep paper' })
-  expect(screen.getByText('1 left out: no supporting quote')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'left out' }).parentElement).toHaveTextContent('1 left out: no supporting quote')
 })
 
 test('an edited card says AI · edited', async () => {
@@ -106,4 +106,26 @@ test('regenerating an edited card asks in the app, then sends confirm', async ()
   fireEvent.click(await screen.findByRole('button', { name: 'Replace my edits' }))
   await waitFor(() => expect(api.generateEvidenceCard).toHaveBeenCalledWith('p1', true, true))
   expect(confirm).not.toHaveBeenCalled()
+})
+
+test('while loading it shows a skeleton, not the empty copy', () => {
+  vi.spyOn(api, 'listEvidenceCards').mockReturnValue(new Promise(() => {}))
+  renderTab()
+  expect(screen.getByRole('status')).toHaveAttribute('aria-busy', 'true')
+  expect(screen.queryByText(/evidence cards will show up here/)).not.toBeInTheDocument()
+})
+
+test('when empty it says so', async () => {
+  vi.spyOn(api, 'listEvidenceCards').mockResolvedValue([])
+  renderTab()
+  expect(await screen.findByText('Add papers to this workspace and their evidence cards will show up here.')).toBeInTheDocument()
+})
+
+test('a failed load shows the error and a Retry that refetches', async () => {
+  const list = vi.spyOn(api, 'listEvidenceCards').mockRejectedValueOnce(new Error('Could not load cards.'))
+  renderTab()
+  expect(await screen.findByRole('alert')).toHaveTextContent('Could not load cards.')
+  list.mockResolvedValue([row(ready())])
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+  await screen.findByRole('button', { name: 'Edit Findings for Sleep paper' })
 })

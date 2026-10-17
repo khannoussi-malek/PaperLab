@@ -109,12 +109,15 @@ test('shows a loading message while the queue itself is being fetched', () => {
   expect(screen.getAllByText(/loading/i).length).toBeGreaterThan(0)
 })
 
-test('shows an alert with the error message when the queue request fails', () => {
+test('shows the error and a Retry that refetches when the queue request fails', () => {
+  const refetch = vi.fn()
   mockRuns(runsData)
-  mockQueue(undefined, { isError: true, error: new Error('Could not load the reading queue.') })
+  mockQueue(undefined, { isError: true, error: new Error('Could not load the reading queue.'), refetch })
   renderWithClient(<ReadingQueueTab workspaceId="ws-1" runId="run-1" />)
 
   expect(screen.getByRole('alert')).toHaveTextContent('Could not load the reading queue.')
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+  expect(refetch).toHaveBeenCalled()
 })
 
 test('shows an empty-state message when nothing included has been imported yet', () => {
@@ -122,6 +125,7 @@ test('shows an empty-state message when nothing included has been imported yet',
   mockQueue({ rows: [] })
   renderWithClient(<ReadingQueueTab workspaceId="ws-1" runId="run-1" />)
 
+  expect(screen.getByRole('heading', { name: 'No included papers yet' })).toBeInTheDocument()
   expect(screen.getByText(/no included papers have been imported/i)).toBeInTheDocument()
 })
 
@@ -153,4 +157,31 @@ test('a row with no priority and no reading progress shows plainly as not starte
   expect(screen.queryByText(/^Priority/)).not.toBeInTheDocument()
   expect(screen.getByText('Not started')).toBeInTheDocument()
   expect(screen.getByText('0 notes')).toBeInTheDocument()
+})
+
+test('while loading it shows a skeleton, not the empty copy', () => {
+  mockRuns(runsData)
+  mockQueue(undefined)
+  renderWithClient(<ReadingQueueTab workspaceId="ws-1" runId="run-1" />)
+  expect(screen.getByRole('status')).toHaveAttribute('aria-busy', 'true')
+  expect(screen.queryByText('No included papers yet')).not.toBeInTheDocument()
+})
+
+test('a failed runs query shows the error and Retry, not "No search runs yet"', () => {
+  const refetch = vi.fn()
+  vi.spyOn(queries, 'usePrismaExport').mockReturnValue({ data: undefined, isPending: false, isError: true, error: new Error('Nope.'), refetch } as any)
+  mockQueue(undefined)
+  renderWithClient(<ReadingQueueTab workspaceId="ws-1" runId={null} />)
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+  expect(refetch).toHaveBeenCalled()
+  expect(screen.queryByText('No search runs yet')).not.toBeInTheDocument()
+})
+
+test('with no runs it says so and links to step 1', () => {
+  mockRuns({ ...runsData, runs: [] })
+  mockQueue(undefined)
+  renderWithClient(<ReadingQueueTab workspaceId="ws-1" runId={null} />)
+  expect(screen.getByRole('heading', { name: 'No search runs yet' })).toBeInTheDocument()
+  expect(screen.getByText('Start one on 1 · Search & screen.')).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Go to 1 · Search & screen' })).toBeInTheDocument()
 })

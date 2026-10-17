@@ -14,7 +14,7 @@ async function searchAndWait(page: Page, request: APIRequestContext, workspaceId
     })
     .toBe('exhausted')
   await page.goto(`/#/workspaces/${workspaceId}?tab=search`)
-  await expect(page.getByText(/[1-9]\d* in pool/)).toBeVisible()
+  await expect(page.getByText(/[1-9]\d* results \(after filters\)/)).toBeVisible()
 }
 
 function row(page: Page, title: string) {
@@ -23,23 +23,23 @@ function row(page: Page, title: string) {
 
 test('the ranked sort learns from decisions and keeps only unscreened hits', async ({ page, request, workspaceId }) => {
   await searchAndWait(page, request, workspaceId)
-  await page.getByLabel('Sort hits').selectOption('ranked')
+  await page.getByLabel('Sort results').selectOption('ranked')
   await expect(
     page.getByText("Ranking learns once you've marked at least one hit relevant and one not relevant."),
   ).toBeVisible()
 
-  await row(page, 'paperlab pagination fixture 1').getByRole('button', { name: 'Hit actions' }).click()
+  await row(page, 'paperlab pagination fixture 1').getByRole('button', { name: 'Result actions' }).click()
   await page.getByRole('menuitem', { name: 'Relevant', exact: true }).click()
-  await row(page, 'paperlab pagination fixture 3').getByRole('button', { name: 'Hit actions' }).click()
+  await row(page, 'paperlab pagination fixture 3').getByRole('button', { name: 'Result actions' }).click()
   await page.getByRole('menuitem', { name: 'Not relevant…' }).click()
-  await page.getByRole('menuitem', { name: 'wrong_topic' }).click()
+  await page.getByRole('menuitem', { name: 'Wrong topic' }).click()
 
   await expect(page.getByText(/Showing the 1 most likely relevant of 1 unscreened\./)).toBeVisible()
   await expect(row(page, 'paperlab pagination fixture 2')).toBeVisible()
   await expect(row(page, 'paperlab pagination fixture 1')).toHaveCount(0)
 
   await page.reload()
-  await expect(page.getByLabel('Sort hits')).toHaveValue('ranked')
+  await expect(page.getByLabel('Sort results')).toHaveValue('ranked')
 
   const prisma = await (await request.get(`/api/workspaces/${workspaceId}/search/prisma`)).json()
   expect(prisma.automation[0]).toContain('prioritised with active learning')
@@ -51,18 +51,18 @@ test('criteria and the fake model give suggestion chips, and the reader still de
   await searchAndWait(page, request, workspaceId)
   await page.getByLabel('Include when…').fill('Primary studies on pagination fixtures')
   await page.getByRole('button', { name: 'Save criteria' }).click()
-  await page.getByRole('button', { name: 'Suggest for unscreened hits' }).click()
+  await page.getByRole('button', { name: 'Suggest for unscreened results' }).click()
 
   await expect(page.getByText('Suggestions stopped')).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Suggest for unscreened hits' })).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByRole('button', { name: 'Suggest for unscreened results' })).toBeVisible({ timeout: 30_000 })
   const target = row(page, 'paperlab pagination fixture 2')
   await expect(target.getByText('Suggests: exclude · wrong topic')).toBeVisible()
   await expect(target.getByRole('button', { name: /Suggests/ })).toHaveCount(0)
 
   // The suggestion said exclude; the reader marks it relevant, and that is what sticks.
-  await target.getByRole('button', { name: 'Hit actions' }).click()
+  await target.getByRole('button', { name: 'Result actions' }).click()
   await page.getByRole('menuitem', { name: 'Relevant', exact: true }).click()
-  await expect(target.getByText('relevant', { exact: true })).toBeVisible()
+  await expect(target.getByText('Relevant', { exact: true })).toBeVisible()
 
   const prisma = await (await request.get(`/api/workspaces/${workspaceId}/search/prisma`)).json()
   expect(prisma.screening_criteria).toContain('Primary studies on pagination fixtures')

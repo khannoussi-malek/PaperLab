@@ -22,8 +22,8 @@ const paper = (id: string, title: string) => ({
 const papers = [paper('p1', 'Alpha trial'), paper('p2', 'Beta cohort'), paper('p3', 'Gamma study')]
 const map = { p1: ['rct', 'cohort'], p2: ['cohort'], p3: [] as string[] }
 
-function setup(tags: string[], match: 'any' | 'all' = 'any') {
-  vi.spyOn(queries, 'useWorkspacePapers').mockReturnValue({ data: papers } as any)
+function setup(tags: string[], match: 'any' | 'all' = 'any', data: Paper[] | null = papers) {
+  vi.spyOn(queries, 'useWorkspacePapers').mockReturnValue({ data: data ?? undefined } as any)
   vi.spyOn(queries, 'useTags').mockReturnValue({ data: [tagSummary('rct', 1), tagSummary('cohort', 2)] } as any)
   vi.spyOn(queries, 'usePaperTags').mockReturnValue({ data: map } as any)
   vi.spyOn(queries, 'useApplyTag').mockReturnValue({ mutate: vi.fn(), error: null } as any)
@@ -160,4 +160,17 @@ test('papers hidden by the list\'s own search are no longer selected, counted or
   fireEvent.click(screen.getByRole('button', { name: 'Tag…' }))
   fireEvent.click(screen.getByRole('option', { name: /rct/ }))
   expect(apply).toHaveBeenCalledWith({ tag: 'rct', paperIds: ['p1'] }, expect.anything())
+})
+
+test('while loading it shows a skeleton, not the empty copy', () => {
+  setup([], 'any', null)
+  expect(screen.getByText('Loading papers').closest('[role="status"]')).toHaveAttribute('aria-busy', 'true')
+  expect(screen.queryByText('No papers yet')).toBeNull()
+})
+
+test('an empty workspace says so and keeps the three add buttons', () => {
+  setup([], 'any', [])
+  expect(screen.getByRole('heading', { name: 'No papers yet' })).toBeTruthy()
+  expect(screen.getByText('Add them from your library, upload PDFs, or find one by DOI or title.')).toBeTruthy()
+  expect(screen.getByRole('button', { name: /Add papers/ })).toBeTruthy()
 })

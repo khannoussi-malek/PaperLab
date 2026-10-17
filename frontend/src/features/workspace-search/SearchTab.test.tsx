@@ -31,6 +31,7 @@ function renderWithClient(ui: React.ReactElement, client = new QueryClient({ def
 }
 
 beforeEach(() => {
+  vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: [], next_cursor: null }) // an unmocked list would now show its own error alert
   vi.spyOn(api, 'startSearchRun')
   vi.spyOn(api, 'getSearchRun')
   vi.spyOn(api, 'stopSearchRun')
