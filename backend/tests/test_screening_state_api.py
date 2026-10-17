@@ -7,7 +7,7 @@ from app.models import LLMModel
 from app.models.workspace_search import WorkspaceSearchRun
 from tests.screening_pool import BASE, make_pool
 
-pytestmark = pytest.mark.anyio
+pytestmark = [pytest.mark.anyio, pytest.mark.usefixtures("local_default_model")]
 
 
 def _url(workspace):

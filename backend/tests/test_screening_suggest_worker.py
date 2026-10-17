@@ -23,7 +23,9 @@ from app.workers import screening_suggest as worker_module
 from tests.conftest import TEST_DATABASE_URL
 from tests.screening_pool import BASE, make_pool
 
-pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("references")]
+pytestmark = [
+    pytest.mark.anyio, pytest.mark.xdist_group("references"), pytest.mark.usefixtures("local_default_model"),
+]
 
 POSITIVE = "randomised controlled trial of sleep deprivation in adults"
 NEGATIVE = "a survey of graph neural networks for molecules"
@@ -242,6 +244,17 @@ async def test_the_advisory_lock_survives_its_own_session_rotating_connections(m
     monkeypatch.setattr(worker_module, "SessionLocal", TestSessionLocal)
     monkeypatch.setattr(worker_module, "engine", test_engine, raising=False)
     monkeypatch.setattr(worker_module, "build_llm", lambda *a, **k: ScriptedLLM([J("include")] * len(hits)))
+    # Its own engine commits for real, so the rolled-back local_default_model can't reach it: stub the lookup instead
+    # of reading the dev database's model settings (M75).
+    connection = SimpleNamespace(
+        kind="ollama", label="Test local", base_url="http://localhost:11434", cloud_proxy=False
+    )
+    local = (connection, SimpleNamespace(name="m"))
+
+    async def resolve(_session, _model_id):
+        return local
+
+    monkeypatch.setattr(worker_module.llm_connections, "resolve", resolve)
 
     async def noise():
         for _ in range(40):

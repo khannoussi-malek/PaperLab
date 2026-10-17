@@ -124,7 +124,9 @@ def test_a_version_tag_releases_and_a_change_to_the_release_files_is_a_dry_run()
         "Dockerfile",
         ".dockerignore",
     ]
-    assert [path.name for path in (ROOT / ".github/workflows").iterdir()] == ["release.yml"]  # the only workflow
+    # release.yml is the only workflow that builds the app; pages.yml publishes the website, homebrew.yml the cask.
+    workflows = sorted(path.name for path in (ROOT / ".github/workflows").iterdir())
+    assert workflows == ["homebrew.yml", "pages.yml", "release.yml"]
 
 
 def test_images_build_natively_per_architecture_and_are_tagged_with_the_version_only():

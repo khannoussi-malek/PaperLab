@@ -6,7 +6,7 @@ from sqlalchemy import delete, update
 from app.models import LLMConnection, LLMModel
 from tests.screening_pool import make_pool
 
-pytestmark = pytest.mark.anyio
+pytestmark = [pytest.mark.anyio, pytest.mark.usefixtures("local_default_model")]
 
 
 def _url(workspace, tail=""):
