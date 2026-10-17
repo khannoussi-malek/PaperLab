@@ -48,6 +48,7 @@ ACCESS_NOTE = {
     "abstract": "abstract only in PaperLab",
     "metadata": "metadata only in PaperLab",
 }
+CONTROL = re.compile(r"\s*[\x00-\x1f\x7f]+\s*")
 PEER_NOTE = {"true": "peer-reviewed", "false": "not peer-reviewed"}
 
 
@@ -105,7 +106,9 @@ def _extra_lines(paper) -> list[str]:
 
 def _keywords(paper, extra: list[str]) -> list[str]:
     label = (paper.source_type or "").replace("_", " ")
-    return [*extra, *(k for k in (label, "peer-reviewed" if paper.peer_reviewed == "true" else None) if k)]
+    words = [*extra, label, "peer-reviewed" if paper.peer_reviewed == "true" else None]
+    # a control character (a newline in a tag) would start a new line in RIS, which doesn't escape
+    return [clean for w in words if w and (clean := CONTROL.sub(" ", w).strip())]
 
 
 def csl_item(paper, keywords: list[str] | None = None) -> dict:
@@ -143,6 +146,7 @@ def csl_item(paper, keywords: list[str] | None = None) -> dict:
         item["note"] = note
     if words := _keywords(paper, keywords or []):
         item["keyword"] = ", ".join(words)
+        item["_keywords"] = words  # private: RIS writes one KW per entry, a tag may itself contain ", "
     return item
 
 
@@ -216,7 +220,8 @@ def render(items: list[dict], fmt: str) -> str:
     if fmt not in FORMATS:
         raise ValueError("unknown_format")
     if fmt == "csljson":
-        return json.dumps(items, ensure_ascii=False, indent=2)
+        public = [{k: v for k, v in item.items() if not k.startswith("_")} for item in items]
+        return json.dumps(public, ensure_ascii=False, indent=2)
     if fmt == "bibtex":
         return _bibtex(items)
     if fmt == "ris":
@@ -303,7 +308,7 @@ def _ris_entry(item: dict) -> dict:
         "notes": _note_lines(item),
         "abstract": item.get("abstract"),
         "issn": item.get("ISSN"),
-        "keywords": item["keyword"].split(", ") if item.get("keyword") else None,
+        "keywords": item.get("_keywords"),
     }
     return {k: v for k, v in entry.items() if v}
 

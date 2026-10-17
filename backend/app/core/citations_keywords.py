@@ -21,14 +21,14 @@ async def decisions(session: AsyncSession, ws: uuid.UUID) -> dict[uuid.UUID, str
         WorkspaceSearchHit.workspace_id == ws,
         WorkspaceSearchHit.paper_id.is_not(None),
         WorkspaceSearchHit.stage1_status.in_(STAGE1),
-    ).order_by(WorkspaceSearchHit.first_seen_at)  # fmt: skip
+    ).order_by(WorkspaceSearchHit.stage1_decided_at.asc().nulls_first(), WorkspaceSearchHit.id)  # fmt: skip
     for paper_id, status in await session.execute(hits):
         found[paper_id] = STAGE1[status]
     verdicts = (
         select(SearchRunEligibility.paper_id, SearchRunEligibility.stage2_status)
         .join(WorkspaceSearchRun, WorkspaceSearchRun.id == SearchRunEligibility.search_run_id)
         .where(WorkspaceSearchRun.workspace_id == ws, SearchRunEligibility.stage2_status.in_(STAGE2))
-        .order_by(SearchRunEligibility.assessed_at.asc().nulls_first())
+        .order_by(SearchRunEligibility.assessed_at.asc().nulls_first(), SearchRunEligibility.search_run_id)
     )
     for paper_id, status in await session.execute(verdicts):
         found[paper_id] = STAGE2[status]
