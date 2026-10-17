@@ -24,7 +24,7 @@ it("turns a duplicate refusal into a link to the paper that holds it", async () 
   );
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <CandidateList candidates={[found]} />
+      <CandidateList candidates={[found]} empty="No papers found." />
     </QueryClientProvider>,
   );
   fireEvent.click(screen.getByRole("button", { name: "Add REAL Sampling" }));
