@@ -547,14 +547,13 @@ async def test_a_locked_published_doi_on_the_copy_is_kept(session, tmp_path, job
     assert copy.peer_reviewed == "true"  # peer_reviewed only goes up
 
 
-@pytest.mark.xfail(
-    strict=True, reason="adding an arXiv id when the publisher version is held still duplicates (follow-up)"
-)
 async def test_adding_the_arxiv_id_after_the_publisher_version_is_held_reuses_it(
     session, tmp_path, jobs, real_world, monkeypatch
 ):
-    """The reverse case needs a title match on the add path (not built yet)."""
-    held = await library_copy(session, tmp_path, REAL_TACL_DOI, source_type="journal_article")
+    held = await library_copy(
+        session, tmp_path, REAL_TACL_DOI, source_type="journal_article", year=2025,
+        authors=["Haw-Shiuan Chang", "Nanyun Peng"], venue=REAL_TACL_VENUE,
+    )  # fmt: skip
     candidate = Candidate(
         title=REAL_TITLE, authors=["Chang, Haw-Shiuan"], year=2024, doi=f"10.48550/arxiv.{REAL_ARXIV}",
         external_ids={"arxiv": REAL_ARXIV}, pdf_urls=[f"https://pdf.example/pdf/{REAL_ARXIV}"],
@@ -568,3 +567,6 @@ async def test_adding_the_arxiv_id_after_the_publisher_version_is_held_reuses_it
     added = await pipeline.add_paper(session, REAL_ARXIV)
 
     assert [p.id for p in await with_title(session)] == [held.id] and added.paper_id == held.id
+    await session.refresh(held)
+    assert (held.doi, held.venue) == (REAL_TACL_DOI, REAL_TACL_VENUE)  # the published record is not weakened
+    assert jobs.jobs == [] and added.tried[-1]["outcome"] == "in_library"

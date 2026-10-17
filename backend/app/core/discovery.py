@@ -44,6 +44,7 @@ from app.core.paper_enrichment import apply_published
 from app.core.paper_sources import KEYED, NAMES, SourceSettings
 from app.core.redact import redact
 from app.core.source_registry import ASKS
+from app.core.source_types import is_preprint_copy
 from app.models import Paper
 from app.providers import arxiv, discovery_fake, semantic_scholar, unpaywall
 
@@ -576,6 +577,34 @@ async def _reuse_arxiv_copy(
         raise Conflict(ALREADY_IN_LIBRARY, paper_id=paper_id, tried=[*tried, found])
 
 
+async def _reuse_published_copy(session: AsyncSession, candidate: Candidate) -> None:
+    """Raises Conflict(ALREADY_IN_LIBRARY, paper_id, tried) when the candidate is an arXiv copy of a paper the library
+    already holds as its published version: the same title (or the same title before its colon, when renamed on
+    publication) under the arXiv fallback's author and year rules, read with the held paper as the published side.
+    The held paper is not changed. Otherwise returns. The transaction ends either way, before any download.
+    ponytail: a title prefix scan; it only runs for an arXiv copy, and papers have no title index to need."""
+    arxiv_id = arxiv_from_doi(candidate.doi) or (None if candidate.doi else candidate.external_ids.get("arxiv"))
+    head = candidate.title.partition(":")[0].strip().lower()
+    found = None
+    if arxiv_id and head:
+        rows = await session.execute(select(Paper).where(func.lower(Paper.title).startswith(head, autoescape=True)))
+        preprint = {"title": candidate.title, "authors": candidate.authors, "year": candidate.year}
+        found = next(
+            (
+                held.id
+                for held in rows.scalars()
+                if not is_preprint_copy(held)
+                and (published := Candidate(title=held.title, authors=held.authors, year=held.year))
+                and (_same_work(published, preprint) or _renamed_work(published, preprint))
+            ),
+            None,
+        )
+    await session.commit()
+    if found is not None:
+        tried = [{"url": f"https://arxiv.org/abs/{arxiv_id}", "outcome": "in_library"}]
+        raise Conflict(ALREADY_IN_LIBRARY, paper_id=found, tried=tried)
+
+
 async def _arxiv_title_copy(
     session: AsyncSession, providers: Providers, candidate: Candidate, tried: list[dict[str, str]]
 ) -> tuple[bytes | None, list[dict[str, str]]]:
@@ -672,6 +701,7 @@ async def add(
     if candidate.doi and candidate.pdf_urls:  # one extra request: a repository copy beside a bot-checked publisher
         [candidate] = await _add_unpaywall_links(providers.client("unpaywall"), [candidate], merge=True)
     await _reuse_arxiv_copy(session, candidate, _arxiv_ids(candidate), [])  # before any download
+    await _reuse_published_copy(session, candidate)  # the reverse: its published version is held
     data, tried = await download_pdf(providers.pdf, candidate.pdf_urls)
     copies: list[str] = []
     if data is None:
