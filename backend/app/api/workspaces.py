@@ -2,10 +2,11 @@ import uuid
 from dataclasses import asdict
 
 from fastapi import APIRouter, Request, Response
+from fastapi.responses import StreamingResponse
 
 from app.api.citations import download
 from app.api.deps import SessionDep
-from app.core import notes_markdown, pipeline, tags, workspace_search, workspaces
+from app.core import citations_bundle, notes_markdown, pipeline, tags, workspace_search, workspaces
 from app.core.citations_export import filename_slug
 from app.schemas.notes import NoteOut
 from app.schemas.papers import PaperOut
@@ -69,11 +70,23 @@ async def set_eligibility(
 
 
 @router.get("/{workspace_id}/citations")
-async def export_citations(workspace_id: uuid.UUID, format: str, session: SessionDep) -> Response:
-    """The workspace's papers as a download: bibtex, ris, csljson, apa or apa-html. 404 unknown workspace, 422 for an
-    unknown format or no papers."""
-    text, _ = await pipeline.export_citations(session, workspace_id=workspace_id, fmt=format)
+async def export_citations(workspace_id: uuid.UUID, format: str, session: SessionDep, notes: bool = False) -> Response:
+    """The workspace's papers as a download: bibtex, ris, csljson, apa or apa-html; `notes=true` adds the PaperLab
+    notes (BibTeX annote, RIS N1). 404 unknown workspace, 422 for an unknown format or no papers."""
+    text, _ = await pipeline.export_citations(session, workspace_id=workspace_id, fmt=format, notes=notes)
     return download(text, format, (await workspaces.get(session, workspace_id)).name)
+
+
+@router.get("/{workspace_id}/citations.zip")
+async def export_citations_zip(
+    workspace_id: uuid.UUID, format: str, session: SessionDep, notes: bool = False
+) -> StreamingResponse:
+    """refs.bib or refs.ris plus files/<key>.pdf for each paper whose PDF is on disk, as Zotero imports it. 404 unknown
+    workspace, 422 for a format other than bibtex or ris, or no papers."""
+    file, size = await citations_bundle.build(session, workspace_id, format, notes)
+    slug = filename_slug((await workspaces.get(session, workspace_id)).name)
+    headers = {"Content-Disposition": f'attachment; filename="{slug}.zip"', "Content-Length": str(size)}
+    return StreamingResponse(citations_bundle.chunks(file), media_type="application/zip", headers=headers)
 
 
 @router.get("/{workspace_id}/notes.zip")

@@ -807,10 +807,13 @@ async def list_evidence_cards(
 
 
 async def export_citations(
-    session: AsyncSession, *, workspace_id: uuid.UUID | None = None, paper_ids: list[uuid.UUID] | None = None, fmt: str
-) -> tuple[str, int]:
+    session: AsyncSession, *, workspace_id: uuid.UUID | None = None, paper_ids: list[uuid.UUID] | None = None,
+    fmt: str, notes: bool = False,
+) -> tuple[str, int]:  # fmt: skip
     """(text, paper count) for a workspace or a selection of papers; shared by the API and the MCP tool."""
-    return await citations_export.export_papers(session, workspace_id=workspace_id, paper_ids=paper_ids, fmt=fmt)
+    return await citations_export.export_papers(
+        session, workspace_id=workspace_id, paper_ids=paper_ids, fmt=fmt, notes=notes
+    )
 
 
 @dataclass(frozen=True)
