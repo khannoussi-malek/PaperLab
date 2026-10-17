@@ -483,21 +483,37 @@ def _same_work(candidate: Candidate, entry: dict) -> bool:
 def _title_prefix(title: str) -> str | None:
     """The normalised text before a title's first colon ("real sampling"), when there is one of two words or more."""
     head, colon, _ = title.partition(":")
-    words = normal_title(head).split()
-    return " ".join(words) if colon and len(words) >= 2 else None
+    # Words split on spaces, so "GPT-4" or "Self-RAG" stays one name, too short to identify a paper.
+    return normal_title(head) if colon and len(head.split()) >= 2 else None
+
+
+_SERIES_PART = re.compile(r"\b(?:part|vol(?:ume)?)\s+(?:[ivx]+|\d+)\b", re.IGNORECASE)
+
+
+def _initial(name: str) -> str:
+    """The first given-name initial, ASCII-folded ("Chang, Haw-Shiuan" and "Haw-Shiuan Chang" give "h"), or ""."""
+    given = name.split(",", 1)[1] if "," in name else " ".join(name.split()[:-1])
+    return surname(next(iter(given.split()), ""))[:1]
+
+
+def _same_author(ours: str, theirs: str) -> bool:
+    initials = {_initial(ours), _initial(theirs)}
+    return bool(_surname_forms(ours) & _surname_forms(theirs)) and ("" in initials or len(initials) == 1)
 
 
 def _renamed_work(candidate: Candidate, entry: dict) -> bool:
     """An arXiv entry is the preprint of a paper renamed on publication: the same text before the colon (two words or
-    more), the same three or more authors in the same order, and the paper published 0 to 2 years after the preprint.
+    more), the same three or more authors in the same order (surname and first initial), the paper published 0 to 2
+    years after the preprint, and neither title a part of a series ("Part II"), whose parts share a prefix and authors.
     The title test is looser than _same_work's, so the author and year tests are stricter."""
     ours, theirs = candidate.authors, entry["authors"]
     return (
         (prefix := _title_prefix(candidate.title)) is not None
         and prefix == _title_prefix(entry["title"])
+        and not any(_SERIES_PART.search(t) for t in (candidate.title, entry["title"]))
         and len(ours) >= 3
         and len(ours) == len(theirs)
-        and all(_surname_forms(a) & _surname_forms(b) for a, b in zip(ours, theirs))
+        and all(_same_author(a, b) for a, b in zip(ours, theirs))
         and None not in (candidate.year, entry["year"])
         and entry["year"] <= candidate.year <= entry["year"] + 2
     )
