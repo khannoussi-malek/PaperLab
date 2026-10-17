@@ -20,16 +20,19 @@ import {
 import { PanelResizeHandle } from '@/components/PanelResizeHandle'
 import { loadPanelWidth, panelTrack, savePanelWidth, type PanelLimits } from '@/components/panelWidth'
 import { Button } from '@/components/ui/button'
+import { Term } from '@/features/workspaces/Term'
 import { Checkbox } from '@/components/ui/checkbox'
 import { browserStorage } from '@/features/notes/highlightColors'
 import { cn } from '@/lib/utils'
 import { HitContextMenu, HitMenu } from './HitMenu'
-import { EXCLUDE_REASONS, matchesFilter, sourceLabel } from './hitReview'
+import { EXCLUDE_REASONS, matchesFilter, reasonLabel, sourceLabel, statusLabel } from './hitReview'
 import { loadHitSort, saveHitSort, type HitSort } from './hitSort'
 import { HitPreview } from './HitPreview'
 import { errorText } from './schedule'
 import { RankSortBar } from './RankSortBar'
 import { snowballMessage } from './ScreeningTab'
+import { LoadError } from '@/features/library/ErrorAlert'
+import { EmptyState, TabSkeleton } from '@/features/workspaces/TabStates'
 import { StatusDot } from './StatusDot'
 import { SuggestionChip } from './SuggestionChip'
 
@@ -73,7 +76,7 @@ function hasPdfOrAbstract(hit: Hit): boolean {
 export function HitTable({ workspaceId, run }: { workspaceId: string; run?: SearchRun }) {
   const [sort, setSort] = useState<HitSort>(() => loadHitSort(browserStorage(), workspaceId))
   const [minRelevance, setMinRelevance] = useState<number | null>(null)
-  const { data, hasNextPage, isFetchingNextPage, fetchNextPage } = useSearchHits(workspaceId, undefined, undefined, {
+  const { data, isPending, isError, error, refetch, hasNextPage, isFetchingNextPage, fetchNextPage } = useSearchHits(workspaceId, undefined, undefined, {
     sort: sort === 'ai' ? 'ai' : undefined,
     minRelevance: sort === 'ranked' ? undefined : (minRelevance ?? undefined),
   })
@@ -100,6 +103,7 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
   const rows = sort === 'ranked' ? (ranked.data?.items ?? []) : (data?.pages.flatMap((page) => page.items) ?? [])
   const rawFound = totalRawFound(run)
   const filter = filterText.trim().toLowerCase()
+  const filtered = filter !== '' || (sort !== 'ranked' && minRelevance != null)
   const filteredRows = filter ? rows.filter((hit) => matchesFilter(hit, filter)) : rows
   // A hit with an abstract to read or a PDF already in the corpus is the one worth looking at first — a bare
   // title with neither is the hardest to judge relevance from. Stable sort (native since ES2019), so hits within
@@ -240,30 +244,31 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
     null
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-[24rem] flex-1 flex-col">
       <div className="flex items-center justify-between gap-3 border-b px-3 py-2 text-sm">
         <Checkbox
-          aria-label="Select all visible hits"
+          aria-label="Select all visible results"
           checked={someVisibleChecked && !allVisibleChecked ? 'indeterminate' : allVisibleChecked}
           onCheckedChange={toggleCheckAllVisible}
           disabled={visibleRows.length === 0}
           className="shrink-0"
         />
         <label className="flex flex-1 items-center gap-2">
-          <span className="sr-only">Search hits</span>
+          <span className="sr-only">Search results</span>
           <input
             type="text"
             value={filterText}
             onChange={(event) => setFilterText(event.target.value)}
             onKeyDown={onListKeyDown}
             placeholder="Search by title or abstract…"
-            aria-label="Search hits"
+            aria-label="Search results"
             className="h-8 w-full max-w-xs rounded-lg border bg-background px-2 text-sm"
           />
         </label>
         <span className="shrink-0 text-muted-foreground">
           {rawFound !== undefined && `${rawFound} found so far · `}
-          {filter ? `${visibleRows.length} of ${rows.length} in pool` : `${rows.length} in pool`}
+          {filter ? `${visibleRows.length} of ${rows.length}` : rows.length} <Term term="results">results</Term> (after
+          filters) <Term term="identified">How this differs from PRISMA</Term>
         </span>
         <Button type="button" size="sm" disabled={importAllHits.isPending} onClick={() => importAllHits.mutate()}>
           Import all with PDF in this filter
@@ -274,7 +279,7 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
           variant="outline"
           disabled={clearHits.isPending}
           onClick={() => {
-            if (window.confirm('Clear every hit not yet imported? Papers already in your corpus stay untouched.')) {
+            if (window.confirm('Clear every result not yet imported? Papers already in your corpus stay untouched.')) {
               clearHits.mutate()
             }
           }}
@@ -303,20 +308,21 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
             <Sparkles aria-hidden />
             Accept AI suggestions
           </Button>
+          <Term term="aiSuggestion"><span className="sr-only">What is an AI suggestion?</span></Term>
           <label htmlFor="bulk-exclude-reason" className="sr-only">
-            Exclusion reason for selected hits
+            Exclusion reason for selected results
           </label>
           <select
             id="bulk-exclude-reason"
             value={bulkReason}
             onChange={(event) => setBulkReason(event.target.value as ExcludeReason | '')}
-            aria-label="Exclusion reason for selected hits"
+            aria-label="Exclusion reason for selected results"
             className="h-8 rounded-lg border bg-background px-2 text-sm"
           >
             <option value="">Select a reason…</option>
             {EXCLUDE_REASONS.map((r) => (
               <option key={r} value={r}>
-                {r}
+                {reasonLabel(r)}
               </option>
             ))}
           </select>
@@ -354,16 +360,42 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
           {statusMessage.text}
         </p>
       )}
-      {filter && visibleRows.length === 0 && (
-        <p className="px-3 py-1 text-xs text-muted-foreground">No hits match “{filterText.trim()}”.</p>
+      {(sort === 'ranked' ? ranked.isError : isError) ? (
+        <LoadError
+          message={(sort === 'ranked' ? ranked.error : error)?.message ?? 'Could not load results.'}
+          onRetry={() => void (sort === 'ranked' ? ranked.refetch() : refetch())}
+        />
+      ) : (sort === 'ranked' ? ranked.isPending : isPending) ? (
+        <TabSkeleton label="Loading search results" />
+      ) : (
+        visibleRows.length === 0 && (
+          <EmptyState
+            title={filtered ? 'No results match these filters.' : 'No results yet: run a search above.'}
+            action={
+              filtered && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setFilterText('')
+                    setMinRelevance(null)
+                  }}
+                >
+                  Clear filters
+                </Button>
+              )
+            }
+          />
+        )
       )}
       <div
-        className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(0,1fr)_var(--preview-track)]"
+        className="grid min-h-[16rem] flex-1 gap-3 lg:grid-cols-[minmax(0,1fr)_var(--preview-track)]"
         style={{ '--preview-track': panelTrack(HIT_PREVIEW, previewWidth) } as CSSProperties}
       >
         <div
           ref={parentRef}
-          aria-label="Hit pool"
+          aria-label="Result list"
           tabIndex={0}
           onKeyDown={onListKeyDown}
           className="min-h-0 overflow-auto outline-none"
@@ -407,7 +439,7 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
                         type="button"
                         size="xs"
                         variant="outline"
-                        aria-label={`Accept: ${hit.title ?? hit.normalized_title}`}
+                        aria-label={`Accept AI suggestion: ${hit.title ?? hit.normalized_title}`}
                         disabled={acceptSuggestions.isPending}
                         onClick={(event) => {
                           event.stopPropagation()
@@ -419,7 +451,7 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
                     )}
                     <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
                       <StatusDot status={hit.stage1_status} />
-                      {hit.stage1_status ?? 'unreviewed'}
+                      {statusLabel(hit.stage1_status)}
                     </span>
                     <HitMenu hit={hit} onReview={onReview} onSnowball={onSnowball} />
                   </div>

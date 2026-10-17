@@ -1,17 +1,16 @@
-import { FileText, Plus } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { useState } from 'react'
 import { usePaperTags, useTags, useUploadPapers, useWorkspacePapers } from '@/api/queries'
-import { delayedIn } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { FindPapersButton } from '@/features/discovery/FindPapersButton'
 import { ErrorAlert, LoadError } from '@/features/library/ErrorAlert'
 import { PaperList } from '@/features/library/PaperList'
 import { UploadPdfsButton } from '@/features/library/UploadPdfsButton'
 import type { TagMatch } from '@/lib/route'
-import { cn } from '@/lib/utils'
 import { AddPapersDialog } from './AddPapersDialog'
 import { TagFilterMenu } from './TagFilterMenu'
 import { TagPicker } from './TagPicker'
+import { EmptyState, TabSkeleton } from './TabStates'
 import { TagSidebar } from './TagSidebar'
 import { filterByTags, toggled } from './tagFilter'
 
@@ -60,13 +59,10 @@ export function WorkspacePapers({
         papers.isError ? (
           <LoadError message={papers.error.message} onRetry={() => void papers.refetch()} />
         ) : (
-          <p className={cn('text-muted-foreground', delayedIn)}>Loading…</p>
+          <TabSkeleton label="Loading papers" />
         )
       ) : all?.length === 0 ? (
-        <div className="grid place-items-center gap-2 rounded-xl border border-dashed border-glass-border px-6 py-16 text-center">
-          <FileText aria-hidden className="size-8 text-muted-foreground" />
-          <p className="text-muted-foreground">No papers in this workspace yet. Add them from your library, or upload a PDF.</p>
-        </div>
+        <EmptyState title="No papers yet">Add them from your library, upload PDFs, or find one by DOI or title.</EmptyState>
       ) : (
         <div className="flex items-start gap-6">
           <TagSidebar {...filterProps} />

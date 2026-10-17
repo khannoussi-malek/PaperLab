@@ -22,3 +22,35 @@ export function matchesFilter(hit: Hit, filter: string): boolean {
   const abstract = hit.abstract?.toLowerCase() ?? ''
   return title.includes(filter) || abstract.includes(filter)
 }
+
+const REASON_LABELS: Record<string, string> = {
+  wrong_topic: 'Wrong topic',
+  wrong_study_type: 'Wrong study type',
+  duplicate: 'Duplicate',
+  language: 'Language',
+  inaccessible: "Can't access",
+  other: 'Other',
+  unspecified: 'No reason given',
+}
+
+const STATUS_LABELS: Record<string, string> = { relevant: 'Relevant', maybe: 'Maybe', not_relevant: 'Not relevant' }
+
+/** Words for a stage-1 row status; null is unreviewed, an unknown value renders as written. */
+export function statusLabel(status: string | null | undefined): string {
+  if (status == null || status === '') return 'Unreviewed'
+  return STATUS_LABELS[status] ?? status
+}
+
+const STAGE2_LABELS: Record<string, string> = { include: 'Included', exclude: 'Excluded' }
+
+/** Words for a stage-2 (full-text) row status; null is not yet assessed. */
+export function stage2Label(status: string | null | undefined): string {
+  if (status == null || status === '') return 'Not assessed'
+  return STAGE2_LABELS[status] ?? status
+}
+
+/** Words for a stage-1 reason code; stage-2 free text (or any unknown value) renders as written. */
+export function reasonLabel(code: string | null | undefined): string {
+  if (code == null || code === '') return REASON_LABELS.unspecified
+  return REASON_LABELS[code] ?? code
+}

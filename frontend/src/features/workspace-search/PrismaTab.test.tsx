@@ -55,20 +55,38 @@ test('shows the full funnel with counts from usePrismaExport', () => {
   expect(screen.getByText('120')).toBeInTheDocument()
   expect(screen.getByText('Duplicates removed')).toBeInTheDocument()
   expect(screen.getByText('20')).toBeInTheDocument()
-  expect(screen.getByText('Stage-1 screened')).toBeInTheDocument()
+  expect(screen.getByText('Screened on title & abstract')).toBeInTheDocument()
   expect(screen.getByText('100')).toBeInTheDocument()
-  expect(screen.getByText('Stage-1 excluded')).toBeInTheDocument()
+  expect(screen.getByText('Excluded on title & abstract')).toBeInTheDocument()
   expect(screen.getByText('42')).toBeInTheDocument()
   expect(screen.getByText('Reports sought')).toBeInTheDocument()
   expect(screen.getByText('58')).toBeInTheDocument()
   expect(screen.getByText('Not retrieved')).toBeInTheDocument()
   expect(screen.getByText('6')).toBeInTheDocument()
-  expect(screen.getByText('Stage-2 assessed')).toBeInTheDocument()
+  expect(screen.getByText('Full texts assessed')).toBeInTheDocument()
   expect(screen.getByText('52')).toBeInTheDocument()
-  expect(screen.getByText('Stage-2 excluded')).toBeInTheDocument()
+  expect(screen.getByText('Excluded after full text')).toBeInTheDocument()
   expect(screen.getByText('14')).toBeInTheDocument()
   expect(screen.getByText('Included')).toBeInTheDocument()
   expect(screen.getByText('38')).toBeInTheDocument()
+})
+
+test('no raw reason code renders', () => {
+  vi.spyOn(queries, 'usePrismaExport').mockImplementation(
+    () => ({ data: { ...combinedData, stage1_excluded_by_reason: { wrong_topic: 6, unspecified: 1 } } }) as unknown as ReturnType<typeof queries.usePrismaExport>,
+  )
+  const { container } = render(<PrismaTab workspaceId="ws-1" />)
+  expect(screen.getByText('Wrong topic: 6')).toBeInTheDocument()
+  expect(screen.getByText('No reason given: 1')).toBeInTheDocument()
+  expect(container.textContent).not.toMatch(/\b[a-z]+_[a-z_]+\b/)
+})
+
+test('the official box names carry explained terms', () => {
+  mockPrismaExport()
+  render(<PrismaTab workspaceId="ws-1" />)
+  for (const name of ['Identified', 'Duplicates removed', 'Screened on title & abstract', 'Excluded on title & abstract', 'Reports sought', 'Not retrieved', 'Full texts assessed', 'Excluded after full text', 'Eligibility']) {
+    expect(screen.getByRole('button', { name })).toBeInTheDocument()
+  }
 })
 
 test('toggles between combined and a specific run, re-querying usePrismaExport with the new runs value', () => {
@@ -144,15 +162,18 @@ test('shows a loading state before the export arrives', () => {
   expect(screen.getByText(/loading/i)).toBeInTheDocument()
 })
 
-test('shows an alert with the error message when the export request fails', () => {
+test('shows the error and a Retry that refetches when the export request fails', () => {
+  const refetch = vi.fn()
   vi.spyOn(queries, 'usePrismaExport').mockReturnValue(
     {
-      data: undefined, isPending: false, isError: true, error: new Error('Could not load the PRISMA export.'),
-    } as ReturnType<typeof queries.usePrismaExport>,
+      data: undefined, isPending: false, isError: true, error: new Error('Could not load the PRISMA export.'), refetch,
+    } as unknown as ReturnType<typeof queries.usePrismaExport>,
   )
   render(<PrismaTab workspaceId="ws-1" />)
 
   expect(screen.getByRole('alert')).toHaveTextContent('Could not load the PRISMA export.')
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+  expect(refetch).toHaveBeenCalled()
 })
 
 test('lists methods notes: criteria and automation lines', () => {
@@ -189,4 +210,26 @@ test('says plainly that identified is partial when a run was cut short (D266)', 
   render(<PrismaTab workspaceId="ws-1" />)
   const notes = screen.getByRole('region', { name: 'Methods notes' })
   expect(within(notes).getByText(/identified count is partial/)).toBeInTheDocument()
+})
+
+test('while loading it shows a skeleton, not the empty copy', () => {
+  vi.spyOn(queries, 'usePrismaExport').mockReturnValue({ data: undefined, isPending: true } as ReturnType<typeof queries.usePrismaExport>)
+  render(<PrismaTab workspaceId="ws-1" />)
+  expect(screen.getByRole('status')).toHaveAttribute('aria-busy', 'true')
+  expect(screen.queryByText('Your PRISMA flow will appear here')).not.toBeInTheDocument()
+})
+
+test('an empty workspace shows no zero funnel', () => {
+  const empty: PrismaExportOut = {
+    ...combinedData, identified: 0, duplicates_removed: 0, stage1_screened: 0, stage1_excluded: 0, stage1_excluded_by_reason: {},
+    sought: 0, not_retrieved: 0, stage2_assessed: 0, stage2_excluded: 0, stage2_excluded_by_reason: {}, included: 0, runs: [],
+  }
+  vi.spyOn(queries, 'usePrismaExport').mockReturnValue({ data: empty } as ReturnType<typeof queries.usePrismaExport>)
+  render(<PrismaTab workspaceId="ws-1" />)
+  expect(screen.getByRole('heading', { name: 'Your PRISMA flow will appear here' })).toBeInTheDocument()
+  expect(screen.getByText('It fills in as you search and screen.')).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Go to 1 · Search & screen' })).toBeInTheDocument()
+  expect(screen.queryByText('Identified')).not.toBeInTheDocument()
+  expect(screen.queryByText('Runs')).not.toBeInTheDocument()
+  expect(screen.queryByLabelText('Methods notes')).not.toBeInTheDocument()
 })

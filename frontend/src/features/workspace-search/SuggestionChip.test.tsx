@@ -30,8 +30,8 @@ describe('SuggestionChip', () => {
 
   it('says the score and a low confidence in words', () => {
     render(<SuggestionChip hit={hit({ suggestion: 'include', suggestion_relevance: 4, suggestion_confidence: 'low' })} />)
-    expect(screen.getByText('Score 4/5')).toBeInTheDocument()
-    expect(screen.getByText('low confidence')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Score' }).parentElement).toHaveTextContent('Score 4/5')
+    expect(screen.getByRole('button', { name: 'low confidence' })).toBeInTheDocument()
   })
 
   it('says each flag in words and stays quiet about high confidence', () => {
@@ -43,7 +43,9 @@ describe('SuggestionChip', () => {
         })}
       />,
     )
-    expect(screen.getByText("no abstract · a quote didn't match · model error")).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: "a quote didn't match" }).parentElement?.parentElement).toHaveTextContent(
+      "no abstract · a quote didn't match · model error",
+    )
     expect(screen.queryByText(/confidence/)).toBeNull()
   })
 })

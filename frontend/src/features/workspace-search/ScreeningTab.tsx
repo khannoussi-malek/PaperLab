@@ -2,7 +2,10 @@ import { useState } from 'react'
 import type { EligibilityUpdate, Hit } from '@/api/client'
 import { useSearchHits, useSetEligibility, useSnowball } from '@/api/queries'
 import { Button } from '@/components/ui/button'
-import { matchesFilter } from './hitReview'
+import { Term } from '@/features/workspaces/Term'
+import { LoadError } from '@/features/library/ErrorAlert'
+import { EmptyState, GoToSearchAction, TabSkeleton } from '@/features/workspaces/TabStates'
+import { matchesFilter, stage2Label } from './hitReview'
 import { StatusDot } from './StatusDot'
 
 /** Stage-2 (full-text) eligibility screening for papers already acquired via a search run (imported
@@ -22,7 +25,7 @@ import { StatusDot } from './StatusDot'
  * Each call is independently keyset-paginated (50/page, same as ManualAcquisitionTab's identical situation —
  * see its "I7 fix 1" comment), so each gets its own "Load more" — silently showing only the first 50 imported
  * or first 50 manual papers would leave stage-2 screening incomplete with no indication anything is missing. */
-export function ScreeningTab({ workspaceId }: { workspaceId: string }) {
+export function ScreeningTab({ workspaceId, runId }: { workspaceId: string; runId?: string | null }) {
   const imported = useSearchHits(workspaceId, 'relevant', 'imported')
   const manual = useSearchHits(workspaceId, 'relevant', 'manual')
   const setEligibility = useSetEligibility(workspaceId)
@@ -39,17 +42,26 @@ export function ScreeningTab({ workspaceId }: { workspaceId: string }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2 p-3">
-      {rows.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Nothing to screen yet — import or upload a paper first.</p>
+      {imported.isError || manual.isError ? (
+        <LoadError
+          message={(imported.error ?? manual.error)?.message ?? 'Could not load papers to review.'}
+          onRetry={() => void Promise.all([imported.isError && imported.refetch(), manual.isError && manual.refetch()])}
+        />
+      ) : rows.length === 0 && (imported.isPending || manual.isPending) ? (
+        <TabSkeleton label="Loading papers to review" />
+      ) : rows.length === 0 ? (
+        <EmptyState title="Nothing to review yet" action={<GoToSearchAction workspaceId={workspaceId} runId={runId} />}>
+          Import relevant results with a PDF first.
+        </EmptyState>
       ) : (
         <label className="flex items-center gap-2">
-          <span className="sr-only">Search hits to screen</span>
+          <span className="sr-only">Search results to screen</span>
           <input
             type="text"
             value={filterText}
             onChange={(event) => setFilterText(event.target.value)}
             placeholder="Search by title or abstract…"
-            aria-label="Search hits to screen"
+            aria-label="Search results to screen"
             className="h-8 w-full max-w-xs rounded-lg border bg-background px-2 text-sm"
           />
           <span className="shrink-0 text-xs text-muted-foreground">
@@ -58,7 +70,7 @@ export function ScreeningTab({ workspaceId }: { workspaceId: string }) {
         </label>
       )}
       {filter && visibleRows.length === 0 && (
-        <p className="text-xs text-muted-foreground">No hits match “{filterText.trim()}”.</p>
+        <p className="text-xs text-muted-foreground">No results match “{filterText.trim()}”.</p>
       )}
       {visibleRows.map((hit) => (
         <ScreeningRow
@@ -162,7 +174,7 @@ function ScreeningRow({
       <span className="flex-1 truncate">{title}</span>
       <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <StatusDot status={hit.stage2_status ?? null} />
-        {hit.stage2_status ?? 'not assessed'}
+        {stage2Label(hit.stage2_status)}
       </span>
       {paperId ? (
         <>
@@ -202,8 +214,9 @@ function ScreeningRow({
             </Button>
           )}
           <Button type="button" size="sm" variant="outline" disabled={snowballPending} onClick={() => onSnowball(paperId)}>
-            Snowball
+            Find citing & cited papers
           </Button>
+          <Term term="snowball"><span className="sr-only">What does finding citing & cited papers do?</span></Term>
         </>
       ) : (
         <span className="text-xs text-muted-foreground">No linked paper record</span>
