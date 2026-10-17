@@ -71,7 +71,7 @@ export function prismaText(data: PrismaExportOut, runLabel: string): string {
 
 // Text fields starting with = + - @ get a leading ' so Excel doesn't run them as formulas; counts are numbers we wrote.
 const q = (v: string | number) => {
-  const t = typeof v === 'string' && /^[=+\-@]/.test(v) ? `'${v}` : String(v)
+  const t = typeof v === 'string' && /^[=+\-@\t\r]/.test(v) ? `'${v}` : String(v)
   return `"${t.replace(/"/g, '""')}"`
 }
 

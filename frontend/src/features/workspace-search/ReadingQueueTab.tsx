@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQueries } from '@tanstack/react-query'
 import { readingQueueOptions, usePrismaExport, useReadingQueue } from '@/api/queries'
 import { Badge } from '@/components/ui/badge'
@@ -44,18 +44,26 @@ export function pickReadingRun(
  * needed — it's derived fresh every render. */
 export function ReadingQueueTab({ workspaceId, runId }: { workspaceId: string; runId: string | null }) {
   const [manualRunId, setManualRunId] = useState<string | null>(null)
+  // The automatic choice, pinned once made (for the URL run it was made under) so later invalidations of the
+  // reading-queue queries (every Relevant/Not relevant click) don't re-run the probes or flip the selection.
+  const [pinned, setPinned] = useState<{ urlRun: string | null; id: string } | null>(null)
+  const autoRunId = pinned && pinned.urlRun === runId ? pinned.id : null
   const { data: allRunsData, isPending: runsPending, isError: runsError, error: runsErr, refetch: refetchRuns } = usePrismaExport(workspaceId, 'all')
   const allRuns = allRunsData ? asPrismaRunMeta(allRunsData.runs) : []
   const newestIds = allRuns.toSorted((a, b) => b.started_at.localeCompare(a.started_at)).slice(0, PROBED_RUNS).map((r) => r.id)
   const probeIds = [...new Set([...(runId && allRuns.some((r) => r.id === runId) ? [runId] : []), ...newestIds])]
   const probes = useQueries({
-    queries: probeIds.map((id) => ({ ...readingQueueOptions(workspaceId, id), enabled: manualRunId == null })),
+    queries: probeIds.map((id) => ({ ...readingQueueOptions(workspaceId, id), enabled: manualRunId == null && autoRunId == null })),
   })
   const hasIncludes = (id: string) => {
     const q = probes[probeIds.indexOf(id)]
     return q?.isError ? false : q?.data ? q.data.rows.length > 0 : undefined
   }
-  const selectedRunId = pickReadingRun(allRuns, manualRunId, runId, hasIncludes)
+  const picked = pickReadingRun(allRuns, manualRunId ?? autoRunId, runId, hasIncludes)
+  const selectedRunId = picked
+  useEffect(() => {
+    if (manualRunId == null && autoRunId == null && picked != null) setPinned({ urlRun: runId, id: picked })
+  }, [manualRunId, autoRunId, picked, runId])
 
   const queue = useReadingQueue(workspaceId, selectedRunId, selectedRunId != null)
 

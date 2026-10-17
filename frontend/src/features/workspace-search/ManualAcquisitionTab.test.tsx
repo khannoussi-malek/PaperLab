@@ -199,3 +199,32 @@ test('the upload button picks a file and shows its name', async () => {
   expect(screen.getByRole('button', { name: /paper\.pdf/ })).toBeInTheDocument()
   await waitFor(() => expect(uploadSpy).toHaveBeenCalledWith('ws-1', 'h1', file))
 })
+
+test('with another page the heading says "At least N"', () => {
+  mockHits([failedHit, richHit], { hasNextPage: true })
+  renderWithClient(<ManualAcquisitionTab workspaceId="ws-1" />)
+  expect(screen.getByRole('heading', { name: 'At least 2 relevant papers need a PDF' })).toBeInTheDocument()
+})
+
+test('the hidden input is out of the tab order; the visible button names the paper', () => {
+  renderWithClient(<ManualAcquisitionTab workspaceId="ws-1" />)
+  expect(screen.getByLabelText('Upload PDF for unreachable paper')).toHaveAttribute('tabindex', '-1')
+  expect(screen.getByRole('button', { name: 'Upload PDF for unreachable paper' })).toBeInTheDocument()
+})
+
+test('after a pick the button shows the file name and still names the paper', () => {
+  vi.spyOn(api, 'uploadHitPdf').mockImplementation(() => new Promise(() => {}))
+  renderWithClient(<ManualAcquisitionTab workspaceId="ws-1" />)
+  const file = new File([new Uint8Array([1])], 'paper.pdf', { type: 'application/pdf' })
+  fireEvent.change(screen.getByLabelText('Upload PDF for unreachable paper'), { target: { files: [file] } })
+  expect(screen.getByRole('button', { name: 'paper.pdf for unreachable paper' })).toBeInTheDocument()
+})
+
+test('a failed upload clears the shown file name', async () => {
+  vi.spyOn(api, 'uploadHitPdf').mockRejectedValue(new Error('Upload failed'))
+  renderWithClient(<ManualAcquisitionTab workspaceId="ws-1" />)
+  const file = new File([new Uint8Array([1])], 'paper.pdf', { type: 'application/pdf' })
+  fireEvent.change(screen.getByLabelText('Upload PDF for unreachable paper'), { target: { files: [file] } })
+  await screen.findByRole('alert')
+  expect(screen.getByRole('button', { name: 'Upload PDF for unreachable paper' })).toBeInTheDocument()
+})
