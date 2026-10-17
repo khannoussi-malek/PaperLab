@@ -126,7 +126,7 @@ async def add_paper(session: AsyncSession, workspace_id: uuid.UUID, paper_id: uu
     await session.execute(
         insert(workspace_papers).values(workspace_id=workspace_id, paper_id=paper_id).on_conflict_do_nothing()
     )
-    await retrieved_hits.link(session, workspace_id, [paper_id])
+    await retrieved_hits.link(session, workspace_id)
     await session.commit()
     await session.refresh(paper, ["workspace_ids"])  # the session may already hold this paper
 
