@@ -88,15 +88,20 @@ def _fill(paper: Paper, found: dict[str, str | None]) -> bool:
     return changed
 
 
-def apply_openalex(paper: Paper, work: dict) -> bool:
-    """A preprint copy's OpenAlex work that is its published version: same write rules as apply_s2."""
-    doi, venue, _ = openalex_published(work)
+def apply_published(paper: Paper, doi: str | None, venue: str | None) -> bool:
+    """A preprint copy's published version, with apply_s2's write rules (never its own DOI, hand edits kept)."""
     if not is_preprint_copy(paper) or doi in (None, normalize_doi(paper.doi or "")):
         return False
     found = {"published_doi": doi, "published_venue": venue}
     if "source_type" not in paper.manual_fields:
         found["peer_reviewed"] = "true"
     return _fill(paper, found)
+
+
+def apply_openalex(paper: Paper, work: dict) -> bool:
+    """A preprint copy's OpenAlex work that is its published version: same write rules as apply_s2."""
+    doi, venue, _ = openalex_published(work)
+    return apply_published(paper, doi, venue)
 
 
 async def _openalex_pass(session: AsyncSession, oa: httpx.AsyncClient, ws: uuid.UUID) -> int:
