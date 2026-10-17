@@ -51,12 +51,16 @@ describe('Term', () => {
   })
 
   it('every glossary key is used', () => {
-    // Placed as term="<key>" in JSX, or named as a quoted key in a data table (the PRISMA rows) that feeds a Term.
+    // Placed as term="<key>" (or term={'<key>'}) in JSX; the PRISMA rows name theirs as quoted keys in prismaText.ts.
     const modules = import.meta.glob(['/src/**/*.ts', '/src/**/*.tsx'], { query: '?raw', import: 'default', eager: true }) as Record<string, string>
-    const sources = Object.entries(modules)
-      .filter(([path]) => !/\.test\.tsx?$|glossary\.ts$|schema\.d\.ts$/.test(path))
-      .map(([, src]) => src)
-    const unused = Object.keys(GLOSSARY).filter((key) => !sources.some((src) => src.includes(`term="${key}"`) || src.includes(`'${key}'`)))
+    const sources = Object.entries(modules).filter(([path]) => !/\.test\.tsx?$|glossary\.ts$|schema\.d\.ts$/.test(path))
+    const unused = Object.keys(GLOSSARY).filter(
+      (key) =>
+        !sources.some(
+          ([path, src]) =>
+            src.includes(`term="${key}"`) || src.includes(`term={'${key}'}`) || (path.endsWith('/prismaText.ts') && src.includes(`'${key}'`)),
+        ),
+    )
     expect(unused).toEqual([])
   })
 })
