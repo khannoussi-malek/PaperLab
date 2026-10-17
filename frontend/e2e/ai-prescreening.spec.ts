@@ -44,9 +44,9 @@ test('AI pre-screening scores hits, shows why, and Accept makes the decision', a
   await expect(page.getByLabel('Result preview').getByText(/“.+”/)).toBeVisible()
 
   await first.getByRole('button', { name: /^Accept AI suggestion:/ }).click()
-  await expect(first.getByText('relevant', { exact: true })).toBeVisible()
+  await expect(first.getByText('Relevant', { exact: true })).toBeVisible()
 
   await page.getByRole('checkbox', { name: /^Select paperlab pagination fixture 2/i }).check()
   await page.getByRole('button', { name: 'Accept AI suggestions' }).click()
-  await expect(second.getByText('not_relevant', { exact: true })).toBeVisible()
+  await expect(second.getByText('Not relevant', { exact: true })).toBeVisible()
 })

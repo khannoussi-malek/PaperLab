@@ -32,7 +32,7 @@ test('the ranked sort learns from decisions and keeps only unscreened hits', asy
   await page.getByRole('menuitem', { name: 'Relevant', exact: true }).click()
   await row(page, 'paperlab pagination fixture 3').getByRole('button', { name: 'Result actions' }).click()
   await page.getByRole('menuitem', { name: 'Not relevant…' }).click()
-  await page.getByRole('menuitem', { name: 'wrong_topic' }).click()
+  await page.getByRole('menuitem', { name: 'Wrong topic' }).click()
 
   await expect(page.getByText(/Showing the 1 most likely relevant of 1 unscreened\./)).toBeVisible()
   await expect(row(page, 'paperlab pagination fixture 2')).toBeVisible()
@@ -62,7 +62,7 @@ test('criteria and the fake model give suggestion chips, and the reader still de
   // The suggestion said exclude; the reader marks it relevant, and that is what sticks.
   await target.getByRole('button', { name: 'Result actions' }).click()
   await page.getByRole('menuitem', { name: 'Relevant', exact: true }).click()
-  await expect(target.getByText('relevant', { exact: true })).toBeVisible()
+  await expect(target.getByText('Relevant', { exact: true })).toBeVisible()
 
   const prisma = await (await request.get(`/api/workspaces/${workspaceId}/search/prisma`)).json()
   expect(prisma.screening_criteria).toContain('Primary studies on pagination fixtures')
