@@ -1,5 +1,5 @@
 import { ExternalLink, LoaderCircle, Plus } from 'lucide-react'
-import type { Candidate } from '@/api/client'
+import { AlreadyInLibraryError, type Candidate } from '@/api/client'
 import { useAddCandidate } from '@/api/queries'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -13,7 +13,8 @@ type RowProps = { candidate: Candidate; workspaceId?: string }
 /** One found paper: what it is, its sources, whether a free PDF is listed, and Add, In library or Open page. */
 function CandidateRow({ candidate, workspaceId }: RowProps) {
   const add = useAddCandidate(workspaceId)
-  const paperId = add.data?.id ?? candidate.paper_id
+  const held = add.error instanceof AlreadyInLibraryError ? add.error.paperId : undefined
+  const paperId = add.data?.id ?? held ?? candidate.paper_id
   const hasPdf = candidate.pdf_urls.length > 0
   const link = pageLink(candidate)
   const meta = [byline(candidate), citationsLabel(candidate.cited_by_count)].filter(Boolean).join(' · ')
@@ -44,7 +45,7 @@ function CandidateRow({ candidate, workspaceId }: RowProps) {
       <div className="flex flex-wrap items-center gap-2">
         {paperId ? (
           <Button size="sm" variant="outline" asChild>
-            <a href={readerHref(paperId)}>In library</a>
+            <a href={readerHref(paperId)}>{held ? 'Already in your library' : 'In library'}</a>
           </Button>
         ) : (
           hasPdf && (
@@ -68,7 +69,7 @@ function CandidateRow({ candidate, workspaceId }: RowProps) {
           </Button>
         )}
       </div>
-      {add.error && <ErrorAlert message={add.error.message} />}
+      {add.error && !held && <ErrorAlert message={add.error.message} />}
     </li>
   )
 }

@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { errorDetail } from './client'
+import { describe, expect, it, vi } from 'vitest'
+import { api, errorDetail } from './client'
 
 const jsonResponse = (body: unknown) => new Response(JSON.stringify(body), { status: 422 })
 
@@ -26,5 +26,15 @@ describe('errorDetail', () => {
 
   it('falls back to a generic message when the validation errors carry no field name', () => {
     return expect(errorDetail(jsonResponse({ detail: [{ msg: 'bad' }] }))).resolves.toBe('Some details are invalid.')
+  })
+})
+
+describe('api.addCandidate', () => {
+  it('rejects a 409 that names a paper as AlreadyInLibraryError', async () => {
+    const body = { detail: 'already_in_library', paper_id: 'p7' }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { status: 409 })))
+    const added = api.addCandidate({ title: 'T' } as never)
+    await expect(added).rejects.toMatchObject({ name: 'AlreadyInLibraryError', paperId: 'p7' })
+    vi.unstubAllGlobals()
   })
 })
