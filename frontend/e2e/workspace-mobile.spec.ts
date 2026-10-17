@@ -38,6 +38,12 @@ test('at 390 px a result row gives its title the whole first line', async ({ pag
 
   expect(title?.width ?? 0).toBeGreaterThan(250)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= 390)).toBe(true)
+  // every item of the row, chips and menu included, sits inside the row: nothing spills onto the next one
+  const spill = await list.locator('[aria-selected]').first().evaluate((row) => {
+    const box = row.getBoundingClientRect()
+    return [...row.children].filter((child) => child.getBoundingClientRect().bottom > box.bottom + 0.5).length
+  })
+  expect(spill).toBe(0)
 })
 
 test.describe('at 1440 px', () => {
