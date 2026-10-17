@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { EligibilityUpdate, Hit } from '@/api/client'
 import { useSearchHits, useSetEligibility, useSnowball } from '@/api/queries'
 import { Button } from '@/components/ui/button'
+import { LoadError } from '@/features/library/ErrorAlert'
 import { EmptyState, GoToSearchAction, TabSkeleton } from '@/features/workspaces/TabStates'
 import { matchesFilter } from './hitReview'
 import { StatusDot } from './StatusDot'
@@ -40,7 +41,12 @@ export function ScreeningTab({ workspaceId }: { workspaceId: string }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2 p-3">
-      {imported.isPending || manual.isPending ? (
+      {imported.isError || manual.isError ? (
+        <LoadError
+          message={(imported.error ?? manual.error)?.message ?? 'Could not load papers to review.'}
+          onRetry={() => void Promise.all([imported.isError && imported.refetch(), manual.isError && manual.refetch()])}
+        />
+      ) : imported.isPending && manual.isPending ? (
         <TabSkeleton label="Loading papers to review" />
       ) : rows.length === 0 ? (
         <EmptyState title="Nothing to review yet" action={<GoToSearchAction workspaceId={workspaceId} />}>

@@ -163,3 +163,22 @@ test('while loading it shows a skeleton, not the empty copy', () => {
   expect(screen.getByRole('status')).toHaveAttribute('aria-busy', 'true')
   expect(screen.queryByText('No included papers yet')).not.toBeInTheDocument()
 })
+
+test('a failed runs query shows the error and Retry, not "No search runs yet"', () => {
+  const refetch = vi.fn()
+  vi.spyOn(queries, 'usePrismaExport').mockReturnValue({ data: undefined, isPending: false, isError: true, error: new Error('Nope.'), refetch } as any)
+  mockQueue(undefined)
+  renderWithClient(<ReadingQueueTab workspaceId="ws-1" runId={null} />)
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+  expect(refetch).toHaveBeenCalled()
+  expect(screen.queryByText('No search runs yet')).not.toBeInTheDocument()
+})
+
+test('with no runs it says so and links to step 1', () => {
+  mockRuns({ ...runsData, runs: [] })
+  mockQueue(undefined)
+  renderWithClient(<ReadingQueueTab workspaceId="ws-1" runId={null} />)
+  expect(screen.getByRole('heading', { name: 'No search runs yet' })).toBeInTheDocument()
+  expect(screen.getByText('Start one on 1 · Search & screen.')).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Go to 1 · Search & screen' })).toBeInTheDocument()
+})

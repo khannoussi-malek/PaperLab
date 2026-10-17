@@ -3,6 +3,7 @@ import { useSearchHits, useUploadHitPdf } from '@/api/queries'
 import { Button } from '@/components/ui/button'
 import { pageLink } from '@/features/discovery/candidateMeta'
 import { copyText } from '@/lib/clipboard'
+import { LoadError } from '@/features/library/ErrorAlert'
 import { EmptyState, TabSkeleton } from '@/features/workspaces/TabStates'
 
 /** Hits stage-1 marked relevant but with no free PDF found automatically (Task 9/11's `import_hits` leaves these
@@ -14,7 +15,7 @@ import { EmptyState, TabSkeleton } from '@/features/workspaces/TabStates'
  * Shows the linked ExternalRef's real title/authors/year/venue/doi (I7 fix 2) when there is one, falling back to
  * `normalized_title` for a hit that never matched a ref. */
 export function ManualAcquisitionTab({ workspaceId }: { workspaceId: string }) {
-  const { data, isPending, hasNextPage, isFetchingNextPage, fetchNextPage } = useSearchHits(workspaceId, undefined, 'failed')
+  const { data, isPending, isError, error, refetch, hasNextPage, isFetchingNextPage, fetchNextPage } = useSearchHits(workspaceId, undefined, 'failed')
   const upload = useUploadHitPdf(workspaceId)
   const [copyError, setCopyError] = useState<string | null>(null)
   const rows = data?.pages.flatMap((page) => page.items) ?? []
@@ -31,7 +32,8 @@ export function ManualAcquisitionTab({ workspaceId }: { workspaceId: string }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2 p-3">
       {isPending && <TabSkeleton label="Loading papers to fetch" />}
-      {!isPending && rows.length === 0 && (
+      {isError && <LoadError message={error.message} onRetry={() => void refetch()} />}
+      {!isPending && !isError && rows.length === 0 && (
         <EmptyState title="Nothing to fetch by hand">Relevant papers land here only when no free PDF was found for them.</EmptyState>
       )}
       {rows.map((hit) => {

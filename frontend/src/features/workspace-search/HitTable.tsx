@@ -30,6 +30,7 @@ import { HitPreview } from './HitPreview'
 import { errorText } from './schedule'
 import { RankSortBar } from './RankSortBar'
 import { snowballMessage } from './ScreeningTab'
+import { LoadError } from '@/features/library/ErrorAlert'
 import { EmptyState, TabSkeleton } from '@/features/workspaces/TabStates'
 import { StatusDot } from './StatusDot'
 import { SuggestionChip } from './SuggestionChip'
@@ -74,7 +75,7 @@ function hasPdfOrAbstract(hit: Hit): boolean {
 export function HitTable({ workspaceId, run }: { workspaceId: string; run?: SearchRun }) {
   const [sort, setSort] = useState<HitSort>(() => loadHitSort(browserStorage(), workspaceId))
   const [minRelevance, setMinRelevance] = useState<number | null>(null)
-  const { data, isPending, hasNextPage, isFetchingNextPage, fetchNextPage } = useSearchHits(workspaceId, undefined, undefined, {
+  const { data, isPending, isError, error, refetch, hasNextPage, isFetchingNextPage, fetchNextPage } = useSearchHits(workspaceId, undefined, undefined, {
     sort: sort === 'ai' ? 'ai' : undefined,
     minRelevance: sort === 'ranked' ? undefined : (minRelevance ?? undefined),
   })
@@ -101,7 +102,7 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
   const rows = sort === 'ranked' ? (ranked.data?.items ?? []) : (data?.pages.flatMap((page) => page.items) ?? [])
   const rawFound = totalRawFound(run)
   const filter = filterText.trim().toLowerCase()
-  const filtered = filter !== '' || minRelevance != null
+  const filtered = filter !== '' || (sort !== 'ranked' && minRelevance != null)
   const filteredRows = filter ? rows.filter((hit) => matchesFilter(hit, filter)) : rows
   // A hit with an abstract to read or a PDF already in the corpus is the one worth looking at first — a bare
   // title with neither is the hardest to judge relevance from. Stable sort (native since ES2019), so hits within
@@ -356,7 +357,12 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
           {statusMessage.text}
         </p>
       )}
-      {(sort === 'ranked' ? ranked.isPending : isPending) ? (
+      {(sort === 'ranked' ? ranked.isError : isError) ? (
+        <LoadError
+          message={(sort === 'ranked' ? ranked.error : error)?.message ?? 'Could not load results.'}
+          onRetry={() => void (sort === 'ranked' ? ranked.refetch() : refetch())}
+        />
+      ) : (sort === 'ranked' ? ranked.isPending : isPending) ? (
         <TabSkeleton label="Loading search results" />
       ) : (
         visibleRows.length === 0 && (
