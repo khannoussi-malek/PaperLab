@@ -36,11 +36,16 @@ def test_zotero_export_with_files():
                  "files/14/notpdf.pdf": b"nope"})  # fmt: skip
     with read_bundle(data) as b:
         assert len(b.entries) == 4
-        assert {e.collection for e in b.entries} == {"My Library"}
+        assert {e.collection for e in b.entries} == {None}  # Zotero's default export name, not a collection
         assert b.read_pdf(b.pdf_path(0)) == PDF
         assert b.read_pdf(b.pdf_path(1)) == PDF + b"2"  # case-insensitive fallback + Title:path:mime form
         assert b.pdf_path(2) is None and b.pdf_path(3) is None
         assert any("Gamma" in w for w in b.warnings) and not any("Delta" in w for w in b.warnings)
+
+
+def test_a_named_export_is_the_collection():
+    with read_bundle(make({"Reading list.bib": BIB})) as b:
+        assert {e.collection for e in b.entries} == {"Reading list"}
 
 
 def test_better_bibtex_and_stream_input():
@@ -143,7 +148,7 @@ def test_finder_wrapped_export_ignores_attachments_named_like_refs():
     data = make({"Exported Items/Exported Items.bib": BIB, "Exported Items/files/12/Alpha.pdf": PDF,
                  "Exported Items/files/13/data.json": "{}"})  # fmt: skip
     with read_bundle(data) as b:
-        assert b.entries[0].collection == "Exported Items"
+        assert b.entries[0].collection is None
         assert b.read_pdf(b.pdf_path(0)) == PDF
 
 

@@ -1,7 +1,10 @@
 """M40 Task 7: a Zotero import becomes papers, without duplicates (D267–D269, ruling A, Review Focus 3)."""
 
 import io
+import itertools
 import json
+import os
+import time
 import uuid
 import zipfile
 from contextlib import asynccontextmanager
@@ -14,9 +17,9 @@ from sqlalchemy import func, select
 from app.core import citations_import_apply as cia
 from app.core import discovery, notes, papers, queue, tags, workspaces
 from app.core.candidates import Candidate
-from app.core.citations_bundle_read import read_bundle
-from app.core.citations_import import ImportEntry
-from app.models import Note, Paper, Provenance
+from app.core.citations_bundle_read import Bundle, read_bundle
+from app.core.citations_import import CitationsImportError, ImportEntry
+from app.models import Paper, Provenance, note_papers
 from app.workers import citations_import as worker
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("references")]
@@ -87,7 +90,7 @@ async def bodies(session, paper_id) -> list[str]:
 def zipped(bib: str, members: dict[str, bytes]) -> bytes:
     out = io.BytesIO()
     with zipfile.ZipFile(out, "w") as zf:
-        zf.writestr("My Library.bib", bib)
+        zf.writestr("Reading list.bib", bib)
         for name, body in members.items():
             zf.writestr(name, body)
     return out.getvalue()
@@ -172,7 +175,7 @@ async def test_a_bundled_pdf_becomes_a_locked_paper_with_ingest_queued(session, 
     assert jobs.jobs == [("ingest_paper", str(paper.id))]
     assert ws.id in (await papers.get_paper(session, paper.id)).workspace_ids
     assert (await tags.paper_tag_map(session, ws.id))[paper.id] == ["coffee", "genetics"]
-    assert await bodies(session, paper.id) == ["A **key** idea.", "From Zotero — collection: My Library"]
+    assert await bodies(session, paper.id) == ["A **key** idea.", "From Zotero — collection: Reading list"]
     assert result.notes == 2
 
 
@@ -264,14 +267,16 @@ async def test_importing_the_same_file_twice_adds_nothing(session, pdf_dir, jobs
 
     with read_bundle(data) as bundle:
         first = await cia.apply(session, bundle.entries, workspace_id=ws.id, bundle=bundle)
-    count = await session.scalar(select(func.count()).select_from(Note))
+    ours = select(Paper.id).where(Paper.title.in_([title("twice-a"), title("twice-b")]))
+    count_ours = select(func.count()).select_from(note_papers).where(note_papers.c.paper_id.in_(ours))
+    count = await session.scalar(count_ours)
     with read_bundle(data) as bundle:
         second = await cia.apply(session, bundle.entries, workspace_id=ws.id, bundle=bundle)
 
     assert (first.imported, first.pdfs_attached, first.notes) == (2, 2, 3)
     assert (second.imported, second.already_in_library, second.pdfs_attached, second.notes) == (0, 2, 0, 0)
     assert len(await titled(session, "twice-a")) == 1 and len(await titled(session, "twice-b")) == 1
-    assert await session.scalar(select(func.count()).select_from(Note)) == count
+    assert count == 3 and await session.scalar(count_ours) == count
     assert len(jobs.jobs) == 2
 
 
@@ -299,7 +304,7 @@ async def test_one_failing_entry_leaves_no_paper_and_the_rest_go_on(session, pdf
     assert result.imported == 2 and result.failed == [{"title": title("bad"), "reason": cia.FAILED}]
     assert await titled(session, "bad") == []
     assert len(await titled(session, "ok1")) == 1 and len(await titled(session, "ok2")) == 1
-    assert len(jobs.jobs) == 2
+    assert len(jobs.jobs) == 3  # ingest is queued before filing; the discarded paper's ingest finds it gone
     assert len(list(pdf_dir.glob("*.pdf"))) == 2  # the failed one's file is gone
 
 
@@ -338,6 +343,11 @@ async def test_a_big_import_runs_as_a_job_that_reports_progress(session, pdf_dir
     [(name, path, file_name, ws, fetch)] = jobs.jobs
     assert (name, file_name, ws, fetch) == ("import_citations", "refs.bib", None, False)
     assert Path(path).read_bytes() == data and Path(path).is_relative_to(pdf_dir)
+    stale, fresh = Path(path).with_name("stale.upload"), Path(path).with_name("fresh.upload")
+    stale.write_bytes(b"old")
+    fresh.write_bytes(b"new")
+    two_days_ago = time.time() - 2 * 24 * 3600
+    os.utime(stale, (two_days_ago, two_days_ago))
     redis = FakeRedis()
     done = await worker.import_citations({"redis": redis, "job_id": job_id}, path, file_name, ws, fetch)
 
@@ -347,5 +357,116 @@ async def test_a_big_import_runs_as_a_job_that_reports_progress(session, pdf_dir
     progress = [w for _, w, _ in redis.writes]
     assert len(progress) == cia.INLINE_MAX + 2  # one per entry, then the finished result
     assert progress[0]["total"] == cia.INLINE_MAX + 1 and progress[0]["finished"] is False
+    assert progress[1]["done"] == 2 and progress[1]["needs_pdf"] == 1  # running: counts only, never the lists
+    assert all(isinstance(p["needs_pdf"], int) and isinstance(p["failed"], int) for p in progress[:-1])
     assert progress[-1]["finished"] is True and progress[-1]["already_in_library"] == 1
+    assert len(progress[-1]["needs_pdf"]) == cia.INLINE_MAX and progress[-1]["not_reached"] == []
+    assert {ex for _, _, ex in redis.writes} == {cia.PROGRESS_TTL}
     assert not Path(path).exists()
+    assert not stale.exists() and fresh.exists()  # an upload a crashed job left behind is swept after a day
+
+
+async def test_a_job_stops_before_its_timeout_and_says_what_it_did_not_reach(session, pdf_dir, monkeypatch):
+    @asynccontextmanager
+    async def shared_session():
+        yield session
+
+    monkeypatch.setattr(worker, "SessionLocal", shared_session)
+    monkeypatch.setattr(worker, "IMPORT_JOB_TIMEOUT", worker.SAFETY_MARGIN)  # no time left at all
+    path = pdf_dir / "imports" / "budget.upload"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(bib_of(3))
+    redis = FakeRedis()
+
+    done = await worker.import_citations({"redis": redis, "job_id": "j"}, str(path), "refs.bib", None, False)
+
+    assert done["finished"] is True and done["needs_pdf"] == []
+    assert done["not_reached"] == [title(f"job{i}") for i in range(3)]
+    assert done["stopped"] == cia.STOPPED.format(done=0, total=3)
+    assert "Import the same file again" in done["stopped"]
+
+
+async def test_apply_stops_at_its_deadline(session, pdf_dir, monkeypatch):
+    monkeypatch.setattr(cia, "_now", itertools.count().__next__)  # 0, 1, 2, ...
+    entries = [entry(f"dl{i}") for i in range(4)]
+
+    result = await cia.apply(session, entries, fetch_free_pdfs=False, deadline=2)
+
+    assert len(result.needs_pdf) == 2 and result.not_reached == [title("dl2"), title("dl3")]
+    assert result.stopped == cia.STOPPED.format(done=2, total=4)
+
+
+# ---- inline only without network ----
+
+
+async def test_an_import_that_would_fetch_goes_to_the_job_even_when_small(session, pdf_dir, jobs):
+    data = f"@article{{a, title={{{title('jf')}}}, year={{2020}}, doi={{{doi('jf')}}}}}\n".encode()
+
+    job_id = await cia.start(session, "refs.bib", data)  # fetch on by default; nothing is contacted here
+
+    assert isinstance(job_id, str) and [j[0] for j in jobs.jobs] == ["import_citations"]
+    assert await titled(session, "jf") == []
+
+
+async def test_a_dedupe_only_import_stays_inline_with_fetch_on(session, pdf_dir, jobs):
+    paper = await held(session, pdf_dir, "inl", doi=doi("inl"))
+    data = f"@article{{a, title={{{title('inl')}}}, year={{2020}}, doi={{{doi('inl')}}}}}\n".encode()
+
+    result = await cia.start(session, "refs.bib", data)
+
+    assert isinstance(result, cia.ImportResult) and result.already_in_library == 1 and jobs.jobs == []
+    assert [p.id for p in await titled(session, "inl")] == [paper.id]
+
+
+# ---- ingest first, then filing ----
+
+
+async def test_ingest_is_queued_before_the_paper_is_filed(session, pdf_dir, jobs, monkeypatch):
+    real = cia._file
+    seen = []
+
+    async def filing(session, paper_id, entry, workspace_id):
+        seen.append(list(jobs.jobs))
+        return await real(session, paper_id, entry, workspace_id)
+
+    monkeypatch.setattr(cia, "_file", filing)
+    bib = f"@article{{a, title={{{title('order')}}}, year={{2020}}, file={{files/1/a.pdf}}}}\n"
+    with read_bundle(zipped(bib, {"files/1/a.pdf": PDF})) as bundle:
+        await cia.apply(session, bundle.entries, bundle=bundle)
+
+    [paper] = await titled(session, "order")
+    assert seen == [[("ingest_paper", str(paper.id))]]
+
+
+# ---- a damaged PDF in the zip ----
+
+
+def damaged(monkeypatch):
+    def read_pdf(self, member):
+        raise CitationsImportError("This zip is damaged, so nothing was imported.")
+
+    monkeypatch.setattr(Bundle, "read_pdf", read_pdf)
+
+
+async def test_a_damaged_bundled_pdf_falls_back_to_a_free_copy(session, pdf_dir, jobs, fetching, monkeypatch):
+    found, pdf_host = fetching
+    found[doi("dmg")] = Candidate(title=title("dmg"), doi=doi("dmg"), pdf_urls=["https://pdf.example/dmg"])
+    pdf_host.reply("/dmg", 200, content=PDF)
+    damaged(monkeypatch)
+    bib = f"@article{{a, title={{{title('dmg')}}}, year={{2020}}, doi={{{doi('dmg')}}}, file={{files/1/a.pdf}}}}\n"
+
+    with read_bundle(zipped(bib, {"files/1/a.pdf": PDF})) as bundle:
+        result = await cia.apply(session, bundle.entries, bundle=bundle)
+
+    assert (result.imported, result.pdfs_attached, result.failed) == (1, 0, [])
+    assert len(await titled(session, "dmg")) == 1
+
+
+async def test_a_damaged_bundled_pdf_fails_with_fetch_off(session, pdf_dir, monkeypatch):
+    damaged(monkeypatch)
+    bib = f"@article{{a, title={{{title('dmg2')}}}, year={{2020}}, doi={{{doi('dmg2')}}}, file={{files/1/a.pdf}}}}\n"
+
+    with read_bundle(zipped(bib, {"files/1/a.pdf": PDF})) as bundle:
+        result = await cia.apply(session, bundle.entries, bundle=bundle, fetch_free_pdfs=False)
+
+    assert result.failed == [{"title": title("dmg2"), "reason": "This zip is damaged, so nothing was imported."}]

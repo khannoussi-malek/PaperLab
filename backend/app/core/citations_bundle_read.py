@@ -20,6 +20,8 @@ REFS_SUFFIXES = (".bib", ".bibtex", ".ris", ".json")
 _METHODS = (zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED)
 _SYMLINK = 0o120000
 _TYPE_MASK = 0o170000
+# The names Zotero gives an export of the whole library or of selected items: not collections.
+DEFAULT_EXPORT_NAMES = frozenset({"My Library", "Exported Items"})
 
 
 def _clean(name: str) -> str:
@@ -166,8 +168,9 @@ def read_bundle(data: bytes | IO[bytes]) -> Bundle:
         if refs.file_size > MAX_BYTES:
             raise CitationsImportError("The references file is larger than 20 MB, which PaperLab can't import.")
         entries = parse(name.rsplit("/", 1)[-1], _read(zf, refs))
-        collection = name.rsplit("/", 1)[-1].rsplit(".", 1)[0]
-        entries = [e if e.collection else replace(e, collection=collection) for e in entries]
+        stem = name.rsplit("/", 1)[-1].rsplit(".", 1)[0]
+        collection = None if stem in DEFAULT_EXPORT_NAMES else stem  # an exported collection is named after it
+        entries = [e if e.collection or not collection else replace(e, collection=collection) for e in entries]
         paths, pdfs, warnings = _pair(zf, infos, entries, name[: name.rfind("/") + 1])
         return Bundle(entries, warnings, zf, paths, pdfs)
     except BaseException:
