@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/button'
 import { Term } from '@/features/workspaces/Term'
 import { Checkbox } from '@/components/ui/checkbox'
 import { browserStorage } from '@/features/notes/highlightColors'
+import { useMediaQuery } from '@/lib/useMediaQuery'
 import { cn } from '@/lib/utils'
 import { HitContextMenu, HitMenu } from './HitMenu'
 import { EXCLUDE_REASONS, matchesFilter, reasonLabel, sourceLabel, statusLabel } from './hitReview'
@@ -39,6 +40,9 @@ import { SuggestionChip } from './SuggestionChip'
 type ExcludeReason = (typeof EXCLUDE_REASONS)[number]
 
 const ROW_HEIGHT = 44
+// Below `sm` (M71) a row is two lines: the title alone on the first, its chips and actions on the second.
+const ROW_HEIGHT_NARROW = 72
+const NARROW = '(max-width: 639px)'
 const NO_IMPORT_REASON = 'No relevant results waiting to be imported'
 /** `AppShell`'s `p-3` on the view pane, between the preview's right edge and the window's. */
 const PANE_PADDING_PX = 12
@@ -137,16 +141,18 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
   const importDisabled = poolUnsettled || (!morePages && importable === 0)
   const previewed = visibleRows.find((hit) => hit.id === previewId) ?? visibleRows[0]
 
+  const narrow = useMediaQuery(NARROW)
   const virtualizer = useVirtualizer({
     count: visibleRows.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => ROW_HEIGHT,
+    estimateSize: () => (narrow ? ROW_HEIGHT_NARROW : ROW_HEIGHT),
     overscan: 10,
     // Without this, the virtualizer reports zero virtual items until ResizeObserver fires with the real
     // container size (a first-paint flash of an empty list) — and jsdom has no ResizeObserver at all, so
     // tests would see an empty list forever. A reasonable guess for the panel's usual height fixes both.
     initialRect: { width: 600, height: 600 },
   })
+  useEffect(() => virtualizer.measure(), [narrow, virtualizer])
   const virtualItems = virtualizer.getVirtualItems()
   const onReview = (hitId: string, body: HitReviewUpdate) => reviewHit.mutate({ hitId, body })
   // Seeds a snowball hop straight from this hit — no import required first (see HitMenu's onSnowball docstring).
@@ -442,6 +448,7 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
                   <div
                     className={cn(
                       'flex w-full cursor-pointer items-center gap-2 border-b px-3 text-sm hover:bg-muted',
+                      narrow && 'flex-wrap content-center gap-y-1',
                       selected && 'bg-muted',
                     )}
                     style={{ position: 'absolute', top: virtualRow.start, height: virtualRow.size, width: '100%' }}
@@ -456,7 +463,7 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
                       onClick={(event) => event.stopPropagation()}
                       className="shrink-0"
                     />
-                    <span className="flex-1 truncate">
+                    <span className={cn('flex-1 truncate', narrow && 'basis-[calc(100%-2rem)]')}>
                       {hit.title ?? hit.normalized_title}
                       {byline && <span className="text-muted-foreground"> · {byline}</span>}
                     </span>
