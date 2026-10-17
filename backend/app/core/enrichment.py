@@ -136,6 +136,9 @@ def work_fields(work: dict[str, Any]) -> dict[str, Any]:
     location = work.get("primary_location") or {}
     source = location.get("source") or {}
     best_oa = work.get("best_oa_location") or {}
+    biblio = work.get("biblio") or {}
+    ids = work.get("ids") or {}
+    pages = "-".join(p for p in (biblio.get("first_page"), biblio.get("last_page")) if p)
     fields = {
         "openalex_id": short_id(work["id"]),
         "doi": normalize_doi(work.get("doi") or ""),
@@ -145,6 +148,11 @@ def work_fields(work: dict[str, Any]) -> dict[str, Any]:
         "year": work.get("publication_year"),
         "venue": source.get("display_name") or location.get("raw_source_name"),
         "issn": source.get("issn_l"),
+        "volume": biblio.get("volume"),
+        "issue": biblio.get("issue"),
+        "pages": pages or None,
+        "pmid": short_id((ids.get("pmid") or "").rstrip("/")),
+        "pmcid": short_id((ids.get("pmcid") or "").rstrip("/")),
         "type": work.get("type"),
         "is_retracted": bool(work.get("is_retracted")),
         "oa_status": (work.get("open_access") or {}).get("oa_status"),
@@ -155,6 +163,7 @@ def work_fields(work: dict[str, Any]) -> dict[str, Any]:
     return fields
 
 
+BIBLIO_FIELDS = ("volume", "issue", "pages", "editors", "pmid", "pmcid")
 PUBLISHED_TYPES = frozenset({"article", "conference-paper", "proceedings-article", "book-chapter"})
 
 
@@ -348,6 +357,51 @@ async def fill_source_type(
     return asked
 
 
+def crossref_biblio(work: dict[str, Any]) -> dict[str, Any]:
+    """volume, issue, pages and editors from a Crossref work; editors are "Given Family" names."""
+    editors = [
+        (e.get("name") or f"{e.get('given', '')} {e.get('family', '')}").strip() for e in work.get("editor") or []
+    ]
+    fields = {k: work.get(src) for k, src in (("volume", "volume"), ("issue", "issue"), ("pages", "page"))}
+    return {**fields, "editors": [e for e in editors if e] or None}
+
+
+async def fill_biblio(
+    session: AsyncSession,
+    paper_id: uuid.UUID,
+    crossref_http: httpx.AsyncClient | None,
+    openalex_http: httpx.AsyncClient | None = None,
+) -> bool:
+    """Fills volume, issue, pages, editors, pmid and pmcid that are still NULL, from Crossref and (for the PubMed ids
+    and what Crossref lacks) OpenAlex; never past manual_fields. Source errors are logged, never raised. True when a
+    source was asked."""
+    paper = await get_paper(session, paper_id)
+    await session.refresh(paper)
+    doi = normalize_doi(paper.doi or "")
+    found: dict[str, Any] = {}
+    asked = False
+    if doi and crossref_http and not doi.startswith(ARXIV_DOI_PREFIX):  # an arXiv preprint has no volume
+        asked = True
+        try:
+            found |= crossref_biblio(await crossref.get_work(crossref_http, doi) or {})
+        except (httpx.HTTPError, KeyError, TypeError, AttributeError) as exc:
+            logger.warning("Crossref biblio lookup failed for paper %s: %r", paper_id, exc)
+    if openalex_http and (key := paper.openalex_id or (doi and f"doi:{doi}")):
+        asked = True
+        try:
+            work = await openalex.get_work(openalex_http, key)
+            # Crossref reads as the publisher's own; OpenAlex only fills what Crossref left.
+            theirs = work_fields(work) if work else {}
+            found = {k: theirs.get(k) for k in BIBLIO_FIELDS if theirs.get(k)} | {k: v for k, v in found.items() if v}
+        except (httpx.HTTPError, KeyError, TypeError, AttributeError) as exc:
+            logger.warning("OpenAlex biblio lookup failed for paper %s: %r", paper_id, exc)
+    fields = {k: v for k, v in found.items() if v and getattr(paper, k) is None}
+    if fields:
+        await _write(session, paper, fields)
+        await session.commit()
+    return asked
+
+
 async def enrich_paper(
     session: AsyncSession,
     http: httpx.AsyncClient | None,
@@ -376,6 +430,7 @@ async def enrich_paper(
                 await _write(session, paper, fallback)  # never replaces what an earlier match found
         await session.commit()
         await fill_source_type(session, paper_id, None, crossref_http)
+        await fill_biblio(session, paper_id, crossref_http)
         return
 
     await _write(session, paper, work_fields(work))
@@ -383,6 +438,7 @@ async def enrich_paper(
     await record_published(session, paper_id, work)
     await session.commit()
     await fill_source_type(session, paper_id, work.get("type"), crossref_http)
+    await fill_biblio(session, paper_id, crossref_http)
     author_ids = await _replace_authorships(session, paper_id, work)
     await session.commit()
     try:
