@@ -70,7 +70,7 @@ describe('ScreeningAssist', () => {
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(`${base}/screening`, expect.objectContaining({ body: '{"prescreen_after_scheduled_runs":false}' })),
     )
-    fireEvent.change(screen.getByLabelText('Import free PDFs automatically for hits rated'), { target: { value: '4' } })
+    fireEvent.change(screen.getByLabelText('Import free PDFs automatically for results rated'), { target: { value: '4' } })
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(`${base}/screening`, expect.objectContaining({ body: '{"auto_import_min_relevance":4}' })),
     )

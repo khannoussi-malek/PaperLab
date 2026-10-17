@@ -25,7 +25,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { browserStorage } from '@/features/notes/highlightColors'
 import { cn } from '@/lib/utils'
 import { HitContextMenu, HitMenu } from './HitMenu'
-import { EXCLUDE_REASONS, matchesFilter, reasonLabel, sourceLabel } from './hitReview'
+import { EXCLUDE_REASONS, matchesFilter, reasonLabel, sourceLabel, statusLabel } from './hitReview'
 import { loadHitSort, saveHitSort, type HitSort } from './hitSort'
 import { HitPreview } from './HitPreview'
 import { errorText } from './schedule'
@@ -279,7 +279,7 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
           variant="outline"
           disabled={clearHits.isPending}
           onClick={() => {
-            if (window.confirm('Clear every hit not yet imported? Papers already in your corpus stay untouched.')) {
+            if (window.confirm('Clear every result not yet imported? Papers already in your corpus stay untouched.')) {
               clearHits.mutate()
             }
           }}
@@ -450,7 +450,7 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
                     )}
                     <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
                       <StatusDot status={hit.stage1_status} />
-                      {hit.stage1_status ?? 'unreviewed'}
+                      {statusLabel(hit.stage1_status)}
                     </span>
                     <HitMenu hit={hit} onReview={onReview} onSnowball={onSnowball} />
                   </div>

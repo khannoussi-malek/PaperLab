@@ -33,6 +33,14 @@ const REASON_LABELS: Record<string, string> = {
   unspecified: 'No reason given',
 }
 
+const STATUS_LABELS: Record<string, string> = { relevant: 'Relevant', maybe: 'Maybe', not_relevant: 'Not relevant' }
+
+/** Words for a stage-1 row status; null is unreviewed, an unknown value renders as written. */
+export function statusLabel(status: string | null | undefined): string {
+  if (status == null || status === '') return 'Unreviewed'
+  return STATUS_LABELS[status] ?? status
+}
+
 /** Words for a stage-1 reason code; stage-2 free text (or any unknown value) renders as written. */
 export function reasonLabel(code: string | null | undefined): string {
   if (code == null || code === '') return REASON_LABELS.unspecified

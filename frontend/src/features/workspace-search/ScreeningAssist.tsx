@@ -109,7 +109,7 @@ export function ScreeningAssist({ workspaceId }: { workspaceId: string }) {
             <Term term="preScreen"><span className="sr-only">What is pre-screening?</span></Term>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Label htmlFor="screening-auto-import">Import free PDFs automatically for hits rated</Label>
+            <Label htmlFor="screening-auto-import">Import free PDFs automatically for results rated</Label>
             <select
               id="screening-auto-import"
               value={data.auto_import_min_relevance ?? ''}
