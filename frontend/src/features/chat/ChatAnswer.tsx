@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { aiMark } from './aiMark'
-import { describeSource, splitCitations, type Segment } from './citations'
+import { MARKER, describeSource, splitCitations, type Segment } from './citations'
 import { markdownPieces, type Piece, type Tag } from './markdown'
 import { splitNoteBlocks } from './noteBlocks'
 import { SuggestedNote } from './SuggestedNote'
@@ -74,9 +74,12 @@ export function ChatAnswer(props: Props) {
   )
   const cited = new Set(segments.flatMap((segment) => (segment.kind === 'cite' ? [segment.label] : [])))
   const known = new Set([...(sources ?? []), ...notes].flatMap((source) => (source ? [source.label] : [])))
+  // Once the sources are known every marker is split out, so one that matches none of them shows flagged (M72)
+  // rather than as plain text that reads like a real citation. Until then, unknown labels stay text.
   const renderText = (text: string) =>
-    splitCitations(text, known).map((segment, i) => {
+    splitCitations(text, sources === null ? known : new Set([...text.matchAll(MARKER)].map((m) => m[1]))).map((segment, i) => {
       const source = segment.kind === 'cite' ? sourceFor(segment.label) : undefined
+      if (!source && segment.kind === 'cite') return <UnknownCitation key={i} label={segment.label} />
       // The tooltip renders in a portal, so the answer's text (which promote.ts counts) is unchanged.
       return source ? (
         <Hint key={i} label={describe(source)} detail={hintFor(source)}>
@@ -311,6 +314,25 @@ function AnswerMeta({ footer, sources, notes, wholePaper, cited, pending, descri
         </Button>
       )}
     </div>
+  )
+}
+
+const NO_SOURCE = "This citation doesn't match any source the answer was given."
+
+/** A label the model cited that no source carries: shown, so the reader sees the invented reference, but flagged.
+ * The "?" is chrome (answerSelection.ts skips it), so a quote saved from the answer stays a verbatim slice. */
+function UnknownCitation({ label }: { label: string }) {
+  return (
+    <Hint label={`${label}?`} detail={NO_SOURCE}>
+      <span
+        tabIndex={0}
+        aria-label={`${label}? ${NO_SOURCE}`}
+        className="chat-cite-unknown cursor-help rounded-xs border-b border-dashed border-muted-foreground text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        [{label}
+        <span data-chrome>?</span>]
+      </span>
+    </Hint>
   )
 }
 
