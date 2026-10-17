@@ -39,6 +39,7 @@ import { SuggestionChip } from './SuggestionChip'
 type ExcludeReason = (typeof EXCLUDE_REASONS)[number]
 
 const ROW_HEIGHT = 44
+const NO_PDF_REASON = 'No results with a free PDF in this filter'
 /** `AppShell`'s `p-3` on the view pane, between the preview's right edge and the window's. */
 const PANE_PADDING_PX = 12
 
@@ -65,7 +66,7 @@ function hasPdfOrAbstract(hit: Hit): boolean {
  * mention it. Stage-1 triage
  * is via a right-click menu or a trailing ⋮ button on each row, and there are two ways to get a PDF: one hit at a
  * time from the preview panel's "Add PDF" (fetching a PDF starts ingestion — chunking, embedding — for that paper,
- * so this is the cheap default), or "Import all with PDF in this filter" when the user has decided that cost is
+ * so this is the cheap default), or "Import N with PDF" when the user has decided that cost is
  * worth paying for everything currently in view at once. "Clear old results" is the other direction — every
  * search a workspace has ever run lands in this same shared pool, with no built-in way to remove anything, so
  * this wipes every not-yet-imported hit back to empty (confirmed first — it's destructive) when the accumulated
@@ -123,6 +124,11 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
         : filteredRows.slice().sort((a, b) => Number(hasPdfOrAbstract(b)) - Number(hasPdfOrAbstract(a)))
   // Falls back to the first loaded row, so the panel is never empty on first paint (mirrors PaperList) — and to
   // whichever row is first once a filter drops the previously selected one out of view.
+  // What "Import N with PDF" imports: the server (import_hits with no ids) takes every not-yet-imported hit marked
+  // relevant in the whole pool, with no filter and no PDF check, so count exactly that over the loaded rows.
+  const importable = rows.filter(
+    (hit) => hit.stage1_status === 'relevant' && hit.acquisition_status !== 'imported' && hit.acquisition_status !== 'manual',
+  ).length
   const previewed = visibleRows.find((hit) => hit.id === previewId) ?? visibleRows[0]
 
   const virtualizer = useVirtualizer({
@@ -243,9 +249,35 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
     }) ||
     null
 
+  const listState = (sort === 'ranked' ? ranked.isPending : isPending) ? (
+    <TabSkeleton label="Loading search results" />
+  ) : (
+    !(sort === 'ranked' ? ranked.isError : isError) &&
+    visibleRows.length === 0 && (
+      <EmptyState
+        title={filtered ? 'No results match these filters.' : 'No results yet: run a search above.'}
+        action={
+          filtered && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setFilterText('')
+                setMinRelevance(null)
+              }}
+            >
+              Clear filters
+            </Button>
+          )
+        }
+      />
+    )
+  )
+
   return (
     <div className="flex min-h-[24rem] flex-1 flex-col">
-      <div className="flex items-center justify-between gap-3 border-b px-3 py-2 text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2 text-sm">
         <Checkbox
           aria-label="Select all visible results"
           checked={someVisibleChecked && !allVisibleChecked ? 'indeterminate' : allVisibleChecked}
@@ -265,14 +297,27 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
             className="h-8 w-full max-w-xs rounded-lg border bg-background px-2 text-sm"
           />
         </label>
-        <span className="shrink-0 text-muted-foreground">
+        <span className="text-muted-foreground">
           {rawFound !== undefined && `${rawFound} found so far · `}
           {filter ? `${visibleRows.length} of ${rows.length}` : rows.length} <Term term="results">results</Term> (after
           filters) <Term term="identified">How this differs from PRISMA</Term>
         </span>
-        <Button type="button" size="sm" disabled={importAllHits.isPending} onClick={() => importAllHits.mutate()}>
-          Import all with PDF in this filter
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={importable === 0 || importAllHits.isPending}
+          title={importable === 0 ? NO_PDF_REASON : undefined}
+          aria-describedby={importable === 0 ? 'import-none-reason' : undefined}
+          onClick={() => importAllHits.mutate()}
+        >
+          Import {importable} with PDF
         </Button>
+        {importable === 0 && (
+          <span id="import-none-reason" className="sr-only">
+            {NO_PDF_REASON}
+          </span>
+        )}
         <Button
           type="button"
           size="sm"
@@ -360,37 +405,17 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
           {statusMessage.text}
         </p>
       )}
-      {(sort === 'ranked' ? ranked.isError : isError) ? (
+      {(sort === 'ranked' ? ranked.isError : isError) && (
         <LoadError
           message={(sort === 'ranked' ? ranked.error : error)?.message ?? 'Could not load results.'}
           onRetry={() => void (sort === 'ranked' ? ranked.refetch() : refetch())}
         />
-      ) : (sort === 'ranked' ? ranked.isPending : isPending) ? (
-        <TabSkeleton label="Loading search results" />
-      ) : (
-        visibleRows.length === 0 && (
-          <EmptyState
-            title={filtered ? 'No results match these filters.' : 'No results yet: run a search above.'}
-            action={
-              filtered && (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    setFilterText('')
-                    setMinRelevance(null)
-                  }}
-                >
-                  Clear filters
-                </Button>
-              )
-            }
-          />
-        )
       )}
       <div
-        className="grid min-h-[16rem] flex-1 gap-3 lg:grid-cols-[minmax(0,1fr)_var(--preview-track)]"
+        className={cn(
+          'grid flex-1 gap-3 lg:grid-cols-[minmax(0,1fr)_var(--preview-track)]',
+          visibleRows.length > 0 && 'min-h-[16rem]',
+        )}
         style={{ '--preview-track': panelTrack(HIT_PREVIEW, previewWidth) } as CSSProperties}
       >
         <div
@@ -400,6 +425,7 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
           onKeyDown={onListKeyDown}
           className="min-h-0 overflow-auto outline-none"
         >
+          {listState}
           <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
             {virtualItems.map((virtualRow) => {
               const hit = visibleRows[virtualRow.index]
