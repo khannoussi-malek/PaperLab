@@ -20,21 +20,31 @@ SPOOL_BYTES = 8 * 1024 * 1024  # above this the temp file spills to disk
 CHUNK = 64 * 1024
 
 
-def _write(items: list[dict], papers: list, fmt: str) -> IO[bytes]:
+def _write(items: list[dict], papers: list, fmt: str) -> tuple[IO[bytes], int]:
     keys = citations_export.bibtex_keys(items)
     on_disk = {p.id: Path(p.file_path) for p in papers if Path(p.file_path).is_file()}
-    # the same key the BibTeX writer assigns; items are new dicts, the CSL items stay untouched
-    named = [{**i, "_file": f"files/{keys[i['id']]}.pdf"} if uuid.UUID(i["id"]) in on_disk else i for i in items]
     out = tempfile.SpooledTemporaryFile(max_size=SPOOL_BYTES)
-    ext = citations_export.FORMATS[fmt][1]
-    with zipfile.ZipFile(out, "w") as zf:
-        zf.writestr(f"refs.{ext}", citations_export.render(named, fmt), compress_type=zipfile.ZIP_DEFLATED)
-        for item in named:
-            if "_file" in item:  # PDFs are already compressed: store them
-                zf.write(on_disk[uuid.UUID(item["id"])], item["_file"], compress_type=zipfile.ZIP_STORED)
-    size = out.tell()
-    out.seek(0)
-    return out, size
+    try:
+        attached: dict[str, str] = {}  # item id -> path in the zip, for the PDFs actually written
+        with zipfile.ZipFile(out, "w") as zf:
+            for item in items:
+                if not (path := on_disk.get(uuid.UUID(item["id"]))):
+                    continue
+                name = f"files/{keys[item['id']]}.pdf"
+                try:  # PDFs are already compressed: store them
+                    zf.write(path, name, compress_type=zipfile.ZIP_STORED)
+                except FileNotFoundError:  # vanished since the check: no attachment, like a missing one
+                    continue
+                attached[item["id"]] = name
+            named = [{**i, "_file": attached[i["id"]]} if i["id"] in attached else i for i in items]
+            refs = citations_export.render(named, fmt)
+            zf.writestr(f"refs.{citations_export.FORMATS[fmt][1]}", refs, compress_type=zipfile.ZIP_DEFLATED)
+        size = out.tell()
+        out.seek(0)
+        return out, size
+    except BaseException:
+        out.close()
+        raise
 
 
 async def build(session: AsyncSession, workspace_id: uuid.UUID, fmt: str, notes: bool) -> tuple[IO[bytes], int]:
