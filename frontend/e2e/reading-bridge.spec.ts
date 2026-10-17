@@ -47,7 +47,7 @@ test('shows why a paper is here, its reading queue, and never a not-yet-imported
   const { id: runId } = await startResponse.json()
   await waitForRunToFinish(request, workspaceId, runId)
   await page.reload()
-  await expect(page.getByText(/[1-9]\d* results in this run/)).toBeVisible()
+  await expect(page.getByText(/[1-9]\d* results \(after filters\)/)).toBeVisible()
 
   const title = 'paperlab pagination fixture 2'
   const row = page.locator('[data-slot="context-menu-trigger"]', { hasText: title })

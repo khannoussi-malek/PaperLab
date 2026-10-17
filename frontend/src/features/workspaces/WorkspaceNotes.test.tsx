@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { expect, test, vi } from 'vitest'
 import { WorkspaceNotes } from './WorkspaceNotes'
 
-const state = vi.hoisted(() => ({ notes: [] as unknown[] | undefined }))
+const state = vi.hoisted(() => ({ notes: [] as unknown[] | undefined, error: null as Error | null, refetch: vi.fn() }))
 vi.mock('@/api/queries', () => ({
-  useWorkspaceNotes: () => ({ data: state.notes, error: null }),
+  useWorkspaceNotes: () => ({ data: state.notes, error: state.error, refetch: state.refetch }),
   useWorkspacePapers: () => ({ data: [], error: null }),
 }))
 
@@ -21,4 +21,14 @@ test('while loading it shows a skeleton, not the empty copy', () => {
   render(<WorkspaceNotes workspaceId="w1" />)
   expect(screen.getByRole('status')).toHaveAttribute('aria-busy', 'true')
   expect(screen.queryByText('No notes yet')).not.toBeInTheDocument()
+})
+
+test('a failed load shows the error and a Retry that refetches', () => {
+  state.notes = undefined
+  state.error = new Error('Could not load notes.')
+  render(<WorkspaceNotes workspaceId="w1" />)
+  expect(screen.getByRole('alert')).toHaveTextContent('Could not load notes.')
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+  expect(state.refetch).toHaveBeenCalled()
+  state.error = null
 })

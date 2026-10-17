@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { EXCLUDE_REASONS, reasonLabel } from './hitReview'
+import { EXCLUDE_REASONS, reasonLabel, stage2Label } from './hitReview'
 
 describe('reasonLabel', () => {
   it('gives words for every stage-1 code and unspecified', () => {
@@ -16,5 +16,13 @@ describe('reasonLabel', () => {
     expect(reasonLabel('not about LLMs')).toBe('not about LLMs')
     expect(reasonLabel(null)).toBe('No reason given')
     expect(reasonLabel(undefined)).toBe('No reason given')
+  })
+})
+
+describe('stage2Label', () => {
+  it('puts a stage-2 status in words', () => {
+    expect(stage2Label('include')).toBe('Included')
+    expect(stage2Label('exclude')).toBe('Excluded')
+    expect(stage2Label(null)).toBe('Not assessed')
   })
 })

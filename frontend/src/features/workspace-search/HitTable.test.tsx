@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { HitTable } from './HitTable'
 import { api, type Hit } from '@/api/client'
+import { GLOSSARY } from '@/features/workspaces/glossary'
 
 /** The row list only — excludes the preview panel, which also renders the current hit's title/byline. Always
  * present (even before data loads), so this can be synchronous. */
@@ -149,7 +150,7 @@ test('typing in the search box filters the pool by title, client-side, with no n
 
   await waitFor(() => expect(pool().queryByText('Attention Is All You Need')).not.toBeInTheDocument())
   expect(pool().getByText('BERT: Pre-training')).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: 'results' }).parentElement).toHaveTextContent('1 of 2 results in this run (after filters)')
+  expect(screen.getByRole('button', { name: 'results' }).parentElement).toHaveTextContent('1 of 2 results (after filters)')
   expect(api.listSearchHits).toHaveBeenCalledTimes(callsBeforeTyping)
 })
 
@@ -609,7 +610,7 @@ test('shows the live raw found count from the run, separate from the deduped "in
 
   expect(screen.getByText(/127 found so far/)).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'results' }).parentElement).toHaveTextContent(
-    '127 found so far · 1 results in this run (after filters)',
+    '127 found so far · 1 results (after filters)',
   )
   expect(screen.getByRole('button', { name: 'How this differs from PRISMA' })).toBeInTheDocument()
 })
@@ -821,6 +822,18 @@ test('no Accept button on a decided row or an unsure suggestion', async () => {
   renderWithClient(<HitTable workspaceId="ws-1" />)
   await pool().findByText('Decided')
   expect(pool().queryByRole('button', { name: /^Accept AI suggestion:/ })).toBeNull()
+})
+
+globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} }
+
+test('the AI suggestion term sits once beside the bulk Accept button', async () => {
+  vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: [suggested], next_cursor: null })
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  fireEvent.click(await pool().findByRole('checkbox', { name: 'Select Sleep trial' }))
+  const info = screen.getAllByRole('button', { name: 'What is an AI suggestion?' })
+  expect(info).toHaveLength(1)
+  fireEvent.click(info[0])
+  expect(screen.getByRole('tooltip')).toHaveTextContent(GLOSSARY.aiSuggestion)
 })
 
 test('Accept AI suggestions in the bulk bar sends the selected ids and reports accepted and skipped', async () => {

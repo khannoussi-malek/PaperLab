@@ -15,7 +15,7 @@ async function searchAndWait(page: Page, request: APIRequestContext, workspaceId
     })
     .toBe('exhausted')
   await page.goto(`/#/workspaces/${workspaceId}?tab=search`)
-  await expect(page.getByText(/[1-9]\d* results in this run/)).toBeVisible()
+  await expect(page.getByText(/[1-9]\d* results \(after filters\)/)).toBeVisible()
 }
 
 function row(page: Page, title: string) {

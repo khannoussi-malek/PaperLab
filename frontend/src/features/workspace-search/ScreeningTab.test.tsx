@@ -77,7 +77,7 @@ test('shows an imported hit with Include/Exclude actions and no verdict yet', ()
   expect(screen.getByText('Imported Paper')).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Include' })).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Exclude' })).toBeInTheDocument()
-  expect(screen.getByText('not assessed')).toBeInTheDocument()
+  expect(screen.getByText('Not assessed')).toBeInTheDocument()
 })
 
 test('merges imported and manual hits from the two separate useSearchHits calls', () => {
@@ -210,6 +210,19 @@ test('shows an empty-state message when there is nothing to screen', () => {
   expect(screen.getByRole('heading', { name: 'Nothing to review yet' })).toBeInTheDocument()
   expect(screen.getByText('Import relevant results with a PDF first.')).toBeInTheDocument()
   expect(screen.getByRole('link', { name: 'Go to 1 · Search & screen' })).toHaveAttribute('href', workspaceHref('ws-1', 'search'))
+})
+
+test('the empty-state link keeps the active run', () => {
+  mockHits({ imported: { items: [] }, manual: { items: [] } })
+  renderWithClient(<ScreeningTab workspaceId="ws-1" runId="r1" />)
+  expect(screen.getByRole('link', { name: 'Go to 1 · Search & screen' })).toHaveAttribute('href', workspaceHref('ws-1', 'search', 'r1'))
+})
+
+test('shows included and excluded rows in words', () => {
+  mockHits({ imported: { items: [{ ...importedHit, stage2_status: 'include' }] }, manual: { items: [{ ...manualHit, stage2_status: 'exclude' }] } })
+  renderWithClient(<ScreeningTab workspaceId="ws-1" />)
+  expect(screen.getByText('Included')).toBeInTheDocument()
+  expect(screen.getByText('Excluded')).toBeInTheDocument()
 })
 
 test('hides Load more controls when neither status has a next page (the common case)', () => {

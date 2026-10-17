@@ -29,10 +29,10 @@ export function EmptyState({ title, children, action }: { title: string; childre
 const SEARCH_TAB = WORKSPACE_TABS.find((t) => t.value === 'search')!
 
 /** "Go to 1 · Search & screen", a plain link styled as a button. */
-export function GoToSearchAction({ workspaceId }: { workspaceId: string }) {
+export function GoToSearchAction({ workspaceId, runId }: { workspaceId: string; runId?: string | null }) {
   return (
     <Button asChild variant="outline" size="sm">
-      <a href={workspaceHref(workspaceId, 'search')}>{`Go to ${SEARCH_TAB.step} · ${SEARCH_TAB.label}`}</a>
+      <a href={workspaceHref(workspaceId, 'search', runId)}>{`Go to ${SEARCH_TAB.step} · ${SEARCH_TAB.label}`}</a>
     </Button>
   )
 }

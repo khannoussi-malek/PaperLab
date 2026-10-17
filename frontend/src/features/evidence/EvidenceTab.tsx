@@ -3,6 +3,7 @@ import { Download } from 'lucide-react'
 import { api, type EvidenceCardRow } from '@/api/client'
 import { useEvidenceCards, useGenerateEvidenceCard, useGenerateEvidenceCards } from '@/api/queries'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { LoadError } from '@/features/library/ErrorAlert'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -17,7 +18,7 @@ export function EvidenceTab({ workspaceId }: { workspaceId: string }) {
   const generateMissing = useGenerateEvidenceCards(workspaceId)
   const [replacing, setReplacing] = useState<EvidenceCardRow | null>(null)
   const generateOne = useGenerateEvidenceCard(workspaceId)
-  const error = rows.error ?? generateMissing.error ?? generateOne.error
+  const error = generateMissing.error ?? generateOne.error
   const generating = rows.data?.filter((r) => r.card?.status === 'generating').length ?? 0
 
   const regenerate = (row: EvidenceCardRow, confirm: boolean) =>
@@ -40,6 +41,7 @@ export function EvidenceTab({ workspaceId }: { workspaceId: string }) {
           </span>
         )}
       </div>
+      {rows.error && <LoadError message={rows.error.message} onRetry={() => void rows.refetch()} />}
       {error && <Alert variant="destructive"><AlertDescription>{error.message}</AlertDescription></Alert>}
       {rows.isPending && <TabSkeleton label="Loading evidence cards" />}
       {rows.data?.length === 0 && (

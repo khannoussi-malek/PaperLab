@@ -46,7 +46,7 @@ test('snowball from an imported paper, screen it stage-2, see it in the PRISMA e
   const { id: runId } = await startResponse.json()
   await waitForRunToFinish(request, workspaceId, runId)
   await page.reload()
-  await expect(page.getByText(/[1-9]\d* results in this run/)).toBeVisible()
+  await expect(page.getByText(/[1-9]\d* results \(after filters\)/)).toBeVisible()
 
   // "fixture 2" (not "fixture 1"): deterministically has no free PDF, so it always needs manual acquisition —
   // see workspace-search.spec.ts's own comment on why fixture 1 is avoided.

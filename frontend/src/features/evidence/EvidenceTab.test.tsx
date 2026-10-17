@@ -120,3 +120,12 @@ test('when empty it says so', async () => {
   renderTab()
   expect(await screen.findByText('Add papers to this workspace and their evidence cards will show up here.')).toBeInTheDocument()
 })
+
+test('a failed load shows the error and a Retry that refetches', async () => {
+  const list = vi.spyOn(api, 'listEvidenceCards').mockRejectedValueOnce(new Error('Could not load cards.'))
+  renderTab()
+  expect(await screen.findByRole('alert')).toHaveTextContent('Could not load cards.')
+  list.mockResolvedValue([row(ready())])
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+  await screen.findByRole('button', { name: 'Edit Findings for Sleep paper' })
+})

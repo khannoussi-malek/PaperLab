@@ -20,6 +20,11 @@ test('the empty state has an h2 title, its sentence and its action', () => {
   expect(screen.getByRole('link', { name: 'Go' })).toBeInTheDocument()
 })
 
+test('the step-1 action keeps the active run in the link', () => {
+  render(<GoToSearchAction workspaceId="w1" runId="r1" />)
+  expect(screen.getByRole('link', { name: 'Go to 1 · Search & screen' }).getAttribute('href')).toContain('run=r1')
+})
+
 test('the step-1 action links to the workspace search tab', () => {
   render(<GoToSearchAction workspaceId="w1" />)
   expect(screen.getByRole('link', { name: 'Go to 1 · Search & screen' })).toHaveAttribute('href', '#/workspaces/w1?tab=search')

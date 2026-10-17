@@ -44,7 +44,7 @@ test('search, screen, import a hit, then upload its PDF manually', async ({ page
   // is a belt-and-suspenders check that the pool is actually populated by the time this test looks — not a
   // required workaround for missing invalidation, the way it used to be.
   await page.reload()
-  await expect(page.getByText(/[1-9]\d* results in this run/)).toBeVisible()
+  await expect(page.getByText(/[1-9]\d* results \(after filters\)/)).toBeVisible()
 
   // "fixture 1" is deliberately avoided: discovery_fake.py's paginated arXiv feed derives entry 1's id as
   // "2609.00001", which collides with FREE_ARXIV_ID (the single-item Find Papers fixture's id). Whenever that

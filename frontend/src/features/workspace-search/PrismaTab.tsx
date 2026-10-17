@@ -2,7 +2,7 @@ import { ClipboardList } from 'lucide-react'
 import { useState } from 'react'
 import { usePrismaExport } from '@/api/queries'
 import type { PrismaExportOut } from '@/api/client'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { LoadError } from '@/features/library/ErrorAlert'
 import { Badge } from '@/components/ui/badge'
 import { Term } from '@/features/workspaces/Term'
 import type { GlossaryKey } from '@/features/workspaces/glossary'
@@ -63,9 +63,9 @@ const REASON_FIELD: Partial<Record<StageKey, 'stage1_excluded_by_reason' | 'stag
 
 /** Read-only PRISMA funnel view: counts from `usePrismaExport`, combined across the workspace or scoped to one
  * run. Spec §13. */
-export function PrismaTab({ workspaceId }: { workspaceId: string }) {
+export function PrismaTab({ workspaceId, runId }: { workspaceId: string; runId?: string | null }) {
   const [runs, setRuns] = useState('all')
-  const { data, isPending, isError, error } = usePrismaExport(workspaceId, runs)
+  const { data, isPending, isError, error, refetch } = usePrismaExport(workspaceId, runs)
   // Dropdown options (and the selected run's own query/filters/date below) always come from the combined
   // export — the backend only populates `runs` on that branch ([] for a per-run export, since the caller already
   // knows which run). Fetched separately so the picker stays populated after selecting one run; this shares the
@@ -110,15 +110,11 @@ export function PrismaTab({ workspaceId }: { workspaceId: string }) {
       )}
       {isPending && <TabSkeleton label="Loading PRISMA report" />}
       {empty && (
-        <EmptyState title="Your PRISMA flow will appear here" action={<GoToSearchAction workspaceId={workspaceId} />}>
+        <EmptyState title="Your PRISMA flow will appear here" action={<GoToSearchAction workspaceId={workspaceId} runId={runId} />}>
           It fills in as you search and screen.
         </EmptyState>
       )}
-      {isError && (
-        <Alert variant="destructive" className="border-glass-border">
-          <AlertDescription>{error.message}</AlertDescription>
-        </Alert>
-      )}
+      {isError && <LoadError message={error.message} onRetry={() => void refetch()} />}
       {data && !empty && (
         <div className="flex flex-col gap-3 rounded-lg border p-3">
           {PHASES.map(([phase, phaseTerm, stages]) => (

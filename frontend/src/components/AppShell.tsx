@@ -5,7 +5,7 @@ import { ModeToggle } from '@/components/mode-toggle'
 import { fadeIn } from '@/components/motion'
 import { NavRail } from '@/components/NavRail'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 
 /** The shell's own `h1`. Exported so a view that draws its own (an editable title) matches the rest. */
@@ -78,6 +78,7 @@ export function AppShell({ title, back, actions, status, fills = false, children
           className="top-0 left-0 h-dvh max-h-none w-64 max-w-[85vw] translate-x-0 translate-y-0 gap-0 rounded-none p-0 sm:max-w-[85vw] md:hidden"
         >
           <DialogTitle className="sr-only">Navigation</DialogTitle>
+          <DialogDescription className="sr-only">Go to a view or a workspace.</DialogDescription>
           <NavRail onNavigate={() => setNavOpen(false)} />
         </DialogContent>
       </Dialog>

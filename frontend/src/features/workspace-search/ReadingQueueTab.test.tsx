@@ -109,12 +109,15 @@ test('shows a loading message while the queue itself is being fetched', () => {
   expect(screen.getAllByText(/loading/i).length).toBeGreaterThan(0)
 })
 
-test('shows an alert with the error message when the queue request fails', () => {
+test('shows the error and a Retry that refetches when the queue request fails', () => {
+  const refetch = vi.fn()
   mockRuns(runsData)
-  mockQueue(undefined, { isError: true, error: new Error('Could not load the reading queue.') })
+  mockQueue(undefined, { isError: true, error: new Error('Could not load the reading queue.'), refetch })
   renderWithClient(<ReadingQueueTab workspaceId="ws-1" runId="run-1" />)
 
   expect(screen.getByRole('alert')).toHaveTextContent('Could not load the reading queue.')
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+  expect(refetch).toHaveBeenCalled()
 })
 
 test('shows an empty-state message when nothing included has been imported yet', () => {
