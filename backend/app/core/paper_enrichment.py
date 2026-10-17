@@ -75,6 +75,11 @@ def apply_s2(paper: Paper, answer: dict) -> bool:
     peer = peer_reviewed_of(source_type) == "true"
     if peer and (preprint or paper.peer_reviewed == "unknown") and "source_type" not in paper.manual_fields:
         found["peer_reviewed"] = "true"
+    return _fill(paper, found)
+
+
+def _fill(paper: Paper, found: dict[str, str | None]) -> bool:
+    """Sets each non-empty value that is not hand-edited (manual_fields) and differs. True when anything changed."""
     changed = False
     for field, value in found.items():
         if value and field not in paper.manual_fields and getattr(paper, field) != value:
@@ -91,12 +96,7 @@ def apply_openalex(paper: Paper, work: dict) -> bool:
     found = {"published_doi": doi, "published_venue": venue}
     if "source_type" not in paper.manual_fields:
         found["peer_reviewed"] = "true"
-    changed = False
-    for field, value in found.items():
-        if value and field not in paper.manual_fields and getattr(paper, field) != value:
-            setattr(paper, field, value)
-            changed = True
-    return changed
+    return _fill(paper, found)
 
 
 async def _openalex_pass(session: AsyncSession, oa: httpx.AsyncClient, ws: uuid.UUID) -> int:
@@ -115,6 +115,8 @@ async def _openalex_pass(session: AsyncSession, oa: httpx.AsyncClient, ws: uuid.
     except httpx.HTTPError:
         logger.exception("OpenAlex batch for %d papers failed; going on", len(papers))
         return 0
+    ids = [p.id for p in papers]  # the call can take long: re-read so a hand edit made meanwhile is seen
+    await session.execute(select(Paper).where(Paper.id.in_(ids)).execution_options(populate_existing=True))
     by_id = {w["id"].rsplit("/", 1)[-1]: w for w in works}
     filled = sum(apply_openalex(p, by_id[p.openalex_id]) for p in papers if p.openalex_id in by_id)
     await session.commit()
@@ -133,6 +135,7 @@ async def enrich(
             paper.published_checked_at = datetime.now(timezone.utc)  # nothing to ask about: never picked again
     await session.commit()
     looked_up = filled = not_found = 0
+    result = None
     for start in range(0, len(papers), CHUNK):
         chunk = papers[start : start + CHUNK]
         try:
@@ -146,7 +149,8 @@ async def enrich(
         if answers is None:
             remaining = len(papers) - start
             logger.warning("Semantic Scholar kept answering 429; stopping with %d papers left", remaining)
-            return PaperEnrichResult(looked_up, filled, not_found, remaining, True)
+            result = (remaining, True)  # OpenAlex is another service: it still runs below
+            break
         looked_up += len(chunk)
         # The batch (and any 429 wait) can take long: re-read the papers so a hand edit made meanwhile is seen.
         ids = [paper.id for paper, _ in chunk]
@@ -161,4 +165,5 @@ async def enrich(
         await session.commit()
     if oa is not None:
         filled += await _openalex_pass(session, oa, ws)
-    return PaperEnrichResult(looked_up, filled, not_found)
+    remaining, limited = result or (0, False)
+    return PaperEnrichResult(looked_up, filled, not_found, remaining, limited)

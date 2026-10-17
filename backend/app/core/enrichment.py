@@ -162,10 +162,13 @@ def openalex_published(work: dict[str, Any]) -> tuple[str | None, str | None, st
     """(published_doi, published_venue, source_type) when the work is a published version: a non-arXiv DOI, a
     published type (or a publishedVersion location) and a primary source that is no preprint server."""
     location = work.get("primary_location") or {}
-    venue = (location.get("source") or {}).get("display_name") or location.get("raw_source_name")
+    source = location.get("source") or {}
+    venue = source.get("display_name") or location.get("raw_source_name")
     doi = normalize_doi(work.get("doi") or "")
     published = location.get("version") == "publishedVersion" or (work.get("type") or "").lower() in PUBLISHED_TYPES
-    if not doi or doi.startswith(ARXIV_DOI_PREFIX) or not published or (venue and PREPRINT_SERVERS.search(venue)):
+    if not doi or doi.startswith(ARXIV_DOI_PREFIX) or not published:
+        return None, None, None
+    if source.get("type") == "repository" or (venue and PREPRINT_SERVERS.search(venue)):
         return None, None, None
     return doi, venue, source_type_of(work.get("type"), doi)
 
