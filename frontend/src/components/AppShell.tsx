@@ -1,10 +1,11 @@
-import { ArrowLeft } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { ArrowLeft, Menu } from 'lucide-react'
+import { useState, type ReactNode } from 'react'
 import { glass } from '@/components/glass'
 import { ModeToggle } from '@/components/mode-toggle'
 import { fadeIn } from '@/components/motion'
 import { NavRail } from '@/components/NavRail'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 
 /** The shell's own `h1`. Exported so a view that draws its own (an editable title) matches the rest. */
@@ -40,9 +41,13 @@ type Props = {
  * grows long enough to scroll.
  */
 export function AppShell({ title, back, actions, status, fills = false, children }: Props) {
+  const [navOpen, setNavOpen] = useState(false)
   return (
-    <div className="grid h-dvh grid-cols-[14rem_minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden">
+    <div className="grid h-dvh grid-cols-1 md:grid-cols-[14rem_minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden">
       <header className={cn('col-span-full flex h-11 items-center gap-1 border-b border-glass-border px-2', glass)}>
+        <Button variant="ghost" size="icon" aria-label="Open navigation" className="min-h-11 shrink-0 md:hidden" onClick={() => setNavOpen(true)}>
+          <Menu aria-hidden />
+        </Button>
         {back && (
           <Button variant="ghost" size="sm" asChild className="shrink-0 text-muted-foreground">
             <a href={back.href}>
@@ -64,7 +69,18 @@ export function AppShell({ title, back, actions, status, fills = false, children
         <ModeToggle />
       </header>
 
-      <NavRail />
+      <div className="hidden min-h-0 md:flex md:flex-col [&>nav]:flex-1">
+        <NavRail />
+      </div>
+      <Dialog open={navOpen} onOpenChange={setNavOpen}>
+        <DialogContent
+          showCloseButton={false}
+          className="top-0 left-0 h-dvh max-h-none w-64 max-w-[85vw] translate-x-0 translate-y-0 gap-0 rounded-none p-0 sm:max-w-[85vw] md:hidden"
+        >
+          <DialogTitle className="sr-only">Navigation</DialogTitle>
+          <NavRail onNavigate={() => setNavOpen(false)} />
+        </DialogContent>
+      </Dialog>
 
       {/* Keyed by nothing: the view inside changes with the route, and fades in as it arrives. */}
       <main className={cn('min-w-0', fills ? 'flex min-h-0 flex-col overflow-hidden p-3' : 'overflow-auto p-3', fadeIn)}>
