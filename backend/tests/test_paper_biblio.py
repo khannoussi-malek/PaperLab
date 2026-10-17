@@ -164,3 +164,35 @@ async def test_the_backfill_sends_openalex_its_api_key(monkeypatch):
     await backfill_biblio.main()
 
     assert built == {"email": "me@example.org", "api_key": "k-1"}
+
+
+def test_the_backfill_help_prints_and_runs_nothing(monkeypatch, capsys):
+    # A `--help` once started the real run on the live library: arguments are parsed before anything else.
+    from app.scripts import backfill_biblio  # noqa: PLC0415
+
+    monkeypatch.setattr(backfill_biblio, "main", lambda dry_run: pytest.fail("ran instead of printing help"))
+    with pytest.raises(SystemExit) as exited:
+        backfill_biblio.cli(["--help"])
+    assert exited.value.code == 0 and "--dry-run" in capsys.readouterr().out
+
+
+async def test_a_dry_run_counts_the_papers_it_would_ask_about_and_asks_nobody(session, monkeypatch, capsys):
+    from contextlib import asynccontextmanager  # noqa: PLC0415
+
+    from app.scripts import backfill_biblio  # noqa: PLC0415
+
+    paper = Paper(file_path="/nonexistent.pdf", title="dry run", doi=f"10.5555/dry-{uuid.uuid4().hex[:8]}")
+    session.add(paper)
+    await session.flush()
+
+    @asynccontextmanager
+    async def this_session():
+        yield session
+
+    monkeypatch.setattr(backfill_biblio, "SessionLocal", this_session)
+    monkeypatch.setattr(backfill_biblio.crossref, "new_client", lambda **k: pytest.fail("built a client"))
+    monkeypatch.setattr(backfill_biblio.openalex, "new_client", lambda **k: pytest.fail("built a client"))
+
+    await backfill_biblio.main(dry_run=True)
+
+    assert "would check" in capsys.readouterr().out
