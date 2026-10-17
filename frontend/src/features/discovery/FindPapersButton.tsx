@@ -7,13 +7,22 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { ErrorAlert } from '@/features/library/ErrorAlert'
+import { Hint } from '@/features/workspaces/Hint'
 import { cn } from '@/lib/utils'
 import { CandidateList } from './CandidateList'
 
 const QUERY_LABEL = 'Title, DOI, arXiv ID or OpenAlex ID'
 
 /** "Find papers" and its dialog: search outside the library, then add a paper that has a free PDF. */
-export function FindPapersButton({ workspaceId }: { workspaceId?: string }) {
+export function FindPapersButton({
+  workspaceId,
+  label = 'Find papers',
+  hint,
+}: {
+  workspaceId?: string
+  label?: string
+  hint?: string
+}) {
   const [draft, setDraft] = useState('')
   const [query, setQuery] = useState<string | null>(null)
   const results = useSearchPapers(query)
@@ -26,10 +35,12 @@ export function FindPapersButton({ workspaceId }: { workspaceId?: string }) {
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button variant="outline">
-          <Search aria-hidden />
-          Find papers
-        </Button>
+        <Hint hint={hint}>
+          <Button variant="outline">
+            <Search aria-hidden />
+            {label}
+          </Button>
+        </Hint>
       </DialogTrigger>
       <DialogContent className={cn(glass, 'bg-glass-strong ring-glass-border sm:max-w-2xl')}>
         <DialogHeader>

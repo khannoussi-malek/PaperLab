@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { act } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import * as queries from '@/api/queries'
 import type { Paper } from '@/api/client'
@@ -9,7 +10,6 @@ import { WorkspacePapers } from './WorkspacePapers'
 import { tagSummary } from './tagFixtures'
 
 vi.mock('@/features/library/PaperPreview', () => ({ PaperPreview: () => null })) // pulls in pdfjs, which needs a worker
-vi.mock('@/features/discovery/FindPapersButton', () => ({ FindPapersButton: () => null }))
 vi.stubGlobal('matchMedia', () => ({ matches: false }))
 vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
 Element.prototype.scrollIntoView = () => {}
@@ -172,5 +172,23 @@ test('an empty workspace says so and keeps the three add buttons', () => {
   setup([], 'any', [])
   expect(screen.getByRole('heading', { name: 'No papers yet' })).toBeTruthy()
   expect(screen.getByText('Add them from your library, upload PDFs, or find one by DOI or title.')).toBeTruthy()
-  expect(screen.getByRole('button', { name: /Add papers/ })).toBeTruthy()
+  expect(screen.getByRole('button', { name: 'Add from library' })).toBeTruthy()
+})
+
+test('the three ways in are named in words', () => {
+  setup([])
+  const ways = [
+    ['Add from library', 'Pick papers already in your library.'],
+    ['Upload PDFs', 'Add PDFs from your computer.'],
+    ['Find by DOI or title', 'Look a paper up by DOI, arXiv ID or title and add its free PDF.'],
+  ]
+  for (const [name, tip] of ways) {
+    const button = screen.getByRole('button', { name })
+    act(() => button.focus())
+    const tooltip = screen.getByRole('tooltip')
+    expect(tooltip).toHaveTextContent(tip)
+    expect(button.getAttribute('aria-describedby')).toBe(screen.getByText(tip, { selector: '[data-slot=tooltip-content]' }).id)
+    act(() => button.blur())
+  }
+  expect(screen.queryByRole('button', { name: /Add papers|Find papers/ })).toBeNull()
 })
