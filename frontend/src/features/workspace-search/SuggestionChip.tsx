@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import type { Hit } from '@/api/client'
 import { Badge } from '@/components/ui/badge'
+import { Term } from '@/features/workspaces/Term'
+import { reasonLabel } from './hitReview'
 
 const FLAG_WORDS: Record<string, string> = {
   no_abstract: 'no abstract',
@@ -17,19 +19,34 @@ export function SuggestionChip({ hit }: { hit: Hit }) {
     hit.suggestion === 'unsure'
       ? 'Unsure'
       : hit.suggestion === 'exclude'
-        ? `Suggests: exclude · ${(hit.suggestion_reason ?? 'other').replaceAll('_', ' ')}`
+        ? `Suggests: exclude · ${reasonLabel(hit.suggestion_reason ?? 'other').toLowerCase()}`
         : 'Suggests: include'
-  const flags = (hit.suggestion_flags ?? []).map((flag) => FLAG_WORDS[flag] ?? flag).join(' · ')
+  const flags = hit.suggestion_flags ?? []
   return (
     <span className="flex shrink-0 items-center gap-1.5">
       <Badge variant="outline" title={hit.suggestion_note ?? undefined} className="shrink-0 font-normal text-muted-foreground">
         {text}
       </Badge>
       {hit.suggestion_relevance != null && (
-        <span className="text-xs text-muted-foreground">Score {hit.suggestion_relevance}/5</span>
+        <span className="text-xs text-muted-foreground">
+          <Term term="score">Score</Term> {hit.suggestion_relevance}/5
+        </span>
       )}
-      {hit.suggestion_confidence === 'low' && <span className="text-xs text-muted-foreground">low confidence</span>}
-      {flags && <span className="text-xs text-muted-foreground">{flags}</span>}
+      {hit.suggestion_confidence === 'low' && (
+        <span className="text-xs text-muted-foreground">
+          <Term term="lowConfidence">low confidence</Term>
+        </span>
+      )}
+      {flags.length > 0 && (
+        <span className="text-xs text-muted-foreground">
+          {flags.map((flag, i) => (
+            <span key={flag}>
+              {i > 0 && ' · '}
+              {flag === 'quote_dropped' ? <Term term="quoteMismatch">{FLAG_WORDS[flag]}</Term> : (FLAG_WORDS[flag] ?? flag)}
+            </span>
+          ))}
+        </span>
+      )}
     </span>
   )
 }

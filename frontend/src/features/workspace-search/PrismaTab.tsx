@@ -4,6 +4,9 @@ import { usePrismaExport } from '@/api/queries'
 import type { PrismaExportOut } from '@/api/client'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
+import { Term } from '@/features/workspaces/Term'
+import type { GlossaryKey } from '@/features/workspaces/glossary'
+import { reasonLabel } from './hitReview'
 import { EmptyState, GoToSearchAction, TabSkeleton } from '@/features/workspaces/TabStates'
 import { asPrismaRunMeta } from './prismaRunMeta'
 
@@ -20,31 +23,35 @@ type StageKey =
 
 // PRISMA's own flow-diagram phases, so the funnel reads as the methodology a systematic-review author already
 // knows, not an arbitrary 9-row table.
-const PHASES: [string, [StageKey, string][]][] = [
+type Row = [StageKey, string, GlossaryKey | null]
+const PHASES: [string, GlossaryKey | null, Row[]][] = [
   [
     'Identification',
+    null,
     [
-      ['identified', 'Identified'],
-      ['duplicates_removed', 'Duplicates removed'],
+      ['identified', 'Identified', 'identified'],
+      ['duplicates_removed', 'Duplicates removed', 'duplicatesRemoved'],
     ],
   ],
   [
     'Screening',
+    null,
     [
-      ['stage1_screened', 'Stage-1 screened'],
-      ['stage1_excluded', 'Stage-1 excluded'],
+      ['stage1_screened', 'Screened on title & abstract', 'titleAbstract'],
+      ['stage1_excluded', 'Excluded on title & abstract', 'titleAbstract'],
     ],
   ],
   [
     'Eligibility',
+    'eligibility',
     [
-      ['sought', 'Reports sought'],
-      ['not_retrieved', 'Not retrieved'],
-      ['stage2_assessed', 'Stage-2 assessed'],
-      ['stage2_excluded', 'Stage-2 excluded'],
+      ['sought', 'Reports sought', 'reportsSought'],
+      ['not_retrieved', 'Not retrieved', 'notRetrieved'],
+      ['stage2_assessed', 'Full texts assessed', 'fullText'],
+      ['stage2_excluded', 'Excluded after full text', 'fullText'],
     ],
   ],
-  ['Included', [['included', 'Included']]],
+  ['Included', null, [['included', 'Included', null]]],
 ]
 
 // A stage whose count has a reason breakdown (spec §13): reason -> count, straight off PrismaExportOut, no
@@ -114,15 +121,15 @@ export function PrismaTab({ workspaceId }: { workspaceId: string }) {
       )}
       {data && !empty && (
         <div className="flex flex-col gap-3 rounded-lg border p-3">
-          {PHASES.map(([phase, stages]) => (
+          {PHASES.map(([phase, phaseTerm, stages]) => (
             <div key={phase} className="flex flex-col gap-1.5">
               {stages.length > 1 && (
-                <h4 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{phase}</h4>
+                <h4 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{phaseTerm ? <Term term={phaseTerm}>{phase}</Term> : phase}</h4>
               )}
               <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
-                {stages.map(([key, label]) => (
+                {stages.map(([key, label, term]) => (
                   <div key={key} className="contents">
-                    <dt className="text-muted-foreground">{label}</dt>
+                    <dt className="text-muted-foreground">{term ? <Term term={term}>{label}</Term> : label}</dt>
                     <dd className="flex flex-wrap items-center gap-1.5">
                       <span className="tabular-nums">{data[key]}</span>
                       <ReasonBreakdown reasons={reasonBreakdown(data, key)} />
@@ -168,7 +175,7 @@ function ReasonBreakdown({ reasons }: { reasons: Record<string, number> | null }
     <>
       {Object.entries(reasons).map(([reason, count]) => (
         <Badge key={reason} variant="outline" className="font-normal text-muted-foreground">
-          {reason}: {count}
+          {reasonLabel(reason)}: {count}
         </Badge>
       ))}
     </>

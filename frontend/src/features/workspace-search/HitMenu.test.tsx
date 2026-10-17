@@ -21,29 +21,29 @@ const hit: Hit = {
   sources: [],
 }
 
-test('the ⋮ menu offers Relevant, Maybe, Not relevant… and Snowball', async () => {
+test('the ⋮ menu offers Relevant, Maybe, Not relevant… and Find citing & cited papers', async () => {
   render(<HitMenu hit={hit} onReview={vi.fn()} onSnowball={vi.fn()} />)
-  fireEvent.pointerDown(screen.getByRole('button', { name: 'Hit actions' }))
+  fireEvent.pointerDown(screen.getByRole('button', { name: 'Result actions' }))
 
   expect(await screen.findByRole('menuitem', { name: 'Relevant' })).toBeInTheDocument()
   expect(screen.getByRole('menuitem', { name: 'Maybe' })).toBeInTheDocument()
   expect(screen.getByRole('menuitem', { name: 'Not relevant…' })).toBeInTheDocument()
-  expect(screen.getByRole('menuitem', { name: 'Snowball' })).toBeInTheDocument()
+  expect(screen.getByRole('menuitem', { name: 'Find citing & cited papers' })).toBeInTheDocument()
 })
 
-test('clicking Snowball in the ⋮ menu calls onSnowball with the hit id, not onReview', async () => {
+test('clicking Find citing & cited papers in the ⋮ menu calls onSnowball with the hit id, not onReview', async () => {
   const onReview = vi.fn()
   const onSnowball = vi.fn()
   render(<HitMenu hit={hit} onReview={onReview} onSnowball={onSnowball} />)
-  fireEvent.pointerDown(screen.getByRole('button', { name: 'Hit actions' }))
+  fireEvent.pointerDown(screen.getByRole('button', { name: 'Result actions' }))
 
-  fireEvent.click(await screen.findByRole('menuitem', { name: 'Snowball' }))
+  fireEvent.click(await screen.findByRole('menuitem', { name: 'Find citing & cited papers' }))
 
   expect(onSnowball).toHaveBeenCalledWith('h1')
   expect(onReview).not.toHaveBeenCalled()
 })
 
-test('the right-click menu also offers Snowball and calls onSnowball with the hit id', async () => {
+test('the right-click menu also offers Find citing & cited papers and calls onSnowball with the hit id', async () => {
   const onSnowball = vi.fn()
   render(
     <HitContextMenu hit={hit} onReview={vi.fn()} onSnowball={onSnowball}>
@@ -52,7 +52,14 @@ test('the right-click menu also offers Snowball and calls onSnowball with the hi
   )
   fireEvent.contextMenu(screen.getByText('row'))
 
-  fireEvent.click(await screen.findByRole('menuitem', { name: 'Snowball' }))
+  fireEvent.click(await screen.findByRole('menuitem', { name: 'Find citing & cited papers' }))
 
   expect(onSnowball).toHaveBeenCalledWith('h1')
+})
+
+test('Snowball is gone from the menu; Find citing & cited papers replaces it', async () => {
+  render(<HitMenu hit={hit} onReview={vi.fn()} onSnowball={vi.fn()} />)
+  fireEvent.pointerDown(screen.getByRole('button', { name: 'Result actions' }))
+  await screen.findByRole('menuitem', { name: 'Find citing & cited papers' })
+  expect(screen.queryByText('Snowball')).toBeNull()
 })

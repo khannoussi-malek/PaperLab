@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useContinueSearchRun, useSearchRuns } from '@/api/queries'
 import { Button } from '@/components/ui/button'
+import { Term } from '@/features/workspaces/Term'
 import { cn } from '@/lib/utils'
 import { plural } from '@/features/charts/chartMeta'
 import { relative } from './schedule'
@@ -23,9 +24,12 @@ export function RunsList({
 
   return (
     <section aria-label="Runs" className="grid gap-2 border-b px-3 py-2 text-sm">
-      <Button variant="ghost" size="sm" className="justify-start" aria-expanded={open} onClick={() => setOpen(!open)}>
-        Runs ({runs.length})
-      </Button>
+      <div className="flex items-center gap-2">
+        <Button variant="ghost" size="sm" className="justify-start" aria-expanded={open} onClick={() => setOpen(!open)}>
+          Runs ({runs.length})
+        </Button>
+        <Term term="run"><span className="sr-only">What is a run?</span></Term>
+      </div>
       {open &&
         runs.map((r) => (
           <div key={r.id} data-run={r.id} className="grid gap-1">
@@ -38,7 +42,7 @@ export function RunsList({
             >
               <span className="min-w-0 flex-1 truncate font-medium">{r.query_text}</span>
               <span className="text-xs text-muted-foreground">
-                {pausedText(r) ?? r.status} · {relative(r.started_at)} · {plural(r.hit_count, 'new hit')}
+                {pausedText(r) ?? r.status} · {relative(r.started_at)} · {plural(r.hit_count, 'new result')}
               </span>
             </button>
             {r.can_continue && (

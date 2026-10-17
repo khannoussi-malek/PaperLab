@@ -20,11 +20,12 @@ import {
 import { PanelResizeHandle } from '@/components/PanelResizeHandle'
 import { loadPanelWidth, panelTrack, savePanelWidth, type PanelLimits } from '@/components/panelWidth'
 import { Button } from '@/components/ui/button'
+import { Term } from '@/features/workspaces/Term'
 import { Checkbox } from '@/components/ui/checkbox'
 import { browserStorage } from '@/features/notes/highlightColors'
 import { cn } from '@/lib/utils'
 import { HitContextMenu, HitMenu } from './HitMenu'
-import { EXCLUDE_REASONS, matchesFilter, sourceLabel } from './hitReview'
+import { EXCLUDE_REASONS, matchesFilter, reasonLabel, sourceLabel } from './hitReview'
 import { loadHitSort, saveHitSort, type HitSort } from './hitSort'
 import { HitPreview } from './HitPreview'
 import { errorText } from './schedule'
@@ -246,27 +247,28 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center justify-between gap-3 border-b px-3 py-2 text-sm">
         <Checkbox
-          aria-label="Select all visible hits"
+          aria-label="Select all visible results"
           checked={someVisibleChecked && !allVisibleChecked ? 'indeterminate' : allVisibleChecked}
           onCheckedChange={toggleCheckAllVisible}
           disabled={visibleRows.length === 0}
           className="shrink-0"
         />
         <label className="flex flex-1 items-center gap-2">
-          <span className="sr-only">Search hits</span>
+          <span className="sr-only">Search results</span>
           <input
             type="text"
             value={filterText}
             onChange={(event) => setFilterText(event.target.value)}
             onKeyDown={onListKeyDown}
             placeholder="Search by title or abstract…"
-            aria-label="Search hits"
+            aria-label="Search results"
             className="h-8 w-full max-w-xs rounded-lg border bg-background px-2 text-sm"
           />
         </label>
         <span className="shrink-0 text-muted-foreground">
           {rawFound !== undefined && `${rawFound} found so far · `}
-          {filter ? `${visibleRows.length} of ${rows.length} in pool` : `${rows.length} in pool`}
+          {filter ? `${visibleRows.length} of ${rows.length}` : rows.length} <Term term="results">results</Term> in this run
+          (after filters) <Term term="identified">How this differs from PRISMA</Term>
         </span>
         <Button type="button" size="sm" disabled={importAllHits.isPending} onClick={() => importAllHits.mutate()}>
           Import all with PDF in this filter
@@ -307,19 +309,19 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
             Accept AI suggestions
           </Button>
           <label htmlFor="bulk-exclude-reason" className="sr-only">
-            Exclusion reason for selected hits
+            Exclusion reason for selected results
           </label>
           <select
             id="bulk-exclude-reason"
             value={bulkReason}
             onChange={(event) => setBulkReason(event.target.value as ExcludeReason | '')}
-            aria-label="Exclusion reason for selected hits"
+            aria-label="Exclusion reason for selected results"
             className="h-8 rounded-lg border bg-background px-2 text-sm"
           >
             <option value="">Select a reason…</option>
             {EXCLUDE_REASONS.map((r) => (
               <option key={r} value={r}>
-                {r}
+                {reasonLabel(r)}
               </option>
             ))}
           </select>
@@ -392,7 +394,7 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
       >
         <div
           ref={parentRef}
-          aria-label="Hit pool"
+          aria-label="Result list"
           tabIndex={0}
           onKeyDown={onListKeyDown}
           className="min-h-0 overflow-auto outline-none"
@@ -436,7 +438,7 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
                         type="button"
                         size="xs"
                         variant="outline"
-                        aria-label={`Accept: ${hit.title ?? hit.normalized_title}`}
+                        aria-label={`Accept AI suggestion: ${hit.title ?? hit.normalized_title}`}
                         disabled={acceptSuggestions.isPending}
                         onClick={(event) => {
                           event.stopPropagation()

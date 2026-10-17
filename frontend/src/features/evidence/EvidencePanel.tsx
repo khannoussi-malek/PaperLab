@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useChunksOnPage, useEvidenceCard, useGenerateEvidenceCard } from '@/api/queries'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import { Term } from '@/features/workspaces/Term'
 import type { PdfRect } from '../reader/coords'
 import { LeftOut, Making, SourceBadge } from './EvidenceBits'
 import { FIELDS, cellView, failureReason } from './evidenceFields'
@@ -52,7 +53,9 @@ export function EvidencePanel({ paperId, onShowRegion }: Props) {
           return (
             <section key={f.key} aria-label={f.label} className="flex flex-col gap-1.5">
               <h3 className="text-sm font-semibold">{f.label}</h3>
-              {view.shown.length === 0 && <p className="text-sm text-muted-foreground">Nothing found</p>}
+              {view.shown.length === 0 && <p className="text-sm text-muted-foreground">
+                  <Term term="nothingFound">Nothing found</Term>
+                </p>}
               <ul className="flex flex-col gap-1.5">
                 {view.shown.map((s) => (
                   <li key={s.index} className="flex flex-col gap-1 text-sm">

@@ -7,9 +7,9 @@ import { api, type Hit } from '@/api/client'
 
 /** The row list only — excludes the preview panel, which also renders the current hit's title/byline. Always
  * present (even before data loads), so this can be synchronous. */
-const pool = () => within(screen.getByLabelText('Hit pool'))
+const pool = () => within(screen.getByLabelText('Result list'))
 /** The preview panel only. Only mounts once there's a hit to preview, so this is async. */
-const preview = async () => within(await screen.findByLabelText('Hit preview'))
+const preview = async () => within(await screen.findByLabelText('Result preview'))
 
 function renderWithClient(ui: React.ReactElement) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -112,7 +112,7 @@ test('a hit with an abstract or an already-acquired PDF sorts before one with ne
   renderWithClient(<HitTable workspaceId="ws-1" />)
   await pool().findByText('No Info Paper')
 
-  const text = screen.getByLabelText('Hit pool').textContent ?? ''
+  const text = screen.getByLabelText('Result list').textContent ?? ''
   expect(text.indexOf('Has Abstract Paper')).toBeLessThan(text.indexOf('No Info Paper'))
   expect(text.indexOf('Has PDF Paper')).toBeLessThan(text.indexOf('No Info Paper'))
 })
@@ -129,7 +129,7 @@ test('the sort is stable: hits within the same group (both informative, or both 
   renderWithClient(<HitTable workspaceId="ws-1" />)
   await pool().findByText('Bare First')
 
-  const text = screen.getByLabelText('Hit pool').textContent ?? ''
+  const text = screen.getByLabelText('Result list').textContent ?? ''
   expect(text.indexOf('Abstract First')).toBeLessThan(text.indexOf('Abstract Second'))
   expect(text.indexOf('Bare First')).toBeLessThan(text.indexOf('Bare Second'))
 })
@@ -145,11 +145,11 @@ test('typing in the search box filters the pool by title, client-side, with no n
   await pool().findByText('Attention Is All You Need')
   const callsBeforeTyping = vi.mocked(api.listSearchHits).mock.calls.length
 
-  fireEvent.change(screen.getByLabelText('Search hits'), { target: { value: 'bert' } })
+  fireEvent.change(screen.getByLabelText('Search results'), { target: { value: 'bert' } })
 
   await waitFor(() => expect(pool().queryByText('Attention Is All You Need')).not.toBeInTheDocument())
   expect(pool().getByText('BERT: Pre-training')).toBeInTheDocument()
-  expect(screen.getByText('1 of 2 in pool')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'results' }).parentElement).toHaveTextContent('1 of 2 results in this run (after filters)')
   expect(api.listSearchHits).toHaveBeenCalledTimes(callsBeforeTyping)
 })
 
@@ -170,7 +170,7 @@ test('the search box also matches the abstract, not just the title', async () =>
   await pool().findByText('Attention Is All You Need')
 
   // "mechanisms" appears only in the first hit's abstract, not in either title.
-  fireEvent.change(screen.getByLabelText('Search hits'), { target: { value: 'mechanisms' } })
+  fireEvent.change(screen.getByLabelText('Search results'), { target: { value: 'mechanisms' } })
 
   await waitFor(() => expect(pool().queryByText('BERT: Pre-training')).not.toBeInTheDocument())
   expect(pool().getByText('Attention Is All You Need')).toBeInTheDocument()
@@ -180,7 +180,7 @@ test('a filter that matches nothing says so instead of showing an empty list', a
   renderWithClient(<HitTable workspaceId="ws-1" />)
   await pool().findByText('a paper about llms')
 
-  fireEvent.change(screen.getByLabelText('Search hits'), { target: { value: 'nonexistent' } })
+  fireEvent.change(screen.getByLabelText('Search results'), { target: { value: 'nonexistent' } })
 
   expect(await screen.findByRole('heading', { name: 'No results match these filters.' })).toBeInTheDocument()
 })
@@ -188,9 +188,9 @@ test('a filter that matches nothing says so instead of showing an empty list', a
 test('Clear filters resets the text filter and brings the rows back', async () => {
   renderWithClient(<HitTable workspaceId="ws-1" />)
   await pool().findByText('a paper about llms')
-  fireEvent.change(screen.getByLabelText('Search hits'), { target: { value: 'nonexistent' } })
+  fireEvent.change(screen.getByLabelText('Search results'), { target: { value: 'nonexistent' } })
   fireEvent.click(await screen.findByRole('button', { name: 'Clear filters' }))
-  expect(screen.getByLabelText('Search hits')).toHaveValue('')
+  expect(screen.getByLabelText('Search results')).toHaveValue('')
   expect(await pool().findByText('a paper about llms')).toBeInTheDocument()
 })
 
@@ -260,7 +260,7 @@ test('↓/↑ move the previewed selection to the next/previous row and stop at 
   const panel = await preview()
   await panel.findByText('First Paper')
 
-  const hitPool = screen.getByLabelText('Hit pool')
+  const hitPool = screen.getByLabelText('Result list')
   fireEvent.keyDown(hitPool, { key: 'ArrowDown' })
   await panel.findByText('Second Paper')
 
@@ -276,7 +276,7 @@ test('a hit with no linked ExternalRef previews its normalized title and says no
 
   const panel = await preview()
   expect(await panel.findByText('a paper about llms')).toBeInTheDocument()
-  expect(panel.getByText('No abstract available for this hit.')).toBeInTheDocument()
+  expect(panel.getByText('No abstract available for this result.')).toBeInTheDocument()
 })
 
 test('focusing a different row (via its ⋮ button) swaps the preview immediately, no hover delay', async () => {
@@ -290,7 +290,7 @@ test('focusing a different row (via its ⋮ button) swaps the preview immediatel
   const panel = await preview()
   await panel.findByText('First Paper') // the first row previews by default
 
-  const [, secondRowMenuButton] = pool().getAllByRole('button', { name: 'Hit actions' })
+  const [, secondRowMenuButton] = pool().getAllByRole('button', { name: 'Result actions' })
   fireEvent.focus(secondRowMenuButton)
 
   await panel.findByText('Second Paper')
@@ -407,7 +407,7 @@ test('the preview panel hides the PDF-getting options once a hit is already impo
 test('the trailing ⋮ button opens a menu with Relevant, Maybe and Not relevant…', async () => {
   renderWithClient(<HitTable workspaceId="ws-1" />)
   await pool().findByText('a paper about llms')
-  fireEvent.pointerDown(pool().getByRole('button', { name: 'Hit actions' }))
+  fireEvent.pointerDown(pool().getByRole('button', { name: 'Result actions' }))
 
   expect(await screen.findByRole('menuitem', { name: 'Relevant' })).toBeInTheDocument()
   expect(screen.getByRole('menuitem', { name: 'Maybe' })).toBeInTheDocument()
@@ -424,7 +424,7 @@ test('right-clicking a row opens the same menu', async () => {
 test('marking relevant from the ⋮ menu sends only stage1_status', async () => {
   renderWithClient(<HitTable workspaceId="ws-1" />)
   await pool().findByText('a paper about llms')
-  fireEvent.pointerDown(pool().getByRole('button', { name: 'Hit actions' }))
+  fireEvent.pointerDown(pool().getByRole('button', { name: 'Result actions' }))
   fireEvent.click(await screen.findByRole('menuitem', { name: 'Relevant' }))
 
   await waitFor(() => expect(api.patchSearchHit).toHaveBeenCalledWith('ws-1', 'h1', { stage1_status: 'relevant' }))
@@ -434,8 +434,8 @@ test('clicking Snowball from the ⋮ menu seeds the mutation with this hit, not 
   const snowballSpy = vi.spyOn(api, 'snowball').mockResolvedValue({ new_hits: 0, skipped_seeds: [], errors: {} })
   renderWithClient(<HitTable workspaceId="ws-1" />)
   await pool().findByText('a paper about llms')
-  fireEvent.pointerDown(pool().getByRole('button', { name: 'Hit actions' }))
-  fireEvent.click(await screen.findByRole('menuitem', { name: 'Snowball' }))
+  fireEvent.pointerDown(pool().getByRole('button', { name: 'Result actions' }))
+  fireEvent.click(await screen.findByRole('menuitem', { name: 'Find citing & cited papers' }))
 
   await waitFor(() =>
     expect(snowballSpy).toHaveBeenCalledWith('ws-1', { seed_hit_ids: ['h1'], backward: true, forward: true }),
@@ -446,8 +446,8 @@ test('a successful snowball from the hit menu reports the new-hit count near the
   vi.spyOn(api, 'snowball').mockResolvedValue({ new_hits: 2, skipped_seeds: [], errors: {} })
   renderWithClient(<HitTable workspaceId="ws-1" />)
   await pool().findByText('a paper about llms')
-  fireEvent.pointerDown(pool().getByRole('button', { name: 'Hit actions' }))
-  fireEvent.click(await screen.findByRole('menuitem', { name: 'Snowball' }))
+  fireEvent.pointerDown(pool().getByRole('button', { name: 'Result actions' }))
+  fireEvent.click(await screen.findByRole('menuitem', { name: 'Find citing & cited papers' }))
 
   expect(await screen.findByRole('status')).toHaveTextContent('Found 2 new papers')
 })
@@ -457,7 +457,7 @@ test('reviewing a hit patches it into the pool in place, without re-fetching the
   await pool().findByText('a paper about llms')
   const callsBeforeClick = vi.mocked(api.listSearchHits).mock.calls.length
 
-  fireEvent.pointerDown(pool().getByRole('button', { name: 'Hit actions' }))
+  fireEvent.pointerDown(pool().getByRole('button', { name: 'Result actions' }))
   fireEvent.click(await screen.findByRole('menuitem', { name: 'Relevant' }))
 
   await waitFor(() => expect(api.patchSearchHit).toHaveBeenCalled())
@@ -467,9 +467,9 @@ test('reviewing a hit patches it into the pool in place, without re-fetching the
 test('picking a reason under Not relevant… sends stage1_status and the reason together', async () => {
   renderWithClient(<HitTable workspaceId="ws-1" />)
   await pool().findByText('a paper about llms')
-  fireEvent.pointerDown(pool().getByRole('button', { name: 'Hit actions' }))
+  fireEvent.pointerDown(pool().getByRole('button', { name: 'Result actions' }))
   fireEvent.click(await screen.findByRole('menuitem', { name: 'Not relevant…' }))
-  fireEvent.click(await screen.findByRole('menuitem', { name: 'duplicate' }))
+  fireEvent.click(await screen.findByRole('menuitem', { name: 'Duplicate' }))
 
   await waitFor(() =>
     expect(api.patchSearchHit).toHaveBeenCalledWith('ws-1', 'h1', {
@@ -483,7 +483,7 @@ test('a failed review shows an error message', async () => {
   vi.spyOn(api, 'patchSearchHit').mockRejectedValue(new Error('Review failed'))
   renderWithClient(<HitTable workspaceId="ws-1" />)
   await pool().findByText('a paper about llms')
-  fireEvent.pointerDown(pool().getByRole('button', { name: 'Hit actions' }))
+  fireEvent.pointerDown(pool().getByRole('button', { name: 'Result actions' }))
   fireEvent.click(await screen.findByRole('menuitem', { name: 'Maybe' }))
 
   expect(await screen.findByRole('alert')).toHaveTextContent('Review failed')
@@ -518,13 +518,13 @@ test('select-all-visible checks every row, and Mark not relevant is disabled unt
   renderWithClient(<HitTable workspaceId="ws-1" />)
   await pool().findByText('First')
 
-  fireEvent.click(screen.getByRole('checkbox', { name: 'Select all visible hits' }))
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Select all visible results' }))
   expect(screen.getByText('2 selected')).toBeInTheDocument()
 
   const notRelevantButton = screen.getByRole('button', { name: /Mark not relevant/ })
   expect(notRelevantButton).toBeDisabled()
 
-  fireEvent.change(screen.getByRole('combobox', { name: 'Exclusion reason for selected hits' }), {
+  fireEvent.change(screen.getByRole('combobox', { name: 'Exclusion reason for selected results' }), {
     target: { value: 'duplicate' },
   })
   fireEvent.click(notRelevantButton)
@@ -556,7 +556,7 @@ test('stays virtualized: a large hit pool renders far fewer rows than it has hit
   renderWithClient(<HitTable workspaceId="ws-1" />)
   await pool().findByText('hit-0')
 
-  const rowMenuButtons = pool().getAllByRole('button', { name: 'Hit actions' })
+  const rowMenuButtons = pool().getAllByRole('button', { name: 'Result actions' })
   expect(rowMenuButtons.length).toBeGreaterThan(0)
   expect(rowMenuButtons.length).toBeLessThan(50)
 })
@@ -608,7 +608,10 @@ test('shows the live raw found count from the run, separate from the deduped "in
   await pool().findByText('a paper about llms')
 
   expect(screen.getByText(/127 found so far/)).toBeInTheDocument()
-  expect(screen.getByText(/1 in pool/)).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'results' }).parentElement).toHaveTextContent(
+    '127 found so far · 1 results in this run (after filters)',
+  )
+  expect(screen.getByRole('button', { name: 'How this differs from PRISMA' })).toBeInTheDocument()
 })
 
 test('with no run yet, only the "in pool" count shows — no "found so far" claim with nothing to back it', async () => {
@@ -711,7 +714,7 @@ test('lists hits in ranked order when "Most likely relevant first" is chosen', a
   renderWithClient(<HitTable workspaceId="ws-1" />)
   await pool().findByText('Has Abstract')
 
-  fireEvent.change(screen.getByLabelText('Sort hits'), { target: { value: 'ranked' } })
+  fireEvent.change(screen.getByLabelText('Sort results'), { target: { value: 'ranked' } })
 
   await waitFor(() => {
     const titles = [...document.querySelectorAll('[data-slot="context-menu-trigger"]')].map((r) => r.textContent)
@@ -729,7 +732,7 @@ test('lists hits newest publication first when "Newest publication first" is cho
   renderWithClient(<HitTable workspaceId="ws-1" />)
   await pool().findByText('Older Paper')
 
-  fireEvent.change(screen.getByLabelText('Sort hits'), { target: { value: 'year' } })
+  fireEvent.change(screen.getByLabelText('Sort results'), { target: { value: 'year' } })
 
   await waitFor(() => {
     const titles = [...document.querySelectorAll('[data-slot="context-menu-trigger"]')].map((r) => r.textContent)
@@ -760,7 +763,7 @@ test('the AI score order asks the server for sort=ai, and Score ≥ sends min_re
   localStorage.clear()
   renderWithClient(<HitTable workspaceId="ws-1" />)
   await pool().findByText('a paper about llms')
-  fireEvent.change(screen.getByLabelText('Sort hits'), { target: { value: 'ai' } })
+  fireEvent.change(screen.getByLabelText('Sort results'), { target: { value: 'ai' } })
   await waitFor(() => expect(api.listSearchHits).toHaveBeenCalledWith('ws-1', expect.objectContaining({ sort: 'ai' })))
   fireEvent.change(screen.getByLabelText('Score ≥'), { target: { value: '4' } })
   await waitFor(() =>
@@ -772,8 +775,28 @@ test('a suggested undecided row has an Accept button named after the paper that 
   vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: [suggested], next_cursor: null })
   vi.spyOn(api, 'acceptSuggestions').mockResolvedValue({ accepted: 1, skipped: [] })
   renderWithClient(<HitTable workspaceId="ws-1" />)
-  fireEvent.click(await pool().findByRole('button', { name: 'Accept: Sleep trial' }))
+  fireEvent.click(await pool().findByRole('button', { name: 'Accept AI suggestion: Sleep trial' }))
   await waitFor(() => expect(api.acceptSuggestions).toHaveBeenCalledWith('ws-1', ['h1']))
+})
+
+test('the row Accept button names what it accepts', async () => {
+  vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: [suggested], next_cursor: null })
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  const button = await pool().findByRole('button', { name: 'Accept AI suggestion: Sleep trial' })
+  expect(button).toHaveTextContent(/^Accept$/)
+})
+
+test('no raw reason code renders in the bulk bar or the preview select', async () => {
+  vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: [baseHit as never], next_cursor: null })
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  await pool().findByText('a paper about llms')
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Select all visible results' }))
+  for (const name of ['Exclusion reason for selected results', 'Exclusion reason']) {
+    const options = within(screen.getByRole('combobox', { name })).getAllByRole('option').map((o) => o.textContent ?? '')
+    expect(options).toContain('Wrong topic')
+    expect(options).toContain("Can't access")
+    expect(options.filter((text) => /\b[a-z]+_[a-z_]+\b/.test(text))).toEqual([])
+  }
 })
 
 test('no Accept button on a decided row or an unsure suggestion', async () => {
@@ -786,7 +809,7 @@ test('no Accept button on a decided row or an unsure suggestion', async () => {
   })
   renderWithClient(<HitTable workspaceId="ws-1" />)
   await pool().findByText('Decided')
-  expect(pool().queryByRole('button', { name: /^Accept:/ })).toBeNull()
+  expect(pool().queryByRole('button', { name: /^Accept AI suggestion:/ })).toBeNull()
 })
 
 test('Accept AI suggestions in the bulk bar sends the selected ids and reports accepted and skipped', async () => {
@@ -803,7 +826,7 @@ test('a failed accept shows the error', async () => {
   vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: [suggested], next_cursor: null })
   vi.spyOn(api, 'acceptSuggestions').mockRejectedValue(new Error('Accept failed'))
   renderWithClient(<HitTable workspaceId="ws-1" />)
-  fireEvent.click(await pool().findByRole('button', { name: 'Accept: Sleep trial' }))
+  fireEvent.click(await pool().findByRole('button', { name: 'Accept AI suggestion: Sleep trial' }))
   expect(await screen.findByRole('alert')).toHaveTextContent('Accept failed')
 })
 
@@ -821,10 +844,10 @@ test('Score ≥ is not a filter in ranked order, where it does nothing', async (
     items: [], trained: true, total_unscreened: 0, streak: 0, threshold: 50, show_stop_hint: false,
   })
   renderWithClient(<HitTable workspaceId="ws-1" />)
-  fireEvent.change(screen.getByLabelText('Sort hits'), { target: { value: 'ai' } })
+  fireEvent.change(screen.getByLabelText('Sort results'), { target: { value: 'ai' } })
   fireEvent.change(screen.getByLabelText('Score ≥'), { target: { value: '4' } })
   expect(await screen.findByRole('heading', { name: 'No results match these filters.' })).toBeInTheDocument()
-  fireEvent.change(screen.getByLabelText('Sort hits'), { target: { value: 'ranked' } })
+  fireEvent.change(screen.getByLabelText('Sort results'), { target: { value: 'ranked' } })
   expect(await screen.findByRole('heading', { name: 'No results yet: run a search above.' })).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument()
 })

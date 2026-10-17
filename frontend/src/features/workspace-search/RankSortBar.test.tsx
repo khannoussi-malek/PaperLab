@@ -12,7 +12,7 @@ describe('RankSortBar', () => {
   it('switches between found order and most likely relevant first', () => {
     const onSortChange = vi.fn()
     render(<RankSortBar sort="found" onSortChange={onSortChange} />)
-    fireEvent.change(screen.getByLabelText('Sort hits'), { target: { value: 'ranked' } })
+    fireEvent.change(screen.getByLabelText('Sort results'), { target: { value: 'ranked' } })
     expect(onSortChange).toHaveBeenCalledWith('ranked')
   })
 
@@ -46,7 +46,7 @@ describe('RankSortBar', () => {
     const onSortChange = vi.fn()
     const onMinRelevanceChange = vi.fn()
     render(<RankSortBar sort="found" onSortChange={onSortChange} minRelevance={null} onMinRelevanceChange={onMinRelevanceChange} />)
-    fireEvent.change(screen.getByLabelText('Sort hits'), { target: { value: 'ai' } })
+    fireEvent.change(screen.getByLabelText('Sort results'), { target: { value: 'ai' } })
     expect(onSortChange).toHaveBeenCalledWith('ai')
     fireEvent.change(screen.getByLabelText('Score ≥'), { target: { value: '4' } })
     expect(onMinRelevanceChange).toHaveBeenCalledWith(4)

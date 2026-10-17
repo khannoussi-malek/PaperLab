@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { keys, useSaveScreening, useScreeningState, useStartSuggestions, useStopSuggestions } from '@/api/queries'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import { Term } from '@/features/workspaces/Term'
 import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
 import { Switch } from '@/components/ui/switch'
@@ -104,7 +105,8 @@ export function ScreeningAssist({ workspaceId }: { workspaceId: string }) {
               disabled={save.isPending}
               onCheckedChange={(checked) => save.mutate({ prescreen_after_scheduled_runs: checked })}
             />
-            <Label htmlFor="screening-prescreen">Pre-screen new hits after a scheduled search (local model only)</Label>
+            <Label htmlFor="screening-prescreen">Pre-screen new results after a scheduled search (local model only)</Label>
+            <Term term="preScreen"><span className="sr-only">What is pre-screening?</span></Term>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Label htmlFor="screening-auto-import">Import free PDFs automatically for hits rated</Label>
@@ -129,7 +131,7 @@ export function ScreeningAssist({ workspaceId }: { workspaceId: string }) {
       <div className="flex flex-wrap items-center gap-2">
         {!running && (
           <Button type="button" size="sm" disabled={noModel || !hasCriteria || start.isPending} onClick={onSuggest}>
-            Suggest for unscreened hits
+            Suggest for unscreened results
           </Button>
         )}
         {noModel && (
@@ -141,7 +143,7 @@ export function ScreeningAssist({ workspaceId }: { workspaceId: string }) {
       </div>
       {data.capped && (
         <p className="text-xs text-muted-foreground">
-          Auto pre-screen scored {data.capped} new hits, best first; {data.capped_left} wait for Suggest.
+          Auto pre-screen scored {data.capped} new results, best first; {data.capped_left} wait for Suggest.
         </p>
       )}
       {running && (

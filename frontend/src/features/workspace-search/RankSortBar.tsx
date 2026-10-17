@@ -21,9 +21,9 @@ export function RankSortBar({
     <div className="flex flex-col gap-1.5 border-b px-3 py-1.5 text-xs text-muted-foreground">
       <div className="flex flex-wrap items-center gap-3">
       <label className="flex items-center gap-2">
-        <span>Sort hits</span>
+        <span>Sort results</span>
         <select
-          aria-label="Sort hits"
+          aria-label="Sort results"
           value={sort}
           onChange={(event) => onSortChange(event.target.value as HitSort)}
           className="h-7 rounded-md border border-input bg-background px-1.5 text-xs text-foreground outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"

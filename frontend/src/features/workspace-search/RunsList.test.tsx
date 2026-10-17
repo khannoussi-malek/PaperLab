@@ -31,13 +31,13 @@ test('opening Runs (2) lists both queries newest first with hit counts', () => {
   expect(toggle.getAttribute('aria-expanded')).toBe('true')
   const rows = screen.getAllByRole('button', { name: /query/ })
   expect(rows.map((r) => r.textContent)).toEqual([expect.stringContaining('newer query'), expect.stringContaining('older query')])
-  expect(screen.getAllByText(/3 new hits/)).toHaveLength(2)
+  expect(screen.getAllByText(/3 new results/)).toHaveLength(2)
 })
 
-test('a run with one hit says "1 new hit"', () => {
+test('a run with one hit says "1 new result"', () => {
   setup([{ ...run('r1', 'solo query'), hit_count: 1 }])
   fireEvent.click(screen.getByRole('button', { name: 'Runs (1)' }))
-  expect(screen.getByText(/1 new hit(?!s)/)).toBeTruthy()
+  expect(screen.getByText(/1 new result(?!s)/)).toBeTruthy()
 })
 
 test('clicking a row selects that run', () => {
@@ -109,4 +109,11 @@ test('a refused Continue explains itself on its own row only, and only that row 
   expect(alert.textContent).toBe('Still stopping the last pass; try again in a few seconds.')
   expect(alert.closest('[data-run]')?.getAttribute('data-run')).toBe('ra')
   expect(screen.getAllByRole('alert')).toHaveLength(1)
+})
+
+test('the Runs toggle has an explained term beside it, not inside it', () => {
+  setup([run('r1', 'solo query')])
+  const toggle = screen.getByRole('button', { name: 'Runs (1)' })
+  expect(toggle.querySelector('button')).toBeNull()
+  expect(screen.getByRole('button', { name: 'What is a run?' })).toBeInTheDocument()
 })

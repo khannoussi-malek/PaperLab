@@ -3,6 +3,7 @@ import { useEditEvidenceCard } from '@/api/queries'
 import type { EvidenceCard } from '@/api/client'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import { Term } from '@/features/workspaces/Term'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Textarea } from '@/components/ui/textarea'
 import { LeftOut, SourceBadge } from './EvidenceBits'
@@ -21,7 +22,9 @@ export function EvidenceCell({ workspaceId, paperId, title, card, field }: Props
   if (!first) {
     return (
       <div className="flex flex-col gap-1 text-sm">
-        <span className="text-muted-foreground">Nothing found</span>
+        <span className="text-muted-foreground">
+          <Term term="nothingFound">Nothing found</Term>
+        </span>
         <LeftOut count={view.leftOut} />
       </div>
     )

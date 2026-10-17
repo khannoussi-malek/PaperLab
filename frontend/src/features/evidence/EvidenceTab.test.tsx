@@ -48,7 +48,7 @@ test('never shows the text of an unsupported item, only a count', async () => {
   vi.spyOn(api, 'listEvidenceCards').mockResolvedValue([row(ready())])
   renderTab()
   await screen.findByRole('button', { name: 'Edit Findings for Sleep paper' })
-  expect(screen.getByText('1 left out: no supporting quote')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'left out' }).parentElement).toHaveTextContent('1 left out: no supporting quote')
 })
 
 test('an edited card says AI · edited', async () => {

@@ -32,7 +32,7 @@ describe('ScreeningAssist', () => {
   it('says how many hits the auto pre-screen left for a manual Suggest', async () => {
     stubFetch({ [`GET ${base}/screening`]: () => state({ capped: '200 of 8226', capped_left: 8026 }) })
     renderWithClient(<ScreeningAssist workspaceId="w1" />)
-    expect(await screen.findByText(/Auto pre-screen scored 200 of 8226 new hits/)).toBeInTheDocument()
+    expect(await screen.findByText(/Auto pre-screen scored 200 of 8226 new results/)).toBeInTheDocument()
     expect(screen.getByText(/8026 wait for Suggest/)).toBeInTheDocument()
   })
 
@@ -56,10 +56,17 @@ describe('ScreeningAssist', () => {
     )
   })
 
+  it('explains pre-screening in a term beside the switch label', async () => {
+    stubFetch({ [`GET ${base}/screening`]: () => state() })
+    renderWithClient(<ScreeningAssist workspaceId="w1" />)
+    await screen.findByRole('switch', { name: /Pre-screen new results/ })
+    expect(screen.getByRole('button', { name: 'What is pre-screening?' })).toBeInTheDocument()
+  })
+
   it('saves the pre-screen switch and the auto-import choice on their own', async () => {
     const fetchMock = stubFetch({ [`GET ${base}/screening`]: () => state(), [`PUT ${base}/screening`]: () => state() })
     renderWithClient(<ScreeningAssist workspaceId="w1" />)
-    fireEvent.click(await screen.findByRole('switch', { name: 'Pre-screen new hits after a scheduled search (local model only)' }))
+    fireEvent.click(await screen.findByRole('switch', { name: 'Pre-screen new results after a scheduled search (local model only)' }))
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(`${base}/screening`, expect.objectContaining({ body: '{"prescreen_after_scheduled_runs":false}' })),
     )
@@ -85,7 +92,7 @@ describe('ScreeningAssist', () => {
     const confirm = vi.spyOn(window, 'confirm')
     const fetchMock = stubFetch({ [`GET ${base}/screening`]: () => state(), [`POST ${base}/suggestions`]: () => state({ suggest_status: 'running' }) })
     renderWithClient(<ScreeningAssist workspaceId="w1" />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Suggest for unscreened hits' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Suggest for unscreened results' }))
     expect(confirm).not.toHaveBeenCalled()
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(`${base}/suggestions`, expect.objectContaining({ body: '{"confirm_remote":false}' })),
@@ -96,7 +103,7 @@ describe('ScreeningAssist', () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
     const fetchMock = stubFetch({ [`GET ${base}/screening`]: () => state({ model_is_local: false, model_host: 'api.openai.com' }) })
     renderWithClient(<ScreeningAssist workspaceId="w1" />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Suggest for unscreened hits' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Suggest for unscreened results' }))
     expect(confirm).toHaveBeenCalledWith('Abstracts will be sent to api.openai.com and may cost money. Continue?')
     expect(fetchMock).not.toHaveBeenCalledWith(`${base}/suggestions`, expect.anything())
   })
@@ -111,14 +118,14 @@ describe('ScreeningAssist', () => {
   it('disables Suggest when no chat model', async () => {
     stubFetch({ [`GET ${base}/screening`]: () => state({ model_label: null, model_is_local: null, model_host: null }) })
     renderWithClient(<ScreeningAssist workspaceId="w1" />)
-    expect(await screen.findByRole('button', { name: 'Suggest for unscreened hits' })).toBeDisabled()
+    expect(await screen.findByRole('button', { name: 'Suggest for unscreened results' })).toBeDisabled()
     expect(screen.getByText('Set up a chat model in Settings to get suggestions.')).toBeInTheDocument()
   })
 
   it('disables Suggest until criteria are saved, and shows the last error', async () => {
     stubFetch({ [`GET ${base}/screening`]: () => state({ criteria: null, inclusion_criteria: null, suggest_error: "Can't reach localhost:11434" }) })
     renderWithClient(<ScreeningAssist workspaceId="w1" />)
-    expect(await screen.findByRole('button', { name: 'Suggest for unscreened hits' })).toBeDisabled()
+    expect(await screen.findByRole('button', { name: 'Suggest for unscreened results' })).toBeDisabled()
     expect(screen.getByRole('alert')).toHaveTextContent("Can't reach localhost:11434")
   })
 
@@ -133,7 +140,7 @@ describe('ScreeningAssist', () => {
     await screen.findByText('Screening criteria')
     expect(document.querySelector('summary')).toHaveTextContent('Does sleep help memory?')
     expect(document.querySelector('details')).toHaveProperty('open', false)
-    expect(screen.getByRole('button', { name: 'Suggest for unscreened hits' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Suggest for unscreened results' })).toBeEnabled()
   })
 
   it('does not fold the panel after the first criteria are saved', async () => {
@@ -145,14 +152,14 @@ describe('ScreeningAssist', () => {
     renderWithClient(<ScreeningAssist workspaceId="w1" />)
     fireEvent.change(await screen.findByLabelText('Include when…'), { target: { value: 'RCTs' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save criteria' }))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Suggest for unscreened hits' })).toBeEnabled())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Suggest for unscreened results' })).toBeEnabled())
     expect(document.querySelector('details')).toHaveProperty('open', true)
   })
 
   it('needs a research question or inclusion criteria: exclusion alone is not enough', async () => {
     stubFetch({ [`GET ${base}/screening`]: () => state({ inclusion_criteria: null, exclusion_criteria: 'animal studies', criteria: null }) })
     renderWithClient(<ScreeningAssist workspaceId="w1" />)
-    expect(await screen.findByRole('button', { name: 'Suggest for unscreened hits' })).toBeDisabled()
+    expect(await screen.findByRole('button', { name: 'Suggest for unscreened results' })).toBeDisabled()
     expect(screen.getByText('Add a research question or inclusion criteria first.')).toBeInTheDocument()
   })
 })

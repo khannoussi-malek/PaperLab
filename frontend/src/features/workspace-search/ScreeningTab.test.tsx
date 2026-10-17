@@ -92,7 +92,7 @@ test('the filter box narrows the already-loaded rows by title, client-side', () 
   mockHits({ imported: { items: [importedHit] }, manual: { items: [manualHit] } })
   renderWithClient(<ScreeningTab workspaceId="ws-1" />)
 
-  fireEvent.change(screen.getByLabelText('Search hits to screen'), { target: { value: 'manually' } })
+  fireEvent.change(screen.getByLabelText('Search results to screen'), { target: { value: 'manually' } })
 
   expect(screen.queryByText('Imported Paper')).not.toBeInTheDocument()
   expect(screen.getByText('Manually Uploaded Paper')).toBeInTheDocument()
@@ -103,9 +103,9 @@ test('a filter matching nothing shows a "no match" message instead of an empty l
   mockHits({ imported: { items: [importedHit] }, manual: { items: [] } })
   renderWithClient(<ScreeningTab workspaceId="ws-1" />)
 
-  fireEvent.change(screen.getByLabelText('Search hits to screen'), { target: { value: 'nothing matches this' } })
+  fireEvent.change(screen.getByLabelText('Search results to screen'), { target: { value: 'nothing matches this' } })
 
-  expect(screen.getByText(/No hits match/)).toBeInTheDocument()
+  expect(screen.getByText(/No results match/)).toBeInTheDocument()
 })
 
 test("clicking Include calls setEligibility with status 'include' and the hit's own paper/run id", async () => {
@@ -151,7 +151,7 @@ test("renders a Snowball control per hit that calls useSnowball with that hit's 
   const snowballSpy = vi.spyOn(api, 'snowball').mockResolvedValue({ new_hits: 0, skipped_seeds: [], errors: {} })
 
   renderWithClient(<ScreeningTab workspaceId="ws-1" />)
-  fireEvent.click(screen.getByRole('button', { name: 'Snowball' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Find citing & cited papers' }))
 
   await waitFor(() =>
     expect(snowballSpy).toHaveBeenCalledWith('ws-1', { seed_paper_ids: ['p1'], backward: true, forward: true }),
@@ -162,7 +162,7 @@ test('a successful snowball with new hits surfaces the count', async () => {
   vi.spyOn(api, 'snowball').mockResolvedValue({ new_hits: 3, skipped_seeds: [], errors: {} })
 
   renderWithClient(<ScreeningTab workspaceId="ws-1" />)
-  fireEvent.click(screen.getByRole('button', { name: 'Snowball' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Find citing & cited papers' }))
 
   expect(await screen.findByRole('status')).toHaveTextContent('Found 3 new papers')
 })
@@ -171,7 +171,7 @@ test('a successful snowball with zero new hits says so, not nothing', async () =
   vi.spyOn(api, 'snowball').mockResolvedValue({ new_hits: 0, skipped_seeds: [], errors: {} })
 
   renderWithClient(<ScreeningTab workspaceId="ws-1" />)
-  fireEvent.click(screen.getByRole('button', { name: 'Snowball' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Find citing & cited papers' }))
 
   expect(await screen.findByRole('status')).toHaveTextContent('No new papers found')
 })
@@ -180,7 +180,7 @@ test('a snowball with skipped seeds mentions them in the status message', async 
   vi.spyOn(api, 'snowball').mockResolvedValue({ new_hits: 0, skipped_seeds: ['p1'], errors: {} })
 
   renderWithClient(<ScreeningTab workspaceId="ws-1" />)
-  fireEvent.click(screen.getByRole('button', { name: 'Snowball' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Find citing & cited papers' }))
 
   expect(await screen.findByRole('status')).toHaveTextContent('Skipped 1')
 })
@@ -189,7 +189,7 @@ test('a failed snowball request shows an alert with the error', async () => {
   vi.spyOn(api, 'snowball').mockRejectedValue(new Error('Semantic Scholar is off.'))
 
   renderWithClient(<ScreeningTab workspaceId="ws-1" />)
-  fireEvent.click(screen.getByRole('button', { name: 'Snowball' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Find citing & cited papers' }))
 
   expect(await screen.findByRole('alert')).toHaveTextContent('Semantic Scholar is off.')
 })
@@ -264,7 +264,7 @@ test('a hit with no linked paper record (paper_id null) renders no actions, not 
   expect(screen.getByText('No linked paper record')).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Include' })).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Exclude' })).not.toBeInTheDocument()
-  expect(screen.queryByRole('button', { name: 'Snowball' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Find citing & cited papers' })).not.toBeInTheDocument()
 })
 
 test('while loading it shows a skeleton, not the empty copy', () => {
@@ -304,4 +304,11 @@ test('one query empty and the other pending shows the skeleton, not the empty co
   renderWithClient(<ScreeningTab workspaceId="ws-1" />)
   expect(screen.getByRole('status')).toHaveAttribute('aria-busy', 'true')
   expect(screen.queryByText('Nothing to review yet')).not.toBeInTheDocument()
+})
+
+test('Find citing & cited papers replaces Snowball, with an explained term beside it', () => {
+  mockHits({ imported: { items: [importedHit] }, manual: { items: [] } })
+  renderWithClient(<ScreeningTab workspaceId="ws-1" />)
+  expect(screen.queryByText('Snowball')).toBeNull()
+  expect(screen.getByRole('button', { name: 'What does finding citing & cited papers do?' })).toBeInTheDocument()
 })
