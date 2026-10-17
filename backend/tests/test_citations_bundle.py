@@ -8,7 +8,7 @@ import zipfile
 import pytest
 from sqlalchemy import insert
 
-from app.models import Note, Paper, note_anchors, note_papers
+from app.models import Chunk, Note, Paper, note_anchors, note_papers
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("references")]
 
@@ -27,7 +27,12 @@ async def seed(client, session, tmp_path):
     await session.commit()
     for p in (with_pdf, no_pdf):
         await client.put(f"/api/workspaces/{ws['id']}/papers/{p.id}")
-    chunk = uuid.uuid4()
+    chunk_row = Chunk(
+        paper_id=with_pdf.id, ordinal=0, page=7, bbox=[[1, 2, 3, 4]], text="t", embed_model="m", strategy_ver=1
+    )
+    session.add(chunk_row)
+    await session.flush()
+    chunk = chunk_row.id
     quoted = Note(body="Key claim\nsecond line", provenance="llm")
     plain = Note(body="Just a thought", provenance="human")
     session.add_all([quoted, plain])
@@ -42,7 +47,7 @@ async def seed(client, session, tmp_path):
             page=7,
             bbox=[[1, 2, 3, 4]],
             quoted_text="verbatim quote",
-            chunk_id=None,
+            chunk_id=chunk,
         )  # fmt: skip
     )
     await session.commit()
@@ -72,7 +77,7 @@ async def test_zip_layout_and_refs_point_at_files_in_the_zip(client, session, tm
 
 
 async def test_notes_in_ris_one_n1_per_note_with_quote_page_label_and_link(client, session, tmp_path):
-    ws, p, _, _ = await seed(client, session, tmp_path)
+    ws, p, _, chunk = await seed(client, session, tmp_path)
     ris = (
         open_zip(
             await client.get(f"/api/workspaces/{ws['id']}/citations.zip", params={"format": "ris", "notes": "true"})
@@ -83,20 +88,20 @@ async def test_notes_in_ris_one_n1_per_note_with_quote_page_label_and_link(clien
     n1 = [line for line in ris.splitlines() if line.startswith("N1  - ")]
     quoted = next(line for line in n1 if "Key claim" in line)
     assert "AI" in quoted and "p. 7" in quoted and "verbatim quote" in quoted
-    assert f"paperlab://papers/{p.id}?page=7" in quoted and "\n" not in quoted
+    assert f"paperlab://papers/{p.id}?page=7&chunk={chunk}" in quoted and "\n" not in quoted
     plain = next(line for line in n1 if "Just a thought" in line)
     assert "You" in plain and f"paperlab://papers/{p.id}" in plain
     await client.delete(f"/api/workspaces/{ws['id']}")
 
 
 async def test_notes_in_bibtex_annote_joined_by_a_blank_line(client, session, tmp_path):
-    ws, p, _, _ = await seed(client, session, tmp_path)
+    ws, p, _, chunk = await seed(client, session, tmp_path)
     response = await client.get(f"/api/workspaces/{ws['id']}/citations", params={"format": "bibtex", "notes": "true"})
     assert response.status_code == 200
     annote = response.text.split("annote = {")[1].split("\n    }")[0] if "annote = {" in response.text else ""
     assert annote, response.text
     assert "AI" in annote and "p. 7" in annote and "verbatim quote" in annote and "Just a thought" in annote
-    assert "\n\n" in annote and f"paperlab://papers/{p.id}?page=7" in annote.replace("\\&", "&")
+    assert "\n\n" in annote and f"paperlab://papers/{p.id}?page=7\\&chunk={chunk}" in annote
     plain = await client.get(f"/api/workspaces/{ws['id']}/citations", params={"format": "bibtex"})
     assert "annote" not in plain.text and "Just a thought" not in plain.text
     ris = await client.get(f"/api/workspaces/{ws['id']}/citations", params={"format": "ris", "notes": "true"})
@@ -110,4 +115,16 @@ async def test_zip_errors(client, session, tmp_path):
     for fmt in ("apa", "csljson", "nonsense"):
         bad = await client.get(f"/api/workspaces/{ws['id']}/citations.zip", params={"format": fmt})
         assert bad.status_code == 422, fmt
+    await client.delete(f"/api/workspaces/{ws['id']}")
+
+
+async def test_a_pdf_that_vanishes_mid_build_gets_no_attachment(client, session, tmp_path, monkeypatch):
+    ws, *_ = await seed(client, session, tmp_path)
+
+    def gone(self, filename, *args, **kwargs):
+        raise FileNotFoundError(filename)
+
+    monkeypatch.setattr(zipfile.ZipFile, "write", gone)
+    zf = open_zip(await client.get(f"/api/workspaces/{ws['id']}/citations.zip", params={"format": "bibtex"}))
+    assert zf.namelist() == ["refs.bib"] and "file = {" not in zf.read("refs.bib").decode()
     await client.delete(f"/api/workspaces/{ws['id']}")
