@@ -39,6 +39,7 @@ from app.core.candidates import (
 )
 from app.core.enrichment import ARXIV_DOI_PREFIX
 from app.core.errors import Conflict, InvalidInput
+from app.core.paper_enrichment import apply_published
 from app.core.paper_sources import KEYED, NAMES, SourceSettings
 from app.core.redact import redact
 from app.core.source_registry import ASKS
@@ -500,11 +501,22 @@ def _search_outcome(exc: httpx.HTTPError) -> str:
     return f"error: {type(exc).__name__}"
 
 
+async def _arxiv_copy_in_library(session: AsyncSession, candidate: Candidate, arxiv_id: str) -> Paper | None:
+    """The library's copy of this arXiv paper, now recording the candidate's DOI and venue as its published version."""
+    query = select(Paper).where(func.lower(Paper.doi) == f"{ARXIV_DOI_PREFIX}{arxiv_id}".lower())
+    paper = (await session.execute(query.execution_options(populate_existing=True))).scalars().first()
+    if paper is not None and apply_published(paper, candidate.doi, candidate.venue):
+        await session.commit()
+    return paper
+
+
 async def _arxiv_title_copy(
-    providers: Providers, candidate: Candidate, tried: list[dict[str, str]]
+    session: AsyncSession, providers: Providers, candidate: Candidate, tried: list[dict[str, str]]
 ) -> tuple[bytes | None, list[dict[str, str]]]:
     """Last resort for a paper no source links to arXiv: one title search there, and the PDF of an exact match.
-    Returns (the PDF or None, `tried` plus what this step did). Nothing happens when arXiv is off."""
+    Returns (the PDF or None, `tried` plus what this step did). Nothing happens when arXiv is off. When the library
+    already holds that arXiv paper, it learns the candidate's published version and Conflict(ALREADY_IN_LIBRARY,
+    paper_id, tried) is raised instead of downloading."""
     http = providers.client("arxiv")
     if http is None or _has_arxiv_id(candidate):
         return None, tried
@@ -519,6 +531,10 @@ async def _arxiv_title_copy(
         return None, [*tried, {"url": ARXIV_SEARCH, "outcome": "no_match"}]
     arxiv_id = match["arxiv_id"]
     found = [{"url": f"https://arxiv.org/abs/{arxiv_id}", "outcome": "arxiv_title_match"}]
+    held = await _arxiv_copy_in_library(session, candidate, arxiv_id)
+    if held is not None:
+        found.append({"url": f"{ARXIV_DOI_PREFIX}{arxiv_id}", "outcome": "in_library"})
+        raise Conflict(ALREADY_IN_LIBRARY, paper_id=held.id, tried=[*tried, *found])
     data, more = await download_pdf(providers.pdf, ordered_pdf_urls(arxiv_id))
     return data, [*tried, *found, *more]
 
@@ -588,7 +604,7 @@ async def add(
     data, tried = await download_pdf(providers.pdf, candidate.pdf_urls)
     copies: list[str] = []
     if data is None:
-        data, tried = await _arxiv_title_copy(providers, candidate, tried)
+        data, tried = await _arxiv_title_copy(session, providers, candidate, tried)
     if data is None:
         copies = await free_copies(providers, candidate.doi, tried)
         data, tried = await _diva_copy(providers, copies, tried)
