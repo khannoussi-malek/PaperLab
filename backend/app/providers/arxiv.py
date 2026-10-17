@@ -39,12 +39,13 @@ def title_words(title: str) -> list[str]:
     return [word for word in re.findall(r"\w+", title.lower()) if word not in STOPWORDS][:MAX_TITLE_WORDS]
 
 
-async def search(http: httpx.AsyncClient, title: str, limit: int) -> list[dict]:
+async def search(http: httpx.AsyncClient, title: str, limit: int, author: str | None = None) -> list[dict]:
     # `ti:` word by word, not a quoted phrase, so a partial title still matches. `all:` ranked unrelated papers first.
+    # `author` (a surname) narrows a short title: "REAL Sampling" alone ranks other papers first.
     words = title_words(title)
     if not words:
         return []
-    query = " AND ".join(f"ti:{word}" for word in words)
+    query = " AND ".join([*(f"ti:{word}" for word in words), *(f"au:{word}" for word in title_words(author or ""))])
     response = await http.get("/api/query", params={"search_query": query, "max_results": limit})
     return _entries(response.raise_for_status())
 
