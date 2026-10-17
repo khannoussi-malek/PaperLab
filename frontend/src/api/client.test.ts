@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { api, errorDetail } from './client'
+import { AlreadyInLibraryError, api, errorDetail } from './client'
 
 const jsonResponse = (body: unknown) => new Response(JSON.stringify(body), { status: 422 })
 
@@ -27,6 +27,16 @@ describe('errorDetail', () => {
   it('falls back to a generic message when the validation errors carry no field name', () => {
     return expect(errorDetail(jsonResponse({ detail: [{ msg: 'bad' }] }))).resolves.toBe('Some details are invalid.')
   })
+})
+
+it('AlreadyInLibraryError carries its message and the holding paper id', () => {
+  const error = new AlreadyInLibraryError('This paper is already in your library.', 'p7')
+  expect(error).toBeInstanceOf(Error)
+  expect([error.name, error.message, error.paperId]).toEqual([
+    'AlreadyInLibraryError',
+    'This paper is already in your library.',
+    'p7',
+  ])
 })
 
 describe('api.addCandidate', () => {
