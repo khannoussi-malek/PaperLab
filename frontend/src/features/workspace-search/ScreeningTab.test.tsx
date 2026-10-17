@@ -5,7 +5,11 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { ScreeningTab } from './ScreeningTab'
 import * as queries from '@/api/queries'
 import { api } from '@/api/client'
-import { workspaceHref } from '@/lib/route'
+import { readerHref, workspaceHref } from '@/lib/route'
+
+// jsdom lacks these; Radix Select needs them.
+Element.prototype.scrollIntoView ??= () => {}
+Element.prototype.hasPointerCapture ??= () => false
 
 function renderWithClient(ui: React.ReactElement) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -121,30 +125,53 @@ test("clicking Include calls setEligibility with status 'include' and the hit's 
   )
 })
 
-test('Exclude opens a free-text reason input, gated by disabled until text is entered', async () => {
+async function pickReason(name: string) {
+  fireEvent.keyDown(screen.getByRole('combobox', { name: /Exclusion reason/i }), { key: 'Enter' })
+  fireEvent.click(await screen.findByRole('option', { name }))
+}
+
+test('exclude with a listed reason saves its label', async () => {
+  const setEligibilitySpy = vi.spyOn(api, 'setEligibility').mockResolvedValue({
+    paper_id: 'p1', search_run_id: 'run-1', stage2_status: 'exclude', stage2_exclude_reason: 'Duplicate', assessed_at: '2026-09-24T00:00:00Z',
+  })
+
+  renderWithClient(<ScreeningTab workspaceId="ws-1" />)
+  fireEvent.click(screen.getByRole('button', { name: 'Exclude' }))
+
+  const confirm = screen.getByRole('button', { name: 'Confirm exclude' })
+  expect(confirm).toBeDisabled()
+  await pickReason('Duplicate')
+  expect(confirm).not.toBeDisabled()
+  fireEvent.click(confirm)
+
+  await waitFor(() =>
+    expect(setEligibilitySpy).toHaveBeenCalledWith('ws-1', 'p1', 'run-1', { status: 'exclude', exclude_reason: 'Duplicate' }),
+  )
+})
+
+test('exclude with Other saves the typed reason', async () => {
   const setEligibilitySpy = vi.spyOn(api, 'setEligibility').mockResolvedValue({
     paper_id: 'p1', search_run_id: 'run-1', stage2_status: 'exclude', stage2_exclude_reason: 'off topic', assessed_at: '2026-09-24T00:00:00Z',
   })
 
   renderWithClient(<ScreeningTab workspaceId="ws-1" />)
   fireEvent.click(screen.getByRole('button', { name: 'Exclude' }))
+  await pickReason('Other (type a reason)')
 
-  // No fixed-enum <select> like stage-1's EXCLUDE_REASONS — a real free-text input instead.
-  expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
-  const input = screen.getByLabelText(/Exclusion reason/i)
   const confirm = screen.getByRole('button', { name: 'Confirm exclude' })
   expect(confirm).toBeDisabled()
-
-  fireEvent.change(input, { target: { value: 'off topic' } })
+  fireEvent.change(screen.getByPlaceholderText('Reason for excluding…'), { target: { value: 'off topic' } })
   expect(confirm).not.toBeDisabled()
   fireEvent.click(confirm)
 
   await waitFor(() =>
-    expect(setEligibilitySpy).toHaveBeenCalledWith('ws-1', 'p1', 'run-1', {
-      status: 'exclude',
-      exclude_reason: 'off topic',
-    }),
+    expect(setEligibilitySpy).toHaveBeenCalledWith('ws-1', 'p1', 'run-1', { status: 'exclude', exclude_reason: 'off topic' }),
   )
+})
+
+test("a review row's title opens the paper", () => {
+  renderWithClient(<ScreeningTab workspaceId="ws-1" />)
+  expect(screen.getByRole('link', { name: 'Imported Paper' })).toHaveAttribute('href', readerHref('p1'))
 })
 
 test("renders a Snowball control per hit that calls useSnowball with that hit's paper_id as the seed", async () => {
@@ -324,4 +351,14 @@ test('Find citing & cited papers replaces Snowball, with an explained term besid
   renderWithClient(<ScreeningTab workspaceId="ws-1" />)
   expect(screen.queryByText('Snowball')).toBeNull()
   expect(screen.getByRole('button', { name: 'What does finding citing & cited papers do?' })).toBeInTheDocument()
+})
+
+test('the row wraps its actions and offers the renamed stage-2 reasons', async () => {
+  renderWithClient(<ScreeningTab workspaceId="ws-1" />)
+  const row = screen.getByRole('button', { name: 'Exclude' }).parentElement!
+  expect(row.className).toContain('flex-wrap')
+  fireEvent.click(screen.getByRole('button', { name: 'Exclude' }))
+  fireEvent.keyDown(screen.getByRole('combobox', { name: /Exclusion reason/i }), { key: 'Enter' })
+  const options = (await screen.findAllByRole('option')).map((o) => o.textContent)
+  expect(options).toEqual(['Wrong topic', 'Wrong study type', 'Wrong population', 'Not peer-reviewed', 'Duplicate', 'Other (type a reason)'])
 })

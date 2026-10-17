@@ -67,9 +67,9 @@ export function ScreeningAssist({ workspaceId }: { workspaceId: string }) {
       <details open={userOpen ?? initialOpen.current} onToggle={(event) => setUserOpen(event.currentTarget.open)}>
         <summary className="cursor-pointer truncate font-medium">
           Screening criteria
-          {saved.research_question && (
-            <span className="font-normal text-muted-foreground"> · {saved.research_question}</span>
-          )}
+          <span className="font-normal text-muted-foreground">
+            {' · '}{saved.research_question || 'Not set: AI suggestions need it'}
+          </span>
         </summary>
         <div className="mt-2 flex flex-col gap-2">
         {FIELDS.map(({ key, label, hint }) => (

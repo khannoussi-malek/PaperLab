@@ -43,8 +43,12 @@ function mockPrismaExport() {
   )
 }
 
+const realClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
 afterEach(() => {
   vi.restoreAllMocks()
+  vi.useRealTimers()
+  if (realClipboard) Object.defineProperty(navigator, 'clipboard', realClipboard)
+  else delete (navigator as { clipboard?: unknown }).clipboard
 })
 
 test('shows the full funnel with counts from usePrismaExport', () => {
@@ -232,4 +236,63 @@ test('an empty workspace shows no zero funnel', () => {
   expect(screen.queryByText('Identified')).not.toBeInTheDocument()
   expect(screen.queryByText('Runs')).not.toBeInTheDocument()
   expect(screen.queryByLabelText('Methods notes')).not.toBeInTheDocument()
+})
+
+function setClipboard(writeText: unknown) {
+  Object.defineProperty(navigator, 'clipboard', { value: writeText === undefined ? undefined : { writeText }, configurable: true })
+}
+
+test('explains which papers count', () => {
+  mockPrismaExport()
+  render(<PrismaTab workspaceId="ws-1" />)
+  expect(screen.getByText("Counts cover your search runs and their results. Papers added on the Papers tab aren't counted.")).toBeInTheDocument()
+})
+
+test('Copy as text says Copied', async () => {
+  mockPrismaExport()
+  const writeText = vi.fn().mockResolvedValue(undefined)
+  setClipboard(writeText)
+  render(<PrismaTab workspaceId="ws-1" />)
+  fireEvent.click(screen.getByRole('button', { name: 'Copy as text' }))
+  expect(await screen.findByRole('status')).toHaveTextContent('Copied')
+  expect(writeText.mock.calls[0][0]).toContain('Identified: 120')
+})
+
+test.each([['rejects', vi.fn().mockRejectedValue(new Error('no'))], ['is missing', undefined]])(
+  'a refused clipboard says so and shows the text (%s)',
+  async (_n, writeText) => {
+    mockPrismaExport()
+    setClipboard(writeText)
+    const { container } = render(<PrismaTab workspaceId="ws-1" />)
+    fireEvent.click(screen.getByRole('button', { name: 'Copy as text' }))
+    expect(await screen.findByText("Couldn't copy. Select the text instead.")).toBeInTheDocument()
+    expect(screen.queryByText('Copied')).toBeNull()
+    expect(container.querySelector('pre')?.textContent).toContain('Identified: 120')
+  },
+)
+
+test('Download CSV offers a csv file', async () => {
+  vi.useFakeTimers()
+  mockPrismaExport()
+  const create = vi.fn(() => 'blob:x')
+  const revoke = vi.fn()
+  Object.assign(URL, { createObjectURL: create, revokeObjectURL: revoke })
+  let attached = false
+  const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+    expect(this.download).toBe('prisma-ws-1-all.csv')
+    attached = document.body.contains(this)
+  })
+  render(<PrismaTab workspaceId="ws-1" />)
+  fireEvent.click(screen.getByRole('button', { name: 'Download CSV' }))
+  expect(click).toHaveBeenCalledTimes(1)
+  expect(attached).toBe(true)
+  expect(document.querySelector('a[download]')).toBeNull()
+  const blob = (create.mock.calls[0] as unknown as [Blob])[0]
+  expect(blob.type).toContain('text/csv')
+  expect(revoke).not.toHaveBeenCalled()
+  vi.advanceTimersByTime(1000)
+  expect(revoke).toHaveBeenCalledWith('blob:x')
+  vi.useRealTimers()
+  // Blob.text() strips the BOM on decode, so check the raw bytes.
+  expect([...new Uint8Array(await blob.arrayBuffer()).slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf])
 })

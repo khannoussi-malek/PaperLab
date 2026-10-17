@@ -1,12 +1,35 @@
-import { useState } from 'react'
-import { usePrismaExport, useReadingQueue } from '@/api/queries'
+import { useEffect, useState } from 'react'
+import { useQueries } from '@tanstack/react-query'
+import { readingQueueOptions, usePrismaExport, useReadingQueue } from '@/api/queries'
 import { Badge } from '@/components/ui/badge'
 import { readingChip } from '@/features/reading/passes'
 import { LoadError } from '@/features/library/ErrorAlert'
 import { EmptyState, GoToSearchAction, TabSkeleton } from '@/features/workspaces/TabStates'
 import { counted } from '@/features/workspaces/workspaceMeta'
 import { readerHref } from '@/lib/route'
-import { asPrismaRunMeta } from './prismaRunMeta'
+import { asPrismaRunMeta, type PrismaRunMeta } from './prismaRunMeta'
+
+const PROBED_RUNS = 10
+
+/** Which run the reading list opens on (§11.2): the user's pick, then the URL run if it has included papers, then
+ * the newest of the 10 newest runs that has some, then simply the newest. `hasIncludes` is `undefined` while a
+ * probe is still loading; we return null (wait) rather than fall back early. */
+export function pickReadingRun(
+  runs: PrismaRunMeta[],
+  picked: string | null,
+  urlRun: string | null,
+  hasIncludes: (id: string) => boolean | undefined,
+): string | null {
+  if (picked) return picked
+  const newest = runs.toSorted((a, b) => b.started_at.localeCompare(a.started_at))
+  const candidates = [...(urlRun && runs.some((r) => r.id === urlRun) ? [urlRun] : []), ...newest.slice(0, PROBED_RUNS).map((r) => r.id)]
+  for (const id of candidates) {
+    const has = hasIncludes(id)
+    if (has === undefined) return null
+    if (has) return id
+  }
+  return newest[0]?.id ?? null
+}
 
 /** How much of this search run's included papers have actually been read (M30 §12): one row per stage-2-included,
  * already-imported paper, its priority, and its reading progress.
@@ -21,10 +44,26 @@ import { asPrismaRunMeta } from './prismaRunMeta'
  * needed — it's derived fresh every render. */
 export function ReadingQueueTab({ workspaceId, runId }: { workspaceId: string; runId: string | null }) {
   const [manualRunId, setManualRunId] = useState<string | null>(null)
+  // The automatic choice, pinned once made (for the URL run it was made under) so later invalidations of the
+  // reading-queue queries (every Relevant/Not relevant click) don't re-run the probes or flip the selection.
+  const [pinned, setPinned] = useState<{ urlRun: string | null; id: string } | null>(null)
+  const autoRunId = pinned && pinned.urlRun === runId ? pinned.id : null
   const { data: allRunsData, isPending: runsPending, isError: runsError, error: runsErr, refetch: refetchRuns } = usePrismaExport(workspaceId, 'all')
   const allRuns = allRunsData ? asPrismaRunMeta(allRunsData.runs) : []
-  const mostRecent = allRuns.toSorted((a, b) => b.started_at.localeCompare(a.started_at))[0]
-  const selectedRunId = manualRunId ?? runId ?? mostRecent?.id ?? null
+  const newestIds = allRuns.toSorted((a, b) => b.started_at.localeCompare(a.started_at)).slice(0, PROBED_RUNS).map((r) => r.id)
+  const probeIds = [...new Set([...(runId && allRuns.some((r) => r.id === runId) ? [runId] : []), ...newestIds])]
+  const probes = useQueries({
+    queries: probeIds.map((id) => ({ ...readingQueueOptions(workspaceId, id), enabled: manualRunId == null && autoRunId == null })),
+  })
+  const hasIncludes = (id: string) => {
+    const q = probes[probeIds.indexOf(id)]
+    return q?.isError ? false : q?.data ? q.data.rows.length > 0 : undefined
+  }
+  const picked = pickReadingRun(allRuns, manualRunId ?? autoRunId, runId, hasIncludes)
+  const selectedRunId = picked
+  useEffect(() => {
+    if (manualRunId == null && autoRunId == null && picked != null) setPinned({ urlRun: runId, id: picked })
+  }, [manualRunId, autoRunId, picked, runId])
 
   const queue = useReadingQueue(workspaceId, selectedRunId, selectedRunId != null)
 
@@ -42,12 +81,17 @@ export function ReadingQueueTab({ workspaceId, runId }: { workspaceId: string; r
     )
   }
 
+  if (selectedRunId == null) return <TabSkeleton label="Loading reading list" />
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 p-3">
+      <p className="max-w-prose text-sm text-muted-foreground">
+        Only papers you included in step 3 appear here. Papers added on the Papers tab aren't part of the review flow.
+      </p>
       <label className="flex w-fit items-center gap-2 text-sm">
         <span>Run</span>
         <select
-          value={selectedRunId ?? ''}
+          value={selectedRunId}
           onChange={(e) => setManualRunId(e.target.value)}
           className="w-fit rounded-md border border-input bg-background px-2 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
         >
