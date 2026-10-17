@@ -23,8 +23,11 @@ const wordsOf = (text: string): string[] =>
  * True when every word of `query` starts a word of the title, an author, the year or the venue: "train" finds
  * "training", but "ai" doesn't. A blank query matches all.
  */
-export function matchesPaper(paper: Pick<Paper, 'title' | 'authors' | 'year' | 'venue'>, query: string): boolean {
-  const words = wordsOf([paper.title, ...paper.authors, paper.year, paper.venue].join(' '))
+export function matchesPaper(
+  paper: Pick<Paper, 'title' | 'authors' | 'year' | 'venue'> & { published_venue?: string | null },
+  query: string,
+): boolean {
+  const words = wordsOf([paper.title, ...paper.authors, paper.year, paper.venue, paper.published_venue].join(' '))
   return wordsOf(query).every((part) => words.some((word) => word.startsWith(part)))
 }
 

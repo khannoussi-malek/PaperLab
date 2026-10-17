@@ -36,24 +36,27 @@ describe('SourceBadges', () => {
         published_venue: 'Conference on Empirical Methods in Natural Language Processing', ...over,
       })
 
-    it('shows one Published chip instead of Preprint and Peer-reviewed', () => {
+    it('shows one Published chip with the full venue, truncated by CSS', () => {
       render(<SourceBadges paper={copy()} />)
-      expect(screen.getByText('Published: Conference on Empirical Methods in Natur… 2025')).toBeInTheDocument()
+      const chip = document.querySelector('.published-version')
+      expect(chip).toHaveTextContent(
+        'Published: Conference on Empirical Methods in Natural Language Processing 2025',
+      )
+      expect(screen.getByTitle('Conference on Empirical Methods in Natural Language Processing')).toHaveClass('truncate')
       expect(screen.queryByText('Preprint')).toBeNull()
       expect(screen.queryByText('Peer-reviewed')).toBeNull()
     })
 
-    it('uses the parenthetical, links the DOI and names the full venue', () => {
-      render(<SourceBadges paper={copy({ published_venue: 'Proceedings of the 57th Symposium (STOC)', published_doi: '10.1145/3717823.3718108' })} />)
-      const link = screen.getByRole('link', { name: 'Published version: Proceedings of the 57th Symposium (STOC) 2025' })
-      expect(link).toHaveTextContent('Published: STOC 2025')
+    it('uses the acronym, links the DOI, and its accessible name is the visible text', () => {
+      render(<SourceBadges paper={copy({ published_venue: 'Symposium on Theory of Computing (STOC)', published_doi: '10.1145/3717823.3718108' })} />)
+      const link = screen.getByRole('link', { name: 'Published: STOC 2025' })
       expect(link).toHaveAttribute('href', 'https://doi.org/10.1145/3717823.3718108')
+      expect(link).not.toHaveAttribute('aria-label')
     })
 
     it('is plain text without a DOI', () => {
       render(<SourceBadges paper={copy({ published_doi: null })} />)
       expect(screen.queryByRole('link')).toBeNull()
-      expect(screen.getByLabelText(/^Published version: Conference on Empirical/)).toBeInTheDocument()
     })
   })
 
