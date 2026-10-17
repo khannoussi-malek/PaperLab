@@ -16,7 +16,9 @@ from app.models.workspace_search import WorkspaceSearchCursor, WorkspaceSearchHi
 from app.providers import discovery_fake
 from app.workers import workspace_search as worker_module
 
-pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("references")]
+pytestmark = [
+    pytest.mark.anyio, pytest.mark.xdist_group("references"), pytest.mark.usefixtures("local_default_model"),
+]
 
 
 @pytest.fixture
