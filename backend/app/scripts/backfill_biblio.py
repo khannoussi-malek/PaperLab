@@ -29,7 +29,9 @@ async def run(
     only: list[uuid.UUID] | None = None,
 ) -> dict[str, int]:
     columns = [getattr(Paper, name) for name in enrichment.BIBLIO_FIELDS]
-    query = select(Paper.id, *columns).where(Paper.doi.is_not(None), or_(*(c.is_(None) for c in columns)))
+    # Editors alone never select a paper: most papers have none.
+    wanted = [getattr(Paper, name) for name in ("volume", "issue", "pages", "pmid", "pmcid")]
+    query = select(Paper.id, *columns).where(Paper.doi.is_not(None), or_(*(c.is_(None) for c in wanted)))
     if only is not None:
         query = query.where(Paper.id.in_(only))
     rows = (await session.execute(query.order_by(Paper.created_at))).all()
