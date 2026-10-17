@@ -258,3 +258,47 @@ test('a refused Continue is not shown on another run', async () => {
   await waitFor(() => expect(screen.queryByRole('button', { name: /^Continue/ })).toBeNull())
   expect(screen.queryByRole('alert')).toBeNull()
 })
+
+const activeRun = {
+  id: 'run-1', workspace_id: 'ws-1', query_text: 'sleep and memory', filters_json: {}, sources_json: ['arxiv'],
+  status: 'exhausted', started_at: '2026-09-24T12:00:00Z', stopped_at: null, stats_json: {},
+} as never
+const summary = {
+  id: 'run-1', query_text: 'sleep and memory', status: 'exhausted', started_at: '2026-09-24T12:00:00Z', stopped_at: null,
+  sources_json: ['arxiv'], per_source_raw_count: {}, failed_sources: [], hit_count: 12, can_continue: false, sources_left: [], paused_sources: [],
+}
+
+test('the active run is named above the results', async () => {
+  vi.mocked(api.getSearchRun).mockResolvedValue(activeRun)
+  vi.spyOn(api, 'listSearchRuns').mockResolvedValue([summary] as never)
+  renderWithClient(<SearchTab workspaceId="ws-1" runId="run-1" onRunIdChange={vi.fn()} />)
+  const line = await screen.findByText(/Results from sleep and memory/)
+  expect(line).toHaveTextContent(/run on Sep 24, 2026/)
+  await waitFor(() => expect(line).toHaveTextContent('12 results'))
+})
+
+test('with no active run it says results come from every run', () => {
+  renderWithClient(<SearchTab workspaceId="ws-1" runId={null} onRunIdChange={vi.fn()} />)
+  expect(screen.getByText('Showing results from every run')).toBeInTheDocument()
+})
+
+test('Change run opens the runs list', async () => {
+  vi.mocked(api.getSearchRun).mockResolvedValue(activeRun)
+  vi.spyOn(api, 'listSearchRuns').mockResolvedValue([summary] as never)
+  renderWithClient(<SearchTab workspaceId="ws-1" runId="run-1" onRunIdChange={vi.fn()} />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Change run' }))
+  expect(await screen.findByRole('button', { name: 'Runs (1)' })).toHaveAttribute('aria-expanded', 'true')
+})
+
+// Guard: M68a made the SearchTab panel scroll as a whole, so this passes already; it pins that the criteria stay in a scroll region.
+test('the criteria panel is not clipped', async () => {
+  vi.spyOn(api, 'screeningState').mockResolvedValue({
+    research_question: null, inclusion_criteria: null, exclusion_criteria: null, prescreen_after_scheduled_runs: false,
+    auto_import_min_relevance: null, suggest_status: 'idle', suggest_done: 0, suggest_total: 0, suggest_error: null,
+    model_label: null, model_is_local: true, model_host: 'x',
+  } as never)
+  renderWithClient(<SearchTab workspaceId="ws-1" runId={null} onRunIdChange={vi.fn()} />)
+  const last = await screen.findByLabelText(/Import free PDFs automatically/)
+  expect(last.closest('[class*="overflow-y-auto"], [class*="overflow-auto"]')).not.toBeNull()
+  expect(last.closest('.overflow-hidden')).toBeNull()
+})

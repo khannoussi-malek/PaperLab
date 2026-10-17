@@ -162,4 +162,16 @@ describe('ScreeningAssist', () => {
     expect(await screen.findByRole('button', { name: 'Suggest for unscreened results' })).toBeDisabled()
     expect(screen.getByText('Add a research question or inclusion criteria first.')).toBeInTheDocument()
   })
+
+  it('the collapsed criteria say what is set', async () => {
+    stubFetch({ [`GET ${base}/screening`]: () => state({ research_question: 'Does sleep help memory?' }) })
+    const first = renderWithClient(<ScreeningAssist workspaceId="w1" />)
+    await screen.findByText('Screening criteria')
+    expect(document.querySelector('summary')).toHaveTextContent('Does sleep help memory?')
+    first.unmount()
+    stubFetch({ [`GET ${base}/screening`]: () => state({ research_question: null }) })
+    renderWithClient(<ScreeningAssist workspaceId="w1" />)
+    await screen.findByText('Screening criteria')
+    expect(document.querySelector('summary')).toHaveTextContent('Not set: AI suggestions need it')
+  })
 })
