@@ -293,3 +293,15 @@ test('rows from one query show while the other is still loading', () => {
   renderWithClient(<ScreeningTab workspaceId="ws-1" />)
   expect(screen.getByText('Imported Paper')).toBeInTheDocument()
 })
+
+test('one query empty and the other pending shows the skeleton, not the empty copy', () => {
+  vi.spyOn(queries, 'useSearchHits').mockImplementation(
+    (_w: string, _s?: string, acquisition?: string) =>
+      (acquisition === 'imported'
+        ? { data: { pages: [{ items: [], next_cursor: null }] }, isPending: false, hasNextPage: false, isFetchingNextPage: false, fetchNextPage: vi.fn() }
+        : { data: undefined, isPending: true, hasNextPage: false, isFetchingNextPage: false, fetchNextPage: vi.fn() }) as any,
+  )
+  renderWithClient(<ScreeningTab workspaceId="ws-1" />)
+  expect(screen.getByRole('status')).toHaveAttribute('aria-busy', 'true')
+  expect(screen.queryByText('Nothing to review yet')).not.toBeInTheDocument()
+})

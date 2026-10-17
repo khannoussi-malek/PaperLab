@@ -36,9 +36,11 @@ export function ReadingQueueTab({ workspaceId, runId }: { workspaceId: string; r
     return <TabSkeleton label="Loading reading list" />
   }
   if (allRuns.length === 0) {
-    return <EmptyState title="No search runs yet" action={<GoToSearchAction workspaceId={workspaceId} />}>
+    return (
+      <EmptyState title="No search runs yet" action={<GoToSearchAction workspaceId={workspaceId} />}>
         Start one on 1 · Search & screen.
       </EmptyState>
+    )
   }
 
   return (

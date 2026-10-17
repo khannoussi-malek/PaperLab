@@ -46,7 +46,7 @@ export function ScreeningTab({ workspaceId }: { workspaceId: string }) {
           message={(imported.error ?? manual.error)?.message ?? 'Could not load papers to review.'}
           onRetry={() => void Promise.all([imported.isError && imported.refetch(), manual.isError && manual.refetch()])}
         />
-      ) : imported.isPending && manual.isPending ? (
+      ) : rows.length === 0 && (imported.isPending || manual.isPending) ? (
         <TabSkeleton label="Loading papers to review" />
       ) : rows.length === 0 ? (
         <EmptyState title="Nothing to review yet" action={<GoToSearchAction workspaceId={workspaceId} />}>
