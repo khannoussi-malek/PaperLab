@@ -187,6 +187,8 @@ def test_note_text_stays_readable_and_built_links_stay_safe():
     assert html_to_markdown("<a href=' JavaScript:alert(1)'>t</a>") == "t"
     link = html_to_markdown("<a href='https://x.org/) [y](javascript:alert(1)'>t</a>")
     assert link == "[t](https://x.org/%29%20%5By%5D%28javascript:alert%281%29)"
+    out = html_to_markdown("<a href='https://x.org'>a](javascript:alert(1)) [b</a>")
+    assert out == "[a\\](javascript:alert(1)) \\[b](https://x.org)"  # one link; the text's brackets are escaped
 
 
 def test_errors_name_the_broken_entry():
