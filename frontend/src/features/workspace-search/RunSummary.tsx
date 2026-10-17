@@ -16,8 +16,8 @@ export function RunSummary({
     <div className="flex items-center gap-2 border-b px-3 py-1 text-sm text-muted-foreground">
       <p className="min-w-0 flex-1 truncate">
         {run
-          ? `Results from ${run.query_text} · run on ${day(run.started_at)}${
-              resultCount === undefined ? '' : ` · ${resultCount.toLocaleString('en')} ${resultCount === 1 ? 'result' : 'results'}`
+          ? `Active run: ${run.query_text} · run on ${day(run.started_at)}${
+              resultCount === undefined ? '' : ` · ${resultCount.toLocaleString('en')} ${resultCount === 1 ? 'new result' : 'new results'}`
             }`
           : 'Showing results from every run'}
       </p>

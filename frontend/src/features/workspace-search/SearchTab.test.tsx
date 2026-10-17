@@ -272,9 +272,9 @@ test('the active run is named above the results', async () => {
   vi.mocked(api.getSearchRun).mockResolvedValue(activeRun)
   vi.spyOn(api, 'listSearchRuns').mockResolvedValue([summary] as never)
   renderWithClient(<SearchTab workspaceId="ws-1" runId="run-1" onRunIdChange={vi.fn()} />)
-  const line = await screen.findByText(/Results from sleep and memory/)
+  const line = await screen.findByText(/Active run: sleep and memory/)
   expect(line).toHaveTextContent(/run on Sep 24, 2026/)
-  await waitFor(() => expect(line).toHaveTextContent('12 results'))
+  await waitFor(() => expect(line).toHaveTextContent('12 new results'))
 })
 
 test('with no active run it says results come from every run', () => {
