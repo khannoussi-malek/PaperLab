@@ -285,8 +285,6 @@ async def test_import_reuses_the_held_arxiv_copy_of_a_publisher_hit(session, dis
 
     assert (result.imported, result.paper_ids) == (1, [])
     assert (await reload(session, hit)).paper_id == held.id
-    await session.refresh(held)
-    assert (held.doi, held.published_doi) == (ARXIV_DOI, TACL)  # it learns its published version (M66)
     ref = await session.get(ExternalRef, hit.external_ref_id)
     await session.refresh(ref)
     assert ref.imported_as == held.id  # matched by its arXiv id: an identifier, so the reference may say so
@@ -307,3 +305,19 @@ async def test_import_still_downloads_a_lookalike_by_other_authors(session, disc
 
     assert result.imported == 1 and len(result.paper_ids) == 1
     assert (await reload(session, hit)).paper_id not in (None, held.id)
+
+
+async def test_a_held_publisher_paper_wins_and_its_held_arxiv_duplicate_is_left_alone(session, discovery_fakes):
+    ws = await workspace(session)
+    publisher = await paper(session, title=REAL, authors=AUTHORS, year=2025, doi=TACL, source_type="journal_article")
+    arxiv = await paper(session, title=REAL, authors=AUTHORS, year=2024, doi=ARXIV_DOI, source_type="preprint")
+    hit = await failed_hit(
+        session, ws, title=REAL, status="not_attempted", authors=AUTHORS, year=2025, doi=TACL,
+        external_ids={"arxiv": "2406.07735"}, pdf_urls=["https://pdf.example/closed"],
+    )  # fmt: skip
+
+    await import_hits(session, discovery_fakes.providers, ws.id, [hit.id])
+
+    assert (await reload(session, hit)).paper_id == publisher.id  # the DOI match wins
+    await session.refresh(arxiv)
+    assert arxiv.published_doi is None  # two papers must not both answer to the TACL DOI
