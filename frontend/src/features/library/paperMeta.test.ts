@@ -75,3 +75,19 @@ describe('matchesPaper', () => {
     expect(matchesPaper({ title: 'Untitled draft', authors: [], year: null, venue: null }, 'draft')).toBe(true)
   })
 })
+
+describe('byline with a published venue', () => {
+  it('prefers published_venue over the arXiv venue', () => {
+    const paper = { authors: ['Ada'], year: 2025, venue: 'arXiv (Cornell University)', published_venue: 'STOC' }
+    expect(byline(paper)).toBe('Ada · 2025 · STOC')
+    expect(byline({ ...paper, published_venue: null })).toBe('Ada · 2025 · arXiv (Cornell University)')
+  })
+})
+
+describe('matchesPaper with a published venue', () => {
+  it('finds a preprint copy by the venue it was published in', () => {
+    const paper = { title: 'On the Limits', authors: ['Ada'], year: 2025, venue: 'arXiv', published_venue: 'STOC' }
+    expect(matchesPaper(paper, 'stoc')).toBe(true)
+    expect(matchesPaper({ ...paper, published_venue: null }, 'stoc')).toBe(false)
+  })
+})

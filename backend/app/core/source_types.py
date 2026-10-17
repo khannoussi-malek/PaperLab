@@ -3,6 +3,7 @@
 `magazine` is never inferred: no reliable signal. The owner sets it by hand.
 """
 
+import re
 from typing import Literal, get_args
 
 SourceType = Literal["journal_article", "proceedings", "book", "chapter", "preprint", "magazine", "thesis", "other"]
@@ -47,6 +48,14 @@ def source_type_of(raw_type: str | None, doi: str | None, *, crossref: bool = Fa
     if not raw_type:
         return None
     return (CROSSREF_TYPES if crossref else OPENALEX_TYPES).get(raw_type.lower(), "other")
+
+
+PREPRINT_SERVERS = re.compile(r"arxiv|biorxiv|medrxiv|ssrn|research square|preprints\.org", re.IGNORECASE)
+
+
+def is_preprint_copy(paper) -> bool:
+    """An arXiv-issued DOI or source_type "preprint": the paper may have a published version elsewhere."""
+    return (paper.doi or "").lower().startswith(ARXIV_DOI_PREFIX) or paper.source_type == "preprint"
 
 
 def peer_reviewed_of(source_type: str | None) -> str:

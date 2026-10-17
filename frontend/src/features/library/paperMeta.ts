@@ -11,9 +11,9 @@ export function shortAuthors(authors: string[]): string {
 export const pageCountLabel = (count: number | null): string =>
   count ? `${count} ${count === 1 ? 'page' : 'pages'}` : ''
 
-/** "Ada, Alan et al. · 2017 · NeurIPS", leaving out whatever is missing. */
-export const byline = (paper: Pick<Paper, 'authors' | 'year' | 'venue'>): string =>
-  [shortAuthors(paper.authors), paper.year, paper.venue].filter(Boolean).join(' · ')
+/** "Ada, Alan et al. · 2017 · NeurIPS" (a published preprint copy shows its published venue), leaving out whatever is missing. */
+export const byline = (paper: Pick<Paper, 'authors' | 'year' | 'venue'> & { published_venue?: string | null }): string =>
+  [shortAuthors(paper.authors), paper.year, paper.published_venue ?? paper.venue].filter(Boolean).join(' · ')
 
 /** Lower-case words with accents and punctuation dropped, so "muller" finds "Müller" and "pre-training" is two words. */
 const wordsOf = (text: string): string[] =>
@@ -23,8 +23,11 @@ const wordsOf = (text: string): string[] =>
  * True when every word of `query` starts a word of the title, an author, the year or the venue: "train" finds
  * "training", but "ai" doesn't. A blank query matches all.
  */
-export function matchesPaper(paper: Pick<Paper, 'title' | 'authors' | 'year' | 'venue'>, query: string): boolean {
-  const words = wordsOf([paper.title, ...paper.authors, paper.year, paper.venue].join(' '))
+export function matchesPaper(
+  paper: Pick<Paper, 'title' | 'authors' | 'year' | 'venue'> & { published_venue?: string | null },
+  query: string,
+): boolean {
+  const words = wordsOf([paper.title, ...paper.authors, paper.year, paper.venue, paper.published_venue].join(' '))
   return wordsOf(query).every((part) => words.some((word) => word.startsWith(part)))
 }
 
