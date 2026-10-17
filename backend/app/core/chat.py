@@ -20,8 +20,8 @@ from app.models import Chunk, LLMOutput, Note, Paper, PaperStatus, Provenance
 # v6: the note-block rule leads with its condition and names "never" explicitly, to stop it firing on an unasked
 # follow-up; v5: a literal example fixed the delimiter syntax; v4: asked for notes, the model writes each as a
 # :::note block (M20)
-CHAT_PROMPT_VERSION = 6
-WORKSPACE_PROMPT_VERSION = 5  # v5: the same reordered :::note rule
+CHAT_PROMPT_VERSION = 7  # v7: cite only the labels listed (M72)
+WORKSPACE_PROMPT_VERSION = 6  # v6: the same cite-only-listed rule
 # Each file holds the system prompt, then the user prompt template after this marker line.
 PROMPT_MARKER = "\n<!-- prompt -->\n"
 SYSTEM_PROMPT, PROMPT_TEMPLATE = prompts.load("chat", CHAT_PROMPT_VERSION).split(PROMPT_MARKER)
