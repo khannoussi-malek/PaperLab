@@ -19,12 +19,15 @@ function RailLink({ href, icon: Icon, label, active }: { href: string; icon: Luc
  * Views on top, workspaces in the middle (they are the list that grows, so they get the scroll), and the two settings
  * destinations pinned to the bottom, away from the everyday items.
  */
-export function NavRail() {
+export function NavRail({ onNavigate }: { onNavigate?: () => void } = {}) {
   const route = useRoute()
   const active: NavKey = activeNav(route)
   return (
     <nav
       aria-label="Views"
+      onClick={(event) => {
+        if ((event.target as HTMLElement).closest('a')) onNavigate?.()
+      }}
       className={cn('flex min-h-0 flex-col gap-2 border-r border-glass-border p-2', glass)}
     >
       <div className="flex flex-col gap-0.5">

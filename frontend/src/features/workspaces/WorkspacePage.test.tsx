@@ -134,3 +134,13 @@ test('a zero count shows no badge', () => {
   expect(screen.getByRole('tab', { name: 'Get PDFs, step 2 of 5' })).toBeTruthy()
   expect(screen.getByRole('tab', { name: 'Full-text review, step 3 of 5' })).toBeTruthy()
 })
+
+test('the active tab scrolls into view on change', () => {
+  const scroll = vi.fn()
+  Element.prototype.scrollIntoView = scroll
+  const view = page('papers')
+  scroll.mockClear()
+  view.rerender(<WorkspacePage workspaceId="w1" tab="reading" runId={null} tags={[]} match="any" />)
+  expect(scroll).toHaveBeenCalledWith({ block: 'nearest', inline: 'nearest' })
+  expect((scroll.mock.contexts[0] as HTMLElement).getAttribute('aria-label')).toMatch(/^Reading list/)
+})
