@@ -129,3 +129,14 @@ test('a failed load shows the error and a Retry that refetches', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
   await screen.findByRole('button', { name: 'Edit Findings for Sleep paper' })
 })
+
+test('a long unbroken title wraps and clamps', async () => {
+  const title = 'Supercalifragilistic'.repeat(12)
+  vi.spyOn(api, 'listEvidenceCards').mockResolvedValue([row(ready(), 'p1', title)])
+  renderTab()
+  const header = await screen.findByRole('rowheader', { name: new RegExp(title) })
+  const shown = within(header).getByText(title)
+  expect(shown.className).toContain('break-words')
+  expect(shown.className).toContain('line-clamp-3')
+  expect(shown).toHaveAttribute('title', title)
+})

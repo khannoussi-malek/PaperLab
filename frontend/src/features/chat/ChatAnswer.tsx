@@ -1,5 +1,5 @@
 import { CornerDownRight, Sparkles } from 'lucide-react'
-import { createElement, Fragment, useMemo, type ReactNode } from 'react'
+import { createElement, Fragment, useMemo, useState, type ReactNode } from 'react'
 import type { ChatScope, ChatSource, NoteSource, SavedNote } from '@/api/client'
 import { pressable, slideUpIn } from '@/components/motion'
 import { Badge } from '@/components/ui/badge'
@@ -11,6 +11,7 @@ import { describeSource, splitCitations, type Segment } from './citations'
 import { markdownPieces, type Piece, type Tag } from './markdown'
 import { splitNoteBlocks } from './noteBlocks'
 import { SuggestedNote } from './SuggestedNote'
+import { Term } from '@/features/workspaces/Term'
 import { Scene3D } from '@/features/scene3d/Scene3D'
 
 const loadChatScene = () => import('@/features/scene3d/directors/chat')
@@ -71,6 +72,7 @@ export function ChatAnswer(props: Props) {
       })),
     [content],
   )
+  const cited = new Set(segments.flatMap((segment) => (segment.kind === 'cite' ? [segment.label] : [])))
   const known = new Set([...(sources ?? []), ...notes].flatMap((source) => (source ? [source.label] : [])))
   const renderText = (text: string) =>
     splitCitations(text, known).map((segment, i) => {
@@ -152,6 +154,8 @@ export function ChatAnswer(props: Props) {
                 sources={sources}
                 notes={notes}
                 wholePaper={wholePaper}
+                cited={cited}
+                pending={pending}
                 describe={describe}
                 onCite={onCite}
                 followUp={followUp}
@@ -159,7 +163,7 @@ export function ChatAnswer(props: Props) {
             )}
             {notesUsed !== null && notesTotal !== null && notesUsed < notesTotal && (
               <p className="text-xs text-muted-foreground">
-                Using {notesUsed} of {notesTotal} notes (newest first)
+                Using {notesUsed} of {notesTotal} <Term term="notesUsed">notes</Term> (newest first)
               </p>
             )}
           </div>
@@ -227,7 +231,9 @@ function TypingIndicator({ label, phase }: { label: string; phase: 'sources' | '
   )
 }
 
-type MetaProps = Pick<Props, 'footer' | 'sources' | 'notes' | 'wholePaper' | 'onCite' | 'followUp'> & {
+type MetaProps = Pick<Props, 'footer' | 'sources' | 'notes' | 'wholePaper' | 'onCite' | 'followUp' | 'pending'> & {
+  /** Labels the answer's text cites; only these show until "Show all". */
+  cited: ReadonlySet<string>
   describe: (source: Cited) => string
 }
 
@@ -235,7 +241,8 @@ type MetaProps = Pick<Props, 'footer' | 'sources' | 'notes' | 'wholePaper' | 'on
  * One quiet row: the AI mark, then a pill per source. Everything longer (the model, each passage's page and section)
  * waits in a tooltip, so a thread of answers doesn't repeat the same line under each one.
  */
-function AnswerMeta({ footer, sources, notes, wholePaper, describe, onCite, followUp }: MetaProps) {
+function AnswerMeta({ footer, sources, notes, wholePaper, cited, pending, describe, onCite, followUp }: MetaProps) {
+  const [showAll, setShowAll] = useState(false)
   const aiLabel = footer ? aiMark(footer.model, footer.connectionName, footer.promptVersion) : 'AI'
   const pill = (source: Cited | null) =>
     source && (
@@ -253,6 +260,9 @@ function AnswerMeta({ footer, sources, notes, wholePaper, describe, onCite, foll
         </Hint>
       </li>
     )
+  const shown = (list: (Cited | null)[]) => (wholePaper || showAll ? list : list.filter((source) => source && cited.has(source.label)))
+  const total = wholePaper || sources === null ? 0 : sources.length + notes.filter(Boolean).length
+  const hidden = total - [...shown(sources ?? []), ...shown(notes)].filter(Boolean).length
   // The pills wrap among themselves, so the AI mark keeps its place at the start of the row.
   return (
     <div className="flex items-start gap-1.5">
@@ -276,10 +286,16 @@ function AnswerMeta({ footer, sources, notes, wholePaper, describe, onCite, foll
               <Badge variant="outline">Whole paper · {sources.length} chunks</Badge>
             </li>
           ) : (
-            sources.map(pill)
+            shown(sources).map(pill)
           )}
-          {notes.map(pill)}
+          {shown(notes).map(pill)}
         </ul>
+      )}
+      {/* A streaming answer shows what it cites so far; the full list waits for the saved answer. */}
+      {hidden > 0 && !pending && (
+        <Button variant="link" size="xs" className="shrink-0" onClick={() => setShowAll(true)}>
+          Show all {total} sources
+        </Button>
       )}
       {followUp && (
         <Button

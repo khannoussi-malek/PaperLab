@@ -98,8 +98,8 @@ function PaperRow({ row, workspaceId, onGenerate }: { row: EvidenceCardRow; work
   const meta = [row.first_author, row.year].filter(Boolean).join(', ')
   return (
     <TableRow>
-      <TableHead scope="row" className="max-w-56 whitespace-normal align-top">
-        <div className="font-medium">{title}</div>
+      <TableHead scope="row" aria-label={title} className="max-w-56 whitespace-normal align-top">
+        <div className="font-medium break-words line-clamp-3" title={title}>{title}</div>
         {meta && <div className="text-xs font-normal text-muted-foreground">{meta}</div>}
         {card?.status === 'ready' && (
           <Button variant="link" size="sm" className="h-auto p-0" onClick={() => onGenerate(row)} aria-label={`Regenerate card for ${title}`}>
