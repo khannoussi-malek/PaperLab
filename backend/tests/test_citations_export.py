@@ -76,6 +76,7 @@ def test_url_only_without_a_doi():
     item = csl_item(paper(doi=None, oa_url="https://example.org/p.pdf"))
     assert "DOI" not in item and item["URL"] == "https://example.org/p.pdf"
     assert "URL" not in csl_item(paper(doi=None, oa_url=None))
+    assert csl_item(paper(oa_url="https://example.org/p.pdf"))["URL"] == "https://example.org/p.pdf"  # M40: with a DOI
 
 
 def test_missing_year_venue_and_unknown_peer_review_are_left_out():
@@ -137,7 +138,7 @@ def test_formats_table_and_unknown_format():
 
 def test_csljson_is_the_items_as_a_json_array():
     items = items_of(paper(), paper(title="Other"))
-    assert json.loads(render(items, "csljson")) == items
+    assert json.loads(render(items, "csljson")) == [{k: v for k, v in i.items() if k != "_keywords"} for i in items]
 
 
 def test_bibtex_round_trips_and_keeps_unicode():

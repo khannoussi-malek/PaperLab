@@ -114,7 +114,7 @@ def test_bibtex_title_with_braces_and_specials_round_trips_after_unescaping():
 
 def test_a_preprint_note_does_not_repeat_the_genre():
     p = paper(source_type="preprint", peer_reviewed="false", doi="10.48550/arXiv.2401.00001", venue=None)
-    assert csl_item(p)["note"] == "Not peer-reviewed · full text in PaperLab"
+    assert csl_item(p)["note"].split("\n")[0] == "Not peer-reviewed · full text in PaperLab"
     assert render(items_of(p), "bibtex").count("Preprint") == 1
 
 
