@@ -61,7 +61,8 @@ async def test_a_paper_found_without_openalex_locks_its_doi_so_enrichment_trusts
     by_arxiv = await discovery.add(
         session,
         discovery_fakes.providers,
-        candidate(external_ids={"arxiv": "2003.07000"}, pdf_urls=[f"{HOST}/copy.pdf"]),
+        # its own title: the same title, author and year as by_doi would be its published version (M69)
+        candidate(title="Found: Another Paper", external_ids={"arxiv": "2003.07000"}, pdf_urls=[f"{HOST}/copy.pdf"]),
         pdf_dir,
     )
 
@@ -814,3 +815,85 @@ async def test_an_error_on_the_prefix_search_is_recorded_after_the_first_no_matc
         await discovery.add(session, providers, renamed(), pdf_dir)
 
     assert [t["outcome"] for t in raised.value.details["tried"]] == ["bot_check", "no_match", "busy"]
+
+
+# --- M69: adding the arXiv copy of a paper the library holds as its published version reuses that paper ---
+
+TACL_DOI = "10.1162/tacl_a_00757"
+
+
+async def published_copy(session, title=REAL_TITLE, authors=REAL_AUTHORS, year=2025, **fields) -> Paper:
+    defaults = {
+        "doi": TACL_DOI, "venue": "Transactions of the Association for Computational Linguistics",
+        "source_type": "journal_article",
+    }  # fmt: skip
+    paper = Paper(file_path="/nonexistent.pdf", title=title, authors=authors, year=year, **defaults | fields)
+    session.add(paper)
+    await session.commit()
+    return paper
+
+
+def arxiv_copy(**fields) -> Candidate:
+    base = {
+        "title": REAL_TITLE, "authors": REAL_AUTHORS, "year": 2024, "doi": HELD_DOI,
+        "external_ids": {"arxiv": "2406.07735"}, "pdf_urls": [f"{HOST}/pdf/2406.07735"],
+    }  # fmt: skip
+    return candidate(**base | fields)
+
+
+@pytest.mark.parametrize(
+    "held_title",
+    [REAL_TITLE, TACL_TITLE, REAL_TITLE.replace("REAL Sampling", "REAL-Sampling")],
+)  # the same title, renamed on publication, or punctuated differently
+async def test_an_arxiv_copy_reuses_the_held_published_version(session, discovery_fakes, pdf_dir, held_title):
+    held = await published_copy(session, title=held_title)
+
+    with pytest.raises(Conflict) as raised:
+        await discovery.add(session, discovery_fakes.providers, arxiv_copy(), pdf_dir)
+
+    assert str(raised.value) == discovery.ALREADY_IN_LIBRARY and raised.value.details["paper_id"] == held.id
+    assert raised.value.details["tried"] == [{"url": "https://arxiv.org/abs/2406.07735", "outcome": "in_library"}]
+    assert discovery_fakes.pdf_host.requests == []  # nothing downloaded
+    await session.refresh(held)
+    assert (held.doi, held.venue, held.source_type) == (
+        TACL_DOI, "Transactions of the Association for Computational Linguistics", "journal_article",
+    )  # fmt: skip
+
+
+@pytest.mark.parametrize(
+    ("held_fields", "why"),
+    [
+        ({"authors": ["Someone Else", "Another Person"]}, "other authors"),
+        ({"year": 2020}, "published before the preprint"),
+        ({"doi": "10.48550/arxiv.2406.99999", "source_type": "preprint"}, "the held paper is itself a preprint"),
+        ({"title": "REAL Sampling: Something Else Entirely", "authors": REAL_AUTHORS[:2]}, "a 2-author renamed match"),
+    ],
+)
+async def test_a_title_lookalike_is_not_reused(session, discovery_fakes, pdf_dir, held_fields, why):
+    held = await published_copy(session, **held_fields)
+    discovery_fakes.pdf_host.reply("/pdf/2406.07735", 200, content=PDF)
+
+    paper = await discovery.add(session, discovery_fakes.providers, arxiv_copy(), pdf_dir)
+
+    assert paper.id != held.id, why
+
+
+async def test_a_publisher_candidate_is_not_matched_by_title(session, discovery_fakes, pdf_dir):
+    await published_copy(session)
+    discovery_fakes.pdf_host.reply("/other.pdf", 200, content=PDF)
+    other = candidate(title=REAL_TITLE, authors=REAL_AUTHORS, year=2025, doi="10.5555/another-venue",
+                      pdf_urls=[f"{HOST}/other.pdf"])  # fmt: skip
+
+    paper = await discovery.add(session, discovery_fakes.providers, other, pdf_dir)
+
+    assert paper.doi == "10.5555/another-venue"  # only an arXiv copy looks for its published version by title
+
+
+async def test_an_arxiv_pdf_link_alone_marks_an_arxiv_copy(session, discovery_fakes, pdf_dir):
+    held = await published_copy(session)
+    link_only = arxiv_copy(doi=None, external_ids={}, pdf_urls=["https://arxiv.org/pdf/2406.07735"])
+
+    with pytest.raises(Conflict) as raised:
+        await discovery.add(session, discovery_fakes.providers, link_only, pdf_dir)
+
+    assert raised.value.details["paper_id"] == held.id

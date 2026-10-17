@@ -44,6 +44,7 @@ from app.core.paper_enrichment import apply_published
 from app.core.paper_sources import KEYED, NAMES, SourceSettings
 from app.core.redact import redact
 from app.core.source_registry import ASKS
+from app.core.source_types import is_preprint_copy
 from app.models import Paper
 from app.providers import arxiv, discovery_fake, semantic_scholar, unpaywall
 
@@ -576,6 +577,37 @@ async def _reuse_arxiv_copy(
         raise Conflict(ALREADY_IN_LIBRARY, paper_id=paper_id, tried=[*tried, found])
 
 
+async def _reuse_published_copy(session: AsyncSession, candidate: Candidate) -> None:
+    """Raises Conflict(ALREADY_IN_LIBRARY, paper_id, tried) when the candidate is an arXiv copy of a paper the library
+    already holds as its published version: the same title (or the same title before its colon, when renamed on
+    publication) under the arXiv fallback's author and year rules, read with the held paper as the published side.
+    The held paper is not changed. Otherwise returns. The transaction ends either way, before any download.
+    ponytail: scans the titles that start with the candidate's first word (papers have no title index); it only runs
+    for an arXiv copy."""
+    is_arxiv_copy = not candidate.doi or arxiv_from_doi(candidate.doi)
+    arxiv_id = next(iter(_arxiv_ids(candidate)), None) if is_arxiv_copy else None
+    first = next(iter(normal_title(candidate.title).split()), "")
+    found = None
+    if arxiv_id and first:
+        columns = (Paper.id, Paper.title, Paper.authors, Paper.year, Paper.doi, Paper.source_type)
+        rows = await session.execute(select(*columns).where(func.lower(Paper.title).startswith(first, autoescape=True)))
+        preprint = {"title": candidate.title, "authors": candidate.authors, "year": candidate.year}
+        found = next(
+            (
+                held.id
+                for held in rows
+                if not is_preprint_copy(held)
+                and (published := Candidate(title=held.title, authors=held.authors, year=held.year))
+                and (_same_work(published, preprint) or _renamed_work(published, preprint))
+            ),
+            None,
+        )
+    await session.commit()
+    if found is not None:
+        tried = [{"url": f"https://arxiv.org/abs/{arxiv_id}", "outcome": "in_library"}]
+        raise Conflict(ALREADY_IN_LIBRARY, paper_id=found, tried=tried)
+
+
 async def _arxiv_title_copy(
     session: AsyncSession, providers: Providers, candidate: Candidate, tried: list[dict[str, str]]
 ) -> tuple[bytes | None, list[dict[str, str]]]:
@@ -669,6 +701,7 @@ async def add(
         raise Conflict(ALREADY_IN_LIBRARY, paper_id=marked.paper_id)
     # Release the connection (and its transaction) before a download that can take up to several 30s reads.
     await session.commit()
+    await _reuse_published_copy(session, candidate)  # the reverse: its published version is held
     if candidate.doi and candidate.pdf_urls:  # one extra request: a repository copy beside a bot-checked publisher
         [candidate] = await _add_unpaywall_links(providers.client("unpaywall"), [candidate], merge=True)
     await _reuse_arxiv_copy(session, candidate, _arxiv_ids(candidate), [])  # before any download
