@@ -582,17 +582,20 @@ async def _reuse_published_copy(session: AsyncSession, candidate: Candidate) -> 
     already holds as its published version: the same title (or the same title before its colon, when renamed on
     publication) under the arXiv fallback's author and year rules, read with the held paper as the published side.
     The held paper is not changed. Otherwise returns. The transaction ends either way, before any download.
-    ponytail: a title prefix scan; it only runs for an arXiv copy, and papers have no title index to need."""
-    arxiv_id = arxiv_from_doi(candidate.doi) or (None if candidate.doi else candidate.external_ids.get("arxiv"))
-    head = candidate.title.partition(":")[0].strip().lower()
+    ponytail: scans the titles that start with the candidate's first word (papers have no title index); it only runs
+    for an arXiv copy."""
+    is_arxiv_copy = not candidate.doi or arxiv_from_doi(candidate.doi)
+    arxiv_id = next(iter(_arxiv_ids(candidate)), None) if is_arxiv_copy else None
+    first = next(iter(normal_title(candidate.title).split()), "")
     found = None
-    if arxiv_id and head:
-        rows = await session.execute(select(Paper).where(func.lower(Paper.title).startswith(head, autoescape=True)))
+    if arxiv_id and first:
+        columns = (Paper.id, Paper.title, Paper.authors, Paper.year, Paper.doi, Paper.source_type)
+        rows = await session.execute(select(*columns).where(func.lower(Paper.title).startswith(first, autoescape=True)))
         preprint = {"title": candidate.title, "authors": candidate.authors, "year": candidate.year}
         found = next(
             (
                 held.id
-                for held in rows.scalars()
+                for held in rows
                 if not is_preprint_copy(held)
                 and (published := Candidate(title=held.title, authors=held.authors, year=held.year))
                 and (_same_work(published, preprint) or _renamed_work(published, preprint))
@@ -698,10 +701,10 @@ async def add(
         raise Conflict(ALREADY_IN_LIBRARY, paper_id=marked.paper_id)
     # Release the connection (and its transaction) before a download that can take up to several 30s reads.
     await session.commit()
+    await _reuse_published_copy(session, candidate)  # the reverse: its published version is held
     if candidate.doi and candidate.pdf_urls:  # one extra request: a repository copy beside a bot-checked publisher
         [candidate] = await _add_unpaywall_links(providers.client("unpaywall"), [candidate], merge=True)
     await _reuse_arxiv_copy(session, candidate, _arxiv_ids(candidate), [])  # before any download
-    await _reuse_published_copy(session, candidate)  # the reverse: its published version is held
     data, tried = await download_pdf(providers.pdf, candidate.pdf_urls)
     copies: list[str] = []
     if data is None:
