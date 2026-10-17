@@ -519,6 +519,18 @@ async def test_adding_a_publisher_doi_reuses_the_arxiv_copy_in_the_library(sessi
     assert (copy.published_doi, copy.published_venue) == (REAL_TACL_DOI, REAL_TACL_VENUE)
     assert copy.peer_reviewed == "true"
     assert copy.doi == f"10.48550/arxiv.{REAL_ARXIV}"
+    assert not any(r.url.path.startswith("/pdf/") for r in real_world.pdf_host.requests)  # nothing downloaded
+    assert added.tried[-1] == {"url": f"https://doi.org/{REAL_TACL_DOI}", "outcome": "in_library"}
+
+
+async def test_a_failed_arxiv_copy_is_requeued_when_the_publisher_doi_is_added(session, tmp_path, jobs, real_world):
+    copy = await library_copy(session, tmp_path, f"10.48550/arxiv.{REAL_ARXIV}", status=PaperStatus.FAILED)
+
+    added = await pipeline.add_paper(session, REAL_TACL_DOI)
+
+    await session.refresh(copy)
+    assert (added.status, added.paper_id) == ("queued", copy.id)
+    assert copy.status == PaperStatus.UPLOADED and jobs.jobs == [("ingest_paper", str(copy.id))]
 
 
 async def test_a_locked_published_doi_on_the_copy_is_kept(session, tmp_path, jobs, real_world):
@@ -535,11 +547,13 @@ async def test_a_locked_published_doi_on_the_copy_is_kept(session, tmp_path, job
     assert copy.peer_reviewed == "true"  # peer_reviewed only goes up
 
 
-async def test_adding_the_arxiv_id_after_the_publisher_version_is_held_still_duplicates(
+@pytest.mark.xfail(
+    strict=True, reason="adding an arXiv id when the publisher version is held still duplicates (follow-up)"
+)
+async def test_adding_the_arxiv_id_after_the_publisher_version_is_held_reuses_it(
     session, tmp_path, jobs, real_world, monkeypatch
 ):
-    """The reverse, known and not fixed in M66: the library holds the TACL version, then 2406.07735 is added. It needs a
-    title match on the add path; this test pins today's behavior (two records) so a fix flips it on purpose."""
+    """The reverse case needs a title match on the add path (not built yet)."""
     held = await library_copy(session, tmp_path, REAL_TACL_DOI, source_type="journal_article")
     candidate = Candidate(
         title=REAL_TITLE, authors=["Chang, Haw-Shiuan"], year=2024, doi=f"10.48550/arxiv.{REAL_ARXIV}",
@@ -553,5 +567,4 @@ async def test_adding_the_arxiv_id_after_the_publisher_version_is_held_still_dup
     monkeypatch.setattr(discovery, "search", search)
     added = await pipeline.add_paper(session, REAL_ARXIV)
 
-    titles = [p.id for p in await with_title(session)]
-    assert held.id in titles and added.paper_id != held.id and len(titles) == 2
+    assert [p.id for p in await with_title(session)] == [held.id] and added.paper_id == held.id

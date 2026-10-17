@@ -30,6 +30,7 @@ from app.core.candidates import (
     ARXIV_ID,
     Candidate,
     arxiv_from_doi,
+    arxiv_from_url,
     from_s2,
     merge,
     normal_title,
@@ -169,17 +170,22 @@ def _library_dois(candidate: Candidate) -> list[str]:
 
 
 async def mark_in_library(session: AsyncSession, candidates: list[Candidate]) -> list[Candidate]:
-    """New candidates with `paper_id` set where the library holds the paper, by OpenAlex ID or DOI (any case)."""
+    """New candidates with `paper_id` set where the library holds the paper, by OpenAlex ID or DOI (any case); a
+    preprint copy also answers to its published DOI."""
     ids = [oa for c in candidates if (oa := c.external_ids.get("openalex"))]
     dois = [doi for c in candidates for doi in _library_dois(c)]
     rows = (
         await session.execute(
-            select(Paper.id, func.lower(Paper.doi), Paper.openalex_id).where(
-                or_(Paper.openalex_id.in_(ids), func.lower(Paper.doi).in_(dois))
+            select(Paper.id, func.lower(Paper.doi), Paper.openalex_id, func.lower(Paper.published_doi)).where(
+                or_(
+                    Paper.openalex_id.in_(ids),
+                    func.lower(Paper.doi).in_(dois),
+                    func.lower(Paper.published_doi).in_(dois),
+                )
             )
         )
     ).all()
-    library = {key: paper_id for paper_id, doi, openalex_id in rows for key in (doi, openalex_id) if key}
+    library = {key: paper_id for paper_id, *keys in rows for key in keys if key}
     return [
         replace(
             c,
@@ -501,13 +507,34 @@ def _search_outcome(exc: httpx.HTTPError) -> str:
     return f"error: {type(exc).__name__}"
 
 
-async def _arxiv_copy_in_library(session: AsyncSession, candidate: Candidate, arxiv_id: str) -> Paper | None:
-    """The library's copy of this arXiv paper, now recording the candidate's DOI and venue as its published version."""
-    query = select(Paper).where(func.lower(Paper.doi) == f"{ARXIV_DOI_PREFIX}{arxiv_id}".lower())
-    paper = (await session.execute(query.execution_options(populate_existing=True))).scalars().first()
-    if paper is not None and apply_published(paper, candidate.doi, candidate.venue):
-        await session.commit()
-    return paper
+def _arxiv_ids(candidate: Candidate) -> list[str]:
+    """Every arXiv id the candidate names: its external ids, an arXiv DOI and arXiv links among its PDF URLs."""
+    found = [
+        candidate.external_ids.get("arxiv"),
+        arxiv_from_doi(candidate.doi),
+        *(arxiv_from_url(url) for url in candidate.pdf_urls),
+    ]
+    return list(dict.fromkeys(i for i in found if i))
+
+
+async def _reuse_arxiv_copy(
+    session: AsyncSession, candidate: Candidate, arxiv_ids: list[str], tried: list[dict[str, str]]
+) -> None:
+    """Raises Conflict(ALREADY_IN_LIBRARY, paper_id, tried) when the library holds one of these arXiv papers, after
+    recording the candidate's DOI and venue on it as its published version. Otherwise returns. The transaction ends
+    either way, so no connection idles through the downloads that follow.
+    ponytail: the lookup keys are the arXiv DOI (`10.48550/arxiv.<id>`) and arXiv links only; a copy filed under
+    another DOI is not found."""
+    keys = [f"{ARXIV_DOI_PREFIX}{i}".lower() for i in arxiv_ids]
+    query = select(Paper).where(func.lower(Paper.doi).in_(keys)).execution_options(populate_existing=True)
+    held = (await session.execute(query)).scalars().first() if keys else None
+    if held is not None:
+        apply_published(held, candidate.doi, candidate.venue)
+    paper_id = held and held.id
+    await session.commit()
+    if paper_id is not None:
+        found = {"url": f"https://doi.org/{candidate.doi}", "outcome": "in_library"}
+        raise Conflict(ALREADY_IN_LIBRARY, paper_id=paper_id, tried=[*tried, found])
 
 
 async def _arxiv_title_copy(
@@ -531,10 +558,7 @@ async def _arxiv_title_copy(
         return None, [*tried, {"url": ARXIV_SEARCH, "outcome": "no_match"}]
     arxiv_id = match["arxiv_id"]
     found = [{"url": f"https://arxiv.org/abs/{arxiv_id}", "outcome": "arxiv_title_match"}]
-    held = await _arxiv_copy_in_library(session, candidate, arxiv_id)
-    if held is not None:
-        found.append({"url": f"{ARXIV_DOI_PREFIX}{arxiv_id}", "outcome": "in_library"})
-        raise Conflict(ALREADY_IN_LIBRARY, paper_id=held.id, tried=[*tried, *found])
+    await _reuse_arxiv_copy(session, candidate, [arxiv_id], [*tried, *found])
     data, more = await download_pdf(providers.pdf, ordered_pdf_urls(arxiv_id))
     return data, [*tried, *found, *more]
 
@@ -596,11 +620,12 @@ async def add(
     wants to know what each URL said passes `tried_out` (a failure carries it on the Conflict anyway)."""
     [marked] = await mark_in_library(session, [candidate])
     if marked.paper_id is not None:
-        raise Conflict(ALREADY_IN_LIBRARY)
+        raise Conflict(ALREADY_IN_LIBRARY, paper_id=marked.paper_id)
     # Release the connection (and its transaction) before a download that can take up to several 30s reads.
     await session.commit()
     if candidate.doi and candidate.pdf_urls:  # one extra request: a repository copy beside a bot-checked publisher
         [candidate] = await _add_unpaywall_links(providers.client("unpaywall"), [candidate], merge=True)
+    await _reuse_arxiv_copy(session, candidate, _arxiv_ids(candidate), [])  # before any download
     data, tried = await download_pdf(providers.pdf, candidate.pdf_urls)
     copies: list[str] = []
     if data is None:

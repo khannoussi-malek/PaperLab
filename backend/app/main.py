@@ -111,6 +111,8 @@ def create_app() -> FastAPI:
     async def domain_error(_: Request, exc: DomainError) -> JSONResponse:
         # no_free_pdf says what it tried and where a free copy may be (M63)
         extra = {key: exc.details[key] for key in ("tried", "free_copies") if key in exc.details}
+        if "paper_id" in exc.details:  # already_in_library says which paper (M66)
+            extra["paper_id"] = str(exc.details["paper_id"])
         return JSONResponse({"detail": str(exc), **extra}, status_code=STATUS_BY_ERROR.get(type(exc), 400))
 
     @app.exception_handler(RequestValidationError)

@@ -659,3 +659,60 @@ async def test_at_most_three_urn_kb_se_links_are_resolved(session, discovery_fak
         await discovery.add(session, providers, candidate(doi="10.5555/urns", pdf_urls=[f"{HOST}/closed"]), pdf_dir)
 
     assert [r.url.path for r in discovery_fakes.pdf_host.requests].count("/resolve") == 3
+
+
+# --- M66: the library's arXiv copy is reused, not downloaded again ---
+
+HELD_DOI = "10.48550/arxiv.2406.07735"
+
+
+async def held_copy(session) -> Paper:
+    paper = Paper(file_path="/nonexistent.pdf", title=REAL_TITLE, doi=HELD_DOI, source_type="preprint")
+    session.add(paper)
+    await session.commit()
+    return paper
+
+
+async def test_the_session_is_not_in_a_transaction_when_the_arxiv_pdf_is_downloaded(
+    session, discovery_fakes, pdf_dir, monkeypatch
+):
+    providers = arxiv_world(discovery_fakes, arxiv_entry())
+    discovery_fakes.pdf_host.reply("/pdf/2406.07735", 200, content=PDF)
+    in_transaction = []
+    real = discovery.download_pdf
+
+    async def watching(*args, **kwargs):
+        in_transaction.append(session.in_transaction())
+        return await real(*args, **kwargs)
+
+    monkeypatch.setattr(discovery, "download_pdf", watching)
+
+    await discovery.add(session, providers, tacl_like(), pdf_dir)
+
+    assert in_transaction == [False, False]  # the publisher link, then the arXiv copy
+
+
+async def test_a_pdf_link_to_a_held_arxiv_copy_is_reused_without_any_download(session, discovery_fakes, pdf_dir):
+    copy = await held_copy(session)
+    link = "https://arxiv.org/pdf/2406.07735"
+
+    with pytest.raises(Conflict) as raised:
+        candidate = tacl_like(pdf_urls=[f"{HOST}/closed", link])
+        await discovery.add(session, arxiv_world(discovery_fakes), candidate, pdf_dir)
+
+    assert str(raised.value) == discovery.ALREADY_IN_LIBRARY and raised.value.details["paper_id"] == copy.id
+    assert discovery_fakes.pdf_host.requests == [] and discovery_fakes.arxiv.requests == []
+    await session.refresh(copy)
+    assert copy.published_doi == "10.1162/tacl_a_00757"
+
+
+async def test_the_in_library_entry_names_the_publisher_doi_and_no_arxiv_pdf_is_requested(
+    session, discovery_fakes, pdf_dir
+):
+    await held_copy(session)
+
+    with pytest.raises(Conflict) as raised:
+        await discovery.add(session, arxiv_world(discovery_fakes, arxiv_entry()), tacl_like(), pdf_dir)
+
+    assert raised.value.details["tried"][-1] == {"url": "https://doi.org/10.1162/tacl_a_00757", "outcome": "in_library"}
+    assert [r.url.path for r in discovery_fakes.pdf_host.requests] == ["/closed"]
