@@ -1,5 +1,5 @@
 import { CircleHelp, CircleX, Sparkles, ThumbsUp } from 'lucide-react'
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { Hit, HitReviewUpdate, SearchRun } from '@/api/client'
 import {
@@ -40,7 +40,7 @@ import { SuggestionChip } from './SuggestionChip'
 type ExcludeReason = (typeof EXCLUDE_REASONS)[number]
 
 const ROW_HEIGHT = 44
-// Below `sm` (M71) a row is two lines: the title alone on the first, its chips and actions on the second.
+// Below `sm` (M71) a row is at least two lines: the title alone on the first, its chips and actions below.
 const ROW_HEIGHT_NARROW = 72
 const NARROW = '(max-width: 639px)'
 const NO_IMPORT_REASON = 'No relevant results waiting to be imported'
@@ -152,7 +152,7 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
     // tests would see an empty list forever. A reasonable guess for the panel's usual height fixes both.
     initialRect: { width: 600, height: 600 },
   })
-  useEffect(() => virtualizer.measure(), [narrow, virtualizer])
+  useLayoutEffect(() => virtualizer.measure(), [narrow, virtualizer])
   const virtualItems = virtualizer.getVirtualItems()
   const onReview = (hitId: string, body: HitReviewUpdate) => reviewHit.mutate({ hitId, body })
   // Seeds a snowball hop straight from this hit — no import required first (see HitMenu's onSnowball docstring).
@@ -448,10 +448,17 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
                   <div
                     className={cn(
                       'flex w-full cursor-pointer items-center gap-2 border-b px-3 text-sm hover:bg-muted',
-                      narrow && 'flex-wrap content-center gap-y-1',
+                      narrow && 'flex-wrap content-center gap-y-1 py-1.5',
                       selected && 'bg-muted',
                     )}
-                    style={{ position: 'absolute', top: virtualRow.start, height: virtualRow.size, width: '100%' }}
+                    // Narrow rows are measured: a row whose suggestion chips need a third line grows instead of
+                    // spilling over the next one. Desktop rows keep their fixed single line.
+                    ref={narrow ? virtualizer.measureElement : undefined}
+                    data-index={narrow ? virtualRow.index : undefined}
+                    style={{
+                      position: 'absolute', top: virtualRow.start, width: '100%',
+                      ...(narrow ? { minHeight: ROW_HEIGHT_NARROW } : { height: virtualRow.size }),
+                    }}  // fmt: skip
                     aria-selected={selected}
                     onClick={() => setPreviewId(hit.id)}
                     onFocus={() => setPreviewId(hit.id)}

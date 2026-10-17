@@ -976,7 +976,8 @@ test('below sm a result row gives the title the first line and wraps its chips u
   const title = await within(await screen.findByLabelText('Result list')).findByText('a paper about llms')
   const row = rowOf(title)
 
-  expect(row.style.height).toBe('72px')
+  // measured, not fixed: a row whose suggestion chips need a third line grows instead of spilling onto the next
+  expect([row.style.height, row.style.minHeight, row.dataset.index]).toEqual(['', '72px', '0'])
   expect(row.className).toContain('flex-wrap')
   expect(title.className).toContain('basis-[calc(100%-2rem)]')
   vi.unstubAllGlobals()
