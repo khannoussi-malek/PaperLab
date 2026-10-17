@@ -4,13 +4,20 @@ survive."""
 
 import re
 from html.parser import HTMLParser
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 
 HEADINGS = {"h1": "#", "h2": "##", "h3": "###"}
 BLOCKS = {"p", "div", "ul", "ol", "br"}
 DROPPED = {"script", "style"}
+URL_SAFE = ":/?#@!$&'*+,;=%-._~"  # everything else, including ( ) < > [ ] and spaces, is percent-encoded
 SAFE_SCHEMES = {"http", "https", "mailto"}
 HAS_TAGS = re.compile(r"</?[a-zA-Z][^>]*>")
+
+
+def escape(text: str) -> str:
+    """Make text inert markdown: no raw HTML (< >) and no link syntax ([ ]), so `[c](javascript:...)` can't form."""
+    escaped = text.replace("\\", "\\\\").replace("[", "\\[").replace("]", "\\]")
+    return escaped.replace("<", "&lt;").replace(">", "&gt;")
 
 
 class _Converter(HTMLParser):
@@ -34,8 +41,9 @@ class _Converter(HTMLParser):
         _, extra = self.kinds.pop()
         text = "".join(self.stack.pop()).strip()
         if tag == "a":
-            safe = urlsplit(extra).scheme.lower() in SAFE_SCHEMES
-            self._put(f"[{text}]({extra})" if text and extra and safe else text)
+            href = extra.strip()
+            safe = urlsplit(href).scheme.lower() in SAFE_SCHEMES
+            self._put(f"[{text}]({quote(href, safe=URL_SAFE)})" if text and href and safe else text)
         elif tag == "li":
             first = self.lists[-1] if self.lists else [-1]
             marker = "- " if first[0] < 0 else f"{first[0]}. "
@@ -85,13 +93,13 @@ class _Converter(HTMLParser):
 
     def handle_data(self, data):
         if not self.skip:
-            self._put(re.sub(r"\s+", " ", data))
+            self._put(escape(re.sub(r"\s+", " ", data)))
 
 
 def html_to_markdown(text: str) -> str:
     """Markdown for a Zotero note. Plain text (no tags) is returned as it is, trimmed."""
     if not HAS_TAGS.search(text):
-        return text.strip()
+        return escape(text.strip())
     converter = _Converter()
     converter.feed(text)
     converter.close()
