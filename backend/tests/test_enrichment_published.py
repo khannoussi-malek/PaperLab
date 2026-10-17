@@ -38,6 +38,14 @@ def test_an_arxiv_primary_location_is_not_a_published_version():
     assert openalex_published(on_arxiv) == (None, None, None)
 
 
+def test_a_repository_deposit_is_not_a_published_version():
+    zenodo = {
+        "doi": "https://doi.org/10.5281/zenodo.1", "type": "article",
+        "primary_location": {"version": "publishedVersion", "source": {"display_name": "Zenodo", "type": "repository"}},
+    }
+    assert openalex_published(zenodo) == (None, None, None)
+
+
 async def locked_copy(session, **fields) -> Paper:
     fields = {"manual_fields": ["doi"], **fields}
     paper = Paper(title="On the Limits", file_path="/x.pdf", doi=ARXIV_DOI, openalex_id="W4411320050", **fields)
