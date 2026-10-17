@@ -273,3 +273,23 @@ test('while loading it shows a skeleton, not the empty copy', () => {
   expect(screen.getByRole('status')).toHaveAttribute('aria-busy', 'true')
   expect(screen.queryByText('Nothing to review yet')).not.toBeInTheDocument()
 })
+
+test('a failed query shows the error and Retry, not the empty copy', () => {
+  const refetch = vi.fn()
+  vi.spyOn(queries, 'useSearchHits').mockReturnValue({ data: undefined, isPending: false, isError: true, error: new Error('Nope.'), refetch, hasNextPage: false, isFetchingNextPage: false, fetchNextPage: vi.fn() } as any)
+  renderWithClient(<ScreeningTab workspaceId="ws-1" />)
+  fireEvent.click(screen.getAllByRole('button', { name: 'Retry' })[0])
+  expect(refetch).toHaveBeenCalled()
+  expect(screen.queryByText('Nothing to review yet')).not.toBeInTheDocument()
+})
+
+test('rows from one query show while the other is still loading', () => {
+  vi.spyOn(queries, 'useSearchHits').mockImplementation(
+    (_w: string, _s?: string, acquisition?: string) =>
+      (acquisition === 'imported'
+        ? { data: { pages: [{ items: [importedHit], next_cursor: null }] }, isPending: false, hasNextPage: false, isFetchingNextPage: false, fetchNextPage: vi.fn() }
+        : { data: undefined, isPending: true, hasNextPage: false, isFetchingNextPage: false, fetchNextPage: vi.fn() }) as any,
+  )
+  renderWithClient(<ScreeningTab workspaceId="ws-1" />)
+  expect(screen.getByText('Imported Paper')).toBeInTheDocument()
+})

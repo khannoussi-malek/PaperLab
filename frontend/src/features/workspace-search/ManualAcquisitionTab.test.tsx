@@ -174,3 +174,12 @@ test('when empty it says so', () => {
   expect(screen.getByText('Relevant papers land here only when no free PDF was found for them.')).toBeInTheDocument()
   expect(workspaceHref('ws-1', 'search')).toContain('tab=search')
 })
+
+test('a failed query shows the error and Retry, not the empty copy', () => {
+  const refetch = vi.fn()
+  mockHits([], { data: undefined, isPending: false, isError: true, error: new Error('Nope.'), refetch })
+  renderWithClient(<ManualAcquisitionTab workspaceId="ws-1" />)
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+  expect(refetch).toHaveBeenCalled()
+  expect(screen.queryByText('Nothing to fetch by hand')).not.toBeInTheDocument()
+})

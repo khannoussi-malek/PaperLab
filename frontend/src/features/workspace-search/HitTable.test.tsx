@@ -806,3 +806,25 @@ test('a failed accept shows the error', async () => {
   fireEvent.click(await pool().findByRole('button', { name: 'Accept: Sleep trial' }))
   expect(await screen.findByRole('alert')).toHaveTextContent('Accept failed')
 })
+
+test('a failed hits query shows the error and Retry, not the empty copy', async () => {
+  vi.spyOn(api, 'listSearchHits').mockRejectedValue(new Error('Hits are down.'))
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  expect(await screen.findByRole('button', { name: 'Retry' })).toBeInTheDocument()
+  expect(screen.getByText('Hits are down.')).toBeInTheDocument()
+  expect(screen.queryByText('No results yet: run a search above.')).not.toBeInTheDocument()
+})
+
+test('Score ≥ is not a filter in ranked order, where it does nothing', async () => {
+  vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: [], next_cursor: null })
+  vi.spyOn(api, 'rankedSearchHits').mockResolvedValue({
+    items: [], trained: true, total_unscreened: 0, streak: 0, threshold: 50, show_stop_hint: false,
+  })
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  fireEvent.change(screen.getByLabelText('Sort hits'), { target: { value: 'ai' } })
+  fireEvent.change(screen.getByLabelText('Score ≥'), { target: { value: '4' } })
+  expect(await screen.findByRole('heading', { name: 'No results match these filters.' })).toBeInTheDocument()
+  fireEvent.change(screen.getByLabelText('Sort hits'), { target: { value: 'ranked' } })
+  expect(await screen.findByRole('heading', { name: 'No results yet: run a search above.' })).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument()
+})
