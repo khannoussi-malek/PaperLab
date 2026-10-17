@@ -772,6 +772,9 @@ async def test_a_renamed_paper_downloads_its_arxiv_copy(session, discovery_fakes
         ({}, {"title": "REAL Sampling Revisited: " + REAL_TITLE.split(": ")[1]}, 2),  # another prefix
         ({}, {"year": 2022}, 2),  # published more than 2 years after the preprint
         ({}, {"year": 2026}, 2),  # the preprint came after the paper
+        ({"title": "GPT-4: " + TACL_TITLE.split(": ")[1]}, {"title": "GPT-4: x"}, 1),  # a hyphenated name is one word
+        ({}, {"authors": ["Yu Chang", *REAL_AUTHORS[1:]]}, 2),  # same surnames, another first author
+        ({"title": "REAL Sampling: Part II"}, {"title": "REAL Sampling: Part I"}, 2),  # the other part of a series
     ],
 )
 async def test_the_prefix_rule_rejects(session, discovery_fakes, pdf_dir, fake_clock, ours, entry, searches):
@@ -783,3 +786,31 @@ async def test_the_prefix_rule_rejects(session, discovery_fakes, pdf_dir, fake_c
     assert raised.value.details["tried"][-1]["outcome"] == "no_match"
     assert len(discovery_fakes.arxiv.requests) == searches
     assert [r.url.path for r in discovery_fakes.pdf_host.requests] == ["/closed"]
+
+
+@pytest.mark.parametrize("year", [2024, 2026])  # published the year of the preprint, or two years on
+async def test_the_prefix_rule_accepts_the_year_bounds(session, discovery_fakes, pdf_dir, fake_clock, year):
+    discovery_fakes.pdf_host.reply("/pdf/2406.07735", 200, content=PDF)
+    tried = []
+
+    await discovery.add(session, arxiv_world(discovery_fakes, arxiv_entry()), renamed(year=year), pdf_dir, tried)
+
+    assert tried[-2]["outcome"] == "arxiv_title_prefix_match"
+
+
+async def test_an_error_on_the_prefix_search_is_recorded_after_the_first_no_match(
+    session, discovery_fakes, pdf_dir, fake_clock
+):
+    providers = arxiv_world(discovery_fakes)
+    calls = []
+
+    def answer(request):
+        calls.append(request)
+        return httpx.Response(200, text=atom()) if len(calls) == 1 else httpx.Response(429)
+
+    providers.clients["arxiv"]._transport = httpx.MockTransport(answer)
+
+    with pytest.raises(Conflict) as raised:
+        await discovery.add(session, providers, renamed(), pdf_dir)
+
+    assert [t["outcome"] for t in raised.value.details["tried"]] == ["bot_check", "no_match", "busy"]
