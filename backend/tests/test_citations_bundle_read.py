@@ -1,6 +1,7 @@
 """M40 Task 8: read a Zotero "export with files" zip safely. No database."""
 
 import io
+import random
 import zipfile
 
 import pytest
@@ -117,17 +118,17 @@ def test_corrupt_deflate_is_a_plain_message():
 
 
 def test_corrupt_data_after_a_good_header_is_a_plain_error_on_read():
-    body = PDF + bytes(range(256)) * 200
-    data = deflated({"x.bib": BIB, "files/12/Alpha.pdf": body})
-    with read_bundle(data) as b:
+    rng = random.Random(7)
+    body = PDF + rng.randbytes(60_000)  # incompressible, so the deflate stream is long
+    good = deflated({"x.bib": BIB, "files/12/Alpha.pdf": body})
+    with read_bundle(good) as b:
         info = b._pdfs["files/12/Alpha.pdf"]
-        raw = bytearray(data)
-        pos = info.header_offset + 30 + len(info.filename) + 40
-        raw[pos : pos + 8] = b"\xff" * 8
-    with read_bundle(bytes(raw)) as b2:
-        if b2.pdf_path(0):
-            with pytest.raises(CitationsImportError):
-                b2.read_pdf(b2.pdf_path(0))
+    mid = info.header_offset + 30 + len(info.filename) + info.compress_size // 2
+    raw = bytearray(good)
+    raw[mid : mid + 200] = b"\xff" * 200  # well past the first block: the head check still passes
+    with read_bundle(bytes(raw)) as bad:
+        with pytest.raises(CitationsImportError, match="damaged"):
+            bad.read_pdf("files/12/Alpha.pdf")
 
 
 def test_rejects_other_compression_methods():
