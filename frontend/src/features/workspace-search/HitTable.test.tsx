@@ -949,3 +949,36 @@ test('Score ≥ is not a filter in ranked order, where it does nothing', async (
   expect(await screen.findByRole('heading', { name: 'No results yet: run a search above.' })).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument()
 })
+
+// M71: below `sm` a row gives its title the whole first line and wraps the chips onto a second; desktop is unchanged.
+function stubWidth(narrow: boolean) {
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: narrow && query === '(max-width: 639px)', media: query,
+    addEventListener: vi.fn(), removeEventListener: vi.fn(),
+  }))  // fmt: skip
+}
+
+const rowOf = (title: HTMLElement) => title.closest('[aria-selected]') as HTMLElement
+
+test('at desktop width a result row stays one 44 px line', async () => {
+  stubWidth(false)
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  const row = rowOf(await within(await screen.findByLabelText('Result list')).findByText('a paper about llms'))
+
+  expect(row.style.height).toBe('44px')
+  expect(row.className).not.toContain('flex-wrap')
+  vi.unstubAllGlobals()
+})
+
+test('below sm a result row gives the title the first line and wraps its chips under it', async () => {
+  stubWidth(true)
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  const title = await within(await screen.findByLabelText('Result list')).findByText('a paper about llms')
+  const row = rowOf(title)
+
+  // measured, not fixed: a row whose suggestion chips need a third line grows instead of spilling onto the next
+  expect([row.style.height, row.style.minHeight, row.dataset.index]).toEqual(['', '72px', '0'])
+  expect(row.className).toContain('flex-wrap')
+  expect(title.className).toContain('basis-[calc(100%-2rem)]')
+  vi.unstubAllGlobals()
+})
