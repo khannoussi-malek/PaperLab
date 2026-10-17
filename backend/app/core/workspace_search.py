@@ -20,7 +20,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.core import ai_sort, discovery, tags, year_range
+from app.core import ai_sort, discovery, retrieved_hits, tags, year_range
 from app.core.candidates import Candidate, from_s2, merge, normal_title
 from app.core.discovery import Providers, _add_unpaywall_links, download_pdf
 from app.core.references import _same_reference
@@ -954,9 +954,11 @@ async def import_hits(
         paper_ids.append(paper.id)
         done.append(hit)
 
+    # A hit whose download failed but whose paper the workspace holds by another key (a title) is retrieved too.
+    relinked = len(set(await retrieved_hits.link(session, workspace_id)) & {h.id for h in hits})
     await tags.apply_hit_tags(session, workspace_id, done)  # only hits imported now: a removed tag stays removed
     await session.commit()
-    return ImportResult(imported, failed, paper_ids)
+    return ImportResult(imported + relinked, failed - relinked, paper_ids)
 
 
 async def upload_hit_pdf(
