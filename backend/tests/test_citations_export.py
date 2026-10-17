@@ -76,6 +76,7 @@ def test_url_only_without_a_doi():
     item = csl_item(paper(doi=None, oa_url="https://example.org/p.pdf"))
     assert "DOI" not in item and item["URL"] == "https://example.org/p.pdf"
     assert "URL" not in csl_item(paper(doi=None, oa_url=None))
+    assert csl_item(paper(oa_url="https://example.org/p.pdf"))["URL"] == "https://example.org/p.pdf"  # M40: with a DOI
 
 
 def test_missing_year_venue_and_unknown_peer_review_are_left_out():

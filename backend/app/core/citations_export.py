@@ -16,6 +16,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import workspaces
+from app.core.candidates import arxiv_from_doi
+from app.core.citations_keywords import workspace_keywords
 from app.core.errors import InvalidInput, NotFound
 from app.models import Paper
 
@@ -86,8 +88,29 @@ def _note(paper) -> str | None:
     return note[:1].upper() + note[1:] if preprint and note else note or None
 
 
-def csl_item(paper) -> dict:
-    """The CSL-JSON item for a paper-like object (no DB). Optional editors/volume/issue/pages are read when present."""
+def _extra_lines(paper) -> list[str]:
+    """Zotero reads `Label: value` lines of a note as its Extra field, so identifiers with no CSL field go there."""
+    published, venue = getattr(paper, "published_doi", None), getattr(paper, "published_venue", None)
+    version = f"Published version: {venue + ' ' if venue else ''}"
+    arxiv = arxiv_from_doi((paper.doi or "").lower())
+    pmid, pmcid = getattr(paper, "pmid", None), getattr(paper, "pmcid", None)
+    lines = (
+        f"arXiv: {arxiv}" if arxiv else None,
+        f"PMID: {pmid}" if pmid else None,
+        f"PMCID: {pmcid}" if pmcid else None,
+        f"{version}https://doi.org/{published}" if published else None,
+    )
+    return [line for line in lines if line]
+
+
+def _keywords(paper, extra: list[str]) -> list[str]:
+    label = (paper.source_type or "").replace("_", " ")
+    return [*extra, *(k for k in (label, "peer-reviewed" if paper.peer_reviewed == "true" else None) if k)]
+
+
+def csl_item(paper, keywords: list[str] | None = None) -> dict:
+    """The CSL-JSON item for a paper-like object (no DB). `keywords` come first (a workspace's tags and screening
+    decision); the source type and "peer-reviewed" follow. Optional biblio fields are read when present."""
     item: dict = {
         "id": str(paper.id),
         "type": CSL_TYPES.get(paper.source_type, "document"),
@@ -109,12 +132,17 @@ def csl_item(paper) -> dict:
     for key, attr in (("volume", "volume"), ("issue", "issue"), ("page", "pages")):
         if value := getattr(paper, attr, None):
             item[key] = str(value)
+    for key, attr in (("abstract", "abstract"), ("ISSN", "issn"), ("PMID", "pmid"), ("PMCID", "pmcid")):
+        if value := getattr(paper, attr, None):
+            item[key] = value
     if paper.doi:
         item["DOI"] = paper.doi
-    elif paper.oa_url:
+    if paper.oa_url:
         item["URL"] = paper.oa_url
-    if note := _note(paper):
+    if note := "\n".join(p for p in (_note(paper), *_extra_lines(paper)) if p):
         item["note"] = note
+    if words := _keywords(paper, keywords or []):
+        item["keyword"] = ", ".join(words)
     return item
 
 
@@ -207,6 +235,12 @@ def _bibtex_names(people: list[dict]) -> str:
     )
 
 
+def _note_lines(item: dict) -> list[str]:
+    """The genre joined to the first note line, then one line per Extra line (`arXiv: …`, `PMID: …`)."""
+    first, *rest = (item.get("note") or "").split("\n")
+    return [line for line in (". ".join(p for p in (item.get("genre"), first) if p), *rest) if line]
+
+
 def _bibtex_fields(item: dict) -> dict[str, str]:
     kind = item["type"]
     container = item.get("container-title")
@@ -221,11 +255,18 @@ def _bibtex_fields(item: dict) -> dict[str, str]:
         "volume": item.get("volume"),
         "number": item.get("issue"),
         "pages": re.sub(r"^(\d+)\s*[-–]+\s*(\d+)$", r"\1--\2", item.get("page") or "") or None,
-        "note": ". ".join(p for p in (item.get("genre"), item.get("note")) if p),
+        "note": "\n".join(_note_lines(item)),
+        "abstract": item.get("abstract"),
+        "issn": item.get("ISSN"),
+        "pmid": item.get("PMID"),
+        "pmcid": item.get("PMCID"),
+        "keywords": item.get("keyword"),
     }
     escaped = {k: v if k in ("author", "editor") else _tex(v) for k, v in fields.items()}
-    # DOIs and URLs are verbatim in BibTeX; escaping their underscores or percents would break the link.
-    return {**escaped, "doi": item.get("DOI"), "url": item.get("URL")}
+    # DOIs, URLs and the arXiv id are verbatim in BibTeX; escaping their underscores or percents would break the link.
+    arxiv = arxiv_from_doi((item.get("DOI") or "").lower())
+    extra = {"eprint": arxiv, "archivePrefix": "arXiv" if arxiv else None}
+    return {**escaped, "doi": item.get("DOI"), "url": item.get("URL"), **extra}
 
 
 def _bibtex(items: list[dict]) -> str:
@@ -259,7 +300,10 @@ def _ris_entry(item: dict) -> dict:
         "end_page": last,
         "doi": item.get("DOI"),
         "urls": [item["URL"]] if item.get("URL") else None,
-        "notes": [". ".join(p for p in (item.get("genre"), item.get("note")) if p)],
+        "notes": _note_lines(item),
+        "abstract": item.get("abstract"),
+        "issn": item.get("ISSN"),
+        "keywords": item["keyword"].split(", ") if item.get("keyword") else None,
     }
     return {k: v for k, v in entry.items() if v}
 
@@ -348,12 +392,15 @@ async def export_papers(
     session: AsyncSession, *, workspace_id: uuid.UUID | None = None, paper_ids: list[uuid.UUID] | None = None, fmt: str
 ) -> tuple[str, int]:
     """The workspace's papers (its own order) or the selected ones (the order given, repeats dropped) rendered as `fmt`.
+    With a workspace, keywords add its tags and screening decision; ids plus a workspace select within it (any paper).
     Raises InvalidInput unknown_format / no_papers / too_many_papers, NotFound for an unknown workspace or paper."""
     if fmt not in FORMATS:
         raise InvalidInput("unknown_format")
-    if workspace_id is not None:
+    if workspace_id is not None and paper_ids is None:
         papers = await workspaces.papers(session, workspace_id)
     else:
+        if workspace_id is not None:
+            await workspaces.get(session, workspace_id)
         if len(paper_ids or []) > MAX_SELECTION:
             raise InvalidInput("too_many_papers", max=MAX_SELECTION)
         ids = list(dict.fromkeys(paper_ids or []))
@@ -363,7 +410,8 @@ async def export_papers(
         papers = [found[i] for i in ids]
     if not papers:
         raise InvalidInput("no_papers")
-    return render([csl_item(p) for p in papers], fmt), len(papers)
+    words = await workspace_keywords(session, workspace_id) if workspace_id is not None else {}
+    return render([csl_item(p, words.get(p.id)) for p in papers], fmt), len(papers)
 
 
 def filename_slug(name: str) -> str:
