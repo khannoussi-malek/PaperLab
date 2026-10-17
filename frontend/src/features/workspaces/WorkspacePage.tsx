@@ -101,8 +101,9 @@ export function WorkspacePage({ workspaceId, tab, runId, tags, match }: PageProp
               panel above), `panel`'s plain overflow-auto never actually clips anything: nothing constrains
               HitTable's own scroll container to a real pixel height, so it grows to fit every loaded row, the
               virtualizer renders all of them as real DOM nodes instead of just the visible ones, and "am I
-              scrolled to the bottom" is trivially always true. The header stack can be taller than a short viewport, so SearchTab scrolls as a whole and HitTable keeps a
-              minimum height: the virtualizer always has a real viewport. */}
+              scrolled to the bottom" is trivially always true.
+              The header stack can be taller than a short viewport, so SearchTab scrolls as a whole and HitTable keeps
+              a minimum height: the virtualizer always has a real viewport. */}
           <TabsContent value="search" forceMount className={cn(panel, 'flex flex-col overflow-hidden')}>
             <SearchTab workspaceId={workspaceId} runId={runId} onRunIdChange={setRunId} />
           </TabsContent>
