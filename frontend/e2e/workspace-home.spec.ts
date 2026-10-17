@@ -42,7 +42,7 @@ test("add two library papers to a workspace, see both papers' notes, and open on
   await expect(page.getByRole('tab', { name: /^Papers/ })).toHaveAttribute('aria-selected', 'true')
   await expect(page.getByRole('heading', { name: EMPTY })).toBeVisible()
 
-  await page.getByRole('button', { name: 'Add papers' }).click()
+  await page.getByRole('button', { name: 'Add from library' }).click()
   const dialog = page.getByRole('dialog', { name: 'Add papers' })
   await dialog.getByRole('combobox', { name: 'Search papers' }).fill(FIXTURE_TITLE)
   // Both copies share a title, and aborted runs can leave more: pick by id.

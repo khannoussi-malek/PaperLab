@@ -8,6 +8,7 @@ import { PaperList } from '@/features/library/PaperList'
 import { UploadPdfsButton } from '@/features/library/UploadPdfsButton'
 import type { TagMatch } from '@/lib/route'
 import { AddPapersDialog } from './AddPapersDialog'
+import { Hint } from './Hint'
 import { TagFilterMenu } from './TagFilterMenu'
 import { TagPicker } from './TagPicker'
 import { EmptyState, TabSkeleton } from './TabStates'
@@ -44,13 +45,24 @@ export function WorkspacePapers({
   const filterProps = { workspaceId, selected: tags, match, onChange: onTagsChange }
   return (
     <div className="flex flex-col gap-4 py-2">
-      <div className="flex items-center gap-2">
-        <Button onClick={() => setAdding(true)}>
-          <Plus aria-hidden />
-          Add papers
-        </Button>
-        <UploadPdfsButton variant="outline" isPending={upload.isPending} onUpload={(files) => upload.mutate(files)} />
-        <FindPapersButton workspaceId={workspaceId} />
+      <div className="flex flex-wrap items-center gap-2">
+        <Hint hint="Pick papers already in your library.">
+          <Button onClick={() => setAdding(true)}>
+            <Plus aria-hidden />
+            Add from library
+          </Button>
+        </Hint>
+        <UploadPdfsButton
+          variant="outline"
+          hint="Add PDFs from your computer."
+          isPending={upload.isPending}
+          onUpload={(files) => upload.mutate(files)}
+        />
+        <FindPapersButton
+          workspaceId={workspaceId}
+          label="Find by DOI or title"
+          hint="Look a paper up by DOI, arXiv ID or title and add its free PDF."
+        />
       </div>
 
       {upload.error && <ErrorAlert message={upload.error.message} />}

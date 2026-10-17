@@ -43,8 +43,8 @@ test.afterEach(async ({ request }) => {
 
 const rowOf = (scope: Locator, title: string) => scope.locator('.candidate-row').filter({ hasText: title })
 
-async function searchFromHere(page: Page): Promise<Locator> {
-  await page.getByRole('button', { name: 'Find papers' }).click()
+async function searchFromHere(page: Page, button = 'Find papers'): Promise<Locator> {
+  await page.getByRole('button', { name: button }).click()
   const dialog = page.getByRole('dialog', { name: 'Find papers' })
   await dialog.getByRole('textbox', { name: QUERY_LABEL }).fill('fixture')
   await dialog.getByRole('button', { name: 'Search' }).click()
@@ -128,7 +128,7 @@ test('a paper whose PDF link is a web page says no free PDF was found', { tag },
 
 test('a paper found from a workspace joins that workspace', { tag }, async ({ page, request, workspaceId }) => {
   await page.goto(`/#/workspaces/${workspaceId}`)
-  const dialog = await searchFromHere(page)
+  const dialog = await searchFromHere(page, 'Find by DOI or title')
 
   const paperId = await addFrom(rowOf(dialog, FREE))
 
