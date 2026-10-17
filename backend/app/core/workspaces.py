@@ -12,6 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import retrieved_hits
 from app.core.errors import Conflict, InvalidInput, NotFound
 from app.core.notes import NoteView, _with_anchors, reading_position
 from app.core.papers import get_paper
@@ -119,11 +120,13 @@ async def _membership(session: AsyncSession, workspace_id: uuid.UUID, paper_id: 
 
 
 async def add_paper(session: AsyncSession, workspace_id: uuid.UUID, paper_id: uuid.UUID) -> None:
-    """Idempotent. Raises NotFound for an unknown workspace or paper."""
+    """Idempotent. Raises NotFound for an unknown workspace or paper. A failed search hit for this paper in the
+    workspace is retrieved now (M67): every way a paper joins a workspace comes through here."""
     paper = await _membership(session, workspace_id, paper_id)
     await session.execute(
         insert(workspace_papers).values(workspace_id=workspace_id, paper_id=paper_id).on_conflict_do_nothing()
     )
+    await retrieved_hits.link(session, workspace_id)
     await session.commit()
     await session.refresh(paper, ["workspace_ids"])  # the session may already hold this paper
 
