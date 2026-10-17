@@ -175,6 +175,12 @@ test('an empty workspace says so and keeps the three add buttons', () => {
   expect(screen.getByRole('button', { name: 'Add from library' })).toBeTruthy()
 })
 
+test('"Find by DOI or title" on the Papers tab opens the find dialog', () => {
+  setup([])
+  fireEvent.click(screen.getByRole('button', { name: 'Find by DOI or title' }))
+  expect(screen.getByRole('dialog', { name: 'Find papers' })).toBeTruthy()
+})
+
 test('the three ways in are named in words', () => {
   setup([])
   const ways = [

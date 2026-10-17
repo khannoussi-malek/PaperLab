@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { ErrorAlert } from '@/features/library/ErrorAlert'
-import { Hint } from '@/features/workspaces/Hint'
+import { Hint } from '@/components/Hint'
 import { cn } from '@/lib/utils'
 import { CandidateList } from './CandidateList'
 
@@ -34,14 +34,14 @@ export function FindPapersButton({
 
   return (
     <Dialog>
-      <DialogTrigger asChild>
-        <Hint hint={hint}>
+      <Hint hint={hint}>
+        <DialogTrigger asChild>
           <Button variant="outline">
             <Search aria-hidden />
             {label}
           </Button>
-        </Hint>
-      </DialogTrigger>
+        </DialogTrigger>
+      </Hint>
       <DialogContent className={cn(glass, 'bg-glass-strong ring-glass-border sm:max-w-2xl')}>
         <DialogHeader>
           <DialogTitle>Find papers</DialogTitle>

@@ -1,7 +1,7 @@
 import { Upload } from 'lucide-react'
 import { useRef } from 'react'
 import { Button } from '@/components/ui/button'
-import { Hint } from '@/features/workspaces/Hint'
+import { Hint } from '@/components/Hint'
 
 type Props = {
   onUpload: (files: File[]) => void
