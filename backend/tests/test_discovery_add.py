@@ -716,3 +716,70 @@ async def test_the_in_library_entry_names_the_publisher_doi_and_no_arxiv_pdf_is_
 
     assert raised.value.details["tried"][-1] == {"url": "https://doi.org/10.1162/tacl_a_00757", "outcome": "in_library"}
     assert [r.url.path for r in discovery_fakes.pdf_host.requests] == ["/closed"]
+
+
+# --- M66b: a paper renamed on publication finds its arXiv copy by the title before the colon ---
+
+TACL_TITLE = (
+    "REAL Sampling: Boosting Factuality and Diversity of Open-ended Generation by Extrapolating the Entropy of an "
+    "Infinitely Large LM"
+)
+
+
+def renamed(**fields) -> Candidate:
+    return tacl_like(**{"title": TACL_TITLE, "authors": REAL_AUTHORS, "year": 2025} | fields)
+
+
+async def test_a_renamed_paper_reuses_the_held_arxiv_copy_as_its_published_version(
+    session, discovery_fakes, pdf_dir, fake_clock
+):
+    copy = await held_copy(session)
+
+    with pytest.raises(Conflict) as raised:
+        await discovery.add(session, arxiv_world(discovery_fakes, arxiv_entry()), renamed(), pdf_dir)
+
+    assert raised.value.details["paper_id"] == copy.id
+    outcomes = [t["outcome"] for t in raised.value.details["tried"]]
+    assert outcomes == ["bot_check", "no_match", "arxiv_title_prefix_match", "in_library"]
+    await session.refresh(copy)
+    assert copy.published_doi == "10.1162/tacl_a_00757"
+    searches = [r.url.params["search_query"] for r in discovery_fakes.arxiv.requests]
+    assert searches[1] == "ti:real AND ti:sampling AND au:chang"
+    assert fake_clock == [discovery.ARXIV_SPACING]  # the second search waits its 3 s
+
+
+async def test_a_renamed_paper_downloads_its_arxiv_copy(session, discovery_fakes, pdf_dir, fake_clock):
+    discovery_fakes.pdf_host.reply("/pdf/2406.07735", 200, content=PDF)
+    tried = []
+
+    paper = await discovery.add(session, arxiv_world(discovery_fakes, arxiv_entry()), renamed(), pdf_dir, tried)
+
+    assert (pdf_dir / f"{paper.id}.pdf").read_bytes() == PDF
+    assert [t["outcome"] for t in tried] == ["bot_check", "no_match", "arxiv_title_prefix_match", "pdf"]
+    assert "2406.07735" in tried[2]["url"]
+
+
+@pytest.mark.parametrize(
+    ("ours", "entry", "searches"),
+    [
+        ({"authors": REAL_AUTHORS[:2]}, {"authors": REAL_AUTHORS[:2]}, 1),  # 2 authors: the short prefix is too weak
+        ({"title": "REAL: " + TACL_TITLE.split(": ")[1]}, {"title": "REAL: x"}, 1),  # one word before the colon
+        ({"title": TACL_TITLE.replace(":", "")}, {}, 1),  # no colon
+        ({"year": None}, {}, 1),  # no year to compare
+        ({}, {"authors": [REAL_AUTHORS[1], REAL_AUTHORS[0], *REAL_AUTHORS[2:]]}, 2),  # authors out of order
+        ({}, {"authors": REAL_AUTHORS[:4]}, 2),  # an author missing
+        ({}, {"authors": [*REAL_AUTHORS[:4], "Zed Quux"]}, 2),  # an author differs
+        ({}, {"title": "REAL Sampling Revisited: " + REAL_TITLE.split(": ")[1]}, 2),  # another prefix
+        ({}, {"year": 2022}, 2),  # published more than 2 years after the preprint
+        ({}, {"year": 2026}, 2),  # the preprint came after the paper
+    ],
+)
+async def test_the_prefix_rule_rejects(session, discovery_fakes, pdf_dir, fake_clock, ours, entry, searches):
+    providers = arxiv_world(discovery_fakes, arxiv_entry(**entry))
+
+    with pytest.raises(Conflict) as raised:
+        await discovery.add(session, providers, renamed(**ours), pdf_dir)
+
+    assert raised.value.details["tried"][-1]["outcome"] == "no_match"
+    assert len(discovery_fakes.arxiv.requests) == searches
+    assert [r.url.path for r in discovery_fakes.pdf_host.requests] == ["/closed"]

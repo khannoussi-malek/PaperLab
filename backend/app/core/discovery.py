@@ -480,6 +480,29 @@ def _same_work(candidate: Candidate, entry: dict) -> bool:
     return sum(any(_surname_forms(name) & forms for forms in their_forms) for name in ours) >= 2
 
 
+def _title_prefix(title: str) -> str | None:
+    """The normalised text before a title's first colon ("real sampling"), when there is one of two words or more."""
+    head, colon, _ = title.partition(":")
+    words = normal_title(head).split()
+    return " ".join(words) if colon and len(words) >= 2 else None
+
+
+def _renamed_work(candidate: Candidate, entry: dict) -> bool:
+    """An arXiv entry is the preprint of a paper renamed on publication: the same text before the colon (two words or
+    more), the same three or more authors in the same order, and the paper published 0 to 2 years after the preprint.
+    The title test is looser than _same_work's, so the author and year tests are stricter."""
+    ours, theirs = candidate.authors, entry["authors"]
+    return (
+        (prefix := _title_prefix(candidate.title)) is not None
+        and prefix == _title_prefix(entry["title"])
+        and len(ours) >= 3
+        and len(ours) == len(theirs)
+        and all(_surname_forms(a) & _surname_forms(b) for a, b in zip(ours, theirs))
+        and None not in (candidate.year, entry["year"])
+        and entry["year"] <= candidate.year <= entry["year"] + 2
+    )
+
+
 def _has_arxiv_id(candidate: Candidate) -> bool:
     return bool(
         candidate.external_ids.get("arxiv")
@@ -540,24 +563,31 @@ async def _reuse_arxiv_copy(
 async def _arxiv_title_copy(
     session: AsyncSession, providers: Providers, candidate: Candidate, tried: list[dict[str, str]]
 ) -> tuple[bytes | None, list[dict[str, str]]]:
-    """Last resort for a paper no source links to arXiv: one title search there, and the PDF of an exact match.
-    Returns (the PDF or None, `tried` plus what this step did). Nothing happens when arXiv is off. When the library
-    already holds that arXiv paper, it learns the candidate's published version and Conflict(ALREADY_IN_LIBRARY,
-    paper_id, tried) is raised instead of downloading."""
+    """Last resort for a paper no source links to arXiv: a title search there, and the PDF of an exact match. A paper
+    that may have been renamed on publication gets a second search, by the title before its colon and its first
+    author. Returns (the PDF or None, `tried` plus what this step did). Nothing happens when arXiv is off. When the
+    library already holds that arXiv paper, it learns the candidate's published version and
+    Conflict(ALREADY_IN_LIBRARY, paper_id, tried) is raised instead of downloading."""
     http = providers.client("arxiv")
     if http is None or _has_arxiv_id(candidate):
         return None, tried
-    await _space_arxiv_searches(providers)
-    try:
-        entries = await arxiv.search(http, candidate.title, 5)
-    except httpx.HTTPError as exc:
-        logger.info("no arXiv title search for %s: %s", redact(candidate.title), redact(str(exc)))
-        return None, [*tried, {"url": ARXIV_SEARCH, "outcome": _search_outcome(exc)}]
-    match = next((e for e in entries if _same_work(candidate, e)), None)
-    if match is None:
-        return None, [*tried, {"url": ARXIV_SEARCH, "outcome": "no_match"}]
+    searches = [(candidate.title, None, _same_work, "arxiv_title_match")]
+    if (prefix := _title_prefix(candidate.title)) and len(candidate.authors) >= 3 and candidate.year:
+        searches.append((prefix, surname(candidate.authors[0]), _renamed_work, "arxiv_title_prefix_match"))
+    for title, author, same, outcome in searches:
+        await _space_arxiv_searches(providers)
+        try:
+            entries = await arxiv.search(http, title, 5, author)
+        except httpx.HTTPError as exc:
+            logger.info("no arXiv title search for %s: %s", redact(title), redact(str(exc)))
+            return None, [*tried, {"url": ARXIV_SEARCH, "outcome": _search_outcome(exc)}]
+        if match := next((e for e in entries if same(candidate, e)), None):
+            break
+        tried = [*tried, {"url": ARXIV_SEARCH, "outcome": "no_match"}]
+    else:
+        return None, tried
     arxiv_id = match["arxiv_id"]
-    found = [{"url": f"https://arxiv.org/abs/{arxiv_id}", "outcome": "arxiv_title_match"}]
+    found = [{"url": f"https://arxiv.org/abs/{arxiv_id}", "outcome": outcome}]
     await _reuse_arxiv_copy(session, candidate, [arxiv_id], [*tried, *found])
     data, more = await download_pdf(providers.pdf, ordered_pdf_urls(arxiv_id))
     return data, [*tried, *found, *more]
