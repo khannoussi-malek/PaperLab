@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useSearchHits, useUploadHitPdf } from '@/api/queries'
 import { Button } from '@/components/ui/button'
 import { pageLink } from '@/features/discovery/candidateMeta'
 import { copyText } from '@/lib/clipboard'
 import { LoadError } from '@/features/library/ErrorAlert'
 import { EmptyState, TabSkeleton } from '@/features/workspaces/TabStates'
+
+const WHY_HERE = 'Relevant papers land here only when no free PDF was found for them.'
 
 /** Hits stage-1 marked relevant but with no free PDF found automatically (Task 9/11's `import_hits` leaves these
  * `acquisition_status: 'failed'`). The user finds a copy themselves and uploads it here.
@@ -34,7 +36,15 @@ export function ManualAcquisitionTab({ workspaceId }: { workspaceId: string }) {
       {isPending && <TabSkeleton label="Loading papers to fetch" />}
       {isError && <LoadError message={error.message} onRetry={() => void refetch()} />}
       {!isPending && !isError && rows.length === 0 && (
-        <EmptyState title="Nothing to fetch by hand">Relevant papers land here only when no free PDF was found for them.</EmptyState>
+        <EmptyState title="Nothing to fetch by hand">{WHY_HERE}</EmptyState>
+      )}
+      {rows.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <h2 className="text-base font-medium">
+            {rows.length} relevant {rows.length === 1 ? 'paper needs' : 'papers need'} a PDF
+          </h2>
+          <p className="max-w-prose text-sm text-muted-foreground">{WHY_HERE}</p>
+        </div>
       )}
       {rows.map((hit) => {
         // `||`, not `??`: an empty-string title (falsy but not null/undefined) must still fall back, not render blank.
@@ -66,19 +76,11 @@ export function ManualAcquisitionTab({ workspaceId }: { workspaceId: string }) {
                 Copy DOI
               </Button>
             )}
-            <label>
-              <span className="sr-only">{`Upload PDF for ${title}`}</span>
-              <input
-                type="file"
-                accept="application/pdf"
-                aria-label={`Upload PDF for ${title}`}
-                disabled={upload.isPending}
-                onChange={(e) => {
-                  const file = e.target.files?.[0]
-                  if (file) upload.mutate({ hitId: hit.id, file })
-                }}
-              />
-            </label>
+            <UploadButton
+              title={title}
+              disabled={upload.isPending}
+              onPick={(file) => upload.mutate({ hitId: hit.id, file })}
+            />
           </div>
         )
       })}
@@ -104,5 +106,32 @@ export function ManualAcquisitionTab({ workspaceId }: { workspaceId: string }) {
         </p>
       )}
     </div>
+  )
+}
+
+/** A visually hidden native file input (kept labelled, so it stays reachable by label) driven by a visible button. */
+function UploadButton({ title, disabled, onPick }: { title: string; disabled: boolean; onPick: (file: File) => void }) {
+  const input = useRef<HTMLInputElement>(null)
+  const [fileName, setFileName] = useState<string | null>(null)
+  return (
+    <>
+      <input
+        ref={input}
+        type="file"
+        accept="application/pdf"
+        aria-label={`Upload PDF for ${title}`}
+        className="sr-only"
+        disabled={disabled}
+        onChange={(e) => {
+          const file = e.target.files?.[0]
+          if (!file) return
+          setFileName(file.name)
+          onPick(file)
+        }}
+      />
+      <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => input.current?.click()}>
+        {fileName ?? 'Upload PDF'}
+      </Button>
+    </>
   )
 }
