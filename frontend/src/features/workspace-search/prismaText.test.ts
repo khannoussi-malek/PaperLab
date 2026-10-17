@@ -47,3 +47,11 @@ test('prismaCsv escapes a query with a comma, a quote and a newline', () => {
   for (const r of rows) expect(r).toHaveLength(4)
   expect(rows.some((r) => r.includes('a, "b"\nc'))).toBe(true)
 })
+
+test('prismaCsv defuses spreadsheet formulas in text but not counts', () => {
+  const csv = prismaCsv(data, '=HYPERLINK("x")')
+  expect(csv).toContain(`"'=HYPERLINK(""x"")"`)
+  expect(csv).toContain('"Identified","120"')
+  expect(csv).not.toContain("'120")
+  expect(prismaCsv(data, '-covid')).toContain(`"'-covid"`)
+})

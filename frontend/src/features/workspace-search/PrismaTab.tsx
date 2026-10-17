@@ -136,12 +136,15 @@ function ExportActions({ data, runLabel, workspaceId, runs }: { data: PrismaExpo
     }
   }
   const onDownload = () => {
-    const url = URL.createObjectURL(new Blob([prismaCsv(data, runLabel)], { type: 'text/csv;charset=utf-8' }))
+    const url = URL.createObjectURL(new Blob(['\uFEFF', prismaCsv(data, runLabel)], { type: 'text/csv;charset=utf-8' }))
     const a = document.createElement('a')
     a.href = url
     a.download = `prisma-${slug(workspaceId)}-${slug(runs)}.csv`
+    document.body.appendChild(a)
     a.click()
-    URL.revokeObjectURL(url)
+    a.remove()
+    // Revoke later: some browsers cancel the download if the URL dies synchronously.
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
   return (
     <div className="flex flex-col gap-2">
