@@ -841,7 +841,10 @@ def arxiv_copy(**fields) -> Candidate:
     return candidate(**base | fields)
 
 
-@pytest.mark.parametrize("held_title", [REAL_TITLE, TACL_TITLE])  # the same title, or renamed on publication
+@pytest.mark.parametrize(
+    "held_title",
+    [REAL_TITLE, TACL_TITLE, REAL_TITLE.replace("REAL Sampling", "REAL-Sampling")],
+)  # the same title, renamed on publication, or punctuated differently
 async def test_an_arxiv_copy_reuses_the_held_published_version(session, discovery_fakes, pdf_dir, held_title):
     held = await published_copy(session, title=held_title)
 
@@ -884,3 +887,13 @@ async def test_a_publisher_candidate_is_not_matched_by_title(session, discovery_
     paper = await discovery.add(session, discovery_fakes.providers, other, pdf_dir)
 
     assert paper.doi == "10.5555/another-venue"  # only an arXiv copy looks for its published version by title
+
+
+async def test_an_arxiv_pdf_link_alone_marks_an_arxiv_copy(session, discovery_fakes, pdf_dir):
+    held = await published_copy(session)
+    link_only = arxiv_copy(doi=None, external_ids={}, pdf_urls=["https://arxiv.org/pdf/2406.07735"])
+
+    with pytest.raises(Conflict) as raised:
+        await discovery.add(session, discovery_fakes.providers, link_only, pdf_dir)
+
+    assert raised.value.details["paper_id"] == held.id
