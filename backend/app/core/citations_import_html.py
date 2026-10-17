@@ -37,7 +37,8 @@ class _Converter(HTMLParser):
         if tag == "a":
             href = extra.strip()
             safe = urlsplit(href).scheme.lower() in SAFE_SCHEMES
-            self._put(f"[{text}]({quote(href, safe=URL_SAFE)})" if text and href and safe else text)
+            label = text.replace("\\", "\\\\").replace("[", "\\[").replace("]", "\\]")  # link text only
+            self._put(f"[{label}]({quote(href, safe=URL_SAFE)})" if text and href and safe else text)
         elif tag == "li":
             first = self.lists[-1] if self.lists else [-1]
             marker = "- " if first[0] < 0 else f"{first[0]}. "
