@@ -1,9 +1,8 @@
 import { Download } from 'lucide-react'
 import { notesZipUrl, type Note } from '@/api/client'
 import { useWorkspaceNotes, useWorkspacePapers } from '@/api/queries'
-import { glass } from '@/components/glass'
 import { isFresh, slideUpIn } from '@/components/motion'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { LoadError } from '@/features/library/ErrorAlert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { ProvenanceBadge } from '@/features/notes/ProvenanceBadge'
@@ -67,11 +66,7 @@ export function WorkspaceNotes({ workspaceId }: { workspaceId: string }) {
   const error = notes.error ?? papers.error
 
   if (error) {
-    return (
-      <Alert variant="destructive" className={cn('border-glass-border', glass)}>
-        <AlertDescription>{error.message}</AlertDescription>
-      </Alert>
-    )
+    return <LoadError message={error.message} onRetry={() => void Promise.all([notes.error && notes.refetch(), papers.error && papers.refetch()])} />
   }
   if (!notes.data || !papers.data) return <TabSkeleton label="Loading notes" />
 

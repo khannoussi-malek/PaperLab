@@ -17,6 +17,22 @@ describe('Term', () => {
     expect(trigger.getAttribute('aria-describedby')).toBe(screen.getByText(GLOSSARY.prisma, { selector: '[data-slot=tooltip-content]' }).id)
   })
 
+  it('waits about 300 ms on hover, and has a visible focus ring', () => {
+    vi.useFakeTimers()
+    try {
+      render(<Term term="run">Run</Term>)
+      const trigger = screen.getByRole('button', { name: /Run/ })
+      expect(trigger.className).toContain('focus-visible:ring-3')
+      fireEvent.pointerMove(trigger)
+      act(() => { vi.advanceTimersByTime(200) })
+      expect(screen.queryByRole('tooltip')).toBeNull()
+      act(() => { vi.advanceTimersByTime(150) })
+      expect(screen.getByRole('tooltip')).toHaveTextContent(GLOSSARY.run)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('opens on tap and closes on a second tap', () => {
     render(<Term term="run">Run</Term>)
     const trigger = screen.getByRole('button', { name: /Run/ })

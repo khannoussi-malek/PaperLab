@@ -162,15 +162,18 @@ test('shows a loading state before the export arrives', () => {
   expect(screen.getByText(/loading/i)).toBeInTheDocument()
 })
 
-test('shows an alert with the error message when the export request fails', () => {
+test('shows the error and a Retry that refetches when the export request fails', () => {
+  const refetch = vi.fn()
   vi.spyOn(queries, 'usePrismaExport').mockReturnValue(
     {
-      data: undefined, isPending: false, isError: true, error: new Error('Could not load the PRISMA export.'),
-    } as ReturnType<typeof queries.usePrismaExport>,
+      data: undefined, isPending: false, isError: true, error: new Error('Could not load the PRISMA export.'), refetch,
+    } as unknown as ReturnType<typeof queries.usePrismaExport>,
   )
   render(<PrismaTab workspaceId="ws-1" />)
 
   expect(screen.getByRole('alert')).toHaveTextContent('Could not load the PRISMA export.')
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+  expect(refetch).toHaveBeenCalled()
 })
 
 test('lists methods notes: criteria and automation lines', () => {

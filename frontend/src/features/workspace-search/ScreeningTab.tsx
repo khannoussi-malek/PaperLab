@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Term } from '@/features/workspaces/Term'
 import { LoadError } from '@/features/library/ErrorAlert'
 import { EmptyState, GoToSearchAction, TabSkeleton } from '@/features/workspaces/TabStates'
-import { matchesFilter } from './hitReview'
+import { matchesFilter, stage2Label } from './hitReview'
 import { StatusDot } from './StatusDot'
 
 /** Stage-2 (full-text) eligibility screening for papers already acquired via a search run (imported
@@ -25,7 +25,7 @@ import { StatusDot } from './StatusDot'
  * Each call is independently keyset-paginated (50/page, same as ManualAcquisitionTab's identical situation —
  * see its "I7 fix 1" comment), so each gets its own "Load more" — silently showing only the first 50 imported
  * or first 50 manual papers would leave stage-2 screening incomplete with no indication anything is missing. */
-export function ScreeningTab({ workspaceId }: { workspaceId: string }) {
+export function ScreeningTab({ workspaceId, runId }: { workspaceId: string; runId?: string | null }) {
   const imported = useSearchHits(workspaceId, 'relevant', 'imported')
   const manual = useSearchHits(workspaceId, 'relevant', 'manual')
   const setEligibility = useSetEligibility(workspaceId)
@@ -50,7 +50,7 @@ export function ScreeningTab({ workspaceId }: { workspaceId: string }) {
       ) : rows.length === 0 && (imported.isPending || manual.isPending) ? (
         <TabSkeleton label="Loading papers to review" />
       ) : rows.length === 0 ? (
-        <EmptyState title="Nothing to review yet" action={<GoToSearchAction workspaceId={workspaceId} />}>
+        <EmptyState title="Nothing to review yet" action={<GoToSearchAction workspaceId={workspaceId} runId={runId} />}>
           Import relevant results with a PDF first.
         </EmptyState>
       ) : (
@@ -174,7 +174,7 @@ function ScreeningRow({
       <span className="flex-1 truncate">{title}</span>
       <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <StatusDot status={hit.stage2_status ?? null} />
-        {hit.stage2_status ?? 'not assessed'}
+        {stage2Label(hit.stage2_status)}
       </span>
       {paperId ? (
         <>

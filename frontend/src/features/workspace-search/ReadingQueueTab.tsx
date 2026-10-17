@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { usePrismaExport, useReadingQueue } from '@/api/queries'
-import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { readingChip } from '@/features/reading/passes'
 import { LoadError } from '@/features/library/ErrorAlert'
@@ -37,7 +36,7 @@ export function ReadingQueueTab({ workspaceId, runId }: { workspaceId: string; r
   }
   if (allRuns.length === 0) {
     return (
-      <EmptyState title="No search runs yet" action={<GoToSearchAction workspaceId={workspaceId} />}>
+      <EmptyState title="No search runs yet" action={<GoToSearchAction workspaceId={workspaceId} runId={runId} />}>
         Start one on 1 · Search & screen.
       </EmptyState>
     )
@@ -58,9 +57,7 @@ export function ReadingQueueTab({ workspaceId, runId }: { workspaceId: string; r
         </select>
       </label>
       {queue.isError && (
-        <Alert variant="destructive" className="border-glass-border">
-          <AlertDescription>{queue.error.message}</AlertDescription>
-        </Alert>
+        <LoadError message={queue.error.message} onRetry={() => void queue.refetch()} />
       )}
       {!queue.isError && queue.data === undefined && <TabSkeleton label="Loading reading list" />}
       {queue.data?.rows.length === 0 && (

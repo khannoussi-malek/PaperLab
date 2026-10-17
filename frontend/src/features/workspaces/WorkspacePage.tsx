@@ -81,7 +81,7 @@ export function WorkspacePage({ workspaceId, tab, runId, tags, match }: PageProp
         <p className="text-muted-foreground">This workspace doesn't exist. It may have been deleted.</p>
       )}
       {workspace.data && (
-        <Tabs value={tab} onValueChange={(value) => showTab(value as WorkspaceTab)} className="min-h-0 min-w-0 flex-1 gap-3">
+        <Tabs value={tab} onValueChange={(value) => showTab(value as WorkspaceTab)} className="min-h-0 min-w-0 flex-1 gap-4">
           <WorkspaceTabBar active={tab} counts={{ ...stepCounts, papers: workspace.data.paper_count, notes: workspace.data.note_count }} />
           <TabsContent value="papers" forceMount className={panel}>
             <WorkspacePapers workspaceId={workspaceId} tags={tags} match={match} onTagsChange={onTagsChange} />
@@ -114,13 +114,13 @@ export function WorkspacePage({ workspaceId, tab, runId, tags, match }: PageProp
               WorkspaceChat/SearchTab above), so they need the same bounded viewport here, not `panel`'s plain
               overflow-auto. */}
           <TabsContent value="screening" forceMount className={cn(panel, 'flex flex-col overflow-hidden')}>
-            <ScreeningTab workspaceId={workspaceId} />
+            <ScreeningTab workspaceId={workspaceId} runId={runId} />
           </TabsContent>
           <TabsContent value="reading" forceMount className={panel}>
             <ReadingQueueTab workspaceId={workspaceId} runId={runId} />
           </TabsContent>
           <TabsContent value="prisma" forceMount className={cn(panel, 'flex flex-col overflow-hidden')}>
-            <PrismaTab workspaceId={workspaceId} />
+            <PrismaTab workspaceId={workspaceId} runId={runId} />
           </TabsContent>
         </Tabs>
       )}

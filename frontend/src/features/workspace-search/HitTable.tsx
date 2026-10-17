@@ -267,8 +267,8 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
         </label>
         <span className="shrink-0 text-muted-foreground">
           {rawFound !== undefined && `${rawFound} found so far · `}
-          {filter ? `${visibleRows.length} of ${rows.length}` : rows.length} <Term term="results">results</Term> in this run
-          (after filters) <Term term="identified">How this differs from PRISMA</Term>
+          {filter ? `${visibleRows.length} of ${rows.length}` : rows.length} <Term term="results">results</Term> (after
+          filters) <Term term="identified">How this differs from PRISMA</Term>
         </span>
         <Button type="button" size="sm" disabled={importAllHits.isPending} onClick={() => importAllHits.mutate()}>
           Import all with PDF in this filter
@@ -308,6 +308,7 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
             <Sparkles aria-hidden />
             Accept AI suggestions
           </Button>
+          <Term term="aiSuggestion"><span className="sr-only">What is an AI suggestion?</span></Term>
           <label htmlFor="bulk-exclude-reason" className="sr-only">
             Exclusion reason for selected results
           </label>
