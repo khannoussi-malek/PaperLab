@@ -10,14 +10,17 @@ one. Without either it is listed in `needs_pdf` and nothing is created.
   (and, library-only, the tags) go in one short "From Zotero — …" note. A note body the paper already has is skipped,
   so importing a file twice adds nothing.
 - Each entry stands alone: one that fails is listed in `failed`, a paper it created is removed, and the rest go on.
-- Imports over INLINE_MAX entries run as the import_citations job (app/workers/citations_import.py)."""
+- An import that would fetch, or has over INLINE_MAX entries, runs as the import_citations job
+  (app/workers/citations_import.py), which stops before its timeout and lists the entries it didn't reach."""
 
 import asyncio
 import contextlib
 import logging
+import time
 import uuid
 from collections.abc import Awaitable, Callable
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
+from pathlib import Path
 from typing import IO
 
 from sqlalchemy import delete, func, select
@@ -38,6 +41,10 @@ INLINE_MAX = 50
 JOB = "import_citations"
 PROGRESS_TTL = 24 * 3600
 FAILED = "Something went wrong importing this reference. Try importing it again."
+STOPPED = (
+    "This import ran out of time, so PaperLab stopped after {done} of {total} references. Import the same file again "
+    "to add the rest: references already in your library are skipped."
+)
 FROM_ZOTERO = "From Zotero — "
 EXTRA_FIELDS = ("volume", "issue", "pages", "issn", "pmid", "pmcid")
 
@@ -50,15 +57,16 @@ class ImportResult:
     notes: int = 0
     needs_pdf: list[dict] = field(default_factory=list)  # {title, doi, tried, free_copies}
     failed: list[dict] = field(default_factory=list)  # {title, reason}
+    not_reached: list[str] = field(default_factory=list)  # titles left when the import ran out of time
+    stopped: str = ""  # why it stopped early, in words (STOPPED); "" when every entry was reached
 
     def __add__(self, other: "ImportResult") -> "ImportResult":
-        return ImportResult(
-            *(getattr(self, f) + getattr(other, f) for f in ("imported", "already_in_library", "pdfs_attached")),
-            self.notes + other.notes, [*self.needs_pdf, *other.needs_pdf], [*self.failed, *other.failed],
-        )  # fmt: skip
+        return ImportResult(**{f.name: getattr(self, f.name) + getattr(other, f.name) for f in fields(self)})
 
 
 Progress = Callable[[ImportResult], Awaitable[None]]
+GetProviders = Callable[[], Awaitable[discovery.Providers]]
+_now = time.monotonic  # patchable, so tests need not wait
 
 
 def _candidate(entry: ImportEntry) -> Candidate:
@@ -169,33 +177,48 @@ async def _discard(session: AsyncSession, paper_id: uuid.UUID) -> None:
     await papers.delete_paper(session, paper_id)
 
 
-async def _new_paper(session, entry, providers, pdf: bytes | None) -> tuple[Paper | uuid.UUID | None, dict]:
-    if pdf is not None:
+NO_PDF = {"tried": [], "free_copies": []}
+
+
+async def _new_paper(session, entry, providers: GetProviders | None, bundle: Bundle | None, index: int):
+    """(the new Paper, a held paper's id, or None with what was tried; whether its PDF came from the zip). A damaged
+    PDF in the zip falls back to a free copy when fetching is on, and fails the entry when none is found."""
+    can_fetch = providers is not None and bool(entry.doi or entry.arxiv_id)
+    if member := bundle.pdf_path(index) if bundle is not None else None:
+        try:
+            pdf = bundle.read_pdf(member)
+        except CitationsImportError:
+            if not can_fetch:
+                raise
+            made, missing = await _fetch(session, await providers(), entry)
+            if made is None:
+                raise
+            return made, missing, False
         name = discovery._filename(entry.title)
-        return await papers.create_paper(session, name, pdf, settings.pdf_dir, prefill=_prefill(entry)), {}
-    if providers is None or not (entry.doi or entry.arxiv_id):
-        return None, {"tried": [], "free_copies": []}
-    return await _fetch(session, providers, entry)
+        return await papers.create_paper(session, name, pdf, settings.pdf_dir, prefill=_prefill(entry)), {}, True
+    if not can_fetch:
+        return None, NO_PDF, False
+    return *await _fetch(session, await providers(), entry), False
 
 
 async def _one(session, entry, workspace_id, providers, bundle: Bundle | None, index: int) -> ImportResult:
     held = await _held(session, entry)
     if held is not None:
         return ImportResult(already_in_library=1, notes=await _file(session, held, entry, workspace_id))
-    member = bundle.pdf_path(index) if bundle is not None else None
-    pdf = bundle.read_pdf(member) if member else None
-    made, missing = await _new_paper(session, entry, providers, pdf)
+    made, missing, from_zip = await _new_paper(session, entry, providers, bundle, index)
     if made is None:
         return ImportResult(needs_pdf=[{"title": entry.title, "doi": entry.doi, **missing}])
     if not isinstance(made, Paper):  # the free-copy search found it held after all
         return ImportResult(already_in_library=1, notes=await _file(session, made, entry, workspace_id))
     try:
-        added = await _file(session, made.id, entry, workspace_id)
+        # First, so a crash while filing never leaves a paper that is never ingested (ingest of a paper discarded
+        # below finds it gone and stops).
         await queue.enqueue("ingest_paper", str(made.id))
+        added = await _file(session, made.id, entry, workspace_id)
     except BaseException:
         await _discard(session, made.id)
         raise
-    return ImportResult(imported=1, pdfs_attached=int(pdf is not None), notes=added)
+    return ImportResult(imported=1, pdfs_attached=int(from_zip), notes=added)
 
 
 async def _isolated(session, entry, workspace_id, providers, bundle, index) -> ImportResult:
@@ -218,19 +241,30 @@ async def apply(
     fetch_free_pdfs: bool = True,
     bundle: Bundle | None = None,
     progress: Progress | None = None,
+    deadline: float | None = None,
 ) -> ImportResult:
     """The entries as papers, one at a time (the zip's PDFs are read one by one). Raises NotFound for an unknown
-    workspace before anything is created; anything else an entry raises is listed in `failed`."""
+    workspace before anything is created; anything else an entry raises is listed in `failed`. Past `deadline` (a
+    time.monotonic() value) the entries left are listed in `not_reached` and `stopped` says so."""
     if workspace_id is not None:
         await workspaces.get(session, workspace_id)
     result = ImportResult()
-    fetches = fetch_free_pdfs and any(
-        (e.doi or e.arxiv_id) and not (bundle and bundle.pdf_path(i)) for i, e in enumerate(entries)
-    )
-    opened = discovery.open_providers(session) if fetches else contextlib.nullcontext()
-    async with opened as providers:  # one set of clients, so arXiv title searches stay paced across the import
+    async with contextlib.AsyncExitStack() as stack:
+        opened: list[discovery.Providers] = []
+
+        async def providers() -> discovery.Providers:
+            """Opened on the first fetch, then shared, so arXiv title searches stay paced across the import."""
+            if not opened:
+                opened.append(await stack.enter_async_context(discovery.open_providers(session)))
+            return opened[0]
+
         for index, entry in enumerate(entries):
-            result += await _isolated(session, entry, workspace_id, providers, bundle, index)
+            if deadline is not None and _now() >= deadline:
+                stopped = STOPPED.format(done=index, total=len(entries))
+                return result + ImportResult(not_reached=[e.title for e in entries[index:]], stopped=stopped)
+            result += await _isolated(
+                session, entry, workspace_id, providers if fetch_free_pdfs else None, bundle, index
+            )
             if progress is not None:
                 await progress(result)
     return result
@@ -247,12 +281,35 @@ def read(name: str, source: bytes | IO[bytes]) -> tuple[list[ImportEntry], Bundl
     return parse(name, source if isinstance(source, bytes) else source.read()), None
 
 
+async def _would_fetch(session: AsyncSession, entries: list[ImportEntry], bundle: Bundle | None) -> bool:
+    """Whether an entry would go to the network: an identifier, no PDF in the zip, and not already in the library."""
+    for index, entry in enumerate(entries):
+        bundled = bundle is not None and bundle.pdf_path(index)
+        if (entry.doi or entry.arxiv_id) and not bundled and await _held(session, entry) is None:
+            return True
+    return False
+
+
+def uploads_dir() -> Path:
+    """Where start() leaves a file for the job (the api and the worker share pdf_dir)."""
+    return settings.pdf_dir / "imports"
+
+
 def progress_key(job_id: str) -> str:
     return f"{job_id}:progress"
 
 
 def progress_payload(result: ImportResult, total: int, finished: bool) -> dict:
-    return asdict(result) | {"total": total, "finished": finished}
+    """While running, counts only (needs_pdf and failed as numbers), so each write stays small; finished, the whole
+    result. `done` counts the entries reached."""
+    done = result.imported + result.already_in_library + len(result.needs_pdf) + len(result.failed)
+    counts = {"total": total, "done": done, "finished": finished}
+    if finished:
+        return asdict(result) | counts
+    tallies = ("imported", "already_in_library", "pdfs_attached", "notes")
+    return {name: getattr(result, name) for name in tallies} | {
+        "needs_pdf": len(result.needs_pdf), "failed": len(result.failed),
+    } | counts  # fmt: skip
 
 
 async def start(
@@ -263,19 +320,20 @@ async def start(
     workspace_id: uuid.UUID | None = None,
     fetch_free_pdfs: bool = True,
 ) -> ImportResult | str:
-    """Imports a file now (INLINE_MAX entries or fewer), or queues the import_citations job and returns its id. The
-    job reads a copy of the file under settings.pdf_dir/imports, deleted when it ends; its progress is a Redis value
-    at progress_key(job id). Raises CitationsImportError for an unreadable file, NotFound for an unknown workspace."""
+    """Imports a file now (INLINE_MAX entries or fewer, and none that would fetch: dedupe, zipped PDFs or fetch off),
+    or queues the import_citations job and returns its id. The job reads a copy of the file in uploads_dir(), deleted
+    when it ends; its progress is a Redis value at progress_key(job id). Raises CitationsImportError for an
+    unreadable file, NotFound for an unknown workspace."""
     if workspace_id is not None:
         await workspaces.get(session, workspace_id)
     entries, bundle = read(name, data)
     with bundle or contextlib.nullcontext():
-        if len(entries) <= INLINE_MAX:
+        if len(entries) <= INLINE_MAX and not (fetch_free_pdfs and await _would_fetch(session, entries, bundle)):
             return await apply(
                 session, entries, workspace_id=workspace_id, fetch_free_pdfs=fetch_free_pdfs, bundle=bundle
             )
     job_id = f"{JOB}:{uuid.uuid4()}"
-    folder = settings.pdf_dir / "imports"
+    folder = uploads_dir()
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / f"{job_id.split(':')[1]}.upload"
     await asyncio.to_thread(path.write_bytes, data)
