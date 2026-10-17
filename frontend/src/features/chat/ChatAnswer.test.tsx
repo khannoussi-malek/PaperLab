@@ -88,3 +88,12 @@ describe('a citation that matches no source', () => {
     expect(screen.getByText(/invented \[C16\]/)).toBeTruthy()
   })
 })
+
+it('a label whose source was replaced since (a null slot) stays plain, never flagged as invented', () => {
+  const withGap = [source(1), null, source(3)]
+  render(<ChatAnswer {...base} sources={withGap} segments={[{ kind: 'text', text: 'Gone [C2] and invented [C9].' }]} />)
+
+  expect(screen.queryByLabelText(/C2\? /)).toBeNull()
+  expect(screen.getByText('[C2]').tagName).toBe('SPAN') // plain, as before: no button, no flag
+  expect(screen.getByLabelText(/C9\? This citation doesn't match/)).toBeTruthy()
+})

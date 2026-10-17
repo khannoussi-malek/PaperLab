@@ -74,12 +74,18 @@ export function ChatAnswer(props: Props) {
   )
   const cited = new Set(segments.flatMap((segment) => (segment.kind === 'cite' ? [segment.label] : [])))
   const known = new Set([...(sources ?? []), ...notes].flatMap((source) => (source ? [source.label] : [])))
+  // Labels are positional (C1…, N1…), so a label within the answer's lists named a real source when it was written,
+  // even if that slot is null now (re-ingested, or a note deleted): only one past the end was invented.
+  const beyondSources = (label: string) =>
+    Number(label.slice(1)) > (label.startsWith('C') ? (sources ?? []).length : notes.length)
   // Once the sources are known every marker is split out, so one that matches none of them shows flagged (M72)
   // rather than as plain text that reads like a real citation. Until then, unknown labels stay text.
   const renderText = (text: string) =>
     splitCitations(text, sources === null ? known : new Set([...text.matchAll(MARKER)].map((m) => m[1]))).map((segment, i) => {
       const source = segment.kind === 'cite' ? sourceFor(segment.label) : undefined
-      if (!source && segment.kind === 'cite') return <UnknownCitation key={i} label={segment.label} />
+      if (!source && segment.kind === 'cite' && beyondSources(segment.label)) {
+        return <UnknownCitation key={i} label={segment.label} />
+      }
       // The tooltip renders in a portal, so the answer's text (which promote.ts counts) is unchanged.
       return source ? (
         <Hint key={i} label={describe(source)} detail={hintFor(source)}>
