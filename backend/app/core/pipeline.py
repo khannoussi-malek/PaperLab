@@ -236,17 +236,13 @@ async def _add_found(session, providers, kind, value, workspace_uuid, tried_out=
     if match is None:
         raise NotFound("no_matching_paper", identifier=value)
     if match.paper_id is not None:
-        paper = await papers.get_paper(session, match.paper_id)
-        if workspace_uuid is not None:
-            await workspaces.add_paper(session, workspace_uuid, paper.id)
-        if paper.status == PaperStatus.FAILED:  # a retry, as the app's reingest does
-            await papers.set_status(session, paper.id, PaperStatus.UPLOADED)
-            await queue.enqueue("ingest_paper", str(paper.id))
-        status = "ingested" if paper.status == PaperStatus.READY else "queued"
-        return AddPaperResult(status=status, paper_id=paper.id, title=paper.title)
+        return await _in_library(session, match.paper_id, workspace_uuid)
     try:
         paper = await discovery.add(session, providers, match, settings.pdf_dir, tried_out)
     except Conflict as exc:
+        if str(exc) == discovery.ALREADY_IN_LIBRARY and "paper_id" in exc.details:  # its arXiv copy is held
+            held = await _in_library(session, exc.details["paper_id"], workspace_uuid)
+            return replace(held, tried=exc.details["tried"])
         if str(exc) != discovery.NO_FREE_PDF:
             raise
         return AddPaperResult(
@@ -257,6 +253,17 @@ async def _add_found(session, providers, kind, value, workspace_uuid, tried_out=
             free_copies=exc.details.get("free_copies", []),
         )
     return await _queued(session, paper, workspace_uuid)
+
+
+async def _in_library(session, paper_id, workspace_uuid) -> AddPaperResult:
+    paper = await papers.get_paper(session, paper_id)
+    if workspace_uuid is not None:
+        await workspaces.add_paper(session, workspace_uuid, paper.id)
+    if paper.status == PaperStatus.FAILED:  # a retry, as the app's reingest does
+        await papers.set_status(session, paper.id, PaperStatus.UPLOADED)
+        await queue.enqueue("ingest_paper", str(paper.id))
+    status = "ingested" if paper.status == PaperStatus.READY else "queued"
+    return AddPaperResult(status=status, paper_id=paper.id, title=paper.title)
 
 
 def _link_dois(link: str) -> list[str]:

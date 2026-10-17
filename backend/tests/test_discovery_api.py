@@ -204,3 +204,18 @@ async def test_the_live_discovery_dependency_follows_settings(no_sources_row):
         assert (providers.client("openalex"), providers.client("crossref")) == (None, None)
         assert providers.client("unpaywall").params["email"] == "me@example.org"
         assert "x-api-key" not in providers.client("semantic_scholar").headers
+
+
+async def test_add_of_a_paper_whose_arxiv_copy_is_held_is_409_naming_the_paper(client, discovery_api, session, arq):
+    paper = Paper(title="Held", file_path="/nonexistent.pdf", doi="10.48550/arxiv.2406.07735")
+    session.add(paper)
+    await session.flush()
+
+    response = await client.post(
+        "/api/discovery/add", json=body(pdf_urls=["https://arxiv.org/pdf/2406.07735"])
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == discovery.ALREADY_IN_LIBRARY
+    assert response.json()["paper_id"] == str(paper.id)
+    assert arq.jobs == []

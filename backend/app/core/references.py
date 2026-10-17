@@ -550,11 +550,20 @@ async def import_reference(
         title=ref.title, authors=ref.authors, year=ref.year, venue=ref.venue, doi=ref.doi,
         external_ids=dict(ref.external_ids), cited_by_count=ref.cited_by_count, pdf_urls=ref.pdf_urls,
     )  # fmt: skip
-    paper = await discovery.add(session, providers, candidate, pdf_dir)
     # Only doi/arxiv matter for this match, same as before — not every identifier, deliberately.
     arxiv_only = {"arxiv": ref.external_ids["arxiv"]} if "arxiv" in ref.external_ids else {}
     same_paper = [ExternalRef.id == ref_id, *_same_reference(arxiv_only, ref.doi)]
-    # Dealt with: deleting the paper later won't put it back in To read (D164).
-    await session.execute(update(ExternalRef).where(or_(*same_paper)).values(imported_as=paper.id, queued_at=None))
-    await session.commit()
+
+    async def mark_imported(paper_id: uuid.UUID) -> None:
+        # Dealt with: deleting the paper later won't put it back in To read (D164).
+        await session.execute(update(ExternalRef).where(or_(*same_paper)).values(imported_as=paper_id, queued_at=None))
+        await session.commit()
+
+    try:
+        paper = await discovery.add(session, providers, candidate, pdf_dir)
+    except Conflict as exc:
+        if str(exc) == discovery.ALREADY_IN_LIBRARY and "paper_id" in exc.details:  # the library holds its arXiv copy
+            await mark_imported(exc.details["paper_id"])
+        raise
+    await mark_imported(paper.id)
     return paper

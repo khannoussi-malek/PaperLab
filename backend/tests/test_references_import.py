@@ -139,3 +139,16 @@ async def test_importing_takes_every_row_for_that_paper_off_to_read(library, dis
         "Same arXiv ID": (paper.id, None),
         "Another paper": (None, at),
     }
+
+
+async def test_a_reference_whose_arxiv_copy_is_held_is_marked_imported_as_that_paper(library, discovery_fakes, pdf_dir):
+    held = await add_paper(library, doi="10.48550/arxiv.2406.07735")
+    ref = ExternalRef(title="Cited", doi="10.1162/tacl_a_00757", pdf_urls=["https://arxiv.org/pdf/2406.07735"])
+    library.add(ref)
+    await library.flush()
+
+    with pytest.raises(Conflict) as raised:
+        await references.import_reference(library, discovery_fakes.providers, ref.id, pdf_dir)
+
+    await library.refresh(ref)
+    assert raised.value.details["paper_id"] == held.id and ref.imported_as == held.id

@@ -154,9 +154,25 @@ export async function errorDetail(response: Response): Promise<string> {
   return JSON.stringify(detail)
 }
 
+/** A 409 that names the library paper already holding what was being added (or imported). */
+export class AlreadyInLibraryError extends Error {
+  constructor(
+    message: string,
+    readonly paperId: string,
+  ) {
+    super(message)
+    this.name = 'AlreadyInLibraryError'
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, init)
-  if (!response.ok) throw new Error(await errorDetail(response))
+  if (!response.ok) {
+    const held: unknown =
+      response.status === 409 ? await response.clone().json().then((body) => body.paper_id, () => undefined) : undefined
+    const message = await errorDetail(response)
+    throw typeof held === 'string' ? new AlreadyInLibraryError(message, held) : new Error(message)
+  }
   return (response.status === 204 ? undefined : await response.json()) as T
 }
 
