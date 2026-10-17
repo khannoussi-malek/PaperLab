@@ -15,7 +15,7 @@ async function searchAndWait(page: Page, request: APIRequestContext, workspaceId
     })
     .toBe('exhausted')
   await page.goto(`/#/workspaces/${workspaceId}?tab=search`)
-  await expect(page.getByText(/[1-9]\d* in pool/)).toBeVisible()
+  await expect(page.getByText(/[1-9]\d* results in this run/)).toBeVisible()
 }
 
 function row(page: Page, title: string) {
@@ -28,11 +28,11 @@ test('AI pre-screening scores hits, shows why, and Accept makes the decision', a
   await page.getByLabel('Include when…').fill('Studies of pagination')
   await page.getByRole('button', { name: 'Save criteria' }).click()
   page.on('dialog', (dialog) => dialog.accept())
-  await page.getByRole('button', { name: 'Suggest for unscreened hits' }).click()
+  await page.getByRole('button', { name: 'Suggest for unscreened results' }).click()
   await expect(page.getByText('Suggestions stopped')).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Suggest for unscreened hits' })).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByRole('button', { name: 'Suggest for unscreened results' })).toBeVisible({ timeout: 30_000 })
 
-  await page.getByLabel('Sort hits').selectOption('ai')
+  await page.getByLabel('Sort results').selectOption('ai')
   const first = row(page, 'paperlab pagination fixture 1')
   const second = row(page, 'paperlab pagination fixture 2')
   await expect(page.locator('[data-slot="context-menu-trigger"]').first()).toContainText(/fixture 1/i)
@@ -41,9 +41,9 @@ test('AI pre-screening scores hits, shows why, and Accept makes the decision', a
 
   await first.click()
   await page.getByRole('button', { name: 'Why' }).click()
-  await expect(page.getByLabel('Hit preview').getByText(/“.+”/)).toBeVisible()
+  await expect(page.getByLabel('Result preview').getByText(/“.+”/)).toBeVisible()
 
-  await first.getByRole('button', { name: /^Accept:/ }).click()
+  await first.getByRole('button', { name: /^Accept AI suggestion:/ }).click()
   await expect(first.getByText('relevant', { exact: true })).toBeVisible()
 
   await page.getByRole('checkbox', { name: /^Select paperlab pagination fixture 2/i }).check()

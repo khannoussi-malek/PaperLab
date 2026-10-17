@@ -46,25 +46,25 @@ test('snowball from an imported paper, screen it stage-2, see it in the PRISMA e
   const { id: runId } = await startResponse.json()
   await waitForRunToFinish(request, workspaceId, runId)
   await page.reload()
-  await expect(page.getByText(/[1-9]\d* in pool/)).toBeVisible()
+  await expect(page.getByText(/[1-9]\d* results in this run/)).toBeVisible()
 
   // "fixture 2" (not "fixture 1"): deterministically has no free PDF, so it always needs manual acquisition —
   // see workspace-search.spec.ts's own comment on why fixture 1 is avoided.
   const title = 'paperlab pagination fixture 2'
   const row = page.locator('[data-slot="context-menu-trigger"]', { hasText: title })
-  await row.getByRole('button', { name: 'Hit actions' }).click()
+  await row.getByRole('button', { name: 'Result actions' }).click()
   // exact: true — Playwright's default substring name match makes plain 'Relevant' ambiguous against the
   // "Not relevant…" submenu trigger (HitMenu.tsx) sharing the same open menu.
   await page.getByRole('menuitem', { name: 'Relevant', exact: true }).click()
   await expect(page.getByRole('menuitem', { name: 'Relevant', exact: true })).toHaveCount(0)
 
   // Hover the row to bring its own preview into the side panel (HitTable.tsx: hover/focus-driven, 150ms debounced)
-  // — asserting on the preview's heading waits out that debounce instead of a sleep. Scoped to the "Hit preview"
+  // — asserting on the preview's heading waits out that debounce instead of a sleep. Scoped to the "Result preview"
   // aside throughout: ManualAcquisitionTab (also force-mounted by WorkspacePage) independently lists this same
   // hit once it's 'failed' below, with its own identically-labelled upload input, so an unscoped getByLabel would
   // be ambiguous between the two.
   await row.hover()
-  const preview = page.locator('aside[aria-label="Hit preview"]')
+  const preview = page.locator('aside[aria-label="Result preview"]')
   await expect(preview.getByRole('heading', { name: title })).toBeVisible()
 
   const [importResponse] = await Promise.all([
@@ -91,10 +91,10 @@ test('snowball from an imported paper, screen it stage-2, see it in the PRISMA e
   const targetAlreadyPooled = hitsBefore.items.some((hit) => hit.title === SNOWBALL_TARGET)
 
   // 2/3. Screening tab: click Snowball on the seed paper's row, wait for the response.
-  await page.getByRole('tab', { name: 'Screening' }).click()
+  await page.getByRole('tab', { name: /^Full-text review/ }).click()
   const [snowballResponse] = await Promise.all([
     page.waitForResponse((r) => r.url().endsWith('/search/snowball') && r.request().method() === 'POST'),
-    page.getByRole('button', { name: 'Snowball' }).click(),
+    page.getByRole('button', { name: 'Find citing & cited papers' }).click(),
   ])
   const snowballResult = await snowballResponse.json()
   expect(snowballResult.skipped_seeds).toEqual([])
@@ -119,7 +119,7 @@ test('snowball from an imported paper, screen it stage-2, see it in the PRISMA e
 
   // 6. PRISMA tab: the eligibility mutation invalidates its query (Task 10's cache invalidation), so the funnel
   //    should update with no reload — reloading here would hide a real invalidation bug instead of catching it.
-  await page.getByRole('tab', { name: 'PRISMA' }).click()
+  await page.getByRole('tab', { name: /^PRISMA report/ }).click()
   const includedRow = page.locator('.contents', { hasText: 'Included' })
   await expect(includedRow.locator('dd')).toHaveText(/[1-9]\d*/)
 
