@@ -1,7 +1,7 @@
 import { Info } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import type { Paper } from '@/api/client'
-import { api } from '@/api/client'
+import { AlreadyInLibraryError, api } from '@/api/client'
 import { keys } from '@/api/queries'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -16,7 +16,12 @@ async function addPublished(doi: string): Promise<Outcome> {
   if (!found) return { kind: 'not-found' }
   if (found.paper_id) return { kind: 'owned', paperId: found.paper_id }
   if (found.pdf_urls.length === 0) return { kind: 'no-pdf' }
-  await api.addCandidate(found)
+  try {
+    await api.addCandidate(found)
+  } catch (error) {
+    if (error instanceof AlreadyInLibraryError) return { kind: 'owned', paperId: error.paperId }
+    throw error
+  }
   return { kind: 'added' }
 }
 

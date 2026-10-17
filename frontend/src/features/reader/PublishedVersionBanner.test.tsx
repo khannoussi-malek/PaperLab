@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { Paper } from '@/api/client'
-import { api } from '@/api/client'
+import { AlreadyInLibraryError, api } from '@/api/client'
 import { PublishedVersionBanner } from './PublishedVersionBanner'
 
 const paper = { id: 'p1', published_doi: '10.1/pub' } as Paper
@@ -59,4 +59,14 @@ it('never adds a different paper: a search without the matching DOI links the la
   fireEvent.click(screen.getByRole('button', { name: 'Add the published version' }))
   expect(await screen.findByText(/couldn't find it/i)).toBeInTheDocument()
   expect(add).not.toHaveBeenCalled()
+})
+
+it('says it is already in the library when the add is refused as a duplicate', async () => {
+  const found = candidate({ pdf_urls: ['https://x/a.pdf'] })
+  vi.spyOn(api, 'searchPapers').mockResolvedValue({ results: [found], notices: [] } as never)
+  vi.spyOn(api, 'addCandidate').mockRejectedValue(new AlreadyInLibraryError('already_in_library', 'p7'))
+  renderBanner()
+  fireEvent.click(screen.getByRole('button', { name: 'Add the published version' }))
+  expect(await screen.findByRole('link', { name: 'Open it' })).toHaveAttribute('href', '#/papers/p7')
+  expect(screen.queryByText(/couldn't add it/i)).not.toBeInTheDocument()
 })

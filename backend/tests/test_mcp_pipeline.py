@@ -8,6 +8,7 @@ import pytest
 from mcp_fixtures import *  # noqa: F403
 from mcp_fixtures import call, result
 from pdf_papers import chunked_paper
+from sqlalchemy import select
 
 from app.core import discovery, papers, pdf_links, pipeline, workspaces
 from app.core.candidates import Candidate
@@ -448,3 +449,122 @@ async def test_a_safe_link_whose_page_declares_a_private_pdf_falls_back_to_the_d
 
     assert added["status"] == "queued" and jobs.jobs == [("ingest_paper", added["paper_id"])]
     assert [t["outcome"] for t in added["tried"]][:3] == ["not_a_pdf → followed citation_pdf_url", "unsafe_url", "pdf"]
+
+
+# --- M66: a publisher DOI whose arXiv copy the library already holds ---
+
+REAL_TACL_DOI = "10.1162/tacl_a_00757"
+REAL_TACL_VENUE = "Transactions of the Association for Computational Linguistics"
+REAL_TITLE = "REAL Sampling: Boosting Factuality and Diversity of Open-Ended Generation via Asymptotic Entropy"
+REAL_ARXIV = "2406.07735"
+ATOM = (
+    '<feed xmlns="http://www.w3.org/2005/Atom"><entry><id>http://arxiv.org/abs/2406.07735v2</id>'
+    "<published>2024-06-11T00:00:00Z</published>"
+    f"<title>{REAL_TITLE}</title><author><name>Haw-Shiuan Chang</name></author>"
+    "<author><name>Nanyun Peng</name></author></entry></feed>"
+)  # fmt: skip
+
+
+def tacl_candidate() -> Candidate:
+    return Candidate(
+        title=REAL_TITLE, authors=["Chang, Haw-Shiuan", "Peng, Nanyun"], year=2025, venue=REAL_TACL_VENUE,
+        doi=REAL_TACL_DOI,        external_ids={"openalex": "W4412571773"}, pdf_urls=["https://pdf.example/closed"],
+    )  # fmt: skip
+
+
+@pytest.fixture
+def real_world(discovery_fakes, monkeypatch):
+    """The TACL candidate is found but a stranger to the library (no paper_id); its PDF is bot-checked; arXiv finds the
+    exact title."""
+    discovery_fakes.pdf_host.reply("/closed", 403, headers={"cf-mitigated": "challenge"})
+    discovery_fakes.pdf_host.reply(f"/pdf/{REAL_ARXIV}", 200, content=b"%PDF-1.7\n%real\n")
+    discovery_fakes.arxiv.reply("/api/query", 200, text=ATOM)
+    providers = discovery_fakes.turned_on("arxiv")
+
+    @asynccontextmanager
+    async def open_providers(_session):
+        yield providers
+
+    async def search(_session, _providers, _query):
+        return discovery.SearchResult([tacl_candidate()], [])
+
+    monkeypatch.setattr(discovery, "open_providers", open_providers)
+    monkeypatch.setattr(discovery, "search", search)
+    return discovery_fakes
+
+
+async def library_copy(session, tmp_path, doi, **fields) -> Paper:
+    paper, _, _ = await chunked_paper(session, tmp_path, title=REAL_TITLE)
+    for name, value in {"doi": doi, "source_type": "preprint", **fields}.items():
+        setattr(paper, name, value)
+    await session.commit()
+    return paper
+
+
+async def with_title(session) -> list[Paper]:
+    return list((await session.execute(select(Paper).where(Paper.title == REAL_TITLE))).scalars())
+
+
+async def test_adding_a_publisher_doi_reuses_the_arxiv_copy_in_the_library(session, tmp_path, jobs, real_world):
+    copy = await library_copy(session, tmp_path, f"10.48550/arxiv.{REAL_ARXIV}", openalex_id="W4399694541")
+    ws = await workspaces.create(session, f"Reuse {RUN}")
+
+    added = await pipeline.add_paper(session, REAL_TACL_DOI, workspace=f"Reuse {RUN}")
+
+    await session.refresh(copy)
+    assert [p.id for p in await with_title(session)] == [copy.id]
+    assert added.paper_id == copy.id
+    assert jobs.jobs == []
+    assert [p.id for p in await workspaces.papers(session, ws.id)] == [copy.id]
+    assert (copy.published_doi, copy.published_venue) == (REAL_TACL_DOI, REAL_TACL_VENUE)
+    assert copy.peer_reviewed == "true"
+    assert copy.doi == f"10.48550/arxiv.{REAL_ARXIV}"
+    assert not any(r.url.path.startswith("/pdf/") for r in real_world.pdf_host.requests)  # nothing downloaded
+    assert added.tried[-1] == {"url": f"https://doi.org/{REAL_TACL_DOI}", "outcome": "in_library"}
+
+
+async def test_a_failed_arxiv_copy_is_requeued_when_the_publisher_doi_is_added(session, tmp_path, jobs, real_world):
+    copy = await library_copy(session, tmp_path, f"10.48550/arxiv.{REAL_ARXIV}", status=PaperStatus.FAILED)
+
+    added = await pipeline.add_paper(session, REAL_TACL_DOI)
+
+    await session.refresh(copy)
+    assert (added.status, added.paper_id) == ("queued", copy.id)
+    assert copy.status == PaperStatus.UPLOADED and jobs.jobs == [("ingest_paper", str(copy.id))]
+
+
+async def test_a_locked_published_doi_on_the_copy_is_kept(session, tmp_path, jobs, real_world):
+    copy = await library_copy(
+        session, tmp_path, f"10.48550/arxiv.{REAL_ARXIV}", published_doi="10.1/mine",
+        manual_fields=["published_doi", "published_venue"], peer_reviewed="false",
+    )  # fmt: skip
+
+    added = await pipeline.add_paper(session, REAL_TACL_DOI)
+
+    await session.refresh(copy)
+    assert added.paper_id == copy.id and len(await with_title(session)) == 1
+    assert (copy.published_doi, copy.published_venue) == ("10.1/mine", None)
+    assert copy.peer_reviewed == "true"  # peer_reviewed only goes up
+
+
+@pytest.mark.xfail(
+    strict=True, reason="adding an arXiv id when the publisher version is held still duplicates (follow-up)"
+)
+async def test_adding_the_arxiv_id_after_the_publisher_version_is_held_reuses_it(
+    session, tmp_path, jobs, real_world, monkeypatch
+):
+    """The reverse case needs a title match on the add path (not built yet)."""
+    held = await library_copy(session, tmp_path, REAL_TACL_DOI, source_type="journal_article")
+    candidate = Candidate(
+        title=REAL_TITLE, authors=["Chang, Haw-Shiuan"], year=2024, doi=f"10.48550/arxiv.{REAL_ARXIV}",
+        external_ids={"arxiv": REAL_ARXIV}, pdf_urls=[f"https://pdf.example/pdf/{REAL_ARXIV}"],
+    )  # fmt: skip
+
+    async def search(_session, _providers, _query):
+        return discovery.SearchResult([candidate], [])
+
+    real_world.pdf_host.reply(f"/pdf/{REAL_ARXIV}", 200, content=b"%PDF-1.7\n%real\n")
+    monkeypatch.setattr(discovery, "search", search)
+    added = await pipeline.add_paper(session, REAL_ARXIV)
+
+    assert [p.id for p in await with_title(session)] == [held.id] and added.paper_id == held.id

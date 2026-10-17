@@ -60,7 +60,7 @@ def arxiv_from_doi(doi: str | None) -> str | None:
     return doi.removeprefix(ARXIV_DOI_PREFIX) if doi and doi.startswith(ARXIV_DOI_PREFIX) else None
 
 
-def _arxiv_from_url(url: str | None) -> str | None:
+def arxiv_from_url(url: str | None) -> str | None:
     match = _ARXIV_URL.search(url or "")
     return match.group(1).lower() if match else None
 
@@ -127,7 +127,7 @@ def from_work(work: dict[str, Any]) -> Candidate:
     location_urls = [
         url for place in [best, *locations] for url in (place.get("landing_page_url"), place.get("pdf_url"))
     ]
-    arxiv_id = arxiv_from_doi(doi) or next(filter(None, map(_arxiv_from_url, location_urls)), None)
+    arxiv_id = arxiv_from_doi(doi) or next(filter(None, map(arxiv_from_url, location_urls)), None)
     source = (work.get("primary_location") or {}).get("source") or {}
     authors = [a["author"]["display_name"] for a in work.get("authorships") or [] if a.get("author")]
     external_ids = {k: v for k, v in {"openalex": short_id(work.get("id")), "arxiv": arxiv_id}.items() if v}
@@ -204,7 +204,7 @@ def from_dblp(entry: Mapping[str, Any]) -> Candidate:
     if not isinstance(links, list):
         links = [links]
     arxiv_id = arxiv_from_doi(doi) or next(
-        (found for link in links if isinstance(link, str) and (found := _arxiv_from_url(link))), None
+        (found for link in links if isinstance(link, str) and (found := arxiv_from_url(link))), None
     )
     arxiv_id = ARXIV_VERSION.sub("", arxiv_id) if arxiv_id else None
     ids = {k: v for k, v in {"dblp": entry.get("key"), "arxiv": arxiv_id}.items() if v}

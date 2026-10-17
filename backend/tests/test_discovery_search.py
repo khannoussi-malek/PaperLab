@@ -361,3 +361,16 @@ async def test_iacr_eprints_search_page_preserves_year_through_from_iacr_eprint(
 
     [entry] = entries
     assert from_iacr_eprint(entry).year == 2025
+
+
+async def test_a_candidate_whose_doi_is_a_held_preprints_published_doi_is_in_the_library(session):
+    paper = Paper(file_path="/nonexistent.pdf", title="A preprint", doi="10.48550/arxiv.2406.07735",
+                  published_doi="10.1162/TACL_A_00757")  # fmt: skip
+    session.add(paper)
+    await session.flush()
+
+    [marked] = await discovery.mark_in_library(
+        session, [Candidate(title="A preprint", doi="10.1162/tacl_a_00757")]
+    )
+
+    assert marked.paper_id == paper.id
