@@ -11,7 +11,7 @@ import httpx
 import pymupdf
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import delete, or_, text
+from sqlalchemy import delete, or_, text, update
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -21,7 +21,7 @@ from app.config import settings
 from app.core import discovery, queue
 from app.db import get_session
 from app.main import create_app
-from app.models import Author, Paper, PaperSources
+from app.models import Author, LLMConnection, LLMModel, Paper, PaperSources
 from app.providers import arxiv, core_ac, crossref, embedding, openalex, semantic_scholar, unpaywall
 from app.providers.base import LLMUnavailable
 from app.providers.llm import FakeLLM
@@ -96,6 +96,20 @@ async def session():
             yield test_session
         await transaction.rollback()
     await engine.dispose()
+
+
+@pytest.fixture
+async def local_default_model(session) -> LLMModel:
+    """A local default chat model of the test's own, so a test never leans on the dev database's model settings: an
+    empty throwaway database has none, and the owner's default may be a remote one that needs a confirm (M75)."""
+    await session.execute(update(LLMModel).values(is_default=False))
+    connection = LLMConnection(kind="ollama", label="Test local models", base_url="http://localhost:11434")
+    session.add(connection)
+    await session.flush()
+    model = LLMModel(connection_id=connection.id, name="qwen3:8b", is_default=True)
+    session.add(model)
+    await session.flush()
+    return model
 
 
 class FakeArq:

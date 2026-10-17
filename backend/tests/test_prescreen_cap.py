@@ -8,7 +8,9 @@ from app.core import pipeline, queue, screening
 from app.models.saved_search import SavedSearch
 from app.models.workspace_search import WorkspaceSearchHit, WorkspaceSearchRun
 
-pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("references")]
+pytestmark = [
+    pytest.mark.anyio, pytest.mark.xdist_group("references"), pytest.mark.usefixtures("local_default_model"),
+]
 
 ROWS = [(f"abstract {i} about sleep", None) for i in range(250)]
 
