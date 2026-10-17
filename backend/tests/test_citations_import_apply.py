@@ -1,5 +1,6 @@
 """M40 Task 7: a Zotero import becomes papers, without duplicates (D267–D269, ruling A, Review Focus 3)."""
 
+import asyncio
 import io
 import itertools
 import json
@@ -470,3 +471,102 @@ async def test_a_damaged_bundled_pdf_fails_with_fetch_off(session, pdf_dir, monk
         result = await cia.apply(session, bundle.entries, bundle=bundle, fetch_free_pdfs=False)
 
     assert result.failed == [{"title": title("dmg2"), "reason": "This zip is damaged, so nothing was imported."}]
+
+
+# ---- final review wave ----
+
+
+async def test_a_slow_entry_is_cut_at_the_deadline_and_the_rest_listed(session, pdf_dir, fetching, monkeypatch):
+    async def slow(*_):
+        await asyncio.sleep(30)
+
+    monkeypatch.setattr(cia, "_fetch", slow)
+    entries = [entry("fast"), entry("slow", doi=doi("slow")), entry("after", doi=doi("after"))]
+
+    started = time.monotonic()
+    result = await cia.apply(session, entries, deadline=time.monotonic() + 0.3)
+
+    assert time.monotonic() - started < 5
+    assert [n["title"] for n in result.needs_pdf] == [title("fast")]
+    assert result.not_reached == [title("slow"), title("after")]
+    assert result.stopped == cia.STOPPED.format(done=1, total=3)
+
+
+async def test_a_long_note_is_cut_to_the_notes_limit_once(session, pdf_dir):
+    paper = await held(session, pdf_dir, "long", doi=doi("long"))
+    long_entry = entry("long", doi=doi("long"), notes=["w" * 60_000])
+
+    await cia.apply(session, [long_entry], fetch_free_pdfs=False)
+    again = await cia.apply(session, [long_entry], fetch_free_pdfs=False)
+
+    [body] = await bodies(session, paper.id)
+    assert len(body) == cia.NOTE_MAX_CHARS and body.endswith(cia.NOTE_CUT)
+    assert again.notes == 0
+
+
+async def test_a_fetched_paper_keeps_what_the_entry_knows_and_what_the_fetch_found(session, pdf_dir, fetching):
+    found, pdf_host = fetching
+    found[doi("meta")] = Candidate(
+        title=title("meta"), doi=doi("meta"), abstract="Found abstract", pdf_urls=["https://pdf.example/meta"]
+    )
+    pdf_host.reply("/meta", 200, content=PDF)
+    zotero = entry(
+        "meta", doi=doi("meta"), abstract="Zotero abstract", volume="7", issue="2", pages="1-9",
+        editors=["Ed Itor"], pmid="42", pmcid="PMC42", source_type="journal_article",
+    )  # fmt: skip
+
+    await cia.apply(session, [zotero])
+
+    [paper] = await titled(session, "meta")
+    assert paper.abstract == "Found abstract"  # the fetch's own value wins
+    assert (paper.volume, paper.issue, paper.pages, paper.editors) == ("7", "2", "1-9", ["Ed Itor"])
+    assert (paper.pmid, paper.pmcid) == ("42", "PMC42")
+    assert (paper.source_type, paper.peer_reviewed) == ("journal_article", "true")
+
+
+async def test_fetch_tries_the_arxiv_id_when_the_doi_has_no_free_copy(session, pdf_dir, fetching):
+    found, pdf_host = fetching
+    arxiv_id = f"2604.{RUN[:5]}"
+    found[doi("both")] = Candidate(title=title("both"), doi=doi("both"), pdf_urls=["https://pdf.example/shut"])
+    found[arxiv_id] = Candidate(
+        title=title("both"), external_ids={"arxiv": arxiv_id}, pdf_urls=["https://pdf.example/arx"]
+    )
+    pdf_host.reply("/shut", 404)
+    pdf_host.reply("/arx", 200, content=PDF)
+
+    result = await cia.apply(session, [entry("both", doi=doi("both"), arxiv_id=arxiv_id)])
+
+    assert result.imported == 1 and len(await titled(session, "both")) == 1
+
+
+async def test_fetch_lists_both_attempts_when_neither_has_a_copy(session, pdf_dir, fetching):
+    found, pdf_host = fetching
+    arxiv_id = f"2605.{RUN[:5]}"
+    found[doi("none")] = Candidate(title=title("none"), doi=doi("none"), pdf_urls=["https://pdf.example/shut"])
+    pdf_host.reply("/shut", 404)
+
+    result = await cia.apply(session, [entry("none", doi=doi("none"), arxiv_id=arxiv_id)])
+
+    assert result.needs_pdf[0]["tried"] == [
+        {"url": "https://pdf.example/shut", "outcome": "http_404"},
+        {"url": f"https://arxiv.org/abs/{arxiv_id}", "outcome": "no_match"},
+    ]
+
+
+async def test_preview_counts_without_contacting_anyone(session, pdf_dir):
+    await held(session, pdf_dir, "pv-held", doi=doi("pvh"))
+    bib = (
+        f"@article{{a, title={{{title('pv-held')}}}, doi={{{doi('pvh')}}}}}\n"
+        f"@article{{b, title={{{title('pv-zip')}}}, year={{2020}}, file={{files/1/b.pdf}}}}\n"
+        f"@article{{c, title={{{title('pv-fetch')}}}, doi={{{doi('pvf')}}}}}\n"
+        f"@article{{d, title={{{title('pv-bare')}}}}}\n"
+    )
+    with read_bundle(zipped(bib, {"files/1/b.pdf": PDF})) as bundle:
+        on = await cia.preview(session, bundle.entries, bundle=bundle)
+        off = await cia.preview(session, bundle.entries, bundle=bundle, fetch_free_pdfs=False)
+
+    assert on == cia.ImportPreview(
+        total=4, already_in_library=1, with_bundled_pdf=1, would_fetch=1, cannot_import_without_fetch=2
+    )
+    assert off.would_fetch == 0 and off.cannot_import_without_fetch == 2
+    assert await titled(session, "pv-zip") == []

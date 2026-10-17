@@ -23,7 +23,8 @@ from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 from typing import IO
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import case, delete, func, literal, select, update
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -47,6 +48,9 @@ STOPPED = (
 )
 FROM_ZOTERO = "From Zotero — "
 EXTRA_FIELDS = ("volume", "issue", "pages", "issn", "pmid", "pmcid")
+# The notes API's own body limit (schemas/notes.py, NoteCreate/NoteUpdate max_length; no shared constant there).
+NOTE_MAX_CHARS = 50_000
+NOTE_CUT = "… (cut at 50,000 characters)"
 
 
 @dataclass(frozen=True)
@@ -120,6 +124,11 @@ async def _add_note(session: AsyncSession, paper_id: uuid.UUID, body: str) -> No
     await notes._link(session, note.id, [paper_id])
 
 
+def _capped(body: str | None) -> str | None:
+    """A note longer than the notes API takes is cut (and says so), so it can still be read and edited in the app."""
+    return body[: NOTE_MAX_CHARS - len(NOTE_CUT)] + NOTE_CUT if body and len(body) > NOTE_MAX_CHARS else body
+
+
 def _zotero_note(entry: ImportEntry, note_tags: list[str]) -> str | None:
     parts = [f"tags: {', '.join(note_tags)}" if note_tags else None,
              f"collection: {entry.collection}" if entry.collection else None]  # fmt: skip
@@ -138,7 +147,7 @@ async def _file(session: AsyncSession, paper_id: uuid.UUID, entry: ImportEntry, 
     linked = select(note_papers.c.note_id).where(note_papers.c.paper_id == paper_id)
     have = set(await session.scalars(select(Note.body).where(Note.id.in_(linked))))
     added = 0
-    for body in (*entry.notes, _zotero_note(entry, note_tags)):
+    for body in map(_capped, (*entry.notes, _zotero_note(entry, note_tags))):
         if body and body not in have:
             await _add_note(session, paper_id, body)
             have.add(body)
@@ -147,16 +156,19 @@ async def _file(session: AsyncSession, paper_id: uuid.UUID, entry: ImportEntry, 
     return added
 
 
-async def _fetch(session: AsyncSession, providers, entry: ImportEntry) -> tuple[Paper | uuid.UUID | None, dict]:
-    """Add paper's free-copy flow (pipeline._add_found): by DOI, else arXiv id. Returns (the new Paper, or a held
-    paper's id, or None with what was tried)."""
-    _, value = discovery.classify_query(entry.doi or entry.arxiv_id)
+def _landing(kind: str, value: str) -> str:
+    return f"https://doi.org/{value}" if kind == "doi" else f"https://arxiv.org/abs/{value}"
+
+
+async def _fetch_by(session, providers, kind: str, value: str) -> tuple[Paper | uuid.UUID | None, dict]:
+    """Add paper's free-copy flow (pipeline._add_found) for one identifier: (the new Paper, or a held paper's id, or
+    None with what was tried)."""
     found = await discovery.search(session, providers, value)
     match = next(
         (c for c in found.results if (c.doi or "").lower() == value or c.external_ids.get("arxiv") == value), None
     )
     if match is None:
-        return None, {"tried": [], "free_copies": []}
+        return None, {"tried": [{"url": _landing(kind, value), "outcome": "no_match"}], "free_copies": []}
     if match.paper_id is not None:
         return match.paper_id, {}
     try:
@@ -167,6 +179,34 @@ async def _fetch(session: AsyncSession, providers, entry: ImportEntry) -> tuple[
         if str(exc) != discovery.NO_FREE_PDF:
             raise
         return None, {"tried": exc.details.get("tried", []), "free_copies": exc.details.get("free_copies", [])}
+
+
+async def _fetch(session: AsyncSession, providers, entry: ImportEntry) -> tuple[Paper | uuid.UUID | None, dict]:
+    """By DOI, then by arXiv id when the DOI found no copy. `tried` holds both attempts."""
+    keys = dict.fromkeys(discovery.classify_query(key) for key in (entry.doi, entry.arxiv_id) if key)
+    missing = {"tried": [], "free_copies": []}
+    for kind, value in keys:
+        made, more = await _fetch_by(session, providers, kind, value)
+        if made is not None:
+            return made, {}
+        missing = {name: [*missing[name], *more[name]] for name in missing}
+    return None, missing
+
+
+async def _fill_from_entry(session: AsyncSession, paper_id: uuid.UUID, entry: ImportEntry) -> None:
+    """A fetched NEW paper: the entry's metadata where the fetch found none (COALESCE, so a value already there, even
+    one ingest wrote meanwhile, stays)."""
+    known = {name: value for name in (*EXTRA_FIELDS, "abstract") if (value := getattr(entry, name))}
+    values = {name: func.coalesce(getattr(Paper, name), value) for name, value in known.items()}
+    if entry.editors:
+        values["editors"] = func.coalesce(Paper.editors, literal(entry.editors, JSONB))
+    if entry.source_type != "other":
+        peer = peer_reviewed_of(entry.source_type)
+        values["peer_reviewed"] = case((Paper.source_type.is_(None), peer), else_=Paper.peer_reviewed)
+        values["source_type"] = func.coalesce(Paper.source_type, entry.source_type)
+    if values:
+        await session.execute(update(Paper).where(Paper.id == paper_id).values(**values))
+        await session.commit()
 
 
 async def _discard(session: AsyncSession, paper_id: uuid.UUID) -> None:
@@ -214,6 +254,8 @@ async def _one(session, entry, workspace_id, providers, bundle: Bundle | None, i
         # First, so a crash while filing never leaves a paper that is never ingested (ingest of a paper discarded
         # below finds it gone and stops).
         await queue.enqueue("ingest_paper", str(made.id))
+        if not from_zip:
+            await _fill_from_entry(session, made.id, entry)
         added = await _file(session, made.id, entry, workspace_id)
     except BaseException:
         await _discard(session, made.id)
@@ -259,12 +301,19 @@ async def apply(
             return opened[0]
 
         for index, entry in enumerate(entries):
-            if deadline is not None and _now() >= deadline:
+            budget = None if deadline is None else deadline - _now()
+            try:
+                if budget is not None and budget <= 0:
+                    raise TimeoutError
+                async with asyncio.timeout(budget):  # one slow fetch must not outrun the job's own timeout
+                    one = await _isolated(
+                        session, entry, workspace_id, providers if fetch_free_pdfs else None, bundle, index
+                    )
+            except TimeoutError:  # _one discards a paper it made when cancelled
+                await session.rollback()
                 stopped = STOPPED.format(done=index, total=len(entries))
                 return result + ImportResult(not_reached=[e.title for e in entries[index:]], stopped=stopped)
-            result += await _isolated(
-                session, entry, workspace_id, providers if fetch_free_pdfs else None, bundle, index
-            )
+            result += one
             if progress is not None:
                 await progress(result)
     return result
@@ -281,13 +330,34 @@ def read(name: str, source: bytes | IO[bytes]) -> tuple[list[ImportEntry], Bundl
     return parse(name, source if isinstance(source, bytes) else source.read()), None
 
 
-async def _would_fetch(session: AsyncSession, entries: list[ImportEntry], bundle: Bundle | None) -> bool:
-    """Whether an entry would go to the network: an identifier, no PDF in the zip, and not already in the library."""
+@dataclass(frozen=True)
+class ImportPreview:
+    """What an import would do, before it starts. cannot_import_without_fetch: entries neither held nor with a PDF
+    in the zip, which only a free-copy fetch can make papers (fetching on or not); would_fetch: those of them that
+    will contact free-copy sources (fetching on and a DOI or arXiv id)."""
+
+    total: int
+    already_in_library: int
+    with_bundled_pdf: int
+    would_fetch: int
+    cannot_import_without_fetch: int
+
+
+async def preview(
+    session: AsyncSession, entries: list[ImportEntry], *, bundle: Bundle | None = None, fetch_free_pdfs: bool = True
+) -> ImportPreview:
+    """apply's dedupe and choice of route, with no network call and nothing created.
+    ponytail: three lookups per entry (_held); fine for a dialog, slow only near the 5,000-entry limit."""
+    held = bundled = fetch = rest = 0
     for index, entry in enumerate(entries):
-        bundled = bundle is not None and bundle.pdf_path(index)
-        if (entry.doi or entry.arxiv_id) and not bundled and await _held(session, entry) is None:
-            return True
-    return False
+        if await _held(session, entry) is not None:
+            held += 1
+        elif bundle is not None and bundle.pdf_path(index):
+            bundled += 1
+        else:
+            rest += 1
+            fetch += bool(fetch_free_pdfs and (entry.doi or entry.arxiv_id))
+    return ImportPreview(len(entries), held, bundled, fetch, rest)
 
 
 def uploads_dir() -> Path:
@@ -328,7 +398,8 @@ async def start(
         await workspaces.get(session, workspace_id)
     entries, bundle = read(name, data)
     with bundle or contextlib.nullcontext():
-        if len(entries) <= INLINE_MAX and not (fetch_free_pdfs and await _would_fetch(session, entries, bundle)):
+        small = len(entries) <= INLINE_MAX
+        if small and not (await preview(session, entries, bundle=bundle, fetch_free_pdfs=fetch_free_pdfs)).would_fetch:
             return await apply(
                 session, entries, workspace_id=workspace_id, fetch_free_pdfs=fetch_free_pdfs, bundle=bundle
             )

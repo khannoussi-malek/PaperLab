@@ -3,6 +3,7 @@ Parsing only, no database. The file is never trusted: 20 MB, 5,000 entries, and 
 `CitationsImportError` (plain message) before anything is created. The inverse of `citations_export`."""
 
 import json
+import logging
 import re
 import unicodedata
 from dataclasses import dataclass, field
@@ -14,6 +15,8 @@ from pylatexenc.latex2text import LatexNodes2Text
 from app.core.candidates import ARXIV_ID, arxiv_from_doi
 from app.core.citations_import_html import html_to_markdown
 from app.core.enrichment import normalize_doi
+
+logger = logging.getLogger(__name__)
 
 MAX_BYTES = 20 * 1024 * 1024
 MAX_ENTRIES = 5000
@@ -37,6 +40,10 @@ BIG_FIELDS = {"abstract": 100_000, "annote": 100_000}
 LONG_FIELDS = {"author": 50_000, "editor": 50_000, "file": 50_000, "keywords": 50_000, "keyword": 50_000,
                "note": 50_000, "collections": 50_000}  # fmt: skip
 FIELD_MAX = 2_000
+# RIS and CSL keys checked under the BibTeX limit of another name; any other key is checked as itself (FIELD_MAX).
+RIS_LIMITS = {"notes": "note", "urls": "file", "file_attachments1": "file", "authors": "author name",
+              "first_authors": "author name", "secondary_authors": "editor name"}  # fmt: skip
+CSL_LIMITS = {"author": "author name", "editor": "editor name", "keyword": "keywords", "URL": "file"}
 SUFFIX = re.compile(r"(Jr\.?|Sr\.?|II|III|IV)", re.IGNORECASE)
 MIME_TAIL = re.compile(r":(?:application|text|image|audio|video)/[\w.+-]+$")
 DRIVE = re.compile(r"[A-Za-z]:[\\/]")
@@ -280,9 +287,9 @@ def _ris_entry(r: dict, number: int) -> ImportEntry:
     label = f"reference #{number} in this RIS file"
     if not (title := r.get("title") or r.get("primary_title")):
         raise CitationsImportError(f"The {label} has no title, so nothing was imported.")
-    _check_sizes(label, {"title": title})
-    for name in _as_list(r.get("authors")) + _as_list(r.get("first_authors")) + _as_list(r.get("secondary_authors")):
-        _check_sizes(label, {"author name": name})
+    for key, value in r.items():
+        for item in _as_list(value):
+            _check_sizes(label, {RIS_LIMITS.get(key, key.replace("_", " ")): item})
     texts = _as_list(r.get("notes")) + _as_list(r.get("note"))
     page = _pages("-".join(p for p in (r.get("start_page"), r.get("end_page")) if p))
     return _build(
@@ -348,10 +355,20 @@ def _csl_keywords(value) -> list[str]:
     return _split_words(", ".join(v for v in (_s(x) for x in value) if v) if isinstance(value, list) else _s(value))
 
 
+def _check_csl(label: str, item: dict) -> None:
+    """Every text in the item, a person's name parts included, under the BibTeX limits."""
+    for key, value in item.items():
+        for part in value if isinstance(value, list) else [value]:
+            for text in part.values() if isinstance(part, dict) else [part]:
+                if isinstance(text, str):
+                    _check_sizes(label, {CSL_LIMITS.get(key, key): text})
+
+
 def _csl_entry(item, number: int) -> ImportEntry:
     label = f"reference #{number} in this CSL-JSON file"
     if not isinstance(item, dict) or not (title := _s(item.get("title"))):
         raise CitationsImportError(f"The {label} has no title, so nothing was imported.")
+    _check_csl(label, item)
     return _build(
         title, CSL_TYPES.get(_s(item.get("type")) or "", "other"), extra=_s(item.get("note")) or "",
         url=_s(item.get("URL")), authors=_csl_people(item, "author"), editors=_csl_people(item, "editor"),
@@ -399,5 +416,7 @@ def parse(name: str, data: bytes) -> list[ImportEntry]:
     try:
         return {"bibtex": _parse_bibtex, "ris": _parse_ris, "json": _parse_csl}[kind](text)
     except (RecursionError, TypeError, AttributeError, ValueError):
-        # hostile or oddly shaped input (deep nesting, wrong value types): one plain message, never a trace
+        # hostile or oddly shaped input (deep nesting, wrong value types): one plain message, never a trace to the
+        # user; the log keeps it, so a real bug shows
+        logger.warning("could not parse %s as %s", name, kind, exc_info=True)
         raise CitationsImportError("PaperLab couldn't read this file, so nothing was imported.") from None
