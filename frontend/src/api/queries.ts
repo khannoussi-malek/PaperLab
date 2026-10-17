@@ -1220,10 +1220,15 @@ export function useFinishSetup() {
 export const useReadingContext = (paperId: string) =>
   useQuery({ queryKey: keys.readingContext(paperId), queryFn: () => api.readingContext(paperId) })
 
+/** Shared by `useReadingQueue` and ReadingQueueTab's per-run "has included papers" probes, so both hit one cache entry. */
+export const readingQueueOptions = (workspaceId: string, runId: string) => ({
+  queryKey: keys.readingQueue(workspaceId, runId),
+  queryFn: () => api.readingQueue(workspaceId, runId),
+})
+
 export const useReadingQueue = (workspaceId: string, runId: string | null, enabled = true) =>
   useQuery({
-    queryKey: keys.readingQueue(workspaceId, runId ?? 'none'),
-    queryFn: () => api.readingQueue(workspaceId, runId as string),
+    ...readingQueueOptions(workspaceId, runId ?? 'none'),
     enabled: enabled && runId != null,
   })
 
