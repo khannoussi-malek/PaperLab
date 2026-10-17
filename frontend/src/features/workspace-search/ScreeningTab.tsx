@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { EligibilityUpdate, Hit } from '@/api/client'
 import { useSearchHits, useSetEligibility, useSnowball } from '@/api/queries'
 import { Button } from '@/components/ui/button'
+import { Term } from '@/features/workspaces/Term'
 import { LoadError } from '@/features/library/ErrorAlert'
 import { EmptyState, GoToSearchAction, TabSkeleton } from '@/features/workspaces/TabStates'
 import { matchesFilter } from './hitReview'
@@ -54,13 +55,13 @@ export function ScreeningTab({ workspaceId }: { workspaceId: string }) {
         </EmptyState>
       ) : (
         <label className="flex items-center gap-2">
-          <span className="sr-only">Search hits to screen</span>
+          <span className="sr-only">Search results to screen</span>
           <input
             type="text"
             value={filterText}
             onChange={(event) => setFilterText(event.target.value)}
             placeholder="Search by title or abstract…"
-            aria-label="Search hits to screen"
+            aria-label="Search results to screen"
             className="h-8 w-full max-w-xs rounded-lg border bg-background px-2 text-sm"
           />
           <span className="shrink-0 text-xs text-muted-foreground">
@@ -69,7 +70,7 @@ export function ScreeningTab({ workspaceId }: { workspaceId: string }) {
         </label>
       )}
       {filter && visibleRows.length === 0 && (
-        <p className="text-xs text-muted-foreground">No hits match “{filterText.trim()}”.</p>
+        <p className="text-xs text-muted-foreground">No results match “{filterText.trim()}”.</p>
       )}
       {visibleRows.map((hit) => (
         <ScreeningRow
@@ -213,8 +214,9 @@ function ScreeningRow({
             </Button>
           )}
           <Button type="button" size="sm" variant="outline" disabled={snowballPending} onClick={() => onSnowball(paperId)}>
-            Snowball
+            Find citing & cited papers
           </Button>
+          <Term term="snowball"><span className="sr-only">What does finding citing & cited papers do?</span></Term>
         </>
       ) : (
         <span className="text-xs text-muted-foreground">No linked paper record</span>

@@ -50,7 +50,6 @@ export const editChange = (key: FieldKey, index: number, text: string): Evidence
   values: { [key === 'sample' ? 'population' : 'value']: text },
 })
 
-export const leftOutText = (n: number) => `${n} left out: no supporting quote`
 
 const REASONS: Record<string, string> = {
   not_ready: "This paper's text isn't ready yet. Try again once it has finished importing.",

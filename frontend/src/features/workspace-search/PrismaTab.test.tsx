@@ -55,20 +55,38 @@ test('shows the full funnel with counts from usePrismaExport', () => {
   expect(screen.getByText('120')).toBeInTheDocument()
   expect(screen.getByText('Duplicates removed')).toBeInTheDocument()
   expect(screen.getByText('20')).toBeInTheDocument()
-  expect(screen.getByText('Stage-1 screened')).toBeInTheDocument()
+  expect(screen.getByText('Screened on title & abstract')).toBeInTheDocument()
   expect(screen.getByText('100')).toBeInTheDocument()
-  expect(screen.getByText('Stage-1 excluded')).toBeInTheDocument()
+  expect(screen.getByText('Excluded on title & abstract')).toBeInTheDocument()
   expect(screen.getByText('42')).toBeInTheDocument()
   expect(screen.getByText('Reports sought')).toBeInTheDocument()
   expect(screen.getByText('58')).toBeInTheDocument()
   expect(screen.getByText('Not retrieved')).toBeInTheDocument()
   expect(screen.getByText('6')).toBeInTheDocument()
-  expect(screen.getByText('Stage-2 assessed')).toBeInTheDocument()
+  expect(screen.getByText('Full texts assessed')).toBeInTheDocument()
   expect(screen.getByText('52')).toBeInTheDocument()
-  expect(screen.getByText('Stage-2 excluded')).toBeInTheDocument()
+  expect(screen.getByText('Excluded after full text')).toBeInTheDocument()
   expect(screen.getByText('14')).toBeInTheDocument()
   expect(screen.getByText('Included')).toBeInTheDocument()
   expect(screen.getByText('38')).toBeInTheDocument()
+})
+
+test('no raw reason code renders', () => {
+  vi.spyOn(queries, 'usePrismaExport').mockImplementation(
+    () => ({ data: { ...combinedData, stage1_excluded_by_reason: { wrong_topic: 6, unspecified: 1 } } }) as unknown as ReturnType<typeof queries.usePrismaExport>,
+  )
+  const { container } = render(<PrismaTab workspaceId="ws-1" />)
+  expect(screen.getByText('Wrong topic: 6')).toBeInTheDocument()
+  expect(screen.getByText('No reason given: 1')).toBeInTheDocument()
+  expect(container.textContent).not.toMatch(/\b[a-z]+_[a-z_]+\b/)
+})
+
+test('the official box names carry explained terms', () => {
+  mockPrismaExport()
+  render(<PrismaTab workspaceId="ws-1" />)
+  for (const name of ['Identified', 'Duplicates removed', 'Screened on title & abstract', 'Excluded on title & abstract', 'Reports sought', 'Not retrieved', 'Full texts assessed', 'Excluded after full text', 'Eligibility']) {
+    expect(screen.getByRole('button', { name })).toBeInTheDocument()
+  }
 })
 
 test('toggles between combined and a specific run, re-querying usePrismaExport with the new runs value', () => {
