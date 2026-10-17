@@ -244,7 +244,7 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
     null
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-[24rem] flex-1 flex-col">
       <div className="flex items-center justify-between gap-3 border-b px-3 py-2 text-sm">
         <Checkbox
           aria-label="Select all visible results"
@@ -389,7 +389,7 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
         )
       )}
       <div
-        className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(0,1fr)_var(--preview-track)]"
+        className="grid min-h-[16rem] flex-1 gap-3 lg:grid-cols-[minmax(0,1fr)_var(--preview-track)]"
         style={{ '--preview-track': panelTrack(HIT_PREVIEW, previewWidth) } as CSSProperties}
       >
         <div
