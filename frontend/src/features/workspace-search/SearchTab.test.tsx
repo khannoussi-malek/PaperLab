@@ -282,12 +282,42 @@ test('with no active run it says results come from every run', () => {
   expect(screen.getByText('Showing results from every run')).toBeInTheDocument()
 })
 
+Element.prototype.scrollIntoView ??= () => {}
+
 test('Change run opens the runs list', async () => {
   vi.mocked(api.getSearchRun).mockResolvedValue(activeRun)
   vi.spyOn(api, 'listSearchRuns').mockResolvedValue([summary] as never)
   renderWithClient(<SearchTab workspaceId="ws-1" runId="run-1" onRunIdChange={vi.fn()} />)
   fireEvent.click(await screen.findByRole('button', { name: 'Change run' }))
   expect(await screen.findByRole('button', { name: 'Runs (1)' })).toHaveAttribute('aria-expanded', 'true')
+})
+
+test('Change run scrolls the Runs toggle into view and focuses it', async () => {
+  vi.mocked(api.getSearchRun).mockResolvedValue(activeRun)
+  vi.spyOn(api, 'listSearchRuns').mockResolvedValue([summary] as never)
+  const scroll = vi.fn()
+  Element.prototype.scrollIntoView = scroll
+  renderWithClient(<SearchTab workspaceId="ws-1" runId="run-1" onRunIdChange={vi.fn()} />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Change run' }))
+  const toggle = await screen.findByRole('button', { name: 'Runs (1)' })
+  expect(scroll).toHaveBeenCalledWith({ block: 'nearest' })
+  expect(scroll.mock.contexts[0]).toBe(toggle)
+  expect(toggle).toHaveFocus()
+})
+
+test('Change run is hidden when the workspace has no runs', async () => {
+  vi.spyOn(api, 'listSearchRuns').mockResolvedValue([] as never)
+  renderWithClient(<SearchTab workspaceId="ws-1" runId={null} onRunIdChange={vi.fn()} />)
+  await screen.findByText('Showing results from every run')
+  expect(screen.queryByRole('button', { name: 'Change run' })).not.toBeInTheDocument()
+})
+
+test('the run summary line wraps instead of truncating the result count', async () => {
+  vi.mocked(api.getSearchRun).mockResolvedValue(activeRun)
+  vi.spyOn(api, 'listSearchRuns').mockResolvedValue([summary] as never)
+  renderWithClient(<SearchTab workspaceId="ws-1" runId="run-1" onRunIdChange={vi.fn()} />)
+  const line = await screen.findByText(/12 new results/)
+  expect(line.className).not.toContain('truncate')
 })
 
 // Guard: M68a made the SearchTab panel scroll as a whole, so this passes already; it pins that the criteria stay in a scroll region.

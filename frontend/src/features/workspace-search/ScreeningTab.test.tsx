@@ -352,3 +352,13 @@ test('Find citing & cited papers replaces Snowball, with an explained term besid
   expect(screen.queryByText('Snowball')).toBeNull()
   expect(screen.getByRole('button', { name: 'What does finding citing & cited papers do?' })).toBeInTheDocument()
 })
+
+test('the row wraps its actions and offers the renamed stage-2 reasons', async () => {
+  renderWithClient(<ScreeningTab workspaceId="ws-1" />)
+  const row = screen.getByRole('button', { name: 'Exclude' }).parentElement!
+  expect(row.className).toContain('flex-wrap')
+  fireEvent.click(screen.getByRole('button', { name: 'Exclude' }))
+  fireEvent.keyDown(screen.getByRole('combobox', { name: /Exclusion reason/i }), { key: 'Enter' })
+  const options = (await screen.findAllByRole('option')).map((o) => o.textContent)
+  expect(options).toEqual(['Wrong topic', 'Wrong study type', 'Wrong population', 'Not peer-reviewed', 'Duplicate', 'Other (type a reason)'])
+})

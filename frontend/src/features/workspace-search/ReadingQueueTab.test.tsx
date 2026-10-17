@@ -249,3 +249,22 @@ test('25 runs and none with includes: at most 10 queue requests, then the newest
   expect((screen.getByRole('combobox') as HTMLSelectElement).value).toBe('r24')
   expect(rq.mock.calls.length).toBeLessThanOrEqual(10)
 })
+
+test('once the run is auto-picked, invalidating the queue queries neither re-probes nor flips the selection', async () => {
+  mockRuns(runsData)
+  mockQueue({ rows: [] })
+  let run1Rows: object[] = [row]
+  const rq = vi.spyOn(api, 'readingQueue').mockImplementation(async (_ws: string, id: string) => ({ rows: id === 'run-1' ? run1Rows : [] }) as any)
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  render(<QueryClientProvider client={client}><ReadingQueueTab workspaceId="ws-1" runId={null} /></QueryClientProvider>)
+
+  await waitFor(() => expect((screen.getByRole('combobox') as HTMLSelectElement).value).toBe('run-1'))
+  // the pin lands one render after the selection shows; by then no probe is active any more
+  await waitFor(() => expect(client.getQueryCache().findAll({ type: 'active' })).toHaveLength(0))
+  const before = rq.mock.calls.length
+  run1Rows = []
+  await client.invalidateQueries({ queryKey: ['workspaces', 'ws-1', 'search', 'reading-queue'] })
+
+  expect(rq.mock.calls.length).toBe(before)
+  expect((screen.getByRole('combobox') as HTMLSelectElement).value).toBe('run-1')
+})

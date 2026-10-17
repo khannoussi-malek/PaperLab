@@ -678,7 +678,7 @@ test('the text filter does not change the import count', async () => {
 test('with a next page the import has no number', async () => {
   vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: [relevantHit(1)], next_cursor: 'c2' })
   renderWithClient(<HitTable workspaceId="ws-1" />)
-  expect(await screen.findByRole('button', { name: 'Import all relevant results' })).toBeEnabled()
+  await waitFor(async () => expect(await screen.findByRole('button', { name: 'Import all relevant results' })).toBeEnabled())
 })
 
 test('import is disabled with a reason at zero', async () => {
@@ -690,6 +690,15 @@ test('import is disabled with a reason at zero', async () => {
   expect(document.getElementById(button.getAttribute('aria-describedby')!)).toHaveTextContent(
     'No relevant results waiting to be imported',
   )
+})
+
+test('while the pool is loading or failed, import is the unnumbered label, disabled, with no "none waiting" reason', async () => {
+  vi.spyOn(api, 'listSearchHits').mockRejectedValue(new Error('boom'))
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  const button = await screen.findByRole('button', { name: 'Import all relevant results' })
+  expect(button).toBeDisabled()
+  expect(button).not.toHaveAttribute('title')
+  expect(screen.queryByText('No relevant results waiting to be imported')).not.toBeInTheDocument()
 })
 
 test('only one primary button: the HitTable toolbar has no primary of its own', async () => {

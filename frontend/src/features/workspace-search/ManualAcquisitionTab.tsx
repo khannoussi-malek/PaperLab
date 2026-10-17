@@ -41,6 +41,7 @@ export function ManualAcquisitionTab({ workspaceId }: { workspaceId: string }) {
       {rows.length > 0 && (
         <div className="flex flex-col gap-1">
           <h2 className="text-base font-medium">
+            {hasNextPage && 'At least '}
             {rows.length} relevant {rows.length === 1 ? 'paper needs' : 'papers need'} a PDF
           </h2>
           <p className="max-w-prose text-sm text-muted-foreground">{WHY_HERE}</p>
@@ -79,7 +80,7 @@ export function ManualAcquisitionTab({ workspaceId }: { workspaceId: string }) {
             <UploadButton
               title={title}
               disabled={upload.isPending}
-              onPick={(file) => upload.mutate({ hitId: hit.id, file })}
+              onPick={(file, onFail) => upload.mutate({ hitId: hit.id, file }, { onError: onFail })}
             />
           </div>
         )
@@ -110,7 +111,7 @@ export function ManualAcquisitionTab({ workspaceId }: { workspaceId: string }) {
 }
 
 /** A visually hidden native file input (kept labelled, so it stays reachable by label) driven by a visible button. */
-function UploadButton({ title, disabled, onPick }: { title: string; disabled: boolean; onPick: (file: File) => void }) {
+function UploadButton({ title, disabled, onPick }: { title: string; disabled: boolean; onPick: (file: File, onFail: () => void) => void }) {
   const input = useRef<HTMLInputElement>(null)
   const [fileName, setFileName] = useState<string | null>(null)
   return (
@@ -121,16 +122,20 @@ function UploadButton({ title, disabled, onPick }: { title: string; disabled: bo
         accept="application/pdf"
         aria-label={`Upload PDF for ${title}`}
         className="sr-only"
+        tabIndex={-1}
         disabled={disabled}
         onChange={(e) => {
           const file = e.target.files?.[0]
           if (!file) return
           setFileName(file.name)
-          onPick(file)
+          onPick(file, () => setFileName(null))
         }}
       />
       <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => input.current?.click()}>
-        {fileName ?? 'Upload PDF'}
+        <span>
+          {fileName ?? 'Upload PDF'}{' '}
+          <span className="sr-only">for {title}</span>
+        </span>
       </Button>
     </>
   )

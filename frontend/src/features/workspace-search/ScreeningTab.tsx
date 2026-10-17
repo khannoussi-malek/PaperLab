@@ -139,7 +139,7 @@ export function snowballMessage(result: { new_hits: number; skipped_seeds: strin
   return parts.join(' ')
 }
 
-const EXCLUDE_REASONS = ['Not about my question', 'Wrong study design', 'Wrong population', 'Not peer-reviewed', 'Duplicate']
+const EXCLUDE_REASONS = ['Wrong topic', 'Wrong study type', 'Wrong population', 'Not peer-reviewed', 'Duplicate']
 const OTHER_REASON = 'Other (type a reason)'
 
 /** One hit's row: verdict badge, Include, a two-step free-text Exclude (stage-2's `stage2_exclude_reason` has no
@@ -181,7 +181,7 @@ function ScreeningRow({
   }
 
   return (
-    <div className="flex items-center justify-between gap-3 border-b pb-2 text-sm">
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2 text-sm">
       {paperId ? (
         <a href={readerHref(paperId)} className="flex-1 truncate underline-offset-2 hover:underline">
           {title}

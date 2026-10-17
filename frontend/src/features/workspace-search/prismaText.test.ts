@@ -55,3 +55,9 @@ test('prismaCsv defuses spreadsheet formulas in text but not counts', () => {
   expect(csv).not.toContain("'120")
   expect(prismaCsv(data, '-covid')).toContain(`"'-covid"`)
 })
+
+test('CSV fields starting with a tab or carriage return are neutralised too', () => {
+  const csv = prismaCsv(data, '\tcmd')
+  expect(csv).toContain(`"'\tcmd"`)
+  expect(prismaCsv(data, '\rcmd')).toContain(`"'\rcmd"`)
+})

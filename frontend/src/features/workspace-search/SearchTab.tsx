@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useContinueSearchRun, useSearchRun, useSearchRuns, useStartSearchRun, useStopSearchRun } from '@/api/queries'
 import { Scene3D } from '@/features/scene3d/Scene3D'
 import type { SearchRunStatus } from '@/features/scene3d/poses'
@@ -44,7 +44,14 @@ export function SearchTab({
   const run = useSearchRun(workspaceId, runId)
   const [query, setQuery] = useState('')
   const [runsOpen, setRunsOpen] = useState(false)
-  const runCount = useSearchRuns(workspaceId).data?.find((r) => r.id === runId)?.hit_count
+  const runsQuery = useSearchRuns(workspaceId)
+  const runCount = runsQuery.data?.find((r) => r.id === runId)?.hit_count
+  const runsToggle = useRef<HTMLButtonElement>(null)
+  const changeRun = () => {
+    setRunsOpen(true)
+    runsToggle.current?.scrollIntoView({ block: 'nearest' })
+    runsToggle.current?.focus()
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
@@ -56,7 +63,7 @@ export function SearchTab({
         onStop={() => runId && stopRun.mutate(runId)}
       />
       <SavedSearches workspaceId={workspaceId} currentQuery={query} onRunStarted={onRunIdChange} />
-      <RunsList workspaceId={workspaceId} runId={runId} onSelect={onRunIdChange} open={runsOpen} onOpenChange={setRunsOpen} />
+      <RunsList workspaceId={workspaceId} runId={runId} onSelect={onRunIdChange} open={runsOpen} onOpenChange={setRunsOpen} toggleRef={runsToggle} />
       <ScreeningAssist workspaceId={workspaceId} />
       {run.data && (
         <>
@@ -100,7 +107,7 @@ export function SearchTab({
         ))}
         </>
       )}
-      <RunSummary run={run.data ?? null} resultCount={runCount} onChangeRun={() => setRunsOpen(true)} />
+      <RunSummary run={run.data ?? null} resultCount={runCount} hasRuns={(runsQuery.data?.length ?? 0) > 0} onChangeRun={changeRun} />
       <HitTable workspaceId={workspaceId} run={run.data} />
     </div>
   )

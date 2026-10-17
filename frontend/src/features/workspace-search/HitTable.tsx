@@ -132,8 +132,9 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
   const importable = (pool.data?.pages.flatMap((page) => page.items) ?? []).filter(
     (hit) => hit.stage1_status === 'relevant' && hit.acquisition_status !== 'imported' && hit.acquisition_status !== 'manual',
   ).length
-  const importLabel = morePages ? 'Import all relevant results' : `Import ${importable} relevant result${importable === 1 ? '' : 's'}`
-  const importDisabled = !morePages && importable === 0
+  const poolUnsettled = pool.isPending || pool.isError
+  const importLabel = morePages || poolUnsettled ? 'Import all relevant results' : `Import ${importable} relevant result${importable === 1 ? '' : 's'}`
+  const importDisabled = poolUnsettled || (!morePages && importable === 0)
   const previewed = visibleRows.find((hit) => hit.id === previewId) ?? visibleRows[0]
 
   const virtualizer = useVirtualizer({
@@ -312,13 +313,13 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
           size="sm"
           variant="outline"
           disabled={importDisabled || importAllHits.isPending}
-          title={importDisabled ? NO_IMPORT_REASON : undefined}
-          aria-describedby={importDisabled ? 'import-none-reason' : undefined}
+          title={importDisabled && !poolUnsettled ? NO_IMPORT_REASON : undefined}
+          aria-describedby={importDisabled && !poolUnsettled ? 'import-none-reason' : undefined}
           onClick={() => importAllHits.mutate()}
         >
           {importLabel}
         </Button>
-        {importDisabled && (
+        {importDisabled && !poolUnsettled && (
           <span id="import-none-reason" className="sr-only">
             {NO_IMPORT_REASON}
           </span>
