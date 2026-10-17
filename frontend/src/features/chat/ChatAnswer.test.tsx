@@ -67,3 +67,24 @@ describe('ChatAnswer sources', () => {
     expect(screen.getByRole('button', { name: 'Show all 53 sources' })).toBeInTheDocument()
   })
 })
+
+// M72: a label the answer cites that matches no source it was given is flagged, never shown as if it were real.
+describe('a citation that matches no source', () => {
+  const invented = [{ kind: 'text' as const, text: 'Known [C1] and invented [C16].' }]
+
+  it('is flagged as [C16?] and says why, while a known label stays a working citation', () => {
+    render(<ChatAnswer {...base} sources={sources.slice(0, 8)} segments={invented} />)
+
+    const flag = screen.getByLabelText(/C16\? This citation doesn't match any source the answer was given\./)
+    expect(flag.textContent).toBe('[C16?]')
+    expect(flag.querySelector('[data-chrome]')?.textContent).toBe('?') // not counted: a saved quote stays verbatim
+    expect(screen.getByRole('button', { name: /^Source 1/ })).toBeTruthy()
+  })
+
+  it('is not flagged while the sources are still unknown', () => {
+    render(<ChatAnswer {...base} sources={null} pending segments={invented} />)
+
+    expect(screen.queryByLabelText(/doesn't match any source/)).toBeNull()
+    expect(screen.getByText(/invented \[C16\]/)).toBeTruthy()
+  })
+})

@@ -160,7 +160,7 @@ async def test_save_answer_fills_every_column_and_inserts_no_note(session):
     ids = [s.id for s in prepared.sources]
     assert (row.paper_id, row.kind, row.question, row.content) == (paper.id, "chat", "why?", answer)
     assert (row.source_chunks, row.cited_chunks) == (ids, [ids[2], ids[0]])
-    assert (row.model, row.prompt_version, row.whole_paper) == ("qwen3:8b", 6, True)
+    assert (row.model, row.prompt_version, row.whole_paper) == ("qwen3:8b", chat.CHAT_PROMPT_VERSION, True)
     assert await session.scalar(select(func.count()).select_from(Note)) == notes_before
 
 
@@ -173,7 +173,7 @@ async def test_prepare_gives_a_paper_its_own_notes_newest_first_after_the_passag
 
     prepared = await chat.prepare(session, paper.id, "What do my notes say?")
 
-    assert (prepared.system, prepared.prompt_version) == (chat.SYSTEM_PROMPT, 6)
+    assert (prepared.system, prepared.prompt_version) == (chat.SYSTEM_PROMPT, chat.CHAT_PROMPT_VERSION)
     assert "[N1]" in prepared.system
     notes_block = '[N1] (AI · Devlin 2019 p.1) "quote Uses NSP." — Uses NSP.\n[N2] (You · Devlin 2019 p.2)'
     assert notes_block in prepared.prompt and "Not this paper" not in prepared.prompt
@@ -340,4 +340,19 @@ def test_the_note_block_rule_leads_with_never_in_chat_v6_and_workspace_v5_after_
     assert prompts.load("chat", 6) == prompts.load("chat", 5).replace(NOTE_RULE_V2, NOTE_RULE_V3)
     assert prompts.load("chat_workspace", 5) == prompts.load("chat_workspace", 4).replace(NOTE_RULE_V2, NOTE_RULE_V3)
     assert NOTE_RULE_V3 not in prompts.load("chat", 5) + prompts.load("chat_workspace", 4)
-    assert (chat.CHAT_PROMPT_VERSION, chat.WORKSPACE_PROMPT_VERSION) == (6, 5)
+
+
+# M72: answers cited labels no source carried ([C16] with 8 sources); the prompt now says to cite only listed labels.
+INVENT_RULE = "Never invent a new [N#] to number or head something you write yourself"
+CITE_ONLY_LISTED = (
+    "- Cite only the labels listed below. Never write a [C#] or [N#] that isn't listed: if nothing listed supports a"
+    " point, say so instead of citing.\n"
+)
+
+
+def test_chat_v7_and_workspace_v6_add_only_the_cite_only_listed_labels_rule():
+    for name, old, new in [("chat", 6, 7), ("chat_workspace", 5, 6)]:
+        before = prompts.load(name, old)
+        line_end = before.index("\n", before.index(INVENT_RULE)) + 1
+        assert prompts.load(name, new) == before[:line_end] + CITE_ONLY_LISTED + before[line_end:]
+    assert (chat.CHAT_PROMPT_VERSION, chat.WORKSPACE_PROMPT_VERSION) == (7, 6)
