@@ -914,11 +914,12 @@ async def import_hits(
         ref = await session.get(ExternalRef, hit.external_ref_id) if hit.external_ref_id else None
         existing_id = ref.imported_as or await _library_paper_id(session, ref) if ref is not None else None
         by_identifier = True
-        if ref is not None:
+        if ref is not None and existing_id is None:
             # Its other version may be held (M73): the arXiv copy by arXiv id (which learns this published version),
-            # or the published version by title. Checked even when the id lookup matched, so the copy learns it.
+            # or the published version by title. Only when no identifier matched: an identifier match wins, and a
+            # held duplicate of the other version must not learn a DOI another paper already answers to.
             held = await discovery.held_version(session, _ref_candidate(ref))
-            if held is not None and existing_id in (None, held[0]):
+            if held is not None:
                 existing_id, by_identifier = held
         if existing_id is not None:
             # Already in the library — an earlier hit in this batch, an earlier run, the References panel, or a paper
