@@ -190,3 +190,25 @@ test('says plainly that identified is partial when a run was cut short (D266)', 
   const notes = screen.getByRole('region', { name: 'Methods notes' })
   expect(within(notes).getByText(/identified count is partial/)).toBeInTheDocument()
 })
+
+test('while loading it shows a skeleton, not the empty copy', () => {
+  vi.spyOn(queries, 'usePrismaExport').mockReturnValue({ data: undefined, isPending: true } as ReturnType<typeof queries.usePrismaExport>)
+  render(<PrismaTab workspaceId="ws-1" />)
+  expect(screen.getByRole('status')).toHaveAttribute('aria-busy', 'true')
+  expect(screen.queryByText('Your PRISMA flow will appear here')).not.toBeInTheDocument()
+})
+
+test('an empty workspace shows no zero funnel', () => {
+  const empty: PrismaExportOut = {
+    ...combinedData, identified: 0, duplicates_removed: 0, stage1_screened: 0, stage1_excluded: 0, stage1_excluded_by_reason: {},
+    sought: 0, not_retrieved: 0, stage2_assessed: 0, stage2_excluded: 0, stage2_excluded_by_reason: {}, included: 0, runs: [],
+  }
+  vi.spyOn(queries, 'usePrismaExport').mockReturnValue({ data: empty } as ReturnType<typeof queries.usePrismaExport>)
+  render(<PrismaTab workspaceId="ws-1" />)
+  expect(screen.getByRole('heading', { name: 'Your PRISMA flow will appear here' })).toBeInTheDocument()
+  expect(screen.getByText('It fills in as you search and screen.')).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Go to 1 · Search & screen' })).toBeInTheDocument()
+  expect(screen.queryByText('Identified')).not.toBeInTheDocument()
+  expect(screen.queryByText('Runs')).not.toBeInTheDocument()
+  expect(screen.queryByLabelText('Methods notes')).not.toBeInTheDocument()
+})

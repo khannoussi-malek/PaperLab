@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { ScreeningTab } from './ScreeningTab'
 import * as queries from '@/api/queries'
 import { api } from '@/api/client'
+import { workspaceHref } from '@/lib/route'
 
 function renderWithClient(ui: React.ReactElement) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -206,7 +207,9 @@ test('shows an empty-state message when there is nothing to screen', () => {
   mockHits({ imported: { items: [] }, manual: { items: [] } })
   renderWithClient(<ScreeningTab workspaceId="ws-1" />)
 
-  expect(screen.getByText(/nothing to screen/i)).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: 'Nothing to review yet' })).toBeInTheDocument()
+  expect(screen.getByText('Import relevant results with a PDF first.')).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Go to 1 · Search & screen' })).toHaveAttribute('href', workspaceHref('ws-1', 'search'))
 })
 
 test('hides Load more controls when neither status has a next page (the common case)', () => {
@@ -262,4 +265,11 @@ test('a hit with no linked paper record (paper_id null) renders no actions, not 
   expect(screen.queryByRole('button', { name: 'Include' })).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Exclude' })).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Snowball' })).not.toBeInTheDocument()
+})
+
+test('while loading it shows a skeleton, not the empty copy', () => {
+  vi.spyOn(queries, 'useSearchHits').mockReturnValue({ data: undefined, isPending: true, hasNextPage: false, isFetchingNextPage: false, fetchNextPage: vi.fn() } as any)
+  renderWithClient(<ScreeningTab workspaceId="ws-1" />)
+  expect(screen.getByRole('status')).toHaveAttribute('aria-busy', 'true')
+  expect(screen.queryByText('Nothing to review yet')).not.toBeInTheDocument()
 })

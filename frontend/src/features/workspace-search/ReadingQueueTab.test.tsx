@@ -122,6 +122,7 @@ test('shows an empty-state message when nothing included has been imported yet',
   mockQueue({ rows: [] })
   renderWithClient(<ReadingQueueTab workspaceId="ws-1" runId="run-1" />)
 
+  expect(screen.getByRole('heading', { name: 'No included papers yet' })).toBeInTheDocument()
   expect(screen.getByText(/no included papers have been imported/i)).toBeInTheDocument()
 })
 
@@ -153,4 +154,12 @@ test('a row with no priority and no reading progress shows plainly as not starte
   expect(screen.queryByText(/^Priority/)).not.toBeInTheDocument()
   expect(screen.getByText('Not started')).toBeInTheDocument()
   expect(screen.getByText('0 notes')).toBeInTheDocument()
+})
+
+test('while loading it shows a skeleton, not the empty copy', () => {
+  mockRuns(runsData)
+  mockQueue(undefined)
+  renderWithClient(<ReadingQueueTab workspaceId="ws-1" runId="run-1" />)
+  expect(screen.getByRole('status')).toHaveAttribute('aria-busy', 'true')
+  expect(screen.queryByText('No included papers yet')).not.toBeInTheDocument()
 })

@@ -4,6 +4,7 @@ import { usePrismaExport } from '@/api/queries'
 import type { PrismaExportOut } from '@/api/client'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
+import { EmptyState, GoToSearchAction, TabSkeleton } from '@/features/workspaces/TabStates'
 import { asPrismaRunMeta } from './prismaRunMeta'
 
 type StageKey =
@@ -65,9 +66,12 @@ export function PrismaTab({ workspaceId }: { workspaceId: string }) {
   const { data: allRunsData } = usePrismaExport(workspaceId, 'all')
   const allRuns = allRunsData ? asPrismaRunMeta(allRunsData.runs) : []
   const selectedRun = runs !== 'all' ? allRuns.find((r) => r.id === runs) : undefined
+  // Nothing searched yet: a funnel of zeros says nothing, so show the next step instead.
+  const empty = !!data && !!allRunsData && allRuns.length === 0 && data.identified === 0
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 p-3">
+      {!empty && (
       <label className="flex w-fit items-center gap-2 text-sm">
         <span>Runs</span>
         <select
@@ -81,6 +85,7 @@ export function PrismaTab({ workspaceId }: { workspaceId: string }) {
           ))}
         </select>
       </label>
+      )}
       {selectedRun && (
         <dl
           aria-label="Selected run details"
@@ -96,13 +101,18 @@ export function PrismaTab({ workspaceId }: { workspaceId: string }) {
           <dd>{selectedRun.started_at}</dd>
         </dl>
       )}
-      {isPending && <p className="text-sm text-muted-foreground">Loading…</p>}
+      {isPending && <TabSkeleton label="Loading PRISMA report" />}
+      {empty && (
+        <EmptyState title="Your PRISMA flow will appear here" action={<GoToSearchAction workspaceId={workspaceId} />}>
+          It fills in as you search and screen.
+        </EmptyState>
+      )}
       {isError && (
         <Alert variant="destructive" className="border-glass-border">
           <AlertDescription>{error.message}</AlertDescription>
         </Alert>
       )}
-      {data && (
+      {data && !empty && (
         <div className="flex flex-col gap-3 rounded-lg border p-3">
           {PHASES.map(([phase, stages]) => (
             <div key={phase} className="flex flex-col gap-1.5">
@@ -124,7 +134,7 @@ export function PrismaTab({ workspaceId }: { workspaceId: string }) {
           ))}
         </div>
       )}
-      {data && (data.automation.length > 0 || (data.notes ?? []).length > 0 || data.screening_criteria) && (
+      {data && !empty && (data.automation.length > 0 || (data.notes ?? []).length > 0 || data.screening_criteria) && (
         <section aria-label="Methods notes" className="flex flex-col gap-2 rounded-lg border p-3 text-sm">
           <h3 className="flex items-center gap-1.5 font-medium">
             <ClipboardList aria-hidden className="size-4" />

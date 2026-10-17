@@ -30,6 +30,7 @@ import { HitPreview } from './HitPreview'
 import { errorText } from './schedule'
 import { RankSortBar } from './RankSortBar'
 import { snowballMessage } from './ScreeningTab'
+import { EmptyState, TabSkeleton } from '@/features/workspaces/TabStates'
 import { StatusDot } from './StatusDot'
 import { SuggestionChip } from './SuggestionChip'
 
@@ -73,7 +74,7 @@ function hasPdfOrAbstract(hit: Hit): boolean {
 export function HitTable({ workspaceId, run }: { workspaceId: string; run?: SearchRun }) {
   const [sort, setSort] = useState<HitSort>(() => loadHitSort(browserStorage(), workspaceId))
   const [minRelevance, setMinRelevance] = useState<number | null>(null)
-  const { data, hasNextPage, isFetchingNextPage, fetchNextPage } = useSearchHits(workspaceId, undefined, undefined, {
+  const { data, isPending, hasNextPage, isFetchingNextPage, fetchNextPage } = useSearchHits(workspaceId, undefined, undefined, {
     sort: sort === 'ai' ? 'ai' : undefined,
     minRelevance: sort === 'ranked' ? undefined : (minRelevance ?? undefined),
   })
@@ -100,6 +101,7 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
   const rows = sort === 'ranked' ? (ranked.data?.items ?? []) : (data?.pages.flatMap((page) => page.items) ?? [])
   const rawFound = totalRawFound(run)
   const filter = filterText.trim().toLowerCase()
+  const filtered = filter !== '' || minRelevance != null
   const filteredRows = filter ? rows.filter((hit) => matchesFilter(hit, filter)) : rows
   // A hit with an abstract to read or a PDF already in the corpus is the one worth looking at first — a bare
   // title with neither is the hardest to judge relevance from. Stable sort (native since ES2019), so hits within
@@ -354,8 +356,29 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
           {statusMessage.text}
         </p>
       )}
-      {filter && visibleRows.length === 0 && (
-        <p className="px-3 py-1 text-xs text-muted-foreground">No hits match “{filterText.trim()}”.</p>
+      {(sort === 'ranked' ? ranked.isPending : isPending) ? (
+        <TabSkeleton label="Loading search results" />
+      ) : (
+        visibleRows.length === 0 && (
+          <EmptyState
+            title={filtered ? 'No results match these filters.' : 'No results yet: run a search above.'}
+            action={
+              filtered && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setFilterText('')
+                    setMinRelevance(null)
+                  }}
+                >
+                  Clear filters
+                </Button>
+              )
+            }
+          />
+        )
       )}
       <div
         className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(0,1fr)_var(--preview-track)]"

@@ -3,14 +3,22 @@ import { render, screen } from '@testing-library/react'
 import { expect, test, vi } from 'vitest'
 import { WorkspaceNotes } from './WorkspaceNotes'
 
+const state = vi.hoisted(() => ({ notes: [] as unknown[] | undefined }))
 vi.mock('@/api/queries', () => ({
-  useWorkspaceNotes: () => ({ data: [], error: null }),
+  useWorkspaceNotes: () => ({ data: state.notes, error: null }),
   useWorkspacePapers: () => ({ data: [], error: null }),
 }))
 
-test('the Notes tab offers a Markdown export that downloads the workspace zip', () => {
+test('Export to Markdown is hidden with no notes', () => {
+  state.notes = []
   render(<WorkspaceNotes workspaceId="w 1" />)
-  const link = screen.getByRole('link', { name: 'Export to Markdown' })
-  expect(link.getAttribute('href')).toBe('/api/workspaces/w%201/notes.zip')
-  expect(link.hasAttribute('download')).toBe(true)
+  expect(screen.getByText('No notes yet')).toBeInTheDocument()
+  expect(screen.queryByRole('link', { name: 'Export to Markdown' })).not.toBeInTheDocument()
+})
+
+test('while loading it shows a skeleton, not the empty copy', () => {
+  state.notes = undefined
+  render(<WorkspaceNotes workspaceId="w1" />)
+  expect(screen.getByRole('status')).toHaveAttribute('aria-busy', 'true')
+  expect(screen.queryByText('No notes yet')).not.toBeInTheDocument()
 })

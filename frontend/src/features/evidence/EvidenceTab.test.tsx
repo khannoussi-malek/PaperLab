@@ -107,3 +107,16 @@ test('regenerating an edited card asks in the app, then sends confirm', async ()
   await waitFor(() => expect(api.generateEvidenceCard).toHaveBeenCalledWith('p1', true, true))
   expect(confirm).not.toHaveBeenCalled()
 })
+
+test('while loading it shows a skeleton, not the empty copy', () => {
+  vi.spyOn(api, 'listEvidenceCards').mockReturnValue(new Promise(() => {}))
+  renderTab()
+  expect(screen.getByRole('status')).toHaveAttribute('aria-busy', 'true')
+  expect(screen.queryByText(/evidence cards will show up here/)).not.toBeInTheDocument()
+})
+
+test('when empty it says so', async () => {
+  vi.spyOn(api, 'listEvidenceCards').mockResolvedValue([])
+  renderTab()
+  expect(await screen.findByText('Add papers to this workspace and their evidence cards will show up here.')).toBeInTheDocument()
+})
