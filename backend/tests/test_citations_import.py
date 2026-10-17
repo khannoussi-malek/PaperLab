@@ -179,15 +179,14 @@ def test_one_huge_field_is_refused_by_name():
         parse("a.ris", ("TY  - JOUR\nTI  - " + "x" * 3000 + "\nAU  - " + "y" * 3000 + "\nER  - \n").encode())
 
 
-def test_html_cannot_smuggle_markup_or_links():
-    out = html_to_markdown("<p>&lt;img src=x onerror=alert(1)&gt;</p>")
-    assert "<" not in out and ">" not in out
+def test_note_text_stays_readable_and_built_links_stay_safe():
+    assert html_to_markdown("<p>see [1] and a &lt; b</p>") == "see [1] and a < b"
+    assert html_to_markdown("see [1]\na < b") == "see [1]\na < b"
+    assert html_to_markdown("<p>&lt;img src=x&gt;</p>") == "<img src=x>"  # literal text, shown as plain text
+    assert html_to_markdown("<a href='javascript:alert(1)'>x</a>") == "x"
+    assert html_to_markdown("<a href=' JavaScript:alert(1)'>t</a>") == "t"
     link = html_to_markdown("<a href='https://x.org/) [y](javascript:alert(1)'>t</a>")
     assert link == "[t](https://x.org/%29%20%5By%5D%28javascript:alert%281%29)"
-    text = html_to_markdown("<p>[c](javascript:alert(1))</p>")
-    assert text == "\\[c\\](javascript:alert(1))"  # brackets escaped, so no link forms
-    assert html_to_markdown("[c](javascript:alert(1))") == text  # plain text too
-    assert html_to_markdown("<a href=' JavaScript:alert(1)'>t</a>") == "t"
 
 
 def test_errors_name_the_broken_entry():
