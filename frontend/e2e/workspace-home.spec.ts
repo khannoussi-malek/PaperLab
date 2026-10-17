@@ -39,7 +39,7 @@ test("add two library papers to a workspace, see both papers' notes, and open on
   const second = await addNote(request, secondPaperId, 1, 'Note on the second paper')
   await page.goto(`/#/workspaces/${workspaceId}`)
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(workspaceName)
-  await expect(page.getByRole('tab', { name: 'Papers' })).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByRole('tab', { name: /^Papers/ })).toHaveAttribute('aria-selected', 'true')
   await expect(page.getByText(EMPTY)).toBeVisible()
 
   await page.getByRole('button', { name: 'Add papers' }).click()

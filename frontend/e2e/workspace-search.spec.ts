@@ -44,7 +44,7 @@ test('search, screen, import a hit, then upload its PDF manually', async ({ page
   // is a belt-and-suspenders check that the pool is actually populated by the time this test looks — not a
   // required workaround for missing invalidation, the way it used to be.
   await page.reload()
-  await expect(page.getByText(/[1-9]\d* in pool/)).toBeVisible()
+  await expect(page.getByText(/[1-9]\d* results in this run/)).toBeVisible()
 
   // "fixture 1" is deliberately avoided: discovery_fake.py's paginated arXiv feed derives entry 1's id as
   // "2609.00001", which collides with FREE_ARXIV_ID (the single-item Find Papers fixture's id). Whenever that
@@ -53,7 +53,7 @@ test('search, screen, import a hit, then upload its PDF manually', async ({ page
   // so it reliably has no free PDF and always needs manual acquisition below.
   const title = 'paperlab pagination fixture 2'
   const row = page.locator('[data-slot="context-menu-trigger"]', { hasText: title })
-  await row.getByRole('button', { name: 'Hit actions' }).click()
+  await row.getByRole('button', { name: 'Result actions' }).click()
   // exact: true — Playwright's default substring match on "Relevant" also matches "Not relevant…".
   await page.getByRole('menuitem', { name: 'Relevant', exact: true }).click()
   await expect(page.getByRole('menuitem', { name: 'Relevant', exact: true })).toHaveCount(0)
@@ -64,7 +64,7 @@ test('search, screen, import a hit, then upload its PDF manually', async ({ page
   ])
 
   // fixture 2 has no free PDF, so the import fails and it needs manual acquisition.
-  await page.getByRole('tab', { name: 'Acquisition' }).click()
+  await page.getByRole('tab', { name: /^Get PDFs/ }).click()
   // Every tab stays mounted (forceMount, for I1's runId preservation), inactive ones hidden by CSS alone, not
   // the `hidden` attribute — the Search tab's own preview panel can render an upload control with the same
   // label for this same hit, so scope to the one active tabpanel rather than a bare page-wide getByLabel.
