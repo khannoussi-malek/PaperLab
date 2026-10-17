@@ -45,4 +45,25 @@ describe('ChatAnswer sources', () => {
     expect(screen.getByText(/Using 3 of 9/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /notes/ }).parentElement?.closest('button')).toBeNull()
   })
+
+  it('counts only real sources: a replaced (null) one is not in "Show all N"', () => {
+    const four = [source(1), null, source(2), source(3), source(4)]
+    render(<ChatAnswer {...base} sources={four} />)
+    expect(chips()).toHaveLength(2)
+    fireEvent.click(screen.getByRole('button', { name: 'Show all 4 sources' }))
+    expect(chips()).toHaveLength(4)
+    expect(screen.queryByRole('button', { name: /Show all/ })).toBeNull()
+  })
+
+  it('has no Show all when everything is already cited', () => {
+    render(<ChatAnswer {...base} sources={[source(1), source(2)]} />)
+    expect(chips()).toHaveLength(2)
+    expect(screen.queryByRole('button', { name: /Show all/ })).toBeNull()
+  })
+
+  it('an answer citing nothing shows no chips and a Show all button', () => {
+    render(<ChatAnswer {...base} segments={[{ kind: 'text', text: 'No citations.' }]} />)
+    expect(chips().filter((b) => /^C\d+$/.test(b.textContent ?? ''))).toHaveLength(0)
+    expect(screen.getByRole('button', { name: 'Show all 53 sources' })).toBeInTheDocument()
+  })
 })

@@ -261,8 +261,9 @@ function AnswerMeta({ footer, sources, notes, wholePaper, cited, pending, descri
       </li>
     )
   const shown = (list: (Cited | null)[]) => (wholePaper || showAll ? list : list.filter((source) => source && cited.has(source.label)))
-  const total = wholePaper || sources === null ? 0 : sources.length + notes.filter(Boolean).length
-  const hidden = total - [...shown(sources ?? []), ...shown(notes)].filter(Boolean).length
+  const real = wholePaper || sources === null ? 0 : [...sources, ...notes].filter(Boolean).length
+  const total = real
+  const hidden = real - [...shown(sources ?? []), ...shown(notes)].filter(Boolean).length
   // The pills wrap among themselves, so the AI mark keeps its place at the start of the row.
   return (
     <div className="flex items-start gap-1.5">
