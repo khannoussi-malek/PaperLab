@@ -2,6 +2,8 @@ import { useState } from 'react'
 import type { EligibilityUpdate, Hit } from '@/api/client'
 import { useSearchHits, useSetEligibility, useSnowball } from '@/api/queries'
 import { Button } from '@/components/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { readerHref } from '@/lib/route'
 import { Term } from '@/features/workspaces/Term'
 import { LoadError } from '@/features/library/ErrorAlert'
 import { EmptyState, GoToSearchAction, TabSkeleton } from '@/features/workspaces/TabStates'
@@ -72,6 +74,7 @@ export function ScreeningTab({ workspaceId, runId }: { workspaceId: string; runI
       {filter && visibleRows.length === 0 && (
         <p className="text-xs text-muted-foreground">No results match “{filterText.trim()}”.</p>
       )}
+      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
       {visibleRows.map((hit) => (
         <ScreeningRow
           key={hit.id}
@@ -118,6 +121,7 @@ export function ScreeningTab({ workspaceId, runId }: { workspaceId: string; runI
           {snowballMessage(snowball.data)}
         </p>
       )}
+      </div>
     </div>
   )
 }
@@ -134,6 +138,9 @@ export function snowballMessage(result: { new_hits: number; skipped_seeds: strin
   if (errorMessages.length > 0) parts.push(errorMessages.join(' '))
   return parts.join(' ')
 }
+
+const EXCLUDE_REASONS = ['Not about my question', 'Wrong study design', 'Wrong population', 'Not peer-reviewed', 'Duplicate']
+const OTHER_REASON = 'Other (type a reason)'
 
 /** One hit's row: verdict badge, Include, a two-step free-text Exclude (stage-2's `stage2_exclude_reason` has no
  * CHECK constraint in the DB, unlike stage-1's fixed `EXCLUDE_REASONS` enum — so this is a plain text input, not a
@@ -160,18 +167,28 @@ function ScreeningRow({
   const title = hit.title || hit.normalized_title
   const paperId = hit.paper_id
   const [excluding, setExcluding] = useState(false)
-  const [reason, setReason] = useState('')
+  const [choice, setChoice] = useState('')
+  const [typed, setTyped] = useState('')
+  const isOther = choice === OTHER_REASON
+  const reason = isOther ? typed.trim() : choice
 
   const confirmExclude = (id: string) => {
     if (!reason) return
     onSetEligibility(id, hit.run_id, { status: 'exclude', exclude_reason: reason })
-    setReason('')
+    setChoice('')
+    setTyped('')
     setExcluding(false)
   }
 
   return (
     <div className="flex items-center justify-between gap-3 border-b pb-2 text-sm">
-      <span className="flex-1 truncate">{title}</span>
+      {paperId ? (
+        <a href={readerHref(paperId)} className="flex-1 truncate underline-offset-2 hover:underline">
+          {title}
+        </a>
+      ) : (
+        <span className="flex-1 truncate">{title}</span>
+      )}
       <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <StatusDot status={hit.stage2_status ?? null} />
         {stage2Label(hit.stage2_status)}
@@ -181,24 +198,36 @@ function ScreeningRow({
           <Button
             type="button"
             size="sm"
-            variant={hit.stage2_status === 'include' ? 'default' : 'outline'}
+            variant="default"
             onClick={() => onSetEligibility(paperId, hit.run_id, { status: 'include' })}
           >
             Include
           </Button>
           {excluding ? (
             <>
-              <label htmlFor={`exclude-reason-${hit.id}`} className="sr-only">
-                Exclusion reason for {title}
-              </label>
-              <input
-                id={`exclude-reason-${hit.id}`}
-                type="text"
-                value={reason}
-                onChange={(event) => setReason(event.target.value)}
-                placeholder="Reason for excluding…"
-                className="h-8 w-40 rounded-lg border bg-background px-2 text-sm"
-              />
+              <Select value={choice} onValueChange={setChoice}>
+                <SelectTrigger size="sm" className="w-48" aria-label={`Exclusion reason for ${title}`}>
+                  <SelectValue placeholder="Pick a reason" />
+                </SelectTrigger>
+                <SelectContent>
+                  {EXCLUDE_REASONS.map((label) => (
+                    <SelectItem key={label} value={label}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value={OTHER_REASON}>{OTHER_REASON}</SelectItem>
+                </SelectContent>
+              </Select>
+              {isOther && (
+                <input
+                  type="text"
+                  value={typed}
+                  onChange={(event) => setTyped(event.target.value)}
+                  placeholder="Reason for excluding…"
+                  aria-label={`Typed exclusion reason for ${title}`}
+                  className="h-8 w-40 rounded-lg border bg-background px-2 text-sm"
+                />
+              )}
               <Button type="button" size="sm" variant="destructive" disabled={!reason} onClick={() => confirmExclude(paperId)}>
                 Confirm exclude
               </Button>
@@ -213,7 +242,7 @@ function ScreeningRow({
               Exclude
             </Button>
           )}
-          <Button type="button" size="sm" variant="outline" disabled={snowballPending} onClick={() => onSnowball(paperId)}>
+          <Button type="button" size="sm" variant="ghost" disabled={snowballPending} onClick={() => onSnowball(paperId)}>
             Find citing & cited papers
           </Button>
           <Term term="snowball"><span className="sr-only">What does finding citing & cited papers do?</span></Term>

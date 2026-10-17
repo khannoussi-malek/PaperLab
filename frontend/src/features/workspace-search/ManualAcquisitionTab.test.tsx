@@ -183,3 +183,19 @@ test('a failed query shows the error and Retry, not the empty copy', () => {
   expect(refetch).toHaveBeenCalled()
   expect(screen.queryByText('Nothing to fetch by hand')).not.toBeInTheDocument()
 })
+
+test('Get PDFs says how many and why', () => {
+  mockHits([failedHit, richHit])
+  renderWithClient(<ManualAcquisitionTab workspaceId="ws-1" />)
+  expect(screen.getByRole('heading', { name: '2 relevant papers need a PDF' })).toBeInTheDocument()
+  expect(screen.getByText('Relevant papers land here only when no free PDF was found for them.')).toBeInTheDocument()
+})
+
+test('the upload button picks a file and shows its name', async () => {
+  const uploadSpy = vi.spyOn(api, 'uploadHitPdf').mockResolvedValue({} as any)
+  renderWithClient(<ManualAcquisitionTab workspaceId="ws-1" />)
+  const file = new File([new Uint8Array([1, 2, 3])], 'paper.pdf', { type: 'application/pdf' })
+  fireEvent.change(screen.getByLabelText('Upload PDF for unreachable paper'), { target: { files: [file] } })
+  expect(screen.getByRole('button', { name: /paper\.pdf/ })).toBeInTheDocument()
+  await waitFor(() => expect(uploadSpy).toHaveBeenCalledWith('ws-1', 'h1', file))
+})
