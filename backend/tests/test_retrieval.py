@@ -253,3 +253,22 @@ async def test_an_empty_workspace_returns_nothing_without_embedding_the_query(se
 
     assert await retrieve(session, QUERY, workspace_id=workspace.id, embedder=embedder) == []
     assert embedder.calls == []
+
+
+async def test_the_search_widens_hnsw_ef_search_to_the_setting(session, embedder, monkeypatch):
+    # M8 step 2: at pgvector's default 40 a workspace search missed ~4% of its true top 8; 100 brought @8 to ≥ 0.99.
+    monkeypatch.setattr(retrieval.settings, "hnsw_ef_search", 123)
+    await retrieve(session, "anything", k=4, embedder=embedder)
+
+    assert await session.scalar(text("SHOW hnsw.ef_search")) == "123"
+
+
+def test_hnsw_ef_search_defaults_to_100_and_rejects_nonsense():
+    from pydantic import ValidationError  # noqa: PLC0415
+
+    from app.config import Settings  # noqa: PLC0415
+
+    assert Settings().hnsw_ef_search == 100
+    for bad in (0, 1001):
+        with pytest.raises(ValidationError):
+            Settings(hnsw_ef_search=bad)

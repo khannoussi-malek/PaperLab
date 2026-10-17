@@ -8,6 +8,7 @@ from pgvector.sqlalchemy import Vector
 from sqlalchemy import bindparam, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.core import embedding_index, embedding_sources
 from app.core.errors import Conflict
 from app.models import workspace_papers
@@ -157,5 +158,7 @@ async def retrieve(
     else:
         statement, params["paper_ids"] = NEAREST_IN_PAPERS, list(paper_ids)
     await session.execute(ITERATIVE_SCAN)  # SET LOCAL: ends with the caller's transaction
+    # SET can't take a bind parameter; the setting is a validated int (1–1000).
+    await session.execute(text(f"SET LOCAL hnsw.ef_search = {int(settings.hnsw_ef_search)}"))
     rows = await session.execute(statement, params)
     return [_to_chunk(row, distance=row.distance) for row in rows]
