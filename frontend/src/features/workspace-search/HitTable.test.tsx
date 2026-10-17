@@ -799,6 +799,17 @@ test('no raw reason code renders in the bulk bar or the preview select', async (
   }
 })
 
+test('an excluded row says "Not relevant", never the raw status code', async () => {
+  vi.spyOn(api, 'listSearchHits').mockResolvedValue({
+    items: [{ ...baseHit, stage1_status: 'not_relevant', stage1_exclude_reason: 'wrong_topic' } as never],
+    next_cursor: null,
+  })
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  await pool().findByText('a paper about llms')
+  expect(pool().getByText('Not relevant')).toBeInTheDocument()
+  expect(screen.getByLabelText('Result list').textContent).not.toMatch(/\b[a-z]+_[a-z_]+\b/)
+})
+
 test('no Accept button on a decided row or an unsure suggestion', async () => {
   vi.spyOn(api, 'listSearchHits').mockResolvedValue({
     items: [
