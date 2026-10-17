@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 from typing import Literal
 
-from pydantic import field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 from app.providers.search_model import SHIPPED
@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     # to itself it takes every core, which on a busy machine is slower than a few. Below 1 or not a whole number: the
     # default, with a warning.
     embed_threads: int = DEFAULT_EMBED_THREADS
+    # How many candidates the HNSW index considers for a workspace or library search (HNSW_EF_SEARCH). pgvector's
+    # default 40 missed ~4% of a 146-paper workspace's true top 8; 100 brought it to ≥ 0.99 for ~13 ms at p95
+    # (M8 step 2). A single paper never uses the index: it sorts that paper's chunks exactly.
+    hnsw_ef_search: int = Field(100, ge=1, le=1000)
     # `fake` swaps every provider call made through a model connection for a scripted one (the E2E stack).
     # With LLM_MODEL, OLLAMA_URL and ANTHROPIC_API_KEY it also seeds the first connection while there are none;
     # after that the database decides which model answers.
