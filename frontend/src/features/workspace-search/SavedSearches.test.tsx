@@ -163,3 +163,8 @@ test('Weekly shows a weekday select and creates a weekly search', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Save' }))
   expect(create.mutateAsync).toHaveBeenCalledWith(expect.objectContaining({ query: 'typed query', schedule_kind: 'weekly', weekday: 1 }))
 })
+
+test('saved searches say when there are none', () => {
+  setup([])
+  expect(screen.getByText('None yet. Save a search to rerun it on a schedule.')).toBeTruthy()
+})

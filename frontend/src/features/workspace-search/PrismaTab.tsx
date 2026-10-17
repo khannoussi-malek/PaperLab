@@ -1,65 +1,15 @@
 import { ClipboardList } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { usePrismaExport } from '@/api/queries'
 import type { PrismaExportOut } from '@/api/client'
 import { LoadError } from '@/features/library/ErrorAlert'
+import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Term } from '@/features/workspaces/Term'
-import type { GlossaryKey } from '@/features/workspaces/glossary'
 import { reasonLabel } from './hitReview'
+import { PHASES, REASON_FIELD, prismaCsv, prismaText, type StageKey } from './prismaText'
 import { EmptyState, GoToSearchAction, TabSkeleton } from '@/features/workspaces/TabStates'
 import { asPrismaRunMeta } from './prismaRunMeta'
-
-type StageKey =
-  | 'identified'
-  | 'duplicates_removed'
-  | 'stage1_screened'
-  | 'stage1_excluded'
-  | 'sought'
-  | 'not_retrieved'
-  | 'stage2_assessed'
-  | 'stage2_excluded'
-  | 'included'
-
-// PRISMA's own flow-diagram phases, so the funnel reads as the methodology a systematic-review author already
-// knows, not an arbitrary 9-row table.
-type Row = [StageKey, string, GlossaryKey | null]
-const PHASES: [string, GlossaryKey | null, Row[]][] = [
-  [
-    'Identification',
-    null,
-    [
-      ['identified', 'Identified', 'identified'],
-      ['duplicates_removed', 'Duplicates removed', 'duplicatesRemoved'],
-    ],
-  ],
-  [
-    'Screening',
-    null,
-    [
-      ['stage1_screened', 'Screened on title & abstract', 'titleAbstract'],
-      ['stage1_excluded', 'Excluded on title & abstract', 'titleAbstract'],
-    ],
-  ],
-  [
-    'Eligibility',
-    'eligibility',
-    [
-      ['sought', 'Reports sought', 'reportsSought'],
-      ['not_retrieved', 'Not retrieved', 'notRetrieved'],
-      ['stage2_assessed', 'Full texts assessed', 'fullText'],
-      ['stage2_excluded', 'Excluded after full text', 'fullText'],
-    ],
-  ],
-  ['Included', null, [['included', 'Included', null]]],
-]
-
-// A stage whose count has a reason breakdown (spec §13): reason -> count, straight off PrismaExportOut, no
-// separate fetch.
-const REASON_FIELD: Partial<Record<StageKey, 'stage1_excluded_by_reason' | 'stage2_excluded_by_reason'>> = {
-  stage1_excluded: 'stage1_excluded_by_reason',
-  stage2_excluded: 'stage2_excluded_by_reason',
-}
 
 /** Read-only PRISMA funnel view: counts from `usePrismaExport`, combined across the workspace or scoped to one
  * run. Spec §13. */
@@ -74,6 +24,7 @@ export function PrismaTab({ workspaceId, runId }: { workspaceId: string; runId?:
   const allRuns = allRunsData ? asPrismaRunMeta(allRunsData.runs) : []
   const selectedRun = runs !== 'all' ? allRuns.find((r) => r.id === runs) : undefined
   // Nothing searched yet: a funnel of zeros says nothing, so show the next step instead.
+  const runLabel = runs === 'all' ? 'All runs (combined)' : (selectedRun?.query_text ?? runs)
   const empty = !!data && !!allRunsData && allRuns.length === 0 && data.identified === 0
 
   return (
@@ -137,6 +88,7 @@ export function PrismaTab({ workspaceId, runId }: { workspaceId: string; runId?:
           ))}
         </div>
       )}
+      {data && !empty && <ExportActions data={data} runLabel={runLabel} workspaceId={workspaceId} runs={runs} />}
       {data && !empty && (data.automation.length > 0 || (data.notes ?? []).length > 0 || data.screening_criteria) && (
         <section aria-label="Methods notes" className="flex flex-col gap-2 rounded-lg border p-3 text-sm">
           <h3 className="flex items-center gap-1.5 font-medium">
@@ -156,6 +108,58 @@ export function PrismaTab({ workspaceId, runId }: { workspaceId: string; runId?:
           ))}
         </section>
       )}
+    </div>
+  )
+}
+
+function slug(v: string): string {
+  return v.replace(/[^A-Za-z0-9_-]+/g, '-')
+}
+
+type CopyState = 'idle' | 'copied' | 'failed'
+
+function ExportActions({ data, runLabel, workspaceId, runs }: { data: PrismaExportOut; runLabel: string; workspaceId: string; runs: string }) {
+  const [copy, setCopy] = useState<CopyState>('idle')
+  useEffect(() => {
+    if (copy !== 'copied') return
+    const t = setTimeout(() => setCopy('idle'), 2000)
+    return () => clearTimeout(t)
+  }, [copy])
+
+  const text = prismaText(data, runLabel)
+  const onCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopy('copied')
+    } catch {
+      setCopy('failed')
+    }
+  }
+  const onDownload = () => {
+    const url = URL.createObjectURL(new Blob(['\uFEFF', prismaCsv(data, runLabel)], { type: 'text/csv;charset=utf-8' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `prisma-${slug(workspaceId)}-${slug(runs)}.csv`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    // Revoke later: some browsers cancel the download if the URL dies synchronously.
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="max-w-prose text-sm text-muted-foreground">
+        Counts cover your search runs and their results. Papers added on the Papers tab aren't counted.
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button variant="outline" size="sm" onClick={() => void onCopy()}>Copy as text</Button>
+        <Button variant="outline" size="sm" onClick={onDownload}>Download CSV</Button>
+        <span role="status" className="text-sm text-muted-foreground">
+          {copy === 'copied' && 'Copied'}
+          {copy === 'failed' && "Couldn't copy. Select the text instead."}
+        </span>
+      </div>
+      {copy === 'failed' && <pre className="overflow-x-auto rounded-md border bg-muted/30 p-2 text-xs select-all">{text}</pre>}
     </div>
   )
 }

@@ -650,22 +650,95 @@ test('two simultaneous mutation errors collapse to one status line, not a stack 
   expect(screen.getAllByRole('alert')).toHaveLength(1)
 })
 
-test('"Import all with PDF in this filter" imports every hit still pending in the pool, not just one', async () => {
-  vi.spyOn(api, 'importSearchHits').mockResolvedValue({ imported: 1, failed: 0 })
+const relevantHit = (n: number): Hit => ({ ...baseHit, id: `r${n}`, normalized_title: `relevant paper ${n}`, stage1_status: 'relevant', peer_review: 'unknown' })
+const importButton = () => screen.findByRole('button', { name: /^Import (\d+ relevant results?|all relevant results)$/ })
+
+test('import shows how many it will import', async () => {
+  const items = [1, 2, 3].map(relevantHit).concat({ ...relevantHit(9), acquisition_status: 'imported' }, { ...relevantHit(8), acquisition_status: 'failed' })
+  vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items, next_cursor: null })
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  await waitFor(async () => expect(await importButton()).toHaveTextContent('Import 4 relevant results'))
+  expect(await importButton()).toHaveAttribute('data-variant', 'outline')
+})
+
+test('import says "result" for one', async () => {
+  vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: [relevantHit(1)], next_cursor: null })
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  expect(await screen.findByRole('button', { name: 'Import 1 relevant result' })).toBeEnabled()
+})
+
+test('the text filter does not change the import count', async () => {
+  vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: [1, 2, 3].map(relevantHit), next_cursor: null })
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  await screen.findByRole('button', { name: 'Import 3 relevant results' })
+  fireEvent.change(screen.getByLabelText('Search results'), { target: { value: 'paper 1' } })
+  expect(screen.getByRole('button', { name: 'Import 3 relevant results' })).toBeInTheDocument()
+})
+
+test('with a next page the import has no number', async () => {
+  vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: [relevantHit(1)], next_cursor: 'c2' })
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  await waitFor(async () => expect(await screen.findByRole('button', { name: 'Import all relevant results' })).toBeEnabled())
+})
+
+test('import is disabled with a reason at zero', async () => {
   renderWithClient(<HitTable workspaceId="ws-1" />)
   await pool().findByText('a paper about llms')
+  const button = await screen.findByRole('button', { name: 'Import 0 relevant results' })
+  expect(button).toBeDisabled()
+  expect(button).toHaveAttribute('title', 'No relevant results waiting to be imported')
+  expect(document.getElementById(button.getAttribute('aria-describedby')!)).toHaveTextContent(
+    'No relevant results waiting to be imported',
+  )
+})
 
-  fireEvent.click(screen.getByRole('button', { name: 'Import all with PDF in this filter' }))
+test('while the pool is loading or failed, import is the unnumbered label, disabled, with no "none waiting" reason', async () => {
+  vi.spyOn(api, 'listSearchHits').mockRejectedValue(new Error('boom'))
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  const button = await screen.findByRole('button', { name: 'Import all relevant results' })
+  expect(button).toBeDisabled()
+  expect(button).not.toHaveAttribute('title')
+  expect(screen.queryByText('No relevant results waiting to be imported')).not.toBeInTheDocument()
+})
+
+test('only one primary button: the HitTable toolbar has no primary of its own', async () => {
+  vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: [relevantHit(1)], next_cursor: null })
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  const toolbar = (await importButton()).parentElement!
+  // "Suggest for unscreened results" (ScreeningAssist) is the primary; nothing in this toolbar competes with it.
+  expect(toolbar.querySelectorAll('button[data-variant="default"]')).toHaveLength(0)
+})
+
+test('an empty list shows its message in place of a blank list box', async () => {
+  vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: [], next_cursor: null })
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  const message = await screen.findByText('No results yet: run a search above.')
+  expect(message.closest('[aria-label="Result list"]')).not.toBeNull()
+})
+
+test('the toolbar wraps so 390 px has no horizontal scroll', async () => {
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  expect((await importButton()).parentElement!).toHaveClass('flex-wrap')
+})
+
+test('"Import N relevant results" imports every hit still pending in the pool, not just one', async () => {
+  vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: [relevantHit(1)], next_cursor: null })
+  vi.spyOn(api, 'importSearchHits').mockResolvedValue({ imported: 1, failed: 0 })
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  await pool().findByText('relevant paper 1')
+
+  fireEvent.click(await importButton())
 
   await waitFor(() => expect(api.importSearchHits).toHaveBeenCalledWith('ws-1', undefined))
 })
 
 test('a failed bulk import shows an error message', async () => {
+  vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: [relevantHit(1)], next_cursor: null })
   vi.spyOn(api, 'importSearchHits').mockRejectedValue(new Error('Bulk import failed'))
   renderWithClient(<HitTable workspaceId="ws-1" />)
-  await pool().findByText('a paper about llms')
+  await pool().findByText('relevant paper 1')
 
-  fireEvent.click(screen.getByRole('button', { name: 'Import all with PDF in this filter' }))
+  fireEvent.click(await importButton())
 
   expect(await screen.findByRole('alert')).toHaveTextContent('Bulk import failed')
 })

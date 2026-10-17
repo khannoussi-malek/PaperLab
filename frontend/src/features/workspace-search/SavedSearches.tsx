@@ -46,6 +46,9 @@ export function SavedSearches({
           <AlertDescription>{actionError}</AlertDescription>
         </Alert>
       )}
+      {rows.length === 0 && !list.isPending && (
+        <p className="text-sm text-muted-foreground">None yet. Save a search to rerun it on a schedule.</p>
+      )}
       {rows.map((s) => (
         <div key={s.id} className="grid gap-0.5 rounded-md border px-3 py-2">
           <div className="flex items-center gap-2">

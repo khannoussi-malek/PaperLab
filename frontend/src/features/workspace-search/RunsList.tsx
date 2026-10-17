@@ -12,20 +12,30 @@ export function RunsList({
   workspaceId,
   runId,
   onSelect,
+  open: openProp,
+  onOpenChange,
+  toggleRef,
 }: {
   workspaceId: string
   runId: string | null
   onSelect: (runId: string) => void
+  /** Optional control from the parent (e.g. "Change run"); without it the list tracks its own state. */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+  /** Lets the parent scroll to and focus the "Runs (N)" toggle. */
+  toggleRef?: React.Ref<HTMLButtonElement>
 }) {
   const runs = useSearchRuns(workspaceId).data ?? []
   const cont = useContinueSearchRun(workspaceId)
-  const [open, setOpen] = useState(false)
+  const [ownOpen, setOwnOpen] = useState(false)
+  const open = openProp ?? ownOpen
+  const setOpen = onOpenChange ?? setOwnOpen
   if (runs.length === 0) return null
 
   return (
     <section aria-label="Runs" className="grid gap-2 border-b px-3 py-2 text-sm">
       <div className="flex items-center gap-2">
-        <Button variant="ghost" size="sm" className="justify-start" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <Button ref={toggleRef} variant="ghost" size="sm" className="justify-start" aria-expanded={open} onClick={() => setOpen(!open)}>
           Runs ({runs.length})
         </Button>
         <Term term="run"><span className="sr-only">What is a run?</span></Term>
