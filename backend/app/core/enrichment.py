@@ -136,9 +136,6 @@ def work_fields(work: dict[str, Any]) -> dict[str, Any]:
     location = work.get("primary_location") or {}
     source = location.get("source") or {}
     best_oa = work.get("best_oa_location") or {}
-    biblio = work.get("biblio") or {}
-    ids = work.get("ids") or {}
-    pages = "-".join(p for p in (biblio.get("first_page"), biblio.get("last_page")) if p)
     fields = {
         "openalex_id": short_id(work["id"]),
         "doi": normalize_doi(work.get("doi") or ""),
@@ -148,11 +145,6 @@ def work_fields(work: dict[str, Any]) -> dict[str, Any]:
         "year": work.get("publication_year"),
         "venue": source.get("display_name") or location.get("raw_source_name"),
         "issn": source.get("issn_l"),
-        "volume": biblio.get("volume"),
-        "issue": biblio.get("issue"),
-        "pages": pages or None,
-        "pmid": short_id((ids.get("pmid") or "").rstrip("/")),
-        "pmcid": short_id((ids.get("pmcid") or "").rstrip("/")),
         "type": work.get("type"),
         "is_retracted": bool(work.get("is_retracted")),
         "oa_status": (work.get("open_access") or {}).get("oa_status"),
@@ -161,6 +153,21 @@ def work_fields(work: dict[str, Any]) -> dict[str, Any]:
         "referenced_works_count": work.get("referenced_works_count"),
     }
     return fields
+
+
+def openalex_biblio(work: dict[str, Any]) -> dict[str, str | None]:
+    """volume, issue, pages, pmid and pmcid (bare ids) of an OpenAlex work. Not in `work_fields`: these six columns are
+    fill-only (see `fill_biblio`)."""
+    biblio = work.get("biblio") or {}
+    ids = work.get("ids") or {}
+    pages = "-".join(dict.fromkeys(p for p in (biblio.get("first_page"), biblio.get("last_page")) if p))
+    return {
+        "volume": biblio.get("volume"),
+        "issue": biblio.get("issue"),
+        "pages": pages or None,
+        "pmid": short_id((ids.get("pmid") or "").rstrip("/")),
+        "pmcid": short_id((ids.get("pmcid") or "").rstrip("/")),
+    }
 
 
 BIBLIO_FIELDS = ("volume", "issue", "pages", "editors", "pmid", "pmcid")
@@ -325,8 +332,20 @@ async def _write(session: AsyncSession, paper: Paper, fields: dict[str, Any]) ->
         await session.execute(update(Paper).where(Paper.id == paper.id).values(**values))
 
 
+async def _crossref_work(http: httpx.AsyncClient, doi: str, cache: dict[str, dict | None]) -> dict | None:
+    """One Crossref fetch per DOI per `cache`; a failed fetch is remembered too, then re-raised."""
+    if doi not in cache:
+        cache[doi] = None
+        cache[doi] = await crossref.get_work(http, doi)
+    return cache[doi]
+
+
 async def fill_source_type(
-    session: AsyncSession, paper_id: uuid.UUID, raw_type: str | None, crossref_http: httpx.AsyncClient | None
+    session: AsyncSession,
+    paper_id: uuid.UUID,
+    raw_type: str | None,
+    crossref_http: httpx.AsyncClient | None,
+    crossref_works: dict[str, dict | None] | None = None,
 ) -> bool:
     """Sets source_type, peer_reviewed and published_doi (never past the owner's lock). `raw_type` is OpenAlex's type;
     without one, a non-arXiv DOI is asked of Crossref (when `crossref_http` is given). A paper that already has a
@@ -339,7 +358,7 @@ async def fill_source_type(
     if (source_type := source_type_of(raw_type, doi)) is None and paper.source_type is None and doi and crossref_http:
         asked = True
         try:
-            work = await crossref.get_work(crossref_http, doi)
+            work = await _crossref_work(crossref_http, doi, {} if crossref_works is None else crossref_works)
             if work:
                 source_type = source_type_of(work.get("type"), doi, crossref=True)
                 preprint_of = ((work.get("relation") or {}).get("is-preprint-of") or [{}])[0].get("id")
@@ -371,30 +390,42 @@ async def fill_biblio(
     paper_id: uuid.UUID,
     crossref_http: httpx.AsyncClient | None,
     openalex_http: httpx.AsyncClient | None = None,
+    *,
+    openalex_work: dict[str, Any] | None = None,
+    crossref_works: dict[str, dict | None] | None = None,
 ) -> bool:
-    """Fills volume, issue, pages, editors, pmid and pmcid that are still NULL, from Crossref and (for the PubMed ids
-    and what Crossref lacks) OpenAlex; never past manual_fields. Source errors are logged, never raised. True when a
-    source was asked."""
+    """Fills volume, issue, pages, editors, pmid and pmcid that are still NULL, never past manual_fields and never over
+    a value already held. Crossref wins over OpenAlex. `openalex_work` is a work already fetched; `crossref_works` is
+    the per-enrichment cache shared with `fill_source_type`. Source errors are logged, never raised. True when a
+    request went out."""
     paper = await get_paper(session, paper_id)
     await session.refresh(paper)
     doi = normalize_doi(paper.doi or "")
+    cache = {} if crossref_works is None else crossref_works
     found: dict[str, Any] = {}
     asked = False
-    if doi and crossref_http and not doi.startswith(ARXIV_DOI_PREFIX):  # an arXiv preprint has no volume
-        asked = True
+    crossref_fields = ("volume", "issue", "pages", "editors")
+    if (
+        doi
+        and crossref_http
+        and not doi.startswith(ARXIV_DOI_PREFIX)
+        and any(getattr(paper, f) is None for f in crossref_fields)
+    ):
+        asked = doi not in cache
         try:
-            found |= crossref_biblio(await crossref.get_work(crossref_http, doi) or {})
+            found |= crossref_biblio(await _crossref_work(crossref_http, doi, cache) or {})
         except (httpx.HTTPError, KeyError, TypeError, AttributeError) as exc:
             logger.warning("Crossref biblio lookup failed for paper %s: %r", paper_id, exc)
-    if openalex_http and (key := paper.openalex_id or (doi and f"doi:{doi}")):
+    wanted = ("volume", "issue", "pages", "pmid", "pmcid")
+    key = paper.openalex_id or (doi and f"doi:{doi}")
+    if openalex_work is None and openalex_http and key and any(getattr(paper, f) is None for f in wanted):
         asked = True
         try:
-            work = await openalex.get_work(openalex_http, key)
-            # Crossref reads as the publisher's own; OpenAlex only fills what Crossref left.
-            theirs = work_fields(work) if work else {}
-            found = {k: theirs.get(k) for k in BIBLIO_FIELDS if theirs.get(k)} | {k: v for k, v in found.items() if v}
+            openalex_work = await openalex.get_work(openalex_http, key)
         except (httpx.HTTPError, KeyError, TypeError, AttributeError) as exc:
             logger.warning("OpenAlex biblio lookup failed for paper %s: %r", paper_id, exc)
+    if openalex_work:
+        found = {k: v for k, v in openalex_biblio(openalex_work).items() if v} | {k: v for k, v in found.items() if v}
     fields = {k: v for k, v in found.items() if v and getattr(paper, k) is None}
     if fields:
         await _write(session, paper, fields)
@@ -414,6 +445,7 @@ async def enrich_paper(
     OpenAlex failures are logged and fall back to the PDF. A DOI or `openalex_id` another paper already holds is
     silently dropped instead of raising (see `_write`).
     """
+    crossref_works: dict[str, dict | None] = {}  # one /works/{doi} fetch shared by fill_source_type and fill_biblio
     paper = await get_paper(session, paper_id)
     await session.refresh(paper)  # the pipeline changed the title with a bulk UPDATE since this object was loaded
     try:
@@ -429,16 +461,16 @@ async def enrich_paper(
             if fallback:
                 await _write(session, paper, fallback)  # never replaces what an earlier match found
         await session.commit()
-        await fill_source_type(session, paper_id, None, crossref_http)
-        await fill_biblio(session, paper_id, crossref_http)
+        await fill_source_type(session, paper_id, None, crossref_http, crossref_works)
+        await fill_biblio(session, paper_id, crossref_http, crossref_works=crossref_works)
         return
 
     await _write(session, paper, work_fields(work))
     await _replace_topics(session, paper_id, "openalex", work_topics(work))
     await record_published(session, paper_id, work)
     await session.commit()
-    await fill_source_type(session, paper_id, work.get("type"), crossref_http)
-    await fill_biblio(session, paper_id, crossref_http)
+    await fill_source_type(session, paper_id, work.get("type"), crossref_http, crossref_works)
+    await fill_biblio(session, paper_id, crossref_http, openalex_work=work, crossref_works=crossref_works)
     author_ids = await _replace_authorships(session, paper_id, work)
     await session.commit()
     try:

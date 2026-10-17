@@ -54,11 +54,13 @@ def openalex_work(**extra):
 
 
 def test_openalex_work_gives_biblio_and_bare_ids():
-    fields = enrichment.work_fields(openalex_work())
+    fields = enrichment.openalex_biblio(openalex_work())
     assert (fields["volume"], fields["issue"], fields["pages"]) == ("7", None, "10-20")
     assert (fields["pmid"], fields["pmcid"]) == ("12345", "PMC678")
-    bare = enrichment.work_fields({"id": "https://openalex.org/W1"})
+    bare = enrichment.openalex_biblio({"id": "https://openalex.org/W1"})
     assert (bare["volume"], bare["pages"], bare["pmid"], bare["pmcid"]) == (None, None, None, None)
+    one_page = enrichment.openalex_biblio(openalex_work(biblio={"first_page": "10", "last_page": "10"}))
+    assert one_page["pages"] == "10"
 
 
 async def test_backfill_fills_nulls_only_and_is_idempotent(session):
@@ -91,3 +93,35 @@ async def test_the_api_exposes_the_six_fields(client, session):
     await session.execute(update(Paper).where(Paper.id == uuid.UUID(created["id"])).values(**values))
     body = (await client.get(f"/api/papers/{created['id']}")).json()
     assert {k: body[k] for k in BIBLIO} == values
+
+
+async def test_openalex_re_enrichment_never_overwrites_a_held_value(session, fake_openalex):
+    fake_openalex.route(
+        f"/works/doi:{DOI}", openalex_work(biblio={"volume": "8", "first_page": "45", "last_page": "68"})
+    )
+    fake_openalex.route("/authors", {"results": []})
+    paper = await add_paper(session, doi=DOI, pages="45-67", manual_fields=["doi"])
+    await enrichment.enrich_paper(session, fake_openalex.client, paper.id, hints())
+    await session.refresh(paper)
+    assert (paper.pages, paper.volume, paper.pmid) == ("45-67", "8", "12345")
+
+
+async def test_one_enrichment_makes_one_crossref_request(session):
+    paper = await add_paper(session, doi=DOI)
+    client, seen = fake_crossref(CROSSREF)
+    await enrichment.enrich_paper(session, None, paper.id, hints(), crossref_http=client)
+    assert [r.url.path for r in seen] == [f"/works/{DOI}"]
+
+
+async def test_nothing_left_to_learn_asks_nobody(session):
+    paper = await add_paper(session, doi=DOI, source_type="book", volume="1", issue="2", pages="3", editors=["A"])
+    client, seen = fake_crossref(CROSSREF)
+    await enrichment.enrich_paper(session, None, paper.id, hints(), crossref_http=client)
+    assert seen == []
+
+
+async def test_backfill_ignores_papers_missing_only_editors(session):
+    paper = await add_paper(session, doi=DOI, volume="1", issue="2", pages="3", pmid="4", pmcid="PMC5")
+    client, seen = fake_crossref(CROSSREF)
+    summary = await backfill_biblio.run(session, client, None, delay=0, only=[paper.id])
+    assert summary["checked"] == 0 and seen == []
