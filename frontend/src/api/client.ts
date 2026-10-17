@@ -156,12 +156,12 @@ export async function errorDetail(response: Response): Promise<string> {
 
 /** A 409 that names the library paper already holding what was being added (or imported). */
 export class AlreadyInLibraryError extends Error {
-  constructor(
-    message: string,
-    readonly paperId: string,
-  ) {
+  readonly paperId: string
+
+  constructor(message: string, paperId: string) {
     super(message)
     this.name = 'AlreadyInLibraryError'
+    this.paperId = paperId
   }
 }
 
