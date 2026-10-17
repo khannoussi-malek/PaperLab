@@ -50,6 +50,13 @@ describe('Term', () => {
     expect(screen.getByRole('tooltip')).toBeInTheDocument()
   })
 
-  // Turned on in Task 13, once Terms are placed across the tabs: every GLOSSARY key appears as term="<key>" in a non-test src .tsx.
-  it.todo('every glossary key is used')
+  it('every glossary key is used', () => {
+    // Placed as term="<key>" in JSX, or named as a quoted key in a data table (the PRISMA rows) that feeds a Term.
+    const modules = import.meta.glob(['/src/**/*.ts', '/src/**/*.tsx'], { query: '?raw', import: 'default', eager: true }) as Record<string, string>
+    const sources = Object.entries(modules)
+      .filter(([path]) => !/\.test\.tsx?$|glossary\.ts$|schema\.d\.ts$/.test(path))
+      .map(([, src]) => src)
+    const unused = Object.keys(GLOSSARY).filter((key) => !sources.some((src) => src.includes(`term="${key}"`) || src.includes(`'${key}'`)))
+    expect(unused).toEqual([])
+  })
 })
