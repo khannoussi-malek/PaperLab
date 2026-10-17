@@ -12,6 +12,7 @@ import asyncio
 import logging
 import re
 import time
+import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field, replace
@@ -606,6 +607,21 @@ async def _reuse_published_copy(session: AsyncSession, candidate: Candidate) -> 
     if found is not None:
         tried = [{"url": f"https://arxiv.org/abs/{arxiv_id}", "outcome": "in_library"}]
         raise Conflict(ALREADY_IN_LIBRARY, paper_id=found, tried=tried)
+
+
+async def held_version(session: AsyncSession, candidate: Candidate) -> tuple[uuid.UUID, bool] | None:
+    """The library paper holding the candidate's other version, without downloading anything: its arXiv copy (by arXiv
+    id, which then records the candidate as its published version) or its published version (by title, M69).
+    Returns (paper id, matched by an identifier) or None. Ends the transaction, as both checks do."""
+    try:
+        await _reuse_arxiv_copy(session, candidate, _arxiv_ids(candidate), [])
+    except Conflict as exc:
+        return exc.details["paper_id"], True
+    try:
+        await _reuse_published_copy(session, candidate)
+    except Conflict as exc:
+        return exc.details["paper_id"], False
+    return None
 
 
 async def _arxiv_title_copy(

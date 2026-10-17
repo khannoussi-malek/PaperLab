@@ -913,11 +913,18 @@ async def import_hits(
             continue
         ref = await session.get(ExternalRef, hit.external_ref_id) if hit.external_ref_id else None
         existing_id = ref.imported_as or await _library_paper_id(session, ref) if ref is not None else None
+        by_identifier = True
+        if ref is not None:
+            # Its other version may be held (M73): the arXiv copy by arXiv id (which learns this published version),
+            # or the published version by title. Checked even when the id lookup matched, so the copy learns it.
+            held = await discovery.held_version(session, _ref_candidate(ref))
+            if held is not None and existing_id in (None, held[0]):
+                existing_id, by_identifier = held
         if existing_id is not None:
             # Already in the library — an earlier hit in this batch, an earlier run, the References panel, or a paper
             # holding the same DOI/OpenAlex id. Attach it instead of downloading/creating a duplicate, no re-ingest.
             await workspaces.add_paper(session, workspace_id, existing_id)
-            if ref.imported_as is None:
+            if ref.imported_as is None and by_identifier:  # a title match never claims the shared reference (M67)
                 ref.imported_as = existing_id
             hit.acquisition_status = "imported"
             hit.paper_id = existing_id

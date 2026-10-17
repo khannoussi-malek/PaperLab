@@ -243,3 +243,67 @@ async def test_the_dry_run_names_each_link_and_its_rule(session):
     [found] = await retrieved_hits.repair(session)
 
     assert (found.paper_id, found.rule) == (held.id, "identifier")
+
+
+# --- M73: a research-run import reuses a held published version or arXiv copy instead of duplicating it ---
+
+REAL = "REAL Sampling: Boosting Factuality and Diversity of Open-Ended Generation via Asymptotic Entropy"
+AUTHORS = ["Haw-Shiuan Chang", "Nanyun Peng", "Mohit Bansal"]
+TACL = "10.1162/tacl_a_00757"
+ARXIV_DOI = "10.48550/arxiv.2406.07735"
+
+
+async def test_import_reuses_the_held_published_version_of_an_arxiv_hit(session, discovery_fakes):
+    ws = await workspace(session)
+    held = await paper(session, title=REAL, authors=AUTHORS, year=2025, doi=TACL, source_type="journal_article")
+    hit = await failed_hit(
+        session, ws, title=REAL, status="not_attempted", authors=AUTHORS, year=2024, doi=ARXIV_DOI,
+        external_ids={"arxiv": "2406.07735"}, pdf_urls=["https://pdf.example/pdf/2406.07735"],
+    )  # fmt: skip
+
+    result = await import_hits(session, discovery_fakes.providers, ws.id, [hit.id])
+
+    assert (result.imported, result.failed, result.paper_ids) == (1, 0, [])
+    assert (await reload(session, hit)).paper_id == held.id
+    assert held.id in [p.id for p in await workspaces.papers(session, ws.id)]
+    assert discovery_fakes.pdf_host.requests == []  # nothing downloaded
+    ref = await session.get(ExternalRef, hit.external_ref_id)
+    await session.refresh(ref)
+    assert ref.imported_as is None  # a title match never claims the shared reference (M67)
+
+
+async def test_import_reuses_the_held_arxiv_copy_of_a_publisher_hit(session, discovery_fakes):
+    ws = await workspace(session)
+    held = await paper(session, title=REAL, authors=AUTHORS, year=2024, doi=ARXIV_DOI, source_type="preprint")
+    hit = await failed_hit(
+        session, ws, title=REAL, status="not_attempted", authors=AUTHORS, year=2025, doi=TACL,
+        venue="Transactions of the Association for Computational Linguistics", external_ids={"arxiv": "2406.07735"},
+        pdf_urls=["https://pdf.example/closed"],
+    )  # fmt: skip
+
+    result = await import_hits(session, discovery_fakes.providers, ws.id, [hit.id])
+
+    assert (result.imported, result.paper_ids) == (1, [])
+    assert (await reload(session, hit)).paper_id == held.id
+    await session.refresh(held)
+    assert (held.doi, held.published_doi) == (ARXIV_DOI, TACL)  # it learns its published version (M66)
+    ref = await session.get(ExternalRef, hit.external_ref_id)
+    await session.refresh(ref)
+    assert ref.imported_as == held.id  # matched by its arXiv id: an identifier, so the reference may say so
+
+
+async def test_import_still_downloads_a_lookalike_by_other_authors(session, discovery_fakes, pdf_dir):
+    ws = await workspace(session)
+    held = await paper(
+        session, title=REAL, authors=["Someone Else"], year=2025, doi=TACL, source_type="journal_article"
+    )
+    discovery_fakes.pdf_host.reply("/pdf/2406.07735", 200, content=b"%PDF-1.4 lookalike")
+    hit = await failed_hit(
+        session, ws, title=REAL, status="not_attempted", authors=AUTHORS, year=2024, doi=ARXIV_DOI,
+        external_ids={"arxiv": "2406.07735"}, pdf_urls=["https://pdf.example/pdf/2406.07735"],
+    )  # fmt: skip
+
+    result = await import_hits(session, discovery_fakes.providers, ws.id, [hit.id])
+
+    assert result.imported == 1 and len(result.paper_ids) == 1
+    assert (await reload(session, hit)).paper_id not in (None, held.id)
