@@ -7,6 +7,7 @@ from arq.cron import cron
 from app.config import settings
 from app.core.evidence_cards import JOB_TIMEOUT as EVIDENCE_CARDS_JOB_TIMEOUT
 from app.core.queue import INGEST_QUEUE
+from app.workers.citations_import import IMPORT_JOB_TIMEOUT, import_citations
 from app.workers.evidence_cards import MAX_TRIES as EVIDENCE_CARDS_MAX_TRIES
 from app.workers.evidence_cards import generate_evidence_cards
 from app.workers.harvest import (
@@ -56,6 +57,8 @@ class WorkerSettings:
         func(enrich_papers, timeout=ENRICH_PAPERS_TIMEOUT, keep_result=0),
         func(suggest_screening, timeout=SUGGEST_JOB_TIMEOUT),
         func(generate_evidence_cards, timeout=EVIDENCE_CARDS_JOB_TIMEOUT, max_tries=EVIDENCE_CARDS_MAX_TRIES),
+        # one try: the job deletes its uploaded file when it ends, so a retry would have nothing to read
+        func(import_citations, timeout=IMPORT_JOB_TIMEOUT, max_tries=1, keep_result=24 * 3600),
     ]
     cron_jobs = [
         cron(
