@@ -36,6 +36,17 @@ test("offers BibTeX, RIS and CSL-JSON as downloads from the workspace route", as
   }
 });
 
+test("Export for Zotero downloads the zip with PDFs and notes", async () => {
+  await openMenu();
+  const item = screen.getByRole("menuitem", {
+    name: "Export for Zotero (with PDFs and notes)",
+  });
+  expect(item.getAttribute("href")).toBe(
+    "/api/workspaces/w1/citations.zip?format=bibtex&notes=true",
+  );
+  expect(item.hasAttribute("download")).toBe(true);
+});
+
 test("APA 7 opens a preview rendered as HTML and Copy copies the plain text", async () => {
   const text = vi
     .spyOn(api, "citationsText")
@@ -84,7 +95,7 @@ test("the preview says it is loading", async () => {
 
 test("an empty workspace has nothing to export, with the reason on each item", async () => {
   await openMenu(0);
-  for (const name of ["BibTeX", "RIS", "CSL-JSON", "APA 7…"]) {
+  for (const name of ["BibTeX", "RIS", "CSL-JSON", "Export for Zotero (with PDFs and notes)", "APA 7…"]) {
     const item = screen.getByRole("menuitem", { name });
     expect(item.getAttribute("aria-disabled")).toBe("true");
     expect(item.getAttribute("href")).toBeNull();
