@@ -17,6 +17,7 @@ dependencies = [
     "onnxruntime>=1.30.0",
     "pgvector>=0.3",
     "pydantic-settings>=2.6",
+    "pylatexenc>=2.10,<3",
     "pymupdf>=1.25",
     "python-multipart>=0.0.18",
     "pyyaml>=6",
