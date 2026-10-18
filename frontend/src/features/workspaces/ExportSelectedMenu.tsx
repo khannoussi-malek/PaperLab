@@ -7,14 +7,21 @@ function save(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob)
   const link = Object.assign(document.createElement('a'), { href: url, download: filename })
   link.click()
-  URL.revokeObjectURL(url)
+  setTimeout(() => URL.revokeObjectURL(url), 0) // after the click has started the download
+}
+
+/** The API's snake_case refusal codes, in words. */
+function plainError(error: Error): string {
+  if (error.message === 'no_papers') return 'Pick at least one paper to export.'
+  if (error.message === 'too_many_papers') return 'You can export up to 1000 papers at a time.'
+  return "Couldn't build the reference list. Try again."
 }
 
 /** "Export selected…" on the Papers selection bar: the chosen papers as a BibTeX or RIS download. */
-export function ExportSelectedMenu({ paperIds }: { paperIds: string[] }) {
+export function ExportSelectedMenu({ workspaceId, paperIds }: { workspaceId: string; paperIds: string[] }) {
   const exportIt = useMutation({
     mutationFn: async (format: 'bibtex' | 'ris') => {
-      const { blob, filename } = await api.exportSelection(paperIds, format)
+      const { blob, filename } = await api.exportSelection(paperIds, format, workspaceId)
       save(blob, filename)
     },
   })
@@ -33,7 +40,7 @@ export function ExportSelectedMenu({ paperIds }: { paperIds: string[] }) {
       </DropdownMenu>
       {exportIt.error && (
         <span role="alert" className="text-sm text-destructive">
-          Couldn't export those papers: {exportIt.error.message}
+          {plainError(exportIt.error)}
         </span>
       )}
     </>

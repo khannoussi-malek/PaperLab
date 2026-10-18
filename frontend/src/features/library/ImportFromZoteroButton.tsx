@@ -1,6 +1,6 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { FileUp } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api, type ImportProgress } from '@/api/client'
 import { keys } from '@/api/queries'
 import { Hint } from '@/components/Hint'
@@ -16,6 +16,9 @@ import { ImportResultView } from './ImportResultView'
 
 const POLL_MS = 2000
 type Target = 'library' | 'workspace' | 'new'
+const MB = 1024 * 1024
+/** The size caps the API enforces: 200 MB for a zip, 20 MB for the text formats. */
+const capFor = (file: File) => (/\.zip$/i.test(file.name) ? { mb: 200, what: 'a Zotero zip' } : { mb: 20, what: 'a .bib, .ris or .json file' })
 const running = (p?: ImportProgress | null) => p?.state === 'queued' || p?.state === 'running'
 
 /** "Import from Zotero" and its dialog: a references file or Zotero zip into the library, or a workspace. */
@@ -47,24 +50,38 @@ function ImportBody({ workspaceId }: { workspaceId?: string }) {
   const [target, setTarget] = useState<Target>(workspaceId ? 'workspace' : 'library')
   const [name, setName] = useState('')
   const [fetchPdfs, setFetchPdfs] = useState(true)
+  const [tooBig, setTooBig] = useState<string | null>(null)
+  const started = useRef(false)
 
   const previewWorkspace = target === 'workspace' ? workspaceId : undefined
   const preview = useQuery({
     queryKey: ['citation-import-preview', file?.name, file?.size, file?.lastModified, previewWorkspace, fetchPdfs],
     queryFn: () => api.previewImport(file!, previewWorkspace, fetchPdfs),
     enabled: file !== null,
+    placeholderData: keepPreviousData,
     retry: false,
     gcTime: 0,
   })
 
   const start = useMutation({
-    mutationFn: () =>
-      api.startImport(
+    mutationFn: () => {
+      started.current = true
+      return api.startImport(
         file!,
         target === 'workspace' ? { workspaceId } : target === 'new' ? { newWorkspaceName: name.trim() } : {},
         fetchPdfs,
-      ),
+      )
+    },
   })
+  // A closed dialog forgets the job but not the import: refresh the lists so its papers show up.
+  useEffect(
+    () => () => {
+      if (!started.current) return
+      void client.invalidateQueries({ queryKey: keys.papers })
+      void client.invalidateQueries({ queryKey: keys.workspaces })
+    },
+    [client],
+  )
   const jobId = running(start.data) ? start.data?.job_id : undefined
   const poll = useQuery({
     queryKey: ['citation-import', jobId],
@@ -82,9 +99,20 @@ function ImportBody({ workspaceId }: { workspaceId?: string }) {
 
   if (progress && !start.isPending) return <Outcome progress={progress} pollError={poll.error} onRetry={() => start.mutate()} />
 
-  const ready = file !== null && (target !== 'new' || name.trim() !== '')
+  const updating = preview.isFetching
+  const ready = file !== null && !updating && (target !== 'new' || name.trim() !== '')
   const pv = preview.data
-  const error = start.error ?? preview.error
+  const error = tooBig ? new Error(tooBig) : (start.error ?? preview.error)
+
+  function pickFile(next: File | null) {
+    const cap = next && capFor(next)
+    if (next && cap && next.size > cap.mb * MB) {
+      setFile(null)
+      return setTooBig(`That file is over the ${cap.mb} MB limit for ${cap.what}.`)
+    }
+    setTooBig(null)
+    setFile(next)
+  }
   return (
     <form
       className="flex flex-col gap-4"
@@ -95,7 +123,7 @@ function ImportBody({ workspaceId }: { workspaceId?: string }) {
     >
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="zotero-file">References file</Label>
-        <Input id="zotero-file" type="file" accept=".bib,.ris,.json,.zip" onChange={(e) => setFile(e.currentTarget.files?.[0] ?? null)} />
+        <Input id="zotero-file" type="file" accept=".bib,.ris,.json,.zip" onChange={(e) => pickFile(e.currentTarget.files?.[0] ?? null)} />
         <p className="text-xs text-muted-foreground">
           A .bib, .ris or .json file (up to 20 MB), or a Zotero zip with PDFs (up to 200 MB).
         </p>
@@ -120,7 +148,7 @@ function ImportBody({ workspaceId }: { workspaceId?: string }) {
       </div>
 
       <div aria-live="polite" className="flex flex-col gap-1 text-sm">
-        {file && preview.isPending && <p className="text-muted-foreground">Reading the file…</p>}
+        {file && !pv && preview.isFetching && <p className="text-muted-foreground">Reading the file…</p>}
         {pv && (
           <p>
             {pv.total} references: {pv.already_in_library} already in your library
@@ -128,6 +156,13 @@ function ImportBody({ workspaceId }: { workspaceId?: string }) {
           </p>
         )}
         {pv && pv.would_fetch > 0 && pv.disclosure && <p>{pv.disclosure}</p>}
+        {pv && !fetchPdfs && pv.cannot_import_without_fetch > 0 && (
+          <p>
+            {pv.cannot_import_without_fetch} references have no PDF in the file and won't be imported unless fetching is
+            on.
+          </p>
+        )}
+        {updating && pv && <p className="text-muted-foreground">Updating…</p>}
       </div>
 
       {error && (
@@ -164,7 +199,8 @@ function Outcome({ progress, pollError, onRetry }: { progress: ImportProgress; p
     const c = progress.counts
     return (
       <p role="status" className="text-sm">
-        {c && c.total > 0 ? `Importing… ${c.done} of ${c.total} references done.` : 'Waiting to start…'}
+        {c && c.total > 0 ? `Importing… ${c.done} of ${c.total} references done.` : 'Waiting to start…'} You can close this;
+        the import keeps running and its papers will appear in your library.
         {pollError && ` ${pollError.message}`}
       </p>
     )

@@ -88,7 +88,7 @@ export function WorkspacePapers({
                 <span role="status" className="text-sm">{selectedIds.length} selected</span>
                 <TagPicker workspaceId={workspaceId} mode="add" paperIds={selectedIds} onDone={() => setPicked(new Set())} />
                 <TagPicker workspaceId={workspaceId} mode="remove" paperIds={selectedIds} onDone={() => setPicked(new Set())} />
-                <ExportSelectedMenu paperIds={selectedIds} />
+                <ExportSelectedMenu workspaceId={workspaceId} paperIds={selectedIds} />
                 <Button variant="ghost" size="sm" onClick={() => setPicked(new Set())}>Clear</Button>
               </div>
             )}

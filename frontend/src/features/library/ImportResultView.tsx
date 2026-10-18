@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ImportResult } from '@/api/client'
 import { Button } from '@/components/ui/button'
 import { copyText } from '@/lib/clipboard'
@@ -13,6 +13,8 @@ const listText = (entries: ImportResult['needs_pdf']) =>
 /** What an import did, in words, then the entries that still need the reader. */
 export function ImportResultView({ result }: { result: ImportResult }) {
   const [copied, setCopied] = useState<string | null>(null)
+  const heading = useRef<HTMLHeadingElement>(null)
+  useEffect(() => heading.current?.focus(), [])
   const { needs_pdf: needsPdf, failed } = result
 
   async function copy() {
@@ -26,7 +28,10 @@ export function ImportResultView({ result }: { result: ImportResult }) {
 
   const already = result.already_in_library
   return (
-    <div className="flex flex-col gap-3 text-sm">
+    <div aria-live="polite" className="flex flex-col gap-3 text-sm">
+      <h3 ref={heading} tabIndex={-1} className="font-medium outline-none">
+        Import finished
+      </h3>
       <p>
         Imported {plural(result.imported, 'new paper')}. {already} {already === 1 ? 'was' : 'were'} already in your
         library, {plural(result.pdfs_attached, 'PDF')} attached, {plural(result.notes, 'note')}.

@@ -32,13 +32,16 @@ afterEach(() => {
 })
 
 function open(workspaceId?: string) {
-  render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const view = render(
+    <QueryClientProvider client={client}>
       <ImportFromZoteroButton workspaceId={workspaceId} />
     </QueryClientProvider>,
   )
   fireEvent.click(screen.getByRole('button', { name: 'Import from Zotero' }))
+  return { client, view }
 }
+const invalidated = (client: QueryClient) => vi.spyOn(client, 'invalidateQueries')
 const pick = () => fireEvent.change(screen.getByLabelText('References file'), { target: { files: [file] } })
 const importButton = () => screen.getByRole('button', { name: 'Import' })
 
@@ -186,4 +189,82 @@ test('needs-a-PDF and couldn\'t-import lists, and Copy list copies title and DOI
   expect(screen.getByText(/No title/)).toBeTruthy()
   fireEvent.click(screen.getByRole('button', { name: 'Copy list' }))
   await waitFor(() => expect(copy).toHaveBeenCalledWith('Sleep and memory - https://doi.org/10.1/abc\nNo DOI paper'))
+})
+
+test('Import waits for the preview of the current inputs, and keeps the old one visible meanwhile', async () => {
+  open()
+  pick()
+  await screen.findByText(/Fetching contacts/)
+  let release!: (p: ImportPreview) => void
+  previewSpy.mockReturnValue(new Promise((resolve) => { release = resolve }))
+  fireEvent.click(screen.getByRole('switch', { name: /Fetch free PDFs/ }))
+  await waitFor(() => expect((importButton() as HTMLButtonElement).disabled).toBe(true))
+  expect(screen.getByText(/12 references/)).toBeTruthy()
+  expect(screen.getByText(/Updating/)).toBeTruthy()
+  await act(async () => release(preview({ would_fetch: 0, disclosure: null })))
+  await waitFor(() => expect((importButton() as HTMLButtonElement).disabled).toBe(false))
+  expect(screen.queryByText(/Updating/)).toBeNull()
+})
+
+test('a preview error still lets you import', async () => {
+  previewSpy.mockRejectedValue(new Error('Could not read it.'))
+  open()
+  pick()
+  await screen.findByRole('alert')
+  expect((importButton() as HTMLButtonElement).disabled).toBe(false)
+})
+
+test('with the switch off, entries that would be left out are said in words', async () => {
+  previewSpy.mockResolvedValue(preview({ would_fetch: 0, disclosure: null, cannot_import_without_fetch: 3 }))
+  open()
+  pick()
+  fireEvent.click(screen.getByRole('switch', { name: /Fetch free PDFs/ }))
+  expect(await screen.findByText(/3 references have no PDF in the file and won't be imported unless fetching is on/)).toBeTruthy()
+})
+
+test('a file over its cap is refused before any upload', async () => {
+  open()
+  const big = new File(['x'], 'big.bib')
+  Object.defineProperty(big, 'size', { value: 21 * 1024 * 1024 })
+  fireEvent.change(screen.getByLabelText('References file'), { target: { files: [big] } })
+  expect((await screen.findByRole('alert')).textContent).toContain('20 MB')
+  expect(previewSpy).not.toHaveBeenCalled()
+  expect((importButton() as HTMLButtonElement).disabled).toBe(true)
+  const zip = new File(['x'], 'big.zip')
+  Object.defineProperty(zip, 'size', { value: 150 * 1024 * 1024 })
+  fireEvent.change(screen.getByLabelText('References file'), { target: { files: [zip] } })
+  await screen.findByText(/12 references/)
+})
+
+test('a state with no server message falls back to words', async () => {
+  startSpy.mockResolvedValueOnce({ state: 'restarted', result: null })
+  open()
+  pick()
+  await screen.findByText(/12 references/)
+  fireEvent.click(importButton())
+  expect(await screen.findByText('PaperLab restarted before the import finished.')).toBeTruthy()
+})
+
+test('the finished result is announced and takes focus on its heading', async () => {
+  open()
+  pick()
+  await screen.findByText(/12 references/)
+  fireEvent.click(importButton())
+  const heading = await screen.findByRole('heading', { name: 'Import finished' })
+  expect(document.activeElement).toBe(heading)
+  expect(heading.closest('[aria-live]')).toBeTruthy()
+})
+
+test('a closed running import says it keeps running, and closing refreshes papers and workspaces', async () => {
+  startSpy.mockResolvedValue({ state: 'queued', job_id: 'j1' })
+  vi.spyOn(api, 'importProgress').mockResolvedValue({ state: 'running', job_id: 'j1' } as ImportProgress)
+  const { client, view } = open()
+  const spy = invalidated(client)
+  pick()
+  await screen.findByText(/12 references/)
+  fireEvent.click(importButton())
+  expect(await screen.findByText(/keeps running/)).toBeTruthy()
+  view.unmount()
+  expect(spy).toHaveBeenCalledWith({ queryKey: ['papers'] })
+  expect(spy).toHaveBeenCalledWith({ queryKey: ['workspaces'] })
 })
