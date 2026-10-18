@@ -32,6 +32,7 @@ TOOLS = [
     "get_screening_criteria",
     "get_screening_suggestions",
     "get_search_run",
+    "import_citations",
     "import_hit",
     "list_evidence_cards",
     "list_hits",

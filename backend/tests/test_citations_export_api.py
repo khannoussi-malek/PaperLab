@@ -57,6 +57,18 @@ async def test_selection_export_keeps_the_given_order_and_names_the_file_citatio
     assert response.text.count("TY  - ") == 2
 
 
+async def test_selection_export_from_a_workspace_carries_that_workspaces_tags(client, session):
+    workspace, (paper,) = await workspace_with(client, session, f"Tagged {RUN}")
+    from app.core import tags
+
+    await tags.tag_papers(session, uuid.UUID(workspace["id"]), f"RQ-{RUN}", [paper.id])
+    body = {"paper_ids": [str(paper.id)], "format": "ris", "workspace_id": workspace["id"]}
+    assert f"RQ-{RUN}" in (await client.post("/api/citations/export", json=body)).text
+    del body["workspace_id"]
+    assert f"RQ-{RUN}" not in (await client.post("/api/citations/export", json=body)).text
+    await client.delete(f"/api/workspaces/{workspace['id']}")
+
+
 async def test_http_errors(client, session):
     workspace, _ = await workspace_with(client, session, f"Delta {RUN}")
     missing = uuid.uuid4()

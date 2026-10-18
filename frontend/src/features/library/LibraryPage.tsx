@@ -8,6 +8,7 @@ import { FindPapersButton } from '../discovery/FindPapersButton'
 import { ErrorAlert, LoadError } from './ErrorAlert'
 import { PaperList } from './PaperList'
 import { SearchNotice } from './SearchNotice'
+import { ImportFromZoteroButton } from './ImportFromZoteroButton'
 import { UploadPdfsButton } from './UploadPdfsButton'
 
 const loadLibraryScene = () => import('@/features/scene3d/directors/library')
@@ -25,6 +26,7 @@ export function LibraryPage() {
       actions={
         <>
           <FindPapersButton />
+          <ImportFromZoteroButton />
           <UploadPdfsButton isPending={upload.isPending} onUpload={(files) => upload.mutate(files)} />
         </>
       }
