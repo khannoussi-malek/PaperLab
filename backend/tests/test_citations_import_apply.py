@@ -202,9 +202,11 @@ async def test_fetch_on_without_a_free_copy_lists_the_entry(session, pdf_dir, jo
 
     assert result.imported == 0 and await titled(session, "closed") == []
     assert result.needs_pdf == [{
-        "title": title("closed"), "doi": doi("c"),
+        "title": title("closed"), "authors": ["Jane Smith", "Hans Muller"], "year": 2020, "venue": None,
+        "doi": doi("c"), "arxiv_id": None, "pmid": None, "pmcid": None, "issn": None, "abstract": None,
+        "volume": None, "issue": None, "pages": None, "editors": [], "source_type": "other", "tags": [], "notes": [],
         "tried": [{"url": "https://pdf.example/closed", "outcome": "http_404"}], "free_copies": [],
-    }]  # fmt: skip
+    }]  # fmt: skip  (the whole entry, so it can later be saved as a metadata-only paper)
     assert jobs.jobs == []
 
 

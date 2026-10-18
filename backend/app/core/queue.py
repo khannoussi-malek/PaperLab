@@ -13,13 +13,18 @@ INGEST_JOBS = frozenset({"ingest_paper", "reembed_paper"})
 _pool: ArqRedis | None = None  # tests replace it with conftest.FakeArq
 
 
-async def enqueue(job: str, *args, job_id: str | None = None) -> bool:
-    """Queues a job; False when `job_id` is already queued or running (arq refuses the duplicate)."""
+async def pool() -> ArqRedis:
+    """The process's arq pool, made on first use (the MCP server also reads job status through it)."""
     # ponytail: one module-level pool for the process's life; the MCP server is one stdio process.
     global _pool
     if _pool is None:
         _pool = await create_pool(RedisSettings.from_dsn(settings.redis_url))
-    queued = await _pool.enqueue_job(
+    return _pool
+
+
+async def enqueue(job: str, *args, job_id: str | None = None) -> bool:
+    """Queues a job; False when `job_id` is already queued or running (arq refuses the duplicate)."""
+    queued = await (await pool()).enqueue_job(
         job, *args, _queue_name=INGEST_QUEUE if job in INGEST_JOBS else None, **({"_job_id": job_id} if job_id else {})
     )
     return queued is not None
