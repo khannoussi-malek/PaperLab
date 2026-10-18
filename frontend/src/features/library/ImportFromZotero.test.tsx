@@ -253,6 +253,18 @@ test('a file over its cap is refused before any upload', async () => {
   await screen.findByText(/12 references/)
 })
 
+test('a file refused after a preview takes the old counts away with it', async () => {
+  open()
+  pick()
+  await screen.findByText(/12 references/)
+  const big = new File(['x'], 'big.bib')
+  Object.defineProperty(big, 'size', { value: 21 * 1024 * 1024 })
+  fireEvent.change(screen.getByLabelText('References file'), { target: { files: [big] } })
+  await screen.findByRole('alert')
+  expect(screen.queryByText(/12 references/)).toBeNull()
+  expect(screen.queryByText(/Fetching contacts/)).toBeNull()
+})
+
 test('a state with no server message falls back to words', async () => {
   startSpy.mockResolvedValueOnce({ state: 'restarted', result: null })
   open()

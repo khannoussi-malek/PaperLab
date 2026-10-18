@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { expect, test, vi } from 'vitest'
+import { afterEach, expect, test, vi } from 'vitest'
 import { api } from '@/api/client'
 import { LibraryPage } from './LibraryPage'
 
@@ -29,6 +29,10 @@ vi.mock('./PaperList', () => ({
 }))
 vi.mock('@/features/graph/viewModel', () => ({ hasWebGL: () => false }))
 vi.stubGlobal('matchMedia', () => ({ matches: false }))
+afterEach(() => {
+  state.papers = []
+  vi.restoreAllMocks()
+})
 
 test('the empty Library still says what to do, with the icon as the fallback when 3D cannot run', () => {
   render(<LibraryPage />)
@@ -53,5 +57,4 @@ test('ticked papers get a selection bar that exports just them, with no workspac
   await waitFor(() => expect(spy).toHaveBeenCalledWith(['a', 'c'], 'bibtex', undefined))
   fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
   expect(screen.queryByText('2 selected')).toBeNull()
-  state.papers = []
 })

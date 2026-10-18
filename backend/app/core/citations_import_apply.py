@@ -431,6 +431,8 @@ async def route(
     """start() for entries already read from `source` (its bundle still open). The job reads a copy of the file in
     uploads_dir(), deleted when it ends; its progress is a Redis value at progress_key(job id)."""
     small = len(entries) <= INLINE_MAX
+    # ponytail: a damaged zip PDF's fallback lookup (fallback_fetch) still runs inline; queueing on it would send
+    # nearly every Zotero zip to the background. Queue on it if those lookups ever stall a request.
     if small and not (await preview(session, entries, bundle=bundle, fetch_free_pdfs=fetch_free_pdfs)).would_fetch:
         return await apply(session, entries, workspace_id=workspace_id, fetch_free_pdfs=fetch_free_pdfs, bundle=bundle)
     job_id = f"{JOB}:{uuid.uuid4()}"
