@@ -530,10 +530,31 @@ export interface paths {
         };
         /**
          * Export Citations
-         * @description The workspace's papers as a download: bibtex, ris, csljson, apa or apa-html. 404 unknown workspace, 422 for an
-         *     unknown format or no papers.
+         * @description The workspace's papers as a download: bibtex, ris, csljson, apa or apa-html; `notes=true` adds the PaperLab
+         *     notes (BibTeX annote, RIS N1). 404 unknown workspace, 422 for an unknown format or no papers.
          */
         get: operations["export_citations_api_workspaces__workspace_id__citations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/citations.zip": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Citations Zip
+         * @description refs.bib or refs.ris plus files/<key>.pdf for each paper whose PDF is on disk, as Zotero imports it. 404 unknown
+         *     workspace, 422 for a format other than bibtex or ris, or no papers.
+         */
+        get: operations["export_citations_zip_api_workspaces__workspace_id__citations_zip_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -662,6 +683,72 @@ export interface paths {
          * @description The selected papers, in the order given, as a download. 422 for an unknown format, none, or over 1000.
          */
         post: operations["export_selection_api_citations_export_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/citations/import/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Import
+         * @description What importing the file (a references file or a Zotero zip) would do: counts, and `disclosure`, the sentence
+         *     to show when free-copy sources will be contacted. Nothing is written and no paper source is contacted. 422 for
+         *     an unreadable file, 413 over the size caps.
+         */
+        post: operations["preview_import_api_citations_import_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/citations/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Citations
+         * @description Imports a references file or a Zotero zip into the library, and into `workspace_id` or a new workspace
+         *     named `new_workspace_name` (made only once the file has parsed). 200 with the result (state finished) when it
+         *     ran now; 202 with `job_id` (state queued) to poll at GET /api/citations/import/{job_id}. 422 for an unreadable
+         *     file or both targets, 404 unknown workspace, 409 a taken name, 413 over the size caps.
+         */
+        post: operations["import_citations_api_citations_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/citations/import/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Import Progress
+         * @description An import job's state: queued, running (with counts), finished (with the result), failed, restarted (PaperLab
+         *     restarted before it finished) or expired (unknown or over a day old), the last three with a message in words.
+         */
+        get: operations["import_progress_api_citations_import__job_id__get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1912,6 +1999,20 @@ export interface components {
              */
             scale: "linear" | "log" | "symlog" | "category";
         };
+        /** Body_import_citations_api_citations_import_post */
+        Body_import_citations_api_citations_import_post: {
+            /** File */
+            file: string;
+            /** Workspace Id */
+            workspace_id?: string | null;
+            /** New Workspace Name */
+            new_workspace_name?: string | null;
+            /**
+             * Fetch Free Pdfs
+             * @default true
+             */
+            fetch_free_pdfs: boolean;
+        };
         /** Body_import_dataset_api_datasets_import_post */
         Body_import_dataset_api_datasets_import_post: {
             /** File */
@@ -1923,6 +2024,18 @@ export interface components {
         Body_import_notes_api_notes_import_post: {
             /** Files */
             files: string[];
+        };
+        /** Body_preview_import_api_citations_import_preview_post */
+        Body_preview_import_api_citations_import_preview_post: {
+            /** File */
+            file: string;
+            /** Workspace Id */
+            workspace_id?: string | null;
+            /**
+             * Fetch Free Pdfs
+             * @default true
+             */
+            fetch_free_pdfs: boolean;
         };
         /** Body_upload_hit_pdf_api_workspaces__workspace_id__search_hits__hit_id__upload_post */
         Body_upload_hit_pdf_api_workspaces__workspace_id__search_hits__hit_id__upload_post: {
@@ -2636,6 +2749,13 @@ export interface components {
             /** Format */
             format: string;
         };
+        /** FailedOut */
+        FailedOut: {
+            /** Title */
+            title: string;
+            /** Reason */
+            reason: string;
+        };
         /** GenerateIn */
         GenerateIn: {
             /**
@@ -2866,6 +2986,28 @@ export interface components {
             /** Topic Fit */
             topic_fit?: ("same_topic" | "related_topic" | "different_topic" | "out_of_scope") | null;
         };
+        /**
+         * ImportCountsOut
+         * @description A running import's tallies; `done` counts the entries reached.
+         */
+        ImportCountsOut: {
+            /** Total */
+            total: number;
+            /** Done */
+            done: number;
+            /** Imported */
+            imported: number;
+            /** Already In Library */
+            already_in_library: number;
+            /** Pdfs Attached */
+            pdfs_attached: number;
+            /** Notes */
+            notes: number;
+            /** Needs Pdf */
+            needs_pdf: number;
+            /** Failed */
+            failed: number;
+        };
         /** ImportHitsOut */
         ImportHitsOut: {
             /** Imported */
@@ -2878,10 +3020,67 @@ export interface components {
             /** Hit Ids */
             hit_ids?: string[] | null;
         };
+        /**
+         * ImportPreviewOut
+         * @description What an import would do, before it starts; nothing is created and no paper source is contacted.
+         */
+        ImportPreviewOut: {
+            /** Total */
+            total: number;
+            /** Already In Library */
+            already_in_library: number;
+            /** With Bundled Pdf */
+            with_bundled_pdf: number;
+            /** Would Fetch */
+            would_fetch: number;
+            /** Cannot Import Without Fetch */
+            cannot_import_without_fetch: number;
+            /** Disclosure */
+            disclosure: string | null;
+        };
+        /**
+         * ImportProgressOut
+         * @description An import, finished inline or as a job. `result` once finished, `counts` while running, `message` (in words)
+         *     when failed, restarted, expired or unavailable (Redis can't be read just now).
+         */
+        ImportProgressOut: {
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "queued" | "running" | "finished" | "failed" | "restarted" | "expired" | "unavailable";
+            /** Job Id */
+            job_id?: string | null;
+            /** Workspace Id */
+            workspace_id?: string | null;
+            counts?: components["schemas"]["ImportCountsOut"] | null;
+            result?: components["schemas"]["ImportResultOut"] | null;
+            /** Message */
+            message?: string | null;
+        };
         /** ImportReferenceIn */
         ImportReferenceIn: {
             /** Workspace Id */
             workspace_id?: string | null;
+        };
+        /** ImportResultOut */
+        ImportResultOut: {
+            /** Imported */
+            imported: number;
+            /** Already In Library */
+            already_in_library: number;
+            /** Pdfs Attached */
+            pdfs_attached: number;
+            /** Notes */
+            notes: number;
+            /** Needs Pdf */
+            needs_pdf: components["schemas"]["NeedsPdfOut"][];
+            /** Failed */
+            failed: components["schemas"]["FailedOut"][];
+            /** Not Reached */
+            not_reached: string[];
+            /** Stopped */
+            stopped: string;
         };
         /** IndexedModelOut */
         IndexedModelOut: {
@@ -2993,6 +3192,76 @@ export interface components {
             name: string;
             /** Is Default */
             is_default: boolean;
+        };
+        /**
+         * NeedsPdfOut
+         * @description An entry with no PDF in the zip and no free copy found: the whole parsed reference (so it can later be saved as
+         *     a metadata-only paper as it is), with what was tried and where a free copy may be.
+         */
+        NeedsPdfOut: {
+            /** Title */
+            title: string;
+            /**
+             * Authors
+             * @default []
+             */
+            authors: string[];
+            /** Year */
+            year?: number | null;
+            /** Venue */
+            venue?: string | null;
+            /** Doi */
+            doi?: string | null;
+            /** Arxiv Id */
+            arxiv_id?: string | null;
+            /** Pmid */
+            pmid?: string | null;
+            /** Pmcid */
+            pmcid?: string | null;
+            /** Issn */
+            issn?: string | null;
+            /** Abstract */
+            abstract?: string | null;
+            /** Volume */
+            volume?: string | null;
+            /** Issue */
+            issue?: string | null;
+            /** Pages */
+            pages?: string | null;
+            /**
+             * Editors
+             * @default []
+             */
+            editors: string[];
+            /**
+             * Source Type
+             * @default other
+             */
+            source_type: string;
+            /**
+             * Tags
+             * @default []
+             */
+            tags: string[];
+            /** Collection */
+            collection?: string | null;
+            /**
+             * Notes
+             * @default []
+             */
+            notes: string[];
+            /**
+             * Tried
+             * @default []
+             */
+            tried: {
+                [key: string]: string;
+            }[];
+            /**
+             * Free Copies
+             * @default []
+             */
+            free_copies: string[];
         };
         /** NoteCreate */
         NoteCreate: {
@@ -3209,6 +3478,18 @@ export interface components {
             referenced_works_count: number | null;
             /** Issn */
             issn: string | null;
+            /** Volume */
+            volume: string | null;
+            /** Issue */
+            issue: string | null;
+            /** Pages */
+            pages: string | null;
+            /** Editors */
+            editors: string[] | null;
+            /** Pmid */
+            pmid: string | null;
+            /** Pmcid */
+            pmcid: string | null;
             /** Page Count */
             page_count: number | null;
             /** Status */
@@ -5594,6 +5875,41 @@ export interface operations {
         parameters: {
             query: {
                 format: string;
+                notes?: boolean;
+            };
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_citations_zip_api_workspaces__workspace_id__citations_zip_get: {
+        parameters: {
+            query: {
+                format: string;
+                notes?: boolean;
             };
             header?: never;
             path: {
@@ -5876,6 +6192,112 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_import_api_citations_import_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_preview_import_api_citations_import_preview_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportPreviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_citations_api_citations_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_citations_api_citations_import_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportProgressOut"];
+                };
+            };
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportProgressOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_progress_api_citations_import__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportProgressOut"];
                 };
             };
             /** @description Validation Error */
