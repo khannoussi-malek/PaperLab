@@ -21,6 +21,7 @@ IMPORT_BODY_MAX = citations_import_run.ZIP_MAX_BYTES + 1024 * 1024
 class ExportIn(BaseModel):
     paper_ids: list[uuid.UUID]
     format: str  # one of FORMATS; anything else is 422 unknown_format
+    workspace_id: uuid.UUID | None = None  # exporting from this workspace: its tags go in the keywords
 
 
 def download(text: str, fmt: str, name: str) -> Response:
@@ -32,7 +33,9 @@ def download(text: str, fmt: str, name: str) -> Response:
 @router.post("/api/citations/export")
 async def export_selection(payload: ExportIn, session: SessionDep) -> Response:
     """The selected papers, in the order given, as a download. 422 for an unknown format, none, or over 1000."""
-    text, _ = await pipeline.export_citations(session, paper_ids=payload.paper_ids, fmt=payload.format)
+    text, _ = await pipeline.export_citations(
+        session, workspace_id=payload.workspace_id, paper_ids=payload.paper_ids, fmt=payload.format
+    )
     return download(text, payload.format, "citations")
 
 

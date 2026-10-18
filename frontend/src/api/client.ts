@@ -462,9 +462,9 @@ export const api = {
     return request<ImportProgress>('/api/citations/import', { method: 'POST', body: form })
   },
   importProgress: (jobId: string) => request<ImportProgress>(`/api/citations/import/${encodeURIComponent(jobId)}`),
-  /** The chosen papers as one citations file; resolves to its bytes and the server's file name. */
-  exportSelection: async (paperIds: string[], format: 'bibtex' | 'ris'): Promise<{ blob: Blob; filename: string }> => {
-    const response = await fetch('/api/citations/export', sendJson('POST', { paper_ids: paperIds, format }))
+  /** The chosen papers as one citations file (with `workspaceId`, that workspace's tags go in the keywords); resolves to its bytes and the server's file name. */
+  exportSelection: async (paperIds: string[], format: 'bibtex' | 'ris', workspaceId?: string): Promise<{ blob: Blob; filename: string }> => {
+    const response = await fetch('/api/citations/export', sendJson('POST', { paper_ids: paperIds, format, workspace_id: workspaceId }))
     if (!response.ok) throw new Error(await errorDetail(response))
     const name = /filename="([^"]+)"/.exec(response.headers.get('Content-Disposition') ?? '')?.[1]
     return { blob: await response.blob(), filename: name ?? `citations.${format === 'ris' ? 'ris' : 'bib'}` }

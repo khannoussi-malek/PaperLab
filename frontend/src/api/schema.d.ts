@@ -2748,6 +2748,8 @@ export interface components {
             paper_ids: string[];
             /** Format */
             format: string;
+            /** Workspace Id */
+            workspace_id?: string | null;
         };
         /** FailedOut */
         FailedOut: {

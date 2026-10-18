@@ -27,8 +27,8 @@ const DOWNLOADS = [
   ["CSL-JSON", "csljson"],
 ] as const;
 
-/** The workspace header's "Export citations" menu: three downloads, and an APA 7 preview to read and copy. */
 const ZOTERO_LABEL = "Export for Zotero (with PDFs and notes)";
+
 const NO_PAPERS = "Add papers to this workspace first.";
 
 /** The API's snake_case refusal codes, in words for the reader. */
@@ -38,6 +38,7 @@ function plainError(error: Error): string {
     : "Couldn't build the reference list. Try again.";
 }
 
+/** The workspace header's "Export citations" menu: three downloads, the Zotero zip,, and an APA 7 preview to read and copy. */
 export function ExportCitationsMenu({
   workspaceId,
   paperCount,
