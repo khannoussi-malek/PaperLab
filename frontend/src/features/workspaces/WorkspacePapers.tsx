@@ -84,7 +84,7 @@ export function WorkspacePapers({
           <div className="flex min-w-0 flex-1 flex-col gap-3">
             <TagFilterMenu {...filterProps} />
             {selectedIds.length > 0 && (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <span role="status" className="text-sm">{selectedIds.length} selected</span>
                 <TagPicker workspaceId={workspaceId} mode="add" paperIds={selectedIds} onDone={() => setPicked(new Set())} />
                 <TagPicker workspaceId={workspaceId} mode="remove" paperIds={selectedIds} onDone={() => setPicked(new Set())} />

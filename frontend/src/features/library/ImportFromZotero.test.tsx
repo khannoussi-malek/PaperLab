@@ -63,18 +63,35 @@ test('the preview is said in words, with the disclosure above the Import button 
   expect(screen.getByText(/5 with a PDF in the zip/)).toBeTruthy()
   const disclosure = screen.getByText(preview().disclosure!)
   expect(disclosure.compareDocumentPosition(importButton()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-  expect(previewSpy).toHaveBeenCalledWith(file, undefined, true)
+  expect(previewSpy).toHaveBeenCalledWith(file)
 })
 
-test('no disclosure when nothing will be fetched; turning the switch off re-runs the preview', async () => {
-  previewSpy.mockImplementation(async (_f, _w, fetchPdfs) =>
-    fetchPdfs ? preview() : preview({ would_fetch: 0, disclosure: null }))
-  open()
+test('the file is previewed once: the switch hides the disclosure and the target changes nothing to ask', async () => {
+  open('w1')
   pick()
   await screen.findByText(/Fetching contacts/)
   fireEvent.click(screen.getByRole('switch', { name: /Fetch free PDFs/ }))
-  await waitFor(() => expect(previewSpy).toHaveBeenLastCalledWith(file, undefined, false))
   await waitFor(() => expect(screen.queryByText(/Fetching contacts/)).toBeNull())
+  fireEvent.click(screen.getByLabelText('Library only'))
+  fireEvent.click(screen.getByRole('switch', { name: /Fetch free PDFs/ }))
+  expect(await screen.findByText(/Fetching contacts/)).toBeTruthy()
+  expect((importButton() as HTMLButtonElement).disabled).toBe(false)
+  expect(previewSpy).toHaveBeenCalledTimes(1)
+})
+
+test('no disclosure when nothing will be fetched', async () => {
+  previewSpy.mockResolvedValue(preview({ would_fetch: 0, disclosure: null }))
+  open()
+  pick()
+  await screen.findByText(/12 references/)
+  expect(screen.queryByText(/Fetching contacts/)).toBeNull()
+})
+
+test('a disclosure with no count to fetch (a zip PDF that cannot be read) is still shown', async () => {
+  previewSpy.mockResolvedValue(preview({ would_fetch: 0, disclosure: 'Fetching contacts free-copy sources only for a PDF in the zip.' }))
+  open()
+  pick()
+  expect(await screen.findByText('Fetching contacts free-copy sources only for a PDF in the zip.')).toBeTruthy()
 })
 
 test('from a workspace the workspace target is preselected and sent', async () => {
@@ -82,7 +99,7 @@ test('from a workspace the workspace target is preselected and sent', async () =
   expect((screen.getByLabelText('This workspace') as HTMLInputElement).checked).toBe(true)
   pick()
   await screen.findByText(/12 references/)
-  expect(previewSpy).toHaveBeenCalledWith(file, 'w1', true)
+  expect(previewSpy).toHaveBeenCalledWith(file)
   fireEvent.click(importButton())
   await screen.findByText(/7 new papers/)
   expect(startSpy).toHaveBeenCalledWith(file, { workspaceId: 'w1' }, true)
@@ -190,13 +207,14 @@ test('needs-a-PDF and couldn\'t-import lists, and Copy list copies title and DOI
   await waitFor(() => expect(copy).toHaveBeenCalledWith('Sleep and memory - https://doi.org/10.1/abc\nNo DOI paper'))
 })
 
-test('Import waits for the preview of the current inputs, and keeps the old one visible meanwhile', async () => {
+test('Import waits for the preview of the current file, and keeps the old one visible meanwhile', async () => {
   open()
   pick()
   await screen.findByText(/Fetching contacts/)
   let release!: (p: ImportPreview) => void
   previewSpy.mockReturnValue(new Promise((resolve) => { release = resolve }))
-  fireEvent.click(screen.getByRole('switch', { name: /Fetch free PDFs/ }))
+  const other = new File(['@article{b}'], 'other.bib')
+  fireEvent.change(screen.getByLabelText('References file'), { target: { files: [other] } })
   await waitFor(() => expect((importButton() as HTMLButtonElement).disabled).toBe(true))
   expect(screen.getByText(/12 references/)).toBeTruthy()
   expect(screen.getByText(/Updating/)).toBeTruthy()
@@ -233,6 +251,18 @@ test('a file over its cap is refused before any upload', async () => {
   Object.defineProperty(zip, 'size', { value: 150 * 1024 * 1024 })
   fireEvent.change(screen.getByLabelText('References file'), { target: { files: [zip] } })
   await screen.findByText(/12 references/)
+})
+
+test('a file refused after a preview takes the old counts away with it', async () => {
+  open()
+  pick()
+  await screen.findByText(/12 references/)
+  const big = new File(['x'], 'big.bib')
+  Object.defineProperty(big, 'size', { value: 21 * 1024 * 1024 })
+  fireEvent.change(screen.getByLabelText('References file'), { target: { files: [big] } })
+  await screen.findByRole('alert')
+  expect(screen.queryByText(/12 references/)).toBeNull()
+  expect(screen.queryByText(/Fetching contacts/)).toBeNull()
 })
 
 test('a state with no server message falls back to words', async () => {

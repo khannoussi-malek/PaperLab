@@ -11,6 +11,7 @@ import zlib
 from dataclasses import dataclass, field, replace
 from typing import IO
 
+from app.core.citations_bundle import EXPORT_NAME
 from app.core.citations_import import MAX_BYTES, CitationsImportError, ImportEntry, parse
 from app.core.pipeline import MAX_UPLOAD_PDF_BYTES
 
@@ -20,9 +21,9 @@ REFS_SUFFIXES = (".bib", ".bibtex", ".ris", ".json")
 _METHODS = (zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED)
 _SYMLINK = 0o120000
 _TYPE_MASK = 0o170000
-# The names Zotero gives an export of the whole library or of selected items, and PaperLab's own export name
-# (citations_bundle): not collections.
-DEFAULT_EXPORT_NAMES = frozenset({"My Library", "Exported Items", "refs"})
+# The names Zotero gives an export of the whole library or of selected items, and PaperLab's own export's name: not
+# collections.
+DEFAULT_EXPORT_NAMES = frozenset({"My Library", "Exported Items", EXPORT_NAME})
 
 
 def _clean(name: str) -> str:

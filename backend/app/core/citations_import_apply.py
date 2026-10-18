@@ -344,6 +344,8 @@ class ImportPreview:
     with_bundled_pdf: int
     would_fetch: int
     cannot_import_without_fetch: int
+    # Bundled entries a damaged zip PDF would send to a free-copy lookup (_new_paper's fallback): for the disclosure.
+    fallback_fetch: int = 0
 
 
 async def preview(
@@ -351,16 +353,17 @@ async def preview(
 ) -> ImportPreview:
     """apply's dedupe and choice of route, with no network call and nothing created.
     ponytail: three lookups per entry (_held); fine for a dialog, slow only near the 5,000-entry limit."""
-    held = bundled = fetch = rest = 0
+    held = bundled = fetch = rest = fallback = 0
     for index, entry in enumerate(entries):
         if await _held(session, entry) is not None:
             held += 1
         elif bundle is not None and bundle.pdf_path(index):
             bundled += 1
+            fallback += bool(fetch_free_pdfs and (entry.doi or entry.arxiv_id))
         else:
             rest += 1
             fetch += bool(fetch_free_pdfs and (entry.doi or entry.arxiv_id))
-    return ImportPreview(len(entries), held, bundled, fetch, rest)
+    return ImportPreview(len(entries), held, bundled, fetch, rest, fallback)
 
 
 def uploads_dir() -> Path:
@@ -428,6 +431,8 @@ async def route(
     """start() for entries already read from `source` (its bundle still open). The job reads a copy of the file in
     uploads_dir(), deleted when it ends; its progress is a Redis value at progress_key(job id)."""
     small = len(entries) <= INLINE_MAX
+    # ponytail: a damaged zip PDF's fallback lookup (fallback_fetch) still runs inline; queueing on it would send
+    # nearly every Zotero zip to the background. Queue on it if those lookups ever stall a request.
     if small and not (await preview(session, entries, bundle=bundle, fetch_free_pdfs=fetch_free_pdfs)).would_fetch:
         return await apply(session, entries, workspace_id=workspace_id, fetch_free_pdfs=fetch_free_pdfs, bundle=bundle)
     job_id = f"{JOB}:{uuid.uuid4()}"

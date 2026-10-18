@@ -1,6 +1,6 @@
-"""Citations with their PDFs for Zotero (M40 D270): `refs.<bib|ris>` plus `files/<key>.pdf`, the layout of Zotero's own
-"export with files". The zip is written to a spooled temp file straight from disk, so a workspace's PDFs are never
-all in memory."""
+"""Citations with their PDFs for Zotero (M40 D270): `PaperLab export.<bib|ris>` plus `files/<key>.pdf`, the layout
+of Zotero's own "export with files". The zip is written to a spooled temp file straight from disk, so a workspace's
+PDFs are never all in memory."""
 
 import asyncio
 import tempfile
@@ -14,6 +14,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import citations_export
 from app.core.errors import InvalidInput
+
+# The references file's name: Zotero names the collection it imports into after it, and citations_bundle_read reads
+# it back as no collection.
+EXPORT_NAME = "PaperLab export"
 
 BUNDLE_FORMATS = ("bibtex", "ris")
 SPOOL_BYTES = 8 * 1024 * 1024  # above this the temp file spills to disk
@@ -38,7 +42,7 @@ def _write(items: list[dict], papers: list, fmt: str) -> tuple[IO[bytes], int]:
                 attached[item["id"]] = name
             named = [{**i, "_file": attached[i["id"]]} if i["id"] in attached else i for i in items]
             refs = citations_export.render(named, fmt)
-            zf.writestr(f"refs.{citations_export.FORMATS[fmt][1]}", refs, compress_type=zipfile.ZIP_DEFLATED)
+            zf.writestr(f"{EXPORT_NAME}.{citations_export.FORMATS[fmt][1]}", refs, compress_type=zipfile.ZIP_DEFLATED)
         size = out.tell()
         out.seek(0)
         return out, size
