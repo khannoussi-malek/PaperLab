@@ -49,8 +49,10 @@ def test_a_named_export_is_the_collection():
 
 
 def test_paperlabs_own_export_is_not_a_collection():
-    with read_bundle(make({"refs.bib": BIB})) as b:  # citations_bundle's name
+    with read_bundle(make({"PaperLab export.bib": BIB})) as b:  # citations_bundle's name
         assert {e.collection for e in b.entries} == {None}
+    with read_bundle(make({"refs.bib": BIB})) as b:  # a Zotero collection that happens to be called refs
+        assert {e.collection for e in b.entries} == {"refs"}
 
 
 def test_better_bibtex_and_stream_input():

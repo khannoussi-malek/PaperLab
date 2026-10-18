@@ -81,8 +81,8 @@ async def export_citations(workspace_id: uuid.UUID, format: str, session: Sessio
 async def export_citations_zip(
     workspace_id: uuid.UUID, format: str, session: SessionDep, notes: bool = False
 ) -> StreamingResponse:
-    """refs.bib or refs.ris plus files/<key>.pdf for each paper whose PDF is on disk, as Zotero imports it. 404 unknown
-    workspace, 422 for a format other than bibtex or ris, or no papers."""
+    """PaperLab export.bib or .ris plus files/<key>.pdf for each paper whose PDF is on disk, as Zotero imports it.
+    404 unknown workspace, 422 for a format other than bibtex or ris, or no papers."""
     file, size = await citations_bundle.build(session, workspace_id, format, notes)
     slug = filename_slug((await workspaces.get(session, workspace_id)).name)
     headers = {"Content-Disposition": f'attachment; filename="{slug}.zip"', "Content-Length": str(size)}
