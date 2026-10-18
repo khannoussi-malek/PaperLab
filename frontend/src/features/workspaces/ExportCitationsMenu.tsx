@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Quote } from "lucide-react";
 import { useState } from "react";
-import { api, citationsUrl } from "@/api/client";
+import { api, citationsUrl, zoteroZipUrl } from "@/api/client";
 import { glass } from "@/components/glass";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,7 @@ const DOWNLOADS = [
 ] as const;
 
 /** The workspace header's "Export citations" menu: three downloads, and an APA 7 preview to read and copy. */
+const ZOTERO_LABEL = "Export for Zotero (with PDFs and notes)";
 const NO_PAPERS = "Add papers to this workspace first.";
 
 /** The API's snake_case refusal codes, in words for the reader. */
@@ -74,6 +75,19 @@ export function ExportCitationsMenu({
               )}
             </DropdownMenuItem>
           ))}
+          <DropdownMenuItem
+            asChild={!empty}
+            disabled={empty}
+            title={empty ? NO_PAPERS : undefined}
+          >
+            {empty ? (
+              ZOTERO_LABEL
+            ) : (
+              <a href={zoteroZipUrl(workspaceId)} download>
+                {ZOTERO_LABEL}
+              </a>
+            )}
+          </DropdownMenuItem>
           <DropdownMenuItem
             disabled={empty}
             title={empty ? NO_PAPERS : undefined}

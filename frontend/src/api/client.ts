@@ -27,6 +27,9 @@ export type TagResult = components['schemas']['TagResultOut']
 export type TagRenamed = components['schemas']['TagRenamed']
 export type TagDeleted = components['schemas']['TagDeleted']
 export type PaperTagGroup = components['schemas']['PaperTagGroup']
+export type ImportPreview = components['schemas']['ImportPreviewOut']
+export type ImportProgress = components['schemas']['ImportProgressOut']
+export type ImportResult = components['schemas']['ImportResultOut']
 export type Workspace = components['schemas']['WorkspaceOut']
 export type ChartRef = components['schemas']['ChartRefOut']
 export type Dataset = components['schemas']['DatasetOut']
@@ -178,6 +181,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const citationsUrl = (workspaceId: string, format: string) =>
   `/api/workspaces/${encodeURIComponent(workspaceId)}/citations?format=${format}`
+
+/** BibTeX plus each paper's PDF and notes, as Zotero imports it. */
+export const zoteroZipUrl = (workspaceId: string) =>
+  `/api/workspaces/${encodeURIComponent(workspaceId)}/citations.zip?format=bibtex&notes=true`
 
 export const notesZipUrl = (workspaceId: string) => `/api/workspaces/${encodeURIComponent(workspaceId)}/notes.zip`
 
@@ -437,6 +444,31 @@ export const api = {
       `/api/workspaces/${workspaceId}/papers/${paperId}/eligibility?run=${runId}`,
       sendJson('PATCH', body),
     ),
+  /** What importing `file` would do. Nothing is written. */
+  previewImport: (file: File, workspaceId: string | undefined, fetchFreePdfs: boolean) => {
+    const form = new FormData()
+    form.append('file', file)
+    if (workspaceId) form.append('workspace_id', workspaceId)
+    form.append('fetch_free_pdfs', String(fetchFreePdfs))
+    return request<ImportPreview>('/api/citations/import/preview', { method: 'POST', body: form })
+  },
+  /** Starts an import: 200 gives the result now, 202 a job id to poll (same body shape either way). */
+  startImport: (file: File, target: { workspaceId?: string; newWorkspaceName?: string }, fetchFreePdfs: boolean) => {
+    const form = new FormData()
+    form.append('file', file)
+    if (target.workspaceId) form.append('workspace_id', target.workspaceId)
+    if (target.newWorkspaceName) form.append('new_workspace_name', target.newWorkspaceName)
+    form.append('fetch_free_pdfs', String(fetchFreePdfs))
+    return request<ImportProgress>('/api/citations/import', { method: 'POST', body: form })
+  },
+  importProgress: (jobId: string) => request<ImportProgress>(`/api/citations/import/${encodeURIComponent(jobId)}`),
+  /** The chosen papers as one citations file; resolves to its bytes and the server's file name. */
+  exportSelection: async (paperIds: string[], format: 'bibtex' | 'ris'): Promise<{ blob: Blob; filename: string }> => {
+    const response = await fetch('/api/citations/export', sendJson('POST', { paper_ids: paperIds, format }))
+    if (!response.ok) throw new Error(await errorDetail(response))
+    const name = /filename="([^"]+)"/.exec(response.headers.get('Content-Disposition') ?? '')?.[1]
+    return { blob: await response.blob(), filename: name ?? `citations.${format === 'ris' ? 'ris' : 'bib'}` }
+  },
   /** A workspace's citations as text (the apa-html preview and the plain apa to copy). Downloads use the URL directly. */
   citationsText: async (workspaceId: string, format: string): Promise<string> => {
     const response = await fetch(citationsUrl(workspaceId, format))
