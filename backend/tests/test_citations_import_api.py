@@ -150,6 +150,32 @@ async def test_preview_with_fetch_off_has_no_disclosure_and_one_entry_reads_sing
     assert "for 1 entry, the same way" in on.json()["disclosure"]
 
 
+async def test_preview_discloses_the_lookup_for_a_zip_pdf_that_cant_be_read(client):
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w") as zf:  # a bundled PDF and a DOI: a damaged PDF falls back to a free copy
+        zf.writestr("Exported Items.bib", bib("p6", doi=True).decode().replace("}\n", ", file={files/1/p6.pdf}}\n"))
+        zf.writestr("files/1/p6.pdf", b"%PDF-1.7 zipped")
+    on = (await post(client, "/api/citations/import/preview", out.getvalue(), name="Exported Items.zip")).json()
+    assert (on["with_bundled_pdf"], on["would_fetch"]) == (1, 0)
+    assert on["disclosure"] == (
+        "Fetching contacts free-copy sources (Unpaywall, arXiv, …) only for a PDF in the zip that can't be read, "
+        "the same way adding a paper by DOI does."
+    )
+    off = await post(client, "/api/citations/import/preview", out.getvalue(), name="Exported Items.zip",
+                     fetch_free_pdfs=False)  # fmt: skip
+    assert off.json()["disclosure"] is None
+    mixed = io.BytesIO()
+    with zipfile.ZipFile(mixed, "w") as zf:
+        zf.writestr("Exported Items.bib", bib("p7", doi=True).decode().replace("}\n", ", file={files/1/p7.pdf}}\n")
+                    + bib("p8", doi=True).decode())  # fmt: skip
+        zf.writestr("files/1/p7.pdf", b"%PDF-1.7 zipped")
+    both = await post(client, "/api/citations/import/preview", mixed.getvalue(), name="Exported Items.zip")
+    assert both.json()["disclosure"] == (
+        "Fetching contacts free-copy sources (Unpaywall, arXiv, …) for 1 entry, and for a PDF in the zip that can't "
+        "be read, the same way adding a paper by DOI does."
+    )
+
+
 async def test_preview_of_a_bad_file_is_a_plain_422(client):
     response = await post(client, "/api/citations/import/preview", b"not references at all", name="notes.txt")
     assert response.status_code == 422
