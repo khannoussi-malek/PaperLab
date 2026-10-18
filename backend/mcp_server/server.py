@@ -16,7 +16,7 @@ from mcp.server.mcpserver import MCPServer
 from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import Field
 
-from app.core import citations_import_run, graph, library, notes, pipeline, queue, screening, workspaces
+from app.core import citations_import_run, graph, library, notes, pipeline, screening, workspaces
 from app.core.errors import DomainError, error_code
 from app.db import SessionLocal
 
@@ -274,13 +274,14 @@ async def import_citations(
     RIS or CSL-JSON file (20 MB at most) or of a Zotero "export with files" zip (200 MB) that the PaperLab server can
     read (it runs in Docker, so a file on the owner's computer is usually not visible: pass the file's text instead),
     or the text of a references file. Give `workspace` (its exact name) to file the papers there too.
-    Every paper has a PDF: one from the zip, else, with `fetch_free_pdfs` (on by default), a free copy found the way
-    add_paper finds one; an entry with neither is listed in `needs_pdf` with its whole reference and what was tried.
-    A small import that doesn't fetch answers `state` finished with `result`; otherwise it runs in the background
-    (`state` queued, with `job_id`): call again with only `job_id` to read its progress until it is finished, failed,
-    restarted or expired (polling changes nothing)."""
+    Every paper has a PDF: one from the zip, else a free copy. By default, for each entry without a PDF in the zip,
+    PaperLab contacts free-copy sources (Unpaywall, arXiv, …) by its DOI or arXiv ID, as add_paper does; give
+    fetch_free_pdfs=False to contact none. An entry left without a PDF is listed in `needs_pdf` with its whole
+    reference and what was tried. A small import that doesn't fetch answers `state` finished with `result`;
+    otherwise it runs in the background (`state` queued, with `job_id`): call again with only `job_id` to read its
+    progress until it is finished, failed, restarted or expired (polling changes nothing)."""
     if job_id is not None:
-        return await citations_import_run.status(await queue.pool(), job_id)
+        return await citations_import_run.poll(job_id, path_or_text)
     async with sessions() as session:
         return await citations_import_run.start_from(session, path_or_text, workspace, fetch_free_pdfs)
 

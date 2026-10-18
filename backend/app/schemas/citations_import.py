@@ -26,6 +26,7 @@ class NeedsPdfOut(BaseModel):
     editors: list[str] = []
     source_type: str = "other"
     tags: list[str] = []
+    collection: str | None = None  # the Zotero collection it was exported from
     notes: list[str] = []  # markdown
     tried: list[dict[str, str]] = []  # {url, outcome}
     free_copies: list[str] = []
@@ -73,9 +74,9 @@ class ImportPreviewOut(BaseModel):
 
 class ImportProgressOut(BaseModel):
     """An import, finished inline or as a job. `result` once finished, `counts` while running, `message` (in words)
-    when failed, restarted or expired."""
+    when failed, restarted, expired or unavailable (Redis can't be read just now)."""
 
-    state: Literal["queued", "running", "finished", "failed", "restarted", "expired"]
+    state: Literal["queued", "running", "finished", "failed", "restarted", "expired", "unavailable"]
     job_id: str | None = None
     workspace_id: uuid.UUID | None = None  # the workspace imported into, when the import named or made one
     counts: ImportCountsOut | None = None

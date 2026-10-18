@@ -1,6 +1,6 @@
 import uuid
 from collections.abc import Callable
-from typing import Annotated
+from typing import IO, Annotated
 
 from fastapi import APIRouter, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import JSONResponse
@@ -47,7 +47,7 @@ class CappedBody(APIRoute):
         handler = super().get_route_handler()
 
         async def capped(request: Request) -> Response:
-            too_big = citations_import_run.too_big("upload.zip")
+            too_big = citations_import_run.UPLOAD_TOO_BIG
             declared = request.headers.get("content-length", "")
             if declared.isdigit() and int(declared) > IMPORT_BODY_MAX:
                 return JSONResponse({"detail": too_big}, status_code=413)
@@ -69,13 +69,13 @@ class CappedBody(APIRoute):
 imports = APIRouter(tags=["citations"], route_class=CappedBody)
 
 
-async def _upload(file: UploadFile) -> tuple[str, bytes]:
-    """The upload's name and bytes: 413 over its kind's cap (20 MB a file, 200 MB a zip), read no further."""
+def _upload(file: UploadFile) -> tuple[str, IO[bytes]]:
+    """The upload's name and its spooled file, read from there (a zip never whole): 413 over its kind's cap (20 MB a
+    file, 200 MB a zip)."""
     name = file.filename or citations_import_run.RAW_TEXT_NAME
-    limit = citations_import_run.cap(name)
-    if (file.size or 0) > limit or len(data := await file.read(limit + 1)) > limit:
+    if (file.size or 0) > citations_import_run.cap(name):
         raise HTTPException(413, citations_import_run.too_big(name))
-    return name, data
+    return name, file.file
 
 
 @imports.post("/api/citations/import/preview")
@@ -88,9 +88,9 @@ async def preview_import(
     """What importing the file (a references file or a Zotero zip) would do: counts, and `disclosure`, the sentence
     to show when free-copy sources will be contacted. Nothing is written and no paper source is contacted. 422 for
     an unreadable file, 413 over the size caps."""
-    name, data = await _upload(file)
+    name, source = _upload(file)
     return await citations_import_run.preview(
-        session, name, data, workspace_id=workspace_id, fetch_free_pdfs=fetch_free_pdfs
+        session, name, source, workspace_id=workspace_id, fetch_free_pdfs=fetch_free_pdfs
     )
 
 
@@ -107,9 +107,9 @@ async def import_citations(
     named `new_workspace_name` (made only once the file has parsed). 200 with the result (state finished) when it
     ran now; 202 with `job_id` (state queued) to poll at GET /api/citations/import/{job_id}. 422 for an unreadable
     file or both targets, 404 unknown workspace, 409 a taken name, 413 over the size caps."""
-    name, data = await _upload(file)
+    name, source = _upload(file)
     progress = await citations_import_run.start(
-        session, name, data, workspace_id=workspace_id, new_workspace_name=new_workspace_name,
+        session, name, source, workspace_id=workspace_id, new_workspace_name=new_workspace_name,
         fetch_free_pdfs=fetch_free_pdfs,
     )  # fmt: skip
     if progress.state == "queued":

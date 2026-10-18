@@ -100,3 +100,18 @@ async def test_a_fetching_import_is_a_job_to_poll_with_job_id(session, redis):
 async def test_neither_a_file_nor_a_job_is_refused(session):
     response = await call("import_citations")
     assert response.is_error and response.structured_content["error"] == "path_or_text_or_job_id_required"
+
+
+async def test_a_job_id_with_a_file_is_refused(session):
+    response = await call("import_citations", path_or_text=bib("m7").decode(), job_id=f"{cia.JOB}:x")
+    assert response.is_error and response.structured_content["error"] == "invalid_input"
+    assert response.structured_content["detail"] == (
+        "Give job_id to read an import's progress, or path_or_text to start one, not both."
+    )
+
+
+async def test_the_docstring_says_what_the_default_contacts():
+    from mcp_server import server
+
+    doc = server.import_citations.__doc__
+    assert "contacts free-copy sources (Unpaywall, arXiv, …)" in doc and "fetch_free_pdfs=False" in doc
