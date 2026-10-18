@@ -51,6 +51,8 @@ EXTRA_FIELDS = ("volume", "issue", "pages", "issn", "pmid", "pmcid")
 # The notes API's own body limit (schemas/notes.py, NoteCreate/NoteUpdate max_length; no shared constant there).
 NOTE_MAX_CHARS = 50_000
 NOTE_CUT = "… (cut at 50,000 characters)"
+# What a needs_pdf item keeps of its entry: the whole reference, so it can later be saved as a metadata-only paper.
+ENTRY_RECORD = tuple(f.name for f in fields(ImportEntry) if f.name not in ("collection", "files"))
 
 
 @dataclass(frozen=True)
@@ -59,7 +61,7 @@ class ImportResult:
     already_in_library: int = 0
     pdfs_attached: int = 0  # new papers whose PDF came from the zip; the rest of `imported` were fetched
     notes: int = 0
-    needs_pdf: list[dict] = field(default_factory=list)  # {title, doi, tried, free_copies}
+    needs_pdf: list[dict] = field(default_factory=list)  # the entry's ENTRY_RECORD fields + tried, free_copies
     failed: list[dict] = field(default_factory=list)  # {title, reason}
     not_reached: list[str] = field(default_factory=list)  # titles left when the import ran out of time
     stopped: str = ""  # why it stopped early, in words (STOPPED); "" when every entry was reached
@@ -247,7 +249,7 @@ async def _one(session, entry, workspace_id, providers, bundle: Bundle | None, i
         return ImportResult(already_in_library=1, notes=await _file(session, held, entry, workspace_id))
     made, missing, from_zip = await _new_paper(session, entry, providers, bundle, index)
     if made is None:
-        return ImportResult(needs_pdf=[{"title": entry.title, "doi": entry.doi, **missing}])
+        return ImportResult(needs_pdf=[{name: getattr(entry, name) for name in ENTRY_RECORD} | missing])
     if not isinstance(made, Paper):  # the free-copy search found it held after all
         return ImportResult(already_in_library=1, notes=await _file(session, made, entry, workspace_id))
     try:

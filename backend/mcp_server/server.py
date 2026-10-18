@@ -16,7 +16,7 @@ from mcp.server.mcpserver import MCPServer
 from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import Field
 
-from app.core import graph, library, notes, pipeline, screening, workspaces
+from app.core import citations_import_run, graph, library, notes, pipeline, queue, screening, workspaces
 from app.core.errors import DomainError, error_code
 from app.db import SessionLocal
 
@@ -54,7 +54,8 @@ mcp = MCPServer(
         "list_evidence_cards and list_notes take tags=[…] to scope to them; review_hits, "
         "accept_suggestions and import_hit "
         "take tags=[…] to label hits as they are screened, and the paper keeps them once imported. "
-        "Citations: export_citations gives a workspace's papers as BibTeX, RIS, CSL-JSON or APA 7. "
+        "Citations: export_citations gives a workspace's papers as BibTeX, RIS, CSL-JSON or APA 7; "
+        "import_citations brings in a Zotero export (poll a big one with its job_id). "
         "An AI suggestion on a hit is a suggestion, never a decision; only review_hits and "
         "accept_suggestions record one, so ask the owner first."
     ),
@@ -261,6 +262,27 @@ async def add_papers(identifiers: list[str], workspace: str | None = None) -> li
     the whole call. Use add_paper for a single identifier."""
     async with sessions() as session:
         return await pipeline.add_papers(session, identifiers, workspace)
+
+
+@mcp.tool()
+@recoverable
+async def import_citations(
+    path_or_text: str | None = None, workspace: str | None = None, fetch_free_pdfs: bool = True,
+    job_id: str | None = None,
+) -> citations_import_run.ImportProgressOut:
+    """Use to import a Zotero export into the library, without duplicates. `path_or_text` is the path of a BibTeX,
+    RIS or CSL-JSON file (20 MB at most) or of a Zotero "export with files" zip (200 MB) that the PaperLab server can
+    read (it runs in Docker, so a file on the owner's computer is usually not visible: pass the file's text instead),
+    or the text of a references file. Give `workspace` (its exact name) to file the papers there too.
+    Every paper has a PDF: one from the zip, else, with `fetch_free_pdfs` (on by default), a free copy found the way
+    add_paper finds one; an entry with neither is listed in `needs_pdf` with its whole reference and what was tried.
+    A small import that doesn't fetch answers `state` finished with `result`; otherwise it runs in the background
+    (`state` queued, with `job_id`): call again with only `job_id` to read its progress until it is finished, failed,
+    restarted or expired (polling changes nothing)."""
+    if job_id is not None:
+        return await citations_import_run.status(await queue.pool(), job_id)
+    async with sessions() as session:
+        return await citations_import_run.start_from(session, path_or_text, workspace, fetch_free_pdfs)
 
 
 @mcp.tool()

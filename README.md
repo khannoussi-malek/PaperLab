@@ -216,7 +216,8 @@ DBLP is off by default. When enabled, Find papers and Workspace Search send DBLP
 and pagination parameters, never PDFs, notes, contact email or API keys. DBLP supplies no PDFs; existing
 arXiv and Unpaywall resolution still applies.
 API keys stay in your local database and are never sent back to the browser. Adding a paper downloads its PDF from the
-free link found. None of them send a paper's text.
+free link found. Importing from Zotero fetches free copies exactly like adding a paper by DOI; it's on by default and
+you can turn it off for an import. None of them send a paper's text.
 An MCP client you connect, such as Claude Desktop, receives what its tools return: passages from your papers, paper
 details (with your reading pass and decision) and workspace names, and every note on a paper marked as yours or AI.
 Claude Desktop and Claude Code send what the tools return to Anthropic.
@@ -410,6 +411,7 @@ Adding papers:
 - `add_paper`: a paper by DOI, arXiv ID or PDF link, free copies only, optionally into a workspace; when no free PDF is found it says what it tried (`tried`, which a link that fell back to its DOI carries too) and where a free copy may be (`free_copies`);
 - `add_papers`: up to 50 papers by DOI, arXiv ID or PDF link in one call; each item reports its own status or error, and says what it tried (`tried`, `free_copies`) like `add_paper`;
 - `upload_paper`: a PDF you already have (base64, up to 30 MB) into a workspace, with an optional DOI (a paper already in the library is reused) and tags;
+- `import_citations`: a Zotero export (BibTeX, RIS, CSL-JSON, or an "export with files" zip) by path or as text, without duplicates; free copies are fetched like `add_paper` unless `fetch_free_pdfs` is off, entries left without a PDF come back whole in `needs_pdf`, and a big import runs in the background (call again with its `job_id`);
 - `add_paper_to_workspace`: files a library paper in a workspace;
 - `remove_paper_from_workspace`: takes a paper out of a workspace (it stays in the library).
 
