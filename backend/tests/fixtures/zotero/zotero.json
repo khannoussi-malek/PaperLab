@@ -1,0 +1,32 @@
+[
+  {
+    "id": "http://zotero.org/users/1/items/AAAA1111",
+    "type": "article-journal",
+    "title": "The DNA of Café Culture",
+    "container-title": "Journal of Things",
+    "volume": "12",
+    "issue": "3",
+    "page": "45-67",
+    "DOI": "10.1234/ABC.2020.1",
+    "ISSN": "1234-5678",
+    "abstract": "We study DNA and coffee.",
+    "author": [
+      {"family": "Smith", "given": "Jane A."},
+      {"family": "Berg", "given": "Anna", "non-dropping-particle": "van der"},
+      {"literal": "World Health Organization"}
+    ],
+    "editor": [{"family": "Roe", "given": "Richard"}],
+    "issued": {"date-parts": [[2020, 3, 1]]},
+    "note": "PMCID: PMC789\nPMID: 123456"
+  },
+  {
+    "id": "http://zotero.org/users/1/items/BBBB2222",
+    "type": "article",
+    "genre": "Preprint",
+    "title": "Attention revisited",
+    "publisher": "arXiv",
+    "DOI": "10.48550/arXiv.2406.07735",
+    "author": [{"family": "Doe", "given": "John"}],
+    "issued": {"date-parts": [[2024]]}
+  }
+]

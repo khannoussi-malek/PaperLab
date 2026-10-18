@@ -7,6 +7,7 @@ A paper with no PubMed record (most outside biomedicine) keeps a NULL pmid, so e
 run it once after an upgrade, not on a schedule.
 """
 
+import argparse
 import asyncio
 import uuid
 
@@ -22,6 +23,16 @@ from app.providers import crossref, openalex
 DELAY = 0.4
 
 
+def _selection(columns, only: list[uuid.UUID] | None = None):
+    """Papers with a DOI that still lack one of the fields Crossref or OpenAlex can give."""
+    # Editors alone never select a paper: most papers have none.
+    wanted = [getattr(Paper, name) for name in ("volume", "issue", "pages", "pmid", "pmcid")]
+    query = select(Paper.id, *columns).where(Paper.doi.is_not(None), or_(*(c.is_(None) for c in wanted)))
+    if only is not None:
+        query = query.where(Paper.id.in_(only))
+    return query.order_by(Paper.created_at)
+
+
 async def run(
     session: AsyncSession,
     crossref_http: httpx.AsyncClient | None,
@@ -31,12 +42,7 @@ async def run(
     only: list[uuid.UUID] | None = None,
 ) -> dict[str, int]:
     columns = [getattr(Paper, name) for name in enrichment.BIBLIO_FIELDS]
-    # Editors alone never select a paper: most papers have none.
-    wanted = [getattr(Paper, name) for name in ("volume", "issue", "pages", "pmid", "pmcid")]
-    query = select(Paper.id, *columns).where(Paper.doi.is_not(None), or_(*(c.is_(None) for c in wanted)))
-    if only is not None:
-        query = query.where(Paper.id.in_(only))
-    rows = (await session.execute(query.order_by(Paper.created_at))).all()
+    rows = (await session.execute(_selection(columns, only))).all()
     summary = {"checked": len(rows), "updated": 0}
     for paper_id, *before in rows:
         asked = await enrichment.fill_biblio(session, paper_id, crossref_http, openalex_http)
@@ -47,8 +53,12 @@ async def run(
     return summary
 
 
-async def main() -> None:
+async def main(dry_run: bool = False) -> None:
     async with SessionLocal() as session:
+        if dry_run:
+            count = len((await session.execute(_selection([Paper.id]))).all())
+            print(f"Dry run: would check {count} papers. Nothing was asked and nothing was changed.")
+            return
         sources = await paper_sources.get(session)
         email = sources.contact_email
         cr = crossref.new_client(email=email) if sources.enabled["crossref"] else None
@@ -63,5 +73,13 @@ async def main() -> None:
     print(summary)
 
 
+def cli(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument(
+        "--dry-run", action="store_true", help="count the papers it would check; ask and change nothing"
+    )
+    asyncio.run(main(dry_run=parser.parse_args(argv).dry_run))
+
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    cli()
