@@ -19,7 +19,9 @@ from app.core import citations_import_apply as cia
 from app.core import citations_import_run as run
 from app.core import discovery, queue
 from app.core.citations_bundle_read import read_bundle
+from app.core.citations_import import ImportEntry
 from app.models import Paper, Workspace
+from app.schemas.citations_import import ImportResultOut, NeedsPdfOut
 from app.workers import citations_import as worker
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("references")]
@@ -465,3 +467,22 @@ async def test_a_failed_enqueue_removes_the_workspace_it_made(client, session, r
     assert response.status_code == 503
     assert response.json()["detail"] == "PaperLab can't start a background import right now. Try again in a moment."
     assert await session.scalar(select(Workspace).where(Workspace.name == name)) is None
+
+
+# ---- the needs-a-PDF record (the metadata-only papers work saves these as they are) ----
+
+
+async def test_a_needs_pdf_item_keeps_every_field_of_its_entry_through_the_api():
+    assert set(NeedsPdfOut.model_fields) == {*cia.ENTRY_RECORD, "tried", "free_copies"}
+    entry = ImportEntry(
+        title="T", authors=["A B"], year=2020, venue="V", doi="10.1/x", arxiv_id="2001.00001", pmid="1", pmcid="PMC1",
+        issn="1234-5678", abstract="Ab.", volume="1", issue="2", pages="3-4", editors=["E F"], source_type="journal",
+        tags=["t"], collection="C", notes=["n"], files=["f.pdf"],
+    )
+    record = {name: getattr(entry, name) for name in cia.ENTRY_RECORD} | {
+        "tried": [{"url": "https://pdf.example/x", "outcome": "http_404"}], "free_copies": ["https://repo.example/x"],
+    }  # fmt: skip
+    out = ImportResultOut(imported=0, already_in_library=0, pdfs_attached=0, notes=0, needs_pdf=[record], failed=[],
+                          not_reached=[], stopped="")  # fmt: skip
+    assert out.model_dump()["needs_pdf"] == [record]
+    assert "files" not in record  # paths inside a zip mean nothing once the import is done
