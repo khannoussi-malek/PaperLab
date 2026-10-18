@@ -66,13 +66,13 @@ test('Zotero round trip: import a zip and a .bib, import again, then export for 
   await expect(dialog.getByText(/Imported 0 new papers\. 1 was already in your library, 0 PDFs attached, 0 notes\./)).toBeVisible({ timeout: 60_000 })
   await close()
 
-  // 4. Export for Zotero: a zip with refs.bib and the PDF under files/.
+  // 4. Export for Zotero: a zip with PaperLab export.bib and the PDF under files/.
   await page.getByRole('button', { name: 'Export citations' }).click()
   const download = page.waitForEvent('download')
   await page.getByRole('menuitem', { name: 'Export for Zotero (with PDFs and notes)' }).click()
   const bytes = await readFile((await (await download).path())!)
   expect(bytes.subarray(0, 2).toString('latin1')).toBe('PK')
   const names = bytes.toString('latin1') // entry names sit uncompressed in the local headers and central directory
-  expect(names).toContain('refs.bib')
+  expect(names).toContain('PaperLab export.bib')
   expect(names).toMatch(/files\/[^/\0]+\.pdf/)
 })
