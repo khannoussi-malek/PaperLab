@@ -16,6 +16,7 @@ one. Without either it is listed in `needs_pdf` and nothing is created.
 import asyncio
 import contextlib
 import logging
+import shutil
 import time
 import uuid
 from collections.abc import Awaitable, Callable
@@ -51,6 +52,8 @@ EXTRA_FIELDS = ("volume", "issue", "pages", "issn", "pmid", "pmcid")
 # The notes API's own body limit (schemas/notes.py, NoteCreate/NoteUpdate max_length; no shared constant there).
 NOTE_MAX_CHARS = 50_000
 NOTE_CUT = "… (cut at 50,000 characters)"
+# What a needs_pdf item keeps of its entry: the whole reference, so it can later be saved as a metadata-only paper.
+ENTRY_RECORD = tuple(f.name for f in fields(ImportEntry) if f.name != "files")
 
 
 @dataclass(frozen=True)
@@ -59,7 +62,7 @@ class ImportResult:
     already_in_library: int = 0
     pdfs_attached: int = 0  # new papers whose PDF came from the zip; the rest of `imported` were fetched
     notes: int = 0
-    needs_pdf: list[dict] = field(default_factory=list)  # {title, doi, tried, free_copies}
+    needs_pdf: list[dict] = field(default_factory=list)  # the entry's ENTRY_RECORD fields + tried, free_copies
     failed: list[dict] = field(default_factory=list)  # {title, reason}
     not_reached: list[str] = field(default_factory=list)  # titles left when the import ran out of time
     stopped: str = ""  # why it stopped early, in words (STOPPED); "" when every entry was reached
@@ -247,7 +250,7 @@ async def _one(session, entry, workspace_id, providers, bundle: Bundle | None, i
         return ImportResult(already_in_library=1, notes=await _file(session, held, entry, workspace_id))
     made, missing, from_zip = await _new_paper(session, entry, providers, bundle, index)
     if made is None:
-        return ImportResult(needs_pdf=[{"title": entry.title, "doi": entry.doi, **missing}])
+        return ImportResult(needs_pdf=[{name: getattr(entry, name) for name in ENTRY_RECORD} | missing])
     if not isinstance(made, Paper):  # the free-copy search found it held after all
         return ImportResult(already_in_library=1, notes=await _file(session, made, entry, workspace_id))
     try:
@@ -371,9 +374,9 @@ def progress_key(job_id: str) -> str:
 
 def progress_payload(result: ImportResult, total: int, finished: bool) -> dict:
     """While running, counts only (needs_pdf and failed as numbers), so each write stays small; finished, the whole
-    result. `done` counts the entries reached."""
+    result. `done` counts the entries reached; `at` (time.time()) is the heartbeat a poll checks for a dead worker."""
     done = result.imported + result.already_in_library + len(result.needs_pdf) + len(result.failed)
-    counts = {"total": total, "done": done, "finished": finished}
+    counts = {"total": total, "done": done, "finished": finished, "at": time.time()}
     if finished:
         return asdict(result) | counts
     tallies = ("imported", "already_in_library", "pdfs_attached", "notes")
@@ -385,29 +388,53 @@ def progress_payload(result: ImportResult, total: int, finished: bool) -> dict:
 async def start(
     session: AsyncSession,
     name: str,
-    data: bytes,
+    source: bytes | IO[bytes],
     *,
     workspace_id: uuid.UUID | None = None,
     fetch_free_pdfs: bool = True,
 ) -> ImportResult | str:
     """Imports a file now (INLINE_MAX entries or fewer, and none that would fetch: dedupe, zipped PDFs or fetch off),
-    or queues the import_citations job and returns its id. The job reads a copy of the file in uploads_dir(), deleted
-    when it ends; its progress is a Redis value at progress_key(job id). Raises CitationsImportError for an
-    unreadable file, NotFound for an unknown workspace."""
+    or queues the import_citations job and returns its id. `source` is the bytes or a seekable file (a zip is then
+    read from it, never whole). Raises CitationsImportError for an unreadable file, NotFound for an unknown
+    workspace."""
     if workspace_id is not None:
         await workspaces.get(session, workspace_id)
-    entries, bundle = read(name, data)
+    entries, bundle = read(name, source)
     with bundle or contextlib.nullcontext():
-        small = len(entries) <= INLINE_MAX
-        if small and not (await preview(session, entries, bundle=bundle, fetch_free_pdfs=fetch_free_pdfs)).would_fetch:
-            return await apply(
-                session, entries, workspace_id=workspace_id, fetch_free_pdfs=fetch_free_pdfs, bundle=bundle
-            )
+        return await route(
+            session, name, source, entries, bundle, workspace_id=workspace_id, fetch_free_pdfs=fetch_free_pdfs
+        )
+
+
+def _copy(source: bytes | IO[bytes], path: Path) -> None:
+    if isinstance(source, bytes):
+        path.write_bytes(source)
+        return
+    source.seek(0)
+    with open(path, "wb") as out:
+        shutil.copyfileobj(source, out)
+
+
+async def route(
+    session: AsyncSession,
+    name: str,
+    source: bytes | IO[bytes],
+    entries: list[ImportEntry],
+    bundle: Bundle | None,
+    *,
+    workspace_id: uuid.UUID | None = None,
+    fetch_free_pdfs: bool = True,
+) -> ImportResult | str:
+    """start() for entries already read from `source` (its bundle still open). The job reads a copy of the file in
+    uploads_dir(), deleted when it ends; its progress is a Redis value at progress_key(job id)."""
+    small = len(entries) <= INLINE_MAX
+    if small and not (await preview(session, entries, bundle=bundle, fetch_free_pdfs=fetch_free_pdfs)).would_fetch:
+        return await apply(session, entries, workspace_id=workspace_id, fetch_free_pdfs=fetch_free_pdfs, bundle=bundle)
     job_id = f"{JOB}:{uuid.uuid4()}"
     folder = uploads_dir()
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / f"{job_id.split(':')[1]}.upload"
-    await asyncio.to_thread(path.write_bytes, data)
+    await asyncio.to_thread(_copy, source, path)
     try:
         await queue.enqueue(JOB, str(path), name, str(workspace_id) if workspace_id else None, fetch_free_pdfs,
                             job_id=job_id)  # fmt: skip

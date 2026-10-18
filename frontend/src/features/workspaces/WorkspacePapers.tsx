@@ -5,10 +5,12 @@ import { Button } from '@/components/ui/button'
 import { FindPapersButton } from '@/features/discovery/FindPapersButton'
 import { ErrorAlert, LoadError } from '@/features/library/ErrorAlert'
 import { PaperList } from '@/features/library/PaperList'
+import { ImportFromZoteroButton } from '@/features/library/ImportFromZoteroButton'
 import { UploadPdfsButton } from '@/features/library/UploadPdfsButton'
 import type { TagMatch } from '@/lib/route'
 import { AddPapersDialog } from './AddPapersDialog'
 import { Hint } from '@/components/Hint'
+import { ExportSelectedMenu } from './ExportSelectedMenu'
 import { TagFilterMenu } from './TagFilterMenu'
 import { TagPicker } from './TagPicker'
 import { EmptyState, TabSkeleton } from './TabStates'
@@ -63,6 +65,7 @@ export function WorkspacePapers({
           label="Find by DOI or title"
           hint="Look a paper up by DOI, arXiv ID or title and add its free PDF."
         />
+        <ImportFromZoteroButton workspaceId={workspaceId} />
       </div>
 
       {upload.error && <ErrorAlert message={upload.error.message} />}
@@ -85,6 +88,7 @@ export function WorkspacePapers({
                 <span role="status" className="text-sm">{selectedIds.length} selected</span>
                 <TagPicker workspaceId={workspaceId} mode="add" paperIds={selectedIds} onDone={() => setPicked(new Set())} />
                 <TagPicker workspaceId={workspaceId} mode="remove" paperIds={selectedIds} onDone={() => setPicked(new Set())} />
+                <ExportSelectedMenu workspaceId={workspaceId} paperIds={selectedIds} />
                 <Button variant="ghost" size="sm" onClick={() => setPicked(new Set())}>Clear</Button>
               </div>
             )}

@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 from conftest import FakeArq
+from redis.exceptions import ConnectionError as RedisConnectionError
 from sqlalchemy import func, select
 
 from app.core import citations_import_apply as cia
@@ -202,9 +203,12 @@ async def test_fetch_on_without_a_free_copy_lists_the_entry(session, pdf_dir, jo
 
     assert result.imported == 0 and await titled(session, "closed") == []
     assert result.needs_pdf == [{
-        "title": title("closed"), "doi": doi("c"),
+        "title": title("closed"), "authors": ["Jane Smith", "Hans Muller"], "year": 2020, "venue": None,
+        "doi": doi("c"), "arxiv_id": None, "pmid": None, "pmcid": None, "issn": None, "abstract": None,
+        "volume": None, "issue": None, "pages": None, "editors": [], "source_type": "other", "tags": [],
+        "collection": None, "notes": [],
         "tried": [{"url": "https://pdf.example/closed", "outcome": "http_404"}], "free_copies": [],
-    }]  # fmt: skip
+    }]  # fmt: skip  (the whole entry, so it can later be saved as a metadata-only paper)
     assert jobs.jobs == []
 
 
@@ -330,6 +334,26 @@ class FakeRedis:
         self.writes.append((key, json.loads(value), ex))
 
 
+async def test_a_failed_progress_write_is_skipped_and_the_job_finishes(session, pdf_dir, jobs, monkeypatch):
+    @asynccontextmanager
+    async def shared_session():
+        yield session
+
+    class BlipRedis(FakeRedis):
+        async def set(self, key, value, ex=None):
+            if len(self.writes) == 0:
+                self.writes.append(("blip", {}, 0))
+                raise RedisConnectionError("blip")
+            await super().set(key, value, ex)
+
+    monkeypatch.setattr(worker, "SessionLocal", shared_session)
+    data = bib_of(cia.INLINE_MAX + 1)
+    job_id = await cia.start(session, "refs.bib", data, fetch_free_pdfs=False)
+    [(_, path, file_name, ws, fetch)] = jobs.jobs
+    done = await worker.import_citations({"redis": BlipRedis(), "job_id": job_id}, path, file_name, ws, fetch)
+    assert len(done["needs_pdf"]) == cia.INLINE_MAX + 1
+
+
 async def test_a_big_import_runs_as_a_job_that_reports_progress(session, pdf_dir, jobs, monkeypatch):
     @asynccontextmanager
     async def shared_session():
@@ -356,9 +380,11 @@ async def test_a_big_import_runs_as_a_job_that_reports_progress(session, pdf_dir
     keys = {key for key, _, _ in redis.writes}
     assert keys == {cia.progress_key(job_id)}
     progress = [w for _, w, _ in redis.writes]
-    assert len(progress) == cia.INLINE_MAX + 2  # one per entry, then the finished result
+    assert len(progress) == cia.INLINE_MAX + 3  # one before the first entry, one per entry, then the finished result
     assert progress[0]["total"] == cia.INLINE_MAX + 1 and progress[0]["finished"] is False
-    assert progress[1]["done"] == 2 and progress[1]["needs_pdf"] == 1  # running: counts only, never the lists
+    assert progress[0]["done"] == 0  # the first heartbeat, before any entry
+    assert progress[2]["done"] == 2 and progress[2]["needs_pdf"] == 1  # running: counts only, never the lists
+    assert all(abs(p["at"] - time.time()) < 60 for p in progress)  # each write is a heartbeat
     assert all(isinstance(p["needs_pdf"], int) and isinstance(p["failed"], int) for p in progress[:-1])
     assert progress[-1]["finished"] is True and progress[-1]["already_in_library"] == 1
     assert len(progress[-1]["needs_pdf"]) == cia.INLINE_MAX and progress[-1]["not_reached"] == []
