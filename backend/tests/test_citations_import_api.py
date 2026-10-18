@@ -8,6 +8,7 @@ import time
 import uuid
 import zipfile
 from contextlib import asynccontextmanager
+from dataclasses import asdict
 
 import pytest
 from arq.worker import JobExecutionFailed
@@ -472,17 +473,16 @@ async def test_a_failed_enqueue_removes_the_workspace_it_made(client, session, r
 # ---- the needs-a-PDF record (the metadata-only papers work saves these as they are) ----
 
 
-async def test_a_needs_pdf_item_keeps_every_field_of_its_entry_through_the_api():
+async def test_a_needs_pdf_item_keeps_every_field_of_its_entry_through_the_result(session):
     assert set(NeedsPdfOut.model_fields) == {*cia.ENTRY_RECORD, "tried", "free_copies"}
     entry = ImportEntry(
-        title="T", authors=["A B"], year=2020, venue="V", doi="10.1/x", arxiv_id="2001.00001", pmid="1", pmcid="PMC1",
-        issn="1234-5678", abstract="Ab.", volume="1", issue="2", pages="3-4", editors=["E F"], source_type="journal",
-        tags=["t"], collection="C", notes=["n"], files=["f.pdf"],
+        title=title("whole"), authors=["A B"], year=2020, venue="V", doi=f"10.5555/m40b.{RUN}", arxiv_id="2001.00001",
+        pmid="1", pmcid="PMC1", issn="1234-5678", abstract="Ab.", volume="1", issue="2", pages="3-4", editors=["E F"],
+        source_type="journal", tags=["t"], collection="C", notes=["n"], files=["f.pdf"],
     )
-    record = {name: getattr(entry, name) for name in cia.ENTRY_RECORD} | {
-        "tried": [{"url": "https://pdf.example/x", "outcome": "http_404"}], "free_copies": ["https://repo.example/x"],
-    }  # fmt: skip
-    out = ImportResultOut(imported=0, already_in_library=0, pdfs_attached=0, notes=0, needs_pdf=[record], failed=[],
-                          not_reached=[], stopped="")  # fmt: skip
-    assert out.model_dump()["needs_pdf"] == [record]
+
+    result = await cia.apply(session, [entry], fetch_free_pdfs=False)  # what the import itself builds
+
+    record = {name: getattr(entry, name) for name in cia.ENTRY_RECORD}
+    assert ImportResultOut(**asdict(result)).model_dump()["needs_pdf"] == [record | {"tried": [], "free_copies": []}]
     assert "files" not in record  # paths inside a zip mean nothing once the import is done

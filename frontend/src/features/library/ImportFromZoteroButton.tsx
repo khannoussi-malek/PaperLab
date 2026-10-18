@@ -24,7 +24,7 @@ const running = (p?: ImportProgress | null) => p?.state === 'queued' || p?.state
 const tracking = (p?: ImportProgress | null) => running(p) || p?.state === 'unavailable'
 /** The disclosure's general form, for when the preview failed and so can't say how many entries it covers. */
 const GENERAL_DISCLOSURE =
-  'Fetching contacts free-copy sources (Unpaywall, arXiv, …) for any entry without a PDF, the same way adding a paper by DOI does.'
+  "Fetching contacts free-copy sources (Unpaywall, arXiv, …) for any entry without a PDF, or whose PDF in the zip can't be read, the same way adding a paper by DOI does."
 /** The API's own code isn't meant for display. */
 const inWords = (error: Error | null) =>
   error?.message === 'workspace_name_taken' ? new Error('A workspace with this name already exists.') : error
@@ -119,7 +119,7 @@ function ImportBody({ workspaceId }: { workspaceId?: string }) {
 
   const updating = preview.isFetching
   const ready = file !== null && !updating && (target !== 'new' || name.trim() !== '')
-  const pv = preview.data
+  const pv = file ? preview.data : undefined // no file (refused or cleared): the last one's counts are gone too
   // A failed preview can't say how many entries would be looked up, but Import is still allowed: say it generally.
   const generalDisclosure = fetchPdfs && !pv && preview.isError
   const error = tooBig ? new Error(tooBig) : inWords(start.error ?? preview.error)

@@ -24,7 +24,7 @@ export function LibraryPage() {
   const list = papers.data
   const [visible, setVisible] = useState<string[] | null>(null)
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set())
-  // Only papers still on screen stay selected: the list's own search can hide some.
+  // A pick hidden by the list's own search is kept, but only the rows on screen are counted and exported.
   const selectedIds = (list ?? []).filter((p) => picked.has(p.id) && (visible?.includes(p.id) ?? true)).map((p) => p.id)
   const toggle = (id: string) => setPicked((prev) => new Set(prev.has(id) ? [...prev].filter((x) => x !== id) : [...prev, id]))
 
@@ -64,7 +64,7 @@ export function LibraryPage() {
         ) : (
           <div className="flex flex-col gap-3">
             {selectedIds.length > 0 && (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <span role="status" className="text-sm">{selectedIds.length} selected</span>
                 <ExportSelectedMenu paperIds={selectedIds} />
                 <Button variant="ghost" size="sm" onClick={() => setPicked(new Set())}>Clear</Button>

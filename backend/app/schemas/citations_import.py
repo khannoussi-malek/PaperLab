@@ -69,7 +69,7 @@ class ImportPreviewOut(BaseModel):
     with_bundled_pdf: int
     would_fetch: int  # entries that will contact free-copy sources
     cannot_import_without_fetch: int
-    disclosure: str | None  # the sentence to show when would_fetch > 0
+    disclosure: str | None  # what a fetch would contact, when anything could be (also a zip PDF that can't be read)
 
 
 class ImportProgressOut(BaseModel):

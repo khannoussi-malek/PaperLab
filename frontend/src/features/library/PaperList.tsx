@@ -151,7 +151,7 @@ type Props = {
   activeTags?: string[]
   /** Workspace only: shown instead of the usual empty state when `papers` is empty (an outer filter removed them all). */
   emptyMessage?: string
-  /** Workspace only: rows get a checkbox. */
+  /** Rows get a checkbox (the library and a workspace's Papers tab). */
   selection?: Selection
   /** Called with the ids of the rows the list's own search and reading filter leave showing. */
   onVisibleChange?: (ids: string[]) => void
