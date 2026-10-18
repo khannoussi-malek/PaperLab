@@ -48,6 +48,11 @@ def test_a_named_export_is_the_collection():
         assert {e.collection for e in b.entries} == {"Reading list"}
 
 
+def test_paperlabs_own_export_is_not_a_collection():
+    with read_bundle(make({"refs.bib": BIB})) as b:  # citations_bundle's name
+        assert {e.collection for e in b.entries} == {None}
+
+
 def test_better_bibtex_and_stream_input():
     data = make({"Exported Items.bib": BBT, "files/12/Alpha.pdf": PDF})
     with read_bundle(io.BytesIO(data)) as b:

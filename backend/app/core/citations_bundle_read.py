@@ -20,8 +20,9 @@ REFS_SUFFIXES = (".bib", ".bibtex", ".ris", ".json")
 _METHODS = (zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED)
 _SYMLINK = 0o120000
 _TYPE_MASK = 0o170000
-# The names Zotero gives an export of the whole library or of selected items: not collections.
-DEFAULT_EXPORT_NAMES = frozenset({"My Library", "Exported Items"})
+# The names Zotero gives an export of the whole library or of selected items, and PaperLab's own export name
+# (citations_bundle): not collections.
+DEFAULT_EXPORT_NAMES = frozenset({"My Library", "Exported Items", "refs"})
 
 
 def _clean(name: str) -> str:
