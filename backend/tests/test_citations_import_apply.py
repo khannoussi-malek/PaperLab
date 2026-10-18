@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 from conftest import FakeArq
+from redis.exceptions import ConnectionError as RedisConnectionError
 from sqlalchemy import func, select
 
 from app.core import citations_import_apply as cia
@@ -331,6 +332,26 @@ class FakeRedis:
 
     async def set(self, key, value, ex=None):
         self.writes.append((key, json.loads(value), ex))
+
+
+async def test_a_failed_progress_write_is_skipped_and_the_job_finishes(session, pdf_dir, jobs, monkeypatch):
+    @asynccontextmanager
+    async def shared_session():
+        yield session
+
+    class BlipRedis(FakeRedis):
+        async def set(self, key, value, ex=None):
+            if len(self.writes) == 0:
+                self.writes.append(("blip", {}, 0))
+                raise RedisConnectionError("blip")
+            await super().set(key, value, ex)
+
+    monkeypatch.setattr(worker, "SessionLocal", shared_session)
+    data = bib_of(cia.INLINE_MAX + 1)
+    job_id = await cia.start(session, "refs.bib", data, fetch_free_pdfs=False)
+    [(_, path, file_name, ws, fetch)] = jobs.jobs
+    done = await worker.import_citations({"redis": BlipRedis(), "job_id": job_id}, path, file_name, ws, fetch)
+    assert len(done["needs_pdf"]) == cia.INLINE_MAX + 1
 
 
 async def test_a_big_import_runs_as_a_job_that_reports_progress(session, pdf_dir, jobs, monkeypatch):

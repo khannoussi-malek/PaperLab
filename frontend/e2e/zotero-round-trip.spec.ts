@@ -14,7 +14,7 @@ test.afterEach(async ({ request }) => {
   }
 })
 
-test('Zotero round trip: import a zip and a .bib, import again, then export for Zotero', async ({ page, workspaceId }) => {
+test('Zotero round trip: import a zip and a .bib, import again, then export for Zotero', async ({ page, request, workspaceId }) => {
   await page.goto(`/#/workspaces/${workspaceId}`)
   const dialog = page.getByRole('dialog', { name: 'Import from Zotero' })
   const open = async (file: string) => {
@@ -30,19 +30,29 @@ test('Zotero round trip: import a zip and a .bib, import again, then export for 
 
   // 1. The zip: preview, import, summary, then the paper and its note.
   await open('with-pdf.zip')
-  await expect(dialog.getByText('1 references: 0 already in your library, 1 with a PDF in the zip.')).toBeVisible()
+  await expect(dialog.getByText('1 reference: 0 already in your library, 1 with a PDF in the zip.')).toBeVisible()
   await dialog.getByRole('button', { name: 'Import', exact: true }).click()
   await expect(dialog.getByRole('heading', { name: 'Import finished' })).toBeVisible({ timeout: 60_000 })
   await expect(dialog.getByText(/Imported 1 new paper\. 0 were already in your library, 1 PDF attached, 1 note\./)).toBeVisible()
   await close()
   await expect(page.locator('.paper-row').filter({ hasText: ZIP_TITLE })).toBeVisible()
+  // The bundled PDF is on the paper: it ingests to ready, as an uploaded PDF does.
+  await expect
+    .poll(
+      async () => {
+        const papers = (await (await request.get('/api/papers')).json()) as { title: string; status: string }[]
+        return papers.find((p) => p.title === ZIP_TITLE)?.status
+      },
+      { timeout: 60_000 },
+    )
+    .toBe('ready')
   await page.getByRole('tab', { name: 'Notes' }).click()
   await expect(page.locator('a.workspace-note').filter({ hasText: 'A zip entry note from Zotero.' })).toBeVisible()
   await page.getByRole('tab', { name: 'Papers' }).click()
 
   // 2. A plain .bib with fetching off: no PDF, so it is not imported and is listed as needing one.
   await open('one-note.bib')
-  await expect(dialog.getByText(/1 references have no PDF in the file and won't be imported unless fetching is on\./)).toBeVisible()
+  await expect(dialog.getByText(/1 reference has no PDF in the file and won't be imported unless fetching is on\./)).toBeVisible()
   await dialog.getByRole('button', { name: 'Import', exact: true }).click()
   await expect(dialog.getByRole('heading', { name: 'Import finished' })).toBeVisible({ timeout: 60_000 })
   await expect(dialog.getByText('Needs a PDF (1)')).toBeVisible()
@@ -51,9 +61,9 @@ test('Zotero round trip: import a zip and a .bib, import again, then export for 
 
   // 3. The zip again: deduped, nothing new.
   await open('with-pdf.zip')
-  await expect(dialog.getByText(/1 references: 1 already in your library/)).toBeVisible()
+  await expect(dialog.getByText(/1 reference: 1 already in your library/)).toBeVisible()
   await dialog.getByRole('button', { name: 'Import', exact: true }).click()
-  await expect(dialog.getByText(/Imported 0 new papers\. 1 was already in your library/)).toBeVisible({ timeout: 60_000 })
+  await expect(dialog.getByText(/Imported 0 new papers\. 1 was already in your library, 0 PDFs attached, 0 notes\./)).toBeVisible({ timeout: 60_000 })
   await close()
 
   // 4. Export for Zotero: a zip with refs.bib and the PDF under files/.

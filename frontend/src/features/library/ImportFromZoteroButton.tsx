@@ -2,7 +2,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { FileUp } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { api, type ImportProgress } from '@/api/client'
-import { keys } from '@/api/queries'
+import { keys, refreshNotes } from '@/api/queries'
 import { Hint } from '@/components/Hint'
 import { glass } from '@/components/glass'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
-import { ImportResultView } from './ImportResultView'
+import { ImportResultView, plural } from './ImportResultView'
 
 const POLL_MS = 2000
 type Target = 'library' | 'workspace' | 'new'
@@ -20,6 +20,14 @@ const MB = 1024 * 1024
 /** The size caps the API enforces: 200 MB for a zip, 20 MB for the text formats. */
 const capFor = (file: File) => (/\.zip$/i.test(file.name) ? { mb: 200, what: 'a Zotero zip' } : { mb: 20, what: 'a .bib, .ris or .json file' })
 const running = (p?: ImportProgress | null) => p?.state === 'queued' || p?.state === 'running'
+/** Still being tracked: `unavailable` only means Redis couldn't be read for one poll; the job carries on. */
+const tracking = (p?: ImportProgress | null) => running(p) || p?.state === 'unavailable'
+/** The disclosure's general form, for when the preview failed and so can't say how many entries it covers. */
+const GENERAL_DISCLOSURE =
+  'Fetching contacts free-copy sources (Unpaywall, arXiv, …) for any entry without a PDF, the same way adding a paper by DOI does.'
+/** The API's own code isn't meant for display. */
+const inWords = (error: Error | null) =>
+  error?.message === 'workspace_name_taken' ? new Error('A workspace with this name already exists.') : error
 
 /** "Import from Zotero" and its dialog: a references file or Zotero zip into the library, or a workspace. */
 export function ImportFromZoteroButton({ workspaceId, variant = 'outline' }: { workspaceId?: string; variant?: 'default' | 'outline' }) {
@@ -56,6 +64,8 @@ function ImportBody({ workspaceId }: { workspaceId?: string }) {
   const previewWorkspace = target === 'workspace' ? workspaceId : undefined
   const preview = useQuery({
     queryKey: ['citation-import-preview', file?.name, file?.size, file?.lastModified, previewWorkspace, fetchPdfs],
+    // ponytail: every preview re-sends the whole file, so a 200 MB zip goes up 2-4 times (preview, switch or target
+    // changes, then Import); upload once and preview by upload id if that ever hurts.
     queryFn: () => api.previewImport(file!, previewWorkspace, fetchPdfs),
     enabled: file !== null,
     placeholderData: keepPreviousData,
@@ -64,13 +74,17 @@ function ImportBody({ workspaceId }: { workspaceId?: string }) {
   })
 
   const start = useMutation({
-    mutationFn: () => {
+    // `into`: a retry goes into the workspace the first attempt already made, never under the new name again.
+    mutationFn: (into?: string) => {
       started.current = true
-      return api.startImport(
-        file!,
-        target === 'workspace' ? { workspaceId } : target === 'new' ? { newWorkspaceName: name.trim() } : {},
-        fetchPdfs,
-      )
+      const where = into
+        ? { workspaceId: into }
+        : target === 'workspace'
+          ? { workspaceId }
+          : target === 'new'
+            ? { newWorkspaceName: name.trim() }
+            : {}
+      return api.startImport(file!, where, fetchPdfs)
     },
   })
   // A closed dialog forgets the job but not the import: refresh the lists so its papers show up.
@@ -79,15 +93,16 @@ function ImportBody({ workspaceId }: { workspaceId?: string }) {
       if (!started.current) return
       void client.invalidateQueries({ queryKey: keys.papers })
       void client.invalidateQueries({ queryKey: keys.workspaces })
+      void refreshNotes(client)
     },
     [client],
   )
-  const jobId = running(start.data) ? start.data?.job_id : undefined
+  const jobId = tracking(start.data) ? start.data?.job_id : undefined
   const poll = useQuery({
     queryKey: ['citation-import', jobId],
     queryFn: () => api.importProgress(jobId!),
     enabled: !!jobId,
-    refetchInterval: (q) => (running(q.state.data) || q.state.data === undefined ? POLL_MS : false),
+    refetchInterval: (q) => (tracking(q.state.data) || q.state.data === undefined ? POLL_MS : false),
   })
   const progress = poll.data ?? start.data
 
@@ -95,14 +110,20 @@ function ImportBody({ workspaceId }: { workspaceId?: string }) {
     if (progress?.state !== 'finished') return
     void client.invalidateQueries({ queryKey: keys.papers })
     void client.invalidateQueries({ queryKey: keys.workspaces })
+    void refreshNotes(client)
   }, [progress?.state, client])
 
-  if (progress && !start.isPending) return <Outcome progress={progress} pollError={poll.error} onRetry={() => start.mutate()} />
+  if (progress && !start.isPending) {
+    const into = progress.workspace_id ?? start.data?.workspace_id ?? undefined
+    return <Outcome progress={progress} pollError={poll.error} onRetry={() => start.mutate(into)} />
+  }
 
   const updating = preview.isFetching
   const ready = file !== null && !updating && (target !== 'new' || name.trim() !== '')
   const pv = preview.data
-  const error = tooBig ? new Error(tooBig) : (start.error ?? preview.error)
+  // A failed preview can't say how many entries would be looked up, but Import is still allowed: say it generally.
+  const generalDisclosure = fetchPdfs && !pv && preview.isError
+  const error = tooBig ? new Error(tooBig) : inWords(start.error ?? preview.error)
 
   function pickFile(next: File | null) {
     const cap = next && capFor(next)
@@ -151,15 +172,17 @@ function ImportBody({ workspaceId }: { workspaceId?: string }) {
         {file && !pv && preview.isFetching && <p className="text-muted-foreground">Reading the file…</p>}
         {pv && (
           <p>
-            {pv.total} references: {pv.already_in_library} already in your library
+            {plural(pv.total, 'reference')}: {pv.already_in_library} already in your library
             {pv.with_bundled_pdf > 0 && `, ${pv.with_bundled_pdf} with a PDF in the zip`}.
           </p>
         )}
         {pv && pv.would_fetch > 0 && pv.disclosure && <p>{pv.disclosure}</p>}
+        {generalDisclosure && <p>{GENERAL_DISCLOSURE}</p>}
         {pv && !fetchPdfs && pv.cannot_import_without_fetch > 0 && (
           <p>
-            {pv.cannot_import_without_fetch} references have no PDF in the file and won't be imported unless fetching is
-            on.
+            {plural(pv.cannot_import_without_fetch, 'reference')}{' '}
+            {pv.cannot_import_without_fetch === 1 ? 'has' : 'have'} no PDF in the file and won't be imported unless
+            fetching is on.
           </p>
         )}
         {updating && pv && <p className="text-muted-foreground">Updating…</p>}
@@ -190,11 +213,18 @@ const STATE_MESSAGES: Record<string, string> = {
   failed: 'The import stopped with an error.',
   restarted: 'PaperLab restarted before the import finished.',
   expired: 'That import is too old to look up.',
-  unavailable: "Progress can't be read just now.",
 }
 
 function Outcome({ progress, pollError, onRetry }: { progress: ImportProgress; pollError: Error | null; onRetry: () => void }) {
   if (progress.state === 'finished' && progress.result) return <ImportResultView result={progress.result} />
+  if (progress.state === 'unavailable') {
+    return (
+      <p role="status" className="text-sm">
+        Progress can't be read just now. The import carries on, and progress shows again once PaperLab reaches the
+        background service.
+      </p>
+    )
+  }
   if (running(progress)) {
     const c = progress.counts
     return (
