@@ -1,10 +1,13 @@
 import { FileText } from 'lucide-react'
+import { useState } from 'react'
 import { usePapers, useUploadPapers } from '@/api/queries'
 import { AppShell } from '@/components/AppShell'
+import { Button } from '@/components/ui/button'
 import { delayedIn } from '@/components/motion'
 import { Scene3D } from '@/features/scene3d/Scene3D'
 import { cn } from '@/lib/utils'
 import { FindPapersButton } from '../discovery/FindPapersButton'
+import { ExportSelectedMenu } from '../workspaces/ExportSelectedMenu'
 import { ErrorAlert, LoadError } from './ErrorAlert'
 import { PaperList } from './PaperList'
 import { SearchNotice } from './SearchNotice'
@@ -19,6 +22,11 @@ export function LibraryPage() {
   const papers = usePapers()
   const upload = useUploadPapers()
   const list = papers.data
+  const [visible, setVisible] = useState<string[] | null>(null)
+  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set())
+  // Only papers still on screen stay selected: the list's own search can hide some.
+  const selectedIds = (list ?? []).filter((p) => picked.has(p.id) && (visible?.includes(p.id) ?? true)).map((p) => p.id)
+  const toggle = (id: string) => setPicked((prev) => new Set(prev.has(id) ? [...prev].filter((x) => x !== id) : [...prev, id]))
 
   return (
     <AppShell
@@ -54,7 +62,16 @@ export function LibraryPage() {
             <p className="text-muted-foreground">No papers yet. Upload a PDF to start.</p>
           </div>
         ) : (
-          <PaperList papers={list} />
+          <div className="flex flex-col gap-3">
+            {selectedIds.length > 0 && (
+              <div className="flex items-center gap-2">
+                <span role="status" className="text-sm">{selectedIds.length} selected</span>
+                <ExportSelectedMenu paperIds={selectedIds} />
+                <Button variant="ghost" size="sm" onClick={() => setPicked(new Set())}>Clear</Button>
+              </div>
+            )}
+            <PaperList papers={list} selection={{ selected: new Set(selectedIds), onToggle: toggle }} onVisibleChange={setVisible} />
+          </div>
         )}
       </div>
     </AppShell>

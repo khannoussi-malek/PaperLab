@@ -75,4 +75,15 @@ test('Zotero round trip: import a zip and a .bib, import again, then export for 
   const names = bytes.toString('latin1') // entry names sit uncompressed in the local headers and central directory
   expect(names).toContain('PaperLab export.bib')
   expect(names).toMatch(/files\/[^/\0]+\.pdf/)
+
+  // 5. From the library: tick the paper and export just it.
+  await page.goto('/#/')
+  await page.getByRole('checkbox', { name: `Select ${ZIP_TITLE}` }).check()
+  await expect(page.getByRole('status').filter({ hasText: '1 selected' })).toBeVisible()
+  await page.getByRole('button', { name: 'Export selected…' }).click()
+  const picked = page.waitForEvent('download')
+  await page.getByRole('menuitem', { name: 'BibTeX' }).click()
+  const bib = (await readFile((await (await picked).path())!)).toString()
+  expect(bib).toContain(ZIP_TITLE)
+  expect(bib.match(/^@/gm)).toHaveLength(1) // just the ticked paper
 })
