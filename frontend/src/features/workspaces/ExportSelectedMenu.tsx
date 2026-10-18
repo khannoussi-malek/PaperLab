@@ -17,8 +17,9 @@ function plainError(error: Error): string {
   return "Couldn't build the reference list. Try again."
 }
 
-/** "Export selected…" on the Papers selection bar: the chosen papers as a BibTeX or RIS download. */
-export function ExportSelectedMenu({ workspaceId, paperIds }: { workspaceId: string; paperIds: string[] }) {
+/** "Export selected…" on a selection bar: the chosen papers as a BibTeX or RIS download. From a workspace, its
+ * keywords come along; from the library there is none. */
+export function ExportSelectedMenu({ workspaceId, paperIds }: { workspaceId?: string; paperIds: string[] }) {
   const exportIt = useMutation({
     mutationFn: async (format: 'bibtex' | 'ris') => {
       const { blob, filename } = await api.exportSelection(paperIds, format, workspaceId)
