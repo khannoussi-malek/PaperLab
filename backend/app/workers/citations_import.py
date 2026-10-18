@@ -42,6 +42,7 @@ async def import_citations(ctx: dict, path: str, name: str, workspace_id: str | 
 
             async with SessionLocal() as session:
                 with bundle or contextlib.nullcontext():
+                    await report(cia.ImportResult())  # the first heartbeat; apply reports after each entry
                     result = await cia.apply(
                         session, entries, workspace_id=uuid.UUID(workspace_id) if workspace_id else None,
                         fetch_free_pdfs=fetch_free_pdfs, bundle=bundle, progress=report, deadline=deadline,

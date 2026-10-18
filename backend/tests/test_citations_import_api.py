@@ -4,18 +4,21 @@ import asyncio
 import io
 import json
 import pickle
+import time
 import uuid
 import zipfile
 from contextlib import asynccontextmanager
 
 import pytest
 from arq.worker import JobExecutionFailed
+from redis.exceptions import ConnectionError as RedisConnectionError
 from sqlalchemy import func, select
 
 from app.api import citations as citations_api
 from app.core import citations_import_apply as cia
 from app.core import citations_import_run as run
 from app.core import discovery, queue
+from app.core.citations_bundle_read import read_bundle
 from app.models import Paper, Workspace
 from app.workers import citations_import as worker
 
@@ -170,7 +173,7 @@ async def test_a_small_import_runs_inline_and_lists_whole_entries_that_need_a_pd
         "title": title("i1"), "authors": ["Jane Smith", "Hans Muller"], "year": 2021, "venue": "Journal of Things",
         "doi": None, "arxiv_id": None, "pmid": None, "pmcid": None, "issn": None, "abstract": "About i1.",
         "volume": "12", "issue": "3", "pages": "45-67", "editors": [], "source_type": "journal_article",
-        "tags": ["alpha", "beta"], "notes": [], "tried": [], "free_copies": [],
+        "tags": ["alpha", "beta"], "collection": None, "notes": [], "tried": [], "free_copies": [],
     }]  # fmt: skip
     assert redis.jobs == []
 
@@ -330,7 +333,8 @@ async def test_a_body_over_the_cap_is_refused_as_it_streams_in(client, session, 
     response = await client.post(path, content=body, headers=headers)
 
     assert response.status_code == 413
-    assert response.json() == {"detail": run.too_big("upload.zip")}
+    assert response.json() == {"detail": run.UPLOAD_TOO_BIG}
+    assert run.UPLOAD_TOO_BIG.startswith("This upload is larger than 200 MB")
     assert sent["chunks"] < 20  # stopped near the cap, not after all 100
     assert await paper_count(session) == 0
 
@@ -360,3 +364,77 @@ async def test_the_caps_are_20_mb_a_file_and_200_mb_a_zip():
     assert run.too_big("x.ris") == (
         "This file is larger than 20 MB, which is more than PaperLab imports at once, so nothing was imported."
     )
+
+
+# ---- fix round 1: Redis down, a hard-killed worker, streaming, cleanup ----
+
+
+@pytest.mark.parametrize("error", [RedisConnectionError("down"), OSError("no route")])
+async def test_redis_down_is_unavailable_not_500(client, redis, monkeypatch, error):
+    async def down(*_args, **_kwargs):
+        raise error
+
+    monkeypatch.setattr(redis, "get", down)
+    response = await client.get(f"/api/citations/import/{cia.JOB}:{uuid.uuid4()}")
+    assert response.status_code == 200
+    assert response.json()["state"] == "unavailable"
+    assert response.json()["message"] == (
+        "PaperLab can't check this import right now. Try again in a moment; the import carries on."
+    )
+
+
+async def test_a_running_job_with_a_stale_heartbeat_is_restarted(client, redis, monkeypatch):
+    job_id = f"{cia.JOB}:{uuid.uuid4()}"
+    redis.start(job_id)
+    stale = cia.progress_payload(cia.ImportResult(), 5, False) | {"at": time.time() - run.HEARTBEAT_STALE - 1}
+    await redis.set(cia.progress_key(job_id), json.dumps(stale))
+    body = (await client.get(f"/api/citations/import/{job_id}")).json()
+    assert body["state"] == "restarted" and body["message"] == run.RESTARTED
+
+    fresh = stale | {"at": time.time() - run.HEARTBEAT_STALE + 60}
+    await redis.set(cia.progress_key(job_id), json.dumps(fresh))
+    assert (await client.get(f"/api/citations/import/{job_id}")).json()["state"] == "running"
+
+
+async def test_the_heartbeat_outlasts_an_entrys_worst_case():
+    assert run.HEARTBEAT_STALE == 15 * 60
+
+
+def zip_of(*names: str) -> bytes:
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w") as zf:
+        zf.writestr("Exported Items.bib", bib(*names, doi=True))
+    return out.getvalue()
+
+
+async def test_a_zip_is_read_from_the_upload_and_copied_for_the_job_once(client, session, redis, monkeypatch):
+    reads = []
+
+    def counted(source):
+        assert not isinstance(source, bytes), "the zip was read whole into memory"
+        reads.append(source)
+        return read_bundle(source)
+
+    monkeypatch.setattr(cia, "read_bundle", counted)
+    data = zip_of("s1")
+    name = f"Streamed {RUN}"
+
+    response = await post(client, "/api/citations/import", data, name="Exported Items.zip", new_workspace_name=name)
+
+    assert response.status_code == 202, response.text
+    assert len(reads) == 1  # parsed once, even with a new workspace to make
+    [(_, path, *_)] = redis.jobs
+    assert open(path, "rb").read() == data
+
+
+async def test_a_failed_enqueue_removes_the_workspace_it_made(client, session, redis, monkeypatch):
+    async def broken(*_args, **_kwargs):
+        raise RedisConnectionError("down")
+
+    monkeypatch.setattr(redis, "enqueue_job", broken)
+    name = f"Left empty {RUN}"
+
+    with pytest.raises(RedisConnectionError):
+        await post(client, "/api/citations/import", bib("e1", doi=True), new_workspace_name=name)
+
+    assert await session.scalar(select(Workspace).where(Workspace.name == name)) is None
