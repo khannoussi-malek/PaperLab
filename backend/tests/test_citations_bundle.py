@@ -65,9 +65,9 @@ async def test_zip_layout_and_refs_point_at_files_in_the_zip(client, session, tm
     response = await client.get(f"/api/workspaces/{ws['id']}/citations.zip", params={"format": fmt})
     zf = open_zip(response)
     assert f'filename="bundle-{RUN}.zip"' in response.headers["content-disposition"]
-    assert sorted(zf.namelist()) == sorted([f"refs.{ext}", "files/smith2020zeta.pdf"])
+    assert sorted(zf.namelist()) == sorted([f"PaperLab export.{ext}", "files/smith2020zeta.pdf"])
     assert zf.read("files/smith2020zeta.pdf") == PDF
-    refs = zf.read(f"refs.{ext}").decode()
+    refs = zf.read(f"PaperLab export.{ext}").decode()
     pointers = re.findall(r"files/\S+?\.pdf", refs)
     assert pointers == ["files/smith2020zeta.pdf"]  # the paper without a PDF gets no pointer
     assert all(p in zf.namelist() for p in pointers)
@@ -82,7 +82,7 @@ async def test_notes_in_ris_one_n1_per_note_with_quote_page_label_and_link(clien
         open_zip(
             await client.get(f"/api/workspaces/{ws['id']}/citations.zip", params={"format": "ris", "notes": "true"})
         )
-        .read("refs.ris")
+        .read("PaperLab export.ris")
         .decode()
     )
     n1 = [line for line in ris.splitlines() if line.startswith("N1  - ")]
@@ -126,5 +126,5 @@ async def test_a_pdf_that_vanishes_mid_build_gets_no_attachment(client, session,
 
     monkeypatch.setattr(zipfile.ZipFile, "write", gone)
     zf = open_zip(await client.get(f"/api/workspaces/{ws['id']}/citations.zip", params={"format": "bibtex"}))
-    assert zf.namelist() == ["refs.bib"] and "file = {" not in zf.read("refs.bib").decode()
+    assert zf.namelist() == ["PaperLab export.bib"] and "file = {" not in zf.read("PaperLab export.bib").decode()
     await client.delete(f"/api/workspaces/{ws['id']}")

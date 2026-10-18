@@ -551,8 +551,8 @@ export interface paths {
         };
         /**
          * Export Citations Zip
-         * @description refs.bib or refs.ris plus files/<key>.pdf for each paper whose PDF is on disk, as Zotero imports it. 404 unknown
-         *     workspace, 422 for a format other than bibtex or ris, or no papers.
+         * @description PaperLab export.bib or .ris plus files/<key>.pdf for each paper whose PDF is on disk, as Zotero imports it.
+         *     404 unknown workspace, 422 for a format other than bibtex or ris, or no papers.
          */
         get: operations["export_citations_zip_api_workspaces__workspace_id__citations_zip_get"];
         put?: never;

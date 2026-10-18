@@ -24,7 +24,7 @@ const running = (p?: ImportProgress | null) => p?.state === 'queued' || p?.state
 const tracking = (p?: ImportProgress | null) => running(p) || p?.state === 'unavailable'
 /** The disclosure's general form, for when the preview failed and so can't say how many entries it covers. */
 const GENERAL_DISCLOSURE =
-  'Fetching contacts free-copy sources (Unpaywall, arXiv, …) for any entry without a PDF, the same way adding a paper by DOI does.'
+  "Fetching contacts free-copy sources (Unpaywall, arXiv, …) for any entry without a PDF, or whose PDF in the zip can't be read, the same way adding a paper by DOI does."
 /** The API's own code isn't meant for display. */
 const inWords = (error: Error | null) =>
   error?.message === 'workspace_name_taken' ? new Error('A workspace with this name already exists.') : error
@@ -61,12 +61,11 @@ function ImportBody({ workspaceId }: { workspaceId?: string }) {
   const [tooBig, setTooBig] = useState<string | null>(null)
   const started = useRef(false)
 
-  const previewWorkspace = target === 'workspace' ? workspaceId : undefined
   const preview = useQuery({
-    queryKey: ['citation-import-preview', file?.name, file?.size, file?.lastModified, previewWorkspace, fetchPdfs],
-    // ponytail: every preview re-sends the whole file, so a 200 MB zip goes up 2-4 times (preview, switch or target
-    // changes, then Import); upload once and preview by upload id if that ever hurts.
-    queryFn: () => api.previewImport(file!, previewWorkspace, fetchPdfs),
+    // Once per file: the switch and the target don't change what the preview counts (the switch only hides the
+    // disclosure). ponytail: the file still goes up twice (preview, then Import); upload once by id if that hurts.
+    queryKey: ['citation-import-preview', file?.name, file?.size, file?.lastModified],
+    queryFn: () => api.previewImport(file!),
     enabled: file !== null,
     placeholderData: keepPreviousData,
     retry: false,
@@ -120,7 +119,7 @@ function ImportBody({ workspaceId }: { workspaceId?: string }) {
 
   const updating = preview.isFetching
   const ready = file !== null && !updating && (target !== 'new' || name.trim() !== '')
-  const pv = preview.data
+  const pv = file ? preview.data : undefined // no file (refused or cleared): the last one's counts are gone too
   // A failed preview can't say how many entries would be looked up, but Import is still allowed: say it generally.
   const generalDisclosure = fetchPdfs && !pv && preview.isError
   const error = tooBig ? new Error(tooBig) : inWords(start.error ?? preview.error)
@@ -176,7 +175,7 @@ function ImportBody({ workspaceId }: { workspaceId?: string }) {
             {pv.with_bundled_pdf > 0 && `, ${pv.with_bundled_pdf} with a PDF in the zip`}.
           </p>
         )}
-        {pv && pv.would_fetch > 0 && pv.disclosure && <p>{pv.disclosure}</p>}
+        {fetchPdfs && pv?.disclosure && <p>{pv.disclosure}</p>}
         {generalDisclosure && <p>{GENERAL_DISCLOSURE}</p>}
         {pv && !fetchPdfs && pv.cannot_import_without_fetch > 0 && (
           <p>

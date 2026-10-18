@@ -30,8 +30,9 @@ ZIP_MAX_BYTES = MAX_ZIP_BYTES  # a Zotero "export with files" zip
 MB = 1024 * 1024
 TOO_BIG = "This {kind} is larger than {mb} MB, which is more than PaperLab imports at once, so nothing was imported."
 DISCLOSURE = (
-    "Fetching contacts free-copy sources (Unpaywall, arXiv, …) for {count}, the same way adding a paper by DOI does."
+    "Fetching contacts free-copy sources (Unpaywall, arXiv, …) {target}, the same way adding a paper by DOI does."
 )
+UNREADABLE = "for a PDF in the zip that can't be read"
 RESTARTED = "PaperLab restarted during the import. Import the same file again; papers already imported are skipped."
 EXPIRED = (
     "PaperLab no longer knows this import: it finished over a day ago or never started. Import the same file again "
@@ -90,10 +91,15 @@ def _read(name: str, source: bytes | IO[bytes]) -> tuple[list[ImportEntry], Bund
         raise InvalidInput(str(exc)) from None
 
 
-def disclosure(would_fetch: int) -> str | None:
-    if not would_fetch:
-        return None
-    return DISCLOSURE.format(count="1 entry" if would_fetch == 1 else f"{would_fetch:,} entries")
+def disclosure(would_fetch: int, fallback_fetch: int = 0) -> str | None:
+    """What a fetch would contact, or None. `fallback_fetch`: bundled entries whose zip PDF, if it can't be read, is
+    looked up as a free copy instead (citations_import_apply._new_paper)."""
+    count = "for 1 entry" if would_fetch == 1 else f"for {would_fetch:,} entries"
+    if would_fetch and fallback_fetch:
+        return DISCLOSURE.format(target=f"{count}, and {UNREADABLE}")
+    if fallback_fetch:
+        return DISCLOSURE.format(target=f"only {UNREADABLE}")
+    return DISCLOSURE.format(target=count) if would_fetch else None
 
 
 async def preview(
@@ -107,7 +113,9 @@ async def preview(
     entries, bundle = _read(name, source)
     with bundle or contextlib.nullcontext():
         counts = await cia.preview(session, entries, bundle=bundle, fetch_free_pdfs=fetch_free_pdfs)
-    return ImportPreviewOut(**asdict(counts), disclosure=disclosure(counts.would_fetch))
+    shown = asdict(counts)
+    fallback = shown.pop("fallback_fetch")  # only worded in the disclosure
+    return ImportPreviewOut(**shown, disclosure=disclosure(counts.would_fetch, fallback))
 
 
 async def start(

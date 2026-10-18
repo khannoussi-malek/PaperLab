@@ -445,11 +445,10 @@ export const api = {
       sendJson('PATCH', body),
     ),
   /** What importing `file` would do. Nothing is written. */
-  previewImport: (file: File, workspaceId: string | undefined, fetchFreePdfs: boolean) => {
+  /** With fetching on (the API's default): only `would_fetch` and `disclosure` depend on it, and none on the target. */
+  previewImport: (file: File) => {
     const form = new FormData()
     form.append('file', file)
-    if (workspaceId) form.append('workspace_id', workspaceId)
-    form.append('fetch_free_pdfs', String(fetchFreePdfs))
     return request<ImportPreview>('/api/citations/import/preview', { method: 'POST', body: form })
   },
   /** Starts an import: 200 gives the result now, 202 a job id to poll (same body shape either way). */

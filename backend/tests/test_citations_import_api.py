@@ -8,6 +8,7 @@ import time
 import uuid
 import zipfile
 from contextlib import asynccontextmanager
+from dataclasses import asdict
 
 import pytest
 from arq.worker import JobExecutionFailed
@@ -19,7 +20,9 @@ from app.core import citations_import_apply as cia
 from app.core import citations_import_run as run
 from app.core import discovery, queue
 from app.core.citations_bundle_read import read_bundle
+from app.core.citations_import import ImportEntry
 from app.models import Paper, Workspace
+from app.schemas.citations_import import ImportResultOut, NeedsPdfOut
 from app.workers import citations_import as worker
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("references")]
@@ -148,6 +151,32 @@ async def test_preview_with_fetch_off_has_no_disclosure_and_one_entry_reads_sing
     assert off.json()["would_fetch"] == 0 and off.json()["disclosure"] is None
     on = await post(client, "/api/citations/import/preview", bib("p5", doi=True))
     assert "for 1 entry, the same way" in on.json()["disclosure"]
+
+
+async def test_preview_discloses_the_lookup_for_a_zip_pdf_that_cant_be_read(client):
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w") as zf:  # a bundled PDF and a DOI: a damaged PDF falls back to a free copy
+        zf.writestr("Exported Items.bib", bib("p6", doi=True).decode().replace("}\n", ", file={files/1/p6.pdf}}\n"))
+        zf.writestr("files/1/p6.pdf", b"%PDF-1.7 zipped")
+    on = (await post(client, "/api/citations/import/preview", out.getvalue(), name="Exported Items.zip")).json()
+    assert (on["with_bundled_pdf"], on["would_fetch"]) == (1, 0)
+    assert on["disclosure"] == (
+        "Fetching contacts free-copy sources (Unpaywall, arXiv, …) only for a PDF in the zip that can't be read, "
+        "the same way adding a paper by DOI does."
+    )
+    off = await post(client, "/api/citations/import/preview", out.getvalue(), name="Exported Items.zip",
+                     fetch_free_pdfs=False)  # fmt: skip
+    assert off.json()["disclosure"] is None
+    mixed = io.BytesIO()
+    with zipfile.ZipFile(mixed, "w") as zf:
+        zf.writestr("Exported Items.bib", bib("p7", doi=True).decode().replace("}\n", ", file={files/1/p7.pdf}}\n")
+                    + bib("p8", doi=True).decode())  # fmt: skip
+        zf.writestr("files/1/p7.pdf", b"%PDF-1.7 zipped")
+    both = await post(client, "/api/citations/import/preview", mixed.getvalue(), name="Exported Items.zip")
+    assert both.json()["disclosure"] == (
+        "Fetching contacts free-copy sources (Unpaywall, arXiv, …) for 1 entry, and for a PDF in the zip that can't "
+        "be read, the same way adding a paper by DOI does."
+    )
 
 
 async def test_preview_of_a_bad_file_is_a_plain_422(client):
@@ -439,3 +468,21 @@ async def test_a_failed_enqueue_removes_the_workspace_it_made(client, session, r
     assert response.status_code == 503
     assert response.json()["detail"] == "PaperLab can't start a background import right now. Try again in a moment."
     assert await session.scalar(select(Workspace).where(Workspace.name == name)) is None
+
+
+# ---- the needs-a-PDF record (the metadata-only papers work saves these as they are) ----
+
+
+async def test_a_needs_pdf_item_keeps_every_field_of_its_entry_through_the_result(session):
+    assert set(NeedsPdfOut.model_fields) == {*cia.ENTRY_RECORD, "tried", "free_copies"}
+    entry = ImportEntry(
+        title=title("whole"), authors=["A B"], year=2020, venue="V", doi=f"10.5555/m40b.{RUN}", arxiv_id="2001.00001",
+        pmid="1", pmcid="PMC1", issn="1234-5678", abstract="Ab.", volume="1", issue="2", pages="3-4", editors=["E F"],
+        source_type="journal", tags=["t"], collection="C", notes=["n"], files=["f.pdf"],
+    )
+
+    result = await cia.apply(session, [entry], fetch_free_pdfs=False)  # what the import itself builds
+
+    record = {name: getattr(entry, name) for name in cia.ENTRY_RECORD}
+    assert ImportResultOut(**asdict(result)).model_dump()["needs_pdf"] == [record | {"tried": [], "free_copies": []}]
+    assert "files" not in record  # paths inside a zip mean nothing once the import is done
