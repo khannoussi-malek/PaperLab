@@ -6,6 +6,7 @@ from fastapi import APIRouter, Form, HTTPException, Request, Response, UploadFil
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 from pydantic import BaseModel
+from redis.exceptions import RedisError
 
 from app.api.deps import SessionDep
 from app.core import citations_import_run, pipeline
@@ -16,6 +17,9 @@ router = APIRouter(tags=["citations"])
 
 # The zip cap plus room for the form's other fields and the multipart framing.
 IMPORT_BODY_MAX = citations_import_run.ZIP_MAX_BYTES + 1024 * 1024
+
+
+QUEUE_DOWN = "PaperLab can't start a background import right now. Try again in a moment."
 
 
 class ExportIn(BaseModel):
@@ -109,12 +113,16 @@ async def import_citations(
     """Imports a references file or a Zotero zip into the library, and into `workspace_id` or a new workspace
     named `new_workspace_name` (made only once the file has parsed). 200 with the result (state finished) when it
     ran now; 202 with `job_id` (state queued) to poll at GET /api/citations/import/{job_id}. 422 for an unreadable
-    file or both targets, 404 unknown workspace, 409 a taken name, 413 over the size caps."""
+    file or both targets, 404 unknown workspace, 409 a taken name, 413 over the size caps, 503 the background
+    service is down."""
     name, source = _upload(file)
-    progress = await citations_import_run.start(
-        session, name, source, workspace_id=workspace_id, new_workspace_name=new_workspace_name,
-        fetch_free_pdfs=fetch_free_pdfs,
-    )  # fmt: skip
+    try:
+        progress = await citations_import_run.start(
+            session, name, source, workspace_id=workspace_id, new_workspace_name=new_workspace_name,
+            fetch_free_pdfs=fetch_free_pdfs,
+        )  # fmt: skip
+    except (RedisError, OSError):  # the job could not be queued; start() already removed the upload and new workspace
+        raise HTTPException(503, QUEUE_DOWN) from None
     if progress.state == "queued":
         response.status_code = 202
     return progress
@@ -126,5 +134,6 @@ router.include_router(imports)
 @router.get("/api/citations/import/{job_id}")
 async def import_progress(job_id: str, request: Request) -> ImportProgressOut:
     """An import job's state: queued, running (with counts), finished (with the result), failed, restarted (PaperLab
-    restarted before it finished) or expired (unknown or over a day old), the last three with a message in words."""
+    restarted before it finished), expired (unknown or over a day old) or unavailable (Redis can't be read just
+    now; the import carries on, so ask again), the last four with a message in words."""
     return await citations_import_run.status(request.app.state.arq, job_id)

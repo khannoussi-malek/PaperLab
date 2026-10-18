@@ -434,7 +434,8 @@ async def test_a_failed_enqueue_removes_the_workspace_it_made(client, session, r
     monkeypatch.setattr(redis, "enqueue_job", broken)
     name = f"Left empty {RUN}"
 
-    with pytest.raises(RedisConnectionError):
-        await post(client, "/api/citations/import", bib("e1", doi=True), new_workspace_name=name)
+    response = await post(client, "/api/citations/import", bib("e1", doi=True), new_workspace_name=name)
 
+    assert response.status_code == 503
+    assert response.json()["detail"] == "PaperLab can't start a background import right now. Try again in a moment."
     assert await session.scalar(select(Workspace).where(Workspace.name == name)) is None

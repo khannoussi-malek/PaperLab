@@ -3,7 +3,7 @@ import type { ImportResult } from '@/api/client'
 import { Button } from '@/components/ui/button'
 import { copyText } from '@/lib/clipboard'
 
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+export const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 const doiUrl = (doi: string) => `https://doi.org/${doi}`
 
 /** One line per entry, for pasting into a to-do list or a message to a librarian. */

@@ -133,7 +133,6 @@ test('202 polls every 2 seconds with a progress line, then shows the result', as
 test.each([
   ['restarted', 'PaperLab restarted before it finished.'],
   ['expired', 'That import is too old to look up.'],
-  ['unavailable', 'Progress can not be read just now.'],
   ['failed', 'The import broke: disk full.'],
 ] as const)('%s shows its message and Try again resubmits the same file', async (state, message) => {
   startSpy.mockResolvedValueOnce({ state, message, result: null })
@@ -267,4 +266,82 @@ test('a closed running import says it keeps running, and closing refreshes paper
   view.unmount()
   expect(spy).toHaveBeenCalledWith({ queryKey: ['papers'] })
   expect(spy).toHaveBeenCalledWith({ queryKey: ['workspaces'] })
+})
+
+test('an unavailable poll keeps polling, offers no Try again, and recovers to the result', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  startSpy.mockResolvedValue({ state: 'queued', job_id: 'j1' })
+  const poll = vi.spyOn(api, 'importProgress')
+    .mockResolvedValueOnce({ state: 'unavailable', job_id: 'j1', message: 'Try again in a moment' } as ImportProgress)
+    .mockResolvedValue(progress())
+  open()
+  pick()
+  await screen.findByText(/12 references/)
+  fireEvent.click(importButton())
+  expect((await screen.findByRole('status')).textContent).toMatch(/import carries on.*progress shows again/i)
+  expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
+  await act(() => vi.advanceTimersByTimeAsync(2100))
+  await screen.findByText(/7 new papers/)
+  expect(poll.mock.calls.length).toBeGreaterThanOrEqual(2)
+  expect(startSpy).toHaveBeenCalledTimes(1)
+})
+
+test('Try again after a restart goes into the workspace the first attempt made, not under the new name', async () => {
+  startSpy
+    .mockResolvedValueOnce({ state: 'queued', job_id: 'j1', workspace_id: 'w9' })
+    .mockResolvedValueOnce(progress())
+  vi.spyOn(api, 'importProgress').mockResolvedValue({ state: 'restarted', job_id: 'j1', message: 'PaperLab restarted.' } as ImportProgress)
+  open()
+  pick()
+  fireEvent.click(screen.getByLabelText('A new workspace'))
+  await screen.findByText(/12 references/)
+  fireEvent.change(screen.getByLabelText('Workspace name'), { target: { value: 'Thesis' } })
+  fireEvent.click(importButton())
+  fireEvent.click(await screen.findByRole('button', { name: 'Try again' }))
+  await screen.findByText(/7 new papers/)
+  expect(startSpy).toHaveBeenNthCalledWith(1, file, { newWorkspaceName: 'Thesis' }, true)
+  expect(startSpy).toHaveBeenNthCalledWith(2, file, { workspaceId: 'w9' }, true)
+})
+
+test('a taken workspace name is said in words, never as the API code', async () => {
+  startSpy.mockRejectedValue(new Error('workspace_name_taken'))
+  open()
+  pick()
+  fireEvent.click(screen.getByLabelText('A new workspace'))
+  await screen.findByText(/12 references/)
+  fireEvent.change(screen.getByLabelText('Workspace name'), { target: { value: 'Thesis' } })
+  fireEvent.click(importButton())
+  const alert = await screen.findByRole('alert')
+  expect(alert.textContent).toContain('A workspace with this name already exists')
+  expect(alert.textContent).not.toContain('workspace_name_taken')
+})
+
+test('a failed preview with fetching on still shows the general disclosure above Import', async () => {
+  previewSpy.mockRejectedValue(new Error('Could not read it.'))
+  open()
+  pick()
+  const note = await screen.findByText(/Fetching contacts free-copy sources \(Unpaywall, arXiv, …\) for any entry without a PDF/)
+  expect(note.compareDocumentPosition(importButton()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  fireEvent.click(screen.getByRole('switch', { name: /Fetch free PDFs/ }))
+  await waitFor(() => expect(screen.queryByText(/for any entry without a PDF/)).toBeNull())
+})
+
+test('one reference is said in the singular', async () => {
+  previewSpy.mockResolvedValue(preview({ total: 1, already_in_library: 0, with_bundled_pdf: 0, would_fetch: 0, disclosure: null, cannot_import_without_fetch: 1 }))
+  open()
+  pick()
+  fireEvent.click(screen.getByRole('switch', { name: /Fetch free PDFs/ }))
+  expect(await screen.findByText('1 reference: 0 already in your library.')).toBeTruthy()
+  expect(screen.getByText(/1 reference has no PDF in the file/)).toBeTruthy()
+})
+
+test('a finished import also refreshes the notes lists', async () => {
+  const { client } = open()
+  const spy = invalidated(client)
+  pick()
+  await screen.findByText(/12 references/)
+  fireEvent.click(importButton())
+  await screen.findByText(/7 new papers/)
+  const predicates = spy.mock.calls.map(([f]) => (f as { predicate?: (q: { queryKey: unknown[] }) => boolean }).predicate).filter(Boolean)
+  expect(predicates.some((p) => p!({ queryKey: ['notes'] }))).toBe(true)
 })

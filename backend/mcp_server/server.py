@@ -279,7 +279,8 @@ async def import_citations(
     fetch_free_pdfs=False to contact none. An entry left without a PDF is listed in `needs_pdf` with its whole
     reference and what was tried. A small import that doesn't fetch answers `state` finished with `result`;
     otherwise it runs in the background (`state` queued, with `job_id`): call again with only `job_id` to read its
-    progress until it is finished, failed, restarted or expired (polling changes nothing)."""
+    progress until it is finished, failed, restarted or expired (polling changes nothing). `unavailable` means the
+    progress can't be read just now; ask again."""
     if job_id is not None:
         return await citations_import_run.poll(job_id, path_or_text)
     async with sessions() as session:

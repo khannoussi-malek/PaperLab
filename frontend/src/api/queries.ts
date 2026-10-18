@@ -130,7 +130,7 @@ export const isNotesList = (queryKey: readonly unknown[]) =>
 
 /** Refetches every list that shows notes: after a note is saved, edited, moved between papers or deleted, or a chart
  * it shows changes. */
-const refreshNotes = (client: QueryClient) =>
+export const refreshNotes = (client: QueryClient) =>
   client.invalidateQueries({ predicate: (query) => isNotesList(query.queryKey) })
 
 /** Poll the library only while a paper is still ingesting. */

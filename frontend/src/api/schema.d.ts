@@ -725,7 +725,8 @@ export interface paths {
          * @description Imports a references file or a Zotero zip into the library, and into `workspace_id` or a new workspace
          *     named `new_workspace_name` (made only once the file has parsed). 200 with the result (state finished) when it
          *     ran now; 202 with `job_id` (state queued) to poll at GET /api/citations/import/{job_id}. 422 for an unreadable
-         *     file or both targets, 404 unknown workspace, 409 a taken name, 413 over the size caps.
+         *     file or both targets, 404 unknown workspace, 409 a taken name, 413 over the size caps, 503 the background
+         *     service is down.
          */
         post: operations["import_citations_api_citations_import_post"];
         delete?: never;
@@ -744,7 +745,8 @@ export interface paths {
         /**
          * Import Progress
          * @description An import job's state: queued, running (with counts), finished (with the result), failed, restarted (PaperLab
-         *     restarted before it finished) or expired (unknown or over a day old), the last three with a message in words.
+         *     restarted before it finished), expired (unknown or over a day old) or unavailable (Redis can't be read just
+         *     now; the import carries on, so ask again), the last four with a message in words.
          */
         get: operations["import_progress_api_citations_import__job_id__get"];
         put?: never;
