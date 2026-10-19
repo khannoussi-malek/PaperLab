@@ -20,7 +20,7 @@ import shutil
 import time
 import uuid
 from collections.abc import Awaitable, Callable
-from dataclasses import asdict, dataclass, field, fields
+from dataclasses import asdict, dataclass, field, fields, replace
 from pathlib import Path
 from typing import IO
 
@@ -36,6 +36,7 @@ from app.core.citations_import import CitationsImportError, ImportEntry, parse
 from app.core.errors import Conflict, DomainError
 from app.core.source_types import peer_reviewed_of
 from app.models import Note, Paper, Provenance, note_papers
+from app.providers import pmc_opendata
 
 logger = logging.getLogger(__name__)
 
@@ -163,9 +164,11 @@ def _landing(kind: str, value: str) -> str:
     return f"https://doi.org/{value}" if kind == "doi" else f"https://arxiv.org/abs/{value}"
 
 
-async def _fetch_by(session, providers, kind: str, value: str) -> tuple[Paper | uuid.UUID | None, dict]:
+async def _fetch_by(
+    session, providers, kind: str, value: str, pmcid: str | None = None
+) -> tuple[Paper | uuid.UUID | None, dict]:
     """Add paper's free-copy flow (pipeline._add_found) for one identifier: (the new Paper, or a held paper's id, or
-    None with what was tried)."""
+    None with what was tried). The entry's own `pmcid` lets the PMC bucket be tried without asking Europe PMC."""
     found = await discovery.search(session, providers, value)
     match = next(
         (c for c in found.results if (c.doi or "").lower() == value or c.external_ids.get("arxiv") == value), None
@@ -174,6 +177,8 @@ async def _fetch_by(session, providers, kind: str, value: str) -> tuple[Paper | 
         return None, {"tried": [{"url": _landing(kind, value), "outcome": "no_match"}], "free_copies": []}
     if match.paper_id is not None:
         return match.paper_id, {}
+    if (own := pmc_opendata.normalize(pmcid)) and "pmc" not in match.external_ids:
+        match = replace(match, external_ids={**match.external_ids, "pmc": own.removeprefix("PMC")})
     try:
         return await discovery.add(session, providers, match, settings.pdf_dir), {}
     except Conflict as exc:
@@ -189,7 +194,7 @@ async def _fetch(session: AsyncSession, providers, entry: ImportEntry) -> tuple[
     keys = dict.fromkeys(discovery.classify_query(key) for key in (entry.doi, entry.arxiv_id) if key)
     missing = {"tried": [], "free_copies": []}
     for kind, value in keys:
-        made, more = await _fetch_by(session, providers, kind, value)
+        made, more = await _fetch_by(session, providers, kind, value, entry.pmcid)
         if made is not None:
             return made, {}
         missing = {name: [*missing[name], *more[name]] for name in missing}
