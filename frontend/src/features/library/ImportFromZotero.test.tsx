@@ -404,7 +404,7 @@ test('turning it off asks for one more preview and sends false', async () => {
   expect(startSpy).toHaveBeenCalledWith(file, {}, true, false)
 })
 
-test('the preview says "up to N" saved without a PDF, singular and plural, only when the switch is on', async () => {
+test('the preview says "up to N" saved without a PDF', async () => {
   previewSpy.mockResolvedValue(preview({ would_save_without_pdf: 4 }))
   open()
   pick()
@@ -412,6 +412,13 @@ test('the preview says "up to N" saved without a PDF, singular and plural, only 
   previewSpy.mockResolvedValue(preview({ would_save_without_pdf: 1 }))
   fireEvent.click(screen.getByRole('switch', { name: /Save the others without a PDF/ }))
   await waitFor(() => expect(screen.queryByText(/will be saved without a PDF/)).toBeNull())
+})
+
+test('the preview says one reference in the singular', async () => {
+  previewSpy.mockResolvedValue(preview({ would_save_without_pdf: 1 }))
+  open()
+  pick()
+  expect(await screen.findByText('Up to 1 reference will be saved without a PDF.')).toBeTruthy()
 })
 
 test('the result says how many were saved without a PDF', async () => {
