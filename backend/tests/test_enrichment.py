@@ -297,6 +297,24 @@ async def test_a_duplicate_pdf_printed_doi_keeps_the_second_papers_authors_and_t
     assert await topics_of(session, paper2.id) == {("author", "engines"): None}
 
 
+async def test_enrich_returns_the_collisions_it_dropped(session, fake_openalex):
+    """Each doi and openalex_id dropped because another paper holds it, with its holder: the merge trigger (R17)."""
+    fake_openalex.route(BERT_WORK, recorded("work_bert"))
+    fake_openalex.route("/authors", {"results": []})
+    holder, match_copy, pdf_copy = await add_paper(session), await add_paper(session), await add_paper(session)
+
+    first = await enrichment.enrich_paper(session, fake_openalex.client, holder.id, hints(doi=BERT_DOI))
+    from_match = await enrichment.enrich_paper(session, fake_openalex.client, match_copy.id, hints(doi=BERT_DOI))
+    from_pdf = await enrichment.enrich_paper(session, None, pdf_copy.id, hints(doi=BERT_DOI))  # the fallback path
+
+    assert first == []
+    assert from_match == [
+        enrichment.Collision("doi", BERT_DOI, holder.id),
+        enrichment.Collision("openalex_id", "W2963341956", holder.id),
+    ]
+    assert from_pdf == [enrichment.Collision("doi", BERT_DOI, holder.id)]
+
+
 async def test_a_title_search_match_keeps_the_stored_doi_when_the_work_has_none(session, fake_openalex):
     fallback_doi = "10.1000/fallback-only"
     paper = await add_paper(session)

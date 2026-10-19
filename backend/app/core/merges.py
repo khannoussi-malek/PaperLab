@@ -8,12 +8,12 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import discovery, retrieved_hits
 from app.core.candidates import Candidate
-from app.core.enrichment import normalize_doi, short_id
+from app.core.enrichment import Collision, normalize_doi, short_id
 from app.core.errors import NotFound
 from app.core.papers import ABSTRACT_PAGE
 from app.models import Paper, PaperMerge
@@ -248,6 +248,29 @@ async def merge(
     except BaseException:
         await session.rollback()
         raise
+
+
+async def after_ingest(session: AsyncSession, paper_id: uuid.UUID, collisions: list[Collision]) -> MergeResult | None:
+    """R17: ingest found `paper_id` (M) holding identifiers other papers hold (enrich_paper's `collisions`). M merges
+    into the holder saved without a PDF, or a reported audit row says why not. A holder with a PDF is today's
+    duplicate: None, nothing written. Two different PDF-less holders (the DOI's and the OpenAlex id's) are reported as
+    holders_disagree and neither merges. Commits like merge, so the session must have nothing pending."""
+    pdfless = set(
+        await session.scalars(
+            select(Paper.id).where(Paper.id.in_([c.holder_id for c in collisions]), Paper.file_path.is_(None))
+        )
+    )
+    tried = [c for c in collisions if c.holder_id in pdfless]
+    if not tried:
+        return None
+    first = tried[0]
+    if len({c.holder_id for c in tried}) > 1:
+        audit = {"kept_id": first.holder_id, "merged_id": paper_id, "identifier": f"{first.column}:{first.value}"}
+        session.add(PaperMerge(**audit, status="reported", reason="holders_disagree", moved={}))
+        await session.commit()
+        return MergeResult("reported", "holders_disagree")
+    # "manual": a plain upload is the owner's own acquisition (pdf_arrived's word for K's awaiting hits).
+    return await merge(session, paper_id, first.holder_id, identifier=(first.column, first.value), how="manual")
 
 
 async def _count(session: AsyncSession, kept: Paper, merged: Paper) -> dict[str, int]:
