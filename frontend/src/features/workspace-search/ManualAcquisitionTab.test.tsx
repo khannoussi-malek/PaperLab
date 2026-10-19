@@ -255,8 +255,42 @@ test('Find free copy on a saved-without-PDF row uses the paper route; a failed h
   mockHits([failedHit], {}, [awaitingHit])
   const find = vi.spyOn(api, 'findPaperPdf').mockResolvedValue({ id: 'p9' } as any)
   renderWithClient(<ManualAcquisitionTab workspaceId="ws-1" />)
-  const buttons = await screen.findAllByRole('button', { name: 'Find free copy' })
+  const buttons = await screen.findAllByRole('button', { name: /Find free copy/ })
   expect(buttons).toHaveLength(1)
   fireEvent.click(buttons[0])
   await waitFor(() => expect(find).toHaveBeenCalledWith('p9'))
+})
+
+test('a failed awaiting query shows the load error with a retry', () => {
+  const refetch = vi.fn()
+  vi.spyOn(queries, 'useSearchHits').mockImplementation(((_w: string, _s?: string, status?: string) =>
+    status === 'awaiting_pdf'
+      ? { data: undefined, isError: true, error: new Error('Awaiting broke.'), refetch, hasNextPage: false }
+      : { data: { pages: [{ items: [failedHit], next_cursor: null }] }, hasNextPage: false }) as any)
+  renderWithClient(<ManualAcquisitionTab workspaceId="ws-1" />)
+  expect(screen.getByText('Awaiting broke.')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+  expect(refetch).toHaveBeenCalled()
+})
+
+test('saved-without-a-PDF rows are their own group, after the failed ones', () => {
+  mockHits([failedHit], {}, [awaitingHit])
+  renderWithClient(<ManualAcquisitionTab workspaceId="ws-1" />)
+  const group = screen.getByRole('region', { name: 'Saved without a PDF' })
+  expect(group).toHaveTextContent('saved without pdf')
+  expect(group).not.toHaveTextContent('unreachable paper')
+})
+
+test('an upload through the hit route also refreshes the library and the paper', async () => {
+  mockHits([failedHit], {}, [awaitingHit])
+  vi.spyOn(api, 'uploadHitPdf').mockResolvedValue({ ...awaitingHit, acquisition_status: 'manual' } as any)
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const invalidate = vi.spyOn(client, 'invalidateQueries')
+  render(<QueryClientProvider client={client}><ManualAcquisitionTab workspaceId="ws-1" /></QueryClientProvider>)
+  const file = new File(['%PDF'], 'a.pdf', { type: 'application/pdf' })
+  fireEvent.change(screen.getByLabelText('Upload PDF for saved without pdf'), { target: { files: [file] } })
+  await waitFor(() => {
+    const keys = invalidate.mock.calls.map((c) => JSON.stringify(c[0]?.queryKey))
+    expect(keys).toEqual(expect.arrayContaining(['["papers"]', '["papers","p9"]']))
+  })
 })

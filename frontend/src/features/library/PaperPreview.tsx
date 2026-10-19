@@ -21,7 +21,7 @@ function NoPdfPlaceholder({ paper }: { paper: Paper }) {
         <NoPdfBadge />
         {source}
       </p>
-      <GetPdfActions paperId={paper.id} title={paper.title} />
+      <GetPdfActions key={paper.id} paperId={paper.id} title={paper.title} />
     </div>
   )
 }
