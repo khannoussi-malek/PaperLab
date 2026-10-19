@@ -98,7 +98,11 @@ async def preview_import(
     an unreadable file, 413 over the size caps."""
     name, source = _upload(file)
     return await citations_import_run.preview(
-        session, name, source, workspace_id=workspace_id, fetch_free_pdfs=fetch_free_pdfs,
+        session,
+        name,
+        source,
+        workspace_id=workspace_id,
+        fetch_free_pdfs=fetch_free_pdfs,
         save_without_pdf=save_without_pdf,
     )
 

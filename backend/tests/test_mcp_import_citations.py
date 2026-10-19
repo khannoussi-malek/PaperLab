@@ -115,3 +115,10 @@ async def test_the_docstring_says_what_the_default_contacts():
 
     doc = server.import_citations.__doc__
     assert "contacts free-copy sources (Unpaywall, arXiv, …)" in doc and "fetch_free_pdfs=False" in doc
+
+
+async def test_import_citations_save_without_pdf_over_mcp(session, redis):
+    out = result(await call("import_citations", path_or_text=bib("m3").decode(), fetch_free_pdfs=False,
+                            save_without_pdf=True))  # fmt: skip
+
+    assert out["result"]["saved_without_pdf"] == 1 and out["result"]["needs_pdf"] == []

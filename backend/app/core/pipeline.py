@@ -252,13 +252,11 @@ async def _add_found(
     try:
         copies: list[str] = []
         tried_out = [] if tried_out is None else tried_out
-        paper = await discovery.add(
-            session, providers, match, settings.pdf_dir, tried_out, save_without_pdf, copies
-        )
+        paper = await discovery.add(session, providers, match, settings.pdf_dir, tried_out, save_without_pdf, copies)
     except Conflict as exc:
         if str(exc) == discovery.ALREADY_IN_LIBRARY and "paper_id" in exc.details:  # its arXiv copy is held
             held = await _in_library(session, exc.details["paper_id"], workspace_uuid)
-            return replace(held, tried=exc.details["tried"])
+            return replace(held, tried=exc.details.get("tried", []))
         if str(exc) != discovery.NO_FREE_PDF:
             raise
         return AddPaperResult(

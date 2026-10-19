@@ -193,6 +193,38 @@ async def test_no_free_pdf_names_the_repository_copies_over_mcp(jobs, monkeypatc
     assert added["free_copies"] == ["https://www.ncbi.nlm.nih.gov/pmc/articles/PMC1/"]
 
 
+async def test_a_paper_saved_without_pdf_keeps_the_repository_copies(jobs, monkeypatch):
+    doi = f"{discovery_fake.DOI_PREFIX}landing"
+
+    async def search(_session, _providers, _query):
+        return discovery.SearchResult([Candidate(title="Closed", doi=doi, pdf_urls=[])], [])
+
+    async def repository_urls(_http, _doi):
+        return ["https://www.ncbi.nlm.nih.gov/pmc/articles/PMC1/"]
+
+    monkeypatch.setattr(discovery, "search", search)
+    monkeypatch.setattr(unpaywall, "repository_urls", repository_urls)
+    added = result(await call("add_paper", identifier=doi, save_without_pdf=True))
+
+    assert added["status"] == "saved_without_pdf"
+    assert added["free_copies"] == ["https://www.ncbi.nlm.nih.gov/pmc/articles/PMC1/"]
+
+
+async def test_a_library_paper_search_missed_answers_already_in_library_not_an_error(session, jobs, monkeypatch):
+    doi = f"{discovery_fake.DOI_PREFIX}raced"
+    held = Paper(title="Raced", doi=doi, file_path="/nonexistent.pdf", status=PaperStatus.READY)
+    session.add(held)
+    await session.flush()
+
+    async def search(_session, _providers, _query):  # marks nothing: the paper "arrived" after the search
+        return discovery.SearchResult([Candidate(title="Raced", doi=doi)], [])
+
+    monkeypatch.setattr(discovery, "search", search)
+    added = result(await call("add_paper", identifier=doi))
+
+    assert (added["status"], added["paper_id"]) == ("ingested", str(held.id))
+
+
 async def test_a_link_that_is_no_pdf_says_what_it_answered(jobs):
     link = f"{discovery_fake.PDF_HOST}/page.html?api_key=SECRET"
     added = result(await call("add_paper", identifier=link))

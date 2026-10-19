@@ -336,7 +336,12 @@ async def apply(
                     raise TimeoutError
                 async with asyncio.timeout(budget):  # one slow fetch must not outrun the job's own timeout
                     one = await _isolated(
-                        session, entry, workspace_id, providers if fetch_free_pdfs else None, bundle, index,
+                        session,
+                        entry,
+                        workspace_id,
+                        providers if fetch_free_pdfs else None,
+                        bundle,
+                        index,
                         save_without_pdf,
                     )
             except TimeoutError:  # _one discards a paper it made when cancelled

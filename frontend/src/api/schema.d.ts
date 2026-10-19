@@ -2089,8 +2089,8 @@ export interface components {
         };
         /**
          * CandidateIn
-         * @description A search result or suggestion sent back to be added. Extra fields (its `paper_id`, its `sources`) are ignored:
-         *     the library is checked again. `abstract` and `sources` are kept for a save without a PDF (its abstract, and where
+         * @description A search result or suggestion sent back to be added. An extra field (its `paper_id`) is ignored: the
+         *     library is checked again. `abstract` and `sources` are kept for a save without a PDF (its abstract, and where
          *     its details came from).
          */
         CandidateIn: {
