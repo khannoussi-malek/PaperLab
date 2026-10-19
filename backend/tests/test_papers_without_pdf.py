@@ -175,16 +175,16 @@ async def test_generating_missing_cards_skips_papers_without_a_pdf(client, sessi
     assert jobs.jobs == [("generate_evidence_cards", ws["id"], [str(filed.id)])]
 
 
-async def test_upload_by_doi_onto_a_paper_without_a_pdf_does_not_crash(session, jobs, pdf_dir):
+async def test_upload_by_doi_onto_a_paper_without_a_pdf_attaches_to_it(session, jobs, pdf_dir):
     doi = "10.1234/nopdf"
     paper = await pdf_less_paper(session, doi=doi, status="failed")
     ws = f"NoPdf {uuid.uuid4().hex[:6]}"
     await workspaces.create(session, ws)
     pdf = base64.b64encode(b"%PDF-1.7\n%x\n").decode()
     added = result(await call("upload_paper", workspace=ws, filename="x.pdf", pdf_base64=pdf, doi=doi))
-    assert (added["status"], added["paper_id"]) == ("already_in_library", str(paper.id))
+    assert (added["status"], added["paper_id"]) == ("queued", str(paper.id))
     await session.refresh(paper)
-    assert (paper.file_path, jobs.jobs) == (None, [])
+    assert (paper.file_path, jobs.jobs) == (str(pdf_dir / f"{paper.id}.pdf"), [("ingest_paper", str(paper.id))])
 
 
 async def test_quoting_a_paper_without_a_pdf_saves_an_unanchored_note_led_by_the_quote(session):

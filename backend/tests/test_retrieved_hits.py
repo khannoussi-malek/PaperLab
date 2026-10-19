@@ -6,10 +6,8 @@ from datetime import datetime, timezone
 import pytest
 from sqlalchemy import select
 
-from app.config import settings
 from app.core import retrieved_hits, tags, workspaces
 from app.core.candidates import normal_title
-from app.core.errors import Conflict
 from app.core.prisma_export import prisma_export
 from app.core.workspace_search import import_hits, upload_hit_pdf
 from app.models import Paper, paper_tags, workspace_papers
@@ -415,26 +413,44 @@ async def test_a_pdfless_paper_of_the_same_title_makes_a_title_match_ambiguous(s
     assert (await reload(session, hit)).acquisition_status == "failed"
 
 
-async def test_an_upload_for_a_hit_whose_paper_has_no_pdf_is_refused_not_discarded(session):
+async def test_an_upload_for_a_hit_whose_paper_has_no_pdf_upgrades_that_paper(session, pdf_dir):
     ws = await workspace(session)
     twin = await paper(session, file_path=None)
     hit = await failed_hit(session, ws, status="not_attempted", imported_as=twin.id)
 
-    with pytest.raises(Conflict, match="paper_has_no_pdf"):
-        await upload_hit_pdf(session, ws.id, hit.id, "a.pdf", b"%PDF-1.7 mine")
+    out, created = await upload_hit_pdf(session, ws.id, hit.id, "a.pdf", b"%PDF-1.7 mine")
 
-    assert (await reload(session, hit)).acquisition_status == "not_attempted"
+    hit = await reload(session, hit)
+    assert (hit.acquisition_status, hit.paper_id, created, out["paper_id"]) == ("manual", twin.id, True, twin.id)
+    await session.refresh(twin)
+    assert twin.has_pdf and (pdf_dir / f"{twin.id}.pdf").read_bytes() == b"%PDF-1.7 mine"
 
 
-async def test_an_upload_for_a_hit_whose_doi_a_pdfless_paper_holds_creates_nothing(session, tmp_path, monkeypatch):
-    monkeypatch.setattr(settings, "pdf_dir", tmp_path)  # so a wrongly created paper fails the assert, not the disk
+async def test_an_upload_for_a_hit_whose_doi_a_pdfless_paper_holds_upgrades_it_without_a_duplicate(session, pdf_dir):
     ws = await workspace(session)  # the hit has no imported_as: Find papers saved the paper without it
     held = await paper(session, doi="10.1126/sciadv.adu5251", file_path=None)
     await workspaces.add_paper(session, ws.id, held.id)
-    hit = await failed_hit(session, ws, doi="10.1126/sciadv.adu5251")
+    hit = await failed_hit(session, ws, status="awaiting_pdf", doi="10.1126/sciadv.adu5251")
 
-    with pytest.raises(Conflict, match="paper_has_no_pdf"):
-        await upload_hit_pdf(session, ws.id, hit.id, "a.pdf", b"%PDF-1.7 mine")
+    _, created = await upload_hit_pdf(session, ws.id, hit.id, "a.pdf", b"%PDF-1.7 mine")
 
-    assert len((await session.scalars(select(Paper))).all()) == 1
-    assert (await reload(session, hit)).acquisition_status == "failed"
+    assert created and len((await session.scalars(select(Paper))).all()) == 1
+    hit = await reload(session, hit)
+    assert (hit.acquisition_status, hit.paper_id) == ("manual", held.id)
+    await session.refresh(held)
+    assert held.has_pdf
+
+
+async def test_import_hits_finds_a_free_copy_for_a_pdfless_holder_and_upgrades_it(session, discovery_fakes, pdf_dir):
+    ws = await workspace(session)
+    held = await paper(session, doi="10.1126/sciadv.adu5251", file_path=None, oa_url="https://pdf.example/ok.pdf")
+    discovery_fakes.pdf_host.reply("/ok.pdf", 200, content=b"%PDF-1.4 ok")
+    hit = await failed_hit(session, ws, status="not_attempted", doi="10.1126/sciadv.adu5251")
+
+    result = await import_hits(session, discovery_fakes.providers, ws.id, [hit.id])
+
+    hit = await reload(session, hit)
+    assert (hit.acquisition_status, hit.paper_id) == ("imported", held.id)
+    assert (result.imported, result.failed, result.paper_ids) == (1, 0, [held.id])
+    await session.refresh(held)
+    assert held.has_pdf and (pdf_dir / f"{held.id}.pdf").read_bytes() == b"%PDF-1.4 ok"
