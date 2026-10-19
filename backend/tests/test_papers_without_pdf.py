@@ -186,13 +186,58 @@ async def test_upload_by_doi_onto_a_paper_without_a_pdf_does_not_crash(session, 
     assert (paper.file_path, jobs.jobs) == (None, [])
 
 
-async def test_quoting_a_paper_without_a_pdf_says_so_instead_of_crashing(session):
-    from app.core import notes
-    from app.core.errors import Conflict
+async def test_quoting_a_paper_without_a_pdf_saves_an_unanchored_note_led_by_the_quote(session):
+    paper = await pdf_less_paper(session, abstract="Sleep helps memory\nconsolidation in adults.")
+    note = await notes.create_llm_note(session, paper.id, "Worth citing.", "sleep helps  memory consolidation")
+    assert (note.body, note.anchors, note.paper_ids) == (
+        "“sleep helps memory consolidation”\n\nWorth citing.",
+        [],
+        [paper.id],
+    )
+    with pytest.raises(InvalidInput, match="quote_not_found"):
+        await notes.create_llm_note(session, paper.id, "Worth citing.", "Naps help too.")
 
+
+async def test_mcp_create_note_on_a_paper_without_a_pdf_quotes_its_abstract(session):
     paper = await pdf_less_paper(session, abstract="Sleep helps memory consolidation.")
-    with pytest.raises(Conflict, match="no_pdf"):
-        await notes.locate_quote(session, paper.id, "Sleep helps memory consolidation.")
+    made = result(await call("create_note", body="AI note.", paper_id=str(paper.id), quoted_text="Sleep helps memory"))
+    assert (made["body"], made["anchors"], made["paper_ids"]) == (
+        "“Sleep helps memory”\n\nAI note.",
+        [],
+        [str(paper.id)],
+    )
+    assert made["provenance"] == "llm"
+
+
+async def test_a_note_on_the_abstract_is_saved_unanchored_with_its_quote_first(client, session):
+    paper = await pdf_less_paper(session, abstract="Sleep helps memory consolidation in adults.")
+    quoted = await client.post(
+        "/api/notes", json={"paper_id": str(paper.id), "quote": "memory consolidation", "body": " Key claim. "}
+    )
+    plain = await client.post("/api/notes", json={"paper_id": str(paper.id), "body": "Read later."})
+    assert quoted.status_code == 201, quoted.text
+    body = quoted.json()
+    assert (body["body"], body["anchors"], body["paper_ids"]) == (
+        "“memory consolidation”\n\nKey claim.",
+        [],
+        [str(paper.id)],
+    )
+    assert body["provenance"] == "human"
+    assert plain.status_code == 201 and plain.json()["body"] == "Read later."
+    listed = (await client.get(f"/api/papers/{paper.id}/notes")).json()
+    assert {n["body"] for n in listed} == {"“memory consolidation”\n\nKey claim.", "Read later."}
+
+
+async def test_a_quote_not_in_the_abstract_is_422_quote_not_found(client, session):
+    paper = await pdf_less_paper(session, abstract="Sleep helps memory consolidation.")
+    answer = await client.post("/api/notes", json={"paper_id": str(paper.id), "quote": "Naps help.", "body": "x"})
+    assert (answer.status_code, answer.json()["detail"]) == (422, "quote_not_found")
+
+
+async def test_a_paper_note_without_an_anchor_on_a_paper_with_a_pdf_is_422_anchor_required(client, session):
+    paper = await _chunked_paper(session, "/x.pdf")
+    answer = await client.post("/api/notes", json={"paper_id": str(paper.id), "body": "x"})
+    assert (answer.status_code, answer.json()["detail"]) == (422, "anchor_required")
 
 
 async def test_a_failed_paper_without_a_pdf_re_added_by_identifier_is_left_alone(session, jobs):

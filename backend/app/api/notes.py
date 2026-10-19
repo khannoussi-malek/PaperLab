@@ -76,6 +76,9 @@ async def import_notes(files: list[UploadFile], session: SessionDep) -> dict[str
 
 @router.post("/api/notes", status_code=201)
 async def create_note(payload: NoteCreate, session: SessionDep) -> NoteOut:
+    """422 anchor_required: a paper_id note on a paper with a PDF; 422 quote_not_found: a quote not in its abstract."""
+    if payload.paper_id is not None:
+        return await notes.create_paper_note(session, payload.paper_id, payload.body, payload.quote, payload.color)
     anchor = notes.Anchor(**payload.anchor.model_dump())
     return await notes.create_human_note(session, payload.body, anchor, payload.color)
 

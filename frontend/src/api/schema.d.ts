@@ -244,7 +244,10 @@ export interface paths {
          */
         get: operations["list_notes_api_notes_get"];
         put?: never;
-        /** Create Note */
+        /**
+         * Create Note
+         * @description 422 anchor_required: a paper_id note on a paper with a PDF; 422 quote_not_found: a quote not in its abstract.
+         */
         post: operations["create_note_api_notes_post"];
         delete?: never;
         options?: never;
@@ -3304,7 +3307,11 @@ export interface components {
              */
             free_copies: string[];
         };
-        /** NoteCreate */
+        /**
+         * NoteCreate
+         * @description An anchored note (`anchor`), or a note on a paper saved without a PDF (`paper_id`, with an optional `quote` from
+         *     its abstract that the note's body then starts with).
+         */
         NoteCreate: {
             /**
              * Body
@@ -3316,7 +3323,11 @@ export interface components {
              * @default #facc15
              */
             color: string;
-            anchor: components["schemas"]["AnchorIn"];
+            anchor?: components["schemas"]["AnchorIn"] | null;
+            /** Paper Id */
+            paper_id?: string | null;
+            /** Quote */
+            quote?: string | null;
         };
         /** NoteOut */
         NoteOut: {
