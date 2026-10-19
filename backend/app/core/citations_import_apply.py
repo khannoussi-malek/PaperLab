@@ -1,6 +1,7 @@
-"""Turn a parsed Zotero import into papers (M40 Task 7, D267–D269, ruling A). Every paper has a PDF, so an entry
-becomes a paper only with one: its PDF from the zip, else (fetch_free_pdfs) a free copy found the way Add paper finds
-one. Without either it is listed in `needs_pdf` and nothing is created.
+"""Turn a parsed Zotero import into papers (M40 Task 7, D267–D269, ruling A). An entry becomes a paper with a PDF:
+its PDF from the zip, else (fetch_free_pdfs) a free copy found the way Add paper finds one. Without either it is
+listed in `needs_pdf` and nothing is created, unless `save_without_pdf` is on: it is then saved as a PDF-less paper
+from its Zotero details (details_source "zotero"), filed like any other and counted in `saved_without_pdf`.
 
 - Dedupe comes first, with today's rules: discovery.mark_in_library (DOI, a preprint's published DOI, OpenAlex id),
   discovery.held_version (the arXiv copy or the published version), then the exact title under _same_work. A match
@@ -62,6 +63,7 @@ class ImportResult:
     imported: int = 0  # new papers
     already_in_library: int = 0
     pdfs_attached: int = 0  # new papers whose PDF came from the zip; the rest of `imported` were fetched
+    saved_without_pdf: int = 0  # new papers made from the entry's details alone (save_without_pdf)
     notes: int = 0
     needs_pdf: list[dict] = field(default_factory=list)  # the entry's ENTRY_RECORD fields + tried, free_copies
     failed: list[dict] = field(default_factory=list)  # {title, reason}
@@ -249,11 +251,29 @@ async def _new_paper(session, entry, providers: GetProviders | None, bundle: Bun
     return *await _fetch(session, await providers(), entry), False
 
 
-async def _one(session, entry, workspace_id, providers, bundle: Bundle | None, index: int) -> ImportResult:
+async def _save_without_pdf(session, entry: ImportEntry, workspace_id: uuid.UUID | None) -> ImportResult:
+    """The entry as a PDF-less paper, filed as an imported one is. Like a fetched paper, its follow-up job is queued
+    first, so a crash while filing never leaves an abstract that is never indexed."""
+    paper = await papers.create_metadata_paper(session, _prefill(entry), details_source="zotero")
+    try:
+        if paper.abstract:
+            await queue.enqueue("index_abstract", str(paper.id))
+        added = await _file(session, paper.id, entry, workspace_id)
+    except BaseException:
+        await _discard(session, paper.id)
+        raise
+    return ImportResult(saved_without_pdf=1, notes=added)
+
+
+async def _one(
+    session, entry, workspace_id, providers, bundle: Bundle | None, index: int, save_without_pdf: bool = False
+) -> ImportResult:
     held = await _held(session, entry)
     if held is not None:
         return ImportResult(already_in_library=1, notes=await _file(session, held, entry, workspace_id))
     made, missing, from_zip = await _new_paper(session, entry, providers, bundle, index)
+    if made is None and save_without_pdf:
+        return await _save_without_pdf(session, entry, workspace_id)
     if made is None:
         return ImportResult(needs_pdf=[{name: getattr(entry, name) for name in ENTRY_RECORD} | missing])
     if not isinstance(made, Paper):  # the free-copy search found it held after all
@@ -271,9 +291,9 @@ async def _one(session, entry, workspace_id, providers, bundle: Bundle | None, i
     return ImportResult(imported=1, pdfs_attached=int(from_zip), notes=added)
 
 
-async def _isolated(session, entry, workspace_id, providers, bundle, index) -> ImportResult:
+async def _isolated(session, entry, workspace_id, providers, bundle, index, save_without_pdf) -> ImportResult:
     try:
-        return await _one(session, entry, workspace_id, providers, bundle, index)
+        return await _one(session, entry, workspace_id, providers, bundle, index, save_without_pdf)
     except (CitationsImportError, DomainError) as exc:
         await session.rollback()
         return ImportResult(failed=[{"title": entry.title, "reason": str(exc)}])
@@ -289,6 +309,7 @@ async def apply(
     *,
     workspace_id: uuid.UUID | None = None,
     fetch_free_pdfs: bool = True,
+    save_without_pdf: bool = False,
     bundle: Bundle | None = None,
     progress: Progress | None = None,
     deadline: float | None = None,
@@ -315,7 +336,8 @@ async def apply(
                     raise TimeoutError
                 async with asyncio.timeout(budget):  # one slow fetch must not outrun the job's own timeout
                     one = await _isolated(
-                        session, entry, workspace_id, providers if fetch_free_pdfs else None, bundle, index
+                        session, entry, workspace_id, providers if fetch_free_pdfs else None, bundle, index,
+                        save_without_pdf,
                     )
             except TimeoutError:  # _one discards a paper it made when cancelled
                 await session.rollback()
@@ -349,12 +371,20 @@ class ImportPreview:
     with_bundled_pdf: int
     would_fetch: int
     cannot_import_without_fetch: int
+    # With save_without_pdf on, the entries that end as PDF-less papers unless a fetch finds a copy: those with no PDF
+    # in the zip (an upper bound, since the fetch result is only known when it runs). 0 when it is off.
+    would_save_without_pdf: int = 0
     # Bundled entries a damaged zip PDF would send to a free-copy lookup (_new_paper's fallback): for the disclosure.
     fallback_fetch: int = 0
 
 
 async def preview(
-    session: AsyncSession, entries: list[ImportEntry], *, bundle: Bundle | None = None, fetch_free_pdfs: bool = True
+    session: AsyncSession,
+    entries: list[ImportEntry],
+    *,
+    bundle: Bundle | None = None,
+    fetch_free_pdfs: bool = True,
+    save_without_pdf: bool = False,
 ) -> ImportPreview:
     """apply's dedupe and choice of route, with no network call and nothing created.
     ponytail: three lookups per entry (_held); fine for a dialog, slow only near the 5,000-entry limit."""
@@ -368,7 +398,10 @@ async def preview(
         else:
             rest += 1
             fetch += bool(fetch_free_pdfs and (entry.doi or entry.arxiv_id))
-    return ImportPreview(len(entries), held, bundled, fetch, rest, fallback)
+    return ImportPreview(
+        len(entries), held, bundled, fetch, rest, would_save_without_pdf=rest if save_without_pdf else 0,
+        fallback_fetch=fallback,
+    )  # fmt: skip
 
 
 def uploads_dir() -> Path:
@@ -383,11 +416,12 @@ def progress_key(job_id: str) -> str:
 def progress_payload(result: ImportResult, total: int, finished: bool) -> dict:
     """While running, counts only (needs_pdf and failed as numbers), so each write stays small; finished, the whole
     result. `done` counts the entries reached; `at` (time.time()) is the heartbeat a poll checks for a dead worker."""
-    done = result.imported + result.already_in_library + len(result.needs_pdf) + len(result.failed)
+    done = result.imported + result.already_in_library + result.saved_without_pdf
+    done += len(result.needs_pdf) + len(result.failed)
     counts = {"total": total, "done": done, "finished": finished, "at": time.time()}
     if finished:
         return asdict(result) | counts
-    tallies = ("imported", "already_in_library", "pdfs_attached", "notes")
+    tallies = ("imported", "already_in_library", "pdfs_attached", "saved_without_pdf", "notes")
     return {name: getattr(result, name) for name in tallies} | {
         "needs_pdf": len(result.needs_pdf), "failed": len(result.failed),
     } | counts  # fmt: skip
@@ -400,6 +434,7 @@ async def start(
     *,
     workspace_id: uuid.UUID | None = None,
     fetch_free_pdfs: bool = True,
+    save_without_pdf: bool = False,
 ) -> ImportResult | str:
     """Imports a file now (INLINE_MAX entries or fewer, and none that would fetch: dedupe, zipped PDFs or fetch off),
     or queues the import_citations job and returns its id. `source` is the bytes or a seekable file (a zip is then
@@ -410,8 +445,9 @@ async def start(
     entries, bundle = read(name, source)
     with bundle or contextlib.nullcontext():
         return await route(
-            session, name, source, entries, bundle, workspace_id=workspace_id, fetch_free_pdfs=fetch_free_pdfs
-        )
+            session, name, source, entries, bundle, workspace_id=workspace_id, fetch_free_pdfs=fetch_free_pdfs,
+            save_without_pdf=save_without_pdf,
+        )  # fmt: skip
 
 
 def _copy(source: bytes | IO[bytes], path: Path) -> None:
@@ -432,6 +468,7 @@ async def route(
     *,
     workspace_id: uuid.UUID | None = None,
     fetch_free_pdfs: bool = True,
+    save_without_pdf: bool = False,
 ) -> ImportResult | str:
     """start() for entries already read from `source` (its bundle still open). The job reads a copy of the file in
     uploads_dir(), deleted when it ends; its progress is a Redis value at progress_key(job id)."""
@@ -439,7 +476,10 @@ async def route(
     # ponytail: a damaged zip PDF's fallback lookup (fallback_fetch) still runs inline; queueing on it would send
     # nearly every Zotero zip to the background. Queue on it if those lookups ever stall a request.
     if small and not (await preview(session, entries, bundle=bundle, fetch_free_pdfs=fetch_free_pdfs)).would_fetch:
-        return await apply(session, entries, workspace_id=workspace_id, fetch_free_pdfs=fetch_free_pdfs, bundle=bundle)
+        return await apply(
+            session, entries, workspace_id=workspace_id, fetch_free_pdfs=fetch_free_pdfs,
+            save_without_pdf=save_without_pdf, bundle=bundle,
+        )  # fmt: skip
     job_id = f"{JOB}:{uuid.uuid4()}"
     folder = uploads_dir()
     folder.mkdir(parents=True, exist_ok=True)
@@ -447,7 +487,7 @@ async def route(
     await asyncio.to_thread(_copy, source, path)
     try:
         await queue.enqueue(JOB, str(path), name, str(workspace_id) if workspace_id else None, fetch_free_pdfs,
-                            job_id=job_id)  # fmt: skip
+                            save_without_pdf, job_id=job_id)  # fmt: skip
     except BaseException:
         path.unlink(missing_ok=True)
         raise

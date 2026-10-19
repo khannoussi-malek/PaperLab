@@ -41,6 +41,7 @@ class ImportResultOut(BaseModel):
     imported: int  # new papers
     already_in_library: int
     pdfs_attached: int  # new papers whose PDF came from the zip
+    saved_without_pdf: int  # new papers saved from the entry's details alone (save_without_pdf)
     notes: int
     needs_pdf: list[NeedsPdfOut]
     failed: list[FailedOut]
@@ -56,6 +57,7 @@ class ImportCountsOut(BaseModel):
     imported: int
     already_in_library: int
     pdfs_attached: int
+    saved_without_pdf: int
     notes: int
     needs_pdf: int
     failed: int
@@ -69,6 +71,7 @@ class ImportPreviewOut(BaseModel):
     with_bundled_pdf: int
     would_fetch: int  # entries that will contact free-copy sources
     cannot_import_without_fetch: int
+    would_save_without_pdf: int  # with save_without_pdf on: entries saved without a PDF unless a fetch finds one
     disclosure: str | None  # what a fetch would contact, when anything could be (also a zip PDF that can't be read)
 
 

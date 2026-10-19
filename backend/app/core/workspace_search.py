@@ -921,6 +921,8 @@ async def import_hits(
             held = await discovery.held_version(session, _ref_candidate(ref))
             if held is not None:
                 existing_id, by_identifier = held
+        if existing_id is not None and not (await papers.get_paper(session, existing_id)).has_pdf:
+            continue  # saved without a PDF: not retrieved, so the hit stays in "Get PDFs" (PRISMA, R6)
         if existing_id is not None:
             # Already in the library — an earlier hit in this batch, an earlier run, the References panel, or a paper
             # holding the same DOI/OpenAlex id. Attach it instead of downloading/creating a duplicate, no re-ingest.
@@ -993,6 +995,9 @@ async def upload_hit_pdf(
 
     ref = await session.get(ExternalRef, hit.external_ref_id) if hit.external_ref_id else None
     if ref is not None and ref.imported_as is not None:
+        if not (await papers.get_paper(session, ref.imported_as)).has_pdf:
+            # The upload would be thrown away and the hit counted as retrieved (PRISMA, R6); attaching it is PR 2.
+            raise Conflict("paper_has_no_pdf")
         await workspaces.add_paper(session, workspace_id, ref.imported_as)
         hit.acquisition_status = "manual"
         hit.paper_id = ref.imported_as

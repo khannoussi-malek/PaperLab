@@ -139,7 +139,7 @@ async def test_preview_counts_and_says_what_a_fetch_contacts(client, session, mo
     assert response.status_code == 200, response.text
     assert response.json() == {
         "total": 3, "already_in_library": 0, "with_bundled_pdf": 0, "would_fetch": 2,
-        "cannot_import_without_fetch": 3,
+        "cannot_import_without_fetch": 3, "would_save_without_pdf": 0,
         "disclosure": "Fetching contacts free-copy sources (Unpaywall, arXiv, …) for 2 entries, the same way adding a "
         "paper by DOI does.",
     }  # fmt: skip
@@ -486,3 +486,18 @@ async def test_a_needs_pdf_item_keeps_every_field_of_its_entry_through_the_resul
     record = {name: getattr(entry, name) for name in cia.ENTRY_RECORD}
     assert ImportResultOut(**asdict(result)).model_dump()["needs_pdf"] == [record | {"tried": [], "free_copies": []}]
     assert "files" not in record  # paths inside a zip mean nothing once the import is done
+
+
+async def test_the_save_without_pdf_form_field_saves_needs_pdf_entries_and_previews_them(client, session, redis):
+    data = bib("sv1", "sv2")
+
+    preview = await post(client, "/api/citations/import/preview", data, fetch_free_pdfs=False, save_without_pdf=True)
+    plain = await post(client, "/api/citations/import", data[: data.index(b"@article{sv2")], fetch_free_pdfs=False)
+    saved = await post(client, "/api/citations/import", data, fetch_free_pdfs=False, save_without_pdf=True)
+
+    assert preview.json()["would_save_without_pdf"] == 2
+    assert [n["title"] for n in plain.json()["result"]["needs_pdf"]] == [title("sv1")]
+    assert plain.json()["result"]["saved_without_pdf"] == 0
+    result = saved.json()["result"]
+    assert (result["saved_without_pdf"], result["already_in_library"], result["needs_pdf"]) == (2, 0, [])
+    assert await paper_count(session) == 2  # the plain run created nothing

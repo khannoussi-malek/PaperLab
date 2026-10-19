@@ -9,11 +9,11 @@ import { ImportFromZoteroButton } from './ImportFromZoteroButton'
 vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
 
 const preview = (over: Partial<ImportPreview> = {}): ImportPreview => ({
-  total: 12, already_in_library: 3, with_bundled_pdf: 5, would_fetch: 4, cannot_import_without_fetch: 0,
+  total: 12, already_in_library: 3, with_bundled_pdf: 5, would_fetch: 4, cannot_import_without_fetch: 0, would_save_without_pdf: 0,
   disclosure: 'Fetching contacts free-copy sources by DOI for 4 entries.', ...over,
 })
 const result = (over: Partial<ImportResult> = {}): ImportResult => ({
-  imported: 7, already_in_library: 3, pdfs_attached: 5, notes: 2, needs_pdf: [], failed: [], not_reached: [], stopped: '', ...over,
+  imported: 7, already_in_library: 3, pdfs_attached: 5, saved_without_pdf: 0, notes: 2, needs_pdf: [], failed: [], not_reached: [], stopped: '', ...over,
 })
 const progress = (over: Partial<ImportProgress> = {}): ImportProgress => ({ state: 'finished', result: result(), ...over })
 

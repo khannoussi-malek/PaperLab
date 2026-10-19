@@ -131,12 +131,12 @@ async def remove_paper_from_workspace(session: AsyncSession, workspace: str, pap
 
 @dataclass(frozen=True)
 class AddPaperResult:
-    status: Literal["queued", "ingested", "already_in_library", "no_free_pdf"]
+    status: Literal["queued", "ingested", "already_in_library", "no_free_pdf", "saved_without_pdf"]
     paper_id: uuid.UUID | None = None
     landing_url: str | None = None
     title: str | None = None
     # no_free_pdf, or a queued link that fell back to its DOI: what each PDF URL tried said ({"url", "outcome"}).
-    # no_free_pdf only: repository pages that may hold a copy.
+    # no_free_pdf and saved_without_pdf: repository pages that may hold a copy.
     tried: list[dict[str, str]] = field(default_factory=list)
     free_copies: list[str] = field(default_factory=list)
 
@@ -228,7 +228,19 @@ async def _queued(session: AsyncSession, paper, workspace_uuid: uuid.UUID | None
     return AddPaperResult(status="queued", paper_id=paper.id, title=paper.title)
 
 
-async def _add_found(session, providers, kind, value, workspace_uuid, tried_out=None) -> AddPaperResult:
+async def _saved_without_pdf(session, paper, workspace_uuid, tried, copies) -> AddPaperResult:
+    if workspace_uuid is not None:
+        await workspaces.add_paper(session, workspace_uuid, paper.id)
+    if paper.abstract:
+        await queue.enqueue("index_abstract", str(paper.id))
+    return AddPaperResult(
+        status="saved_without_pdf", paper_id=paper.id, title=paper.title, tried=tried, free_copies=copies
+    )
+
+
+async def _add_found(
+    session, providers, kind, value, workspace_uuid, tried_out=None, save_without_pdf=False
+) -> AddPaperResult:
     found = await discovery.search(session, providers, value)
     match = next(
         (c for c in found.results if (c.doi or "").lower() == value or c.external_ids.get("arxiv") == value), None
@@ -238,7 +250,11 @@ async def _add_found(session, providers, kind, value, workspace_uuid, tried_out=
     if match.paper_id is not None:
         return await _in_library(session, match.paper_id, workspace_uuid)
     try:
-        paper = await discovery.add(session, providers, match, settings.pdf_dir, tried_out)
+        copies: list[str] = []
+        tried_out = [] if tried_out is None else tried_out
+        paper = await discovery.add(
+            session, providers, match, settings.pdf_dir, tried_out, save_without_pdf, copies
+        )
     except Conflict as exc:
         if str(exc) == discovery.ALREADY_IN_LIBRARY and "paper_id" in exc.details:  # its arXiv copy is held
             held = await _in_library(session, exc.details["paper_id"], workspace_uuid)
@@ -252,6 +268,8 @@ async def _add_found(session, providers, kind, value, workspace_uuid, tried_out=
             tried=exc.details.get("tried", []),
             free_copies=exc.details.get("free_copies", []),
         )
+    if not paper.has_pdf:
+        return await _saved_without_pdf(session, paper, workspace_uuid, tried_out, copies)
     return await _queued(session, paper, workspace_uuid)
 
 
@@ -262,6 +280,8 @@ async def _in_library(session, paper_id, workspace_uuid) -> AddPaperResult:
     if paper.file_path and paper.status == PaperStatus.FAILED:  # a retry, as the app's reingest does
         await papers.set_status(session, paper.id, PaperStatus.UPLOADED)
         await queue.enqueue("ingest_paper", str(paper.id))
+    if not paper.has_pdf:  # nothing to ingest: it was saved without one
+        return AddPaperResult(status="already_in_library", paper_id=paper.id, title=paper.title)
     status = "ingested" if paper.status == PaperStatus.READY else "queued"
     return AddPaperResult(status=status, paper_id=paper.id, title=paper.title)
 
@@ -274,12 +294,12 @@ def _link_dois(link: str) -> list[str]:
     return list(dict.fromkeys([doi, "/".join(doi.split("/")[:2])]))
 
 
-async def _link_by_doi(session, providers, link, tried, workspace_uuid) -> AddPaperResult:
+async def _link_by_doi(session, providers, link, tried, workspace_uuid, save_without_pdf=False) -> AddPaperResult:
     """A link that gave no PDF: its DOI's other free copies (arXiv, a repository) are tried, else the link's answer."""
     for doi in _link_dois(link):
         downloaded: list[dict[str, str]] = []
         try:
-            found = await _add_found(session, providers, "doi", doi, workspace_uuid, downloaded)
+            found = await _add_found(session, providers, "doi", doi, workspace_uuid, downloaded, save_without_pdf)
         except NotFound:
             continue
         except Conflict:  # every source busy or off: the link's own answer stands
@@ -288,13 +308,13 @@ async def _link_by_doi(session, providers, link, tried, workspace_uuid) -> AddPa
     return AddPaperResult(status="no_free_pdf", landing_url=link, tried=tried)
 
 
-async def _add_link(session, providers, link, workspace_uuid) -> AddPaperResult:
+async def _add_link(session, providers, link, workspace_uuid, save_without_pdf=False) -> AddPaperResult:
     await pdf_links.check_url(link)
     data, tried = await discovery.download_pdf(providers.pdf, [link])
     if data is None:
         if tried[0]["outcome"] == "unsafe_url":  # a redirect to a private address is refused, as the link itself is
             raise InvalidInput("unsafe_url", url=link)
-        return await _link_by_doi(session, providers, link, tried, workspace_uuid)
+        return await _link_by_doi(session, providers, link, tried, workspace_uuid, save_without_pdf)
     # Like an upload: extraction and enrichment find the metadata. A paper already in the library becomes a second
     # copy, exactly as uploading the same PDF twice does (enrichment drops a DOI another paper holds).
     name = PurePosixPath(urlsplit(link).path).name or "paper.pdf"
@@ -305,18 +325,22 @@ async def _add_link(session, providers, link, workspace_uuid) -> AddPaperResult:
 logger = logging.getLogger(__name__)
 
 
-async def _add(session, providers, kind, value, workspace_uuid) -> AddPaperResult:
+async def _add(session, providers, kind, value, workspace_uuid, save_without_pdf=False) -> AddPaperResult:
     if kind == "link":
-        return await _add_link(session, providers, value, workspace_uuid)
-    return await _add_found(session, providers, kind, value, workspace_uuid)
+        return await _add_link(session, providers, value, workspace_uuid, save_without_pdf)
+    return await _add_found(session, providers, kind, value, workspace_uuid, save_without_pdf=save_without_pdf)
 
 
-async def add_paper(session: AsyncSession, identifier: str, workspace: str | None = None) -> AddPaperResult:
-    """Adds a paper by DOI, arXiv ID or direct PDF link, free copies only (D68, D217), and queues its ingest."""
+async def add_paper(
+    session: AsyncSession, identifier: str, workspace: str | None = None, save_without_pdf: bool = False
+) -> AddPaperResult:
+    """Adds a paper by DOI, arXiv ID or direct PDF link, free copies only (D68, D217), and queues its ingest. With
+    `save_without_pdf`, a DOI or arXiv ID with no free copy is saved by its details instead (status
+    saved_without_pdf; its abstract is indexed)."""
     kind, value = _identifier(identifier)
     workspace_uuid = await workspace_id(session, workspace) if workspace is not None else None  # before any download
     async with discovery.open_providers(session) as providers:
-        return await _add(session, providers, kind, value, workspace_uuid)
+        return await _add(session, providers, kind, value, workspace_uuid, save_without_pdf)
 
 
 MAX_ADD_PAPERS = 50
@@ -348,7 +372,7 @@ def _distinct(identifiers: list[str]) -> list[tuple[str, tuple[str, str] | None,
 
 
 async def add_papers(
-    session: AsyncSession, identifiers: list[str], workspace: str | None = None
+    session: AsyncSession, identifiers: list[str], workspace: str | None = None, save_without_pdf: bool = False
 ) -> list[AddPapersItem]:
     """add_paper for up to MAX_ADD_PAPERS identifiers with one set of providers; each item keeps its own error."""
     if len(identifiers) > MAX_ADD_PAPERS:
@@ -359,7 +383,7 @@ async def add_papers(
         for text, parsed, error in _distinct(identifiers):
             if parsed is not None:
                 try:
-                    added = await _add(session, providers, *parsed, workspace_uuid)
+                    added = await _add(session, providers, *parsed, workspace_uuid, save_without_pdf)
                     items.append(
                         AddPapersItem(
                             text,
