@@ -1,8 +1,15 @@
 // @vitest-environment jsdom
 import { render, screen } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { expect, test, vi } from 'vitest'
 import type { Paper } from '@/api/client'
-import { PaperPreview } from './PaperPreview'
+import { PaperPreview as Preview } from './PaperPreview'
+
+const PaperPreview = (props: { paper: Paper }) => (
+  <QueryClientProvider client={new QueryClient()}>
+    <Preview {...props} />
+  </QueryClientProvider>
+)
 
 const firstPage = vi.hoisted(() => vi.fn(() => null))
 vi.mock('./FirstPage', () => ({ FirstPage: firstPage })) // the real one loads the PDF
@@ -27,4 +34,10 @@ test('a ready paper with a PDF still shows its first page', () => {
   render(<PaperPreview paper={paper({})} />)
   expect(firstPage).toHaveBeenCalled()
   expect(screen.queryByText('No PDF yet')).toBeNull()
+})
+
+test('a paper without a PDF offers Upload PDF and Find free copy', () => {
+  render(<PaperPreview paper={paper({ has_pdf: false })} />)
+  expect(screen.getByLabelText('Upload PDF for Sleep and memory')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Find free copy' })).toBeInTheDocument()
 })

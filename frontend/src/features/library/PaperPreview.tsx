@@ -6,6 +6,7 @@ import { readerHref } from '@/lib/route'
 import { cn } from '@/lib/utils'
 import { detailsSourceLine } from '../reader/detailsSource'
 import { NoPdfBadge } from '../reader/SourceBadges'
+import { GetPdfActions } from './GetPdfActions'
 import { FirstPage } from './FirstPage'
 import { pageCountLabel } from './paperMeta'
 
@@ -15,11 +16,12 @@ const addedDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, {
 function NoPdfPlaceholder({ paper }: { paper: Paper }) {
   const source = detailsSourceLine(paper)
   return (
-    <div className="grid aspect-[612/792] w-full place-items-center rounded-sm bg-muted/60 p-6 text-center text-sm">
+    <div className="flex aspect-[612/792] w-full flex-col items-center justify-center gap-3 rounded-sm bg-muted/60 p-6 text-center text-sm">
       <p className="flex flex-col items-center gap-2 text-muted-foreground">
         <NoPdfBadge />
         {source}
       </p>
+      <GetPdfActions paperId={paper.id} title={paper.title} />
     </div>
   )
 }

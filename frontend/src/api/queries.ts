@@ -800,6 +800,26 @@ export function useClearSearchHits(workspaceId: string) {
   })
 }
 
+/** A paper saved without a PDF just got one: the paper, its workspaces' counts, PRISMA and hits (all under
+ * keys.workspaces, which prefixes searchHitsRoot and prismaRoot of every workspace) refresh. */
+function pdfArrived(client: QueryClient, paper: Paper) {
+  return Promise.all([
+    client.invalidateQueries({ queryKey: keys.papers }),
+    client.invalidateQueries({ queryKey: keys.paper(paper.id) }),
+    client.invalidateQueries({ queryKey: keys.workspaces }),
+  ])
+}
+
+export function useUploadPaperPdf(paperId: string) {
+  const client = useQueryClient()
+  return useMutation({ mutationFn: (file: File) => api.uploadPaperPdf(paperId, file), onSuccess: (p) => pdfArrived(client, p) })
+}
+
+export function useFindPaperPdf(paperId: string) {
+  const client = useQueryClient()
+  return useMutation({ mutationFn: () => api.findPaperPdf(paperId), onSuccess: (p) => pdfArrived(client, p) })
+}
+
 /** Manual acquisition (Task 10): uploads a PDF for one hit that had no free download. */
 export function useUploadHitPdf(workspaceId: string) {
   const client = useQueryClient()

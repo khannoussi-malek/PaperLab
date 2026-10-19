@@ -43,14 +43,14 @@ const richHit = {
   doi: '10.1234/real',
 }
 
-function mockHits(items: object[], overrides: Partial<Record<string, unknown>> = {}) {
-  vi.spyOn(queries, 'useSearchHits').mockReturnValue({
-    data: { pages: [{ items, next_cursor: null }] },
+function mockHits(items: object[], overrides: Partial<Record<string, unknown>> = {}, awaiting: object[] = []) {
+  vi.spyOn(queries, 'useSearchHits').mockImplementation(((_ws: string, _stage1?: string, status?: string) => ({
+    data: { pages: [{ items: status === 'awaiting_pdf' ? awaiting : items, next_cursor: null }] },
     hasNextPage: false,
     isFetchingNextPage: false,
     fetchNextPage: vi.fn(),
-    ...overrides,
-  } as any)
+    ...(status === 'awaiting_pdf' ? {} : overrides),
+  })) as any)
 }
 
 beforeEach(() => {
@@ -229,12 +229,34 @@ test('a failed upload clears the shown file name', async () => {
   expect(screen.getByRole('button', { name: 'Upload PDF for unreachable paper' })).toBeInTheDocument()
 })
 
-test('a paper_has_no_pdf refusal is said in words', async () => {
-  vi.spyOn(api, 'uploadHitPdf').mockRejectedValue(new Error('paper_has_no_pdf'))
+test('an already_has_pdf refusal is said in words', async () => {
+  vi.spyOn(api, 'uploadHitPdf').mockRejectedValue(new Error('already_has_pdf'))
   renderWithClient(<ManualAcquisitionTab workspaceId="ws-1" />)
   const file = new File(['%PDF'], 'a.pdf', { type: 'application/pdf' })
   fireEvent.change(await screen.findByLabelText('Upload PDF for unreachable paper'), { target: { files: [file] } })
-  expect(await screen.findByRole('alert')).toHaveTextContent(
-    'This paper is saved without a PDF; attaching one comes in a later version.',
-  )
+  expect(await screen.findByRole('alert')).toHaveTextContent('This paper already has its PDF.')
+})
+
+const awaitingHit = { ...failedHit, id: 'h9', normalized_title: 'saved without pdf', acquisition_status: 'awaiting_pdf', paper_id: 'p9' }
+
+test('lists papers saved without a PDF beside the failed ones, with Upload PDF through the hit route', async () => {
+  mockHits([failedHit], {}, [awaitingHit])
+  const upload = vi.spyOn(api, 'uploadHitPdf').mockResolvedValue({ ...awaitingHit, acquisition_status: 'manual' } as any)
+  renderWithClient(<ManualAcquisitionTab workspaceId="ws-1" />)
+  expect(await screen.findByText('Saved without a PDF')).toBeInTheDocument()
+  expect(screen.getByText('saved without pdf')).toBeInTheDocument()
+  expect(screen.getByText('unreachable paper')).toBeInTheDocument()
+  const file = new File(['%PDF'], 'a.pdf', { type: 'application/pdf' })
+  fireEvent.change(screen.getByLabelText('Upload PDF for saved without pdf'), { target: { files: [file] } })
+  await waitFor(() => expect(upload).toHaveBeenCalledWith('ws-1', 'h9', file))
+})
+
+test('Find free copy on a saved-without-PDF row uses the paper route; a failed hit has none', async () => {
+  mockHits([failedHit], {}, [awaitingHit])
+  const find = vi.spyOn(api, 'findPaperPdf').mockResolvedValue({ id: 'p9' } as any)
+  renderWithClient(<ManualAcquisitionTab workspaceId="ws-1" />)
+  const buttons = await screen.findAllByRole('button', { name: 'Find free copy' })
+  expect(buttons).toHaveLength(1)
+  fireEvent.click(buttons[0])
+  await waitFor(() => expect(find).toHaveBeenCalledWith('p9'))
 })

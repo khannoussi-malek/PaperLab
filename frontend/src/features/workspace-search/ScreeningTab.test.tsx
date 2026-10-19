@@ -362,3 +362,18 @@ test('the row wraps its actions and offers the renamed stage-2 reasons', async (
   const options = (await screen.findAllByRole('option')).map((o) => o.textContent)
   expect(options).toEqual(['Wrong topic', 'Wrong study type', 'Wrong population', 'Not peer-reviewed', 'Duplicate', 'Other (type a reason)'])
 })
+
+test('a paper saved without a PDF is a blocked row: No PDF yet, needs the full text, Upload PDF, no verdict buttons', () => {
+  const awaiting = { ...importedHit, id: 'h7', paper_id: 'p7', acquisition_status: 'awaiting_pdf', title: 'Abstract Only Paper' }
+  mockHits({ imported: { items: [importedHit] }, manual: { items: [] }, awaiting_pdf: { items: [awaiting] } })
+  renderWithClient(<ScreeningTab workspaceId="ws-1" />)
+
+  expect(screen.getByText('Abstract Only Paper')).toBeInTheDocument()
+  expect(screen.getByText('No PDF yet')).toBeInTheDocument()
+  expect(screen.getByText('Needs the full text to assess')).toBeInTheDocument()
+  expect(screen.getByLabelText('Upload PDF for Abstract Only Paper')).toBeInTheDocument()
+  // only the imported row has verdict buttons
+  expect(screen.getAllByRole('button', { name: 'Include' })).toHaveLength(1)
+  expect(screen.getAllByRole('button', { name: 'Exclude' })).toHaveLength(1)
+  expect(screen.getByText('1 to screen')).toBeInTheDocument()
+})
