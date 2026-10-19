@@ -48,3 +48,24 @@ describe('api.addCandidate', () => {
     vi.unstubAllGlobals()
   })
 })
+
+describe('Zotero import forms', () => {
+  const file = new File(['@article{a}'], 'refs.bib')
+  const sentForm = async (call: () => Promise<unknown>) => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    await call()
+    vi.unstubAllGlobals()
+    return (fetchMock.mock.calls[0][1] as RequestInit).body as FormData
+  }
+
+  it.each([true, false])('previewImport sends save_without_pdf=%s', async (flag) => {
+    const form = await sentForm(() => api.previewImport(file, flag))
+    expect(form.get('save_without_pdf')).toBe(String(flag))
+  })
+
+  it.each([true, false])('startImport sends save_without_pdf=%s', async (flag) => {
+    const form = await sentForm(() => api.startImport(file, {}, true, flag))
+    expect(form.get('save_without_pdf')).toBe(String(flag))
+  })
+})
