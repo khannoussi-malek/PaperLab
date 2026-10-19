@@ -145,6 +145,28 @@ async def test_add_without_a_free_pdf_is_409_and_enqueues_nothing(client, discov
     assert arq.jobs == []
 
 
+async def test_add_without_a_free_pdf_saves_without_pdf_only_when_asked(client, discovery_api, session, arq):
+    discovery_api.pdf_host.reply("/landing", 200, text="<html>landing</html>")
+    candidate = {"abstract": "An abstract.", "pdf_urls": ["https://pdf.example/landing"]}
+
+    refused = await client.post("/api/discovery/add", json=body(**candidate))
+    saved = await client.post("/api/discovery/add", json={**body(**candidate), "save_without_pdf": True})
+
+    assert refused.status_code == 409 and refused.json()["detail"].startswith("No free PDF was found")
+    assert saved.status_code == 201
+    paper = saved.json()
+    assert (paper["has_pdf"], paper["title"], paper["doi"]) == (False, "Found Paper", "10.5555/m19-api")
+    assert (await session.get(Paper, uuid.UUID(paper["id"]))).details_source == "search"
+    assert arq.jobs == [("index_abstract", paper["id"])]
+
+
+async def test_a_paper_saved_without_pdf_or_abstract_enqueues_nothing(client, discovery_api, arq):
+    response = await client.post("/api/discovery/add", json={**body(), "save_without_pdf": True})
+
+    assert response.status_code == 201 and response.json()["has_pdf"] is False
+    assert arq.jobs == []
+
+
 async def test_add_a_paper_already_in_the_library_is_409(client, discovery_api, session, arq):
     session.add(Paper(title="Owned", file_path="/nonexistent.pdf", doi="10.5555/m19-api"))
     await session.flush()

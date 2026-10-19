@@ -42,6 +42,7 @@ class CandidateOut(BaseModel):
     doi: str | None
     external_ids: dict[str, str]
     cited_by_count: int | None
+    abstract: str | None
     pdf_urls: list[str]
     sources: list[SourceId]
     paper_id: uuid.UUID | None
@@ -58,7 +59,8 @@ class SearchOut(BaseModel):
 
 class CandidateIn(BaseModel):
     """A search result or suggestion sent back to be added. Extra fields (its `paper_id`, its `sources`) are ignored:
-    the library is checked again."""
+    the library is checked again. `abstract` and `sources` are kept for a save without a PDF (its abstract, and where
+    its details came from)."""
 
     title: str = Field(min_length=1, max_length=1000)
     authors: list[AuthorName] = Field(default_factory=list, max_length=MAX_AUTHORS)
@@ -67,6 +69,8 @@ class CandidateIn(BaseModel):
     doi: str | None = Field(default=None, pattern=r"^10\.\d{4,9}/\S+$", max_length=300)
     external_ids: dict[str, str] = Field(default_factory=dict)
     cited_by_count: int | None = Field(default=None, ge=0)
+    abstract: str | None = Field(default=None, max_length=20000)
+    sources: list[SourceId] = Field(default_factory=list, max_length=20)
     pdf_urls: list[HttpUrl] = Field(default_factory=list, max_length=MAX_PDF_URLS)
 
     @model_validator(mode="after")
@@ -85,3 +89,5 @@ class AddPaperRequest(BaseModel):
     candidate: CandidateIn
     # Also file the new paper in this workspace (404 before any download when it's unknown).
     workspace_id: uuid.UUID | None = None
+    # No free PDF: save the paper's details instead of answering 409 no_free_pdf.
+    save_without_pdf: bool = False

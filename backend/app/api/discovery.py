@@ -30,11 +30,18 @@ async def add_paper(
     payload: AddPaperRequest, request: Request, session: SessionDep, providers: DiscoveryDep
 ) -> PaperOut:
     """Downloads the paper's first free PDF and ingests it like an upload. 404 for an unknown workspace (before any
-    download); 409 when the paper is already in the library or no free PDF is found."""
+    download); 409 when the paper is already in the library or no free PDF is found, unless `save_without_pdf`
+    saves it without one (then only its abstract, if any, is indexed)."""
     if payload.workspace_id is not None:
         await workspaces.get(session, payload.workspace_id)
-    paper = await discovery.add(session, providers, payload.candidate.to_candidate(), settings.pdf_dir)
+    paper = await discovery.add(
+        session, providers, payload.candidate.to_candidate(), settings.pdf_dir,
+        save_without_pdf=payload.save_without_pdf,
+    )
     if payload.workspace_id is not None:
         await workspaces.add_paper(session, payload.workspace_id, paper.id)
-    await request.app.state.arq.enqueue_job("ingest_paper", str(paper.id), _queue_name=INGEST_QUEUE)
+    if paper.has_pdf:
+        await request.app.state.arq.enqueue_job("ingest_paper", str(paper.id), _queue_name=INGEST_QUEUE)
+    elif paper.abstract:
+        await request.app.state.arq.enqueue_job("index_abstract", str(paper.id), _queue_name=INGEST_QUEUE)
     return paper

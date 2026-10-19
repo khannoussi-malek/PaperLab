@@ -8,7 +8,7 @@ import pytest
 from mcp_fixtures import *  # noqa: F403
 from mcp_fixtures import call, result
 from pdf_papers import chunked_paper
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.core import discovery, papers, pdf_links, pipeline, workspaces
 from app.core.candidates import Candidate
@@ -121,6 +121,58 @@ async def test_no_free_pdf_returns_the_landing_page_and_stores_nothing(session, 
         "free_copies": [],
     }
     assert jobs.jobs == []
+
+
+def _closed_fixture(monkeypatch, abstract: str | None = "An abstract.") -> str:
+    doi = f"{discovery_fake.DOI_PREFIX}closedsave"
+
+    async def search(_session, _providers, _query):
+        found = Candidate(title="closed save fixture", doi=doi, abstract=abstract, sources=("openalex",))
+        return discovery.SearchResult([found], [])
+
+    monkeypatch.setattr(discovery, "search", search)
+    return doi
+
+
+async def test_mcp_add_paper_needs_the_explicit_argument(session, jobs, monkeypatch):
+    doi = _closed_fixture(monkeypatch)
+
+    refused = result(await call("add_paper", identifier=doi))
+    saved = result(await call("add_paper", identifier=doi, save_without_pdf=True))
+
+    assert refused["status"] == "no_free_pdf" and refused["paper_id"] is None
+    assert saved["status"] == "saved_without_pdf" and saved["paper_id"]
+    assert saved["tried"] == [NO_ARXIV_MATCH] and saved["free_copies"] == []
+    paper = await session.get(Paper, uuid.UUID(saved["paper_id"]))
+    assert (paper.has_pdf, paper.details_source, paper.status) == (False, "openalex", PaperStatus.EMBEDDING)
+    assert jobs.jobs == [("index_abstract", saved["paper_id"])]
+
+
+async def test_mcp_add_papers_saves_without_pdf_per_item_and_skips_the_job_without_an_abstract(jobs, monkeypatch):
+    doi = _closed_fixture(monkeypatch, abstract=None)
+
+    [item] = result(await call("add_papers", identifiers=[doi], save_without_pdf=True))
+
+    assert item["status"] == "saved_without_pdf" and item["paper_id"] and item["error"] is None
+    assert jobs.jobs == []
+
+
+async def test_re_adding_a_paper_saved_without_a_pdf_is_already_in_library(session, jobs, monkeypatch):
+    doi = _closed_fixture(monkeypatch)
+    first = result(await call("add_paper", identifier=doi, save_without_pdf=True))
+    marked = Candidate(title="closed save fixture", doi=doi, paper_id=uuid.UUID(first["paper_id"]))
+
+    async def search(_session, _providers, _query):  # the real search marks what the library holds
+        return discovery.SearchResult([marked], [])
+
+    monkeypatch.setattr(discovery, "search", search)
+    again = result(await call("add_paper", identifier=doi, save_without_pdf=True))
+    plain = result(await call("add_paper", identifier=doi))
+
+    assert (again["status"], again["paper_id"]) == ("already_in_library", first["paper_id"])
+    assert (plain["status"], plain["paper_id"]) == ("already_in_library", first["paper_id"])
+    assert len(jobs.jobs) == 1  # only the first save's index_abstract
+    assert await session.scalar(select(func.count()).select_from(Paper).where(Paper.doi == doi.lower())) == 1
 
 
 async def test_no_free_pdf_names_the_repository_copies_over_mcp(jobs, monkeypatch):
@@ -332,10 +384,10 @@ async def test_add_papers_over_the_cap(jobs):
 async def test_add_papers_carries_on_after_an_unexpected_failure(session, jobs, monkeypatch):
     real = pipeline._add
 
-    async def flaky(session, providers, kind, value, workspace_uuid):
+    async def flaky(session, providers, kind, value, workspace_uuid, *rest):
         if kind == "arxiv":
             raise RuntimeError("provider blew up")
-        return await real(session, providers, kind, value, workspace_uuid)
+        return await real(session, providers, kind, value, workspace_uuid, *rest)
 
     monkeypatch.setattr(pipeline, "_add", flaky)
     ids = [FREE_DOI, discovery_fake.FREE_ARXIV_ID, f"{discovery_fake.DOI_PREFIX}nope"]

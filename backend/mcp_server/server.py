@@ -231,14 +231,19 @@ async def remove_paper_from_workspace(workspace: str, paper_id: uuid.UUID) -> pi
 
 @mcp.tool()
 @recoverable
-async def add_paper(identifier: str, workspace: str | None = None) -> pipeline.AddPaperResult:
+async def add_paper(
+    identifier: str, workspace: str | None = None, save_without_pdf: bool = False
+) -> pipeline.AddPaperResult:
     """Use to bring one paper into the library by DOI, arXiv ID or a direct PDF link (free copies only). Returns
     `queued` (ingesting now), `ingested` (already in the library and ready) or `no_free_pdf` with its landing page,
     `tried` (each PDF URL tried and why it failed; a `queued` link that fell back to its DOI carries it too) and
     `free_copies` (repository pages that may hold a free copy).
-    Give `workspace` to file it there too."""
+    Give `workspace` to file it there too. Nothing is saved without a PDF unless you pass save_without_pdf=True:
+    then a DOI or arXiv ID with no free copy is saved by its details (title, authors, abstract) and answers
+    `saved_without_pdf` with its paper_id (plus `tried` and `free_copies`); its abstract is searchable, its full
+    text is not. Adding a paper that was saved this way again answers `already_in_library`."""
     async with sessions() as session:
-        return await pipeline.add_paper(session, identifier, workspace)
+        return await pipeline.add_paper(session, identifier, workspace, save_without_pdf)
 
 
 @mcp.tool()
@@ -255,37 +260,44 @@ async def upload_paper(
 
 @mcp.tool()
 @recoverable
-async def add_papers(identifiers: list[str], workspace: str | None = None) -> list[pipeline.AddPapersItem]:
+async def add_papers(
+    identifiers: list[str], workspace: str | None = None, save_without_pdf: bool = False
+) -> list[pipeline.AddPapersItem]:
     """Use to bring up to 50 papers into the library at once by DOI, arXiv ID or direct PDF link (free copies only).
     Each item reports its own `status` (as add_paper, with `tried` and `free_copies` when no free PDF was found)
     or `error` (the code add_paper would return), so one bad identifier does not stop the rest. Repeated
     identifiers are added once. Give `workspace` to file them there too; an unknown workspace fails
-    the whole call. Use add_paper for a single identifier."""
+    the whole call. Use add_paper for a single identifier. save_without_pdf=True saves an identifier with no
+    free copy by its details instead (status `saved_without_pdf`), as add_paper does; the default saves nothing."""
     async with sessions() as session:
-        return await pipeline.add_papers(session, identifiers, workspace)
+        return await pipeline.add_papers(session, identifiers, workspace, save_without_pdf)
 
 
 @mcp.tool()
 @recoverable
 async def import_citations(
     path_or_text: str | None = None, workspace: str | None = None, fetch_free_pdfs: bool = True,
-    job_id: str | None = None,
+    job_id: str | None = None, save_without_pdf: bool = False,
 ) -> citations_import_run.ImportProgressOut:
     """Use to import a Zotero export into the library, without duplicates. `path_or_text` is the path of a BibTeX,
     RIS or CSL-JSON file (20 MB at most) or of a Zotero "export with files" zip (200 MB) that the PaperLab server can
     read (it runs in Docker, so a file on the owner's computer is usually not visible: pass the file's text instead),
     or the text of a references file. Give `workspace` (its exact name) to file the papers there too.
-    Every paper has a PDF: one from the zip, else a free copy. By default, for each entry without a PDF in the zip,
+    An entry gets a PDF from the zip, else a free copy. By default, for each entry without a PDF in the zip,
     PaperLab contacts free-copy sources (Unpaywall, arXiv, …) by its DOI or arXiv ID, as add_paper does; give
     fetch_free_pdfs=False to contact none. An entry left without a PDF is listed in `needs_pdf` with its whole
-    reference and what was tried. A small import that doesn't fetch answers `state` finished with `result`;
+    reference and what was tried, and nothing is created for it, unless you pass save_without_pdf=True: then it
+    is saved from its Zotero details with its notes and tags (counted in `saved_without_pdf`; its abstract is
+    searchable, its full text is not). A small import that doesn't fetch answers `state` finished with `result`;
     otherwise it runs in the background (`state` queued, with `job_id`): call again with only `job_id` to read its
     progress until it is finished, failed, restarted or expired (polling changes nothing). `unavailable` means the
     progress can't be read just now; ask again."""
     if job_id is not None:
         return await citations_import_run.poll(job_id, path_or_text)
     async with sessions() as session:
-        return await citations_import_run.start_from(session, path_or_text, workspace, fetch_free_pdfs)
+        return await citations_import_run.start_from(
+            session, path_or_text, workspace, fetch_free_pdfs, save_without_pdf
+        )
 
 
 @mcp.tool()

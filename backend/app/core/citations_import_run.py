@@ -104,7 +104,7 @@ def disclosure(would_fetch: int, fallback_fetch: int = 0) -> str | None:
 
 async def preview(
     session: AsyncSession, name: str, source: bytes | IO[bytes], *, workspace_id: uuid.UUID | None = None,
-    fetch_free_pdfs: bool = True,
+    fetch_free_pdfs: bool = True, save_without_pdf: bool = False,
 ) -> ImportPreviewOut:  # fmt: skip
     """What importing the file would do. Reads only: nothing is written and no paper source is contacted."""
     _check_size(name, source)
@@ -112,7 +112,9 @@ async def preview(
         await workspaces.get(session, workspace_id)
     entries, bundle = _read(name, source)
     with bundle or contextlib.nullcontext():
-        counts = await cia.preview(session, entries, bundle=bundle, fetch_free_pdfs=fetch_free_pdfs)
+        counts = await cia.preview(
+            session, entries, bundle=bundle, fetch_free_pdfs=fetch_free_pdfs, save_without_pdf=save_without_pdf
+        )
     shown = asdict(counts)
     fallback = shown.pop("fallback_fetch")  # only worded in the disclosure
     return ImportPreviewOut(**shown, disclosure=disclosure(counts.would_fetch, fallback))
@@ -120,7 +122,7 @@ async def preview(
 
 async def start(
     session: AsyncSession, name: str, source: bytes | IO[bytes], *, workspace_id: uuid.UUID | None = None,
-    new_workspace_name: str | None = None, fetch_free_pdfs: bool = True,
+    new_workspace_name: str | None = None, fetch_free_pdfs: bool = True, save_without_pdf: bool = False,
 ) -> ImportProgressOut:  # fmt: skip
     """Imports the file inline (state finished) or queues the job (state queued, with its id). `source` is the bytes
     or a seekable file (a zip is read from it, never whole). The file is parsed once; a new workspace is made only
@@ -139,7 +141,8 @@ async def start(
             made = workspace_id = (await workspaces.create(session, new_workspace_name)).id
         try:
             outcome = await cia.route(
-                session, name, source, entries, bundle, workspace_id=workspace_id, fetch_free_pdfs=fetch_free_pdfs
+                session, name, source, entries, bundle, workspace_id=workspace_id, fetch_free_pdfs=fetch_free_pdfs,
+                save_without_pdf=save_without_pdf,
             )
         except BaseException:
             # In practice only the job's enqueue fails here (apply keeps each entry's failure to itself), so the
@@ -159,7 +162,11 @@ def _is_text(path_or_text: str) -> bool:
 
 
 async def start_from(
-    session: AsyncSession, path_or_text: str | None, workspace: str | None = None, fetch_free_pdfs: bool = True
+    session: AsyncSession,
+    path_or_text: str | None,
+    workspace: str | None = None,
+    fetch_free_pdfs: bool = True,
+    save_without_pdf: bool = False,
 ) -> ImportProgressOut:
     """start() for the MCP tool: a local file path (its size checked before it is read, a zip read from the file)
     or the raw text of a references file, and a workspace by name."""
@@ -168,7 +175,10 @@ async def start_from(
     workspace_id = await workspaces.by_name(session, workspace) if workspace is not None else None
     if _is_text(path_or_text):
         data = path_or_text.encode()
-        return await start(session, RAW_TEXT_NAME, data, workspace_id=workspace_id, fetch_free_pdfs=fetch_free_pdfs)
+        return await start(
+            session, RAW_TEXT_NAME, data, workspace_id=workspace_id, fetch_free_pdfs=fetch_free_pdfs,
+            save_without_pdf=save_without_pdf,
+        )
     path = Path(path_or_text.strip())
     try:
         size = path.stat().st_size if path.is_file() else None
@@ -179,7 +189,10 @@ async def start_from(
     if size > cap(path.name):
         raise InvalidInput(too_big(path.name))
     with open(path, "rb") as file:
-        return await start(session, path.name, file, workspace_id=workspace_id, fetch_free_pdfs=fetch_free_pdfs)
+        return await start(
+            session, path.name, file, workspace_id=workspace_id, fetch_free_pdfs=fetch_free_pdfs,
+            save_without_pdf=save_without_pdf,
+        )
 
 
 async def poll(job_id: str, path_or_text: str | None = None) -> ImportProgressOut:
