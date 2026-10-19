@@ -129,6 +129,38 @@ async def test_0050_round_trip(scratch_url):
 
 
 @pytest.mark.anyio
+async def test_0051_round_trip(scratch_url):
+    """Upgrade, downgrade refuses while a hit awaits its PDF, then succeeds, then upgrade again."""
+    dsn = scratch_url.render_as_string(hide_password=False)
+    alembic(dsn, "upgrade", "head")
+    scratch = create_async_engine(scratch_url)
+    async with scratch.begin() as conn:
+        await conn.execute(
+            text(
+                "WITH ws AS (INSERT INTO workspaces (name) VALUES ('W') RETURNING id), "
+                "run AS (INSERT INTO workspace_search_runs (workspace_id, query_text, sources_json, status) "
+                "SELECT id, 'q', '[]', 'exhausted' FROM ws RETURNING id, workspace_id) "
+                "INSERT INTO workspace_search_hits (workspace_id, run_id, source_method, normalized_title, "
+                "acquisition_status) SELECT workspace_id, id, 'database_search', 't', 'awaiting_pdf' FROM run"
+            )
+        )
+    refused = subprocess.run(
+        [sys.executable, "-m", "alembic", "downgrade", "0050"],
+        cwd=BACKEND,
+        env={**os.environ, "DATABASE_URL": dsn},
+        capture_output=True,
+        text=True,
+    )
+    assert refused.returncode != 0
+    assert "hits awaiting a PDF exist; set them back to failed first" in refused.stderr
+    async with scratch.begin() as conn:
+        await conn.execute(text("UPDATE workspace_search_hits SET acquisition_status = 'failed'"))
+    await scratch.dispose()
+    alembic(dsn, "downgrade", "0050")
+    alembic(dsn, "upgrade", "head")
+
+
+@pytest.mark.anyio
 async def test_workspaces_migration_keeps_categories_memberships_and_answers(scratch_url):
     """Data written at 0004, the revision just before the workspaces migration, survives it. If the migration is
     ever renumbered, this upgrade target moves with it."""

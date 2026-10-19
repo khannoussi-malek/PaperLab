@@ -142,7 +142,7 @@ class AddPaperResult:
     note: str | None = None  # something Claude should know about what happened, in words
 
 
-NOT_ATTACHED_NOTE = "The paper is saved without a PDF; attaching an upload comes in a later version."
+NO_COPY_NOTE = "The paper is saved without a PDF; no free copy was found."
 MAX_UPLOAD_PDF_BYTES = 30 * 1024 * 1024  # decoded, as the app's upload allows
 MAX_UPLOAD_BASE64_CHARS = 4 * math.ceil(MAX_UPLOAD_PDF_BYTES / 3) + 4  # refused before decoding allocates anything
 
@@ -179,24 +179,39 @@ async def upload_paper(
         raise InvalidInput("invalid_doi")
     data = _decode_pdf(pdf_base64)
     existing = await session.scalar(select(Paper).where(func.lower(Paper.doi) == clean_doi)) if clean_doi else None
-    note = None
-    if existing and existing.file_path and existing.status == PaperStatus.FAILED:  # a retry, as _add_found does
+    raced = None
+    if existing and not existing.has_pdf:  # saved without one: the upload becomes its PDF
+        paper, status = existing, "queued"
+        raced = await _attach(session, existing, data, "manual")
+    elif existing and existing.file_path and existing.status == PaperStatus.FAILED:  # a retry, as _add_found does
         paper, status = existing, "queued"
         await asyncio.to_thread(Path(paper.file_path).write_bytes, data)  # the upload replaces the broken file
         await papers.set_status(session, paper.id, PaperStatus.UPLOADED)
     elif existing:
         paper, status = existing, "already_in_library"
-        if not existing.has_pdf:
-            note = NOT_ATTACHED_NOTE
     else:
         prefill = {"doi": clean_doi, "manual_fields": ["doi"]} if clean_doi else None
         paper, status = await papers.create_paper(session, filename, data, settings.pdf_dir, prefill=prefill), "queued"
     await workspaces.add_paper(session, ws, paper.id)
     for name in names:
         await tags.tag_papers(session, ws, name, paper_ids=[paper.id])
-    if status == "queued":
+    if status == "queued" and raced is None:
         await queue.enqueue("ingest_paper", str(paper.id))
-    return AddPaperResult(status=status, paper_id=paper.id, title=paper.title, note=note)
+    return AddPaperResult(status=raced or status, paper_id=paper.id, title=paper.title)
+
+
+async def _attach(session: AsyncSession, paper: Paper, data: bytes, how: str) -> str | None:
+    """attach_pdf for a paper saved without a PDF: None once attached (the caller queues ingest). When another
+    request's PDF got there first (already_has_pdf), the re-read paper's answer instead, that request having queued
+    its own ingest: "queued" while it ingests, else already_in_library."""
+    try:
+        await papers.attach_pdf(session, paper.id, data, how)
+        return None
+    except Conflict as exc:
+        if str(exc) != "already_has_pdf":
+            raise
+    await session.refresh(paper)
+    return "already_in_library" if paper.status in (PaperStatus.READY, PaperStatus.FAILED) else "queued"
 
 
 DOI_ARXIV_HOSTS = ("doi.org", "dx.doi.org", "arxiv.org", "www.arxiv.org")
@@ -257,14 +272,20 @@ async def _add_found(
     if match is None:
         raise NotFound("no_matching_paper", identifier=value)
     if match.paper_id is not None:
-        return await _in_library(session, match.paper_id, workspace_uuid)
+        try:
+            return await _in_library(session, match.paper_id, workspace_uuid, providers)
+        except Conflict as exc:  # find_pdf: this PDF-less paper's arXiv copy is held, which answers for it
+            if str(exc) != discovery.ALREADY_IN_LIBRARY or "paper_id" not in exc.details:
+                raise
+            held = await _in_library(session, exc.details["paper_id"], workspace_uuid)
+            return replace(held, tried=exc.details.get("tried", []))
     try:
         copies: list[str] = []
         tried_out = [] if tried_out is None else tried_out
         paper = await discovery.add(session, providers, match, settings.pdf_dir, tried_out, save_without_pdf, copies)
     except Conflict as exc:
         if str(exc) == discovery.ALREADY_IN_LIBRARY and "paper_id" in exc.details:  # its arXiv copy is held
-            held = await _in_library(session, exc.details["paper_id"], workspace_uuid)
+            held = await _in_library(session, exc.details["paper_id"], workspace_uuid)  # no second search
             return replace(held, tried=exc.details.get("tried", []))
         if str(exc) != discovery.NO_FREE_PDF:
             raise
@@ -280,17 +301,39 @@ async def _add_found(
     return await _queued(session, paper, workspace_uuid)
 
 
-async def _in_library(session, paper_id, workspace_uuid) -> AddPaperResult:
+async def _in_library(session, paper_id, workspace_uuid, providers=None) -> AddPaperResult:
+    """A paper the library holds. Saved without a PDF and `providers` given, a free copy is looked for and attached."""
     paper = await papers.get_paper(session, paper_id)
+    if not paper.has_pdf and providers is not None:
+        # Filed after the search answers: a held arXiv copy (Conflict) answers for it, and the workspace gets only that.
+        found = await _attach_found(session, providers, paper)
+        if workspace_uuid is not None:
+            await workspaces.add_paper(session, workspace_uuid, paper.id)
+        return found
     if workspace_uuid is not None:
         await workspaces.add_paper(session, workspace_uuid, paper.id)
     if paper.file_path and paper.status == PaperStatus.FAILED:  # a retry, as the app's reingest does
         await papers.set_status(session, paper.id, PaperStatus.UPLOADED)
         await queue.enqueue("ingest_paper", str(paper.id))
-    if not paper.has_pdf:  # nothing to ingest: it was saved without one
+    if not paper.has_pdf:
         return AddPaperResult(status="already_in_library", paper_id=paper.id, title=paper.title)
     status = "ingested" if paper.status == PaperStatus.READY else "queued"
     return AddPaperResult(status=status, paper_id=paper.id, title=paper.title)
+
+
+async def _attach_found(session, providers, paper) -> AddPaperResult:
+    """find_pdf for a paper saved without one: found, it is attached and ingest queued; else already_in_library with
+    what was tried. A held arXiv copy of the same work (Conflict already_in_library) is the caller's to answer."""
+    data, tried, copies = await discovery.find_pdf(session, providers, discovery.candidate_of(paper))
+    if data is None:
+        return AddPaperResult(
+            status="already_in_library", paper_id=paper.id, title=paper.title, tried=tried, free_copies=copies,
+            note=NO_COPY_NOTE,
+        )
+    if raced := await _attach(session, paper, data, "imported"):
+        return AddPaperResult(status=raced, paper_id=paper.id, title=paper.title)
+    await queue.enqueue("ingest_paper", str(paper.id))
+    return AddPaperResult(status="queued", paper_id=paper.id, title=paper.title)
 
 
 def _link_dois(link: str) -> list[str]:
@@ -361,6 +404,7 @@ class AddPapersItem:
     error: str | None = None
     tried: list[dict] = field(default_factory=list)
     free_copies: list[str] = field(default_factory=list)
+    note: str | None = None
 
 
 def _distinct(identifiers: list[str]) -> list[tuple[str, tuple[str, str] | None, str | None]]:
@@ -398,6 +442,7 @@ async def add_papers(
                             paper_id=added.paper_id,
                             tried=added.tried or [],
                             free_copies=added.free_copies or [],
+                            note=added.note,
                         )
                     )
                     continue

@@ -4,18 +4,17 @@ import uuid
 from datetime import datetime, timezone
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
-from app.config import settings
-from app.core import retrieved_hits, tags, workspaces
+from app.core import discovery, papers, retrieved_hits, tags, workspaces
 from app.core.candidates import normal_title
 from app.core.errors import Conflict
 from app.core.prisma_export import prisma_export
 from app.core.workspace_search import import_hits, upload_hit_pdf
-from app.models import Paper, paper_tags
+from app.models import Paper, paper_tags, workspace_papers
 from app.models.references import ExternalRef
 from app.models.workspace import Workspace
-from app.models.workspace_search import WorkspaceSearchHit, WorkspaceSearchRun
+from app.models.workspace_search import SearchRunEligibility, WorkspaceSearchHit, WorkspaceSearchRun
 
 pytestmark = pytest.mark.anyio
 
@@ -325,43 +324,254 @@ async def test_a_held_publisher_paper_wins_and_its_held_arxiv_duplicate_is_left_
     assert arxiv.published_doi is None  # two papers must not both answer to the TACL DOI
 
 
-async def test_a_hit_attached_to_a_paper_without_a_pdf_is_not_retrieved(session, discovery_fakes):
+async def test_link_marks_a_failed_hit_awaiting_pdf_when_its_match_has_no_pdf(session):
     ws = await workspace(session)
     held = await paper(session, doi="10.1126/sciadv.adu5251", file_path=None)
-    linked = await failed_hit(session, ws, doi="10.1126/sciadv.adu5251")
-    by_import = await failed_hit(session, ws, title="Second", status="not_attempted", doi="10.1126/sciadv.second")
-    twin = await paper(session, title="Second", doi="10.1126/sciadv.second", file_path=None)
+    hit = await failed_hit(session, ws, doi="10.1126/sciadv.adu5251")
 
     await workspaces.add_paper(session, ws.id, held.id)  # link runs on this
-    await workspaces.add_paper(session, ws.id, twin.id)
-    result = await import_hits(session, discovery_fakes.providers, ws.id, [by_import.id])
 
-    assert (await reload(session, linked)).acquisition_status == "failed"
-    assert (await reload(session, by_import)).acquisition_status == "not_attempted"
-    assert (result.imported, result.failed) == (0, 1)
-    assert (await prisma_export(session, ws.id, run_id=None)).not_retrieved == 2
+    hit = await reload(session, hit)
+    assert (hit.acquisition_status, hit.paper_id) == ("awaiting_pdf", held.id)
 
 
-async def test_an_upload_for_a_hit_whose_paper_has_no_pdf_is_refused_not_discarded(session):
+async def test_import_hits_links_a_pdfless_holder_as_awaiting_pdf(session, discovery_fakes):
+    ws = await workspace(session)
+    held = await paper(session, doi="10.1126/sciadv.adu5251", file_path=None)
+    hit = await failed_hit(session, ws, status="not_attempted", doi="10.1126/sciadv.adu5251")
+
+    result = await import_hits(session, discovery_fakes.providers, ws.id, [hit.id])
+
+    hit = await reload(session, hit)
+    assert (hit.acquisition_status, hit.paper_id) == ("awaiting_pdf", held.id)
+    assert (result.imported, result.failed, result.paper_ids) == (0, 1, [])
+    members = await session.scalars(select(workspace_papers.c.paper_id).where(workspace_papers.c.workspace_id == ws.id))
+    assert members.all() == [held.id]
+
+
+async def test_awaiting_pdf_counts_as_not_retrieved(session):
+    ws = await workspace(session)
+    held = await paper(session, file_path=None)
+    await workspaces.add_paper(session, ws.id, held.id)
+    hit = await failed_hit(session, ws, status="awaiting_pdf")
+    hit.paper_id = held.id
+    await session.commit()
+
+    prisma = await prisma_export(session, ws.id, run_id=None)
+
+    assert (prisma.sought, prisma.not_retrieved) == (1, 1)
+
+
+async def test_an_unread_paper_never_counts_as_assessed_or_included(session):
+    """R9: an eligibility row counts only when its paper has a PDF and its hit is retrieved, even one written
+    straight to the table. A hit marked imported on a paper without a PDF can't be written any more; if one exists it
+    is not retrieved either, so the funnel adds up."""
+    ws = await workspace(session)
+    read = await paper(session, title="Read")
+    awaiting = await paper(session, title="Awaiting", file_path=None)
+    arrived = await paper(session, title="PDF arrived, hit not moved yet")
+    unread = await paper(session, title="Marked imported, no PDF", file_path=None)
+    cases = ((read, "imported"), (awaiting, "awaiting_pdf"), (arrived, "awaiting_pdf"), (unread, "imported"))
+    for held, _ in cases:
+        await workspaces.add_paper(session, ws.id, held.id)
+    for held, status in cases:  # after the last link, which would move the arrived one (Minor 1)
+        hit = await failed_hit(session, ws, title=held.title, status=status)
+        hit.paper_id = held.id
+        session.add(SearchRunEligibility(
+            paper_id=held.id, search_run_id=ws.run_id, stage2_status="include", assessed_at=datetime.now(timezone.utc),
+        ))  # fmt: skip
+    await session.commit()
+
+    prisma = await prisma_export(session, ws.id, run_id=None)
+
+    assert (prisma.sought, prisma.not_retrieved, prisma.stage2_assessed, prisma.included) == (4, 3, 1, 1)
+
+
+async def test_an_identifier_match_to_a_pdfless_paper_beats_a_title_match_to_one_with_a_pdf(session):
+    ws = await workspace(session)
+    by_title = await paper(session, title="Deep Learning", year=2015)  # has a PDF, no DOI
+    by_doi = await paper(session, title="Deep learning (book)", year=2016, doi="10.5555/dl-book", file_path=None)
+    await workspaces.add_paper(session, ws.id, by_title.id)
+    await workspaces.add_paper(session, ws.id, by_doi.id)
+    hit = await failed_hit(session, ws, title="Deep Learning", year=2016, doi="10.5555/dl-book")
+
+    await retrieved_hits.link(session, ws.id)
+    await session.commit()
+
+    hit = await reload(session, hit)
+    assert (hit.acquisition_status, hit.paper_id) == ("awaiting_pdf", by_doi.id)
+
+
+async def test_a_pdfless_paper_of_the_same_title_makes_a_title_match_ambiguous(session):
+    """The same-title guard counts every workspace paper, with a PDF or without."""
+    ws = await workspace(session)
+    await workspaces.add_paper(session, ws.id, (await paper(session, title="Editorial", year=2025)).id)
+    await workspaces.add_paper(session, ws.id, (await paper(session, title="Editorial", year=2025, file_path=None)).id)
+    hit = await failed_hit(session, ws, title="Editorial", year=2025)
+
+    await retrieved_hits.link(session, ws.id)
+    await session.commit()
+
+    assert (await reload(session, hit)).acquisition_status == "failed"
+
+
+async def test_an_upload_for_a_hit_whose_paper_has_no_pdf_upgrades_that_paper(session, pdf_dir):
     ws = await workspace(session)
     twin = await paper(session, file_path=None)
     hit = await failed_hit(session, ws, status="not_attempted", imported_as=twin.id)
 
-    with pytest.raises(Conflict, match="paper_has_no_pdf"):
-        await upload_hit_pdf(session, ws.id, hit.id, "a.pdf", b"%PDF-1.7 mine")
+    out, created = await upload_hit_pdf(session, ws.id, hit.id, "a.pdf", b"%PDF-1.7 mine")
 
-    assert (await reload(session, hit)).acquisition_status == "not_attempted"
+    hit = await reload(session, hit)
+    assert (hit.acquisition_status, hit.paper_id, created, out["paper_id"]) == ("manual", twin.id, True, twin.id)
+    await session.refresh(twin)
+    assert twin.has_pdf and (pdf_dir / f"{twin.id}.pdf").read_bytes() == b"%PDF-1.7 mine"
 
 
-async def test_an_upload_for_a_hit_whose_doi_a_pdfless_paper_holds_creates_nothing(session, tmp_path, monkeypatch):
-    monkeypatch.setattr(settings, "pdf_dir", tmp_path)  # so a wrongly created paper fails the assert, not the disk
+async def test_an_upload_for_a_hit_whose_doi_a_pdfless_paper_holds_upgrades_it_without_a_duplicate(session, pdf_dir):
     ws = await workspace(session)  # the hit has no imported_as: Find papers saved the paper without it
     held = await paper(session, doi="10.1126/sciadv.adu5251", file_path=None)
     await workspaces.add_paper(session, ws.id, held.id)
+    hit = await failed_hit(session, ws, status="awaiting_pdf", doi="10.1126/sciadv.adu5251")
+
+    _, created = await upload_hit_pdf(session, ws.id, hit.id, "a.pdf", b"%PDF-1.7 mine")
+
+    assert created and len((await session.scalars(select(Paper))).all()) == 1
+    hit = await reload(session, hit)
+    assert (hit.acquisition_status, hit.paper_id) == ("manual", held.id)
+    await session.refresh(held)
+    assert held.has_pdf
+
+
+async def test_import_hits_finds_a_free_copy_for_a_pdfless_holder_and_upgrades_it(session, discovery_fakes, pdf_dir):
+    ws = await workspace(session)
+    held = await paper(session, doi="10.1126/sciadv.adu5251", file_path=None, oa_url="https://pdf.example/ok.pdf")
+    discovery_fakes.pdf_host.reply("/ok.pdf", 200, content=b"%PDF-1.4 ok")
+    hit = await failed_hit(session, ws, status="not_attempted", doi="10.1126/sciadv.adu5251")
+
+    result = await import_hits(session, discovery_fakes.providers, ws.id, [hit.id])
+
+    hit = await reload(session, hit)
+    assert (hit.acquisition_status, hit.paper_id) == ("imported", held.id)
+    assert (result.imported, result.failed, result.paper_ids) == (1, 0, [held.id])
+    await session.refresh(held)
+    assert held.has_pdf and (pdf_dir / f"{held.id}.pdf").read_bytes() == b"%PDF-1.4 ok"
+
+
+async def test_import_hits_tries_the_hits_own_pdf_link_for_a_pdfless_holder(session, discovery_fakes, pdf_dir):
+    ws = await workspace(session)
+    held = await paper(session, doi="10.1126/sciadv.adu5251", file_path=None)  # saved from details: no oa_url
+    discovery_fakes.pdf_host.reply("/ref.pdf", 200, content=b"%PDF-1.4 ref")
+    hit = await failed_hit(
+        session, ws, status="not_attempted", doi="10.1126/sciadv.adu5251", pdf_urls=["https://pdf.example/ref.pdf"]
+    )
+
+    result = await import_hits(session, discovery_fakes.providers, ws.id, [hit.id])
+
+    assert (await reload(session, hit)).acquisition_status == "imported"
+    assert result.paper_ids == [held.id]
+    await session.refresh(held)
+    assert held.has_pdf
+
+
+async def test_import_hits_skips_a_holder_deleted_during_the_search_and_still_ingests_the_rest(
+    session, discovery_fakes, pdf_dir, monkeypatch
+):
+    ws = await workspace(session)
+    held = await paper(session, doi="10.1126/sciadv.adu5251", file_path=None)
+    discovery_fakes.pdf_host.reply("/ok.pdf", 200, content=b"%PDF-1.4 ok")
+    fresh = await failed_hit(session, ws, title="Fresh one", status="not_attempted", pdf_urls=["https://pdf.example/ok.pdf"])
+    gone = await failed_hit(session, ws, status="not_attempted", doi="10.1126/sciadv.adu5251")
+
+    async def find_pdf(s, providers, candidate):  # another request deletes the holder meanwhile
+        await s.execute(delete(Paper).where(Paper.id == held.id))
+        await s.commit()
+        return b"%PDF-1.4 mine", [], []
+
+    monkeypatch.setattr(discovery, "find_pdf", find_pdf)
+    result = await import_hits(session, discovery_fakes.providers, ws.id, [fresh.id, gone.id])
+
+    fresh = await reload(session, fresh)
+    assert fresh.acquisition_status == "imported" and result.paper_ids == [fresh.paper_id]
+    assert (await reload(session, gone)).acquisition_status == "not_attempted"
+
+
+async def test_a_pdf_that_arrives_during_the_search_makes_the_hit_imported_not_awaiting(
+    session, discovery_fakes, pdf_dir, monkeypatch
+):
+    ws = await workspace(session)
+    held = await paper(session, doi="10.1126/sciadv.adu5251", file_path=None)
+    hit = await failed_hit(session, ws, status="not_attempted", doi="10.1126/sciadv.adu5251")
+
+    async def find_pdf(s, providers, candidate):  # another request uploads while this one downloads
+        await papers.attach_pdf(s, held.id, b"%PDF-1.4 theirs", "manual")
+        return b"%PDF-1.4 mine", [], []
+
+    monkeypatch.setattr(discovery, "find_pdf", find_pdf)
+    result = await import_hits(session, discovery_fakes.providers, ws.id, [hit.id])
+
+    hit = await reload(session, hit)
+    assert (hit.acquisition_status, hit.paper_id) == ("imported", held.id)
+    assert result.paper_ids == []  # the other request enqueues its own ingest
+
+
+async def test_import_hits_links_awaiting_pdf_when_a_held_arxiv_copy_answers(
+    session, discovery_fakes, pdf_dir, monkeypatch
+):
+    ws = await workspace(session)
+    held = await paper(session, doi="10.1126/sciadv.adu5251", file_path=None)
+    hit = await failed_hit(session, ws, status="not_attempted", doi="10.1126/sciadv.adu5251")
+
+    async def find_pdf(s, providers, candidate):
+        raise Conflict(discovery.ALREADY_IN_LIBRARY, paper_id=uuid.uuid4(), tried=[])
+
+    monkeypatch.setattr(discovery, "find_pdf", find_pdf)
+    result = await import_hits(session, discovery_fakes.providers, ws.id, [hit.id])
+
+    hit = await reload(session, hit)
+    assert (hit.acquisition_status, hit.paper_id, result.paper_ids) == ("awaiting_pdf", held.id, [])
+    await session.refresh(held)
+    assert not held.has_pdf
+
+
+async def test_an_upload_found_by_doi_records_the_holder_on_the_reference(session, pdf_dir):
+    ws = await workspace(session)
+    held = await paper(session, doi="10.1126/sciadv.adu5251", file_path=None)
     hit = await failed_hit(session, ws, doi="10.1126/sciadv.adu5251")
 
-    with pytest.raises(Conflict, match="paper_has_no_pdf"):
-        await upload_hit_pdf(session, ws.id, hit.id, "a.pdf", b"%PDF-1.7 mine")
+    await upload_hit_pdf(session, ws.id, hit.id, "a.pdf", b"%PDF-1.7 mine")
 
-    assert len((await session.scalars(select(Paper))).all()) == 1
-    assert (await reload(session, hit)).acquisition_status == "failed"
+    ref = await session.get(ExternalRef, hit.external_ref_id)
+    await session.refresh(ref)
+    assert ref.imported_as == held.id
+
+
+async def test_link_retrieves_an_awaiting_hit_whose_paper_got_its_pdf_since(session):
+    ws = await workspace(session)
+    held = await paper(session, file_path=None)
+    still = await paper(session, title="Still without one", file_path=None)
+    await workspaces.add_paper(session, ws.id, held.id)
+    hit = await failed_hit(session, ws, status="awaiting_pdf")
+    waiting = await failed_hit(session, ws, status="awaiting_pdf")
+    hit.paper_id, waiting.paper_id = held.id, still.id
+    held.file_path = "/arrived.pdf"  # an attach that committed after link read the paper and before it wrote the hit
+    await session.commit()
+
+    await retrieved_hits.link(session, ws.id)
+    await session.commit()
+
+    assert ((await reload(session, hit)).acquisition_status, hit.paper_id) == ("imported", held.id)
+    assert ((await reload(session, waiting)).acquisition_status, waiting.paper_id) == ("awaiting_pdf", still.id)
+
+
+async def test_deleting_a_pdfless_paper_sends_its_awaiting_hits_back_to_failed(session):
+    ws = await workspace(session)
+    held = await paper(session, file_path=None)
+    await workspaces.add_paper(session, ws.id, held.id)
+    hit = await failed_hit(session, ws, status="awaiting_pdf")
+    hit.paper_id = held.id
+    await session.commit()
+
+    await papers.delete_paper(session, held.id)
+
+    assert ((await reload(session, hit)).acquisition_status, hit.paper_id) == ("failed", None)

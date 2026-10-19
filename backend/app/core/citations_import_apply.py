@@ -34,7 +34,7 @@ from app.core import discovery, notes, papers, queue, tags, workspaces
 from app.core.candidates import Candidate, normal_title
 from app.core.citations_bundle_read import Bundle, read_bundle
 from app.core.citations_import import CitationsImportError, ImportEntry, parse
-from app.core.errors import Conflict, DomainError
+from app.core.errors import Conflict, DomainError, InvalidInput
 from app.core.source_types import peer_reviewed_of
 from app.models import Note, Paper, Provenance, note_papers
 from app.providers import pmc_opendata
@@ -62,7 +62,7 @@ ENTRY_RECORD = tuple(f.name for f in fields(ImportEntry) if f.name != "files")
 class ImportResult:
     imported: int = 0  # new papers
     already_in_library: int = 0
-    pdfs_attached: int = 0  # new papers whose PDF came from the zip; the rest of `imported` were fetched
+    pdfs_attached: int = 0  # papers whose PDF came from the zip (new, or held without one); other imports were fetched
     saved_without_pdf: int = 0  # new papers made from the entry's details alone (save_without_pdf)
     notes: int = 0
     needs_pdf: list[dict] = field(default_factory=list)  # the entry's ENTRY_RECORD fields + tried, free_copies
@@ -265,12 +265,29 @@ async def _save_without_pdf(session, entry: ImportEntry, workspace_id: uuid.UUID
     return ImportResult(saved_without_pdf=1, notes=added)
 
 
+async def _attach_bundled(session, held: uuid.UUID, bundle: Bundle | None, index: int) -> bool:
+    """The entry's bundled PDF becomes the PDF of a held paper saved without one (R12). False when there is nothing to
+    attach, or the PDF is unreadable: the entry then counts as held, as before. Nothing is fetched for a held entry."""
+    member = bundle.pdf_path(index) if bundle is not None else None
+    if member is None or (await papers.get_paper(session, held)).has_pdf:
+        return False
+    try:
+        await papers.attach_pdf(session, held, bundle.read_pdf(member), "manual")
+    except (CitationsImportError, InvalidInput, Conflict):
+        return False
+    await queue.enqueue("ingest_paper", str(held))
+    return True
+
+
 async def _one(
     session, entry, workspace_id, providers, bundle: Bundle | None, index: int, save_without_pdf: bool = False
 ) -> ImportResult:
     held = await _held(session, entry)
     if held is not None:
-        return ImportResult(already_in_library=1, notes=await _file(session, held, entry, workspace_id))
+        attached = await _attach_bundled(session, held, bundle, index)
+        return ImportResult(
+            already_in_library=1, pdfs_attached=int(attached), notes=await _file(session, held, entry, workspace_id)
+        )
     made, missing, from_zip = await _new_paper(session, entry, providers, bundle, index)
     if made is None and save_without_pdf:
         return await _save_without_pdf(session, entry, workspace_id)

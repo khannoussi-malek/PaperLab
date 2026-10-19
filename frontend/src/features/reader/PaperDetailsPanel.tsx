@@ -1,4 +1,5 @@
 import type { Paper } from '@/api/client'
+import { GetPdfActions } from '@/features/library/GetPdfActions'
 import { Term } from '@/features/workspaces/Term'
 import { detailsSourceLine } from './detailsSource'
 import { NoPdfBadge } from './SourceBadges'
@@ -16,6 +17,7 @@ export function PaperDetailsPanel({ paper }: { paper: Paper }) {
             <NoPdfBadge />
             {source && <Term term="detailsSource">{source}</Term>}
           </div>
+          <GetPdfActions paperId={paper.id} title={paper.title} />
         </header>
         {(paper.authors.length > 0 || facts || paper.doi) && (
           <div className="flex flex-col gap-1 text-sm">

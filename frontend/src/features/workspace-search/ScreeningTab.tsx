@@ -3,7 +3,10 @@ import type { EligibilityUpdate, Hit } from '@/api/client'
 import { useSearchHits, useSetEligibility, useSnowball } from '@/api/queries'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { codeInWords } from '@/lib/errorWords'
 import { readerHref } from '@/lib/route'
+import { GetPdfActions } from '@/features/library/GetPdfActions'
+import { NoPdfBadge } from '@/features/reader/SourceBadges'
 import { Term } from '@/features/workspaces/Term'
 import { LoadError } from '@/features/library/ErrorAlert'
 import { EmptyState, GoToSearchAction, TabSkeleton } from '@/features/workspaces/TabStates'
@@ -14,14 +17,14 @@ import { StatusDot } from './StatusDot'
  * automatically, or uploaded manually via ManualAcquisitionTab), plus one-hop snowballing from any of them.
  * Spec §9, §4 step 5.
  *
- * Both calls filter to `stage1_status: 'relevant'`, not just an `acquisition_status` — a hit only reaches
+ * The imported and manual calls filter to `stage1_status: 'relevant'`, not just an `acquisition_status` — a hit only reaches
  * acquisition at all once stage-1 marks it relevant, but PRISMA's funnel (prisma_export's `sought`/`not_retrieved`/
  * `stage2_assessed`) counts stage-2 only for relevant hits too, so this list must match that scope exactly; without
  * it a hit stage-1 later un-marked "relevant" (still carrying acquisition_status imported/manual from before) would
  * keep showing up here for stage-2 screening while PRISMA no longer counts it at all.
  *
- * `useSearchHits` filters to exactly one `acquisition_status` per call, so this calls it twice — once for
- * 'imported', once for 'manual' — and merges the two `rows` arrays. Extending the hook/backend to accept a list
+ * `useSearchHits` filters to exactly one `acquisition_status` per call, so this calls it three times — 'imported',
+ * 'manual', and 'awaiting_pdf' (papers saved without a PDF, shown as blocked rows) — and merges the `rows` arrays. Extending the hook/backend to accept a list
  * of statuses would be the bigger change for what only this one screen needs (Task 7's `queries.ts` guidance).
  *
  * Each call is independently keyset-paginated (50/page, same as ManualAcquisitionTab's identical situation —
@@ -30,6 +33,7 @@ import { StatusDot } from './StatusDot'
 export function ScreeningTab({ workspaceId, runId }: { workspaceId: string; runId?: string | null }) {
   const imported = useSearchHits(workspaceId, 'relevant', 'imported')
   const manual = useSearchHits(workspaceId, 'relevant', 'manual')
+  const awaiting = useSearchHits(workspaceId, undefined, 'awaiting_pdf')
   const setEligibility = useSetEligibility(workspaceId)
   const snowball = useSnowball(workspaceId)
   const [filterText, setFilterText] = useState('')
@@ -37,19 +41,32 @@ export function ScreeningTab({ workspaceId, runId }: { workspaceId: string; runI
   const rows = [
     ...(imported.data?.pages.flatMap((page) => page.items) ?? []),
     ...(manual.data?.pages.flatMap((page) => page.items) ?? []),
+    // ponytail: only the first page of papers awaiting a PDF; they cannot be assessed, and Get PDFs pages them all.
+    // The same query as Get PDFs and the step counts (one cache), kept to the relevant ones here.
+    ...(awaiting.data?.pages.flatMap((page) => page.items) ?? []).filter((hit) => hit.stage1_status === 'relevant'),
   ]
   // Client-side, over whatever's already loaded — same approach HitTable's own filter box uses, no new request.
   const filter = filterText.trim().toLowerCase()
   const visibleRows = filter ? rows.filter((hit) => matchesFilter(hit, filter)) : rows
+  // Blocked rows are listed but are not to screen: both counts leave them out.
+  const isBlocked = (hit: Hit) => hit.acquisition_status === 'awaiting_pdf'
+  const toScreen = rows.filter((hit) => !isBlocked(hit)).length
+  const visibleToScreen = visibleRows.filter((hit) => !isBlocked(hit)).length
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2 p-3">
-      {imported.isError || manual.isError ? (
+      {imported.isError || manual.isError || awaiting.isError ? (
         <LoadError
-          message={(imported.error ?? manual.error)?.message ?? 'Could not load papers to review.'}
-          onRetry={() => void Promise.all([imported.isError && imported.refetch(), manual.isError && manual.refetch()])}
+          message={(imported.error ?? manual.error ?? awaiting.error)?.message ?? 'Could not load papers to review.'}
+          onRetry={() =>
+            void Promise.all([
+              imported.isError && imported.refetch(),
+              manual.isError && manual.refetch(),
+              awaiting.isError && awaiting.refetch(),
+            ])
+          }
         />
-      ) : rows.length === 0 && (imported.isPending || manual.isPending) ? (
+      ) : rows.length === 0 && (imported.isPending || manual.isPending || awaiting.isPending) ? (
         <TabSkeleton label="Loading papers to review" />
       ) : rows.length === 0 ? (
         <EmptyState title="Nothing to review yet" action={<GoToSearchAction workspaceId={workspaceId} runId={runId} />}>
@@ -67,7 +84,7 @@ export function ScreeningTab({ workspaceId, runId }: { workspaceId: string; runI
             className="h-8 w-full max-w-xs rounded-lg border bg-background px-2 text-sm"
           />
           <span className="shrink-0 text-xs text-muted-foreground">
-            {filter ? `${visibleRows.length} of ${rows.length}` : `${rows.length} to screen`}
+            {filter ? `${visibleToScreen} of ${toScreen}` : `${toScreen} to screen`}
           </span>
         </label>
       )}
@@ -108,7 +125,7 @@ export function ScreeningTab({ workspaceId, runId }: { workspaceId: string; runI
       )}
       {setEligibility.isError && (
         <p role="alert" className="text-xs text-destructive">
-          {setEligibility.error.message}
+          {codeInWords(setEligibility.error.message)}
         </p>
       )}
       {snowball.isError && (
@@ -148,7 +165,7 @@ const OTHER_REASON = 'Other (type a reason)'
  * Snowball.
  *
  * `HitOut.paper_id` is typed nullable (`string | null`), even though it should always be set for hits this tab
- * queries (`acquisition_status` 'imported'/'manual' only exist once a Paper row has been created — see
+ * queries (`acquisition_status` 'imported'/'manual'/'awaiting_pdf' only exist once a Paper row has been created — see
  * `useImportSearchHits`/`useUploadHitPdf` in queries.ts). Rather than force-unwrap it, this guards the actionable
  * section behind `paperId &&` — same convention as HitPreview's `hit.doi &&`/ManualAcquisitionTab's `hit.doi &&` —
  * so a hit with no linked paper record (however unlikely) renders no actions instead of firing a malformed
@@ -189,11 +206,19 @@ function ScreeningRow({
       ) : (
         <span className="flex-1 truncate">{title}</span>
       )}
-      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <StatusDot status={hit.stage2_status ?? null} />
-        {stage2Label(hit.stage2_status)}
-      </span>
-      {paperId ? (
+      {hit.acquisition_status !== 'awaiting_pdf' && (
+        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <StatusDot status={hit.stage2_status ?? null} />
+          {stage2Label(hit.stage2_status)}
+        </span>
+      )}
+      {hit.acquisition_status === 'awaiting_pdf' && paperId ? (
+        <>
+          <NoPdfBadge />
+          <span className="text-xs text-muted-foreground">Needs the full text to assess</span>
+          <GetPdfActions paperId={paperId} title={title} />
+        </>
+      ) : paperId ? (
         <>
           <Button
             type="button"

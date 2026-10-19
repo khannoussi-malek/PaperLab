@@ -117,6 +117,7 @@ async def reading_queue(session: AsyncSession, workspace_id: uuid.UUID, run_id: 
                 WorkspaceSearchHit.workspace_id == workspace_id,
                 SearchRunEligibility.stage2_status == "include",
                 WorkspaceSearchHit.paper_id.is_not(None),
+                Paper.file_path.is_not(None),  # R9: a verdict on a paper without its full text is not one
             )
             .group_by(Paper.id, Paper.title, Paper.reading_pass, Paper.triage)
             .order_by(best_priority.asc().nulls_last(), Paper.title)

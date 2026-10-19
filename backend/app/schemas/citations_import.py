@@ -40,7 +40,7 @@ class FailedOut(BaseModel):
 class ImportResultOut(BaseModel):
     imported: int  # new papers
     already_in_library: int
-    pdfs_attached: int  # new papers whose PDF came from the zip
+    pdfs_attached: int  # papers whose PDF came from the zip (new, or held without one)
     saved_without_pdf: int  # new papers saved from the entry's details alone (save_without_pdf)
     notes: int
     needs_pdf: list[NeedsPdfOut]

@@ -12,8 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.errors import NotFound
 from app.core.source_registry import NAMES
 from app.core.workspace_search import PER_SOURCE_PASS_LIMIT, get_run
+from app.models import Paper
 from app.models.workspace import Workspace
 from app.models.workspace_search import SearchRunEligibility, WorkspaceSearchHit, WorkspaceSearchRun
+
+RETRIEVED = ("imported", "manual")  # anything else, awaiting_pdf included, is "Not retrieved"
 
 # PRISMA 2020 item 8: report automation tools used in screening (M31 spec §3.5, §4.6).
 RANKED_NOTE = (
@@ -104,9 +107,17 @@ async def prisma_export(session: AsyncSession, workspace_id: uuid.UUID, run_id: 
 
     relevant = [h for h in hits if h.stage1_status == "relevant"]
     sought = len(relevant)
-    not_retrieved = sum(1 for h in relevant if h.acquisition_status not in ("imported", "manual"))
+    # R9: retrieved means the full text is here. A hit whose paper has no PDF is not retrieved, whatever its status
+    # says, and only a retrieved hit's paper can have been assessed: an eligibility row for any other (written before
+    # set_eligibility refused it, or while a PDF has arrived but its hit hasn't moved yet) is left out.
+    paper_ids = {h.paper_id for h in relevant if h.paper_id is not None}
+    pdfless = set(
+        (await session.scalars(select(Paper.id).where(Paper.id.in_(paper_ids), Paper.file_path.is_(None)))).all()
+    )
+    retrieved = [h for h in relevant if h.acquisition_status in RETRIEVED and h.paper_id not in pdfless]
+    not_retrieved = sought - len(retrieved)
 
-    in_corpus_paper_ids = [h.paper_id for h in relevant if h.paper_id is not None]
+    in_corpus_paper_ids = [h.paper_id for h in retrieved if h.paper_id is not None]
     # Combined view: the same paper can carry eligibility rows from more than one run — take the most recently
     # assessed_at per paper_id, across ALL of that paper's eligibility rows from a run IN THIS WORKSPACE (not
     # just this run's, but never another workspace's — papers are shared/reusable entities, not 1:1 with a

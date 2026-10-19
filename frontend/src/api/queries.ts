@@ -800,12 +800,54 @@ export function useClearSearchHits(workspaceId: string) {
   })
 }
 
+/** A paper saved without a PDF just got one: the paper, its workspaces' counts, PRISMA and hits (all under
+ * keys.workspaces, which prefixes searchHitsRoot and prismaRoot of every workspace) refresh. */
+function pdfArrived(client: QueryClient, paperId: string) {
+  return Promise.all([
+    client.invalidateQueries({ queryKey: keys.papers }),
+    client.invalidateQueries({ queryKey: keys.paper(paperId) }),
+    client.invalidateQueries({ queryKey: keys.workspaces }),
+  ])
+}
+
+/** Got its PDF, here or (already_has_pdf) from another tab or request: either way the views catch up. */
+const pdfArrivedOptions = (client: QueryClient, paperId: string) => ({
+  onSuccess: () => pdfArrived(client, paperId),
+  onError: (error: Error) => {
+    if (error.message === 'already_has_pdf') void pdfArrived(client, paperId)
+  },
+})
+
+export function useUploadPaperPdf(paperId: string) {
+  const client = useQueryClient()
+  return useMutation({ mutationFn: (file: File) => api.uploadPaperPdf(paperId, file), ...pdfArrivedOptions(client, paperId) })
+}
+
+export function useFindPaperPdf(paperId: string) {
+  const client = useQueryClient()
+  return useMutation({ mutationFn: () => api.findPaperPdf(paperId), ...pdfArrivedOptions(client, paperId) })
+}
+
 /** Manual acquisition (Task 10): uploads a PDF for one hit that had no free download. */
 export function useUploadHitPdf(workspaceId: string) {
   const client = useQueryClient()
   return useMutation({
     mutationFn: ({ hitId, file }: { hitId: string; file: File }) => api.uploadHitPdf(workspaceId, hitId, file),
-    onSuccess: (hit) => patchHitFields(client, workspaceId, hit.id, hit),
+    onSuccess: (hit) => {
+      patchHitFields(client, workspaceId, hit.id, hit)
+      // An upload onto a hit whose paper was saved without a PDF attaches it: the library and reader must see that.
+      if (hit.paper_id) {
+        void client.invalidateQueries({ queryKey: keys.papers })
+        void client.invalidateQueries({ queryKey: keys.paper(hit.paper_id) })
+      }
+    },
+    onError: (error: Error) => {
+      // A stale awaiting row: its paper got a PDF elsewhere. The hit and paper views catch up (no paper id here).
+      if (error.message === 'already_has_pdf') {
+        void client.invalidateQueries({ queryKey: keys.workspaces })
+        void client.invalidateQueries({ queryKey: keys.papers })
+      }
+    },
   })
 }
 
