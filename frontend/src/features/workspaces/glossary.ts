@@ -5,7 +5,7 @@ export const GLOSSARY = {
   fullText: 'Second screening pass: read the full paper and decide whether it meets your inclusion criteria.',
   eligibility: 'The full-text stage of PRISMA: papers checked against your inclusion criteria.',
   reportsSought: 'Relevant papers you tried to get the full text of.',
-  notRetrieved: 'Relevant papers with no full text yet: no free PDF was found and none was uploaded.',
+  notRetrieved: 'Relevant papers with no full text yet: no free PDF was found and none was uploaded. Papers saved without a PDF count here too, until their PDF arrives.',
   duplicatesRemoved: 'Records found more than once, across sources or runs, counted once.',
   identified: 'Every record your searches returned, across all runs, before duplicates are removed.',
   results: 'The papers a search returned, after duplicates are merged. Filters on this tab narrow what you see.',

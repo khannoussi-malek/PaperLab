@@ -242,7 +242,8 @@ async def add_paper(
     Give `workspace` to file it there too. Nothing is saved without a PDF unless you pass save_without_pdf=True:
     then a DOI or arXiv ID with no free copy is saved by its details (title, authors, abstract) and answers
     `saved_without_pdf` with its paper_id (plus `tried` and `free_copies`); its abstract is searchable, its full
-    text is not. Adding a paper that was saved this way again answers `already_in_library`."""
+    text is not. Adding a paper that was saved this way again looks for a free copy and attaches it (`queued`);
+    with none found it answers `already_in_library` with a note, `tried` and `free_copies`."""
     async with sessions() as session:
         return await pipeline.add_paper(session, identifier, workspace, save_without_pdf)
 
@@ -254,7 +255,7 @@ async def upload_paper(
 ) -> pipeline.AddPaperResult:
     """Use to add a PDF you already have (base64 with no line breaks, at most 30 MB) to a workspace; it is ingested
     like an upload in the app. Give doi if you know it, so a paper already in the library is reused instead of
-    copied."""
+    copied; a paper saved without a PDF gets this PDF attached (`queued`)."""
     async with sessions() as session:
         return await pipeline.upload_paper(session, workspace, filename, pdf_base64, doi, tags)
 
@@ -500,7 +501,8 @@ async def import_hit(
     workspace: str, hit_id: uuid.UUID, tags: list[str] | None = None
 ) -> pipeline.workspace_search.ImportResult:
     """Use to pull a screened hit into the library: downloads its free PDF and starts ingesting. failed=1 means no
-    free copy was found; imported=0, failed=0 means it was already imported. `tags` label the paper (created when
+    free copy was found; imported=0, failed=0 means it was already imported. A paper already saved without a PDF
+    gets the free copy attached; with none found the hit waits for a PDF. `tags` label the paper (created when
     missing)."""
     async with sessions() as session:
         return await pipeline.import_hit(session, workspace, hit_id, tags)

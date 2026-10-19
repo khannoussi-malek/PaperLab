@@ -199,9 +199,10 @@ async def index_abstract(ctx: dict, paper_id: str) -> None:
             logger.exception("embedding the abstract of %s failed; the paper stays usable", pid)
         finally:  # also when arq cancels the job at job_timeout (not an Exception), which still propagates
             await session.rollback()  # a no-op after _embed's commits; clears a statement cut short
-            # ponytail: a PDF attached between the check above and here would be marked ready mid-ingest; PR 2's
-            # upgrade must re-check file_path (or enqueue ingest after this job) when it lands.
-            await papers.set_status(session, pid, PaperStatus.READY)
+            # Only while it still has no PDF: one attached meanwhile (R10) is ingest's, never marked ready mid-ingest.
+            ready = update(Paper).where(Paper.id == pid, Paper.file_path.is_(None))
+            await session.execute(ready.values(status=PaperStatus.READY, status_error=None))
+            await session.commit()
 
 
 async def reembed_paper(ctx: dict, paper_id: str, missing_only: bool = False) -> None:

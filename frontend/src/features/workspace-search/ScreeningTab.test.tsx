@@ -45,7 +45,16 @@ const manualHit = {
   normalized_title: 'manual paper lowercase',
 }
 
-type HitsMock = { items: object[]; hasNextPage?: boolean; isFetchingNextPage?: boolean; fetchNextPage?: () => void }
+type HitsMock = {
+  items: object[]
+  hasNextPage?: boolean
+  isFetchingNextPage?: boolean
+  fetchNextPage?: () => void
+  isPending?: boolean
+  isError?: boolean
+  error?: Error
+  refetch?: () => void
+}
 
 // Mirrors ManualAcquisitionTab.test.tsx's idiom, but ScreeningTab calls useSearchHits twice (once per
 // acquisition_status: 'imported' and 'manual') and merges the results, so the mock dispatches on that arg.
@@ -60,6 +69,10 @@ function mockHits(byStatus: Record<string, HitsMock>) {
         hasNextPage: entry.hasNextPage ?? false,
         isFetchingNextPage: entry.isFetchingNextPage ?? false,
         fetchNextPage: entry.fetchNextPage ?? vi.fn(),
+        isPending: entry.isPending ?? false,
+        isError: entry.isError ?? false,
+        error: entry.error ?? null,
+        refetch: entry.refetch ?? vi.fn(),
       } as any
     },
   )
@@ -361,4 +374,67 @@ test('the row wraps its actions and offers the renamed stage-2 reasons', async (
   fireEvent.keyDown(screen.getByRole('combobox', { name: /Exclusion reason/i }), { key: 'Enter' })
   const options = (await screen.findAllByRole('option')).map((o) => o.textContent)
   expect(options).toEqual(['Wrong topic', 'Wrong study type', 'Wrong population', 'Not peer-reviewed', 'Duplicate', 'Other (type a reason)'])
+})
+
+test('a paper saved without a PDF is a blocked row: No PDF yet, needs the full text, Upload PDF, no verdict buttons', () => {
+  const awaiting = { ...importedHit, id: 'h7', paper_id: 'p7', acquisition_status: 'awaiting_pdf', title: 'Abstract Only Paper' }
+  mockHits({ imported: { items: [importedHit] }, manual: { items: [] }, awaiting_pdf: { items: [awaiting] } })
+  renderWithClient(<ScreeningTab workspaceId="ws-1" />)
+
+  expect(screen.getByText('Abstract Only Paper')).toBeInTheDocument()
+  expect(screen.getByText('No PDF yet')).toBeInTheDocument()
+  expect(screen.getByText('Needs the full text to assess')).toBeInTheDocument()
+  expect(screen.getByLabelText('Upload PDF for Abstract Only Paper')).toBeInTheDocument()
+  // only the imported row has verdict buttons
+  expect(screen.getAllByRole('button', { name: 'Include' })).toHaveLength(1)
+  expect(screen.getAllByRole('button', { name: 'Exclude' })).toHaveLength(1)
+  expect(screen.getByText('1 to screen')).toBeInTheDocument()
+})
+
+test('a needs_full_text refusal reads in words', async () => {
+  vi.spyOn(api, 'setEligibility').mockRejectedValue(new Error('needs_full_text'))
+  renderWithClient(<ScreeningTab workspaceId="ws-1" />)
+  fireEvent.click(screen.getByRole('button', { name: 'Include' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('Needs the full text to assess.')
+})
+
+const awaitingRow = { ...importedHit, id: 'h7', paper_id: 'p7', acquisition_status: 'awaiting_pdf', title: 'Abstract Only Paper' }
+
+test('a blocked row never shows a verdict label', () => {
+  mockHits({ imported: { items: [] }, manual: { items: [] }, awaiting_pdf: { items: [{ ...awaitingRow, stage2_status: 'include' }] } })
+  renderWithClient(<ScreeningTab workspaceId="ws-1" />)
+  expect(screen.getByText('Needs the full text to assess')).toBeInTheDocument()
+  expect(screen.queryByText('Included')).toBeNull()
+})
+
+test('the filtered count leaves blocked rows out, like the unfiltered one', () => {
+  mockHits({ imported: { items: [importedHit] }, manual: { items: [] }, awaiting_pdf: { items: [awaitingRow] } })
+  renderWithClient(<ScreeningTab workspaceId="ws-1" />)
+  fireEvent.change(screen.getByLabelText('Search results to screen'), { target: { value: 'paper' } })
+  expect(screen.getByText('1 of 1')).toBeInTheDocument()
+})
+
+test('a failed awaiting query shows the load error with a retry, not a silent drop', () => {
+  const refetch = vi.fn()
+  mockHits({ imported: { items: [importedHit] }, manual: { items: [] }, awaiting_pdf: { items: [], isError: true, error: new Error('Awaiting broke.'), refetch } })
+  renderWithClient(<ScreeningTab workspaceId="ws-1" />)
+  expect(screen.getByText('Awaiting broke.')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+  expect(refetch).toHaveBeenCalled()
+})
+
+test('while the awaiting query loads it does not claim there is nothing to review', () => {
+  mockHits({ imported: { items: [] }, manual: { items: [] }, awaiting_pdf: { items: [], isPending: true } })
+  renderWithClient(<ScreeningTab workspaceId="ws-1" />)
+  expect(screen.queryByText('Nothing to review yet')).toBeNull()
+})
+
+test('the awaiting hits come from the one query step 2 and the counts share (no stage-1 filter), kept to relevant here', () => {
+  const spy = vi.spyOn(queries, 'useSearchHits')
+  mockHits({ imported: { items: [] }, manual: { items: [] }, awaiting_pdf: { items: [awaitingRow, { ...awaitingRow, id: 'h8', paper_id: 'p8', title: 'Not Relevant One', stage1_status: 'not_relevant' }] } })
+  renderWithClient(<ScreeningTab workspaceId="ws-1" />)
+  expect(queries.useSearchHits).toHaveBeenCalledWith('ws-1', undefined, 'awaiting_pdf')
+  expect(screen.getByText('Abstract Only Paper')).toBeInTheDocument()
+  expect(screen.queryByText('Not Relevant One')).toBeNull()
+  void spy
 })

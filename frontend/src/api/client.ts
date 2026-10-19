@@ -170,21 +170,27 @@ export class AlreadyInLibraryError extends Error {
 
 /** The 409 an Add gets when no free PDF was found: it carries what was tried, and the paper can be saved without one. */
 export class NoFreePdfError extends Error {
-  constructor(message: string) {
+  readonly tried: { url: string; outcome: string }[]
+  readonly freeCopies: string[]
+
+  constructor(message: string, tried: { url: string; outcome: string }[] = [], freeCopies: string[] = []) {
     super(message)
     this.name = 'NoFreePdfError'
+    this.tried = tried
+    this.freeCopies = freeCopies
   }
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, init)
   if (!response.ok) {
-    const body: { paper_id?: unknown; tried?: unknown } =
+    const body: { paper_id?: unknown; tried?: unknown; free_copies?: unknown } =
       response.status === 409 ? await response.clone().json().catch(() => ({})) : {}
     const message = await errorDetail(response)
     if (typeof body.paper_id === 'string') throw new AlreadyInLibraryError(message, body.paper_id)
     // no_free_pdf's detail is the server's sentence; its `tried` list is what marks it (main.py's DomainError handler)
-    throw Array.isArray(body.tried) ? new NoFreePdfError(message) : new Error(message)
+    if (!Array.isArray(body.tried)) throw new Error(message)
+    throw new NoFreePdfError(message, body.tried as NoFreePdfError['tried'], Array.isArray(body.free_copies) ? (body.free_copies as string[]) : [])
   }
   return (response.status === 204 ? undefined : await response.json()) as T
 }
@@ -232,6 +238,14 @@ export const api = {
    * value. 422 for an out-of-range pass, an unknown decision, or an empty body. */
   setReading: (id: string, changes: ReadingIn) => request<Paper>(`/api/papers/${id}/reading`, sendJson('PUT', changes)),
   deletePaper: (id: string) => request<void>(`/api/papers/${id}`, { method: 'DELETE' }),
+  /** Attaches `file` to a paper saved without a PDF; it then ingests. 409 already_has_pdf, 422 not_a_pdf / pdf_too_large. */
+  uploadPaperPdf: (id: string, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return request<Paper>(`/api/papers/${id}/pdf`, { method: 'POST', body: form })
+  },
+  /** Looks for a free copy and attaches it. Rejects NoFreePdfError (what was tried), AlreadyInLibraryError, or already_has_pdf. */
+  findPaperPdf: (id: string) => request<Paper>(`/api/papers/${id}/find-pdf`, { method: 'POST' }),
   reingestPaper: (id: string) => request<Paper>(`/api/papers/${id}/reingest`, { method: 'POST' }),
   paperFileUrl: (id: string) => `/api/papers/${id}/file`,
   /** Papers outside the library for a title, DOI, arXiv ID or OpenAlex ID, and a notice per source that failed. */

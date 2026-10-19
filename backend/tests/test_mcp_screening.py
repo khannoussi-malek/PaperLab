@@ -13,9 +13,9 @@ from app.core import discovery, paper_sources, workspace_search, workspaces
 from app.core import notes as notes_core
 from app.core.paper_sources import SourceSettings
 from app.core.source_registry import SOURCE_IDS
-from app.models import Note
+from app.models import Note, Paper
 from app.models.note import Provenance
-from app.models.workspace_search import WorkspaceSearchCursor
+from app.models.workspace_search import SearchRunEligibility, WorkspaceSearchCursor
 from app.providers import discovery_fake
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("references")]
@@ -273,11 +273,11 @@ async def test_eligibility_then_prisma_counts_it(session, tmp_path):
     ws, run = await run_with_hits(session, "Elig")
     paper, _, _ = await chunked_paper(session, tmp_path, title="Full text read")
     await workspaces.add_paper(session, ws.id, paper.id)
-    # PRISMA's stage 2 only counts papers behind a hit the owner marked relevant.
+    # PRISMA's stage 2 only counts papers behind a hit the owner marked relevant and that was retrieved (R9).
     hit = result(await call("list_hits", workspace=f"Elig {RUN}"))["hits"][0]
     await call("review_hits", workspace=f"Elig {RUN}", hit_ids=[hit["id"]], decision="relevant")
     row = await session.get(workspace_search.WorkspaceSearchHit, uuid.UUID(hit["id"]))
-    row.paper_id = paper.id
+    row.paper_id, row.acquisition_status = paper.id, "imported"
     await session.commit()
 
     verdict = result(await call(
@@ -301,6 +301,28 @@ async def test_a_bad_verdict_and_an_unknown_run_are_readable(session, tmp_path):
     ghost = await call("set_eligibility", verdict="include", **args)
     assert bad.structured_content["error"] == "invalid_decision"
     assert ghost.structured_content["error"] == "not_found"
+
+
+async def test_set_eligibility_refuses_a_paper_without_a_pdf(session, client):
+    ws = await new_workspace(session, "No PDF elig")
+    run = await workspace_search.start_run(session, ws.id, "q", {}, ["arxiv"])
+    paper = Paper(title="Saved without a PDF", file_path=None)
+    session.add(paper)
+    await session.flush()
+    await workspaces.add_paper(session, ws.id, paper.id)
+
+    response = await client.patch(
+        f"/api/workspaces/{ws.id}/papers/{paper.id}/eligibility?run={run.id}", json={"status": "include"}
+    )
+    refused = await call(
+        "set_eligibility", workspace=f"No PDF elig {RUN}", paper_id=str(paper.id), run_id=str(run.id), verdict="include"
+    )
+
+    assert (response.status_code, response.json()["detail"]) == (409, "needs_full_text")
+    assert refused.structured_content == {
+        "error": "needs_full_text", "detail": "This paper has no PDF yet, so its full text can't be assessed."
+    }  # fmt: skip
+    assert await session.get(SearchRunEligibility, (paper.id, run.id)) is None
 
 
 async def notes_on(session, tmp_path, label):

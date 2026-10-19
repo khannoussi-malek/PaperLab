@@ -17,6 +17,7 @@ import {
   useSetEligibility,
   useWorkspaceMutations,
   useSnowball,
+  useUploadHitPdf,
 } from './queries'
 
 const prismaRootKey = (workspaceId: string) => ['workspaces', workspaceId, 'search', 'prisma']
@@ -108,6 +109,19 @@ describe('prisma cache invalidation', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
 
     expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({ queryKey: prismaRootKey('ws-1') }))
+  })
+
+  it('useUploadHitPdf refreshes the hits and papers when the paper already got its PDF elsewhere', async () => {
+    vi.spyOn(api, 'uploadHitPdf').mockRejectedValue(new Error('already_has_pdf'))
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
+
+    const { result } = renderHook(() => useUploadHitPdf('ws-1'), { wrapper: withQueryClient(client) })
+    result.current.mutate({ hitId: 'h1', file: new File(['%PDF'], 'p.pdf') })
+    await waitFor(() => expect(result.current.isError).toBe(true))
+
+    expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ['workspaces'] }))
+    expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ['papers'] }))
   })
 
   it('useSnowball invalidates only the prisma and reading-queue roots, never searchHitsRoot wholesale', async () => {

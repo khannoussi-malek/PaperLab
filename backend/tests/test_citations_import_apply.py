@@ -154,6 +154,41 @@ async def test_the_exact_title_and_authors_are_a_match(session, pdf_dir):
     assert [p.id for p in await titled(session, "ttl")] == [same.id]
 
 
+# ---- a held paper without a PDF gets the bundled one ----
+
+
+async def test_a_bundled_pdf_upgrades_a_held_paper_saved_without_one(session, pdf_dir, jobs):
+    ws = await workspaces.create(session, f"Import {RUN} upgrade")
+    kept = await papers.create_metadata_paper(session, {"title": title("up"), "doi": doi("u")}, "manual")
+    bib = (
+        f"@article{{a, title={{{title('up')}}}, author={{Smith, Jane}}, year={{2020}}, doi={{{doi('u')}}},"
+        f" keywords={{coffee}}, file={{files/1/a.pdf}}}}\n"
+    )
+    with read_bundle(zipped(bib, {"files/1/a.pdf": PDF})) as bundle:
+        result = await cia.apply(session, bundle.entries, workspace_id=ws.id, bundle=bundle, fetch_free_pdfs=False)
+
+    assert (result.imported, result.pdfs_attached, result.already_in_library) == (0, 1, 1)
+    assert [p.id for p in await titled(session, "up")] == [kept.id]
+    await session.refresh(kept)
+    assert kept.has_pdf and (pdf_dir / f"{kept.id}.pdf").read_bytes() == PDF
+    assert [p.id for p in await workspaces.papers(session, ws.id)] == [kept.id]
+    assert ("ingest_paper", str(kept.id)) in jobs.jobs
+
+
+async def test_an_unreadable_bundled_pdf_leaves_a_held_paper_as_held(session, pdf_dir, jobs):
+    kept = await papers.create_metadata_paper(session, {"title": title("bad"), "doi": doi("b")}, "manual")
+    bib = (
+        f"@article{{a, title={{{title('bad')}}}, author={{Smith, Jane}}, year={{2020}}, doi={{{doi('b')}}},"
+        f" file={{files/1/a.pdf}}}}\n"
+    )
+    with read_bundle(zipped(bib, {"files/1/a.pdf": b"not a pdf at all"})) as bundle:
+        result = await cia.apply(session, bundle.entries, bundle=bundle, fetch_free_pdfs=False)
+
+    assert (result.already_in_library, result.pdfs_attached, result.failed) == (1, 0, [])
+    await session.refresh(kept)
+    assert not kept.has_pdf and jobs.jobs == []
+
+
 # ---- new papers ----
 
 

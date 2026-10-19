@@ -185,3 +185,15 @@ async def test_a_stage2_verdict_overrides_stage1(session):
     session.add(SearchRunEligibility(paper_id=p.id, search_run_id=r2.id, stage2_status="exclude", assessed_at=now))
     await session.commit()
     assert (await decisions(session, ws))[p.id] == "screening: excluded"
+
+
+@pytest.mark.anyio
+@pytest.mark.xdist_group("references")
+async def test_an_old_verdict_on_a_paper_without_a_pdf_never_shows_as_included(session):
+    """R9: a stage-2 verdict needs the full text, so one recorded before that rule leaves the stage-1 decision."""
+    ws, p, (r1, r2), now = await _decision_fixture(session, "No PDF verdict")
+    p.file_path = None
+    session.add(_hit(ws, r1, p, "relevant", now, now))
+    session.add(SearchRunEligibility(paper_id=p.id, search_run_id=r2.id, stage2_status="include", assessed_at=now))
+    await session.commit()
+    assert (await decisions(session, ws))[p.id] == "screening: relevant"

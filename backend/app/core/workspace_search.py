@@ -10,7 +10,7 @@ import base64
 import binascii
 import json
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
@@ -598,6 +598,9 @@ async def snowball(
     return SnowballResult(new_hits=new_hits, skipped_seeds=skipped, errors=errors)
 
 
+NEEDS_FULL_TEXT = "This paper has no PDF yet, so its full text can't be assessed."
+
+
 async def set_eligibility(
     session: AsyncSession, workspace_id: uuid.UUID, paper_id: uuid.UUID, run_id: uuid.UUID,
     status: str, exclude_reason: str | None,
@@ -618,6 +621,8 @@ async def set_eligibility(
     )).first()
     if member is None:
         raise NotFound(f"paper {paper_id} not in workspace {workspace_id}")
+    if not (await papers.get_paper(session, paper_id)).has_pdf:  # R9: no full text, nothing to assess
+        raise Conflict("needs_full_text", detail=NEEDS_FULL_TEXT)
 
     assessed_at = datetime.now(timezone.utc)
     stmt = (
@@ -886,13 +891,34 @@ async def _ref_prefill(session: AsyncSession, ref: ExternalRef) -> dict:
     return discovery.prefill(candidate)
 
 
+async def _attach_free_copy(session: AsyncSession, providers: Providers, holder: Paper, ref: ExternalRef) -> bool:
+    """A free copy for a paper saved without a PDF, attached to it (R12): the hit's own PDF links first, then the
+    paper's. False when none is found, when its arXiv copy is the one held (that copy is the work's PDF; nothing is
+    written onto it), or when a PDF arrived meanwhile (read `holder.has_pdf`). Raises NotFound if the paper is gone.
+    ponytail: find_pdf's full source chain runs per PDF-less holder on every Import all; a "last tried" timestamp on
+    the hit (PR 4's weekly re-check) would skip the ones tried recently."""
+    candidate = discovery.candidate_of(holder)
+    candidate = replace(candidate, pdf_urls=[*(ref.pdf_urls or []), *candidate.pdf_urls])
+    try:
+        data, _tried, _copies = await discovery.find_pdf(session, providers, candidate)
+    except Conflict:
+        return False
+    if data is None:
+        return False
+    try:
+        await papers.attach_pdf(session, holder.id, data, "imported")
+    except Conflict:  # a PDF arrived since: nothing to enqueue
+        return False
+    return True
+
+
 async def import_hits(
     session: AsyncSession, providers: Providers, workspace_id: uuid.UUID, hit_ids: list[uuid.UUID] | None
 ) -> ImportResult:
     """Best-effort bulk import (spec Task 9), mirroring discovery.add's one-candidate download-then-create flow:
     every targeted hit (hit_ids, or every not-yet-imported `relevant` hit) gets its own outcome, so one hit with no
     free PDF never stops the rest of the batch. A hit left `failed` is Manual acquisition's job (Task 11).
-    `paper_ids` are the newly created papers, for the route to enqueue ingest on — a core function has no
+    `paper_ids` are the papers new or just given a PDF, for the route to enqueue ingest on — a core function has no
     Request to enqueue with itself. A hit whose ExternalRef.imported_as is already set (import_reference's own
     bookkeeping, same as ours below) is attached to that existing paper without downloading again, and its
     paper_id is left out of paper_ids so ingest isn't re-enqueued for a paper that already went through it."""
@@ -912,9 +938,11 @@ async def import_hits(
             # automatic import) — re-running Import all must never quietly relabel it "imported" (I8).
             continue
         ref = await session.get(ExternalRef, hit.external_ref_id) if hit.external_ref_id else None
-        existing_id, by_identifier = await _held(session, ref) if ref is not None else (None, True)
-        if existing_id is not None and not (await papers.get_paper(session, existing_id)).has_pdf:
-            continue  # saved without a PDF: not retrieved, so the hit stays in "Get PDFs" (PRISMA, R6)
+        if ref is not None and hit.acquisition_status == "awaiting_pdf" and hit.paper_id is not None:
+            # The paper it awaits, even one linked by title, which _held's identifiers can miss (C1).
+            existing_id, by_identifier = hit.paper_id, False
+        else:
+            existing_id, by_identifier = await _held(session, ref) if ref is not None else (None, True)
         if existing_id is not None:
             # Already in the library — an earlier hit in this batch, an earlier run, the References panel, or a paper
             # holding the same DOI/OpenAlex id. Attach it instead of downloading/creating a duplicate, no re-ingest.
@@ -924,7 +952,18 @@ async def import_hits(
                 continue
             if ref.imported_as is None and by_identifier:  # a title match never claims the shared reference (M67)
                 ref.imported_as = existing_id
-            hit.acquisition_status = "imported"
+            # Saved without a PDF: linked so step 3 shows it, but not retrieved until its PDF arrives (R8).
+            try:
+                holder = await papers.get_paper(session, existing_id)
+                has_pdf = holder.has_pdf
+                if not has_pdf and await _attach_free_copy(session, providers, holder, ref):
+                    has_pdf = True
+                    paper_ids.append(existing_id)  # its PDF is new: the route enqueues ingest
+                elif not has_pdf:
+                    has_pdf = holder.has_pdf  # a PDF may have arrived meanwhile (attach_pdf re-read the row)
+            except NotFound:  # deleted during the search for its copy (M78): this hit stays as it was
+                continue
+            hit.acquisition_status = "imported" if has_pdf else "awaiting_pdf"
             hit.paper_id = existing_id
             await _record_snowball_citation(session, hit, ref.id)
             imported += 1
@@ -989,7 +1028,8 @@ async def upload_hit_pdf(
     """Manual acquisition (spec Task 10) for a hit with no free PDF: the user supplies the file directly instead of
     `import_hits` finding one. Same ownership scoping and already-imported handling as `import_hits` above — a
     hit whose ExternalRef.imported_as is already set gets the existing paper attached, no new paper, no re-enqueue.
-    Returns (hit, created) so the route only enqueues ingest when this call actually created a new paper.
+    Returns (hit, created) so the route only enqueues ingest when this call created a new paper or gave a held one
+    its PDF.
 
     The %PDF-body check is the trust boundary for this user-uploaded file (spec's Global Constraint): reject
     before touching the already-imported branch too, using the same magic bytes `papers.create_paper` checks."""
@@ -1002,11 +1042,28 @@ async def upload_hit_pdf(
 
     ref = await session.get(ExternalRef, hit.external_ref_id) if hit.external_ref_id else None
     # By identifier only: held_version may write this DOI onto a held arXiv copy, which an upload must not do.
-    held_id = (ref.imported_as or await _library_paper_id(session, ref)) if ref is not None else None
-    if held_id is not None and not (await papers.get_paper(session, held_id)).has_pdf:
-        # The upload would be thrown away or become a duplicate of it, and the hit counted as retrieved (PRISMA, R6);
-        # attaching it is PR 2.
-        raise Conflict("paper_has_no_pdf")
+    by_identifier = (ref.imported_as or await _library_paper_id(session, ref)) if ref is not None else None
+    # A hit awaiting its paper's PDF names that paper itself, even one linked by title, which no identifier finds (C1).
+    awaited = hit.paper_id if hit.acquisition_status == "awaiting_pdf" else None
+    held_id = awaited or by_identifier
+    held = await session.get(Paper, held_id) if held_id is not None else None
+    if held is not None and not held.has_pdf:
+        # Saved without a PDF: the upload becomes its PDF, in place. The route enqueues ingest (created=True).
+        # attach_pdf first: it locks the paper before any hit row is written (its pdf_arrived moves this hit when
+        # it is awaiting), the order a paper-route attach takes them in, so the two can't deadlock.
+        await papers.attach_pdf(session, held_id, content, "manual")
+        await workspaces.add_paper(session, workspace_id, held_id)
+        if ref is not None and ref.imported_as is None and by_identifier == held_id:  # as import_hits records it
+            ref.imported_as = held_id
+        hit.acquisition_status = "manual"
+        hit.paper_id = held_id
+        if ref is not None:
+            await _record_snowball_citation(session, hit, ref.id)
+        await tags.apply_hit_tags(session, workspace_id, [hit])
+        await session.commit()
+        return _hit_out_dict(hit, ref), True
+    if awaited is not None and held is not None:  # its PDF arrived meanwhile, by another request
+        raise Conflict("already_has_pdf")
     if ref is not None and ref.imported_as is not None:
         await workspaces.add_paper(session, workspace_id, ref.imported_as)
         hit.acquisition_status = "manual"

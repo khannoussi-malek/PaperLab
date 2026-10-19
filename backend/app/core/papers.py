@@ -8,9 +8,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.chunking import STRATEGY_VERSION, ChunkDraft
-from app.core.errors import InvalidInput, NotFound
+from app.core.errors import Conflict, InvalidInput, NotFound
 from app.core.source_types import DETAILS_SOURCES
 from app.models import Chunk, Paper, PaperStatus
+from app.models.workspace_search import WorkspaceSearchHit
 
 PDF_MAGIC = b"%PDF-"
 # A paper saved without a PDF keeps its abstract as one chunk on this page (R2): PDF pages count from 1, so every
@@ -89,6 +90,40 @@ async def create_metadata_paper(session: AsyncSession, prefill: dict[str, Any], 
     return paper
 
 
+async def attach_pdf(session: AsyncSession, paper_id: uuid.UUID, data: bytes, how: str) -> Paper:
+    """The upgrade (R10): a paper saved without a PDF gets one, in place. Writes pdf_dir/<id>.pdf, sets file_path and
+    `uploaded`, and moves its awaiting_pdf hits to `how` ("manual" for an upload, "imported" for a found copy) in the
+    same commit. Its id, tags, notes, workspaces, decisions, details_source and locked fields are untouched. The caller
+    enqueues ingest_paper, which replaces the abstract chunk with the PDF's. The size cap is the caller's: an upload's
+    is not a found copy's. Raises NotFound, InvalidInput("not_a_pdf"), Conflict("already_has_pdf")."""
+    from app.core import retrieved_hits  # here: retrieved_hits -> tags -> enrichment imports this module
+
+    if not data.startswith(PDF_MAGIC):
+        raise InvalidInput("not_a_pdf")
+    if how not in retrieved_hits.ARRIVALS:
+        raise ValueError(f"how must be manual or imported, not {how!r}")
+    # Locked until the commit: a second attach waits here, then finds the file instead of overwriting it.
+    paper = await session.get(Paper, paper_id, with_for_update=True, populate_existing=True)
+    if paper is None:
+        raise NotFound(f"paper {paper_id} not found")
+    if paper.has_pdf:  # the lock lasts until the caller's transaction ends
+        raise Conflict("already_has_pdf")
+    path = settings.pdf_dir / f"{paper.id}.pdf"
+    settings.pdf_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        # ponytail: a cancel can't stop the writing thread, which may still leave a file here; the next attach
+        # overwrites it. A commit whose ack is lost after the server committed unlinks a file the row names: rare.
+        await asyncio.to_thread(path.write_bytes, data)
+        paper.file_path, paper.status, paper.status_error = str(path), PaperStatus.UPLOADED, None
+        await retrieved_hits.pdf_arrived(session, paper.id, how)
+        await session.commit()
+    except BaseException:
+        path.unlink(missing_ok=True)
+        raise
+    await session.refresh(paper)
+    return paper
+
+
 async def get_paper(session: AsyncSession, paper_id: uuid.UUID) -> Paper:
     paper = await session.get(Paper, paper_id)
     if paper is None:
@@ -156,8 +191,14 @@ async def replace_chunks(session: AsyncSession, paper_id: uuid.UUID, drafts: lis
 
 
 async def delete_paper(session: AsyncSession, paper_id: uuid.UUID) -> None:
-    """Chunks and note anchors cascade. Notes survive: they are the primary object."""
+    """Chunks and note anchors cascade. Notes survive: they are the primary object. Hits awaiting this paper's PDF
+    go back to `failed`, for Get PDFs and link to take up again, instead of awaiting no paper."""
     paper = await get_paper(session, paper_id)
+    await session.execute(
+        update(WorkspaceSearchHit)
+        .where(WorkspaceSearchHit.paper_id == paper_id, WorkspaceSearchHit.acquisition_status == "awaiting_pdf")
+        .values(acquisition_status="failed", paper_id=None)
+    )
     await session.delete(paper)
     await session.commit()
     if paper.file_path:  # a paper saved without a PDF has no file to remove
