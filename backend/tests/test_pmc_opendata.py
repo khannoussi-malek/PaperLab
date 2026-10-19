@@ -8,8 +8,9 @@ import httpx
 import pytest
 
 from app.core import discovery, pdf_links
+from app.core.candidates import from_europe_pmc
 from app.core.discovery import Candidate
-from app.core.errors import Conflict
+from app.core.errors import Conflict, InvalidInput
 from app.providers import europe_pmc, pmc_opendata
 
 pytestmark = pytest.mark.anyio
@@ -89,7 +90,7 @@ async def test_a_paper_with_a_pmcid_gets_its_pdf_from_the_bucket(session, discov
     discovery_fakes.pdf_host.reply("/PMC4512184.1/PMC4512184.1.pdf", 200, content=PDF)
     tried = []
     found = candidate(
-        doi="10.1038/srep12277", pdf_urls=["https://pdf.example/closed"], external_ids={"pmcid": "4512184"}
+        doi="10.1038/srep12277", pdf_urls=["https://pdf.example/closed"], external_ids={"pmc": "4512184"}
     )
 
     paper = await discovery.add(session, discovery_fakes.providers, found, pdf_dir, tried)
@@ -102,7 +103,7 @@ async def test_a_pmcid_not_in_the_bucket_is_recorded_as_no_match(session, discov
     discovery_fakes.pdf_host.reply("/", 200, text=listing("PMC4004805"))
 
     with pytest.raises(Conflict) as caught:
-        await discovery.add(session, discovery_fakes.providers, candidate(external_ids={"pmcid": "4004805"}), pdf_dir)
+        await discovery.add(session, discovery_fakes.providers, candidate(external_ids={"pmc": "4004805"}), pdf_dir)
 
     assert caught.value.details["tried"][-1] == {"url": EMPTY_LISTING, "outcome": "no_match"}
 
@@ -112,7 +113,7 @@ async def test_a_body_that_isnt_a_pdf_is_refused(session, discovery_fakes, pdf_d
     discovery_fakes.pdf_host.reply("/PMC4512184.1/PMC4512184.1.pdf", 200, text="<html>nope</html>")
 
     with pytest.raises(Conflict) as caught:
-        await discovery.add(session, discovery_fakes.providers, candidate(external_ids={"pmcid": "4512184"}), pdf_dir)
+        await discovery.add(session, discovery_fakes.providers, candidate(external_ids={"pmc": "4512184"}), pdf_dir)
 
     assert caught.value.details["tried"][-1] == {"url": OA_PDF, "outcome": "not_a_pdf"}
 
@@ -121,7 +122,7 @@ async def test_a_listing_that_fails_is_recorded_and_ends_quietly(session, discov
     discovery_fakes.pdf_host.reply("/", 503)
 
     with pytest.raises(Conflict) as caught:
-        await discovery.add(session, discovery_fakes.providers, candidate(external_ids={"pmcid": "4512184"}), pdf_dir)
+        await discovery.add(session, discovery_fakes.providers, candidate(external_ids={"pmc": "4512184"}), pdf_dir)
 
     assert caught.value.details["tried"][-1] == {"url": pmc_opendata.listing_url("PMC4512184"), "outcome": "http_503"}
 
@@ -143,7 +144,7 @@ def test_pmc_links_are_read_in_their_usual_forms():
     assert discovery.pmcid_of({}, ["https://pmc.ncbi.nlm.nih.gov/articles/PMC4512184/"]) == "PMC4512184"
     assert discovery.pmcid_of({}, ["https://europepmc.org/articles/pmc4512184"]) == "PMC4512184"
     assert discovery.pmcid_of({}, ["https://europepmc.org/article/PMC/PMC4512184"]) == "PMC4512184"
-    assert discovery.pmcid_of({"pmcid": "1"}, ["https://europepmc.org/articles/PMC2"]) == "PMC1"  # its own id first
+    assert discovery.pmcid_of({"pmc": "1"}, ["https://europepmc.org/articles/PMC2"]) == "PMC1"  # its own id first
     assert discovery.pmcid_of({}, ["https://repo.example/PMC4512184"]) is None
 
 
@@ -178,3 +179,60 @@ async def test_no_pmcid_asks_neither_the_bucket_nor_europe_pmc(session, discover
         await discovery.add(session, discovery_fakes.providers, found, pdf_dir)  # Europe PMC off in these fakes
 
     assert [r.url.path for r in discovery_fakes.pdf_host.requests] == ["/closed"]
+
+
+# ---- M76 review: the real external_ids key, the PDF client's guard, a tried PMC page, the Zotero entry's PMCID ----
+
+
+async def test_a_europe_pmc_hit_reaches_the_bucket_by_its_own_pmcid(session, discovery_fakes, pdf_dir):
+    discovery_fakes.pdf_host.reply("/", 200, text=listing("PMC4512184"))
+    discovery_fakes.pdf_host.reply("/PMC4512184.1/PMC4512184.1.pdf", 200, content=PDF)
+    record = {"pmcid": "PMC4512184", "title": "The Brain Functional State of Music Creation"}
+    hit = from_europe_pmc(europe_pmc._entry(record))  # the converter's own key ("pmc"), not one set by hand
+
+    paper = await discovery.add(session, discovery_fakes.providers, hit, pdf_dir)  # no DOI, Europe PMC off
+
+    assert hit.external_ids["pmc"] == "4512184" and (pdf_dir / f"{paper.id}.pdf").read_bytes() == PDF
+
+
+async def test_a_bucket_host_the_guard_refuses_is_recorded_not_raised(session, discovery_fakes, pdf_dir, monkeypatch):
+    async def refused(_http, _pmcid):  # the real PDF client's pdf_links.guard on a DNS failure or a private answer
+        raise InvalidInput("unsafe_url")
+
+    monkeypatch.setattr(pmc_opendata, "pdf_url", refused)
+
+    with pytest.raises(Conflict) as caught:
+        await discovery.add(session, discovery_fakes.providers, candidate(external_ids={"pmc": "4512184"}), pdf_dir)
+
+    assert str(caught.value) == discovery.NO_FREE_PDF
+    assert caught.value.details["tried"][-1] == {"url": pmc_opendata.listing_url("PMC4512184"), "outcome": "unsafe_url"}
+
+
+async def test_a_pmc_page_already_tried_still_names_the_pmcid(session, discovery_fakes, pdf_dir):
+    discovery_fakes.pdf_host.reply("/articles/pmc4512184", 403, headers={"cf-mitigated": "challenge"})
+    discovery_fakes.pdf_host.reply("/", 200, text=listing("PMC4512184"))
+    discovery_fakes.pdf_host.reply("/PMC4512184.1/PMC4512184.1.pdf", 200, content=PDF)
+    found = candidate(pdf_urls=["https://europepmc.org/articles/pmc4512184?pdf=render"])
+
+    paper = await discovery.add(session, discovery_fakes.providers, found, pdf_dir)
+
+    assert (pdf_dir / f"{paper.id}.pdf").read_bytes() == PDF
+
+
+async def test_a_zotero_entrys_own_pmcid_goes_with_its_search_match(session, monkeypatch):
+    from app.core import citations_import_apply as cia
+
+    added = []
+
+    async def search(_session, _providers, _value):
+        return discovery.SearchResult([candidate(doi="10.1038/srep12277")], [])
+
+    async def add(_session, _providers, match, _pdf_dir, *_):
+        added.append(match)
+        raise Conflict(discovery.NO_FREE_PDF, tried=[], free_copies=[])
+
+    monkeypatch.setattr(discovery, "search", search)
+    monkeypatch.setattr(discovery, "add", add)
+    await cia._fetch_by(session, None, "doi", "10.1038/srep12277", "PMC4512184")
+
+    assert added[0].external_ids == {"pmc": "4512184"}

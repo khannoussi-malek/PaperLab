@@ -715,19 +715,21 @@ _PMC_LINK = re.compile(
 )
 
 
-def pmcid_of(external_ids: dict, copies: list[str]) -> str | None:
-    """The paper's own PMCID, else the first PMC article link among its free copies ("PMC4512184"), else None."""
-    if own := pmc_opendata.normalize(external_ids.get("pmcid")):
+def pmcid_of(external_ids: dict, urls: list[str]) -> str | None:
+    """The paper's own PMCID (external_ids "pmc", as PMC and Europe PMC store it), else the first PMC article link
+    among `urls` ("PMC4512184"), else None."""
+    if own := pmc_opendata.normalize(external_ids.get("pmc")):
         return own
-    return next((pmc_opendata.normalize(m[1]) for url in copies if (m := _PMC_LINK.match(url))), None)
+    return next((pmc_opendata.normalize(m[1]) for url in urls if (m := _PMC_LINK.match(url))), None)
 
 
-async def _pmc_copy(
+async def pmc_copy(
     providers: Providers, external_ids: dict, doi: str | None, copies: list[str], tried: list[dict[str, str]]
 ) -> tuple[bytes | None, list[dict[str, str]]]:
     """NCBI's PMC Open Access bucket (M76), for a paper with a PMCID: its own, a PMC link among its free copies, or
     the one Europe PMC gives for its DOI (only when that source is on). Nothing is asked without a PMCID."""
-    pmcid = pmcid_of(external_ids, copies)
+    # A PMC page already tried (a bot-checked europepmc ?pdf=render, say) still names the PMCID.
+    pmcid = pmcid_of(external_ids, [*copies, *(t["url"] for t in tried)])
     if pmcid is None and doi and (epmc := providers.client("europe_pmc")) is not None:
         try:
             pmcid = pmc_opendata.normalize(await europe_pmc.pmcid_for_doi(epmc, doi))
@@ -737,6 +739,10 @@ async def _pmc_copy(
         return None, tried
     try:
         url, listed = await pmc_opendata.pdf_url(providers.pdf, pmcid)
+    except InvalidInput as exc:  # the PDF client's guard: the bucket's host didn't resolve to a public address
+        if str(exc) != "unsafe_url":
+            raise
+        return None, [*tried, {"url": pmc_opendata.listing_url(pmcid), "outcome": "unsafe_url"}]
     except httpx.HTTPError as exc:
         outcome = f"http_{exc.response.status_code}" if isinstance(exc, httpx.HTTPStatusError) else (
             f"error: {type(exc).__name__}"
@@ -771,7 +777,7 @@ async def add(
         copies = await free_copies(providers, candidate.doi, tried)
         data, tried = await _diva_copy(providers, copies, tried)
     if data is None:
-        data, tried = await _pmc_copy(providers, candidate.external_ids, candidate.doi, copies, tried)
+        data, tried = await pmc_copy(providers, candidate.external_ids, candidate.doi, copies, tried)
     if tried_out is not None:
         tried_out.extend(tried)
     if data is None:
