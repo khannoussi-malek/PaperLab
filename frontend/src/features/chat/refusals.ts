@@ -33,6 +33,11 @@ const REFUSALS: Record<string, ChatProblem> = {
     retryable: false,
     reindex: true,
   },
+  no_text: {
+    message: 'This paper has no PDF and no abstract to chat with.',
+    retryable: false,
+    reindex: false,
+  },
   // No search model yet (D136): a long paper or a workspace needs search; a short paper is sent whole and never gets here.
   search_not_set_up: {
     message: "Search isn't set up, so this can't be searched yet.",

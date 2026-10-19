@@ -309,7 +309,7 @@ async def prepare(
     A follow-up (`thread`) adds the earlier questions, and a large paper's earlier passages ahead of the fresh ones.
 
     Raises NotFound, or Conflict("paper_not_ready" | "search_not_set_up" | "search_rebuilding" |
-    "embedding_model_changed" | "paper_not_indexed"). A small paper needs no search model.
+    "embedding_model_changed" | "paper_not_indexed" | "no_text"). A small paper needs no search model.
     """
     scope = _scope(paper_id)
     if scope.workspace_id is not None:
@@ -322,6 +322,8 @@ async def prepare(
     if paper.status != PaperStatus.READY:
         raise Conflict("paper_not_ready")
     chars, embedded = await _size(session, paper_id)
+    if chars == 0 and not paper.has_pdf:  # saved without a PDF or an abstract: nothing to answer from, no LLM call
+        raise Conflict("no_text")
     whole_paper = chars <= SMALL_PAPER_CHARS
     if not whole_paper:
         # D156's gate before the index: not set up, then rebuilding, then vectors from another model.

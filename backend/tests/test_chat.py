@@ -356,3 +356,12 @@ def test_chat_v7_and_workspace_v6_add_only_the_cite_only_listed_labels_rule():
         line_end = before.index("\n", before.index(INVENT_RULE)) + 1
         assert prompts.load(name, new) == before[:line_end] + CITE_ONLY_LISTED + before[line_end:]
     assert (chat.CHAT_PROMPT_VERSION, chat.WORKSPACE_PROMPT_VERSION) == (7, 6)
+
+
+async def test_prepare_refuses_a_pdfless_paper_with_no_text(session, embedder):
+    bare = Paper(title="Bare", file_path=None, status="ready")
+    session.add(bare)
+    await session.commit()
+
+    with pytest.raises(Conflict, match="^no_text$"):
+        await chat.prepare(session, bare.id, "q", embedder)

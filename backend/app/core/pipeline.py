@@ -139,8 +139,10 @@ class AddPaperResult:
     # no_free_pdf and saved_without_pdf: repository pages that may hold a copy.
     tried: list[dict[str, str]] = field(default_factory=list)
     free_copies: list[str] = field(default_factory=list)
+    note: str | None = None  # something Claude should know about what happened, in words
 
 
+NOT_ATTACHED_NOTE = "The paper is saved without a PDF; attaching an upload comes in a later version."
 MAX_UPLOAD_PDF_BYTES = 30 * 1024 * 1024  # decoded, as the app's upload allows
 MAX_UPLOAD_BASE64_CHARS = 4 * math.ceil(MAX_UPLOAD_PDF_BYTES / 3) + 4  # refused before decoding allocates anything
 
@@ -177,12 +179,15 @@ async def upload_paper(
         raise InvalidInput("invalid_doi")
     data = _decode_pdf(pdf_base64)
     existing = await session.scalar(select(Paper).where(func.lower(Paper.doi) == clean_doi)) if clean_doi else None
+    note = None
     if existing and existing.file_path and existing.status == PaperStatus.FAILED:  # a retry, as _add_found does
         paper, status = existing, "queued"
         await asyncio.to_thread(Path(paper.file_path).write_bytes, data)  # the upload replaces the broken file
         await papers.set_status(session, paper.id, PaperStatus.UPLOADED)
     elif existing:
         paper, status = existing, "already_in_library"
+        if not existing.has_pdf:
+            note = NOT_ATTACHED_NOTE
     else:
         prefill = {"doi": clean_doi, "manual_fields": ["doi"]} if clean_doi else None
         paper, status = await papers.create_paper(session, filename, data, settings.pdf_dir, prefill=prefill), "queued"
@@ -191,7 +196,7 @@ async def upload_paper(
         await tags.tag_papers(session, ws, name, paper_ids=[paper.id])
     if status == "queued":
         await queue.enqueue("ingest_paper", str(paper.id))
-    return AddPaperResult(status=status, paper_id=paper.id, title=paper.title)
+    return AddPaperResult(status=status, paper_id=paper.id, title=paper.title, note=note)
 
 
 DOI_ARXIV_HOSTS = ("doi.org", "dx.doi.org", "arxiv.org", "www.arxiv.org")
@@ -232,7 +237,11 @@ async def _saved_without_pdf(session, paper, workspace_uuid, tried, copies) -> A
     if workspace_uuid is not None:
         await workspaces.add_paper(session, workspace_uuid, paper.id)
     if paper.abstract:
-        await queue.enqueue("index_abstract", str(paper.id))
+        try:
+            await queue.enqueue("index_abstract", str(paper.id))
+        except Exception:  # never stuck at `embedding`: ready without vectors, Settings' Try again embeds it
+            await papers.set_status(session, paper.id, PaperStatus.READY)
+            raise
     return AddPaperResult(
         status="saved_without_pdf", paper_id=paper.id, title=paper.title, tried=tried, free_copies=copies
     )

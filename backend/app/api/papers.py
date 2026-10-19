@@ -49,8 +49,13 @@ async def get_paper(paper_id: uuid.UUID, session: SessionDep) -> PaperOut:
 
 
 @router.patch("/{paper_id}")
-async def correct_paper(paper_id: uuid.UUID, payload: PaperUpdate, session: SessionDep) -> PaperOut:
-    return await enrichment.correct_metadata(session, paper_id, payload.model_dump(exclude_unset=True))
+async def correct_paper(paper_id: uuid.UUID, payload: PaperUpdate, request: Request, session: SessionDep) -> PaperOut:
+    fields = payload.model_dump(exclude_unset=True)
+    paper = await enrichment.correct_metadata(session, paper_id, fields)
+    rebuilt = not {"title", "abstract"}.isdisjoint(fields) and not paper.has_pdf  # its abstract chunk was rebuilt
+    if rebuilt and paper.status == PaperStatus.EMBEDDING:
+        await request.app.state.arq.enqueue_job("index_abstract", str(paper.id), _queue_name=INGEST_QUEUE)
+    return paper
 
 
 @router.put("/{paper_id}/reading")

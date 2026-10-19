@@ -4,9 +4,10 @@ from fastapi import APIRouter, Query, Request
 
 from app.api.deps import DiscoveryDep, SessionDep
 from app.config import settings
-from app.core import discovery, workspaces
+from app.core import discovery, papers, workspaces
 from app.core.errors import InvalidInput
 from app.core.queue import INGEST_QUEUE
+from app.models import PaperStatus
 from app.schemas.discovery import AddPaperRequest, SearchOut
 from app.schemas.papers import PaperOut
 
@@ -46,5 +47,9 @@ async def add_paper(
     if paper.has_pdf:
         await request.app.state.arq.enqueue_job("ingest_paper", str(paper.id), _queue_name=INGEST_QUEUE)
     elif paper.abstract:
-        await request.app.state.arq.enqueue_job("index_abstract", str(paper.id), _queue_name=INGEST_QUEUE)
+        try:
+            await request.app.state.arq.enqueue_job("index_abstract", str(paper.id), _queue_name=INGEST_QUEUE)
+        except Exception:  # never stuck at `embedding`: ready without vectors, Settings' Try again embeds it
+            await papers.set_status(session, paper.id, PaperStatus.READY)
+            raise
     return paper
