@@ -20,6 +20,7 @@ from app.models.workspace_search import WorkspaceSearchHit
 # A title match also needs both years, within one (a preprint and its published version): an undated "Editorial"
 # must not claim another.
 YEAR_SLACK = 1
+ARRIVALS = ("manual", "imported")  # how a PDF reaches a paper: an upload, or a found free copy
 
 
 class Linked(NamedTuple):
@@ -105,7 +106,7 @@ async def link(session: AsyncSession, workspace_id: uuid.UUID) -> list[Linked]:
 async def pdf_arrived(session: AsyncSession, paper_id: uuid.UUID, how: str) -> None:
     """The paper's PDF arrived: every hit awaiting it is retrieved, `how` ("manual" for an upload, "imported" for a
     found copy). The caller commits, with the PDF itself, so a hit never counts as retrieved without it."""
-    if how not in ("manual", "imported"):
+    if how not in ARRIVALS:
         raise ValueError(f"how must be manual or imported, not {how!r}")
     await session.execute(
         update(WorkspaceSearchHit)
