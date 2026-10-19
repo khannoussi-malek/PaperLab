@@ -4,7 +4,7 @@ listed in `needs_pdf` and nothing is created, unless `save_without_pdf` is on: i
 from its Zotero details (details_source "zotero"), filed like any other and counted in `saved_without_pdf`.
 
 - Dedupe comes first, with today's rules: discovery.mark_in_library (DOI, a preprint's published DOI, OpenAlex id),
-  discovery.held_version (the arXiv copy or the published version), then the exact title under _same_work. A match
+  discovery.held_version (the arXiv copy or the published version), then the exact title under same_work. A match
   is attached as it is: its fields are never written (held_version itself records a published version on a held
   arXiv copy, as everywhere else).
 - Zotero notes become unanchored notes by You. Into a workspace, tags become its tags on the paper; the collection
@@ -87,7 +87,7 @@ def _candidate(entry: ImportEntry) -> Candidate:
 
 
 async def _same_title(session: AsyncSession, entry: ImportEntry) -> uuid.UUID | None:
-    """A library paper with the entry's exact title under _same_work's author and year rules (M63b).
+    """A library paper with the entry's exact title under same_work's author and year rules (M63b).
     ponytail: scans the titles that start with the entry's first word, as _reuse_published_copy does (no title
     index)."""
     first = next(iter(normal_title(entry.title).split()), "")
@@ -97,7 +97,7 @@ async def _same_title(session: AsyncSession, entry: ImportEntry) -> uuid.UUID | 
     rows = await session.execute(select(*columns).where(func.lower(Paper.title).startswith(first, autoescape=True)))
     ours = {"title": entry.title, "authors": entry.authors, "year": entry.year}
     return next(
-        (row.id for row in rows if discovery._same_work(Candidate(row.title, row.authors, row.year), ours)), None
+        (row.id for row in rows if discovery.same_work(Candidate(row.title, row.authors, row.year), ours)), None
     )
 
 

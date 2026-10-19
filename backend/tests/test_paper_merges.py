@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 
 import pytest
 from sqlalchemy import select, text
+from sqlalchemy.exc import IntegrityError
 from test_pdf_upgrade import awaiting
 from test_retrieved_hits import failed_hit, paper, workspace
 
@@ -22,6 +23,7 @@ ABSTRACT = "Sleep helps memory consolidation in adults."
 AUTHORS = ["Ada Lovelace", "Alan Turing"]
 DOI = "10.1234/sleep.2021"
 FILE = "/pdfs/merged.pdf"
+PROOF = ("doi", DOI)  # the collision that leads to a merge: M learned the DOI K holds
 
 # Every column that holds a paper id (the plan's inventory). test_the_inventory_names_every_paper_id_column keeps it
 # in step with the schema.
@@ -166,6 +168,27 @@ MOVED = {
 }
 
 
+AFTER = {  # K's rows after the merge: its own plus M's moved or unioned ones
+    "chunks.paper_id": 2,
+    "llm_outputs.paper_id": 2,
+    "note_anchors.paper_id": 1,
+    "note_papers.paper_id": 2,
+    "workspace_papers.paper_id": 2,
+    "paper_tags.paper_id": 2,
+    "paper_authors.paper_id": 1,
+    "paper_topics.paper_id": 1,
+    "datasets.paper_id": 1,
+    "external_refs.imported_as": 1,
+    "paper_references.paper_id": 1,
+    "paper_links.from_paper": 2,
+    "paper_links.to_paper": 0,
+    "workspace_search_hits.paper_id": 2,
+    "workspace_search_hits.seed_paper_id": 1,
+    "search_run_eligibility.paper_id": 2,
+    "evidence_cards.paper_id": 1,
+}
+
+
 async def audits(session, *paper_ids) -> list[PaperMerge]:
     query = select(PaperMerge).where(PaperMerge.kept_id.in_(paper_ids) | PaperMerge.merged_id.in_(paper_ids))
     return list((await session.scalars(query)).all())
@@ -186,9 +209,10 @@ async def test_a_merge_preserves_every_paper_id_row(session):
     k, m, seeded = await seed_both(session)
     assert all((await rows_of(session, m.id)).values())  # M has a row in every inventoried table
 
-    result = await merges.merge(session, m.id, k.id)
+    result = await merges.merge(session, m.id, k.id, identifier=PROOF)
 
     assert (result.status, result.reason, result.moved) == ("merged", None, MOVED)
+    assert await rows_of(session, k.id) == AFTER
     assert set((await rows_of(session, m.id)).values()) == {0}
     assert await session.get(Paper, m.id, populate_existing=True) is None
     k = await session.get(Paper, k.id, populate_existing=True)
@@ -233,7 +257,7 @@ async def test_the_kept_papers_abstract_chunk_is_gone_after_a_merge(session):
     k, m = await kept(session), await merged(session)
     assert [c.page for c in await papers.list_chunks(session, k.id)] == [papers.ABSTRACT_PAGE]
 
-    await merges.merge(session, m.id, k.id)
+    await merges.merge(session, m.id, k.id, identifier=PROOF)
 
     chunks = await papers.list_chunks(session, k.id)
     assert [(c.page, c.text) for c in chunks] == [(1, "Sleep matters."), (2, "We slept.")]  # only M's full text
@@ -245,17 +269,27 @@ async def columns_of(session, paper_id) -> dict:
     return dict((await session.execute(text("SELECT * FROM papers WHERE id = :p"), {"p": paper_id})).one()._mapping)
 
 
-async def test_a_failed_merge_leaves_both_papers_intact(session, monkeypatch):
+async def _raise(*args, **kwargs):
+    raise RuntimeError("the disk is full")
+
+
+FAILURES = {  # where the merge breaks: after every row has moved; inside _absorb (K's update); at the audit write
+    "pdf_arrived": (retrieved_hits, "pdf_arrived", _raise, RuntimeError),
+    "absorb": (merges, "_kept_columns", lambda kept, merged: {"title": None}, IntegrityError),
+    "audit": (merges, "PaperMerge", lambda **row: PaperMerge(**{**row, "status": "half"}), IntegrityError),
+}
+
+
+@pytest.mark.parametrize("where", FAILURES)
+async def test_a_failed_merge_leaves_both_papers_intact(session, monkeypatch, where):
     k, m, _ = await seed_both(session)
     ids = (k.id, m.id)  # the rollback expires k and m
     before = {pid: (await rows_of(session, pid), await columns_of(session, pid)) for pid in ids}
+    module, name, broken, error = FAILURES[where]
 
-    async def broken(*args, **kwargs):  # after every row has moved, before K's columns and M's delete
-        raise RuntimeError("the disk is full")
-
-    monkeypatch.setattr(retrieved_hits, "pdf_arrived", broken)
-    with pytest.raises(RuntimeError, match="the disk is full"):
-        await merges.merge(session, m.id, k.id)
+    monkeypatch.setattr(module, name, broken)
+    with pytest.raises(error):
+        await merges.merge(session, m.id, k.id, identifier=PROOF)
 
     assert {pid: (await rows_of(session, pid), await columns_of(session, pid)) for pid in ids} == before
     assert await audits(session, *ids) == []
@@ -289,7 +323,7 @@ async def test_conflicting_hand_edits_are_reported(session):
     k = await kept(session, manual_fields=["title", "year"])
     m = await merged(session, year=2022, manual_fields=["year"])
 
-    result = await merges.merge(session, m.id, k.id)
+    result = await merges.merge(session, m.id, k.id, identifier=PROOF)
 
     assert (result.status, result.reason) == ("reported", "conflicting_hand_edits:year")
     assert len(await papers.list_chunks(session, m.id)) == 2  # nothing moved
@@ -325,7 +359,7 @@ async def test_dry_run_counts_and_writes_nothing(session):
     k, m, _ = await seed_both(session)
     before = {pid: await rows_of(session, pid) for pid in (k.id, m.id)}
 
-    result = await merges.merge(session, m.id, k.id, dry_run=True)
+    result = await merges.merge(session, m.id, k.id, identifier=PROOF, dry_run=True)
 
     assert (result.status, result.moved, result.dry_run) == ("merged", MOVED, True)
     assert {pid: await rows_of(session, pid) for pid in (k.id, m.id)} == before
@@ -338,16 +372,77 @@ async def test_dry_run_counts_and_writes_nothing(session):
     assert await audits(session, k.id, m.id) == []  # a reported dry run writes no audit row either
 
 
-async def test_k_awaiting_hits_become_retrieved_on_merge(session):
+@pytest.mark.parametrize("how", ["manual", "imported"])
+async def test_k_awaiting_hits_become_retrieved_on_merge(session, how):
     k, m = await kept(session), await merged(session)
     ws = await workspace(session)
     hit = await awaiting(session, ws, k)
 
-    result = await merges.merge(session, m.id, k.id)
+    result = await merges.merge(session, m.id, k.id, identifier=PROOF, how=how)
 
     assert result.moved["awaiting_hits_retrieved"] == 1
     hit = await session.get(WorkspaceSearchHit, hit.id, populate_existing=True)
-    assert (hit.acquisition_status, hit.paper_id) == ("manual", k.id)
+    assert (hit.acquisition_status, hit.paper_id) == (how, k.id)
+
+
+async def test_a_title_only_lookalike_is_reported(session):
+    """The same title and first author, and 12 years apart, with no identifier in common: never merged (R15b)."""
+    k, m = await kept(session), await merged(session, year=2009)
+
+    result = await merges.merge(session, m.id, k.id)
+
+    assert (result.status, result.reason) == ("reported", "no_shared_identifier")
+    assert [a.reason for a in await audits(session, k.id, m.id)] == ["no_shared_identifier"]
+
+
+async def test_an_identifier_the_kept_paper_does_not_hold_is_no_proof(session):
+    k, m = await kept(session), await merged(session)  # K has a DOI and no OpenAlex id; M has W123
+
+    result = await merges.merge(session, m.id, k.id, identifier=("openalex_id", "W123"))
+
+    assert (result.status, result.reason) == ("reported", "no_shared_identifier")
+
+
+async def test_an_identifier_both_papers_hold_is_proof(session):
+    k, m = await kept(session, pmcid="PMC456"), await merged(session, pmcid="pmc456")
+
+    result = await merges.merge(session, m.id, k.id)
+
+    assert result.status == "merged"
+    [audit] = await audits(session, k.id, m.id)
+    assert audit.identifier == "pmcid:PMC456"
+
+
+async def test_unparseable_identifiers_are_never_equal(session):
+    k = await kept(session, openalex_id="https://openalex.org/")
+    m = await merged(session, openalex_id="https://openalex.org//")
+
+    result = await merges.merge(session, m.id, k.id, identifier=("openalex_id", "https://openalex.org/"))
+
+    assert (result.status, result.reason) == ("reported", "no_shared_identifier")
+
+
+async def test_a_session_with_pending_changes_is_refused(session):
+    k, m = await kept(session), await merged(session)
+    stray = Paper(title="Not the merge's", file_path="/stray.pdf")
+    session.add(stray)
+
+    with pytest.raises(RuntimeError, match="pending"):
+        await merges.merge(session, m.id, k.id, identifier=PROOF)
+
+    assert stray in session.new  # neither committed nor rolled back: the caller's to decide
+    session.expunge(stray)
+    assert await audits(session, k.id, m.id) == []
+
+
+async def test_the_kept_paper_takes_the_merged_papers_fetched_references(session):
+    k = await kept(session, references_state="failed", references_error="Semantic Scholar timed out")
+    m = await merged(session, references_state="ready")
+
+    await merges.merge(session, m.id, k.id, identifier=PROOF)
+
+    k = await session.get(Paper, k.id, populate_existing=True)
+    assert (k.references_state, k.references_error) == ("ready", None)
 
 
 async def test_an_unknown_paper_is_not_found(session):

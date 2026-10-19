@@ -3,9 +3,10 @@ K is kept, since its id is what links, tags, notes and decisions point to: every
 dropped as a duplicate of K's own; K takes M's file, page count and status; M's row goes. One transaction, with an
 audit row in paper_merges. A merge the guards refuse (R15) is only reported, with the reason, and changes nothing."""
 
+import re
 import uuid
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,19 +18,25 @@ from app.core.errors import NotFound
 from app.core.papers import ABSTRACT_PAGE
 from app.models import Paper, PaperMerge
 
-IDENTIFIERS = ("doi", "openalex_id")  # UNIQUE on papers
+UNIQUE_IDENTIFIERS = ("doi", "openalex_id")  # UNIQUE on papers: M's are cleared before K may take them
+# What proves two papers are one work (R15b). arXiv ids aren't stored apart: an arXiv DOI is a DOI.
+IDENTIFIERS = (*UNIQUE_IDENTIFIERS, "pmcid")
 FROM_MERGED = ("file_path", "page_count", "status", "status_error")  # the PDF and its ingest
-KEPT_AS_IS = ("id", "details_source", "created_at", "manual_fields")
+REFERENCES = ("references_state", "references_error", "references_requested_at")  # one fetch's state, kept together
+KEPT_AS_IS = ("id", "details_source", "created_at", "manual_fields", *REFERENCES)
 # A column's "nothing here" value when it isn't NULL: K takes M's value over these.
-EMPTY = {"reading_pass": 0, "peer_reviewed": "unknown", "references_state": "none", "is_retracted": False}
-ARRIVED_BY = "manual"  # M's PDF was an upload
+EMPTY = {"reading_pass": 0, "peer_reviewed": "unknown", "is_retracted": False}
+_OPENALEX_WORK = re.compile(r"W\d+")
+_PMCID = re.compile(r"PMC\d+")
 
 
 @dataclass(frozen=True)
 class MergeResult:
-    status: str  # merged | reported (a dry run says what a real one would)
+    status: str  # merged | reported. A dry run says what a real one would, as far as guards and counts can tell.
     reason: str | None = None  # why it was only reported, e.g. "kept_has_pdf" or "conflicting_hand_edits:year"
     moved: dict[str, int] = field(default_factory=dict)  # rows per step, the non-zero ones
+    # True: nothing was written. ponytail: a dry run can't foresee a UNIQUE collision (a non-failed K card, a K
+    # numbers dataset, a row K gained meanwhile); the real merge then raises and rolls back whole.
     dry_run: bool = False
 
 
@@ -118,30 +125,51 @@ _AWAITING = (
 )
 
 
-def _normal(column: str, value: str) -> str:
+def _normal(column: str, value: str | None) -> str | None:
+    """The identifier as compared, or None when empty or unparseable: such a value is missing, never equal."""
+    value = (value or "").strip()
     if column == "doi":
-        return normalize_doi(value) or value.strip().lower()
-    return (short_id(value.strip()) or "").upper()
+        return normalize_doi(value)
+    if column == "openalex_id":
+        work = (short_id(value) or "").upper()
+        return work if _OPENALEX_WORK.fullmatch(work) else None
+    pmcid = value.upper()
+    pmcid = pmcid if pmcid.startswith("PMC") else f"PMC{pmcid}"
+    return pmcid if _PMCID.fullmatch(pmcid) else None
 
 
-def _identifier(kept: Paper, identifier: tuple[str, str] | None) -> str | None:
-    column, value = identifier or next(((c, getattr(kept, c)) for c in IDENTIFIERS if getattr(kept, c)), (None, None))
-    return f"{column}:{_normal(column, value)}" if column else None
+def _pairs(kept: Paper, merged: Paper, identifier: tuple[str, str] | None) -> list[tuple[str, str | None, str | None]]:
+    """(column, K's, M's) normalised, the passed identifier first: it stands for a value M learned but couldn't keep."""
+    pairs = [(c, _normal(c, getattr(kept, c)), _normal(c, getattr(merged, c))) for c in IDENTIFIERS]
+    if identifier:
+        column, value = identifier
+        pairs.insert(0, (column, _normal(column, getattr(kept, column)), _normal(column, value)))
+    return pairs
+
+
+def _identifier(kept: Paper, merged: Paper, identifier: tuple[str, str] | None) -> str | None:
+    """For the audit: the identifier that proves the merge, else (reported) the one that led here, else K's first."""
+    pairs = _pairs(kept, merged, identifier)
+    proof = next(((c, ours) for c, ours, theirs in pairs if ours and ours == theirs), None)
+    led = (identifier[0], _normal(*identifier) or identifier[1]) if identifier else None
+    column, value = proof or led or next(((c, ours) for c, ours, _ in pairs if ours), (None, None))
+    return f"{column}:{value}" if column else None
 
 
 def _refusal(kept: Paper, merged: Paper, identifier: tuple[str, str] | None) -> str | None:
-    """R15: why M must not merge into K, or None."""
+    """R15: why M must not merge into K, or None. A merge needs proof (R15b): an identifier K holds, equal to the
+    passed one or to M's own; the same work by title and authors is required on top of that, never instead."""
     if kept.has_pdf:
         return "kept_has_pdf"
     if not merged.has_pdf:
         return "merged_has_no_pdf"
-    pairs = [(c, getattr(kept, c), getattr(merged, c)) for c in IDENTIFIERS]
-    if identifier:
-        pairs.append((identifier[0], getattr(kept, identifier[0]), identifier[1]))
-    if any(ours and theirs and _normal(c, ours) != _normal(c, theirs) for c, ours, theirs in pairs):
+    pairs = _pairs(kept, merged, identifier)
+    if any(ours and theirs and ours != theirs for _, ours, theirs in pairs):
         return "identifier_differs"
+    if not any(ours and ours == theirs for _, ours, theirs in pairs):
+        return "no_shared_identifier"
     theirs = {"title": merged.title, "authors": merged.authors, "year": merged.year}
-    if not discovery._same_work(Candidate(kept.title, kept.authors, kept.year), theirs):
+    if not discovery.same_work(Candidate(kept.title, kept.authors, kept.year), theirs):
         return "not_the_same_work"
     for name in sorted(set(kept.manual_fields) & set(merged.manual_fields)):
         if getattr(kept, name, None) != getattr(merged, name, None):
@@ -165,6 +193,9 @@ def _kept_columns(kept: Paper, merged: Paper) -> dict[str, Any]:
             hand_edited = name in merged.manual_fields
             values[name] = theirs if hand_edited or _empty(name, ours) else ours
     values["manual_fields"] = [*kept.manual_fields, *(f for f in merged.manual_fields if f not in kept.manual_fields)]
+    # M's references move in, so K's fetch state follows them unless K's own fetch finished or M never fetched.
+    if kept.references_state != "ready" and merged.references_state != "none":
+        values.update({name: getattr(merged, name) for name in REFERENCES})
     return values
 
 
@@ -184,24 +215,31 @@ async def merge(
     kept_id: uuid.UUID,
     *,
     identifier: tuple[str, str] | None = None,
+    how: Literal["manual", "imported"] = "manual",
     dry_run: bool = False,
 ) -> MergeResult:
     """Merges M (`merged_id`) into K (`kept_id`) and commits, or reports why not (R15) with a `reported` audit row.
     `identifier` is the (column, value) M learned that K holds, when a collision led here; the guards check it too.
-    A dry run runs the same guards and counts per step, and writes nothing, not even the audit row. On any failure
-    everything rolls back and the error propagates: both papers stay as they were. Raises NotFound."""
+    `how` M's PDF arrived (pdf_arrived's word for K's awaiting hits): "manual", an upload, or "imported", a found copy.
+
+    It commits (or, on a failure, rolls back) the caller's session, so the caller passes one with nothing pending:
+    RuntimeError otherwise, before anything is read. A dry run runs the same guards and counts per step, and writes
+    nothing, not even the audit row; it can't foresee a UNIQUE collision, after which a real merge rolls back. On any
+    failure everything rolls back and the error propagates: both papers stay as they were. Raises NotFound."""
     if merged_id == kept_id:
         raise ValueError("a paper can't merge into itself")
+    if session.new or session.dirty or session.deleted:
+        raise RuntimeError("merge commits the session: pass one with nothing pending")
     try:
         papers = await _papers(session, (merged_id, kept_id), lock=not dry_run)
         kept, merged = papers[kept_id], papers[merged_id]
-        audit = {"kept_id": kept_id, "merged_id": merged_id, "identifier": _identifier(kept, identifier)}
+        audit = {"kept_id": kept_id, "merged_id": merged_id, "identifier": _identifier(kept, merged, identifier)}
         if reason := _refusal(kept, merged, identifier):
             if not dry_run:
                 session.add(PaperMerge(**audit, status="reported", reason=reason, moved={}))
                 await session.commit()
             return MergeResult("reported", reason, dry_run=dry_run)
-        moved = await (_count(session, kept, merged) if dry_run else _move_rows(session, kept, merged))
+        moved = await (_count(session, kept, merged) if dry_run else _move_rows(session, kept, merged, how))
         if not dry_run:
             await _absorb(session, kept, merged)
             session.add(PaperMerge(**audit, status="merged", moved=moved))
@@ -213,6 +251,7 @@ async def merge(
 
 
 async def _count(session: AsyncSession, kept: Paper, merged: Paper) -> dict[str, int]:
+    """The rows each step would take, read only. Its ceiling: it can't tell a step that would hit a UNIQUE index."""
     ids = {"m": merged.id, "k": kept.id}
     counts = {}
     for step in STEPS:
@@ -221,13 +260,13 @@ async def _count(session: AsyncSession, kept: Paper, merged: Paper) -> dict[str,
     return {label: n for label, n in counts.items() if n}
 
 
-async def _move_rows(session: AsyncSession, kept: Paper, merged: Paper) -> dict[str, int]:
+async def _move_rows(session: AsyncSession, kept: Paper, merged: Paper, how: str) -> dict[str, int]:
     ids = {"m": merged.id, "k": kept.id}
     counts = {}
     for step in STEPS:
         counts[step.label] = (await session.execute(text(step.sql()), ids)).rowcount
     counts["awaiting_hits_retrieved"] = await session.scalar(text(_AWAITING), ids)
-    await retrieved_hits.pdf_arrived(session, kept.id, ARRIVED_BY)
+    await retrieved_hits.pdf_arrived(session, kept.id, how)
     return {label: n for label, n in counts.items() if n}
 
 
@@ -236,7 +275,7 @@ async def _absorb(session: AsyncSession, kept: Paper, merged: Paper) -> None:
     Not papers.delete_paper: M's file is K's now, never unlinked. ponytail: the file keeps M's uuid name; nothing
     reads the name."""
     values = _kept_columns(kept, merged)
-    for name in IDENTIFIERS:
+    for name in UNIQUE_IDENTIFIERS:
         setattr(merged, name, None)
     await session.flush()
     for name, value in values.items():
