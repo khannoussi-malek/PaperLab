@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import pytest
 from sqlalchemy import select
 
+from app.config import settings
 from app.core import retrieved_hits, tags, workspaces
 from app.core.candidates import normal_title
 from app.core.errors import Conflict
@@ -350,3 +351,17 @@ async def test_an_upload_for_a_hit_whose_paper_has_no_pdf_is_refused_not_discard
         await upload_hit_pdf(session, ws.id, hit.id, "a.pdf", b"%PDF-1.7 mine")
 
     assert (await reload(session, hit)).acquisition_status == "not_attempted"
+
+
+async def test_an_upload_for_a_hit_whose_doi_a_pdfless_paper_holds_creates_nothing(session, tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "pdf_dir", tmp_path)  # so a wrongly created paper fails the assert, not the disk
+    ws = await workspace(session)  # the hit has no imported_as: Find papers saved the paper without it
+    held = await paper(session, doi="10.1126/sciadv.adu5251", file_path=None)
+    await workspaces.add_paper(session, ws.id, held.id)
+    hit = await failed_hit(session, ws, doi="10.1126/sciadv.adu5251")
+
+    with pytest.raises(Conflict, match="paper_has_no_pdf"):
+        await upload_hit_pdf(session, ws.id, hit.id, "a.pdf", b"%PDF-1.7 mine")
+
+    assert len((await session.scalars(select(Paper))).all()) == 1
+    assert (await reload(session, hit)).acquisition_status == "failed"

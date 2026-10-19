@@ -473,3 +473,55 @@ async def test_no_api_response_leaks_page_0(client, worker_session, ctx, embedde
     assert (bodies["verify_claim"]["evidence_level"], bodies["verify_claim"]["quote_page"]) == ("abstract_only", None)
     (item,) = bodies["verify_claims"]
     assert item["check"]["evidence_level"] == "abstract_only", item
+
+
+async def _chunk_texts(session, paper_id) -> list[str]:
+    return list(await session.scalars(select(Chunk.text).where(Chunk.paper_id == paper_id)))
+
+
+async def _saved(session, **fields) -> Paper:
+    return await papers.create_metadata_paper(session, {"title": "Saved Paper", **fields}, "manual")
+
+
+async def test_editing_a_pdfless_papers_abstract_rebuilds_its_chunk_and_queues_indexing(client, session, arq):
+    paper = await _saved(session)  # no abstract: ready, no chunk
+    assert await _chunk_texts(session, paper.id) == []
+
+    added = await client.patch(f"/api/papers/{paper.id}", json={"abstract": "First words."})
+    changed = await client.patch(f"/api/papers/{paper.id}", json={"abstract": "Second words.", "title": "New Title"})
+
+    assert (added.status_code, changed.status_code) == (200, 200)
+    assert changed.json()["status"] == "embedding"
+    assert await _chunk_texts(session, paper.id) == ["New Title. Second words."]
+    assert arq.jobs == [("index_abstract", str(paper.id))] * 2
+
+
+async def test_clearing_a_pdfless_papers_abstract_deletes_its_chunk_and_queues_nothing(client, session, arq):
+    paper = await _saved(session, abstract="Some words.")
+    assert await _chunk_texts(session, paper.id) == ["Saved Paper. Some words."]
+
+    response = await client.patch(f"/api/papers/{paper.id}", json={"abstract": None})
+
+    assert (response.status_code, response.json()["status"]) == (200, "ready")
+    assert await _chunk_texts(session, paper.id) == []
+    assert arq.jobs == []
+
+
+async def test_editing_other_fields_of_a_pdfless_paper_leaves_its_chunk_alone(client, session, arq):
+    paper = await _saved(session, abstract="Some words.")
+
+    response = await client.patch(f"/api/papers/{paper.id}", json={"year": 2020})
+
+    assert response.json()["status"] == "embedding"  # untouched: still waiting for the job create queued
+    assert await _chunk_texts(session, paper.id) == ["Saved Paper. Some words."]
+    assert arq.jobs == []
+
+
+async def test_editing_a_paper_with_a_pdf_never_touches_its_chunks(client, session, arq):
+    paper = await _chunked_paper(session, "/some.pdf")
+
+    response = await client.patch(f"/api/papers/{paper.id}", json={"abstract": "Changed.", "title": "Other"})
+
+    assert (response.status_code, response.json()["status"]) == (200, "ready")
+    assert await _chunk_texts(session, paper.id) == ["An abstract."]
+    assert arq.jobs == []

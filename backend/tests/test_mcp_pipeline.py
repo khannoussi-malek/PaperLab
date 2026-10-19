@@ -119,6 +119,7 @@ async def test_no_free_pdf_returns_the_landing_page_and_stores_nothing(session, 
         "landing_url": f"https://doi.org/{discovery_fake.DOI_PREFIX}{suffix}",
         "tried": [{"url": url, "outcome": "not_a_pdf"} for url in page] + [NO_ARXIV_MATCH],
         "free_copies": [],
+        "note": None,
     }
     assert jobs.jobs == []
 
@@ -655,3 +656,17 @@ async def test_adding_the_arxiv_id_after_the_publisher_version_is_held_reuses_it
     await session.refresh(held)
     assert (held.doi, held.venue) == (REAL_TACL_DOI, REAL_TACL_VENUE)  # the published record is not weakened
     assert jobs.jobs == [] and added.tried[-1]["outcome"] == "in_library"
+
+
+async def test_a_failed_index_abstract_enqueue_leaves_the_paper_ready_not_embedding(session, jobs, monkeypatch):
+    doi = _closed_fixture(monkeypatch)
+
+    async def down(*_a, **_k):
+        raise ConnectionError("redis is down")
+
+    monkeypatch.setattr(jobs, "enqueue_job", down)
+    failed = await call("add_paper", identifier=doi, save_without_pdf=True)
+
+    assert failed.is_error  # the call still fails, as add_paper's other enqueue failures do
+    paper = await session.scalar(select(Paper).where(Paper.doi == doi.lower()))
+    assert paper.status == PaperStatus.READY

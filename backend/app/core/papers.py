@@ -52,6 +52,14 @@ def abstract_chunk_text(title: str, abstract: str) -> str:
     return f"{title if title.endswith(('.', '?', '!')) else title + '.'} {abstract}"
 
 
+def abstract_drafts(title: str, abstract: str | None) -> list[ChunkDraft]:
+    """The one abstract chunk of a paper without a PDF, or none when it has no abstract."""
+    if not abstract:
+        return []
+    text = abstract_chunk_text(title, abstract)
+    return [ChunkDraft(ordinal=0, page=ABSTRACT_PAGE, bbox=[], section_title="Abstract", text=text)]
+
+
 async def create_metadata_paper(session: AsyncSession, prefill: dict[str, Any], details_source: str) -> Paper:
     """A paper saved without a PDF (R5): `prefill` as create_paper takes it, and where the details came from.
 
@@ -76,12 +84,7 @@ async def create_metadata_paper(session: AsyncSession, prefill: dict[str, Any], 
     )
     session.add(paper)
     await session.flush()
-    if abstract:  # replace_chunks commits the paper and its chunk together
-        text = abstract_chunk_text(paper.title, abstract)
-        draft = ChunkDraft(ordinal=0, page=ABSTRACT_PAGE, bbox=[], section_title="Abstract", text=text)
-        await replace_chunks(session, paper.id, [draft])
-    else:
-        await session.commit()
+    await replace_chunks(session, paper.id, abstract_drafts(paper.title, abstract))  # commits paper and chunk together
     await session.refresh(paper)
     return paper
 

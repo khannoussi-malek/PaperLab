@@ -132,7 +132,8 @@ async def related_papers(paper_id: uuid.UUID, hops: int = 1) -> list[graph.Relat
 @recoverable
 async def create_note(body: str, paper_id: uuid.UUID, quoted_text: str) -> notes.NoteView:
     """Save a note on a paper, anchored on `quoted_text`. Copy quoted_text exactly from one passage search_library
-    returned for this paper, long enough to occur only once. The note is shown to the owner as written by AI."""
+    returned for this paper, long enough to occur only once. For a passage marked from_abstract, quote from the abstract
+    itself, not the title that starts the passage. The note is shown to the owner as written by AI."""
     async with sessions() as session:
         return await notes.create_llm_note(session, paper_id, body, quoted_text)
 

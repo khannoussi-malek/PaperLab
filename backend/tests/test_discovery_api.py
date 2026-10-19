@@ -3,7 +3,7 @@ from contextlib import aclosing
 
 import pytest
 from conftest import recorded_discovery
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 
 from app.api.deps import get_discovery
 from app.config import settings
@@ -253,3 +253,21 @@ async def test_add_of_a_paper_whose_arxiv_copy_is_held_is_409_naming_the_paper(c
     assert response.json()["detail"] == discovery.ALREADY_IN_LIBRARY
     assert response.json()["paper_id"] == str(paper.id)
     assert arq.jobs == []
+
+
+async def test_a_failed_index_abstract_enqueue_leaves_the_paper_ready_not_embedding(
+    client, discovery_api, session, arq, monkeypatch
+):
+    discovery_api.pdf_host.reply("/landing", 200, text="<html>landing</html>")
+    candidate = {"abstract": "An abstract.", "sources": ["crossref"], "pdf_urls": ["https://pdf.example/landing"]}
+
+    async def down(*_a, **_k):
+        raise ConnectionError("redis is down")
+
+    monkeypatch.setattr(arq, "enqueue_job", down)
+    with pytest.raises(ConnectionError):
+        await client.post("/api/discovery/add", json={**body(**candidate), "save_without_pdf": True})
+
+    session.expire_all()
+    paper = await session.scalar(select(Paper).where(Paper.doi == "10.5555/m19-api"))
+    assert paper.status == "ready"
