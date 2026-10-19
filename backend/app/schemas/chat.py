@@ -20,6 +20,7 @@ class ChatSource(BaseModel):
     page: int
     section: str | None
     bbox: list[Rect]
+    from_abstract: bool  # a paper saved without a PDF: cite it as "abstract only", never by page
 
 
 class NoteSource(BaseModel):

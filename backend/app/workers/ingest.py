@@ -9,7 +9,7 @@ from sqlalchemy import update
 from app.core import embedding_index, embedding_sources, enrichment, paper_sources, papers
 from app.core.chunking import chunk_blocks
 from app.db import SessionLocal
-from app.models import Chunk, PaperStatus
+from app.models import Chunk, Paper, PaperStatus
 from app.providers import crossref, embedding, openalex
 from app.providers.base import LLMError, LLMUnavailable
 from app.providers.extraction import ExtractedDoc, extract
@@ -176,6 +176,31 @@ async def ingest_paper(ctx: dict, paper_id: str) -> None:
             await papers.set_status(session, pid, PaperStatus.FAILED, error=error)
         finally:  # the success, timeout and failure paths all say where the time went
             logger.info(_timings(pid, marks, started, chunks, pages))
+
+
+async def index_abstract(ctx: dict, paper_id: str) -> None:
+    """embedding -> ready for a paper saved without a PDF (R3): embeds its abstract chunk with the search source, as
+    ingest's embedding stage does. Like ingest it always ends ready: with no search model, or a source that fails, the
+    paper is ready without vectors and Settings' Try again embeds it (D155). A paper deleted meanwhile, or one that got
+    a PDF (ingest owns it now), is left alone."""
+    pid = uuid.UUID(paper_id)
+    async with SessionLocal() as session:
+        paper = await session.get(Paper, pid)
+        if paper is None or paper.file_path is not None:
+            logger.info("indexing the abstract of %s skipped: the paper is gone or has a PDF", pid)
+            return
+        try:
+            embedder = await search_embedder(ctx, session)
+            if embedder is None:
+                logger.info("no search model: %s is ready without vectors", pid)
+            else:
+                await _embed(session, pid, embedder)
+        except Exception:
+            logger.exception("embedding the abstract of %s failed; the paper stays usable", pid)
+            await session.rollback()
+        # ponytail: a PDF attached between the check above and here would be marked ready mid-ingest; PR 2's upgrade
+        # must re-check file_path (or enqueue ingest after this job) when it lands.
+        await papers.set_status(session, pid, PaperStatus.READY)
 
 
 async def reembed_paper(ctx: dict, paper_id: str, missing_only: bool = False) -> None:

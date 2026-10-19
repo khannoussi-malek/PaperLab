@@ -2388,6 +2388,8 @@ export interface components {
                 number,
                 number
             ][];
+            /** From Abstract */
+            from_abstract: boolean;
         };
         /** ChunkOut */
         ChunkOut: {
@@ -2413,6 +2415,11 @@ export interface components {
             text: string;
             /** Strategy Ver */
             strategy_ver: number;
+            /**
+             * From Abstract
+             * @description The abstract chunk of a paper saved without a PDF: no page to show or jump to.
+             */
+            readonly from_abstract: boolean;
         };
         /** ClearHitsOut */
         ClearHitsOut: {

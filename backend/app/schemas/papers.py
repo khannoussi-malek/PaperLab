@@ -2,8 +2,9 @@ import uuid
 from datetime import datetime
 from typing import Annotated, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
+from app.core.papers import ABSTRACT_PAGE
 from app.core.source_types import DetailsSource, PeerReviewed, SourceType
 
 # PDF points, top-left origin: (x0, y0, x1, y1). A tuple so OpenAPI (and the TS types) say 4 numbers.
@@ -110,3 +111,9 @@ class ChunkOut(BaseModel):
     section_title: str | None
     text: str
     strategy_ver: int
+
+    @computed_field
+    @property
+    def from_abstract(self) -> bool:
+        """The abstract chunk of a paper saved without a PDF: no page to show or jump to."""
+        return self.page == ABSTRACT_PAGE

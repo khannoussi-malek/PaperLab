@@ -209,9 +209,11 @@ def format_context(paper: Paper | dict[uuid.UUID, Paper], sources: list[Retrieve
     def label(source: RetrievedChunk) -> str:
         return source_label(paper if isinstance(paper, Paper) else paper[source.paper_id])
 
+    def where(source: RetrievedChunk) -> list[str | None]:
+        return ["abstract only"] if source.from_abstract else [f"p.{source.page}", source.section]
+
     return "\n\n".join(
-        f"[C{i}] ({', '.join(filter(None, [label(s), f'p.{s.page}', s.section]))})\n{s.text}"
-        for i, s in enumerate(sources, start=1)
+        f"[C{i}] ({', '.join(filter(None, [label(s), *where(s)]))})\n{s.text}" for i, s in enumerate(sources, start=1)
     )
 
 

@@ -27,7 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.chunking import join_lines
 from app.core.errors import Conflict, InvalidInput, NotFound
-from app.core.papers import get_paper, get_paper_file, list_chunks
+from app.core.papers import ABSTRACT_PAGE, get_paper, get_paper_file, list_chunks
 from app.models import Chart, Chunk, LLMOutput, Note, Paper, Provenance, note_anchors, note_charts, note_papers
 from app.providers.extraction import quote_rects
 
@@ -294,22 +294,25 @@ def _collapse_whitespace(text: str) -> str:
     return " ".join(text.split())
 
 
-async def _chunk_anchors(session: AsyncSession, chunk_ids: list[uuid.UUID]) -> list[dict]:
-    """One anchor row (no note_id yet) per spot the chunks cover, in their order: note_anchors' PK is (note_id,
-    paper_id, page, bbox), and two chunks can share a spot. chunk_id stays NULL because a re-ingest replaces chunks
-    (D10). Raises InvalidInput(STALE_CHUNK) when a chunk is gone."""
+async def _chunk_anchors(session: AsyncSession, chunk_ids: list[uuid.UUID]) -> tuple[list[uuid.UUID], list[dict]]:
+    """The chunks' papers, and one anchor row (no note_id yet) per spot the chunks cover, both in their order:
+    note_anchors' PK is (note_id, paper_id, page, bbox), and two chunks can share a spot. An abstract chunk (a paper
+    saved without a PDF) has no spot: its paper is linked, unanchored. chunk_id stays NULL because a re-ingest replaces
+    chunks (D10). Raises InvalidInput(STALE_CHUNK) when a chunk is gone."""
     wanted = list(dict.fromkeys(chunk_ids))
     if not wanted:
-        return []
+        return [], []
     chunks = {c.id: c for c in await session.scalars(select(Chunk).where(Chunk.id.in_(wanted)))}
     if len(chunks) != len(wanted):
         raise InvalidInput(STALE_CHUNK)
     rows: dict[tuple, dict] = {}
     for chunk_id in wanted:
         c = chunks[chunk_id]
+        if c.page == ABSTRACT_PAGE:
+            continue
         key = (c.paper_id, c.page, tuple(tuple(rect) for rect in c.bbox))
         rows.setdefault(key, {"paper_id": c.paper_id, "page": c.page, "bbox": c.bbox, "quoted_text": c.text})
-    return list(rows.values())
+    return list(dict.fromkeys(chunks[chunk_id].paper_id for chunk_id in wanted)), list(rows.values())
 
 
 async def promote_llm_fragment(
@@ -333,13 +336,14 @@ async def promote_llm_fragment(
         raise InvalidInput("a promoted note needs at least one cited chunk")
     if not set(wanted) <= set(output.source_chunks):
         raise InvalidInput("a chunk is not a source of this answer")
-    rows = await _chunk_anchors(session, wanted)
+    paper_ids, rows = await _chunk_anchors(session, wanted)
 
     note = Note(body=text, provenance=Provenance.LLM, source_id=output.id)
     session.add(note)
     await session.flush()
-    await _link(session, note.id, [row["paper_id"] for row in rows])
-    await session.execute(insert(note_anchors), [{**row, "note_id": note.id} for row in rows])
+    await _link(session, note.id, paper_ids)
+    if rows:
+        await session.execute(insert(note_anchors), [{**row, "note_id": note.id} for row in rows])
     await session.commit()
     await session.refresh(note)
     return (await _with_anchors(session, [note]))[0]
@@ -363,8 +367,8 @@ async def save_suggestion(session: AsyncSession, output_id: uuid.UUID, index: in
     if not body:
         raise InvalidInput("empty_body")
     cited = [output.source_chunks[i - 1] for i in parse_citations(body, len(output.source_chunks))]
-    rows = await _chunk_anchors(session, cited)
-    papers = [row["paper_id"] for row in rows] + ([output.paper_id] if output.paper_id else [])
+    paper_ids, rows = await _chunk_anchors(session, cited)
+    papers = paper_ids + ([output.paper_id] if output.paper_id else [])
 
     note = Note(body=body, provenance=Provenance.LLM, source_id=output_id, source_block=index)
     session.add(note)

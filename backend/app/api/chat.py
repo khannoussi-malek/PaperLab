@@ -61,7 +61,15 @@ def to_sources(chunks: list[RetrievedChunk | None]) -> list[ChatSource | None]:
     return [
         None
         if c is None
-        else ChatSource(label=f"C{i}", chunk_id=c.id, paper_id=c.paper_id, page=c.page, section=c.section, bbox=c.bbox)
+        else ChatSource(
+            label=f"C{i}",
+            chunk_id=c.id,
+            paper_id=c.paper_id,
+            page=c.page,
+            section=c.section,
+            bbox=c.bbox,
+            from_abstract=c.from_abstract,
+        )
         for i, c in enumerate(chunks, start=1)
     ]
 

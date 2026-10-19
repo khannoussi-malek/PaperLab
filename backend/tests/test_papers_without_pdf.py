@@ -1,16 +1,32 @@
 import base64
 import io
+import json
+import re
 import uuid
 import zipfile
 
 import pytest
+from conftest import FakeEmbedder, parse_sse, unit_vector
 from mcp_fixtures import *  # noqa: F403
 from mcp_fixtures import call, result
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select, update
 
-from app.core import chunking, evidence_cards, tags, workspaces
+from app.core import (
+    chat,
+    chunking,
+    claims,
+    evidence_cards,
+    library,
+    notes,
+    papers,
+    retrieval,
+    screening,
+    tags,
+    workspaces,
+)
 from app.core.errors import InvalidInput
-from app.models import Chunk, EvidenceCard, Paper
+from app.models import Chunk, EvidenceCard, LLMOutput, Paper
+from app.providers import embedding
 from app.workers import ingest
 
 pytestmark = pytest.mark.anyio
@@ -192,3 +208,178 @@ async def test_the_max_tries_branch_does_not_touch_a_paper_without_a_pdf(worker_
     await ingest.ingest_paper({**ctx, "job_try": ingest.MAX_TRIES}, str(paper.id))
     await worker_session.refresh(paper)
     assert (paper.status, paper.status_error) == ("ready", None)
+
+
+ABSTRACT = "Sleep helps memory consolidation in adults."
+PREFILL = {"title": "Sleep and memory", "abstract": ABSTRACT, "authors": ["Ada Quillfeather"], "year": 2020}
+QUESTION = "does sleep help memory?"
+PAGE_0 = re.compile(r"\bp\.?\s?0\b")
+
+
+async def indexed_abstract_paper(session, ctx) -> tuple[Paper, Chunk]:
+    """A paper saved without a PDF, its abstract chunk embedded by index_abstract, as Save without PDF leaves it."""
+    paper = await papers.create_metadata_paper(session, PREFILL, "crossref")
+    await ingest.index_abstract(ctx, str(paper.id))
+    await session.refresh(paper)
+    (chunk,) = await papers.list_chunks(session, paper.id)
+    return paper, chunk
+
+
+async def test_create_metadata_paper_writes_one_abstract_chunk_and_no_file(session):
+    paper = await papers.create_metadata_paper(session, PREFILL, "crossref")
+    (chunk,) = await papers.list_chunks(session, paper.id)
+    assert (paper.file_path, paper.status, paper.details_source) == (None, "embedding", "crossref")
+    assert (chunk.ordinal, chunk.page, chunk.bbox, chunk.section_title) == (0, papers.ABSTRACT_PAGE, [], "Abstract")
+    assert chunk.text == f"Sleep and memory. {ABSTRACT}" == papers.abstract_chunk_text("Sleep and memory", ABSTRACT)
+    bare = await papers.create_metadata_paper(session, {"title": "Bare", "abstract": "  "}, "manual")
+    assert (bare.status, bare.has_pdf, await chunk_count(session, bare.id)) == ("ready", False, 0)
+    with pytest.raises(InvalidInput, match="unknown_details_source"):
+        await papers.create_metadata_paper(session, {"title": "Moon"}, "the-moon")
+
+
+async def test_index_abstract_embeds_and_marks_ready(worker_session, ctx, embedder):
+    paper, chunk = await indexed_abstract_paper(worker_session, ctx)
+    assert (paper.status, chunk.embed_model, chunk.embedding is not None) == ("ready", "test", True)
+    assert [texts for texts, _ in embedder.calls] == [[f"search_document: {chunk.text}"]]
+    assert paper.evidence_access == "abstract"
+
+
+async def test_index_abstract_marks_ready_even_when_embedding_fails(worker_session):
+    for ctx in ({"embedder": FakeEmbedder(refuse="The key was revoked.")}, {"embedder": None}):  # failing, none
+        paper, chunk = await indexed_abstract_paper(worker_session, ctx)
+        assert (paper.status, paper.status_error, chunk.embedding) == ("ready", None, None)
+
+
+async def test_index_abstract_leaves_a_paper_gone_or_with_a_pdf_alone(worker_session, ctx, embedder):
+    filed = Paper(title="Has a file", file_path="/x.pdf", status="uploaded")
+    worker_session.add(filed)
+    await worker_session.commit()
+    await ingest.index_abstract(ctx, str(filed.id))
+    await ingest.index_abstract(ctx, str(uuid.uuid4()))
+    await worker_session.refresh(filed)
+    assert (filed.status, embedder.calls) == ("uploaded", [])
+
+
+async def test_library_search_and_chat_retrieval_find_a_paper_by_its_abstract(worker_session, ctx, embedder):
+    session = worker_session
+    await session.execute(delete(Chunk))  # the dev database's chunks, on another model (see test_library)
+    paper, chunk = await indexed_abstract_paper(session, ctx)
+    embedder.vectors[f"search_query: {QUESTION}"] = unit_vector(f"search_document: {chunk.text}")
+    (found,) = await retrieval.retrieve(session, QUESTION, embedder=embedder)
+    assert (found.id, found.from_abstract) == (chunk.id, True)
+    (passage,) = await library.search(session, QUESTION, embedder=embedder)
+    assert (passage.chunk_id, passage.from_abstract, passage.evidence_access) == (chunk.id, True, "abstract")
+    assert passage.text == f"(abstract only) {chunk.text}"
+
+
+async def test_chat_context_names_the_abstract_not_page_0(session):
+    paper = await papers.create_metadata_paper(session, PREFILL, "crossref")
+    sources = await chat.chunk_sources(session, Chunk.paper_id == paper.id)
+    context = chat.format_context(paper, sources)
+    assert context == f"[C1] (Quillfeather 2020, abstract only)\nSleep and memory. {ABSTRACT}"
+    assert not PAGE_0.search(context)
+
+
+async def test_saving_an_answer_citing_an_abstract_makes_an_unanchored_linked_note(session):
+    paper = await papers.create_metadata_paper(session, PREFILL, "crossref")
+    (chunk,) = await papers.list_chunks(session, paper.id)
+    ws = await workspaces.create(session, f"Abstract notes {uuid.uuid4().hex[:6]}")
+    # A workspace answer: no paper of its own, so the note's paper can only come from the cited chunk.
+    output = LLMOutput(
+        workspace_id=ws.id, kind="chat", question="Why sleep?", model="fake", prompt_version=1,
+        content="Sleep helps memory [C1].\n:::note\nSleep helps memory consolidation [C1].\n:::",
+        source_chunks=[chunk.id],
+    )  # fmt: skip
+    session.add(output)
+    await session.commit()
+    saved = await notes.save_suggestion(session, output.id, 0)
+    promoted = await notes.promote_llm_fragment(session, output.id, "Sleep helps memory", [chunk.id])
+    assert [(n.paper_ids, n.anchors) for n in (saved, promoted)] == [([paper.id], [])] * 2
+
+
+async def test_reembed_keeps_the_abstract_chunk_searchable(worker_session, ctx):
+    paper, chunk = await indexed_abstract_paper(worker_session, ctx)
+    await worker_session.execute(update(Chunk).where(Chunk.id == chunk.id).values(embedding=None))
+    await ingest.reembed_paper(ctx, str(paper.id))
+    (again,) = await papers.list_chunks(worker_session, paper.id)
+    await worker_session.refresh(again)
+    assert (again.id, again.page, again.embedding is not None) == (chunk.id, papers.ABSTRACT_PAGE, True)
+
+
+def _page_0_leaks(value) -> list:
+    """Every object in a response body with a page of 0 (page, quote_page, ...) that doesn't say from_abstract."""
+    if isinstance(value, list):
+        return [leak for item in value for leak in _page_0_leaks(item)]
+    if not isinstance(value, dict):
+        return []
+    here = any(key.endswith("page") and v == 0 and v is not False for key, v in value.items())
+    return ([value] if here and value.get("from_abstract") is not True else []) + _page_0_leaks(list(value.values()))
+
+
+class SupportedByTheAbstract:
+    model, connection_name = "fake:abstract", "Test"
+
+    async def stream(self, system, prompt):
+        yield json.dumps({"verdict": "supported", "passage": 1, "quote": "Sleep helps memory", "reason": "Says so."})
+
+
+async def test_no_api_response_leaks_page_0(client, worker_session, ctx, embedder, fake_llm, monkeypatch):
+    session = worker_session
+    monkeypatch.setattr(embedding, "get_model", lambda: embedder)  # the search source the API and MCP build
+    llm = SupportedByTheAbstract()
+
+    async def given(_session, _llm):
+        return llm
+
+    async def local_model(_session):
+        return ("Test · model", True, "localhost")
+
+    monkeypatch.setattr(claims, "_llm", given)
+    monkeypatch.setattr(screening, "_default_model", local_model)
+    paper, chunk = await indexed_abstract_paper(session, ctx)
+    name = f"No page 0 {uuid.uuid4().hex[:6]}"
+    ws = await workspaces.create(session, name)
+    await workspaces.add_paper(session, ws.id, paper.id)
+    pid, wid = paper.id, ws.id
+
+    asked = await client.post(f"/api/papers/{pid}/chat", json={"question": "What helps memory?"})
+    events = parse_sse(asked.text)
+    output_id = events[-1][1]["output_id"]
+    workspace_asked = await client.post(f"/api/workspaces/{wid}/chat", json={"question": "What helps memory?"})
+    promoted = await client.post(
+        "/api/notes/promote", json={"output_id": output_id, "body": "Fake answer", "chunk_ids": [str(chunk.id)]}
+    )
+    export = await client.get(f"/api/workspaces/{wid}/notes.zip")
+    exported = zipfile.ZipFile(io.BytesIO(export.content))
+    bodies = {
+        "paper chat": [data for _, data in events],
+        "workspace chat": [data for _, data in parse_sse(workspace_asked.text)],
+        "paper answers": (await client.get(f"/api/papers/{pid}/chat")).json(),
+        "workspace answers": (await client.get(f"/api/workspaces/{wid}/chat")).json(),
+        "promoted note": promoted.json(),
+        "paper notes": (await client.get(f"/api/papers/{pid}/notes")).json(),
+        "notes export": [exported.read(n).decode() for n in exported.namelist()],
+        "chunks": (await client.get(f"/api/papers/{pid}/chunks")).json(),
+        "note suggestions": (await client.post(f"/api/papers/{pid}/notes/suggest")).json(),
+        "evidence card": (await client.post(f"/api/papers/{pid}/evidence-card")).json(),
+        "search_library": result(await call("search_library", query=QUESTION, workspace=name)),
+        "get_paper": result(await call("get_paper", paper_id=str(pid))),
+        "verify_claim": result(await call("verify_claim", claim="Sleep helps memory.", paper_id=str(pid))),
+        "verify_claims": result(
+            await call("verify_claims", text="Sleep helps memory (Quillfeather, 2020).", workspace=name)
+        ),
+    }
+    for where, body in bodies.items():
+        assert not PAGE_0.search(json.dumps(body)), where
+        assert _page_0_leaks(body) == [], where
+
+    assert [s["from_abstract"] for s in events[0][1]["sources"]] == [True]
+    assert bodies["promoted note"]["anchors"] == [] and bodies["promoted note"]["paper_ids"] == [str(pid)]
+    assert [c["from_abstract"] for c in bodies["chunks"]] == [True]
+    assert bodies["note suggestions"]["detail"] == "no_pdf"
+    assert bodies["evidence card"]["detail"] == "needs_full_text"
+    assert [p["from_abstract"] for p in bodies["search_library"]] == [True]
+    assert bodies["get_paper"]["sections"] == []
+    assert (bodies["verify_claim"]["evidence_level"], bodies["verify_claim"]["quote_page"]) == ("abstract_only", None)
+    (item,) = bodies["verify_claims"]
+    assert item["check"]["evidence_level"] == "abstract_only", item
