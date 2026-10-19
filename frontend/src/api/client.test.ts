@@ -47,6 +47,14 @@ describe('api.addCandidate', () => {
     await expect(added).rejects.toMatchObject({ name: 'AlreadyInLibraryError', paperId: 'p7' })
     vi.unstubAllGlobals()
   })
+
+  it('rejects the 409 no-free-PDF answer as NoFreePdfError, whatever its sentence says', async () => {
+    // The real body: the server's own sentence as `detail`, with what it tried (main.py's DomainError handler).
+    const body = { detail: 'No free PDF was found for this paper. Open its page, download the PDF and use Upload PDFs.', tried: [], free_copies: [] }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { status: 409 })))
+    await expect(api.addCandidate({ title: 'T' } as never)).rejects.toMatchObject({ name: 'NoFreePdfError', message: body.detail })
+    vi.unstubAllGlobals()
+  })
 })
 
 describe('Zotero import forms', () => {

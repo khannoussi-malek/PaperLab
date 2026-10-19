@@ -1,5 +1,5 @@
 import { ExternalLink, LoaderCircle, Plus } from 'lucide-react'
-import { AlreadyInLibraryError, type Candidate } from '@/api/client'
+import { AlreadyInLibraryError, NoFreePdfError, type Candidate } from '@/api/client'
 import { useAddCandidate } from '@/api/queries'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -18,7 +18,7 @@ function CandidateRow({ candidate, workspaceId }: RowProps) {
   const paperId = add.data?.id ?? held ?? candidate.paper_id
   const hasPdf = candidate.pdf_urls.length > 0
   // No free PDF listed, or Add just found none: the paper can still be saved by its details.
-  const canSaveWithoutPdf = !hasPdf || add.error?.message === 'no_free_pdf'
+  const canSaveWithoutPdf = !hasPdf || add.error instanceof NoFreePdfError
   const link = pageLink(candidate)
   const meta = [byline(candidate), citationsLabel(candidate.cited_by_count)].filter(Boolean).join(' · ')
   return (
