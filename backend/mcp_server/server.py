@@ -97,7 +97,8 @@ async def search_library(
     search_rebuilding with how far it got (done of total papers): try again when it finishes. Each passage says what
     its paper is: `source_type` (journal_article, proceedings, book, chapter, preprint, magazine, thesis, other, or
     null), `peer_reviewed` (true, false or unknown: a heuristic) and `evidence_access` (full_text, abstract or
-    metadata): weigh the evidence by them."""
+    metadata): weigh the evidence by them. A passage with `from_abstract` true is the paper's abstract (the paper
+    has no PDF yet): cite it as the abstract, never by a page."""
     async with sessions() as session:
         return await library.search(session, query, workspace, tags=tags, match=match)
 

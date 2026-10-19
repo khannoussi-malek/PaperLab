@@ -27,7 +27,7 @@ class Passage:
     paper_id: uuid.UUID
     paper_title: str
     year: int | None
-    page: int
+    page: int | None  # None for an abstract (from_abstract): cite it as the paper's abstract, never by page
     section: str | None
     text: str
     distance: float
@@ -122,7 +122,7 @@ async def search(
             paper_id=chunk.paper_id,
             paper_title=papers[chunk.paper_id].title,
             year=papers[chunk.paper_id].year,
-            page=chunk.page,
+            page=None if chunk.from_abstract else chunk.page,
             section=chunk.section,
             text=f"(abstract only) {chunk.text}" if chunk.from_abstract else chunk.text,
             distance=round(chunk.distance, 4),

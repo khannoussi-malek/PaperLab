@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import io
 import json
@@ -213,7 +214,7 @@ async def test_the_max_tries_branch_does_not_touch_a_paper_without_a_pdf(worker_
 ABSTRACT = "Sleep helps memory consolidation in adults."
 PREFILL = {"title": "Sleep and memory", "abstract": ABSTRACT, "authors": ["Ada Quillfeather"], "year": 2020}
 QUESTION = "does sleep help memory?"
-PAGE_0 = re.compile(r"\bp\.?\s?0\b")
+PAGE_0 = re.compile(r"\b(p\.?|page)\s?=?\s?0\b")  # p.0, p 0, page 0, ?page=0
 
 
 async def indexed_abstract_paper(session, ctx) -> tuple[Paper, Chunk]:
@@ -232,9 +233,20 @@ async def test_create_metadata_paper_writes_one_abstract_chunk_and_no_file(sessi
     assert (chunk.ordinal, chunk.page, chunk.bbox, chunk.section_title) == (0, papers.ABSTRACT_PAGE, [], "Abstract")
     assert chunk.text == f"Sleep and memory. {ABSTRACT}" == papers.abstract_chunk_text("Sleep and memory", ABSTRACT)
     bare = await papers.create_metadata_paper(session, {"title": "Bare", "abstract": "  "}, "manual")
-    assert (bare.status, bare.has_pdf, await chunk_count(session, bare.id)) == ("ready", False, 0)
+    assert (bare.status, bare.has_pdf, bare.abstract, await chunk_count(session, bare.id)) == ("ready", False, None, 0)
+    assert bare.evidence_access == "metadata"
+
+
+async def test_create_metadata_paper_refuses_what_it_cannot_store(session):
     with pytest.raises(InvalidInput, match="unknown_details_source"):
         await papers.create_metadata_paper(session, {"title": "Moon"}, "the-moon")
+    for title in (None, "", "   "):
+        with pytest.raises(InvalidInput, match="empty_title"):
+            await papers.create_metadata_paper(session, {"title": title, "abstract": ABSTRACT}, "manual")
+    for key in ("file_path", "status", "details_source", "id"):
+        with pytest.raises(InvalidInput, match="reserved_field") as refused:
+            await papers.create_metadata_paper(session, {**PREFILL, key: None}, "manual")
+        assert refused.value.details == {"fields": [key]}
 
 
 async def test_index_abstract_embeds_and_marks_ready(worker_session, ctx, embedder):
@@ -248,6 +260,30 @@ async def test_index_abstract_marks_ready_even_when_embedding_fails(worker_sessi
     for ctx in ({"embedder": FakeEmbedder(refuse="The key was revoked.")}, {"embedder": None}):  # failing, none
         paper, chunk = await indexed_abstract_paper(worker_session, ctx)
         assert (paper.status, paper.status_error, chunk.embedding) == ("ready", None, None)
+
+
+class Breaks(FakeEmbedder):
+    """A source that fails in a way _embed doesn't catch: a bug (RuntimeError), or arq's cancel at job_timeout."""
+
+    def __init__(self, error: BaseException):
+        super().__init__()
+        self.error = error
+
+    async def encode(self, texts):
+        raise self.error
+
+
+async def test_index_abstract_marks_ready_after_an_unexpected_error(worker_session):
+    paper, chunk = await indexed_abstract_paper(worker_session, {"embedder": Breaks(RuntimeError("a bug"))})
+    assert (paper.status, chunk.embedding) == ("ready", None)
+
+
+async def test_index_abstract_marks_ready_when_cancelled_and_still_cancels(worker_session):
+    paper = await papers.create_metadata_paper(worker_session, PREFILL, "crossref")
+    with pytest.raises(asyncio.CancelledError):
+        await ingest.index_abstract({"embedder": Breaks(asyncio.CancelledError())}, str(paper.id))
+    await worker_session.refresh(paper)
+    assert paper.status == "ready"
 
 
 async def test_index_abstract_leaves_a_paper_gone_or_with_a_pdf_alone(worker_session, ctx, embedder):
@@ -269,6 +305,7 @@ async def test_library_search_and_chat_retrieval_find_a_paper_by_its_abstract(wo
     assert (found.id, found.from_abstract) == (chunk.id, True)
     (passage,) = await library.search(session, QUESTION, embedder=embedder)
     assert (passage.chunk_id, passage.from_abstract, passage.evidence_access) == (chunk.id, True, "abstract")
+    assert passage.page is None  # an MCP client cites it as the abstract, never by page
     assert passage.text == f"(abstract only) {chunk.text}"
 
 
@@ -337,7 +374,7 @@ async def test_no_api_response_leaks_page_0(client, worker_session, ctx, embedde
     monkeypatch.setattr(claims, "_llm", given)
     monkeypatch.setattr(screening, "_default_model", local_model)
     paper, chunk = await indexed_abstract_paper(session, ctx)
-    name = f"No page 0 {uuid.uuid4().hex[:6]}"
+    name = f"Abstract leaks {uuid.uuid4().hex[:6]}"
     ws = await workspaces.create(session, name)
     await workspaces.add_paper(session, ws.id, paper.id)
     pid, wid = paper.id, ws.id
@@ -369,6 +406,7 @@ async def test_no_api_response_leaks_page_0(client, worker_session, ctx, embedde
             await call("verify_claims", text="Sleep helps memory (Quillfeather, 2020).", workspace=name)
         ),
     }
+    assert all(PAGE_0.search(s) for s in ("p.0", "p. 0", "page 0", "paperlab://papers/x?page=0&chunk=y"))
     for where, body in bodies.items():
         assert not PAGE_0.search(json.dumps(body)), where
         assert _page_0_leaks(body) == [], where
@@ -378,7 +416,7 @@ async def test_no_api_response_leaks_page_0(client, worker_session, ctx, embedde
     assert [c["from_abstract"] for c in bodies["chunks"]] == [True]
     assert bodies["note suggestions"]["detail"] == "no_pdf"
     assert bodies["evidence card"]["detail"] == "needs_full_text"
-    assert [p["from_abstract"] for p in bodies["search_library"]] == [True]
+    assert [(p["page"], p["from_abstract"]) for p in bodies["search_library"]] == [(None, True)]
     assert bodies["get_paper"]["sections"] == []
     assert (bodies["verify_claim"]["evidence_level"], bodies["verify_claim"]["quote_page"]) == ("abstract_only", None)
     (item,) = bodies["verify_claims"]
