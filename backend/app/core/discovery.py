@@ -463,7 +463,7 @@ def _surname_forms(name: str) -> set[str]:
     return {tokens[-1], " ".join(tokens[start:])} if tokens else set()
 
 
-def _same_work(candidate: Candidate, entry: dict) -> bool:
+def same_work(candidate: Candidate, entry: dict) -> bool:
     """An arXiv entry is the candidate's preprint: the same title word for word; the same first author or at least
     two shared surnames (with no authors on either side, a year within one); and not posted more than a year after
     the paper. A wrong match would ingest another paper, so this is strict."""
@@ -507,7 +507,7 @@ def _renamed_work(candidate: Candidate, entry: dict) -> bool:
     """An arXiv entry is the preprint of a paper renamed on publication: the same text before the colon (two words or
     more), the same three or more authors in the same order (surname and first initial), the paper published 0 to 2
     years after the preprint, and neither title a part of a series ("Part II"), whose parts share a prefix and authors.
-    The title test is looser than _same_work's, so the author and year tests are stricter."""
+    The title test is looser than same_work's, so the author and year tests are stricter."""
     ours, theirs = candidate.authors, entry["authors"]
     return (
         (prefix := _title_prefix(candidate.title)) is not None
@@ -609,7 +609,7 @@ async def _reuse_published_copy(session: AsyncSession, candidate: Candidate) -> 
                 for held in rows
                 if not is_preprint_copy(held)
                 and (published := Candidate(title=held.title, authors=held.authors, year=held.year))
-                and (_same_work(published, preprint) or _renamed_work(published, preprint))
+                and (same_work(published, preprint) or _renamed_work(published, preprint))
             ),
             None,
         )
@@ -645,7 +645,7 @@ async def _arxiv_title_copy(
     http = providers.client("arxiv")
     if http is None or _has_arxiv_id(candidate):
         return None, tried
-    searches = [(candidate.title, None, _same_work, "arxiv_title_match")]
+    searches = [(candidate.title, None, same_work, "arxiv_title_match")]
     if (prefix := _title_prefix(candidate.title)) and len(candidate.authors) >= 3 and candidate.year:
         searches.append((prefix, surname(candidate.authors[0]), _renamed_work, "arxiv_title_prefix_match"))
     for title, author, same, outcome in searches:
