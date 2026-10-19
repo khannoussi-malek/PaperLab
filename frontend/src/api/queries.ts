@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import {
+  MutationCache,
   QueryClient,
   keepPreviousData,
   useInfiniteQuery,
@@ -12,6 +13,7 @@ import { sameCandidate } from '@/features/discovery/candidateMeta'
 import { ALREADY_SAVED } from '@/features/chat/noteBlocks'
 import {
   api,
+  PaperMergedError,
   type BulkHitReviewUpdate,
   type Candidate,
   type ChartSpec,
@@ -51,9 +53,17 @@ import {
 
 export const PAPERS_POLL_MS = 2000
 
-export const queryClient = new QueryClient({
+export const queryClient: QueryClient = new QueryClient({
   // A local API answers or fails at once; retrying a 404 only delays the error the user needs to see.
   defaultOptions: { queries: { retry: false } },
+  mutationCache: new MutationCache({
+    // A save on a paper merged meanwhile (R19): its details refetch, answer 410, and the reader moves to the kept one.
+    // ponytail: the 410 names only the kept paper, so every open paper's details refetch; a merge is rare.
+    onError: (error) => {
+      if (error instanceof PaperMergedError)
+        void queryClient.invalidateQueries({ predicate: (q) => q.queryKey[0] === 'papers' && q.queryKey.length === 2 })
+    },
+  }),
 })
 
 export const keys = {
