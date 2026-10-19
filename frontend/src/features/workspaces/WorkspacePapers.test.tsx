@@ -186,7 +186,7 @@ test('the three ways in are named in words', () => {
   const ways = [
     ['Add from library', 'Pick papers already in your library.'],
     ['Upload PDFs', 'Add PDFs from your computer.'],
-    ['Find by DOI or title', 'Look a paper up by DOI, arXiv ID or title and add its free PDF.'],
+    ['Find by DOI or title', 'Look a paper up by DOI, arXiv ID or title.'],
   ]
   for (const [name, tip] of ways) {
     const button = screen.getByRole('button', { name })

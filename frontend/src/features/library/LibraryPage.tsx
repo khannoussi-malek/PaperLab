@@ -59,7 +59,7 @@ export function LibraryPage() {
               fallback={<FileText aria-hidden className="size-8 text-muted-foreground" />}
               className="h-48 w-64"
             />
-            <p className="text-muted-foreground">No papers yet. Upload a PDF to start.</p>
+            <p className="text-muted-foreground">No papers yet. Upload a PDF, or add one by DOI.</p>
           </div>
         ) : (
           <div className="flex flex-col gap-3">

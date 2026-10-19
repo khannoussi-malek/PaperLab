@@ -312,8 +312,9 @@ export const useSimilarPapers = (paperId: string, enabled: boolean) =>
 export function useAddCandidate(workspaceId?: string) {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: (candidate: Candidate) => api.addCandidate(candidate, workspaceId),
-    onSuccess: (paper, candidate) => {
+    mutationFn: ({ candidate, saveWithoutPdf }: { candidate: Candidate; saveWithoutPdf?: boolean }) =>
+      api.addCandidate(candidate, workspaceId, saveWithoutPdf),
+    onSuccess: (paper, { candidate }) => {
       // So a row still shows "In library" after the dialog (or the Similar tab) is closed and reopened, even though
       // that only rereads the cache: the rows themselves unmount, and the cached candidate otherwise still lacks
       // paper_id until the next real search. New arrays and objects throughout: never mutate cached query data.
