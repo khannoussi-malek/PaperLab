@@ -56,6 +56,20 @@ describe('api.addCandidate', () => {
     vi.unstubAllGlobals()
   })
 
+  it('uploads a paper PDF to /pdf as multipart field "file", and finds one at /find-pdf', async () => {
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(new Response('{}', { status: 200 })))
+    vi.stubGlobal('fetch', fetchMock)
+    const file = new File(['%PDF'], 'a.pdf', { type: 'application/pdf' })
+    await api.uploadPaperPdf('p1', file)
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/papers/p1/pdf')
+    expect(fetchMock.mock.calls[0][1].method).toBe('POST')
+    expect((fetchMock.mock.calls[0][1].body as FormData).get('file')).toBeInstanceOf(File)
+    await api.findPaperPdf('p1')
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/papers/p1/find-pdf')
+    expect(fetchMock.mock.calls[1][1].method).toBe('POST')
+    vi.unstubAllGlobals()
+  })
+
   it('keeps what a failed find-pdf tried and the free copies it names', async () => {
     const body = { detail: 'no_free_pdf', tried: [{ url: 'https://a.example/x.pdf', outcome: 'http_403' }], free_copies: ['https://b.example'] }
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { status: 409 })))

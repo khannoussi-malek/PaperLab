@@ -90,12 +90,14 @@ function FindFailure({ error }: { error: Error }) {
 }
 
 /** "Find free copy" for a paper saved without a PDF, with its result: looking, found (the list refreshes), or why not. */
-export function FindFreeCopy({ paperId }: { paperId: string }) {
+export function FindFreeCopy({ paperId, title }: { paperId: string; title: string }) {
   const find = useFindPaperPdf(paperId)
   return (
     <>
       <Button type="button" variant="outline" size="sm" disabled={find.isPending} onClick={() => find.mutate()}>
-        Find free copy
+        <span>
+          Find free copy <span className="sr-only">for {title}</span>
+        </span>
       </Button>
       {find.isPending && <p role="status" className="basis-full text-xs text-muted-foreground">Looking for a free copy…</p>}
       {find.isError && (
@@ -117,7 +119,7 @@ export function GetPdfActions({ paperId, title }: { paperId: string; title: stri
         disabled={upload.isPending}
         onPick={(file, onFail) => upload.mutate(file, { onError: onFail })}
       />
-      <FindFreeCopy paperId={paperId} />
+      <FindFreeCopy paperId={paperId} title={title} />
       {upload.isError && (
         <p role="alert" className="basis-full text-xs text-destructive">
           {codeInWords(upload.error.message)}

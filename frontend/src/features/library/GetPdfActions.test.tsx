@@ -42,7 +42,7 @@ test('Find free copy says it is looking, then refreshes on success', async () =>
   let done: (v: unknown) => void = () => {}
   const find = vi.spyOn(api, 'findPaperPdf').mockReturnValue(new Promise((r) => (done = r)) as any)
   const invalidate = setup()
-  fireEvent.click(screen.getByRole('button', { name: 'Find free copy' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Find free copy for Sleep and memory' }))
   expect(await screen.findByText('Looking for a free copy…')).toBeInTheDocument()
   expect(find).toHaveBeenCalledWith('p1')
   done({ id: 'p1' })
@@ -55,8 +55,8 @@ test('a failed find lists what was tried and where a copy may be', async () => {
     new NoFreePdfError('x', [{ url: 'https://pub.example/a.pdf', outcome: 'http_403' }], ['https://repo.example/p']),
   )
   setup()
-  fireEvent.click(screen.getByRole('button', { name: 'Find free copy' }))
-  expect(await screen.findByText('No free copy was found.')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Find free copy for Sleep and memory' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('No free copy was found.')
   expect(screen.getByText(/pub\.example\/a\.pdf: the site answered 403/)).toBeInTheDocument()
   expect(screen.getByText('Where a copy may be:')).toBeInTheDocument()
   expect(screen.getByRole('link', { name: 'https://repo.example/p' })).toHaveAttribute('href', 'https://repo.example/p')
@@ -65,14 +65,14 @@ test('a failed find lists what was tried and where a copy may be', async () => {
 test('a held arXiv copy links to the other paper', async () => {
   vi.spyOn(api, 'findPaperPdf').mockRejectedValue(new AlreadyInLibraryError('already_in_library', 'p2'))
   setup()
-  fireEvent.click(screen.getByRole('button', { name: 'Find free copy' }))
-  expect(await screen.findByText(/Your library already holds this work as another paper\./)).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Find free copy for Sleep and memory' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('Your library already holds this work as another paper.')
   expect(screen.getByRole('link', { name: 'Open it' }).getAttribute('href')).toContain('p2')
 })
 
 test('already_has_pdf reads in words', async () => {
   vi.spyOn(api, 'findPaperPdf').mockRejectedValue(new Error('already_has_pdf'))
   setup()
-  fireEvent.click(screen.getByRole('button', { name: 'Find free copy' }))
-  expect(await screen.findByText('This paper already has its PDF.')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Find free copy for Sleep and memory' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('This paper already has its PDF.')
 })

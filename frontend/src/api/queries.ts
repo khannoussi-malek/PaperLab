@@ -825,7 +825,14 @@ export function useUploadHitPdf(workspaceId: string) {
   const client = useQueryClient()
   return useMutation({
     mutationFn: ({ hitId, file }: { hitId: string; file: File }) => api.uploadHitPdf(workspaceId, hitId, file),
-    onSuccess: (hit) => patchHitFields(client, workspaceId, hit.id, hit),
+    onSuccess: (hit) => {
+      patchHitFields(client, workspaceId, hit.id, hit)
+      // An upload onto a hit whose paper was saved without a PDF attaches it: the library and reader must see that.
+      if (hit.paper_id) {
+        void client.invalidateQueries({ queryKey: keys.papers })
+        void client.invalidateQueries({ queryKey: keys.paper(hit.paper_id) })
+      }
+    },
   })
 }
 
