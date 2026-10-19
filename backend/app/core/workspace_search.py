@@ -998,7 +998,8 @@ async def upload_hit_pdf(
         raise NotFound(f"hit {hit_id} not found")
 
     ref = await session.get(ExternalRef, hit.external_ref_id) if hit.external_ref_id else None
-    held_id = (await _held(session, ref))[0] if ref is not None else None
+    # By identifier only: held_version may write this DOI onto a held arXiv copy, which an upload must not do.
+    held_id = (ref.imported_as or await _library_paper_id(session, ref)) if ref is not None else None
     if held_id is not None and not (await papers.get_paper(session, held_id)).has_pdf:
         # The upload would be thrown away or become a duplicate of it, and the hit counted as retrieved (PRISMA, R6);
         # attaching it is PR 2.

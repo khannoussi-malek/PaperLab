@@ -54,7 +54,12 @@ async def correct_paper(paper_id: uuid.UUID, payload: PaperUpdate, request: Requ
     paper = await enrichment.correct_metadata(session, paper_id, fields)
     rebuilt = not {"title", "abstract"}.isdisjoint(fields) and not paper.has_pdf  # its abstract chunk was rebuilt
     if rebuilt and paper.status == PaperStatus.EMBEDDING:
-        await request.app.state.arq.enqueue_job("index_abstract", str(paper.id), _queue_name=INGEST_QUEUE)
+        paper_id = paper.id
+        try:
+            await request.app.state.arq.enqueue_job("index_abstract", str(paper_id), _queue_name=INGEST_QUEUE)
+        except Exception:
+            await papers.set_status(session, paper_id, PaperStatus.READY)  # never left at embedding with no job
+            raise
     return paper
 
 
