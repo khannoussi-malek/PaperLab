@@ -17,6 +17,9 @@ PDF_MAGIC = b"%PDF-"
 # consumer that shows or trusts a page says "abstract" for it, or leaves it out.
 ABSTRACT_PAGE = 0
 
+# What create_metadata_paper sets itself; a prefill naming one is refused rather than overriding it.
+OWNED_BY_CREATE = frozenset({"id", "file_path", "status", "details_source"})
+
 READING_PASSES = range(4)
 TRIAGES = ("keep", "later", "drop")
 
@@ -54,13 +57,19 @@ async def create_metadata_paper(session: AsyncSession, prefill: dict[str, Any], 
 
     With an abstract it gets one chunk on ABSTRACT_PAGE and starts `embedding`, for the caller to enqueue
     index_abstract; without one it is `ready` at once, with no chunks (R3). Commits; enqueues nothing.
-    Raises InvalidInput("unknown_details_source", allowed=[...]).
+    Raises InvalidInput("unknown_details_source", allowed=[...] | "reserved_field", fields=[...] | "empty_title").
+    A blank abstract is stored as none.
     """
     if details_source not in DETAILS_SOURCES:
         raise InvalidInput("unknown_details_source", allowed=list(DETAILS_SOURCES))
-    abstract = (prefill.get("abstract") or "").strip()
+    if reserved := sorted(OWNED_BY_CREATE.intersection(prefill)):
+        raise InvalidInput("reserved_field", fields=reserved)
+    title = (prefill.get("title") or "").strip()
+    if not title:
+        raise InvalidInput("empty_title")
+    abstract = (prefill.get("abstract") or "").strip() or None
     paper = Paper(
-        **{**prefill, "title": prefill.get("title") or "untitled"},
+        **{**prefill, "title": title, "abstract": abstract},
         file_path=None,
         details_source=details_source,
         status=PaperStatus.EMBEDDING if abstract else PaperStatus.READY,
