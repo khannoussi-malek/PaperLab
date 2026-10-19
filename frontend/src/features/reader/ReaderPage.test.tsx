@@ -11,6 +11,7 @@ type NotesProps = {
 }
 const state = vi.hoisted(() => ({
   paper: undefined as Paper | undefined,
+  paperError: null as Error | null,
   onCite: null as null | ((s: ChatSource) => void),
   notes: null as null | NotesProps,
   create: vi.fn(),
@@ -20,7 +21,7 @@ vi.mock('./pdfjs', () => ({ getDocument, pdfWorker: null }))
 vi.mock('@/api/queries', () => {
   const idle = { data: undefined, error: null }
   return {
-    usePaper: () => ({ data: state.paper, error: null }),
+    usePaper: () => ({ data: state.paper, error: state.paperError, isError: state.paperError !== null }),
     useNotes: () => ({ data: [], error: null }),
     useNoteMutations: () => ({ create: { mutateAsync: state.create }, update: {}, remove: {} }),
     useChunksOnPage: () => idle,
@@ -64,6 +65,7 @@ const paper = (over: Partial<Paper>) =>
 
 beforeEach(() => {
   getDocument.mockClear()
+  state.paperError = null
   state.create.mockReset().mockResolvedValue({})
 })
 afterEach(() => { window.location.hash = '' })
@@ -131,4 +133,11 @@ test('a plain note on a paper without a PDF is saved linked to it, with no ancho
   render(<ReaderPage paperId={ID} tab="notes" target={null} />)
   await act(() => state.notes!.onSavePaperNote('Read later.'))
   expect(state.create).toHaveBeenCalledWith({ body: 'Read later.', color: expect.any(String), paper_id: ID })
+})
+
+test('when the paper details fail to load, the PDF is still asked for', () => {
+  state.paper = undefined
+  state.paperError = new Error('Server error')
+  render(<ReaderPage paperId={ID} tab="notes" target={null} />)
+  expect(getDocument).toHaveBeenCalledWith({ url: `/api/papers/${ID}/file`, worker: null })
 })

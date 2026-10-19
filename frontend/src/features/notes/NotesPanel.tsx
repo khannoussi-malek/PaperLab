@@ -13,6 +13,8 @@ type Props = {
   paperId: string
   /** False for a paper saved without its PDF: notes quote its abstract, or are written with no quote. */
   hasPdf?: boolean
+  /** Whether that paper has an abstract to select from. */
+  hasAbstract?: boolean
   /** Saves a note with no quote; a paper without a PDF only. */
   onSavePaperNote?: (body: string) => Promise<boolean>
   notes: Note[]
@@ -32,8 +34,9 @@ type Props = {
   onPapersSaved: (note: Note) => void
 }
 
-// A new selection must reset the composer's text, so the draft's position is its identity.
-const draftKey = (draft: SelectionAnchor) => `${draft.page}:${draft.rects.flat().join(',')}`
+// A new selection must reset the composer's text, so the draft's position and words are its identity: an abstract
+// selection has no position.
+const draftKey = (draft: SelectionAnchor) => `${draft.page}:${draft.rects.flat().join(',')}:${draft.quotedText}`
 
 const isHuman = (note: Note) => note.provenance === 'human'
 
@@ -85,7 +88,9 @@ export function NotesPanel(props: Props) {
         />
       ) : props.hasPdf === false ? (
         <>
-          <p className="text-sm text-muted-foreground">Select text in the abstract, or write a note.</p>
+          <p className="text-sm text-muted-foreground">
+            {props.hasAbstract ? 'Select text in the abstract, or write a note.' : 'Write a note.'}
+          </p>
           {props.onSavePaperNote && <PlainNoteComposer onSave={props.onSavePaperNote} />}
         </>
       ) : (

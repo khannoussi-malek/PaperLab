@@ -25,7 +25,7 @@ from app.core import (
     tags,
     workspaces,
 )
-from app.core.errors import InvalidInput
+from app.core.errors import Conflict, InvalidInput
 from app.models import Chunk, EvidenceCard, LLMOutput, Paper
 from app.providers import embedding
 from app.workers import ingest
@@ -196,6 +196,13 @@ async def test_quoting_a_paper_without_a_pdf_saves_an_unanchored_note_led_by_the
     )
     with pytest.raises(InvalidInput, match="quote_not_found"):
         await notes.create_llm_note(session, paper.id, "Worth citing.", "Naps help too.")
+
+
+async def test_locating_a_quote_on_a_paper_without_a_pdf_still_refuses_no_pdf(session):
+    """create_ai_note keeps the note and drops the anchor on this Conflict; an abstract has no spot to anchor on."""
+    paper = await pdf_less_paper(session, abstract="Sleep helps memory consolidation.")
+    with pytest.raises(Conflict, match="no_pdf"):
+        await notes.locate_quote(session, paper.id, "Sleep helps memory consolidation.")
 
 
 async def test_mcp_create_note_on_a_paper_without_a_pdf_quotes_its_abstract(session):

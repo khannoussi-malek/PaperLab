@@ -114,8 +114,9 @@ type Props = {
 export function ReaderPage({ paperId, tab, target }: Props) {
   const paper = usePaper(paperId)
   // Asked for once the paper says it has a PDF: one saved without asks for nothing and shows its details instead.
+  // Details that failed to load say nothing either way, so the PDF is still tried.
   const noPdf = paper.data?.has_pdf === false
-  const { doc, error: pdfError } = usePdfDocument(paper.data?.has_pdf ? api.paperFileUrl(paperId) : null)
+  const { doc, error: pdfError } = usePdfDocument(paper.data?.has_pdf || paper.isError ? api.paperFileUrl(paperId) : null)
   const notesQuery = useNotes(paperId)
   const mutations = useNoteMutations()
   const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX)
@@ -585,6 +586,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
           <NotesPanel
             paperId={paperId}
             hasPdf={!noPdf}
+            hasAbstract={Boolean(paper.data?.abstract)}
             onSavePaperNote={savePaperNote}
             notes={notes}
             draft={draft}
