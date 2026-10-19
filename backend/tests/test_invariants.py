@@ -161,6 +161,38 @@ async def test_0051_round_trip(scratch_url):
 
 
 @pytest.mark.anyio
+async def test_0052_round_trip(scratch_url):
+    """paper_merges takes merged and reported rows only; downgrade refuses while the history has rows, then drops it."""
+    dsn = scratch_url.render_as_string(hide_password=False)
+    alembic(dsn, "upgrade", "head")
+    scratch = create_async_engine(scratch_url)
+    row = "INSERT INTO paper_merges (kept_id, merged_id, status) VALUES (gen_random_uuid(), gen_random_uuid(), :s)"
+    async with scratch.begin() as conn:
+        await conn.execute(text(row), {"s": "merged"})
+        moved = (await conn.execute(text("SELECT moved FROM paper_merges"))).scalar_one()
+    assert moved == {}
+    with pytest.raises(IntegrityError, match="ck_paper_merges_status"):
+        async with scratch.begin() as conn:
+            await conn.execute(text(row), {"s": "pending"})
+    refused = subprocess.run(
+        [sys.executable, "-m", "alembic", "downgrade", "0051"],
+        cwd=BACKEND,
+        env={**os.environ, "DATABASE_URL": dsn},
+        capture_output=True,
+        text=True,
+    )
+    assert refused.returncode != 0
+    assert "paper merges are recorded; delete them first" in refused.stderr
+    async with scratch.begin() as conn:
+        await conn.execute(text("DELETE FROM paper_merges"))
+    alembic(dsn, "downgrade", "0051")
+    async with scratch.connect() as conn:
+        assert (await conn.execute(text("SELECT to_regclass('paper_merges')"))).scalar_one() is None
+    await scratch.dispose()
+    alembic(dsn, "upgrade", "head")
+
+
+@pytest.mark.anyio
 async def test_workspaces_migration_keeps_categories_memberships_and_answers(scratch_url):
     """Data written at 0004, the revision just before the workspaces migration, survives it. If the migration is
     ever renumbered, this upgrade target moves with it."""
