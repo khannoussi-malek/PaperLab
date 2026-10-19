@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Text, text
+from sqlalchemy import DateTime, Index, Text, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -22,3 +22,5 @@ class PaperMerge(Base):
     moved: Mapped[dict[str, int]] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
     identifier: Mapped[str | None] = mapped_column(Text)  # "doi:10.…" or "openalex_id:W…"
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+
+    __table_args__ = (Index("ix_paper_merges_merged_id", "merged_id"),)

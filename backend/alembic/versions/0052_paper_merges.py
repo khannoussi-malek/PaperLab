@@ -29,6 +29,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.CheckConstraint("status IN ('merged', 'reported')", name="ck_paper_merges_status"),
     )
+    op.create_index("ix_paper_merges_merged_id", "paper_merges", ["merged_id"])  # a merged paper's id looks it up
 
 
 def downgrade() -> None:

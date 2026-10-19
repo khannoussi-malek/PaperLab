@@ -8,9 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.chunking import STRATEGY_VERSION, ChunkDraft
-from app.core.errors import Conflict, InvalidInput, NotFound
+from app.core.errors import Conflict, Gone, InvalidInput, NotFound
 from app.core.source_types import DETAILS_SOURCES
-from app.models import Chunk, Paper, PaperStatus
+from app.models import Chunk, Paper, PaperMerge, PaperStatus
 from app.models.workspace_search import WorkspaceSearchHit
 
 PDF_MAGIC = b"%PDF-"
@@ -127,6 +127,15 @@ async def attach_pdf(session: AsyncSession, paper_id: uuid.UUID, data: bytes, ho
 async def get_paper(session: AsyncSession, paper_id: uuid.UUID) -> Paper:
     paper = await session.get(Paper, paper_id)
     if paper is None:
+        # the one indexed lookup, only here: a merged paper's id leads to the paper it became (R19)
+        kept = await session.scalar(
+            select(PaperMerge.kept_id)
+            .where(PaperMerge.merged_id == paper_id, PaperMerge.status == "merged")
+            .order_by(PaperMerge.created_at.desc())
+            .limit(1)
+        )
+        if kept is not None:
+            raise Gone("paper_merged", detail=f"This paper was merged into {kept}.", kept_id=str(kept))
         raise NotFound(f"paper {paper_id} not found")
     return paper
 
