@@ -17,6 +17,8 @@ pytestmark = pytest.mark.anyio
 
 DOI = "10.18653/v1/n19-1423"  # the DOI doi_pdf prints
 PDF_TITLE = "A Paper With a Printed DOI"  # doi_pdf's title; its embedded authors are Jacob Devlin and Ming-Wei Chang
+BERT_TITLE = "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding"  # work_bert's
+BERT_ID = "W2963341956"
 
 
 @pytest.fixture
@@ -29,6 +31,13 @@ def worker_ctx(ctx, fake_openalex):
 async def saved_without_pdf(session, **fields) -> Paper:
     prefill = {"title": PDF_TITLE, "authors": ["Jacob Devlin"], "doi": DOI, **fields}
     return await papers.create_metadata_paper(session, prefill, "crossref")
+
+
+async def openalex_answers(session, fake_openalex, work: dict) -> None:
+    """OpenAlex on, answering the DOI doi_pdf prints with `work`."""
+    await paper_sources.update(session, {"contact_email": fake_openalex.MAILTO, "enabled": {"openalex": True}})
+    fake_openalex.route(f"/works/doi:{DOI}", work)
+    fake_openalex.route("/authors", {"results": []})
 
 
 async def upload(session, path) -> uuid.UUID:
@@ -108,11 +117,9 @@ async def test_a_failing_merge_leaves_the_ingested_paper_ready(
 
 async def test_two_pdfless_holders_are_reported_and_neither_merges(worker_session, doi_pdf, worker_ctx, fake_openalex):
     """M's DOI is held by K1 and its OpenAlex id by K2: two different papers, so which is M is unclear."""
-    await paper_sources.update(worker_session, {"contact_email": fake_openalex.MAILTO, "enabled": {"openalex": True}})
-    fake_openalex.route(f"/works/doi:{DOI}", recorded("work_bert"))
-    fake_openalex.route("/authors", {"results": []})
+    await openalex_answers(worker_session, fake_openalex, recorded("work_bert"))
     k1 = await saved_without_pdf(worker_session)
-    k2 = await saved_without_pdf(worker_session, doi=None, openalex_id="W2963341956")
+    k2 = await saved_without_pdf(worker_session, doi=None, openalex_id=BERT_ID)
     m_id = await upload(worker_session, doi_pdf)
 
     await ingest.ingest_paper(worker_ctx, str(m_id))
@@ -122,6 +129,42 @@ async def test_two_pdfless_holders_are_reported_and_neither_merges(worker_sessio
     assert (await paper_row(worker_session, k1.id)).file_path is None
     assert (await paper_row(worker_session, k2.id)).file_path is None
     assert await audit(worker_session, m_id) == [("reported", "holders_disagree")]
+
+
+async def test_a_pdfless_and_a_pdf_holder_are_reported_and_neither_merges(
+    worker_session, doi_pdf, worker_ctx, fake_openalex
+):
+    """M's DOI is held by K, saved without a PDF, and its OpenAlex id by P, which has one: M may be a copy of P."""
+    await openalex_answers(worker_session, fake_openalex, recorded("work_bert"))
+    k = await saved_without_pdf(worker_session)
+    p = Paper(file_path="/first-copy.pdf", title=BERT_TITLE, openalex_id=BERT_ID, status="ready")
+    worker_session.add(p)
+    await worker_session.commit()
+    m_id = await upload(worker_session, doi_pdf)
+
+    await ingest.ingest_paper(worker_ctx, str(m_id))
+
+    m, kept, holder = [await paper_row(worker_session, i) for i in (m_id, k.id, p.id)]
+    assert (m.status, m.file_path) == ("ready", str(doi_pdf))
+    assert (kept.file_path, holder.file_path) == (None, "/first-copy.pdf")
+    assert await audit(worker_session, m_id) == [("reported", "holders_disagree")]
+
+
+async def test_an_upload_whose_openalex_id_alone_a_pdfless_paper_holds_is_merged(
+    worker_session, doi_pdf, worker_ctx, fake_openalex
+):
+    """M's match carries no DOI: the OpenAlex id K holds is the only proof (R15b)."""
+    await openalex_answers(worker_session, fake_openalex, {**recorded("work_bert"), "doi": None})
+    k = await saved_without_pdf(worker_session, title=BERT_TITLE, doi=None, openalex_id=BERT_ID)
+    m_id = await upload(worker_session, doi_pdf)
+
+    await ingest.ingest_paper(worker_ctx, str(m_id))
+
+    assert await paper_row(worker_session, m_id) is None
+    kept = await paper_row(worker_session, k.id)
+    assert (kept.file_path, kept.status, kept.openalex_id, kept.doi) == (str(doi_pdf), "ready", BERT_ID, None)
+    identifier = select(PaperMerge.status, PaperMerge.identifier).where(PaperMerge.merged_id == m_id)
+    assert [tuple(r) for r in await worker_session.execute(identifier)] == [("merged", f"openalex_id:{BERT_ID}")]
 
 
 async def test_after_ingest_with_no_pdfless_holder_does_nothing(session):

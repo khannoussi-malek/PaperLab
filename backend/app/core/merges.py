@@ -253,18 +253,15 @@ async def merge(
 async def after_ingest(session: AsyncSession, paper_id: uuid.UUID, collisions: list[Collision]) -> MergeResult | None:
     """R17: ingest found `paper_id` (M) holding identifiers other papers hold (enrich_paper's `collisions`). M merges
     into the holder saved without a PDF, or a reported audit row says why not. A holder with a PDF is today's
-    duplicate: None, nothing written. Two different PDF-less holders (the DOI's and the OpenAlex id's) are reported as
-    holders_disagree and neither merges. Commits like merge, so the session must have nothing pending."""
-    pdfless = set(
-        await session.scalars(
-            select(Paper.id).where(Paper.id.in_([c.holder_id for c in collisions]), Paper.file_path.is_(None))
-        )
-    )
-    tried = [c for c in collisions if c.holder_id in pdfless]
-    if not tried:
+    duplicate: None, nothing written. Two different holders, at least one without a PDF (the DOI's and the OpenAlex
+    id's), are reported as holders_disagree and neither merges: M may as well be a copy of the other one. Commits like
+    merge, so the session must have nothing pending."""
+    holders = {c.holder_id for c in collisions}
+    pdfless = set(await session.scalars(select(Paper.id).where(Paper.id.in_(holders), Paper.file_path.is_(None))))
+    first = next((c for c in collisions if c.holder_id in pdfless), None)
+    if first is None:
         return None
-    first = tried[0]
-    if len({c.holder_id for c in tried}) > 1:
+    if len(holders) > 1:
         audit = {"kept_id": first.holder_id, "merged_id": paper_id, "identifier": f"{first.column}:{first.value}"}
         session.add(PaperMerge(**audit, status="reported", reason="holders_disagree", moved={}))
         await session.commit()
