@@ -7,7 +7,8 @@ from fastapi.responses import FileResponse
 from app.api.deps import DiscoveryDep, SessionDep
 from app.config import settings
 from app.core import discovery, enrichment, papers, tags, workspaces
-from app.core.errors import Conflict
+from app.core.errors import Conflict, InvalidInput
+from app.core.pipeline import MAX_UPLOAD_PDF_BYTES
 from app.core.queue import INGEST_QUEUE
 from app.models import PaperStatus
 from app.schemas.discovery import CandidateOut
@@ -101,6 +102,42 @@ async def reingest_paper(paper_id: uuid.UUID, request: Request, session: Session
     # (paper_not_ready) instead of a `ready` paper whose chunks are mid-replacement.
     await papers.set_status(session, paper.id, PaperStatus.UPLOADED)
     await session.refresh(paper)
+    await _enqueue_ingest(request, paper.id)
+    return paper
+
+
+@router.post("/{paper_id}/pdf")
+async def upload_paper_pdf(paper_id: uuid.UUID, file: UploadFile, request: Request, session: SessionDep) -> PaperOut:
+    """The PDF of a paper saved without one: the same paper upgrades in place, keeping its tags, notes, workspaces and
+    decisions, and its hits awaiting the PDF count as retrieved (manual). Ingest is queued. 404 unknown paper; 409
+    already_has_pdf; 422 not_a_pdf or pdf_too_large."""
+    data = await file.read()
+    if len(data) > MAX_UPLOAD_PDF_BYTES:
+        raise InvalidInput("pdf_too_large", max_mb=MAX_UPLOAD_PDF_BYTES // 1024 // 1024)
+    paper = await papers.attach_pdf(session, paper_id, data, how="manual")
+    await _enqueue_ingest(request, paper.id)
+    return paper
+
+
+@router.post("/{paper_id}/find-pdf")
+async def find_paper_pdf(
+    paper_id: uuid.UUID, request: Request, session: SessionDep, providers: DiscoveryDep
+) -> PaperOut:
+    """Looks for a free copy of a paper saved without a PDF, as Find papers' Add does, and upgrades it in place when
+    one is found (its awaiting hits count as imported); ingest is queued. 404 unknown paper; 409 already_has_pdf,
+    already_in_library with paper_id (its arXiv copy is held), or no_free_pdf with tried and free_copies."""
+    paper = await papers.get_paper(session, paper_id)
+    if paper.has_pdf:
+        raise Conflict("already_has_pdf")
+    try:
+        data, tried, copies = await discovery.find_pdf(session, providers, discovery.candidate_of(paper))
+    except Conflict as exc:
+        if str(exc) != discovery.ALREADY_IN_LIBRARY:
+            raise
+        raise Conflict("already_in_library", **exc.details) from exc
+    if data is None:
+        raise Conflict("no_free_pdf", tried=tried, free_copies=copies)
+    paper = await papers.attach_pdf(session, paper_id, data, how="imported")
     await _enqueue_ingest(request, paper.id)
     return paper
 

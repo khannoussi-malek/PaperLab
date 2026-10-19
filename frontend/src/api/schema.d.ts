@@ -159,6 +159,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/papers/{paper_id}/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload Paper Pdf
+         * @description The PDF of a paper saved without one: the same paper upgrades in place, keeping its tags, notes, workspaces and
+         *     decisions, and its hits awaiting the PDF count as retrieved (manual). Ingest is queued. 404 unknown paper; 409
+         *     already_has_pdf; 422 not_a_pdf or pdf_too_large.
+         */
+        post: operations["upload_paper_pdf_api_papers__paper_id__pdf_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/papers/{paper_id}/find-pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Find Paper Pdf
+         * @description Looks for a free copy of a paper saved without a PDF, as Find papers' Add does, and upgrades it in place when
+         *     one is found (its awaiting hits count as imported); ingest is queued. 404 unknown paper; 409 already_has_pdf,
+         *     already_in_library with paper_id (its arXiv copy is held), or no_free_pdf with tried and free_copies.
+         */
+        post: operations["find_paper_pdf_api_papers__paper_id__find_pdf_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/papers/{paper_id}/tags": {
         parameters: {
             query?: never;
@@ -2070,6 +2114,11 @@ export interface components {
             file: string;
             /** Workspace Id */
             workspace_id?: string | null;
+        };
+        /** Body_upload_paper_pdf_api_papers__paper_id__pdf_post */
+        Body_upload_paper_pdf_api_papers__paper_id__pdf_post: {
+            /** File */
+            file: string;
         };
         /** BulkHitReviewUpdate */
         BulkHitReviewUpdate: {
@@ -5077,6 +5126,72 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaperOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_paper_pdf_api_papers__paper_id__pdf_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                paper_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_paper_pdf_api_papers__paper_id__pdf_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaperOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    find_paper_pdf_api_papers__paper_id__find_pdf_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                paper_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -755,6 +755,53 @@ async def pmc_copy(
     return data, [*tried, *more]
 
 
+async def _download_free_copy(
+    session: AsyncSession, providers: Providers, candidate: Candidate
+) -> tuple[bytes | None, list[dict[str, str]], list[str]]:
+    """The download waterfall add() and find_pdf() share: the candidate's PDF URLs, the arXiv title copy, DiVA among
+    the repository copies, then PMC. (the PDF or None, what each URL tried said, the repository copies)."""
+    data, tried = await download_pdf(providers.pdf, candidate.pdf_urls)
+    copies: list[str] = []
+    if data is None:
+        data, tried = await _arxiv_title_copy(session, providers, candidate, tried)
+    if data is None:
+        copies = await free_copies(providers, candidate.doi, tried)
+        data, tried = await _diva_copy(providers, copies, tried)
+    if data is None:
+        data, tried = await pmc_copy(providers, candidate.external_ids, candidate.doi, copies, tried)
+    return data, tried, copies
+
+
+async def find_pdf(
+    session: AsyncSession, providers: Providers, candidate: Candidate
+) -> tuple[bytes | None, list[dict[str, str]], list[str]]:
+    """A free copy for a paper the library holds without one (R11): Unpaywall's links merged in, then add()'s
+    waterfall. Returns (the PDF or None, what each URL tried said, the repository pages that may hold a copy); stores
+    nothing. The reuse-a-held-copy checks of add() are left out, as they decide whether to create a paper, except
+    the arXiv title search's: a held arXiv copy of the same work raises Conflict(ALREADY_IN_LIBRARY, paper_id, tried),
+    a duplicate rather than a second file. Ends the transaction first, so no connection idles through the downloads."""
+    await session.commit()
+    [candidate] = await _add_unpaywall_links(providers.client("unpaywall"), [candidate], merge=True)
+    return await _download_free_copy(session, providers, candidate)
+
+
+def candidate_of(paper: Paper) -> Candidate:
+    """A held paper as find_pdf's candidate: its bibliographic fields, its OpenAlex, PMC and arXiv ids, and the arXiv
+    PDF and open-access link it knows, as its first PDF URLs."""
+    arxiv_id = arxiv_from_doi((paper.doi or "").lower() or None) or arxiv_from_url(paper.oa_url)
+    pmc = pmc_opendata.normalize(paper.pmcid)
+    ids = {"openalex": paper.openalex_id, "pmc": pmc and pmc.removeprefix("PMC"), "arxiv": arxiv_id}
+    return Candidate(
+        title=paper.title,
+        authors=list(paper.authors or []),
+        year=paper.year,
+        venue=paper.venue,
+        doi=paper.doi,
+        external_ids={key: value for key, value in ids.items() if value},
+        pdf_urls=ordered_pdf_urls(arxiv_id, paper.oa_url),
+    )
+
+
 async def add(
     session: AsyncSession,
     providers: Providers,
@@ -779,15 +826,7 @@ async def add(
     if candidate.doi and candidate.pdf_urls:  # one extra request: a repository copy beside a bot-checked publisher
         [candidate] = await _add_unpaywall_links(providers.client("unpaywall"), [candidate], merge=True)
     await _reuse_arxiv_copy(session, candidate, _arxiv_ids(candidate), [])  # before any download
-    data, tried = await download_pdf(providers.pdf, candidate.pdf_urls)
-    copies: list[str] = []
-    if data is None:
-        data, tried = await _arxiv_title_copy(session, providers, candidate, tried)
-    if data is None:
-        copies = await free_copies(providers, candidate.doi, tried)
-        data, tried = await _diva_copy(providers, copies, tried)
-    if data is None:
-        data, tried = await pmc_copy(providers, candidate.external_ids, candidate.doi, copies, tried)
+    data, tried, copies = await _download_free_copy(session, providers, candidate)
     if tried_out is not None:
         tried_out.extend(tried)
     if copies_out is not None:
