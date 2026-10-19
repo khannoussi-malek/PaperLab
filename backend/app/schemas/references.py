@@ -27,6 +27,7 @@ class ReferenceOut(BaseModel):
     has_pdf: bool
     cocitation: int
     paper_id: uuid.UUID | None
+    paper_has_pdf: bool | None  # null when the library doesn't hold it
     position: int
     queued_at: datetime | None
 

@@ -4,10 +4,25 @@ import { glass } from '@/components/glass'
 import { Button } from '@/components/ui/button'
 import { readerHref } from '@/lib/route'
 import { cn } from '@/lib/utils'
+import { detailsSourceLine } from '../reader/detailsSource'
+import { NoPdfBadge } from '../reader/SourceBadges'
 import { FirstPage } from './FirstPage'
 import { pageCountLabel } from './paperMeta'
 
 const addedDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { dateStyle: 'medium' })
+
+/** The page area of a paper saved without a PDF: no sheet to draw, so it says so and where its details came from. */
+function NoPdfPlaceholder({ paper }: { paper: Paper }) {
+  const source = detailsSourceLine(paper)
+  return (
+    <div className="grid aspect-[612/792] w-full place-items-center rounded-sm bg-muted/60 p-6 text-center text-sm">
+      <p className="flex flex-col items-center gap-2 text-muted-foreground">
+        <NoPdfBadge />
+        {source}
+      </p>
+    </div>
+  )
+}
 
 /** The page area while a paper has no readable PDF yet: still ingesting, or failed. */
 function PagePlaceholder({ paper }: { paper: Paper }) {
@@ -38,7 +53,9 @@ export function PaperPreview({ paper }: { paper: Paper }) {
       aria-label="Paper preview"
       className={cn('paper-preview flex flex-col gap-4 rounded-xl p-4 ring-1 ring-glass-border', glass)}
     >
-      {paper.status === 'ready' ? (
+      {paper.has_pdf === false ? (
+        <NoPdfPlaceholder paper={paper} />
+      ) : paper.status === 'ready' ? (
         <FirstPage key={fileUrl} url={fileUrl} title={paper.title} />
       ) : (
         <PagePlaceholder paper={paper} />

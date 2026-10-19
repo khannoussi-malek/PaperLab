@@ -18,6 +18,8 @@ export const GLOSSARY = {
   quoteMismatch: "A quote the AI gave as a reason isn't in the abstract word for word, so check its reasoning.",
   nothingFound: 'The AI found no statement for this field in the paper.',
   leftOut: "Items the AI proposed without a quote from the paper to back them. They're hidden so nothing unsupported shows.",
+  detailsSource: "Where PaperLab found this paper's title, authors and abstract when it was saved. Edit details changes them.",
+  needsFullText: "Evidence cards are made from a paper's full text. This paper has no PDF yet, so there is no card to make.",
   notesUsed: "Chat sends your newest notes that fit in the model's context. Older notes beyond that aren't used for this answer.",
 } as const
 

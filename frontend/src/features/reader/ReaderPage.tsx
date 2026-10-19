@@ -39,6 +39,7 @@ import { citationAt, clientPointToPdf, notesAt, rectContains } from './hitTest'
 import { PdfPage } from './PdfPage'
 import { SelectionCopyButton } from './SelectionCopyButton'
 import { ReaderContextMenu, type ContextMenuState } from './ReaderContextMenu'
+import { PaperDetailsPanel } from './PaperDetailsPanel'
 import { PaperTagChips } from './PaperTagChips'
 import { ReaderToolbar } from './ReaderToolbar'
 import { ReadingContextBanner } from './ReadingContextBanner'
@@ -111,8 +112,10 @@ type Props = {
 }
 
 export function ReaderPage({ paperId, tab, target }: Props) {
-  const { doc, error: pdfError } = usePdfDocument(api.paperFileUrl(paperId))
   const paper = usePaper(paperId)
+  // Asked for once the paper says it has a PDF: one saved without asks for nothing and shows its details instead.
+  const noPdf = paper.data?.has_pdf === false
+  const { doc, error: pdfError } = usePdfDocument(paper.data?.has_pdf ? api.paperFileUrl(paperId) : null)
   const notesQuery = useNotes(paperId)
   const mutations = useNoteMutations()
   const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX)
@@ -184,8 +187,13 @@ export function ReaderPage({ paperId, tab, target }: Props) {
   // A one-shot target from the hash. Once the PDF and what the target needs have loaded, it goes
   // through the same path as a citation click or a note click, then leaves the hash so a reload doesn't repeat it.
   // replaceState fires no hashchange and adds no history entry, so Back still returns to where the link was.
+  // A paper without a PDF has no page to show a passage on: any target but a note (a chat link's page 0) is dropped.
   useEffect(() => {
-    if (!doc || !target || shownTargetId.current === target.id) return
+    if (noPdf && target?.kind !== 'note') {
+      if (window.location.hash !== readerHref(paperId, tab)) window.history.replaceState(null, '', readerHref(paperId, tab))
+      return
+    }
+    if ((!doc && !noPdf) || !target || shownTargetId.current === target.id) return
     if (target.kind === 'chunk') {
       if (!targetChunks.data) return
       const chunk = targetChunks.data.find((c) => c.id === target.id)
@@ -462,6 +470,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
         onScroll={jumpBack.onScroll}
         onContextMenu={openContextMenu}
       >
+        {noPdf && paper.data && <PaperDetailsPanel paper={paper.data} />}
         {doc &&
           Array.from({ length: doc.numPages }, (_, i) => i + 1).map((pageNumber) => (
             <PdfPage key={pageNumber} doc={doc} pageNumber={pageNumber} scale={scale}>
@@ -568,6 +577,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
         notes={
           <NotesPanel
             paperId={paperId}
+            hasPdf={!noPdf}
             notes={notes}
             draft={draft}
             draftColor={draftColor}
@@ -587,15 +597,22 @@ export function ReaderPage({ paperId, tab, target }: Props) {
         chat={
           <ChatPanel
             scope={{ kind: 'paper', id: paperId }}
-            // A cited passage flashes on its page; a cited note is focused as if picked in the Notes tab.
-            onCite={(source) => ('bbox' in source ? flashChunk(source.page, source.bbox) : focusNote({ id: source.note_id }))}
+            // A cited passage flashes on its page, a cited abstract scrolls into view; a cited note is focused as if
+            // picked in the Notes tab.
+            onCite={(source) =>
+              !('bbox' in source)
+                ? focusNote({ id: source.note_id })
+                : source.from_abstract
+                  ? scrollToElement('.paper-abstract', 'center')
+                  : flashChunk(source.page, source.bbox)
+            }
             onPromoted={showPromotedNote}
           />
         }
         data={<DataPanel paperId={paperId} onShowRegion={flashChunk} />}
         similar={<SimilarTab paperId={paperId} active={tab === 'similar'} />}
         references={<ReferencesTab paperId={paperId} active={tab === 'references'} />}
-        evidence={<EvidencePanel paperId={paperId} onShowRegion={flashChunk} />}
+        evidence={<EvidencePanel paperId={paperId} hasPdf={!noPdf} onShowRegion={flashChunk} />}
       />
 
       {numberDraft && (

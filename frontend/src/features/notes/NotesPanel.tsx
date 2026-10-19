@@ -11,6 +11,8 @@ import { SuggestedNotes } from './SuggestedNotes'
 
 type Props = {
   paperId: string
+  /** False for a paper saved without its PDF. */
+  hasPdf?: boolean
   notes: Note[]
   draft: SelectionAnchor | null
   draftColor: string
@@ -82,7 +84,7 @@ export function NotesPanel(props: Props) {
       ) : (
         <p className="text-sm text-muted-foreground">Select text in the paper to add a note.</p>
       )}
-      <SuggestedNotes paperId={paperId} />
+      <SuggestedNotes paperId={paperId} hasPdf={props.hasPdf} />
       {notes.length > 0 && shown.length === 0 && (
         <p className="text-sm text-muted-foreground">No notes match these filters.</p>
       )}

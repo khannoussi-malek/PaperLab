@@ -3857,6 +3857,8 @@ export interface components {
             cocitation: number;
             /** Paper Id */
             paper_id: string | null;
+            /** Paper Has Pdf */
+            paper_has_pdf: boolean | null;
             /** Position */
             position: number;
             /** Queued At */

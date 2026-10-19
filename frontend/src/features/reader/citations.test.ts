@@ -35,6 +35,7 @@ const fake = (title: string, slug: string, position: number): Reference => ({
   has_pdf: slug !== 'closed',
   cocitation: 1,
   paper_id: null,
+  paper_has_pdf: null,
   position,
   queued_at: null,
 })

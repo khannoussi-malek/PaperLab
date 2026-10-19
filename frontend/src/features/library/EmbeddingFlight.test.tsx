@@ -10,6 +10,11 @@ test('isEmbedding is true only while a paper is embedding', () => {
   }
 })
 
+test('a paper without a PDF embedding its abstract has no pages to fly', () => {
+  expect(isEmbedding({ status: 'embedding', has_pdf: false })).toBe(false)
+  expect(isEmbedding({ status: 'embedding', has_pdf: true })).toBe(true)
+})
+
 test('renders a hidden, non-interactive layer of 7 motion-safe pages', () => {
   const { container } = render(<EmbeddingFlight />)
   const layer = container.firstElementChild as HTMLElement

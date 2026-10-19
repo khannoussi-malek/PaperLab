@@ -24,6 +24,8 @@ type Props = {
 
 export function ReaderToolbar({ paper, zoomIndex, onZoomChange, capturing, onCaptureChange, onOpenReferences, tags }: Props) {
   const title = paper?.title
+  // A paper saved without its PDF has no pages to zoom or capture from; while it loads, the controls show as usual.
+  const pages = paper?.has_pdf !== false
   return (
     <>
     <header className={cn('col-span-full flex h-11 items-center gap-1 border-b border-glass-border px-2', glass)}>
@@ -39,38 +41,44 @@ export function ReaderToolbar({ paper, zoomIndex, onZoomChange, capturing, onCap
         </div>
       )}
       {paper && <ReadingControl paper={paper} onOpenReferences={onOpenReferences} />}
-      <Button
-        variant="ghost"
-        size="sm"
-        aria-pressed={capturing}
-        className="aria-pressed:border-primary aria-pressed:bg-primary/10 aria-pressed:text-primary"
-        onClick={() => onCaptureChange(!capturing)}
-      >
-        <Table2 aria-hidden />
-        Capture table
-      </Button>
+      {pages && (
+        <Button
+          variant="ghost"
+          size="sm"
+          aria-pressed={capturing}
+          className="aria-pressed:border-primary aria-pressed:bg-primary/10 aria-pressed:text-primary"
+          onClick={() => onCaptureChange(!capturing)}
+        >
+          <Table2 aria-hidden />
+          Capture table
+        </Button>
+      )}
       {paper && <PaperDetailsDialog paper={paper} />}
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        aria-label="Zoom out"
-        disabled={zoomIndex === 0}
-        onClick={() => onZoomChange(Math.max(0, zoomIndex - 1))}
-      >
-        <ZoomOut aria-hidden />
-      </Button>
-      <span className="zoom-level min-w-12 text-center text-sm tabular-nums">
-        {Math.round(ZOOM_STEPS[zoomIndex] * 100)}%
-      </span>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        aria-label="Zoom in"
-        disabled={zoomIndex === ZOOM_STEPS.length - 1}
-        onClick={() => onZoomChange(Math.min(ZOOM_STEPS.length - 1, zoomIndex + 1))}
-      >
-        <ZoomIn aria-hidden />
-      </Button>
+      {pages && (
+        <>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Zoom out"
+            disabled={zoomIndex === 0}
+            onClick={() => onZoomChange(Math.max(0, zoomIndex - 1))}
+          >
+            <ZoomOut aria-hidden />
+          </Button>
+          <span className="zoom-level min-w-12 text-center text-sm tabular-nums">
+            {Math.round(ZOOM_STEPS[zoomIndex] * 100)}%
+          </span>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Zoom in"
+            disabled={zoomIndex === ZOOM_STEPS.length - 1}
+            onClick={() => onZoomChange(Math.min(ZOOM_STEPS.length - 1, zoomIndex + 1))}
+          >
+            <ZoomIn aria-hidden />
+          </Button>
+        </>
+      )}
       <ModeToggle />
     </header>
     {paper && (

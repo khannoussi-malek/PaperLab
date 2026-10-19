@@ -3,10 +3,13 @@ import { PROVENANCE_LABEL } from '@/features/notes/ProvenanceBadge'
 
 /**
  * A cited source in words. "C1" alone means nothing to a reader. A passage: `Source 1: page 6, section “2.4 Analysis”`,
- * with its paper's name after the colon when an answer can cite several papers. A note: `N1 · You · BERT p.4`.
+ * with its paper's name after the colon when an answer can cite several papers. A passage from the abstract of a paper
+ * without a PDF has no page: `Source 1: abstract only`. A note: `N1 · You · BERT p.4`.
  */
 export function describeSource(
-  source: Pick<ChatSource, 'label' | 'page' | 'section'> | Pick<NoteSource, 'label' | 'page' | 'provenance'>,
+  source:
+    | (Pick<ChatSource, 'label' | 'page' | 'section'> & Partial<Pick<ChatSource, 'from_abstract'>>)
+    | Pick<NoteSource, 'label' | 'page' | 'provenance'>,
   paperName?: string,
 ): string {
   if ('provenance' in source) {
@@ -14,7 +17,9 @@ export function describeSource(
     const where = [paperName, source.page === null ? null : `p.${source.page}`].filter(Boolean).join(' ')
     return [source.label, PROVENANCE_LABEL[source.provenance], where].filter(Boolean).join(' · ')
   }
-  const where = `Source ${source.label.replace(/^C/, '')}: ${paperName ? `${paperName}, ` : ''}page ${source.page}`
+  const prefix = `Source ${source.label.replace(/^C/, '')}: ${paperName ? `${paperName}, ` : ''}`
+  if (source.from_abstract) return `${prefix}abstract only` // its page is 0, and its section is the abstract
+  const where = `${prefix}page ${source.page}`
   return source.section ? `${where}, section “${source.section}”` : where
 }
 
