@@ -34,7 +34,9 @@ export function ImportResultView({ result }: { result: ImportResult }) {
       </h3>
       <p>
         Imported {plural(result.imported, 'new paper')}. {already} {already === 1 ? 'was' : 'were'} already in your
-        library, {plural(result.pdfs_attached, 'PDF')} attached, {plural(result.notes, 'note')}.
+        library, {plural(result.pdfs_attached, 'PDF')} attached,{' '}
+        {result.saved_without_pdf > 0 && `${result.saved_without_pdf} saved without a PDF, `}
+        {plural(result.notes, 'note')}.
       </p>
       {result.stopped && (
         <p>

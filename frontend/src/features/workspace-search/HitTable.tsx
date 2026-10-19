@@ -1,4 +1,5 @@
 import { CircleHelp, CircleX, Sparkles, ThumbsUp } from 'lucide-react'
+import { codeInWords } from '@/lib/errorWords'
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { Hit, HitReviewUpdate, SearchRun } from '@/api/client'
@@ -244,7 +245,7 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
     (importAllHits.isError && { tone: 'error' as const, text: importAllHits.error.message }) ||
     (clearHits.isError && { tone: 'error' as const, text: clearHits.error.message }) ||
     (reviewHit.isError && { tone: 'error' as const, text: reviewHit.error.message }) ||
-    (uploadHitPdf.isError && { tone: 'error' as const, text: uploadHitPdf.error.message }) ||
+    (uploadHitPdf.isError && { tone: 'error' as const, text: codeInWords(uploadHitPdf.error.message) }) ||
     (snowball.isError && { tone: 'error' as const, text: snowball.error.message }) ||
     // A "failed" import is a resolved response (see useImportSearchHits), not a rejected mutation — no free
     // copy was found automatically, which isn't an error so much as a cue to use the manual options already

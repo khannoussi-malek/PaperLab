@@ -227,9 +227,12 @@ export const api = {
   /** Papers outside the library for a title, DOI, arXiv ID or OpenAlex ID, and a notice per source that failed. */
   searchPapers: (query: string) => request<SearchResult>(`/api/discovery/search?q=${encodeURIComponent(query)}`),
   similarPapers: (paperId: string) => request<Candidate[]>(`/api/papers/${paperId}/similar`),
-  /** Downloads a found paper's free PDF into the library; with a `workspaceId` it also joins that workspace. */
-  addCandidate: (candidate: Candidate, workspaceId?: string) =>
-    request<Paper>('/api/discovery/add', sendJson('POST', { candidate, workspace_id: workspaceId ?? null })),
+  /** Downloads a found paper's free PDF into the library (or, with `saveWithoutPdf`, saves it without one); with a `workspaceId` it also joins that workspace. */
+  addCandidate: (candidate: Candidate, workspaceId?: string, saveWithoutPdf = false) =>
+    request<Paper>(
+      '/api/discovery/add',
+      sendJson('POST', { candidate, workspace_id: workspaceId ?? null, save_without_pdf: saveWithoutPdf }),
+    ),
   listChunks: (paperId: string, page: number) => request<Chunk[]>(`/api/papers/${paperId}/chunks?page=${page}`),
   listNotes: (paperId: string) => request<Note[]>(`/api/papers/${paperId}/notes`),
   createNote: (note: NoteCreate) => request<Note>('/api/notes', sendJson('POST', note)),
@@ -446,18 +449,20 @@ export const api = {
     ),
   /** What importing `file` would do. Nothing is written. */
   /** With fetching on (the API's default): only `would_fetch` and `disclosure` depend on it, and none on the target. */
-  previewImport: (file: File) => {
+  previewImport: (file: File, saveWithoutPdf = true) => {
     const form = new FormData()
     form.append('file', file)
+    form.append('save_without_pdf', String(saveWithoutPdf))
     return request<ImportPreview>('/api/citations/import/preview', { method: 'POST', body: form })
   },
   /** Starts an import: 200 gives the result now, 202 a job id to poll (same body shape either way). */
-  startImport: (file: File, target: { workspaceId?: string; newWorkspaceName?: string }, fetchFreePdfs: boolean) => {
+  startImport: (file: File, target: { workspaceId?: string; newWorkspaceName?: string }, fetchFreePdfs: boolean, saveWithoutPdf = true) => {
     const form = new FormData()
     form.append('file', file)
     if (target.workspaceId) form.append('workspace_id', target.workspaceId)
     if (target.newWorkspaceName) form.append('new_workspace_name', target.newWorkspaceName)
     form.append('fetch_free_pdfs', String(fetchFreePdfs))
+    form.append('save_without_pdf', String(saveWithoutPdf))
     return request<ImportProgress>('/api/citations/import', { method: 'POST', body: form })
   },
   importProgress: (jobId: string) => request<ImportProgress>(`/api/citations/import/${encodeURIComponent(jobId)}`),

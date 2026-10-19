@@ -58,14 +58,15 @@ function ImportBody({ workspaceId }: { workspaceId?: string }) {
   const [target, setTarget] = useState<Target>(workspaceId ? 'workspace' : 'library')
   const [name, setName] = useState('')
   const [fetchPdfs, setFetchPdfs] = useState(true)
+  const [saveWithoutPdf, setSaveWithoutPdf] = useState(true)
   const [tooBig, setTooBig] = useState<string | null>(null)
   const started = useRef(false)
 
   const preview = useQuery({
-    // Once per file: the switch and the target don't change what the preview counts (the switch only hides the
-    // disclosure). ponytail: the file still goes up twice (preview, then Import); upload once by id if that hurts.
-    queryKey: ['citation-import-preview', file?.name, file?.size, file?.lastModified],
-    queryFn: () => api.previewImport(file!),
+    // Once per file: the fetch switch and the target don't change what the preview counts (the switch only hides the
+    // disclosure); the save switch does, so flipping it asks once more. ponytail: the file still goes up twice (preview, then Import); upload once by id if that hurts.
+    queryKey: ['citation-import-preview', file?.name, file?.size, file?.lastModified, saveWithoutPdf],
+    queryFn: () => api.previewImport(file!, saveWithoutPdf),
     enabled: file !== null,
     placeholderData: keepPreviousData,
     retry: false,
@@ -83,7 +84,7 @@ function ImportBody({ workspaceId }: { workspaceId?: string }) {
           : target === 'new'
             ? { newWorkspaceName: name.trim() }
             : {}
-      return api.startImport(file!, where, fetchPdfs)
+      return api.startImport(file!, where, fetchPdfs, saveWithoutPdf)
     },
   })
   // A closed dialog forgets the job but not the import: refresh the lists so its papers show up.
@@ -166,6 +167,10 @@ function ImportBody({ workspaceId }: { workspaceId?: string }) {
         <Switch id="zotero-fetch" checked={fetchPdfs} onCheckedChange={setFetchPdfs} />
         <Label htmlFor="zotero-fetch">Fetch free PDFs for entries without one</Label>
       </div>
+      <div className="flex items-center gap-2">
+        <Switch id="zotero-save-without-pdf" checked={saveWithoutPdf} onCheckedChange={setSaveWithoutPdf} />
+        <Label htmlFor="zotero-save-without-pdf">Save the others without a PDF</Label>
+      </div>
 
       <div aria-live="polite" className="flex flex-col gap-1 text-sm">
         {file && !pv && preview.isFetching && <p className="text-muted-foreground">Reading the file…</p>}
@@ -177,7 +182,10 @@ function ImportBody({ workspaceId }: { workspaceId?: string }) {
         )}
         {fetchPdfs && pv?.disclosure && <p>{pv.disclosure}</p>}
         {generalDisclosure && <p>{GENERAL_DISCLOSURE}</p>}
-        {pv && !fetchPdfs && pv.cannot_import_without_fetch > 0 && (
+        {saveWithoutPdf && pv && pv.would_save_without_pdf > 0 && (
+          <p>Up to {plural(pv.would_save_without_pdf, 'reference')} will be saved without a PDF.</p>
+        )}
+        {pv && !fetchPdfs && !saveWithoutPdf && pv.cannot_import_without_fetch > 0 && (
           <p>
             {plural(pv.cannot_import_without_fetch, 'reference')}{' '}
             {pv.cannot_import_without_fetch === 1 ? 'has' : 'have'} no PDF in the file and won't be imported unless

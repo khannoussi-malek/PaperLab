@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Quote } from "lucide-react";
 import { useState } from "react";
+import { useWorkspacePapers } from "@/api/queries";
 import { api, citationsUrl, zoteroZipUrl } from "@/api/client";
 import { glass } from "@/components/glass";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -47,6 +48,8 @@ export function ExportCitationsMenu({
   paperCount: number;
 }) {
   const empty = paperCount === 0;
+  const papers = useWorkspacePapers(workspaceId);
+  const someWithoutPdf = papers.data?.some((paper) => paper.has_pdf === false);
   const [apaOpen, setApaOpen] = useState(false);
   return (
     <>
@@ -89,6 +92,11 @@ export function ExportCitationsMenu({
               </a>
             )}
           </DropdownMenuItem>
+          {someWithoutPdf && (
+            <p className="px-2 py-1 text-xs text-muted-foreground">
+              Papers without a PDF are exported without a file.
+            </p>
+          )}
           <DropdownMenuItem
             disabled={empty}
             title={empty ? NO_PAPERS : undefined}

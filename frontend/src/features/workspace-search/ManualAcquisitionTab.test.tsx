@@ -228,3 +228,13 @@ test('a failed upload clears the shown file name', async () => {
   await screen.findByRole('alert')
   expect(screen.getByRole('button', { name: 'Upload PDF for unreachable paper' })).toBeInTheDocument()
 })
+
+test('a paper_has_no_pdf refusal is said in words', async () => {
+  vi.spyOn(api, 'uploadHitPdf').mockRejectedValue(new Error('paper_has_no_pdf'))
+  renderWithClient(<ManualAcquisitionTab workspaceId="ws-1" />)
+  const file = new File(['%PDF'], 'a.pdf', { type: 'application/pdf' })
+  fireEvent.change(await screen.findByLabelText('Upload PDF for unreachable paper'), { target: { files: [file] } })
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'This paper is saved without a PDF; attaching one comes in a later version.',
+  )
+})

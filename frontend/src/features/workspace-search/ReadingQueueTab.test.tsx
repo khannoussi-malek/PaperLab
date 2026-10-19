@@ -261,11 +261,22 @@ test('once the run is auto-picked, invalidating the queue queries neither re-pro
 
   await waitFor(() => expect((screen.getByRole('combobox') as HTMLSelectElement).value).toBe('run-1'))
   // the pin lands one render after the selection shows; by then no probe is active any more
-  await waitFor(() => expect(client.getQueryCache().findAll({ type: 'active' })).toHaveLength(0))
+  await waitFor(() => expect(client.getQueryCache().findAll({ type: 'active', queryKey: ['workspaces', 'ws-1', 'search', 'reading-queue'] })).toHaveLength(0))
   const before = rq.mock.calls.length
   run1Rows = []
   await client.invalidateQueries({ queryKey: ['workspaces', 'ws-1', 'search', 'reading-queue'] })
 
   expect(rq.mock.calls.length).toBe(before)
   expect((screen.getByRole('combobox') as HTMLSelectElement).value).toBe('run-1')
+})
+
+test('a row whose paper has no PDF carries the "No PDF yet" badge', async () => {
+  vi.spyOn(api, 'listWorkspacePapers').mockResolvedValue([{ id: 'p1', has_pdf: false }, { id: 'p2', has_pdf: true }] as any)
+  mockRuns(runsData)
+  mockQueue({ rows: [row, { ...row, paper_id: 'p2', title: 'Has a file' }] })
+  renderWithClient(<ReadingQueueTab workspaceId="ws-1" runId={null} />)
+
+  const noPdf = await screen.findAllByText('No PDF yet')
+  expect(noPdf).toHaveLength(1)
+  expect(noPdf[0].closest('li')).toHaveTextContent('A Paper Worth Reading')
 })
