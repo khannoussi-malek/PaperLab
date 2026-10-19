@@ -60,7 +60,8 @@ class Paper(Base):
     pmcid: Mapped[str | None] = mapped_column(Text)
     # Columns the user corrected by hand. Extraction and enrichment never overwrite them.
     manual_fields: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default=text("'{}'"))
-    file_path: Mapped[str] = mapped_column(Text)
+    file_path: Mapped[str | None] = mapped_column(Text)  # NULL: saved without a PDF
+    details_source: Mapped[str | None] = mapped_column(Text)  # app.core.source_types.DetailsSource; CHECK in 0050
     page_count: Mapped[int | None]
     status: Mapped[str] = mapped_column(Text, server_default=PaperStatus.UPLOADED)
     status_error: Mapped[str | None] = mapped_column(Text)
@@ -90,7 +91,11 @@ class Paper(Base):
     def evidence_access(self) -> str:
         from app.core.source_types import evidence_access
 
-        return evidence_access(self.abstract, self.status, self.has_chunks)
+        return evidence_access(self.abstract, self.status, self.has_chunks, self.has_pdf)
+
+    @property
+    def has_pdf(self) -> bool:
+        return self.file_path is not None
 
 
 class Chunk(Base):

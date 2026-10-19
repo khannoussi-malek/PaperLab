@@ -73,10 +73,11 @@ def test_peer_review_rule():
 
 
 def test_evidence_access():
-    assert evidence_access("abs", "ready", True) == "full_text"
-    assert evidence_access("abs", "chunking", True) == "abstract"  # still ingesting
-    assert evidence_access("abs", "ready", False) == "abstract"
-    assert evidence_access(None, "ready", False) == "metadata"
+    assert evidence_access("abs", "ready", True, True) == "full_text"
+    assert evidence_access("abs", "chunking", True, True) == "abstract"  # still ingesting
+    assert evidence_access("abs", "ready", False, True) == "abstract"
+    assert evidence_access(None, "ready", False, True) == "metadata"
+    assert evidence_access("abs", "ready", True, False) == "abstract"  # no PDF: the chunk is the abstract
 
 
 async def test_migration_maps_existing_openalex_types(session):

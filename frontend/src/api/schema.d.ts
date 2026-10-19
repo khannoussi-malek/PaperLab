@@ -3470,6 +3470,10 @@ export interface components {
              * @enum {string}
              */
             evidence_access: "full_text" | "abstract" | "metadata";
+            /** Has Pdf */
+            has_pdf: boolean;
+            /** Details Source */
+            details_source: ("zotero" | "crossref" | "openalex" | "semantic_scholar" | "arxiv" | "search" | "manual") | null;
             /** Is Retracted */
             is_retracted: boolean;
             /** Oa Status */

@@ -174,7 +174,8 @@ async def delete(session: AsyncSession, ws: uuid.UUID, name: str) -> int:
 
 async def summaries(session: AsyncSession, ws: uuid.UUID) -> list[TagSummary]:
     """Every tag of the workspace by name, with how its papers split by review status and evidence access."""
-    full_text = and_(Paper.status == "ready", Paper.has_chunks)  # as Paper.evidence_access
+    # as Paper.evidence_access
+    full_text = and_(Paper.status == "ready", Paper.has_chunks, Paper.file_path.is_not(None))
     has_abstract = and_(~full_text, func.coalesce(Paper.abstract, "") != "")
     peer = Paper.peer_reviewed == "true"
     preprint = and_(~peer, Paper.source_type.is_not_distinct_from("preprint"))

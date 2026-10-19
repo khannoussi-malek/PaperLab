@@ -4,7 +4,7 @@ from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.core.source_types import PeerReviewed, SourceType
+from app.core.source_types import DetailsSource, PeerReviewed, SourceType
 
 # PDF points, top-left origin: (x0, y0, x1, y1). A tuple so OpenAPI (and the TS types) say 4 numbers.
 Rect = tuple[float, float, float, float]
@@ -29,6 +29,8 @@ class PaperOut(BaseModel):
     published_doi: str | None
     published_venue: str | None
     evidence_access: Literal["full_text", "abstract", "metadata"]
+    has_pdf: bool
+    details_source: DetailsSource | None
     is_retracted: bool
     oa_status: str | None
     oa_url: str | None
