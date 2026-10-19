@@ -17,6 +17,10 @@ class NotFound(DomainError):
     pass
 
 
+class Gone(DomainError):
+    """The resource existed and is now another one (a merged paper: details carry kept_id). The API answers 410."""
+
+
 class InvalidInput(DomainError):
     pass
 
@@ -26,7 +30,7 @@ class Conflict(DomainError):
 
 
 CODE = re.compile(r"[a-z]+(?:_[a-z0-9]+)+")  # a message like unknown_workspace is itself the error code
-KINDS = {NotFound: "not_found", InvalidInput: "invalid_input", Conflict: "conflict"}
+KINDS = {NotFound: "not_found", Gone: "gone", InvalidInput: "invalid_input", Conflict: "conflict"}
 
 
 def error_code(exc: DomainError) -> str:

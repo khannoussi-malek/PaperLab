@@ -2,6 +2,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import type { ChatSource, Paper } from '@/api/client'
+import { PaperMergedError } from '@/api/client'
 import { ReaderPage } from './ReaderPage'
 
 type NotesProps = {
@@ -141,4 +142,14 @@ test('when the paper details fail to load, the PDF is still asked for', () => {
   state.paperError = new Error('Server error')
   render(<ReaderPage paperId={ID} tab="notes" target={null} />)
   expect(getDocument).toHaveBeenCalledWith({ url: `/api/papers/${ID}/file`, worker: null })
+})
+
+test('a merged paper opens the paper it was merged into', () => {
+  const KEPT = '6f1c2a40-1111-4a8e-9c4e-000000000009'
+  state.paper = undefined
+  state.paperError = new PaperMergedError('paper_merged', KEPT)
+  window.location.hash = `#/papers/${ID}`
+  render(<ReaderPage paperId={ID} tab="notes" target={null} />)
+  expect(window.location.hash).toBe(`#/papers/${KEPT}`)
+  expect(getDocument).not.toHaveBeenCalled()
 })

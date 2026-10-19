@@ -1,6 +1,6 @@
 import { Table2, Undo2 } from 'lucide-react'
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
-import { api, type Note } from '@/api/client'
+import { api, PaperMergedError, type Note } from '@/api/client'
 import {
   useChunksOnPage,
   useDataset,
@@ -115,8 +115,13 @@ export function ReaderPage({ paperId, tab, target }: Props) {
   const paper = usePaper(paperId)
   // Asked for once the paper says it has a PDF: one saved without asks for nothing and shows its details instead.
   // Details that failed to load say nothing either way, so the PDF is still tried.
+  const mergedInto = paper.error instanceof PaperMergedError ? paper.error.keptId : null
+  // A merged paper's id leads to the paper it became (R19); its own file, chunks and notes answer 410 too.
+  useEffect(() => {
+    if (mergedInto) window.location.replace(readerHref(mergedInto))
+  }, [mergedInto])
   const noPdf = paper.data?.has_pdf === false
-  const { doc, error: pdfError } = usePdfDocument(paper.data?.has_pdf || paper.isError ? api.paperFileUrl(paperId) : null)
+  const { doc, error: pdfError } = usePdfDocument(paper.data?.has_pdf || (paper.isError && !mergedInto) ? api.paperFileUrl(paperId) : null)
   const notesQuery = useNotes(paperId)
   const mutations = useNoteMutations()
   const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX)
