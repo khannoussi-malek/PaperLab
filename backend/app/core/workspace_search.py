@@ -1009,8 +1009,8 @@ async def upload_hit_pdf(
     # By identifier only: held_version may write this DOI onto a held arXiv copy, which an upload must not do.
     held_id = (ref.imported_as or await _library_paper_id(session, ref)) if ref is not None else None
     if held_id is not None and not (await papers.get_paper(session, held_id)).has_pdf:
-        # The upload would be thrown away or become a duplicate of it, and the hit counted as retrieved (PRISMA, R6);
-        # attaching it is PR 2.
+        # The upload would be thrown away or become a duplicate of it, and the hit counted as retrieved without the
+        # paper having its PDF. ponytail: refused until the upload attaches to that paper (Task 11's upgrade).
         raise Conflict("paper_has_no_pdf")
     if ref is not None and ref.imported_as is not None:
         await workspaces.add_paper(session, workspace_id, ref.imported_as)

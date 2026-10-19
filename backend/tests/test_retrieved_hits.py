@@ -353,8 +353,10 @@ async def test_import_hits_links_a_pdfless_holder_as_awaiting_pdf(session, disco
 async def test_awaiting_pdf_counts_as_not_retrieved(session):
     ws = await workspace(session)
     held = await paper(session, file_path=None)
-    await failed_hit(session, ws, status="awaiting_pdf")
     await workspaces.add_paper(session, ws.id, held.id)
+    hit = await failed_hit(session, ws, status="awaiting_pdf")
+    hit.paper_id = held.id
+    await session.commit()
 
     prisma = await prisma_export(session, ws.id, run_id=None)
 
@@ -363,12 +365,15 @@ async def test_awaiting_pdf_counts_as_not_retrieved(session):
 
 async def test_an_unread_paper_never_counts_as_assessed_or_included(session):
     """R9: an eligibility row counts only when its paper has a PDF and its hit is retrieved, even one written
-    straight to the table."""
+    straight to the table. A hit marked imported on a paper without a PDF can't be written any more; if one exists it
+    is not retrieved either, so the funnel adds up."""
     ws = await workspace(session)
     read = await paper(session, title="Read")
     awaiting = await paper(session, title="Awaiting", file_path=None)
+    arrived = await paper(session, title="PDF arrived, hit not moved yet")
     unread = await paper(session, title="Marked imported, no PDF", file_path=None)
-    for held, status in ((read, "imported"), (awaiting, "awaiting_pdf"), (unread, "imported")):
+    cases = ((read, "imported"), (awaiting, "awaiting_pdf"), (arrived, "awaiting_pdf"), (unread, "imported"))
+    for held, status in cases:
         hit = await failed_hit(session, ws, title=held.title, status=status)
         hit.paper_id = held.id
         await workspaces.add_paper(session, ws.id, held.id)
@@ -379,7 +384,35 @@ async def test_an_unread_paper_never_counts_as_assessed_or_included(session):
 
     prisma = await prisma_export(session, ws.id, run_id=None)
 
-    assert (prisma.not_retrieved, prisma.stage2_assessed, prisma.included) == (1, 1, 1)
+    assert (prisma.sought, prisma.not_retrieved, prisma.stage2_assessed, prisma.included) == (4, 3, 1, 1)
+
+
+async def test_an_identifier_match_to_a_pdfless_paper_beats_a_title_match_to_one_with_a_pdf(session):
+    ws = await workspace(session)
+    by_title = await paper(session, title="Deep Learning", year=2015)  # has a PDF, no DOI
+    by_doi = await paper(session, title="Deep learning (book)", year=2016, doi="10.5555/dl-book", file_path=None)
+    await workspaces.add_paper(session, ws.id, by_title.id)
+    await workspaces.add_paper(session, ws.id, by_doi.id)
+    hit = await failed_hit(session, ws, title="Deep Learning", year=2016, doi="10.5555/dl-book")
+
+    await retrieved_hits.link(session, ws.id)
+    await session.commit()
+
+    hit = await reload(session, hit)
+    assert (hit.acquisition_status, hit.paper_id) == ("awaiting_pdf", by_doi.id)
+
+
+async def test_a_pdfless_paper_of_the_same_title_makes_a_title_match_ambiguous(session):
+    """The same-title guard counts every workspace paper, with a PDF or without."""
+    ws = await workspace(session)
+    await workspaces.add_paper(session, ws.id, (await paper(session, title="Editorial", year=2025)).id)
+    await workspaces.add_paper(session, ws.id, (await paper(session, title="Editorial", year=2025, file_path=None)).id)
+    hit = await failed_hit(session, ws, title="Editorial", year=2025)
+
+    await retrieved_hits.link(session, ws.id)
+    await session.commit()
+
+    assert (await reload(session, hit)).acquisition_status == "failed"
 
 
 async def test_an_upload_for_a_hit_whose_paper_has_no_pdf_is_refused_not_discarded(session):
