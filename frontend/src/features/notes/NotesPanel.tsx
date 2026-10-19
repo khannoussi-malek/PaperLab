@@ -6,13 +6,15 @@ import { pressable } from '@/components/motion'
 import { notesHref } from '@/lib/route'
 import type { SelectionAnchor } from '../reader/selection'
 import { NoteCard } from './NoteCard'
-import { NoteComposer } from './NoteComposer'
+import { NoteComposer, PlainNoteComposer } from './NoteComposer'
 import { SuggestedNotes } from './SuggestedNotes'
 
 type Props = {
   paperId: string
-  /** False for a paper saved without its PDF. */
+  /** False for a paper saved without its PDF: notes quote its abstract, or are written with no quote. */
   hasPdf?: boolean
+  /** Saves a note with no quote; a paper without a PDF only. */
+  onSavePaperNote?: (body: string) => Promise<boolean>
   notes: Note[]
   draft: SelectionAnchor | null
   draftColor: string
@@ -81,6 +83,11 @@ export function NotesPanel(props: Props) {
           onCancel={props.onCancelDraft}
           onAddNumber={props.onAddNumber}
         />
+      ) : props.hasPdf === false ? (
+        <>
+          <p className="text-sm text-muted-foreground">Select text in the abstract, or write a note.</p>
+          {props.onSavePaperNote && <PlainNoteComposer onSave={props.onSavePaperNote} />}
+        </>
       ) : (
         <p className="text-sm text-muted-foreground">Select text in the paper to add a note.</p>
       )}

@@ -221,6 +221,45 @@ async def create_human_note(session: AsyncSession, body: str, anchor: Anchor, co
     return (await _with_anchors(session, [note]))[0]
 
 
+def _abstract_quote(paper: Paper, quoted_text: str) -> str:
+    """The quote, its whitespace collapsed, once it is found in the abstract of a paper saved without a PDF: matched as
+    locate_quote matches a passage (fold). Raises InvalidInput("empty_quote" | "quote_not_found")."""
+    quote = " ".join(quoted_text.split())
+    if not fold(quote):
+        raise InvalidInput("empty_quote")
+    if fold(quote) not in fold(paper.abstract or ""):
+        raise InvalidInput("quote_not_found", hint="Copy the quote exactly from this paper's abstract.")
+    return quote
+
+
+def _quoted(quote: str, body: str) -> str:
+    """An abstract note's body: the quote in curly quotes, then the note. Note cards show plain text, not Markdown."""
+    return f"“{quote}”\n\n{body}" if body else f"“{quote}”"
+
+
+async def create_paper_note(
+    session: AsyncSession, paper_id: uuid.UUID, body: str, quote: str | None = None, color: str = DEFAULT_COLOR
+) -> NoteView:
+    """A person's note on a paper saved without a PDF: linked to it, with no anchor, since there is no page to place it
+    on. With `quote`, text from its abstract, the body starts with that quote. A paper with a PDF takes an anchored
+    note (create_human_note). Raises NotFound, InvalidInput("anchor_required" | "empty_body" | "empty_quote" |
+    "quote_not_found")."""
+    paper = await get_paper(session, paper_id)
+    if paper.has_pdf:
+        raise InvalidInput("anchor_required")
+    text = body.strip()
+    if quote is not None:
+        text = _quoted(_abstract_quote(paper, quote), text)
+    if not text:
+        raise InvalidInput("empty_body")
+    note = Note(body=text, provenance=Provenance.HUMAN, color=normalize_color(color))
+    session.add(note)
+    await session.flush()
+    await _link(session, note.id, [paper_id])
+    await session.commit()
+    return await _view(session, note)
+
+
 def _placed_on(note: NoteView, paper_id: uuid.UUID) -> bool:
     return any(anchor.paper_id == paper_id for anchor in note.anchors)
 
@@ -512,14 +551,19 @@ async def locate_quote(session: AsyncSession, paper_id: uuid.UUID, quoted_text: 
 
 async def create_llm_note(session: AsyncSession, paper_id: uuid.UUID, body: str, quoted_text: str) -> NoteView:
     """A note an MCP client wrote, anchored on `quoted_text`: provenance='llm', with its text also kept as an
-    llm_outputs row (kind 'mcp') the note's source_id points at, so the model's words survive an edit (D91).
+    llm_outputs row (kind 'mcp') the note's source_id points at, so the model's words survive an edit (D91). On a paper
+    saved without a PDF the quote must be in its abstract, and the note is linked unanchored with the quote leading it.
 
-    Raises InvalidInput("empty_body"), and whatever locate_quote raises.
+    Raises InvalidInput("empty_body"), and whatever locate_quote (or, without a PDF, _abstract_quote) raises.
     """
     text = body.strip()
     if not text:
         raise InvalidInput("empty_body")
-    anchor = await locate_quote(session, paper_id, quoted_text)
+    paper = await get_paper(session, paper_id)
+    if paper.has_pdf:
+        anchor = await locate_quote(session, paper_id, quoted_text)
+    else:
+        anchor, text = None, _quoted(_abstract_quote(paper, quoted_text), text)
     # ponytail: model and prompt_version are NOT NULL, but an MCP client names no PaperLab model and uses no prompt.
     output = LLMOutput(paper_id=paper_id, kind=MCP_OUTPUT_KIND, content=text, model="mcp", prompt_version=0)
     session.add(output)

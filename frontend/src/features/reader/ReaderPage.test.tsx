@@ -1,10 +1,20 @@
 // @vitest-environment jsdom
-import { render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import type { ChatSource, Paper } from '@/api/client'
 import { ReaderPage } from './ReaderPage'
 
-const state = vi.hoisted(() => ({ paper: undefined as Paper | undefined, onCite: null as null | ((s: ChatSource) => void) }))
+type NotesProps = {
+  draft: { quotedText: string } | null
+  onSaveDraft: (body: string) => Promise<boolean>
+  onSavePaperNote: (body: string) => Promise<boolean>
+}
+const state = vi.hoisted(() => ({
+  paper: undefined as Paper | undefined,
+  onCite: null as null | ((s: ChatSource) => void),
+  notes: null as null | NotesProps,
+  create: vi.fn(),
+}))
 const getDocument = vi.hoisted(() => vi.fn(() => ({ promise: new Promise(() => {}), destroy: vi.fn() })))
 vi.mock('./pdfjs', () => ({ getDocument, pdfWorker: null }))
 vi.mock('@/api/queries', () => {
@@ -12,7 +22,7 @@ vi.mock('@/api/queries', () => {
   return {
     usePaper: () => ({ data: state.paper, error: null }),
     useNotes: () => ({ data: [], error: null }),
-    useNoteMutations: () => ({ create: {}, update: {}, remove: {} }),
+    useNoteMutations: () => ({ create: { mutateAsync: state.create }, update: {}, remove: {} }),
     useChunksOnPage: () => idle,
     usePaperDatasets: () => ({ data: [] }),
     useDataset: () => idle,
@@ -26,7 +36,12 @@ vi.mock('../chat/ChatPanel', () => ({
     return null
   },
 }))
-vi.mock('../notes/NotesPanel', () => ({ NotesPanel: () => null }))
+vi.mock('../notes/NotesPanel', () => ({
+  NotesPanel: (props: NotesProps) => {
+    state.notes = props
+    return null
+  },
+}))
 vi.mock('../data/DataPanel', () => ({ DataPanel: () => null }))
 vi.mock('../discovery/SimilarTab', () => ({ SimilarTab: () => null }))
 vi.mock('../references/ReferencesTab', () => ({ ReferencesTab: () => null }))
@@ -47,7 +62,10 @@ const paper = (over: Partial<Paper>) =>
     published_doi: null, ...over,
   }) as Paper
 
-beforeEach(() => { getDocument.mockClear() })
+beforeEach(() => {
+  getDocument.mockClear()
+  state.create.mockReset().mockResolvedValue({})
+})
 afterEach(() => { window.location.hash = '' })
 
 test('a paper without a PDF never asks for its file and shows its details where the pages go', () => {
@@ -91,4 +109,26 @@ test('a paper with a PDF still opens it, with zoom', () => {
   expect(getDocument).toHaveBeenCalledWith({ url: `/api/papers/${ID}/file`, worker: null })
   expect(screen.queryByRole('region', { name: 'Paper details' })).toBeNull()
   expect(screen.getByRole('button', { name: 'Zoom in' })).toBeInTheDocument()
+})
+
+test('text selected in the abstract becomes the draft, and saving it sends the paper and that exact quote', async () => {
+  state.paper = paper({})
+  render(<ReaderPage paperId={ID} tab="notes" target={null} />)
+  const abstract = screen.getByText('Sleep helps memory consolidation.')
+  const range = document.createRange()
+  range.setStart(abstract.firstChild!, 0)
+  range.setEnd(abstract.firstChild!, 'Sleep helps memory'.length)
+  window.getSelection()!.removeAllRanges()
+  window.getSelection()!.addRange(range)
+  fireEvent.mouseUp(abstract)
+  await waitFor(() => expect(state.notes!.draft?.quotedText).toBe('Sleep helps memory'))
+  await act(() => state.notes!.onSaveDraft('Key claim.'))
+  expect(state.create).toHaveBeenCalledWith({ body: 'Key claim.', color: expect.any(String), paper_id: ID, quote: 'Sleep helps memory' })
+})
+
+test('a plain note on a paper without a PDF is saved linked to it, with no anchor', async () => {
+  state.paper = paper({})
+  render(<ReaderPage paperId={ID} tab="notes" target={null} />)
+  await act(() => state.notes!.onSavePaperNote('Read later.'))
+  expect(state.create).toHaveBeenCalledWith({ body: 'Read later.', color: expect.any(String), paper_id: ID })
 })

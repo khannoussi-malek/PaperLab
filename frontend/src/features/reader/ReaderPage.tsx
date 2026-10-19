@@ -47,7 +47,7 @@ import { PublishedVersionBanner } from './PublishedVersionBanner'
 import { RetractionBanner } from './RetractionBanner'
 import { EvidencePanel } from '../evidence/EvidencePanel'
 import { RightPanel } from './RightPanel'
-import { readSelection, type SelectionAnchor } from './selection'
+import { readAbstractSelection, readSelection, type SelectionAnchor } from './selection'
 import { useCitations } from './useCitations'
 import { useHoverCard } from './useHoverCard'
 import { useJumpBack } from './useJumpBack'
@@ -246,17 +246,21 @@ export function ReaderPage({ paperId, tab, target }: Props) {
     if (event.button !== 0) return // a right-click opens the menu instead
     const result = readSelection(scale)
     if (result.kind === 'invalid') setError(result.reason)
-    if (result.kind === 'anchor') {
+    const anchor = result.kind === 'anchor' ? result.anchor : noPdf ? readAbstractSelection() : null
+    if (anchor) {
       setError(null)
-      setDraft(result.anchor)
+      setDraft(anchor)
       if (tab !== 'notes') showTab('notes') // the composer lives on the Notes tab
     }
   }
 
   async function saveDraft(body: string, color: string = draftColor): Promise<boolean> {
     if (!draft) return false
-    const anchor = { paper_id: paperId, page: draft.page, bbox: draft.rects, quoted_text: draft.quotedText }
-    const saved = await attempt(() => mutations.create.mutateAsync({ body, color, anchor }))
+    // A paper without a PDF has no page to anchor on: the note goes on the paper, its body led by the abstract's words.
+    const note = noPdf
+      ? { body, color, paper_id: paperId, quote: draft.quotedText }
+      : { body, color, anchor: { paper_id: paperId, page: draft.page, bbox: draft.rects, quoted_text: draft.quotedText } }
+    const saved = await attempt(() => mutations.create.mutateAsync(note))
     if (saved) {
       saveLastColor(browserStorage(), color)
       setDraft(null)
@@ -264,6 +268,9 @@ export function ReaderPage({ paperId, tab, target }: Props) {
     }
     return saved
   }
+
+  const savePaperNote = (body: string) =>
+    attempt(() => mutations.create.mutateAsync({ body, color: draftColor, paper_id: paperId }))
 
   async function highlightDraft(color: string) {
     setDraftColor(color)
@@ -578,6 +585,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
           <NotesPanel
             paperId={paperId}
             hasPdf={!noPdf}
+            onSavePaperNote={savePaperNote}
             notes={notes}
             draft={draft}
             draftColor={draftColor}
