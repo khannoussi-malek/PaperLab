@@ -1,20 +1,23 @@
 """R10–R12(1): a paper saved without a PDF upgrades in place when its PDF arrives, by upload or a found free copy."""
 
 import uuid
+from contextlib import contextmanager
 from datetime import datetime, timezone
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import event, select
 from starlette.datastructures import UploadFile
 from test_discovery_add import arxiv_entry, atom
 from test_retrieved_hits import failed_hit, workspace
 
 from app.api import papers as papers_api
+from app.api import workspace_search as workspace_search_api
 from app.api.deps import get_discovery
-from app.core import discovery, notes, papers, retrieved_hits, tags, workspaces
+from app.core import discovery, notes, papers, retrieved_hits, tags, workspace_search, workspaces
 from app.core.errors import Conflict
 from app.core.prisma_export import prisma_export
 from app.models import Paper
+from app.models.references import ExternalRef
 from app.models.workspace_search import SearchRunEligibility, WorkspaceSearchHit
 from app.workers import ingest
 
@@ -335,3 +338,142 @@ async def test_attach_pdf_leaves_no_file_when_the_write_breaks_midway(session, p
         await papers.attach_pdf(session, held.id, PDF, how="manual")
 
     assert list(pdf_dir.iterdir()) == []
+
+
+async def title_linked(session):
+    """A paper saved without a PDF or a DOI (a Zotero entry can be), with a tag, a note and a decision, and a hit for
+    the same work linked to it by title alone: the hit knows a DOI and a PDF link the paper doesn't (C1)."""
+    held = await papers.create_metadata_paper(session, {**PREFILL, "year": 2025}, "crossref")
+    ws = await workspace(session)
+    hit = await failed_hit(session, ws, title=held.title, doi="10.1000/sleep", pdf_urls=[f"{HOST}/ok.pdf"])
+    await workspaces.add_paper(session, ws.id, held.id)  # link's title rule
+    await tags.tag_papers(session, ws.id, "sleep", paper_ids=[held.id])
+    note = await notes.create_llm_note(session, held.id, "Worth citing.", "Sleep helps memory")
+    session.add(SearchRunEligibility(
+        paper_id=held.id, search_run_id=ws.run_id, stage2_status="include", assessed_at=datetime.now(timezone.utc),
+    ))  # fmt: skip
+    await session.commit()
+    hit = await session.get(WorkspaceSearchHit, hit.id, populate_existing=True)
+    assert (hit.acquisition_status, hit.paper_id) == ("awaiting_pdf", held.id)
+    return ws, held, hit, note
+
+
+async def assert_upgraded_in_place(session, ws, held, hit, note, status):
+    """One paper: the held one has the PDF and kept its tag, note and decision; the hit is retrieved on it."""
+    assert [p.id for p in (await session.scalars(select(Paper))).all()] == [held.id]
+    await session.refresh(held)
+    assert held.has_pdf
+    assert [(w, t) for w, _, t in await tags.tags_of_paper(session, held.id)] == [(ws.id, ["sleep"])]
+    assert [n.id for n in await notes.list_notes_for_paper(session, held.id)] == [note.id]
+    assert (await session.get(SearchRunEligibility, (held.id, ws.run_id))).stage2_status == "include"
+    hit = await session.get(WorkspaceSearchHit, hit.id, populate_existing=True)
+    assert (hit.acquisition_status, hit.paper_id) == (status, held.id)
+    ref = await session.get(ExternalRef, hit.external_ref_id, populate_existing=True)
+    assert ref.imported_as is None  # a title match never claims the shared reference
+
+
+async def test_a_hit_upload_upgrades_the_paper_it_is_linked_to_by_title(session, pdf_dir):
+    ws, held, hit, note = await title_linked(session)
+
+    _, created = await workspace_search.upload_hit_pdf(session, ws.id, hit.id, "a.pdf", PDF)
+
+    assert created
+    await assert_upgraded_in_place(session, ws, held, hit, note, "manual")
+
+
+async def test_import_all_upgrades_the_paper_a_hit_is_linked_to_by_title(session, discovery_fakes, pdf_dir):
+    ws, held, hit, note = await title_linked(session)
+    discovery_fakes.pdf_host.reply("/ok.pdf", 200, content=PDF)
+
+    result = await workspace_search.import_hits(session, discovery_fakes.providers, ws.id, [hit.id])
+
+    assert result.paper_ids == [held.id]
+    await assert_upgraded_in_place(session, ws, held, hit, note, "imported")
+
+
+@contextmanager
+def sent(session):
+    """The SQL statements the session sends inside the block, in order."""
+    seen: list[str] = []
+
+    def record(_conn, _cursor, statement, *_):
+        seen.append(statement)
+
+    connection = session.bind.sync_connection
+    event.listen(connection, "before_cursor_execute", record)
+    try:
+        yield seen
+    finally:
+        event.remove(connection, "before_cursor_execute", record)
+
+
+async def test_the_hit_route_and_the_paper_route_lock_the_paper_before_its_hits(session, pdf_dir):
+    """Both upgrades take the paper's row lock before writing a hit row, so neither order can deadlock (Minor 2):
+    a paper-route attach holds the paper, then pdf_arrived writes its awaiting hits."""
+    held = await papers.create_metadata_paper(session, {**PREFILL, "title": "Held", "doi": "10.1000/a"}, "crossref")
+    other = await papers.create_metadata_paper(session, {**PREFILL, "title": "Held by the paper"}, "crossref")
+    ws = await workspace(session)
+    await workspaces.add_paper(session, ws.id, held.id)
+    hit = await failed_hit(session, ws, title=held.title, status="awaiting_pdf", doi="10.1000/a")
+    hit.paper_id = held.id
+    await awaiting(session, ws, other)
+
+    for upgrade in (
+        lambda: workspace_search.upload_hit_pdf(session, ws.id, hit.id, "a.pdf", PDF),
+        lambda: papers.attach_pdf(session, other.id, PDF, how="manual"),
+    ):
+        with sent(session) as seen:
+            await upgrade()
+        locks = [i for i, s in enumerate(seen) if "FROM papers" in s and "FOR UPDATE" in s]
+        hit_writes = [i for i, s in enumerate(seen) if s.startswith("UPDATE workspace_search_hits")]
+        assert locks and hit_writes and locks[0] < hit_writes[0]
+
+
+async def test_an_upload_onto_a_paper_with_a_pdf_is_refused_unread(client, session, monkeypatch):
+    filed = Paper(title="Has a file", file_path="/kept.pdf", status="ready")
+    session.add(filed)
+    await session.commit()
+
+    async def never_read(*args):
+        raise AssertionError("a paper that has its PDF is refused before the body is read")
+
+    monkeypatch.setattr(UploadFile, "read", never_read)
+    answer = await client.post(f"/api/papers/{filed.id}/pdf", files={"file": ("x.pdf", PDF, "application/pdf")})
+
+    assert (answer.status_code, answer.json()["detail"]) == (409, "already_has_pdf")
+
+
+async def test_a_hit_upload_over_the_cap_is_refused_unread(client, session, pdf_dir, monkeypatch):
+    ws = await workspace(session)
+    hit = await failed_hit(session, ws)
+    monkeypatch.setattr(workspace_search_api, "MAX_UPLOAD_PDF_BYTES", len(PDF) - 1)
+
+    async def never_read(*args):
+        raise AssertionError("an over-cap body with a known size is refused unread")
+
+    monkeypatch.setattr(UploadFile, "read", never_read)
+    url = f"/api/workspaces/{ws.id}/search/hits/{hit.id}/upload"
+    answer = await client.post(url, files={"file": ("x.pdf", PDF, "application/pdf")})
+
+    assert (answer.status_code, answer.json()["detail"]) == (422, "pdf_too_large")
+    assert (await session.get(WorkspaceSearchHit, hit.id, populate_existing=True)).paper_id is None
+    assert not (pdf_dir.exists() and any(pdf_dir.iterdir()))
+
+
+async def test_a_hit_upload_whose_size_is_unknown_is_capped_after_reading(client, session, pdf_dir, monkeypatch):
+    ws = await workspace(session)
+    hit = await failed_hit(session, ws)
+    monkeypatch.setattr(workspace_search_api, "MAX_UPLOAD_PDF_BYTES", len(PDF) - 1)
+    sized = UploadFile.__init__
+
+    def unsized(self, *args, **kwargs):  # a client that sends no part size
+        sized(self, *args, **kwargs)
+        self.size = None
+
+    monkeypatch.setattr(UploadFile, "__init__", unsized)
+    url = f"/api/workspaces/{ws.id}/search/hits/{hit.id}/upload"
+
+    answer = await client.post(url, files={"file": ("x.pdf", PDF, "application/pdf")})
+
+    assert (answer.status_code, answer.json()["detail"]) == (422, "pdf_too_large")
+    assert not (pdf_dir.exists() and any(pdf_dir.iterdir()))

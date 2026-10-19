@@ -159,3 +159,44 @@ async def test_an_upload_for_a_doi_held_without_a_pdf_attaches_to_that_paper(ses
     assert (out["status"], out["paper_id"], out["note"]) == ("queued", str(held.id), None)
     assert jobs.jobs == [("ingest_paper", str(held.id))] and (pdf_dir / f"{held.id}.pdf").read_bytes() == PDF
     assert await paper_count(session) == 1
+
+
+def a_pdf_lands_first(monkeypatch, session, status):
+    """Another request's PDF reaches the paper just before this one's attach (Minor 10): it queued its own ingest,
+    and its paper is `status` by now."""
+    attach = papers.attach_pdf
+
+    async def racing(s, paper_id, data, how):
+        await attach(s, paper_id, b"%PDF-1.7 theirs", "manual")
+        await papers.set_status(s, paper_id, status)
+        return await attach(s, paper_id, data, how)
+
+    monkeypatch.setattr(papers, "attach_pdf", racing)
+
+
+@pytest.mark.parametrize(
+    ("status", "answer"), [(PaperStatus.UPLOADED, "queued"), (PaperStatus.READY, "already_in_library")]
+)
+async def test_an_upload_racing_another_pdf_answers_from_the_paper(session, jobs, pdf_dir, monkeypatch, status, answer):
+    ws = await make_ws(session, f"race {status}")
+    held = await papers.create_metadata_paper(session, {"title": "Held", "doi": "10.5555/race"}, "manual")
+    a_pdf_lands_first(monkeypatch, session, status)
+
+    out = result(await call("upload_paper", workspace=ws, filename="x.pdf", pdf_base64=b64(), doi="10.5555/race"))
+
+    assert (out["status"], out["paper_id"]) == (answer, str(held.id))
+    assert jobs.jobs == [] and (pdf_dir / f"{held.id}.pdf").read_bytes() == b"%PDF-1.7 theirs"
+
+
+async def test_a_found_copy_racing_another_pdf_answers_from_the_paper(session, jobs, pdf_dir, monkeypatch):
+    held = await papers.create_metadata_paper(session, {"title": "Held", "doi": "10.5555/found"}, "manual")
+
+    async def find_pdf(*_):
+        return PDF, [], []
+
+    monkeypatch.setattr(pipeline.discovery, "find_pdf", find_pdf)
+    a_pdf_lands_first(monkeypatch, session, PaperStatus.UPLOADED)
+
+    out = await pipeline._attach_found(session, None, held)
+
+    assert (out.status, out.paper_id, jobs.jobs) == ("queued", held.id, [])

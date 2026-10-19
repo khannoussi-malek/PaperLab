@@ -76,7 +76,18 @@ async def link(session: AsyncSession, workspace_id: uuid.UUID) -> list[Linked]:
     (hit.paper_id, ref.imported_as), DOI, published DOI or OpenAlex id, else by the hit's normalised title when exactly
     one paper has it, both years known and within YEAR_SLACK. Copies each linked hit's tags to its paper. A title
     match leaves the shared ExternalRef's `imported_as` alone, so no other workspace inherits a guess.
+    An awaiting hit whose paper has its PDF by now (an attach that committed while an earlier link ran) is imported.
     Idempotent; the caller commits."""
+    arrived = select(Paper.id).where(Paper.file_path.is_not(None))
+    await session.execute(
+        update(WorkspaceSearchHit)
+        .where(
+            WorkspaceSearchHit.workspace_id == workspace_id,
+            WorkspaceSearchHit.acquisition_status == "awaiting_pdf",
+            WorkspaceSearchHit.paper_id.in_(arrived),
+        )
+        .values(acquisition_status="imported")
+    )
     hits = (
         await session.execute(
             select(WorkspaceSearchHit, ExternalRef)

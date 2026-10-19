@@ -179,8 +179,10 @@ async def upload_paper(
         raise InvalidInput("invalid_doi")
     data = _decode_pdf(pdf_base64)
     existing = await session.scalar(select(Paper).where(func.lower(Paper.doi) == clean_doi)) if clean_doi else None
+    raced = None
     if existing and not existing.has_pdf:  # saved without one: the upload becomes its PDF
-        paper, status = await papers.attach_pdf(session, existing.id, data, "manual"), "queued"
+        paper, status = existing, "queued"
+        raced = await _attach(session, existing, data, "manual")
     elif existing and existing.file_path and existing.status == PaperStatus.FAILED:  # a retry, as _add_found does
         paper, status = existing, "queued"
         await asyncio.to_thread(Path(paper.file_path).write_bytes, data)  # the upload replaces the broken file
@@ -193,9 +195,23 @@ async def upload_paper(
     await workspaces.add_paper(session, ws, paper.id)
     for name in names:
         await tags.tag_papers(session, ws, name, paper_ids=[paper.id])
-    if status == "queued":
+    if status == "queued" and raced is None:
         await queue.enqueue("ingest_paper", str(paper.id))
-    return AddPaperResult(status=status, paper_id=paper.id, title=paper.title)
+    return AddPaperResult(status=raced or status, paper_id=paper.id, title=paper.title)
+
+
+async def _attach(session: AsyncSession, paper: Paper, data: bytes, how: str) -> str | None:
+    """attach_pdf for a paper saved without a PDF: None once attached (the caller queues ingest). When another
+    request's PDF got there first (already_has_pdf), the re-read paper's answer instead, that request having queued
+    its own ingest: "queued" while it ingests, else already_in_library."""
+    try:
+        await papers.attach_pdf(session, paper.id, data, how)
+        return None
+    except Conflict as exc:
+        if str(exc) != "already_has_pdf":
+            raise
+    await session.refresh(paper)
+    return "already_in_library" if paper.status in (PaperStatus.READY, PaperStatus.FAILED) else "queued"
 
 
 DOI_ARXIV_HOSTS = ("doi.org", "dx.doi.org", "arxiv.org", "www.arxiv.org")
@@ -314,7 +330,8 @@ async def _attach_found(session, providers, paper) -> AddPaperResult:
             status="already_in_library", paper_id=paper.id, title=paper.title, tried=tried, free_copies=copies,
             note=NO_COPY_NOTE,
         )
-    await papers.attach_pdf(session, paper.id, data, "imported")
+    if raced := await _attach(session, paper, data, "imported"):
+        return AddPaperResult(status=raced, paper_id=paper.id, title=paper.title)
     await queue.enqueue("ingest_paper", str(paper.id))
     return AddPaperResult(status="queued", paper_id=paper.id, title=paper.title)
 

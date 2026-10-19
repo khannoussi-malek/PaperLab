@@ -938,7 +938,11 @@ async def import_hits(
             # automatic import) — re-running Import all must never quietly relabel it "imported" (I8).
             continue
         ref = await session.get(ExternalRef, hit.external_ref_id) if hit.external_ref_id else None
-        existing_id, by_identifier = await _held(session, ref) if ref is not None else (None, True)
+        if ref is not None and hit.acquisition_status == "awaiting_pdf" and hit.paper_id is not None:
+            # The paper it awaits, even one linked by title, which _held's identifiers can miss (C1).
+            existing_id, by_identifier = hit.paper_id, False
+        else:
+            existing_id, by_identifier = await _held(session, ref) if ref is not None else (None, True)
         if existing_id is not None:
             # Already in the library — an earlier hit in this batch, an earlier run, the References panel, or a paper
             # holding the same DOI/OpenAlex id. Attach it instead of downloading/creating a duplicate, no re-ingest.
@@ -1038,18 +1042,28 @@ async def upload_hit_pdf(
 
     ref = await session.get(ExternalRef, hit.external_ref_id) if hit.external_ref_id else None
     # By identifier only: held_version may write this DOI onto a held arXiv copy, which an upload must not do.
-    held_id = (ref.imported_as or await _library_paper_id(session, ref)) if ref is not None else None
-    if held_id is not None and not (await papers.get_paper(session, held_id)).has_pdf:
+    by_identifier = (ref.imported_as or await _library_paper_id(session, ref)) if ref is not None else None
+    # A hit awaiting its paper's PDF names that paper itself, even one linked by title, which no identifier finds (C1).
+    awaited = hit.paper_id if hit.acquisition_status == "awaiting_pdf" else None
+    held_id = awaited or by_identifier
+    held = await session.get(Paper, held_id) if held_id is not None else None
+    if held is not None and not held.has_pdf:
         # Saved without a PDF: the upload becomes its PDF, in place. The route enqueues ingest (created=True).
+        # attach_pdf first: it locks the paper before any hit row is written (its pdf_arrived moves this hit when
+        # it is awaiting), the order a paper-route attach takes them in, so the two can't deadlock.
+        await papers.attach_pdf(session, held_id, content, "manual")
         await workspaces.add_paper(session, workspace_id, held_id)
-        if ref.imported_as is None:  # found by an identifier, as import_hits records it
+        if ref is not None and ref.imported_as is None and by_identifier == held_id:  # as import_hits records it
             ref.imported_as = held_id
         hit.acquisition_status = "manual"
         hit.paper_id = held_id
-        await _record_snowball_citation(session, hit, ref.id)
+        if ref is not None:
+            await _record_snowball_citation(session, hit, ref.id)
         await tags.apply_hit_tags(session, workspace_id, [hit])
-        await papers.attach_pdf(session, held_id, content, "manual")  # commits all of the above
+        await session.commit()
         return _hit_out_dict(hit, ref), True
+    if awaited is not None and held is not None:  # its PDF arrived meanwhile, by another request
+        raise Conflict("already_has_pdf")
     if ref is not None and ref.imported_as is not None:
         await workspaces.add_paper(session, workspace_id, ref.imported_as)
         hit.acquisition_status = "manual"
