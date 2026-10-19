@@ -194,3 +194,26 @@ async def test_a_note_on_a_whole_workspace_paper_is_counted_and_listed_first_und
     assert [n.id for n in listed] == [whole.id, placed.id]
     assert listed[0].paper_ids == [bert.id]
     assert (await workspaces.get(session, workspace.id)).note_count == 2
+
+
+# ---- M78: a paper deleted while it is being filed ----
+
+
+async def test_a_paper_deleted_while_being_filed_is_not_found_and_the_session_survives(session, monkeypatch):
+    from app.models import Workspace
+
+    workspace = Workspace(name=f"Race {uuid.uuid4().hex[:8]}")
+    session.add(workspace)
+    await session.commit()
+    gone = uuid.uuid4()
+
+    async def raced(_session, _workspace_id, paper_id):  # the check passed just before another request deleted it
+        return Paper(id=paper_id, title="Deleted meanwhile")
+
+    monkeypatch.setattr(workspaces, "_membership", raced)
+    with pytest.raises(NotFound):
+        await workspaces.add_paper(session, workspace.id, gone)
+
+    # Only the insert's savepoint was rolled back: the session, and the caller's earlier work, carry on.
+    filed = select(func.count()).select_from(workspace_papers).where(workspace_papers.c.workspace_id == workspace.id)
+    assert await session.scalar(filed) == 0

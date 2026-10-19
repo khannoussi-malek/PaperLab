@@ -10,6 +10,7 @@ from datetime import datetime
 from sqlalchemy import delete as delete_rows
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import retrieved_hits
@@ -123,9 +124,16 @@ async def add_paper(session: AsyncSession, workspace_id: uuid.UUID, paper_id: uu
     """Idempotent. Raises NotFound for an unknown workspace or paper. A failed search hit for this paper in the
     workspace is retrieved now (M67): every way a paper joins a workspace comes through here."""
     paper = await _membership(session, workspace_id, paper_id)
-    await session.execute(
-        insert(workspace_papers).values(workspace_id=workspace_id, paper_id=paper_id).on_conflict_do_nothing()
-    )
+    try:
+        # A savepoint: a paper or workspace deleted since the check above (M78) fails only this insert, never the
+        # caller's earlier work in the same session.
+        async with session.begin_nested():
+            await session.execute(
+                insert(workspace_papers).values(workspace_id=workspace_id, paper_id=paper_id).on_conflict_do_nothing()
+            )
+    except IntegrityError as exc:
+        gone = f"paper {paper_id}" if "paper_id" in str(exc.orig) else f"workspace {workspace_id}"
+        raise NotFound(f"{gone} not found") from exc
     await retrieved_hits.link(session, workspace_id)
     await session.commit()
     await session.refresh(paper, ["workspace_ids"])  # the session may already hold this paper

@@ -766,6 +766,39 @@ async def test_import_hits_gets_a_pmc_open_access_pdf_for_a_hit_with_a_pmcid(ses
     assert [r.url.path for r in discovery_api.pdf_host.requests] == ["/", "/PMC4512184.1/PMC4512184.1.pdf"]
 
 
+async def test_import_hits_skips_a_held_paper_deleted_mid_import_and_imports_the_rest(
+    session, client, discovery_api, monkeypatch
+):
+    from app.core import workspaces
+    from app.core.errors import NotFound
+    from app.models import Paper
+    from app.models.workspace_search import WorkspaceSearchHit
+
+    gone = Paper(title="Deleted mid import", file_path="/nonexistent.pdf")
+    kept = Paper(title="Kept", file_path="/nonexistent.pdf")
+    session.add_all([gone, kept])
+    await session.commit()
+    first = await _make_importable_hit(session, pdf_urls=[], imported_as=gone.id)
+    workspace_id = (await session.get(WorkspaceSearchHit, first)).workspace_id
+    second = await _make_importable_hit(session, pdf_urls=[], workspace_id=workspace_id, imported_as=kept.id)
+    real_add = workspaces.add_paper
+
+    async def racing(session_, workspace_id_, paper_id):
+        if paper_id == gone.id:  # another request deleted it between the lookup and the filing
+            raise NotFound(f"paper {paper_id} not found")
+        await real_add(session_, workspace_id_, paper_id)
+
+    monkeypatch.setattr(workspaces, "add_paper", racing)
+    resp = await client.post(
+        f"/api/workspaces/{workspace_id}/search/hits/import", json={"hit_ids": [str(first), str(second)]}
+    )
+
+    assert resp.status_code == 200 and resp.json() == {"imported": 1, "failed": 1}
+    session.expire_all()
+    statuses = {h: (await session.get(WorkspaceSearchHit, h)).acquisition_status for h in (first, second)}
+    assert statuses[second] == "imported" and statuses[first] != "imported"
+
+
 async def test_import_hits_download_failure_marks_failed_and_continues_the_batch(session, client, discovery_api):
     from app.models.workspace_search import WorkspaceSearchHit
 
