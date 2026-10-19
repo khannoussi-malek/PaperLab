@@ -6,12 +6,12 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.core.source_registry import DISCOVERY_SOURCE_IDS
 
-# Mirrors the DB CHECK constraints on workspace_search_hits (migration 0013): Literal + Field bounds reject a
+# Mirrors the DB CHECK constraints on workspace_search_hits (migrations 0013, 0051): Literal + Field bounds reject a
 # garbage value with a clean 422 in the schema layer, before it can reach the DB as an IntegrityError/500.
 Stage1Status = Literal["relevant", "not_relevant", "maybe"]
 ExcludeReason = Literal["wrong_topic", "wrong_study_type", "duplicate", "language", "inaccessible", "other"]
 TopicFit = Literal["same_topic", "related_topic", "different_topic", "out_of_scope"]
-AcquisitionStatus = Literal["not_attempted", "queued", "imported", "failed", "manual"]
+AcquisitionStatus = Literal["not_attempted", "queued", "imported", "failed", "manual", "awaiting_pdf"]
 # Search/discovery sources only (spec §6) — Unpaywall is DOI-only enrichment, never fanned out to by search_batch
 # (app/core/paper_sources.py's own comment: "Unpaywall only adds PDF links"). Derived from the registry's own
 # `is_discovery_source` flag (Phase 0), not hand-listed — a source present here but missing from
