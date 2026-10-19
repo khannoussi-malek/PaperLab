@@ -17,8 +17,9 @@ class NotFound(DomainError):
     pass
 
 
-class Gone(DomainError):
-    """The resource existed and is now another one (a merged paper: details carry kept_id). The API answers 410."""
+class Gone(NotFound):
+    """The resource existed and is now another one (a merged paper: details carry kept_id). The API answers 410: the
+    maps below look up the exact type. A NotFound, so code that skips what was deleted meanwhile skips this too."""
 
 
 class InvalidInput(DomainError):

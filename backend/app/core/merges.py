@@ -13,10 +13,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import discovery, retrieved_hits
 from app.core.candidates import Candidate
-from app.core.enrichment import Collision, normalize_doi, short_id
+from app.core.enrichment import Collision, normalize_doi, pdf_hints, short_id
 from app.core.errors import NotFound
 from app.core.papers import ABSTRACT_PAGE
 from app.models import Paper, PaperMerge
+from app.models.workspace_search import WorkspaceSearchHit
 
 UNIQUE_IDENTIFIERS = ("doi", "openalex_id")  # UNIQUE on papers: M's are cleared before K may take them
 # What proves two papers are one work (R15b). arXiv ids aren't stored apart: an arXiv DOI is a DOI.
@@ -156,9 +157,16 @@ def _identifier(kept: Paper, merged: Paper, identifier: tuple[str, str] | None) 
     return f"{column}:{value}" if column else None
 
 
-def _refusal(kept: Paper, merged: Paper, identifier: tuple[str, str] | None) -> str | None:
+def pdf_evidence(title: str | None, metadata: dict[str, str]) -> Candidate:
+    """What the PDF itself says it is (R15c): its extracted title, before enrichment, and the authors its metadata
+    names. Never M's columns after enrichment: they came from the very work whose identifier collided."""
+    return Candidate((title or "").strip(), pdf_hints("", metadata).authors)
+
+
+def _refusal(kept: Paper, merged: Paper, identifier: tuple[str, str] | None, evidence: Candidate | None) -> str | None:
     """R15: why M must not merge into K, or None. A merge needs proof (R15b): an identifier K holds, equal to the
-    passed one or to M's own; the same work by title and authors is required on top of that, never instead."""
+    passed one or to M's own; the same work by title and authors is required on top of that, never instead. With
+    `evidence` (R15c) that is the PDF's own title, not M's stored one; none is no_pdf_title."""
     if kept.has_pdf:
         return "kept_has_pdf"
     if not merged.has_pdf:
@@ -168,7 +176,12 @@ def _refusal(kept: Paper, merged: Paper, identifier: tuple[str, str] | None) -> 
         return "identifier_differs"
     if not any(ours and ours == theirs for _, ours, theirs in pairs):
         return "no_shared_identifier"
-    theirs = {"title": merged.title, "authors": merged.authors, "year": merged.year}
+    if evidence is not None and not evidence.title.strip():
+        return "no_pdf_title"
+    # ponytail: a PDF seldom names its authors or year in its metadata; M's stand in, and as they may be the matched
+    # work's, the PDF's title is then the only independent evidence. Page-1 author parsing would add a second.
+    title = evidence.title if evidence else merged.title
+    theirs = {"title": title, "authors": (evidence and evidence.authors) or merged.authors, "year": merged.year}
     if not discovery.same_work(Candidate(kept.title, kept.authors, kept.year), theirs):
         return "not_the_same_work"
     for name in sorted(set(kept.manual_fields) & set(merged.manual_fields)):
@@ -215,12 +228,15 @@ async def merge(
     kept_id: uuid.UUID,
     *,
     identifier: tuple[str, str] | None = None,
+    evidence: Candidate | None = None,
     how: Literal["manual", "imported"] = "manual",
     dry_run: bool = False,
 ) -> MergeResult:
     """Merges M (`merged_id`) into K (`kept_id`) and commits, or reports why not (R15) with a `reported` audit row.
     `identifier` is the (column, value) M learned that K holds, when a collision led here; the guards check it too.
-    `how` M's PDF arrived (pdf_arrived's word for K's awaiting hits): "manual", an upload, or "imported", a found copy.
+    `evidence` is what M's PDF itself says (pdf_evidence): when given, K must be the same work as it, not as M's
+    stored title. `how` M's PDF arrived (pdf_arrived's word for K's awaiting hits): "manual", an upload, or
+    "imported", a found copy (see arrival).
 
     It commits (or, on a failure, rolls back) the caller's session, so the caller passes one with nothing pending:
     RuntimeError otherwise, before anything is read. A dry run runs the same guards and counts per step, and writes
@@ -234,9 +250,9 @@ async def merge(
         papers = await _papers(session, (merged_id, kept_id), lock=not dry_run)
         kept, merged = papers[kept_id], papers[merged_id]
         audit = {"kept_id": kept_id, "merged_id": merged_id, "identifier": _identifier(kept, merged, identifier)}
-        if reason := _refusal(kept, merged, identifier):
+        if reason := _refusal(kept, merged, identifier, evidence):
             if not dry_run:
-                session.add(PaperMerge(**audit, status="reported", reason=reason, moved={}))
+                await _report(session, audit, reason)
                 await session.commit()
             return MergeResult("reported", reason, dry_run=dry_run)
         moved = await (_count(session, kept, merged) if dry_run else _move_rows(session, kept, merged, how))
@@ -250,24 +266,64 @@ async def merge(
         raise
 
 
-async def after_ingest(session: AsyncSession, paper_id: uuid.UUID, collisions: list[Collision]) -> MergeResult | None:
+async def _report(session: AsyncSession, audit: dict[str, Any], reason: str) -> None:
+    """A reported audit row, unless the pair's latest row already says just that: a re-ingest repeats nothing.
+    The caller commits."""
+    pair = (PaperMerge.kept_id == audit["kept_id"], PaperMerge.merged_id == audit["merged_id"])
+    latest = select(PaperMerge.status, PaperMerge.reason).where(*pair).order_by(PaperMerge.created_at.desc()).limit(1)
+    if tuple((await session.execute(latest)).first() or ()) != ("reported", reason):
+        session.add(PaperMerge(**audit, status="reported", reason=reason, moved={}))
+
+
+async def arrival(session: AsyncSession, merged_id: uuid.UUID, default: str) -> str:
+    """How M's PDF arrived, for K's awaiting hits: M's own retrieved hit's word when it has one ("imported", a found
+    copy; "manual", an upload for that hit), else `default`. Read before the merge moves M's hits. ponytail: M's hits
+    seldom disagree; when they do, "imported" wins."""
+    query = select(WorkspaceSearchHit.acquisition_status).where(
+        WorkspaceSearchHit.paper_id == merged_id, WorkspaceSearchHit.acquisition_status.in_(retrieved_hits.ARRIVALS)
+    )
+    return await session.scalar(query.order_by(WorkspaceSearchHit.acquisition_status).limit(1)) or default
+
+
+async def _kept_holder(session: AsyncSession, collisions: list[Collision]) -> tuple[Collision | None, bool]:
+    """(the first collision whose holder has no PDF, or None; whether the holders are more than one paper)."""
+    holders = {c.holder_id for c in collisions}
+    pdfless = set(await session.scalars(select(Paper.id).where(Paper.id.in_(holders), Paper.file_path.is_(None))))
+    return next((c for c in collisions if c.holder_id in pdfless), None), len(holders) > 1
+
+
+async def after_ingest(
+    session: AsyncSession, paper_id: uuid.UUID, collisions: list[Collision], evidence: Candidate
+) -> MergeResult | None:
     """R17: ingest found `paper_id` (M) holding identifiers other papers hold (enrich_paper's `collisions`). M merges
     into the holder saved without a PDF, or a reported audit row says why not. A holder with a PDF is today's
     duplicate: None, nothing written. Two different holders, at least one without a PDF (the DOI's and the OpenAlex
-    id's), are reported as holders_disagree and neither merges: M may as well be a copy of the other one. Commits like
-    merge, so the session must have nothing pending."""
-    holders = {c.holder_id for c in collisions}
-    pdfless = set(await session.scalars(select(Paper.id).where(Paper.id.in_(holders), Paper.file_path.is_(None))))
-    first = next((c for c in collisions if c.holder_id in pdfless), None)
+    id's), are reported as holders_disagree and neither merges: M may as well be a copy of the other one. `evidence`
+    is pdf_evidence for M's PDF (R15c). Commits like merge, so the session must have nothing pending."""
+    first, disagree = await _kept_holder(session, collisions)
     if first is None:
         return None
-    if len(holders) > 1:
+    if disagree:
         audit = {"kept_id": first.holder_id, "merged_id": paper_id, "identifier": f"{first.column}:{first.value}"}
-        session.add(PaperMerge(**audit, status="reported", reason="holders_disagree", moved={}))
+        await _report(session, audit, "holders_disagree")
         await session.commit()
         return MergeResult("reported", "holders_disagree")
-    # "manual": a plain upload is the owner's own acquisition (pdf_arrived's word for K's awaiting hits).
-    return await merge(session, paper_id, first.holder_id, identifier=(first.column, first.value), how="manual")
+    # Ingest isn't told how the PDF came, so M's own hit says; else "manual", a plain upload being the owner's own.
+    how = await arrival(session, paper_id, "manual")
+    identifier = (first.column, first.value)
+    return await merge(session, paper_id, first.holder_id, identifier=identifier, evidence=evidence, how=how)
+
+
+async def report_failure(
+    session: AsyncSession, paper_id: uuid.UUID, collisions: list[Collision], error: BaseException
+) -> None:
+    """after_ingest raised (a race lost, a deadlock): a reported row, merge_failed:<type>, so the pair can be found
+    again; M's dropped DOI no longer leads to it. Commits."""
+    first, _ = await _kept_holder(session, collisions)
+    if first is not None:
+        audit = {"kept_id": first.holder_id, "merged_id": paper_id, "identifier": f"{first.column}:{first.value}"}
+        await _report(session, audit, f"merge_failed:{type(error).__name__}")
+        await session.commit()
 
 
 async def _count(session: AsyncSession, kept: Paper, merged: Paper) -> dict[str, int]:

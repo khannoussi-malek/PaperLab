@@ -6,12 +6,12 @@ from datetime import datetime, timezone
 import pytest
 from sqlalchemy import delete, select
 
-from app.core import discovery, papers, retrieved_hits, tags, workspaces
+from app.core import discovery, papers, retrieved_hits, tags, workspace_search, workspaces
 from app.core.candidates import normal_title
 from app.core.errors import Conflict
 from app.core.prisma_export import prisma_export
 from app.core.workspace_search import import_hits, upload_hit_pdf
-from app.models import Paper, paper_tags, workspace_papers
+from app.models import Paper, PaperMerge, paper_tags, workspace_papers
 from app.models.references import ExternalRef
 from app.models.workspace import Workspace
 from app.models.workspace_search import SearchRunEligibility, WorkspaceSearchHit, WorkspaceSearchRun
@@ -494,6 +494,33 @@ async def test_import_hits_skips_a_holder_deleted_during_the_search_and_still_in
     fresh = await reload(session, fresh)
     assert fresh.acquisition_status == "imported" and result.paper_ids == [fresh.paper_id]
     assert (await reload(session, gone)).acquisition_status == "not_attempted"
+
+
+async def test_import_hits_skips_a_holder_merged_meanwhile_and_imports_the_rest(
+    session, discovery_fakes, pdf_dir, monkeypatch
+):
+    """A merged paper is Gone, which is a NotFound: the batch skips that hit as it does a deleted holder's."""
+    ws = await workspace(session)
+    held = await paper(session, doi="10.1126/sciadv.adu5251")
+    other = await paper(session, title="Fresh one", doi="10.1/fresh")
+    gone = await failed_hit(session, ws, status="not_attempted", doi="10.1126/sciadv.adu5251")
+    fresh = await failed_hit(session, ws, title="Fresh one", status="not_attempted", doi="10.1/fresh")
+    found = workspace_search._held
+
+    async def held_then_merged(s, ref):  # an after-ingest merge folds the holder into another paper right after
+        existing = await found(s, ref)
+        if existing[0] == held.id:
+            await s.execute(delete(Paper).where(Paper.id == held.id))
+            s.add(PaperMerge(kept_id=uuid.uuid4(), merged_id=held.id, status="merged"))
+            await s.commit()
+        return existing
+
+    monkeypatch.setattr(workspace_search, "_held", held_then_merged)
+    result = await import_hits(session, discovery_fakes.providers, ws.id, [gone.id, fresh.id])
+
+    assert (await reload(session, gone)).acquisition_status == "not_attempted"
+    assert ((await reload(session, fresh)).acquisition_status, result.imported) == ("imported", 1)
+    assert (await reload(session, fresh)).paper_id == other.id
 
 
 async def test_a_pdf_that_arrives_during_the_search_makes_the_hit_imported_not_awaiting(
