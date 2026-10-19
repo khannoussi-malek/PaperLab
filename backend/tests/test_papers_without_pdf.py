@@ -5,6 +5,7 @@ import json
 import re
 import uuid
 import zipfile
+from datetime import datetime, timezone
 
 import pytest
 from conftest import FakeEmbedder, parse_sse, unit_vector
@@ -525,3 +526,50 @@ async def test_editing_a_paper_with_a_pdf_never_touches_its_chunks(client, sessi
     assert (response.status_code, response.json()["status"]) == (200, "ready")
     assert await _chunk_texts(session, paper.id) == ["An abstract."]
     assert arq.jobs == []
+
+
+async def test_a_failed_index_abstract_enqueue_on_edit_leaves_the_paper_ready(client, session, arq, monkeypatch):
+    pid = (await _saved(session)).id
+
+    async def down(*_a, **_k):
+        raise ConnectionError("redis is down")
+
+    monkeypatch.setattr(arq, "enqueue_job", down)
+    with pytest.raises(ConnectionError):
+        await client.patch(f"/api/papers/{pid}", json={"abstract": "Added by hand."})
+
+    session.expire_all()
+    assert (await session.get(Paper, pid)).status == "ready"  # never stuck at embedding
+
+
+async def test_uploading_onto_a_hit_never_asks_for_its_other_version(session, monkeypatch):
+    """upload_hit_pdf only needs a holder found by identifier; held_version can write a DOI onto an arXiv copy."""
+    from app.core import discovery, workspace_search
+    from app.models import Workspace
+    from app.models.references import ExternalRef
+    from app.models.workspace_search import WorkspaceSearchHit, WorkspaceSearchRun
+
+    async def never(*_a, **_k):
+        raise AssertionError("upload_hit_pdf asked for the other version")
+
+    monkeypatch.setattr(discovery, "held_version", never)
+    workspace = Workspace(name=f"Upload {uuid.uuid4().hex[:8]}")
+    ref = ExternalRef(title="Upload Probe Paper", pdf_urls=[])
+    session.add_all([workspace, ref])
+    await session.flush()
+    run = WorkspaceSearchRun(
+        workspace_id=workspace.id, query_text="q", filters_json={}, query_overrides_json={}, sources_json=[],
+        status="exhausted", started_at=datetime.now(timezone.utc), stats_json={},
+    )  # fmt: skip
+    session.add(run)
+    await session.flush()
+    hit = WorkspaceSearchHit(
+        workspace_id=workspace.id, run_id=run.id, external_ref_id=ref.id, source_method="database_search",
+        normalized_title="upload probe paper", stage1_status="relevant", first_seen_at=datetime.now(timezone.utc),
+    )  # fmt: skip
+    session.add(hit)
+    await session.commit()
+
+    _, created = await workspace_search.upload_hit_pdf(session, workspace.id, hit.id, "p.pdf", b"%PDF-1.4 probe")
+
+    assert created
