@@ -841,6 +841,13 @@ export function useUploadHitPdf(workspaceId: string) {
         void client.invalidateQueries({ queryKey: keys.paper(hit.paper_id) })
       }
     },
+    onError: (error: Error) => {
+      // A stale awaiting row: its paper got a PDF elsewhere. The hit and paper views catch up (no paper id here).
+      if (error.message === 'already_has_pdf') {
+        void client.invalidateQueries({ queryKey: keys.workspaces })
+        void client.invalidateQueries({ queryKey: keys.papers })
+      }
+    },
   })
 }
 
