@@ -35,7 +35,10 @@ async def add_paper(
     if payload.workspace_id is not None:
         await workspaces.get(session, payload.workspace_id)
     paper = await discovery.add(
-        session, providers, payload.candidate.to_candidate(), settings.pdf_dir,
+        session,
+        providers,
+        payload.candidate.to_candidate(),
+        settings.pdf_dir,
         save_without_pdf=payload.save_without_pdf,
     )
     if payload.workspace_id is not None:

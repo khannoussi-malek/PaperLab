@@ -147,7 +147,7 @@ async def test_add_without_a_free_pdf_is_409_and_enqueues_nothing(client, discov
 
 async def test_add_without_a_free_pdf_saves_without_pdf_only_when_asked(client, discovery_api, session, arq):
     discovery_api.pdf_host.reply("/landing", 200, text="<html>landing</html>")
-    candidate = {"abstract": "An abstract.", "pdf_urls": ["https://pdf.example/landing"]}
+    candidate = {"abstract": "An abstract.", "sources": ["crossref"], "pdf_urls": ["https://pdf.example/landing"]}
 
     refused = await client.post("/api/discovery/add", json=body(**candidate))
     saved = await client.post("/api/discovery/add", json={**body(**candidate), "save_without_pdf": True})
@@ -156,8 +156,20 @@ async def test_add_without_a_free_pdf_saves_without_pdf_only_when_asked(client, 
     assert saved.status_code == 201
     paper = saved.json()
     assert (paper["has_pdf"], paper["title"], paper["doi"]) == (False, "Found Paper", "10.5555/m19-api")
-    assert (await session.get(Paper, uuid.UUID(paper["id"]))).details_source == "search"
+    stored = await session.get(Paper, uuid.UUID(paper["id"]))
+    assert (stored.details_source, stored.abstract) == ("crossref", "An abstract.")
     assert arq.jobs == [("index_abstract", paper["id"])]
+
+
+async def test_an_overlong_abstract_is_cut_not_refused(client, discovery_api, session, arq):
+    discovery_api.pdf_host.reply("/copy.pdf", 200, content=PDF)
+
+    response = await client.post(
+        "/api/discovery/add", json=body(abstract="x" * 25_000, pdf_urls=["https://pdf.example/copy.pdf"])
+    )
+
+    assert response.status_code == 201
+    assert len((await session.get(Paper, uuid.UUID(response.json()["id"]))).abstract) <= 20_000
 
 
 async def test_a_paper_saved_without_pdf_or_abstract_enqueues_nothing(client, discovery_api, arq):

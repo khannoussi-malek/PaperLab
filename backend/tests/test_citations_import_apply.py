@@ -390,6 +390,22 @@ async def test_a_failed_progress_write_is_skipped_and_the_job_finishes(session, 
     assert len(done["needs_pdf"]) == cia.INLINE_MAX + 1
 
 
+async def test_the_job_carries_save_without_pdf_to_the_worker(session, pdf_dir, jobs, monkeypatch):
+    @asynccontextmanager
+    async def shared_session():
+        yield session
+
+    monkeypatch.setattr(worker, "SessionLocal", shared_session)
+    data = bib_of(cia.INLINE_MAX + 1)
+
+    job_id = await cia.start(session, "refs.bib", data, fetch_free_pdfs=False, save_without_pdf=True)
+
+    [(_, path, file_name, ws, fetch, save)] = jobs.jobs
+    assert save is True
+    done = await worker.import_citations({"redis": FakeRedis(), "job_id": job_id}, path, file_name, ws, fetch, save)
+    assert (done["saved_without_pdf"], done["needs_pdf"]) == (cia.INLINE_MAX + 1, [])
+
+
 async def test_a_big_import_runs_as_a_job_that_reports_progress(session, pdf_dir, jobs, monkeypatch):
     @asynccontextmanager
     async def shared_session():

@@ -2,7 +2,7 @@ import re
 import uuid
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl, model_validator
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator, model_validator
 
 from app.core.candidates import MAX_AUTHORS, MAX_PDF_URLS, Candidate
 from app.schemas.paper_sources import SourceId
@@ -57,9 +57,12 @@ class SearchOut(BaseModel):
     notices: list[str]
 
 
+MAX_ABSTRACT_CHARS = 20_000
+
+
 class CandidateIn(BaseModel):
-    """A search result or suggestion sent back to be added. Extra fields (its `paper_id`, its `sources`) are ignored:
-    the library is checked again. `abstract` and `sources` are kept for a save without a PDF (its abstract, and where
+    """A search result or suggestion sent back to be added. An extra field (its `paper_id`) is ignored: the
+    library is checked again. `abstract` and `sources` are kept for a save without a PDF (its abstract, and where
     its details came from)."""
 
     title: str = Field(min_length=1, max_length=1000)
@@ -69,7 +72,7 @@ class CandidateIn(BaseModel):
     doi: str | None = Field(default=None, pattern=r"^10\.\d{4,9}/\S+$", max_length=300)
     external_ids: dict[str, str] = Field(default_factory=dict)
     cited_by_count: int | None = Field(default=None, ge=0)
-    abstract: str | None = Field(default=None, max_length=20000)
+    abstract: str | None = None
     sources: list[SourceId] = Field(default_factory=list, max_length=20)
     pdf_urls: list[HttpUrl] = Field(default_factory=list, max_length=MAX_PDF_URLS)
 
@@ -80,6 +83,11 @@ class CandidateIn(BaseModel):
             if pattern is None or not pattern.fullmatch(value):
                 raise ValueError(f"'{value}' is not a valid {source} id")
         return self
+
+    @field_validator("abstract", mode="after")
+    @classmethod
+    def _cut_a_long_abstract(cls, value: str | None) -> str | None:
+        return value[:MAX_ABSTRACT_CHARS] if value else value  # sources send abstracts of any length: cut, never refuse
 
     def to_candidate(self) -> Candidate:
         return Candidate(**self.model_dump(exclude={"pdf_urls"}), pdf_urls=[str(url) for url in self.pdf_urls])
