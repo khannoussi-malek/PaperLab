@@ -120,6 +120,9 @@ async def ingest_paper(ctx: dict, paper_id: str) -> None:
         return
     async with SessionLocal() as session:
         paper = await papers.get_paper(session, pid)
+        if paper.file_path is None:  # nothing to extract: extract(None) would "succeed" and wipe the abstract chunk
+            logger.info("ingest of %s skipped: the paper has no PDF", pid)
+            return
         started = time.monotonic()
         marks: list[tuple[str, float]] = [("extracting", started)]  # each stage's start; a stage runs until the next
         chunks = pages = 0

@@ -7,6 +7,7 @@ from fastapi.responses import FileResponse
 from app.api.deps import DiscoveryDep, SessionDep
 from app.config import settings
 from app.core import discovery, enrichment, papers, tags, workspaces
+from app.core.errors import Conflict
 from app.core.queue import INGEST_QUEUE
 from app.models import PaperStatus
 from app.schemas.discovery import CandidateOut
@@ -84,6 +85,8 @@ async def list_chunks(paper_id: uuid.UUID, session: SessionDep, page: int | None
 @router.post("/{paper_id}/reingest", status_code=202)
 async def reingest_paper(paper_id: uuid.UUID, request: Request, session: SessionDep) -> PaperOut:
     paper = await papers.get_paper(session, paper_id)
+    if paper.file_path is None:
+        raise Conflict("no_pdf", detail="This paper has no PDF yet.")
     # Flips the status before enqueueing, so a chat request racing the worker sees `uploaded`
     # (paper_not_ready) instead of a `ready` paper whose chunks are mid-replacement.
     await papers.set_status(session, paper.id, PaperStatus.UPLOADED)

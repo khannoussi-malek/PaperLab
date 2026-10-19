@@ -177,7 +177,7 @@ async def upload_paper(
         raise InvalidInput("invalid_doi")
     data = _decode_pdf(pdf_base64)
     existing = await session.scalar(select(Paper).where(func.lower(Paper.doi) == clean_doi)) if clean_doi else None
-    if existing and existing.status == PaperStatus.FAILED:  # a retry, as _add_found does
+    if existing and existing.file_path and existing.status == PaperStatus.FAILED:  # a retry, as _add_found does
         paper, status = existing, "queued"
         await asyncio.to_thread(Path(paper.file_path).write_bytes, data)  # the upload replaces the broken file
         await papers.set_status(session, paper.id, PaperStatus.UPLOADED)

@@ -472,12 +472,14 @@ async def locate_quote(session: AsyncSession, paper_id: uuid.UUID, quoted_text: 
     The quote must occur exactly once in the paper's chunks. Its rects are the quoted lines when the PDF is on this
     machine, else the paragraphs they're in. Raises NotFound (the paper), InvalidInput("empty_quote" |
     "quote_not_found" with a hint | "quote_ambiguous" with pages and a hint), Conflict("paper_not_ready") when the
-    paper has no chunks yet.
+    paper has no chunks yet, Conflict("no_pdf") when it has no PDF.
     """
     chunks = await list_chunks(session, paper_id)
     quote = fold(quoted_text)
     if not quote:
         raise InvalidInput("empty_quote")
+    if (await get_paper(session, paper_id)).file_path is None:  # its abstract chunk has no boxes to anchor on
+        raise Conflict("no_pdf", detail="This paper has no PDF yet.")
     if not chunks:
         raise Conflict("paper_not_ready")
     # ponytail: a quote that crosses from one chunk into the next isn't found; the hint asks for one passage. Join

@@ -93,7 +93,7 @@ _SHAPES = {
 class CardView:
     paper_id: uuid.UUID
     status: str  # generating | ready | failed
-    error: str | None = None  # not_ready | no_text | model_error
+    error: str | None = None  # not_ready | no_text | needs_full_text | model_error
     fields: dict = field(default_factory=dict)
     provenance: str = "llm"
     model: str | None = None
@@ -205,7 +205,9 @@ async def build_card(session: AsyncSession, paper_id: uuid.UUID, *, llm=None, re
     if paper is None:
         raise NotFound("paper_not_found", detail=f"Paper {paper_id} does not exist.")
     failed = None
-    if paper.status != PaperStatus.READY:
+    if not paper.has_pdf:  # an abstract-only chunk is not the full text
+        failed = "needs_full_text"
+    elif paper.status != PaperStatus.READY:
         failed = "not_ready"
     elif not await session.scalar(select(func.count()).select_from(Chunk).where(Chunk.paper_id == paper_id)):
         failed = "no_text"
@@ -247,12 +249,20 @@ async def request_cards(
     `card_edited_needs_confirm`, checked for every paper before anything changes). A card already `generating` is
     returned as is and not queued again, so two requests make one job. Returns one view per paper, in order.
     """
-    paper_ids = list(dict.fromkeys(paper_ids))
+    paper_ids = original_ids = list(dict.fromkeys(paper_ids))
     if not paper_ids:
         return []
-    known = await session.scalar(select(func.count()).select_from(Paper).where(Paper.id.in_(set(paper_ids))))
-    if known != len(set(paper_ids)):
+    found = {p.id: p for p in await session.scalars(select(Paper).where(Paper.id.in_(set(paper_ids))))}
+    if len(found) != len(set(paper_ids)):
         raise NotFound("paper_not_found")
+    # A card needs the full text. One paper asked for by name is refused; a whole workspace skips those without.
+    no_pdf = [i for i in paper_ids if not found[i].has_pdf]
+    if no_pdf and workspace_id is None:
+        raise InvalidInput("needs_full_text", detail="A paper needs its PDF before it gets an evidence card.")
+    skipped = {i: CardView(i, "failed", "needs_full_text") for i in no_pdf}
+    paper_ids = [i for i in paper_ids if i not in skipped]
+    if not paper_ids:
+        return list(skipped.values())
     if regenerate and not confirm and await session.scalar(
         select(func.count()).select_from(EvidenceCard).where(
             EvidenceCard.paper_id.in_(paper_ids), EvidenceCard.status == "ready",
@@ -291,7 +301,7 @@ async def request_cards(
                 cards[paper_id].status, cards[paper_id].error = "failed", "queue_error"
             await session.commit()
             raise
-    return [_view(cards[i]) for i in paper_ids]
+    return [skipped[i] if i in skipped else _view(cards[i]) for i in original_ids]
 
 
 _EDITABLE = {"research_question": _Item, "design": _Item, "sample": _Sample, "findings": _Item,
