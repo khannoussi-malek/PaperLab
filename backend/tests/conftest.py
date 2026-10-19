@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path
 
+import db_guard
 import httpx
 import pymupdf
 import pytest
@@ -46,6 +47,12 @@ RECORDED_DOIS = sorted({doi.lower() for doi in re.findall(r"doi\.org/(10\.[^\"]+
 DISCOVERY_FIXTURES = Path(__file__).parent / "fixtures" / "discovery"
 
 BODY_TEXT = "The quick brown fox jumps over the lazy dog near the river bank today. " * 3
+
+
+def pytest_configure(config):
+    # M77: once, on the controller (an xdist worker has `workerinput`): never the live database behind this branch.
+    if not hasattr(config, "workerinput") and (why := db_guard.check(TEST_DATABASE_URL)):
+        pytest.exit(why, returncode=2)
 
 
 @pytest.hookimpl(tryfirst=True)  # before xdist reads the markers
