@@ -11,6 +11,7 @@ from app.core.chunking import STRATEGY_VERSION, ChunkDraft
 from app.core.errors import Conflict, InvalidInput, NotFound
 from app.core.source_types import DETAILS_SOURCES
 from app.models import Chunk, Paper, PaperStatus
+from app.models.workspace_search import WorkspaceSearchHit
 
 PDF_MAGIC = b"%PDF-"
 # A paper saved without a PDF keeps its abstract as one chunk on this page (R2): PDF pages count from 1, so every
@@ -190,8 +191,14 @@ async def replace_chunks(session: AsyncSession, paper_id: uuid.UUID, drafts: lis
 
 
 async def delete_paper(session: AsyncSession, paper_id: uuid.UUID) -> None:
-    """Chunks and note anchors cascade. Notes survive: they are the primary object."""
+    """Chunks and note anchors cascade. Notes survive: they are the primary object. Hits awaiting this paper's PDF
+    go back to `failed`, for Get PDFs and link to take up again, instead of awaiting no paper."""
     paper = await get_paper(session, paper_id)
+    await session.execute(
+        update(WorkspaceSearchHit)
+        .where(WorkspaceSearchHit.paper_id == paper_id, WorkspaceSearchHit.acquisition_status == "awaiting_pdf")
+        .values(acquisition_status="failed", paper_id=None)
+    )
     await session.delete(paper)
     await session.commit()
     if paper.file_path:  # a paper saved without a PDF has no file to remove

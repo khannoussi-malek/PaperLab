@@ -111,7 +111,8 @@ async def upload_paper_pdf(paper_id: uuid.UUID, file: UploadFile, request: Reque
     """The PDF of a paper saved without one: the same paper upgrades in place, keeping its tags, notes, workspaces and
     decisions, and its hits awaiting the PDF count as retrieved (manual). Ingest is queued. 404 unknown paper; 409
     already_has_pdf; 422 not_a_pdf or pdf_too_large."""
-    await papers.get_paper(session, paper_id)
+    if (await papers.get_paper(session, paper_id)).has_pdf:  # refused unread; attach_pdf re-checks under its lock
+        raise Conflict("already_has_pdf")
     too_large = InvalidInput("pdf_too_large", max_mb=MAX_UPLOAD_PDF_BYTES // 1024 // 1024)
     if (file.size or 0) > MAX_UPLOAD_PDF_BYTES:  # refused unread when the size is known
         raise too_large

@@ -6,6 +6,7 @@ from fastapi import APIRouter, File, Query, Request, UploadFile
 from app.api.deps import DiscoveryDep, SessionDep
 from app.core import screening, workspace_search
 from app.core.errors import InvalidInput
+from app.core.pipeline import MAX_UPLOAD_PDF_BYTES
 from app.core.prisma_export import prisma_export
 from app.core.queue import INGEST_QUEUE
 from app.core.screening import RANKED_LIMIT_MAX
@@ -203,7 +204,11 @@ async def upload_hit_pdf(
     workspace_id: uuid.UUID, hit_id: uuid.UUID, session: SessionDep, request: Request,
     file: UploadFile = File(...),
 ) -> HitOut:
-    content = await file.read()
+    too_large = InvalidInput("pdf_too_large", max_mb=MAX_UPLOAD_PDF_BYTES // 1024 // 1024)
+    if (file.size or 0) > MAX_UPLOAD_PDF_BYTES:  # refused unread when the size is known, as the paper route does
+        raise too_large
+    if len(content := await file.read()) > MAX_UPLOAD_PDF_BYTES:
+        raise too_large
     hit, created = await workspace_search.upload_hit_pdf(session, workspace_id, hit_id, file.filename, content)
     if created:
         await _enqueue_ingest(request, hit["paper_id"])

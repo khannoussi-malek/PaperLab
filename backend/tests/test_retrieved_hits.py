@@ -372,10 +372,11 @@ async def test_an_unread_paper_never_counts_as_assessed_or_included(session):
     arrived = await paper(session, title="PDF arrived, hit not moved yet")
     unread = await paper(session, title="Marked imported, no PDF", file_path=None)
     cases = ((read, "imported"), (awaiting, "awaiting_pdf"), (arrived, "awaiting_pdf"), (unread, "imported"))
-    for held, status in cases:
+    for held, _ in cases:
+        await workspaces.add_paper(session, ws.id, held.id)
+    for held, status in cases:  # after the last link, which would move the arrived one (Minor 1)
         hit = await failed_hit(session, ws, title=held.title, status=status)
         hit.paper_id = held.id
-        await workspaces.add_paper(session, ws.id, held.id)
         session.add(SearchRunEligibility(
             paper_id=held.id, search_run_id=ws.run_id, stage2_status="include", assessed_at=datetime.now(timezone.utc),
         ))  # fmt: skip
@@ -543,3 +544,34 @@ async def test_an_upload_found_by_doi_records_the_holder_on_the_reference(sessio
     ref = await session.get(ExternalRef, hit.external_ref_id)
     await session.refresh(ref)
     assert ref.imported_as == held.id
+
+
+async def test_link_retrieves_an_awaiting_hit_whose_paper_got_its_pdf_since(session):
+    ws = await workspace(session)
+    held = await paper(session, file_path=None)
+    still = await paper(session, title="Still without one", file_path=None)
+    await workspaces.add_paper(session, ws.id, held.id)
+    hit = await failed_hit(session, ws, status="awaiting_pdf")
+    waiting = await failed_hit(session, ws, status="awaiting_pdf")
+    hit.paper_id, waiting.paper_id = held.id, still.id
+    held.file_path = "/arrived.pdf"  # an attach that committed after link read the paper and before it wrote the hit
+    await session.commit()
+
+    await retrieved_hits.link(session, ws.id)
+    await session.commit()
+
+    assert ((await reload(session, hit)).acquisition_status, hit.paper_id) == ("imported", held.id)
+    assert ((await reload(session, waiting)).acquisition_status, waiting.paper_id) == ("awaiting_pdf", still.id)
+
+
+async def test_deleting_a_pdfless_paper_sends_its_awaiting_hits_back_to_failed(session):
+    ws = await workspace(session)
+    held = await paper(session, file_path=None)
+    await workspaces.add_paper(session, ws.id, held.id)
+    hit = await failed_hit(session, ws, status="awaiting_pdf")
+    hit.paper_id = held.id
+    await session.commit()
+
+    await papers.delete_paper(session, held.id)
+
+    assert ((await reload(session, hit)).acquisition_status, hit.paper_id) == ("failed", None)
