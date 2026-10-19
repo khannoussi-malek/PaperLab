@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.chunking import STRATEGY_VERSION, ChunkDraft
-from app.core.errors import InvalidInput, NotFound
+from app.core.errors import Conflict, InvalidInput, NotFound
 from app.core.source_types import DETAILS_SOURCES
 from app.models import Chunk, Paper, PaperStatus
 
@@ -85,6 +85,36 @@ async def create_metadata_paper(session: AsyncSession, prefill: dict[str, Any], 
     session.add(paper)
     await session.flush()
     await replace_chunks(session, paper.id, abstract_drafts(paper.title, abstract))  # commits paper and chunk together
+    await session.refresh(paper)
+    return paper
+
+
+async def attach_pdf(session: AsyncSession, paper_id: uuid.UUID, data: bytes, how: str) -> Paper:
+    """The upgrade (R10): a paper saved without a PDF gets one, in place. Writes pdf_dir/<id>.pdf, sets file_path and
+    `uploaded`, and moves its awaiting_pdf hits to `how` ("manual" for an upload, "imported" for a found copy) in the
+    same commit. Its id, tags, notes, workspaces, decisions, details_source and locked fields are untouched. The caller
+    enqueues ingest_paper, which replaces the abstract chunk with the PDF's. The size cap is the caller's: an upload's
+    is not a found copy's. Raises NotFound, InvalidInput("not_a_pdf"), Conflict("already_has_pdf")."""
+    from app.core import retrieved_hits  # here: retrieved_hits -> tags -> enrichment imports this module
+
+    if not data.startswith(PDF_MAGIC):
+        raise InvalidInput("not_a_pdf")
+    # Locked until the commit: a second attach waits here, then finds the file instead of overwriting it.
+    paper = await session.get(Paper, paper_id, with_for_update=True, populate_existing=True)
+    if paper is None:
+        raise NotFound(f"paper {paper_id} not found")
+    if paper.has_pdf:  # the lock lasts until the caller's transaction ends
+        raise Conflict("already_has_pdf")
+    path = settings.pdf_dir / f"{paper.id}.pdf"
+    settings.pdf_dir.mkdir(parents=True, exist_ok=True)
+    await asyncio.to_thread(path.write_bytes, data)
+    try:
+        paper.file_path, paper.status, paper.status_error = str(path), PaperStatus.UPLOADED, None
+        await retrieved_hits.pdf_arrived(session, paper.id, how)
+        await session.commit()
+    except BaseException:
+        path.unlink(missing_ok=True)
+        raise
     await session.refresh(paper)
     return paper
 

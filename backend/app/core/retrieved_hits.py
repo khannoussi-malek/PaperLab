@@ -8,7 +8,7 @@ changes; papers' own data is never touched."""
 import uuid
 from typing import NamedTuple
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import tags
@@ -100,6 +100,18 @@ async def link(session: AsyncSession, workspace_id: uuid.UUID) -> list[Linked]:
     await session.flush()
     await tags.apply_hit_tags(session, workspace_id, done)
     return linked
+
+
+async def pdf_arrived(session: AsyncSession, paper_id: uuid.UUID, how: str) -> None:
+    """The paper's PDF arrived: every hit awaiting it is retrieved, `how` ("manual" for an upload, "imported" for a
+    found copy). The caller commits, with the PDF itself, so a hit never counts as retrieved without it."""
+    if how not in ("manual", "imported"):
+        raise ValueError(f"how must be manual or imported, not {how!r}")
+    await session.execute(
+        update(WorkspaceSearchHit)
+        .where(WorkspaceSearchHit.paper_id == paper_id, WorkspaceSearchHit.acquisition_status == "awaiting_pdf")
+        .values(acquisition_status=how)
+    )
 
 
 async def repair(session: AsyncSession) -> list[Linked]:
