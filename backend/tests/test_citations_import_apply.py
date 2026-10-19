@@ -175,6 +175,20 @@ async def test_a_bundled_pdf_upgrades_a_held_paper_saved_without_one(session, pd
     assert ("ingest_paper", str(kept.id)) in jobs.jobs
 
 
+async def test_an_unreadable_bundled_pdf_leaves_a_held_paper_as_held(session, pdf_dir, jobs):
+    kept = await papers.create_metadata_paper(session, {"title": title("bad"), "doi": doi("b")}, "manual")
+    bib = (
+        f"@article{{a, title={{{title('bad')}}}, author={{Smith, Jane}}, year={{2020}}, doi={{{doi('b')}}},"
+        f" file={{files/1/a.pdf}}}}\n"
+    )
+    with read_bundle(zipped(bib, {"files/1/a.pdf": b"not a pdf at all"})) as bundle:
+        result = await cia.apply(session, bundle.entries, bundle=bundle, fetch_free_pdfs=False)
+
+    assert (result.already_in_library, result.pdfs_attached, result.failed) == (1, 0, [])
+    await session.refresh(kept)
+    assert not kept.has_pdf and jobs.jobs == []
+
+
 # ---- new papers ----
 
 

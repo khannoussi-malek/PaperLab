@@ -288,14 +288,18 @@ async def _add_found(
 async def _in_library(session, paper_id, workspace_uuid, providers=None) -> AddPaperResult:
     """A paper the library holds. Saved without a PDF and `providers` given, a free copy is looked for and attached."""
     paper = await papers.get_paper(session, paper_id)
+    if not paper.has_pdf and providers is not None:
+        # Filed after the search answers: a held arXiv copy (Conflict) answers for it, and the workspace gets only that.
+        found = await _attach_found(session, providers, paper)
+        if workspace_uuid is not None:
+            await workspaces.add_paper(session, workspace_uuid, paper.id)
+        return found
     if workspace_uuid is not None:
         await workspaces.add_paper(session, workspace_uuid, paper.id)
     if paper.file_path and paper.status == PaperStatus.FAILED:  # a retry, as the app's reingest does
         await papers.set_status(session, paper.id, PaperStatus.UPLOADED)
         await queue.enqueue("ingest_paper", str(paper.id))
     if not paper.has_pdf:
-        if providers is not None:
-            return await _attach_found(session, providers, paper)
         return AddPaperResult(status="already_in_library", paper_id=paper.id, title=paper.title)
     status = "ingested" if paper.status == PaperStatus.READY else "queued"
     return AddPaperResult(status=status, paper_id=paper.id, title=paper.title)

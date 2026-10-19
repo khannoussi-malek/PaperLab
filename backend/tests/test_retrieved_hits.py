@@ -4,10 +4,11 @@ import uuid
 from datetime import datetime, timezone
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
-from app.core import retrieved_hits, tags, workspaces
+from app.core import discovery, papers, retrieved_hits, tags, workspaces
 from app.core.candidates import normal_title
+from app.core.errors import Conflict
 from app.core.prisma_export import prisma_export
 from app.core.workspace_search import import_hits, upload_hit_pdf
 from app.models import Paper, paper_tags, workspace_papers
@@ -454,3 +455,91 @@ async def test_import_hits_finds_a_free_copy_for_a_pdfless_holder_and_upgrades_i
     assert (result.imported, result.failed, result.paper_ids) == (1, 0, [held.id])
     await session.refresh(held)
     assert held.has_pdf and (pdf_dir / f"{held.id}.pdf").read_bytes() == b"%PDF-1.4 ok"
+
+
+async def test_import_hits_tries_the_hits_own_pdf_link_for_a_pdfless_holder(session, discovery_fakes, pdf_dir):
+    ws = await workspace(session)
+    held = await paper(session, doi="10.1126/sciadv.adu5251", file_path=None)  # saved from details: no oa_url
+    discovery_fakes.pdf_host.reply("/ref.pdf", 200, content=b"%PDF-1.4 ref")
+    hit = await failed_hit(
+        session, ws, status="not_attempted", doi="10.1126/sciadv.adu5251", pdf_urls=["https://pdf.example/ref.pdf"]
+    )
+
+    result = await import_hits(session, discovery_fakes.providers, ws.id, [hit.id])
+
+    assert (await reload(session, hit)).acquisition_status == "imported"
+    assert result.paper_ids == [held.id]
+    await session.refresh(held)
+    assert held.has_pdf
+
+
+async def test_import_hits_skips_a_holder_deleted_during_the_search_and_still_ingests_the_rest(
+    session, discovery_fakes, pdf_dir, monkeypatch
+):
+    ws = await workspace(session)
+    held = await paper(session, doi="10.1126/sciadv.adu5251", file_path=None)
+    discovery_fakes.pdf_host.reply("/ok.pdf", 200, content=b"%PDF-1.4 ok")
+    fresh = await failed_hit(session, ws, title="Fresh one", status="not_attempted", pdf_urls=["https://pdf.example/ok.pdf"])
+    gone = await failed_hit(session, ws, status="not_attempted", doi="10.1126/sciadv.adu5251")
+
+    async def find_pdf(s, providers, candidate):  # another request deletes the holder meanwhile
+        await s.execute(delete(Paper).where(Paper.id == held.id))
+        await s.commit()
+        return b"%PDF-1.4 mine", [], []
+
+    monkeypatch.setattr(discovery, "find_pdf", find_pdf)
+    result = await import_hits(session, discovery_fakes.providers, ws.id, [fresh.id, gone.id])
+
+    fresh = await reload(session, fresh)
+    assert fresh.acquisition_status == "imported" and result.paper_ids == [fresh.paper_id]
+    assert (await reload(session, gone)).acquisition_status == "not_attempted"
+
+
+async def test_a_pdf_that_arrives_during_the_search_makes_the_hit_imported_not_awaiting(
+    session, discovery_fakes, pdf_dir, monkeypatch
+):
+    ws = await workspace(session)
+    held = await paper(session, doi="10.1126/sciadv.adu5251", file_path=None)
+    hit = await failed_hit(session, ws, status="not_attempted", doi="10.1126/sciadv.adu5251")
+
+    async def find_pdf(s, providers, candidate):  # another request uploads while this one downloads
+        await papers.attach_pdf(s, held.id, b"%PDF-1.4 theirs", "manual")
+        return b"%PDF-1.4 mine", [], []
+
+    monkeypatch.setattr(discovery, "find_pdf", find_pdf)
+    result = await import_hits(session, discovery_fakes.providers, ws.id, [hit.id])
+
+    hit = await reload(session, hit)
+    assert (hit.acquisition_status, hit.paper_id) == ("imported", held.id)
+    assert result.paper_ids == []  # the other request enqueues its own ingest
+
+
+async def test_import_hits_links_awaiting_pdf_when_a_held_arxiv_copy_answers(
+    session, discovery_fakes, pdf_dir, monkeypatch
+):
+    ws = await workspace(session)
+    held = await paper(session, doi="10.1126/sciadv.adu5251", file_path=None)
+    hit = await failed_hit(session, ws, status="not_attempted", doi="10.1126/sciadv.adu5251")
+
+    async def find_pdf(s, providers, candidate):
+        raise Conflict(discovery.ALREADY_IN_LIBRARY, paper_id=uuid.uuid4(), tried=[])
+
+    monkeypatch.setattr(discovery, "find_pdf", find_pdf)
+    result = await import_hits(session, discovery_fakes.providers, ws.id, [hit.id])
+
+    hit = await reload(session, hit)
+    assert (hit.acquisition_status, hit.paper_id, result.paper_ids) == ("awaiting_pdf", held.id, [])
+    await session.refresh(held)
+    assert not held.has_pdf
+
+
+async def test_an_upload_found_by_doi_records_the_holder_on_the_reference(session, pdf_dir):
+    ws = await workspace(session)
+    held = await paper(session, doi="10.1126/sciadv.adu5251", file_path=None)
+    hit = await failed_hit(session, ws, doi="10.1126/sciadv.adu5251")
+
+    await upload_hit_pdf(session, ws.id, hit.id, "a.pdf", b"%PDF-1.7 mine")
+
+    ref = await session.get(ExternalRef, hit.external_ref_id)
+    await session.refresh(ref)
+    assert ref.imported_as == held.id

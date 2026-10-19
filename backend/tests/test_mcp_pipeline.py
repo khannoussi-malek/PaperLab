@@ -204,6 +204,30 @@ async def test_add_papers_on_a_pdfless_held_paper_with_no_copy_says_so(session, 
     assert jobs.jobs == [] and not (pdf_dir / f"{held.id}.pdf").exists()
 
 
+async def test_add_paper_on_a_pdfless_paper_with_a_held_arxiv_copy_files_only_the_copy(session, jobs, monkeypatch):
+    doi = f"{discovery_fake.DOI_PREFIX}arxivheld"
+    bare = await papers.create_metadata_paper(session, {"title": "Bare", "doi": doi}, "manual")
+    copy = Paper(title="Bare", file_path="/nonexistent.pdf", status=PaperStatus.READY)
+    session.add(copy)
+    await session.flush()
+    await workspaces.create(session, f"Arxiv {RUN}")
+
+    async def search(_session, _providers, _query):
+        return discovery.SearchResult([Candidate(title="Bare", doi=doi, paper_id=bare.id)], [])
+
+    async def find_pdf(_session, _providers, _candidate):
+        raise Conflict(discovery.ALREADY_IN_LIBRARY, paper_id=copy.id, tried=[])
+
+    monkeypatch.setattr(discovery, "search", search)
+    monkeypatch.setattr(discovery, "find_pdf", find_pdf)
+    added = result(await call("add_paper", identifier=doi, workspace=f"Arxiv {RUN}"))
+
+    assert (added["status"], added["paper_id"]) == ("ingested", str(copy.id))
+    members = result(await call("list_papers", workspace=f"Arxiv {RUN}"))
+    assert [m["id"] for m in members] == [str(copy.id)]  # not the bare paper too
+    assert jobs.jobs == []
+
+
 async def test_no_free_pdf_names_the_repository_copies_over_mcp(jobs, monkeypatch):
     doi = f"{discovery_fake.DOI_PREFIX}landing"
 
