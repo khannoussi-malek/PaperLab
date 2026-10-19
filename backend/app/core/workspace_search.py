@@ -891,13 +891,29 @@ async def _ref_prefill(session: AsyncSession, ref: ExternalRef) -> dict:
     return discovery.prefill(candidate)
 
 
+async def _attach_free_copy(session: AsyncSession, providers: Providers, holder: Paper) -> bool:
+    """A free copy for a paper saved without a PDF, attached to it (R12). False when none is found, or when its arXiv
+    copy is the one held: that copy is the work's PDF, and nothing is written onto it."""
+    try:
+        data, _tried, _copies = await discovery.find_pdf(session, providers, discovery.candidate_of(holder))
+    except Conflict:
+        return False
+    if data is None:
+        return False
+    try:
+        await papers.attach_pdf(session, holder.id, data, "imported")
+    except Conflict:  # a PDF arrived since: nothing to enqueue
+        return False
+    return True
+
+
 async def import_hits(
     session: AsyncSession, providers: Providers, workspace_id: uuid.UUID, hit_ids: list[uuid.UUID] | None
 ) -> ImportResult:
     """Best-effort bulk import (spec Task 9), mirroring discovery.add's one-candidate download-then-create flow:
     every targeted hit (hit_ids, or every not-yet-imported `relevant` hit) gets its own outcome, so one hit with no
     free PDF never stops the rest of the batch. A hit left `failed` is Manual acquisition's job (Task 11).
-    `paper_ids` are the newly created papers, for the route to enqueue ingest on — a core function has no
+    `paper_ids` are the papers new or just given a PDF, for the route to enqueue ingest on — a core function has no
     Request to enqueue with itself. A hit whose ExternalRef.imported_as is already set (import_reference's own
     bookkeeping, same as ours below) is attached to that existing paper without downloading again, and its
     paper_id is left out of paper_ids so ingest isn't re-enqueued for a paper that already went through it."""
@@ -928,7 +944,11 @@ async def import_hits(
             if ref.imported_as is None and by_identifier:  # a title match never claims the shared reference (M67)
                 ref.imported_as = existing_id
             # Saved without a PDF: linked so step 3 shows it, but not retrieved until its PDF arrives (R8).
-            has_pdf = (await papers.get_paper(session, existing_id)).has_pdf
+            holder = await papers.get_paper(session, existing_id)
+            has_pdf = holder.has_pdf
+            if not has_pdf and await _attach_free_copy(session, providers, holder):
+                has_pdf = True
+                paper_ids.append(existing_id)  # its PDF is new: the route enqueues ingest
             hit.acquisition_status = "imported" if has_pdf else "awaiting_pdf"
             hit.paper_id = existing_id
             await _record_snowball_citation(session, hit, ref.id)
@@ -1009,9 +1029,14 @@ async def upload_hit_pdf(
     # By identifier only: held_version may write this DOI onto a held arXiv copy, which an upload must not do.
     held_id = (ref.imported_as or await _library_paper_id(session, ref)) if ref is not None else None
     if held_id is not None and not (await papers.get_paper(session, held_id)).has_pdf:
-        # The upload would be thrown away or become a duplicate of it, and the hit counted as retrieved without the
-        # paper having its PDF. ponytail: refused until the upload attaches to that paper (Task 11's upgrade).
-        raise Conflict("paper_has_no_pdf")
+        # Saved without a PDF: the upload becomes its PDF, in place. The route enqueues ingest (created=True).
+        await workspaces.add_paper(session, workspace_id, held_id)
+        hit.acquisition_status = "manual"
+        hit.paper_id = held_id
+        await _record_snowball_citation(session, hit, ref.id)
+        await tags.apply_hit_tags(session, workspace_id, [hit])
+        await papers.attach_pdf(session, held_id, content, "manual")  # commits all of the above
+        return _hit_out_dict(hit, ref), True
     if ref is not None and ref.imported_as is not None:
         await workspaces.add_paper(session, workspace_id, ref.imported_as)
         hit.acquisition_status = "manual"
