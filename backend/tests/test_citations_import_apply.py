@@ -21,7 +21,7 @@ from app.core import discovery, notes, papers, queue, tags, workspaces
 from app.core.candidates import Candidate
 from app.core.citations_bundle_read import Bundle, read_bundle
 from app.core.citations_import import CitationsImportError, ImportEntry
-from app.models import Paper, Provenance, note_papers
+from app.models import Note, Paper, Provenance, note_papers
 from app.workers import citations_import as worker
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("references")]
@@ -226,6 +226,42 @@ async def test_fetch_on_skips_an_entry_with_no_doi_or_arxiv_id(session, pdf_dir,
     assert [n["title"] for n in result.needs_pdf] == [title("noid")]
 
 
+async def test_zotero_import_saves_needs_pdf_entries_without_pdf_when_asked(session, pdf_dir, jobs):
+    ws = await workspaces.create(session, f"Zotero {RUN}")
+    with_abstract = entry("abs", abstract="An abstract.", tags=["t1"], notes=["my note"], doi=doi("abs"))
+    bare = entry("bare")
+
+    result = await cia.apply(
+        session, [with_abstract, bare], workspace_id=ws.id, fetch_free_pdfs=False, save_without_pdf=True
+    )
+
+    assert (result.saved_without_pdf, result.imported, result.needs_pdf, result.failed) == (2, 0, [], [])
+    [saved] = await titled(session, "abs")
+    assert (saved.has_pdf, saved.details_source, saved.abstract) == (False, "zotero", "An abstract.")
+    assert saved.doi == doi("abs")
+    assert saved.manual_fields == ["doi", "title"]
+    assert [p.title for p in await workspaces.papers(session, ws.id)] == sorted([title("abs"), title("bare")])
+    bodies = set(await session.scalars(select(Note.body).join(note_papers).where(note_papers.c.paper_id == saved.id)))
+    assert "my note" in bodies and result.notes == 1
+    assert jobs.jobs == [("index_abstract", str(saved.id))]  # none for the paper without an abstract
+
+
+async def test_zotero_import_without_the_flag_is_unchanged(session, pdf_dir, jobs):
+    result = await cia.apply(session, [entry("nosave")], fetch_free_pdfs=False)
+
+    assert (result.saved_without_pdf, len(result.needs_pdf)) == (0, 1)
+    assert await titled(session, "nosave") == [] and jobs.jobs == []
+
+
+async def test_the_preview_counts_what_would_be_saved_without_a_pdf(session):
+    entries = [entry("p1"), entry("p2", doi=doi("p2"))]
+
+    on = await cia.preview(session, entries, fetch_free_pdfs=False, save_without_pdf=True)
+    off = await cia.preview(session, entries, fetch_free_pdfs=False)
+
+    assert (on.would_save_without_pdf, off.would_save_without_pdf) == (2, 0)
+
+
 # ---- notes and the "From Zotero" note ----
 
 
@@ -349,9 +385,25 @@ async def test_a_failed_progress_write_is_skipped_and_the_job_finishes(session, 
     monkeypatch.setattr(worker, "SessionLocal", shared_session)
     data = bib_of(cia.INLINE_MAX + 1)
     job_id = await cia.start(session, "refs.bib", data, fetch_free_pdfs=False)
-    [(_, path, file_name, ws, fetch)] = jobs.jobs
-    done = await worker.import_citations({"redis": BlipRedis(), "job_id": job_id}, path, file_name, ws, fetch)
+    [(_, path, file_name, ws, fetch, save)] = jobs.jobs
+    done = await worker.import_citations({"redis": BlipRedis(), "job_id": job_id}, path, file_name, ws, fetch, save)
     assert len(done["needs_pdf"]) == cia.INLINE_MAX + 1
+
+
+async def test_the_job_carries_save_without_pdf_to_the_worker(session, pdf_dir, jobs, monkeypatch):
+    @asynccontextmanager
+    async def shared_session():
+        yield session
+
+    monkeypatch.setattr(worker, "SessionLocal", shared_session)
+    data = bib_of(cia.INLINE_MAX + 1)
+
+    job_id = await cia.start(session, "refs.bib", data, fetch_free_pdfs=False, save_without_pdf=True)
+
+    [(_, path, file_name, ws, fetch, save)] = jobs.jobs
+    assert save is True
+    done = await worker.import_citations({"redis": FakeRedis(), "job_id": job_id}, path, file_name, ws, fetch, save)
+    assert (done["saved_without_pdf"], done["needs_pdf"]) == (cia.INLINE_MAX + 1, [])
 
 
 async def test_a_big_import_runs_as_a_job_that_reports_progress(session, pdf_dir, jobs, monkeypatch):
@@ -365,7 +417,7 @@ async def test_a_big_import_runs_as_a_job_that_reports_progress(session, pdf_dir
 
     job_id = await cia.start(session, "refs.bib", data, fetch_free_pdfs=False)
 
-    [(name, path, file_name, ws, fetch)] = jobs.jobs
+    [(name, path, file_name, ws, fetch, save)] = jobs.jobs
     assert (name, file_name, ws, fetch) == ("import_citations", "refs.bib", None, False)
     assert Path(path).read_bytes() == data and Path(path).is_relative_to(pdf_dir)
     stale, fresh = Path(path).with_name("stale.upload"), Path(path).with_name("fresh.upload")
@@ -374,7 +426,7 @@ async def test_a_big_import_runs_as_a_job_that_reports_progress(session, pdf_dir
     two_days_ago = time.time() - 2 * 24 * 3600
     os.utime(stale, (two_days_ago, two_days_ago))
     redis = FakeRedis()
-    done = await worker.import_citations({"redis": redis, "job_id": job_id}, path, file_name, ws, fetch)
+    done = await worker.import_citations({"redis": redis, "job_id": job_id}, path, file_name, ws, fetch, save)
 
     assert (done["already_in_library"], len(done["needs_pdf"])) == (1, cia.INLINE_MAX)
     keys = {key for key, _, _ in redis.writes}

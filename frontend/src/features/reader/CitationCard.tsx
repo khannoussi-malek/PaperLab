@@ -14,6 +14,7 @@ import { cocitationBadge } from '@/features/references/referencesMeta'
 import { readerHref } from '@/lib/route'
 import { cn } from '@/lib/utils'
 import { cardView, UNMATCHED_LINES, type CardView } from './citationMatch'
+import { NoPdfBadge } from './SourceBadges'
 import { citationCardId, type Citation } from './citations'
 
 /** The note hover card's size, motion and surface (D147): strong glass, since the page's text sits right behind it. */
@@ -48,6 +49,7 @@ function Details({ view }: { view: Matched }) {
       <div className="flex flex-wrap gap-1">
         {view.kind === 'free-pdf' && <Badge variant="secondary">PDF</Badge>}
         {view.kind === 'details' && <Badge variant="outline">No free PDF</Badge>}
+        {view.kind === 'in-library' && reference.paper_has_pdf === false && <NoPdfBadge />}
         {shared && (
           <Badge variant="outline" className="font-normal text-muted-foreground">
             {shared}
@@ -71,7 +73,8 @@ function MatchedBody({ view }: { view: Matched }) {
       ...(reference.s2_id ? { semantic_scholar: reference.s2_id } : {}),
     },
   })
-  const fileUrl = reference.paper_id ? api.paperFileUrl(reference.paper_id) : null
+  // A library paper saved without its PDF has no first page to draw.
+  const fileUrl = reference.paper_id && reference.paper_has_pdf !== false ? api.paperFileUrl(reference.paper_id) : null
 
   // A keyboard user's focus was on Add to library; once that add turns this card into In library, that button
   // unmounts and focus would otherwise fall to <body>. No state, no effect: a ref carries the "just added" flag, and

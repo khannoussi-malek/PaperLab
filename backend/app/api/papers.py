@@ -7,6 +7,7 @@ from fastapi.responses import FileResponse
 from app.api.deps import DiscoveryDep, SessionDep
 from app.config import settings
 from app.core import discovery, enrichment, papers, tags, workspaces
+from app.core.errors import Conflict
 from app.core.queue import INGEST_QUEUE
 from app.models import PaperStatus
 from app.schemas.discovery import CandidateOut
@@ -48,8 +49,18 @@ async def get_paper(paper_id: uuid.UUID, session: SessionDep) -> PaperOut:
 
 
 @router.patch("/{paper_id}")
-async def correct_paper(paper_id: uuid.UUID, payload: PaperUpdate, session: SessionDep) -> PaperOut:
-    return await enrichment.correct_metadata(session, paper_id, payload.model_dump(exclude_unset=True))
+async def correct_paper(paper_id: uuid.UUID, payload: PaperUpdate, request: Request, session: SessionDep) -> PaperOut:
+    fields = payload.model_dump(exclude_unset=True)
+    paper = await enrichment.correct_metadata(session, paper_id, fields)
+    rebuilt = not {"title", "abstract"}.isdisjoint(fields) and not paper.has_pdf  # its abstract chunk was rebuilt
+    if rebuilt and paper.status == PaperStatus.EMBEDDING:
+        paper_id = paper.id
+        try:
+            await request.app.state.arq.enqueue_job("index_abstract", str(paper_id), _queue_name=INGEST_QUEUE)
+        except Exception:
+            await papers.set_status(session, paper_id, PaperStatus.READY)  # never left at embedding with no job
+            raise
+    return paper
 
 
 @router.put("/{paper_id}/reading")
@@ -84,6 +95,8 @@ async def list_chunks(paper_id: uuid.UUID, session: SessionDep, page: int | None
 @router.post("/{paper_id}/reingest", status_code=202)
 async def reingest_paper(paper_id: uuid.UUID, request: Request, session: SessionDep) -> PaperOut:
     paper = await papers.get_paper(session, paper_id)
+    if paper.file_path is None:
+        raise Conflict("no_pdf", detail="This paper has no PDF yet.")
     # Flips the status before enqueueing, so a chat request racing the worker sees `uploaded`
     # (paper_not_ready) instead of a `ready` paper whose chunks are mid-replacement.
     await papers.set_status(session, paper.id, PaperStatus.UPLOADED)

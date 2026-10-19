@@ -27,7 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.chunking import join_lines
 from app.core.errors import Conflict, InvalidInput, NotFound
-from app.core.papers import get_paper, get_paper_file, list_chunks
+from app.core.papers import ABSTRACT_PAGE, get_paper, get_paper_file, list_chunks
 from app.models import Chart, Chunk, LLMOutput, Note, Paper, Provenance, note_anchors, note_charts, note_papers
 from app.providers.extraction import quote_rects
 
@@ -221,6 +221,45 @@ async def create_human_note(session: AsyncSession, body: str, anchor: Anchor, co
     return (await _with_anchors(session, [note]))[0]
 
 
+def _abstract_quote(paper: Paper, quoted_text: str) -> str:
+    """The quote, its whitespace collapsed, once it is found in the abstract of a paper saved without a PDF: matched as
+    locate_quote matches a passage (fold). Raises InvalidInput("empty_quote" | "quote_not_found")."""
+    quote = " ".join(quoted_text.split())
+    if not fold(quote):
+        raise InvalidInput("empty_quote")
+    if fold(quote) not in fold(paper.abstract or ""):
+        raise InvalidInput("quote_not_found", hint="Copy the quote exactly from this paper's abstract.")
+    return quote
+
+
+def _quoted(quote: str, body: str) -> str:
+    """An abstract note's body: the quote in curly quotes, then the note. Note cards show plain text, not Markdown."""
+    return f"“{quote}”\n\n{body}" if body else f"“{quote}”"
+
+
+async def create_paper_note(
+    session: AsyncSession, paper_id: uuid.UUID, body: str, quote: str | None = None, color: str = DEFAULT_COLOR
+) -> NoteView:
+    """A person's note on a paper saved without a PDF: linked to it, with no anchor, since there is no page to place it
+    on. With `quote`, text from its abstract, the body starts with that quote. A paper with a PDF takes an anchored
+    note (create_human_note). Raises NotFound, InvalidInput("anchor_required" | "empty_body" | "empty_quote" |
+    "quote_not_found")."""
+    paper = await get_paper(session, paper_id)
+    if paper.has_pdf:
+        raise InvalidInput("anchor_required")
+    text = body.strip()
+    if quote is not None:
+        text = _quoted(_abstract_quote(paper, quote), text)
+    if not text:
+        raise InvalidInput("empty_body")
+    note = Note(body=text, provenance=Provenance.HUMAN, color=normalize_color(color))
+    session.add(note)
+    await session.flush()
+    await _link(session, note.id, [paper_id])
+    await session.commit()
+    return await _view(session, note)
+
+
 def _placed_on(note: NoteView, paper_id: uuid.UUID) -> bool:
     return any(anchor.paper_id == paper_id for anchor in note.anchors)
 
@@ -294,22 +333,25 @@ def _collapse_whitespace(text: str) -> str:
     return " ".join(text.split())
 
 
-async def _chunk_anchors(session: AsyncSession, chunk_ids: list[uuid.UUID]) -> list[dict]:
-    """One anchor row (no note_id yet) per spot the chunks cover, in their order: note_anchors' PK is (note_id,
-    paper_id, page, bbox), and two chunks can share a spot. chunk_id stays NULL because a re-ingest replaces chunks
-    (D10). Raises InvalidInput(STALE_CHUNK) when a chunk is gone."""
+async def _chunk_anchors(session: AsyncSession, chunk_ids: list[uuid.UUID]) -> tuple[list[uuid.UUID], list[dict]]:
+    """The chunks' papers, and one anchor row (no note_id yet) per spot the chunks cover, both in their order:
+    note_anchors' PK is (note_id, paper_id, page, bbox), and two chunks can share a spot. An abstract chunk (a paper
+    saved without a PDF) has no spot: its paper is linked, unanchored. chunk_id stays NULL because a re-ingest replaces
+    chunks (D10). Raises InvalidInput(STALE_CHUNK) when a chunk is gone."""
     wanted = list(dict.fromkeys(chunk_ids))
     if not wanted:
-        return []
+        return [], []
     chunks = {c.id: c for c in await session.scalars(select(Chunk).where(Chunk.id.in_(wanted)))}
     if len(chunks) != len(wanted):
         raise InvalidInput(STALE_CHUNK)
     rows: dict[tuple, dict] = {}
     for chunk_id in wanted:
         c = chunks[chunk_id]
+        if c.page == ABSTRACT_PAGE:
+            continue
         key = (c.paper_id, c.page, tuple(tuple(rect) for rect in c.bbox))
         rows.setdefault(key, {"paper_id": c.paper_id, "page": c.page, "bbox": c.bbox, "quoted_text": c.text})
-    return list(rows.values())
+    return list(dict.fromkeys(chunks[chunk_id].paper_id for chunk_id in wanted)), list(rows.values())
 
 
 async def promote_llm_fragment(
@@ -333,13 +375,14 @@ async def promote_llm_fragment(
         raise InvalidInput("a promoted note needs at least one cited chunk")
     if not set(wanted) <= set(output.source_chunks):
         raise InvalidInput("a chunk is not a source of this answer")
-    rows = await _chunk_anchors(session, wanted)
+    paper_ids, rows = await _chunk_anchors(session, wanted)
 
     note = Note(body=text, provenance=Provenance.LLM, source_id=output.id)
     session.add(note)
     await session.flush()
-    await _link(session, note.id, [row["paper_id"] for row in rows])
-    await session.execute(insert(note_anchors), [{**row, "note_id": note.id} for row in rows])
+    await _link(session, note.id, paper_ids)
+    if rows:
+        await session.execute(insert(note_anchors), [{**row, "note_id": note.id} for row in rows])
     await session.commit()
     await session.refresh(note)
     return (await _with_anchors(session, [note]))[0]
@@ -363,8 +406,8 @@ async def save_suggestion(session: AsyncSession, output_id: uuid.UUID, index: in
     if not body:
         raise InvalidInput("empty_body")
     cited = [output.source_chunks[i - 1] for i in parse_citations(body, len(output.source_chunks))]
-    rows = await _chunk_anchors(session, cited)
-    papers = [row["paper_id"] for row in rows] + ([output.paper_id] if output.paper_id else [])
+    paper_ids, rows = await _chunk_anchors(session, cited)
+    papers = paper_ids + ([output.paper_id] if output.paper_id else [])
 
     note = Note(body=body, provenance=Provenance.LLM, source_id=output_id, source_block=index)
     session.add(note)
@@ -472,12 +515,14 @@ async def locate_quote(session: AsyncSession, paper_id: uuid.UUID, quoted_text: 
     The quote must occur exactly once in the paper's chunks. Its rects are the quoted lines when the PDF is on this
     machine, else the paragraphs they're in. Raises NotFound (the paper), InvalidInput("empty_quote" |
     "quote_not_found" with a hint | "quote_ambiguous" with pages and a hint), Conflict("paper_not_ready") when the
-    paper has no chunks yet.
+    paper has no chunks yet, Conflict("no_pdf") when it has no PDF.
     """
     chunks = await list_chunks(session, paper_id)
     quote = fold(quoted_text)
     if not quote:
         raise InvalidInput("empty_quote")
+    if (await get_paper(session, paper_id)).file_path is None:  # its abstract chunk has no boxes to anchor on
+        raise Conflict("no_pdf", detail="This paper has no PDF yet.")
     if not chunks:
         raise Conflict("paper_not_ready")
     # ponytail: a quote that crosses from one chunk into the next isn't found; the hint asks for one passage. Join
@@ -506,14 +551,19 @@ async def locate_quote(session: AsyncSession, paper_id: uuid.UUID, quoted_text: 
 
 async def create_llm_note(session: AsyncSession, paper_id: uuid.UUID, body: str, quoted_text: str) -> NoteView:
     """A note an MCP client wrote, anchored on `quoted_text`: provenance='llm', with its text also kept as an
-    llm_outputs row (kind 'mcp') the note's source_id points at, so the model's words survive an edit (D91).
+    llm_outputs row (kind 'mcp') the note's source_id points at, so the model's words survive an edit (D91). On a paper
+    saved without a PDF the quote must be in its abstract, and the note is linked unanchored with the quote leading it.
 
-    Raises InvalidInput("empty_body"), and whatever locate_quote raises.
+    Raises InvalidInput("empty_body"), and whatever locate_quote (or, without a PDF, _abstract_quote) raises.
     """
     text = body.strip()
     if not text:
         raise InvalidInput("empty_body")
-    anchor = await locate_quote(session, paper_id, quoted_text)
+    paper = await get_paper(session, paper_id)
+    if paper.has_pdf:
+        anchor = await locate_quote(session, paper_id, quoted_text)
+    else:
+        anchor, text = None, _quoted(_abstract_quote(paper, quoted_text), text)
     # ponytail: model and prompt_version are NOT NULL, but an MCP client names no PaperLab model and uses no prompt.
     output = LLMOutput(paper_id=paper_id, kind=MCP_OUTPUT_KIND, content=text, model="mcp", prompt_version=0)
     session.add(output)

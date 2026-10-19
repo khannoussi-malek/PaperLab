@@ -8,7 +8,7 @@ from mcp_fixtures import *  # noqa: F403
 from mcp_fixtures import call, result
 from sqlalchemy import func, select
 
-from app.core import pipeline, workspaces
+from app.core import papers, pipeline, workspaces
 from app.models import Paper, PaperStatus
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("references")]
@@ -148,3 +148,14 @@ async def test_an_unknown_workspace_is_refused_before_any_write(session, jobs, p
 
     assert response.is_error and response.structured_content["error"] == "unknown_workspace"
     assert await paper_count(session) == before and jobs.jobs == [] and list(pdf_dir.glob("*")) == []
+
+
+async def test_an_upload_for_a_doi_held_without_a_pdf_says_it_was_not_attached(session, jobs, pdf_dir):
+    ws = await make_ws(session, "pdfless")
+    held = await papers.create_metadata_paper(session, {"title": "Held", "doi": "10.5555/held"}, "manual")
+
+    out = result(await call("upload_paper", workspace=ws, filename="x.pdf", pdf_base64=b64(), doi="10.5555/held"))
+
+    assert (out["status"], out["paper_id"]) == ("already_in_library", str(held.id))
+    assert out["note"] == pipeline.NOT_ATTACHED_NOTE and "without a PDF" in out["note"]
+    assert jobs.jobs == [] and not (pdf_dir / f"{held.id}.pdf").exists()

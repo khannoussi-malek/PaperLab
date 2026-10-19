@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useQueries } from '@tanstack/react-query'
-import { readingQueueOptions, usePrismaExport, useReadingQueue } from '@/api/queries'
+import { readingQueueOptions, usePrismaExport, useReadingQueue, useWorkspacePapers } from '@/api/queries'
 import { Badge } from '@/components/ui/badge'
+import { NoPdfBadge } from '@/features/reader/SourceBadges'
 import { readingChip } from '@/features/reading/passes'
 import { LoadError } from '@/features/library/ErrorAlert'
 import { EmptyState, GoToSearchAction, TabSkeleton } from '@/features/workspaces/TabStates'
@@ -66,6 +67,8 @@ export function ReadingQueueTab({ workspaceId, runId }: { workspaceId: string; r
   }, [manualRunId, autoRunId, picked, runId])
 
   const queue = useReadingQueue(workspaceId, selectedRunId, selectedRunId != null)
+  // The queue's rows carry no PDF flag: read it off the workspace's papers (already cached by the Papers tab).
+  const noPdfIds = new Set(useWorkspacePapers(workspaceId).data?.filter((p) => p.has_pdf === false).map((p) => p.id))
 
   if (runsError) {
     return <LoadError message={runsErr.message} onRetry={() => void refetchRuns()} />
@@ -114,6 +117,7 @@ export function ReadingQueueTab({ workspaceId, runId }: { workspaceId: string; r
               <a href={readerHref(row.paper_id)} className="min-w-0 flex-1 truncate text-sm font-medium hover:underline">
                 {row.title}
               </a>
+              {noPdfIds.has(row.paper_id) && <NoPdfBadge />}
               {row.priority != null && (
                 <Badge variant="outline" className="shrink-0 font-normal text-muted-foreground">
                   Priority {row.priority}

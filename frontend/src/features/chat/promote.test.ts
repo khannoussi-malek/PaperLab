@@ -9,6 +9,7 @@ const source = (label: string): ChatSource => ({
   page: 1,
   section: null,
   bbox: [],
+  from_abstract: false,
 })
 const SOURCES = [source('C1'), source('C2'), source('C3')]
 const ANSWER =

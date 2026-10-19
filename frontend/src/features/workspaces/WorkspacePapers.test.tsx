@@ -186,7 +186,7 @@ test('the three ways in are named in words', () => {
   const ways = [
     ['Add from library', 'Pick papers already in your library.'],
     ['Upload PDFs', 'Add PDFs from your computer.'],
-    ['Find by DOI or title', 'Look a paper up by DOI, arXiv ID or title and add its free PDF.'],
+    ['Find by DOI or title', 'Look a paper up by DOI, arXiv ID or title.'],
   ]
   for (const [name, tip] of ways) {
     const button = screen.getByRole('button', { name })
@@ -197,4 +197,13 @@ test('the three ways in are named in words', () => {
     act(() => button.blur())
   }
   expect(screen.queryByRole('button', { name: /Add papers|Find papers/ })).toBeNull()
+})
+
+test('a paper without a PDF is badged in its row, with no pages flying and no status chip while its abstract embeds', () => {
+  const pdfLess = { ...paper('p4', 'Delta abstract'), status: 'embedding', has_pdf: false } as Paper
+  setup([], 'any', [pdfLess])
+  const row = document.querySelector('li.paper-row')!
+  expect(row).toHaveTextContent('No PDF yet')
+  expect(row.querySelector('.embedding-page')).toBeNull()
+  expect(row.querySelector('.status')).toHaveClass('sr-only')
 })

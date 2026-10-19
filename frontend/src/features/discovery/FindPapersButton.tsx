@@ -46,8 +46,8 @@ export function FindPapersButton({
         <DialogHeader>
           <DialogTitle>Find papers</DialogTitle>
           <DialogDescription>
-            Search by title or identifier. Add downloads a free PDF only: from arXiv, a repository or an open-access
-            publisher.
+            Search by title or identifier. Add downloads a free PDF when there is one (arXiv, a repository or an
+            open-access publisher). Without one, you can save the paper without a PDF.
           </DialogDescription>
         </DialogHeader>
         <form className="flex gap-2" onSubmit={submit}>

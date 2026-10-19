@@ -26,7 +26,7 @@ CHUNK = 64 * 1024
 
 def _write(items: list[dict], papers: list, fmt: str) -> tuple[IO[bytes], int]:
     keys = citations_export.bibtex_keys(items)
-    on_disk = {p.id: Path(p.file_path) for p in papers if Path(p.file_path).is_file()}
+    on_disk = {p.id: Path(p.file_path) for p in papers if p.file_path and Path(p.file_path).is_file()}
     out = tempfile.SpooledTemporaryFile(max_size=SPOOL_BYTES)
     try:
         attached: dict[str, str] = {}  # item id -> path in the zip, for the PDFs actually written

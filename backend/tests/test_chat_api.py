@@ -53,9 +53,9 @@ async def test_chat_streams_sources_then_tokens_then_done_and_saves_one_output(c
         "whole_paper": True,
         "sources": [
             {"label": "C1", "chunk_id": str(chunks[0].id), "paper_id": paper_id, "page": 1, "section": None,
-             "bbox": rect},
+             "bbox": rect, "from_abstract": False},
             {"label": "C2", "chunk_id": str(chunks[1].id), "paper_id": paper_id, "page": 2, "section": "Method",
-             "bbox": rect},
+             "bbox": rect, "from_abstract": False},
         ],
         "notes": [],
         "notes_used": 0,
@@ -176,7 +176,7 @@ async def test_history_lists_answers_oldest_first_with_replaced_chunks_as_null(c
         None,
         {
             "label": "C2", "chunk_id": str(chunks[1].id), "paper_id": str(paper.id), "page": 2, "section": "Method",
-            "bbox": [[72, 100, 300, 120]],
+            "bbox": [[72, 100, 300, 120]], "from_abstract": False,
         },
     ]
     assert (first["notes"], first["notes_used"], first["notes_total"]) == ([], None, None)

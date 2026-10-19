@@ -87,6 +87,11 @@ describe('describeSource', () => {
     expect(describeSource({ ...source, section: null })).toBe('Source 12: page 6')
   })
 
+  it('calls a passage from a paper without a PDF "abstract only", never a page', () => {
+    const abstract = { ...source, page: 0, section: 'Abstract', from_abstract: true }
+    expect(describeSource(abstract, 'Lee 2020')).toBe('Source 12: Lee 2020, abstract only')
+  })
+
   it('names the paper first when an answer cites several papers', () => {
     expect(describeSource(source, 'Karpukhin 2020')).toBe('Source 12: Karpukhin 2020, page 6, section “2.4 Analysis”')
   })

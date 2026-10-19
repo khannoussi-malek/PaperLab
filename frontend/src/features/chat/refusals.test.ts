@@ -22,6 +22,14 @@ describe('refusal', () => {
     expect(refusal(409, 'paper_not_indexed')).toMatchObject({ retryable: false, reindex: true })
   })
 
+  it('words a paper with no PDF and no abstract, with no Retry or Re-index', () => {
+    expect(refusal(409, 'no_text')).toEqual({
+      message: 'This paper has no PDF and no abstract to chat with.',
+      retryable: false,
+      reindex: false,
+    })
+  })
+
   it("words an empty workspace, and one whose papers can't be searched yet", () => {
     expect(refusal(409, 'workspace_empty')).toEqual({
       message: 'Add papers to chat with this workspace.',

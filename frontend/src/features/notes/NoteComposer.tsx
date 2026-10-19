@@ -58,10 +58,13 @@ export function NoteComposer({ draft, color, onColorChange, onSave, onCancel, on
           <HighlightColorPicker value={color} onChange={onColorChange} />
         </CardContent>
         <CardFooter className="justify-end gap-2">
-          <Button type="button" variant="ghost" size="sm" onClick={onAddNumber}>
-            <Hash aria-hidden />
-            Add as number
-          </Button>
+          {/* A number is placed on a page; a quote from the abstract (no rects) has none. */}
+          {draft.rects.length > 0 && (
+            <Button type="button" variant="ghost" size="sm" onClick={onAddNumber}>
+              <Hash aria-hidden />
+              Add as number
+            </Button>
+          )}
           <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
             Cancel
           </Button>
@@ -70,6 +73,45 @@ export function NoteComposer({ draft, color, onColorChange, onSave, onCancel, on
           </Button>
         </CardFooter>
       </Card>
+    </form>
+  )
+}
+
+/** A note with no quote, on a paper without a PDF: there is no page to select on, so it is written here. */
+export function PlainNoteComposer({ onSave }: { onSave: (body: string) => Promise<boolean> }) {
+  const [body, setBody] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  async function save() {
+    if (!body.trim()) return
+    setSaving(true)
+    if (await onSave(body)) setBody('')
+    setSaving(false)
+  }
+
+  return (
+    <form
+      className="flex flex-col gap-2"
+      onSubmit={(e) => {
+        e.preventDefault()
+        void save()
+      }}
+    >
+      <Textarea
+        aria-label="New note"
+        placeholder="Write a note. Ctrl/⌘+Enter saves."
+        value={body}
+        onChange={(e) => setBody(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+            e.preventDefault()
+            void save()
+          }
+        }}
+      />
+      <Button type="submit" size="sm" className="self-end" disabled={saving || !body.trim()}>
+        Save note
+      </Button>
     </form>
   )
 }

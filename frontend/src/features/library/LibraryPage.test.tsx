@@ -36,7 +36,7 @@ afterEach(() => {
 
 test('the empty Library still says what to do, with the icon as the fallback when 3D cannot run', () => {
   render(<LibraryPage />)
-  expect(screen.getByText('No papers yet. Upload a PDF to start.')).toBeInTheDocument()
+  expect(screen.getByText('No papers yet. Upload a PDF, or add one by DOI.')).toBeInTheDocument()
   expect(document.querySelector('svg.lucide-file-text')).not.toBeNull()
   expect(document.querySelector('canvas')).toBeNull()
 })

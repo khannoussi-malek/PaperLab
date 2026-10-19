@@ -53,8 +53,9 @@ type Props = {
 type Cited = ChatSource | NoteSource
 
 const CITE_HINT = 'The AI used this passage. Click to see it in the paper.'
+const ABSTRACT_HINT = "The AI used this paper's abstract: it has no PDF yet. Click to see the abstract."
 const NOTE_HINT = 'The AI used this note. Click to see it in the paper.'
-const hintFor = (source: Cited) => ('note_id' in source ? NOTE_HINT : CITE_HINT)
+const hintFor = (source: Cited) => ('note_id' in source ? NOTE_HINT : source.from_abstract ? ABSTRACT_HINT : CITE_HINT)
 
 export function ChatAnswer(props: Props) {
   const { question, wholePaper, sources, notes, notesUsed, notesTotal, segments, footer, outputId, pending } = props
@@ -293,7 +294,7 @@ function AnswerMeta({ footer, sources, notes, wholePaper, cited, pending, descri
         <ul className="chat-sources flex min-w-0 flex-1 flex-wrap gap-1" aria-label="Sources">
           {wholePaper ? (
             <li>
-              <Badge variant="outline">Whole paper · {sources.length} chunks</Badge>
+              <Badge variant="outline">Whole paper · {sources.length} {sources.length === 1 ? 'chunk' : 'chunks'}</Badge>
             </li>
           ) : (
             shown(sources).map(pill)

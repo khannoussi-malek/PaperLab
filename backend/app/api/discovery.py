@@ -4,9 +4,10 @@ from fastapi import APIRouter, Query, Request
 
 from app.api.deps import DiscoveryDep, SessionDep
 from app.config import settings
-from app.core import discovery, workspaces
+from app.core import discovery, papers, workspaces
 from app.core.errors import InvalidInput
 from app.core.queue import INGEST_QUEUE
+from app.models import PaperStatus
 from app.schemas.discovery import AddPaperRequest, SearchOut
 from app.schemas.papers import PaperOut
 
@@ -30,11 +31,25 @@ async def add_paper(
     payload: AddPaperRequest, request: Request, session: SessionDep, providers: DiscoveryDep
 ) -> PaperOut:
     """Downloads the paper's first free PDF and ingests it like an upload. 404 for an unknown workspace (before any
-    download); 409 when the paper is already in the library or no free PDF is found."""
+    download); 409 when the paper is already in the library or no free PDF is found, unless `save_without_pdf`
+    saves it without one (then only its abstract, if any, is indexed)."""
     if payload.workspace_id is not None:
         await workspaces.get(session, payload.workspace_id)
-    paper = await discovery.add(session, providers, payload.candidate.to_candidate(), settings.pdf_dir)
+    paper = await discovery.add(
+        session,
+        providers,
+        payload.candidate.to_candidate(),
+        settings.pdf_dir,
+        save_without_pdf=payload.save_without_pdf,
+    )
     if payload.workspace_id is not None:
         await workspaces.add_paper(session, payload.workspace_id, paper.id)
-    await request.app.state.arq.enqueue_job("ingest_paper", str(paper.id), _queue_name=INGEST_QUEUE)
+    if paper.has_pdf:
+        await request.app.state.arq.enqueue_job("ingest_paper", str(paper.id), _queue_name=INGEST_QUEUE)
+    elif paper.abstract:
+        try:
+            await request.app.state.arq.enqueue_job("index_abstract", str(paper.id), _queue_name=INGEST_QUEUE)
+        except Exception:  # never stuck at `embedding`: ready without vectors, Settings' Try again embeds it
+            await papers.set_status(session, paper.id, PaperStatus.READY)
+            raise
     return paper

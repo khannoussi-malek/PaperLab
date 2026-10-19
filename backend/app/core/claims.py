@@ -121,8 +121,11 @@ async def _passages(
 ) -> tuple[str, list[dict], list[str], list[str], list[int | None]]:
     """(evidence level, passage descriptions, passage texts, sentence starts, their pages):
     the best chunks, else the abstract."""
-    has_chunks = paper.status == PaperStatus.READY and await session.scalar(
-        select(func.count()).select_from(Chunk).where(Chunk.paper_id == paper.id)
+    # A paper saved without a PDF has only its abstract chunk: it is read as the abstract below, never as full text.
+    has_chunks = (
+        paper.has_pdf
+        and paper.status == PaperStatus.READY
+        and await session.scalar(select(func.count()).select_from(Chunk).where(Chunk.paper_id == paper.id))
     )
     if has_chunks:
         found = await retrieval.retrieve(

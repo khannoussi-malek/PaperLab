@@ -35,9 +35,22 @@ class ChartRefOut(BaseModel):
 
 
 class NoteCreate(BaseModel):
+    """An anchored note (`anchor`), or a note on a paper saved without a PDF (`paper_id`, with an optional `quote` from
+    its abstract that the note's body then starts with)."""
+
     body: str = Field(default="", max_length=50_000)
     color: HexColor = DEFAULT_COLOR
-    anchor: AnchorIn
+    anchor: AnchorIn | None = None
+    paper_id: uuid.UUID | None = None
+    quote: str | None = Field(default=None, min_length=1, max_length=20_000)
+
+    @model_validator(mode="after")
+    def anchor_or_paper(self) -> Self:
+        if (self.anchor is None) == (self.paper_id is None):
+            raise ValueError("send an anchor, or a paper_id, not both")
+        if self.quote is not None and self.paper_id is None:
+            raise ValueError("a quote goes with a paper_id")
+        return self
 
 
 class NoteUpdate(BaseModel):

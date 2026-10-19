@@ -35,3 +35,11 @@ test('a paper with no card offers to make one', async () => {
   render(<QueryClientProvider client={client}><EvidencePanel paperId="p1" onShowRegion={vi.fn()} /></QueryClientProvider>)
   expect(await screen.findByRole('button', { name: 'Generate evidence card' })).toBeInTheDocument()
 })
+
+test('a paper without a PDF says its card needs the full text, and offers nothing to generate', async () => {
+  vi.spyOn(api, 'getEvidenceCard').mockRejectedValue(new Error('Paper p1 has no evidence card.'))
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  render(<QueryClientProvider client={client}><EvidencePanel paperId="p1" hasPdf={false} onShowRegion={vi.fn()} /></QueryClientProvider>)
+  expect(await screen.findByText('Needs the full text')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /Generate/ })).toBeNull()
+})

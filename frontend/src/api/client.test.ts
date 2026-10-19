@@ -47,4 +47,33 @@ describe('api.addCandidate', () => {
     await expect(added).rejects.toMatchObject({ name: 'AlreadyInLibraryError', paperId: 'p7' })
     vi.unstubAllGlobals()
   })
+
+  it('rejects the 409 no-free-PDF answer as NoFreePdfError, whatever its sentence says', async () => {
+    // The real body: the server's own sentence as `detail`, with what it tried (main.py's DomainError handler).
+    const body = { detail: 'No free PDF was found for this paper. Open its page, download the PDF and use Upload PDFs.', tried: [], free_copies: [] }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { status: 409 })))
+    await expect(api.addCandidate({ title: 'T' } as never)).rejects.toMatchObject({ name: 'NoFreePdfError', message: body.detail })
+    vi.unstubAllGlobals()
+  })
+})
+
+describe('Zotero import forms', () => {
+  const file = new File(['@article{a}'], 'refs.bib')
+  const sentForm = async (call: () => Promise<unknown>) => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    await call()
+    vi.unstubAllGlobals()
+    return (fetchMock.mock.calls[0][1] as RequestInit).body as FormData
+  }
+
+  it.each([true, false])('previewImport sends save_without_pdf=%s', async (flag) => {
+    const form = await sentForm(() => api.previewImport(file, flag))
+    expect(form.get('save_without_pdf')).toBe(String(flag))
+  })
+
+  it.each([true, false])('startImport sends save_without_pdf=%s', async (flag) => {
+    const form = await sentForm(() => api.startImport(file, {}, true, flag))
+    expect(form.get('save_without_pdf')).toBe(String(flag))
+  })
 })

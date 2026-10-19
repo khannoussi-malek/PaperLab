@@ -6,10 +6,12 @@ from datetime import datetime, timezone
 import pytest
 from sqlalchemy import select
 
+from app.config import settings
 from app.core import retrieved_hits, tags, workspaces
 from app.core.candidates import normal_title
+from app.core.errors import Conflict
 from app.core.prisma_export import prisma_export
-from app.core.workspace_search import import_hits
+from app.core.workspace_search import import_hits, upload_hit_pdf
 from app.models import Paper, paper_tags
 from app.models.references import ExternalRef
 from app.models.workspace import Workspace
@@ -51,7 +53,7 @@ async def failed_hit(session, ws, title=NEURAL, status="failed", **ref_fields) -
 
 
 async def paper(session, title=NEURAL, **fields) -> Paper:
-    held = Paper(file_path="/nonexistent.pdf", title=title, **{"year": 2025, **fields})
+    held = Paper(**{"file_path": "/nonexistent.pdf", "title": title, "year": 2025, **fields})
     session.add(held)
     await session.commit()
     return held
@@ -321,3 +323,45 @@ async def test_a_held_publisher_paper_wins_and_its_held_arxiv_duplicate_is_left_
     assert (await reload(session, hit)).paper_id == publisher.id  # the DOI match wins
     await session.refresh(arxiv)
     assert arxiv.published_doi is None  # two papers must not both answer to the TACL DOI
+
+
+async def test_a_hit_attached_to_a_paper_without_a_pdf_is_not_retrieved(session, discovery_fakes):
+    ws = await workspace(session)
+    held = await paper(session, doi="10.1126/sciadv.adu5251", file_path=None)
+    linked = await failed_hit(session, ws, doi="10.1126/sciadv.adu5251")
+    by_import = await failed_hit(session, ws, title="Second", status="not_attempted", doi="10.1126/sciadv.second")
+    twin = await paper(session, title="Second", doi="10.1126/sciadv.second", file_path=None)
+
+    await workspaces.add_paper(session, ws.id, held.id)  # link runs on this
+    await workspaces.add_paper(session, ws.id, twin.id)
+    result = await import_hits(session, discovery_fakes.providers, ws.id, [by_import.id])
+
+    assert (await reload(session, linked)).acquisition_status == "failed"
+    assert (await reload(session, by_import)).acquisition_status == "not_attempted"
+    assert (result.imported, result.failed) == (0, 1)
+    assert (await prisma_export(session, ws.id, run_id=None)).not_retrieved == 2
+
+
+async def test_an_upload_for_a_hit_whose_paper_has_no_pdf_is_refused_not_discarded(session):
+    ws = await workspace(session)
+    twin = await paper(session, file_path=None)
+    hit = await failed_hit(session, ws, status="not_attempted", imported_as=twin.id)
+
+    with pytest.raises(Conflict, match="paper_has_no_pdf"):
+        await upload_hit_pdf(session, ws.id, hit.id, "a.pdf", b"%PDF-1.7 mine")
+
+    assert (await reload(session, hit)).acquisition_status == "not_attempted"
+
+
+async def test_an_upload_for_a_hit_whose_doi_a_pdfless_paper_holds_creates_nothing(session, tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "pdf_dir", tmp_path)  # so a wrongly created paper fails the assert, not the disk
+    ws = await workspace(session)  # the hit has no imported_as: Find papers saved the paper without it
+    held = await paper(session, doi="10.1126/sciadv.adu5251", file_path=None)
+    await workspaces.add_paper(session, ws.id, held.id)
+    hit = await failed_hit(session, ws, doi="10.1126/sciadv.adu5251")
+
+    with pytest.raises(Conflict, match="paper_has_no_pdf"):
+        await upload_hit_pdf(session, ws.id, hit.id, "a.pdf", b"%PDF-1.7 mine")
+
+    assert len((await session.scalars(select(Paper))).all()) == 1
+    assert (await reload(session, hit)).acquisition_status == "failed"

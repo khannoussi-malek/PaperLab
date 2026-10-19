@@ -31,7 +31,9 @@ def _sweep_stale_uploads() -> None:
                 path.unlink()
 
 
-async def import_citations(ctx: dict, path: str, name: str, workspace_id: str | None, fetch_free_pdfs: bool) -> dict:
+async def import_citations(
+    ctx: dict, path: str, name: str, workspace_id: str | None, fetch_free_pdfs: bool, save_without_pdf: bool = False
+) -> dict:
     """The file at `path` (written by cia.start) is deleted when the job ends, whatever happens. Returns the result."""
     deadline = time.monotonic() + IMPORT_JOB_TIMEOUT - SAFETY_MARGIN
     _sweep_stale_uploads()
@@ -55,7 +57,8 @@ async def import_citations(ctx: dict, path: str, name: str, workspace_id: str | 
                     await report(cia.ImportResult())  # the first heartbeat; apply reports after each entry
                     result = await cia.apply(
                         session, entries, workspace_id=uuid.UUID(workspace_id) if workspace_id else None,
-                        fetch_free_pdfs=fetch_free_pdfs, bundle=bundle, progress=report, deadline=deadline,
+                        fetch_free_pdfs=fetch_free_pdfs, save_without_pdf=save_without_pdf, bundle=bundle,
+                        progress=report, deadline=deadline,
                     )  # fmt: skip
     finally:
         Path(path).unlink(missing_ok=True)

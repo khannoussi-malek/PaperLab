@@ -168,13 +168,23 @@ export class AlreadyInLibraryError extends Error {
   }
 }
 
+/** The 409 an Add gets when no free PDF was found: it carries what was tried, and the paper can be saved without one. */
+export class NoFreePdfError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'NoFreePdfError'
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, init)
   if (!response.ok) {
-    const held: unknown =
-      response.status === 409 ? await response.clone().json().then((body) => body.paper_id, () => undefined) : undefined
+    const body: { paper_id?: unknown; tried?: unknown } =
+      response.status === 409 ? await response.clone().json().catch(() => ({})) : {}
     const message = await errorDetail(response)
-    throw typeof held === 'string' ? new AlreadyInLibraryError(message, held) : new Error(message)
+    if (typeof body.paper_id === 'string') throw new AlreadyInLibraryError(message, body.paper_id)
+    // no_free_pdf's detail is the server's sentence; its `tried` list is what marks it (main.py's DomainError handler)
+    throw Array.isArray(body.tried) ? new NoFreePdfError(message) : new Error(message)
   }
   return (response.status === 204 ? undefined : await response.json()) as T
 }
@@ -227,9 +237,12 @@ export const api = {
   /** Papers outside the library for a title, DOI, arXiv ID or OpenAlex ID, and a notice per source that failed. */
   searchPapers: (query: string) => request<SearchResult>(`/api/discovery/search?q=${encodeURIComponent(query)}`),
   similarPapers: (paperId: string) => request<Candidate[]>(`/api/papers/${paperId}/similar`),
-  /** Downloads a found paper's free PDF into the library; with a `workspaceId` it also joins that workspace. */
-  addCandidate: (candidate: Candidate, workspaceId?: string) =>
-    request<Paper>('/api/discovery/add', sendJson('POST', { candidate, workspace_id: workspaceId ?? null })),
+  /** Downloads a found paper's free PDF into the library (or, with `saveWithoutPdf`, saves it without one); with a `workspaceId` it also joins that workspace. */
+  addCandidate: (candidate: Candidate, workspaceId?: string, saveWithoutPdf = false) =>
+    request<Paper>(
+      '/api/discovery/add',
+      sendJson('POST', { candidate, workspace_id: workspaceId ?? null, save_without_pdf: saveWithoutPdf }),
+    ),
   listChunks: (paperId: string, page: number) => request<Chunk[]>(`/api/papers/${paperId}/chunks?page=${page}`),
   listNotes: (paperId: string) => request<Note[]>(`/api/papers/${paperId}/notes`),
   createNote: (note: NoteCreate) => request<Note>('/api/notes', sendJson('POST', note)),
@@ -446,18 +459,20 @@ export const api = {
     ),
   /** What importing `file` would do. Nothing is written. */
   /** With fetching on (the API's default): only `would_fetch` and `disclosure` depend on it, and none on the target. */
-  previewImport: (file: File) => {
+  previewImport: (file: File, saveWithoutPdf = true) => {
     const form = new FormData()
     form.append('file', file)
+    form.append('save_without_pdf', String(saveWithoutPdf))
     return request<ImportPreview>('/api/citations/import/preview', { method: 'POST', body: form })
   },
   /** Starts an import: 200 gives the result now, 202 a job id to poll (same body shape either way). */
-  startImport: (file: File, target: { workspaceId?: string; newWorkspaceName?: string }, fetchFreePdfs: boolean) => {
+  startImport: (file: File, target: { workspaceId?: string; newWorkspaceName?: string }, fetchFreePdfs: boolean, saveWithoutPdf = true) => {
     const form = new FormData()
     form.append('file', file)
     if (target.workspaceId) form.append('workspace_id', target.workspaceId)
     if (target.newWorkspaceName) form.append('new_workspace_name', target.newWorkspaceName)
     form.append('fetch_free_pdfs', String(fetchFreePdfs))
+    form.append('save_without_pdf', String(saveWithoutPdf))
     return request<ImportProgress>('/api/citations/import', { method: 'POST', body: form })
   },
   importProgress: (jobId: string) => request<ImportProgress>(`/api/citations/import/${encodeURIComponent(jobId)}`),

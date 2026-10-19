@@ -41,5 +41,6 @@ test('edit changes name the item index for lists only', () => {
 test('failure reasons are plain words', () => {
   expect(failureReason('not_ready')).toMatch(/isn't ready/)
   expect(failureReason('no_text')).toMatch(/no readable text/)
+  expect(failureReason('needs_full_text')).toBe('Needs the full text')
   expect(failureReason('model_error')).toMatch(/try again/i)
 })

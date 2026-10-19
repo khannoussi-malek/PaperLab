@@ -45,7 +45,7 @@ from app.core.paper_enrichment import apply_published
 from app.core.paper_sources import KEYED, NAMES, SourceSettings
 from app.core.redact import redact
 from app.core.source_registry import ASKS
-from app.core.source_types import is_preprint_copy
+from app.core.source_types import DETAILS_SOURCES, is_preprint_copy
 from app.models import Paper
 from app.providers import arxiv, discovery_fake, europe_pmc, pmc_opendata, semantic_scholar, unpaywall
 
@@ -756,10 +756,20 @@ async def pmc_copy(
 
 
 async def add(
-    session: AsyncSession, providers: Providers, candidate: Candidate, pdf_dir: Path, tried_out: list | None = None
+    session: AsyncSession,
+    providers: Providers,
+    candidate: Candidate,
+    pdf_dir: Path,
+    tried_out: list | None = None,
+    save_without_pdf: bool = False,
+    copies_out: list | None = None,
 ) -> Paper:
     """Downloads the candidate's first free PDF and creates the paper. The caller enqueues ingest. A caller that
-    wants to know what each URL said passes `tried_out` (a failure carries it on the Conflict anyway)."""
+    wants to know what each URL said passes `tried_out` (a failure carries it on the Conflict anyway), and
+    `copies_out` for the repository pages that may hold a copy.
+
+    With `save_without_pdf`, no free PDF saves a PDF-less paper instead of raising NO_FREE_PDF (`tried_out` and
+    `copies_out` are still filled): the caller enqueues index_abstract when it has an abstract."""
     [marked] = await mark_in_library(session, [candidate])
     if marked.paper_id is not None:
         raise Conflict(ALREADY_IN_LIBRARY, paper_id=marked.paper_id)
@@ -780,6 +790,11 @@ async def add(
         data, tried = await pmc_copy(providers, candidate.external_ids, candidate.doi, copies, tried)
     if tried_out is not None:
         tried_out.extend(tried)
+    if copies_out is not None:
+        copies_out.extend(copies)
+    if data is None and save_without_pdf:
+        source = next((s for s in candidate.sources if s in DETAILS_SOURCES), "search")
+        return await papers.create_metadata_paper(session, prefill(candidate), details_source=source)
     if data is None:
         raise Conflict(NO_FREE_PDF, tried=tried, free_copies=copies)
     # ponytail: two adds of one paper racing past the check above hit papers' UNIQUE doi and 500. The buttons disable

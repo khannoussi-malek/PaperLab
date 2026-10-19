@@ -93,3 +93,22 @@ test('a failed generation shows an error message', async () => {
 
   expect(await screen.findByRole('alert')).toHaveTextContent('Suggest failed')
 })
+
+const NO_PDF = 'Suggested notes need the full text, and this paper has no PDF yet.'
+
+test('a paper without a PDF says in words why there are no suggestions, and asks for none', () => {
+  renderWithClient(<SuggestedNotes paperId="p1" hasPdf={false} />)
+  expect(screen.getByText(NO_PDF)).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Suggest notes' })).toBeNull()
+  expect(screen.queryByRole('alert')).toBeNull()
+  expect(api.suggestNotes).not.toHaveBeenCalled()
+})
+
+test('a no_pdf refusal reads the same words, not an error', async () => {
+  vi.spyOn(api, 'suggestNotes').mockRejectedValue(new Error('no_pdf'))
+  renderWithClient(<SuggestedNotes paperId="p1" />)
+  fireEvent.click(screen.getByRole('button', { name: 'Suggest notes' }))
+  expect(await screen.findByText(NO_PDF)).toBeInTheDocument()
+  expect(screen.queryByRole('alert')).toBeNull()
+  expect(screen.queryByText('no_pdf')).toBeNull()
+})

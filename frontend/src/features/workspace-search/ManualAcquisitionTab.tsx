@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { codeInWords } from '@/lib/errorWords'
 import { useSearchHits, useUploadHitPdf } from '@/api/queries'
 import { Button } from '@/components/ui/button'
 import { pageLink } from '@/features/discovery/candidateMeta'
@@ -98,7 +99,7 @@ export function ManualAcquisitionTab({ workspaceId }: { workspaceId: string }) {
       )}
       {upload.isError && (
         <p role="alert" className="text-xs text-destructive">
-          {upload.error.message}
+          {codeInWords(upload.error.message)}
         </p>
       )}
       {copyError && (

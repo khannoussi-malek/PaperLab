@@ -9,11 +9,11 @@ import { ImportFromZoteroButton } from './ImportFromZoteroButton'
 vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
 
 const preview = (over: Partial<ImportPreview> = {}): ImportPreview => ({
-  total: 12, already_in_library: 3, with_bundled_pdf: 5, would_fetch: 4, cannot_import_without_fetch: 0,
+  total: 12, already_in_library: 3, with_bundled_pdf: 5, would_fetch: 4, cannot_import_without_fetch: 0, would_save_without_pdf: 0,
   disclosure: 'Fetching contacts free-copy sources by DOI for 4 entries.', ...over,
 })
 const result = (over: Partial<ImportResult> = {}): ImportResult => ({
-  imported: 7, already_in_library: 3, pdfs_attached: 5, notes: 2, needs_pdf: [], failed: [], not_reached: [], stopped: '', ...over,
+  imported: 7, already_in_library: 3, pdfs_attached: 5, saved_without_pdf: 0, notes: 2, needs_pdf: [], failed: [], not_reached: [], stopped: '', ...over,
 })
 const progress = (over: Partial<ImportProgress> = {}): ImportProgress => ({ state: 'finished', result: result(), ...over })
 
@@ -63,7 +63,7 @@ test('the preview is said in words, with the disclosure above the Import button 
   expect(screen.getByText(/5 with a PDF in the zip/)).toBeTruthy()
   const disclosure = screen.getByText(preview().disclosure!)
   expect(disclosure.compareDocumentPosition(importButton()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-  expect(previewSpy).toHaveBeenCalledWith(file)
+  expect(previewSpy).toHaveBeenCalledWith(file, true)
 })
 
 test('the file is previewed once: the switch hides the disclosure and the target changes nothing to ask', async () => {
@@ -99,10 +99,10 @@ test('from a workspace the workspace target is preselected and sent', async () =
   expect((screen.getByLabelText('This workspace') as HTMLInputElement).checked).toBe(true)
   pick()
   await screen.findByText(/12 references/)
-  expect(previewSpy).toHaveBeenCalledWith(file)
+  expect(previewSpy).toHaveBeenCalledWith(file, true)
   fireEvent.click(importButton())
   await screen.findByText(/7 new papers/)
-  expect(startSpy).toHaveBeenCalledWith(file, { workspaceId: 'w1' }, true)
+  expect(startSpy).toHaveBeenCalledWith(file, { workspaceId: 'w1' }, true, true)
 })
 
 test('a new workspace needs a name and sends it', async () => {
@@ -114,7 +114,7 @@ test('a new workspace needs a name and sends it', async () => {
   fireEvent.change(screen.getByLabelText('Workspace name'), { target: { value: 'Sleep' } })
   fireEvent.click(importButton())
   await screen.findByText(/7 new papers/)
-  expect(startSpy).toHaveBeenCalledWith(file, { newWorkspaceName: 'Sleep' }, true)
+  expect(startSpy).toHaveBeenCalledWith(file, { newWorkspaceName: 'Sleep' }, true, true)
 })
 
 test('an inline result is summarised in words', async () => {
@@ -236,6 +236,7 @@ test('with the switch off, entries that would be left out are said in words', as
   open()
   pick()
   fireEvent.click(screen.getByRole('switch', { name: /Fetch free PDFs/ }))
+  fireEvent.click(screen.getByRole('switch', { name: /Save the others without a PDF/ }))
   expect(await screen.findByText(/3 references have no PDF in the file and won't be imported unless fetching is on/)).toBeTruthy()
 })
 
@@ -329,8 +330,8 @@ test('Try again after a restart goes into the workspace the first attempt made, 
   fireEvent.click(importButton())
   fireEvent.click(await screen.findByRole('button', { name: 'Try again' }))
   await screen.findByText(/7 new papers/)
-  expect(startSpy).toHaveBeenNthCalledWith(1, file, { newWorkspaceName: 'Thesis' }, true)
-  expect(startSpy).toHaveBeenNthCalledWith(2, file, { workspaceId: 'w9' }, true)
+  expect(startSpy).toHaveBeenNthCalledWith(1, file, { newWorkspaceName: 'Thesis' }, true, true)
+  expect(startSpy).toHaveBeenNthCalledWith(2, file, { workspaceId: 'w9' }, true, true)
 })
 
 test('a taken workspace name is said in words, never as the API code', async () => {
@@ -361,6 +362,7 @@ test('one reference is said in the singular', async () => {
   open()
   pick()
   fireEvent.click(screen.getByRole('switch', { name: /Fetch free PDFs/ }))
+  fireEvent.click(screen.getByRole('switch', { name: /Save the others without a PDF/ }))
   expect(await screen.findByText('1 reference: 0 already in your library.')).toBeTruthy()
   expect(screen.getByText(/1 reference has no PDF in the file/)).toBeTruthy()
 })
@@ -374,4 +376,56 @@ test('a finished import also refreshes the notes lists', async () => {
   await screen.findByText(/7 new papers/)
   const predicates = spy.mock.calls.map(([f]) => (f as { predicate?: (q: { queryKey: unknown[] }) => boolean }).predicate).filter(Boolean)
   expect(predicates.some((p) => p!({ queryKey: ['notes'] }))).toBe(true)
+})
+
+test('"Save the others without a PDF" is on by default, sits beside the fetch switch, and is sent with preview and import', async () => {
+  open()
+  const save = screen.getByRole('switch', { name: /Save the others without a PDF/ })
+  expect(save.getAttribute('aria-checked')).toBe('true')
+  expect(save.closest('div')).toBe(screen.getByRole('switch', { name: /Fetch free PDFs/ }).closest('div')?.nextElementSibling)
+  pick()
+  await screen.findByText(/12 references/)
+  fireEvent.click(importButton())
+  await screen.findByText(/7 new papers/)
+  expect(previewSpy).toHaveBeenCalledWith(file, true)
+  expect(startSpy).toHaveBeenCalledWith(file, {}, true, true)
+})
+
+test('turning it off asks for one more preview and sends false', async () => {
+  open()
+  pick()
+  await screen.findByText(/12 references/)
+  fireEvent.click(screen.getByRole('switch', { name: /Save the others without a PDF/ }))
+  await waitFor(() => expect(previewSpy).toHaveBeenLastCalledWith(file, false))
+  expect(previewSpy).toHaveBeenCalledTimes(2)
+  await waitFor(() => expect((importButton() as HTMLButtonElement).disabled).toBe(false))
+  fireEvent.click(importButton())
+  await screen.findByText(/7 new papers/)
+  expect(startSpy).toHaveBeenCalledWith(file, {}, true, false)
+})
+
+test('the preview says "up to N" saved without a PDF', async () => {
+  previewSpy.mockResolvedValue(preview({ would_save_without_pdf: 4 }))
+  open()
+  pick()
+  expect(await screen.findByText('Up to 4 references will be saved without a PDF.')).toBeTruthy()
+  previewSpy.mockResolvedValue(preview({ would_save_without_pdf: 1 }))
+  fireEvent.click(screen.getByRole('switch', { name: /Save the others without a PDF/ }))
+  await waitFor(() => expect(screen.queryByText(/will be saved without a PDF/)).toBeNull())
+})
+
+test('the preview says one reference in the singular', async () => {
+  previewSpy.mockResolvedValue(preview({ would_save_without_pdf: 1 }))
+  open()
+  pick()
+  expect(await screen.findByText('Up to 1 reference will be saved without a PDF.')).toBeTruthy()
+})
+
+test('the result says how many were saved without a PDF', async () => {
+  startSpy.mockResolvedValue(progress({ result: result({ saved_without_pdf: 2 }) }))
+  open()
+  pick()
+  await screen.findByText(/12 references/)
+  fireEvent.click(importButton())
+  expect((await screen.findByText(/7 new papers/)).textContent).toMatch(/2 saved without a PDF/)
 })

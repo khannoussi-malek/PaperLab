@@ -50,8 +50,9 @@ test('Zotero round trip: import a zip and a .bib, import again, then export for 
   await expect(page.locator('a.workspace-note').filter({ hasText: 'A zip entry note from Zotero.' })).toBeVisible()
   await page.getByRole('tab', { name: 'Papers' }).click()
 
-  // 2. A plain .bib with fetching off: no PDF, so it is not imported and is listed as needing one.
+  // 2. A plain .bib with fetching off and saving without a PDF off: it is not imported and is listed as needing one.
   await open('one-note.bib')
+  await dialog.getByRole('switch', { name: 'Save the others without a PDF' }).click() // on by default
   await expect(dialog.getByText(/1 reference has no PDF in the file and won't be imported unless fetching is on\./)).toBeVisible()
   await dialog.getByRole('button', { name: 'Import', exact: true }).click()
   await expect(dialog.getByRole('heading', { name: 'Import finished' })).toBeVisible({ timeout: 60_000 })
