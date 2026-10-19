@@ -1,9 +1,10 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { codeInWords } from '@/lib/errorWords'
 import { useSearchHits, useUploadHitPdf } from '@/api/queries'
 import { Button } from '@/components/ui/button'
 import { pageLink } from '@/features/discovery/candidateMeta'
 import { copyText } from '@/lib/clipboard'
+import { FindFreeCopy, UploadPdfButton } from '@/features/library/GetPdfActions'
 import { LoadError } from '@/features/library/ErrorAlert'
 import { EmptyState, TabSkeleton } from '@/features/workspaces/TabStates'
 
@@ -18,10 +19,16 @@ const WHY_HERE = 'Relevant papers land here only when no free PDF was found for 
  * Shows the linked ExternalRef's real title/authors/year/venue/doi (I7 fix 2) when there is one, falling back to
  * `normalized_title` for a hit that never matched a ref. */
 export function ManualAcquisitionTab({ workspaceId }: { workspaceId: string }) {
-  const { data, isPending, isError, error, refetch, hasNextPage, isFetchingNextPage, fetchNextPage } = useSearchHits(workspaceId, undefined, 'failed')
+  const failed = useSearchHits(workspaceId, undefined, 'failed')
+  const awaiting = useSearchHits(workspaceId, undefined, 'awaiting_pdf')
+  const { isError, error, refetch, isFetchingNextPage } = failed
+  const isPending = failed.isPending || awaiting.isPending
+  const hasNextPage = failed.hasNextPage || awaiting.hasNextPage
+  // Pages are fetched together: "Load more" asks each list that has more.
+  const fetchNextPage = () => Promise.all([failed.hasNextPage && failed.fetchNextPage(), awaiting.hasNextPage && awaiting.fetchNextPage()])
   const upload = useUploadHitPdf(workspaceId)
   const [copyError, setCopyError] = useState<string | null>(null)
-  const rows = data?.pages.flatMap((page) => page.items) ?? []
+  const rows = [...(failed.data?.pages ?? []), ...(awaiting.data?.pages ?? [])].flatMap((page) => page.items)
 
   async function copyDoi(doi: string) {
     try {
@@ -56,9 +63,12 @@ export function ManualAcquisitionTab({ workspaceId }: { workspaceId: string }) {
         // "Open page" logic the References panel uses, just fed less to work with.
         const openPage = pageLink({ doi: hit.doi ?? null, external_ids: {} })
         return (
-          <div key={hit.id} className="flex items-center justify-between gap-3 border-b pb-2 text-sm">
+          <div key={hit.id} className="flex flex-wrap items-center justify-between gap-3 border-b pb-2 text-sm">
             <div className="min-w-0 flex-1">
               <p className="truncate">{title}</p>
+              {hit.acquisition_status === 'awaiting_pdf' && (
+                <p className="text-xs text-muted-foreground">Saved without a PDF</p>
+              )}
               {byline && <p className="truncate text-xs text-muted-foreground">{byline}</p>}
             </div>
             <a
@@ -78,11 +88,12 @@ export function ManualAcquisitionTab({ workspaceId }: { workspaceId: string }) {
                 Copy DOI
               </Button>
             )}
-            <UploadButton
+            <UploadPdfButton
               title={title}
               disabled={upload.isPending}
               onPick={(file, onFail) => upload.mutate({ hitId: hit.id, file }, { onError: onFail })}
             />
+            {hit.acquisition_status === 'awaiting_pdf' && hit.paper_id && <FindFreeCopy paperId={hit.paper_id} />}
           </div>
         )
       })}
@@ -91,10 +102,10 @@ export function ManualAcquisitionTab({ workspaceId }: { workspaceId: string }) {
           type="button"
           variant="outline"
           size="sm"
-          disabled={isFetchingNextPage}
+          disabled={isFetchingNextPage || awaiting.isFetchingNextPage}
           onClick={() => fetchNextPage()}
         >
-          {isFetchingNextPage ? 'Loading…' : 'Load more'}
+          {isFetchingNextPage || awaiting.isFetchingNextPage ? 'Loading…' : 'Load more'}
         </Button>
       )}
       {upload.isError && (
@@ -108,36 +119,5 @@ export function ManualAcquisitionTab({ workspaceId }: { workspaceId: string }) {
         </p>
       )}
     </div>
-  )
-}
-
-/** A visually hidden native file input (kept labelled, so it stays reachable by label) driven by a visible button. */
-function UploadButton({ title, disabled, onPick }: { title: string; disabled: boolean; onPick: (file: File, onFail: () => void) => void }) {
-  const input = useRef<HTMLInputElement>(null)
-  const [fileName, setFileName] = useState<string | null>(null)
-  return (
-    <>
-      <input
-        ref={input}
-        type="file"
-        accept="application/pdf"
-        aria-label={`Upload PDF for ${title}`}
-        className="sr-only"
-        tabIndex={-1}
-        disabled={disabled}
-        onChange={(e) => {
-          const file = e.target.files?.[0]
-          if (!file) return
-          setFileName(file.name)
-          onPick(file, () => setFileName(null))
-        }}
-      />
-      <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => input.current?.click()}>
-        <span>
-          {fileName ?? 'Upload PDF'}{' '}
-          <span className="sr-only">for {title}</span>
-        </span>
-      </Button>
-    </>
   )
 }

@@ -4,6 +4,8 @@ import { useSearchHits, useSetEligibility, useSnowball } from '@/api/queries'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { readerHref } from '@/lib/route'
+import { GetPdfActions } from '@/features/library/GetPdfActions'
+import { NoPdfBadge } from '@/features/reader/SourceBadges'
 import { Term } from '@/features/workspaces/Term'
 import { LoadError } from '@/features/library/ErrorAlert'
 import { EmptyState, GoToSearchAction, TabSkeleton } from '@/features/workspaces/TabStates'
@@ -30,6 +32,7 @@ import { StatusDot } from './StatusDot'
 export function ScreeningTab({ workspaceId, runId }: { workspaceId: string; runId?: string | null }) {
   const imported = useSearchHits(workspaceId, 'relevant', 'imported')
   const manual = useSearchHits(workspaceId, 'relevant', 'manual')
+  const awaiting = useSearchHits(workspaceId, 'relevant', 'awaiting_pdf')
   const setEligibility = useSetEligibility(workspaceId)
   const snowball = useSnowball(workspaceId)
   const [filterText, setFilterText] = useState('')
@@ -37,6 +40,8 @@ export function ScreeningTab({ workspaceId, runId }: { workspaceId: string; runI
   const rows = [
     ...(imported.data?.pages.flatMap((page) => page.items) ?? []),
     ...(manual.data?.pages.flatMap((page) => page.items) ?? []),
+    // ponytail: only the first page of papers awaiting a PDF; they cannot be assessed, and Get PDFs pages them all
+    ...(awaiting.data?.pages.flatMap((page) => page.items) ?? []),
   ]
   // Client-side, over whatever's already loaded — same approach HitTable's own filter box uses, no new request.
   const filter = filterText.trim().toLowerCase()
@@ -67,7 +72,7 @@ export function ScreeningTab({ workspaceId, runId }: { workspaceId: string; runI
             className="h-8 w-full max-w-xs rounded-lg border bg-background px-2 text-sm"
           />
           <span className="shrink-0 text-xs text-muted-foreground">
-            {filter ? `${visibleRows.length} of ${rows.length}` : `${rows.length} to screen`}
+            {filter ? `${visibleRows.length} of ${rows.length}` : `${rows.filter((hit) => hit.acquisition_status !== 'awaiting_pdf').length} to screen`}
           </span>
         </label>
       )}
@@ -193,7 +198,13 @@ function ScreeningRow({
         <StatusDot status={hit.stage2_status ?? null} />
         {stage2Label(hit.stage2_status)}
       </span>
-      {paperId ? (
+      {hit.acquisition_status === 'awaiting_pdf' && paperId ? (
+        <>
+          <NoPdfBadge />
+          <span className="text-xs text-muted-foreground">Needs the full text to assess</span>
+          <GetPdfActions paperId={paperId} title={title} />
+        </>
+      ) : paperId ? (
         <>
           <Button
             type="button"

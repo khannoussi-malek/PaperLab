@@ -55,6 +55,13 @@ describe('api.addCandidate', () => {
     await expect(api.addCandidate({ title: 'T' } as never)).rejects.toMatchObject({ name: 'NoFreePdfError', message: body.detail })
     vi.unstubAllGlobals()
   })
+
+  it('keeps what a failed find-pdf tried and the free copies it names', async () => {
+    const body = { detail: 'no_free_pdf', tried: [{ url: 'https://a.example/x.pdf', outcome: 'http_403' }], free_copies: ['https://b.example'] }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { status: 409 })))
+    await expect(api.findPaperPdf('p1')).rejects.toMatchObject({ tried: body.tried, freeCopies: body.free_copies })
+    vi.unstubAllGlobals()
+  })
 })
 
 describe('Zotero import forms', () => {
