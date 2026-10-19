@@ -93,6 +93,7 @@ async def test_file_of_a_paper_without_a_pdf_is_404_no_pdf(client, session):
 async def test_deleting_a_paper_without_a_pdf_is_204(client, session):
     paper = await pdf_less_paper(session)
     assert (await client.delete(f"/api/papers/{paper.id}")).status_code == 204
+    assert await chunk_count(session, paper.id) == 0
     assert (await client.get(f"/api/papers/{paper.id}")).status_code == 404
 
 
@@ -121,12 +122,12 @@ async def test_ingest_and_rechunk_leave_a_paper_without_a_pdf_alone(worker_sessi
     assert (paper.status, paper.status_error, await chunk_count(worker_session, paper.id)) == ("ready", None, 1)
 
 
-async def test_reingest_refuses_no_pdf(client, session, jobs):
+async def test_reingest_refuses_no_pdf(client, session, arq):
     paper = await pdf_less_paper(session, status="ready")
     response = await client.post(f"/api/papers/{paper.id}/reingest")
     assert (response.status_code, response.json()["detail"]) == (409, "no_pdf")
     await session.refresh(paper)
-    assert (paper.status, jobs.jobs) == ("ready", [])  # not flipped to uploaded, nothing queued
+    assert (paper.status, arq.jobs) == ("ready", [])  # not flipped to uploaded, nothing queued
 
 
 async def test_evidence_card_needs_the_full_text(client, session, jobs):
@@ -175,3 +176,19 @@ async def test_quoting_a_paper_without_a_pdf_says_so_instead_of_crashing(session
     paper = await pdf_less_paper(session, abstract="Sleep helps memory consolidation.")
     with pytest.raises(Conflict, match="no_pdf"):
         await notes.locate_quote(session, paper.id, "Sleep helps memory consolidation.")
+
+
+async def test_a_failed_paper_without_a_pdf_re_added_by_identifier_is_left_alone(session, jobs):
+    from app.core import pipeline
+
+    paper = await pdf_less_paper(session, status="failed")
+    added = await pipeline._in_library(session, paper.id, None)
+    await session.refresh(paper)
+    assert (paper.status, jobs.jobs, added.paper_id) == ("failed", [], paper.id)
+
+
+async def test_the_max_tries_branch_does_not_touch_a_paper_without_a_pdf(worker_session, ctx):
+    paper = await pdf_less_paper(worker_session, status="ready")
+    await ingest.ingest_paper({**ctx, "job_try": ingest.MAX_TRIES}, str(paper.id))
+    await worker_session.refresh(paper)
+    assert (paper.status, paper.status_error) == ("ready", None)

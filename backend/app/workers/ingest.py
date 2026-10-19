@@ -113,6 +113,10 @@ async def ingest_paper(ctx: dict, paper_id: str) -> None:
     ctx["embedder"] and an httpx transport in ctx["transport"].
     """
     pid = uuid.UUID(paper_id)
+    async with SessionLocal() as session:
+        if (await papers.get_paper(session, pid)).file_path is None:  # extract(None) would "succeed" and wipe chunks
+            logger.info("ingest of %s skipped: the paper has no PDF", pid)
+            return
     if ctx.get("job_try", 1) >= MAX_TRIES:
         async with SessionLocal() as session:
             await papers.set_status(session, pid, PaperStatus.FAILED, error=INTERRUPTED.format(times=MAX_TRIES - 1))
@@ -120,9 +124,6 @@ async def ingest_paper(ctx: dict, paper_id: str) -> None:
         return
     async with SessionLocal() as session:
         paper = await papers.get_paper(session, pid)
-        if paper.file_path is None:  # nothing to extract: extract(None) would "succeed" and wipe the abstract chunk
-            logger.info("ingest of %s skipped: the paper has no PDF", pid)
-            return
         started = time.monotonic()
         marks: list[tuple[str, float]] = [("extracting", started)]  # each stage's start; a stage runs until the next
         chunks = pages = 0
