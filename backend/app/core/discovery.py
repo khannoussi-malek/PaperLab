@@ -47,7 +47,7 @@ from app.core.redact import redact
 from app.core.source_registry import ASKS
 from app.core.source_types import is_preprint_copy
 from app.models import Paper
-from app.providers import arxiv, discovery_fake, semantic_scholar, unpaywall
+from app.providers import arxiv, discovery_fake, europe_pmc, pmc_opendata, semantic_scholar, unpaywall
 
 logger = logging.getLogger(__name__)
 
@@ -707,6 +707,54 @@ async def _diva_copy(
     return data, [*tried, *more]
 
 
+# PMC's own article pages and Europe PMC's, as Unpaywall lists them among a paper's repository copies.
+_PMC_LINK = re.compile(
+    r"https?://(?:www\.ncbi\.nlm\.nih\.gov/pmc/articles|pmc\.ncbi\.nlm\.nih\.gov/articles"
+    r"|(?:www\.)?europepmc\.org/articles?(?:/pmc)?)/(PMC\d+)",
+    re.IGNORECASE,
+)
+
+
+def pmcid_of(external_ids: dict, urls: list[str]) -> str | None:
+    """The paper's own PMCID (external_ids "pmc", as PMC and Europe PMC store it), else the first PMC article link
+    among `urls` ("PMC4512184"), else None."""
+    if own := pmc_opendata.normalize(external_ids.get("pmc")):
+        return own
+    return next((pmc_opendata.normalize(m[1]) for url in urls if (m := _PMC_LINK.match(url))), None)
+
+
+async def pmc_copy(
+    providers: Providers, external_ids: dict, doi: str | None, copies: list[str], tried: list[dict[str, str]]
+) -> tuple[bytes | None, list[dict[str, str]]]:
+    """NCBI's PMC Open Access bucket (M76), for a paper with a PMCID: its own, a PMC link among its free copies, or
+    the one Europe PMC gives for its DOI (only when that source is on). Nothing is asked without a PMCID."""
+    # A PMC page already tried (a bot-checked europepmc ?pdf=render, say) still names the PMCID.
+    pmcid = pmcid_of(external_ids, [*copies, *(t["url"] for t in tried)])
+    if pmcid is None and doi and (epmc := providers.client("europe_pmc")) is not None:
+        try:
+            pmcid = pmc_opendata.normalize(await europe_pmc.pmcid_for_doi(epmc, doi))
+        except httpx.HTTPError as exc:
+            logger.info("no PMCID from Europe PMC for %s: %s", doi, redact(str(exc)))
+    if pmcid is None:
+        return None, tried
+    try:
+        url, listed = await pmc_opendata.pdf_url(providers.pdf, pmcid)
+    except InvalidInput as exc:  # the PDF client's guard: the bucket's host didn't resolve to a public address
+        if str(exc) != "unsafe_url":
+            raise
+        return None, [*tried, {"url": pmc_opendata.listing_url(pmcid), "outcome": "unsafe_url"}]
+    except httpx.HTTPError as exc:
+        outcome = f"http_{exc.response.status_code}" if isinstance(exc, httpx.HTTPStatusError) else (
+            f"error: {type(exc).__name__}"
+        )  # fmt: skip
+        return None, [*tried, {"url": pmc_opendata.listing_url(pmcid), "outcome": outcome}]
+    if url is None:
+        return None, [*tried, {"url": listed, "outcome": "no_match"}]
+    await pmc_opendata.wait_turn()
+    data, more = await download_pdf(providers.pdf, [url])
+    return data, [*tried, *more]
+
+
 async def add(
     session: AsyncSession, providers: Providers, candidate: Candidate, pdf_dir: Path, tried_out: list | None = None
 ) -> Paper:
@@ -728,6 +776,8 @@ async def add(
     if data is None:
         copies = await free_copies(providers, candidate.doi, tried)
         data, tried = await _diva_copy(providers, copies, tried)
+    if data is None:
+        data, tried = await pmc_copy(providers, candidate.external_ids, candidate.doi, copies, tried)
     if tried_out is not None:
         tried_out.extend(tried)
     if data is None:

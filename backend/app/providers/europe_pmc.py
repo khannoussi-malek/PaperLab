@@ -112,6 +112,12 @@ async def search(http: httpx.AsyncClient, term: str, limit: int) -> list[dict]:
     return [_entry(r) for r in body["resultList"]["result"]]
 
 
+async def pmcid_for_doi(http: httpx.AsyncClient, doi: str) -> str | None:
+    """The PMCID ("4512184", bare) of the record with this DOI, or None. One request."""
+    entries = await search(http, f'DOI:"{doi}"', 1)
+    return next((e["pmcid"] for e in entries if e["pmcid"] and e["doi"] == doi.lower()), None)
+
+
 async def search_page(
     http: httpx.AsyncClient, term: str, page_size: int, cursor: str
 ) -> tuple[list[dict], str | None]:

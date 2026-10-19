@@ -202,7 +202,9 @@ email goes to Crossref, Unpaywall, OpenAlex (when on), PubMed and PMC, never to 
 PubMed and PMC (NCBI E-utilities) are on by default. Find papers and Workspace Search send them the search text and
 paging, then the IDs of the matching records to fetch their details, with `tool=paperlab`, your contact email (NCBI
 asks every caller to identify itself) and your NCBI API key if you added one. Europe PMC is on by default and receives
-the search text and a paging cursor, never an email or key.
+the search text and a paging cursor, or a paper's DOI to find its PMCID, never an email or key.
+When a paper with a PMCID has no free PDF elsewhere, PaperLab looks in NCBI's PMC Open Access dataset on AWS (a public
+bucket), which receives the PMCID and nothing else, never an email or key.
 HAL is on by default and receives the words of the search text (Find papers drops common stopwords) and paging, or a
 HAL document ID to fetch one record, never an email or key.
 OpenAIRE is on by default and receives the search text, a publications-only filter and paging, or a record ID to
