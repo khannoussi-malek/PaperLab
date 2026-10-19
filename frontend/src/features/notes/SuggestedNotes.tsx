@@ -5,7 +5,11 @@ import { usePromoteNote, useSuggestNotes } from '@/api/queries'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter } from '@/components/ui/card'
 
-type Props = { paperId: string }
+type Props = {
+  paperId: string
+  /** False for a paper saved without its PDF: suggestions are spots on its pages, and it has none. */
+  hasPdf?: boolean
+}
 
 /** "Suggest notes": generates a handful of cited note candidates and shows each as a card the reader accepts or
  * dismisses individually — notes are never saved automatically (chat.py's own docstring states the same rule
@@ -13,7 +17,7 @@ type Props = { paperId: string }
  * for that choice, not an exception to it). Accepting one goes through the unchanged POST /api/notes/promote —
  * the same endpoint a chat answer's own text selection already uses — so there's no separate "accept" write path
  * to keep in sync. */
-export function SuggestedNotes({ paperId }: Props) {
+export function SuggestedNotes({ paperId, hasPdf = true }: Props) {
   const suggest = useSuggestNotes(paperId)
   const promote = usePromoteNote()
   const [outputId, setOutputId] = useState<string | null>(null)
@@ -40,6 +44,11 @@ export function SuggestedNotes({ paperId }: Props) {
       { output_id: outputId, body: pending[index].body, chunk_ids: [pending[index].chunk_id] },
       { onSuccess: () => dismiss(index), onSettled: () => setAcceptingIndex(null) },
     )
+  }
+
+  // The server's 409 no_pdf, for a click made before the paper had loaded, reads the same as knowing it up front.
+  if (!hasPdf || suggest.error?.message === 'no_pdf') {
+    return <p className="text-xs text-muted-foreground">Suggested notes need the full text, and this paper has no PDF yet.</p>
   }
 
   return (

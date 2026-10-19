@@ -91,13 +91,19 @@ async def preview_import(
     session: SessionDep,
     workspace_id: Annotated[uuid.UUID | None, Form()] = None,
     fetch_free_pdfs: Annotated[bool, Form()] = True,
+    save_without_pdf: Annotated[bool, Form()] = False,
 ) -> ImportPreviewOut:
     """What importing the file (a references file or a Zotero zip) would do: counts, and `disclosure`, the sentence
     to show when free-copy sources will be contacted. Nothing is written and no paper source is contacted. 422 for
     an unreadable file, 413 over the size caps."""
     name, source = _upload(file)
     return await citations_import_run.preview(
-        session, name, source, workspace_id=workspace_id, fetch_free_pdfs=fetch_free_pdfs
+        session,
+        name,
+        source,
+        workspace_id=workspace_id,
+        fetch_free_pdfs=fetch_free_pdfs,
+        save_without_pdf=save_without_pdf,
     )
 
 
@@ -109,9 +115,11 @@ async def import_citations(
     workspace_id: Annotated[uuid.UUID | None, Form()] = None,
     new_workspace_name: Annotated[str | None, Form()] = None,
     fetch_free_pdfs: Annotated[bool, Form()] = True,
+    save_without_pdf: Annotated[bool, Form()] = False,
 ) -> ImportProgressOut:
     """Imports a references file or a Zotero zip into the library, and into `workspace_id` or a new workspace
-    named `new_workspace_name` (made only once the file has parsed). 200 with the result (state finished) when it
+    named `new_workspace_name` (made only once the file has parsed). With `save_without_pdf`, an entry that gets no
+    PDF is saved from its details instead of being listed in `needs_pdf`. 200 with the result (state finished) when it
     ran now; 202 with `job_id` (state queued) to poll at GET /api/citations/import/{job_id}. 422 for an unreadable
     file or both targets, 404 unknown workspace, 409 a taken name, 413 over the size caps, 503 the background
     service is down."""
@@ -119,7 +127,7 @@ async def import_citations(
     try:
         progress = await citations_import_run.start(
             session, name, source, workspace_id=workspace_id, new_workspace_name=new_workspace_name,
-            fetch_free_pdfs=fetch_free_pdfs,
+            fetch_free_pdfs=fetch_free_pdfs, save_without_pdf=save_without_pdf,
         )  # fmt: skip
     except (RedisError, OSError):  # the job could not be queued; start() already removed the upload and new workspace
         raise HTTPException(503, QUEUE_DOWN) from None

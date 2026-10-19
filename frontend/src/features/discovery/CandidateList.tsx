@@ -1,21 +1,24 @@
 import { ExternalLink, LoaderCircle, Plus } from 'lucide-react'
-import { AlreadyInLibraryError, type Candidate } from '@/api/client'
+import { AlreadyInLibraryError, NoFreePdfError, type Candidate } from '@/api/client'
 import { useAddCandidate } from '@/api/queries'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ErrorAlert } from '@/features/library/ErrorAlert'
 import { byline } from '@/features/library/paperMeta'
+import { codeInWords } from '@/lib/errorWords'
 import { readerHref } from '@/lib/route'
 import { candidateKey, citationsLabel, pageLink, SOURCE_NAMES } from './candidateMeta'
 
 type RowProps = { candidate: Candidate; workspaceId?: string }
 
-/** One found paper: what it is, its sources, whether a free PDF is listed, and Add, In library or Open page. */
+/** One found paper: what it is, its sources, whether a free PDF is listed, and Add or Save without PDF, In library or Open page. */
 function CandidateRow({ candidate, workspaceId }: RowProps) {
   const add = useAddCandidate(workspaceId)
   const held = add.error instanceof AlreadyInLibraryError ? add.error.paperId : undefined
   const paperId = add.data?.id ?? held ?? candidate.paper_id
   const hasPdf = candidate.pdf_urls.length > 0
+  // No free PDF listed, or Add just found none: the paper can still be saved by its details.
+  const canSaveWithoutPdf = !hasPdf || add.error instanceof NoFreePdfError
   const link = pageLink(candidate)
   const meta = [byline(candidate), citationsLabel(candidate.cited_by_count)].filter(Boolean).join(' · ')
   return (
@@ -48,17 +51,30 @@ function CandidateRow({ candidate, workspaceId }: RowProps) {
             <a href={readerHref(paperId)}>{held ? 'Already in your library' : 'In library'}</a>
           </Button>
         ) : (
-          hasPdf && (
-            <Button
-              size="sm"
-              aria-label={`Add ${candidate.title}`}
-              disabled={add.isPending}
-              onClick={() => add.mutate(candidate)}
-            >
-              {add.isPending ? <LoaderCircle aria-hidden className="motion-safe:animate-spin" /> : <Plus aria-hidden />}
-              {add.isPending ? 'Adding…' : 'Add'}
-            </Button>
-          )
+          <>
+            {hasPdf && (
+              <Button
+                size="sm"
+                aria-label={`Add ${candidate.title}`}
+                disabled={add.isPending}
+                onClick={() => add.mutate({ candidate })}
+              >
+                {add.isPending ? <LoaderCircle aria-hidden className="motion-safe:animate-spin" /> : <Plus aria-hidden />}
+                {add.isPending ? 'Adding…' : 'Add'}
+              </Button>
+            )}
+            {canSaveWithoutPdf && (
+              <Button
+                size="sm"
+                variant={hasPdf ? 'outline' : 'default'}
+                aria-label={`Save without PDF: ${candidate.title}`}
+                disabled={add.isPending}
+                onClick={() => add.mutate({ candidate, saveWithoutPdf: true })}
+              >
+                {add.isPending ? 'Saving…' : 'Save without PDF'}
+              </Button>
+            )}
+          </>
         )}
         {link && (
           <Button size="sm" variant="ghost" asChild>
@@ -69,7 +85,7 @@ function CandidateRow({ candidate, workspaceId }: RowProps) {
           </Button>
         )}
       </div>
-      {add.error && !held && <ErrorAlert message={add.error.message} />}
+      {add.error && !held && <ErrorAlert message={codeInWords(add.error.message)} />}
     </li>
   )
 }

@@ -21,7 +21,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import Conflict, InvalidInput
-from app.core.papers import get_paper
+from app.core.papers import abstract_drafts, get_paper, replace_chunks
 from app.core.source_types import (
     ARXIV_DOI_PREFIX,
     PREPRINT_SERVERS,
@@ -29,7 +29,7 @@ from app.core.source_types import (
     peer_reviewed_of,
     source_type_of,
 )
-from app.models import Author, Paper, paper_authors, paper_topics
+from app.models import Author, Paper, PaperStatus, paper_authors, paper_topics
 from app.providers import crossref, openalex
 
 logger = logging.getLogger(__name__)
@@ -483,7 +483,8 @@ async def correct_metadata(session: AsyncSession, paper_id: uuid.UUID, fields: d
     """The user's corrections, written as given and added to manual_fields so nothing overwrites them later.
 
     `fields` holds only what the user changed. Raises NotFound, InvalidInput (a DOI that isn't one) or
-    Conflict("doi_taken").
+    Conflict("doi_taken"). A paper without a PDF gets its abstract chunk rebuilt when the title or abstract changes:
+    `embedding` again (the route enqueues index_abstract), or `ready` with no chunk when the abstract is cleared.
     """
     paper = await get_paper(session, paper_id)
     clears_match = {}
@@ -499,9 +500,17 @@ async def correct_metadata(session: AsyncSession, paper_id: uuid.UUID, fields: d
             # manual_fields: enrichment stays free to write back whatever the corrected DOI actually resolves to.
             clears_match = {"openalex_id": None, "published_checked_at": None}  # enrich_papers asks again
     manual_fields = sorted(set(paper.manual_fields) | fields.keys())
+    rebuild = not paper.has_pdf and not {"title", "abstract"}.isdisjoint(fields)
+    abstract = ((fields["abstract"] if "abstract" in fields else paper.abstract) or "").strip() or None
+    reindex = {"status": PaperStatus.EMBEDDING if abstract else PaperStatus.READY} if rebuild else {}
     await session.execute(
-        update(Paper).where(Paper.id == paper_id).values(**fields, **clears_match, manual_fields=manual_fields)
+        update(Paper)
+        .where(Paper.id == paper_id)
+        .values(**fields, **clears_match, **reindex, manual_fields=manual_fields)
     )
-    await session.commit()
+    if rebuild:  # the abstract chunk is what search and chat read; the caller enqueues index_abstract when embedding
+        await replace_chunks(session, paper_id, abstract_drafts(fields.get("title", paper.title), abstract))
+    else:
+        await session.commit()
     await session.refresh(paper)
     return paper

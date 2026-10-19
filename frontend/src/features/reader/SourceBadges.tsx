@@ -9,6 +9,11 @@ const EVIDENCE: Record<Paper['evidence_access'], string> = {
   metadata: 'Metadata only',
 }
 
+/** The one mark of a paper saved without its PDF: the library rows, the reader and the previews all show this badge. */
+export function NoPdfBadge() {
+  return <Badge variant="secondary" className="no-pdf font-normal">No PDF yet</Badge>
+}
+
 /** "Peer-reviewed", "Preprint · not peer-reviewed", or nothing while it is unknown: a guess would be worse than silence. */
 function peerReviewLabel(paper: Paper): string | null {
   if (paper.peer_reviewed === 'true') return 'Peer-reviewed'
@@ -48,6 +53,7 @@ export function SourceBadges({ paper }: { paper: Paper }) {
   const review = peerReviewLabel(paper)
   return (
     <>
+      {paper.has_pdf === false && <NoPdfBadge />}
       {published && <PublishedChip paper={paper} />}
       {!published && type && <Badge variant="secondary" className="source-type font-normal">{type}</Badge>}
       {!published && review && <Badge variant="outline" className="peer-review font-normal">{review}</Badge>}

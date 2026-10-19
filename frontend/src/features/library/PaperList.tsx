@@ -28,6 +28,8 @@ const STAGGER_MS = 40
 const MAX_STAGGER_STEPS = 6
 
 const isIngesting = (paper: Paper) => paper.status !== 'ready' && paper.status !== 'failed'
+/** Ready is the normal state, and a paper without a PDF never ingests (its abstract embeds in a moment): neither shows. */
+const quietStatus = (paper: Paper) => paper.status === 'ready' || (paper.has_pdf === false && paper.status !== 'failed')
 
 type RowProps = {
   paper: Paper
@@ -113,12 +115,12 @@ function PaperRow({ paper, previewed, enterDelayMs, workspaceId, tags, activeTag
             {readingChip(paper.reading_pass, paper.triage)}
           </Badge>
         )}
-        {/* Ready is the normal state: announced, not shown. Only in-progress and failed papers get a visible badge. */}
+        {/* Quiet states are announced, not shown. Only in-progress and failed papers get a visible badge. */}
         <Badge
           variant={paper.status === 'failed' ? 'destructive' : 'outline'}
-          className={cn('status mt-1', paper.status === 'ready' && 'sr-only')}
+          className={cn('status mt-1', quietStatus(paper) && 'sr-only')}
         >
-          {isIngesting(paper) && <LoaderCircle aria-hidden className="motion-safe:animate-spin" />}
+          {isIngesting(paper) && !quietStatus(paper) && <LoaderCircle aria-hidden className="motion-safe:animate-spin" />}
           {paper.status}
         </Badge>
         <PaperMenu paper={paper} workspaceId={workspaceId} onMembershipChange={onMembership} onReadingChange={onReading} />

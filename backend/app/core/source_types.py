@@ -8,6 +8,9 @@ from typing import Literal, get_args
 
 SourceType = Literal["journal_article", "proceedings", "book", "chapter", "preprint", "magazine", "thesis", "other"]
 PeerReviewed = Literal["true", "false", "unknown"]
+# Where a PDF-less paper's details came from (shown as "Details from <Source>").
+DetailsSource = Literal["zotero", "crossref", "openalex", "semantic_scholar", "arxiv", "search", "manual"]
+DETAILS_SOURCES: tuple[str, ...] = get_args(DetailsSource)
 SOURCE_TYPES: tuple[str, ...] = get_args(SourceType)
 PEER_REVIEWED: tuple[str, ...] = get_args(PeerReviewed)
 
@@ -62,8 +65,9 @@ def peer_reviewed_of(source_type: str | None) -> str:
     return _PEER.get(source_type or "", "unknown")
 
 
-def evidence_access(abstract: str | None, status: str, has_chunks: bool) -> str:
-    """full_text only when the paper is ready and has chunks; a paper still ingesting with an abstract is 'abstract'."""
-    if status == "ready" and has_chunks:
+def evidence_access(abstract: str | None, status: str, has_chunks: bool, has_pdf: bool) -> str:
+    """full_text only when the paper is ready, has a PDF and has chunks; a paper still ingesting with an abstract is
+    'abstract', and so is one without a PDF (its only chunk is the abstract)."""
+    if status == "ready" and has_chunks and has_pdf:
         return "full_text"
     return "abstract" if abstract else "metadata"

@@ -27,3 +27,17 @@ export function readSelection(scale: number): SelectionResult {
   if (!quotedText || rects.length === 0) return { kind: 'none' }
   return { kind: 'anchor', anchor: { page: Number(page.dataset.page), rects, quotedText } }
 }
+
+/**
+ * Text selected inside the abstract of a paper without a PDF (the details panel's `.paper-abstract`), as a draft.
+ * ponytail: page 0 and no rects mark it as the abstract's; it is never sent or shown (the note goes by paper_id).
+ */
+export function readAbstractSelection(): SelectionAnchor | null {
+  const selection = window.getSelection()
+  if (!selection || selection.isCollapsed || selection.rangeCount === 0) return null
+  const range = selection.getRangeAt(0)
+  const inAbstract = (node: Node) => (node instanceof Element ? node : node.parentElement)?.closest('.paper-abstract')
+  if (!inAbstract(range.startContainer) || !inAbstract(range.endContainer)) return null
+  const quotedText = selection.toString().trim()
+  return quotedText ? { page: 0, rects: [], quotedText } : null
+}

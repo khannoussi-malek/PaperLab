@@ -244,3 +244,25 @@ async def test_the_references_page_answers_its_four_parts_and_scopes_to_a_worksp
 
     assert (await client.get(f"/api/references?workspace={uuid.uuid4()}")).status_code == 404
     assert (await client.get("/api/references?workspace=not-a-uuid")).status_code == 422
+
+
+async def test_a_reference_in_the_library_says_whether_its_paper_has_a_pdf(client, library):
+    reader, free, closed = await reader_with_references(library)
+    library.add_all([
+        Paper(title="Held without a PDF", file_path=None, doi=free.doi),
+        Paper(title="Held with a PDF", file_path="/held.pdf", doi="10.5555/m75-api-closed"),
+    ])  # fmt: skip
+    closed.doi = "10.5555/m75-api-closed"
+    outside = ExternalRef(title="Not held")
+    library.add(outside)
+    await library.flush()
+    await library.execute(
+        paper_references.insert(), [{"paper_id": reader.id, "ref_id": outside.id, "direction": "cites", "position": 1}]
+    )
+    await library.commit()
+
+    cites = (await client.get(f"/api/papers/{reader.id}/references")).json()["rows"]
+    cited_by = (await client.get(f"/api/papers/{reader.id}/references", params={"direction": "cited_by"})).json()
+
+    assert {r["title"]: r["paper_has_pdf"] for r in cites} == {"Free reference": False, "Not held": None}
+    assert [(r["title"], r["paper_has_pdf"]) for r in cited_by["rows"]] == [("Closed reference", True)]

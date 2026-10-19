@@ -8,7 +8,8 @@ import { ExportCitationsMenu } from "./ExportCitationsMenu";
 
 afterEach(() => vi.restoreAllMocks());
 
-async function openMenu(paperCount = 2) {
+async function openMenu(paperCount = 2, papers: { has_pdf: boolean }[] = []) {
+  vi.spyOn(api, "listWorkspacePapers").mockResolvedValue(papers as never);
   const client = new QueryClient();
   render(
     <QueryClientProvider client={client}>
@@ -20,6 +21,19 @@ async function openMenu(paperCount = 2) {
   );
   await screen.findByRole("menuitem", { name: "BibTeX" });
 }
+
+test("says papers without a PDF are exported without a file, only when there are some", async () => {
+  await openMenu(2, [{ has_pdf: true }, { has_pdf: false }]);
+  expect(
+    await screen.findByText("Papers without a PDF are exported without a file."),
+  ).toBeTruthy();
+});
+
+test("stays quiet when every paper has a PDF", async () => {
+  await openMenu(2, [{ has_pdf: true }, { has_pdf: true }]);
+  await waitFor(() => expect(api.listWorkspacePapers).toHaveBeenCalled());
+  expect(screen.queryByText(/exported without a file/)).toBeNull();
+});
 
 test("offers BibTeX, RIS and CSL-JSON as downloads from the workspace route", async () => {
   await openMenu();

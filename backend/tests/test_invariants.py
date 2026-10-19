@@ -105,6 +105,30 @@ async def test_migrations_upgrade_downgrade_upgrade(scratch_url):
 
 
 @pytest.mark.anyio
+async def test_0050_round_trip(scratch_url):
+    """Upgrade, downgrade refuses while a PDF-less paper exists, then succeeds, then upgrade again."""
+    dsn = scratch_url.render_as_string(hide_password=False)
+    alembic(dsn, "upgrade", "head")
+    scratch = create_async_engine(scratch_url)
+    async with scratch.begin() as conn:
+        await conn.execute(text("INSERT INTO papers (title, file_path) VALUES ('No file', NULL)"))
+    refused = subprocess.run(
+        [sys.executable, "-m", "alembic", "downgrade", "0049"],
+        cwd=BACKEND,
+        env={**os.environ, "DATABASE_URL": dsn},
+        capture_output=True,
+        text=True,
+    )
+    assert refused.returncode != 0
+    assert "papers without a PDF exist; delete them first" in refused.stderr
+    async with scratch.begin() as conn:
+        await conn.execute(text("DELETE FROM papers WHERE file_path IS NULL"))
+    await scratch.dispose()
+    alembic(dsn, "downgrade", "0049")
+    alembic(dsn, "upgrade", "head")
+
+
+@pytest.mark.anyio
 async def test_workspaces_migration_keeps_categories_memberships_and_answers(scratch_url):
     """Data written at 0004, the revision just before the workspaces migration, survives it. If the migration is
     ever renumbered, this upgrade target moves with it."""

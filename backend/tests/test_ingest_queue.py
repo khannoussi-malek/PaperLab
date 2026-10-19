@@ -20,7 +20,8 @@ def test_the_ingest_worker_runs_one_paper_at_a_time_on_its_own_queue():
     assert IngestWorkerSettings.queue_name == queue.INGEST_QUEUE
     assert IngestWorkerSettings.max_jobs == 1
     assert IngestWorkerSettings.max_tries == ingest.MAX_TRIES
-    assert names(IngestWorkerSettings.functions) == queue.INGEST_JOBS == {"ingest_paper", "reembed_paper"}
+    jobs = {"ingest_paper", "reembed_paper", "index_abstract"}
+    assert names(IngestWorkerSettings.functions) == queue.INGEST_JOBS == jobs
 
 
 def test_the_main_worker_keeps_the_other_jobs_on_the_default_queue():

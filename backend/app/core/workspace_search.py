@@ -912,15 +912,9 @@ async def import_hits(
             # automatic import) — re-running Import all must never quietly relabel it "imported" (I8).
             continue
         ref = await session.get(ExternalRef, hit.external_ref_id) if hit.external_ref_id else None
-        existing_id = ref.imported_as or await _library_paper_id(session, ref) if ref is not None else None
-        by_identifier = True
-        if ref is not None and existing_id is None:
-            # Its other version may be held (M73): the arXiv copy by arXiv id (which learns this published version),
-            # or the published version by title. Only when no identifier matched: an identifier match wins, and a
-            # held duplicate of the other version must not learn a DOI another paper already answers to.
-            held = await discovery.held_version(session, _ref_candidate(ref))
-            if held is not None:
-                existing_id, by_identifier = held
+        existing_id, by_identifier = await _held(session, ref) if ref is not None else (None, True)
+        if existing_id is not None and not (await papers.get_paper(session, existing_id)).has_pdf:
+            continue  # saved without a PDF: not retrieved, so the hit stays in "Get PDFs" (PRISMA, R6)
         if existing_id is not None:
             # Already in the library — an earlier hit in this batch, an earlier run, the References panel, or a paper
             # holding the same DOI/OpenAlex id. Attach it instead of downloading/creating a duplicate, no re-ingest.
@@ -974,6 +968,18 @@ async def import_hits(
     return ImportResult(imported, len(targeted) - imported, paper_ids)
 
 
+async def _held(session: AsyncSession, ref: ExternalRef) -> tuple[uuid.UUID | None, bool]:
+    """(the library paper this reference already is, whether an identifier matched it)."""
+    existing_id = ref.imported_as or await _library_paper_id(session, ref)
+    if existing_id is not None:
+        return existing_id, True
+    # Its other version may be held (M73): the arXiv copy by arXiv id (which learns this published version),
+    # or the published version by title. Only when no identifier matched: an identifier match wins, and a
+    # held duplicate of the other version must not learn a DOI another paper already answers to.
+    held = await discovery.held_version(session, _ref_candidate(ref))
+    return held if held is not None else (None, True)
+
+
 async def upload_hit_pdf(
     session: AsyncSession, workspace_id: uuid.UUID, hit_id: uuid.UUID, filename: str | None, content: bytes
 ) -> tuple[dict, bool]:
@@ -992,6 +998,12 @@ async def upload_hit_pdf(
         raise NotFound(f"hit {hit_id} not found")
 
     ref = await session.get(ExternalRef, hit.external_ref_id) if hit.external_ref_id else None
+    # By identifier only: held_version may write this DOI onto a held arXiv copy, which an upload must not do.
+    held_id = (ref.imported_as or await _library_paper_id(session, ref)) if ref is not None else None
+    if held_id is not None and not (await papers.get_paper(session, held_id)).has_pdf:
+        # The upload would be thrown away or become a duplicate of it, and the hit counted as retrieved (PRISMA, R6);
+        # attaching it is PR 2.
+        raise Conflict("paper_has_no_pdf")
     if ref is not None and ref.imported_as is not None:
         await workspaces.add_paper(session, workspace_id, ref.imported_as)
         hit.acquisition_status = "manual"

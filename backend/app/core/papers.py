@@ -9,9 +9,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.core.chunking import STRATEGY_VERSION, ChunkDraft
 from app.core.errors import InvalidInput, NotFound
+from app.core.source_types import DETAILS_SOURCES
 from app.models import Chunk, Paper, PaperStatus
 
 PDF_MAGIC = b"%PDF-"
+# A paper saved without a PDF keeps its abstract as one chunk on this page (R2): PDF pages count from 1, so every
+# consumer that shows or trusts a page says "abstract" for it, or leaves it out.
+ABSTRACT_PAGE = 0
+
+# What create_metadata_paper sets itself; a prefill naming one is refused rather than overriding it.
+OWNED_BY_CREATE = frozenset({"id", "file_path", "status", "details_source"})
 
 READING_PASSES = range(4)
 TRIAGES = ("keep", "later", "drop")
@@ -36,6 +43,48 @@ async def create_paper(
     except Exception:
         path.unlink(missing_ok=True)
         raise
+    await session.refresh(paper)
+    return paper
+
+
+def abstract_chunk_text(title: str, abstract: str) -> str:
+    """What the abstract chunk holds, and what gets embedded: "<title>. <abstract>", so a search finds the title too."""
+    return f"{title if title.endswith(('.', '?', '!')) else title + '.'} {abstract}"
+
+
+def abstract_drafts(title: str, abstract: str | None) -> list[ChunkDraft]:
+    """The one abstract chunk of a paper without a PDF, or none when it has no abstract."""
+    if not abstract:
+        return []
+    text = abstract_chunk_text(title, abstract)
+    return [ChunkDraft(ordinal=0, page=ABSTRACT_PAGE, bbox=[], section_title="Abstract", text=text)]
+
+
+async def create_metadata_paper(session: AsyncSession, prefill: dict[str, Any], details_source: str) -> Paper:
+    """A paper saved without a PDF (R5): `prefill` as create_paper takes it, and where the details came from.
+
+    With an abstract it gets one chunk on ABSTRACT_PAGE and starts `embedding`, for the caller to enqueue
+    index_abstract; without one it is `ready` at once, with no chunks (R3). Commits; enqueues nothing.
+    Raises InvalidInput("unknown_details_source", allowed=[...] | "reserved_field", fields=[...] | "empty_title").
+    A blank abstract is stored as none.
+    """
+    if details_source not in DETAILS_SOURCES:
+        raise InvalidInput("unknown_details_source", allowed=list(DETAILS_SOURCES))
+    if reserved := sorted(OWNED_BY_CREATE.intersection(prefill)):
+        raise InvalidInput("reserved_field", fields=reserved)
+    title = (prefill.get("title") or "").strip()
+    if not title:
+        raise InvalidInput("empty_title")
+    abstract = (prefill.get("abstract") or "").strip() or None
+    paper = Paper(
+        **{**prefill, "title": title, "abstract": abstract},
+        file_path=None,
+        details_source=details_source,
+        status=PaperStatus.EMBEDDING if abstract else PaperStatus.READY,
+    )
+    session.add(paper)
+    await session.flush()
+    await replace_chunks(session, paper.id, abstract_drafts(paper.title, abstract))  # commits paper and chunk together
     await session.refresh(paper)
     return paper
 
@@ -111,11 +160,15 @@ async def delete_paper(session: AsyncSession, paper_id: uuid.UUID) -> None:
     paper = await get_paper(session, paper_id)
     await session.delete(paper)
     await session.commit()
-    await asyncio.to_thread(Path(paper.file_path).unlink, missing_ok=True)
+    if paper.file_path:  # a paper saved without a PDF has no file to remove
+        await asyncio.to_thread(Path(paper.file_path).unlink, missing_ok=True)
 
 
 async def get_paper_file(session: AsyncSession, paper_id: uuid.UUID) -> Path:
-    path = Path((await get_paper(session, paper_id)).file_path)
+    paper = await get_paper(session, paper_id)
+    if paper.file_path is None:
+        raise NotFound("no_pdf", detail="This paper has no PDF yet.")
+    path = Path(paper.file_path)
     if not await asyncio.to_thread(path.is_file):
         raise NotFound(f"PDF for paper {paper_id} is missing from storage")
     return path

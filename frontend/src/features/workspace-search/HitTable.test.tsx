@@ -394,6 +394,18 @@ test('uploading a PDF from the preview panel calls the upload mutation for that 
   await waitFor(() => expect(api.uploadHitPdf).toHaveBeenCalledWith('ws-1', 'h1', file))
 })
 
+test('a paper_has_no_pdf refusal on upload from the preview panel is said in words', async () => {
+  vi.spyOn(api, 'uploadHitPdf').mockRejectedValue(new Error('paper_has_no_pdf'))
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  const panel = await preview()
+  await panel.findByText('a paper about llms')
+
+  const file = new File(['%PDF-1.4'], 'paper.pdf', { type: 'application/pdf' })
+  fireEvent.change(panel.getByLabelText('Upload PDF for a paper about llms'), { target: { files: [file] } })
+
+  expect(await screen.findByText('This paper is saved without a PDF; attaching one comes in a later version.')).toBeInTheDocument()
+})
+
 test('the preview panel hides the PDF-getting options once a hit is already imported or manually acquired', async () => {
   const hit: Hit = { ...baseHit, acquisition_status: 'imported' }
   vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: [hit], next_cursor: null })

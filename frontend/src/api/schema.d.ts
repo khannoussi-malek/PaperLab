@@ -244,7 +244,10 @@ export interface paths {
          */
         get: operations["list_notes_api_notes_get"];
         put?: never;
-        /** Create Note */
+        /**
+         * Create Note
+         * @description 422 anchor_required: a paper_id note on a paper with a PDF; 422 quote_not_found: a quote not in its abstract.
+         */
         post: operations["create_note_api_notes_post"];
         delete?: never;
         options?: never;
@@ -723,7 +726,8 @@ export interface paths {
         /**
          * Import Citations
          * @description Imports a references file or a Zotero zip into the library, and into `workspace_id` or a new workspace
-         *     named `new_workspace_name` (made only once the file has parsed). 200 with the result (state finished) when it
+         *     named `new_workspace_name` (made only once the file has parsed). With `save_without_pdf`, an entry that gets no
+         *     PDF is saved from its details instead of being listed in `needs_pdf`. 200 with the result (state finished) when it
          *     ran now; 202 with `job_id` (state queued) to poll at GET /api/citations/import/{job_id}. 422 for an unreadable
          *     file or both targets, 404 unknown workspace, 409 a taken name, 413 over the size caps, 503 the background
          *     service is down.
@@ -1660,7 +1664,8 @@ export interface paths {
         /**
          * Add Paper
          * @description Downloads the paper's first free PDF and ingests it like an upload. 404 for an unknown workspace (before any
-         *     download); 409 when the paper is already in the library or no free PDF is found.
+         *     download); 409 when the paper is already in the library or no free PDF is found, unless `save_without_pdf`
+         *     saves it without one (then only its abstract, if any, is indexed).
          */
         post: operations["add_paper_api_discovery_add_post"];
         delete?: never;
@@ -1937,6 +1942,11 @@ export interface components {
             candidate: components["schemas"]["CandidateIn"];
             /** Workspace Id */
             workspace_id?: string | null;
+            /**
+             * Save Without Pdf
+             * @default false
+             */
+            save_without_pdf: boolean;
         };
         /** AnchorIn */
         AnchorIn: {
@@ -2014,6 +2024,11 @@ export interface components {
              * @default true
              */
             fetch_free_pdfs: boolean;
+            /**
+             * Save Without Pdf
+             * @default false
+             */
+            save_without_pdf: boolean;
         };
         /** Body_import_dataset_api_datasets_import_post */
         Body_import_dataset_api_datasets_import_post: {
@@ -2038,6 +2053,11 @@ export interface components {
              * @default true
              */
             fetch_free_pdfs: boolean;
+            /**
+             * Save Without Pdf
+             * @default false
+             */
+            save_without_pdf: boolean;
         };
         /** Body_upload_hit_pdf_api_workspaces__workspace_id__search_hits__hit_id__upload_post */
         Body_upload_hit_pdf_api_workspaces__workspace_id__search_hits__hit_id__upload_post: {
@@ -2072,8 +2092,9 @@ export interface components {
         };
         /**
          * CandidateIn
-         * @description A search result or suggestion sent back to be added. Extra fields (its `paper_id`, its `sources`) are ignored:
-         *     the library is checked again.
+         * @description A search result or suggestion sent back to be added. An extra field (its `paper_id`) is ignored: the
+         *     library is checked again. `abstract` and `sources` are kept for a save without a PDF (its abstract, and where
+         *     its details came from).
          */
         CandidateIn: {
             /** Title */
@@ -2092,6 +2113,10 @@ export interface components {
             };
             /** Cited By Count */
             cited_by_count?: number | null;
+            /** Abstract */
+            abstract?: string | null;
+            /** Sources */
+            sources?: ("openalex" | "crossref" | "semantic_scholar" | "arxiv" | "core" | "unpaywall" | "pubmed" | "pmc" | "europe_pmc" | "zenodo" | "hal" | "acm_dl" | "ssrn" | "doaj" | "openaire" | "iacr_eprint" | "biorxiv" | "medrxiv" | "dblp")[];
             /** Pdf Urls */
             pdf_urls?: string[];
         };
@@ -2117,6 +2142,8 @@ export interface components {
             };
             /** Cited By Count */
             cited_by_count: number | null;
+            /** Abstract */
+            abstract: string | null;
             /** Pdf Urls */
             pdf_urls: string[];
             /** Sources */
@@ -2388,6 +2415,8 @@ export interface components {
                 number,
                 number
             ][];
+            /** From Abstract */
+            from_abstract: boolean;
         };
         /** ChunkOut */
         ChunkOut: {
@@ -2413,6 +2442,11 @@ export interface components {
             text: string;
             /** Strategy Ver */
             strategy_ver: number;
+            /**
+             * From Abstract
+             * @description The abstract chunk of a paper saved without a PDF: no page to show or jump to.
+             */
+            readonly from_abstract: boolean;
         };
         /** ClearHitsOut */
         ClearHitsOut: {
@@ -3005,6 +3039,8 @@ export interface components {
             already_in_library: number;
             /** Pdfs Attached */
             pdfs_attached: number;
+            /** Saved Without Pdf */
+            saved_without_pdf: number;
             /** Notes */
             notes: number;
             /** Needs Pdf */
@@ -3039,6 +3075,8 @@ export interface components {
             would_fetch: number;
             /** Cannot Import Without Fetch */
             cannot_import_without_fetch: number;
+            /** Would Save Without Pdf */
+            would_save_without_pdf: number;
             /** Disclosure */
             disclosure: string | null;
         };
@@ -3075,6 +3113,8 @@ export interface components {
             already_in_library: number;
             /** Pdfs Attached */
             pdfs_attached: number;
+            /** Saved Without Pdf */
+            saved_without_pdf: number;
             /** Notes */
             notes: number;
             /** Needs Pdf */
@@ -3267,7 +3307,11 @@ export interface components {
              */
             free_copies: string[];
         };
-        /** NoteCreate */
+        /**
+         * NoteCreate
+         * @description An anchored note (`anchor`), or a note on a paper saved without a PDF (`paper_id`, with an optional `quote` from
+         *     its abstract that the note's body then starts with).
+         */
         NoteCreate: {
             /**
              * Body
@@ -3279,7 +3323,11 @@ export interface components {
              * @default #facc15
              */
             color: string;
-            anchor: components["schemas"]["AnchorIn"];
+            anchor?: components["schemas"]["AnchorIn"] | null;
+            /** Paper Id */
+            paper_id?: string | null;
+            /** Quote */
+            quote?: string | null;
         };
         /** NoteOut */
         NoteOut: {
@@ -3470,6 +3518,10 @@ export interface components {
              * @enum {string}
              */
             evidence_access: "full_text" | "abstract" | "metadata";
+            /** Has Pdf */
+            has_pdf: boolean;
+            /** Details Source */
+            details_source: ("zotero" | "crossref" | "openalex" | "semantic_scholar" | "arxiv" | "search" | "manual") | null;
             /** Is Retracted */
             is_retracted: boolean;
             /** Oa Status */
@@ -3816,6 +3868,8 @@ export interface components {
             cocitation: number;
             /** Paper Id */
             paper_id: string | null;
+            /** Paper Has Pdf */
+            paper_has_pdf: boolean | null;
             /** Position */
             position: number;
             /** Queued At */

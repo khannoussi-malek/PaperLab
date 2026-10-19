@@ -30,3 +30,11 @@ test('"Upload PDFs" still opens the file picker, with or without a tooltip', () 
     unmount()
   }
 })
+
+test('the description no longer says free PDF only', () => {
+  wrap(<FindPapersButton />)
+  fireEvent.click(screen.getByRole('button', { name: 'Find papers' }))
+  expect(screen.getByRole('dialog')).toHaveTextContent(
+    'Add downloads a free PDF when there is one (arXiv, a repository or an open-access publisher). Without one, you can save the paper without a PDF.',
+  )
+})

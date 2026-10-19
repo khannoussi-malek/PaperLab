@@ -23,8 +23,10 @@ const PAGES: PageSpec[] = [
   { top: '86%', width: 24, height: 32, dur: '3.6s', tilt: '-17deg', animationDelayMs: 700 },
 ]
 
-/** Whether `paper` should show the flying-pages layer behind its Library row. */
-export const isEmbedding = (paper: { status: string }): boolean => paper.status === 'embedding'
+/** Whether `paper` should show the flying-pages layer behind its Library row: not one without a PDF, whose abstract
+ * embeds with no pages to fly. */
+export const isEmbedding = (paper: { status: string; has_pdf?: boolean }): boolean =>
+  paper.status === 'embedding' && paper.has_pdf !== false
 
 /**
  * A decorative layer of small pages drifting right-to-left behind a Library row, shown only while its paper's

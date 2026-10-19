@@ -1,16 +1,16 @@
 import { useState } from 'react'
 import { Download } from 'lucide-react'
 import { api, type EvidenceCardRow } from '@/api/client'
-import { useEvidenceCards, useGenerateEvidenceCard, useGenerateEvidenceCards } from '@/api/queries'
+import { useEvidenceCards, useGenerateEvidenceCard, useGenerateEvidenceCards, useWorkspacePapers } from '@/api/queries'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { LoadError } from '@/features/library/ErrorAlert'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { EmptyState, TabSkeleton } from '@/features/workspaces/TabStates'
-import { Making } from './EvidenceBits'
+import { Making, NeedsFullText } from './EvidenceBits'
 import { EvidenceCell } from './EvidenceCell'
-import { FIELDS, failureReason } from './evidenceFields'
+import { FIELDS, errorWords, failureReason } from './evidenceFields'
 
 /** The workspace Evidence tab: one row per paper, one column per card field. */
 export function EvidenceTab({ workspaceId }: { workspaceId: string }) {
@@ -18,6 +18,9 @@ export function EvidenceTab({ workspaceId }: { workspaceId: string }) {
   const generateMissing = useGenerateEvidenceCards(workspaceId)
   const [replacing, setReplacing] = useState<EvidenceCardRow | null>(null)
   const generateOne = useGenerateEvidenceCard(workspaceId)
+  // "Generate cards" skips these on the server; their rows say why instead of offering a Generate that would fail.
+  const papers = useWorkspacePapers(workspaceId)
+  const withoutPdf = new Set(papers.data?.filter((p) => p.has_pdf === false).map((p) => p.id))
   const error = generateMissing.error ?? generateOne.error
   const generating = rows.data?.filter((r) => r.card?.status === 'generating').length ?? 0
 
@@ -42,7 +45,7 @@ export function EvidenceTab({ workspaceId }: { workspaceId: string }) {
         )}
       </div>
       {rows.error && <LoadError message={rows.error.message} onRetry={() => void rows.refetch()} />}
-      {error && <Alert variant="destructive"><AlertDescription>{error.message}</AlertDescription></Alert>}
+      {error && <Alert variant="destructive"><AlertDescription>{errorWords(error.message)}</AlertDescription></Alert>}
       {rows.isPending && <TabSkeleton label="Loading evidence cards" />}
       {rows.data?.length === 0 && (
         <EmptyState title="No evidence cards yet">Add papers to this workspace and their evidence cards will show up here.</EmptyState>
@@ -61,6 +64,7 @@ export function EvidenceTab({ workspaceId }: { workspaceId: string }) {
                 key={row.paper_id}
                 row={row}
                 workspaceId={workspaceId}
+                hasPdf={!withoutPdf.has(row.paper_id)}
                 onGenerate={(r) => (r.card?.provenance === 'llm_edited' && r.card.status === 'ready' ? setReplacing(r) : regenerate(r, false))}
               />
             ))}
@@ -93,7 +97,9 @@ export function EvidenceTab({ workspaceId }: { workspaceId: string }) {
   )
 }
 
-function PaperRow({ row, workspaceId, onGenerate }: { row: EvidenceCardRow; workspaceId: string; onGenerate: (row: EvidenceCardRow) => void }) {
+type RowProps = { row: EvidenceCardRow; workspaceId: string; hasPdf: boolean; onGenerate: (row: EvidenceCardRow) => void }
+
+function PaperRow({ row, workspaceId, hasPdf, onGenerate }: RowProps) {
   const { card, title } = row
   const meta = [row.first_author, row.year].filter(Boolean).join(', ')
   return (
@@ -117,6 +123,8 @@ function PaperRow({ row, workspaceId, onGenerate }: { row: EvidenceCardRow; work
         <TableCell colSpan={FIELDS.length} className="align-top">
           {card?.status === 'generating' ? (
             <Making title={title} />
+          ) : !hasPdf ? (
+            <NeedsFullText />
           ) : (
             <div className="flex flex-wrap items-center gap-3 text-sm">
               <span className="text-muted-foreground">{card?.status === 'failed' && card.error ? failureReason(card.error) : 'Not generated'}</span>

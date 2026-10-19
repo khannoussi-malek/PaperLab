@@ -42,7 +42,8 @@ async def _held(session: AsyncSession, workspace_id: uuid.UUID):
     """The workspace's papers by identifier, and by normalised title."""
     members = select(workspace_papers.c.paper_id).where(workspace_papers.c.workspace_id == workspace_id)
     query = select(Paper.id, Paper.doi, Paper.published_doi, Paper.openalex_id, Paper.title, Paper.year)
-    query = query.where(Paper.id.in_(members))
+    # A paper saved without a PDF is not a retrieved one: its hit stays in "Get PDFs" (PRISMA, R6).
+    query = query.where(Paper.id.in_(members), Paper.file_path.is_not(None))
     by_key: dict = {}
     by_title: dict[str, list[tuple[uuid.UUID, int | None]]] = {}
     for paper_id, doi, published_doi, openalex_id, title, year in (await session.execute(query)).all():

@@ -63,7 +63,7 @@ export function WorkspacePapers({
         <FindPapersButton
           workspaceId={workspaceId}
           label="Find by DOI or title"
-          hint="Look a paper up by DOI, arXiv ID or title and add its free PDF."
+          hint="Look a paper up by DOI, arXiv ID or title."
         />
         <ImportFromZoteroButton workspaceId={workspaceId} />
       </div>

@@ -53,6 +53,9 @@ export const editChange = (key: FieldKey, index: number, text: string): Evidence
 const REASONS: Record<string, string> = {
   not_ready: "This paper's text isn't ready yet. Try again once it has finished importing.",
   no_text: 'This paper has no readable text, so there is nothing to build a card from.',
+  needs_full_text: 'Needs the full text',
 }
 export const failureReason = (error: string | null) =>
   (error && REASONS[error]) || "The model couldn't make this card. Please try again."
+/** A refused request's message: a known code (a 422 needs_full_text) in words, anything else as it came. */
+export const errorWords = (message: string) => REASONS[message] ?? message

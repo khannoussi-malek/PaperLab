@@ -3,7 +3,7 @@ from contextlib import aclosing
 
 import pytest
 from conftest import recorded_discovery
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 
 from app.api.deps import get_discovery
 from app.config import settings
@@ -145,6 +145,40 @@ async def test_add_without_a_free_pdf_is_409_and_enqueues_nothing(client, discov
     assert arq.jobs == []
 
 
+async def test_add_without_a_free_pdf_saves_without_pdf_only_when_asked(client, discovery_api, session, arq):
+    discovery_api.pdf_host.reply("/landing", 200, text="<html>landing</html>")
+    candidate = {"abstract": "An abstract.", "sources": ["crossref"], "pdf_urls": ["https://pdf.example/landing"]}
+
+    refused = await client.post("/api/discovery/add", json=body(**candidate))
+    saved = await client.post("/api/discovery/add", json={**body(**candidate), "save_without_pdf": True})
+
+    assert refused.status_code == 409 and refused.json()["detail"].startswith("No free PDF was found")
+    assert saved.status_code == 201
+    paper = saved.json()
+    assert (paper["has_pdf"], paper["title"], paper["doi"]) == (False, "Found Paper", "10.5555/m19-api")
+    stored = await session.get(Paper, uuid.UUID(paper["id"]))
+    assert (stored.details_source, stored.abstract) == ("crossref", "An abstract.")
+    assert arq.jobs == [("index_abstract", paper["id"])]
+
+
+async def test_an_overlong_abstract_is_cut_not_refused(client, discovery_api, session, arq):
+    discovery_api.pdf_host.reply("/copy.pdf", 200, content=PDF)
+
+    response = await client.post(
+        "/api/discovery/add", json=body(abstract="x" * 25_000, pdf_urls=["https://pdf.example/copy.pdf"])
+    )
+
+    assert response.status_code == 201
+    assert len((await session.get(Paper, uuid.UUID(response.json()["id"]))).abstract) <= 20_000
+
+
+async def test_a_paper_saved_without_pdf_or_abstract_enqueues_nothing(client, discovery_api, arq):
+    response = await client.post("/api/discovery/add", json={**body(), "save_without_pdf": True})
+
+    assert response.status_code == 201 and response.json()["has_pdf"] is False
+    assert arq.jobs == []
+
+
 async def test_add_a_paper_already_in_the_library_is_409(client, discovery_api, session, arq):
     session.add(Paper(title="Owned", file_path="/nonexistent.pdf", doi="10.5555/m19-api"))
     await session.flush()
@@ -219,3 +253,21 @@ async def test_add_of_a_paper_whose_arxiv_copy_is_held_is_409_naming_the_paper(c
     assert response.json()["detail"] == discovery.ALREADY_IN_LIBRARY
     assert response.json()["paper_id"] == str(paper.id)
     assert arq.jobs == []
+
+
+async def test_a_failed_index_abstract_enqueue_leaves_the_paper_ready_not_embedding(
+    client, discovery_api, session, arq, monkeypatch
+):
+    discovery_api.pdf_host.reply("/landing", 200, text="<html>landing</html>")
+    candidate = {"abstract": "An abstract.", "sources": ["crossref"], "pdf_urls": ["https://pdf.example/landing"]}
+
+    async def down(*_a, **_k):
+        raise ConnectionError("redis is down")
+
+    monkeypatch.setattr(arq, "enqueue_job", down)
+    with pytest.raises(ConnectionError):
+        await client.post("/api/discovery/add", json={**body(**candidate), "save_without_pdf": True})
+
+    session.expire_all()
+    paper = await session.scalar(select(Paper).where(Paper.doi == "10.5555/m19-api"))
+    assert paper.status == "ready"
