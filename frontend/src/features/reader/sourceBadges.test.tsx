@@ -71,4 +71,12 @@ describe('SourceBadges', () => {
     expect(screen.getByText('Peer-reviewed')).toBeInTheDocument()
     expect(screen.queryByText(/Published:/)).toBeNull()
   })
+
+  it('says "No PDF yet" for a paper saved without one, and nothing about the PDF otherwise', () => {
+    const { unmount } = render(<SourceBadges paper={paper({ has_pdf: false, evidence_access: 'abstract' })} />)
+    expect(screen.getByText('No PDF yet')).toHaveClass('no-pdf')
+    unmount()
+    render(<SourceBadges paper={paper({ has_pdf: true, evidence_access: 'full_text' })} />)
+    expect(screen.queryByText('No PDF yet')).toBeNull()
+  })
 })

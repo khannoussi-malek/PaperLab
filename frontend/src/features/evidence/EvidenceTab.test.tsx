@@ -31,6 +31,7 @@ beforeEach(() => {
   vi.spyOn(api, 'editEvidenceCard').mockResolvedValue(ready())
   vi.spyOn(api, 'generateEvidenceCards').mockResolvedValue([])
   vi.spyOn(api, 'generateEvidenceCard').mockResolvedValue([])
+  vi.spyOn(api, 'listWorkspacePapers').mockResolvedValue([])
 })
 afterEach(() => vi.restoreAllMocks())
 
@@ -139,4 +140,15 @@ test('a long unbroken title wraps and clamps', async () => {
   expect(shown.className).toContain('break-words')
   expect(shown.className).toContain('line-clamp-3')
   expect(shown).toHaveAttribute('title', title)
+})
+
+test('a paper without a PDF says its card needs the full text, with no Generate button', async () => {
+  vi.spyOn(api, 'listEvidenceCards').mockResolvedValue([row(null, 'p1', 'Abstract paper'), row(null, 'p2', 'Full paper')])
+  vi.spyOn(api, 'listWorkspacePapers').mockResolvedValue([
+    { id: 'p1', has_pdf: false }, { id: 'p2', has_pdf: true },
+  ] as Awaited<ReturnType<typeof api.listWorkspacePapers>>)
+  renderTab()
+  expect(await screen.findByText('Needs the full text')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Generate card for Abstract paper' })).toBeNull()
+  expect(screen.getByRole('button', { name: 'Generate card for Full paper' })).toBeInTheDocument()
 })

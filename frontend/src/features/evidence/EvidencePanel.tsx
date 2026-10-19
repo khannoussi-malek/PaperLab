@@ -4,17 +4,19 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Term } from '@/features/workspaces/Term'
 import type { PdfRect } from '../reader/coords'
-import { LeftOut, Making, SourceBadge } from './EvidenceBits'
+import { LeftOut, Making, NeedsFullText, SourceBadge } from './EvidenceBits'
 import { FIELDS, cellView, failureReason } from './evidenceFields'
 
 type Props = {
   paperId: string
+  /** False for a paper saved without its PDF: a card is built from the full text, so there is none to make. */
+  hasPdf?: boolean
   /** Scrolls the reader to a page and flashes the rects there. */
   onShowRegion: (page: number, rects: PdfRect[]) => void
 }
 
 /** The reader's "Evidence card" section: the card's values with page links that jump to the cited passage. */
-export function EvidencePanel({ paperId, onShowRegion }: Props) {
+export function EvidencePanel({ paperId, hasPdf = true, onShowRegion }: Props) {
   const card = useEvidenceCard(paperId)
   const generate = useGenerateEvidenceCard()
   const [jump, setJump] = useState<{ page: number; chunkId: string | null; id: number } | null>(null)
@@ -29,6 +31,15 @@ export function EvidencePanel({ paperId, onShowRegion }: Props) {
 
   const request = (regenerate: boolean) => generate.mutate({ paperId, regenerate, confirm: false })
   const data = card.data
+  if (!hasPdf) {
+    return (
+      <aside className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-4" aria-label="Evidence card">
+        <div className="grid place-items-center gap-2 rounded-xl border border-dashed border-glass-border px-4 py-10 text-center">
+          <NeedsFullText />
+        </div>
+      </aside>
+    )
+  }
   return (
     <aside className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-4" aria-label="Evidence card">
       {(card.error ?? generate.error) && (

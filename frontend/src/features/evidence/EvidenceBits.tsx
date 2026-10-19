@@ -19,3 +19,10 @@ export const Making = ({ title }: { title: string }) => (
     Making the card…
   </span>
 )
+
+/** What a paper saved without its PDF shows where its card would be: there is nothing to generate it from. */
+export const NeedsFullText = () => (
+  <span className="text-sm text-muted-foreground">
+    <Term term="needsFullText">Needs the full text</Term>
+  </span>
+)

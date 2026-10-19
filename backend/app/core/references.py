@@ -60,6 +60,7 @@ class ReferenceRow:
     has_pdf: bool
     cocitation: int  # library papers citing it (or, for citing works, library papers it cites)
     paper_id: uuid.UUID | None  # set when the library holds it
+    paper_has_pdf: bool | None  # whether that library paper has its PDF; None when the library doesn't hold it
     position: int
     queued_at: datetime | None  # when the reader marked it To read (D164)
 
@@ -387,6 +388,8 @@ _LISTING = text(
              WHERE other.ref_id = r.id AND other.direction = pr.direction) AS cocitation,
            {NOTE_SIMILARITY} AS note_similarity,
            (SELECT il.paper_id FROM in_library il WHERE il.ref_id = r.id ORDER BY il.paper_id LIMIT 1) AS paper_id,
+           (SELECT p.file_path IS NOT NULL FROM in_library il JOIN papers p ON p.id = il.paper_id
+             WHERE il.ref_id = r.id ORDER BY il.paper_id LIMIT 1) AS paper_has_pdf,
            pr.position, r.queued_at
       FROM paper_references pr
       JOIN external_refs r ON r.id = pr.ref_id
@@ -469,7 +472,7 @@ _PAGE = text(
            r.external_ids->>'semantic_scholar' AS s2_id, r.cited_by_count,
            jsonb_array_length(r.pdf_urls) > 0 AS has_pdf, coalesce(l.cocitation, 0) AS cocitation,
            coalesce(l.citing, 0) AS citing, {NOTE_SIMILARITY} AS note_similarity,
-           NULL::uuid AS paper_id, coalesce(l.position, 0) AS position, r.queued_at
+           NULL::uuid AS paper_id, NULL::boolean AS paper_has_pdf, coalesce(l.position, 0) AS position, r.queued_at
       FROM external_refs r LEFT JOIN linked l ON l.ref_id = r.id
      WHERE NOT EXISTS (SELECT 1 FROM in_library il WHERE il.ref_id = r.id)
        AND (l.ref_id IS NOT NULL OR (r.queued_at IS NOT NULL AND CAST(:workspace AS uuid) IS NULL))

@@ -198,3 +198,12 @@ test('the three ways in are named in words', () => {
   }
   expect(screen.queryByRole('button', { name: /Add papers|Find papers/ })).toBeNull()
 })
+
+test('a paper without a PDF is badged in its row, with no pages flying and no status chip while its abstract embeds', () => {
+  const pdfLess = { ...paper('p4', 'Delta abstract'), status: 'embedding', has_pdf: false } as Paper
+  setup([], 'any', [pdfLess])
+  const row = document.querySelector('li.paper-row')!
+  expect(row).toHaveTextContent('No PDF yet')
+  expect(row.querySelector('.embedding-page')).toBeNull()
+  expect(row.querySelector('.status')).toHaveClass('sr-only')
+})

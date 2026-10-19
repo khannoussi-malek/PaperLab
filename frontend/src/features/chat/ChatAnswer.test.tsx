@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, within } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { ChatSource } from '@/api/client'
 import { ChatAnswer } from './ChatAnswer'
 
@@ -96,4 +96,21 @@ it('a label whose source was replaced since (a null slot) stays plain, never fla
   expect(screen.queryByLabelText(/C2\? /)).toBeNull()
   expect(screen.getByText('[C2]').tagName).toBe('SPAN') // plain, as before: no button, no flag
   expect(screen.getByLabelText(/C9\? This citation doesn't match/)).toBeTruthy()
+})
+
+it('a passage from the abstract reads "abstract only" with no page, and its click still shows the source', () => {
+  const abstract = { ...source(1), page: 0, section: 'Abstract', from_abstract: true } as ChatSource
+  const onCite = vi.fn()
+  render(<ChatAnswer {...base} sources={[abstract]} segments={[{ kind: 'cite', label: 'C1' }]} paperLabel={() => 'Lee 2020'} onCite={onCite} />)
+  const [inline, pill] = screen.getAllByRole('button', { name: 'Source 1: Lee 2020, abstract only' })
+  expect(document.body.textContent).not.toMatch(/page/i)
+  fireEvent.click(pill)
+  fireEvent.click(inline)
+  expect(onCite).toHaveBeenCalledTimes(2)
+  expect(onCite).toHaveBeenCalledWith(abstract)
+})
+
+it('a whole-paper answer over one passage says "1 chunk"', () => {
+  render(<ChatAnswer {...base} wholePaper sources={[source(1)]} segments={[{ kind: 'text', text: 'x' }]} />)
+  expect(screen.getByText('Whole paper · 1 chunk')).toBeInTheDocument()
 })
