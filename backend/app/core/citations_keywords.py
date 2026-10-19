@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import tags
+from app.models import Paper
 from app.models.workspace_search import SearchRunEligibility, WorkspaceSearchHit, WorkspaceSearchRun
 
 STAGE1 = {"relevant": "screening: relevant", "not_relevant": "screening: not relevant"}
@@ -27,7 +28,13 @@ async def decisions(session: AsyncSession, ws: uuid.UUID) -> dict[uuid.UUID, str
     verdicts = (
         select(SearchRunEligibility.paper_id, SearchRunEligibility.stage2_status)
         .join(WorkspaceSearchRun, WorkspaceSearchRun.id == SearchRunEligibility.search_run_id)
-        .where(WorkspaceSearchRun.workspace_id == ws, SearchRunEligibility.stage2_status.in_(STAGE2))
+        .join(Paper, Paper.id == SearchRunEligibility.paper_id)
+        # R9: a verdict on a paper without its full text is not one (set_eligibility refuses it now)
+        .where(
+            WorkspaceSearchRun.workspace_id == ws,
+            SearchRunEligibility.stage2_status.in_(STAGE2),
+            Paper.file_path.is_not(None),
+        )
         .order_by(SearchRunEligibility.assessed_at.asc().nulls_first(), SearchRunEligibility.search_run_id)
     )
     for paper_id, status in await session.execute(verdicts):

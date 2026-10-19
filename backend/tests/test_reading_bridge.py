@@ -7,7 +7,7 @@ import pytest
 
 from app.core import reading_bridge, workspace_search, workspaces
 from app.models import Paper
-from app.models.workspace_search import WorkspaceSearchHit, WorkspaceSearchRun
+from app.models.workspace_search import SearchRunEligibility, WorkspaceSearchHit, WorkspaceSearchRun
 
 pytestmark = pytest.mark.anyio
 
@@ -182,6 +182,21 @@ async def test_reading_queue_lists_only_stage_2_included_and_imported_papers(ses
     rows = await reading_bridge.reading_queue(session, workspace.id, run.id)
 
     assert [r.paper_id for r in rows] == [included_and_imported.id]
+
+
+async def test_reading_queue_leaves_out_an_old_include_on_a_paper_without_a_pdf(session):
+    """R9: set_eligibility now refuses such a paper, but a verdict from before that still sits in the table."""
+    workspace = await workspaces.create(session, f"Queue no PDF {RUN}")
+    run = await add_run(session, workspace.id)
+    unread = await add_paper(session, title=f"Unread {RUN}", file_path=None)
+    await workspaces.add_paper(session, workspace.id, unread.id)
+    await add_hit(session, workspace.id, run.id, unread.id, priority=1)
+    session.add(SearchRunEligibility(
+        paper_id=unread.id, search_run_id=run.id, stage2_status="include", assessed_at=datetime.now(timezone.utc),
+    ))  # fmt: skip
+    await session.flush()
+
+    assert await reading_bridge.reading_queue(session, workspace.id, run.id) == []
 
 
 async def test_reading_queue_orders_by_priority_then_title(session):

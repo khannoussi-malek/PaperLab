@@ -39,21 +39,23 @@ def _hit_keys(hit: WorkspaceSearchHit, ref: ExternalRef | None) -> list:
     return [hit.paper_id, ref.imported_as, *dois, ref.external_ids.get("openalex")]
 
 
-async def _held(session: AsyncSession, workspace_id: uuid.UUID, has_pdf: bool):
-    """The workspace's papers with (or without) a PDF, by identifier and by normalised title."""
+async def _held(session: AsyncSession, workspace_id: uuid.UUID):
+    """The workspace's papers by identifier, and by normalised title; and which of them have no PDF."""
     members = select(workspace_papers.c.paper_id).where(workspace_papers.c.workspace_id == workspace_id)
-    query = select(Paper.id, Paper.doi, Paper.published_doi, Paper.openalex_id, Paper.title, Paper.year)
-    # Matched apart, so a paper saved without a PDF never blocks a title match to the one that has it.
-    query = query.where(Paper.id.in_(members), Paper.file_path.is_not(None) if has_pdf else Paper.file_path.is_(None))
+    paper = (Paper.id, Paper.doi, Paper.published_doi, Paper.openalex_id, Paper.title, Paper.year, Paper.file_path)
+    query = select(*paper).where(Paper.id.in_(members))
     by_key: dict = {}
     by_title: dict[str, list[tuple[uuid.UUID, int | None]]] = {}
-    for paper_id, doi, published_doi, openalex_id, title, year in (await session.execute(query)).all():
+    pdfless: set[uuid.UUID] = set()
+    for paper_id, doi, published_doi, openalex_id, title, year, file_path in (await session.execute(query)).all():
         for key in _paper_keys(paper_id, doi, published_doi, openalex_id):
             if key:
                 by_key.setdefault(key, paper_id)
         if title:
             by_title.setdefault(normal_title(title), []).append((paper_id, year))
-    return by_key, by_title
+        if file_path is None:
+            pdfless.add(paper_id)
+    return by_key, by_title, pdfless
 
 
 def _match(hit, ref, by_key, by_title) -> tuple[uuid.UUID, str] | None:
@@ -83,17 +85,14 @@ async def link(session: AsyncSession, workspace_id: uuid.UUID) -> list[Linked]:
     ).all()
     if not hits:
         return []
-    with_pdf, without_pdf = await _held(session, workspace_id, True), await _held(session, workspace_id, False)
+    by_key, by_title, pdfless = await _held(session, workspace_id)
     linked, done = [], []
     for hit, ref in hits:
-        if found := _match(hit, ref, *with_pdf):
-            status = "imported"
-        elif found := _match(hit, ref, *without_pdf):
-            status = "awaiting_pdf"  # linked so step 3 shows it, but not retrieved until its PDF arrives (R8)
-        else:
+        if (found := _match(hit, ref, by_key, by_title)) is None:
             continue
         paper_id, rule = found
-        hit.acquisition_status, hit.paper_id = status, paper_id
+        # A paper saved without a PDF: linked so step 3 shows it, but not retrieved until its PDF arrives (R8).
+        hit.acquisition_status, hit.paper_id = "awaiting_pdf" if paper_id in pdfless else "imported", paper_id
         if rule == "identifier" and ref is not None and ref.imported_as is None:
             ref.imported_as = paper_id
         linked.append(Linked(hit.id, paper_id, rule))
