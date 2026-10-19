@@ -918,7 +918,10 @@ async def import_hits(
         if existing_id is not None:
             # Already in the library — an earlier hit in this batch, an earlier run, the References panel, or a paper
             # holding the same DOI/OpenAlex id. Attach it instead of downloading/creating a duplicate, no re-ingest.
-            await workspaces.add_paper(session, workspace_id, existing_id)
+            try:
+                await workspaces.add_paper(session, workspace_id, existing_id)
+            except NotFound:  # deleted by another request since it was found (M78): this hit stays as it was
+                continue
             if ref.imported_as is None and by_identifier:  # a title match never claims the shared reference (M67)
                 ref.imported_as = existing_id
             hit.acquisition_status = "imported"
