@@ -51,8 +51,12 @@ BODY_TEXT = "The quick brown fox jumps over the lazy dog near the river bank tod
 
 def pytest_configure(config):
     # M77: once, on the controller (an xdist worker has `workerinput`): never the live database behind this branch.
-    if not hasattr(config, "workerinput") and (why := db_guard.check(TEST_DATABASE_URL)):
-        pytest.exit(why, returncode=2)
+    # Both URLs: the fixtures use TEST_DATABASE_URL, while code under test (SessionLocal) uses DATABASE_URL.
+    if hasattr(config, "workerinput"):
+        return
+    for url in dict.fromkeys([TEST_DATABASE_URL, settings.database_url]):
+        if why := db_guard.check(url):
+            pytest.exit(why, returncode=2)
 
 
 @pytest.hookimpl(tryfirst=True)  # before xdist reads the markers
