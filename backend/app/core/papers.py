@@ -9,9 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.core.chunking import STRATEGY_VERSION, ChunkDraft
 from app.core.errors import InvalidInput, NotFound
+from app.core.source_types import DETAILS_SOURCES
 from app.models import Chunk, Paper, PaperStatus
 
 PDF_MAGIC = b"%PDF-"
+# A paper saved without a PDF keeps its abstract as one chunk on this page (R2): PDF pages count from 1, so every
+# consumer that shows or trusts a page says "abstract" for it, or leaves it out.
+ABSTRACT_PAGE = 0
 
 READING_PASSES = range(4)
 TRIAGES = ("keep", "later", "drop")
@@ -36,6 +40,39 @@ async def create_paper(
     except Exception:
         path.unlink(missing_ok=True)
         raise
+    await session.refresh(paper)
+    return paper
+
+
+def abstract_chunk_text(title: str, abstract: str) -> str:
+    """What the abstract chunk holds, and what gets embedded: "<title>. <abstract>", so a search finds the title too."""
+    return f"{title if title.endswith(('.', '?', '!')) else title + '.'} {abstract}"
+
+
+async def create_metadata_paper(session: AsyncSession, prefill: dict[str, Any], details_source: str) -> Paper:
+    """A paper saved without a PDF (R5): `prefill` as create_paper takes it, and where the details came from.
+
+    With an abstract it gets one chunk on ABSTRACT_PAGE and starts `embedding`, for the caller to enqueue
+    index_abstract; without one it is `ready` at once, with no chunks (R3). Commits; enqueues nothing.
+    Raises InvalidInput("unknown_details_source", allowed=[...]).
+    """
+    if details_source not in DETAILS_SOURCES:
+        raise InvalidInput("unknown_details_source", allowed=list(DETAILS_SOURCES))
+    abstract = (prefill.get("abstract") or "").strip()
+    paper = Paper(
+        **{**prefill, "title": prefill.get("title") or "untitled"},
+        file_path=None,
+        details_source=details_source,
+        status=PaperStatus.EMBEDDING if abstract else PaperStatus.READY,
+    )
+    session.add(paper)
+    await session.flush()
+    if abstract:  # replace_chunks commits the paper and its chunk together
+        text = abstract_chunk_text(paper.title, abstract)
+        draft = ChunkDraft(ordinal=0, page=ABSTRACT_PAGE, bbox=[], section_title="Abstract", text=text)
+        await replace_chunks(session, paper.id, [draft])
+    else:
+        await session.commit()
     await session.refresh(paper)
     return paper
 

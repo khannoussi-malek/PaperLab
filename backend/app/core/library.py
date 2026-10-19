@@ -14,7 +14,7 @@ from app.core import embedding_index, workspaces
 from app.core import tags as tag_store
 from app.core.errors import InvalidInput
 from app.core.notes import list_notes_for_paper
-from app.core.papers import get_paper
+from app.core.papers import ABSTRACT_PAGE, get_paper
 from app.core.retrieval import MAX_PER_PAPER, retrieve, searchable
 from app.models import Chunk, Paper, Workspace, workspace_papers
 
@@ -37,6 +37,7 @@ class Passage:
     peer_reviewed: str  # true | false | unknown (a heuristic; the owner can set it)
     published_venue: str | None  # where a preprint was published, when known
     evidence_access: str  # full_text | abstract | metadata
+    from_abstract: bool  # a paper saved without a PDF: its abstract, with no page to cite
 
 
 @dataclass(frozen=True)
@@ -123,12 +124,13 @@ async def search(
             year=papers[chunk.paper_id].year,
             page=chunk.page,
             section=chunk.section,
-            text=chunk.text,
+            text=f"(abstract only) {chunk.text}" if chunk.from_abstract else chunk.text,
             distance=round(chunk.distance, 4),
             source_type=papers[chunk.paper_id].source_type,
             peer_reviewed=papers[chunk.paper_id].peer_reviewed,
             published_venue=papers[chunk.paper_id].published_venue,
             evidence_access=papers[chunk.paper_id].evidence_access,
+            from_abstract=chunk.from_abstract,
         )
         for chunk in found
     ]
@@ -141,7 +143,9 @@ async def paper_card(session: AsyncSession, paper_id: uuid.UUID) -> PaperCard:
     await session.refresh(paper)  # evidence_access reads chunks, which a bulk write may have changed behind this object
     names = select(Workspace.name).join(workspace_papers).where(workspace_papers.c.paper_id == paper_id)
     starts = await session.execute(
-        select(Chunk.section_title, Chunk.page).where(Chunk.paper_id == paper_id).order_by(Chunk.ordinal)
+        select(Chunk.section_title, Chunk.page)
+        .where(Chunk.paper_id == paper_id, Chunk.page != ABSTRACT_PAGE)  # the abstract is a field, not a section
+        .order_by(Chunk.ordinal)
     )
     sections: dict[str, Section] = {}
     for title, page in starts:

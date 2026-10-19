@@ -103,6 +103,7 @@ async def test_search_library_returns_ids_and_structure_not_prose(session, tmp_p
         "peer_reviewed": "unknown",
         "published_venue": None,
         "evidence_access": "full_text",
+        "from_abstract": False,
     }
 
 

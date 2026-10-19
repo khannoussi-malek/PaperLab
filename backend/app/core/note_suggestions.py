@@ -68,10 +68,12 @@ async def _already_noted(session: AsyncSession, paper_id: uuid.UUID) -> set[tupl
 
 
 async def suggest(session: AsyncSession, paper_id: uuid.UUID, llm: LLM) -> Suggested:
-    """Raises NotFound, or Conflict("paper_not_ready" | "paper_not_indexed"). Skips any passage a note (human or
-    AI, from an earlier accepted suggestion or written by hand) already covers — asking again shouldn't keep
+    """Raises NotFound, or Conflict("no_pdf" | "paper_not_ready" | "paper_not_indexed"). Skips any passage a note
+    (human or AI, from an earlier accepted suggestion or written by hand) already covers — asking again shouldn't keep
     re-suggesting the same spots, and there's nothing useful left to say about one that already has a note."""
     paper = await get_paper(session, paper_id)
+    if not paper.has_pdf:  # a suggestion is a spot on a page; an abstract chunk has none
+        raise Conflict("no_pdf")
     if paper.status != PaperStatus.READY:
         raise Conflict("paper_not_ready")
     all_chunks = await chunk_sources(session, Chunk.paper_id == paper_id)

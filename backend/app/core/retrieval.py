@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.core import embedding_index, embedding_sources
 from app.core.errors import Conflict
+from app.core.papers import ABSTRACT_PAGE
 from app.models import workspace_papers
 from app.providers import embedding
 from app.providers.base import LLMError, LLMUnavailable, TextEmbedder
@@ -64,6 +65,11 @@ class RetrievedChunk:
     bbox: list[Rect]
     text: str
     distance: float | None = None  # None when chat sends the whole paper instead of retrieving
+
+    @property
+    def from_abstract(self) -> bool:
+        """The abstract chunk of a paper saved without a PDF: no page to show or jump to."""
+        return self.page == ABSTRACT_PAGE
 
 
 async def _built(source: embedding_sources.Source) -> TextEmbedder:
