@@ -116,7 +116,7 @@ test('a hit whose paper has no PDF waits in step 2, is blocked in step 3 and not
   await page.reload()
   await page.getByRole('tab', { name: /^Get PDFs/ }).click()
   const saved = page.getByRole('region', { name: 'Saved without a PDF' })
-  await expect(saved.getByText(HIT_TITLE)).toBeVisible()
+  await expect(saved.locator('p').filter({ hasText: new RegExp(`^${HIT_TITLE}$`, 'i') })).toBeVisible()
 
   await page.getByRole('tab', { name: /^Full-text review/ }).click()
   await expect(page.getByText('Needs the full text to assess')).toBeVisible()
