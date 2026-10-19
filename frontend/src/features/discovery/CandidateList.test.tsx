@@ -3,7 +3,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, expect, it, vi } from "vitest";
 import type { Candidate } from "@/api/client";
-import { AlreadyInLibraryError, api } from "@/api/client";
+import { AlreadyInLibraryError, NoFreePdfError, api } from "@/api/client";
 import { CandidateList } from "./CandidateList";
 
 const found = {
@@ -71,12 +71,11 @@ it("keeps Add the primary action when a free PDF is listed, and sends no flag", 
 it("says a no_free_pdf refusal in words and offers Save without PDF as the retry", async () => {
   const add = vi
     .spyOn(api, "addCandidate")
-    .mockRejectedValueOnce(new Error("no_free_pdf"))
+    .mockRejectedValueOnce(new NoFreePdfError("No free PDF was found for this paper. Open its page, download the PDF and use Upload PDFs."))
     .mockResolvedValueOnce(paper);
   show(found);
   fireEvent.click(screen.getByRole("button", { name: "Add REAL Sampling" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("No free PDF was found for this paper.");
-  expect(screen.queryByText("no_free_pdf")).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Save without PDF: REAL Sampling" }));
   expect(await screen.findByRole("link", { name: "In library" })).toBeInTheDocument();
   expect(add).toHaveBeenLastCalledWith(found, undefined, true);

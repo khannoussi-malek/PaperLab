@@ -168,13 +168,23 @@ export class AlreadyInLibraryError extends Error {
   }
 }
 
+/** The 409 an Add gets when no free PDF was found: it carries what was tried, and the paper can be saved without one. */
+export class NoFreePdfError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'NoFreePdfError'
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, init)
   if (!response.ok) {
-    const held: unknown =
-      response.status === 409 ? await response.clone().json().then((body) => body.paper_id, () => undefined) : undefined
+    const body: { paper_id?: unknown; tried?: unknown } =
+      response.status === 409 ? await response.clone().json().catch(() => ({})) : {}
     const message = await errorDetail(response)
-    throw typeof held === 'string' ? new AlreadyInLibraryError(message, held) : new Error(message)
+    if (typeof body.paper_id === 'string') throw new AlreadyInLibraryError(message, body.paper_id)
+    // no_free_pdf's detail is the server's sentence; its `tried` list is what marks it (main.py's DomainError handler)
+    throw Array.isArray(body.tried) ? new NoFreePdfError(message) : new Error(message)
   }
   return (response.status === 204 ? undefined : await response.json()) as T
 }
