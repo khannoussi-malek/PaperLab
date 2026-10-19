@@ -11,6 +11,7 @@ from test_pdf_upgrade import awaiting
 from test_retrieved_hits import failed_hit, paper, workspace
 
 from app.core import merges, notes, papers, retrieved_hits, tags, workspaces
+from app.core.candidates import Candidate
 from app.core.chunking import ChunkDraft
 from app.core.errors import NotFound
 from app.models import EvidenceCard, Paper, PaperMerge
@@ -449,3 +450,39 @@ async def test_an_unknown_paper_is_not_found(session):
     k = await kept(session)
     with pytest.raises(NotFound):
         await merges.merge(session, uuid.uuid4(), k.id)
+
+
+@pytest.mark.parametrize("title", ["", "   "])
+async def test_a_pdf_without_a_title_is_reported(session, title):
+    """R15c: the PDF's own title is the evidence; with none, nothing tells a supplement from the paper."""
+    k, m = await kept(session), await merged(session)
+
+    result = await merges.merge(session, m.id, k.id, identifier=PROOF, evidence=Candidate(title, AUTHORS))
+
+    assert (result.status, result.reason) == ("reported", "no_pdf_title")
+    assert (await session.get(Paper, m.id, populate_existing=True)).file_path == FILE
+
+
+async def test_the_pdfs_own_title_decides_not_the_merged_papers_stored_one(session):
+    k, m = await kept(session), await merged(session)  # M's stored title is K's, as OpenAlex would leave it
+
+    result = await merges.merge(session, m.id, k.id, identifier=PROOF, evidence=Candidate("Correction to: " + TITLE))
+
+    assert (result.status, result.reason) == ("reported", "not_the_same_work")
+
+
+async def test_a_delete_of_m_that_waited_on_the_merge_leaves_ks_file(session, tmp_path):
+    """delete_paper(M) read M before the merge committed and deleted after it. Emulated in one session: M is in the
+    identity map, its row is gone, and K names its file."""
+    pdf = tmp_path / "m.pdf"
+    pdf.write_bytes(b"%PDF-1.4 probe")
+    k, m = await kept(session), await merged(session, file_path=str(pdf))
+    await session.commit()
+    await session.get(Paper, m.id)  # the delete request's read, before the merge
+    await session.execute(text("DELETE FROM papers WHERE id = :m"), {"m": m.id})
+    await session.execute(text("UPDATE papers SET file_path = :f WHERE id = :k"), {"f": str(pdf), "k": k.id})
+
+    with pytest.raises(NotFound):
+        await papers.delete_paper(session, m.id)
+
+    assert pdf.exists()

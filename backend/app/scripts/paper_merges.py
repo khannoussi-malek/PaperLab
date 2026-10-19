@@ -2,8 +2,9 @@
 same work as a paper saved without a PDF (K).
 
 Run in the api container: `python -m app.scripts.paper_merges`. A dry run by default: it writes nothing. `--apply`
-merges the candidates whose dry run says it would, whose M is ready, and that share an identifier. A pair matched by
-title alone is never applied, only listed for review.
+merges the candidates whose dry run says it would, whose M is ready, and that share an identifier, checking K against
+the title M's PDF itself prints (R15c). A pair matched by title alone is never applied, only listed for review. A
+candidate that can't be tried (its M merged earlier in the run, its file unreadable) is skipped and listed.
 """
 
 import argparse
@@ -18,6 +19,7 @@ from app.core import discovery, merges
 from app.core.candidates import Candidate, normal_title
 from app.db import SessionLocal
 from app.models import Paper, PaperMerge
+from app.providers.extraction import extract_title
 
 
 @dataclass(frozen=True)
@@ -36,9 +38,17 @@ class MergeCandidate:
 
 
 @dataclass(frozen=True)
+class Skipped:
+    kept_id: uuid.UUID
+    merged_id: uuid.UUID
+    why: str  # the error, e.g. "NotFound: paper … not found" for an M merged earlier in the run
+
+
+@dataclass(frozen=True)
 class Report:
     audit: list[PaperMerge] = field(default_factory=list)
     candidates: list[MergeCandidate] = field(default_factory=list)
+    skipped: list[Skipped] = field(default_factory=list)
 
 
 def _proof(kept: Paper, merged: Paper) -> str:
@@ -72,20 +82,32 @@ async def _pairs(session: AsyncSession) -> list[tuple[Paper, Paper]]:
 async def run(session: AsyncSession, *, apply: bool = False) -> Report:
     audit = list(await session.scalars(select(PaperMerge).order_by(PaperMerge.created_at)))
     session.expunge_all()  # merge needs a session with nothing pending; the rows stay readable
-    candidates = []
+    candidates, skipped = [], []
     for k, m in await _pairs(session):
         kept_id, merged_id, title, proof, ready = k.id, m.id, k.title, _proof(k, m), m.status == "ready"
+        file_path = m.file_path
         session.expunge_all()
-        result = await merges.merge(session, merged_id, kept_id, dry_run=True)
-        candidate = MergeCandidate(kept_id, merged_id, title, proof, result, ready)
-        if apply and candidate.applicable:
-            # "imported": the merge has no better word for a script-run merge
+        # Any error skips only this candidate (merge has rolled back), so the report still prints at the end.
+        try:
             candidate = MergeCandidate(
-                kept_id, merged_id, title, proof, result, ready,
-                await merges.merge(session, merged_id, kept_id, how="imported"),
-            )  # fmt: skip
+                kept_id, merged_id, title, proof, await merges.merge(session, merged_id, kept_id, dry_run=True), ready
+            )
+            if apply and candidate.applicable:
+                applied = await _apply(session, merged_id, kept_id, file_path)
+                candidate = MergeCandidate(kept_id, merged_id, title, proof, candidate.result, ready, applied)
+        except Exception as exc:
+            skipped.append(Skipped(kept_id, merged_id, f"{type(exc).__name__}: {exc}"))
+            continue
         candidates.append(candidate)
-    return Report(audit, candidates)
+    return Report(audit, candidates, skipped)
+
+
+async def _apply(session: AsyncSession, merged_id: uuid.UUID, kept_id: uuid.UUID, file_path: str) -> merges.MergeResult:
+    """The real merge, with the title M's PDF prints as the evidence (R15c), and M's own hit's provenance, else
+    "imported": the merge has no better word for a script-run merge."""
+    evidence = merges.pdf_evidence(*await asyncio.to_thread(extract_title, file_path))
+    how = await merges.arrival(session, merged_id, "imported")
+    return await merges.merge(session, merged_id, kept_id, evidence=evidence, how=how)
 
 
 def _describe(result: merges.MergeResult) -> str:
@@ -110,6 +132,8 @@ def render(report: Report, *, apply: bool) -> str:
         )
         if c.applied:
             lines.append(f"    applied: {_describe(c.applied)}")
+    for s in report.skipped:
+        lines.append(f"  skipped kept={s.kept_id} merged={s.merged_id} {s.why}")
     mode = "Applied." if apply else "Dry run: nothing was written. Pass --apply to merge the proven, ready ones."
     lines.append(f"{len(report.candidates)} candidates. {mode}")
     return "\n".join(lines)

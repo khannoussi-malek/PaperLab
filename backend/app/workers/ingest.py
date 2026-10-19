@@ -7,6 +7,7 @@ from contextlib import AsyncExitStack
 from sqlalchemy import update
 
 from app.core import embedding_index, embedding_sources, enrichment, merges, paper_sources, papers
+from app.core.candidates import Candidate
 from app.core.chunking import chunk_blocks
 from app.db import SessionLocal
 from app.models import Chunk, Paper, PaperStatus
@@ -72,13 +73,19 @@ async def _enrich(session, transport, paper_id: uuid.UUID, doc: ExtractedDoc) ->
         return []
 
 
-async def _merge_after_ingest(pid: uuid.UUID, collisions: list[enrichment.Collision]) -> None:
-    """R17, in a session of its own: never fails the ingest. merge rolls back on a failure, so both papers stay."""
+async def _merge_after_ingest(pid: uuid.UUID, collisions: list[enrichment.Collision], evidence: Candidate) -> None:
+    """R17, in a session of its own: never fails the ingest. merge rolls back on a failure, so both papers stay, and
+    a fresh session records the failure, best effort."""
     try:
         async with SessionLocal() as session:
-            await merges.after_ingest(session, pid, collisions)
-    except Exception:
+            await merges.after_ingest(session, pid, collisions, evidence)
+    except Exception as exc:
         logger.exception("merging %s after ingest failed; both papers stay as they were", pid)
+        try:
+            async with SessionLocal() as session:
+                await merges.report_failure(session, pid, collisions, exc)
+        except Exception:
+            logger.exception("recording the failed merge of %s failed too", pid)
 
 
 async def search_embedder(ctx: dict, session):
@@ -138,11 +145,13 @@ async def ingest_paper(ctx: dict, paper_id: str) -> None:
         marks: list[tuple[str, float]] = [("extracting", started)]  # each stage's start; a stage runs until the next
         chunks = pages = 0
         collisions: list[enrichment.Collision] = []  # set only once the paper is ready
+        evidence = Candidate("")  # what the PDF itself says, for the merge (R15c); set once extracted
         deadline = asyncio.timeout(INGEST_JOB_TIMEOUT)
         try:
             async with deadline:
                 await papers.set_status(session, pid, PaperStatus.EXTRACTING)
                 doc = await asyncio.to_thread(extract, paper.file_path)
+                evidence = merges.pdf_evidence(doc.title, doc.metadata)  # before enrichment, whatever the title lock
                 # extract() can take seconds; re-read the lock right before deciding, in case a PATCH landed meanwhile.
                 await session.refresh(paper, ["openalex_id", "manual_fields"])
 
@@ -190,7 +199,7 @@ async def ingest_paper(ctx: dict, paper_id: str) -> None:
             logger.info(_timings(pid, marks, started, chunks, pages))
     # The very last step: ingest queues no job for the paper, so nothing of ingest's finds M gone after a merge.
     if collisions:
-        await _merge_after_ingest(pid, collisions)
+        await _merge_after_ingest(pid, collisions, evidence)
 
 
 async def index_abstract(ctx: dict, paper_id: str) -> None:
