@@ -29,6 +29,7 @@ export function UploadPdfButton({
         disabled={disabled}
         onChange={(e) => {
           const file = e.target.files?.[0]
+          e.target.value = '' // so picking the same file again (after a refusal) fires change
           if (!file) return
           setFileName(file.name)
           onPick(file, () => setFileName(null))

@@ -76,3 +76,42 @@ test('already_has_pdf reads in words', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Find free copy for Sleep and memory' }))
   expect(await screen.findByRole('alert')).toHaveTextContent('This paper already has its PDF.')
 })
+
+test('a too-large upload names the limit', async () => {
+  vi.spyOn(api, 'uploadPaperPdf').mockRejectedValue(new Error('pdf_too_large'))
+  setup()
+  const file = new File(['%PDF'], 'big.pdf', { type: 'application/pdf' })
+  fireEvent.change(screen.getByLabelText('Upload PDF for Sleep and memory'), { target: { files: [file] } })
+  expect(await screen.findByRole('alert')).toHaveTextContent('That PDF is larger than 30 MB.')
+})
+
+test('the picker is cleared after each pick, so the same file can be picked again', async () => {
+  vi.spyOn(api, 'uploadPaperPdf').mockRejectedValue(new Error('not_a_pdf'))
+  setup()
+  const input = screen.getByLabelText('Upload PDF for Sleep and memory')
+  const cleared = vi.fn()
+  Object.defineProperty(input, 'value', { configurable: true, get: () => '', set: cleared })
+  fireEvent.change(input, { target: { files: [new File(['x'], 'a.pdf', { type: 'application/pdf' })] } })
+  expect(cleared).toHaveBeenCalledWith('')
+})
+
+test.each([
+  ['a Find', () => fireEvent.click(screen.getByRole('button', { name: 'Find free copy for Sleep and memory' }))],
+  [
+    'an Upload',
+    () =>
+      fireEvent.change(screen.getByLabelText('Upload PDF for Sleep and memory'), {
+        target: { files: [new File(['%PDF'], 'a.pdf', { type: 'application/pdf' })] },
+      }),
+  ],
+])('%s that answers already_has_pdf refreshes the paper too', async (_name, act) => {
+  vi.spyOn(api, 'findPaperPdf').mockRejectedValue(new Error('already_has_pdf'))
+  vi.spyOn(api, 'uploadPaperPdf').mockRejectedValue(new Error('already_has_pdf'))
+  const invalidate = setup()
+  act()
+  expect(await screen.findByRole('alert')).toHaveTextContent('This paper already has its PDF.')
+  await waitFor(() => {
+    const keys = invalidate.mock.calls.map((c) => JSON.stringify(c[0]?.queryKey))
+    expect(keys).toEqual(expect.arrayContaining(['["papers"]', '["papers","p1"]', '["workspaces"]']))
+  })
+})
