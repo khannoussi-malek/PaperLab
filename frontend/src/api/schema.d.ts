@@ -6539,7 +6539,7 @@ export interface operations {
                 limit?: number;
                 after?: string | null;
                 stage1_status?: ("relevant" | "not_relevant" | "maybe") | null;
-                acquisition_status?: ("not_attempted" | "queued" | "imported" | "failed" | "manual") | null;
+                acquisition_status?: ("not_attempted" | "queued" | "imported" | "failed" | "manual" | "awaiting_pdf") | null;
                 sort?: "ai" | null;
                 min_relevance?: number | null;
             };

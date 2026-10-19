@@ -12,8 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.errors import NotFound
 from app.core.source_registry import NAMES
 from app.core.workspace_search import PER_SOURCE_PASS_LIMIT, get_run
+from app.models import Paper
 from app.models.workspace import Workspace
 from app.models.workspace_search import SearchRunEligibility, WorkspaceSearchHit, WorkspaceSearchRun
+
+RETRIEVED = ("imported", "manual")  # anything else, awaiting_pdf included, is "Not retrieved"
 
 # PRISMA 2020 item 8: report automation tools used in screening (M31 spec §3.5, §4.6).
 RANKED_NOTE = (
@@ -104,18 +107,26 @@ async def prisma_export(session: AsyncSession, workspace_id: uuid.UUID, run_id: 
 
     relevant = [h for h in hits if h.stage1_status == "relevant"]
     sought = len(relevant)
-    not_retrieved = sum(1 for h in relevant if h.acquisition_status not in ("imported", "manual"))
+    retrieved = [h for h in relevant if h.acquisition_status in RETRIEVED]
+    not_retrieved = sought - len(retrieved)
 
-    in_corpus_paper_ids = [h.paper_id for h in relevant if h.paper_id is not None]
+    # R9: only a retrieved paper with its PDF can have been assessed; an awaiting_pdf hit's paper has no full text,
+    # so even an eligibility row written for it some other way is left out.
+    in_corpus_paper_ids = [h.paper_id for h in retrieved if h.paper_id is not None]
     # Combined view: the same paper can carry eligibility rows from more than one run — take the most recently
     # assessed_at per paper_id, across ALL of that paper's eligibility rows from a run IN THIS WORKSPACE (not
     # just this run's, but never another workspace's — papers are shared/reusable entities, not 1:1 with a
     # workspace, so a paper independently screened in two different workspaces would otherwise leak an unrelated
     # workspace's verdict into this export whenever it happened to be the more recently assessed one). Per-run
     # view: scoped to just this run's own verdict (workspace_run_ids == [run_id] there).
-    elig_query = select(SearchRunEligibility).where(
-        SearchRunEligibility.paper_id.in_(in_corpus_paper_ids),
-        SearchRunEligibility.search_run_id.in_(workspace_run_ids),
+    elig_query = (
+        select(SearchRunEligibility)
+        .join(Paper, Paper.id == SearchRunEligibility.paper_id)
+        .where(
+            SearchRunEligibility.paper_id.in_(in_corpus_paper_ids),
+            SearchRunEligibility.search_run_id.in_(workspace_run_ids),
+            Paper.file_path.is_not(None),
+        )
     )
     elig_rows = (await session.execute(elig_query)).scalars().all()
     latest_by_paper: dict[uuid.UUID, SearchRunEligibility] = {}

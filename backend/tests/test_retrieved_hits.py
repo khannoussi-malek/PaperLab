@@ -12,10 +12,10 @@ from app.core.candidates import normal_title
 from app.core.errors import Conflict
 from app.core.prisma_export import prisma_export
 from app.core.workspace_search import import_hits, upload_hit_pdf
-from app.models import Paper, paper_tags
+from app.models import Paper, paper_tags, workspace_papers
 from app.models.references import ExternalRef
 from app.models.workspace import Workspace
-from app.models.workspace_search import WorkspaceSearchHit, WorkspaceSearchRun
+from app.models.workspace_search import SearchRunEligibility, WorkspaceSearchHit, WorkspaceSearchRun
 
 pytestmark = pytest.mark.anyio
 
@@ -325,21 +325,61 @@ async def test_a_held_publisher_paper_wins_and_its_held_arxiv_duplicate_is_left_
     assert arxiv.published_doi is None  # two papers must not both answer to the TACL DOI
 
 
-async def test_a_hit_attached_to_a_paper_without_a_pdf_is_not_retrieved(session, discovery_fakes):
+async def test_link_marks_a_failed_hit_awaiting_pdf_when_its_match_has_no_pdf(session):
     ws = await workspace(session)
     held = await paper(session, doi="10.1126/sciadv.adu5251", file_path=None)
-    linked = await failed_hit(session, ws, doi="10.1126/sciadv.adu5251")
-    by_import = await failed_hit(session, ws, title="Second", status="not_attempted", doi="10.1126/sciadv.second")
-    twin = await paper(session, title="Second", doi="10.1126/sciadv.second", file_path=None)
+    hit = await failed_hit(session, ws, doi="10.1126/sciadv.adu5251")
 
     await workspaces.add_paper(session, ws.id, held.id)  # link runs on this
-    await workspaces.add_paper(session, ws.id, twin.id)
-    result = await import_hits(session, discovery_fakes.providers, ws.id, [by_import.id])
 
-    assert (await reload(session, linked)).acquisition_status == "failed"
-    assert (await reload(session, by_import)).acquisition_status == "not_attempted"
-    assert (result.imported, result.failed) == (0, 1)
-    assert (await prisma_export(session, ws.id, run_id=None)).not_retrieved == 2
+    hit = await reload(session, hit)
+    assert (hit.acquisition_status, hit.paper_id) == ("awaiting_pdf", held.id)
+
+
+async def test_import_hits_links_a_pdfless_holder_as_awaiting_pdf(session, discovery_fakes):
+    ws = await workspace(session)
+    held = await paper(session, doi="10.1126/sciadv.adu5251", file_path=None)
+    hit = await failed_hit(session, ws, status="not_attempted", doi="10.1126/sciadv.adu5251")
+
+    result = await import_hits(session, discovery_fakes.providers, ws.id, [hit.id])
+
+    hit = await reload(session, hit)
+    assert (hit.acquisition_status, hit.paper_id) == ("awaiting_pdf", held.id)
+    assert (result.imported, result.failed, result.paper_ids) == (0, 1, [])
+    members = await session.scalars(select(workspace_papers.c.paper_id).where(workspace_papers.c.workspace_id == ws.id))
+    assert members.all() == [held.id]
+
+
+async def test_awaiting_pdf_counts_as_not_retrieved(session):
+    ws = await workspace(session)
+    held = await paper(session, file_path=None)
+    await failed_hit(session, ws, status="awaiting_pdf")
+    await workspaces.add_paper(session, ws.id, held.id)
+
+    prisma = await prisma_export(session, ws.id, run_id=None)
+
+    assert (prisma.sought, prisma.not_retrieved) == (1, 1)
+
+
+async def test_an_unread_paper_never_counts_as_assessed_or_included(session):
+    """R9: an eligibility row counts only when its paper has a PDF and its hit is retrieved, even one written
+    straight to the table."""
+    ws = await workspace(session)
+    read = await paper(session, title="Read")
+    awaiting = await paper(session, title="Awaiting", file_path=None)
+    unread = await paper(session, title="Marked imported, no PDF", file_path=None)
+    for held, status in ((read, "imported"), (awaiting, "awaiting_pdf"), (unread, "imported")):
+        hit = await failed_hit(session, ws, title=held.title, status=status)
+        hit.paper_id = held.id
+        await workspaces.add_paper(session, ws.id, held.id)
+        session.add(SearchRunEligibility(
+            paper_id=held.id, search_run_id=ws.run_id, stage2_status="include", assessed_at=datetime.now(timezone.utc),
+        ))  # fmt: skip
+    await session.commit()
+
+    prisma = await prisma_export(session, ws.id, run_id=None)
+
+    assert (prisma.not_retrieved, prisma.stage2_assessed, prisma.included) == (1, 1, 1)
 
 
 async def test_an_upload_for_a_hit_whose_paper_has_no_pdf_is_refused_not_discarded(session):

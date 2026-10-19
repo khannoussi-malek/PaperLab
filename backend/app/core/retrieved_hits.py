@@ -1,8 +1,9 @@
 """Retrieved means retrieved (M67): a search hit left `failed` (no free PDF found) whose paper is in its workspace
 anyway, added by Find papers, add_paper(s), an upload, the arXiv fallback or a dedup reuse, is `imported`, linked to
 that paper, exactly as if import_hits had fetched it. It then leaves Get PDFs, enters full-text review and stops
-counting as PRISMA "Not retrieved". Only hit bookkeeping (and the hit's tags, copied to the paper) changes; papers'
-own data is never touched."""
+counting as PRISMA "Not retrieved". When that paper has no PDF yet the hit is `awaiting_pdf` instead (R8): linked,
+so step 3 shows it, and still "Not retrieved". Only hit bookkeeping (and the hit's tags, copied to the paper)
+changes; papers' own data is never touched."""
 
 import uuid
 from typing import NamedTuple
@@ -38,12 +39,12 @@ def _hit_keys(hit: WorkspaceSearchHit, ref: ExternalRef | None) -> list:
     return [hit.paper_id, ref.imported_as, *dois, ref.external_ids.get("openalex")]
 
 
-async def _held(session: AsyncSession, workspace_id: uuid.UUID):
-    """The workspace's papers by identifier, and by normalised title."""
+async def _held(session: AsyncSession, workspace_id: uuid.UUID, has_pdf: bool):
+    """The workspace's papers with (or without) a PDF, by identifier and by normalised title."""
     members = select(workspace_papers.c.paper_id).where(workspace_papers.c.workspace_id == workspace_id)
     query = select(Paper.id, Paper.doi, Paper.published_doi, Paper.openalex_id, Paper.title, Paper.year)
-    # A paper saved without a PDF is not a retrieved one: its hit stays in "Get PDFs" (PRISMA, R6).
-    query = query.where(Paper.id.in_(members), Paper.file_path.is_not(None))
+    # Matched apart, so a paper saved without a PDF never blocks a title match to the one that has it.
+    query = query.where(Paper.id.in_(members), Paper.file_path.is_not(None) if has_pdf else Paper.file_path.is_(None))
     by_key: dict = {}
     by_title: dict[str, list[tuple[uuid.UUID, int | None]]] = {}
     for paper_id, doi, published_doi, openalex_id, title, year in (await session.execute(query)).all():
@@ -67,7 +68,8 @@ def _match(hit, ref, by_key, by_title) -> tuple[uuid.UUID, str] | None:
 
 
 async def link(session: AsyncSession, workspace_id: uuid.UUID) -> list[Linked]:
-    """Links the workspace's failed hits to the workspace paper holding the same paper: by link
+    """Links the workspace's failed hits to the workspace paper holding the same paper (`imported`, or `awaiting_pdf`
+    when that paper has no PDF yet): by link
     (hit.paper_id, ref.imported_as), DOI, published DOI or OpenAlex id, else by the hit's normalised title when exactly
     one paper has it, both years known and within YEAR_SLACK. Copies each linked hit's tags to its paper. A title
     match leaves the shared ExternalRef's `imported_as` alone, so no other workspace inherits a guess.
@@ -81,13 +83,17 @@ async def link(session: AsyncSession, workspace_id: uuid.UUID) -> list[Linked]:
     ).all()
     if not hits:
         return []
-    by_key, by_title = await _held(session, workspace_id)
+    with_pdf, without_pdf = await _held(session, workspace_id, True), await _held(session, workspace_id, False)
     linked, done = [], []
     for hit, ref in hits:
-        if (found := _match(hit, ref, by_key, by_title)) is None:
+        if found := _match(hit, ref, *with_pdf):
+            status = "imported"
+        elif found := _match(hit, ref, *without_pdf):
+            status = "awaiting_pdf"  # linked so step 3 shows it, but not retrieved until its PDF arrives (R8)
+        else:
             continue
         paper_id, rule = found
-        hit.acquisition_status, hit.paper_id = "imported", paper_id
+        hit.acquisition_status, hit.paper_id = status, paper_id
         if rule == "identifier" and ref is not None and ref.imported_as is None:
             ref.imported_as = paper_id
         linked.append(Linked(hit.id, paper_id, rule))

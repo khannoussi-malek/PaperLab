@@ -598,6 +598,9 @@ async def snowball(
     return SnowballResult(new_hits=new_hits, skipped_seeds=skipped, errors=errors)
 
 
+NEEDS_FULL_TEXT = "This paper has no PDF yet, so its full text can't be assessed."
+
+
 async def set_eligibility(
     session: AsyncSession, workspace_id: uuid.UUID, paper_id: uuid.UUID, run_id: uuid.UUID,
     status: str, exclude_reason: str | None,
@@ -618,6 +621,8 @@ async def set_eligibility(
     )).first()
     if member is None:
         raise NotFound(f"paper {paper_id} not in workspace {workspace_id}")
+    if not (await papers.get_paper(session, paper_id)).has_pdf:  # R9: no full text, nothing to assess
+        raise Conflict("needs_full_text", detail=NEEDS_FULL_TEXT)
 
     assessed_at = datetime.now(timezone.utc)
     stmt = (
@@ -913,8 +918,6 @@ async def import_hits(
             continue
         ref = await session.get(ExternalRef, hit.external_ref_id) if hit.external_ref_id else None
         existing_id, by_identifier = await _held(session, ref) if ref is not None else (None, True)
-        if existing_id is not None and not (await papers.get_paper(session, existing_id)).has_pdf:
-            continue  # saved without a PDF: not retrieved, so the hit stays in "Get PDFs" (PRISMA, R6)
         if existing_id is not None:
             # Already in the library — an earlier hit in this batch, an earlier run, the References panel, or a paper
             # holding the same DOI/OpenAlex id. Attach it instead of downloading/creating a duplicate, no re-ingest.
@@ -924,7 +927,9 @@ async def import_hits(
                 continue
             if ref.imported_as is None and by_identifier:  # a title match never claims the shared reference (M67)
                 ref.imported_as = existing_id
-            hit.acquisition_status = "imported"
+            # Saved without a PDF: linked so step 3 shows it, but not retrieved until its PDF arrives (R8).
+            has_pdf = (await papers.get_paper(session, existing_id)).has_pdf
+            hit.acquisition_status = "imported" if has_pdf else "awaiting_pdf"
             hit.paper_id = existing_id
             await _record_snowball_citation(session, hit, ref.id)
             imported += 1
