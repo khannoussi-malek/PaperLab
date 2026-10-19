@@ -136,7 +136,8 @@ async def test_no_free_pdf_names_the_repository_copies_over_mcp(jobs, monkeypatc
     monkeypatch.setattr(unpaywall, "repository_urls", repository_urls)
     added = result(await call("add_paper", identifier=doi))
 
-    assert added["status"] == "no_free_pdf" and added["tried"] == [NO_ARXIV_MATCH]
+    pmc_bucket = {"url": "https://pmc-oa-opendata.s3.amazonaws.com/?list-type=2&prefix=PMC1.", "outcome": "http_404"}
+    assert added["status"] == "no_free_pdf" and added["tried"] == [NO_ARXIV_MATCH, pmc_bucket]  # M76: its PMC link
     assert added["free_copies"] == ["https://www.ncbi.nlm.nih.gov/pmc/articles/PMC1/"]
 
 
