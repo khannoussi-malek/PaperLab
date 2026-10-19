@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pytest
 
@@ -741,6 +742,28 @@ async def test_import_hits_with_no_pdf_urls_skips_straight_to_failed(session, cl
     await session.refresh(hit)
     assert hit.acquisition_status == "failed"
     assert hit.paper_id is None
+
+
+async def test_import_hits_gets_a_pmc_open_access_pdf_for_a_hit_with_a_pmcid(session, client, discovery_api, arq,
+                                                                             monkeypatch):
+    from app.models.references import ExternalRef
+    from app.models.workspace_search import WorkspaceSearchHit
+    from app.providers import pmc_opendata
+
+    monkeypatch.setattr(pmc_opendata._PACER, "min_interval_seconds", 0)
+    listing = (Path(__file__).parent / "fixtures" / "pmc_opendata" / "list-PMC4512184.xml").read_text()
+    discovery_api.pdf_host.reply("/", 200, text=listing)
+    discovery_api.pdf_host.reply("/PMC4512184.1/PMC4512184.1.pdf", 200, content=b"%PDF-1.4 from the PMC bucket")
+    hit_id = await _make_importable_hit(session, pdf_urls=[])
+    hit = await session.get(WorkspaceSearchHit, hit_id)
+    ref = await session.get(ExternalRef, hit.external_ref_id)
+    ref.external_ids = {"pmcid": "4512184"}
+    await session.commit()
+
+    resp = await client.post(f"/api/workspaces/{hit.workspace_id}/search/hits/import", json={"hit_ids": [str(hit_id)]})
+
+    assert resp.json() == {"imported": 1, "failed": 0}
+    assert [r.url.path for r in discovery_api.pdf_host.requests] == ["/", "/PMC4512184.1/PMC4512184.1.pdf"]
 
 
 async def test_import_hits_download_failure_marks_failed_and_continues_the_batch(session, client, discovery_api):
