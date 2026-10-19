@@ -99,6 +99,8 @@ async def attach_pdf(session: AsyncSession, paper_id: uuid.UUID, data: bytes, ho
 
     if not data.startswith(PDF_MAGIC):
         raise InvalidInput("not_a_pdf")
+    if how not in retrieved_hits.ARRIVALS:
+        raise ValueError(f"how must be manual or imported, not {how!r}")
     # Locked until the commit: a second attach waits here, then finds the file instead of overwriting it.
     paper = await session.get(Paper, paper_id, with_for_update=True, populate_existing=True)
     if paper is None:
@@ -107,8 +109,10 @@ async def attach_pdf(session: AsyncSession, paper_id: uuid.UUID, data: bytes, ho
         raise Conflict("already_has_pdf")
     path = settings.pdf_dir / f"{paper.id}.pdf"
     settings.pdf_dir.mkdir(parents=True, exist_ok=True)
-    await asyncio.to_thread(path.write_bytes, data)
     try:
+        # ponytail: a cancel can't stop the writing thread, which may still leave a file here; the next attach
+        # overwrites it. A commit whose ack is lost after the server committed unlinks a file the row names: rare.
+        await asyncio.to_thread(path.write_bytes, data)
         paper.file_path, paper.status, paper.status_error = str(path), PaperStatus.UPLOADED, None
         await retrieved_hits.pdf_arrived(session, paper.id, how)
         await session.commit()

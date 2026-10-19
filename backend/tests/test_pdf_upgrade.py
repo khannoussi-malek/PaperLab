@@ -1,12 +1,15 @@
 """R10–R12(1): a paper saved without a PDF upgrades in place when its PDF arrives, by upload or a found free copy."""
 
+import uuid
 from datetime import datetime, timezone
 
 import pytest
 from sqlalchemy import select
+from starlette.datastructures import UploadFile
 from test_discovery_add import arxiv_entry, atom
 from test_retrieved_hits import failed_hit, workspace
 
+from app.api import papers as papers_api
 from app.api.deps import get_discovery
 from app.core import discovery, notes, papers, retrieved_hits, tags, workspaces
 from app.core.errors import Conflict
@@ -152,17 +155,26 @@ async def test_find_pdf_route_upgrades_or_says_what_it_tried(app, client, sessio
     assert arq.jobs == [("ingest_paper", str(found.id))]
 
 
-async def test_find_pdf_route_names_a_held_arxiv_copy_of_the_same_work(
-    app, client, session, discovery_fakes, monkeypatch
-):
-    """The arXiv title search finds a preprint the library already holds: that is a duplicate, never a second file."""
-    title = "Sleep and memory in adults"
-    preprint = Paper(title=title, doi="10.48550/arxiv.2401.00001", file_path="/held.pdf", status="ready")
+ARXIV_TITLE = "Sleep and memory in adults"
+
+
+async def held_preprint(session) -> Paper:
+    preprint = Paper(title=ARXIV_TITLE, doi="10.48550/arxiv.2401.00001", file_path="/held.pdf", status="ready")
     session.add(preprint)
     await session.commit()
-    prefill = {"title": title, "authors": ["Ada Lovelace"], "year": 2024, "doi": "10.5555/sleep"}
+    return preprint
+
+
+@pytest.mark.parametrize("doi", ["10.5555/sleep", None])
+async def test_find_pdf_route_names_a_held_arxiv_copy_of_the_same_work(
+    app, client, session, discovery_fakes, monkeypatch, doi
+):
+    """The arXiv title search finds a preprint the library already holds: a duplicate, never a second file, and the
+    preprint learns nothing: the DOI is the PDF-less paper's own, so it must keep answering to it alone."""
+    preprint = await held_preprint(session)
+    prefill = {"title": ARXIV_TITLE, "authors": ["Ada Lovelace"], "year": 2024, "doi": doi, "venue": "J. Sleep"}
     held = await papers.create_metadata_paper(session, prefill, "crossref")
-    entry = arxiv_entry(title=title, authors=["Ada Lovelace"], id="2401.00001", year=2024)
+    entry = arxiv_entry(title=ARXIV_TITLE, authors=["Ada Lovelace"], id="2401.00001", year=2024)
     discovery_fakes.arxiv.reply("/api/query", 200, text=atom(entry))
     app.dependency_overrides[get_discovery] = lambda: discovery_fakes.turned_on("arxiv")
     monkeypatch.setattr(discovery, "_sleep", _no_wait)
@@ -172,9 +184,56 @@ async def test_find_pdf_route_names_a_held_arxiv_copy_of_the_same_work(
     assert (answer.status_code, answer.json()["detail"], answer.json()["paper_id"]) == (
         409, "already_in_library", str(preprint.id),
     )  # fmt: skip
+    assert answer.json()["tried"][-1] == {
+        "url": f"https://doi.org/{doi}" if doi else "https://arxiv.org/abs/2401.00001", "outcome": "in_library",
+    }  # fmt: skip
     await session.refresh(held)
-    assert held.has_pdf is False
-    assert discovery_fakes.pdf_host.requests == []
+    await session.refresh(preprint)
+    assert (held.has_pdf, discovery_fakes.pdf_host.requests) == (False, [])
+    assert (preprint.published_doi, preprint.published_venue, preprint.peer_reviewed) == (None, None, "unknown")
+    if doi:
+        [marked] = await discovery.mark_in_library(session, [discovery.Candidate(title=ARXIV_TITLE, doi=doi)])
+        assert marked.paper_id == held.id
+
+
+async def test_find_pdf_route_never_attaches_a_second_copy_of_a_held_arxiv_paper(app, client, session, discovery_fakes):
+    """An arXiv link of its own names a paper the library holds: the same 409 as the title search, nothing fetched."""
+    preprint = await held_preprint(session)
+    held = await papers.create_metadata_paper(
+        session, {**PREFILL, "doi": "10.5555/sleep", "oa_url": "https://arxiv.org/abs/2401.00001"}, "openalex"
+    )
+    app.dependency_overrides[get_discovery] = lambda: discovery_fakes.providers
+
+    answer = await client.post(f"/api/papers/{held.id}/find-pdf")
+
+    assert (answer.status_code, answer.json()["detail"], answer.json()["paper_id"]) == (
+        409, "already_in_library", str(preprint.id),
+    )  # fmt: skip
+    await session.refresh(held)
+    await session.refresh(preprint)
+    assert (held.has_pdf, preprint.published_doi, discovery_fakes.pdf_host.requests) == (False, None, [])
+
+
+async def test_both_routes_answer_404_for_an_unknown_paper_whatever_the_body(client):
+    unknown = uuid.uuid4()
+    upload = await client.post(f"/api/papers/{unknown}/pdf", files={"file": ("x.pdf", b"<html>", "text/html")})
+    find = await client.post(f"/api/papers/{unknown}/find-pdf")
+    assert (upload.status_code, find.status_code) == (404, 404)
+
+
+async def test_an_upload_over_the_cap_is_refused_before_anything_is_stored(client, session, pdf_dir, monkeypatch):
+    held = await papers.create_metadata_paper(session, PREFILL, "crossref")
+    monkeypatch.setattr(papers_api, "MAX_UPLOAD_PDF_BYTES", len(PDF) - 1)
+
+    async def never_read(*args):
+        raise AssertionError("an over-cap body with a known size is refused unread")
+
+    monkeypatch.setattr(UploadFile, "read", never_read)
+    answer = await client.post(f"/api/papers/{held.id}/pdf", files={"file": ("x.pdf", PDF, "application/pdf")})
+
+    assert (answer.status_code, answer.json()["detail"]) == (422, "pdf_too_large")
+    await session.refresh(held)
+    assert (held.has_pdf, pdf_dir.exists() and any(pdf_dir.iterdir())) == (False, False)
 
 
 async def _no_wait(_seconds):
@@ -253,3 +312,26 @@ async def test_attach_pdf_leaves_no_file_when_the_commit_fails(session, pdf_dir,
     await session.rollback()
     file_path = await session.scalar(select(Paper.file_path).where(Paper.id == paper_id))
     assert file_path is None
+
+
+async def test_attach_pdf_checks_how_before_writing_anything(session, pdf_dir):
+    held = await papers.create_metadata_paper(session, PREFILL, "crossref")
+
+    with pytest.raises(ValueError, match="how"):
+        await papers.attach_pdf(session, held.id, PDF, how="failed")
+
+    assert (held.file_path, pdf_dir.exists() and any(pdf_dir.iterdir())) == (None, False)
+
+
+async def test_attach_pdf_leaves_no_file_when_the_write_breaks_midway(session, pdf_dir, monkeypatch):
+    held = await papers.create_metadata_paper(session, PREFILL, "crossref")
+
+    async def half_written(func, data):
+        func(data[:4])
+        raise OSError("No space left on device")
+
+    monkeypatch.setattr(papers.asyncio, "to_thread", half_written)
+    with pytest.raises(OSError):
+        await papers.attach_pdf(session, held.id, PDF, how="manual")
+
+    assert list(pdf_dir.iterdir()) == []
