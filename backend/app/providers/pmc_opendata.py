@@ -33,7 +33,10 @@ def listing_url(pmcid: str) -> str:
 
 
 def pdf_key(listing_xml: str, pmcid: str) -> str | None:
-    """The highest version's `<pmcid>.<v>/<pmcid>.<v>.pdf` key in a ListBucketResult, or None."""
+    """The highest version's `<pmcid>.<v>/<pmcid>.<v>.pdf` key in a ListBucketResult, or None.
+    ponytail: reads the first 1,000 keys only (IsTruncated is ignored); an article with that many version files and
+    figures could hide its PDF. List with delimiter=/ and fetch the top version's PDF directly if that ever bites.
+    The listing is parsed by ElementTree on expat (>= 2.4 refuses entity expansion bombs; no external entities)."""
     wanted = re.compile(rf"{re.escape(pmcid)}\.(\d+)/{re.escape(pmcid)}\.\1\.pdf")
     keys = [el.text or "" for el in ET.fromstring(listing_xml).iter(f"{_S3}Key")]
     versions = [(int(match[1]), key) for key in keys if (match := wanted.fullmatch(key))]

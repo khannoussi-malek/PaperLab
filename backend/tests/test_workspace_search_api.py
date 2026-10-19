@@ -757,7 +757,7 @@ async def test_import_hits_gets_a_pmc_open_access_pdf_for_a_hit_with_a_pmcid(ses
     hit_id = await _make_importable_hit(session, pdf_urls=[])
     hit = await session.get(WorkspaceSearchHit, hit_id)
     ref = await session.get(ExternalRef, hit.external_ref_id)
-    ref.external_ids = {"pmcid": "4512184"}
+    ref.external_ids = {"pmc": "4512184"}  # the key PMC and Europe PMC write
     await session.commit()
 
     resp = await client.post(f"/api/workspaces/{hit.workspace_id}/search/hits/import", json={"hit_ids": [str(hit_id)]})

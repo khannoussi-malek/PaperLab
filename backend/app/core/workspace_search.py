@@ -946,7 +946,7 @@ async def import_hits(
                 ref.pdf_urls = enriched.pdf_urls
         data = (await download_pdf(providers.pdf, ref.pdf_urls))[0] if ref and ref.pdf_urls else None
         if data is None and ref is not None:  # M76: the PMC Open Access bucket, for a hit with a PMCID
-            data = (await discovery._pmc_copy(providers, ref.external_ids, ref.doi, [], []))[0]
+            data = (await discovery.pmc_copy(providers, ref.external_ids, ref.doi, [], []))[0]
         if data is None:
             hit.acquisition_status = "failed"
             failed += 1
