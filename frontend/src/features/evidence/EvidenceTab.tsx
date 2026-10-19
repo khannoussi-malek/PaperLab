@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { EmptyState, TabSkeleton } from '@/features/workspaces/TabStates'
 import { Making, NeedsFullText } from './EvidenceBits'
 import { EvidenceCell } from './EvidenceCell'
-import { FIELDS, failureReason } from './evidenceFields'
+import { FIELDS, errorWords, failureReason } from './evidenceFields'
 
 /** The workspace Evidence tab: one row per paper, one column per card field. */
 export function EvidenceTab({ workspaceId }: { workspaceId: string }) {
@@ -45,7 +45,7 @@ export function EvidenceTab({ workspaceId }: { workspaceId: string }) {
         )}
       </div>
       {rows.error && <LoadError message={rows.error.message} onRetry={() => void rows.refetch()} />}
-      {error && <Alert variant="destructive"><AlertDescription>{error.message}</AlertDescription></Alert>}
+      {error && <Alert variant="destructive"><AlertDescription>{errorWords(error.message)}</AlertDescription></Alert>}
       {rows.isPending && <TabSkeleton label="Loading evidence cards" />}
       {rows.data?.length === 0 && (
         <EmptyState title="No evidence cards yet">Add papers to this workspace and their evidence cards will show up here.</EmptyState>

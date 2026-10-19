@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Term } from '@/features/workspaces/Term'
 import type { PdfRect } from '../reader/coords'
 import { LeftOut, Making, NeedsFullText, SourceBadge } from './EvidenceBits'
-import { FIELDS, cellView, failureReason } from './evidenceFields'
+import { FIELDS, cellView, errorWords, failureReason } from './evidenceFields'
 
 type Props = {
   paperId: string
@@ -43,7 +43,7 @@ export function EvidencePanel({ paperId, hasPdf = true, onShowRegion }: Props) {
   return (
     <aside className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-4" aria-label="Evidence card">
       {(card.error ?? generate.error) && (
-        <Alert variant="destructive"><AlertDescription>{(card.error ?? generate.error)!.message}</AlertDescription></Alert>
+        <Alert variant="destructive"><AlertDescription>{errorWords((card.error ?? generate.error)!.message)}</AlertDescription></Alert>
       )}
       {data === null && (
         <div className="grid place-items-center gap-2 rounded-xl border border-dashed border-glass-border px-4 py-10 text-center">

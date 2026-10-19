@@ -152,3 +152,12 @@ test('a paper without a PDF says its card needs the full text, with no Generate 
   expect(screen.queryByRole('button', { name: 'Generate card for Abstract paper' })).toBeNull()
   expect(screen.getByRole('button', { name: 'Generate card for Full paper' })).toBeInTheDocument()
 })
+
+test('a needs_full_text refusal reads in words, never as the raw code', async () => {
+  vi.spyOn(api, 'listEvidenceCards').mockResolvedValue([row(null, 'p1', 'Abstract paper')])
+  vi.spyOn(api, 'generateEvidenceCard').mockRejectedValue(new Error('needs_full_text'))
+  renderTab()
+  fireEvent.click(await screen.findByRole('button', { name: 'Generate card for Abstract paper' }))
+  expect(await screen.findByText('Needs the full text')).toBeInTheDocument()
+  expect(screen.queryByText('needs_full_text')).toBeNull()
+})
