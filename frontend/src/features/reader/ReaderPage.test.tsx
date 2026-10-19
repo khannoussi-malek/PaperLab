@@ -153,3 +153,13 @@ test('a merged paper opens the paper it was merged into', () => {
   expect(window.location.hash).toBe(`#/papers/${KEPT}`)
   expect(getDocument).not.toHaveBeenCalled()
 })
+
+test('a merged paper keeps the tab and the target: its chunks and notes are the kept paper\'s now', () => {
+  const KEPT = '6f1c2a40-1111-4a8e-9c4e-000000000009'
+  const query = 'tab=chat&chunk=6f1c2a40-2222-4a8e-9c4e-000000000002&page=3'
+  state.paper = undefined
+  state.paperError = new PaperMergedError('paper_merged', KEPT)
+  window.location.hash = `#/papers/${ID}?${query}`
+  render(<ReaderPage paperId={ID} tab="chat" target={{ kind: 'chunk', id: '6f1c2a40-2222-4a8e-9c4e-000000000002', page: 3 }} />)
+  expect(window.location.hash).toBe(`#/papers/${KEPT}?${query}`)
+})
