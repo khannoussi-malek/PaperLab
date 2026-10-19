@@ -634,7 +634,8 @@ async def generate_evidence_card(
     and the limitations its authors state. It starts the job and returns at once with status generating; generation
     takes about a minute per paper, so poll get_evidence_card until the status is ready or failed. A paper with no PDF
     yet is refused with needs_full_text ("This paper has no PDF yet."). regenerate=true replaces a ready card; an
-    edited card also needs confirm=true, so ask the owner first. A remote default model is refused unless the owner agreed and you pass allow_remote=true."""
+    edited card also needs confirm=true, so ask the owner first. A remote default
+    model is refused unless the owner agreed and you pass allow_remote=true."""
     async with sessions() as session:
         return await pipeline.generate_evidence_card(session, paper_id, regenerate, confirm, allow_remote)
 
