@@ -259,7 +259,7 @@ async def _in_library(session, paper_id, workspace_uuid) -> AddPaperResult:
     paper = await papers.get_paper(session, paper_id)
     if workspace_uuid is not None:
         await workspaces.add_paper(session, workspace_uuid, paper.id)
-    if paper.status == PaperStatus.FAILED:  # a retry, as the app's reingest does
+    if paper.file_path and paper.status == PaperStatus.FAILED:  # a retry, as the app's reingest does
         await papers.set_status(session, paper.id, PaperStatus.UPLOADED)
         await queue.enqueue("ingest_paper", str(paper.id))
     status = "ingested" if paper.status == PaperStatus.READY else "queued"
