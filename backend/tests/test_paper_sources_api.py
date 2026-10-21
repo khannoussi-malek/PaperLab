@@ -127,3 +127,14 @@ async def test_startup_seeds_the_row_from_env(monkeypatch):
         pass
 
     assert seeded == [("me@example.org", "s2-key-0123456789")]
+
+
+async def test_the_recheck_switch_defaults_on_and_a_patch_toggles_it(client, no_row):
+    assert (await client.get("/api/paper-sources")).json()["pdf_recheck_enabled"] is True
+
+    off = await client.patch("/api/paper-sources", json={"pdf_recheck_enabled": False})
+    other = await client.patch("/api/paper-sources", json={"contact_email": "me@example.org"})
+    on = await client.patch("/api/paper-sources", json={"pdf_recheck_enabled": True})
+
+    assert (off.json()["pdf_recheck_enabled"], other.json()["pdf_recheck_enabled"]) == (False, False)
+    assert on.json()["pdf_recheck_enabled"] is True

@@ -121,3 +121,22 @@ class ChunkOut(BaseModel):
     def from_abstract(self) -> bool:
         """The abstract chunk of a paper saved without a PDF: no page to show or jump to."""
         return self.page == ABSTRACT_PAGE
+
+
+class PaperEventOut(BaseModel):
+    """One thing that happened to a paper (R21). `detail` is {"how"} for pdf_attached, {"url", "how"} for pdf_found."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    kind: Literal["pdf_found", "pdf_attached"]
+    detail: dict[str, str | None]
+    created_at: datetime
+
+
+class FoundPdfOut(BaseModel):
+    """A free copy the weekly re-check found, for the notice."""
+
+    paper_id: uuid.UUID
+    title: str
+    created_at: datetime
