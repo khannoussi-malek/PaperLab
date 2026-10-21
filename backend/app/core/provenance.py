@@ -47,6 +47,13 @@ def stamp(values: dict[str, Any], source: str) -> dict[str, Any]:
     return {**values, "field_sources": Paper.field_sources.op("||")(literal(sources, JSONB))} if sources else values
 
 
+def stamp_edited(fields: Iterable[str]) -> dict[str, Any]:
+    """field_sources for the owner's correction: every group it touches is "manual", a field cleared to blank too.
+    manual_fields can't tell an edit from a lock the app sets itself (a search result's title), so edits say so here."""
+    edited = dict.fromkeys(sorted(groups_of(fields)), "manual")
+    return {"field_sources": Paper.field_sources.op("||")(literal(edited, JSONB))} if edited else {}
+
+
 def stamp_filled(fields: Iterable[str], source: str) -> dict[str, Any]:
     """field_sources for an UPDATE that fills only NULL columns (COALESCE): a group of `fields` is claimed when one of
     its fields was NULL before the UPDATE, which is what a SET expression reads."""

@@ -14,9 +14,14 @@ it('gives one line per group with a known source', () => {
   expect(lines).toEqual(['Title, authors and venue: from OpenAlex', 'Abstract: from the PDF'])
 })
 
-it('says "edited by you" when a manual field is in the group, and that wins over a source', () => {
-  const lines = provenanceLines(paper({ field_sources: { bibliographic: 'openalex' }, manual_fields: ['year', 'doi'] }))
-  expect(lines).toEqual(['Title, authors and venue: edited by you', 'Identifiers: edited by you'])
+it('says "edited by you" for a group the owner corrected (source manual)', () => {
+  const lines = provenanceLines(paper({ field_sources: { bibliographic: 'manual', identifiers: 'crossref' } }))
+  expect(lines).toEqual(['Title, authors and venue: edited by you', 'Identifiers: from Crossref'])
+})
+
+it('never reads a lock the app set (manual_fields) as an edit: a saved search result keeps its source', () => {
+  const lines = provenanceLines(paper({ field_sources: { bibliographic: 'crossref' }, manual_fields: ['title', 'doi'] }))
+  expect(lines).toEqual(['Title, authors and venue: from Crossref'])
 })
 
 it('shows nothing for a group with neither', () => {

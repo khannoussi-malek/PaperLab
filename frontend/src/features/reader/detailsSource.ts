@@ -29,11 +29,12 @@ const GROUPS: readonly { key: string; name: string; fields: readonly string[] }[
   { key: 'published', name: 'Published version', fields: ['published_doi', 'published_venue'] },
 ]
 
-/** "Abstract: from the PDF" per group; "edited by you" wins over a source, and a group with neither is left out. */
-export function provenanceLines(paper: Pick<Paper, 'field_sources' | 'manual_fields'>): string[] {
-  return GROUPS.flatMap(({ key, name, fields }) => {
-    if (fields.some((f) => paper.manual_fields.includes(f))) return [`${name}: edited by you`]
+/** "Abstract: from the PDF" per group, "edited by you" for a group the owner corrected (its source is `manual`), and
+ * nothing for a group with no known source. Never read from manual_fields: it also holds locks the app sets itself. */
+export function provenanceLines(paper: Pick<Paper, 'field_sources'>): string[] {
+  return GROUPS.flatMap(({ key, name }) => {
     const source = paper.field_sources[key]
-    return source ? [`${name}: from ${DETAILS_SOURCE[source]}`] : []
+    if (!source) return []
+    return [source === 'manual' ? `${name}: edited by you` : `${name}: from ${DETAILS_SOURCE[source]}`]
   })
 }

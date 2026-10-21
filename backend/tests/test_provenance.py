@@ -156,12 +156,14 @@ async def test_a_field_the_guard_drops_claims_nothing(session):
     assert paper.field_sources == {"published": "openalex"}  # only the field that was written
 
 
-async def test_a_hand_correction_leaves_field_sources_alone(session):
-    paper = await add_paper(session, field_sources={"bibliographic": "openalex"})
-    await enrichment.correct_metadata(session, paper.id, {"title": "Mine", "year": 2001})
+async def test_a_hand_correction_stamps_its_groups_as_yours(session):
+    """manual_fields also holds locks the app sets itself (a search result's title and DOI), so "edited by you" can't
+    be read from it: a correction records itself, including a field cleared to blank."""
+    paper = await add_paper(session, field_sources={"bibliographic": "openalex", "citation": "crossref"})
+    await enrichment.correct_metadata(session, paper.id, {"title": "Mine", "volume": None})
     await session.refresh(paper)
-    assert paper.field_sources == {"bibliographic": "openalex"}
-    assert {"title", "year"} <= set(paper.manual_fields)
+    assert paper.field_sources == {"bibliographic": "manual", "citation": "manual"}
+    assert {"title", "volume"} <= set(paper.manual_fields)
 
 
 async def test_paper_out_carries_field_sources_and_manual_fields(client, session):
