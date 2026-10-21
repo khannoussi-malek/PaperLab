@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import Conflict, InvalidInput
 from app.core.papers import abstract_drafts, get_paper, replace_chunks
-from app.core.provenance import stamp
+from app.core.provenance import stamp, stamp_edited
 from app.core.source_types import (
     ARXIV_DOI_PREFIX,
     PREPRINT_SERVERS,
@@ -527,7 +527,7 @@ async def correct_metadata(session: AsyncSession, paper_id: uuid.UUID, fields: d
     await session.execute(
         update(Paper)
         .where(Paper.id == paper_id)
-        .values(**fields, **clears_match, **reindex, manual_fields=manual_fields)
+        .values(**fields, **clears_match, **reindex, **stamp_edited(fields), manual_fields=manual_fields)
     )
     if rebuild:  # the abstract chunk is what search and chat read; the caller enqueues index_abstract when embedding
         await replace_chunks(session, paper_id, abstract_drafts(fields.get("title", paper.title), abstract))
