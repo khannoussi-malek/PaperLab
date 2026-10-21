@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { usePaperSources, useUpdatePaperSources } from '@/api/queries'
+import { usePaperSources, useUpdatePaperSources, useUpdatePdfRecheck } from '@/api/queries'
 import { glass } from '@/components/glass'
 import { delayedIn } from '@/components/motion'
 import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert'
@@ -79,7 +79,7 @@ function ContactEmail({ saved }: { saved: string | null }) {
 
 /** The weekly free-copy re-check for papers saved without a PDF. */
 function RecheckSwitch({ enabled }: { enabled: boolean }) {
-  const update = useUpdatePaperSources()
+  const update = useUpdatePdfRecheck()
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-2.5">
@@ -87,13 +87,19 @@ function RecheckSwitch({ enabled }: { enabled: boolean }) {
           id="pdf-recheck"
           checked={enabled}
           disabled={update.isPending}
-          onCheckedChange={(checked) => update.mutate({ pdf_recheck_enabled: checked === true })}
+          aria-describedby="pdf-recheck-help"
+          onCheckedChange={(checked) => update.mutate(checked === true)}
         />
         <Label htmlFor="pdf-recheck">Look for free PDFs weekly for papers saved without one</Label>
       </div>
-      <p className="pl-6.5 text-xs text-muted-foreground">
+      <p id="pdf-recheck-help" className="pl-6.5 text-xs text-muted-foreground">
         Papers saved without a PDF are re-checked for a free copy at most once a week, 25 a day, using the same sources as Add (Unpaywall, arXiv, PMC and repositories).
       </p>
+      {update.error && (
+        <Alert variant="destructive" className="border-glass-border">
+          <AlertDescription>{update.error.message}</AlertDescription>
+        </Alert>
+      )}
     </div>
   )
 }
