@@ -12,7 +12,7 @@ import httpx
 import pymupdf
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import delete, or_, text, update
+from sqlalchemy import delete, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -22,7 +22,7 @@ from app.config import settings
 from app.core import discovery, queue
 from app.db import get_session
 from app.main import create_app
-from app.models import Author, LLMConnection, LLMModel, Paper, PaperSources
+from app.models import Author, LLMConnection, LLMModel, Paper, PaperEvent, PaperSources
 from app.providers import arxiv, core_ac, crossref, embedding, openalex, semantic_scholar, unpaywall
 from app.providers.base import LLMUnavailable
 from app.providers.llm import FakeLLM
@@ -203,6 +203,12 @@ async def worker_session(session, monkeypatch):
 def ctx(embedder):
     """What WorkerSettings.on_startup leaves in the ARQ context, with the fake model."""
     return {"embedder": embedder}
+
+
+async def pdf_attached(session, paper_id) -> list[dict]:
+    """The details of a paper's pdf_attached events (R21): one per PDF that arrived."""
+    query = select(PaperEvent.detail).where(PaperEvent.paper_id == paper_id, PaperEvent.kind == "pdf_attached")
+    return list(await session.scalars(query))
 
 
 def recorded(name: str) -> dict:

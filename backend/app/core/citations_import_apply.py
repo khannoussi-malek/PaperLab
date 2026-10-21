@@ -30,7 +30,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.core import discovery, notes, papers, queue, tags, workspaces
+from app.core import discovery, notes, papers, provenance, queue, tags, workspaces
 from app.core.candidates import Candidate, normal_title
 from app.core.citations_bundle_read import Bundle, read_bundle
 from app.core.citations_import import CitationsImportError, ImportEntry, parse
@@ -119,7 +119,7 @@ def _prefill(entry: ImportEntry) -> dict:
         fields["editors"] = entry.editors
     if entry.source_type != "other":
         fields |= {"source_type": entry.source_type, "peer_reviewed": peer_reviewed_of(entry.source_type)}
-    return fields
+    return fields | {"field_sources": provenance.sources_of(fields, "zotero")}
 
 
 async def _add_note(session: AsyncSession, paper_id: uuid.UUID, body: str) -> None:
@@ -205,7 +205,7 @@ async def _fetch(session: AsyncSession, providers, entry: ImportEntry) -> tuple[
 
 async def _fill_from_entry(session: AsyncSession, paper_id: uuid.UUID, entry: ImportEntry) -> None:
     """A fetched NEW paper: the entry's metadata where the fetch found none (COALESCE, so a value already there, even
-    one ingest wrote meanwhile, stays)."""
+    one ingest wrote meanwhile, stays). Only the groups it filled read "zotero"."""
     known = {name: value for name in (*EXTRA_FIELDS, "abstract") if (value := getattr(entry, name))}
     values = {name: func.coalesce(getattr(Paper, name), value) for name, value in known.items()}
     if entry.editors:
@@ -215,7 +215,8 @@ async def _fill_from_entry(session: AsyncSession, paper_id: uuid.UUID, entry: Im
         values["peer_reviewed"] = case((Paper.source_type.is_(None), peer), else_=Paper.peer_reviewed)
         values["source_type"] = func.coalesce(Paper.source_type, entry.source_type)
     if values:
-        await session.execute(update(Paper).where(Paper.id == paper_id).values(**values))
+        stamped = values | provenance.stamp_filled(values, "zotero")
+        await session.execute(update(Paper).where(Paper.id == paper_id).values(**stamped))
         await session.commit()
 
 
@@ -251,10 +252,13 @@ async def _new_paper(session, entry, providers: GetProviders | None, bundle: Bun
     return *await _fetch(session, await providers(), entry), False
 
 
-async def _save_without_pdf(session, entry: ImportEntry, workspace_id: uuid.UUID | None) -> ImportResult:
+async def _save_without_pdf(
+    session, entry: ImportEntry, workspace_id: uuid.UUID | None, looked_for_pdf: bool
+) -> ImportResult:
     """The entry as a PDF-less paper, filed as an imported one is. Like a fetched paper, its follow-up job is queued
-    first, so a crash while filing never leaves an abstract that is never indexed."""
-    paper = await papers.create_metadata_paper(session, _prefill(entry), details_source="zotero")
+    first, so a crash while filing never leaves an abstract that is never indexed. `looked_for_pdf`: a free-copy
+    lookup ran and found none, which counts as a check."""
+    paper = await papers.create_metadata_paper(session, _prefill(entry), "zotero", looked_for_pdf=looked_for_pdf)
     try:
         if paper.abstract:
             await queue.enqueue("index_abstract", str(paper.id))
@@ -289,8 +293,8 @@ async def _one(
             already_in_library=1, pdfs_attached=int(attached), notes=await _file(session, held, entry, workspace_id)
         )
     made, missing, from_zip = await _new_paper(session, entry, providers, bundle, index)
-    if made is None and save_without_pdf:
-        return await _save_without_pdf(session, entry, workspace_id)
+    if made is None and save_without_pdf:  # NO_PDF: fetching was off or the entry has no DOI/arXiv id to look by
+        return await _save_without_pdf(session, entry, workspace_id, looked_for_pdf=missing is not NO_PDF)
     if made is None:
         return ImportResult(needs_pdf=[{name: getattr(entry, name) for name in ENTRY_RECORD} | missing])
     if not isinstance(made, Paper):  # the free-copy search found it held after all

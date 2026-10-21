@@ -6,7 +6,7 @@ from contextlib import AsyncExitStack
 
 from sqlalchemy import update
 
-from app.core import embedding_index, embedding_sources, enrichment, merges, paper_sources, papers
+from app.core import embedding_index, embedding_sources, enrichment, merges, paper_sources, papers, provenance
 from app.core.candidates import Candidate
 from app.core.chunking import chunk_blocks
 from app.db import SessionLocal
@@ -157,7 +157,7 @@ async def ingest_paper(ctx: dict, paper_id: str) -> None:
 
                 # Enriched or corrected titles beat the font heuristic; don't overwrite them on re-runs.
                 keep = paper.openalex_id is not None or "title" in paper.manual_fields
-                title = {"title": doc.title} if doc.title and not keep else {}
+                title = provenance.stamp({"title": doc.title}, "pdf") if doc.title and not keep else {}
                 marks.append(("chunking", time.monotonic()))
                 pages = doc.page_count
                 await papers.set_status(session, pid, PaperStatus.CHUNKING, page_count=doc.page_count, **title)

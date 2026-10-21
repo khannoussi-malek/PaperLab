@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import Conflict, InvalidInput
 from app.core.papers import abstract_drafts, get_paper, replace_chunks
+from app.core.provenance import stamp, stamp_edited
 from app.core.source_types import (
     ARXIV_DOI_PREFIX,
     PREPRINT_SERVERS,
@@ -206,7 +207,7 @@ async def record_published(session: AsyncSession, paper_id: uuid.UUID, work: dic
     doi, venue, _ = openalex_published(work)
     if not is_preprint_copy(paper) or doi in (None, normalize_doi(paper.doi or "")):
         return
-    await _write(session, paper, {"published_doi": doi, "published_venue": venue, "peer_reviewed": "true"})
+    await _write(session, paper, {"published_doi": doi, "published_venue": venue, "peer_reviewed": "true"}, "openalex")
 
 
 def work_topics(work: dict[str, Any]) -> dict[str, float]:
@@ -324,7 +325,8 @@ async def refresh_authors(session: AsyncSession, http: httpx.AsyncClient, openal
     await session.commit()
 
 
-async def _write(session: AsyncSession, paper: Paper, fields: dict[str, Any]) -> list[Collision]:
+async def _write(session: AsyncSession, paper: Paper, fields: dict[str, Any], source: str) -> list[Collision]:
+    """Writes `fields` past the guards below, stamping `source` on the groups actually written (R22)."""
     # The OpenAlex lookup can take seconds; re-read the lock right before writing, in case a PATCH landed meanwhile.
     await session.refresh(paper, ["manual_fields"])
     values = {k: v for k, v in fields.items() if k not in paper.manual_fields and not _regresses(v, getattr(paper, k))}
@@ -340,7 +342,7 @@ async def _write(session: AsyncSession, paper: Paper, fields: dict[str, Any]) ->
             values = {k: v for k, v in values.items() if k != key}
             collisions.append(Collision(key, value, holder_id))
     if values:
-        await session.execute(update(Paper).where(Paper.id == paper.id).values(**values))
+        await session.execute(update(Paper).where(Paper.id == paper.id).values(**stamp(values, source)))
     return collisions
 
 
@@ -367,8 +369,10 @@ async def fill_source_type(
     doi = normalize_doi(paper.doi or "")
     fields: dict[str, Any] = {}
     asked = False
+    # The arXiv DOI rule needs no source's word for it (source_type_of); otherwise OpenAlex's type, else Crossref's.
+    source = "arxiv" if (doi or "").startswith(ARXIV_DOI_PREFIX) else "openalex"
     if (source_type := source_type_of(raw_type, doi)) is None and paper.source_type is None and doi and crossref_http:
-        asked = True
+        asked, source = True, "crossref"
         try:
             work = await _crossref_work(crossref_http, doi, {} if crossref_works is None else crossref_works)
             if work:
@@ -383,7 +387,7 @@ async def fill_source_type(
     if paper.published_venue or paper.published_doi:  # enrich_papers found it published: not a preprint to rate
         fields.pop("peer_reviewed", None)
     if fields:
-        await _write(session, paper, fields)
+        await _write(session, paper, fields, source)
         await session.commit()
     return asked
 
@@ -436,11 +440,14 @@ async def fill_biblio(
             openalex_work = await openalex.get_work(openalex_http, key)
         except (httpx.HTTPError, KeyError, TypeError, AttributeError) as exc:
             logger.warning("OpenAlex biblio lookup failed for paper %s: %r", paper_id, exc)
+    from_crossref = {k for k, v in found.items() if v}
     if openalex_work:
         found = {k: v for k, v in openalex_biblio(openalex_work).items() if v} | {k: v for k, v in found.items() if v}
     fields = {k: v for k, v in found.items() if v and getattr(paper, k) is None}
     if fields:
-        await _write(session, paper, fields)
+        for source in ("openalex", "crossref"):  # OpenAlex first, so a group both filled reads Crossref, the winner
+            if part := {k: v for k, v in fields.items() if (k in from_crossref) == (source == "crossref")}:
+                await _write(session, paper, part, source)
         await session.commit()
     return asked
 
@@ -472,13 +479,13 @@ async def enrich_paper(
         if paper.openalex_id is None:
             fallback = {k: v for k, v in {"authors": hints.authors, "doi": hints.doi}.items() if v}
             if fallback:
-                collisions = await _write(session, paper, fallback)  # never replaces what an earlier match found
+                collisions = await _write(session, paper, fallback, "pdf")  # never replaces what an earlier match found
         await session.commit()
         await fill_source_type(session, paper_id, None, crossref_http, crossref_works)
         await fill_biblio(session, paper_id, crossref_http, crossref_works=crossref_works)
         return collisions
 
-    collisions = await _write(session, paper, work_fields(work))
+    collisions = await _write(session, paper, work_fields(work), "openalex")
     await _replace_topics(session, paper_id, "openalex", work_topics(work))
     await record_published(session, paper_id, work)
     await session.commit()
@@ -520,7 +527,7 @@ async def correct_metadata(session: AsyncSession, paper_id: uuid.UUID, fields: d
     await session.execute(
         update(Paper)
         .where(Paper.id == paper_id)
-        .values(**fields, **clears_match, **reindex, manual_fields=manual_fields)
+        .values(**fields, **clears_match, **reindex, **stamp_edited(fields), manual_fields=manual_fields)
     )
     if rebuild:  # the abstract chunk is what search and chat read; the caller enqueues index_abstract when embedding
         await replace_chunks(session, paper_id, abstract_drafts(fields.get("title", paper.title), abstract))

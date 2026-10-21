@@ -21,6 +21,8 @@ async def update_paper_sources(payload: PaperSourcesUpdate, session: SessionDep)
     changes: dict = {}
     if "contact_email" in payload.model_fields_set:
         changes["contact_email"] = payload.contact_email
+    if payload.pdf_recheck_enabled is not None:
+        changes["pdf_recheck_enabled"] = payload.pdf_recheck_enabled
     if payload.enabled is not None:
         changes["enabled"] = {source: getattr(payload.enabled, source) for source in payload.enabled.model_fields_set}
     if payload.api_keys is not None:

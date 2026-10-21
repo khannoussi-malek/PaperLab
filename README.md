@@ -205,6 +205,8 @@ asks every caller to identify itself) and your NCBI API key if you added one. Eu
 the search text and a paging cursor, or a paper's DOI to find its PMCID, never an email or key.
 When a paper with a PMCID has no free PDF elsewhere, PaperLab looks in NCBI's PMC Open Access dataset on AWS (a public
 bucket), which receives the PMCID and nothing else, never an email or key.
+Papers saved without a PDF are re-checked for a free copy at most once a week, 25 a day, using the same sources as
+Add (Unpaywall, arXiv, PMC and repositories); turn it off in Settings → Paper sources.
 HAL is on by default and receives the words of the search text (Find papers drops common stopwords) and paging, or a
 HAL document ID to fetch one record, never an email or key.
 OpenAIRE is on by default and receives the search text, a publications-only filter and paging, or a record ID to

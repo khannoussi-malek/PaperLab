@@ -71,6 +71,8 @@ export type SearchResult = components['schemas']['SearchOut']
 export type PaperSources = components['schemas']['PaperSourcesOut']
 export type PaperSource = components['schemas']['PaperSourceOut']
 export type PaperSourceId = PaperSource['id']
+export type PaperEvent = components['schemas']['PaperEventOut']
+export type FoundPdf = components['schemas']['FoundPdfOut']
 export type PaperSourcesUpdate = components['schemas']['PaperSourcesUpdate']
 export type References = components['schemas']['ReferencesOut']
 export type Reference = components['schemas']['ReferenceOut']
@@ -381,6 +383,9 @@ export const api = {
   /** Probes the source, then saves it and queues the papers not yet on it: 202 {papers}, 200 for the source in use. */
   switchSearchSource: (body: SearchSourceIn) =>
     request<{ papers: number }>('/api/embedding/source', sendJson('PUT', body)),
+  paperEvents: (paperId: string) => request<PaperEvent[]>(`/api/papers/${paperId}/events`),
+  foundPdfs: () => request<FoundPdf[]>('/api/papers/found-pdfs'),
+  markFoundPdfsSeen: (ids: string[]) => request<void>('/api/papers/found-pdfs/seen', sendJson('POST', { ids })),
   paperSources: () => request<PaperSources>('/api/paper-sources'),
   /** Only what `patch` holds changes: a key left out is kept, a null key is removed. */
   updatePaperSources: (patch: PaperSourcesUpdate) =>

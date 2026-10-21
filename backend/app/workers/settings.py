@@ -20,6 +20,7 @@ from app.workers.harvest import (
 from app.workers.hit_enrichment import ENRICH_JOB_TIMEOUT, enrich_hits
 from app.workers.ingest import INGEST_JOB_TIMEOUT, MAX_TRIES, index_abstract, ingest_paper, reembed_paper
 from app.workers.paper_enrichment import ENRICH_PAPERS_TIMEOUT, enrich_papers
+from app.workers.pdf_recheck import RECHECK_JOB_TIMEOUT, recheck_free_pdfs
 from app.workers.references import fetch_references
 from app.workers.saved_searches import schedule_saved_searches
 from app.workers.screening_suggest import SUGGEST_JOB_TIMEOUT, suggest_screening
@@ -84,6 +85,16 @@ class WorkerSettings:
             minute={30},
             run_at_startup=True,
             timeout=BIORXIV_HARVEST_JOB_TIMEOUT,
+        ),
+        # never at startup: each worker start would check another RECHECK_CAP papers ("25 a day"). ponytail: a Mac
+        # asleep at 05:00 skips that day's run; arq doesn't catch up on missed crons
+        cron(
+            recheck_free_pdfs,
+            name="recheck_free_pdfs",
+            hour={5},
+            minute={0},
+            run_at_startup=False,
+            timeout=RECHECK_JOB_TIMEOUT,
         ),
         cron(schedule_saved_searches, name="schedule_saved_searches", second=0, run_at_startup=True),
     ]

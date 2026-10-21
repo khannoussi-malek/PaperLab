@@ -1,5 +1,6 @@
 import asyncio
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -7,10 +8,11 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.core import provenance
 from app.core.chunking import STRATEGY_VERSION, ChunkDraft
 from app.core.errors import Conflict, Gone, InvalidInput, NotFound
 from app.core.source_types import DETAILS_SOURCES
-from app.models import Chunk, Paper, PaperMerge, PaperStatus
+from app.models import Chunk, Paper, PaperEvent, PaperMerge, PaperStatus
 from app.models.workspace_search import WorkspaceSearchHit
 
 PDF_MAGIC = b"%PDF-"
@@ -61,8 +63,12 @@ def abstract_drafts(title: str, abstract: str | None) -> list[ChunkDraft]:
     return [ChunkDraft(ordinal=0, page=ABSTRACT_PAGE, bbox=[], section_title="Abstract", text=text)]
 
 
-async def create_metadata_paper(session: AsyncSession, prefill: dict[str, Any], details_source: str) -> Paper:
-    """A paper saved without a PDF (R5): `prefill` as create_paper takes it, and where the details came from.
+async def create_metadata_paper(
+    session: AsyncSession, prefill: dict[str, Any], details_source: str, *, looked_for_pdf: bool = False
+) -> Paper:
+    """A paper saved without a PDF (R5): `prefill` as create_paper takes it, and where the details came from, which
+    also stamps every group it fills (R22). `looked_for_pdf`: the caller's free-copy lookup just found none, which
+    counts as a check (now, "none"), so the weekly re-check waits a week before repeating it.
 
     With an abstract it gets one chunk on ABSTRACT_PAGE and starts `embedding`, for the caller to enqueue
     index_abstract; without one it is `ready` at once, with no chunks (R3). Commits; enqueues nothing.
@@ -77,11 +83,13 @@ async def create_metadata_paper(session: AsyncSession, prefill: dict[str, Any], 
     if not title:
         raise InvalidInput("empty_title")
     abstract = (prefill.get("abstract") or "").strip() or None
+    values = {**prefill, "title": title, "abstract": abstract}
     paper = Paper(
-        **{**prefill, "title": title, "abstract": abstract},
+        **{**values, "field_sources": provenance.sources_of(values, details_source)},
         file_path=None,
         details_source=details_source,
         status=PaperStatus.EMBEDDING if abstract else PaperStatus.READY,
+        **(no_free_pdf_check() if looked_for_pdf else {}),
     )
     session.add(paper)
     await session.flush()
@@ -90,12 +98,24 @@ async def create_metadata_paper(session: AsyncSession, prefill: dict[str, Any], 
     return paper
 
 
+def no_free_pdf_check() -> dict[str, Any]:
+    """The columns of a free-copy lookup that found nothing just now (R20)."""
+    return {"pdf_checked_at": datetime.now(timezone.utc), "pdf_check_result": "none"}
+
+
+async def record_no_free_pdf(session: AsyncSession, paper_id: uuid.UUID) -> None:
+    """A lookup for a free copy of a held paper found none: it counts as a check. Commits."""
+    await session.execute(update(Paper).where(Paper.id == paper_id).values(**no_free_pdf_check()))
+    await session.commit()
+
+
 async def attach_pdf(session: AsyncSession, paper_id: uuid.UUID, data: bytes, how: str) -> Paper:
     """The upgrade (R10): a paper saved without a PDF gets one, in place. Writes pdf_dir/<id>.pdf, sets file_path and
-    `uploaded`, and moves its awaiting_pdf hits to `how` ("manual" for an upload, "imported" for a found copy) in the
-    same commit. Its id, tags, notes, workspaces, decisions, details_source and locked fields are untouched. The caller
-    enqueues ingest_paper, which replaces the abstract chunk with the PDF's. The size cap is the caller's: an upload's
-    is not a found copy's. Raises NotFound, InvalidInput("not_a_pdf"), Conflict("already_has_pdf")."""
+    `uploaded`, and moves its awaiting_pdf hits to `how` ("manual" for an upload, "imported" for a found copy) and
+    records a pdf_attached event (R21) in the same commit, whichever path the PDF came by. Its id, tags, notes,
+    workspaces, decisions, details_source and locked fields are untouched. The caller enqueues ingest_paper, which
+    replaces the abstract chunk with the PDF's. The size cap is the caller's: an upload's is not a found copy's.
+    Raises NotFound, InvalidInput("not_a_pdf"), Conflict("already_has_pdf")."""
     from app.core import retrieved_hits  # here: retrieved_hits -> tags -> enrichment imports this module
 
     if not data.startswith(PDF_MAGIC):
@@ -116,6 +136,7 @@ async def attach_pdf(session: AsyncSession, paper_id: uuid.UUID, data: bytes, ho
         await asyncio.to_thread(path.write_bytes, data)
         paper.file_path, paper.status, paper.status_error = str(path), PaperStatus.UPLOADED, None
         await retrieved_hits.pdf_arrived(session, paper.id, how)
+        session.add(PaperEvent(paper_id=paper.id, kind="pdf_attached", detail={"how": how}))
         await session.commit()
     except BaseException:
         path.unlink(missing_ok=True)
