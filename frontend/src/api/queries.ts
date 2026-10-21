@@ -1137,6 +1137,15 @@ export function useUpdatePaperSources() {
   })
 }
 
+/** The weekly re-check switch: it changes no search source, so only the sources view is refreshed. */
+export function useUpdatePdfRecheck() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (enabled: boolean) => api.updatePaperSources({ pdf_recheck_enabled: enabled }),
+    onSuccess: () => client.invalidateQueries({ queryKey: keys.paperSources }),
+  })
+}
+
 /** Queues a re-embed of every paper; the status line refetches once it's queued. */
 export function useReindexLibrary() {
   const client = useQueryClient()

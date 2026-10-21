@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { api } from '@/api/client'
+import { keys } from '@/api/queries'
 import { FoundPdfsNotice } from './FoundPdfsNotice'
 
 afterEach(() => vi.restoreAllMocks())
@@ -38,4 +39,12 @@ it('renders nothing when there are no finds', async () => {
   show()
   await waitFor(() => expect(list).toHaveBeenCalled())
   expect(screen.queryByRole('status')).toBeNull()
+})
+
+it('polls every 60 seconds', async () => {
+  vi.spyOn(api, 'foundPdfs').mockResolvedValue([])
+  const client = new QueryClient()
+  render(<QueryClientProvider client={client}><FoundPdfsNotice /></QueryClientProvider>)
+  await waitFor(() => expect(client.getQueryCache().find({ queryKey: keys.foundPdfs })).toBeDefined())
+  expect(client.getQueryCache().find({ queryKey: keys.foundPdfs })?.observers[0]?.options.refetchInterval).toBe(60_000)
 })
