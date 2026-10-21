@@ -5,6 +5,8 @@ import { provenanceLines } from './detailsSource'
 const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { dateStyle: 'medium' })
 
 const CHECK_RESULT = { none: 'none found', found: 'found', error: 'the check failed' } as const
+/** How a PDF came in, from the backend's own words (retrieved_hits.ARRIVALS). */
+const HOW: Record<string, string> = { manual: 'uploaded', imported: 'found' }
 
 /** The Details dialog's read-only part: where each group of details came from, the last free-copy check, the history. */
 export function PaperProvenance({ paper }: { paper: Paper }) {
@@ -31,7 +33,7 @@ export function PaperProvenance({ paper }: { paper: Paper }) {
             {events.data.map((e) => (
               <li key={e.id}>
                 {e.kind === 'pdf_found' ? 'Free PDF found' : 'PDF added'} {day(e.created_at)}
-                {e.kind === 'pdf_attached' && e.detail.how ? ` (${e.detail.how})` : ''}
+                {e.kind === 'pdf_attached' && HOW[String(e.detail.how)] ? ` (${HOW[String(e.detail.how)]})` : ''}
               </li>
             ))}
           </ul>

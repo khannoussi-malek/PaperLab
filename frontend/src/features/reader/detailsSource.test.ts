@@ -6,7 +6,18 @@ const paper = (over: Partial<Paper>) => ({ field_sources: {}, manual_fields: [],
 
 it('labels a PDF-filled group "the PDF"', () => {
   expect(sourceLabel('pdf')).toBe('the PDF')
-  expect(detailsSourceLine({ details_source: 'openalex' })).toBe('Details from OpenAlex')
+  expect(detailsSourceLine(paper({ details_source: 'openalex' }))).toBe('Details from OpenAlex')
+})
+
+it('"Details from" follows whichever source last wrote the title, authors and venue, else the creation source', () => {
+  expect(detailsSourceLine(paper({ details_source: 'crossref', field_sources: { bibliographic: 'openalex' } }))).toBe(
+    'Details from OpenAlex',
+  )
+  expect(detailsSourceLine(paper({ details_source: 'crossref' }))).toBe('Details from Crossref')
+  expect(detailsSourceLine(paper({ details_source: 'crossref', field_sources: { bibliographic: 'manual' } }))).toBe(
+    'Details edited by you',
+  )
+  expect(detailsSourceLine(paper({ details_source: null }))).toBeNull()
 })
 
 it('gives one line per group with a known source', () => {

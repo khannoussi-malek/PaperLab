@@ -42,11 +42,12 @@ it('has no last-checked line for a paper with a PDF', () => {
   expect(screen.queryByText(/Last checked/)).toBeNull()
 })
 
-it('lists the history, newest first as served', async () => {
+it('lists the history, newest first as served, with how each PDF came in words', async () => {
+  // the backend's own values (retrieved_hits.ARRIVALS): manual is an upload, imported a found free copy
   show({}, [
-    { id: 'e2', kind: 'pdf_attached', detail: { how: 'found' }, created_at: '2026-10-15T12:00:00Z' },
-    { id: 'e1', kind: 'pdf_found', detail: {}, created_at: '2026-10-14T12:00:00Z' },
-    { id: 'e0', kind: 'pdf_attached', detail: { how: 'uploaded' }, created_at: '2026-10-13T12:00:00Z' },
+    { id: 'e2', kind: 'pdf_attached', detail: { how: 'imported' }, created_at: '2026-10-15T12:00:00Z' },
+    { id: 'e1', kind: 'pdf_found', detail: { url: null, how: 'imported' }, created_at: '2026-10-14T12:00:00Z' },
+    { id: 'e0', kind: 'pdf_attached', detail: { how: 'manual' }, created_at: '2026-10-13T12:00:00Z' },
   ])
   const items = await screen.findAllByRole('listitem')
   expect(items.map((li) => li.textContent)).toEqual([

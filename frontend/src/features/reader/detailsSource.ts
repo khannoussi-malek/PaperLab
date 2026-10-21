@@ -15,9 +15,14 @@ const DETAILS_SOURCE: Record<FieldSource, string> = {
 
 export const sourceLabel = (source: FieldSource): string => DETAILS_SOURCE[source]
 
-/** "Details from Crossref": where a paper's title, authors and abstract came from, or null when that isn't known. */
-export const detailsSourceLine = (paper: Pick<Paper, 'details_source'>): string | null =>
-  paper.details_source ? `Details from ${DETAILS_SOURCE[paper.details_source]}` : null
+/** "Details from Crossref": the source that last wrote the title, authors and venue, else the one the paper was created
+ * from; "Details edited by you" after the owner corrected them; null when neither is known. */
+export function detailsSourceLine(paper: Pick<Paper, 'details_source' | 'field_sources'>): string | null {
+  const latest = paper.field_sources.bibliographic
+  if (latest === 'manual') return 'Details edited by you'
+  const source = latest ?? paper.details_source
+  return source ? `Details from ${DETAILS_SOURCE[source]}` : null
+}
 
 /** Each group of details, its readable name, and the fields in it. Mirrors FIELD_GROUPS in backend/app/core/provenance.py. */
 const GROUPS: readonly { key: string; name: string; fields: readonly string[] }[] = [

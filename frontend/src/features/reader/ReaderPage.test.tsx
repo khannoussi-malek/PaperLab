@@ -60,7 +60,7 @@ const ID = '6f1c2a40-1111-4a8e-9c4e-000000000001'
 const paper = (over: Partial<Paper>) =>
   ({
     id: ID, title: 'Sleep and memory', authors: ['Ada Lee', 'Bo Chen'], year: 2020, venue: 'Sleep Journal',
-    doi: '10.1/sleep', abstract: 'Sleep helps memory consolidation.', has_pdf: false, details_source: 'zotero',
+    doi: '10.1/sleep', abstract: 'Sleep helps memory consolidation.', has_pdf: false, details_source: 'zotero', field_sources: {},
     status: 'ready', evidence_access: 'abstract', source_type: null, peer_reviewed: 'unknown', is_retracted: false,
     published_doi: null, ...over,
   }) as Paper

@@ -91,12 +91,14 @@ test('the details dialog says where details came from, then "edited by you", the
   let dialog = await openDetails(page)
   // Which source the fake candidate carries decides the label; any real details source or "a search result" is right.
   await expect(dialog.getByText(/^Title, authors and venue: from (Crossref|OpenAlex|Semantic Scholar|arXiv|a search result)$/)).toBeVisible()
-  await expect(dialog.getByText(/^Last checked for a free copy:/)).toBeVisible()
+  // Add's own lookup found no free copy, which counts as a check: the weekly re-check waits a week before repeating it
+  await expect(dialog.getByText(/^Last checked for a free copy: .*, none found$/)).toBeVisible()
 
   await dialog.getByLabel('Title').fill(EDITED)
   await dialog.getByRole('button', { name: 'Save' }).click()
   await expect(dialog).toBeHidden()
-  await expect(page.getByRole('heading', { name: EDITED })).toBeVisible()
+  // the reader toolbar's title (h1); the details panel repeats it as an h2
+  await expect(page.getByRole('heading', { name: EDITED, level: 1 })).toBeVisible()
 
   dialog = await openDetails(page)
   await expect(dialog.getByText('Title, authors and venue: edited by you')).toBeVisible()
