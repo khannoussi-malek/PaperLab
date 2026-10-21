@@ -24,10 +24,10 @@ from app.api import setup as setup_api
 from app.api import workspace_search as workspace_search_api
 from app.config import settings
 from app.core import llm_connections, paper_sources
-from app.core.errors import Conflict, DomainError, InvalidInput, NotFound
+from app.core.errors import Conflict, DomainError, Gone, InvalidInput, NotFound
 from app.db import SessionLocal
 
-STATUS_BY_ERROR = {NotFound: 404, InvalidInput: 422, Conflict: 409}
+STATUS_BY_ERROR = {NotFound: 404, InvalidInput: 422, Conflict: 409, Gone: 410}
 
 # The only Host names the release image answers (spec §3): a web page in the user's browser can rebind its own name to
 # 127.0.0.1, but it still sends that name, so it can't read the library as same-origin.
@@ -111,8 +111,9 @@ def create_app() -> FastAPI:
     async def domain_error(_: Request, exc: DomainError) -> JSONResponse:
         # no_free_pdf says what it tried and where a free copy may be (M63)
         extra = {key: exc.details[key] for key in ("tried", "free_copies") if key in exc.details}
-        if "paper_id" in exc.details:  # already_in_library says which paper (M66)
-            extra["paper_id"] = str(exc.details["paper_id"])
+        for key in ("paper_id", "kept_id"):  # already_in_library (M66) and paper_merged (R19) say which paper
+            if key in exc.details:
+                extra[key] = str(exc.details[key])
         return JSONResponse({"detail": str(exc), **extra}, status_code=STATUS_BY_ERROR.get(type(exc), 400))
 
     @app.exception_handler(RequestValidationError)

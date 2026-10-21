@@ -9,6 +9,7 @@ from app.models.llm_connection import LLMConnection, LLMModel
 from app.models.llm_output import LLMOutput
 from app.models.note import Note, Provenance, note_anchors, note_papers
 from app.models.paper import Chunk, Paper, PaperStatus
+from app.models.paper_merge import PaperMerge
 from app.models.paper_sources import PaperSources
 from app.models.references import ExternalRef, NoteEmbedding, paper_references
 from app.models.saved_search import SavedSearch
@@ -35,6 +36,7 @@ __all__ = [
     "NoteEmbedding",
     "Paper",
     "PaperLink",
+    "PaperMerge",
     "PaperSources",
     "PaperStatus",
     "Provenance",

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { AlreadyInLibraryError, api, errorDetail } from './client'
+import { AlreadyInLibraryError, api, errorDetail, PaperMergedError } from './client'
 
 const jsonResponse = (body: unknown) => new Response(JSON.stringify(body), { status: 422 })
 
@@ -37,6 +37,15 @@ it('AlreadyInLibraryError carries its message and the holding paper id', () => {
     'This paper is already in your library.',
     'p7',
   ])
+})
+
+describe('api.getPaper', () => {
+  it('rejects a 410 that names the kept paper as PaperMergedError', async () => {
+    const body = { detail: 'paper_merged', kept_id: 'k9' }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { status: 410 })))
+    await expect(api.getPaper('m1')).rejects.toSatisfy((e: unknown) => e instanceof PaperMergedError && e.keptId === 'k9')
+    vi.unstubAllGlobals()
+  })
 })
 
 describe('api.addCandidate', () => {

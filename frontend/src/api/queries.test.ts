@@ -1,15 +1,16 @@
 // @vitest-environment jsdom
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClient, QueryClientProvider, useMutation } from '@tanstack/react-query'
 import { renderHook, waitFor } from '@testing-library/react'
 import { createElement, type ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { api, type Hit, type Paper, type ReferencePage, type SearchRun } from './client'
+import { api, PaperMergedError, type Hit, type Paper, type ReferencePage, type SearchRun } from './client'
 import {
   PAPERS_POLL_MS,
   embeddingPollInterval,
   isNotesList,
   matchesEligibleHit,
   papersPollInterval,
+  queryClient,
   referencePagePollInterval,
   searchRunPollInterval,
   useApplyTag,
@@ -304,5 +305,29 @@ describe('useApplyTag', () => {
     const perPaper = invalidateSpy.mock.calls.find(([f]) => f?.predicate)?.[0]
     expect(perPaper?.predicate?.({ queryKey: ['papers', 'p1', 'tags'] } as never)).toBe(true)
     expect(perPaper?.predicate?.({ queryKey: ['papers', 'p1', 'notes'] } as never)).toBe(false)
+  })
+})
+
+describe('a mutation that meets a merged paper', () => {
+  afterEach(() => queryClient.clear())
+
+  const failWith = async (error: Error) => {
+    queryClient.setQueryData(['papers', 'm1'], paper('ready'))
+    queryClient.setQueryData(['papers', 'm1', 'notes'], [])
+    const { result } = renderHook(() => useMutation({ mutationFn: () => Promise.reject(error) }), {
+      wrapper: withQueryClient(queryClient),
+    })
+    await result.current.mutateAsync().catch(() => {})
+  }
+
+  it('invalidates the open papers, so a reader open on the merged one is sent on at once', async () => {
+    await failWith(new PaperMergedError('paper_merged', 'k9'))
+    expect(queryClient.getQueryState(['papers', 'm1'])?.isInvalidated).toBe(true)
+    expect(queryClient.getQueryState(['papers', 'm1', 'notes'])?.isInvalidated).toBe(false)
+  })
+
+  it('leaves them alone on any other error', async () => {
+    await failWith(new Error('Server error'))
+    expect(queryClient.getQueryState(['papers', 'm1'])?.isInvalidated).toBe(false)
   })
 })
