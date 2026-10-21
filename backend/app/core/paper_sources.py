@@ -40,6 +40,7 @@ class SourceSettings:
     contact_email: str | None = None
     enabled: Mapping[str, bool] = field(default_factory=lambda: dict(ENABLED_BY_DEFAULT))
     api_keys: Mapping[str, str | None] = field(default_factory=lambda: dict.fromkeys(KEYED))
+    pdf_recheck_enabled: bool = True  # R20: the weekly free-copy re-check of papers saved without a PDF
 
     @property
     def unpaywall_on(self) -> bool:
@@ -60,6 +61,7 @@ class SourceView:
 class SourcesView:
     contact_email: str | None
     sources: list[SourceView]
+    pdf_recheck_enabled: bool
 
 
 def _settings(row: PaperSources | None) -> SourceSettings:
@@ -69,6 +71,7 @@ def _settings(row: PaperSources | None) -> SourceSettings:
         contact_email=row.contact_email,
         enabled={source: getattr(row, f"{source}_enabled") for source in SOURCES},
         api_keys={source: getattr(row, f"{source}_api_key") for source in KEYED},
+        pdf_recheck_enabled=row.pdf_recheck_enabled,
     )
 
 
@@ -80,6 +83,7 @@ async def get(session: AsyncSession) -> SourceSettings:
 def view(sources: SourceSettings) -> SourcesView:
     return SourcesView(
         contact_email=sources.contact_email,
+        pdf_recheck_enabled=sources.pdf_recheck_enabled,
         sources=[
             SourceView(
                 id=source,
@@ -154,6 +158,8 @@ async def update(session: AsyncSession, changes: Mapping[str, Any]) -> SourceSet
         if source not in KEYED:
             raise InvalidInput(f"{source} doesn't take an API key")
         values[f"{source}_api_key"] = _check_key(api_key)
+    if "pdf_recheck_enabled" in changes:
+        values["pdf_recheck_enabled"] = changes["pdf_recheck_enabled"]
     if values:
         await session.execute(
             insert(PaperSources)
