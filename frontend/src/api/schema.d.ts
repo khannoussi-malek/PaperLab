@@ -48,6 +48,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/papers/found-pdfs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Found Pdfs
+         * @description The free copies the weekly re-check found that the owner hasn't dismissed, newest first.
+         */
+        get: operations["list_found_pdfs_api_papers_found_pdfs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/papers/found-pdfs/seen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark Found Pdfs Seen */
+        post: operations["mark_found_pdfs_seen_api_papers_found_pdfs_seen_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/papers/{paper_id}": {
         parameters: {
             query?: never;
@@ -117,6 +154,26 @@ export interface paths {
          * @description Papers like this one, from Semantic Scholar. 409 when it's off in Settings, doesn't know the paper or is busy.
          */
         get: operations["similar_papers_api_papers__paper_id__similar_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/papers/{paper_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Paper Events
+         * @description What happened to the paper, newest first. 404 unknown paper.
+         */
+        get: operations["list_paper_events_api_papers__paper_id__events_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2843,6 +2900,37 @@ export interface components {
             /** Reason */
             reason: string;
         };
+        /**
+         * FoundPdfOut
+         * @description A free copy the weekly re-check found, for the notice. `id` is the event's, for marking it seen.
+         */
+        FoundPdfOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Paper Id
+             * Format: uuid
+             */
+            paper_id: string;
+            /** Title */
+            title: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * FoundPdfsSeen
+         * @description The finds the owner was shown and dismissed.
+         */
+        FoundPdfsSeen: {
+            /** Ids */
+            ids: string[];
+        };
         /** GenerateIn */
         GenerateIn: {
             /**
@@ -3528,6 +3616,31 @@ export interface components {
                 number
             ][];
         };
+        /**
+         * PaperEventOut
+         * @description One thing that happened to a paper (R21). `detail` is {"how"} for pdf_attached, {"url", "how"} for pdf_found.
+         */
+        PaperEventOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "pdf_found" | "pdf_attached";
+            /** Detail */
+            detail: {
+                [key: string]: string | null;
+            };
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /** PaperOut */
         PaperOut: {
             /**
@@ -3571,6 +3684,16 @@ export interface components {
             has_pdf: boolean;
             /** Details Source */
             details_source: ("zotero" | "crossref" | "openalex" | "semantic_scholar" | "arxiv" | "search" | "manual") | null;
+            /** Field Sources */
+            field_sources: {
+                [key: string]: "zotero" | "crossref" | "openalex" | "semantic_scholar" | "arxiv" | "search" | "manual" | "pdf";
+            };
+            /** Manual Fields */
+            manual_fields: string[];
+            /** Pdf Checked At */
+            pdf_checked_at: string | null;
+            /** Pdf Check Result */
+            pdf_check_result: ("found" | "none" | "error") | null;
             /** Is Retracted */
             is_retracted: boolean;
             /** Oa Status */
@@ -3638,6 +3761,8 @@ export interface components {
             contact_email: string | null;
             /** Sources */
             sources: components["schemas"]["PaperSourceOut"][];
+            /** Pdf Recheck Enabled */
+            pdf_recheck_enabled: boolean;
         };
         /**
          * PaperSourcesUpdate
@@ -3648,6 +3773,8 @@ export interface components {
             contact_email?: string | null;
             enabled?: components["schemas"]["SourceSwitches"];
             api_keys?: components["schemas"]["SourceKeys"];
+            /** Pdf Recheck Enabled */
+            pdf_recheck_enabled?: boolean | null;
         };
         /** PaperTagGroup */
         PaperTagGroup: {
@@ -4890,6 +5017,57 @@ export interface operations {
             };
         };
     };
+    list_found_pdfs_api_papers_found_pdfs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FoundPdfOut"][];
+                };
+            };
+        };
+    };
+    mark_found_pdfs_seen_api_papers_found_pdfs_seen_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FoundPdfsSeen"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_paper_api_papers__paper_id__get: {
         parameters: {
             query?: never;
@@ -5067,6 +5245,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CandidateOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_paper_events_api_papers__paper_id__events_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                paper_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaperEventOut"][];
                 };
             };
             /** @description Validation Error */

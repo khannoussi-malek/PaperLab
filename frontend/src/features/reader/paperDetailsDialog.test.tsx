@@ -9,7 +9,7 @@ import { PaperDetailsDialog } from './PaperDetailsDialog'
 globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} }
 
 const open =  (over: Partial<Paper>) => {
-  const paper = { id: 'p1', title: 'T', authors: [], abstract: '', manual_fields: [], ...over } as unknown as Paper
+  const paper = { id: 'p1', title: 'T', authors: [], abstract: '', manual_fields: [], field_sources: {}, has_pdf: true, ...over } as unknown as Paper
   render(
     <QueryClientProvider client={new QueryClient()}>
       <PaperDetailsDialog paper={paper} />

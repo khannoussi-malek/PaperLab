@@ -5,6 +5,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 
 import pytest
+from conftest import pdf_attached
 from sqlalchemy import event, select
 from starlette.datastructures import UploadFile
 from test_discovery_add import arxiv_entry, atom
@@ -126,6 +127,7 @@ async def test_upload_pdf_route_upgrades_and_queues_ingest(client, session, arq,
     await session.refresh(hit)
     assert hit.acquisition_status == "manual"
     assert (again.status_code, again.json()["detail"]) == (409, "already_has_pdf")
+    assert await pdf_attached(session, held.id) == [{"how": "manual"}]
 
 
 async def test_find_pdf_route_upgrades_or_says_what_it_tried(app, client, session, arq, discovery_fakes, pdf_dir):
@@ -156,6 +158,9 @@ async def test_find_pdf_route_upgrades_or_says_what_it_tried(app, client, sessio
     assert lost.has_pdf is False
     assert (again.status_code, again.json()["detail"]) == (409, "already_has_pdf")
     assert arq.jobs == [("ingest_paper", str(found.id))]
+    assert await pdf_attached(session, found.id) == [{"how": "imported"}]
+    # I3: the lookup counts as a check, so the weekly re-check waits a week before repeating it
+    assert lost.pdf_checked_at is not None and lost.pdf_check_result == "none"
 
 
 ARXIV_TITLE = "Sleep and memory in adults"

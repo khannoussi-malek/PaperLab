@@ -1,8 +1,9 @@
 import { useState, type FormEvent } from 'react'
-import { usePaperSources, useUpdatePaperSources } from '@/api/queries'
+import { usePaperSources, useUpdatePaperSources, useUpdatePdfRecheck } from '@/api/queries'
 import { glass } from '@/components/glass'
 import { delayedIn } from '@/components/motion'
 import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -76,6 +77,33 @@ function ContactEmail({ saved }: { saved: string | null }) {
   )
 }
 
+/** The weekly free-copy re-check for papers saved without a PDF. */
+function RecheckSwitch({ enabled }: { enabled: boolean }) {
+  const update = useUpdatePdfRecheck()
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-2.5">
+        <Checkbox
+          id="pdf-recheck"
+          checked={enabled}
+          disabled={update.isPending}
+          aria-describedby="pdf-recheck-help"
+          onCheckedChange={(checked) => update.mutate(checked === true)}
+        />
+        <Label htmlFor="pdf-recheck">Look for free PDFs weekly for papers saved without one</Label>
+      </div>
+      <p id="pdf-recheck-help" className="pl-6.5 text-xs text-muted-foreground">
+        Papers saved without a PDF are re-checked for a free copy at most once a week, 25 a day, using the same sources as Add (Unpaywall, arXiv, PMC and repositories).
+      </p>
+      {update.error && (
+        <Alert variant="destructive" className="border-glass-border">
+          <AlertDescription>{update.error.message}</AlertDescription>
+        </Alert>
+      )}
+    </div>
+  )
+}
+
 /** The "Paper sources" section: which services Find papers and Similar ask, their API keys, and the contact email. */
 export function PaperSourcesSettings() {
   const sources = usePaperSources()
@@ -112,6 +140,7 @@ export function PaperSourcesSettings() {
               <PaperSourceRow key={source.id} source={source} hasEmail={sources.data.contact_email !== null} />
             ))}
           </ul>
+          <RecheckSwitch enabled={sources.data.pdf_recheck_enabled} />
         </>
       )}
     </section>

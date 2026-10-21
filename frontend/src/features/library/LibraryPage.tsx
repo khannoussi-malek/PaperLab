@@ -10,6 +10,7 @@ import { FindPapersButton } from '../discovery/FindPapersButton'
 import { ExportSelectedMenu } from '../workspaces/ExportSelectedMenu'
 import { ErrorAlert, LoadError } from './ErrorAlert'
 import { PaperList } from './PaperList'
+import { FoundPdfsNotice } from './FoundPdfsNotice'
 import { SearchNotice } from './SearchNotice'
 import { ImportFromZoteroButton } from './ImportFromZoteroButton'
 import { UploadPdfsButton } from './UploadPdfsButton'
@@ -42,6 +43,7 @@ export function LibraryPage() {
     >
       <div className="flex flex-col gap-4">
         <SearchNotice />
+        <FoundPdfsNotice />
 
         {upload.error && <ErrorAlert message={upload.error.message} />}
 

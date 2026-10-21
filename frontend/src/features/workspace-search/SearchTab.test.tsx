@@ -16,6 +16,7 @@ function Harness({ workspaceId }: { workspaceId: string }) {
 
 const enabledSources: PaperSources = {
   contact_email: null,
+  pdf_recheck_enabled: true,
   sources: [
     { id: 'arxiv', name: 'arXiv', enabled: true, has_key: null, key_hint: null },
     { id: 'crossref', name: 'Crossref', enabled: true, has_key: null, key_hint: null },

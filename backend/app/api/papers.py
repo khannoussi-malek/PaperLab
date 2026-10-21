@@ -6,13 +6,13 @@ from fastapi.responses import FileResponse
 
 from app.api.deps import DiscoveryDep, SessionDep
 from app.config import settings
-from app.core import discovery, enrichment, papers, tags, workspaces
+from app.core import discovery, enrichment, paper_events, papers, tags, workspaces
 from app.core.errors import Conflict, InvalidInput
 from app.core.pipeline import MAX_UPLOAD_PDF_BYTES
 from app.core.queue import INGEST_QUEUE
 from app.models import PaperStatus
 from app.schemas.discovery import CandidateOut
-from app.schemas.papers import ChunkOut, PaperOut, PaperUpdate, ReadingIn
+from app.schemas.papers import ChunkOut, FoundPdfOut, FoundPdfsSeen, PaperEventOut, PaperOut, PaperUpdate, ReadingIn
 from app.schemas.tags import PaperTagGroup
 
 router = APIRouter(prefix="/api/papers", tags=["papers"])
@@ -42,6 +42,21 @@ async def upload_paper(
 @router.get("")
 async def list_papers(session: SessionDep) -> list[PaperOut]:
     return await papers.list_papers(session)
+
+
+# Before the /{paper_id} routes, or "found-pdfs" is parsed as an id.
+@router.get("/found-pdfs")
+async def list_found_pdfs(session: SessionDep) -> list[FoundPdfOut]:
+    """The free copies the weekly re-check found that the owner hasn't dismissed, newest first."""
+    return [
+        FoundPdfOut(id=event.id, paper_id=event.paper_id, title=title, created_at=event.created_at)
+        for event, title in await paper_events.unseen_found(session)
+    ]
+
+
+@router.post("/found-pdfs/seen", status_code=204)
+async def mark_found_pdfs_seen(payload: FoundPdfsSeen, session: SessionDep) -> None:
+    await paper_events.mark_seen(session, payload.ids)
 
 
 @router.get("/{paper_id}")
@@ -86,6 +101,13 @@ async def get_paper_file(paper_id: uuid.UUID, session: SessionDep) -> FileRespon
 async def similar_papers(paper_id: uuid.UUID, session: SessionDep, providers: DiscoveryDep) -> list[CandidateOut]:
     """Papers like this one, from Semantic Scholar. 409 when it's off in Settings, doesn't know the paper or is busy."""
     return await discovery.similar(session, providers, await papers.get_paper(session, paper_id))
+
+
+@router.get("/{paper_id}/events")
+async def list_paper_events(paper_id: uuid.UUID, session: SessionDep) -> list[PaperEventOut]:
+    """What happened to the paper, newest first. 404 unknown paper."""
+    await papers.get_paper(session, paper_id)
+    return await paper_events.history(session, paper_id)
 
 
 @router.get("/{paper_id}/chunks")
@@ -139,7 +161,8 @@ async def find_paper_pdf(
         if str(exc) != discovery.ALREADY_IN_LIBRARY:
             raise
         raise Conflict("already_in_library", **exc.details) from exc
-    if data is None:
+    if data is None:  # a check like the weekly re-check's: it waits a week before repeating this lookup
+        await papers.record_no_free_pdf(session, paper_id)
         raise Conflict("no_free_pdf", tried=tried, free_copies=copies)
     paper = await papers.attach_pdf(session, paper_id, data, how="imported")
     await _enqueue_ingest(request, paper.id)

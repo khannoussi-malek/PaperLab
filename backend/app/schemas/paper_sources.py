@@ -25,6 +25,7 @@ class PaperSourcesOut(BaseModel):
 
     contact_email: str | None
     sources: list[PaperSourceOut]
+    pdf_recheck_enabled: bool
 
 
 # Only the sources sent change (a missing source keeps its switch); not Optional, so a sent null is a 422. One
@@ -50,3 +51,4 @@ class PaperSourcesUpdate(BaseModel):
     contact_email: Annotated[str, StringConstraints(max_length=1000)] | None = None
     enabled: SourceSwitches = None
     api_keys: SourceKeys = None
+    pdf_recheck_enabled: bool | None = None  # null is a no-op, like a missing field

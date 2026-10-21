@@ -20,7 +20,7 @@ const paper = (over: Partial<Paper>) =>
   ({
     id: 'p1', title: 'Sleep and memory', authors: ['Ada Lee'], year: 2020, venue: 'Sleep', page_count: null,
     status: 'ready', status_error: null, doi: null, abstract: 'Sleep helps memory.', created_at: '2026-10-18T10:00:00Z',
-    has_pdf: true, details_source: null, ...over,
+    has_pdf: true, details_source: null, field_sources: {}, ...over,
   }) as Paper
 
 test('a paper without a PDF shows no first page: it says so, and leads with the abstract', () => {

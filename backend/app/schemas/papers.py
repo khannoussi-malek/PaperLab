@@ -5,7 +5,7 @@ from typing import Annotated, Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
 from app.core.papers import ABSTRACT_PAGE
-from app.core.source_types import DetailsSource, PeerReviewed, SourceType
+from app.core.source_types import DetailsSource, PeerReviewed, ProvenanceSource, SourceType
 
 # PDF points, top-left origin: (x0, y0, x1, y1). A tuple so OpenAPI (and the TS types) say 4 numbers.
 Rect = tuple[float, float, float, float]
@@ -32,6 +32,10 @@ class PaperOut(BaseModel):
     evidence_access: Literal["full_text", "abstract", "metadata"]
     has_pdf: bool
     details_source: DetailsSource | None
+    field_sources: dict[str, ProvenanceSource]  # {group: source}, app.core.provenance.FIELD_GROUPS (R22)
+    manual_fields: list[str]
+    pdf_checked_at: datetime | None
+    pdf_check_result: Literal["found", "none", "error"] | None
     is_retracted: bool
     oa_status: str | None
     oa_url: str | None
@@ -117,3 +121,31 @@ class ChunkOut(BaseModel):
     def from_abstract(self) -> bool:
         """The abstract chunk of a paper saved without a PDF: no page to show or jump to."""
         return self.page == ABSTRACT_PAGE
+
+
+class PaperEventOut(BaseModel):
+    """One thing that happened to a paper (R21). `detail` is {"how"} for pdf_attached, {"url", "how"} for pdf_found."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    kind: Literal["pdf_found", "pdf_attached"]
+    detail: dict[str, str | None]
+    created_at: datetime
+
+
+class FoundPdfOut(BaseModel):
+    """A free copy the weekly re-check found, for the notice. `id` is the event's, for marking it seen."""
+
+    id: uuid.UUID
+    paper_id: uuid.UUID
+    title: str
+    created_at: datetime
+
+
+class FoundPdfsSeen(BaseModel):
+    """The finds the owner was shown and dismissed."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    ids: list[uuid.UUID]

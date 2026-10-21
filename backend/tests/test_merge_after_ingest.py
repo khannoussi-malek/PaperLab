@@ -5,7 +5,7 @@ import logging
 import uuid
 
 import pytest
-from conftest import BODY_TEXT, _write_pdf, recorded
+from conftest import BODY_TEXT, _write_pdf, pdf_attached, recorded
 from sqlalchemy import func, select
 from test_pdf_upgrade import awaiting
 from test_retrieved_hits import failed_hit, workspace
@@ -71,6 +71,7 @@ async def test_an_upload_whose_doi_a_pdfless_paper_holds_is_merged_after_ingest(
     chunks = select(func.count()).select_from(Chunk).where(Chunk.paper_id == k.id, Chunk.page >= 1)
     assert await worker_session.scalar(chunks) > 0  # M's chunks, now K's
     assert await audit(worker_session, m_id) == [("merged", None)]
+    assert await pdf_attached(worker_session, k.id) == [{"how": "manual", "merged": True}]
 
 
 async def test_a_lookalike_upload_is_reported_and_both_stay(worker_session, doi_pdf, worker_ctx):

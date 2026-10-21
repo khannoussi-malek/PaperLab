@@ -47,6 +47,7 @@ PAPER_ID_COLUMNS = [
     ("workspace_search_hits", "seed_paper_id"),
     ("search_run_eligibility", "paper_id"),
     ("evidence_cards", "paper_id"),
+    ("paper_events", "paper_id"),
 ]
 
 
@@ -129,6 +130,7 @@ async def seed_both(session):
         "INSERT INTO paper_links (from_paper, to_paper, label) VALUES (:m, :k, 'the same')",  # becomes K to K
         "INSERT INTO paper_links (from_paper, to_paper, label) VALUES (:y, :m, 'Y knows M')",  # duplicates K-Y
         "INSERT INTO evidence_cards (paper_id, status, fields) VALUES (:m, 'ready', '{\"x\": 1}')",
+        "INSERT INTO paper_events (paper_id, kind) VALUES (:m, 'pdf_attached')",
     ]:
         await session.execute(text(statement), p)
     await workspaces.add_paper(session, ws.id, m.id)  # a duplicate of K's membership
@@ -166,6 +168,7 @@ MOVED = {
     "search_run_eligibility": 1,
     "evidence_cards_dropped": 1,  # K's needs-full-text placeholder
     "evidence_cards": 1,
+    "paper_events": 1,
     "awaiting_hits_retrieved": 1,
 }
 
@@ -188,6 +191,7 @@ AFTER = {  # K's rows after the merge: its own plus M's moved or unioned ones
     "workspace_search_hits.seed_paper_id": 1,
     "search_run_eligibility.paper_id": 2,
     "evidence_cards.paper_id": 1,
+    "paper_events.paper_id": 2,  # M's moved one, and the merge's own pdf_attached for K (R21)
 }
 
 
@@ -447,6 +451,20 @@ async def test_the_kept_paper_takes_the_merged_papers_fetched_references(session
 
     k = await session.get(Paper, k.id, populate_existing=True)
     assert (k.references_state, k.references_error) == ("ready", None)
+
+
+async def test_the_kept_paper_takes_the_sources_of_the_groups_it_gets_from_m(session):
+    k = await kept(session)
+    m = await merged(session, volume="7", field_sources={"citation": "openalex", "bibliographic": "pdf"})
+
+    await merges.merge(session, m.id, k.id, identifier=PROOF, evidence=EVIDENCE)
+
+    k = await session.get(Paper, k.id, populate_existing=True)
+    assert k.volume == "7"
+    assert k.field_sources == {
+        **dict.fromkeys(("abstract", "bibliographic", "identifiers"), "crossref"),
+        "citation": "openalex",
+    }
 
 
 async def test_an_unknown_paper_is_not_found(session):

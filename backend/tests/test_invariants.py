@@ -193,6 +193,52 @@ async def test_0052_round_trip(scratch_url):
 
 
 @pytest.mark.anyio
+async def test_0053_round_trip(scratch_url):
+    """The re-check and provenance columns start empty, paper_events takes two kinds and goes with its paper, and
+    downgrade refuses while a paper has history, then drops it all."""
+    dsn = scratch_url.render_as_string(hide_password=False)
+    alembic(dsn, "upgrade", "head")
+    scratch = create_async_engine(scratch_url)
+    async with scratch.begin() as conn:
+        paper = (await conn.execute(text("INSERT INTO papers (title) VALUES ('P') RETURNING id"))).scalar_one()
+        columns = "SELECT field_sources, pdf_checked_at, pdf_check_result FROM papers"
+        assert tuple((await conn.execute(text(columns))).one()) == ({}, None, None)
+        await conn.execute(text("INSERT INTO paper_sources (id) VALUES (true) ON CONFLICT DO NOTHING"))
+        assert (await conn.execute(text("SELECT pdf_recheck_enabled FROM paper_sources"))).scalar_one() is True
+        await conn.execute(text("UPDATE papers SET pdf_check_result = 'none', pdf_checked_at = now()"))
+        event = "INSERT INTO paper_events (paper_id, kind) VALUES (:p, :k)"
+        await conn.execute(text(event), {"p": paper, "k": "pdf_found"})
+        detail = (await conn.execute(text("SELECT detail FROM paper_events"))).scalar_one()
+    assert detail == {}
+    with pytest.raises(IntegrityError, match="ck_papers_pdf_check_result"):
+        async with scratch.begin() as conn:
+            await conn.execute(text("UPDATE papers SET pdf_check_result = 'maybe'"))
+    with pytest.raises(IntegrityError, match="ck_paper_events_kind"):
+        async with scratch.begin() as conn:
+            await conn.execute(text(event), {"p": paper, "k": "pdf_lost"})
+    refused = subprocess.run(
+        [sys.executable, "-m", "alembic", "downgrade", "0052"],
+        cwd=BACKEND,
+        env={**os.environ, "DATABASE_URL": dsn},
+        capture_output=True,
+        text=True,
+    )
+    assert refused.returncode != 0
+    assert "paper events are recorded; delete them first" in refused.stderr
+    async with scratch.begin() as conn:
+        await conn.execute(text("DELETE FROM papers"))  # its events go with it
+        assert (await conn.execute(text("SELECT count(*) FROM paper_events"))).scalar_one() == 0
+    alembic(dsn, "downgrade", "0052")
+    async with scratch.connect() as conn:
+        assert (await conn.execute(text("SELECT to_regclass('paper_events')"))).scalar_one() is None
+        left = "SELECT column_name FROM information_schema.columns WHERE column_name = ANY(:names)"
+        names = ["pdf_checked_at", "pdf_check_result", "field_sources", "pdf_recheck_enabled"]
+        assert (await conn.execute(text(left), {"names": names})).all() == []
+    await scratch.dispose()
+    alembic(dsn, "upgrade", "head")
+
+
+@pytest.mark.anyio
 async def test_workspaces_migration_keeps_categories_memberships_and_answers(scratch_url):
     """Data written at 0004, the revision just before the workspaces migration, survives it. If the migration is
     ever renumbered, this upgrade target moves with it."""

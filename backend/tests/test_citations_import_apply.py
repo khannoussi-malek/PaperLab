@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import pytest
-from conftest import FakeArq
+from conftest import FakeArq, pdf_attached
 from redis.exceptions import ConnectionError as RedisConnectionError
 from sqlalchemy import func, select
 
@@ -173,6 +173,7 @@ async def test_a_bundled_pdf_upgrades_a_held_paper_saved_without_one(session, pd
     assert kept.has_pdf and (pdf_dir / f"{kept.id}.pdf").read_bytes() == PDF
     assert [p.id for p in await workspaces.papers(session, ws.id)] == [kept.id]
     assert ("ingest_paper", str(kept.id)) in jobs.jobs
+    assert await pdf_attached(session, kept.id) == [{"how": "manual"}]
 
 
 async def test_an_unreadable_bundled_pdf_leaves_a_held_paper_as_held(session, pdf_dir, jobs):
@@ -279,6 +280,19 @@ async def test_zotero_import_saves_needs_pdf_entries_without_pdf_when_asked(sess
     bodies = set(await session.scalars(select(Note.body).join(note_papers).where(note_papers.c.paper_id == saved.id)))
     assert "my note" in bodies and result.notes == 1
     assert jobs.jobs == [("index_abstract", str(saved.id))]  # none for the paper without an abstract
+    assert (saved.pdf_checked_at, saved.pdf_check_result) == (None, None)  # fetching was off: nothing looked
+
+
+async def test_a_paper_saved_without_pdf_after_a_failed_lookup_counts_as_checked(session, pdf_dir, fetching):
+    found, pdf_host = fetching
+    found[doi("look")] = Candidate(title=title("look"), doi=doi("look"), pdf_urls=["https://pdf.example/gone.pdf"])
+    pdf_host.reply("/gone.pdf", 404)
+
+    result = await cia.apply(session, [entry("look", doi=doi("look"))], save_without_pdf=True)
+
+    [saved] = await titled(session, "look")
+    assert result.saved_without_pdf == 1 and not saved.has_pdf
+    assert saved.pdf_checked_at is not None and saved.pdf_check_result == "none"  # the re-check waits a week
 
 
 async def test_zotero_import_without_the_flag_is_unchanged(session, pdf_dir, jobs):

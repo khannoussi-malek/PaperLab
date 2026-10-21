@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.candidates import s2_triage
 from app.core.enrichment import normalize_doi, openalex_published
 from app.core.hit_enrichment import CHUNK, batch_with_backoff
+from app.core.provenance import sources_of
 from app.core.source_types import ARXIV_DOI_PREFIX, is_preprint_copy, peer_reviewed_of
 from app.models.paper import Paper
 from app.models.workspace import workspace_papers
@@ -75,33 +76,40 @@ def apply_s2(paper: Paper, answer: dict) -> bool:
     peer = peer_reviewed_of(source_type) == "true"
     if peer and (preprint or paper.peer_reviewed == "unknown") and "source_type" not in paper.manual_fields:
         found["peer_reviewed"] = "true"
-    return _fill(paper, found)
+    return _fill(paper, found, "semantic_scholar")
 
 
-def _fill(paper: Paper, found: dict[str, str | None]) -> bool:
-    """Sets each non-empty value that is not hand-edited (manual_fields) and differs. True when anything changed."""
-    changed = False
-    for field, value in found.items():
-        if value and field not in paper.manual_fields and getattr(paper, field) != value:
-            setattr(paper, field, value)
-            changed = True
-    return changed
+def _fill(paper: Paper, found: dict[str, str | None], source: str) -> bool:
+    """Sets each non-empty value that is not hand-edited (manual_fields) and differs, stamping `source` on the groups
+    it set (R22). True when anything changed."""
+    changed = {
+        field: value
+        for field, value in found.items()
+        if value and field not in paper.manual_fields and getattr(paper, field) != value
+    }
+    for field, value in changed.items():
+        setattr(paper, field, value)
+    # A new dict, so SQLAlchemy sees it. ponytail: read-modify-write, so a group another writer stamps between the
+    # caller's re-read and its commit is lost; a `||` UPDATE (provenance.stamp) if that ever matters.
+    if changed:
+        paper.field_sources = {**paper.field_sources, **sources_of(changed, source)}
+    return bool(changed)
 
 
-def apply_published(paper: Paper, doi: str | None, venue: str | None) -> bool:
+def apply_published(paper: Paper, doi: str | None, venue: str | None, source: str) -> bool:
     """A preprint copy's published version, with apply_s2's write rules (never its own DOI, hand edits kept)."""
     if not is_preprint_copy(paper) or doi in (None, normalize_doi(paper.doi or "")):
         return False
     found = {"published_doi": doi, "published_venue": venue}
     if "source_type" not in paper.manual_fields:
         found["peer_reviewed"] = "true"
-    return _fill(paper, found)
+    return _fill(paper, found, source)
 
 
 def apply_openalex(paper: Paper, work: dict) -> bool:
     """A preprint copy's OpenAlex work that is its published version: same write rules as apply_s2."""
     doi, venue, _ = openalex_published(work)
-    return apply_published(paper, doi, venue)
+    return apply_published(paper, doi, venue, "openalex")
 
 
 async def _openalex_pass(session: AsyncSession, oa: httpx.AsyncClient, ws: uuid.UUID) -> int:

@@ -32,6 +32,7 @@ class PaperSources(Base):
     biorxiv_enabled: Mapped[bool] = mapped_column(server_default=text("true"))
     medrxiv_enabled: Mapped[bool] = mapped_column(server_default=text("true"))
     dblp_enabled: Mapped[bool] = mapped_column(server_default=text("false"))
+    pdf_recheck_enabled: Mapped[bool] = mapped_column(server_default=text("true"))  # R20: the weekly free-PDF re-check
     # Never returned by a route; views carry has_key and key_hint.
     openalex_api_key: Mapped[str | None] = mapped_column(Text)
     semantic_scholar_api_key: Mapped[str | None] = mapped_column(Text)
