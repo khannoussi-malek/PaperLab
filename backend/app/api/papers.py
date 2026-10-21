@@ -12,7 +12,7 @@ from app.core.pipeline import MAX_UPLOAD_PDF_BYTES
 from app.core.queue import INGEST_QUEUE
 from app.models import PaperStatus
 from app.schemas.discovery import CandidateOut
-from app.schemas.papers import ChunkOut, FoundPdfOut, PaperEventOut, PaperOut, PaperUpdate, ReadingIn
+from app.schemas.papers import ChunkOut, FoundPdfOut, FoundPdfsSeen, PaperEventOut, PaperOut, PaperUpdate, ReadingIn
 from app.schemas.tags import PaperTagGroup
 
 router = APIRouter(prefix="/api/papers", tags=["papers"])
@@ -49,14 +49,14 @@ async def list_papers(session: SessionDep) -> list[PaperOut]:
 async def list_found_pdfs(session: SessionDep) -> list[FoundPdfOut]:
     """The free copies the weekly re-check found that the owner hasn't dismissed, newest first."""
     return [
-        FoundPdfOut(paper_id=event.paper_id, title=title, created_at=event.created_at)
+        FoundPdfOut(id=event.id, paper_id=event.paper_id, title=title, created_at=event.created_at)
         for event, title in await paper_events.unseen_found(session)
     ]
 
 
 @router.post("/found-pdfs/seen", status_code=204)
-async def mark_found_pdfs_seen(session: SessionDep) -> None:
-    await paper_events.mark_seen(session)
+async def mark_found_pdfs_seen(payload: FoundPdfsSeen, session: SessionDep) -> None:
+    await paper_events.mark_seen(session, payload.ids)
 
 
 @router.get("/{paper_id}")
@@ -141,8 +141,8 @@ async def upload_paper_pdf(paper_id: uuid.UUID, file: UploadFile, request: Reque
     if len(data := await file.read()) > MAX_UPLOAD_PDF_BYTES:
         raise too_large
     paper = await papers.attach_pdf(session, paper_id, data, how="manual")
+    await _enqueue_ingest(request, paper.id)  # before the event: a failed event write can't leave it unqueued
     await paper_events.record(session, paper_id, "pdf_attached", {"how": "manual"})
-    await _enqueue_ingest(request, paper.id)
     return paper
 
 
@@ -165,8 +165,8 @@ async def find_paper_pdf(
     if data is None:
         raise Conflict("no_free_pdf", tried=tried, free_copies=copies)
     paper = await papers.attach_pdf(session, paper_id, data, how="imported")
+    await _enqueue_ingest(request, paper.id)  # before the event: a failed event write can't leave it unqueued
     await paper_events.record(session, paper_id, "pdf_attached", {"how": "imported"})
-    await _enqueue_ingest(request, paper.id)
     return paper
 
 

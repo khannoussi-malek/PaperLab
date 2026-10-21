@@ -135,8 +135,17 @@ class PaperEventOut(BaseModel):
 
 
 class FoundPdfOut(BaseModel):
-    """A free copy the weekly re-check found, for the notice."""
+    """A free copy the weekly re-check found, for the notice. `id` is the event's, for marking it seen."""
 
+    id: uuid.UUID
     paper_id: uuid.UUID
     title: str
     created_at: datetime
+
+
+class FoundPdfsSeen(BaseModel):
+    """The finds the owner was shown and dismissed."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    ids: list[uuid.UUID]

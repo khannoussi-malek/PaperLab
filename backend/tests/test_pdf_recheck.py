@@ -91,21 +91,69 @@ async def test_a_held_arxiv_copy_is_skipped_marked_checked_and_leaves_no_event(s
     assert await paper_events.history(session, paper.id) == []
 
 
-async def test_due_skips_recent_papers_and_caps_oldest_first(session, monkeypatch):
-    monkeypatch.setattr(pdf_recheck, "RECHECK_CAP", 3)
+async def _seed_due(session):
     await session.execute(delete(PaperEvent))
     await session.execute(delete(Paper))
     recent = await held(session, "Recent")
     recent.pdf_checked_at = NOW - timedelta(days=6)
-    has_pdf = Paper(title="Has file", file_path="/x.pdf", status="ready")
-    session.add(has_pdf)
+    session.add(Paper(title="Has file", file_path="/x.pdf", status="ready"))
     old = [await held(session, f"Old {i}") for i in range(4)]
     for age, paper in zip((30, 10, 20, 8), old):
         paper.pdf_checked_at = NOW - timedelta(days=age)
     fresh = await held(session, "Never")
     await session.commit()
+    return recent.id, [p.id for p in old], fresh.id
 
-    assert await pdf_recheck.due(session, NOW) == [fresh.id, old[0].id, old[2].id]
+
+async def test_due_skips_papers_checked_in_the_last_week_and_those_with_a_pdf(session):
+    recent, old, fresh = await _seed_due(session)
+
+    found = await pdf_recheck.due(session, NOW)  # the cap (25) is far above the 5 due papers
+
+    assert recent not in found
+    assert found == [fresh, old[0], old[2], old[1], old[3]]
+
+
+async def test_due_caps_and_takes_the_longest_unchecked_first(session, monkeypatch):
+    monkeypatch.setattr(pdf_recheck, "RECHECK_CAP", 3)
+    _recent, old, fresh = await _seed_due(session)
+
+    assert await pdf_recheck.due(session, NOW) == [fresh, old[0], old[2]]
+
+
+async def test_run_pauses_between_papers_only(session, discovery_fakes, monkeypatch):
+    pauses = []
+
+    async def record_pause(seconds):
+        pauses.append(seconds)
+
+    monkeypatch.setattr(pdf_recheck, "sleep", record_pause)
+    await session.execute(delete(Paper))
+    for title in ("A", "B", "C"):
+        await held(session, title)
+
+    await pdf_recheck.run(session, discovery_fakes.providers, NOW)
+
+    assert pauses == [3.0, 3.0]
+
+
+async def test_a_failing_mark_is_logged_and_the_run_goes_on(session, discovery_fakes, monkeypatch):
+    await session.execute(delete(Paper))
+    first, second = await held(session, "First"), await held(session, "Second")
+    first_id, second_id = first.id, second.id
+    real = pdf_recheck._mark
+
+    async def mark(session_, paper_id, now, outcome):
+        if paper_id == first_id:
+            raise RuntimeError("db down")
+        await real(session_, paper_id, now, outcome)
+
+    monkeypatch.setattr(pdf_recheck, "_mark", mark)
+    counts = await pdf_recheck.run(session, discovery_fakes.providers, NOW)
+
+    checked = {p.id: p.pdf_checked_at for p in await session.scalars(select(Paper))}
+    assert sum(counts.values()) == 2
+    assert (checked[first_id], checked[second_id]) == (None, NOW)
 
 
 async def test_the_job_does_nothing_while_the_switch_is_off(session, worker_session, monkeypatch):
@@ -144,6 +192,24 @@ class _Shared:
         return False
 
 
+async def test_a_failing_event_write_still_leaves_the_ingest_queued(
+    app, client, session, arq, discovery_fakes, pdf_dir, monkeypatch
+):
+    app.dependency_overrides[get_discovery] = lambda: discovery_fakes.providers
+    discovery_fakes.pdf_host.reply("/copy.pdf", 200, content=PDF)
+    paper = await held(session, "Found", oa_url=f"{HOST}/copy.pdf")
+    paper_id = paper.id
+
+    async def broken(*_args):
+        raise RuntimeError("event write failed")
+
+    monkeypatch.setattr(paper_events, "record", broken)
+    with pytest.raises(RuntimeError):
+        await client.post(f"/api/papers/{paper_id}/find-pdf")
+
+    assert arq.jobs == [("ingest_paper", str(paper_id))]
+
+
 async def test_upload_and_find_routes_write_pdf_attached(app, client, session, discovery_fakes, pdf_dir):
     app.dependency_overrides[get_discovery] = lambda: discovery_fakes.providers
     discovery_fakes.pdf_host.reply("/copy.pdf", 200, content=PDF)
@@ -159,23 +225,35 @@ async def test_upload_and_find_routes_write_pdf_attached(app, client, session, d
     )
 
 
+async def _event(session, paper, kind, detail, created_at) -> PaperEvent:
+    event = PaperEvent(paper_id=paper.id, kind=kind, detail=detail, created_at=created_at)
+    session.add(event)
+    await session.commit()
+    return event
+
+
 async def test_events_found_pdfs_and_seen_routes(client, session):
     await session.execute(delete(PaperEvent))
     a, b = await held(session, "Alpha"), await held(session, "Beta")
-    await paper_events.record(session, a.id, "pdf_found", {"url": "https://x/a.pdf", "how": "imported"})
-    await paper_events.record(session, b.id, "pdf_found", {"url": None, "how": "imported"})
-    await paper_events.record(session, a.id, "pdf_attached", {"how": "manual"})
+    t = NOW - timedelta(hours=3)
+    shown_a = await _event(session, a, "pdf_found", {"url": "https://x/a.pdf", "how": "imported"}, t)
+    shown_b = await _event(session, b, "pdf_found", {"url": None, "how": "imported"}, t + timedelta(hours=1))
+    await _event(session, a, "pdf_attached", {"how": "manual"}, t + timedelta(hours=2))
 
     notice = await client.get("/api/papers/found-pdfs")
     history = await client.get(f"/api/papers/{a.id}/events")
     unknown = await client.get("/api/papers/00000000-0000-0000-0000-000000000000/events")
-    seen = await client.post("/api/papers/found-pdfs/seen")
+    late = await _event(session, b, "pdf_found", {"url": None, "how": "imported"}, t + timedelta(hours=3))
+    seen = await client.post("/api/papers/found-pdfs/seen", json={"ids": [f["id"] for f in notice.json()]})
     after = await client.get("/api/papers/found-pdfs")
 
-    assert [(f["title"], f["paper_id"]) for f in notice.json()] == [("Beta", str(b.id)), ("Alpha", str(a.id))]
+    assert [(f["id"], f["title"], f["paper_id"]) for f in notice.json()] == [
+        (str(shown_b.id), "Beta", str(b.id)),
+        (str(shown_a.id), "Alpha", str(a.id)),
+    ]
     assert [(e["kind"], e["detail"]) for e in history.json()] == [
         ("pdf_attached", {"how": "manual"}),
         ("pdf_found", {"url": "https://x/a.pdf", "how": "imported"}),
     ]
-    assert (unknown.status_code, seen.status_code, after.json()) == (404, 204, [])
-    assert (await client.get(f"/api/papers/{a.id}/events")).json()[0]["kind"] == "pdf_attached"
+    assert (unknown.status_code, seen.status_code) == (404, 204)
+    assert [f["id"] for f in after.json()] == [str(late.id)]  # arrived after the list: stays unseen
