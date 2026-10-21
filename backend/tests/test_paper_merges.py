@@ -191,7 +191,7 @@ AFTER = {  # K's rows after the merge: its own plus M's moved or unioned ones
     "workspace_search_hits.seed_paper_id": 1,
     "search_run_eligibility.paper_id": 2,
     "evidence_cards.paper_id": 1,
-    "paper_events.paper_id": 1,
+    "paper_events.paper_id": 2,  # M's moved one, and the merge's own pdf_attached for K (R21)
 }
 
 

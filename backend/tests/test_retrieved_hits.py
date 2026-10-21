@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime, timezone
 
 import pytest
+from conftest import pdf_attached
 from sqlalchemy import delete, select
 
 from app.core import discovery, papers, retrieved_hits, tags, workspace_search, workspaces
@@ -426,6 +427,7 @@ async def test_an_upload_for_a_hit_whose_paper_has_no_pdf_upgrades_that_paper(se
     assert (hit.acquisition_status, hit.paper_id, created, out["paper_id"]) == ("manual", twin.id, True, twin.id)
     await session.refresh(twin)
     assert twin.has_pdf and (pdf_dir / f"{twin.id}.pdf").read_bytes() == b"%PDF-1.7 mine"
+    assert await pdf_attached(session, twin.id) == [{"how": "manual"}]
 
 
 async def test_an_upload_for_a_hit_whose_doi_a_pdfless_paper_holds_upgrades_it_without_a_duplicate(session, pdf_dir):
@@ -456,6 +458,7 @@ async def test_import_hits_finds_a_free_copy_for_a_pdfless_holder_and_upgrades_i
     assert (result.imported, result.failed, result.paper_ids) == (1, 0, [held.id])
     await session.refresh(held)
     assert held.has_pdf and (pdf_dir / f"{held.id}.pdf").read_bytes() == b"%PDF-1.4 ok"
+    assert await pdf_attached(session, held.id) == [{"how": "imported"}]
 
 
 async def test_import_hits_tries_the_hits_own_pdf_link_for_a_pdfless_holder(session, discovery_fakes, pdf_dir):

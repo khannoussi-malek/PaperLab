@@ -3,12 +3,14 @@
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_discovery
 from app.core import discovery, paper_events, papers, pdf_recheck, queue
 from app.models import Paper, PaperEvent, PaperSources
 from app.workers import pdf_recheck as worker
+from app.workers.settings import WorkerSettings
 
 pytestmark = pytest.mark.anyio
 
@@ -36,15 +38,15 @@ async def test_a_found_copy_upgrades_the_paper_and_leaves_an_event(session, arq,
     discovery_fakes.pdf_host.reply("/copy.pdf", 200, content=PDF)
     paper = await held(session, oa_url=f"{HOST}/copy.pdf")
 
-    outcome = await pdf_recheck.recheck(session, discovery_fakes.providers, paper.id, NOW)
+    outcome = await pdf_recheck.recheck(session, discovery_fakes.providers, paper.id)
 
     await session.refresh(paper)
     assert outcome == "found"
     assert (pdf_dir / f"{paper.id}.pdf").read_bytes() == PDF
-    assert (paper.pdf_checked_at, paper.pdf_check_result) == (NOW, "found")
+    assert paper.pdf_check_result == "found"  # the time is set when the run claims it (due)
     assert arq.jobs == [("ingest_paper", str(paper.id))]
-    [event] = await paper_events.history(session, paper.id)
-    assert (event.kind, event.detail) == ("pdf_found", {"url": f"{HOST}/copy.pdf", "how": "imported"})
+    events = {e.kind: e.detail for e in await paper_events.history(session, paper.id)}
+    assert events == {"pdf_found": {"url": f"{HOST}/copy.pdf", "how": "imported"}, "pdf_attached": {"how": "imported"}}
 
 
 async def test_no_copy_records_none_and_a_failure_records_error_and_the_run_goes_on(
@@ -74,21 +76,25 @@ async def test_no_copy_records_none_and_a_failure_records_error_and_the_run_goes
     assert arq.jobs == [("ingest_paper", str(found_id))]
 
 
-async def test_a_held_arxiv_copy_is_skipped_marked_checked_and_leaves_no_event(session, discovery_fakes, monkeypatch):
+async def test_a_held_arxiv_copy_records_none_and_waits_the_normal_week(session, discovery_fakes, monkeypatch):
+    await session.execute(delete(Paper))
     paper = await held(session, doi="10.1/x")
-    paper.pdf_check_result = "none"
-    await session.commit()
+    paper_id = paper.id
+    lookups = []
 
-    async def in_library(*_args):
+    async def in_library(_session, _providers, candidate):
+        lookups.append(candidate.paper_id)
         raise discovery.Conflict(discovery.ALREADY_IN_LIBRARY, paper_id="x")
 
     monkeypatch.setattr(discovery, "find_pdf", in_library)
-    outcome = await pdf_recheck.recheck(session, discovery_fakes.providers, paper.id, NOW)
+    counts = await pdf_recheck.run(session, discovery_fakes.providers, NOW)
+    again = await pdf_recheck.run(session, discovery_fakes.providers, NOW + timedelta(days=6))
 
     await session.refresh(paper)
-    assert outcome == "skipped"
-    assert (paper.pdf_checked_at, paper.pdf_check_result) == (NOW, "none")  # the last real result stays
-    assert await paper_events.history(session, paper.id) == []
+    assert (counts["none"], sum(again.values()), lookups) == (1, 0, [paper_id])
+    assert (paper.pdf_checked_at, paper.pdf_check_result) == (NOW, "none")
+    assert await paper_events.history(session, paper_id) == []
+    assert await pdf_recheck.due(session, NOW + timedelta(days=7, seconds=1)) == [paper_id]
 
 
 async def _seed_due(session):
@@ -121,6 +127,38 @@ async def test_due_caps_and_takes_the_longest_unchecked_first(session, monkeypat
     assert await pdf_recheck.due(session, NOW) == [fresh, old[0], old[2]]
 
 
+async def test_due_claims_its_papers_so_a_second_run_the_same_moment_takes_nothing_new(session):
+    await session.execute(delete(Paper))
+    ids = {(await held(session, title)).id for title in ("A", "B", "C")}
+
+    first = await pdf_recheck.due(session, NOW)
+    second = await pdf_recheck.due(session, NOW)
+
+    assert (set(first), second) == (ids, [])
+    stamped = await session.scalars(select(Paper.pdf_checked_at).where(Paper.id.in_(ids)))
+    assert set(stamped) == {NOW}  # claimed: checked-at is set before any lookup
+
+
+async def test_two_sessions_claim_disjoint_papers(session, monkeypatch):
+    monkeypatch.setattr(pdf_recheck, "RECHECK_CAP", 2)
+    await session.execute(delete(Paper))
+    ids = {(await held(session, title)).id for title in ("A", "B", "C", "D", "E")}
+    other = AsyncSession(bind=session.bind, expire_on_commit=False, join_transaction_mode="create_savepoint")
+
+    try:
+        mine, theirs = await pdf_recheck.due(session, NOW), await pdf_recheck.due(other, NOW)
+    finally:
+        await other.close()
+
+    assert len(mine) == len(theirs) == 2 and not set(mine) & set(theirs) and set(mine) | set(theirs) < ids
+
+
+def test_the_cron_never_runs_at_startup():
+    """Each worker start would otherwise check another RECHECK_CAP papers: one run a day, at 05:00."""
+    [job] = [j for j in WorkerSettings.cron_jobs if j.name == "recheck_free_pdfs"]
+    assert (job.run_at_startup, job.hour, job.minute) == (False, {5}, {0})
+
+
 async def test_run_pauses_between_papers_only(session, discovery_fakes, monkeypatch):
     pauses = []
 
@@ -143,17 +181,17 @@ async def test_a_failing_mark_is_logged_and_the_run_goes_on(session, discovery_f
     first_id, second_id = first.id, second.id
     real = pdf_recheck._mark
 
-    async def mark(session_, paper_id, now, outcome):
+    async def mark(session_, paper_id, outcome):
         if paper_id == first_id:
             raise RuntimeError("db down")
-        await real(session_, paper_id, now, outcome)
+        await real(session_, paper_id, outcome)
 
     monkeypatch.setattr(pdf_recheck, "_mark", mark)
     counts = await pdf_recheck.run(session, discovery_fakes.providers, NOW)
 
-    checked = {p.id: p.pdf_checked_at for p in await session.scalars(select(Paper))}
+    results = {p.id: p.pdf_check_result for p in await session.scalars(select(Paper))}
     assert sum(counts.values()) == 2
-    assert (checked[first_id], checked[second_id]) == (None, NOW)
+    assert (results[first_id], results[second_id]) == (None, "none")
 
 
 async def test_the_job_does_nothing_while_the_switch_is_off(session, worker_session, monkeypatch):
@@ -181,6 +219,26 @@ async def test_the_job_runs_while_the_switch_is_on(session, worker_session, monk
     assert len(ran) == 1
 
 
+async def test_switching_off_mid_run_stops_the_rest(session, discovery_fakes, monkeypatch):
+    await session.execute(delete(PaperSources))
+    await session.execute(delete(Paper))
+    for title in ("A", "B", "C"):
+        await held(session, title)
+    real, looked = discovery.find_pdf, []
+
+    async def then_switch_off(session_, providers, candidate):
+        looked.append(candidate.paper_id)
+        await session_.execute(update(PaperSources).values(pdf_recheck_enabled=False))
+        return await real(session_, providers, candidate)
+
+    session.add(PaperSources(id=True, pdf_recheck_enabled=True))
+    await session.commit()
+    monkeypatch.setattr(discovery, "find_pdf", then_switch_off)
+    counts = await pdf_recheck.run(session, discovery_fakes.providers, NOW)
+
+    assert (len(looked), sum(counts.values())) == (1, 1)
+
+
 class _Shared:
     def __init__(self, session):
         self.session = session
@@ -192,10 +250,9 @@ class _Shared:
         return False
 
 
-async def test_a_failing_event_write_still_leaves_the_ingest_queued(
-    app, client, session, arq, discovery_fakes, pdf_dir, monkeypatch
+async def test_a_failing_pdf_found_write_still_leaves_the_ingest_queued(
+    session, arq, discovery_fakes, pdf_dir, monkeypatch
 ):
-    app.dependency_overrides[get_discovery] = lambda: discovery_fakes.providers
     discovery_fakes.pdf_host.reply("/copy.pdf", 200, content=PDF)
     paper = await held(session, "Found", oa_url=f"{HOST}/copy.pdf")
     paper_id = paper.id
@@ -204,10 +261,9 @@ async def test_a_failing_event_write_still_leaves_the_ingest_queued(
         raise RuntimeError("event write failed")
 
     monkeypatch.setattr(paper_events, "record", broken)
-    with pytest.raises(RuntimeError):
-        await client.post(f"/api/papers/{paper_id}/find-pdf")
+    outcome = await pdf_recheck.recheck(session, discovery_fakes.providers, paper_id)
 
-    assert arq.jobs == [("ingest_paper", str(paper_id))]
+    assert outcome == "found" and arq.jobs == [("ingest_paper", str(paper_id))]
 
 
 async def test_upload_and_find_routes_write_pdf_attached(app, client, session, discovery_fakes, pdf_dir):

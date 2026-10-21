@@ -86,13 +86,14 @@ class WorkerSettings:
             run_at_startup=True,
             timeout=BIORXIV_HARVEST_JOB_TIMEOUT,
         ),
-        # a startup run is cheap: the 7-day filter leaves only papers not checked this week
+        # never at startup: each worker start would check another RECHECK_CAP papers ("25 a day"). ponytail: a Mac
+        # asleep at 05:00 skips that day's run; arq doesn't catch up on missed crons
         cron(
             recheck_free_pdfs,
             name="recheck_free_pdfs",
             hour={5},
             minute={0},
-            run_at_startup=True,
+            run_at_startup=False,
             timeout=RECHECK_JOB_TIMEOUT,
         ),
         cron(schedule_saved_searches, name="schedule_saved_searches", second=0, run_at_startup=True),

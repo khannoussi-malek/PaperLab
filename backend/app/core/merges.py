@@ -16,7 +16,7 @@ from app.core.candidates import Candidate
 from app.core.enrichment import Collision, normalize_doi, pdf_hints, short_id
 from app.core.errors import NotFound
 from app.core.papers import ABSTRACT_PAGE
-from app.models import Paper, PaperMerge
+from app.models import Paper, PaperEvent, PaperMerge
 from app.models.workspace_search import WorkspaceSearchHit
 
 UNIQUE_IDENTIFIERS = ("doi", "openalex_id")  # UNIQUE on papers: M's are cleared before K may take them
@@ -264,6 +264,8 @@ async def merge(
         if not dry_run:
             await _absorb(session, kept, merged)
             session.add(PaperMerge(**audit, status="merged", moved=moved))
+            # K saved without a PDF (_refusal) gets M's: its History says so, as for any arriving PDF (R21)
+            session.add(PaperEvent(paper_id=kept_id, kind="pdf_attached", detail={"how": how, "merged": True}))
             await session.commit()
         return MergeResult("merged", moved=moved, dry_run=dry_run)
     except BaseException:

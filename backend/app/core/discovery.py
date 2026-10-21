@@ -852,7 +852,8 @@ async def add(
     if copies_out is not None:
         copies_out.extend(copies)
     if data is None and save_without_pdf:
-        return await papers.create_metadata_paper(session, prefill(candidate), details_source=details_source(candidate))
+        source = details_source(candidate)
+        return await papers.create_metadata_paper(session, prefill(candidate), source, looked_for_pdf=True)
     if data is None:
         raise Conflict(NO_FREE_PDF, tried=tried, free_copies=copies)
     # ponytail: two adds of one paper racing past the check above hit papers' UNIQUE doi and 500. The buttons disable
