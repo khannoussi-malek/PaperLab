@@ -5,7 +5,7 @@ from typing import Annotated, Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
 from app.core.papers import ABSTRACT_PAGE
-from app.core.source_types import DetailsSource, PeerReviewed, SourceType
+from app.core.source_types import DetailsSource, PeerReviewed, ProvenanceSource, SourceType
 
 # PDF points, top-left origin: (x0, y0, x1, y1). A tuple so OpenAPI (and the TS types) say 4 numbers.
 Rect = tuple[float, float, float, float]
@@ -32,6 +32,10 @@ class PaperOut(BaseModel):
     evidence_access: Literal["full_text", "abstract", "metadata"]
     has_pdf: bool
     details_source: DetailsSource | None
+    field_sources: dict[str, ProvenanceSource]  # {group: source}, app.core.provenance.FIELD_GROUPS (R22)
+    manual_fields: list[str]
+    pdf_checked_at: datetime | None
+    pdf_check_result: Literal["found", "none", "error"] | None
     is_retracted: bool
     oa_status: str | None
     oa_url: str | None

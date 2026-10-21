@@ -43,6 +43,7 @@ from app.core.enrichment import ARXIV_DOI_PREFIX
 from app.core.errors import Conflict, InvalidInput
 from app.core.paper_enrichment import apply_published
 from app.core.paper_sources import KEYED, NAMES, SourceSettings
+from app.core.provenance import sources_of
 from app.core.redact import redact
 from app.core.source_registry import ASKS
 from app.core.source_types import DETAILS_SOURCES, is_preprint_copy
@@ -408,10 +409,15 @@ async def download_pdf(http: httpx.AsyncClient, urls: list[str]) -> tuple[bytes 
     return None, tried
 
 
+def details_source(candidate: Candidate) -> str:
+    """The first of the candidate's sources that is a details source, else "search"."""
+    return next((s for s in candidate.sources if s in DETAILS_SOURCES), "search")
+
+
 def prefill(candidate: Candidate) -> dict[str, Any]:
     """Enrichment trusts a stored openalex_id, and a DOI only when it's locked (D69). The title is always locked:
     ingest's PDF-font heuristic and enrichment's metadata are both worse than the title the source already gave us,
-    so it must survive both (M7.5)."""
+    so it must survive both (M7.5). field_sources stamps the groups it fills with the candidate's source (R22)."""
     doi = next(iter(_library_dois(candidate)), None)
     openalex_id = candidate.external_ids.get("openalex")
     fields = {
@@ -425,7 +431,7 @@ def prefill(candidate: Candidate) -> dict[str, Any]:
         "openalex_id": openalex_id,
     }
     locked = ["doi", "title"] if doi and not openalex_id else ["title"]
-    return fields | {"manual_fields": locked}
+    return fields | {"manual_fields": locked, "field_sources": sources_of(fields, details_source(candidate))}
 
 
 def _filename(title: str) -> str:
@@ -580,7 +586,7 @@ async def _reuse_arxiv_copy(
     if held is not None:
         owner = select(Paper.id).where(func.lower(Paper.doi) == (candidate.doi or "").lower(), Paper.id != held.id)
         if not (candidate.doi and await session.scalar(owner.limit(1))):  # add() never gets here with one: it's held
-            apply_published(held, candidate.doi, candidate.venue)
+            apply_published(held, candidate.doi, candidate.venue, details_source(candidate))
     paper_id, asked = held and held.id, held and arxiv_from_doi(held.doi.lower())
     await session.commit()
     if paper_id is not None:
@@ -846,8 +852,7 @@ async def add(
     if copies_out is not None:
         copies_out.extend(copies)
     if data is None and save_without_pdf:
-        source = next((s for s in candidate.sources if s in DETAILS_SOURCES), "search")
-        return await papers.create_metadata_paper(session, prefill(candidate), details_source=source)
+        return await papers.create_metadata_paper(session, prefill(candidate), details_source=details_source(candidate))
     if data is None:
         raise Conflict(NO_FREE_PDF, tried=tried, free_copies=copies)
     # ponytail: two adds of one paper racing past the check above hit papers' UNIQUE doi and 500. The buttons disable

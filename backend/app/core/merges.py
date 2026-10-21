@@ -120,6 +120,7 @@ STEPS = (
     # K's card can only be the failed needs_full_text one (no PDF); a real card would collide below and roll back.
     _Step("evidence_cards_dropped", "evidence_cards", "t.paper_id = :k AND t.status = 'failed'"),
     _move("evidence_cards"),
+    _move("paper_events"),  # M's history (R21) is K's now
 )
 _AWAITING = (
     "SELECT count(*) FROM workspace_search_hits WHERE paper_id IN (:k, :m) AND acquisition_status = 'awaiting_pdf'"
@@ -206,6 +207,8 @@ def _kept_columns(kept: Paper, merged: Paper) -> dict[str, Any]:
             hand_edited = name in merged.manual_fields
             values[name] = theirs if hand_edited or _empty(name, ours) else ours
     values["manual_fields"] = [*kept.manual_fields, *(f for f in merged.manual_fields if f not in kept.manual_fields)]
+    # ponytail: per group, K's source wins over M's, as K's values mostly do; a group mixing both reads K's
+    values["field_sources"] = {**merged.field_sources, **kept.field_sources}
     # M's references move in, so K's fetch state follows them unless K's own fetch finished or M never fetched.
     if kept.references_state != "ready" and merged.references_state != "none":
         values.update({name: getattr(merged, name) for name in REFERENCES})
