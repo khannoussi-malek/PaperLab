@@ -50,9 +50,9 @@ it('lists the history, newest first as served, with how each PDF came in words',
     { id: 'e0', kind: 'pdf_attached', detail: { how: 'manual' }, created_at: '2026-10-13T12:00:00Z' },
   ])
   const items = await screen.findAllByRole('listitem')
+  // pdf_found feeds the library notice; the arrival itself is the pdf_attached line, so a find isn't listed twice
   expect(items.map((li) => li.textContent)).toEqual([
     expect.stringMatching(/^PDF added .+ \(found\)$/),
-    expect.stringMatching(/^Free PDF found /),
     expect.stringMatching(/^PDF added .+ \(uploaded\)$/),
   ])
 })
