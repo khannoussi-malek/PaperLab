@@ -70,6 +70,16 @@ async def test_biblio_stamps_each_group_with_the_source_that_filled_it(session):
     assert paper.field_sources == {"citation": "crossref", "identifiers": "openalex"}
 
 
+async def test_a_citation_both_sources_filled_reads_crossref(session):
+    paper = await add_paper(session, doi=DOI)
+    client, _ = fake_crossref({"type": "journal-article", "page": "45-67"})  # Crossref has the pages only
+    only_volume = openalex_work(biblio={"volume": "7"}, ids={})  # OpenAlex has the volume only
+    await enrichment.fill_biblio(session, paper.id, client, openalex_work=only_volume)
+    await session.refresh(paper)
+    assert (paper.volume, paper.pages) == ("7", "45-67")
+    assert paper.field_sources == {"citation": "crossref"}  # Crossref wins the group it shares with OpenAlex
+
+
 async def test_biblio_claims_only_the_groups_whose_nulls_it_filled(session):
     held = {"volume": "1", "issue": "2", "pages": "3", "editors": ["E"]}
     paper = await add_paper(session, doi=DOI, **held, field_sources={"citation": "zotero"})
@@ -135,13 +145,14 @@ async def test_a_zotero_fill_claims_only_what_was_missing(session):
 
 async def test_a_field_the_guard_drops_claims_nothing(session):
     holder = await add_paper(session, title="Holder", doi="10.9999/prov.taken")
-    paper = await add_paper(session, authors=["Known"], abstract="Mine", manual_fields=["abstract"])
+    paper = await add_paper(session, authors=["Known"], year=2019, abstract="Mine", manual_fields=["abstract"])
+    # manual: the abstract; regressions: blanks over the known byline and year; taken: the DOI
     fields = {"abstract": "Theirs", "authors": [], "year": None, "doi": holder.doi, "published_doi": "10.9/p"}
     collisions = await enrichment._write(session, paper, fields, "openalex")
     await session.commit()
     await session.refresh(paper)
     assert [c.column for c in collisions] == ["doi"]
-    assert (paper.abstract, paper.authors, paper.doi) == ("Mine", ["Known"], None)
+    assert (paper.abstract, paper.authors, paper.year, paper.doi) == ("Mine", ["Known"], 2019, None)
     assert paper.field_sources == {"published": "openalex"}  # only the field that was written
 
 
