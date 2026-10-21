@@ -69,7 +69,11 @@ async def recheck(session: AsyncSession, providers: discovery.Providers, paper_i
     except Exception:
         logger.exception("the free-copy re-check of paper %s failed", paper_id)
         await session.rollback()
-    await _mark(session, paper_id, now, outcome)
+    try:
+        await _mark(session, paper_id, now, outcome)
+    except Exception:  # the paper is checked again next run; the others still get their turn
+        logger.exception("recording the re-check of paper %s failed", paper_id)
+        await session.rollback()
     return outcome
 
 

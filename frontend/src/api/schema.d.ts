@@ -2902,9 +2902,14 @@ export interface components {
         };
         /**
          * FoundPdfOut
-         * @description A free copy the weekly re-check found, for the notice.
+         * @description A free copy the weekly re-check found, for the notice. `id` is the event's, for marking it seen.
          */
         FoundPdfOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
             /**
              * Paper Id
              * Format: uuid
@@ -2917,6 +2922,14 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /**
+         * FoundPdfsSeen
+         * @description The finds the owner was shown and dismissed.
+         */
+        FoundPdfsSeen: {
+            /** Ids */
+            ids: string[];
         };
         /** GenerateIn */
         GenerateIn: {
@@ -5031,7 +5044,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FoundPdfsSeen"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             204: {
@@ -5039,6 +5056,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };
