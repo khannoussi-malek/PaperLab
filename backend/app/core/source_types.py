@@ -11,6 +11,9 @@ PeerReviewed = Literal["true", "false", "unknown"]
 # Where a PDF-less paper's details came from (shown as "Details from <Source>").
 DetailsSource = Literal["zotero", "crossref", "openalex", "semantic_scholar", "arxiv", "search", "manual"]
 DETAILS_SOURCES: tuple[str, ...] = get_args(DetailsSource)
+# Which source last filled a group of a paper's details (papers.field_sources, R22): a details source or the PDF.
+ProvenanceSource = Literal[DetailsSource, "pdf"]
+PROVENANCE_SOURCES: tuple[str, ...] = get_args(ProvenanceSource)
 SOURCE_TYPES: tuple[str, ...] = get_args(SourceType)
 PEER_REVIEWED: tuple[str, ...] = get_args(PeerReviewed)
 

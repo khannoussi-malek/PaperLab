@@ -7,6 +7,7 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.core import provenance
 from app.core.chunking import STRATEGY_VERSION, ChunkDraft
 from app.core.errors import Conflict, Gone, InvalidInput, NotFound
 from app.core.source_types import DETAILS_SOURCES
@@ -62,7 +63,8 @@ def abstract_drafts(title: str, abstract: str | None) -> list[ChunkDraft]:
 
 
 async def create_metadata_paper(session: AsyncSession, prefill: dict[str, Any], details_source: str) -> Paper:
-    """A paper saved without a PDF (R5): `prefill` as create_paper takes it, and where the details came from.
+    """A paper saved without a PDF (R5): `prefill` as create_paper takes it, and where the details came from, which
+    also stamps every group it fills (R22).
 
     With an abstract it gets one chunk on ABSTRACT_PAGE and starts `embedding`, for the caller to enqueue
     index_abstract; without one it is `ready` at once, with no chunks (R3). Commits; enqueues nothing.
@@ -77,8 +79,9 @@ async def create_metadata_paper(session: AsyncSession, prefill: dict[str, Any], 
     if not title:
         raise InvalidInput("empty_title")
     abstract = (prefill.get("abstract") or "").strip() or None
+    values = {**prefill, "title": title, "abstract": abstract}
     paper = Paper(
-        **{**prefill, "title": title, "abstract": abstract},
+        **{**values, "field_sources": provenance.sources_of(values, details_source)},
         file_path=None,
         details_source=details_source,
         status=PaperStatus.EMBEDDING if abstract else PaperStatus.READY,

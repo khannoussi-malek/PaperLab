@@ -3571,6 +3571,16 @@ export interface components {
             has_pdf: boolean;
             /** Details Source */
             details_source: ("zotero" | "crossref" | "openalex" | "semantic_scholar" | "arxiv" | "search" | "manual") | null;
+            /** Field Sources */
+            field_sources: {
+                [key: string]: "zotero" | "crossref" | "openalex" | "semantic_scholar" | "arxiv" | "search" | "manual" | "pdf";
+            };
+            /** Manual Fields */
+            manual_fields: string[];
+            /** Pdf Checked At */
+            pdf_checked_at: string | null;
+            /** Pdf Check Result */
+            pdf_check_result: ("found" | "none" | "error") | null;
             /** Is Retracted */
             is_retracted: boolean;
             /** Oa Status */

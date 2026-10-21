@@ -62,6 +62,11 @@ class Paper(Base):
     manual_fields: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default=text("'{}'"))
     file_path: Mapped[str | None] = mapped_column(Text)  # NULL: saved without a PDF
     details_source: Mapped[str | None] = mapped_column(Text)  # app.core.source_types.DetailsSource; CHECK in 0050
+    # R22: {group: source}, which source last filled each group of details (app.core.provenance). No CHECK on values.
+    field_sources: Mapped[dict[str, str]] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
+    # R20: when the weekly re-check last looked for a free PDF, and found | none | error (CHECK in 0053).
+    pdf_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    pdf_check_result: Mapped[str | None] = mapped_column(Text)
     page_count: Mapped[int | None]
     status: Mapped[str] = mapped_column(Text, server_default=PaperStatus.UPLOADED)
     status_error: Mapped[str | None] = mapped_column(Text)

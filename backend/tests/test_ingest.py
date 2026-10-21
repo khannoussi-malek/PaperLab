@@ -207,6 +207,17 @@ async def test_enriched_title_is_not_overwritten(worker_session, sample_pdf, ctx
     await worker_session.refresh(paper)
 
     assert paper.status == "ready" and paper.title == "Title From OpenAlex"
+    assert "bibliographic" not in paper.field_sources  # the PDF's title was not written
+
+
+async def test_the_pdf_title_stamps_pdf(worker_session, sample_pdf, ctx):
+    paper = await add_paper(worker_session, sample_pdf, field_sources={"abstract": "crossref"})
+
+    await ingest.ingest_paper(ctx, str(paper.id))
+    await worker_session.refresh(paper)
+
+    assert paper.title == "Deep Paper Title"
+    assert paper.field_sources == {"bibliographic": "pdf", "abstract": "crossref"}
 
 
 BERT_WORK = "/works/doi:10.18653/v1/n19-1423"  # the DOI doi_pdf prints
