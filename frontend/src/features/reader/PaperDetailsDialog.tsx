@@ -18,6 +18,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { PaperProvenance } from './PaperProvenance'
 import { SOURCE_TYPES, toForm, toUpdate, type PaperForm } from './paperForm'
 
 const SELECT_CLASS =
@@ -171,6 +172,7 @@ export function PaperDetailsDialog({ paper }: { paper: Paper }) {
             />
             <Label htmlFor="paper-retracted">Retracted</Label>
           </div>
+          <PaperProvenance paper={paper} />
           {error && (
             <Alert variant="destructive">
               <AlertDescription>{DETAIL_MESSAGES[error] ?? error}</AlertDescription>
