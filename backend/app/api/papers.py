@@ -141,8 +141,7 @@ async def upload_paper_pdf(paper_id: uuid.UUID, file: UploadFile, request: Reque
     if len(data := await file.read()) > MAX_UPLOAD_PDF_BYTES:
         raise too_large
     paper = await papers.attach_pdf(session, paper_id, data, how="manual")
-    await _enqueue_ingest(request, paper.id)  # before the event: a failed event write can't leave it unqueued
-    await paper_events.record(session, paper_id, "pdf_attached", {"how": "manual"})
+    await _enqueue_ingest(request, paper.id)
     return paper
 
 
@@ -162,11 +161,11 @@ async def find_paper_pdf(
         if str(exc) != discovery.ALREADY_IN_LIBRARY:
             raise
         raise Conflict("already_in_library", **exc.details) from exc
-    if data is None:
+    if data is None:  # a check like the weekly re-check's: it waits a week before repeating this lookup
+        await papers.record_no_free_pdf(session, paper_id)
         raise Conflict("no_free_pdf", tried=tried, free_copies=copies)
     paper = await papers.attach_pdf(session, paper_id, data, how="imported")
-    await _enqueue_ingest(request, paper.id)  # before the event: a failed event write can't leave it unqueued
-    await paper_events.record(session, paper_id, "pdf_attached", {"how": "imported"})
+    await _enqueue_ingest(request, paper.id)
     return paper
 
 

@@ -4,6 +4,7 @@ import base64
 import uuid
 
 import pytest
+from conftest import pdf_attached
 from mcp_fixtures import *  # noqa: F403
 from mcp_fixtures import call, result
 from sqlalchemy import func, select
@@ -159,6 +160,7 @@ async def test_an_upload_for_a_doi_held_without_a_pdf_attaches_to_that_paper(ses
     assert (out["status"], out["paper_id"], out["note"]) == ("queued", str(held.id), None)
     assert jobs.jobs == [("ingest_paper", str(held.id))] and (pdf_dir / f"{held.id}.pdf").read_bytes() == PDF
     assert await paper_count(session) == 1
+    assert await pdf_attached(session, held.id) == [{"how": "manual"}]
 
 
 def a_pdf_lands_first(monkeypatch, session, status):

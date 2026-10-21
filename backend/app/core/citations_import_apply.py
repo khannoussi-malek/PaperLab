@@ -252,10 +252,13 @@ async def _new_paper(session, entry, providers: GetProviders | None, bundle: Bun
     return *await _fetch(session, await providers(), entry), False
 
 
-async def _save_without_pdf(session, entry: ImportEntry, workspace_id: uuid.UUID | None) -> ImportResult:
+async def _save_without_pdf(
+    session, entry: ImportEntry, workspace_id: uuid.UUID | None, looked_for_pdf: bool
+) -> ImportResult:
     """The entry as a PDF-less paper, filed as an imported one is. Like a fetched paper, its follow-up job is queued
-    first, so a crash while filing never leaves an abstract that is never indexed."""
-    paper = await papers.create_metadata_paper(session, _prefill(entry), details_source="zotero")
+    first, so a crash while filing never leaves an abstract that is never indexed. `looked_for_pdf`: a free-copy
+    lookup ran and found none, which counts as a check."""
+    paper = await papers.create_metadata_paper(session, _prefill(entry), "zotero", looked_for_pdf=looked_for_pdf)
     try:
         if paper.abstract:
             await queue.enqueue("index_abstract", str(paper.id))
@@ -290,8 +293,8 @@ async def _one(
             already_in_library=1, pdfs_attached=int(attached), notes=await _file(session, held, entry, workspace_id)
         )
     made, missing, from_zip = await _new_paper(session, entry, providers, bundle, index)
-    if made is None and save_without_pdf:
-        return await _save_without_pdf(session, entry, workspace_id)
+    if made is None and save_without_pdf:  # NO_PDF: fetching was off or the entry has no DOI/arXiv id to look by
+        return await _save_without_pdf(session, entry, workspace_id, looked_for_pdf=missing is not NO_PDF)
     if made is None:
         return ImportResult(needs_pdf=[{name: getattr(entry, name) for name in ENTRY_RECORD} | missing])
     if not isinstance(made, Paper):  # the free-copy search found it held after all

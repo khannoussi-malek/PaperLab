@@ -159,6 +159,8 @@ async def test_add_without_a_free_pdf_saves_without_pdf_only_when_asked(client, 
     stored = await session.get(Paper, uuid.UUID(paper["id"]))
     assert (stored.details_source, stored.abstract) == ("crossref", "An abstract.")
     assert arq.jobs == [("index_abstract", paper["id"])]
+    # I3: Add's own lookup counts as a check, so the weekly re-check waits a week before repeating it
+    assert stored.pdf_checked_at is not None and stored.pdf_check_result == "none"
 
 
 async def test_an_overlong_abstract_is_cut_not_refused(client, discovery_api, session, arq):
