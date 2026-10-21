@@ -8,9 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.chunking import STRATEGY_VERSION, ChunkDraft
-from app.core.errors import Conflict, InvalidInput, NotFound
+from app.core.errors import Conflict, Gone, InvalidInput, NotFound
 from app.core.source_types import DETAILS_SOURCES
-from app.models import Chunk, Paper, PaperStatus
+from app.models import Chunk, Paper, PaperMerge, PaperStatus
 from app.models.workspace_search import WorkspaceSearchHit
 
 PDF_MAGIC = b"%PDF-"
@@ -124,9 +124,19 @@ async def attach_pdf(session: AsyncSession, paper_id: uuid.UUID, data: bytes, ho
     return paper
 
 
-async def get_paper(session: AsyncSession, paper_id: uuid.UUID) -> Paper:
-    paper = await session.get(Paper, paper_id)
+async def get_paper(session: AsyncSession, paper_id: uuid.UUID, *, lock: bool = False) -> Paper:
+    """Raises NotFound, or Gone for a merged paper. `lock`: the row is read afresh and locked until the commit."""
+    paper = await session.get(Paper, paper_id, with_for_update=True if lock else None, populate_existing=lock)
     if paper is None:
+        # the one indexed lookup, only here: a merged paper's id leads to the paper it became (R19)
+        kept = await session.scalar(
+            select(PaperMerge.kept_id)
+            .where(PaperMerge.merged_id == paper_id, PaperMerge.status == "merged")
+            .order_by(PaperMerge.created_at.desc())
+            .limit(1)
+        )
+        if kept is not None:
+            raise Gone("paper_merged", detail=f"This paper was merged into {kept}.", kept_id=str(kept))
         raise NotFound(f"paper {paper_id} not found")
     return paper
 
@@ -192,8 +202,9 @@ async def replace_chunks(session: AsyncSession, paper_id: uuid.UUID, drafts: lis
 
 async def delete_paper(session: AsyncSession, paper_id: uuid.UUID) -> None:
     """Chunks and note anchors cascade. Notes survive: they are the primary object. Hits awaiting this paper's PDF
-    go back to `failed`, for Get PDFs and link to take up again, instead of awaiting no paper."""
-    paper = await get_paper(session, paper_id)
+    go back to `failed`, for Get PDFs and link to take up again, instead of awaiting no paper. The row is locked
+    first: a delete that waited on a merge of this paper finds it Gone, and never unlinks the file that is K's now."""
+    paper = await get_paper(session, paper_id, lock=True)
     await session.execute(
         update(WorkspaceSearchHit)
         .where(WorkspaceSearchHit.paper_id == paper_id, WorkspaceSearchHit.acquisition_status == "awaiting_pdf")

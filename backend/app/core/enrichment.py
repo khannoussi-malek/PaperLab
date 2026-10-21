@@ -16,7 +16,7 @@ from datetime import timedelta
 from typing import Any
 
 import httpx
-from sqlalchemy import delete, exists, func, insert, or_, select, update
+from sqlalchemy import delete, func, insert, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -54,6 +54,15 @@ class PdfHints:
     text: str  # the embedded author field and page 1's text, where a match's first author must appear
     authors: list[str]  # the embedded author field, split into names
     keywords: list[str]  # the embedded keywords: the author's own topic labels
+
+
+@dataclass(frozen=True)
+class Collision:
+    """A doi or openalex_id `_write` dropped because another paper (`holder_id`) already holds it."""
+
+    column: str
+    value: str
+    holder_id: uuid.UUID
 
 
 def normalize_doi(value: str) -> str | None:
@@ -243,13 +252,13 @@ def _regresses(new: Any, old: Any) -> bool:
     return new in (None, []) and old not in (None, [])
 
 
-async def _taken(session: AsyncSession, paper_id: uuid.UUID, column: Any, value: Any) -> bool:
-    """True when a different paper already holds this UNIQUE `column` value."""
+async def _taken(session: AsyncSession, paper_id: uuid.UUID, column: Any, value: Any) -> uuid.UUID | None:
+    """The different paper already holding this UNIQUE `column` value, or None."""
     # ponytail: check-then-UPDATE, not atomic. ARQ runs up to 10 jobs at once, so two concurrent duplicates could
     # still both pass this check and hit the UNIQUE constraint on the later UPDATE; the worker's `_enrich` catch-all
     # logs it and the paper still ends `ready`. Upgrade path: `ON CONFLICT` on the UPDATE, or a savepoint around
     # check+write.
-    return bool(await session.scalar(select(exists().where(column == value, Paper.id != paper_id))))
+    return await session.scalar(select(Paper.id).where(column == value, Paper.id != paper_id))
 
 
 async def _replace_authorships(session: AsyncSession, paper_id: uuid.UUID, work: dict[str, Any]) -> list[str]:
@@ -315,7 +324,7 @@ async def refresh_authors(session: AsyncSession, http: httpx.AsyncClient, openal
     await session.commit()
 
 
-async def _write(session: AsyncSession, paper: Paper, fields: dict[str, Any]) -> None:
+async def _write(session: AsyncSession, paper: Paper, fields: dict[str, Any]) -> list[Collision]:
     # The OpenAlex lookup can take seconds; re-read the lock right before writing, in case a PATCH landed meanwhile.
     await session.refresh(paper, ["manual_fields"])
     values = {k: v for k, v in fields.items() if k not in paper.manual_fields and not _regresses(v, getattr(paper, k))}
@@ -324,12 +333,15 @@ async def _write(session: AsyncSession, paper: Paper, fields: dict[str, Any]) ->
     # A duplicate upload can match the very work (or carry the very DOI) an existing paper already holds; doi and
     # openalex_id are both UNIQUE, so a value another paper already has is dropped here instead of raising. The
     # copy still gets the match's authorships and topics: those are written regardless, keyed on paper_id, not on
-    # the papers.openalex_id column this function may have just dropped.
+    # the papers.openalex_id column this function may have just dropped. Each one dropped is returned.
+    collisions = []
     for column, key in ((Paper.doi, "doi"), (Paper.openalex_id, "openalex_id")):
-        if (value := values.get(key)) and await _taken(session, paper.id, column, value):
+        if (value := values.get(key)) and (holder_id := await _taken(session, paper.id, column, value)):
             values = {k: v for k, v in values.items() if k != key}
+            collisions.append(Collision(key, value, holder_id))
     if values:
         await session.execute(update(Paper).where(Paper.id == paper.id).values(**values))
+    return collisions
 
 
 async def _crossref_work(http: httpx.AsyncClient, doi: str, cache: dict[str, dict | None]) -> dict | None:
@@ -439,11 +451,11 @@ async def enrich_paper(
     paper_id: uuid.UUID,
     hints: PdfHints,
     crossref_http: httpx.AsyncClient | None = None,
-) -> None:
+) -> list[Collision]:
     """Fills a paper's metadata from OpenAlex, or from the PDF when OpenAlex has nothing. No client: OpenAlex is off.
 
     OpenAlex failures are logged and fall back to the PDF. A DOI or `openalex_id` another paper already holds is
-    silently dropped instead of raising (see `_write`).
+    dropped instead of raising (see `_write`), and returned: the after-ingest merge (R17) reads them.
     """
     crossref_works: dict[str, dict | None] = {}  # one /works/{doi} fetch shared by fill_source_type and fill_biblio
     paper = await get_paper(session, paper_id)
@@ -456,16 +468,17 @@ async def enrich_paper(
 
     await _replace_topics(session, paper_id, "author", dict.fromkeys(hints.keywords))
     if work is None:
+        collisions = []
         if paper.openalex_id is None:
             fallback = {k: v for k, v in {"authors": hints.authors, "doi": hints.doi}.items() if v}
             if fallback:
-                await _write(session, paper, fallback)  # never replaces what an earlier match found
+                collisions = await _write(session, paper, fallback)  # never replaces what an earlier match found
         await session.commit()
         await fill_source_type(session, paper_id, None, crossref_http, crossref_works)
         await fill_biblio(session, paper_id, crossref_http, crossref_works=crossref_works)
-        return
+        return collisions
 
-    await _write(session, paper, work_fields(work))
+    collisions = await _write(session, paper, work_fields(work))
     await _replace_topics(session, paper_id, "openalex", work_topics(work))
     await record_published(session, paper_id, work)
     await session.commit()
@@ -477,6 +490,7 @@ async def enrich_paper(
         await refresh_authors(session, http, author_ids)
     except httpx.HTTPError as exc:  # the paper and its authorships are saved; details come on the next run
         logger.warning("OpenAlex author fetch failed for paper %s: %r", paper_id, exc)
+    return collisions
 
 
 async def correct_metadata(session: AsyncSession, paper_id: uuid.UUID, fields: dict[str, Any]) -> Paper:

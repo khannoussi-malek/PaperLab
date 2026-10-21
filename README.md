@@ -540,6 +540,7 @@ cd frontend && npm run typecheck:e2e && npm run e2e      # end-to-end against th
 cd desktop && npm ci && npm test && npm run typecheck    # the desktop app: unit tests and types
 cd desktop && npm run e2e -- --project=stub              # its window against a stub docker
 docker compose exec api python -m evals.answer_check --paper "<title prefix>" --workspace "<name>"  # manual, real LLM
+docker compose exec api python -m app.scripts.paper_merges            # report paper merges and merge candidates; a dry run, add --apply to merge the proven ones
 ```
 
 - **End-to-end tests** run against the real stack, with no mocked backend, on their own compose project

@@ -67,20 +67,33 @@ def _title_from_blocks(blocks: list[Block]) -> str | None:
     return join_lines([b.text for b in continued])
 
 
+def _page_blocks(page: pymupdf.Page) -> list[Block]:
+    raws = page.get_text("dict", flags=TEXT_FLAGS)["blocks"]
+    return [block for raw in raws if raw["type"] == 0 and (block := _block(page.number + 1, raw))]
+
+
+def _metadata(doc: pymupdf.Document) -> dict[str, str]:
+    return {key: value.strip() for key, value in (doc.metadata or {}).items() if isinstance(value, str)}
+
+
+def extract_title(path: str | Path) -> tuple[str | None, dict[str, str]]:
+    """extract's title and the PDF's metadata, reading page 1 only (the title comes from there): what a merge checks
+    the paper it would join against (R15c)."""
+    with pymupdf.open(path) as doc:
+        metadata = _metadata(doc)
+        blocks = _page_blocks(doc[0]) if doc.page_count else []
+    return metadata.get("title") or _title_from_blocks(blocks), metadata
+
+
 def extract(path: str | Path) -> ExtractedDoc:
     """Text blocks with bboxes in PDF points (top-left origin, relative to the crop box).
 
     ponytail: assumes unrotated pages; apply page.rotation_matrix if rotated scans show up.
     """
     with pymupdf.open(path) as doc:
-        blocks = [
-            block
-            for page in doc
-            for raw in page.get_text("dict", flags=TEXT_FLAGS)["blocks"]
-            if raw["type"] == 0 and (block := _block(page.number + 1, raw))
-        ]
+        blocks = [block for page in doc for block in _page_blocks(page)]
         page_count = doc.page_count
-        metadata = {key: value.strip() for key, value in (doc.metadata or {}).items() if isinstance(value, str)}
+        metadata = _metadata(doc)
         first_page_text = doc[0].get_text() if page_count else ""
 
     if sum(len(b.text) for b in blocks) < MIN_CHARS_PER_PAGE * page_count:

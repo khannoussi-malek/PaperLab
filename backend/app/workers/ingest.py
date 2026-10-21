@@ -6,7 +6,8 @@ from contextlib import AsyncExitStack
 
 from sqlalchemy import update
 
-from app.core import embedding_index, embedding_sources, enrichment, paper_sources, papers
+from app.core import embedding_index, embedding_sources, enrichment, merges, paper_sources, papers
+from app.core.candidates import Candidate
 from app.core.chunking import chunk_blocks
 from app.db import SessionLocal
 from app.models import Chunk, Paper, PaperStatus
@@ -45,10 +46,10 @@ def _timings(pid: uuid.UUID, marks: list[tuple[str, float]], started: float, chu
     return f"ingest timings for {pid}: {stages} total={now - started:.1f}s chunks={chunks} pages={pages}"
 
 
-async def _enrich(session, transport, paper_id: uuid.UUID, doc: ExtractedDoc) -> None:
+async def _enrich(session, transport, paper_id: uuid.UUID, doc: ExtractedDoc) -> list[enrichment.Collision]:
     """Asks OpenAlex only while it is on in Settings → Paper sources, read here so a change applies to the next ingest
     without a restart (P5). Never fatal (addendum §6d): on any error the paper keeps whatever was saved before the
-    error and still reaches ready."""
+    error and still reaches ready. Returns the identifiers other papers hold (none after an error)."""
     try:
         hints = enrichment.pdf_hints(doc.first_page_text, doc.metadata)
         sources = await paper_sources.get(session)
@@ -65,10 +66,26 @@ async def _enrich(session, transport, paper_id: uuid.UUID, doc: ExtractedDoc) ->
                 cr = await stack.enter_async_context(
                     crossref.new_client(email=sources.contact_email, transport=transport)
                 )
-            await enrichment.enrich_paper(session, http, paper_id, hints, crossref_http=cr)
+            return await enrichment.enrich_paper(session, http, paper_id, hints, crossref_http=cr)
     except Exception:
         logger.exception("enrichment failed for %s; the paper stays usable", paper_id)
         await session.rollback()
+        return []
+
+
+async def _merge_after_ingest(pid: uuid.UUID, collisions: list[enrichment.Collision], evidence: Candidate) -> None:
+    """R17, in a session of its own: never fails the ingest. merge rolls back on a failure, so both papers stay, and
+    a fresh session records the failure, best effort."""
+    try:
+        async with SessionLocal() as session:
+            await merges.after_ingest(session, pid, collisions, evidence)
+    except Exception as exc:
+        logger.exception("merging %s after ingest failed; both papers stay as they were", pid)
+        try:
+            async with SessionLocal() as session:
+                await merges.report_failure(session, pid, collisions, exc)
+        except Exception:
+            logger.exception("recording the failed merge of %s failed too", pid)
 
 
 async def search_embedder(ctx: dict, session):
@@ -127,11 +144,14 @@ async def ingest_paper(ctx: dict, paper_id: str) -> None:
         started = time.monotonic()
         marks: list[tuple[str, float]] = [("extracting", started)]  # each stage's start; a stage runs until the next
         chunks = pages = 0
+        collisions: list[enrichment.Collision] = []  # set only once the paper is ready
+        evidence = Candidate("")  # what the PDF itself says, for the merge (R15c); set once extracted
         deadline = asyncio.timeout(INGEST_JOB_TIMEOUT)
         try:
             async with deadline:
                 await papers.set_status(session, pid, PaperStatus.EXTRACTING)
                 doc = await asyncio.to_thread(extract, paper.file_path)
+                evidence = merges.pdf_evidence(doc.title, doc.metadata)  # before enrichment, whatever the title lock
                 # extract() can take seconds; re-read the lock right before deciding, in case a PATCH landed meanwhile.
                 await session.refresh(paper, ["openalex_id", "manual_fields"])
 
@@ -155,11 +175,12 @@ async def ingest_paper(ctx: dict, paper_id: str) -> None:
 
                 marks.append(("enriching", time.monotonic()))
                 await papers.set_status(session, pid, PaperStatus.ENRICHING)
-                await _enrich(session, ctx.get("transport"), pid, doc)
+                found = await _enrich(session, ctx.get("transport"), pid, doc)
                 # Don't read paper's ORM attributes past this point: _enrich's rollback (on the failure path) expires
                 # them, and an async lazy load outside an awaited call raises MissingGreenlet, not a clean re-fetch.
 
                 await papers.set_status(session, pid, PaperStatus.READY)
+                collisions = found
                 logger.info("ingested %s: %d pages, %d chunks", pid, doc.page_count, len(drafts))
         except Exception as exc:
             await session.rollback()
@@ -176,6 +197,9 @@ async def ingest_paper(ctx: dict, paper_id: str) -> None:
             await papers.set_status(session, pid, PaperStatus.FAILED, error=error)
         finally:  # the success, timeout and failure paths all say where the time went
             logger.info(_timings(pid, marks, started, chunks, pages))
+    # The very last step: ingest queues no job for the paper, so nothing of ingest's finds M gone after a merge.
+    if collisions:
+        await _merge_after_ingest(pid, collisions, evidence)
 
 
 async def index_abstract(ctx: dict, paper_id: str) -> None:

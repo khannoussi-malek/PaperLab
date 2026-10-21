@@ -168,6 +168,17 @@ export class AlreadyInLibraryError extends Error {
   }
 }
 
+/** The 410 a merged paper's id gets: it names the paper it was merged into. */
+export class PaperMergedError extends Error {
+  readonly keptId: string
+
+  constructor(message: string, keptId: string) {
+    super(message)
+    this.name = 'PaperMergedError'
+    this.keptId = keptId
+  }
+}
+
 /** The 409 an Add gets when no free PDF was found: it carries what was tried, and the paper can be saved without one. */
 export class NoFreePdfError extends Error {
   readonly tried: { url: string; outcome: string }[]
@@ -184,9 +195,10 @@ export class NoFreePdfError extends Error {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, init)
   if (!response.ok) {
-    const body: { paper_id?: unknown; tried?: unknown; free_copies?: unknown } =
-      response.status === 409 ? await response.clone().json().catch(() => ({})) : {}
+    const body: { paper_id?: unknown; kept_id?: unknown; tried?: unknown; free_copies?: unknown } =
+      response.status === 409 || response.status === 410 ? await response.clone().json().catch(() => ({})) : {}
     const message = await errorDetail(response)
+    if (response.status === 410 && typeof body.kept_id === 'string') throw new PaperMergedError(message, body.kept_id)
     if (typeof body.paper_id === 'string') throw new AlreadyInLibraryError(message, body.paper_id)
     // no_free_pdf's detail is the server's sentence; its `tried` list is what marks it (main.py's DomainError handler)
     if (!Array.isArray(body.tried)) throw new Error(message)
