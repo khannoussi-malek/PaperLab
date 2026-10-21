@@ -109,6 +109,8 @@ export const keys = {
   available: (connectionId: string) => ['llm', 'connections', connectionId, 'available'] as const,
   embedding: ['embedding'] as const,
   paperSources: ['paper-sources'] as const,
+  paperEvents: (id: string) => ['papers', id, 'events'] as const,
+  foundPdfs: ['papers', 'found-pdfs'] as const,
   // Outside the papers key on purpose: refreshing the library must not re-ask the paper sources.
   discovery: ['discovery'] as const,
   searches: ['discovery', 'search'] as const,
@@ -1101,6 +1103,23 @@ export function useConnectionMutations() {
       onSuccess,
     }),
   }
+}
+
+export const usePaperEvents = (paperId: string) =>
+  useQuery({ queryKey: keys.paperEvents(paperId), queryFn: () => api.paperEvents(paperId) })
+
+const FOUND_PDFS_POLL_MS = 60_000
+
+/** Finds from the weekly re-check not yet dismissed; polled while the Library is open. */
+export const useFoundPdfs = () =>
+  useQuery({ queryKey: keys.foundPdfs, queryFn: api.foundPdfs, refetchInterval: FOUND_PDFS_POLL_MS })
+
+export function useMarkFoundPdfsSeen() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (ids: string[]) => api.markFoundPdfsSeen(ids),
+    onSuccess: () => client.invalidateQueries({ queryKey: keys.foundPdfs }),
+  })
 }
 
 export const usePaperSources = () => useQuery({ queryKey: keys.paperSources, queryFn: api.paperSources })

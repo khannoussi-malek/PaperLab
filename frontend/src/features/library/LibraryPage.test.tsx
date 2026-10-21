@@ -12,6 +12,7 @@ vi.mock('@/api/queries', () => ({
   useEmbeddingStatus: () => ({ data: undefined }),
 }))
 vi.mock('@/components/AppShell', () => ({ AppShell: ({ children }: { children: React.ReactNode }) => <main>{children}</main> }))
+vi.mock('./FoundPdfsNotice', () => ({ FoundPdfsNotice: () => null }))
 vi.mock('../discovery/FindPapersButton', () => ({ FindPapersButton: () => null }))
 type Selection = { selected: ReadonlySet<string>; onToggle: (id: string) => void }
 // The real list pulls in pdfjs, which needs a worker: a checkbox per paper stands in for its rows.
