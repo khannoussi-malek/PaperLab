@@ -244,6 +244,8 @@ async def merge(
     failure everything rolls back and the error propagates: both papers stay as they were. Raises NotFound."""
     if merged_id == kept_id:
         raise ValueError("a paper can't merge into itself")
+    if evidence is None and not dry_run:  # R15c for every caller: never M's stored title (enrichment's copy)
+        raise ValueError("a real merge needs the PDF's own evidence (R15c): pass `evidence`")
     if session.new or session.dirty or session.deleted:
         raise RuntimeError("merge commits the session: pass one with nothing pending")
     try:
