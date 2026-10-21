@@ -13,6 +13,8 @@ export function PaperProvenance({ paper }: { paper: Paper }) {
   const events = usePaperEvents(paper.id)
   const lines = provenanceLines(paper)
   const checked = !paper.has_pdf && paper.pdf_checked_at && paper.pdf_check_result
+  // pdf_found feeds the library's Found PDFs notice; the arrival itself is its pdf_attached, so a find shows once
+  const arrivals = (events.data ?? []).filter((e) => e.kind === 'pdf_attached')
   return (
     <div className="grid gap-3 text-sm text-muted-foreground">
       {lines.length > 0 && (
@@ -26,14 +28,14 @@ export function PaperProvenance({ paper }: { paper: Paper }) {
           Last checked for a free copy: {day(paper.pdf_checked_at!)}, {CHECK_RESULT[paper.pdf_check_result!]}
         </p>
       )}
-      {events.data && events.data.length > 0 && (
+      {arrivals.length > 0 && (
         <section aria-labelledby="history-heading">
           <h3 id="history-heading" className="font-medium text-foreground">History</h3>
           <ul>
-            {events.data.map((e) => (
+            {arrivals.map((e) => (
               <li key={e.id}>
-                {e.kind === 'pdf_found' ? 'Free PDF found' : 'PDF added'} {day(e.created_at)}
-                {e.kind === 'pdf_attached' && HOW[String(e.detail.how)] ? ` (${HOW[String(e.detail.how)]})` : ''}
+                PDF added {day(e.created_at)}
+                {HOW[String(e.detail.how)] ? ` (${HOW[String(e.detail.how)]})` : ''}
               </li>
             ))}
           </ul>
