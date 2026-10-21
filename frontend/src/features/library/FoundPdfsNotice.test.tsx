@@ -34,6 +34,27 @@ it('Dismiss posts exactly the shown ids, then asks again', async () => {
   expect(list).toHaveBeenCalledTimes(2)
 })
 
+it('a failed Dismiss says why and keeps the notice', async () => {
+  vi.spyOn(api, 'foundPdfs').mockResolvedValue([find('a', 'Alpha')])
+  vi.spyOn(api, 'markFoundPdfsSeen').mockRejectedValue(new Error('PaperLab could not save that.'))
+  show()
+  fireEvent.click(await screen.findByRole('button', { name: 'Dismiss' }))
+  expect(await screen.findByText('PaperLab could not save that.')).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Alpha' })).toBeInTheDocument()
+})
+
+it('refreshes the library when more finds arrive, so their "No PDF yet" badges go', async () => {
+  vi.spyOn(api, 'foundPdfs').mockResolvedValueOnce([find('a', 'Alpha')]).mockResolvedValue([find('a', 'Alpha'), find('b', 'Beta')])
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const invalidate = vi.spyOn(client, 'invalidateQueries')
+  render(<QueryClientProvider client={client}><FoundPdfsNotice /></QueryClientProvider>)
+  await screen.findByRole('link', { name: 'Alpha' })
+  expect(invalidate).not.toHaveBeenCalledWith({ queryKey: keys.papers }) // the first list is not news
+  await client.refetchQueries({ queryKey: keys.foundPdfs })
+  await screen.findByRole('link', { name: 'Beta' })
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: keys.papers })
+})
+
 it('renders nothing when there are no finds', async () => {
   const list = vi.spyOn(api, 'foundPdfs').mockResolvedValue([])
   show()
