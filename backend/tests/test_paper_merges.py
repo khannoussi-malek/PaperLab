@@ -48,6 +48,7 @@ PAPER_ID_COLUMNS = [
     ("search_run_eligibility", "paper_id"),
     ("evidence_cards", "paper_id"),
     ("paper_events", "paper_id"),
+    ("section_role_overrides", "paper_id"),
 ]
 
 
@@ -131,6 +132,7 @@ async def seed_both(session):
         "INSERT INTO paper_links (from_paper, to_paper, label) VALUES (:y, :m, 'Y knows M')",  # duplicates K-Y
         "INSERT INTO evidence_cards (paper_id, status, fields) VALUES (:m, 'ready', '{\"x\": 1}')",
         "INSERT INTO paper_events (paper_id, kind) VALUES (:m, 'pdf_attached')",
+        "INSERT INTO section_role_overrides (paper_id, section_title, role) VALUES (:m, '2 Method', 'conclusion')",
     ]:
         await session.execute(text(statement), p)
     await workspaces.add_paper(session, ws.id, m.id)  # a duplicate of K's membership
@@ -151,6 +153,7 @@ async def seed_both(session):
 MOVED = {
     "chunks_dropped": 1,  # K's abstract chunk
     "chunks": 2,
+    "section_role_overrides": 1,
     "llm_outputs": 1,
     "note_papers": 1,
     "note_anchors": 1,
@@ -175,6 +178,7 @@ MOVED = {
 
 AFTER = {  # K's rows after the merge: its own plus M's moved or unioned ones
     "chunks.paper_id": 2,
+    "section_role_overrides.paper_id": 1,
     "llm_outputs.paper_id": 2,
     "note_anchors.paper_id": 1,
     "note_papers.paper_id": 2,

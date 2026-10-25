@@ -5,8 +5,20 @@ fixes, in `section_role_overrides`. No AI.
 """
 
 import re
+import uuid
 from collections.abc import Mapping
+from dataclasses import dataclass
+from itertools import groupby
+from operator import attrgetter
 from typing import Literal, NamedTuple, get_args
+
+from sqlalchemy import delete, exists, func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.errors import InvalidInput
+from app.core.papers import get_paper
+from app.models import Chunk, section_role_overrides
 
 Role = Literal[
     "abstract", "intro", "related", "method", "results", "discussion", "limitations", "conclusion", "back", "other"
@@ -26,6 +38,7 @@ class _Heading(NamedTuple):
 
 
 OTHER = RoleResult("other", "none")
+PREVIEW_CHARS = 160
 # Rule 1. A bare capital letter is text ("A Study of…"); "A.1" and "IV." are numbers.
 # ponytail: IEEE lettered subsections ("A." under "III. Results") don't parse as numbered, so they fall to position;
 # upgrade: accept `[A-Z]\.` when it follows a roman-numbered parent.
@@ -159,3 +172,70 @@ def assign_roles(titles: list[str | None], overrides: Mapping[str, Role]) -> lis
     )
     known = [_direct(title, heading, overrides, i > refs) for i, (title, heading) in enumerate(zip(titles, headings))]
     return _by_position(headings, _front_matter(_inherit(headings, known)))
+
+
+@dataclass(frozen=True)
+class Section:
+    """A run of consecutive chunks under one heading, in reading order (spec §3.1)."""
+
+    title: str | None  # None: the text before the paper's first heading
+    role: Role
+    source: Source
+    chunk_ids: list[uuid.UUID]  # in reading order
+    first_chunk_id: uuid.UUID
+    page: int  # the first chunk's
+    preview: str  # the first PREVIEW_CHARS characters of the first chunk
+
+
+def build_sections(rows, overrides: Mapping[str, Role]) -> list[Section]:
+    """Chunk rows (id, page, section_title, preview) in reading order → sections. A heading that comes back later is
+    the same heading for roles and fixes: roles are assigned over the distinct headings in the order they first
+    appear, and every run takes its heading's role."""
+    runs = [list(run) for _, run in groupby(rows, key=attrgetter("section_title"))]
+    titles = list(dict.fromkeys(run[0].section_title for run in runs))
+    roles = dict(zip(titles, assign_roles(titles, overrides)))
+    return [
+        Section(
+            title=run[0].section_title,
+            role=roles[run[0].section_title].role,
+            source=roles[run[0].section_title].source,
+            chunk_ids=[row.id for row in run],
+            first_chunk_id=run[0].id,
+            page=run[0].page,
+            preview=run[0].preview,
+        )
+        for run in runs
+    ]
+
+
+async def paper_sections(session: AsyncSession, paper_id: uuid.UUID) -> list[Section]:
+    """The paper's sections in reading order, each with its role (spec §3); `[]` without a PDF. Raises NotFound."""
+    paper = await get_paper(session, paper_id)
+    if not paper.has_pdf:
+        return []  # R1: a paper without a PDF has no sections; its ABSTRACT_PAGE chunk is not one
+    preview = func.left(Chunk.text, PREVIEW_CHARS).label("preview")
+    query = select(Chunk.id, Chunk.page, Chunk.section_title, preview).where(Chunk.paper_id == paper_id)
+    rows = (await session.execute(query.order_by(Chunk.ordinal))).all()
+    table = section_role_overrides
+    fixes = select(table.c.section_title, table.c.role).where(table.c.paper_id == paper_id)
+    return build_sections(rows, dict((await session.execute(fixes)).all()))
+
+
+async def set_role(session: AsyncSession, paper_id: uuid.UUID, section_title: str, role: Role | None) -> None:
+    """Saves the reader's role for every section with this heading, or deletes the fix (None: back to the rules).
+
+    Raises NotFound, or InvalidInput("unknown_section") when no chunk of the paper has this heading."""
+    await get_paper(session, paper_id)
+    known = exists().where(Chunk.paper_id == paper_id, Chunk.section_title == section_title)
+    if not await session.scalar(select(known)):
+        raise InvalidInput("unknown_section")
+    table = section_role_overrides
+    if role is None:
+        await session.execute(delete(table).where(table.c.paper_id == paper_id, table.c.section_title == section_title))
+    else:
+        upsert = pg_insert(table).values(paper_id=paper_id, section_title=section_title, role=role)
+        key = [table.c.paper_id, table.c.section_title]
+        await session.execute(
+            upsert.on_conflict_do_update(index_elements=key, set_={"role": role, "updated_at": func.now()})
+        )
+    await session.commit()
