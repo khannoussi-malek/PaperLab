@@ -46,9 +46,10 @@ class Brief:
 
 
 def cut_to_budget(sources: list[RetrievedChunk], budget: int = SMALL_PAPER_CHARS) -> list[RetrievedChunk]:
-    """The longest start of `sources`, in their order, whose text fits `budget` characters. A chunk is never split."""
+    """The longest start of `sources`, in their order, whose text fits `budget` characters. A chunk is never split,
+    and the first one is always kept, so a brief never reads nothing."""
     totals = accumulate(len(source.text) for source in sources)
-    return [source for source, total in zip(sources, totals) if total <= budget]
+    return [source for source, total in zip(sources, totals) if total <= budget] or sources[:1]
 
 
 async def _lens_sources(session: AsyncSession, paper_id: uuid.UUID, lens: str) -> list[RetrievedChunk]:
@@ -116,11 +117,12 @@ async def list_briefs(session: AsyncSession, paper_id: uuid.UUID) -> list[Brief]
     await get_paper(session, paper_id)
     query = select(LLMOutput).where(LLMOutput.paper_id == paper_id, LLMOutput.kind == OUTPUT_KIND)
     newest: dict[str, LLMOutput] = {}
-    for output in await session.scalars(query.order_by(LLMOutput.created_at.desc())):
+    for output in await session.scalars(query.order_by(LLMOutput.created_at.desc(), LLMOutput.id.desc())):
         newest.setdefault(output.lens, output)
     wanted = {chunk_id for output in newest.values() for chunk_id in output.source_chunks}
     chunks = {c.id: c for c in await chunk_sources(session, Chunk.id.in_(wanted))}
     found = []
+    # ponytail: re-reads the sections once per briefed lens (at most 4); one paper_lenses read if it shows up
     for lens in (lens for lens in BRIEFABLE if lens in newest):
         output = newest[lens]
         now = {source.id for source in cut_to_budget(await _lens_sources(session, paper_id, lens))}
