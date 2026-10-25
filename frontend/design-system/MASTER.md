@@ -1010,6 +1010,26 @@ sticky cells from covering content) and *ARIA Labels* (High); `"3d visualization
   papers" table, the "Connected papers" region, the "Papers" heading, "Clear focus", "Link to another paper…", "Paper
   to link to", "Label", "Save link", "Edit label for …" and "Remove link to …".
 
+## Reading lenses
+
+From ui-ux-pro-max (`search.py "…" --domain ux`, 2026-09-19): *Focus States* (High) and *Truncation* (Medium) for "dim
+unfocused content reading focus mode"; *Active State* (Medium) and *Smooth Scroll* (High) for "previous next section
+navigation counter"; *Disclaimer* (High) and *Feedback Loop* (Low) for "AI generated summary card label";
+"overflowing tabs narrow panel" returned nothing.
+
+- **Lens picker:** in `ReaderToolbar`, after Reading and before Capture table: a `sm` shadcn `Select` named "Lens",
+  listing the API's lenses in its order (Full paper, Key ideas, Critical check, How they did it, Related work). The
+  reader always opens on Full paper; the pick isn't remembered.
+- **Steps:** when the lens isn't Full paper and has sections, ghost icon buttons "Previous lens section" /
+  "Next lens section" (`ChevronLeft` / `ChevronRight`) around `.lens-step` (`n/N`, `tabular-nums`,
+  `aria-live="polite"`). A run is a stretch of consecutive lens passages. Picking a lens goes to its first run; a step
+  flashes the run's first passage through the reader's one smooth scroll path (`.chunk-flash`). The end buttons
+  disable.
+- **Fading:** `.lens-fade` rects over every passage outside the lens, `bg-white/65` (the page's own white, so both
+  themes), drawn under the highlights so the reader's marks stay clear. Headings and figures are no passage's rect,
+  so they stay readable as signposts.
+- **Stable hooks and names:** `.lens-fade`, `.lens-step`; "Lens", "Previous lens section", "Next lens section".
+
 ## Pre-delivery check (from ui-ux-pro-max Quick Reference §1–§3)
 
 Run through this before finishing any UI task, in **both** themes:
