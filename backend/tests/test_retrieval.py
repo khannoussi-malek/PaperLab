@@ -272,3 +272,30 @@ def test_hnsw_ef_search_defaults_to_100_and_rejects_nonsense():
     for bad in (0, 1001):
         with pytest.raises(ValidationError):
             Settings(hnsw_ef_search=bad)
+
+
+async def test_chunk_ids_limit_retrieval_to_those_chunks(session, embedder):
+    _, chunks, unembedded, distance = await seed_papers(session, embedder)
+    wanted = [chunks[1], chunks[4], chunks[8]]
+
+    found = await retrieve(session, QUERY, chunk_ids=[c.id for c in [*wanted, unembedded]], k=5, embedder=embedder)
+
+    # An unembedded chunk is still skipped; the rest come back nearest first.
+    assert [r.id for r in found] == [c.id for c in sorted(wanted, key=lambda c: distance[c.id])]
+
+
+async def test_an_empty_chunk_list_returns_nothing_without_embedding_the_query(session, embedder):
+    await seed_papers(session, embedder)
+
+    assert await retrieve(session, QUERY, chunk_ids=[], embedder=embedder) == []
+    assert embedder.calls == []
+
+
+async def test_chunk_ids_combine_with_paper_ids_and_the_per_paper_cap(session, embedder):
+    (paper_a, paper_b), chunks, _, _ = await seed_papers(session, embedder)
+    listed = [c.id for c in chunks[:6]] + [c.id for c in chunks[6:8]]  # all of A, two of B
+
+    found = await retrieve(session, QUERY, paper_ids=[paper_a.id, paper_b.id], chunk_ids=listed, k=8, embedder=embedder)
+
+    assert Counter(r.paper_id for r in found) == {paper_a.id: 3, paper_b.id: 2}
+    assert {r.id for r in found} <= set(listed)
