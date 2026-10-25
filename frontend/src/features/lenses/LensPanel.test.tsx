@@ -2,7 +2,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import type { Lens, Section } from '@/api/client'
+import type { Lens, Role, Section } from '@/api/client'
 import { LensPanel } from './LensPanel'
 import { SectionRow } from './SectionRow'
 import type { LensReader } from './useLensReader'
@@ -41,14 +41,58 @@ describe('LensPanel', () => {
   })
 })
 
+describe('LensPanel states', () => {
+  it('keeps the Lens region while the sections load', () => {
+    const reader = { lens: null, sections: [], sectionsQuery: { error: null } } as unknown as LensReader
+    render(<QueryClientProvider client={new QueryClient()}><LensPanel paperId="p1" reader={reader} hasPdf /></QueryClientProvider>)
+    expect(screen.getByRole('complementary', { name: 'Lens' })).toHaveTextContent('Reading the sections')
+  })
+
+  it('keeps the Lens region when the sections fail to load', () => {
+    const reader = { lens: null, sections: [], sectionsQuery: { error: new Error('boom'), refetch: vi.fn() } } as unknown as LensReader
+    render(<QueryClientProvider client={new QueryClient()}><LensPanel paperId="p1" reader={reader} hasPdf /></QueryClientProvider>)
+    expect(screen.getByRole('complementary', { name: 'Lens' })).toHaveTextContent('boom')
+  })
+})
+
 describe('SectionRow', () => {
-  const row = (s: Section) =>
-    render(<SectionRow section={s} busy={false} onJump={() => {}} onRoleChange={() => {}} />)
+  const row = (s: Section, onRoleChange: (role: Role | null) => void = () => {}, busy = false) =>
+    render(<SectionRow section={s} busy={busy} onJump={() => {}} onRoleChange={onRoleChange} />)
+  const openMenu = () => fireEvent.keyDown(screen.getByRole('button', { name: 'Section actions for 2 Method' }), { key: 'Enter' })
 
   it('marks a fixed role with "you" and shows its page', () => {
     row(section({ source: 'user' }))
     expect(screen.getByText('you')).toBeInTheDocument()
     expect(screen.getByText('p. 2')).toBeInTheDocument()
+  })
+
+  it('shows "you" only for a role the reader fixed', () => {
+    row(section({ source: 'keyword' }))
+    expect(screen.queryByText('you')).toBeNull()
+  })
+
+  it('Change role reports the picked role, and Automatic reports null', () => {
+    const onRoleChange = vi.fn()
+    row(section({ source: 'user', role: 'results' }), onRoleChange)
+    openMenu()
+    expect(screen.getByRole('menuitemradio', { name: 'Results' })).toBeChecked()
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Conclusion' }))
+    expect(onRoleChange).toHaveBeenLastCalledWith('conclusion')
+    openMenu()
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Automatic' }))
+    expect(onRoleChange).toHaveBeenLastCalledWith(null)
+  })
+
+  it('keeps the menu trigger enabled while a save is pending, so focus is not lost', () => {
+    row(section(), () => {}, true)
+    expect(screen.getByRole('button', { name: 'Section actions for 2 Method' })).not.toBeDisabled()
+    openMenu()
+    expect(screen.getByRole('menuitemradio', { name: 'Conclusion' })).toHaveAttribute('aria-disabled', 'true')
+  })
+
+  it('says what the "you" marker means', () => {
+    row(section({ source: 'user' }))
+    expect(screen.getByText('fixed by')).toBeInTheDocument()
   })
 
   it('offers no menu on text before the first heading', () => {
