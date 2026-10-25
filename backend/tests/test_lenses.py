@@ -70,6 +70,21 @@ def test_a_short_paper_falls_back_to_its_whole_body_once():
     assert found == LensChunks(ids_of(pairs, 0, 1, 2, 3), True, ["abstract", "intro", "conclusion"])
 
 
+def test_a_paper_of_back_matter_only_announces_no_fallback():
+    # the banner "Showing the start and end of the paper" never sits over nothing
+    found = pick(ordered("back", "back"), LENSES["key_ideas"])
+
+    assert found == LensChunks([], False, ["abstract", "intro", "conclusion"])
+
+
+def test_a_discussion_without_an_introduction_is_no_fallback():
+    pairs = ordered("abstract", "method", "discussion")
+
+    found = pick(pairs, LENSES["key_ideas"])
+
+    assert found == LensChunks(ids_of(pairs, 0, 2), False, ["intro", "conclusion"])
+
+
 def test_a_lens_with_no_sections_is_empty_and_names_what_is_missing():
     pairs = ordered("intro", "method", "results", "conclusion")
 

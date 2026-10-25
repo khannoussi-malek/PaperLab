@@ -45,6 +45,8 @@ class LensChunks:
 def _position(ordered: list[tuple[uuid.UUID, Role]], missing: list[Role]) -> LensChunks:
     # ponytail: with no References heading detected, the last chunks can be references (spec §3.4).
     body = [chunk_id for chunk_id, role in ordered if role != "back"]
+    if not body:  # back matter only: no start or end to show, so no fallback to announce
+        return LensChunks([], False, missing)
     ids = body if len(body) <= 2 * POSITION_CHUNKS else body[:POSITION_CHUNKS] + body[-POSITION_CHUNKS:]
     return LensChunks(ids, True, missing)
 
