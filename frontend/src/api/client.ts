@@ -86,6 +86,13 @@ export type GraphNode = components['schemas']['GraphNode']
 export type GraphLink = components['schemas']['GraphLink']
 export type LibraryGraph = components['schemas']['GraphOut']
 export type PaperLinkOut = components['schemas']['LinkOut']
+export type PaperSections = components['schemas']['SectionsOut']
+export type Section = components['schemas']['SectionOut']
+export type Lens = components['schemas']['LensOut']
+export type LensId = Lens['id']
+export type Role = Section['role']
+export type SectionRoleIn = components['schemas']['SectionRoleIn']
+export type Brief = components['schemas']['BriefOut']
 // The three continue fields are intersected in by hand until gen:api sees them.
 export type SearchRun = components['schemas']['SearchRunOut'] & {
   can_continue?: boolean
@@ -272,6 +279,21 @@ export const api = {
       sendJson('POST', { candidate, workspace_id: workspaceId ?? null, save_without_pdf: saveWithoutPdf }),
     ),
   listChunks: (paperId: string, page: number) => request<Chunk[]>(`/api/papers/${paperId}/chunks?page=${page}`),
+  /** Every chunk of a paper, in reading order: the lens fades and jumps need their rects. */
+  listAllChunks: (paperId: string) => request<Chunk[]>(`/api/papers/${paperId}/chunks`),
+  /** Every section with its role, and every lens with its chunks. */
+  paperSections: (paperId: string) => request<PaperSections>(`/api/papers/${paperId}/sections`),
+  /** The reader's role for a heading (`role` null: back to the automatic one). Answers the sections again. */
+  setSectionRole: (paperId: string, change: SectionRoleIn) =>
+    request<PaperSections>(`/api/papers/${paperId}/section-roles`, sendJson('PUT', change)),
+  listBriefs: (paperId: string) => request<Brief[]>(`/api/papers/${paperId}/briefs`),
+  /** The raw response: on success its body is the brief's SSE stream, with chat's events. No body: `modelId` is the
+   *  optional `?model_id=` query, and null asks the default. */
+  generateBrief: (paperId: string, lens: LensId, modelId: string | null, signal?: AbortSignal) =>
+    fetch(`/api/papers/${paperId}/briefs/${lens}${modelId ? `?model_id=${encodeURIComponent(modelId)}` : ''}`, {
+      method: 'POST',
+      signal,
+    }),
   listNotes: (paperId: string) => request<Note[]>(`/api/papers/${paperId}/notes`),
   createNote: (note: NoteCreate) => request<Note>('/api/notes', sendJson('POST', note)),
   updateNote: (id: string, patch: NoteUpdate) => request<Note>(`/api/notes/${id}`, sendJson('PATCH', patch)),
