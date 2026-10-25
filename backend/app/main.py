@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api import (
+    briefs,
     charts,
     chat,
     datasets,
@@ -101,6 +102,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(papers.router)
     app.include_router(lenses.router)
+    app.include_router(briefs.router)
     app.include_router(reading_bridge_api.router)
     app.include_router(reading_bridge_api.workspace_router)
     app.include_router(notes.router)

@@ -1,6 +1,6 @@
 import logging
 import uuid
-from collections.abc import AsyncIterable
+from collections.abc import AsyncIterable, Awaitable, Callable
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
@@ -92,10 +92,17 @@ def error_event(message: str) -> ServerSentEvent:
 STREAM_RESPONSES = {200: {"model": SourcesEvent | TokenEvent | DoneEvent | ErrorEvent}}
 
 
-async def answer_events(
-    scope: chat.Scope, question: str, prepared: chat.Prepared, llm: LLM, parent_id: uuid.UUID | None = None
+Save = Callable[[AsyncSession, str], Awaitable[uuid.UUID]]
+
+
+async def stream_output(
+    prepared: chat.Prepared, llm: LLM, save: Save, noun: str, log_as: str
 ) -> AsyncIterable[ServerSentEvent]:
-    """Events: sources, token (repeated), then done. error replaces done, and then nothing is saved."""
+    """Events: sources, token (repeated), then done. error replaces done, and then nothing is saved.
+
+    `save` stores the finished text in a fresh session and returns its id; `noun` names the output in the error texts
+    ("answer", "brief") and `log_as` in the logs ("chat answer", "brief"), because chat's tests assert its log text.
+    Shared by chat and M16's briefs (and M22's check, D175)."""
     sources = SourcesEvent(
         whole_paper=prepared.whole_paper,
         sources=to_sources(prepared.sources),
@@ -111,23 +118,21 @@ async def answer_events(
             yield ServerSentEvent(event="token", data=TokenEvent(text=text))
     except (LLMUnavailable, LLMError) as exc:
         # The message names the connection and host, never the key (providers mask it).
-        logger.warning("chat answer on %s (%s) failed: %s", llm.connection_name, llm.host, exc)
+        logger.warning("%s on %s (%s) failed: %s", log_as, llm.connection_name, llm.host, exc)
         yield error_event(str(exc))
         return
     except Exception:
-        logger.exception("chat answer on %s (%s) failed unexpectedly", llm.connection_name, llm.host)
-        yield error_event("The answer stopped because of an unexpected error")
+        logger.exception("%s on %s (%s) failed unexpectedly", log_as, llm.connection_name, llm.host)
+        yield error_event(f"The {noun} stopped because of an unexpected error")
         return
 
     content = "".join(parts)
     try:
         async with SessionLocal() as session:
-            output_id = await chat.save_answer(
-                session, scope, question, prepared, content, llm.model, llm.connection_name, parent_id
-            )
+            output_id = await save(session, content)
     except Exception:
-        logger.exception("saving a chat answer for %s failed", scope)
-        yield error_event("The answer couldn't be saved")
+        logger.exception("saving a %s failed", log_as)
+        yield error_event(f"The {noun} couldn't be saved")
         return
 
     cited = [f"C{i}" for i in chat.parse_citations(content, len(prepared.sources))]
@@ -140,6 +145,20 @@ async def answer_events(
         cited=cited,
     )
     yield ServerSentEvent(event="done", data=done)
+
+
+async def answer_events(
+    scope: chat.Scope, question: str, prepared: chat.Prepared, llm: LLM, parent_id: uuid.UUID | None = None
+) -> AsyncIterable[ServerSentEvent]:
+    """A chat answer's stream (stream_output), saved as a chat answer."""
+
+    async def save(session: AsyncSession, content: str) -> uuid.UUID:
+        return await chat.save_answer(
+            session, scope, question, prepared, content, llm.model, llm.connection_name, parent_id
+        )
+
+    async for event in stream_output(prepared, llm, save, "answer", "chat answer"):
+        yield event
 
 
 @router.post("/api/papers/{paper_id}/chat", response_class=EventSourceResponse, responses=STREAM_RESPONSES)
