@@ -225,7 +225,9 @@ async def set_role(session: AsyncSession, paper_id: uuid.UUID, section_title: st
     """Saves the reader's role for every section with this heading, or deletes the fix (None: back to the rules).
 
     Raises NotFound, or InvalidInput("unknown_section") when no chunk of the paper has this heading."""
-    await get_paper(session, paper_id)
+    paper = await get_paper(session, paper_id)
+    if not paper.has_pdf:
+        raise InvalidInput("unknown_section")  # R1: no PDF, no sections to fix
     known = exists().where(Chunk.paper_id == paper_id, Chunk.section_title == section_title)
     if not await session.scalar(select(known)):
         raise InvalidInput("unknown_section")
