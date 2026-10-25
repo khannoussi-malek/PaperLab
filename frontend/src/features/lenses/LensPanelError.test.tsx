@@ -7,6 +7,8 @@ import { LensPanel } from './LensPanel'
 import type { LensReader } from './useLensReader'
 
 vi.mock('./queries', () => ({
+  usePaperBriefs: () => ({ data: [] }),
+  useInvalidateBriefs: () => vi.fn(),
   useSetSectionRole: () => ({ error: new Error('Could not save the role'), isPending: false, mutate: vi.fn() }),
 }))
 
