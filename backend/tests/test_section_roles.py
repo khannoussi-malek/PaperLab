@@ -20,6 +20,7 @@ def test_each_golden_heading_list_gets_exactly_its_roles_and_sources(paper):
 
     found = assign_roles([title for title, _, _ in rows], {})
 
+    assert len(found) == len(rows)
     assert [(title, *result) for (title, _, _), result in zip(rows, found)] == [tuple(row) for row in rows]
 
 
@@ -188,3 +189,20 @@ def test_unresolved_sections_before_the_abstract_are_front_matter():
 )
 def test_the_position_rules(titles, expected):
     assert roles_of(titles) == expected
+
+
+def test_a_heading_that_merely_mentions_references_does_not_start_the_back_matter():
+    titles = ["1 Introduction", "2.3 Cross-References Between Issues", "3 Method", "4 Results"]
+
+    assert [r.role for r in assign_roles(titles, {})] == [
+        "intro",
+        "back",
+        "method",
+        "results",
+    ]  # rule 3 still makes the heading itself back
+
+
+def test_a_fixed_references_heading_does_not_send_the_rest_to_back():
+    found = assign_roles(["1 Introduction", "2 Method", "References", "3 Results"], {"References": "discussion"})
+
+    assert [tuple(r) for r in found][2:] == [("discussion", "user"), ("results", "keyword")]

@@ -27,8 +27,10 @@ class _Heading(NamedTuple):
 
 OTHER = RoleResult("other", "none")
 # Rule 1. A bare capital letter is text ("A Study of…"); "A.1" and "IV." are numbers.
+# ponytail: IEEE lettered subsections ("A." under "III. Results") don't parse as numbered, so they fall to position;
+# upgrade: accept `[A-Z]\.` when it follows a roman-numbered parent.
 _NUMBER = re.compile(r"^\s*(\d+(?:\.\d+)*\.?|[A-Z](?:\.\d+)+\.?|[IVX]+\.)\s+")
-_REFERENCES = re.compile(r"\b(?:references|bibliography)\b")
+_REFERENCES = re.compile(r"^(?:references|bibliography)\b")  # the section itself, not a heading that mentions it
 # Rule 3. "acknowledg" is a prefix: acknowledgments, acknowledgements.
 _BACK = re.compile(r"\b(?:references|bibliography|appendix|supplementary|data availability)\b|\backnowledg")
 # Rule 4, first match wins. A trailing "s" is optional, so "3 METHODS" and "6 LIMITATIONS" match.
@@ -151,6 +153,9 @@ def assign_roles(titles: list[str | None], overrides: Mapping[str, Role]) -> lis
 
     `overrides` are the reader's fixes, keyed on the exact heading text."""
     headings = [None if title is None else _parse(title) for title in titles]
-    refs = next((i for i, h in enumerate(headings) if h and _REFERENCES.search(h.text)), len(titles))
+    refs = next(
+        (i for i, h in enumerate(headings) if h and titles[i] not in overrides and _REFERENCES.search(h.text)),
+        len(titles),
+    )
     known = [_direct(title, heading, overrides, i > refs) for i, (title, heading) in enumerate(zip(titles, headings))]
     return _by_position(headings, _front_matter(_inherit(headings, known)))
