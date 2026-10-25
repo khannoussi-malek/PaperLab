@@ -39,10 +39,14 @@ WHERE nth <= :per_paper
 ORDER BY distance
 LIMIT :k
 """
-NEAREST = text(_NEAREST.format(scope="")).bindparams(bindparam("q", type_=Vector(768)))
-NEAREST_IN_PAPERS = text(_NEAREST.format(scope="AND paper_id = ANY(:paper_ids)")).bindparams(
-    bindparam("q", type_=Vector(768))
-)
+
+
+def _nearest(in_papers: bool, in_chunks: bool):
+    """The candidate query with its scope: papers, given chunks (M16, D49), both or neither."""
+    scope = ("AND paper_id = ANY(:paper_ids) " if in_papers else "") + ("AND id = ANY(:chunk_ids)" if in_chunks else "")
+    return text(_NEAREST.format(scope=scope)).bindparams(bindparam("q", type_=Vector(768)))
+
+
 # With a filter, HNSW otherwise post-filters within ef_search (40) candidates and can silently return nothing.
 # ponytail: an iterative scan still stops at hnsw.max_scan_tuples (20,000) or work_mem x hnsw.scan_mem_multiplier.
 # Thousands of dead near-duplicate vectors (re-ingests before autovacuum) can starve it; VACUUM chunks if it shows.
@@ -131,6 +135,7 @@ async def retrieve(
     k: int = 8,
     embedder=None,
     per_paper: int | None = None,
+    chunk_ids: list[uuid.UUID] | None = None,
 ) -> list[RetrievedChunk]:
     """The k chunks nearest to the query, closest first. embedder=None embeds the question with the active search
     source (query_embedder); a source that fails raises Conflict with QUESTION_FAILED's sentence (D155).
@@ -138,6 +143,7 @@ async def retrieve(
     Scope: paper_ids, workspace_id, or neither (the whole library). A scope that resolves to 2+ papers (a
     workspace with several members, or 2+ paper_ids) keeps at most per_paper (default MAX_PER_PAPER) chunks
     from each paper; a workspace with exactly one paper is uncapped, same as passing that one paper's id.
+    chunk_ids narrows the scope to those chunks (M16); an empty list returns [] without embedding the query.
     """
     if paper_ids is not None and workspace_id is not None:
         raise ValueError("retrieve takes paper_ids or workspace_id, not both")
@@ -146,7 +152,7 @@ async def retrieve(
         # exactly; behind ARRAY(subquery) it guesses, picks HNSW, and bloat can starve the scan (see above).
         members = select(workspace_papers.c.paper_id).where(workspace_papers.c.workspace_id == workspace_id)
         paper_ids = list(await session.scalars(members))
-    if paper_ids is not None and not paper_ids:
+    if (paper_ids is not None and not paper_ids) or (chunk_ids is not None and not chunk_ids):
         return []
     # The cap is decided from the resolved paper_ids, not from workspace_id itself: a workspace can resolve to
     # just one paper, which must be as uncapped as passing that paper's id directly.
@@ -159,10 +165,11 @@ async def retrieve(
         raise Conflict(QUESTION_FAILED.format(reason=str(exc).rstrip("."))) from exc
     params = {"q": question, "k": k, "candidates": max(CANDIDATES, k)}
     params["per_paper"] = k if per_paper is None else per_paper
-    if paper_ids is None:
-        statement = NEAREST
-    else:
-        statement, params["paper_ids"] = NEAREST_IN_PAPERS, list(paper_ids)
+    statement = _nearest(paper_ids is not None, chunk_ids is not None)
+    if paper_ids is not None:
+        params["paper_ids"] = list(paper_ids)
+    if chunk_ids is not None:
+        params["chunk_ids"] = list(chunk_ids)
     await session.execute(ITERATIVE_SCAN)  # SET LOCAL: ends with the caller's transaction
     # SET can't take a bind parameter; the setting is a validated int (1–1000).
     await session.execute(text(f"SET LOCAL hnsw.ef_search = {int(settings.hnsw_ef_search)}"))
