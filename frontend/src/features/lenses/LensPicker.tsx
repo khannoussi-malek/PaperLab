@@ -25,7 +25,7 @@ export function LensPicker({ reader }: { reader: LensReader }) {
         <>
           <Button
             variant="ghost"
-            size="icon"
+            size="icon-sm"
             aria-label="Previous lens section"
             disabled={runIndex === 0}
             onClick={() => reader.step(-1)}
@@ -37,7 +37,7 @@ export function LensPicker({ reader }: { reader: LensReader }) {
           </span>
           <Button
             variant="ghost"
-            size="icon"
+            size="icon-sm"
             aria-label="Next lens section"
             disabled={runIndex === runCount - 1}
             onClick={() => reader.step(1)}

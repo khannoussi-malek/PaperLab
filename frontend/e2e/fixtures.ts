@@ -15,7 +15,7 @@ export const TABLE_LINE = 'Our best model reaches'
 /** Twelve pages, about 30,000 characters: too long for chat to send whole, so asking it needs the search model. */
 export const LONG_FIXTURE_FILE = fileURLToPath(new URL('./fixtures/long-paper.pdf', import.meta.url))
 /** The start of the long paper's first line, on page 1. */
-export const LONG_FIRST_LINE = 'This section of the long fixture paper'
+export const LONG_FIRST_LINE = '1 On retrieval' // once on page 1: openReader's visibility check is strict
 export type Rect = [number, number, number, number]
 
 export async function uploadAndWaitUntilReady(
