@@ -96,12 +96,13 @@ Save = Callable[[AsyncSession, str], Awaitable[uuid.UUID]]
 
 
 async def stream_output(
-    prepared: chat.Prepared, llm: LLM, save: Save, noun: str, log_as: str
+    prepared: chat.Prepared, llm: LLM, save: Save, noun: str, log_as: str, log_for: object
 ) -> AsyncIterable[ServerSentEvent]:
     """Events: sources, token (repeated), then done. error replaces done, and then nothing is saved.
 
     `save` stores the finished text in a fresh session and returns its id; `noun` names the output in the error texts
-    ("answer", "brief") and `log_as` in the logs ("chat answer", "brief"), because chat's tests assert its log text.
+    ("answer", "brief") and `log_as` in the logs ("chat answer", "brief"), because chat's tests assert its log text;
+    `log_for` names what a failed save was for (chat's scope, a brief's paper and lens).
     Shared by chat and M16's briefs (and M22's check, D175)."""
     sources = SourcesEvent(
         whole_paper=prepared.whole_paper,
@@ -131,7 +132,7 @@ async def stream_output(
         async with SessionLocal() as session:
             output_id = await save(session, content)
     except Exception:
-        logger.exception("saving a %s failed", log_as)
+        logger.exception("saving a %s for %s failed", log_as, log_for)
         yield error_event(f"The {noun} couldn't be saved")
         return
 
@@ -157,7 +158,7 @@ async def answer_events(
             session, scope, question, prepared, content, llm.model, llm.connection_name, parent_id
         )
 
-    async for event in stream_output(prepared, llm, save, "answer", "chat answer"):
+    async for event in stream_output(prepared, llm, save, "answer", "chat answer", scope):
         yield event
 
 

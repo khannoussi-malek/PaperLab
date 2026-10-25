@@ -32,13 +32,13 @@ async def generate_brief(
     paper_id: uuid.UUID, lens: LensId, llm: LLMByModelIdDep, prepared: BriefPreparedDep
 ) -> AsyncIterable[ServerSentEvent]:
     """Chat's events; no body, the model is the optional `?model_id=`. Checked before streaming, in parameter order:
-    404 model_not_found or 409 no_model, 422 for an unknown lens or bad model_id, then 404 for the paper, 422
-    lens_not_briefable, 409 needs_full_text (no PDF), paper_not_ready or lens_empty."""
+    404 model_not_found or 409 no_model, 422 for an unknown lens or bad model_id, then 422 lens_not_briefable, 404
+    (410 merged) for the paper, 409 needs_full_text (no PDF), paper_not_ready or lens_empty."""
 
     async def save(session: AsyncSession, content: str) -> uuid.UUID:
         return await briefs.save_brief(session, paper_id, lens, prepared, content, llm.model, llm.connection_name)
 
-    async for event in stream_output(prepared, llm, save, "brief", "brief"):
+    async for event in stream_output(prepared, llm, save, "brief", "brief", f"paper {paper_id}, lens {lens}"):
         yield event
 
 
