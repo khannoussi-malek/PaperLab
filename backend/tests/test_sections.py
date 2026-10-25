@@ -152,3 +152,21 @@ async def test_an_output_reads_the_full_lens_unless_it_says_otherwise(session):
     await session.refresh(output)
 
     assert output.lens == "full"
+
+
+async def test_a_repeated_heading_resolved_by_position_is_one_section_for_roles(session):
+    paper, _ = await paper_with_headings(session, ["1 Introduction", "Our system", "3 Method", "Our system"])
+
+    found = await sections.paper_sections(session, paper.id)
+
+    assert [(s.title, s.role, s.source) for s in found if s.title == "Our system"] == [
+        ("Our system", "related", "position"),
+        ("Our system", "related", "position"),
+    ]
+
+
+async def test_set_role_refuses_a_paper_without_a_pdf(session):
+    paper, _ = await paper_with_headings(session, ["Abstract"], has_pdf=False)
+
+    with pytest.raises(InvalidInput, match="unknown_section"):
+        await sections.set_role(session, paper.id, "Abstract", "abstract")

@@ -14,7 +14,7 @@ from app.core import merges, notes, papers, retrieved_hits, tags, workspaces
 from app.core.candidates import Candidate
 from app.core.chunking import ChunkDraft
 from app.core.errors import NotFound
-from app.models import EvidenceCard, Paper, PaperMerge
+from app.models import EvidenceCard, Paper, PaperMerge, section_role_overrides
 from app.models.workspace_search import SearchRunEligibility, WorkspaceSearchHit
 
 pytestmark = pytest.mark.anyio
@@ -133,6 +133,8 @@ async def seed_both(session):
         "INSERT INTO evidence_cards (paper_id, status, fields) VALUES (:m, 'ready', '{\"x\": 1}')",
         "INSERT INTO paper_events (paper_id, kind) VALUES (:m, 'pdf_attached')",
         "INSERT INTO section_role_overrides (paper_id, section_title, role) VALUES (:m, '2 Method', 'conclusion')",
+        "INSERT INTO section_role_overrides (paper_id, section_title, role) VALUES (:k, '1 Introduction', 'intro')",
+        "INSERT INTO section_role_overrides (paper_id, section_title, role) VALUES (:m, '1 Introduction', 'abstract')",
     ]:
         await session.execute(text(statement), p)
     await workspaces.add_paper(session, ws.id, m.id)  # a duplicate of K's membership
@@ -178,7 +180,7 @@ MOVED = {
 
 AFTER = {  # K's rows after the merge: its own plus M's moved or unioned ones
     "chunks.paper_id": 2,
-    "section_role_overrides.paper_id": 1,
+    "section_role_overrides.paper_id": 2,  # K's own, and M's other title; M's clash with K's stays behind
     "llm_outputs.paper_id": 2,
     "note_anchors.paper_id": 1,
     "note_papers.paper_id": 2,
@@ -223,6 +225,10 @@ async def test_a_merge_preserves_every_paper_id_row(session):
 
     assert (result.status, result.reason, result.moved) == ("merged", None, MOVED)
     assert await rows_of(session, k.id) == AFTER
+    kept_fix = select(section_role_overrides.c.role).where(
+        section_role_overrides.c.paper_id == k.id, section_role_overrides.c.section_title == "1 Introduction"
+    )
+    assert (await session.execute(kept_fix)).scalar_one() == "intro"  # K's fix wins a clash
     assert set((await rows_of(session, m.id)).values()) == {0}
     assert await session.get(Paper, m.id, populate_existing=True) is None
     k = await session.get(Paper, k.id, populate_existing=True)
