@@ -26,6 +26,8 @@ test('a Key ideas brief is AI, cites its passage, and goes out of date when a ro
   await expect(card.locator('.brief-stale')).toContainText('Out of date: sections changed')
 
   await card.getByRole('button', { name: 'Regenerate' }).click()
+  // The regenerated brief is saved and shown (`.brief-meta` only appears then) before it can count as not stale.
+  await expect(card.locator('.brief-meta')).toContainText('fake:')
   await expect(card.locator('.brief-stale')).toHaveCount(0)
   await expect(card.locator('.brief-text')).toHaveText('Fake answer: the method is described here [C1].')
 })

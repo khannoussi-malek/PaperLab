@@ -60,4 +60,14 @@ describe('BriefCard', () => {
     card({ stream: { ...idle, status: 'error', lens: 'key_ideas', problem: { message: "Lenses read a paper's sections. Attach its PDF to use them.", retryable: false, reindex: false } } })
     expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
   })
+
+  it('keeps the saved brief below the error when a new brief fails', () => {
+    card({
+      saved: saved({ stale: true }),
+      stream: { ...idle, status: 'error', lens: 'key_ideas', problem: { message: 'The model failed.', retryable: true, reindex: false } },
+    })
+    expect(screen.getByText('The model failed.')).toBeInTheDocument()
+    expect(document.querySelector('.brief-text')).toHaveTextContent('The method')
+    expect(document.querySelector('.brief-meta')).toHaveTextContent('fake:m')
+  })
 })

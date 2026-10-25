@@ -31,13 +31,20 @@ export function LensPanel({ paperId, reader, hasPdf }: Props) {
       <h2 className="font-heading text-lg font-semibold">{lens.label}</h2>
       {notice && <p className="lens-notice text-sm text-muted-foreground">{notice.text}</p>}
       {lens.id !== 'full' && notice?.kind !== 'empty' && (
-        <BriefCard
-          lens={lens}
-          saved={briefs.data?.find((brief) => brief.lens === lens.id) ?? null}
-          stream={stream}
-          onGenerate={() => void generate(lens.id, lens.label)}
-          onCite={(source) => reader.jump(source.page, source.bbox)}
-        />
+        briefs.error ? (
+          <LoadError message={briefs.error.message} onRetry={() => void briefs.refetch()} />
+        ) : briefs.isPending ? (
+          // Same height as the idle card's line, so the card doesn't jump when the briefs arrive.
+          <p role="status" className="min-h-20 text-sm text-muted-foreground">Looking for a saved brief…</p>
+        ) : (
+          <BriefCard
+            lens={lens}
+            saved={briefs.data?.find((brief) => brief.lens === lens.id) ?? null}
+            stream={stream}
+            onGenerate={() => void generate(lens.id, lens.label)}
+            onCite={(source) => reader.jump(source.page, source.bbox)}
+          />
+        )
       )}
       {setRole.error && <ErrorAlert message={setRole.error.message} />}
       <ul aria-label="Sections" className="lens-sections flex flex-col gap-0.5">
