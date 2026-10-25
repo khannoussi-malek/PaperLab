@@ -24,7 +24,9 @@ type Props = {
  */
 export function BriefCard({ lens, saved, stream, onGenerate, onCite }: Props) {
   const mine = stream.lens === lens.id && stream.status !== 'idle'
-  const live = mine && !(stream.status === 'done' && saved?.id === stream.outputId)
+  const failed = mine && stream.status === 'error' && stream.problem !== null
+  // A failed brief that wrote nothing gives the card back to the saved one; the error sits above it.
+  const live = mine && !(stream.status === 'done' && saved?.id === stream.outputId) && !(failed && saved && stream.segments.length === 0)
   const busy = live && (stream.status === 'sources' || stream.status === 'streaming')
   const content = live ? stream.segments.map((s) => (s.kind === 'text' ? s.text : `[${s.label}]`)).join('') : (saved?.content ?? '')
   const sources = live ? (stream.sources ?? []) : (saved?.sources ?? [])
@@ -70,6 +72,18 @@ export function BriefCard({ lens, saved, stream, onGenerate, onCite }: Props) {
           </span>
         )}
       </header>
+      {failed && stream.problem && (
+        <Alert variant="destructive" className="border-glass-border">
+          <AlertDescription>{stream.problem.message}</AlertDescription>
+          {stream.problem.retryable && (
+            <AlertAction>
+              <Button variant="outline" size="xs" onClick={onGenerate}>
+                Retry
+              </Button>
+            </AlertAction>
+          )}
+        </Alert>
+      )}
       {busy && content === '' ? (
         <p role="status" className="text-sm text-muted-foreground">
           Writing the brief…
@@ -85,18 +99,6 @@ export function BriefCard({ lens, saved, stream, onGenerate, onCite }: Props) {
             Regenerate
           </Button>
         </div>
-      )}
-      {live && stream.problem && (
-        <Alert variant="destructive" className="border-glass-border">
-          <AlertDescription>{stream.problem.message}</AlertDescription>
-          {stream.problem.retryable && (
-            <AlertAction>
-              <Button variant="outline" size="xs" onClick={onGenerate}>
-                Retry
-              </Button>
-            </AlertAction>
-          )}
-        </Alert>
       )}
     </section>
   )
