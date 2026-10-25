@@ -65,6 +65,9 @@ workspace: answers cite passages from its papers and your notes.
 
 - Read in a PDF.js reader with zoom, in a light, dark or system theme. The page itself stays white.
 - Select text to highlight it in one of five colours, or a custom one, and add a note if you want.
+- Pick a **Lens** in the toolbar to read one part of a paper at a time: **Key ideas** (abstract, introduction and conclusion), **Critical check** (method, results and limitations), **How they did it** or **Related work**. Text outside the lens fades while the headings stay readable, and the arrows step through it.
+- The **Lens** tab lists the paper's sections and what each one is. PaperLab works this out from the headings; when it gets one wrong, change it from the section's ⋯ menu. Your fix is kept, even when the paper is processed again.
+- Ask for a **brief** of a lens: an AI summary that cites its passages, marked AI with the model that wrote it. It tells you when the sections behind it have changed, so you can write it again.
 - Hover a highlight to see, edit, recolour or delete its note in place. Right-click it for the same actions and "Copy quote".
 - Resize the side panel by dragging its edge. It remembers the width.
 
