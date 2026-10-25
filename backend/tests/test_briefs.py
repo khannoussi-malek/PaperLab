@@ -49,6 +49,13 @@ def test_cut_to_budget_keeps_whole_chunks_from_the_start():
     assert briefs.cut_to_budget(three) == three  # SMALL_PAPER_CHARS
 
 
+def test_cut_to_budget_keeps_a_first_chunk_that_alone_is_over_budget():
+    # a brief never reads nothing: one unsplittable block over the budget is still the lens's first passage
+    huge = [source("a" * 50), source("b" * 10)]
+
+    assert briefs.cut_to_budget(huge, 20) == huge[:1]
+
+
 async def test_a_small_lens_goes_whole_in_reading_order(session):
     paper, chunks = await paper_with_headings(session, HEADINGS)
 
