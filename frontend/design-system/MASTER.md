@@ -1036,7 +1036,15 @@ navigation counter"; *Disclaimer* (High) and *Feedback Loop* (Low) for "AI gener
   ghost `Ellipsis` button "Section actions for <heading>" opening a `DropdownMenu`: label "Change role", then a radio
   group of "Automatic" and the ten roles. Text before the first heading has no menu (it has no heading to fix). A failed
   fix shows an `ErrorAlert` above the list.
-- **Stable hooks and names:** `.lens-fade`, `.lens-step`, `.lens-panel`, `.lens-notice`, `li.lens-section[data-role]`, `button.lens-jump`, `.role-chip`, `.role-fixed`; the tab and aside "Lens", "Sections", "Section actions for <heading>", "Change role", "Automatic", "Previous lens section", "Next lens section".
+- **Brief card:** in the Lens tab for any lens but Full paper, unless the lens is empty. A `section` "<lens> brief",
+  `.brief-card`. Before a brief: a muted line "An AI summary of this lens, with citations to its passages." and a
+  primary `sm` "Generate brief" (`Sparkles`). While writing and once saved: the opaque `bg-provenance-llm-surface`
+  (never glass), a `ProvenanceBadge` "AI", `.brief-meta` "<model> · <date>", then `.brief-text` rendered as chat
+  answers are (markdown; `.brief-cite` buttons flash their passage). `.brief-partial` "Based on part of this lens" when
+  the lens didn't fit; `.brief-stale` "Out of date: sections changed" with an outline `xs` "Regenerate" after a role fix
+  or a re-ingest changed the lens. A failure shows a destructive `Alert` with Retry when it can be retried. A brief
+  has no Save as note.
+- **Stable hooks and names:** `.lens-fade`, `.lens-step`, `.lens-panel`, `.lens-notice`, `li.lens-section[data-role]`, `button.lens-jump`, `.role-chip`, `.role-fixed`, `.brief-card`, `.brief-meta`, `.brief-text`, `.brief-cite`, `.brief-partial`, `.brief-stale`; the tab and aside "Lens", "Sections", "Section actions for <heading>", "Change role", "Automatic", "Previous lens section", "Next lens section", "Generate brief", "Regenerate".
 
 ## Pre-delivery check (from ui-ux-pro-max Quick Reference §1–§3)
 
