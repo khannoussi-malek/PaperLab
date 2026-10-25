@@ -1028,7 +1028,15 @@ navigation counter"; *Disclaimer* (High) and *Feedback Loop* (Low) for "AI gener
 - **Fading:** `.lens-fade` rects over every passage outside the lens, `bg-white/65` (the page's own white, so both
   themes), drawn under the highlights so the reader's marks stay clear. Headings and figures are no passage's rect,
   so they stay readable as signposts.
-- **Stable hooks and names:** `.lens-fade`, `.lens-step`; "Lens", "Previous lens section", "Next lens section".
+- **Lens tab:** the seventh tab, after Evidence; at the 320 px minimum the tab list fits or scrolls sideways (`overflow-x-auto`) with the active tab kept in view, never smaller type. For a paper without a PDF the `aside` holds only a muted `.lens-notice`, "Lenses read a paper's sections. Attach its PDF to use them." Otherwise an `aside` "Lens": the lens label (`h2`, `font-heading`), a muted
+  `.lens-notice` line when the lens is empty, shows the start and end of the paper, or (Critical check) has no
+  limitations section, then the `ul` "Sections". Each `li.lens-section[data-role]` is a `button.lens-jump` (the
+  heading, truncated with the full text in `title`, or "Before the first heading"; an outline `.role-chip`; `.role-fixed`
+  "you" once the reader has fixed it; "p. N"; a `line-clamp-2` preview) that flashes the section's first passage, and a
+  ghost `Ellipsis` button "Section actions for <heading>" opening a `DropdownMenu`: label "Change role", then a radio
+  group of "Automatic" and the ten roles. Text before the first heading has no menu (it has no heading to fix). A failed
+  fix shows an `ErrorAlert` above the list.
+- **Stable hooks and names:** `.lens-fade`, `.lens-step`, `.lens-panel`, `.lens-notice`, `li.lens-section[data-role]`, `button.lens-jump`, `.role-chip`, `.role-fixed`; the tab and aside "Lens", "Sections", "Section actions for <heading>", "Change role", "Automatic", "Previous lens section", "Next lens section".
 
 ## Pre-delivery check (from ui-ux-pro-max Quick Reference §1–§3)
 

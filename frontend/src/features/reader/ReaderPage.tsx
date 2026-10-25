@@ -25,6 +25,7 @@ import { NumberMarks } from '../data/NumberMarks'
 import { numberMarks, tableMarkerAt, tableMarks } from '../data/pageMarks'
 import { useCaptureDrag } from '../data/useCaptureDrag'
 import { LensFade } from '../lenses/LensFade'
+import { LensPanel } from '../lenses/LensPanel'
 import { LensPicker } from '../lenses/LensPicker'
 import { useLensReader } from '../lenses/useLensReader'
 import { SimilarTab } from '../discovery/SimilarTab'
@@ -637,6 +638,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
         similar={<SimilarTab paperId={paperId} active={tab === 'similar'} />}
         references={<ReferencesTab paperId={paperId} active={tab === 'references'} />}
         evidence={<EvidencePanel paperId={paperId} hasPdf={!noPdf} onShowRegion={flashChunk} />}
+        lens={<LensPanel paperId={paperId} reader={lensReader} hasPdf={!noPdf} />}
       />
 
       {numberDraft && (
