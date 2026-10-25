@@ -1,15 +1,17 @@
 """POST /api/papers/{id}/briefs/{lens} (SSE) and GET /api/papers/{id}/briefs (M16 spec §4.3)."""
 
+import logging
 import uuid
 
 import pytest
 from conftest import parse_sse
 from sqlalchemy import select, update
+from test_chat_api import make_paper
 from test_chat_models_api import model_on, owner_rows
 from test_sections import paper_with_headings
 
 from app.config import settings
-from app.core import briefs
+from app.core import briefs, chat
 from app.main import create_app
 from app.models import LLMModel, LLMOutput
 from app.providers import llm
@@ -134,6 +136,48 @@ async def test_a_brief_that_cant_be_saved_says_so(client, session, fake_llm, mon
 
     assert events[-1] == ("error", {"message": "The brief couldn't be saved", "retryable": True})
     assert "done" not in [name for name, _ in events]
+
+
+def save_failure_log(caplog) -> tuple[int, str]:
+    [record] = [r for r in caplog.records if r.name == "app.api.chat" and r.getMessage().startswith("saving")]
+    return record.levelno, record.getMessage()
+
+
+async def test_a_failed_save_logs_what_it_was_saving(client, session, fake_llm, monkeypatch, caplog):
+    # stream_output is shared, so chat's line is pinned here too: word for word what it was before briefs (R5).
+    paper, _ = await paper_with_headings(session, HEADINGS)
+    chat_paper, _ = await make_paper(session, ["Intro text."])
+
+    async def broken_save(*args):
+        raise RuntimeError("database went away")
+
+    monkeypatch.setattr(briefs, "save_brief", broken_save)
+    monkeypatch.setattr(chat, "save_answer", broken_save)
+
+    await generate(client, paper.id)
+    brief_log = save_failure_log(caplog)
+    caplog.clear()
+    await client.post(f"/api/papers/{chat_paper.id}/chat", json={"question": "why?"})
+
+    assert brief_log == (logging.ERROR, f"saving a brief for paper {paper.id}, lens key_ideas failed")
+    assert save_failure_log(caplog) == (
+        logging.ERROR,
+        f"saving a chat answer for {chat.Scope(paper_id=chat_paper.id)} failed",
+    )
+
+
+async def test_an_unexpected_exception_mid_brief_is_an_error_event(client, session, fake_llm):
+    paper, _ = await paper_with_headings(session, HEADINGS)
+
+    async def broken(system: str, prompt: str):
+        yield "Partial "
+        raise RuntimeError("adapter bug")
+
+    fake_llm.stream = broken
+
+    events = parse_sse((await generate(client, paper.id)).text)
+
+    assert events[-1] == ("error", {"message": "The brief stopped because of an unexpected error", "retryable": True})
 
 
 async def test_a_brief_records_the_chosen_model(client, session, fake_stack, answers_in_test_transaction):
