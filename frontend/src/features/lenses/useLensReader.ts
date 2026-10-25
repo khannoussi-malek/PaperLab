@@ -18,6 +18,8 @@ export function useLensReader(paperId: string, tab: ReaderTab, onJump: (page: nu
   const inLens = useMemo(() => new Set(lens?.chunk_ids ?? []), [lens])
   const byPage = useMemo(() => groupByPage(chunks.data ?? []), [chunks.data])
   const runs = useMemo(() => (lensId === 'full' ? [] : lensRuns(chunks.data ?? [], inLens)), [lensId, chunks.data, inLens])
+  // a role fix or a re-index can shrink the runs under the counter; never show "2/1"
+  const current = Math.min(runIndex, Math.max(runs.length - 1, 0))
 
   function goTo(index: number) {
     setRunIndex(index)
@@ -37,7 +39,8 @@ export function useLensReader(paperId: string, tab: ReaderTab, onJump: (page: nu
   // A picked lens opens on its first run; when its chunks are still loading, once they have.
   const pending = useRef<LensId | null>(null)
   useEffect(() => {
-    if (pending.current && openFirstRun(pending.current)) pending.current = null
+    // a failed chunks load drops the jump, so a later fetch (the Lens tab) doesn't fire it by surprise
+    if (pending.current && (chunks.isError || openFirstRun(pending.current))) pending.current = null
   })
 
   function pick(next: LensId) {
@@ -59,9 +62,9 @@ export function useLensReader(paperId: string, tab: ReaderTab, onJump: (page: nu
     sectionsQuery,
     chunks: chunks.data,
     runCount: runs.length,
-    runIndex,
+    runIndex: current,
     pick,
-    step: (delta: -1 | 1) => goTo(stepRun(runIndex, runs.length, delta)),
+    step: (delta: -1 | 1) => goTo(stepRun(current, runs.length, delta)),
     fadeOn: (page: number): PdfRect[] => (lensId === 'full' ? [] : fadeRects(byPage.get(page) ?? [], inLens)),
     jumpToChunk,
     jump: onJump,
