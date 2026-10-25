@@ -109,7 +109,7 @@ test('a chat citation of the abstract brings the abstract into view', () => {
   render(<ReaderPage paperId={ID} tab="chat" target={null} />)
   state.onCite!({ label: 'C1', chunk_id: 'c', paper_id: ID, page: 0, section: 'Abstract', bbox: [], from_abstract: true })
   expect(scrolled).toHaveBeenCalled()
-  expect(scrolled.mock.contexts.at(-1)).toBe(screen.getByText('Sleep helps memory consolidation.'))
+  expect(scrolled.mock.contexts[0]).toBe(screen.getByText('Sleep helps memory consolidation.'))
 })
 
 test('a paper with a PDF still opens it, with zoom', () => {

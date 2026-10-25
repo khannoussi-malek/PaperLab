@@ -18,7 +18,7 @@ const ROLES = Object.keys(ROLE_LABEL) as Role[]
 
 type Props = {
   section: Section
-  /** A role fix is being saved: the menu waits. */
+  /** A role fix is being saved: the menu's choices wait (the trigger stays enabled so focus isn't lost). */
   busy: boolean
   onJump: () => void
   /** null: back to the automatic role. Only offered on a section with a heading. */
@@ -43,7 +43,11 @@ export function SectionRow({ section, busy, onJump, onRoleChange }: Props) {
           <Badge variant="outline" className="role-chip">
             {ROLE_LABEL[section.role]}
           </Badge>
-          {fixed && <span className="role-fixed">you</span>}
+          {fixed && (
+            <span className="role-fixed">
+              <span className="sr-only">fixed by </span>you
+            </span>
+          )}
           <span className="tabular-nums">p. {section.page}</span>
         </span>
         <span className="line-clamp-2 text-xs text-muted-foreground" title={section.preview}>
@@ -53,7 +57,7 @@ export function SectionRow({ section, busy, onJump, onRoleChange }: Props) {
       {section.title !== null && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" aria-label={`Section actions for ${section.title}`} disabled={busy}>
+            <Button variant="ghost" size="icon" aria-label={`Section actions for ${section.title}`}>
               <Ellipsis aria-hidden />
             </Button>
           </DropdownMenuTrigger>
@@ -63,10 +67,10 @@ export function SectionRow({ section, busy, onJump, onRoleChange }: Props) {
               value={fixed ? section.role : AUTOMATIC}
               onValueChange={(value) => onRoleChange(value === AUTOMATIC ? null : (value as Role))}
             >
-              <DropdownMenuRadioItem value={AUTOMATIC}>Automatic</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value={AUTOMATIC} disabled={busy}>Automatic</DropdownMenuRadioItem>
               <DropdownMenuSeparator />
               {ROLES.map((role) => (
-                <DropdownMenuRadioItem key={role} value={role}>
+                <DropdownMenuRadioItem key={role} value={role} disabled={busy}>
                   {ROLE_LABEL[role]}
                 </DropdownMenuRadioItem>
               ))}

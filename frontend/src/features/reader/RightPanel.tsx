@@ -28,8 +28,14 @@ const panel = cn('flex min-h-0 flex-1 flex-col text-base data-[state=inactive]:h
 export function RightPanel({ tab, onTabChange, width, onWidthChange, notes, chat, data, similar, references, evidence, lens }: Props) {
   const listRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    // The active tab stays in view when the list scrolls (seven tabs at the 320 px minimum).
-    listRef.current?.querySelector('[data-state="active"]')?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
+    // Keep the active tab inside the scrolling list. Sets the list's own scrollLeft, so no ancestor (the page) scrolls.
+    const list = listRef.current
+    const active = list?.querySelector('[data-state="active"]')
+    if (!list || !active) return
+    const box = list.getBoundingClientRect()
+    const tabBox = active.getBoundingClientRect()
+    if (tabBox.left < box.left) list.scrollLeft += tabBox.left - box.left
+    else if (tabBox.right > box.right) list.scrollLeft += tabBox.right - box.right
   }, [tab])
   return (
     <Tabs
@@ -38,7 +44,7 @@ export function RightPanel({ tab, onTabChange, width, onWidthChange, notes, chat
       className={cn('reader-panel relative min-h-0 gap-0 border-l border-glass-border', glass)}
     >
       <PanelResizeHandle limits={READER_PANEL} width={width} onWidthChange={onWidthChange} />
-      <TabsList ref={listRef} id="reader-panel-tabs" className="mx-4 mt-3 max-w-full justify-start overflow-x-auto">
+      <TabsList ref={listRef} id="reader-panel-tabs" className="mx-4 mt-3 w-auto justify-start overflow-x-auto">
         <TabsTrigger value="notes">Notes</TabsTrigger>
         <TabsTrigger value="chat">Chat</TabsTrigger>
         <TabsTrigger value="data">Data</TabsTrigger>

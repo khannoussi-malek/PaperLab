@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { useSetSectionRole } from './queries'
 import { ErrorAlert, LoadError } from '@/features/library/ErrorAlert'
 import { NO_PDF_LENS_TEXT, lensNotice, lensSections } from './lenses'
@@ -11,24 +12,18 @@ type Props = { paperId: string; reader: LensReader; hasPdf: boolean }
 export function LensPanel({ paperId, reader, hasPdf }: Props) {
   const setRole = useSetSectionRole(paperId)
   const { lens, sectionsQuery } = reader
-  if (!hasPdf) {
-    return (
-      <aside aria-label="Lens" className="lens-panel flex min-h-0 flex-1 flex-col gap-3 px-4 pt-3 pb-4">
-        <p className="lens-notice text-sm text-muted-foreground">{NO_PDF_LENS_TEXT}</p>
-      </aside>
-    )
-  }
+  if (!hasPdf) return <Shell><p className="lens-notice text-sm text-muted-foreground">{NO_PDF_LENS_TEXT}</p></Shell>
   if (sectionsQuery.error) {
     return (
-      <div className="flex flex-col gap-2 p-4">
+      <Shell>
         <LoadError message={sectionsQuery.error.message} onRetry={() => void sectionsQuery.refetch()} />
-      </div>
+      </Shell>
     )
   }
-  if (!lens) return <p role="status" className="p-4 text-sm text-muted-foreground">Reading the sections…</p>
+  if (!lens) return <Shell><p role="status" className="text-sm text-muted-foreground">Reading the sections…</p></Shell>
   const notice = lensNotice(lens, hasPdf)
   return (
-    <aside aria-label="Lens" className="lens-panel flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 pt-3 pb-4">
+    <Shell>
       <h2 className="font-heading text-lg font-semibold">{lens.label}</h2>
       {notice && <p className="lens-notice text-sm text-muted-foreground">{notice.text}</p>}
       {setRole.error && <ErrorAlert message={setRole.error.message} />}
@@ -43,6 +38,14 @@ export function LensPanel({ paperId, reader, hasPdf }: Props) {
           />
         ))}
       </ul>
+    </Shell>
+  )
+}
+
+function Shell({ children }: { children: ReactNode }) {
+  return (
+    <aside aria-label="Lens" className="lens-panel flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 pt-3 pb-4">
+      {children}
     </aside>
   )
 }
