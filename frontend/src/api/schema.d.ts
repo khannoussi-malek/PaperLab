@@ -277,6 +277,89 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/papers/{paper_id}/sections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Sections
+         * @description Every section with its role and every lens with its chunks, in reading order. 404 for an unknown paper.
+         */
+        get: operations["get_sections_api_papers__paper_id__sections_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/papers/{paper_id}/section-roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Section Role
+         * @description The reader's role for a heading (null: back to the automatic role), then what GET returns, recomputed.
+         *     404 for an unknown paper; 422 for an unknown role, or unknown_section when no chunk has that heading.
+         */
+        put: operations["set_section_role_api_papers__paper_id__section_roles_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/papers/{paper_id}/briefs/{lens}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate Brief
+         * @description Chat's events; no body, the model is the optional `?model_id=`. Checked before streaming, in parameter order:
+         *     404 model_not_found or 409 no_model, 422 for an unknown lens or bad model_id, then 422 lens_not_briefable, 404
+         *     (410 merged) for the paper, 409 needs_full_text (no PDF), paper_not_ready or lens_empty.
+         */
+        post: operations["generate_brief_api_papers__paper_id__briefs__lens__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/papers/{paper_id}/briefs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Briefs
+         * @description The newest brief per lens, each saying whether it is out of date. 404 for an unknown paper.
+         */
+        get: operations["list_briefs_api_papers__paper_id__briefs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/papers/{paper_id}/reading-context": {
         parameters: {
             query?: never;
@@ -2177,6 +2260,38 @@ export interface components {
             /** File */
             file: string;
         };
+        /** BriefOut */
+        BriefOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Lens
+             * @enum {string}
+             */
+            lens: "full" | "key_ideas" | "critical" | "method" | "related";
+            /** Content */
+            content: string;
+            /** Model */
+            model: string;
+            /** Connection Name */
+            connection_name: string | null;
+            /** Prompt Version */
+            prompt_version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Stale */
+            stale: boolean;
+            /** Partial */
+            partial: boolean;
+            /** Sources */
+            sources: (components["schemas"]["ChatSource"] | null)[];
+        };
         /** BulkHitReviewUpdate */
         BulkHitReviewUpdate: {
             /** Hit Ids */
@@ -3289,6 +3404,22 @@ export interface components {
              * @default 2
              */
             facet_columns: number;
+        };
+        /** LensOut */
+        LensOut: {
+            /**
+             * Id
+             * @enum {string}
+             */
+            id: "full" | "key_ideas" | "critical" | "method" | "related";
+            /** Label */
+            label: string;
+            /** Chunk Ids */
+            chunk_ids: string[];
+            /** Positional Fallback */
+            positional_fallback: boolean;
+            /** Missing Roles */
+            missing_roles: ("abstract" | "intro" | "related" | "method" | "results" | "discussion" | "limitations" | "conclusion" | "back" | "other")[];
         };
         /** LinkIn */
         LinkIn: {
@@ -4570,6 +4701,46 @@ export interface components {
             /** Label */
             label: string;
         };
+        /** SectionOut */
+        SectionOut: {
+            /** Title */
+            title: string | null;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "abstract" | "intro" | "related" | "method" | "results" | "discussion" | "limitations" | "conclusion" | "back" | "other";
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "user" | "keyword" | "inherited" | "position" | "none";
+            /** Chunk Ids */
+            chunk_ids: string[];
+            /**
+             * First Chunk Id
+             * Format: uuid
+             */
+            first_chunk_id: string;
+            /** Page */
+            page: number;
+            /** Preview */
+            preview: string;
+        };
+        /** SectionRoleIn */
+        SectionRoleIn: {
+            /** Section Title */
+            section_title: string;
+            /** Role */
+            role: ("abstract" | "intro" | "related" | "method" | "results" | "discussion" | "limitations" | "conclusion" | "back" | "other") | null;
+        };
+        /** SectionsOut */
+        SectionsOut: {
+            /** Sections */
+            sections: components["schemas"]["SectionOut"][];
+            /** Lenses */
+            lenses: components["schemas"]["LensOut"][];
+        };
         /**
          * Series
          * @description One series: a y column (and x, z, error columns) from one dataset, optionally only some of its rows.
@@ -5437,6 +5608,137 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PaperTagGroup"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_sections_api_papers__paper_id__sections_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                paper_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SectionsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_section_role_api_papers__paper_id__section_roles_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                paper_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SectionRoleIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SectionsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_brief_api_papers__paper_id__briefs__lens__post: {
+        parameters: {
+            query?: {
+                model_id?: string | null;
+            };
+            header?: never;
+            path: {
+                paper_id: string;
+                lens: "full" | "key_ideas" | "critical" | "method" | "related";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": components["schemas"]["SourcesEvent"] | components["schemas"]["TokenEvent"] | components["schemas"]["DoneEvent"] | components["schemas"]["ErrorEvent"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_briefs_api_papers__paper_id__briefs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                paper_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BriefOut"][];
                 };
             };
             /** @description Validation Error */

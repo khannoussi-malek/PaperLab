@@ -41,6 +41,11 @@ describe('parseRoute', () => {
     expect(parseRoute(readerHref(id, 'references'))).toEqual({ name: 'reader', paperId: id, tab: 'references', target: null })
   })
 
+  it('keeps the Lens tab in the hash', () => {
+    expect(readerHref(id, 'lens')).toBe(`#/papers/${id}?tab=lens`)
+    expect(parseRoute(readerHref(id, 'lens'))).toEqual({ name: 'reader', paperId: id, tab: 'lens', target: null })
+  })
+
   it('treats an unknown tab as Notes', () => {
     expect(parseRoute(`#/papers/${id}?tab=graph`)).toEqual({ name: 'reader', paperId: id, tab: 'notes', target: null })
   })
