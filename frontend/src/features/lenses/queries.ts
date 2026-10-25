@@ -21,7 +21,9 @@ export function useSetSectionRole(paperId: string) {
   const client = useQueryClient()
   return useMutation({
     mutationFn: (change: SectionRoleIn) => api.setSectionRole(paperId, change),
-    onSuccess: (sections) => {
+    onSuccess: async (sections) => {
+      // a sections fetch started before the fix would otherwise land after it and show the old roles
+      await client.cancelQueries({ queryKey: keys.sections(paperId) })
       client.setQueryData(keys.sections(paperId), sections)
       return client.invalidateQueries({ queryKey: keys.briefs(paperId) })
     },
