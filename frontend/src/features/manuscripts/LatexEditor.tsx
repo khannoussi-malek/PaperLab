@@ -4,7 +4,7 @@ import { stex } from '@codemirror/legacy-modes/mode/stex'
 import { Annotation, Compartment, RangeSetBuilder, Transaction } from '@codemirror/state'
 import { EditorView, GutterMarker, gutter, keymap } from '@codemirror/view'
 import { basicSetup } from 'codemirror'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 type LineError = { line: number; message: string }
 type Props = {
@@ -48,16 +48,35 @@ const errorGutter = (errors: LineError[]) =>
   })
 
 // The app's own colour tokens, so the editor follows light and dark with the rest of the window (see MASTER.md).
-const theme = EditorView.theme({
-  '&': { height: '100%', fontSize: '13px', color: 'var(--foreground)', backgroundColor: 'var(--background)' },
-  '.cm-scroller': { overflow: 'auto', fontFamily: 'var(--font-mono, ui-monospace, monospace)' },
-  '.cm-content': { caretColor: 'var(--foreground)' },
-  '.cm-cursor': { borderLeftColor: 'var(--foreground)' },
-  '.cm-gutters': { backgroundColor: 'var(--muted)', color: 'var(--muted-foreground)', border: 'none' },
-  '.cm-activeLine, .cm-activeLineGutter': { backgroundColor: 'var(--accent)' },
-  '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': { backgroundColor: 'color-mix(in srgb, var(--primary) 30%, transparent)' },
-  '&.cm-focused': { outline: '2px solid var(--ring)', outlineOffset: '-2px' },
-})
+// `dark` tells CodeMirror which base theme to sit on; the colours themselves come from the tokens.
+export const latexTheme = (dark: boolean) =>
+  EditorView.theme(
+    {
+      '&': { height: '100%', fontSize: '13px', color: 'var(--foreground)', backgroundColor: 'var(--background)' },
+      '.cm-scroller': { overflow: 'auto', fontFamily: 'var(--font-mono, ui-monospace, monospace)' },
+      '.cm-content': { caretColor: 'var(--foreground)' },
+      '.cm-cursor': { borderLeftColor: 'var(--foreground)' },
+      '.cm-gutters': { backgroundColor: 'var(--muted)', color: 'var(--muted-foreground)', border: 'none' },
+      // Translucent, so a selection inside the current line stays visible.
+      '.cm-activeLine, .cm-activeLineGutter': { backgroundColor: 'color-mix(in oklab, var(--accent) 40%, transparent)' },
+      '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': { backgroundColor: 'color-mix(in srgb, var(--primary) 30%, transparent)' },
+      '&.cm-focused': { outline: '2px solid var(--ring)', outlineOffset: '-2px' },
+    },
+    { dark },
+  )
+
+/** Whether the app is in dark mode: ThemeProvider toggles the `dark` class on the root element. */
+function useAppIsDark() {
+  const root = document.documentElement
+  const [dark, setDark] = useState(() => root.classList.contains('dark'))
+  useEffect(() => {
+    const observer = new MutationObserver(() => setDark(root.classList.contains('dark')))
+    observer.observe(root, { attributes: true, attributeFilter: ['class'] })
+    setDark(root.classList.contains('dark'))
+    return () => observer.disconnect()
+  }, [root])
+  return dark
+}
 
 const highlight = syntaxHighlighting(
   HighlightStyle.define([
@@ -77,6 +96,8 @@ export function LatexEditor({ value, onChange, errors, onSave, jumpTo, label = '
   const host = useRef<HTMLDivElement>(null)
   const view = useRef<EditorView | null>(null)
   const errorSlot = useRef(new Compartment())
+  const themeSlot = useRef(new Compartment())
+  const dark = useAppIsDark()
   // The view is built once; callbacks go through a ref so it never holds a stale one.
   const latest = useRef({ onChange, onSave })
   latest.current = { onChange, onSave }
@@ -89,7 +110,7 @@ export function LatexEditor({ value, onChange, errors, onSave, jumpTo, label = '
         basicSetup,
         StreamLanguage.define(stex),
         EditorView.lineWrapping,
-        theme,
+        themeSlot.current.of(latexTheme(dark)),
         highlight,
         EditorView.contentAttributes.of({ 'aria-label': label }),
         errorSlot.current.of(errorGutter(errors)),
@@ -112,6 +133,10 @@ export function LatexEditor({ value, onChange, errors, onSave, jumpTo, label = '
       annotations: [FromHost.of(true), Transaction.addToHistory.of(false)],
     })
   }, [value])
+
+  useEffect(() => {
+    view.current!.dispatch({ effects: themeSlot.current.reconfigure(latexTheme(dark)) })
+  }, [dark])
 
   useEffect(() => {
     view.current!.dispatch({ effects: errorSlot.current.reconfigure(errorGutter(errors)) })

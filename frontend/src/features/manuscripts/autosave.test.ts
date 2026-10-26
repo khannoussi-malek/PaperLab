@@ -83,3 +83,24 @@ test('a conflict keeps the text, and keepMine saves it again', async () => {
   expect(save).toHaveBeenLastCalledWith('mine')
   expect(auto.state).toBe('saved')
 })
+
+test('a failure that is not retryable stops at once and says so', async () => {
+  const save = vi.fn().mockRejectedValue(new Error('422'))
+  const onError = vi.fn()
+  const auto = createAutosave({ delayMs: 1000, save, onError, retryable: () => false })
+  auto.change('x')
+  await vi.advanceTimersByTimeAsync(30000)
+  expect(save).toHaveBeenCalledOnce()
+  expect(onError).toHaveBeenCalledWith(expect.any(Error), false)
+  expect(auto.state).toBe('unsaved')
+})
+
+test('retries stop after 6 attempts', async () => {
+  const save = vi.fn().mockRejectedValue(new Error('503'))
+  const onError = vi.fn()
+  const auto = createAutosave({ delayMs: 1000, save, onError })
+  auto.change('x')
+  await vi.advanceTimersByTimeAsync(1000 + 6 * 5000 + 60000)
+  expect(save).toHaveBeenCalledTimes(7)
+  expect(onError).toHaveBeenLastCalledWith(expect.any(Error), false)
+})

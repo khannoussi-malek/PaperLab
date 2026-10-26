@@ -22,7 +22,8 @@ import { OutlinePanel } from './OutlinePanel'
 import { PdfPane } from './PdfPane'
 import { MANUSCRIPT_PDF } from './pdfPanel'
 import type { SaveState } from './autosave'
-import { SourcePane, type KeptText } from './SourcePane'
+import { useKeptTexts } from './keptTexts'
+import { SourcePane } from './SourcePane'
 import { useLeaveWarning } from './useLeaveWarning'
 
 /** The writing studio: files and outline | source | PDF. `file` is the `?file=` of the route; null is the main file. */
@@ -33,18 +34,15 @@ export function ManuscriptPage({ manuscriptId, file }: { manuscriptId: string; f
   const [live, setLive] = useState<Record<string, string>>({})
   const [jump, setJump] = useState<{ line: number; n: number } | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
-  // Text a closed file could not save, until the user opens that file again.
-  const [kept, setKept] = useState<Record<string, KeptText>>({})
+  const kept = useKeptTexts(manuscriptId) // text a closed file could not save; lives outside the page
   const [saveStates, setSaveStates] = useState<Record<string, SaveState>>({})
   const flushRef = useRef<(() => Promise<boolean>) | null>(null)
-  useLeaveWarning(Object.keys(kept).length > 0 || Object.values(saveStates).some((s) => s !== 'saved'))
+  useLeaveWarning(Object.values(saveStates).some((s) => s !== 'saved')) // kept texts are warned about in App
   const onText = useCallback(
     (p: string, text: string | null) =>
       setLive((l) => (text === null ? Object.fromEntries(Object.entries(l).filter(([k]) => k !== p)) : { ...l, [p]: text })),
     [],
   )
-  const onKeep = useCallback((p: string, k: KeptText) => setKept((all) => ({ ...all, [p]: k })), [])
-  const onAdopted = useCallback((p: string) => setKept((all) => Object.fromEntries(Object.entries(all).filter(([k]) => k !== p))), [])
   const onState = useCallback((p: string, s: SaveState) => setSaveStates((all) => ({ ...all, [p]: s })), [])
   const registerFlush = useCallback((f: (() => Promise<boolean>) | null) => { flushRef.current = f }, [])
   const [pdfWidth, setPdfWidth] = useState(() => loadPanelWidth(MANUSCRIPT_PDF, browserStorage()))
@@ -84,7 +82,7 @@ export function ManuscriptPage({ manuscriptId, file }: { manuscriptId: string; f
     >
       {manuscript.error && <LoadError message={manuscript.error.message} onRetry={() => void manuscript.refetch()} />}
       {manuscript.isPending && <TabSkeleton label="Loading manuscript" />}
-      {Object.entries(kept).map(([keptPath, k]) => (
+      {Object.entries(kept).filter(([keptPath]) => keptPath !== path).map(([keptPath, k]) => (
         <Alert key={keptPath} variant="destructive" className="mb-2 w-auto">
           <AlertDescription className="flex flex-wrap items-center gap-3">
             <span>
@@ -111,10 +109,7 @@ export function ManuscriptPage({ manuscriptId, file }: { manuscriptId: string; f
             compiling={compiling}
             compileError={compile.error ? manuscriptFailure(compile.error) : null}
             onCompile={() => compile.mutate(manuscriptId)}
-            kept={kept[path] ?? null}
             onText={onText}
-            onKeep={onKeep}
-            onAdopted={onAdopted}
             onState={onState}
             registerFlush={registerFlush}
           />

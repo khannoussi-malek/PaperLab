@@ -7,20 +7,26 @@ type Options = {
   /** Resolves `{ conflict: true }` when the file changed elsewhere; a rejection leaves the text unsaved. */
   save: (text: string) => Promise<{ conflict: boolean } | void>
   onState?: (state: SaveState) => void
-  onError?: (error: Error) => void
+  /** `willRetry` says whether another attempt is already scheduled. */
+  onError?: (error: Error, willRetry: boolean) => void
+  /** Whether a failure is worth trying again (a network error or a 5xx); a 4xx will fail the same way. */
+  retryable?: (error: Error) => boolean
 }
+
+const MAX_RETRIES = 6
 
 /**
  * Saves the latest text `delayMs` after the last change, one save at a time. The text stays in `unsavedText` until a
  * save succeeds, so a failure or a conflict never loses it; a conflict stops saving until the user picks a side
  * (`keepMine` or `reload`), and a plain failure retries after `retryMs`.
  */
-export function createAutosave({ delayMs, retryMs = 5000, save, onState, onError }: Options) {
+export function createAutosave({ delayMs, retryMs = 5000, save, onState, onError, retryable = () => true }: Options) {
   let state: SaveState = 'saved'
   let pending: string | null = null
   let timer: ReturnType<typeof setTimeout> | undefined
   let queue: Promise<void> = Promise.resolve()
   let disposed = false
+  let attempts = 0 // failed saves in a row
 
   const setState = (next: SaveState) => {
     state = next
@@ -34,12 +40,16 @@ export function createAutosave({ delayMs, retryMs = 5000, save, onState, onError
     try {
       const result = await save(text)
       if (result?.conflict) return setState('conflict')
+      attempts = 0
       if (pending === text) pending = null
       setState(pending === null ? 'saved' : 'unsaved')
     } catch (error) {
+      const failure = error instanceof Error ? error : new Error(String(error))
+      attempts += 1
+      const willRetry = !disposed && attempts <= MAX_RETRIES && retryable(failure)
       setState('unsaved')
-      onError?.(error instanceof Error ? error : new Error(String(error)))
-      if (!disposed) timer = setTimeout(() => void flush(), retryMs)
+      if (willRetry) timer = setTimeout(() => void flush(), retryMs)
+      onError?.(failure, willRetry)
     }
   }
 
@@ -59,6 +69,7 @@ export function createAutosave({ delayMs, retryMs = 5000, save, onState, onError
     },
     change(text: string) {
       pending = text
+      attempts = 0
       if (state === 'conflict') return
       setState('unsaved')
       clearTimeout(timer)
