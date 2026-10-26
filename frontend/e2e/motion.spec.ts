@@ -183,7 +183,7 @@ test.describe('with motion allowed', () => {
 
     const [uploaded] = await Promise.all([
       page.waitForResponse((r) => r.url().endsWith('/api/papers') && r.request().method() === 'POST'),
-      page.locator('input[type="file"]').setInputFiles(FIXTURE_FILE),
+      page.locator('input[type="file"][accept="application/pdf"]').setInputFiles(FIXTURE_FILE),
     ])
     const { id } = await uploaded.json()
     try {
