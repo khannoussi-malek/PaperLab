@@ -1383,9 +1383,9 @@ export const useManuscripts = (workspaceId: string | null) =>
 export const useManuscriptTemplates = () =>
   useQuery({ queryKey: ['manuscripts', 'templates'], queryFn: api.listManuscriptTemplates, staleTime: Infinity })
 
-/** Poll while compiling; stop on error so a failing server isn't hammered. */
-export const manuscriptPollInterval = (data: { compile_status: string } | undefined, failed: boolean) =>
-  !failed && data?.compile_status === 'running' ? COMPILE_POLL_MS : false
+/** Poll while compiling or while another pass is asked for; stop on error so a failing server isn't hammered. */
+export const manuscriptPollInterval = (data: { compile_status: string; compile_requested?: boolean } | undefined, failed: boolean) =>
+  !failed && (data?.compile_status === 'running' || data?.compile_requested === true) ? COMPILE_POLL_MS : false
 
 /** One manuscript with its files; polls while it compiles. */
 export const useManuscript = (id: string) =>
@@ -1453,3 +1453,12 @@ export const useImportManuscript = () =>
 export const useUpdateManuscript = () =>
   useManuscriptMutation((v: { id: string; patch: ManuscriptPatch }) => api.updateManuscript(v.id, v.patch))
 export const useDeleteManuscript = () => useManuscriptMutation((id: string) => api.deleteManuscript(id))
+/** A new, empty text file (a PUT with no base: 409 file_exists when there is one). */
+export const useCreateManuscriptFile = () =>
+  useManuscriptMutation((v: { id: string; path: string }) => api.saveManuscriptFile(v.id, v.path, '', null))
+export const useUploadManuscriptFile = () =>
+  useManuscriptMutation((v: { id: string; path: string; file: File }) => api.uploadManuscriptFile(v.id, v.path, v.file))
+export const useRenameManuscriptFile = () =>
+  useManuscriptMutation((v: { id: string; path: string; newPath: string }) => api.renameManuscriptFile(v.id, v.path, v.newPath))
+export const useDeleteManuscriptFile = () =>
+  useManuscriptMutation((v: { id: string; path: string }) => api.deleteManuscriptFile(v.id, v.path))

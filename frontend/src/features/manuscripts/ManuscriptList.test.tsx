@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { api, type Manuscript } from '@/api/client'
 import { ManuscriptList } from './ManuscriptList'
@@ -54,4 +54,38 @@ test('an import says which files were skipped', async () => {
   const input = container.querySelector('input[type=file]') as HTMLInputElement
   fireEvent.change(input, { target: { files: [new File(['x'], 'paper.zip', { type: 'application/zip' })] } })
   expect(await screen.findByText("Imported. Skipped 2 files PaperLab can't use yet: README, fig.eps.")).toBeInTheDocument()
+})
+
+test('Move picks a workspace, or none, and saves it', async () => {
+  vi.spyOn(api, 'listWorkspaces').mockResolvedValue([{ id: 'w1', name: 'Sleep' }, { id: 'w2', name: 'Memory' }] as never)
+  const update = vi.spyOn(api, 'updateManuscript').mockResolvedValue({ ...ms({ workspace_id: null }), files: [] })
+  renderList()
+  fireEvent.click(await screen.findByRole('button', { name: 'Move My thesis' }))
+  const picker = await screen.findByLabelText('Workspace')
+  await screen.findByRole('option', { name: 'Memory' })
+  expect(picker).toHaveValue('w1')
+  fireEvent.change(picker, { target: { value: '' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Move' }))
+  await waitFor(() => expect(update).toHaveBeenCalledWith('m1', { workspace_id: null }))
+})
+
+test('Delete asks in the app before deleting the manuscript', async () => {
+  const confirm = vi.spyOn(window, 'confirm')
+  const remove = vi.spyOn(api, 'deleteManuscript').mockResolvedValue(undefined)
+  renderList()
+  fireEvent.click(await screen.findByRole('button', { name: 'Delete Draft two' }))
+  expect(await screen.findByText('Delete “Draft two”?')).toBeInTheDocument()
+  expect(remove).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole('button', { name: 'Delete manuscript' }))
+  await waitFor(() => expect(remove).toHaveBeenCalledWith('m2'))
+  expect(confirm).not.toHaveBeenCalled()
+})
+
+test('the library lists manuscripts without a workspace with the same actions', async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const list = vi.spyOn(api, 'listManuscripts').mockResolvedValue([ms({ workspace_id: null })])
+  render(<QueryClientProvider client={client}><ManuscriptList workspaceId={null} /></QueryClientProvider>)
+  expect(await screen.findByRole('button', { name: 'Move My thesis' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Delete My thesis' })).toBeInTheDocument()
+  expect(list).toHaveBeenCalledWith(null)
 })

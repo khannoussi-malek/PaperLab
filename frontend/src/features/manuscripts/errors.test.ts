@@ -12,7 +12,8 @@ test('names the path, limit and cause where there is one', () => {
 test.each([
   'file_changed', 'file_exists', 'bad_path', 'reserved_path', 'unsupported_file_type', 'file_too_large',
   'manuscript_too_large', 'too_many_files', 'bad_zip', 'no_main_file', 'not_text', 'main_file_not_tex',
-  'unknown_template', 'no_pdf',
+  'unknown_template', 'no_pdf', 'package_missing', 'compile_interrupted', 'main_file', 'unknown_workspace',
+  'unknown_file', 'outside_file',
 ])('%s has a plain sentence, not the code', (code) => {
   const text = manuscriptErrorMessage(code, {})
   expect(text).not.toContain(code)
@@ -28,4 +29,15 @@ test('manuscriptFailure: mapped code gets its copy, unmapped keeps the server me
   expect(manuscriptFailure(new ApiError('Compile queue is full', 503, { detail: 'Compile queue is full' }))).toBe('Compile queue is full')
   expect(manuscriptFailure(new Error('Network down'))).toBe('Network down')
   expect(manuscriptFailure(new Error(''))).toBe('Something went wrong. Please try again.')
+})
+
+test('a missing package is named when the compile said which', () => {
+  expect(manuscriptErrorMessage('package_missing', { name: 'fontawesome5' })).toBe(
+    "This project uses a LaTeX package PaperLab doesn't include yet: fontawesome5.",
+  )
+  expect(manuscriptErrorMessage('package_missing')).toBe("This project uses a LaTeX package PaperLab doesn't include yet.")
+})
+
+test('an interrupted compile asks for another', () => {
+  expect(manuscriptErrorMessage('compile_interrupted')).toBe('The last compile was interrupted. Compile again.')
 })
