@@ -80,7 +80,7 @@ def check_title(title: str) -> str:
         depth += (ch == "{") - (ch == "}")
         if depth < 0:
             break
-    if not title or len(title) > MAX_TITLE or depth != 0:
+    if not title or len(title) > MAX_TITLE or depth != 0 or re.search(r"[\r\n]|(?<!\\)%", title):
         raise InvalidInput("bad_title")
     return title
 

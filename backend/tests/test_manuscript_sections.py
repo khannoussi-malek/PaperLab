@@ -69,10 +69,11 @@ def test_split_moves_each_section_and_keeps_the_rest():
 
 def test_check_title():
     assert check_title("  A  ") == "A"
-    for bad in ["", "   ", "x" * 201, "a{b", "a}b", "}a{"]:
+    for bad in ["", "   ", "x" * 201, "a{b", "a}b", "}a{", "a\nb", "a\rb", "50% done", "%"]:
         with pytest.raises(InvalidInput, match="bad_title"):
             check_title(bad)
     assert check_title("A {B} c") == "A {B} c"
+    assert check_title("50\\% done") == "50\\% done"
 
 
 def test_set_title_both_ways():
