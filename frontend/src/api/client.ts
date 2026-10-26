@@ -484,7 +484,9 @@ export const api = {
   saveManuscriptFile: (id: string, path: string, text: string, base: string | null) =>
     request<ManuscriptFile>(`/api/manuscripts/${id}/files/${manuscriptPath(path)}`, sendJson('PUT', { text, base_updated_at: base })),
   compileManuscript: (id: string) => request<{ state: string }>(`/api/manuscripts/${id}/compile`, { method: 'POST' }),
-  manuscriptPdfUrl: (id: string) => `/api/manuscripts/${id}/pdf`,
+  /** `compiledAt` is in the URL so a new compile is a new URL and pdf.js fetches it again. */
+  manuscriptPdfUrl: (id: string, compiledAt?: string | null) =>
+    `/api/manuscripts/${id}/pdf${compiledAt ? `?v=${encodeURIComponent(compiledAt)}` : ''}`,
   manuscriptExportUrl: (id: string) => `/api/manuscripts/${id}/export.zip`,
   listManuscriptSnapshots: (id: string) => request<ManuscriptSnapshot[]>(`/api/manuscripts/${id}/snapshots`),
   restoreManuscriptSnapshot: (id: string, snapshotId: string) =>

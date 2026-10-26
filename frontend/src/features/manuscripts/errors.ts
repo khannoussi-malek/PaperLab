@@ -20,6 +20,11 @@ const MESSAGES: Record<string, (d: Details) => string> = {
   not_text: (d) => `The file${named(d.path)} isn't plain text, so it can't be a .tex or .bib file.`,
   main_file_not_tex: () => 'The main file has to be a .tex file.',
   unknown_template: () => "That template isn't available.",
+  needs_download: () => 'LaTeX needs to download packages once. Connect to the internet and compile again.',
+  biber_unsupported: () =>
+    "This project uses biblatex with Biber, which PaperLab can't run yet. Switch to `backend=bibtex` or natbib.",
+  compile_timeout: () => 'Compiling took longer than a minute and was stopped.',
+  outside_file: () => 'This project tries to read a file outside itself, so PaperLab stopped the compile.',
   no_pdf: () => "There's no PDF yet. Compile the manuscript first.",
 }
 
