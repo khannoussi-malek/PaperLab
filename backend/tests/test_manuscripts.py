@@ -18,7 +18,10 @@ async def new(session, **kw):
 async def test_create_from_template_writes_its_files(session):
     m = await new(session)
     files = await manuscripts.files(session, m.id)
-    assert [f.path for f in files] == ["main.tex"]
+    assert sorted(f.path for f in files) == sorted(
+        ["main.tex"]
+        + [f"sections/{s}.tex" for s in ("introduction", "related-work", "method", "results", "discussion", "conclusion")]
+    )
     assert "documentclass" in (await manuscripts.read(session, m.id, "main.tex")).text
     with pytest.raises(InvalidInput, match="unknown_template"):
         await manuscripts.create(session, title="x", template="nope", workspace_id=None)
@@ -53,8 +56,8 @@ async def test_caps_refuse_large_text_binary_total_and_count(session, monkeypatc
         await manuscripts.put_binary(session, m.id, "a.png", b"123456")
     monkeypatch.setattr(paths, "MAX_TEXT", 2 * 1024**2)
     monkeypatch.setattr(paths, "MAX_TOTAL", 10_000)
-    main_size = (await manuscripts.read(session, m.id, "main.tex")).size
-    monkeypatch.setattr(paths, "MAX_TOTAL", main_size + 3)
+    used = sum(f.size for f in await manuscripts.files(session, m.id))
+    monkeypatch.setattr(paths, "MAX_TOTAL", used + 3)
     with pytest.raises(Conflict, match="manuscript_too_large"):
         await manuscripts.save_text(session, m.id, "a.tex", "1234", base=None)
     await manuscripts.save_text(session, m.id, "a.tex", "123", base=None)
@@ -69,7 +72,7 @@ async def test_main_file_cannot_be_removed(session):
         await manuscripts.remove(session, m.id, "main.tex")
     await manuscripts.save_text(session, m.id, "a.tex", "x", base=None)
     await manuscripts.remove(session, m.id, "a.tex")
-    assert [f.path for f in await manuscripts.files(session, m.id)] == ["main.tex"]
+    assert "a.tex" not in [f.path for f in await manuscripts.files(session, m.id)]
 
 
 async def test_rename_validates_the_new_path(session):
