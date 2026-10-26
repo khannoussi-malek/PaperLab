@@ -1,5 +1,6 @@
 import { ApiError } from '@/api/client'
 
+const GENERIC = 'Something went wrong. Please try again.'
 type Details = Record<string, unknown>
 
 const mb = (bytes: unknown) => (typeof bytes === 'number' ? `${Math.max(1, Math.round(bytes / (1024 * 1024)))} MB` : 'the limit')
@@ -24,10 +25,11 @@ const MESSAGES: Record<string, (d: Details) => string> = {
 
 /** One warm, plain sentence for a manuscript API error code, using the details the server sent (path, limit). */
 export function manuscriptErrorMessage(code: string, details: Details = {}): string {
-  return MESSAGES[code]?.(details) ?? 'Something went wrong. Please try again.'
+  return MESSAGES[code]?.(details) ?? GENERIC
 }
 
-/** The sentence for any thrown error: a server code gets its mapped copy, anything else its own message. */
+/** The sentence for any thrown error: a mapped server code gets its copy, anything else the server's own message. */
 export function manuscriptFailure(error: Error): string {
-  return error instanceof ApiError ? manuscriptErrorMessage(error.code, error.body) : error.message
+  if (error instanceof ApiError && error.code in MESSAGES) return manuscriptErrorMessage(error.code, error.body)
+  return error.message || GENERIC
 }

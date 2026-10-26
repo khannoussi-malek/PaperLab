@@ -394,7 +394,9 @@ export function useWorkspaceMutations() {
     remove: useMutation({
       mutationFn: api.deleteWorkspace,
       // Papers keep existing, but their `workspace_ids` lose this workspace.
-      onSuccess: () => Promise.all([onSuccess(), client.invalidateQueries({ queryKey: keys.papers })]),
+      // A manuscript in it is left without a workspace.
+      onSuccess: () =>
+        Promise.all([onSuccess(), client.invalidateQueries({ queryKey: keys.papers }), client.invalidateQueries({ queryKey: keys.manuscripts })]),
     }),
   }
 }
@@ -1381,12 +1383,16 @@ export const useManuscripts = (workspaceId: string | null) =>
 export const useManuscriptTemplates = () =>
   useQuery({ queryKey: ['manuscripts', 'templates'], queryFn: api.listManuscriptTemplates, staleTime: Infinity })
 
+/** Poll while compiling; stop on error so a failing server isn't hammered. */
+export const manuscriptPollInterval = (data: { compile_status: string } | undefined, failed: boolean) =>
+  !failed && data?.compile_status === 'running' ? COMPILE_POLL_MS : false
+
 /** One manuscript with its files; polls while it compiles. */
 export const useManuscript = (id: string) =>
   useQuery({
     queryKey: keys.manuscript(id),
     queryFn: () => api.getManuscript(id),
-    refetchInterval: (query) => (query.state.data?.compile_status === 'running' ? COMPILE_POLL_MS : false),
+    refetchInterval: (query) => manuscriptPollInterval(query.state.data, query.state.status === 'error'),
   })
 
 export const useManuscriptFile = (id: string, path: string | null) =>
