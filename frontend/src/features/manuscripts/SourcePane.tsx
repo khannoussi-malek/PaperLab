@@ -50,27 +50,28 @@ export function SourcePane(props: Props) {
   const [state, setState] = useState<SaveState>('saved')
   const [saveError, setSaveError] = useState<Error | null>(null)
   const [retrying, setRetrying] = useState(false)
-  const [seq] = useState(() => keptTexts.nextSeq()) // later panes outrank earlier ones in the kept-text store
-  const owned = useRef<KeptText | null>(null) // the entry this pane took over; only it may remove that entry
-  const entry = useKeptTexts(manuscriptId)[path]
+  const [seq] = useState(() => keptTexts.nextSeq()) // this pane's own entry id in the kept-text store
+  const owned = useRef<readonly string[]>([]) // entries this pane took over: its text holds theirs
+  const entries = useKeptTexts(manuscriptId).filter((k) => k.path === path && !owned.current.includes(k.id))
   const [auto] = useState(() =>
     createAutosave({
       delayMs: AUTOSAVE_MS,
       onState: (s) => {
         setState(s)
-        if (s !== 'saved') return
-        setSaveError(null)
-        // Saved, or the user took the server's version: the entry this pane took over is settled. One it didn't
-        // take over (a closing pane's late failure) is not this pane's to remove.
-        if (owned.current && keptTexts.get(manuscriptId, path) === owned.current) keptTexts.remove(manuscriptId, path)
-        owned.current = null
+        if (s === 'saved') setSaveError(null)
       },
       onError: (error, willRetry) => { setSaveError(error); setRetrying(willRetry) },
       retryable: (error) => !(error instanceof ApiError) || error.status >= 500, // a 4xx fails the same way again
       save: async (body) => {
         const result = await live.current.mutate({ id: manuscriptId, path, text: body, base: base.current })
         if (result.conflict) newest.current = result.updatedAt
-        else base.current = result.updatedAt
+        else {
+          base.current = result.updatedAt
+          // The server took text built on the entries this pane took over, so they are settled. Entries it did not
+          // take over (another pane's copy) are never this pane's to remove.
+          owned.current.forEach(keptTexts.remove)
+          owned.current = []
+        }
         return result
       },
     }),
@@ -79,7 +80,7 @@ export function SourcePane(props: Props) {
   // Takes over a kept text: it goes into the editor, and stays unsaved until saved. Text edited against an older version
   // never goes over a newer one unasked: that is a conflict to resolve.
   const adopt = (kept: KeptText, serverAt: string) => {
-    owned.current = kept
+    owned.current = [...owned.current, kept.id]
     setText(kept.text)
     onText(path, kept.text)
     if (kept.reason === 'conflict' || (kept.base !== null && kept.base !== serverAt)) {
@@ -95,9 +96,10 @@ export function SourcePane(props: Props) {
     if (!data) return
     if (base.current === null) {
       base.current = data.updated_at
-      const kept = keptTexts.get(manuscriptId, path)
-      if (!kept) return setText(data.text)
-      adopt(kept, data.updated_at)
+      // One kept copy is taken over at once; several wait for the user to pick (each has its own alert).
+      const kept = keptTexts.forManuscript(manuscriptId).filter((k) => k.path === path)
+      if (kept.length !== 1) return setText(data.text)
+      adopt(kept[0], data.updated_at)
     } else if (data.updated_at !== base.current && auto.state === 'saved') {
       base.current = data.updated_at
       setText(data.text)
@@ -121,7 +123,8 @@ export function SourcePane(props: Props) {
       if (unsaved) keptTexts.flushStarted() // the leave warning stays on until this settles
       void auto.flush().then(() => {
         if (auto.state !== 'saved' && auto.unsavedText !== null) {
-          keptTexts.set(manuscriptId, path, { text: auto.unsavedText, reason: auto.state === 'conflict' ? 'conflict' : 'error', base: base.current, seq })
+          const kept = { path, text: auto.unsavedText, reason: auto.state === 'conflict' ? 'conflict' : 'error', base: base.current, seq } as const
+          keptTexts.put(manuscriptId, kept, owned.current) // replaces only what this pane took over
         }
         if (unsaved) keptTexts.flushSettled()
         onState(path, 'saved')
@@ -154,6 +157,7 @@ export function SourcePane(props: Props) {
     base.current = fresh.data.updated_at
     setText(fresh.data.text)
     onText(path, null)
+    owned.current = [] // the user chose theirs: the copies this pane took over show again, to use or discard
     auto.reload()
   }
 
@@ -187,14 +191,15 @@ export function SourcePane(props: Props) {
           </AlertDescription>
         </Alert>
       )}
-      {entry && entry !== owned.current && file.data && (
+      {file.data && entries.map((entry) => (
         <KeptTextAlert
+          key={entry.id}
           path={path}
           kept={entry}
           action={<Button size="sm" variant="outline" disabled={state !== 'saved'} onClick={() => adopt(entry, base.current ?? file.data!.updated_at)}>Use it</Button>}
-          onDiscard={() => keptTexts.remove(manuscriptId, path)}
+          onDiscard={() => keptTexts.remove(entry.id)}
         />
-      )}
+      ))}
       {saveError && state !== 'conflict' && (
         <Alert variant="destructive" className="m-2 w-auto"><AlertDescription>{manuscriptFailure(saveError)}{retrying && ' Trying again shortly.'}</AlertDescription></Alert>
       )}
