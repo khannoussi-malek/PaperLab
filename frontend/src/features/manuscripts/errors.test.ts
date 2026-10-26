@@ -1,5 +1,6 @@
 import { expect, test } from 'vitest'
-import { manuscriptErrorMessage } from './errors'
+import { ApiError } from '@/api/client'
+import { manuscriptErrorMessage, manuscriptFailure } from './errors'
 
 test('names the path, limit and cause where there is one', () => {
   expect(manuscriptErrorMessage('bad_path', { path: 'a/../b.tex' })).toContain('a/../b.tex')
@@ -20,4 +21,11 @@ test.each([
 
 test('an unknown code falls back to a generic sentence', () => {
   expect(manuscriptErrorMessage('boom')).toBe('Something went wrong. Please try again.')
+})
+
+test('manuscriptFailure: mapped code gets its copy, unmapped keeps the server message, none gets the generic one', () => {
+  expect(manuscriptFailure(new ApiError('file_exists', 409, { detail: 'file_exists' }))).toBe(manuscriptErrorMessage('file_exists'))
+  expect(manuscriptFailure(new ApiError('Compile queue is full', 503, { detail: 'Compile queue is full' }))).toBe('Compile queue is full')
+  expect(manuscriptFailure(new Error('Network down'))).toBe('Network down')
+  expect(manuscriptFailure(new Error(''))).toBe('Something went wrong. Please try again.')
 })
