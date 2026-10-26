@@ -54,8 +54,11 @@ async def update(session: AsyncSession, manuscript_id: uuid.UUID, *, title=_UNSE
     manuscript = await get(session, manuscript_id)
     if workspace_id is not _UNSET:
         await _check_workspace(session, workspace_id)
-    if main_file is not _UNSET and await _file(session, manuscript_id, main_file) is None:
-        raise NotFound("unknown_file")
+    if main_file is not _UNSET:
+        if not main_file.endswith(".tex"):
+            raise InvalidInput("main_file_not_tex")
+        if await _file(session, manuscript_id, main_file) is None:
+            raise NotFound("unknown_file")
     changes = {k: v for k, v in (("title", title), ("workspace_id", workspace_id), ("main_file", main_file),
                                  ("checklist", checklist)) if v is not _UNSET}
     await session.execute(update_rows(Manuscript).where(Manuscript.id == manuscript.id)
@@ -81,6 +84,12 @@ async def read(session: AsyncSession, manuscript_id: uuid.UUID, path: str) -> Ma
     if row is None:
         raise NotFound("unknown_file")
     return row
+
+
+async def get_text(session: AsyncSession, manuscript_id: uuid.UUID, path: str) -> str | None:
+    """A file's text, or None when it is missing or binary."""
+    return await session.scalar(select(ManuscriptFile.text).where(
+        ManuscriptFile.manuscript_id == manuscript_id, ManuscriptFile.path == path))
 
 
 async def _file(session, manuscript_id, path, *, lock=False) -> ManuscriptFile | None:

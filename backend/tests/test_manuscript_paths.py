@@ -8,6 +8,8 @@ from app.core.manuscript_paths import is_text, validate_path
     ("path", "code"),
     [("../a.tex", "bad_path"), ("/a.tex", "bad_path"), ("a\\b.tex", "bad_path"), ("a b.tex", "bad_path"),
      ("a/b/c/d/e.tex", "bad_path"), ("", "bad_path"), ("paperlab.bib", "reserved_path"),
+     ("PaperLab.BIB", "reserved_path"),
+     ("sub/paperlab.bib", "reserved_path"),
      ("fig.svg", "unsupported_file_type")],
 )
 def test_rejected_paths(path, code):

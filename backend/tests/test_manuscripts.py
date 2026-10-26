@@ -109,6 +109,16 @@ async def test_move_to_workspace(session):
     with pytest.raises(NotFound, match="unknown_file"):
         await manuscripts.update(session, m.id, main_file="zzz.tex")
     assert (await manuscripts.update(session, m.id, main_file="a.tex")).main_file == "a.tex"
+
+
+async def test_main_file_must_be_an_existing_tex_file(session):
+    m = await new(session)
+    await manuscripts.put_binary(session, m.id, "fig.png", b"x")
+    await manuscripts.save_text(session, m.id, "refs.bib", "x", base=None)
+    for path in ("fig.png", "refs.bib"):
+        with pytest.raises(InvalidInput, match="main_file_not_tex"):
+            await manuscripts.update(session, m.id, main_file=path)
+    assert (await manuscripts.get(session, m.id)).main_file == "main.tex"
     await manuscripts.delete(session, m.id)
     with pytest.raises(NotFound, match="unknown_manuscript"):
         await manuscripts.get(session, m.id)

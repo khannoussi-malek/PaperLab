@@ -29,7 +29,7 @@ def validate_path(path: str) -> str:
     segments = path.split("/")
     if len(segments) > MAX_DEPTH or not all(_SEGMENT.fullmatch(s) and s not in {".", ".."} for s in segments):
         raise InvalidInput("bad_path")
-    if path == RESERVED:
+    if path.rsplit("/", 1)[-1].lower() == RESERVED:  # any depth, any case: it collides on case-insensitive disks
         raise InvalidInput("reserved_path")
     if not is_text(path) and _extension(path) not in BINARY_EXTENSIONS:
         raise InvalidInput("unsupported_file_type")
