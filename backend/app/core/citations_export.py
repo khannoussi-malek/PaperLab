@@ -167,17 +167,25 @@ def _base_key(item: dict) -> str:
     return f"{_ascii(name) or 'anon'}{year or 'nd'}{word or 'untitled'}"
 
 
-def bibtex_keys(items: list[dict]) -> dict[str, str]:
+def bibtex_keys(items: list[dict], pinned: dict[str, str] | None = None) -> dict[str, str]:
     """item id -> key `firstauthorYEARfirstword`. Collisions in one export get a, b, ... by title, then id, so the
-    same library gives the same keys every time."""
+    same library gives the same keys every time. `pinned` (item id -> key) wins for those items; every pinned key is
+    reserved, so the other items skip it and carry on from the next free letter."""
+    pinned = pinned or {}
+    taken = set(pinned.values())
     groups: dict[str, list[dict]] = {}
     for item in items:
         groups.setdefault(_base_key(item), []).append(item)
-    keys: dict[str, str] = {}
+    keys: dict[str, str] = {i["id"]: pinned[i["id"]] for i in items if i["id"] in pinned}
     for base, group in groups.items():
         group.sort(key=lambda i: (i["title"].lower(), i["id"]))
-        for n, item in enumerate(group):
-            keys[item["id"]] = base if len(group) == 1 else base + _suffix(n)
+        for n, item in enumerate(i for i in group if i["id"] not in pinned):
+            key = base if len(group) == 1 else base + _suffix(n)
+            while key in taken:
+                n += 1
+                key = base + _suffix(n)
+            keys[item["id"]] = key
+            taken.add(key)
     return keys
 
 
@@ -278,8 +286,8 @@ def _bibtex_fields(item: dict) -> dict[str, str]:
     return {**escaped, "doi": item.get("DOI"), "url": item.get("URL"), **extra}
 
 
-def _bibtex(items: list[dict]) -> str:
-    keys = bibtex_keys(items)
+def _bibtex(items: list[dict], pinned: dict[str, str] | None = None) -> str:
+    keys = bibtex_keys(items, pinned)
     library = bibtexparser.Library()
     for item in items:
         fields = [bibtexparser.model.Field(k, v) for k, v in _bibtex_fields(item).items() if v]
