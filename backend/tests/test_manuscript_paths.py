@@ -21,3 +21,8 @@ def test_accepted_paths():
     for path in ("figures/plot.pdf", "sections/intro.tex", "latexmkrc"):
         assert validate_path(path) == path
     assert is_text("latexmkrc") and is_text("a/b.bib") and not is_text("figures/plot.pdf")
+
+
+@pytest.mark.parametrize("name", ["a.clo", "b.def", "c.cfg", "style.bbx", "style.cbx", "fig.tikz", "plot.pgf"])
+def test_tex_support_files_are_text(name):
+    assert validate_path(name) == name and is_text(name)

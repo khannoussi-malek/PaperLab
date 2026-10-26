@@ -224,3 +224,42 @@ async def test_import_body_over_the_cap_is_manuscript_too_large(client, monkeypa
     refused = await client.post("/api/manuscripts/import", files={"file": ("p.zip", b"x" * 50)})
     assert refused.status_code == 409 and refused.json()["detail"] == "manuscript_too_large"
     assert refused.json()["limit"] == 10
+
+
+@pytest.mark.parametrize(("age", "shown"), [
+    (100, ("running", None, True)), (200, ("failed", "compile_interrupted", False)),
+])
+async def test_a_compile_past_the_stale_window_reads_as_interrupted(client, session, age, shown):
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import update
+
+    from app.models import Manuscript
+
+    ws = Workspace(name=f"W {uuid.uuid4().hex[:6]}")
+    session.add(ws)
+    await session.flush()
+    m = await make(client, workspace_id=str(ws.id))
+    await session.execute(update(Manuscript).where(Manuscript.id == uuid.UUID(m["id"])).values(
+        compile_status="running", compile_requested=True,
+        compile_started_at=datetime.now(UTC) - timedelta(seconds=age)))
+    got = (await client.get(f"/api/manuscripts/{m['id']}")).json()
+    listed = (await client.get(f"/api/workspaces/{ws.id}/manuscripts")).json()[0]
+    for body in (got, listed):
+        assert (body["compile_status"], body["compile_friendly"], body["compile_requested"]) == shown
+    stored = await manuscripts.get(session, uuid.UUID(m["id"]))
+    assert stored.compile_status == "running"  # read-time only: request_compile still sees the stale run
+
+
+@pytest.mark.parametrize(("title", "ascii_name", "star"), [
+    ("My Paper", "My_Paper.zip", "My%20Paper.zip"),
+    ('Évolution "quoted"\r\nX-Evil: 1', "volution_quoted_X-Evil_1.zip",
+     "%C3%89volution%20%22quoted%22%0D%0AX-Evil%3A%201.zip"),
+    ("日本語", "manuscript.zip", "%E6%97%A5%E6%9C%AC%E8%AA%9E.zip"),
+])
+async def test_export_is_named_after_the_title(client, title, ascii_name, star):
+    m = await make(client, title=title)
+    out = await client.get(f"/api/manuscripts/{m['id']}/export.zip")
+    disposition = out.headers["content-disposition"]
+    assert disposition == f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{star}"
+    assert "\n" not in disposition and "\r" not in disposition

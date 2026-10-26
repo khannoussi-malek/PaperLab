@@ -18,6 +18,11 @@ _CITATION = re.compile(
     r"^(?:LaTeX|Package \w+) Warning: (?P<message>Citation .* undefined) on input line (?P<line>\d+)\.$"
 )
 _ABSOLUTE = "accessing absolute path"
+# Tectonic names every file it writes on stderr; --untrusted lets \openout reach absolute and ../ paths (isolation
+# layer 2: such a write voids the compile; the images' read-only cache is what stops it doing harm).
+_WRITE = re.compile(r"^note: Writing `(?P<path>[^`]+)`", re.M)
+# Only a .sty or .cls: a missing .tex is the project's own file, not a package PaperLab lacks.
+_MISSING = re.compile(r"File `(?P<name>[^`'/]+)\.(?:sty|cls)' not found")
 
 
 @dataclass(frozen=True)
@@ -50,11 +55,17 @@ def _entry(m: re.Match, kind: str) -> dict:
     return {"file": m.group("file"), "line": int(line) if line else None, "message": m.group("message"), "kind": kind}
 
 
+def _outside(stderr: str) -> bool:
+    """An absolute-path read, or a write to an absolute path or through `..`."""
+    return _ABSOLUTE in stderr or any(
+        p.startswith("/") or ".." in p.split("/") for p in _WRITE.findall(stderr))
+
+
 def friendly_message(log: str) -> str | None:
-    if _ABSOLUTE in log:
+    if _outside(log):
         return "outside_file"
-    if "this bundle isn't cached" in log:
-        return "needs_download"
+    if _MISSING.search(log):  # the images compile from their cache only (TECTONIC_ONLY_CACHED): nothing downloads
+        return "package_missing"
     if "Running external tool biber" in log:
         return "biber_unsupported"
     return None
@@ -68,16 +79,35 @@ def _clean_log(stderr: str, main_log: str) -> str:
 def finish(
     returncode: int, stderr: str, main_log: str, pdf: bytes | None, main_file: str = "main.tex"
 ) -> CompileResult:
-    """Turns a finished run into a result. An absolute-path read voids the PDF even at rc=0 (isolation layer 2)."""
+    """Turns a finished run into a result. Reaching outside the project voids the PDF even at rc=0 (layer 2)."""
     friendly = friendly_message(stderr)
-    ok = returncode == 0 and pdf is not None and _ABSOLUTE not in stderr
+    ok = returncode == 0 and pdf is not None and not _outside(stderr)
+    errors = parse_errors(stderr + "\n" + main_log, main_file)
+    if friendly == "package_missing":  # the name, for "PaperLab doesn't include yet: <name>"
+        name = _MISSING.search(stderr).group("name")
+        errors.insert(0, {"file": main_file, "line": None, "message": name, "kind": "package_missing"})
     return CompileResult(
         ok=ok,
         pdf=pdf if ok else None,
         log=_clean_log(stderr, main_log),
-        errors=parse_errors(stderr + "\n" + main_log, main_file),
+        errors=errors,
         friendly=friendly,
     )
+
+
+def _read_log(path: Path) -> str:
+    """The log's head and tail, MAX_LOG each: a run that floods it never gets read whole."""
+    if not path.exists():
+        return ""
+    with path.open("rb") as f:
+        head = f.read(MAX_LOG)
+        size = f.seek(0, os.SEEK_END)
+        tail = b""
+        if size > MAX_LOG:
+            f.seek(max(MAX_LOG, size - MAX_LOG))
+            tail = f.read(MAX_LOG)
+    joined = head + (b"\n" + tail if tail else b"")
+    return joined.decode(errors="replace")
 
 
 def _env(workdir: Path) -> dict[str, str]:
@@ -138,8 +168,8 @@ async def compile_dir(workdir: Path, main_file: str, *, timeout: float = COMPILE
         if isinstance(exc, TimeoutError):
             return CompileResult(False, None, "", [], "compile_timeout")
         raise
-    stem = Path(main_file).stem
-    pdf_path, log_path = workdir / f"{stem}.pdf", workdir / f"{stem}.log"
+    output = workdir / Path(main_file)  # Tectonic writes its PDF and log beside the main file, nested or not
+    pdf_path = output.with_suffix(".pdf")
     pdf = pdf_path.read_bytes() if pdf_path.exists() else None
-    main_log = log_path.read_text(errors="replace") if log_path.exists() else ""
+    main_log = _read_log(output.with_suffix(".log"))
     return finish(proc.returncode, out.decode(errors="replace"), main_log, pdf, main_file)

@@ -69,3 +69,25 @@ async def test_every_template_compiles(name, tmp_path, monkeypatch):
     assert res.ok, res.log[-2000:]
     text = "".join(p.get_text() for p in pymupdf.open(stream=res.pdf, filetype="pdf"))
     assert "deep learning for papers" in text.lower()
+
+
+WARM = mt.DIR / "warm-packages.tex"
+
+
+def test_the_warm_package_list_is_not_a_template():
+    assert WARM.exists() and "warm-packages" not in mt.TEMPLATES
+    with pytest.raises(InvalidInput, match="unknown_template"):
+        mt.files("warm-packages")
+
+
+@pytest.mark.tectonic
+@pytest.mark.skipif(not os.environ.get("TECTONIC_BIN"), reason="TECTONIC_BIN unset (scripts/tectonic-dev.sh)")
+@pytest.mark.anyio
+async def test_the_warm_package_list_compiles_from_the_cache_alone(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "tectonic_bin", os.environ["TECTONIC_BIN"])
+    monkeypatch.setattr(settings, "tectonic_only_cached", True)
+    if os.environ.get("TECTONIC_CACHE_DIR"):
+        monkeypatch.setattr(settings, "tectonic_cache_dir", Path(os.environ["TECTONIC_CACHE_DIR"]))
+    (tmp_path / "main.tex").write_text(WARM.read_text())
+    res = await lc.compile_dir(tmp_path, "main.tex")
+    assert res.ok, res.log[-2000:]

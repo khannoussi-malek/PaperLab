@@ -82,7 +82,8 @@ async def _run_tectonic(main_file: str, rows, bib: str):
     with tempfile.TemporaryDirectory() as tmp:
         workdir = Path(tmp)
         _write_files(workdir, rows)
-        (workdir / "paperlab.bib").write_text(bib, encoding="utf-8")
+        # beside the main file: that is where \bibliography{paperlab} is looked up
+        (workdir / main_file).parent.joinpath("paperlab.bib").write_text(bib, encoding="utf-8")
         return await compile_dir(workdir, main_file)
 
 
@@ -108,7 +109,7 @@ async def _mark_failed(mid: uuid.UUID, error: Exception) -> None:
     async with SessionLocal() as session:
         await session.execute(update(Manuscript).where(Manuscript.id == mid).values(
             compile_status="failed", compile_log=f"internal error: {type(error).__name__}", compile_friendly=None,
-            compiled_at=datetime.now(UTC)))
+            compile_requested=False, compiled_at=datetime.now(UTC)))
         await session.commit()
 
 

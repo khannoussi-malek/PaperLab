@@ -2,6 +2,7 @@ import mimetypes
 import uuid
 from datetime import datetime, timezone
 from pathlib import PurePosixPath
+from urllib.parse import quote
 
 from fastapi import APIRouter, Form, Response, UploadFile
 from fastapi.responses import FileResponse
@@ -29,9 +30,18 @@ router = APIRouter(tags=["manuscripts"])
 CHUNK = 1024**2
 
 
+def _out(manuscript) -> ManuscriptOut:
+    """A `running` with no live job behind it reads as failed (read-time only; request_compile treats it as stale)."""
+    out = ManuscriptOut.model_validate(manuscript)
+    if manuscripts.interrupted(manuscript, datetime.now(timezone.utc)):
+        out = out.model_copy(update={"compile_status": "failed", "compile_friendly": "compile_interrupted",
+                                     "compile_requested": False})
+    return out
+
+
 async def _detail(session: SessionDep, manuscript) -> ManuscriptDetailOut:
     files = await manuscripts.files(session, manuscript.id)
-    return ManuscriptDetailOut.model_validate({**ManuscriptOut.model_validate(manuscript).model_dump(), "files": files})
+    return ManuscriptDetailOut.model_validate({**_out(manuscript).model_dump(), "files": files})
 
 
 async def _read_capped(file: UploadFile, cap: int, code: str = "file_too_large") -> bytes:
@@ -51,7 +61,7 @@ async def list_templates() -> list[TemplateOut]:
 
 @router.get("/api/workspaces/{workspace_id}/manuscripts")
 async def list_workspace_manuscripts(workspace_id: uuid.UUID, session: SessionDep) -> list[ManuscriptOut]:
-    return await manuscripts.list_for(session, workspace_id=workspace_id)
+    return [_out(m) for m in await manuscripts.list_for(session, workspace_id=workspace_id)]
 
 
 @router.get("/api/manuscripts")
@@ -59,7 +69,7 @@ async def list_orphan_manuscripts(orphans: bool, session: SessionDep) -> list[Ma
     """Manuscripts with no workspace (`orphans=true`; the only listing here)."""
     if not orphans:
         raise InvalidInput("orphans_only")
-    return await manuscripts.list_for(session, workspace_id=None)
+    return [_out(m) for m in await manuscripts.list_for(session, workspace_id=None)]
 
 
 @router.post("/api/manuscripts", status_code=201)
@@ -195,5 +205,7 @@ async def export_zip(manuscript_id: uuid.UUID, session: SessionDep) -> Response:
     await session.commit()  # the keys the bib pinned, as a compile pins them
     target = manuscripts.pdf_path(manuscript_id)
     data = manuscript_zip.write_zip(files, bib, target.read_bytes() if target.is_file() else None, manuscript.title)
-    return Response(data, media_type="application/zip",
-                    headers={"Content-Disposition": 'attachment; filename="manuscript.zip"'})
+    # an ASCII fallback, and RFC 5987's percent-encoded UTF-8 name, which can't carry a quote or a line break either
+    disposition = (f'attachment; filename="{manuscript_zip.safe_name(manuscript.title)}.zip"; '
+                   f"filename*=UTF-8''{quote(manuscript.title + '.zip', safe='')}")
+    return Response(data, media_type="application/zip", headers={"Content-Disposition": disposition})

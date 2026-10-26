@@ -10,7 +10,7 @@ x-app: &app
   env_file:
     - path: .env
       required: false
-  volumes: &app-volumes
+  volumes:
     - pdfs:/data/pdfs
     - models:/models
 
@@ -66,10 +66,6 @@ services:
       # `docker compose up` ran in.
       PAPERLAB_DIR: ${PAPERLAB_DIR:-${PWD:-}}
     ports: ["127.0.0.1:${PAPERLAB_PORT:-5190}:8000"]
-    volumes:
-      - pdfs:/data/pdfs
-      - models:/models
-      - tectonic-cache:/tectonic-cache # the manuscript templates' packages, seeded from the image
     # Ollama on the host, on Linux too: Docker Desktop defines this name, Docker Engine doesn't.
     extra_hosts: ["host.docker.internal:host-gateway"]
     depends_on:
@@ -85,10 +81,6 @@ services:
     # A worker that crashes (out of memory, say) comes back and picks its jobs up again. on-failure never starts it
     # with Docker itself, so nothing starts with the computer.
     restart: on-failure
-    volumes:
-      - pdfs:/data/pdfs
-      - models:/models
-      - tectonic-cache:/tectonic-cache
     environment:
       <<: *worker-env
       TECTONIC_USER: tex # manuscripts compile as this unprivileged account
@@ -101,7 +93,6 @@ services:
 
   ingest-worker:
     <<: *worker
-    volumes: *app-volumes
     environment: *worker-env
     # A paper's ingest and re-embed, one paper at a time: ten at once ran the worker out of memory.
     command: ["arq", "app.workers.settings.IngestWorkerSettings"]
@@ -112,4 +103,3 @@ volumes:
   pdfs:
   redisdata:
   models:
-  tectonic-cache: # Tectonic's packages: seeded from the image's warm cache, then kept across updates
