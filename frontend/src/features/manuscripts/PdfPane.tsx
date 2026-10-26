@@ -20,7 +20,9 @@ export function PdfPane({ manuscript: m, width }: Props) {
   const stamp = goodAt.current ?? m.compiled_at
   const { doc, error } = usePdfDocument(stamp ? api.manuscriptPdfUrl(m.id, stamp) : null)
   const friendly = m.compile_status === 'failed' ? m.compile_friendly : null
-  const errors = parseCompileErrors(m.compile_errors).filter((e) => e.kind === 'error')
+  const parsed = parseCompileErrors(m.compile_errors)
+  const errors = parsed.filter((e) => e.kind === 'error')
+  const missing = parsed.find((e) => e.kind === 'package_missing')?.message // the package the compile named
   const scale = Math.max(0.4, (width - GUTTERS_PX) / PAGE_WIDTH_PT)
 
   return (
@@ -29,7 +31,7 @@ export function PdfPane({ manuscript: m, width }: Props) {
         <Alert variant="destructive" className="m-2 w-auto">
           <AlertDescription>
             {friendly ? (
-              manuscriptErrorMessage(friendly)
+              manuscriptErrorMessage(friendly, { name: missing })
             ) : errors.length > 0 ? (
               <ul className="flex flex-col gap-1">
                 {errors.map((e, i) => (

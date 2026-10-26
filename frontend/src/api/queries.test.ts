@@ -343,6 +343,9 @@ describe('manuscript hooks', () => {
     for (const status of ['never', 'ok', 'failed']) expect(manuscriptPollInterval({ compile_status: status }, false)).toBe(false)
     expect(manuscriptPollInterval(undefined, false)).toBe(false)
     expect(manuscriptPollInterval({ compile_status: 'running' }, true)).toBe(false)
+    // another pass was asked for: keep polling until the worker clears it, whatever the last status says
+    for (const status of ['ok', 'failed']) expect(manuscriptPollInterval({ compile_status: status, compile_requested: true }, false)).toBe(1000)
+    expect(manuscriptPollInterval({ compile_status: 'failed', compile_requested: false }, false)).toBe(false)
   })
 
   it('a stale save resolves to a conflict and invalidates nothing', async () => {

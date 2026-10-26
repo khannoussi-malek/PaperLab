@@ -10,7 +10,7 @@ type Props = { manuscriptId: string; open: boolean; onOpenChange: (open: boolean
   beforeRestore: () => Promise<boolean>
 }
 
-const REASON: Record<string, string> = { compile: 'Compiled', manual: 'Saved by hand' }
+const REASON: Record<string, string> = { compile: 'Compiled', autosave: 'Autosaved', before_restore: 'Before a restore' }
 const when = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 
 /** Earlier versions of the whole manuscript. Restoring asks here, in the dialog, before it replaces anything. */

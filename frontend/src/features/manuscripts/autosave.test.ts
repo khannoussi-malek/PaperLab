@@ -104,3 +104,23 @@ test('retries stop after 6 attempts', async () => {
   expect(save).toHaveBeenCalledTimes(7)
   expect(onError).toHaveBeenLastCalledWith(expect.any(Error), false)
 })
+
+test('text typed while a save is in flight is kept and saved next', async () => {
+  let finish: (v: { conflict: boolean }) => void = () => {}
+  const save = vi.fn()
+    .mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+    .mockResolvedValue({ conflict: false })
+  const auto = createAutosave({ delayMs: 1000, save })
+  auto.change('a')
+  await vi.advanceTimersByTimeAsync(1000)
+  expect(auto.state).toBe('saving')
+  auto.change('ab') // typed while 'a' is on its way
+  finish({ conflict: false })
+  await vi.advanceTimersByTimeAsync(0)
+  expect(auto.state).toBe('unsaved')
+  expect(auto.unsavedText).toBe('ab')
+  await vi.advanceTimersByTimeAsync(1000)
+  expect(save).toHaveBeenLastCalledWith('ab')
+  expect(auto.state).toBe('saved')
+  expect(auto.unsavedText).toBeNull()
+})

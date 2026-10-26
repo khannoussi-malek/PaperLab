@@ -1,5 +1,5 @@
 import { useQueries } from '@tanstack/react-query'
-import { Download, History } from 'lucide-react'
+import { Download, FolderInput, History, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '@/api/client'
 import { useCompileManuscript, useManuscript } from '@/api/queries'
@@ -15,6 +15,7 @@ import { errorsFor } from './compileErrors'
 import { manuscriptFailure } from './errors'
 import { FileList } from './FileList'
 import { FinalStepsChecklist } from './FinalStepsChecklist'
+import { DeleteManuscriptDialog, MoveManuscriptDialog } from './ManuscriptDialogs'
 import { HistoryDialog } from './HistoryDialog'
 import { outline } from './outline'
 import { OutlinePanel } from './OutlinePanel'
@@ -34,6 +35,7 @@ export function ManuscriptPage({ manuscriptId, file }: { manuscriptId: string; f
   const [live, setLive] = useState<Record<string, string>>({})
   const [jump, setJump] = useState<{ line: number; n: number } | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [dialog, setDialog] = useState<'move' | 'delete' | null>(null)
   const kept = useKeptTexts(manuscriptId) // text a closed file could not save; lives outside the page
   const [saveStates, setSaveStates] = useState<Record<string, SaveState>>({})
   const flushRef = useRef<(() => Promise<boolean>) | null>(null)
@@ -74,6 +76,8 @@ export function ManuscriptPage({ manuscriptId, file }: { manuscriptId: string; f
       actions={data && (
         <>
           <Button variant="ghost" size="sm" onClick={() => setHistoryOpen(true)}><History aria-hidden />History</Button>
+          <Button variant="ghost" size="sm" onClick={() => setDialog('move')}><FolderInput aria-hidden />Move</Button>
+          <Button variant="ghost" size="sm" onClick={() => setDialog('delete')}><Trash2 aria-hidden />Delete</Button>
           <Button variant="ghost" size="sm" asChild>
             <a href={api.manuscriptExportUrl(manuscriptId)} download><Download aria-hidden />Download zip</a>
           </Button>
@@ -94,7 +98,8 @@ export function ManuscriptPage({ manuscriptId, file }: { manuscriptId: string; f
       {data && path && (
         <div className="grid min-h-0 flex-1 overflow-hidden" style={{ gridTemplateColumns: `14rem minmax(0,1fr) ${panelTrack(MANUSCRIPT_PDF, pdfWidth)}` }}>
           <div className="flex min-h-0 flex-col gap-4 overflow-auto border-r border-glass-border py-2">
-            <FileList manuscriptId={manuscriptId} files={data.files} current={path} main={data.main_file} />
+            <FileList manuscriptId={manuscriptId} files={data.files} current={path} main={data.main_file}
+              flushCurrent={async () => (await flushRef.current?.()) ?? true} />
             <OutlinePanel manuscriptId={manuscriptId} items={items} currentFile={path} onJump={(line) => setJump((j) => ({ line, n: (j?.n ?? 0) + 1 }))} />
             <FinalStepsChecklist manuscriptId={manuscriptId} checklist={data.checklist} />
           </div>
@@ -116,6 +121,13 @@ export function ManuscriptPage({ manuscriptId, file }: { manuscriptId: string; f
             <PdfPane manuscript={data} width={clamped} />
           </div>
         </div>
+      )}
+      {data && (
+        <>
+          <MoveManuscriptDialog manuscript={data} open={dialog === 'move'} onOpenChange={(o) => setDialog(o ? 'move' : null)} />
+          <DeleteManuscriptDialog manuscript={data} open={dialog === 'delete'} onOpenChange={(o) => setDialog(o ? 'delete' : null)}
+            onDeleted={() => window.location.assign(data.workspace_id ? workspaceHref(data.workspace_id, 'write') : '#/')} />
+        </>
       )}
       <HistoryDialog manuscriptId={manuscriptId} open={historyOpen} onOpenChange={setHistoryOpen} onRestored={() => { setLive({}); setHistoryOpen(false) }}
         beforeRestore={async () => (await flushRef.current?.()) ?? true} />

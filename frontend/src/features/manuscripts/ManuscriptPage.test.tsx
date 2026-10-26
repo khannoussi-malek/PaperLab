@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { api, ApiError, type ManuscriptDetail } from '@/api/client'
 import { keptTexts } from './keptTexts'
@@ -119,12 +119,35 @@ test('Ctrl+S does not compile while a compile is running', async () => {
   expect(compile).not.toHaveBeenCalled()
 })
 
-test('shows the friendly message the worker stored', async () => {
+test('shows the friendly message the worker stored, naming the missing package', async () => {
   vi.spyOn(api, 'getManuscript').mockResolvedValue(
-    detail({ compile_status: 'failed', compile_friendly: 'needs_download', compile_log: '', compiled_at: T3 }),
+    detail({
+      compile_status: 'failed', compile_friendly: 'package_missing', compile_log: '', compiled_at: T3,
+      compile_errors: [{ file: 'main.tex', line: null, message: 'fontawesome5', kind: 'package_missing' }],
+    }),
   )
   renderPage()
-  expect(await screen.findByRole('alert')).toHaveTextContent('LaTeX needs to download packages once. Connect to the internet and compile again.')
+  expect(await screen.findByRole('alert')).toHaveTextContent("This project uses a LaTeX package PaperLab doesn't include yet: fontawesome5.")
+})
+
+test('an interrupted compile says so and Compile is offered again', async () => {
+  vi.spyOn(api, 'getManuscript').mockResolvedValue(
+    detail({ compile_status: 'failed', compile_friendly: 'compile_interrupted', compile_requested: false, compiled_at: null }),
+  )
+  renderPage()
+  expect(await screen.findByRole('alert')).toHaveTextContent('The last compile was interrupted. Compile again.')
+  expect(await screen.findByRole('button', { name: /^Compile/ })).toBeEnabled()
+})
+
+test('History names each kind of snapshot', async () => {
+  vi.spyOn(api, 'listManuscriptSnapshots').mockResolvedValue([
+    { id: 's1', reason: 'compile', created_at: T2 }, { id: 's2', reason: 'autosave', created_at: T2 },
+    { id: 's3', reason: 'before_restore', created_at: T2 },
+  ])
+  renderPage()
+  fireEvent.click(await screen.findByRole('button', { name: 'History' }))
+  for (const label of ['Compiled', 'Autosaved', 'Before a restore']) expect(await screen.findByText(label)).toBeInTheDocument()
+  expect(screen.queryByText('autosave')).toBeNull()
 })
 
 test('a failed compile keeps the last PDF on screen', async () => {
@@ -378,4 +401,21 @@ test('a pane that took over a copy and fails again replaces that copy, not adds 
   await type('kept, edited', 'kept')
   view.open('b.tex')
   await waitFor(() => expect(allKept()).toEqual(['kept, edited']))
+})
+
+test('the header moves the manuscript and deletes it after asking in the app', async () => {
+  vi.spyOn(api, 'listWorkspaces').mockResolvedValue([{ id: 'w1', name: 'Sleep' }, { id: 'w2', name: 'Memory' }] as never)
+  const update = vi.spyOn(api, 'updateManuscript').mockResolvedValue(detail({ workspace_id: 'w2' }))
+  const remove = vi.spyOn(api, 'deleteManuscript').mockResolvedValue(undefined)
+  renderPage()
+  fireEvent.click(await screen.findByRole('button', { name: 'Move' }))
+  await screen.findByRole('option', { name: 'Memory' })
+  fireEvent.change(screen.getByLabelText('Workspace'), { target: { value: 'w2' } })
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Move' }))
+  await waitFor(() => expect(update).toHaveBeenCalledWith('m1', { workspace_id: 'w2' }))
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Delete manuscript' }))
+  await waitFor(() => expect(remove).toHaveBeenCalledWith('m1'))
+  await waitFor(() => expect(window.location.hash).toBe('#/workspaces/w1?tab=write'))
 })

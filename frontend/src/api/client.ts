@@ -481,6 +481,17 @@ export const api = {
   getManuscriptFile: (id: string, path: string) =>
     request<ManuscriptFileText>(`/api/manuscripts/${id}/files/${manuscriptPath(path)}`),
   /** `base` is the updated_at the editor last saw; null for a new file. A stale one is a 409 ApiError (file_changed). */
+  /** A figure or a text file from the computer, at `path` (a binary overwrites; a text file must be new). */
+  uploadManuscriptFile: (id: string, path: string, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    form.append('path', path)
+    return request<ManuscriptFile>(`/api/manuscripts/${id}/uploads`, { method: 'POST', body: form })
+  },
+  renameManuscriptFile: (id: string, path: string, newPath: string) =>
+    request<ManuscriptFile>(`/api/manuscripts/${id}/files/${manuscriptPath(path)}/rename`, sendJson('POST', { new_path: newPath })),
+  deleteManuscriptFile: (id: string, path: string) =>
+    request<void>(`/api/manuscripts/${id}/files/${manuscriptPath(path)}`, { method: 'DELETE' }),
   saveManuscriptFile: (id: string, path: string, text: string, base: string | null) =>
     request<ManuscriptFile>(`/api/manuscripts/${id}/files/${manuscriptPath(path)}`, sendJson('PUT', { text, base_updated_at: base })),
   compileManuscript: (id: string) => request<{ state: string }>(`/api/manuscripts/${id}/compile`, { method: 'POST' }),
