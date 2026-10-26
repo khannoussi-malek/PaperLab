@@ -72,3 +72,21 @@ def test_the_test_stack_and_only_the_test_stack_is_memory_capped():
     assert all(capped[name].get("mem_limit") for name in capped), capped
     assert not any("mem_limit" in live[name] for name in live)
     assert re.search(r"^export COMPOSE_FILE=docker-compose\.yml:docker-compose\.e2e\.yml\b", SCRIPT.read_text(), re.M)
+
+
+def test_no_stack_mounts_a_tectonic_cache_volume():
+    # The cache lives in the image, read-only to the compiling user: a writable shared volume let one project poison
+    # another's packages (final review C1), and an old volume would hide a newer image's warm set.
+    for path in ("docker-compose.yml", "desktop/docker-compose.yml"):
+        text = (ROOT / path).read_text()
+        assert "tectonic-cache" not in text, path
+        for name, service in services(path).items():
+            assert not any("/tectonic-cache" in v for v in service.get("volumes", [])), (path, name)
+
+
+def test_only_the_main_worker_runs_tectonic_as_the_unprivileged_user():
+    for path in ("docker-compose.yml", "desktop/docker-compose.yml"):
+        found = services(path)
+        assert found["worker"]["environment"]["TECTONIC_USER"] == "tex", path
+        for name in ("api", "ingest-worker"):
+            assert "TECTONIC_USER" not in found[name].get("environment", {}), (path, name)

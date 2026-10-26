@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider, useMutation } from '@tanstack/react-q
 import { renderHook, waitFor } from '@testing-library/react'
 import { createElement, type ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { api, PaperMergedError, type Hit, type Paper, type ReferencePage, type SearchRun } from './client'
+import { api, ApiError, PaperMergedError, type Hit, type Paper, type ReferencePage, type SearchRun } from './client'
 import {
   PAPERS_POLL_MS,
   embeddingPollInterval,
@@ -16,6 +16,8 @@ import {
   useApplyTag,
   useBulkPatchSearchHits,
   useSetEligibility,
+  manuscriptPollInterval,
+  useSaveManuscriptFile,
   useWorkspaceMutations,
   useSnowball,
   useUploadHitPdf,
@@ -329,5 +331,60 @@ describe('a mutation that meets a merged paper', () => {
   it('leaves them alone on any other error', async () => {
     await failWith(new Error('Server error'))
     expect(queryClient.getQueryState(['papers', 'm1'])?.isInvalidated).toBe(false)
+  })
+})
+
+describe('manuscript hooks', () => {
+  afterEach(() => vi.restoreAllMocks())
+  const quiet = () => new QueryClient({ defaultOptions: { queries: { retry: false } } })
+
+  it('polls every second while compiling, and stops otherwise or on error', () => {
+    expect(manuscriptPollInterval({ compile_status: 'running' }, false)).toBe(1000)
+    for (const status of ['never', 'ok', 'failed']) expect(manuscriptPollInterval({ compile_status: status }, false)).toBe(false)
+    expect(manuscriptPollInterval(undefined, false)).toBe(false)
+    expect(manuscriptPollInterval({ compile_status: 'running' }, true)).toBe(false)
+    // another pass was asked for: keep polling until the worker clears it, whatever the last status says
+    for (const status of ['ok', 'failed']) expect(manuscriptPollInterval({ compile_status: status, compile_requested: true }, false)).toBe(1000)
+    expect(manuscriptPollInterval({ compile_status: 'failed', compile_requested: false }, false)).toBe(false)
+  })
+
+  it('a stale save resolves to a conflict and invalidates nothing', async () => {
+    vi.spyOn(api, 'saveManuscriptFile').mockRejectedValue(new ApiError('file_changed', 409, { detail: 'file_changed', updated_at: 'T2' }))
+    const client = quiet()
+    const spy = vi.spyOn(client, 'invalidateQueries')
+    const { result } = renderHook(() => useSaveManuscriptFile(), { wrapper: withQueryClient(client) })
+    result.current.mutate({ id: 'm', path: 'main.tex', text: 'x', base: 'T1' })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(result.current.data).toEqual({ conflict: true, updatedAt: 'T2' })
+    expect(spy).not.toHaveBeenCalled()
+  })
+
+  it('a good save returns the new updated_at and invalidates the manuscript', async () => {
+    vi.spyOn(api, 'saveManuscriptFile').mockResolvedValue({ path: 'main.tex', size: 1, updated_at: 'T3' })
+    const client = quiet()
+    const spy = vi.spyOn(client, 'invalidateQueries')
+    const { result } = renderHook(() => useSaveManuscriptFile(), { wrapper: withQueryClient(client) })
+    result.current.mutate({ id: 'm', path: 'main.tex', text: 'x', base: null })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(result.current.data).toEqual({ conflict: false, updatedAt: 'T3' })
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['manuscripts', 'm'] })
+  })
+
+  it('any other save error throws', async () => {
+    vi.spyOn(api, 'saveManuscriptFile').mockRejectedValue(new ApiError('bad_path', 422, { detail: 'bad_path' }))
+    const { result } = renderHook(() => useSaveManuscriptFile(), { wrapper: withQueryClient(quiet()) })
+    result.current.mutate({ id: 'm', path: '../x', text: 'x', base: null })
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(result.current.error).toBeInstanceOf(ApiError)
+  })
+
+  it('deleting a workspace refreshes the manuscripts', async () => {
+    vi.spyOn(api, 'deleteWorkspace').mockResolvedValue(undefined)
+    const client = quiet()
+    client.setQueryData(['manuscripts', 'list', 'orphans'], [])
+    const { result } = renderHook(() => useWorkspaceMutations(), { wrapper: withQueryClient(client) })
+    result.current.remove.mutate('w1')
+    await waitFor(() => expect(result.current.remove.isSuccess).toBe(true))
+    expect(client.getQueryState(['manuscripts', 'list', 'orphans'])?.isInvalidated).toBe(true)
   })
 })

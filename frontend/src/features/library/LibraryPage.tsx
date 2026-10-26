@@ -8,6 +8,8 @@ import { Scene3D } from '@/features/scene3d/Scene3D'
 import { cn } from '@/lib/utils'
 import { FindPapersButton } from '../discovery/FindPapersButton'
 import { ExportSelectedMenu } from '../workspaces/ExportSelectedMenu'
+import { ManuscriptList } from '../manuscripts/ManuscriptList'
+import { useManuscripts } from '@/api/queries'
 import { ErrorAlert, LoadError } from './ErrorAlert'
 import { PaperList } from './PaperList'
 import { FoundPdfsNotice } from './FoundPdfsNotice'
@@ -20,6 +22,7 @@ const loadLibraryScene = () => import('@/features/scene3d/directors/library')
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`
 
 export function LibraryPage() {
+  const orphans = useManuscripts(null)
   const papers = usePapers()
   const upload = useUploadPapers()
   const list = papers.data
@@ -74,6 +77,13 @@ export function LibraryPage() {
             )}
             <PaperList papers={list} selection={{ selected: new Set(selectedIds), onToggle: toggle }} onVisibleChange={setVisible} />
           </div>
+        )}
+
+        {!!orphans.data?.length && (
+          <section aria-labelledby="orphan-manuscripts" className="flex flex-col gap-1">
+            <h2 id="orphan-manuscripts" className="text-base font-medium">Manuscripts without a workspace</h2>
+            <ManuscriptList workspaceId={null} />
+          </section>
         )}
       </div>
     </AppShell>

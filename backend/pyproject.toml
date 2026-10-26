@@ -43,6 +43,7 @@ pythonpath = ["."]
 # 4 workers halves the run; more is slower (they wait on the shared Postgres). `-n 0` runs serially, e.g. for pdb.
 # loadgroup keeps each xdist_group on one worker (see conftest.py).
 addopts = "-n 4 --dist loadgroup"
+markers = ["tectonic: compiles with the real Tectonic binary (needs TECTONIC_BIN, see scripts/tectonic-dev.sh)"]
 
 # Only applies when coverage runs (`uv run pytest --cov`), so single-file test runs aren't gated.
 [tool.coverage.run]

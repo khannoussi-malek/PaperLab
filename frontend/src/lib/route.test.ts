@@ -18,6 +18,7 @@ import {
   settingsHref,
   settingsSectionHref,
   setupHref,
+  manuscriptHref,
   workspaceHref,
 } from './route'
 
@@ -270,5 +271,23 @@ describe('workspace tags in the URL', () => {
     expect(workspaceHref(id, 'papers', null, tagged([], 'any'))).toBe(`#/workspaces/${id}`)
     expect(workspaceHref(id, 'notes', null, tagged(['x']))).toBe(`#/workspaces/${id}?tab=notes`)
     expect(parseRoute(`#/workspaces/${id}?tags=x&match=bogus`)).toMatchObject({ tags: ['x'], match: 'any' })
+  })
+})
+
+describe('manuscript routes', () => {
+  const mid = '11111111-2222-3333-4444-555555555555'
+  it('parses #/manuscripts/<id>?file=sections/intro.tex', () => {
+    expect(parseRoute(`#/manuscripts/${mid}?file=sections/intro.tex`)).toEqual({ name: 'manuscript', manuscriptId: mid, file: 'sections/intro.tex' })
+    expect(parseRoute(`#/manuscripts/${mid}`)).toEqual({ name: 'manuscript', manuscriptId: mid, file: null })
+  })
+  it('manuscriptHref round-trips', () => {
+    expect(manuscriptHref(mid)).toBe(`#/manuscripts/${mid}`)
+    for (const file of ['main.tex', 'sections/my intro&1.tex']) {
+      expect(parseRoute(manuscriptHref(mid, file))).toEqual({ name: 'manuscript', manuscriptId: mid, file })
+    }
+  })
+  it('workspace ?tab=write is allowed', () => {
+    const id = '11111111-2222-3333-4444-666666666666'
+    expect(parseRoute(workspaceHref(id, 'write'))).toMatchObject({ name: 'workspace', tab: 'write' })
   })
 })
