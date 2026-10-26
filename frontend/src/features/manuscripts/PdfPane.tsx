@@ -1,8 +1,9 @@
+import { useRef } from 'react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { api, type ManuscriptDetail } from '@/api/client'
 import { PdfPage } from '../reader/PdfPage'
 import { usePdfDocument } from '../reader/usePdfDocument'
-import { parseCompileErrors, friendlyCompileCode } from './compileErrors'
+import { parseCompileErrors } from './compileErrors'
 import { manuscriptErrorMessage } from './errors'
 
 const PAGE_WIDTH_PT = 612
@@ -12,10 +13,13 @@ type Props = { manuscript: ManuscriptDetail; width: number }
 
 /** The compiled PDF, with the compile's errors above it. The pane's width is the parent's, so loading never moves it. */
 export function PdfPane({ manuscript: m, width }: Props) {
-  // The URL carries compiled_at, so each compile is fetched again; after a failed compile the last PDF stays shown.
-  const url = m.compiled_at && m.compile_status !== 'failed' ? api.manuscriptPdfUrl(m.id, m.compiled_at) : null
-  const { doc, error } = usePdfDocument(url)
-  const friendly = friendlyCompileCode(m)
+  // The URL carries compiled_at, so each good compile is fetched again. A failed compile also stamps compiled_at but
+  // leaves the last PDF on disk, so the URL keeps the last good stamp and that PDF stays on screen.
+  const goodAt = useRef<string | null>(null)
+  if (m.compile_status === 'ok' && m.compiled_at) goodAt.current = m.compiled_at
+  const stamp = goodAt.current ?? m.compiled_at
+  const { doc, error } = usePdfDocument(stamp ? api.manuscriptPdfUrl(m.id, stamp) : null)
+  const friendly = m.compile_status === 'failed' ? m.compile_friendly : null
   const errors = parseCompileErrors(m.compile_errors).filter((e) => e.kind === 'error')
   const scale = Math.max(0.4, (width - GUTTERS_PX) / PAGE_WIDTH_PT)
 
@@ -48,7 +52,7 @@ export function PdfPane({ manuscript: m, width }: Props) {
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">
-            {error ?? (m.compile_status === 'running' ? 'Compiling…' : m.compiled_at ? 'Loading the PDF…' : 'No PDF yet. Press Compile.')}
+            {(m.compile_status === 'failed' ? null : error) ?? (m.compile_status === 'running' ? 'Compiling…' : m.compile_status === 'failed' ? 'No PDF yet. Fix the errors and compile again.' : m.compiled_at ? 'Loading the PDF…' : 'No PDF yet. Press Compile.')}
           </p>
         )}
       </div>

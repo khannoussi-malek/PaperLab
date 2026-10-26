@@ -3655,6 +3655,8 @@ export interface components {
             compiled_at: string | null;
             /** Compile Log */
             compile_log: string | null;
+            /** Compile Friendly */
+            compile_friendly: string | null;
             /** Compile Errors */
             compile_errors: unknown[];
             /**
@@ -3695,6 +3697,8 @@ export interface components {
             compiled_at: string | null;
             /** Compile Log */
             compile_log: string | null;
+            /** Compile Friendly */
+            compile_friendly: string | null;
             /** Compile Errors */
             compile_errors: unknown[];
             /**
@@ -3737,6 +3741,8 @@ export interface components {
             compiled_at: string | null;
             /** Compile Log */
             compile_log: string | null;
+            /** Compile Friendly */
+            compile_friendly: string | null;
             /** Compile Errors */
             compile_errors: unknown[];
             /**

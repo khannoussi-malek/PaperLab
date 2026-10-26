@@ -1,4 +1,4 @@
-"""Runs Tectonic on a manuscript folder and reads what it says (M27a). No fastapi here."""
+"""Runs Tectonic on a manuscript folder and reads what it says (M27a). No web framework here."""
 
 import asyncio
 import os

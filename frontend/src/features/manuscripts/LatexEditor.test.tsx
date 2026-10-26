@@ -10,3 +10,10 @@ test('shows the text and follows a new value', () => {
   rerender(<LatexEditor value="new text" onChange={onChange} errors={[]} onSave={() => {}} />)
   expect(container.querySelector('.cm-content')).toHaveTextContent('new text')
 })
+
+test('a new value from outside is not reported back as an edit', () => {
+  const onChange = vi.fn()
+  const { rerender } = render(<LatexEditor value="one" onChange={onChange} errors={[]} onSave={() => {}} />)
+  rerender(<LatexEditor value="two" onChange={onChange} errors={[]} onSave={() => {}} />)
+  expect(onChange).not.toHaveBeenCalled()
+})

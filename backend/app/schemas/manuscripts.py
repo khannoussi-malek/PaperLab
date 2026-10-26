@@ -36,6 +36,7 @@ class ManuscriptOut(BaseModel):
     compile_requested: bool
     compiled_at: datetime | None
     compile_log: str | None
+    compile_friendly: str | None
     compile_errors: list[Any]
     created_at: datetime
     updated_at: datetime

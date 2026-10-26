@@ -1,6 +1,7 @@
-import { StreamLanguage } from '@codemirror/language'
+import { HighlightStyle, StreamLanguage, syntaxHighlighting } from '@codemirror/language'
+import { tags } from '@lezer/highlight'
 import { stex } from '@codemirror/legacy-modes/mode/stex'
-import { Compartment, RangeSetBuilder } from '@codemirror/state'
+import { Annotation, Compartment, RangeSetBuilder, Transaction } from '@codemirror/state'
 import { EditorView, GutterMarker, gutter, keymap } from '@codemirror/view'
 import { basicSetup } from 'codemirror'
 import { useEffect, useRef } from 'react'
@@ -46,11 +47,30 @@ const errorGutter = (errors: LineError[]) =>
     },
   })
 
+// The app's own colour tokens, so the editor follows light and dark with the rest of the window (see MASTER.md).
 const theme = EditorView.theme({
-  '&': { height: '100%', fontSize: '13px' },
+  '&': { height: '100%', fontSize: '13px', color: 'var(--foreground)', backgroundColor: 'var(--background)' },
   '.cm-scroller': { overflow: 'auto', fontFamily: 'var(--font-mono, ui-monospace, monospace)' },
+  '.cm-content': { caretColor: 'var(--foreground)' },
+  '.cm-cursor': { borderLeftColor: 'var(--foreground)' },
+  '.cm-gutters': { backgroundColor: 'var(--muted)', color: 'var(--muted-foreground)', border: 'none' },
+  '.cm-activeLine, .cm-activeLineGutter': { backgroundColor: 'var(--accent)' },
+  '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': { backgroundColor: 'color-mix(in srgb, var(--primary) 30%, transparent)' },
   '&.cm-focused': { outline: '2px solid var(--ring)', outlineOffset: '-2px' },
 })
+
+const highlight = syntaxHighlighting(
+  HighlightStyle.define([
+    { tag: tags.comment, color: 'var(--muted-foreground)', fontStyle: 'italic' },
+    { tag: [tags.keyword, tags.tagName, tags.atom], color: 'var(--primary)' },
+    { tag: [tags.string, tags.number, tags.meta], color: 'color-mix(in srgb, var(--primary) 55%, var(--foreground))' },
+    { tag: [tags.bracket, tags.punctuation], color: 'var(--muted-foreground)' },
+    { tag: tags.invalid, color: 'var(--destructive)' },
+  ]),
+)
+
+// Marks a change the host made (a new `value`), so it is not reported back as an edit and never enters undo history.
+const FromHost = Annotation.define<boolean>()
 
 /** CodeMirror 6 with LaTeX highlighting, as one controlled-ish component: `value` in, `onChange` out. */
 export function LatexEditor({ value, onChange, errors, onSave, jumpTo, label = 'LaTeX source' }: Props) {
@@ -70,10 +90,13 @@ export function LatexEditor({ value, onChange, errors, onSave, jumpTo, label = '
         StreamLanguage.define(stex),
         EditorView.lineWrapping,
         theme,
+        highlight,
         EditorView.contentAttributes.of({ 'aria-label': label }),
         errorSlot.current.of(errorGutter(errors)),
         keymap.of([{ key: 'Mod-s', run: () => (latest.current.onSave(), true) }]),
-        EditorView.updateListener.of((u) => u.docChanged && latest.current.onChange(u.state.doc.toString())),
+        EditorView.updateListener.of((u) => {
+          if (u.docChanged && !u.transactions.some((t) => t.annotation(FromHost))) latest.current.onChange(u.state.doc.toString())
+        }),
       ],
     })
     view.current = editor
@@ -83,7 +106,11 @@ export function LatexEditor({ value, onChange, errors, onSave, jumpTo, label = '
 
   useEffect(() => {
     const editor = view.current!
-    if (editor.state.doc.toString() !== value) editor.dispatch({ changes: { from: 0, to: editor.state.doc.length, insert: value } })
+    if (editor.state.doc.toString() === value) return
+    editor.dispatch({
+      changes: { from: 0, to: editor.state.doc.length, insert: value },
+      annotations: [FromHost.of(true), Transaction.addToHistory.of(false)],
+    })
   }, [value])
 
   useEffect(() => {

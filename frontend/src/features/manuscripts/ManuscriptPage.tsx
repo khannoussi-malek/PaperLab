@@ -1,16 +1,17 @@
 import { useQueries } from '@tanstack/react-query'
 import { Download, History } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '@/api/client'
 import { useCompileManuscript, useManuscript } from '@/api/queries'
 import { AppShell } from '@/components/AppShell'
 import { loadPanelWidth, panelTrack, savePanelWidth } from '@/components/panelWidth'
 import { PanelResizeHandle } from '@/components/PanelResizeHandle'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { LoadError } from '@/features/library/ErrorAlert'
 import { browserStorage } from '@/features/notes/highlightColors'
 import { TabSkeleton } from '@/features/workspaces/TabStates'
-import { workspaceHref } from '@/lib/route'
+import { manuscriptHref, workspaceHref } from '@/lib/route'
 import { errorsFor } from './compileErrors'
 import { manuscriptFailure } from './errors'
 import { FileList } from './FileList'
@@ -20,7 +21,9 @@ import { outline } from './outline'
 import { OutlinePanel } from './OutlinePanel'
 import { PdfPane } from './PdfPane'
 import { MANUSCRIPT_PDF } from './pdfPanel'
-import { SourcePane } from './SourcePane'
+import type { SaveState } from './autosave'
+import { SourcePane, type KeptText } from './SourcePane'
+import { useLeaveWarning } from './useLeaveWarning'
 
 /** The writing studio: files and outline | source | PDF. `file` is the `?file=` of the route; null is the main file. */
 export function ManuscriptPage({ manuscriptId, file }: { manuscriptId: string; file: string | null }) {
@@ -30,6 +33,20 @@ export function ManuscriptPage({ manuscriptId, file }: { manuscriptId: string; f
   const [live, setLive] = useState<Record<string, string>>({})
   const [jump, setJump] = useState<{ line: number; n: number } | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
+  // Text a closed file could not save, until the user opens that file again.
+  const [kept, setKept] = useState<Record<string, KeptText>>({})
+  const [saveStates, setSaveStates] = useState<Record<string, SaveState>>({})
+  const flushRef = useRef<(() => Promise<boolean>) | null>(null)
+  useLeaveWarning(Object.keys(kept).length > 0 || Object.values(saveStates).some((s) => s !== 'saved'))
+  const onText = useCallback(
+    (p: string, text: string | null) =>
+      setLive((l) => (text === null ? Object.fromEntries(Object.entries(l).filter(([k]) => k !== p)) : { ...l, [p]: text })),
+    [],
+  )
+  const onKeep = useCallback((p: string, k: KeptText) => setKept((all) => ({ ...all, [p]: k })), [])
+  const onAdopted = useCallback((p: string) => setKept((all) => Object.fromEntries(Object.entries(all).filter(([k]) => k !== p))), [])
+  const onState = useCallback((p: string, s: SaveState) => setSaveStates((all) => ({ ...all, [p]: s })), [])
+  const registerFlush = useCallback((f: (() => Promise<boolean>) | null) => { flushRef.current = f }, [])
   const [pdfWidth, setPdfWidth] = useState(() => loadPanelWidth(MANUSCRIPT_PDF, browserStorage()))
   useEffect(() => savePanelWidth(MANUSCRIPT_PDF, browserStorage(), pdfWidth), [pdfWidth])
 
@@ -67,6 +84,17 @@ export function ManuscriptPage({ manuscriptId, file }: { manuscriptId: string; f
     >
       {manuscript.error && <LoadError message={manuscript.error.message} onRetry={() => void manuscript.refetch()} />}
       {manuscript.isPending && <TabSkeleton label="Loading manuscript" />}
+      {Object.entries(kept).map(([keptPath, k]) => (
+        <Alert key={keptPath} variant="destructive" className="mb-2 w-auto">
+          <AlertDescription className="flex flex-wrap items-center gap-3">
+            <span>
+              Your changes to {keptPath} were not saved{k.reason === 'conflict' ? ': the file changed somewhere else' : ''}. They are
+              kept here until you open it.
+            </span>
+            <Button size="sm" variant="outline" asChild><a href={manuscriptHref(manuscriptId, keptPath)}>Open it</a></Button>
+          </AlertDescription>
+        </Alert>
+      ))}
       {data && path && (
         <div className="grid min-h-0 flex-1 overflow-hidden" style={{ gridTemplateColumns: `14rem minmax(0,1fr) ${panelTrack(MANUSCRIPT_PDF, pdfWidth)}` }}>
           <div className="flex min-h-0 flex-col gap-4 overflow-auto border-r border-glass-border py-2">
@@ -83,7 +111,12 @@ export function ManuscriptPage({ manuscriptId, file }: { manuscriptId: string; f
             compiling={compiling}
             compileError={compile.error ? manuscriptFailure(compile.error) : null}
             onCompile={() => compile.mutate(manuscriptId)}
-            onText={(p, text) => setLive((l) => ({ ...l, [p]: text }))}
+            kept={kept[path] ?? null}
+            onText={onText}
+            onKeep={onKeep}
+            onAdopted={onAdopted}
+            onState={onState}
+            registerFlush={registerFlush}
           />
           <div className="relative min-h-0 border-l border-glass-border">
             <PanelResizeHandle limits={MANUSCRIPT_PDF} width={clamped} onWidthChange={setPdfWidth} label="Resize PDF" />
@@ -91,7 +124,8 @@ export function ManuscriptPage({ manuscriptId, file }: { manuscriptId: string; f
           </div>
         </div>
       )}
-      <HistoryDialog manuscriptId={manuscriptId} open={historyOpen} onOpenChange={setHistoryOpen} onRestored={() => setHistoryOpen(false)} />
+      <HistoryDialog manuscriptId={manuscriptId} open={historyOpen} onOpenChange={setHistoryOpen} onRestored={() => { setLive({}); setHistoryOpen(false) }}
+        beforeRestore={async () => (await flushRef.current?.()) ?? true} />
     </AppShell>
   )
 }
