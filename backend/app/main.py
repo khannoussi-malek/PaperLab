@@ -115,7 +115,10 @@ def create_app() -> FastAPI:
     async def domain_error(_: Request, exc: DomainError) -> JSONResponse:
         # no_free_pdf says what it tried and where a free copy may be (M63)
         extra = {key: exc.details[key] for key in ("tried", "free_copies") if key in exc.details}
-        if "updated_at" in exc.details:  # file_changed (M27a) says what the file's clock reads now
+        for key in ("path", "limit"):  # manuscript errors name the file and the cap (M27a)
+            if key in exc.details:
+                extra[key] = exc.details[key]
+        if "updated_at" in exc.details:  # file_changed: the file's clock; pydantic's UTC form (Z) matches the bodies
             extra["updated_at"] = TypeAdapter(datetime).dump_python(exc.details["updated_at"], mode="json")
         for key in ("paper_id", "kept_id"):  # already_in_library (M66) and paper_merged (R19) say which paper
             if key in exc.details:

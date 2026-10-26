@@ -109,9 +109,19 @@ async def test_upload_over_the_cap_is_refused_whatever_content_length_says(clien
     from app.core import manuscript_paths
     monkeypatch.setattr(manuscript_paths, "MAX_BINARY", 10)
     m = await make(client)
+    body = b"x" * 50
     response = await client.post(f"/api/manuscripts/{m['id']}/uploads", data={"path": "a.png"},
-                                 files={"file": ("a.png", b"x" * 50)})
+                                 files={"file": ("a.png", body)})
     assert response.status_code == 409 and response.json()["detail"] == "file_too_large"
+    assert response.json()["limit"] == 10
+    # the same upload with a Content-Length that claims a small body: the cap is on what is read, not on the claim
+    request = client.build_request("POST", f"/api/manuscripts/{m['id']}/uploads", data={"path": "a.png"},
+                                   files={"file": ("a.png", body)})
+    request.headers["content-length"] = "5"
+    lying = await client.send(request)
+    assert lying.status_code == 409 and lying.json()["detail"] == "file_too_large"
+    files = (await client.get(f"/api/manuscripts/{m['id']}")).json()["files"]
+    assert [f["path"] for f in files] == ["main.tex"]
 
 
 async def test_compile_twice_is_queued_then_again(client, arq):
@@ -160,6 +170,7 @@ async def test_import_then_export_round_trip(client):
     m = imported.json()
     names = [f["path"] for f in m["files"]]
     assert names == ["fig/a.png", "main.tex", "paperlab-imported.bib"] and m["title"] == "p"
+    assert m["skipped"] == []
     out = await client.get(f"/api/manuscripts/{m['id']}/export.zip")
     assert out.status_code == 200 and out.headers["content-type"] == "application/zip"
     with zipfile.ZipFile(io.BytesIO(out.content)) as z:
@@ -187,3 +198,29 @@ async def test_import_errors_and_all_or_nothing(client, monkeypatch):
     response = await client.post("/api/manuscripts/import", files={"file": ("p.zip", buf.getvalue())})
     assert response.status_code == 409 and len(calls) == 2
     assert len((await client.get("/api/manuscripts?orphans=true")).json()) == before
+
+
+async def test_import_skips_unsupported_files_and_names_a_bad_member(client):
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("main.tex", TEX)
+        z.writestr("README", "x")
+        z.writestr("fig.eps", b"x")
+    ok = await client.post("/api/manuscripts/import", files={"file": ("p.zip", buf.getvalue())})
+    assert ok.status_code == 201 and sorted(ok.json()["skipped"]) == ["README", "fig.eps"]
+    assert [f["path"] for f in ok.json()["files"]] == ["main.tex"]
+    bad = io.BytesIO()
+    with zipfile.ZipFile(bad, "w") as z:
+        z.writestr("main.tex", TEX)
+        z.writestr("sub/paperlab.bib", "x")
+    refused = await client.post("/api/manuscripts/import", files={"file": ("p.zip", bad.getvalue())})
+    assert refused.status_code == 422 and refused.json()["detail"] == "reserved_path"
+    assert refused.json()["path"] == "sub/paperlab.bib"
+
+
+async def test_import_body_over_the_cap_is_manuscript_too_large(client, monkeypatch):
+    from app.core import manuscript_paths
+    monkeypatch.setattr(manuscript_paths, "MAX_TOTAL", 10)
+    refused = await client.post("/api/manuscripts/import", files={"file": ("p.zip", b"x" * 50)})
+    assert refused.status_code == 409 and refused.json()["detail"] == "manuscript_too_large"
+    assert refused.json()["limit"] == 10
