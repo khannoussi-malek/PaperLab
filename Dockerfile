@@ -44,7 +44,10 @@ COPY backend/app/manuscript_templates /templates
 RUN for t in /templates/*.tex; do \
       d=$(mktemp -d) && cp "$t" "$d/main.tex" && cp /templates/warm.bib "$d/paperlab.bib" \
       && (cd "$d" && tectonic -X compile main.tex) || exit 1; \
-    done && rm -rf /tmp/*
+    done \
+    && d=$(mktemp -d) && cd "$d" \
+    && printf '\\documentclass{article}\\usepackage{verbatim}\\begin{document}\n\\begin{verbatim}\nx\n\\end{verbatim}\n\\end{document}\n' > main.tex \
+    && tectonic -X compile main.tex && rm -rf /tmp/*
 
 # Runtime: the environment first, then the code, so an update that changes only code downloads only the last layers.
 # No search model: it is downloaded into the models volume when the user chooses it.
