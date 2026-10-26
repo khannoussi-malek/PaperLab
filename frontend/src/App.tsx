@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { ChartBuilderPage } from './features/charts/ChartBuilderPage'
 import { ChartPage } from './features/charts/ChartPage'
 import { ChartsPage } from './features/charts/ChartsPage'
@@ -5,7 +6,6 @@ import { ConnectClaudePage } from './features/connect-claude/ConnectClaudePage'
 import { DatasetPage } from './features/data/DatasetPage'
 import { GraphPage } from './features/graph/GraphPage'
 import { LibraryPage } from './features/library/LibraryPage'
-import { ManuscriptPage } from './features/manuscripts/ManuscriptPage'
 import { NotesPage } from './features/notes/NotesPage.tsx'
 import { ReaderPage } from './features/reader/ReaderPage'
 import { ReferencesPage } from './features/references/ReferencesPage'
@@ -16,6 +16,9 @@ import { SetupPage } from './features/setup/SetupPage'
 import { useOpenSetupOnStart } from './features/setup/useOpenSetupOnStart'
 import { WorkspacePage } from './features/workspaces/WorkspacePage'
 import { useRoute } from './lib/route'
+
+// The editor brings CodeMirror, so it loads only when a manuscript opens.
+const ManuscriptPage = lazy(() => import('./features/manuscripts/ManuscriptPage').then((m) => ({ default: m.ManuscriptPage })))
 
 export default function App() {
   const { state } = useSearchModelDownload()
@@ -44,7 +47,11 @@ function Page() {
     return <ReaderPage key={route.paperId} paperId={route.paperId} tab={route.tab} target={route.target} />
   }
   if (route.name === 'manuscript') {
-    return <ManuscriptPage key={route.manuscriptId} manuscriptId={route.manuscriptId} file={route.file} />
+    return (
+      <Suspense fallback={<p role="status" className="p-4 text-sm text-muted-foreground">Loading the editor…</p>}>
+        <ManuscriptPage key={route.manuscriptId} manuscriptId={route.manuscriptId} file={route.file} />
+      </Suspense>
+    )
   }
   if (route.name === 'charts') {
     return <ChartsPage />
