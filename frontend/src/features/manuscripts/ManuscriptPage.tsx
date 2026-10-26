@@ -82,13 +82,13 @@ export function ManuscriptPage({ manuscriptId, file }: { manuscriptId: string; f
     >
       {manuscript.error && <LoadError message={manuscript.error.message} onRetry={() => void manuscript.refetch()} />}
       {manuscript.isPending && <TabSkeleton label="Loading manuscript" />}
-      {Object.entries(kept).filter(([keptPath]) => keptPath !== path).map(([keptPath, k]) => (
+      {kept.filter((k) => k.path !== path).map((k) => (
         <KeptTextAlert
-          key={keptPath}
-          path={keptPath}
+          key={k.id}
+          path={k.path}
           kept={k}
-          action={<Button size="sm" variant="outline" asChild><a href={manuscriptHref(manuscriptId, keptPath)}>Open it</a></Button>}
-          onDiscard={() => keptTexts.remove(manuscriptId, keptPath)}
+          action={<Button size="sm" variant="outline" asChild><a href={manuscriptHref(manuscriptId, k.path)}>Open it</a></Button>}
+          onDiscard={() => keptTexts.remove(k.id)}
         />
       ))}
       {data && path && (

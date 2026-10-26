@@ -49,6 +49,9 @@ async function type(text: string, expectedBefore = 'hello') {
   return box
 }
 const ctrlS = (box: HTMLElement) => fireEvent.keyDown(box, { key: 's', ctrlKey: true })
+// Every kept text for the manuscript, sorted.
+const allKept = () => keptTexts.forManuscript('m1').map((k) => k.text).sort()
+const keep = (path: string, text: string, base = T2) => keptTexts.put('m1', { path, text, reason: 'error', base, seq: keptTexts.nextSeq() })
 
 beforeEach(() => {
   keptTexts.clear()
@@ -201,7 +204,7 @@ test('after a restore the open file shows the restored text', async () => {
 })
 
 test('kept text edited against an older version reopens as a conflict, not a silent overwrite', async () => {
-  keptTexts.set('m1', 'main.tex', { text: 'mine', reason: 'error', base: T2, seq: 0 })
+  keep('main.tex', 'mine')
   server['main.tex'] = { text: 'newer', at: T3 }
   const save = vi.spyOn(api, 'saveManuscriptFile').mockResolvedValue(saved())
   renderPage()
@@ -215,7 +218,7 @@ test('kept text survives leaving the page and coming back', async () => {
   const first = renderPage()
   await type('hello world')
   first.unmount()
-  await waitFor(() => expect(keptTexts.get('m1', 'main.tex')).toMatchObject({ text: 'hello world', base: T2 }))
+  await waitFor(() => expect(keptTexts.forManuscript('m1')).toMatchObject([{ text: 'hello world', base: T2 }]))
   const second = renderPage('b.tex')
   expect(await screen.findByRole('link', { name: 'Open it' })).toHaveAttribute('href', '#/manuscripts/m1?file=main.tex')
   second.open('main.tex')
@@ -223,11 +226,11 @@ test('kept text survives leaving the page and coming back', async () => {
 })
 
 test('kept text is dropped once it is saved', async () => {
-  keptTexts.set('m1', 'main.tex', { text: 'mine', reason: 'error', base: T2, seq: 0 })
+  keep('main.tex', 'mine')
   vi.spyOn(api, 'saveManuscriptFile').mockResolvedValue(saved())
   renderPage()
   await screen.findByText('Unsaved changes')
-  await waitFor(() => expect(keptTexts.get('m1', 'main.tex')).toBeUndefined(), { timeout: 3000 })
+  await waitFor(() => expect(allKept()).toEqual([]), { timeout: 3000 })
 })
 
 test('a 4xx save error shows its message and does not say it will retry', async () => {
@@ -270,18 +273,18 @@ test('a late failing flush from an earlier pane is not lost when the file is reo
   view.open('main.tex') // a second pane opens from the cache, before the first save settles
   await waitFor(() => expect(screen.getByLabelText('LaTeX source')).toHaveValue('hello'))
   failFirst(new Error('network down'))
-  await waitFor(() => expect(keptTexts.get('m1', 'main.tex')?.text).toBe('hello world'))
+  await waitFor(() => expect(allKept()).toEqual(['hello world']))
   expect(await screen.findByRole('button', { name: 'Use it' })).toBeInTheDocument()
   ctrlS(await type('another edit'))
   await waitFor(() => expect(screen.getByText('Saved')).toBeInTheDocument())
-  expect(keptTexts.get('m1', 'main.tex')?.text).toBe('hello world') // not this pane's to remove
+  expect(allKept()).toEqual(['hello world']) // not this pane's to remove
   expect(screen.getByRole('button', { name: 'Use it' })).toBeInTheDocument()
 })
 
 test('Use it puts the kept text into the editor, unsaved', async () => {
   renderPage()
   await waitFor(() => expect(screen.getByLabelText('LaTeX source')).toHaveValue('hello'))
-  keptTexts.set('m1', 'main.tex', { text: 'kept text', reason: 'error', base: T2, seq: 5 })
+  keep('main.tex', 'kept text')
   fireEvent.click(await screen.findByRole('button', { name: 'Use it' }))
   await waitFor(() => expect(screen.getByLabelText('LaTeX source')).toHaveValue('kept text'))
   expect(screen.getByText('Unsaved changes')).toBeInTheDocument()
@@ -291,15 +294,88 @@ test('Use it puts the kept text into the editor, unsaved', async () => {
 test('Use it on text from an older version is a conflict to resolve', async () => {
   renderPage()
   await waitFor(() => expect(screen.getByLabelText('LaTeX source')).toHaveValue('hello'))
-  keptTexts.set('m1', 'main.tex', { text: 'kept text', reason: 'error', base: '2026-09-01T00:00:00Z', seq: 5 })
+  keep('main.tex', 'kept text', '2026-09-01T00:00:00Z')
   fireEvent.click(await screen.findByRole('button', { name: 'Use it' }))
   expect(await screen.findByRole('button', { name: 'Keep my version' })).toBeInTheDocument()
 })
 
 test('Discard drops a kept text', async () => {
-  keptTexts.set('m1', 'b.tex', { text: 'old', reason: 'error', base: T2, seq: 1 })
+  keep('b.tex', 'old')
   renderPage()
   fireEvent.click(await screen.findByRole('button', { name: 'Discard' }))
-  expect(keptTexts.get('m1', 'b.tex')).toBeUndefined()
+  expect(allKept()).toEqual([])
   expect(screen.queryByRole('link', { name: 'Open it' })).toBeNull()
+})
+
+test('a1: an earlier pane\'s late failure and the reopened pane\'s failure both survive', async () => {
+  let failFirst: (error: Error) => void = () => {}
+  const save = vi.spyOn(api, 'saveManuscriptFile')
+    .mockImplementationOnce(() => new Promise((_, reject) => { failFirst = reject }))
+    .mockRejectedValue(new Error('network down'))
+  const view = renderPage()
+  await type('first copy')
+  view.open('b.tex') // the first pane's save hangs
+  await waitFor(() => expect(save).toHaveBeenCalledTimes(1))
+  view.open('main.tex')
+  await waitFor(() => expect(screen.getByLabelText('LaTeX source')).toHaveValue('hello'))
+  failFirst(new Error('network down')) // the first copy is kept while the second pane is open
+  expect(await screen.findByRole('button', { name: 'Use it' })).toBeInTheDocument()
+  await type('second copy')
+  view.open('b.tex') // offline: the second pane's save fails too
+  await waitFor(() => expect(screen.getAllByRole('link', { name: 'Open it' })).toHaveLength(2))
+  expect(allKept()).toEqual(['first copy', 'second copy'])
+  view.open('main.tex') // two copies: neither is taken over unasked
+  await waitFor(() => expect(screen.getAllByRole('button', { name: 'Use it' })).toHaveLength(2))
+  expect(screen.getByLabelText('LaTeX source')).toHaveValue('hello')
+})
+
+test('a2: the reopened pane failing first does not shut out the earlier pane\'s late failure', async () => {
+  let failFirst: (error: Error) => void = () => {}
+  const save = vi.spyOn(api, 'saveManuscriptFile')
+    .mockImplementationOnce(() => new Promise((_, reject) => { failFirst = reject }))
+    .mockRejectedValue(new Error('network down'))
+  const view = renderPage()
+  await type('first copy')
+  view.open('b.tex')
+  await waitFor(() => expect(save).toHaveBeenCalledTimes(1))
+  view.open('main.tex') // nothing to take over yet
+  await type('second copy')
+  view.open('b.tex')
+  await waitFor(() => expect(allKept()).toEqual(['second copy']))
+  failFirst(new Error('network down'))
+  await waitFor(() => expect(screen.getAllByRole('link', { name: 'Open it' })).toHaveLength(2))
+  expect(allKept()).toEqual(['first copy', 'second copy'])
+})
+
+test('Discard drops only the copy it was shown for', async () => {
+  keep('main.tex', 'one')
+  keep('main.tex', 'two')
+  renderPage('b.tex')
+  await waitFor(() => expect(screen.getAllByRole('button', { name: 'Discard' })).toHaveLength(2))
+  fireEvent.click(screen.getAllByRole('button', { name: 'Discard' })[0])
+  expect(allKept()).toEqual(['two'])
+  expect(screen.getAllByRole('link', { name: 'Open it' })).toHaveLength(1)
+})
+
+test('using one of two copies and saving it drops only that copy', async () => {
+  keep('main.tex', 'one')
+  keep('main.tex', 'two')
+  const save = vi.spyOn(api, 'saveManuscriptFile').mockResolvedValue(saved())
+  renderPage()
+  await waitFor(() => expect(screen.getAllByRole('button', { name: 'Use it' })).toHaveLength(2))
+  expect(screen.getByLabelText('LaTeX source')).toHaveValue('hello')
+  fireEvent.click(screen.getAllByRole('button', { name: 'Use it' })[0])
+  await waitFor(() => expect(screen.getByLabelText('LaTeX source')).toHaveValue('one'))
+  await waitFor(() => expect(save).toHaveBeenCalledWith('m1', 'main.tex', 'one', T2))
+  await waitFor(() => expect(allKept()).toEqual(['two']))
+  expect(screen.getAllByRole('button', { name: 'Use it' })).toHaveLength(1)
+})
+
+test('a pane that took over a copy and fails again replaces that copy, not adds to it', async () => {
+  keep('main.tex', 'kept')
+  vi.spyOn(api, 'saveManuscriptFile').mockRejectedValue(new Error('network down'))
+  const view = renderPage()
+  await type('kept, edited', 'kept')
+  view.open('b.tex')
+  await waitFor(() => expect(allKept()).toEqual(['kept, edited']))
 })
