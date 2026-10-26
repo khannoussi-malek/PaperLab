@@ -8,7 +8,7 @@ from app.core import manuscripts
 from app.core.errors import Conflict, InvalidInput, NotFound
 from app.models import Workspace
 
-pytestmark = pytest.mark.anyio
+pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("manuscript_rows")]  # this file reads all manuscripts
 
 
 async def new(session, **kw):

@@ -52,49 +52,73 @@ async def _compile(workdir: Path, main_file: str):
         return await compile_dir(workdir, main_file)
 
 
-async def _pass(session, manuscript: Manuscript) -> None:
-    """One compile; commits its own result."""
-    mid = manuscript.id
-    rows = (await session.execute(select(ManuscriptFile.path, ManuscriptFile.text, ManuscriptFile.data)
-                                  .where(ManuscriptFile.manuscript_id == mid))).all()
-    sources = {p: t for p, t, _ in rows if t is not None}
-    bib = await build_bib(session, manuscript, sources)
+async def _prepare(mid: uuid.UUID):
+    """Short transaction 1: claim the pass, read the files, pin cited keys. None when the manuscript is gone."""
+    async with SessionLocal() as session:
+        manuscript = await session.get(Manuscript, mid, populate_existing=True)
+        if manuscript is None:
+            return None
+        manuscript.compile_requested = False  # a request that arrives during this pass earns one more
+        manuscript.compile_status = "running"
+        manuscript.compile_started_at = datetime.now(UTC)  # keeps the stale window honest on every pass
+        rows = (await session.execute(select(ManuscriptFile.path, ManuscriptFile.text, ManuscriptFile.data)
+                                      .where(ManuscriptFile.manuscript_id == mid))).all()
+        bib = await build_bib(session, manuscript, {p: t for p, t, _ in rows if t is not None})
+        main_file = manuscript.main_file
+        await session.commit()
+        return main_file, rows, bib
+
+
+async def _run_tectonic(main_file: str, rows, bib: str):
+    """No database transaction is open here: a compile takes up to a minute."""
     with tempfile.TemporaryDirectory() as tmp:
         workdir = Path(tmp)
         _write_files(workdir, rows)
         (workdir / "paperlab.bib").write_text(bib, encoding="utf-8")
-        result = await _compile(workdir, manuscript.main_file)
-    if result.ok and result.pdf is not None:
-        _write_pdf(mid, result.pdf)
-        await manuscript_history.take(session, mid, "compile")
-    await session.execute(update(Manuscript).where(Manuscript.id == mid).values(
-        compile_status="ok" if result.ok else "failed", compile_log=result.log,
-        compile_errors=result.errors, compiled_at=datetime.now(UTC)))
-    await session.commit()
+        return await _compile(workdir, main_file)
 
 
-async def _mark_failed(session, mid: uuid.UUID, error: Exception) -> None:
-    await session.rollback()
-    await session.execute(update(Manuscript).where(Manuscript.id == mid).values(
-        compile_status="failed", compile_log=f"internal error: {type(error).__name__}", compiled_at=datetime.now(UTC)))
-    await session.commit()
+async def _store(mid: uuid.UUID, result) -> bool:
+    """Short transaction 2: the result. False (nothing written) when the manuscript was deleted meanwhile."""
+    async with SessionLocal() as session:
+        # NO KEY UPDATE keeps a delete out until we commit, yet lets the snapshot's foreign key through.
+        locked = select(Manuscript.id).where(Manuscript.id == mid).with_for_update(key_share=True)
+        if await session.scalar(locked) is None:
+            return False
+        if result.ok and result.pdf is not None:
+            _write_pdf(mid, result.pdf)
+            await manuscript_history.take(session, mid, "compile")
+        await session.execute(update(Manuscript).where(Manuscript.id == mid).values(
+            compile_status="ok" if result.ok else "failed", compile_log=result.log,
+            compile_errors=result.errors, compiled_at=datetime.now(UTC)))
+        await session.commit()
+        return True
+
+
+async def _mark_failed(mid: uuid.UUID, error: Exception) -> None:
+    async with SessionLocal() as session:
+        await session.execute(update(Manuscript).where(Manuscript.id == mid).values(
+            compile_status="failed", compile_log=f"internal error: {type(error).__name__}",
+            compiled_at=datetime.now(UTC)))
+        await session.commit()
 
 
 async def compile_manuscript(ctx: dict, manuscript_id: str) -> None:
+    # ponytail: an ARQ timeout cancels us (CancelledError is not an Exception), leaving the row `running`; the stale
+    # window in request_compile (COMPILE_TIMEOUT + 60 s) lets the next request queue a fresh job.
     mid = uuid.UUID(manuscript_id)
-    async with SessionLocal() as session:
-        again = True
-        while again:
-            try:
-                manuscript = await session.get(Manuscript, mid, populate_existing=True)
-                if manuscript is None:
-                    return  # deleted meanwhile
-                manuscript.compile_requested = False  # a request that arrives during this pass earns one more
-                manuscript.compile_status = "running"
-                await session.commit()
-                await _pass(session, manuscript)
-                again = bool((await session.get(Manuscript, mid, populate_existing=True)).compile_requested)
-            except Exception as error:
-                logger.exception("compiling manuscript %s failed", mid)
-                await _mark_failed(session, mid, error)
+    again = True
+    while again:
+        try:
+            prepared = await _prepare(mid)
+            if prepared is None:
+                return  # deleted meanwhile
+            result = await _run_tectonic(*prepared)
+            if not await _store(mid, result):
                 return
+            async with SessionLocal() as session:
+                again = bool(await session.scalar(select(Manuscript.compile_requested).where(Manuscript.id == mid)))
+        except Exception as error:
+            logger.exception("compiling manuscript %s failed", mid)
+            await _mark_failed(mid, error)
+            return
