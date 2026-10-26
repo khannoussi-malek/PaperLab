@@ -40,17 +40,55 @@ def test_cited_keys_reads_every_command_form_and_skips_comments():
     assert cited_keys([src]) == list("abcdefghi")
 
 
-def test_bibtex_keys_without_pinned_is_unchanged():
-    p = [csl_item(_P("1", "Deep one")), csl_item(_P("2", "Deep two"))]
-    assert bibtex_keys(p) == {"1": "smith2021deepa", "2": "smith2021deepb"}
-    assert bibtex_keys(p, {"2": "smith2021deepa"}) == {"2": "smith2021deepa", "1": "smith2021deepb"}
-    assert _bibtex(p).startswith("@misc{smith2021deepa,")
+ORIGINAL_F7 = (
+    "@article{smith2021deepa,\n\tauthor = {Smith, Jane},\n\ttitle = {Deep learning},\n"
+    "\tjournal = {Journal of Things},\n\tyear = {2021},\n"
+    "\tnote = {Source: journal article \u00b7 peer-reviewed \u00b7 full text in PaperLab},\n"
+    "\tkeywords = {journal article, peer-reviewed},\n\tdoi = {10.1/x}\n}\n\n\n"
+    "@article{smith2021deepb,\n\tauthor = {Smith, Jane},\n\ttitle = {Deep nets},\n"
+    "\tjournal = {Journal of Things},\n\tyear = {2021},\n"
+    "\tnote = {Source: journal article \u00b7 peer-reviewed \u00b7 full text in PaperLab},\n"
+    "\tkeywords = {journal article, peer-reviewed}\n}\n\n\n"
+    "@article{wei2019graphs,\n\tauthor = {Wei, Li},\n\ttitle = {Graphs},\n"
+    "\tjournal = {Journal of Things},\n\tyear = {2019},\n"
+    "\tnote = {Source: journal article \u00b7 peer-reviewed \u00b7 full text in PaperLab},\n"
+    "\tkeywords = {journal article, peer-reviewed}\n}\n"
+)  # captured from citations_export.py at e28daef, before `pinned` existed
 
 
 class _P:
-    def __init__(self, id, title):
-        self.id, self.title, self.authors, self.year = id, title, ["Jane Smith"], 2021
-        self.source_type = self.venue = self.doi = self.oa_url = self.peer_reviewed = self.evidence_access = None
+    def __init__(self, id, title, authors=("Jane Smith",), year=2021, **kw):
+        self.id, self.title, self.authors, self.year = id, title, list(authors), year
+        self.source_type, self.venue, self.peer_reviewed = "journal_article", "Journal of Things", "true"
+        self.doi = self.oa_url = None
+        self.evidence_access = "full_text"
+        self.__dict__.update(kw)
+
+
+def test_bibtex_without_pinned_is_byte_identical_to_the_original():
+    items = [
+        csl_item(_P("1", "Deep learning", doi="10.1/x")),
+        csl_item(_P("2", "Deep nets")),
+        csl_item(_P("3", "Graphs", ["Li Wei"], 2019)),
+    ]
+    assert _bibtex(items) == ORIGINAL_F7
+
+
+def test_keys_do_not_depend_on_input_order():
+    items = [csl_item(_P(str(i), t)) for i, t in enumerate(["Deep one", "Deep two", "Deepa", "Other"])]
+    assert bibtex_keys(items) == bibtex_keys(items[::-1]) == bibtex_keys(items[2:] + items[:2])
+
+
+def test_a_base_key_that_equals_another_groups_suffixed_key_gets_a_distinct_key():
+    items = [csl_item(_P("1", "Deep one")), csl_item(_P("2", "Deep two")), csl_item(_P("3", "Deepa"))]
+    keys = bibtex_keys(items)
+    assert keys == {"1": "smith2021deepa", "2": "smith2021deepb", "3": "smith2021deepaa"}
+    assert len(set(keys.values())) == 3
+
+
+def test_a_lone_paper_whose_key_is_pinned_elsewhere_takes_the_next_free_letter():
+    items = [csl_item(_P("1", "Deep one"))]
+    assert bibtex_keys(items, {"gone": "smith2021deep"}) == {"1": "smith2021deepa"}
 
 
 async def test_a_cited_key_is_pinned_on_build(session):

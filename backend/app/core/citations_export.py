@@ -177,13 +177,15 @@ def bibtex_keys(items: list[dict], pinned: dict[str, str] | None = None) -> dict
     for item in items:
         groups.setdefault(_base_key(item), []).append(item)
     keys: dict[str, str] = {i["id"]: pinned[i["id"]] for i in items if i["id"] in pinned}
-    for base, group in groups.items():
+    for base in sorted(groups):  # sorted, so the keys do not depend on the order the items arrive in
+        group = groups[base]
         group.sort(key=lambda i: (i["title"].lower(), i["id"]))
         for n, item in enumerate(i for i in group if i["id"] not in pinned):
             key = base if len(group) == 1 else base + _suffix(n)
-            while key in taken:
-                n += 1
-                key = base + _suffix(n)
+            if key in taken:  # the next free letter, counting from "a" for a lone paper
+                n = 0 if len(group) == 1 else n + 1
+                while (key := base + _suffix(n)) in taken:
+                    n += 1
             keys[item["id"]] = key
             taken.add(key)
     return keys
