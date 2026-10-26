@@ -55,14 +55,28 @@ async def test_the_stale_window_boundary(session, arq, age, outcome):
     m = await new(session)
     now = datetime.now(UTC)
     await manuscripts.request_compile(session, m.id, now=now - timedelta(seconds=age))
-    arq.job_ids.clear()  # the first job has ended; only the window decides
     assert await manuscripts.request_compile(session, m.id, now=now) == outcome
 
 
-async def test_the_job_id_is_per_manuscript(session, arq):
+async def test_a_request_after_the_pass_stored_its_result_queues_a_new_job(session, arq, monkeypatch):
     m = await new(session)
-    await manuscripts.request_compile(session, m.id, now=datetime.now(UTC))
-    assert arq.job_ids == {f"compile:{m.id}"}
+    mid = m.id
+    await manuscripts.request_compile(session, mid, now=datetime.now(UTC))
+    fake_compile(monkeypatch, OK)
+    await worker.compile_manuscript({}, str(mid))  # the pass is over: status ok
+    assert await manuscripts.request_compile(session, mid, now=datetime.now(UTC)) == "queued"
+    assert [j[0] for j in arq.jobs] == ["compile_manuscript", "compile_manuscript"]
+
+
+async def test_deleting_a_manuscript_removes_its_pdf(session):
+    m = await new(session)
+    path = manuscripts.pdf_path(m.id)
+    path.parent.mkdir(parents=True)
+    path.write_bytes(b"%PDF")
+    await manuscripts.delete(session, m.id)
+    assert not path.exists()
+    m2 = await new(session)
+    await manuscripts.delete(session, m2.id)  # no PDF: nothing to remove, no error
 
 
 async def test_enqueue_failure_marks_failed(session, monkeypatch):
