@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { api, ApiError, type ManuscriptDetail } from '@/api/client'
+import { keptTexts } from './keptTexts'
 import { ManuscriptPage } from './ManuscriptPage'
 
 const pdf = vi.hoisted(() => vi.fn((_url: string | null) => ({ doc: null, error: null })))
@@ -50,6 +51,7 @@ async function type(text: string, expectedBefore = 'hello') {
 const ctrlS = (box: HTMLElement) => fireEvent.keyDown(box, { key: 's', ctrlKey: true })
 
 beforeEach(() => {
+  keptTexts.clear()
   server = { 'main.tex': { text: 'hello', at: T2 }, 'b.tex': { text: 'bee', at: T2 } }
   pdf.mockClear()
   vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
@@ -196,4 +198,62 @@ test('after a restore the open file shows the restored text', async () => {
   await waitFor(() => expect(screen.getByLabelText('LaTeX source')).toHaveValue('hello'))
   await openRestore()
   await waitFor(() => expect(screen.getByLabelText('LaTeX source')).toHaveValue('restored'))
+})
+
+test('kept text edited against an older version reopens as a conflict, not a silent overwrite', async () => {
+  keptTexts.set('m1', 'main.tex', { text: 'mine', reason: 'error', base: T2 })
+  server['main.tex'] = { text: 'newer', at: T3 }
+  const save = vi.spyOn(api, 'saveManuscriptFile').mockResolvedValue(saved())
+  renderPage()
+  expect(await screen.findByRole('button', { name: 'Keep my version' })).toBeInTheDocument()
+  expect(screen.getByLabelText('LaTeX source')).toHaveValue('mine')
+  expect(save).not.toHaveBeenCalled()
+})
+
+test('kept text survives leaving the page and coming back', async () => {
+  vi.spyOn(api, 'saveManuscriptFile').mockRejectedValue(new Error('network down'))
+  const first = renderPage()
+  await type('hello world')
+  first.unmount()
+  await waitFor(() => expect(keptTexts.get('m1', 'main.tex')).toMatchObject({ text: 'hello world', base: T2 }))
+  const second = renderPage('b.tex')
+  expect(await screen.findByRole('link', { name: 'Open it' })).toHaveAttribute('href', '#/manuscripts/m1?file=main.tex')
+  second.open('main.tex')
+  await waitFor(() => expect(screen.getByLabelText('LaTeX source')).toHaveValue('hello world'))
+})
+
+test('kept text is dropped once it is saved', async () => {
+  keptTexts.set('m1', 'main.tex', { text: 'mine', reason: 'error', base: T2 })
+  vi.spyOn(api, 'saveManuscriptFile').mockResolvedValue(saved())
+  renderPage()
+  await screen.findByText('Unsaved changes')
+  await waitFor(() => expect(keptTexts.get('m1', 'main.tex')).toBeUndefined(), { timeout: 3000 })
+})
+
+test('a 4xx save error shows its message and does not say it will retry', async () => {
+  vi.spyOn(api, 'saveManuscriptFile').mockRejectedValue(new ApiError('file_too_large', 413, { detail: 'file_too_large', limit: 5242880 }))
+  renderPage()
+  ctrlS(await type('hello world'))
+  const alert = await screen.findByRole('alert')
+  expect(alert).toHaveTextContent('bigger than 5 MB')
+  expect(alert).not.toHaveTextContent('Trying again')
+})
+
+test('a network error says it will try again', async () => {
+  vi.spyOn(api, 'saveManuscriptFile').mockRejectedValue(new TypeError('Failed to fetch'))
+  renderPage()
+  ctrlS(await type('hello world'))
+  expect(await screen.findByRole('alert')).toHaveTextContent('Trying again shortly')
+})
+
+test('Load theirs keeps my text and the conflict when the refetch fails', async () => {
+  vi.spyOn(api, 'saveManuscriptFile').mockRejectedValue(conflict())
+  renderPage()
+  ctrlS(await type('hello world'))
+  const load = await screen.findByRole('button', { name: 'Load theirs' })
+  ;(api.getManuscriptFile as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('offline'))
+  fireEvent.click(load)
+  expect(await screen.findByText('offline')).toBeInTheDocument()
+  expect(screen.getByLabelText('LaTeX source')).toHaveValue('hello world')
+  expect(screen.getByRole('button', { name: 'Keep my version' })).toBeInTheDocument()
 })

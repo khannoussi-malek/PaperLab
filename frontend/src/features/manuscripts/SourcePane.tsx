@@ -1,11 +1,13 @@
 import { Loader2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { ApiError } from '@/api/client'
 import { useManuscriptFile, useSaveManuscriptFile } from '@/api/queries'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { TabSkeleton } from '@/features/workspaces/TabStates'
 import { createAutosave, type SaveState } from './autosave'
 import { manuscriptErrorMessage, manuscriptFailure } from './errors'
+import { keptTexts } from './keptTexts'
 import { LatexEditor } from './LatexEditor'
 
 const AUTOSAVE_MS = 1000
@@ -16,9 +18,6 @@ const SAVE_LABEL: Record<SaveState, string> = {
   conflict: 'Changed in another tab',
 }
 
-/** Text a file's pane could not save when it closed, handed back when the file is opened again. */
-export type KeptText = { text: string; reason: 'conflict' | 'error' }
-
 type Props = {
   manuscriptId: string
   path: string
@@ -26,12 +25,9 @@ type Props = {
   jumpTo: { line: number; n: number } | null
   compiling: boolean
   compileError: string | null
-  kept: KeptText | null
   onCompile: () => void
   /** The text as it now is (for the outline), or null once it is the server's again. */
   onText: (path: string, text: string | null) => void
-  onKeep: (path: string, kept: KeptText) => void
-  onAdopted: (path: string) => void
   onState: (path: string, state: SaveState) => void
   /** Hands the page a way to save what is pending; it resolves true when nothing is left unsaved. */
   registerFlush: (flush: (() => Promise<boolean>) | null) => void
@@ -42,7 +38,7 @@ type Props = {
  * unmount flushes whatever is waiting; if that save fails, the text is handed to the page (`onKeep`), not dropped.
  */
 export function SourcePane(props: Props) {
-  const { manuscriptId, path, errors, jumpTo, compiling, compileError, kept, onCompile, onText } = props
+  const { manuscriptId, path, errors, jumpTo, compiling, compileError, onCompile, onText } = props
   const file = useManuscriptFile(manuscriptId, path)
   const save = useSaveManuscriptFile()
   const live = useRef({ ...props, mutate: save.mutateAsync })
@@ -52,11 +48,18 @@ export function SourcePane(props: Props) {
   const [text, setText] = useState<string | null>(null)
   const [state, setState] = useState<SaveState>('saved')
   const [saveError, setSaveError] = useState<Error | null>(null)
+  const [retrying, setRetrying] = useState(false)
   const [auto] = useState(() =>
     createAutosave({
       delayMs: AUTOSAVE_MS,
-      onState: (s) => { setState(s); if (s === 'saved') setSaveError(null) },
-      onError: setSaveError,
+      onState: (s) => {
+        setState(s)
+        if (s !== 'saved') return
+        setSaveError(null)
+        keptTexts.remove(manuscriptId, path) // saved, or the user took the server's version: nothing left to keep
+      },
+      onError: (error, willRetry) => { setSaveError(error); setRetrying(willRetry) },
+      retryable: (error) => !(error instanceof ApiError) || error.status >= 500, // a 4xx fails the same way again
       save: async (body) => {
         const result = await live.current.mutate({ id: manuscriptId, path, text: body, base: base.current })
         if (result.conflict) newest.current = result.updatedAt
@@ -73,20 +76,21 @@ export function SourcePane(props: Props) {
     if (!data) return
     if (base.current === null) {
       base.current = data.updated_at
+      const kept = keptTexts.get(manuscriptId, path)
       if (!kept) return setText(data.text)
       setText(kept.text)
       onText(path, kept.text)
-      if (kept.reason === 'conflict') {
+      // Text edited against an older version never goes over a newer one unasked: that is a conflict to resolve.
+      if (kept.reason === 'conflict' || (kept.base !== null && kept.base !== data.updated_at)) {
         newest.current = data.updated_at
         auto.markConflict(kept.text)
       } else auto.change(kept.text)
-      live.current.onAdopted(path)
     } else if (data.updated_at !== base.current && auto.state === 'saved') {
       base.current = data.updated_at
       setText(data.text)
       onText(path, null)
     }
-  }, [file.data, auto, kept, onText, path])
+  }, [file.data, auto, onText, path, manuscriptId])
 
   useEffect(() => { live.current.onState(path, state) }, [state, path])
 
@@ -98,11 +102,11 @@ export function SourcePane(props: Props) {
     auto.activate()
     live.current.registerFlush(flushNow)
     return () => {
-      const { onKeep, onState, registerFlush } = live.current
+      const { onState, registerFlush } = live.current
       registerFlush(null)
       void auto.flush().then(() => {
         if (auto.state !== 'saved' && auto.unsavedText !== null) {
-          onKeep(path, { text: auto.unsavedText, reason: auto.state === 'conflict' ? 'conflict' : 'error' })
+          keptTexts.set(manuscriptId, path, { text: auto.unsavedText, reason: auto.state === 'conflict' ? 'conflict' : 'error', base: base.current })
         }
         onState(path, 'saved')
       })
@@ -130,7 +134,7 @@ export function SourcePane(props: Props) {
 
   const loadTheirs = async () => {
     const fresh = await file.refetch()
-    if (!fresh.data) return
+    if (fresh.isError || !fresh.data) return // keep my text and the conflict; the error shows above
     base.current = fresh.data.updated_at
     setText(fresh.data.text)
     onText(path, null)
@@ -168,7 +172,7 @@ export function SourcePane(props: Props) {
         </Alert>
       )}
       {saveError && state !== 'conflict' && (
-        <Alert variant="destructive" className="m-2 w-auto"><AlertDescription>{manuscriptFailure(saveError)} Trying again shortly.</AlertDescription></Alert>
+        <Alert variant="destructive" className="m-2 w-auto"><AlertDescription>{manuscriptFailure(saveError)}{retrying && ' Trying again shortly.'}</AlertDescription></Alert>
       )}
       {compileError && <Alert variant="destructive" className="m-2 w-auto"><AlertDescription>{compileError}</AlertDescription></Alert>}
       {file.error && <Alert variant="destructive" className="m-2 w-auto"><AlertDescription>{file.error.message}</AlertDescription></Alert>}

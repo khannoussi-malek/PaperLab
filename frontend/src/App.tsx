@@ -5,6 +5,8 @@ import { ConnectClaudePage } from './features/connect-claude/ConnectClaudePage'
 import { DatasetPage } from './features/data/DatasetPage'
 import { GraphPage } from './features/graph/GraphPage'
 import { LibraryPage } from './features/library/LibraryPage'
+import { useKeptCount } from './features/manuscripts/keptTexts'
+import { useLeaveWarning } from './features/manuscripts/useLeaveWarning'
 import { ManuscriptRoute } from './features/manuscripts/ManuscriptRoute'
 import { NotesPage } from './features/notes/NotesPage.tsx'
 import { ReaderPage } from './features/reader/ReaderPage'
@@ -19,6 +21,7 @@ import { useRoute } from './lib/route'
 
 export default function App() {
   const { state } = useSearchModelDownload()
+  useLeaveWarning(useKeptCount() > 0) // a manuscript's unsaved text outlives its page, so the warning does too
   return (
     <>
       {/* Lives at the root, not in SearchNotice or the chat block: both unmount as soon as the status refetch
