@@ -10,6 +10,7 @@ from pathlib import Path
 
 from sqlalchemy import select, update
 
+from app.config import settings
 from app.core import manuscript_history, manuscripts
 from app.core.latex_compile import COMPILE_TIMEOUT, compile_dir
 from app.core.manuscript_bib import build_bib
@@ -21,6 +22,17 @@ logger = logging.getLogger(__name__)
 COMPILE_JOB_TIMEOUT = 4 * (COMPILE_TIMEOUT + 30)
 # One Tectonic run per worker process: they share a cache and each takes memory.
 _COMPILE_LOCK = asyncio.Lock()
+# The user's PDFs stay root-only while Tectonic runs as another user (isolation layer 3). WorkerSettings has no
+# on_startup (see settings.py), so the first compile in the process does it.
+_PDF_DIR_LOCKED = False
+
+
+def _lock_pdf_dir() -> None:
+    global _PDF_DIR_LOCKED
+    if not _PDF_DIR_LOCKED:
+        settings.pdf_dir.mkdir(parents=True, exist_ok=True)
+        settings.pdf_dir.chmod(0o700)
+        _PDF_DIR_LOCKED = True
 
 
 def _write_files(workdir: Path, rows) -> None:
@@ -66,6 +78,7 @@ async def _prepare(mid: uuid.UUID):
 
 async def _run_tectonic(main_file: str, rows, bib: str):
     """No database transaction is open here: a compile takes up to a minute."""
+    _lock_pdf_dir()
     with tempfile.TemporaryDirectory() as tmp:
         workdir = Path(tmp)
         _write_files(workdir, rows)

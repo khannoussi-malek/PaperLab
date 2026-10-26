@@ -192,3 +192,16 @@ async def test_files_outside_the_workdir_are_skipped(tmp_path):
     (tmp_path / "w").mkdir()
     worker._write_files(tmp_path / "w", [("../evil.txt", "x", None), ("ok/a.tex", "hi", None)])
     assert not (tmp_path / "evil.txt").exists() and (tmp_path / "w/ok/a.tex").read_text() == "hi"
+
+
+async def test_the_first_compile_makes_the_pdf_folder_private_to_root(session, pdf_dir, monkeypatch):
+    pdf_dir.mkdir(exist_ok=True)
+    pdf_dir.chmod(0o755)
+    monkeypatch.setattr(worker, "_PDF_DIR_LOCKED", False)
+    fake_compile(monkeypatch, OK)
+    m = await new(session)
+    await worker.compile_manuscript({}, str(m.id))
+    assert pdf_dir.stat().st_mode & 0o777 == 0o700
+    pdf_dir.chmod(0o755)  # once per process: a later compile leaves the mode alone
+    await worker.compile_manuscript({}, str(m.id))
+    assert pdf_dir.stat().st_mode & 0o777 == 0o755
