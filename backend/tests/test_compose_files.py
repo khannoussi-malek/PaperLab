@@ -72,3 +72,20 @@ def test_the_test_stack_and_only_the_test_stack_is_memory_capped():
     assert all(capped[name].get("mem_limit") for name in capped), capped
     assert not any("mem_limit" in live[name] for name in live)
     assert re.search(r"^export COMPOSE_FILE=docker-compose\.yml:docker-compose\.e2e\.yml\b", SCRIPT.read_text(), re.M)
+
+
+def test_backend_processes_share_the_tectonic_cache():
+    for path in ("docker-compose.yml", "desktop/docker-compose.yml"):
+        found = services(path)
+        for name in ("api", "worker"):
+            assert "tectonic-cache:/tectonic-cache" in found[name]["volumes"], (path, name)
+        assert "tectonic-cache:/tectonic-cache" not in found["ingest-worker"]["volumes"], path
+        assert "tectonic-cache" in yaml.safe_load((ROOT / path).read_text())["volumes"], path
+
+
+def test_only_the_main_worker_runs_tectonic_as_the_unprivileged_user():
+    for path in ("docker-compose.yml", "desktop/docker-compose.yml"):
+        found = services(path)
+        assert found["worker"]["environment"]["TECTONIC_USER"] == "tex", path
+        for name in ("api", "ingest-worker"):
+            assert "TECTONIC_USER" not in found[name].get("environment", {}), (path, name)

@@ -86,7 +86,7 @@ def test_the_library_lives_in_named_volumes_and_redis_keeps_its_queue():
     release = compose("desktop/docker-compose.yml")
     services = release["services"]
 
-    assert set(release["volumes"]) == {"pgdata", "pdfs", "redisdata", "models"}
+    assert set(release["volumes"]) == {"pgdata", "pdfs", "redisdata", "models", "tectonic-cache"}
     assert services["redis"]["command"] == ["redis-server", "--appendonly", "yes"]
     assert services["redis"]["volumes"] == ["redisdata:/data"]
     for name in APP_SERVICES:
@@ -98,7 +98,10 @@ def test_the_dev_stack_runs_the_ingest_worker_beside_the_worker():
 
     assert "app.workers.settings.WorkerSettings" in services["worker"]["command"]
     assert "app.workers.settings.IngestWorkerSettings" in services["ingest-worker"]["command"]
-    assert services["ingest-worker"]["environment"] == services["worker"]["environment"]
+    # the ingest worker never compiles a manuscript, so it alone lacks the worker's TECTONIC_USER
+    assert services["ingest-worker"]["environment"] == {
+        k: v for k, v in services["worker"]["environment"].items() if k != "TECTONIC_USER"
+    }
 
 
 def test_no_env_file_is_needed_in_either_stack():

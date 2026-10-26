@@ -18,6 +18,34 @@ WORKDIR /src
 COPY backend/pyproject.toml backend/uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --no-dev --no-install-project
 
+# Tectonic, pinned and checked, with its package cache warmed by compiling every manuscript template: the first user
+# compile then needs no network, and acmart's ~20 s cold start is already paid.
+FROM python:3.12-slim AS tex
+ARG TARGETARCH
+ENV TECTONIC_CACHE_DIR=/tectonic-cache
+RUN python - <<'PY'
+import hashlib, os, tarfile, urllib.request
+VERSION = "0.17.0"
+SHA256 = {
+    "x86_64": "8533d07f9ccbd7a65824b9e0459041bca34af1eb33daba48f59215593753a3b7",
+    "aarch64": "b10954a95404f3ab2328d2fa59a5ebab8e657f893fab096f98be8db7c0c979b8",
+}
+arch = {"amd64": "x86_64", "arm64": "aarch64"}[os.environ["TARGETARCH"]]
+asset = f"tectonic-{VERSION}-{arch}-unknown-linux-musl.tar.gz"
+data = urllib.request.urlopen(
+    f"https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%40{VERSION}/{asset}", timeout=120
+).read()
+assert hashlib.sha256(data).hexdigest() == SHA256[arch], "tectonic archive checksum mismatch"
+open("/tmp/tectonic.tgz", "wb").write(data)
+with tarfile.open("/tmp/tectonic.tgz") as tar:
+    tar.extract("tectonic", "/usr/local/bin")
+PY
+COPY backend/app/manuscript_templates /templates
+RUN for t in /templates/*.tex; do \
+      d=$(mktemp -d) && cp "$t" "$d/main.tex" && cp /templates/warm.bib "$d/paperlab.bib" \
+      && (cd "$d" && tectonic -X compile main.tex) || exit 1; \
+    done && rm -rf /tmp/*
+
 # Runtime: the environment first, then the code, so an update that changes only code downloads only the last layers.
 # No search model: it is downloaded into the models volume when the user chooses it.
 FROM python:3.12-slim
@@ -25,7 +53,14 @@ LABEL org.opencontainers.image.source="https://github.com/khannoussi-malek/Paper
       org.opencontainers.image.description="PaperLab, a local-first research reader" \
       org.opencontainers.image.licenses="Apache-2.0"
 COPY --from=deps /venv /venv
+COPY --from=tex /usr/local/bin/tectonic /usr/local/bin/tectonic
+# Manuscripts compile as `tex` (TECTONIC_USER), an account with no home and no write access to anything of ours.
+RUN useradd --system --no-create-home --shell /usr/sbin/nologin tex
+COPY --from=tex --chown=tex:tex /tectonic-cache /tectonic-cache
+ENV TECTONIC_CACHE_DIR=/tectonic-cache
 ENV PATH=/venv/bin:$PATH PYTHONUNBUFFERED=1 FRONTEND_DIST=/app/web
 WORKDIR /src
 COPY backend/ ./
 COPY --from=web /web/dist /app/web
+# Tectonic runs as `tex`, which must not read the app's code (an `\input` of a relative path reads anything its user can).
+RUN chmod -R o-rwx /src
