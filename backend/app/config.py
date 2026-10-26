@@ -60,6 +60,12 @@ class Settings(BaseSettings):
     # files. Fake providers run only on a test stack, whose name ends in -e2e (D273): the owner's library lives in
     # `paperlab` (or `paperlab-app`) and must never hold a fake model's rows.
     paperlab_stack: str = ""
+    # The Tectonic binary that compiles manuscripts (TECTONIC_BIN), whether it may only use its cached bundle (-C), and
+    # where that cache lives. TECTONIC_USER names the unprivileged account it runs as in the images (None on the host).
+    tectonic_bin: str = "tectonic"
+    tectonic_only_cached: bool = False
+    tectonic_cache_dir: Path | None = None
+    tectonic_user: str | None = None
 
     @field_validator("embed_threads", mode="before")
     @classmethod
