@@ -1,10 +1,11 @@
 from datetime import datetime, timedelta, timezone
+from uuid import uuid4
 
 import pytest
 
 from app.core import manuscript_history as history
 from app.core import manuscripts
-from app.core.errors import Conflict
+from app.core.errors import Conflict, NotFound
 from app.models import ManuscriptSnapshot
 
 pytestmark = pytest.mark.anyio
@@ -63,3 +64,30 @@ async def test_restore_refuses_when_the_snapshot_lacks_the_main_file(session):
     await session.flush()
     with pytest.raises(Conflict, match="main_file"):
         await history.restore(session, m.id, snap.id)
+
+
+async def test_unknown_snapshot_and_another_manuscripts_snapshot(session):
+    with pytest.raises(NotFound, match="unknown_snapshot"):
+        await history.get(session, uuid4())
+    mine, other = await new(session), await new(session)
+    await manuscripts.save_text(session, other.id, "o.tex", "other", base=None)
+    foreign = await history.take(session, other.id, "compile")
+    await manuscripts.save_text(session, mine.id, "m.tex", "mine", base=None)
+    before = len(await history.list_(session, mine.id))
+    with pytest.raises(NotFound, match="unknown_snapshot"):
+        await history.restore(session, mine.id, foreign.id)
+    assert len(await history.list_(session, mine.id)) == before
+    assert {f.path for f in await manuscripts.files(session, mine.id)} == {"m.tex", "main.tex"}
+
+
+async def test_restore_skips_files_whose_text_is_unchanged(session):
+    m = await new(session)
+    await manuscripts.save_text(session, m.id, "a.tex", "same", base=None)
+    await manuscripts.save_text(session, m.id, "b.tex", "old", base=None)
+    snap = await history.take(session, m.id, "compile")
+    b = await manuscripts.read(session, m.id, "b.tex")
+    await manuscripts.save_text(session, m.id, "b.tex", "new", base=b.updated_at)
+    stamp = (await manuscripts.read(session, m.id, "a.tex")).updated_at
+    await history.restore(session, m.id, snap.id)
+    assert (await manuscripts.read(session, m.id, "a.tex")).updated_at == stamp
+    assert (await manuscripts.read(session, m.id, "b.tex")).text == "old"

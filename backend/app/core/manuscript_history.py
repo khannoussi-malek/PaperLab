@@ -68,4 +68,6 @@ async def restore(session: AsyncSession, manuscript_id: uuid.UUID, snapshot_id: 
         if is_text(f.path) and f.path not in snap.files:  # the main file is in the snapshot, so it stays
             await manuscripts.remove(session, manuscript_id, f.path)
     for path, text in snap.files.items():
-        await manuscripts.upsert_text(session, manuscript_id, path, text)
+        current = await manuscripts.get_text(session, manuscript_id, path)
+        if current != text:  # an untouched file keeps its updated_at, so an open editor sees no conflict
+            await manuscripts.upsert_text(session, manuscript_id, path, text)
