@@ -46,7 +46,7 @@ def _canonical(path: str) -> str:
 
 
 def _require(main: str, path: str) -> None:
-    if path not in {l.target for x in input_lines(main)}:
+    if path not in {x.target for x in input_lines(main)}:
         raise InvalidInput("not_a_section")
 
 
@@ -57,7 +57,7 @@ def _replace_slots(lines: list[str], slots: list[tuple[int, re.Match]], texts: l
         out[i] = out[i][: m.start()] + (text or "") + out[i][m.end():]
         if text is None and not out[i].strip():
             out[i] = None
-    return "".join(l for ln in out if ln is not None)
+    return "".join(ln for ln in out if ln is not None)
 
 
 def _keep_ends(main: str) -> list[str]:
@@ -86,7 +86,7 @@ def check_title(title: str) -> str:
 
 
 def _end_index(lines: list[str]) -> int | None:
-    return next((i for i, ln in enumerate(lines) if any(k in _code(l) for k in END_MARKERS)), None)
+    return next((i for i, ln in enumerate(lines) if any(k in _code(ln) for k in END_MARKERS)), None)
 
 
 def insert_input(main: str, path: str, after: str | None) -> str:

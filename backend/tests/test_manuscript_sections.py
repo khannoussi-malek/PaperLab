@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 import pytest
 
 from app.core.errors import InvalidInput
@@ -17,7 +18,7 @@ MAIN = "\\begin{document}\n\\input{sections/intro}\n\\clearpage\n\\input{section
 
 
 def test_input_lines_reads_both_forms_and_skips_comments():
-    assert [(l.index, l.target) for l in input_lines(MAIN)] == [(1, "sections/intro.tex"), (3, "sections/method.tex")]
+    assert [(x.index, x.target) for x in input_lines(MAIN)] == [(1, "sections/intro.tex"), (3, "sections/method.tex")]
     assert [x.target for x in input_lines("\\input{ a }\\include{b}\n")] == ["a.tex", "b.tex"]
     assert input_lines("\\input sections/x\n") == []
     assert [x.target for x in input_lines("\\input{a} % \\input{b}\n100\\% \\input{c}\n")] == ["a.tex", "c.tex"]
