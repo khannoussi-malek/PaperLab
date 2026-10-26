@@ -207,7 +207,8 @@ def pdf_path(manuscript_id: uuid.UUID) -> Path:
 async def request_compile(session: AsyncSession, manuscript_id: uuid.UUID, *, now: datetime) -> str:
     """Queue a compile, or ask the running one for another pass. Returns "queued" or "again"."""
     manuscript = await session.scalar(select(Manuscript).where(Manuscript.id == manuscript_id)
-                                      .with_for_update().execution_options(populate_existing=True))
+                                      .with_for_update(key_share=True)
+                                      .execution_options(populate_existing=True))
     if manuscript is None:
         raise NotFound("unknown_manuscript")
     started = manuscript.compile_started_at
@@ -218,7 +219,7 @@ async def request_compile(session: AsyncSession, manuscript_id: uuid.UUID, *, no
     manuscript.compile_status, manuscript.compile_started_at = "running", now
     await session.commit()
     try:
-        await queue.enqueue("compile_manuscript", str(manuscript_id))
+        await queue.enqueue("compile_manuscript", str(manuscript_id), job_id=f"compile:{manuscript_id}")
     except Exception:
         manuscript.compile_status = "failed"  # no job will run: don't leave it `running`
         await session.commit()

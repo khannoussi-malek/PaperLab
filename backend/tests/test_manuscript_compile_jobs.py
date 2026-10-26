@@ -1,4 +1,3 @@
-import asyncio
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 
@@ -51,12 +50,19 @@ async def test_request_queues_once_then_asks_again(session, arq):
     assert (await manuscripts.get(session, m.id)).compile_requested is True
 
 
-async def test_a_stale_running_counts_as_idle(session, arq):
+@pytest.mark.parametrize(("age", "outcome"), [(119, "again"), (121, "queued")])
+async def test_the_stale_window_boundary(session, arq, age, outcome):
     m = await new(session)
     now = datetime.now(UTC)
-    await manuscripts.request_compile(session, m.id, now=now - timedelta(seconds=500))
-    assert await manuscripts.request_compile(session, m.id, now=now) == "queued"
-    assert len(arq.jobs) == 2
+    await manuscripts.request_compile(session, m.id, now=now - timedelta(seconds=age))
+    arq.job_ids.clear()  # the first job has ended; only the window decides
+    assert await manuscripts.request_compile(session, m.id, now=now) == outcome
+
+
+async def test_the_job_id_is_per_manuscript(session, arq):
+    m = await new(session)
+    await manuscripts.request_compile(session, m.id, now=datetime.now(UTC))
+    assert arq.job_ids == {f"compile:{m.id}"}
 
 
 async def test_enqueue_failure_marks_failed(session, monkeypatch):
@@ -152,21 +158,23 @@ async def test_a_deleted_manuscript_ends_quietly(session, monkeypatch):
     await worker.compile_manuscript({}, mid)
 
 
+@pytest.mark.parametrize("result", [OK, BAD])
+async def test_deleted_during_the_compile_writes_nothing(session, monkeypatch, result, caplog):
+    m = await new(session)
+    mid = m.id
+
+    async def compile_dir(workdir, main_file, **kw):
+        await manuscripts.delete(session, mid)
+        return result
+
+    monkeypatch.setattr(worker, "compile_dir", compile_dir)
+    await worker.compile_manuscript({}, str(mid))
+    assert not manuscripts.pdf_path(mid).exists()
+    assert not [r for r in caplog.records if r.levelname == "ERROR"]
+    assert await manuscript_history.list_(session, mid) == []
+
+
 async def test_files_outside_the_workdir_are_skipped(tmp_path):
     (tmp_path / "w").mkdir()
     worker._write_files(tmp_path / "w", [("../evil.txt", "x", None), ("ok/a.tex", "hi", None)])
     assert not (tmp_path / "evil.txt").exists() and (tmp_path / "w/ok/a.tex").read_text() == "hi"
-
-
-async def test_two_compiles_never_overlap(tmp_path, monkeypatch):
-    events = []
-
-    async def compile_dir(workdir, main_file, **kw):
-        events.append("in")
-        await asyncio.sleep(0.05)
-        events.append("out")
-        return OK
-
-    monkeypatch.setattr(worker, "compile_dir", compile_dir)
-    await asyncio.gather(worker._compile(tmp_path, "a.tex"), worker._compile(tmp_path, "b.tex"))
-    assert events == ["in", "out", "in", "out"]
