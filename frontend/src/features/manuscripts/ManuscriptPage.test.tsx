@@ -201,7 +201,7 @@ test('after a restore the open file shows the restored text', async () => {
 })
 
 test('kept text edited against an older version reopens as a conflict, not a silent overwrite', async () => {
-  keptTexts.set('m1', 'main.tex', { text: 'mine', reason: 'error', base: T2 })
+  keptTexts.set('m1', 'main.tex', { text: 'mine', reason: 'error', base: T2, seq: 0 })
   server['main.tex'] = { text: 'newer', at: T3 }
   const save = vi.spyOn(api, 'saveManuscriptFile').mockResolvedValue(saved())
   renderPage()
@@ -223,7 +223,7 @@ test('kept text survives leaving the page and coming back', async () => {
 })
 
 test('kept text is dropped once it is saved', async () => {
-  keptTexts.set('m1', 'main.tex', { text: 'mine', reason: 'error', base: T2 })
+  keptTexts.set('m1', 'main.tex', { text: 'mine', reason: 'error', base: T2, seq: 0 })
   vi.spyOn(api, 'saveManuscriptFile').mockResolvedValue(saved())
   renderPage()
   await screen.findByText('Unsaved changes')
@@ -256,4 +256,50 @@ test('Load theirs keeps my text and the conflict when the refetch fails', async 
   expect(await screen.findByText('offline')).toBeInTheDocument()
   expect(screen.getByLabelText('LaTeX source')).toHaveValue('hello world')
   expect(screen.getByRole('button', { name: 'Keep my version' })).toBeInTheDocument()
+})
+
+test('a late failing flush from an earlier pane is not lost when the file is reopened and saved', async () => {
+  let failFirst: (error: Error) => void = () => {}
+  const save = vi.spyOn(api, 'saveManuscriptFile')
+    .mockImplementationOnce(() => new Promise((_, reject) => { failFirst = reject }))
+    .mockResolvedValue(saved())
+  const view = renderPage()
+  await type('hello world')
+  view.open('b.tex') // the first pane closes with its save in flight
+  await waitFor(() => expect(save).toHaveBeenCalledTimes(1))
+  view.open('main.tex') // a second pane opens from the cache, before the first save settles
+  await waitFor(() => expect(screen.getByLabelText('LaTeX source')).toHaveValue('hello'))
+  failFirst(new Error('network down'))
+  await waitFor(() => expect(keptTexts.get('m1', 'main.tex')?.text).toBe('hello world'))
+  expect(await screen.findByRole('button', { name: 'Use it' })).toBeInTheDocument()
+  ctrlS(await type('another edit'))
+  await waitFor(() => expect(screen.getByText('Saved')).toBeInTheDocument())
+  expect(keptTexts.get('m1', 'main.tex')?.text).toBe('hello world') // not this pane's to remove
+  expect(screen.getByRole('button', { name: 'Use it' })).toBeInTheDocument()
+})
+
+test('Use it puts the kept text into the editor, unsaved', async () => {
+  renderPage()
+  await waitFor(() => expect(screen.getByLabelText('LaTeX source')).toHaveValue('hello'))
+  keptTexts.set('m1', 'main.tex', { text: 'kept text', reason: 'error', base: T2, seq: 5 })
+  fireEvent.click(await screen.findByRole('button', { name: 'Use it' }))
+  await waitFor(() => expect(screen.getByLabelText('LaTeX source')).toHaveValue('kept text'))
+  expect(screen.getByText('Unsaved changes')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Use it' })).toBeNull()
+})
+
+test('Use it on text from an older version is a conflict to resolve', async () => {
+  renderPage()
+  await waitFor(() => expect(screen.getByLabelText('LaTeX source')).toHaveValue('hello'))
+  keptTexts.set('m1', 'main.tex', { text: 'kept text', reason: 'error', base: '2026-09-01T00:00:00Z', seq: 5 })
+  fireEvent.click(await screen.findByRole('button', { name: 'Use it' }))
+  expect(await screen.findByRole('button', { name: 'Keep my version' })).toBeInTheDocument()
+})
+
+test('Discard drops a kept text', async () => {
+  keptTexts.set('m1', 'b.tex', { text: 'old', reason: 'error', base: T2, seq: 1 })
+  renderPage()
+  fireEvent.click(await screen.findByRole('button', { name: 'Discard' }))
+  expect(keptTexts.get('m1', 'b.tex')).toBeUndefined()
+  expect(screen.queryByRole('link', { name: 'Open it' })).toBeNull()
 })
