@@ -7,7 +7,7 @@ import { ManuscriptList } from './ManuscriptList'
 
 const ms = (over: Partial<Manuscript>): Manuscript => ({
   id: 'm1', workspace_id: 'w1', title: 'My thesis', main_file: 'main.tex', checklist: {}, compile_status: 'ok',
-  compile_requested: false, compiled_at: null, compile_log: null, compile_errors: [],
+  compile_requested: false, compiled_at: null, compile_log: null, compile_friendly: null, compile_errors: [],
   created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-02T00:00:00Z', ...over,
 })
 

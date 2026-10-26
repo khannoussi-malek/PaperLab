@@ -98,7 +98,8 @@ async def _store(mid: uuid.UUID, result) -> bool:
             await manuscript_history.take(session, mid, "compile")
         await session.execute(update(Manuscript).where(Manuscript.id == mid).values(
             compile_status="ok" if result.ok else "failed", compile_log=result.log,
-            compile_errors=result.errors, compiled_at=datetime.now(UTC)))
+            compile_errors=result.errors,
+            compile_friendly=None if result.ok else result.friendly, compiled_at=datetime.now(UTC)))
         await session.commit()
         return True
 
@@ -106,7 +107,7 @@ async def _store(mid: uuid.UUID, result) -> bool:
 async def _mark_failed(mid: uuid.UUID, error: Exception) -> None:
     async with SessionLocal() as session:
         await session.execute(update(Manuscript).where(Manuscript.id == mid).values(
-            compile_status="failed", compile_log=f"internal error: {type(error).__name__}",
+            compile_status="failed", compile_log=f"internal error: {type(error).__name__}", compile_friendly=None,
             compiled_at=datetime.now(UTC)))
         await session.commit()
 

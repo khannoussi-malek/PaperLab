@@ -5,19 +5,28 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { manuscriptFailure } from './errors'
 
-type Props = { manuscriptId: string; open: boolean; onOpenChange: (open: boolean) => void; onRestored: () => void }
+type Props = { manuscriptId: string; open: boolean; onOpenChange: (open: boolean) => void; onRestored: () => void
+  /** Saves what is pending; false means it could not (a conflict), so nothing is restored. */
+  beforeRestore: () => Promise<boolean>
+}
 
 const REASON: Record<string, string> = { compile: 'Compiled', manual: 'Saved by hand' }
 const when = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 
 /** Earlier versions of the whole manuscript. Restoring asks here, in the dialog, before it replaces anything. */
-export function HistoryDialog({ manuscriptId, open, onOpenChange, onRestored }: Props) {
+export function HistoryDialog({ manuscriptId, open, onOpenChange, onRestored, beforeRestore }: Props) {
   const snapshots = useManuscriptSnapshots(manuscriptId)
   const restore = useRestoreSnapshot()
   const [confirming, setConfirming] = useState<string | null>(null)
 
-  const doRestore = (snapshotId: string) =>
+  const doRestore = async (snapshotId: string) => {
+    if (!(await beforeRestore())) {
+      setConfirming(null)
+      onOpenChange(false) // the editor shows why the save stopped
+      return
+    }
     restore.mutate({ id: manuscriptId, snapshotId }, { onSuccess: () => { setConfirming(null); onRestored() } })
+  }
 
   return (
     <Dialog open={open} onOpenChange={(next) => { setConfirming(null); onOpenChange(next) }}>
@@ -36,7 +45,7 @@ export function HistoryDialog({ manuscriptId, open, onOpenChange, onRestored }: 
               {confirming === s.id ? (
                 <span className="flex items-center gap-2">
                   <span>Replace the current files with this version?</span>
-                  <Button size="sm" variant="destructive" disabled={restore.isPending} onClick={() => doRestore(s.id)}>Restore</Button>
+                  <Button size="sm" variant="destructive" disabled={restore.isPending} onClick={() => void doRestore(s.id)}>Restore</Button>
                   <Button size="sm" variant="ghost" onClick={() => setConfirming(null)}>Cancel</Button>
                 </span>
               ) : (

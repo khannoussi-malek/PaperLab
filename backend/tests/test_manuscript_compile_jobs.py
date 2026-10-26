@@ -114,6 +114,16 @@ async def test_failure_keeps_the_previous_pdf_and_stores_errors(session, monkeyp
     assert manuscripts.pdf_path(m.id).read_bytes() == b"%PDF-new"
 
 
+async def test_a_failed_compile_stores_the_friendly_code_and_a_good_one_clears_it(session, monkeypatch):
+    m = await new(session)
+    needs = CompileResult(ok=False, pdf=None, log="x", errors=[], friendly="needs_download")
+    fake_compile(monkeypatch, needs, OK)
+    await worker.compile_manuscript({}, str(m.id))
+    assert (await manuscripts.get(session, m.id)).compile_friendly == "needs_download"
+    await worker.compile_manuscript({}, str(m.id))
+    assert (await manuscripts.get(session, m.id)).compile_friendly is None
+
+
 async def test_compile_again_runs_a_second_pass_in_the_same_job(session, monkeypatch):
     m = await new(session)
     calls = []

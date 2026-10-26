@@ -16,6 +16,9 @@ const SAVE_LABEL: Record<SaveState, string> = {
   conflict: 'Changed in another tab',
 }
 
+/** Text a file's pane could not save when it closed, handed back when the file is opened again. */
+export type KeptText = { text: string; reason: 'conflict' | 'error' }
+
 type Props = {
   manuscriptId: string
   path: string
@@ -23,20 +26,29 @@ type Props = {
   jumpTo: { line: number; n: number } | null
   compiling: boolean
   compileError: string | null
+  kept: KeptText | null
   onCompile: () => void
-  onText: (path: string, text: string) => void
+  /** The text as it now is (for the outline), or null once it is the server's again. */
+  onText: (path: string, text: string | null) => void
+  onKeep: (path: string, kept: KeptText) => void
+  onAdopted: (path: string) => void
+  onState: (path: string, state: SaveState) => void
+  /** Hands the page a way to save what is pending; it resolves true when nothing is left unsaved. */
+  registerFlush: (flush: (() => Promise<boolean>) | null) => void
 }
 
 /**
  * One file in the editor, with its own autosave. The page keys this by file, so leaving a file unmounts it, and the
- * unmount flushes whatever is still waiting to be saved.
+ * unmount flushes whatever is waiting; if that save fails, the text is handed to the page (`onKeep`), not dropped.
  */
-export function SourcePane({ manuscriptId, path, errors, jumpTo, compiling, compileError, onCompile, onText }: Props) {
+export function SourcePane(props: Props) {
+  const { manuscriptId, path, errors, jumpTo, compiling, compileError, kept, onCompile, onText } = props
   const file = useManuscriptFile(manuscriptId, path)
   const save = useSaveManuscriptFile()
-  const saveRef = useRef(save.mutateAsync)
-  saveRef.current = save.mutateAsync
+  const live = useRef({ ...props, mutate: save.mutateAsync })
+  live.current = { ...props, mutate: save.mutateAsync }
   const base = useRef<string | null>(null) // the file's updated_at as we last saw it
+  const newest = useRef<string | null>(null) // the server's updated_at a conflict reported
   const [text, setText] = useState<string | null>(null)
   const [state, setState] = useState<SaveState>('saved')
   const [saveError, setSaveError] = useState<Error | null>(null)
@@ -46,28 +58,62 @@ export function SourcePane({ manuscriptId, path, errors, jumpTo, compiling, comp
       onState: (s) => { setState(s); if (s === 'saved') setSaveError(null) },
       onError: setSaveError,
       save: async (body) => {
-        const result = await saveRef.current({ id: manuscriptId, path, text: body, base: base.current })
-        if (!result.conflict) base.current = result.updatedAt
+        const result = await live.current.mutate({ id: manuscriptId, path, text: body, base: base.current })
+        if (result.conflict) newest.current = result.updatedAt
+        else base.current = result.updatedAt
         return result
       },
     }),
   )
 
-  // Take the server's text the first time, and again when it changed under us (a restore) while nothing here is unsaved.
+  // Take the server's text the first time (or the kept text), and again when it changed under us (a restore) while
+  // nothing here is unsaved.
   useEffect(() => {
     const data = file.data
     if (!data) return
-    if (base.current === null || (data.updated_at !== base.current && auto.state === 'saved')) {
+    if (base.current === null) {
+      base.current = data.updated_at
+      if (!kept) return setText(data.text)
+      setText(kept.text)
+      onText(path, kept.text)
+      if (kept.reason === 'conflict') {
+        newest.current = data.updated_at
+        auto.markConflict(kept.text)
+      } else auto.change(kept.text)
+      live.current.onAdopted(path)
+    } else if (data.updated_at !== base.current && auto.state === 'saved') {
       base.current = data.updated_at
       setText(data.text)
+      onText(path, null)
     }
-  }, [file.data, auto])
+  }, [file.data, auto, kept, onText, path])
 
-  useEffect(() => () => { void auto.flush() }, [auto])
+  useEffect(() => { live.current.onState(path, state) }, [state, path])
+
+  const flushNow = async () => {
+    await auto.flush()
+    return auto.state === 'saved'
+  }
+  useEffect(() => {
+    auto.activate()
+    live.current.registerFlush(flushNow)
+    return () => {
+      const { onKeep, onState, registerFlush } = live.current
+      registerFlush(null)
+      void auto.flush().then(() => {
+        if (auto.state !== 'saved' && auto.unsavedText !== null) {
+          onKeep(path, { text: auto.unsavedText, reason: auto.state === 'conflict' ? 'conflict' : 'error' })
+        }
+        onState(path, 'saved')
+      })
+      auto.dispose()
+    }
+  }, [auto, path])
 
   const compileNow = async () => {
-    await auto.flush()
-    if (auto.state === 'saved') onCompile()
+    if (text === null) return
+    const ok = await flushNow()
+    if (ok && !live.current.compiling) onCompile()
   }
   const compileRef = useRef(compileNow)
   compileRef.current = compileNow
@@ -82,13 +128,18 @@ export function SourcePane({ manuscriptId, path, errors, jumpTo, compiling, comp
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  const reload = async () => {
+  const loadTheirs = async () => {
     const fresh = await file.refetch()
     if (!fresh.data) return
     base.current = fresh.data.updated_at
     setText(fresh.data.text)
-    onText(path, fresh.data.text)
+    onText(path, null)
     auto.reload()
+  }
+
+  const keepMine = () => {
+    base.current = newest.current ?? base.current
+    void auto.keepMine()
   }
 
   const change = (next: string) => {
@@ -110,13 +161,14 @@ export function SourcePane({ manuscriptId, path, errors, jumpTo, compiling, comp
       {state === 'conflict' && (
         <Alert variant="destructive" className="m-2 w-auto">
           <AlertDescription className="flex flex-wrap items-center gap-3">
-            <span>{manuscriptErrorMessage('file_changed')} Reload to see that version; the edits in this tab are dropped.</span>
-            <Button size="sm" variant="outline" onClick={() => void reload()}>Reload</Button>
+            <span>{manuscriptErrorMessage('file_changed')} Your text is kept until you choose.</span>
+            <Button size="sm" variant="outline" onClick={keepMine}>Keep my version</Button>
+            <Button size="sm" variant="outline" onClick={() => void loadTheirs()}>Load theirs</Button>
           </AlertDescription>
         </Alert>
       )}
       {saveError && state !== 'conflict' && (
-        <Alert variant="destructive" className="m-2 w-auto"><AlertDescription>{manuscriptFailure(saveError)}</AlertDescription></Alert>
+        <Alert variant="destructive" className="m-2 w-auto"><AlertDescription>{manuscriptFailure(saveError)} Trying again shortly.</AlertDescription></Alert>
       )}
       {compileError && <Alert variant="destructive" className="m-2 w-auto"><AlertDescription>{compileError}</AlertDescription></Alert>}
       {file.error && <Alert variant="destructive" className="m-2 w-auto"><AlertDescription>{file.error.message}</AlertDescription></Alert>}

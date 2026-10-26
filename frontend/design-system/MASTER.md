@@ -282,7 +282,12 @@ left to right: files, outline and final steps (14 rem) | the source (CodeMirror,
 "Saved", "Saving…", "Unsaved changes", "Changed in another tab") and Compile, which shows a spinner and is disabled
 while it runs. Autosave fires 1 s after the last keystroke; Ctrl/Cmd+S saves, then compiles.
 - **Errors:** a compile failure shows in the PDF pane's `role="alert"` (a friendly sentence, or `file:line message`),
-  with a red dot in the source gutter per line. A save conflict is a `role="alert"` banner over the source with Reload.
+  with a red dot in the source gutter per line. A save conflict is a `role="alert"` banner over the source with two choices, "Keep my version" (saves
+  the user's text over the newest server version) and "Load theirs"; the user's text is never dropped without a click.
+  Text a closed file could not save is kept and shown as an alert with "Open it"; the browser asks before the tab is
+  closed while anything is unsaved. A failed save retries after 5 s.
+- **Theme:** CodeMirror is styled from the app's tokens (`--background`, `--foreground`, `--muted`, `--primary`,
+  `--accent`, `--ring`), so it follows light and dark with the rest of the window; no bundled theme package.
 - **History** (toolbar) lists snapshots; restoring asks inside the dialog, never with a browser prompt.
 
 ## Motion

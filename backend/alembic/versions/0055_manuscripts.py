@@ -32,6 +32,7 @@ def upgrade() -> None:
         sa.Column("compile_started_at", sa.DateTime(timezone=True)),
         sa.Column("compiled_at", sa.DateTime(timezone=True)),
         sa.Column("compile_log", sa.Text()),
+        sa.Column("compile_friendly", sa.Text()),
         sa.Column("compile_errors", JSONB(), server_default=sa.text("'[]'::jsonb"), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=now, nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=now, nullable=False),
