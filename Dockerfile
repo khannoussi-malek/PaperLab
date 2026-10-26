@@ -58,7 +58,9 @@ LABEL org.opencontainers.image.source="https://github.com/khannoussi-malek/Paper
 COPY --from=deps /venv /venv
 COPY --from=tex /usr/local/bin/tectonic /usr/local/bin/tectonic
 # Manuscripts compile as `tex` (TECTONIC_USER), an account with no home and no write access to anything of ours.
-RUN useradd --system --no-create-home --shell /usr/sbin/nologin tex
+# Fixed ids: a tectonic-cache volume from an earlier image must stay writable to this user after an upgrade.
+RUN groupadd --system --gid 999 tex \
+    && useradd --system --uid 999 --gid 999 --no-create-home --shell /usr/sbin/nologin tex
 COPY --from=tex --chown=tex:tex /tectonic-cache /tectonic-cache
 ENV TECTONIC_CACHE_DIR=/tectonic-cache
 ENV PATH=/venv/bin:$PATH PYTHONUNBUFFERED=1 FRONTEND_DIST=/app/web
@@ -66,4 +68,4 @@ WORKDIR /src
 COPY backend/ ./
 COPY --from=web /web/dist /app/web
 # Tectonic runs as `tex`, which must not read the app's code (an `\input` of a relative path reads anything its user can).
-RUN chmod -R o-rwx /src
+RUN chmod 750 /src
