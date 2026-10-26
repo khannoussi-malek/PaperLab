@@ -1,5 +1,14 @@
 import type { components } from './schema'
 
+export type Manuscript = components['schemas']['ManuscriptOut']
+export type ManuscriptDetail = components['schemas']['ManuscriptDetailOut']
+export type ManuscriptImport = components['schemas']['ManuscriptImportOut']
+export type ManuscriptTemplate = components['schemas']['TemplateOut']
+export type ManuscriptFile = components['schemas']['FileOut']
+export type ManuscriptFileText = components['schemas']['FileTextOut']
+export type ManuscriptSnapshot = components['schemas']['SnapshotOut']
+export type ManuscriptCreate = components['schemas']['ManuscriptCreate']
+export type ManuscriptPatch = components['schemas']['ManuscriptPatch']
 export type Paper = components['schemas']['PaperOut']
 export type PaperUpdate = components['schemas']['PaperUpdate']
 export type ReadingIn = components['schemas']['ReadingIn']
@@ -194,16 +203,31 @@ export class NoFreePdfError extends Error {
   }
 }
 
+/** Any other failed response: `code` is the server's `detail` and `body` the rest of its JSON (path, limit, updated_at…). */
+export class ApiError extends Error {
+  readonly status: number
+  readonly code: string
+  readonly body: Record<string, unknown>
+
+  constructor(message: string, status: number, body: Record<string, unknown>) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    this.code = typeof body.detail === 'string' ? body.detail : message
+    this.body = body
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, init)
   if (!response.ok) {
-    const body: { paper_id?: unknown; kept_id?: unknown; tried?: unknown; free_copies?: unknown } =
-      response.status === 409 || response.status === 410 ? await response.clone().json().catch(() => ({})) : {}
+    const body: { paper_id?: unknown; kept_id?: unknown; tried?: unknown; free_copies?: unknown } & Record<string, unknown> =
+      await response.clone().json().catch(() => ({}))
     const message = await errorDetail(response)
     if (response.status === 410 && typeof body.kept_id === 'string') throw new PaperMergedError(message, body.kept_id)
     if (typeof body.paper_id === 'string') throw new AlreadyInLibraryError(message, body.paper_id)
     // no_free_pdf's detail is the server's sentence; its `tried` list is what marks it (main.py's DomainError handler)
-    if (!Array.isArray(body.tried)) throw new Error(message)
+    if (!Array.isArray(body.tried)) throw new ApiError(message, response.status, body)
     throw new NoFreePdfError(message, body.tried as NoFreePdfError['tried'], Array.isArray(body.free_copies) ? (body.free_copies as string[]) : [])
   }
   return (response.status === 204 ? undefined : await response.json()) as T
@@ -224,6 +248,8 @@ export type NotesImportResult = {
   unmatched_files: number
   skipped_duplicates: number
 }
+
+const manuscriptPath = (path: string) => path.split('/').map(encodeURIComponent).join('/')
 
 const sendJson = (method: string, body: unknown): RequestInit => ({
   method,
@@ -433,6 +459,32 @@ export const api = {
     request<EvidenceCard[]>(`/api/papers/${paperId}/evidence-card`, sendJson('POST', { regenerate, confirm })),
   editEvidenceCard: (paperId: string, changes: EvidenceChange[]) =>
     request<EvidenceCard>(`/api/papers/${paperId}/evidence-card`, sendJson('PATCH', { changes })),
+  listManuscripts: (workspaceId: string | null) =>
+    request<Manuscript[]>(workspaceId ? `/api/workspaces/${workspaceId}/manuscripts` : '/api/manuscripts?orphans=true'),
+  listManuscriptTemplates: () => request<ManuscriptTemplate[]>('/api/templates/manuscripts'),
+  getManuscript: (id: string) => request<ManuscriptDetail>(`/api/manuscripts/${id}`),
+  createManuscript: (body: ManuscriptCreate) => request<ManuscriptDetail>('/api/manuscripts', sendJson('POST', body)),
+  /** An Overleaf zip as a new manuscript; `skipped` names the members PaperLab can't hold. */
+  importManuscript: (file: File, workspaceId?: string | null) => {
+    const form = new FormData()
+    form.append('file', file)
+    if (workspaceId) form.append('workspace_id', workspaceId)
+    return request<ManuscriptImport>('/api/manuscripts/import', { method: 'POST', body: form })
+  },
+  updateManuscript: (id: string, patch: ManuscriptPatch) =>
+    request<ManuscriptDetail>(`/api/manuscripts/${id}`, sendJson('PATCH', patch)),
+  deleteManuscript: (id: string) => request<void>(`/api/manuscripts/${id}`, { method: 'DELETE' }),
+  getManuscriptFile: (id: string, path: string) =>
+    request<ManuscriptFileText>(`/api/manuscripts/${id}/files/${manuscriptPath(path)}`),
+  /** `base` is the updated_at the editor last saw; null for a new file. A stale one is a 409 ApiError (file_changed). */
+  saveManuscriptFile: (id: string, path: string, text: string, base: string | null) =>
+    request<ManuscriptFile>(`/api/manuscripts/${id}/files/${manuscriptPath(path)}`, sendJson('PUT', { text, base_updated_at: base })),
+  compileManuscript: (id: string) => request<{ state: string }>(`/api/manuscripts/${id}/compile`, { method: 'POST' }),
+  manuscriptPdfUrl: (id: string) => `/api/manuscripts/${id}/pdf`,
+  manuscriptExportUrl: (id: string) => `/api/manuscripts/${id}/export.zip`,
+  listManuscriptSnapshots: (id: string) => request<ManuscriptSnapshot[]>(`/api/manuscripts/${id}/snapshots`),
+  restoreManuscriptSnapshot: (id: string, snapshotId: string) =>
+    request<void>(`/api/manuscripts/${id}/snapshots/${snapshotId}/restore`, { method: 'POST' }),
   listEvidenceCards: (workspaceId: string) =>
     request<EvidenceCardRow[]>(`/api/workspaces/${workspaceId}/evidence-cards`),
   generateEvidenceCards: (workspaceId: string) =>

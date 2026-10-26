@@ -13,7 +13,10 @@ import { sameCandidate } from '@/features/discovery/candidateMeta'
 import { ALREADY_SAVED } from '@/features/chat/noteBlocks'
 import {
   api,
+  ApiError,
   PaperMergedError,
+  type ManuscriptCreate,
+  type ManuscriptPatch,
   type BulkHitReviewUpdate,
   type Candidate,
   type ChartSpec,
@@ -67,6 +70,12 @@ export const queryClient: QueryClient = new QueryClient({
 })
 
 export const keys = {
+  // Every manuscript query starts with this, so one invalidation refreshes lists, details, files and history.
+  manuscripts: ['manuscripts'] as const,
+  manuscriptList: (workspaceId: string | null) => ['manuscripts', 'list', workspaceId ?? 'orphans'] as const,
+  manuscript: (id: string) => ['manuscripts', id] as const,
+  manuscriptFile: (id: string, path: string) => ['manuscripts', id, 'file', path] as const,
+  manuscriptSnapshots: (id: string) => ['manuscripts', id, 'snapshots'] as const,
   papers: ['papers'] as const,
   paper: (id: string) => ['papers', id] as const,
   notes: (paperId: string) => ['papers', paperId, 'notes'] as const,
@@ -1362,3 +1371,79 @@ export function useDeleteTag(ws: string) {
     onSuccess: () => invalidateTags(client, ws),
   })
 }
+
+const COMPILE_POLL_MS = 1000
+
+/** A workspace's manuscripts, or (null) those with no workspace. */
+export const useManuscripts = (workspaceId: string | null) =>
+  useQuery({ queryKey: keys.manuscriptList(workspaceId), queryFn: () => api.listManuscripts(workspaceId) })
+
+export const useManuscriptTemplates = () =>
+  useQuery({ queryKey: ['manuscripts', 'templates'], queryFn: api.listManuscriptTemplates, staleTime: Infinity })
+
+/** One manuscript with its files; polls while it compiles. */
+export const useManuscript = (id: string) =>
+  useQuery({
+    queryKey: keys.manuscript(id),
+    queryFn: () => api.getManuscript(id),
+    refetchInterval: (query) => (query.state.data?.compile_status === 'running' ? COMPILE_POLL_MS : false),
+  })
+
+export const useManuscriptFile = (id: string, path: string | null) =>
+  useQuery({
+    queryKey: keys.manuscriptFile(id, path ?? ''),
+    queryFn: () => api.getManuscriptFile(id, path!),
+    enabled: path !== null,
+  })
+
+export type SaveResult = { conflict: boolean; updatedAt: string }
+
+/** Saves a text file. A stale save (409 file_changed) resolves to `{ conflict: true, updatedAt }`; other errors throw. */
+export function useSaveManuscriptFile() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: async (v: { id: string; path: string; text: string; base: string | null }): Promise<SaveResult> => {
+      try {
+        const saved = await api.saveManuscriptFile(v.id, v.path, v.text, v.base)
+        return { conflict: false, updatedAt: saved.updated_at }
+      } catch (error) {
+        if (error instanceof ApiError && error.code === 'file_changed' && typeof error.body.updated_at === 'string')
+          return { conflict: true, updatedAt: error.body.updated_at }
+        throw error
+      }
+    },
+    onSuccess: (result, v) =>
+      result.conflict ? undefined : client.invalidateQueries({ queryKey: keys.manuscript(v.id) }),
+  })
+}
+
+export function useCompileManuscript() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.compileManuscript(id),
+    onSuccess: (_state, id) => client.invalidateQueries({ queryKey: keys.manuscript(id) }),
+  })
+}
+
+export const useManuscriptSnapshots = (id: string) =>
+  useQuery({ queryKey: keys.manuscriptSnapshots(id), queryFn: () => api.listManuscriptSnapshots(id) })
+
+export function useRestoreSnapshot() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (v: { id: string; snapshotId: string }) => api.restoreManuscriptSnapshot(v.id, v.snapshotId),
+    onSuccess: (_done, v) => client.invalidateQueries({ queryKey: keys.manuscript(v.id) }),
+  })
+}
+
+function useManuscriptMutation<V, R>(mutationFn: (variables: V) => Promise<R>) {
+  const client = useQueryClient()
+  return useMutation({ mutationFn, onSuccess: () => client.invalidateQueries({ queryKey: keys.manuscripts }) })
+}
+
+export const useCreateManuscript = () => useManuscriptMutation((body: ManuscriptCreate) => api.createManuscript(body))
+export const useImportManuscript = () =>
+  useManuscriptMutation((v: { file: File; workspaceId: string | null }) => api.importManuscript(v.file, v.workspaceId))
+export const useUpdateManuscript = () =>
+  useManuscriptMutation((v: { id: string; patch: ManuscriptPatch }) => api.updateManuscript(v.id, v.patch))
+export const useDeleteManuscript = () => useManuscriptMutation((id: string) => api.deleteManuscript(id))

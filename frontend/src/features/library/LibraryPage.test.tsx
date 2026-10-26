@@ -10,6 +10,7 @@ vi.mock('@/api/queries', () => ({
   usePapers: () => ({ data: state.papers, isError: false }),
   useUploadPapers: () => ({ isPending: false, error: null, mutate: vi.fn() }),
   useEmbeddingStatus: () => ({ data: undefined }),
+  useManuscripts: () => ({ data: undefined }),
 }))
 vi.mock('@/components/AppShell', () => ({ AppShell: ({ children }: { children: React.ReactNode }) => <main>{children}</main> }))
 vi.mock('./FoundPdfsNotice', () => ({ FoundPdfsNotice: () => null }))
