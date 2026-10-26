@@ -42,7 +42,9 @@ FROM python:3.12-slim
 COPY --from=deps /venv /venv
 COPY --from=tex /usr/local/bin/tectonic /usr/local/bin/tectonic
 # Manuscripts compile as `tex` (TECTONIC_USER), an account with no home and no write access to anything of ours.
-RUN useradd --system --no-create-home --shell /usr/sbin/nologin tex
+# Fixed ids: a tectonic-cache volume from an earlier image must stay writable to this user after an upgrade.
+RUN groupadd --system --gid 999 tex \
+    && useradd --system --uid 999 --gid 999 --no-create-home --shell /usr/sbin/nologin tex
 COPY --from=tex --chown=tex:tex /tectonic-cache /tectonic-cache
 ENV TECTONIC_CACHE_DIR=/tectonic-cache
 ENV PATH=/venv/bin:$PATH PYTHONUNBUFFERED=1

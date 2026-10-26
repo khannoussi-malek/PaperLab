@@ -172,3 +172,19 @@ def test_each_system_builds_its_installers_and_the_release_stays_a_draft():
     ]
     assert "desktop/package.json" in jobs["check"]["steps"][-1]["run"]  # the tag must be the app's version
     assert "gh release create" in text and "--draft" in text
+
+
+def test_both_images_pin_the_same_tectonic_and_the_release_image_keeps_the_sandbox():
+    dev, release = (ROOT / "backend/Dockerfile").read_text(), (ROOT / "Dockerfile").read_text()
+    pinned = [re.search(r'VERSION = "([^"]+)"', d).group(1) for d in (dev, release)]
+    assert pinned[0] == pinned[1] == "0.17.0"
+    for d in (dev, release):
+        assert sorted(re.findall(r'"[0-9a-f]{64}"', d)) == [
+            '"8533d07f9ccbd7a65824b9e0459041bca34af1eb33daba48f59215593753a3b7"',
+            '"b10954a95404f3ab2328d2fa59a5ebab8e657f893fab096f98be8db7c0c979b8"',
+        ]
+        assert "--uid 999 --gid 999" in d  # an old tectonic-cache volume stays writable after an upgrade
+        assert "COPY --from=tex --chown=tex:tex /tectonic-cache /tectonic-cache" in d
+    assert re.search(r"^RUN chmod 750 /src$", release, re.M)  # tex can't enter the app's code
+    for ignore in ("backend/.dockerignore", ".dockerignore"):
+        assert ".tools" in (ROOT / ignore).read_text()
