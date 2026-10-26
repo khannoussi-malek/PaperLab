@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button'
 import { TabSkeleton } from '@/features/workspaces/TabStates'
 import { createAutosave, type SaveState } from './autosave'
 import { manuscriptErrorMessage, manuscriptFailure } from './errors'
-import { keptTexts } from './keptTexts'
+import { keptTexts, useKeptTexts, type KeptText } from './keptTexts'
+import { KeptTextAlert } from './KeptTextAlert'
 import { LatexEditor } from './LatexEditor'
 
 const AUTOSAVE_MS = 1000
@@ -49,6 +50,9 @@ export function SourcePane(props: Props) {
   const [state, setState] = useState<SaveState>('saved')
   const [saveError, setSaveError] = useState<Error | null>(null)
   const [retrying, setRetrying] = useState(false)
+  const [seq] = useState(() => keptTexts.nextSeq()) // later panes outrank earlier ones in the kept-text store
+  const owned = useRef<KeptText | null>(null) // the entry this pane took over; only it may remove that entry
+  const entry = useKeptTexts(manuscriptId)[path]
   const [auto] = useState(() =>
     createAutosave({
       delayMs: AUTOSAVE_MS,
@@ -56,7 +60,10 @@ export function SourcePane(props: Props) {
         setState(s)
         if (s !== 'saved') return
         setSaveError(null)
-        keptTexts.remove(manuscriptId, path) // saved, or the user took the server's version: nothing left to keep
+        // Saved, or the user took the server's version: the entry this pane took over is settled. One it didn't
+        // take over (a closing pane's late failure) is not this pane's to remove.
+        if (owned.current && keptTexts.get(manuscriptId, path) === owned.current) keptTexts.remove(manuscriptId, path)
+        owned.current = null
       },
       onError: (error, willRetry) => { setSaveError(error); setRetrying(willRetry) },
       retryable: (error) => !(error instanceof ApiError) || error.status >= 500, // a 4xx fails the same way again
@@ -69,6 +76,18 @@ export function SourcePane(props: Props) {
     }),
   )
 
+  // Takes over a kept text: it goes into the editor, and stays unsaved until saved. Text edited against an older version
+  // never goes over a newer one unasked: that is a conflict to resolve.
+  const adopt = (kept: KeptText, serverAt: string) => {
+    owned.current = kept
+    setText(kept.text)
+    onText(path, kept.text)
+    if (kept.reason === 'conflict' || (kept.base !== null && kept.base !== serverAt)) {
+      newest.current = serverAt
+      auto.markConflict(kept.text)
+    } else auto.change(kept.text)
+  }
+
   // Take the server's text the first time (or the kept text), and again when it changed under us (a restore) while
   // nothing here is unsaved.
   useEffect(() => {
@@ -78,13 +97,7 @@ export function SourcePane(props: Props) {
       base.current = data.updated_at
       const kept = keptTexts.get(manuscriptId, path)
       if (!kept) return setText(data.text)
-      setText(kept.text)
-      onText(path, kept.text)
-      // Text edited against an older version never goes over a newer one unasked: that is a conflict to resolve.
-      if (kept.reason === 'conflict' || (kept.base !== null && kept.base !== data.updated_at)) {
-        newest.current = data.updated_at
-        auto.markConflict(kept.text)
-      } else auto.change(kept.text)
+      adopt(kept, data.updated_at)
     } else if (data.updated_at !== base.current && auto.state === 'saved') {
       base.current = data.updated_at
       setText(data.text)
@@ -104,10 +117,13 @@ export function SourcePane(props: Props) {
     return () => {
       const { onState, registerFlush } = live.current
       registerFlush(null)
+      const unsaved = auto.state !== 'saved' || auto.unsavedText !== null
+      if (unsaved) keptTexts.flushStarted() // the leave warning stays on until this settles
       void auto.flush().then(() => {
         if (auto.state !== 'saved' && auto.unsavedText !== null) {
-          keptTexts.set(manuscriptId, path, { text: auto.unsavedText, reason: auto.state === 'conflict' ? 'conflict' : 'error', base: base.current })
+          keptTexts.set(manuscriptId, path, { text: auto.unsavedText, reason: auto.state === 'conflict' ? 'conflict' : 'error', base: base.current, seq })
         }
+        if (unsaved) keptTexts.flushSettled()
         onState(path, 'saved')
       })
       auto.dispose()
@@ -170,6 +186,14 @@ export function SourcePane(props: Props) {
             <Button size="sm" variant="outline" onClick={() => void loadTheirs()}>Load theirs</Button>
           </AlertDescription>
         </Alert>
+      )}
+      {entry && entry !== owned.current && file.data && (
+        <KeptTextAlert
+          path={path}
+          kept={entry}
+          action={<Button size="sm" variant="outline" disabled={state !== 'saved'} onClick={() => adopt(entry, base.current ?? file.data!.updated_at)}>Use it</Button>}
+          onDiscard={() => keptTexts.remove(manuscriptId, path)}
+        />
       )}
       {saveError && state !== 'conflict' && (
         <Alert variant="destructive" className="m-2 w-auto"><AlertDescription>{manuscriptFailure(saveError)}{retrying && ' Trying again shortly.'}</AlertDescription></Alert>

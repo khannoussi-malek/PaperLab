@@ -6,7 +6,6 @@ import { useCompileManuscript, useManuscript } from '@/api/queries'
 import { AppShell } from '@/components/AppShell'
 import { loadPanelWidth, panelTrack, savePanelWidth } from '@/components/panelWidth'
 import { PanelResizeHandle } from '@/components/PanelResizeHandle'
-import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { LoadError } from '@/features/library/ErrorAlert'
 import { browserStorage } from '@/features/notes/highlightColors'
@@ -22,7 +21,8 @@ import { OutlinePanel } from './OutlinePanel'
 import { PdfPane } from './PdfPane'
 import { MANUSCRIPT_PDF } from './pdfPanel'
 import type { SaveState } from './autosave'
-import { useKeptTexts } from './keptTexts'
+import { keptTexts, useKeptTexts } from './keptTexts'
+import { KeptTextAlert } from './KeptTextAlert'
 import { SourcePane } from './SourcePane'
 import { useLeaveWarning } from './useLeaveWarning'
 
@@ -83,15 +83,13 @@ export function ManuscriptPage({ manuscriptId, file }: { manuscriptId: string; f
       {manuscript.error && <LoadError message={manuscript.error.message} onRetry={() => void manuscript.refetch()} />}
       {manuscript.isPending && <TabSkeleton label="Loading manuscript" />}
       {Object.entries(kept).filter(([keptPath]) => keptPath !== path).map(([keptPath, k]) => (
-        <Alert key={keptPath} variant="destructive" className="mb-2 w-auto">
-          <AlertDescription className="flex flex-wrap items-center gap-3">
-            <span>
-              Your changes to {keptPath} were not saved{k.reason === 'conflict' ? ': the file changed somewhere else' : ''}. They are
-              kept here until you open it.
-            </span>
-            <Button size="sm" variant="outline" asChild><a href={manuscriptHref(manuscriptId, keptPath)}>Open it</a></Button>
-          </AlertDescription>
-        </Alert>
+        <KeptTextAlert
+          key={keptPath}
+          path={keptPath}
+          kept={k}
+          action={<Button size="sm" variant="outline" asChild><a href={manuscriptHref(manuscriptId, keptPath)}>Open it</a></Button>}
+          onDiscard={() => keptTexts.remove(manuscriptId, keptPath)}
+        />
       ))}
       {data && path && (
         <div className="grid min-h-0 flex-1 overflow-hidden" style={{ gridTemplateColumns: `14rem minmax(0,1fr) ${panelTrack(MANUSCRIPT_PDF, pdfWidth)}` }}>
