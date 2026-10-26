@@ -13,7 +13,11 @@ COMPILE_TIMEOUT = 60
 MAX_LOG = 200 * 1024
 
 _ERROR = re.compile(r"^error: (?:(?P<file>[^\s:]+):(?P<line>\d+): |!)(?P<message>.+)$")
-_WARNING = re.compile(r"^warning: (?P<file>[^\s:]+):(?P<line>\d+): (?P<message>Citation .*undefined.*)$")
+# Real Tectonic puts this in main.log, not on stderr; natbib words it "Package natbib Warning".
+_CITATION = re.compile(
+    r"^(?:LaTeX|Package \w+) Warning: (?P<message>Citation .* undefined) on input line (?P<line>\d+)\.$"
+)
+_ABSOLUTE = "accessing absolute path"
 
 
 @dataclass(frozen=True)
@@ -25,7 +29,7 @@ class CompileResult:
     friendly: str | None
 
 
-def parse_errors(log: str) -> list[dict]:
+def parse_errors(log: str, main_file: str = "main.tex") -> list[dict]:
     out = []
     for raw in log.splitlines():
         line = raw.strip()
@@ -33,9 +37,11 @@ def parse_errors(log: str) -> list[dict]:
         if m:  # the generic "something bad happened" follow-ups carry no file or "!", so they never match
             out.append(_entry(m, "error"))
             continue
-        m = _WARNING.match(line)
+        m = _CITATION.match(line)
         if m:
-            out.append(_entry(m, "warning"))
+            out.append(
+                {"file": main_file, "line": int(m.group("line")), "message": m.group("message"), "kind": "warning"}
+            )
     return out
 
 
@@ -45,12 +51,12 @@ def _entry(m: re.Match, kind: str) -> dict:
 
 
 def friendly_message(log: str) -> str | None:
+    if _ABSOLUTE in log:
+        return "outside_file"
     if "this bundle isn't cached" in log:
         return "needs_download"
     if "Running external tool biber" in log:
         return "biber_unsupported"
-    if "accessing absolute path" in log:
-        return "outside_file"
     return None
 
 
@@ -59,15 +65,17 @@ def _clean_log(stderr: str, main_log: str) -> str:
     return ("\n".join(kept) + "\n" + main_log)[:MAX_LOG]
 
 
-def finish(returncode: int, stderr: str, main_log: str, pdf: bytes | None) -> CompileResult:
+def finish(
+    returncode: int, stderr: str, main_log: str, pdf: bytes | None, main_file: str = "main.tex"
+) -> CompileResult:
     """Turns a finished run into a result. An absolute-path read voids the PDF even at rc=0 (isolation layer 2)."""
     friendly = friendly_message(stderr)
-    ok = returncode == 0 and pdf is not None and friendly != "outside_file"
+    ok = returncode == 0 and pdf is not None and _ABSOLUTE not in stderr
     return CompileResult(
         ok=ok,
         pdf=pdf if ok else None,
         log=_clean_log(stderr, main_log),
-        errors=parse_errors(stderr),
+        errors=parse_errors(stderr + "\n" + main_log, main_file),
         friendly=friendly,
     )
 
@@ -80,13 +88,17 @@ def _env(workdir: Path) -> dict[str, str]:
     return env
 
 
-def _chown_tree(root: Path, user: str) -> None:
+def _ids(user: str) -> tuple[int, int]:
     import pwd
 
-    uid = pwd.getpwnam(user).pw_uid
-    os.chown(root, uid, -1)
+    entry = pwd.getpwnam(user)
+    return entry.pw_uid, entry.pw_gid
+
+
+def _chown_tree(root: Path, uid: int, gid: int) -> None:
+    os.chown(root, uid, gid)
     for p in root.rglob("*"):
-        os.chown(p, uid, -1, follow_symlinks=False)
+        os.chown(p, uid, gid, follow_symlinks=False)
 
 
 async def _spawn(argv: list[str], **kwargs):
@@ -94,13 +106,17 @@ async def _spawn(argv: list[str], **kwargs):
 
 
 async def compile_dir(workdir: Path, main_file: str, *, timeout: float = COMPILE_TIMEOUT) -> CompileResult:
+    parts = main_file.replace("\\", "/").split("/")
+    if not main_file or main_file.startswith(("-", "/")) or "\\" in main_file or ".." in parts:
+        raise ValueError(f"main_file must be a plain relative path: {main_file!r}")
     argv = [settings.tectonic_bin, "-X", "compile", main_file, "--untrusted", "--keep-logs", "--synctex"]
     if settings.tectonic_only_cached:
         argv.append("-C")
     extra = {}
     if settings.tectonic_user:  # isolation layer 3: the images run it as an account that can't read the app's files
-        await asyncio.to_thread(_chown_tree, workdir, settings.tectonic_user)
-        extra["user"] = settings.tectonic_user
+        uid, gid = _ids(settings.tectonic_user)
+        await asyncio.to_thread(_chown_tree, workdir, uid, gid)
+        extra = {"user": uid, "group": gid, "extra_groups": []}  # drop root's gid 0 and supplementary groups
     proc = await _spawn(
         argv,
         cwd=workdir,
@@ -113,15 +129,17 @@ async def compile_dir(workdir: Path, main_file: str, *, timeout: float = COMPILE
     )
     try:
         out, _ = await asyncio.wait_for(proc.communicate(), timeout)
-    except TimeoutError:
+    except BaseException as exc:  # timeout, cancellation or anything else: never leave Tectonic running
         try:
             os.killpg(proc.pid, signal.SIGKILL)
         except ProcessLookupError:
             pass
-        await proc.wait()
-        return CompileResult(False, None, "", [], "compile_timeout")
+        await asyncio.shield(proc.wait())
+        if isinstance(exc, TimeoutError):
+            return CompileResult(False, None, "", [], "compile_timeout")
+        raise
     stem = Path(main_file).stem
     pdf_path, log_path = workdir / f"{stem}.pdf", workdir / f"{stem}.log"
     pdf = pdf_path.read_bytes() if pdf_path.exists() else None
     main_log = log_path.read_text(errors="replace") if log_path.exists() else ""
-    return finish(proc.returncode, out.decode(errors="replace"), main_log, pdf)
+    return finish(proc.returncode, out.decode(errors="replace"), main_log, pdf, main_file)
