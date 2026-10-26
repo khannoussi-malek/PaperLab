@@ -272,6 +272,25 @@ minimum and the share of the window it may take — so two panels share the code
 |---|---|---|---|---|---|
 | Reader, Notes \| Chat (`READER_PANEL`) | "Resize panel" | 360 | 320 | 60% | `paperlab-panel-width` |
 | Charts preview (`CHART_PREVIEW`) | "Resize preview" | 440 | 320 | 50% | `paperlab-chart-preview-width` |
+| Manuscript PDF (`MANUSCRIPT_PDF`) | "Resize PDF" | 520 | 360 | 60% | `paperlab-manuscript-pdf-width` |
+
+## Manuscript editor
+
+`#/manuscripts/:id[?file=]`, lazy-loaded so CodeMirror stays out of the main bundle. Three panes in the shell, tab order
+left to right: files, outline and final steps (14 rem) | the source (CodeMirror, LaTeX highlighting) | the PDF
+(`MANUSCRIPT_PDF`, keeps its width while loading). The source header holds the save state (`aria-live="polite"`:
+"Saved", "Saving…", "Unsaved changes", "Changed in another tab") and Compile, which shows a spinner and is disabled
+while it runs. Autosave fires 1 s after the last keystroke; Ctrl/Cmd+S saves, then compiles.
+- **Errors:** a compile failure shows in the PDF pane's `role="alert"` (a friendly sentence, or `file:line message`),
+  with a red dot in the source gutter per line. A save conflict is a `role="alert"` banner over the source with two choices, "Keep my version" (saves
+  the user's text over the newest server version) and "Load theirs"; the user's text is never dropped without a click.
+  Text a closed file could not save is kept (outliving the page, until saved or "Load theirs") and shown as an
+  alert with "Open it"; reopening it against a newer server version is a conflict, never a silent overwrite. The
+  browser asks before the tab is closed while anything is unsaved. A network or 5xx failure retries every 5 s, up to
+  6 times; a 4xx shows its message and stops.
+- **Theme:** CodeMirror is styled from the app's tokens (`--background`, `--foreground`, `--muted`, `--primary`,
+  `--accent`, `--ring`), so it follows light and dark with the rest of the window; no bundled theme package.
+- **History** (toolbar) lists snapshots; restoring asks inside the dialog, never with a browser prompt.
 
 ## Motion
 

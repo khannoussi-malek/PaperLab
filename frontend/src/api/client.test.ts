@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
-import { AlreadyInLibraryError, api, errorDetail, PaperMergedError } from './client'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { AlreadyInLibraryError, ApiError, api, errorDetail, NoFreePdfError, PaperMergedError } from './client'
 
 const jsonResponse = (body: unknown) => new Response(JSON.stringify(body), { status: 422 })
 
@@ -105,5 +105,49 @@ describe('Zotero import forms', () => {
   it.each([true, false])('startImport sends save_without_pdf=%s', async (flag) => {
     const form = await sentForm(() => api.startImport(file, {}, true, flag))
     expect(form.get('save_without_pdf')).toBe(String(flag))
+  })
+})
+
+describe('request errors', () => {
+  const failWith = (res: Response) => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(res)
+    return api.getManuscript('m').catch((e: unknown) => e)
+  }
+  afterEach(() => vi.restoreAllMocks())
+
+  it('a JSON error body gives an ApiError with code and body', async () => {
+    const e = await failWith(new Response(JSON.stringify({ detail: 'bad_path', path: 'x' }), { status: 422 }))
+    expect(e).toBeInstanceOf(ApiError)
+    expect(e).toMatchObject({ status: 422, code: 'bad_path', message: 'bad_path', body: { path: 'x' } })
+  })
+
+  it('an HTML 502 keeps the status text as its message', async () => {
+    const e = await failWith(new Response('<html>bad gateway</html>', { status: 502, statusText: 'Bad Gateway' }))
+    expect(e).toBeInstanceOf(ApiError)
+    expect(e).toMatchObject({ status: 502, message: 'Bad Gateway', code: 'Bad Gateway', body: {} })
+  })
+
+  it('an empty body does not crash', async () => {
+    const e = await failWith(new Response(null, { status: 500, statusText: 'Server Error' }))
+    expect(e).toMatchObject({ status: 500, message: 'Server Error', body: {} })
+  })
+
+  it('a JSON null body does not throw a TypeError', async () => {
+    const e = await failWith(new Response('null', { status: 500, statusText: 'Server Error' }))
+    expect(e).toBeInstanceOf(ApiError)
+    expect(e).toMatchObject({ status: 500, body: {} })
+  })
+
+  it('a 422 body holding paper_id is an ApiError, not AlreadyInLibraryError', async () => {
+    const e = await failWith(new Response(JSON.stringify({ detail: 'x', paper_id: 'p1' }), { status: 422 }))
+    expect(e).toBeInstanceOf(ApiError)
+    expect(e).not.toBeInstanceOf(AlreadyInLibraryError)
+  })
+
+  it('a 409 holding paper_id is still AlreadyInLibraryError, a 410 kept_id PaperMergedError, a 409 tried NoFreePdfError', async () => {
+    expect(await failWith(new Response(JSON.stringify({ detail: 'x', paper_id: 'p1' }), { status: 409 }))).toBeInstanceOf(AlreadyInLibraryError)
+    expect(await failWith(new Response(JSON.stringify({ detail: 'x', kept_id: 'p2' }), { status: 410 }))).toBeInstanceOf(PaperMergedError)
+    expect(await failWith(new Response(JSON.stringify({ detail: 'x', tried: [] }), { status: 409 }))).toBeInstanceOf(NoFreePdfError)
+    expect(await failWith(new Response(JSON.stringify({ detail: 'x', tried: [] }), { status: 500 }))).toBeInstanceOf(ApiError)
   })
 })

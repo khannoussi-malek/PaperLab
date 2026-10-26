@@ -85,7 +85,7 @@ test('a PDF uploaded on the Papers tab joins the workspace, and removing it from
   await expect(page.getByRole('heading', { name: EMPTY })).toBeVisible()
   const [uploaded] = await Promise.all([
     page.waitForResponse((r) => r.url().endsWith('/api/papers') && r.request().method() === 'POST'),
-    page.locator('input[type="file"]').setInputFiles(FIXTURE_FILE),
+    page.locator('input[type="file"][accept="application/pdf"]').setInputFiles(FIXTURE_FILE),
   ])
   const { id } = await uploaded.json()
 

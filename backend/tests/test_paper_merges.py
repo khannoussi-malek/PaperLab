@@ -48,6 +48,7 @@ PAPER_ID_COLUMNS = [
     ("search_run_eligibility", "paper_id"),
     ("evidence_cards", "paper_id"),
     ("paper_events", "paper_id"),
+    ("manuscript_cite_keys", "paper_id"),
 ]
 
 
@@ -131,6 +132,9 @@ async def seed_both(session):
         "INSERT INTO paper_links (from_paper, to_paper, label) VALUES (:y, :m, 'Y knows M')",  # duplicates K-Y
         "INSERT INTO evidence_cards (paper_id, status, fields) VALUES (:m, 'ready', '{\"x\": 1}')",
         "INSERT INTO paper_events (paper_id, kind) VALUES (:m, 'pdf_attached')",
+        "WITH ms AS (INSERT INTO manuscripts (title) VALUES ('Draft') RETURNING id) "
+        "INSERT INTO manuscript_cite_keys (manuscript_id, key, paper_id, bibtex) "
+        "SELECT id, 'sleep2021', :m, '@article{sleep2021}' FROM ms",
     ]:
         await session.execute(text(statement), p)
     await workspaces.add_paper(session, ws.id, m.id)  # a duplicate of K's membership
@@ -169,6 +173,7 @@ MOVED = {
     "evidence_cards_dropped": 1,  # K's needs-full-text placeholder
     "evidence_cards": 1,
     "paper_events": 1,
+    "manuscript_cite_keys": 1,
     "awaiting_hits_retrieved": 1,
 }
 
@@ -191,6 +196,7 @@ AFTER = {  # K's rows after the merge: its own plus M's moved or unioned ones
     "workspace_search_hits.seed_paper_id": 1,
     "search_run_eligibility.paper_id": 2,
     "evidence_cards.paper_id": 1,
+    "manuscript_cite_keys.paper_id": 1,
     "paper_events.paper_id": 2,  # M's moved one, and the merge's own pdf_attached for K (R21)
 }
 

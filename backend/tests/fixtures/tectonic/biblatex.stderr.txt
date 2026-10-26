@@ -1,0 +1,20 @@
+note: "version 2" Tectonic command-line interface activated
+note: Running TeX ...
+Fontconfig error: Cannot load default config file: No such file: (null)
+note: downloading biblatex.sty
+note: downloading logreq.sty
+note: downloading logreq.def
+note: downloading blx-dm.def
+note: downloading blx-unicode.def
+note: downloading blx-compat.def
+note: downloading biblatex.def
+note: downloading numeric.bbx
+note: downloading standard.bbx
+note: downloading numeric.cbx
+note: downloading biblatex.cfg
+note: downloading blx-case-expl3.sty
+note: downloading english.lbx
+note: Running external tool biber ...
+note: Writing `main.log` (10.9365234375 KiB)
+error: No such file or directory (os error 2)
+rc=1 secs=7
