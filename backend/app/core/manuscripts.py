@@ -1,7 +1,8 @@
 """Manuscripts and their files, stored in Postgres. Writes check the size caps and bump `updated_at`."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from sqlalchemy import delete as delete_rows
 from sqlalchemy import func, select
@@ -9,9 +10,11 @@ from sqlalchemy import update as update_rows
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import load_only
 
-from app.core import manuscript_history, manuscript_templates
+from app.config import settings
+from app.core import manuscript_history, manuscript_templates, queue
 from app.core import manuscript_paths as paths
 from app.core.errors import Conflict, InvalidInput, NotFound
+from app.core.latex_compile import COMPILE_TIMEOUT
 from app.models import Manuscript, ManuscriptFile, Workspace
 
 _UNSET = object()  # "leave this field as it is"; workspace_id=None moves the manuscript out of its workspace
@@ -195,3 +198,29 @@ async def remove(session: AsyncSession, manuscript_id: uuid.UUID, path: str) -> 
     await session.execute(delete_rows(ManuscriptFile).where(
         ManuscriptFile.manuscript_id == manuscript_id, ManuscriptFile.path == path))
     await session.execute(update_rows(Manuscript).where(Manuscript.id == manuscript_id).values(updated_at=_NOW))
+
+
+def pdf_path(manuscript_id: uuid.UUID) -> Path:
+    return settings.pdf_dir / "manuscripts" / f"{manuscript_id}.pdf"
+
+
+async def request_compile(session: AsyncSession, manuscript_id: uuid.UUID, *, now: datetime) -> str:
+    """Queue a compile, or ask the running one for another pass. Returns "queued" or "again"."""
+    manuscript = await session.scalar(select(Manuscript).where(Manuscript.id == manuscript_id)
+                                      .with_for_update().execution_options(populate_existing=True))
+    if manuscript is None:
+        raise NotFound("unknown_manuscript")
+    started = manuscript.compile_started_at
+    if manuscript.compile_status == "running" and started and now - started < timedelta(seconds=COMPILE_TIMEOUT + 60):
+        manuscript.compile_requested = True
+        await session.commit()
+        return "again"
+    manuscript.compile_status, manuscript.compile_started_at = "running", now
+    await session.commit()
+    try:
+        await queue.enqueue("compile_manuscript", str(manuscript_id))
+    except Exception:
+        manuscript.compile_status = "failed"  # no job will run: don't leave it `running`
+        await session.commit()
+        raise
+    return "queued"
