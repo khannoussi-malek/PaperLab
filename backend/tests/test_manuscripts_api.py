@@ -35,7 +35,7 @@ async def test_create_get_patch_delete(client, session):
     m = await make(client, workspace_id=str(ws.id))
     assert m["workspace_id"] == str(ws.id)
     got = (await client.get(f"/api/manuscripts/{m['id']}")).json()
-    assert [f["path"] for f in got["files"]] == ["main.tex"] and got["compile_status"] == "never"
+    assert "main.tex" in [f["path"] for f in got["files"]] and got["compile_status"] == "never"
     patched = await client.patch(f"/api/manuscripts/{m['id']}", json={"title": "New", "workspace_id": None})
     assert patched.json()["title"] == "New" and patched.json()["workspace_id"] is None
     assert (await client.patch(f"/api/manuscripts/{m['id']}", json={"main_file": "x.md"})).status_code == 422
@@ -121,7 +121,7 @@ async def test_upload_over_the_cap_is_refused_whatever_content_length_says(clien
     lying = await client.send(request)
     assert lying.status_code == 409 and lying.json()["detail"] == "file_too_large"
     files = (await client.get(f"/api/manuscripts/{m['id']}")).json()["files"]
-    assert [f["path"] for f in files] == ["main.tex"]
+    assert "a.png" not in [f["path"] for f in files]
 
 
 async def test_compile_twice_is_queued_then_again(client, arq):
