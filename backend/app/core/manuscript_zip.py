@@ -2,10 +2,11 @@
 
 import io
 import re
+import stat
 import zipfile
 
 from app.core import manuscript_paths as paths
-from app.core.errors import InvalidInput
+from app.core.errors import Conflict, DomainError, InvalidInput
 
 IMPORTED_BIB = "paperlab-imported.bib"
 LATEXMKRC = "$pdf_mode = 5;  # XeLaTeX\n"
@@ -22,7 +23,7 @@ def _read_capped(archive: zipfile.ZipFile, info: zipfile.ZipInfo, cap: int) -> b
     with archive.open(info) as member:
         data = member.read(cap + 1)  # a header that understates its size cannot get past the cap
     if len(data) > cap:
-        raise InvalidInput("file_too_large", path=info.filename, limit=cap)
+        raise Conflict("file_too_large", limit=cap)  # the class the manuscript's own caps raise
     return data
 
 
@@ -35,8 +36,29 @@ def _main_file(files: dict[str, str | bytes]) -> str:
     raise InvalidInput("no_main_file")
 
 
-def read_zip(data: bytes) -> tuple[dict[str, str | bytes], str]:
-    """The files in the zip and the main file. Refuses what the manuscript caps would."""
+def _member(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> tuple[str, str | bytes] | None:
+    """(path, content) of one member, or None for a type a manuscript can't hold. Errors raised carry no path yet."""
+    if stat.S_IFMT(info.external_attr >> 16) == stat.S_IFLNK:
+        raise InvalidInput("bad_zip")
+    path = IMPORTED_BIB if info.filename == paths.RESERVED else info.filename
+    try:
+        paths.validate_path(path)
+    except InvalidInput as exc:
+        if str(exc) == "unsupported_file_type":
+            return None
+        raise
+    if not paths.is_text(path):
+        return path, _read_capped(archive, info, paths.MAX_BINARY)
+    raw = _read_capped(archive, info, paths.MAX_TEXT)
+    try:
+        return path, raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise InvalidInput("not_text") from exc
+
+
+def read_zip(data: bytes) -> tuple[dict[str, str | bytes], str, list[str]]:
+    """The files in the zip, the main file and the paths skipped for being a type a manuscript can't hold. Every
+    error from a member names it in `path`."""
     try:
         archive = zipfile.ZipFile(io.BytesIO(data))
     except zipfile.BadZipFile as exc:
@@ -44,25 +66,27 @@ def read_zip(data: bytes) -> tuple[dict[str, str | bytes], str]:
     with archive:
         infos = [i for i in archive.infolist() if not _skipped(i.filename)]
         if len(infos) > paths.MAX_FILES:
-            raise InvalidInput("too_many_files", limit=paths.MAX_FILES)
+            raise Conflict("too_many_files", limit=paths.MAX_FILES)
         if sum(i.file_size for i in infos) > paths.MAX_TOTAL:
-            raise InvalidInput("zip_too_large", limit=paths.MAX_TOTAL)
+            raise Conflict("manuscript_too_large", limit=paths.MAX_TOTAL)
         files: dict[str, str | bytes] = {}
-        try:
-            for info in infos:
-                path = IMPORTED_BIB if info.filename == paths.RESERVED else info.filename
-                paths.validate_path(path)
-                if paths.is_text(path):
-                    raw = _read_capped(archive, info, paths.MAX_TEXT)
-                    try:
-                        files[path] = raw.decode("utf-8")
-                    except UnicodeDecodeError as exc:
-                        raise InvalidInput("not_text", path=path) from exc
-                else:
-                    files[path] = _read_capped(archive, info, paths.MAX_BINARY)
-        except (zipfile.BadZipFile, NotImplementedError, RuntimeError) as exc:  # CRC, odd compression, encryption
-            raise InvalidInput("bad_zip") from exc
-    return files, _main_file(files)
+        seen: set[str] = set()
+        skipped: list[str] = []
+        for info in infos:
+            try:
+                if info.filename.casefold() in seen:  # twice, or twice in different case: one file on a Mac
+                    raise InvalidInput("bad_zip")
+                seen.add(info.filename.casefold())
+                member = _member(archive, info)
+            except DomainError as exc:
+                raise type(exc)(str(exc), **{**exc.details, "path": info.filename}) from exc
+            except (zipfile.BadZipFile, NotImplementedError, RuntimeError) as exc:  # CRC, odd compression, encryption
+                raise InvalidInput("bad_zip", path=info.filename) from exc
+            if member is None:
+                skipped.append(info.filename)
+            else:
+                files[member[0]] = member[1]
+    return files, _main_file(files), skipped
 
 
 def write_zip(files: dict[str, str | bytes], bib: str, pdf: bytes | None, title: str = "manuscript") -> bytes:

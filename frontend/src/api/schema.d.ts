@@ -3670,6 +3670,48 @@ export interface components {
             /** Files */
             files: components["schemas"]["FileOut"][];
         };
+        /** ManuscriptImportOut */
+        ManuscriptImportOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Workspace Id */
+            workspace_id: string | null;
+            /** Title */
+            title: string;
+            /** Main File */
+            main_file: string;
+            /** Checklist */
+            checklist: {
+                [key: string]: unknown;
+            };
+            /** Compile Status */
+            compile_status: string;
+            /** Compile Requested */
+            compile_requested: boolean;
+            /** Compiled At */
+            compiled_at: string | null;
+            /** Compile Log */
+            compile_log: string | null;
+            /** Compile Errors */
+            compile_errors: unknown[];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Files */
+            files: components["schemas"]["FileOut"][];
+            /** Skipped */
+            skipped: string[];
+        };
         /** ManuscriptOut */
         ManuscriptOut: {
             /**
@@ -8253,7 +8295,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ManuscriptDetailOut"];
+                    "application/json": components["schemas"]["ManuscriptImportOut"];
                 };
             };
             /** @description Validation Error */

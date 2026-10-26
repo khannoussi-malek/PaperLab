@@ -45,6 +45,10 @@ class ManuscriptDetailOut(ManuscriptOut):
     files: list[FileOut]
 
 
+class ManuscriptImportOut(ManuscriptDetailOut):
+    skipped: list[str]  # members of a type a manuscript can't hold, left out
+
+
 class ManuscriptCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

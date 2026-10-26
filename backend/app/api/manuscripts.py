@@ -17,6 +17,7 @@ from app.schemas.manuscripts import (
     FileTextOut,
     ManuscriptCreate,
     ManuscriptDetailOut,
+    ManuscriptImportOut,
     ManuscriptOut,
     ManuscriptPatch,
     RenameIn,
@@ -33,13 +34,13 @@ async def _detail(session: SessionDep, manuscript) -> ManuscriptDetailOut:
     return ManuscriptDetailOut.model_validate({**ManuscriptOut.model_validate(manuscript).model_dump(), "files": files})
 
 
-async def _read_capped(file: UploadFile, cap: int) -> bytes:
+async def _read_capped(file: UploadFile, cap: int, code: str = "file_too_large") -> bytes:
     """The upload's bytes, refusing as soon as they pass `cap`: a Content-Length that lies changes nothing."""
     data = bytearray()
     while chunk := await file.read(CHUNK):
         data += chunk
         if len(data) > cap:
-            raise Conflict("file_too_large", limit=cap)
+            raise Conflict(code, limit=cap)
     return bytes(data)
 
 
@@ -71,9 +72,10 @@ async def create_manuscript(payload: ManuscriptCreate, session: SessionDep) -> M
 
 @router.post("/api/manuscripts/import", status_code=201)
 async def import_manuscript(file: UploadFile, session: SessionDep,
-                            workspace_id: uuid.UUID | None = Form(default=None)) -> ManuscriptDetailOut:
+                            workspace_id: uuid.UUID | None = Form(default=None)) -> ManuscriptImportOut:
     """An Overleaf zip as a new manuscript, all or nothing."""
-    files, main_file = manuscript_zip.read_zip(await _read_capped(file, paths.MAX_TOTAL))
+    files, main_file, skipped = manuscript_zip.read_zip(
+        await _read_capped(file, paths.MAX_TOTAL, "manuscript_too_large"))
     title = PurePosixPath(file.filename or "").stem or "Imported manuscript"
     try:
         created = await manuscripts.create_from_files(session, title=title, workspace_id=workspace_id, files=files,
@@ -82,7 +84,7 @@ async def import_manuscript(file: UploadFile, session: SessionDep,
     except Exception:
         await session.rollback()
         raise
-    return await _detail(session, created)
+    return ManuscriptImportOut(**(await _detail(session, created)).model_dump(), skipped=skipped)
 
 
 @router.get("/api/manuscripts/{manuscript_id}")
