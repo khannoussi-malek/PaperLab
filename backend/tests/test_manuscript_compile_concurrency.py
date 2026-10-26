@@ -20,6 +20,8 @@ OK = CompileResult(ok=True, pdf=b"%PDF", log="fine", errors=[], friendly=None)
 
 @pytest.fixture
 async def real(arq, pdf_dir, monkeypatch):
+    """Real, committed rows on separate connections. Yields (new, maker, made); every row `new` made is deleted after
+    the test, whatever happened in it."""
     engine = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)
     made: list[AsyncSession] = []
     maker = async_sessionmaker(engine, expire_on_commit=False)
@@ -30,34 +32,28 @@ async def real(arq, pdf_dir, monkeypatch):
 
     monkeypatch.setattr(queue, "_pool", arq)
     monkeypatch.setattr(worker, "SessionLocal", factory)
+    monkeypatch.setattr(worker, "_COMPILE_LOCK", asyncio.Lock())  # a lock remembers the loop it first waited in
     ids = []
 
     async def new():
         async with maker() as s:
             m = await manuscripts.create(s, title="C", template="article", workspace_id=None)
+            ids.append(m.id)  # before the commit: a failure there still gets cleaned
             await s.commit()
-            ids.append(m.id)
             return m.id
 
-    async def cleanup():  # explicit: these rows are really committed, and must be gone before the next test
+    try:
+        yield new, maker, made
+    finally:
         async with maker() as s:
             await s.execute(delete(Manuscript).where(Manuscript.id.in_(ids)))
             await s.commit()
         await engine.dispose()
 
-    return new, maker, made, cleanup
-
 
 async def test_no_transaction_is_open_and_a_request_is_not_blocked_while_tectonic_runs(real, monkeypatch):
-    new, maker, made, cleanup = real
+    new, maker, made = real
     mid = await new()
-    try:
-        await _no_transaction_body(maker, made, mid, monkeypatch)
-    finally:
-        await cleanup()
-
-
-async def _no_transaction_body(maker, made, mid, monkeypatch):
     inside, release = asyncio.Event(), asyncio.Event()
     open_during = []
 
@@ -82,7 +78,7 @@ async def _no_transaction_body(maker, made, mid, monkeypatch):
 
 
 async def test_two_jobs_never_run_compile_dir_at_once(real, monkeypatch):
-    new, _, _, cleanup = real
+    new, _, _ = real
     a, b = await new(), await new()
     events = []
 
@@ -93,8 +89,30 @@ async def test_two_jobs_never_run_compile_dir_at_once(real, monkeypatch):
         return OK
 
     monkeypatch.setattr(worker, "compile_dir", compile_dir)
-    try:
-        await asyncio.gather(worker.compile_manuscript({}, str(a)), worker.compile_manuscript({}, str(b)))
-    finally:
-        await cleanup()
+    await asyncio.gather(worker.compile_manuscript({}, str(a)), worker.compile_manuscript({}, str(b)))
     assert events == ["in", "out", "in", "out"]
+
+
+async def test_the_stale_clock_starts_only_once_the_job_holds_the_compile_lock(real, monkeypatch):
+    new, maker, _ = real
+    a, b = await new(), await new()
+    inside, release = asyncio.Event(), asyncio.Event()
+
+    async def compile_dir(workdir, main_file, **kw):
+        inside.set()
+        await release.wait()
+        return OK
+
+    monkeypatch.setattr(worker, "compile_dir", compile_dir)
+    job_a = asyncio.create_task(worker.compile_manuscript({}, str(a)))
+    await asyncio.wait_for(inside.wait(), 10)
+    job_b = asyncio.create_task(worker.compile_manuscript({}, str(b)))
+    try:
+        await asyncio.sleep(0.5)  # B is waiting for A's lock
+        async with maker() as s:
+            assert (await manuscripts.get(s, b)).compile_started_at is None
+    finally:
+        release.set()
+        await asyncio.wait_for(asyncio.gather(job_a, job_b), 10)
+    async with maker() as s:
+        assert (await manuscripts.get(s, b)).compile_started_at is not None

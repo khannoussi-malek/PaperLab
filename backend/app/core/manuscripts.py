@@ -72,6 +72,7 @@ async def update(session: AsyncSession, manuscript_id: uuid.UUID, *, title=_UNSE
 async def delete(session: AsyncSession, manuscript_id: uuid.UUID) -> None:
     await get(session, manuscript_id)
     await session.execute(delete_rows(Manuscript).where(Manuscript.id == manuscript_id))
+    pdf_path(manuscript_id).unlink(missing_ok=True)
 
 
 async def files(session: AsyncSession, manuscript_id: uuid.UUID) -> list[ManuscriptFile]:
@@ -219,7 +220,7 @@ async def request_compile(session: AsyncSession, manuscript_id: uuid.UUID, *, no
     manuscript.compile_status, manuscript.compile_started_at = "running", now
     await session.commit()
     try:
-        await queue.enqueue("compile_manuscript", str(manuscript_id), job_id=f"compile:{manuscript_id}")
+        await queue.enqueue("compile_manuscript", str(manuscript_id))
     except Exception:
         manuscript.compile_status = "failed"  # no job will run: don't leave it `running`
         await session.commit()

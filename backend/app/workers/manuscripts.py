@@ -47,11 +47,6 @@ def _write_pdf(manuscript_id: uuid.UUID, pdf: bytes) -> None:
         raise
 
 
-async def _compile(workdir: Path, main_file: str):
-    async with _COMPILE_LOCK:
-        return await compile_dir(workdir, main_file)
-
-
 async def _prepare(mid: uuid.UUID):
     """Short transaction 1: claim the pass, read the files, pin cited keys. None when the manuscript is gone."""
     async with SessionLocal() as session:
@@ -75,7 +70,7 @@ async def _run_tectonic(main_file: str, rows, bib: str):
         workdir = Path(tmp)
         _write_files(workdir, rows)
         (workdir / "paperlab.bib").write_text(bib, encoding="utf-8")
-        return await _compile(workdir, main_file)
+        return await compile_dir(workdir, main_file)
 
 
 async def _store(mid: uuid.UUID, result) -> bool:
@@ -110,12 +105,13 @@ async def compile_manuscript(ctx: dict, manuscript_id: str) -> None:
     again = True
     while again:
         try:
-            prepared = await _prepare(mid)
-            if prepared is None:
-                return  # deleted meanwhile
-            result = await _run_tectonic(*prepared)
-            if not await _store(mid, result):
-                return
+            async with _COMPILE_LOCK:  # taken first, so time spent waiting never counts toward the stale window
+                prepared = await _prepare(mid)
+                if prepared is None:
+                    return  # deleted meanwhile
+                result = await _run_tectonic(*prepared)
+                if not await _store(mid, result):
+                    return
             async with SessionLocal() as session:
                 again = bool(await session.scalar(select(Manuscript.compile_requested).where(Manuscript.id == mid)))
         except Exception as error:
