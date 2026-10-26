@@ -1460,5 +1460,14 @@ export const useUploadManuscriptFile = () =>
   useManuscriptMutation((v: { id: string; path: string; file: File }) => api.uploadManuscriptFile(v.id, v.path, v.file))
 export const useRenameManuscriptFile = () =>
   useManuscriptMutation((v: { id: string; path: string; newPath: string }) => api.renameManuscriptFile(v.id, v.path, v.newPath))
+export const useAddSection = () =>
+  useManuscriptMutation((v: { id: string; title: string; after: string | null }) => api.addSection(v.id, v.title, v.after))
+export const useSplitSections = () => useManuscriptMutation((id: string) => api.splitSections(id))
+export const useRetitleSection = () =>
+  useManuscriptMutation((v: { id: string; path: string; title: string }) => api.retitleSection(v.id, v.path, v.title))
+export const useMoveSection = () =>
+  useManuscriptMutation((v: { id: string; path: string; to: number }) => api.moveSection(v.id, v.path, v.to))
+export const useDeleteSection = () =>
+  useManuscriptMutation((v: { id: string; path: string }) => api.deleteSection(v.id, v.path))
 export const useDeleteManuscriptFile = () =>
   useManuscriptMutation((v: { id: string; path: string }) => api.deleteManuscriptFile(v.id, v.path))

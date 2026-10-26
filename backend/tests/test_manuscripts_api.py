@@ -263,3 +263,49 @@ async def test_export_is_named_after_the_title(client, title, ascii_name, star):
     disposition = out.headers["content-disposition"]
     assert disposition == f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{star}"
     assert "\n" not in disposition and "\r" not in disposition
+
+
+async def test_section_routes(client):
+    m = await make(client)
+    base = f"/api/manuscripts/{m['id']}"
+    added = await client.post(f"{base}/sections", json={"title": "Threats", "after": "sections/method.tex"})
+    assert added.status_code == 201 and added.json() == {"path": "sections/threats.tex"}
+    renamed = await client.post(f"{base}/sections/sections/threats.tex/retitle", json={"title": "Limits"})
+    assert renamed.status_code == 200 and renamed.json() == {"path": "sections/limits.tex"}
+    assert (await client.post(f"{base}/sections/sections/limits.tex/move", json={"to": 0})).status_code == 204
+    main = (await client.get(f"{base}/files/main.tex")).json()["text"]
+    assert main.index("sections/limits") < main.index("sections/introduction")
+    assert (await client.delete(f"{base}/sections/sections/limits.tex")).status_code == 204
+    assert "sections/limits" not in (await client.get(f"{base}/files/main.tex")).json()["text"]
+    assert (await client.post(f"{base}/sections/split")).json()["detail"] == "no_sections"  # already split
+
+
+async def test_split_route_cuts_a_one_file_manuscript(client):
+    m = await make(client)
+    base = f"/api/manuscripts/{m['id']}"
+    text = "\\documentclass{article}\n\\begin{document}\n\\section{One}\na\n\\section{Two}\nb\n\\end{document}\n"
+    current = (await client.get(f"{base}/files/main.tex")).json()["updated_at"]
+    put = await client.put(f"{base}/files/main.tex", json={"text": text, "base_updated_at": current})
+    assert put.status_code == 200, put.text
+    split = await client.post(f"{base}/sections/split")
+    assert split.status_code == 200 and split.json() == {"paths": ["sections/one.tex", "sections/two.tex"]}
+
+
+async def test_section_route_errors(client, session):
+    m = await make(client)
+    base = f"/api/manuscripts/{m['id']}"
+    bad = await client.post(f"{base}/sections/main.tex/retitle", json={"title": "X"})
+    assert bad.status_code == 422 and bad.json()["detail"] == "not_a_section"
+    assert (await client.post(f"{base}/sections", json={"title": "  "})).json()["detail"] == "bad_title"
+    ghost = f"/api/manuscripts/{uuid.uuid4()}"
+    assert (await client.post(f"{ghost}/sections", json={"title": "X"})).status_code == 404
+    assert (await client.delete(f"{ghost}/sections/sections/x.tex")).status_code == 404
+    assert (await client.post(f"{ghost}/sections/split")).status_code == 404
+
+
+async def test_failing_section_op_leaves_no_snapshot(client):
+    m = await make(client)
+    base = f"/api/manuscripts/{m['id']}"
+    assert (await client.delete(f"{base}/sections/main.tex")).json()["detail"] == "not_a_section"
+    reasons = [s["reason"] for s in (await client.get(f"{base}/snapshots")).json()]
+    assert "before_sections" not in reasons

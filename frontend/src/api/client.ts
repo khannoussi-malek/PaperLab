@@ -492,6 +492,15 @@ export const api = {
     request<ManuscriptFile>(`/api/manuscripts/${id}/files/${manuscriptPath(path)}/rename`, sendJson('POST', { new_path: newPath })),
   deleteManuscriptFile: (id: string, path: string) =>
     request<void>(`/api/manuscripts/${id}/files/${manuscriptPath(path)}`, { method: 'DELETE' }),
+  addSection: (id: string, title: string, after: string | null) =>
+    request<{ path: string }>(`/api/manuscripts/${id}/sections`, sendJson('POST', { title, after })),
+  splitSections: (id: string) => request<{ paths: string[] }>(`/api/manuscripts/${id}/sections/split`, { method: 'POST' }),
+  retitleSection: (id: string, path: string, title: string) =>
+    request<{ path: string }>(`/api/manuscripts/${id}/sections/${manuscriptPath(path)}/retitle`, sendJson('POST', { title })),
+  moveSection: (id: string, path: string, to: number) =>
+    request<void>(`/api/manuscripts/${id}/sections/${manuscriptPath(path)}/move`, sendJson('POST', { to })),
+  deleteSection: (id: string, path: string) =>
+    request<void>(`/api/manuscripts/${id}/sections/${manuscriptPath(path)}`, { method: 'DELETE' }),
   saveManuscriptFile: (id: string, path: string, text: string, base: string | null) =>
     request<ManuscriptFile>(`/api/manuscripts/${id}/files/${manuscriptPath(path)}`, sendJson('PUT', { text, base_updated_at: base })),
   compileManuscript: (id: string) => request<{ state: string }>(`/api/manuscripts/${id}/compile`, { method: 'POST' }),
