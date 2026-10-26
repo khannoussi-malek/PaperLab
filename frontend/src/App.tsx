@@ -5,6 +5,7 @@ import { ConnectClaudePage } from './features/connect-claude/ConnectClaudePage'
 import { DatasetPage } from './features/data/DatasetPage'
 import { GraphPage } from './features/graph/GraphPage'
 import { LibraryPage } from './features/library/LibraryPage'
+import { ManuscriptPage } from './features/manuscripts/ManuscriptPage'
 import { NotesPage } from './features/notes/NotesPage.tsx'
 import { ReaderPage } from './features/reader/ReaderPage'
 import { ReferencesPage } from './features/references/ReferencesPage'
@@ -41,6 +42,9 @@ function Page() {
   if (route.name === 'reader') {
     // Keyed by paper only: switching tabs must not remount the reader.
     return <ReaderPage key={route.paperId} paperId={route.paperId} tab={route.tab} target={route.target} />
+  }
+  if (route.name === 'manuscript') {
+    return <ManuscriptPage key={route.manuscriptId} manuscriptId={route.manuscriptId} file={route.file} />
   }
   if (route.name === 'charts') {
     return <ChartsPage />

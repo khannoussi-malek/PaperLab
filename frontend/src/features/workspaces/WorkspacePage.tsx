@@ -11,6 +11,7 @@ import { ReadingQueueTab } from '@/features/workspace-search/ReadingQueueTab'
 import { ScreeningTab } from '@/features/workspace-search/ScreeningTab'
 import { SearchTab } from '@/features/workspace-search/SearchTab'
 import { EvidenceTab } from '../evidence/EvidenceTab'
+import { ManuscriptList } from '../manuscripts/ManuscriptList'
 import { workspaceHref, type TagMatch, type WorkspaceTab } from '@/lib/route'
 import { cn } from '@/lib/utils'
 import { WorkspaceChat } from './WorkspaceChat'
@@ -95,6 +96,9 @@ export function WorkspacePage({ workspaceId, tab, runId, tags, match }: PageProp
           </TabsContent>
           <TabsContent value="evidence" forceMount className={panel}>
             <EvidenceTab workspaceId={workspaceId} />
+          </TabsContent>
+          <TabsContent value="write" forceMount className={panel}>
+            <ManuscriptList workspaceId={workspaceId} />
           </TabsContent>
           {/* SearchTab's HitTable virtualizes its own row list — it needs to measure a real, bounded viewport
               to know which rows are actually visible. Without flex/overflow-hidden here (mirroring the chat

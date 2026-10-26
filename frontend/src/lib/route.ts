@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react'
 import { withViewTransition } from '@/components/motion'
 
 export type ReaderTab = 'notes' | 'chat' | 'data' | 'similar' | 'references' | 'evidence'
-export type WorkspaceTab = 'papers' | 'notes' | 'chat' | 'search' | 'acquisition' | 'screening' | 'prisma' | 'reading' | 'evidence'
+export type WorkspaceTab = 'papers' | 'notes' | 'chat' | 'search' | 'acquisition' | 'screening' | 'prisma' | 'reading' | 'evidence' | 'write'
 /** Settings is one page per section, so a section can be linked to, reloaded and kept in the window's history. */
 export type SettingsSection = 'models' | 'sources' | 'search' | 'desktop' | 'claude'
 export type Rect = [number, number, number, number]
@@ -22,6 +22,7 @@ export type Route =
   // `runId` is the active search run, round-tripped through the URL (I1) so a page reload doesn't lose track of
   // it — null when there's none, same convention as `target` above.
   | { name: 'workspace'; workspaceId: string; tab: WorkspaceTab; runId: string | null; tags: string[]; match: TagMatch }
+  | { name: 'manuscript'; manuscriptId: string; file: string | null }
   | { name: 'charts' }
   | { name: 'chart'; chartId: string }
   | { name: 'chart-builder'; chartId: string | null; datasetId: string | null }
@@ -35,6 +36,7 @@ export type Route =
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const HASH = /^#\/(papers|workspaces)\/([0-9a-f-]{36})(?:\?(.*))?$/i
+const MANUSCRIPT_HASH = /^#\/manuscripts\/([0-9a-f-]{36})(?:\?(.*))?$/i
 const CHARTS_HASH = /^#\/charts(?:\/(new|[0-9a-f-]{36})(\/edit)?)?(?:\?(.*))?$/i
 const DATASET_HASH = /^#\/datasets\/([0-9a-f-]{36})(?:\?(.*))?$/i
 const SETTINGS_HASH = '#/settings'
@@ -99,6 +101,11 @@ export function parseRoute(hash: string): Route {
     return { name: 'references', workspaceId: UUID.test(workspaceId) ? workspaceId : null }
   }
   if (hash === SETUP_HASH) return { name: 'setup' }
+  const manuscript = MANUSCRIPT_HASH.exec(hash)
+  if (manuscript) {
+    if (!UUID.test(manuscript[1])) return { name: 'library' }
+    return { name: 'manuscript', manuscriptId: manuscript[1], file: new URLSearchParams(manuscript[2]).get('file') || null }
+  }
   const charts = CHARTS_HASH.exec(hash)
   if (charts) return chartsRoute(charts)
   const dataset = DATASET_HASH.exec(hash)
@@ -126,7 +133,8 @@ export function parseRoute(hash: string): Route {
         tab === 'screening' ||
         tab === 'prisma' ||
         tab === 'reading' ||
-        tab === 'evidence'
+        tab === 'evidence' ||
+        tab === 'write'
           ? tab
           : 'papers',
       runId: UUID.test(run) ? run : null,
@@ -192,6 +200,9 @@ export const notesHref = (paper?: string | null) => (paper ? `#/notes?paper=${pa
 export const referencesHref = (workspaceId?: string | null) =>
   workspaceId ? `#/references?workspace=${workspaceId}` : '#/references'
 export const setupHref = SETUP_HASH
+/** A manuscript's editor, optionally on one of its files. */
+export const manuscriptHref = (manuscriptId: string, file?: string | null) =>
+  file ? `#/manuscripts/${manuscriptId}?${new URLSearchParams({ file })}` : `#/manuscripts/${manuscriptId}`
 export const chartsHref = '#/charts'
 export const chartHref = (chartId: string) => `#/charts/${chartId}`
 export const editChartHref = (chartId: string) => `#/charts/${chartId}/edit`
