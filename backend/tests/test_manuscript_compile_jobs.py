@@ -116,10 +116,10 @@ async def test_failure_keeps_the_previous_pdf_and_stores_errors(session, monkeyp
 
 async def test_a_failed_compile_stores_the_friendly_code_and_a_good_one_clears_it(session, monkeypatch):
     m = await new(session)
-    needs = CompileResult(ok=False, pdf=None, log="x", errors=[], friendly="needs_download")
+    needs = CompileResult(ok=False, pdf=None, log="x", errors=[], friendly="package_missing")
     fake_compile(monkeypatch, needs, OK)
     await worker.compile_manuscript({}, str(m.id))
-    assert (await manuscripts.get(session, m.id)).compile_friendly == "needs_download"
+    assert (await manuscripts.get(session, m.id)).compile_friendly == "package_missing"
     await worker.compile_manuscript({}, str(m.id))
     assert (await manuscripts.get(session, m.id)).compile_friendly is None
 
@@ -159,6 +159,30 @@ async def test_bib_written_beside_the_sources_pins_cited_keys(session, monkeypat
     assert "smith2021deep" in seen[0]["paperlab.bib"].decode()
     keys = await session.scalars(select(ManuscriptCiteKey.key).where(ManuscriptCiteKey.manuscript_id == m.id))
     assert list(keys) == ["smith2021deep"]
+
+
+async def test_a_nested_main_file_gets_its_bib_beside_it(session, monkeypatch):
+    m = await new(session)
+    await manuscripts.upsert_text(session, m.id, "paper/main.tex", "\\documentclass{article}")
+    await manuscripts.update(session, m.id, main_file="paper/main.tex")
+    seen = []
+    fake_compile(monkeypatch, OK, seen=seen)
+    await worker.compile_manuscript({}, str(m.id))
+    assert "paper/paperlab.bib" in seen[0]  # \bibliography{paperlab} is looked up beside the main file
+
+
+async def test_an_error_during_a_requested_pass_clears_the_request(session, monkeypatch):
+    m = await new(session)
+    mid = m.id
+
+    async def compile_dir(*a, **k):
+        await manuscripts.request_compile(session, mid, now=datetime.now(UTC))  # "again", while this pass runs
+        raise ValueError("kaput")
+
+    monkeypatch.setattr(worker, "compile_dir", compile_dir)
+    await worker.compile_manuscript({}, str(mid))
+    m = await manuscripts.get(session, mid)
+    assert (m.compile_status, m.compile_requested) == ("failed", False)
 
 
 async def test_an_unexpected_error_leaves_it_failed_not_running(session, monkeypatch):

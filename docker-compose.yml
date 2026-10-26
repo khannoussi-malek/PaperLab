@@ -6,7 +6,7 @@ x-backend: &backend
   env_file:
     - path: .env
       required: false
-  volumes: &backend-volumes
+  volumes:
     - ./backend:/src
     - pdfs:/data/pdfs
     - models:/models
@@ -72,21 +72,11 @@ services:
     restart: on-failure
     command: sh -c 'alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 $${DEV_RELOAD:+--reload}'
     ports: ["127.0.0.1:${API_PORT:-8000}:8000"]
-    volumes:
-      - ./backend:/src
-      - pdfs:/data/pdfs
-      - models:/models
-      - tectonic-cache:/tectonic-cache # the manuscript templates' packages, seeded from the image
 
   worker: &worker
     <<: *backend
     restart: on-failure # see the api
     # The References fetch runs here, so the E2E stack's fake discovery must reach the worker too.
-    volumes:
-      - ./backend:/src
-      - pdfs:/data/pdfs
-      - models:/models
-      - tectonic-cache:/tectonic-cache
     environment:
       <<: *worker-env
       TECTONIC_USER: tex # manuscripts compile as this unprivileged account (the ingest worker never compiles)
@@ -98,7 +88,6 @@ services:
 
   ingest-worker:
     <<: *worker
-    volumes: *backend-volumes
     environment: *worker-env
     # A paper's ingest and re-embed, one paper at a time: ten at once ran the worker out of memory.
     command: >-
@@ -119,4 +108,3 @@ volumes:
   pgdata:
   pdfs:
   models:
-  tectonic-cache:

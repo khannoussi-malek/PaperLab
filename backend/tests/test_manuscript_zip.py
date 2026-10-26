@@ -143,3 +143,17 @@ def test_reserved_bib_variants_refused_with_the_path():
         with pytest.raises(InvalidInput, match="reserved_path") as exc:
             manuscript_zip.read_zip(make_zip({"main.tex": TEX, name: "x"}))
         assert exc.value.details["path"] == name
+
+
+def test_a_single_wrapper_folder_is_dropped():
+    # Overleaf's own download, and most zips made of a folder, put everything under "<project>/".
+    data = make_zip({"My Paper/main.tex": TEX, "My Paper/sections/intro.tex": "Hi", "My Paper/paperlab.bib": "@x{y}",
+                     "__MACOSX/My Paper/._main.tex": b"junk", "My Paper/notes.svg": "<svg/>"})
+    files, main, skipped = manuscript_zip.read_zip(data)
+    assert set(files) == {"main.tex", "sections/intro.tex", manuscript_zip.IMPORTED_BIB}
+    assert main == "main.tex" and skipped == ["notes.svg"]
+
+
+def test_folders_that_differ_are_kept():
+    files, main, _ = manuscript_zip.read_zip(make_zip({"paper/main.tex": TEX, "figs/a.png": b"\x89PNG"}))
+    assert set(files) == {"paper/main.tex", "figs/a.png"} and main == "paper/main.tex"

@@ -86,7 +86,7 @@ def test_the_library_lives_in_named_volumes_and_redis_keeps_its_queue():
     release = compose("desktop/docker-compose.yml")
     services = release["services"]
 
-    assert set(release["volumes"]) == {"pgdata", "pdfs", "redisdata", "models", "tectonic-cache"}
+    assert set(release["volumes"]) == {"pgdata", "pdfs", "redisdata", "models"}
     assert services["redis"]["command"] == ["redis-server", "--appendonly", "yes"]
     assert services["redis"]["volumes"] == ["redisdata:/data"]
     for name in APP_SERVICES:
@@ -183,8 +183,13 @@ def test_both_images_pin_the_same_tectonic_and_the_release_image_keeps_the_sandb
             '"8533d07f9ccbd7a65824b9e0459041bca34af1eb33daba48f59215593753a3b7"',
             '"b10954a95404f3ab2328d2fa59a5ebab8e657f893fab096f98be8db7c0c979b8"',
         ]
-        assert "--uid 999 --gid 999" in d  # an old tectonic-cache volume stays writable after an upgrade
-        assert "COPY --from=tex --chown=tex:tex /tectonic-cache /tectonic-cache" in d
+        assert "--uid 999 --gid 999" in d
+        # The cache is root's and read-only to tex (dirs 755, files 644), and compiles never fetch (final review C1).
+        assert re.search(r"^COPY --from=tex /tectonic-cache /tectonic-cache$", d, re.M)
+        assert "--chown=tex" not in d and "chown tex" not in d
+        assert "chmod -R u=rwX,go=rX /tectonic-cache" in d
+        assert re.search(r"^ENV TECTONIC_ONLY_CACHED=1$", d, re.M)
+        assert "/templates/*.tex" in d  # every .tex there is compiled into the cache, warm-packages.tex included
     assert re.search(r"^RUN chmod 750 /src$", release, re.M)  # tex can't enter the app's code
     for ignore in ("backend/.dockerignore", ".dockerignore"):
         assert ".tools" in (ROOT / ignore).read_text()

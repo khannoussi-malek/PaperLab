@@ -24,7 +24,7 @@ class Manuscript(Base):
     compile_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     compiled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     compile_log: Mapped[str | None] = mapped_column(Text)
-    compile_friendly: Mapped[str | None] = mapped_column(Text)  # needs_download | biber_unsupported | ...
+    compile_friendly: Mapped[str | None] = mapped_column(Text)  # package_missing | biber_unsupported | ...
     compile_errors: Mapped[list[Any]] = mapped_column(JSONB, server_default=text("'[]'::jsonb"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=NOW)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=NOW)

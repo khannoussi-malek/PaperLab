@@ -36,11 +36,17 @@ def _main_file(files: dict[str, str | bytes]) -> str:
     raise InvalidInput("no_main_file")
 
 
-def _member(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> tuple[str, str | bytes] | None:
+def _wrapper(names: list[str]) -> str:
+    """"<folder>/" when every member sits in that one top folder (Overleaf's download does this), else ""."""
+    tops = {n.split("/", 1)[0] for n in names}
+    return f"{tops.pop()}/" if len(tops) == 1 and all("/" in n for n in names) else ""
+
+
+def _member(archive: zipfile.ZipFile, info: zipfile.ZipInfo, name: str) -> tuple[str, str | bytes] | None:
     """(path, content) of one member, or None for a type a manuscript can't hold. Errors raised carry no path yet."""
     if stat.S_IFMT(info.external_attr >> 16) == stat.S_IFLNK:
         raise InvalidInput("bad_zip")
-    path = IMPORTED_BIB if info.filename == paths.RESERVED else info.filename
+    path = IMPORTED_BIB if name == paths.RESERVED else name
     try:
         paths.validate_path(path)
     except InvalidInput as exc:
@@ -72,21 +78,28 @@ def read_zip(data: bytes) -> tuple[dict[str, str | bytes], str, list[str]]:
         files: dict[str, str | bytes] = {}
         seen: set[str] = set()
         skipped: list[str] = []
+        wrapper = _wrapper([i.filename for i in infos])
         for info in infos:
+            name = info.filename.removeprefix(wrapper)
             try:
-                if info.filename.casefold() in seen:  # twice, or twice in different case: one file on a Mac
+                if name.casefold() in seen:  # twice, or twice in different case: one file on a Mac
                     raise InvalidInput("bad_zip")
-                seen.add(info.filename.casefold())
-                member = _member(archive, info)
+                seen.add(name.casefold())
+                member = _member(archive, info, name)
             except DomainError as exc:
-                raise type(exc)(str(exc), **{**exc.details, "path": info.filename}) from exc
+                raise type(exc)(str(exc), **{**exc.details, "path": name}) from exc
             except (zipfile.BadZipFile, NotImplementedError, RuntimeError) as exc:  # CRC, odd compression, encryption
-                raise InvalidInput("bad_zip", path=info.filename) from exc
+                raise InvalidInput("bad_zip", path=name) from exc
             if member is None:
-                skipped.append(info.filename)
+                skipped.append(name)
             else:
                 files[member[0]] = member[1]
     return files, _main_file(files), skipped
+
+
+def safe_name(title: str) -> str:
+    """The title as a plain ASCII file name (no extension), or "manuscript" when nothing usable is left."""
+    return re.sub(r"[^A-Za-z0-9._-]+", "_", title).strip("_.") or "manuscript"
 
 
 def write_zip(files: dict[str, str | bytes], bib: str, pdf: bytes | None, title: str = "manuscript") -> bytes:
@@ -99,5 +112,5 @@ def write_zip(files: dict[str, str | bytes], bib: str, pdf: bytes | None, title:
         if "latexmkrc" not in files:
             archive.writestr("latexmkrc", LATEXMKRC)
         if pdf is not None:
-            archive.writestr(f"{re.sub(r'[^A-Za-z0-9._-]', '_', title).strip('_') or 'manuscript'}.pdf", pdf)
+            archive.writestr(f"{safe_name(title)}.pdf", pdf)
     return buf.getvalue()

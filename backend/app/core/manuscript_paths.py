@@ -4,7 +4,8 @@ import re
 
 from app.core.errors import InvalidInput
 
-TEXT_EXTENSIONS = {".tex", ".bib", ".sty", ".cls", ".bst", ".txt", ".md", ".csv", ".dat"}
+TEXT_EXTENSIONS = {".tex", ".bib", ".sty", ".cls", ".bst", ".txt", ".md", ".csv", ".dat",
+                   ".clo", ".def", ".cfg", ".bbx", ".cbx", ".tikz", ".pgf"}
 BINARY_EXTENSIONS = {".png", ".jpg", ".jpeg", ".pdf"}
 TEXT_NAMES = {"latexmkrc"}
 MAX_TEXT = 2 * 1024**2

@@ -11,7 +11,9 @@ from app.core import workspaces
 from app.core.citations_export import _bibtex, bibtex_keys, csl_item
 from app.models import Manuscript, ManuscriptCiteKey
 
-CITE = re.compile(r"\\(?:cite|citep|citet|citealp|citeauthor|citeyear|nocite)\*?(?:\s*\[[^\]]*\]){0,2}\s*\{([^}]*)\}")
+# Any command with "cite" in its name: natbib's \citealt, \Citet, \citeyearpar…, biblatex's \parencite, \textcite,
+# \autocite… A non-citing match (\citestyle{plain}) is harmless: only keys that match a paper get pinned.
+CITE = re.compile(r"\\[A-Za-z]*[Cc]ite[A-Za-z]*\*?(?:\s*\[[^\]]*\]){0,2}\s*\{([^}]*)\}")
 COMMENT = re.compile(r"(?<!\\)%.*")
 
 
@@ -34,8 +36,12 @@ async def build_bib(session: AsyncSession, manuscript: Manuscript, sources: dict
     items = {str(p.id): csl_item(p) for p in papers}
     query = select(ManuscriptCiteKey).where(ManuscriptCiteKey.manuscript_id == manuscript.id)
     rows = {r.key: r for r in await session.scalars(query)}
-    # a pin whose paper is gone still reserves its key: its own key stands in as the id
-    pins = {str(r.paper_id) if r.paper_id else f"orphan:{r.key}": r.key for r in rows.values()}
+    # A pin whose paper is gone still reserves its key: its own key stands in as the id. So does a second pin on one
+    # paper (a merge moved both papers' pins onto it): the paper keeps its first key, the other is emitted as is below.
+    pins: dict[str, str] = {}
+    for r in sorted(rows.values(), key=lambda r: r.key):
+        pins.setdefault(str(r.paper_id) if r.paper_id else f"orphan:{r.key}", r.key)
+    pins |= {f"orphan:{r.key}": r.key for r in rows.values() if r.key not in pins.values()}
     generated = {key: pid for pid, key in bibtex_keys(list(items.values()), pins).items()}
     for key in cited_keys(sources.values()):
         if key in generated and key not in rows:
@@ -48,5 +54,7 @@ async def build_bib(session: AsyncSession, manuscript: Manuscript, sources: dict
         if row.paper_id and (item := items.get(str(row.paper_id))):
             row.bibtex = _bibtex([item], {item["id"]: row.key})
     await session.flush()
-    orphans = [r.bibtex for _, r in sorted(rows.items()) if str(r.paper_id) not in items]
+    # stored entries: a paper gone or out of the workspace, and a merged paper's second key
+    orphans = [r.bibtex for _, r in sorted(rows.items())
+               if str(r.paper_id) not in items or pins.get(str(r.paper_id)) != r.key]
     return _bibtex(list(items.values()), pins) + "".join(orphans)

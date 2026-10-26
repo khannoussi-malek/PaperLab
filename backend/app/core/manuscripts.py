@@ -19,6 +19,8 @@ from app.models import Manuscript, ManuscriptFile, Workspace
 
 _UNSET = object()  # "leave this field as it is"; workspace_id=None moves the manuscript out of its workspace
 _NOW = func.clock_timestamp()  # not now(): that is the transaction's start, so two saves in one transaction tie
+# A `running` older than this has no live job behind it: the worker died, or ARQ's timeout cancelled the job.
+STALE_AFTER = timedelta(seconds=COMPILE_TIMEOUT + 60)
 _META = load_only(ManuscriptFile.id, ManuscriptFile.manuscript_id, ManuscriptFile.path, ManuscriptFile.size,
                   ManuscriptFile.updated_at)
 
@@ -214,6 +216,11 @@ async def remove(session: AsyncSession, manuscript_id: uuid.UUID, path: str) -> 
     await session.execute(update_rows(Manuscript).where(Manuscript.id == manuscript_id).values(updated_at=_NOW))
 
 
+def interrupted(manuscript: Manuscript, now: datetime) -> bool:
+    started = manuscript.compile_started_at
+    return manuscript.compile_status == "running" and (started is None or now - started >= STALE_AFTER)
+
+
 def pdf_path(manuscript_id: uuid.UUID) -> Path:
     return settings.pdf_dir / "manuscripts" / f"{manuscript_id}.pdf"
 
@@ -225,8 +232,7 @@ async def request_compile(session: AsyncSession, manuscript_id: uuid.UUID, *, no
                                       .execution_options(populate_existing=True))
     if manuscript is None:
         raise NotFound("unknown_manuscript")
-    started = manuscript.compile_started_at
-    if manuscript.compile_status == "running" and started and now - started < timedelta(seconds=COMPILE_TIMEOUT + 60):
+    if manuscript.compile_status == "running" and not interrupted(manuscript, now):
         manuscript.compile_requested = True
         await session.commit()
         return "again"

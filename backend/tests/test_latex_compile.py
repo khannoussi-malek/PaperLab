@@ -48,8 +48,32 @@ def test_friendly_biber():
     assert lc.friendly_message(_fix("biblatex.stderr.txt")) == "biber_unsupported"
 
 
-def test_friendly_needs_download():
-    assert lc.friendly_message(_fix("offline-cold.stderr.txt")) == "needs_download"
+MISSING = "error: main.tex:2: ! LaTeX Error: File `fontawesome5.sty' not found.\n"
+
+
+def test_a_missing_package_is_named():
+    res = lc.finish(1, MISSING, "", None)
+    assert res.friendly == "package_missing"
+    assert {"file": "main.tex", "line": None, "message": "fontawesome5", "kind": "package_missing"} in res.errors
+
+
+def test_a_missing_class_is_a_missing_package_too():
+    assert lc.friendly_message("error: main.tex:1: ! LaTeX Error: File `revtex4-2.cls' not found.") == "package_missing"
+
+
+def test_a_missing_tex_input_is_not_a_package():
+    assert lc.friendly_message("error: main.tex:3: ! LaTeX Error: File `chapter1.tex' not found.") is None
+
+
+@pytest.mark.parametrize("written", ["/tectonic-cache/natbib.sty", "../escape.txt", "sub/../../x.txt"])
+def test_a_write_outside_the_project_voids_the_pdf(written):
+    res = lc.finish(0, f"note: Writing `{written}` (2 B)\nnote: Writing `main.pdf` (2 KiB)\n", "", b"%PDF")
+    assert (res.ok, res.pdf, res.friendly) == (False, None, "outside_file")
+
+
+def test_writes_inside_the_project_are_fine():
+    res = lc.finish(0, "note: Writing `main.pdf` (2 KiB)\nnote: Writing `sub/notes.txt` (2 B)\n", "", b"%PDF")
+    assert (res.ok, res.friendly) == (True, None)
 
 
 def test_log_is_truncated_to_200kb_and_drops_fontconfig():
@@ -195,6 +219,68 @@ async def test_untrusted_cannot_read_outside_the_project(real, tmp_path):
     (tmp_path / "main.tex").write_text(ARTICLE % "\\input{/etc/hosts}")
     res = await lc.compile_dir(tmp_path, "main.tex")
     assert (res.ok, res.pdf, res.friendly) == (False, None, "outside_file")
+
+
+OPENOUT = "\\newwrite\\w\\immediate\\openout\\w=%s\\immediate\\write\\w{x}\\immediate\\closeout\\w\nhi"
+
+
+@tectonic
+@needs_bin
+async def test_an_absolute_openout_fails_the_compile(real, tmp_path):
+    work = tmp_path / "work"
+    work.mkdir()
+    (work / "main.tex").write_text(ARTICLE % (OPENOUT % (tmp_path / "abs-out.txt")))
+    res = await lc.compile_dir(work, "main.tex")
+    assert (res.ok, res.pdf, res.friendly) == (False, None, "outside_file")
+
+
+@tectonic
+@needs_bin
+async def test_a_parent_openout_fails_the_compile(real, tmp_path):
+    work = tmp_path / "work"
+    work.mkdir()
+    (work / "main.tex").write_text(ARTICLE % (OPENOUT % "../rel-out.txt"))
+    res = await lc.compile_dir(work, "main.tex")
+    assert (res.ok, res.pdf, res.friendly) == (False, None, "outside_file")
+
+
+@tectonic
+@needs_bin
+async def test_a_missing_package_fails_with_its_name(real, tmp_path):
+    tex = ARTICLE.replace("\\begin{document}", "\\usepackage{paperlabnosuchpkg}\n\\begin{document}")
+    (tmp_path / "main.tex").write_text(tex % "x")
+    res = await lc.compile_dir(tmp_path, "main.tex")
+    assert (res.ok, res.friendly) == (False, "package_missing")
+    assert [e["message"] for e in res.errors if e["kind"] == "package_missing"] == ["paperlabnosuchpkg"]
+
+
+@tectonic
+@needs_bin
+async def test_a_nested_main_file_yields_its_pdf_and_log(real, tmp_path):
+    (tmp_path / "paper" / "sections").mkdir(parents=True)
+    (tmp_path / "paper" / "main.tex").write_text(ARTICLE % "\\input{sections/intro}")
+    (tmp_path / "paper" / "sections" / "intro.tex").write_text("Hello nested.")
+    res = await lc.compile_dir(tmp_path, "paper/main.tex")
+    assert res.ok and res.pdf.startswith(b"%PDF")
+    assert "(sections/intro)" in res.log  # from paper/main.log, not a main.log at the root
+
+
+async def test_a_huge_main_log_is_read_in_bounded_memory(tmp_path, monkeypatch):
+    import tracemalloc
+
+    (tmp_path / "tail.txt").write_text("\nLaTeX Warning: Citation `late' on page 9 undefined on input line 77.\n")
+    body = "head -c 30000000 /dev/zero | tr '\\0' a > main.log && cat tail.txt >> main.log\n"
+    monkeypatch.setattr(settings, "tectonic_bin", _script(tmp_path / "fake", body))
+    tracemalloc.start()
+    try:
+        res = await lc.compile_dir(tmp_path, "main.tex")
+        peak = tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+    assert peak < 5 * 1024**2, peak
+    assert len(res.log) <= lc.MAX_LOG
+    late = {"file": "main.tex", "line": 77, "message": "Citation `late' on page 9 undefined", "kind": "warning"}
+    assert late in res.errors
 
 
 @tectonic

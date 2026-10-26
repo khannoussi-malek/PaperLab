@@ -6,8 +6,9 @@ WORKDIR /src
 COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --no-dev --no-install-project
 
-# Tectonic, pinned and checked, with its package cache warmed by compiling every manuscript template: the first user
-# compile then needs no network, and acmart's ~20 s cold start is already paid.
+# Tectonic, pinned and checked, with its package cache warmed by compiling every .tex in manuscript_templates: the
+# five templates and warm-packages.tex (common packages; not a template). Compiles only ever read this cache
+# (TECTONIC_ONLY_CACHED), so acmart's ~20 s cold start is already paid and nothing is downloaded at compile time.
 FROM python:3.12-slim AS tex
 ARG TARGETARCH
 ENV TECTONIC_CACHE_DIR=/tectonic-cache
@@ -35,18 +36,21 @@ RUN for t in /templates/*.tex; do \
     done \
     && d=$(mktemp -d) && cd "$d" \
     && printf '\\documentclass{article}\\usepackage{verbatim}\\begin{document}\n\\begin{verbatim}\nx\n\\end{verbatim}\n\\end{document}\n' > main.tex \
-    && tectonic -X compile main.tex && rm -rf /tmp/*
+    && tectonic -X compile main.tex && rm -rf /tmp/* \
+    && chmod -R u=rwX,go=rX /tectonic-cache
 
 # Stage 3: runtime. api and worker share this image with different commands.
 FROM python:3.12-slim
 COPY --from=deps /venv /venv
 COPY --from=tex /usr/local/bin/tectonic /usr/local/bin/tectonic
 # Manuscripts compile as `tex` (TECTONIC_USER), an account with no home and no write access to anything of ours.
-# Fixed ids: a tectonic-cache volume from an earlier image must stay writable to this user after an upgrade.
 RUN groupadd --system --gid 999 tex \
     && useradd --system --uid 999 --gid 999 --no-create-home --shell /usr/sbin/nologin tex
-COPY --from=tex --chown=tex:tex /tectonic-cache /tectonic-cache
+# The package cache is root's and read-only to tex (dirs 755, files 644): a project's \openout can't rewrite a package
+# another project then loads. No volume: the cache lives in the image, so an update brings its warm set.
+COPY --from=tex /tectonic-cache /tectonic-cache
 ENV TECTONIC_CACHE_DIR=/tectonic-cache
+ENV TECTONIC_ONLY_CACHED=1
 ENV PATH=/venv/bin:$PATH PYTHONUNBUFFERED=1
 WORKDIR /src
 COPY . .

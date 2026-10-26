@@ -40,6 +40,16 @@ def test_cited_keys_reads_every_command_form_and_skips_comments():
     assert cited_keys([src]) == list("abcdefghi")
 
 
+def test_cited_keys_reads_natbib_and_biblatex_commands():
+    src = (
+        "\\citealt{a} \\citenum{b} \\citeyearpar[p.~2]{c} \\Citet{d} \\Citep*[see][]{e} \\Citealp{f}\n"
+        "\\parencite{g} \\textcite[ch.~3]{h} \\autocite{i} \\Parencite{j} \\footcite{k} \\citeauthor*{l}\n"
+        "% \\textcite{hidden}\n"
+        "\\recite{m} \\excite{n}\n"  # any letters around "cite": a custom \\recite resolves as BibTeX sees it
+    )
+    assert cited_keys([src]) == list("abcdefghijklmn")
+
+
 ORIGINAL_F7 = (
     "@article{smith2021deepa,\n\tauthor = {Smith, Jane},\n\ttitle = {Deep learning},\n"
     "\tjournal = {Journal of Things},\n\tyear = {2021},\n"
@@ -124,3 +134,41 @@ async def test_deleted_paper_keeps_its_stored_entry(session):
 async def test_orphan_manuscript_bib_holds_only_pinned_keys(session):
     _, _, m = await setup(session, with_ws=False)
     assert await build_bib(session, m, {"main.tex": "\\cite{smith2021deep}"}) == ""
+
+
+async def test_merging_two_papers_pinned_in_one_manuscript_keeps_both_keys(session):
+    import re
+
+    from test_paper_merges import EVIDENCE, PROOF, kept, merged
+
+    from app.core import merges
+
+    k, m = await kept(session), await merged(session)
+    ws = Workspace(name="W")
+    session.add(ws)
+    await session.flush()
+    for p in (k, m):
+        await workspaces.add_paper(session, ws.id, p.id)
+    draft = await manuscripts.create(session, title="M", template="article", workspace_id=ws.id)
+    keys = re.findall(r"@\w+\{([^,]+),", await build_bib(session, draft, {}))
+    source = {"main.tex": "".join(f"\\cite{{{key}}}" for key in keys)}
+    await build_bib(session, draft, source)
+    draft_id, k_id = draft.id, k.id
+    await session.commit()
+    assert len(keys) == 2
+
+    result = await merges.merge(session, m.id, k_id, identifier=PROOF, evidence=EVIDENCE)
+    assert result.status == "merged"
+
+    draft = await manuscripts.get(session, draft_id)
+    bib = await build_bib(session, draft, source)
+    assert sorted(re.findall(r"@\w+\{([^,]+),", bib)) == sorted(keys)  # each \cite still resolves, once
+    assert await pins(session, draft) == {key: k_id for key in keys}
+
+
+async def test_a_paper_that_left_the_workspace_keeps_its_stored_entry(session):
+    ws, (p,), m = await setup(session, "Deep learning")
+    await build_bib(session, m, {"main.tex": "\\cite{smith2021deep}"})
+    await workspaces.remove_paper(session, ws.id, p.id)
+    bib = await build_bib(session, m, {})
+    assert "@misc{smith2021deep," in bib
