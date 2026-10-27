@@ -151,3 +151,23 @@ test('collapsing Sections frees only 208 px: at 1044 the rest still needs more t
   expect(screen.queryByRole('tab')).toBeNull() // (the grid string is not asserted: jsdom drops a template with a rail in it)
   expect(screen.getAllByRole('region')).toHaveLength(3)
 })
+
+test('the shared tabs follow the ARIA tabs pattern: arrows move between them, only the selected one is in the tab order', () => {
+  setWidth(1000)
+  render(<StudioColumns columns={shared} />)
+  const pdfTab = screen.getByRole('tab', { name: 'PDF' })
+  const papersTab = screen.getByRole('tab', { name: 'Papers' })
+  expect(pdfTab).toHaveAttribute('tabindex', '0')
+  expect(papersTab).toHaveAttribute('tabindex', '-1')
+  pdfTab.focus()
+  fireEvent.keyDown(pdfTab, { key: 'ArrowRight' })
+  expect(papersTab).toHaveAttribute('aria-selected', 'true')
+  expect(papersTab).toHaveFocus()
+  expect(papersTab).toHaveAttribute('tabindex', '0')
+  expect(pdfTab).toHaveAttribute('tabindex', '-1')
+  fireEvent.keyDown(papersTab, { key: 'ArrowRight' }) // wraps
+  expect(pdfTab).toHaveFocus()
+  fireEvent.keyDown(pdfTab, { key: 'ArrowLeft' })
+  expect(papersTab).toHaveFocus()
+  expect(screen.getByText('deck')).toBeVisible()
+})
