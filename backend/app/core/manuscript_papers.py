@@ -3,35 +3,16 @@ paperlab.bib uses, note counts, and a relevance ranking against a section's text
 
 import uuid
 
-from sqlalchemy import and_, case, exists, func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import manuscripts
 from app.core.citations_export import _bibtex
 from app.core.errors import NotFound
 from app.core.manuscript_bib import key_state
+from app.core.note_counts import note_counts
 from app.core.retrieval import retrieve
-from app.models import Manuscript, ManuscriptCiteKey, Paper, note_anchors, note_papers
-from app.models.note import Note, Provenance
-
-AI = (Provenance.LLM, Provenance.LLM_EDITED)
-
-
-async def _counts(session: AsyncSession, paper_ids: list[uuid.UUID]) -> dict[uuid.UUID, dict[str, int]]:
-    anchored = exists().where(
-        and_(note_anchors.c.note_id == Note.id, note_anchors.c.paper_id == note_papers.c.paper_id)
-    )
-    kind = case((Note.provenance.in_(AI), "ai"), (anchored, "highlights"), else_="notes")
-    query = (
-        select(note_papers.c.paper_id, kind.label("kind"), func.count().label("n"))
-        .join(Note, Note.id == note_papers.c.note_id)
-        .where(note_papers.c.paper_id.in_(paper_ids))
-        .group_by(note_papers.c.paper_id, kind)
-    )
-    counts: dict[uuid.UUID, dict[str, int]] = {}
-    for paper_id, k, n in await session.execute(query):
-        counts.setdefault(paper_id, {})[k] = n
-    return counts
+from app.models import Manuscript, ManuscriptCiteKey, Paper
 
 
 async def _citable(session, manuscript) -> tuple[list[Paper], dict[str, str], set[str]]:
@@ -48,7 +29,7 @@ async def _citable(session, manuscript) -> tuple[list[Paper], dict[str, str], se
 async def list_papers(session: AsyncSession, mid: uuid.UUID) -> list[dict]:
     manuscript = await manuscripts.get(session, mid)
     papers, keys, pinned = await _citable(session, manuscript)
-    counts = await _counts(session, [p.id for p in papers]) if papers else {}
+    counts = await note_counts(session, [p.id for p in papers]) if papers else {}
     return [
         {
             "paper_id": p.id,
@@ -58,9 +39,9 @@ async def list_papers(session: AsyncSession, mid: uuid.UUID) -> list[dict]:
             "first_author": p.authors[0] if p.authors else None,
             "year": p.year,
             "has_pdf": p.has_pdf,
-            "notes": counts.get(p.id, {}).get("notes", 0),
-            "highlights": counts.get(p.id, {}).get("highlights", 0),
-            "ai_notes": counts.get(p.id, {}).get("ai", 0),
+            "notes": counts[p.id]["notes"],
+            "highlights": counts[p.id]["highlights"],
+            "ai_notes": counts[p.id]["ai_notes"],
         }
         for p in papers
     ]

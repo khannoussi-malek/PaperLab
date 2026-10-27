@@ -85,6 +85,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/papers/note-counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Paper Note Counts */
+        post: operations["paper_note_counts_api_papers_note_counts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/papers/{paper_id}": {
         parameters: {
             query?: never;
@@ -4182,6 +4199,21 @@ export interface components {
              */
             free_copies: string[];
         };
+        /** NoteCountsIn */
+        NoteCountsIn: {
+            /** Paper Ids */
+            paper_ids: string[];
+        };
+        /**
+         * NoteCountsOut
+         * @description Notes, highlights and AI notes per paper id (zeros for a paper with none).
+         */
+        NoteCountsOut: {
+            /** Counts */
+            counts: {
+                [key: string]: components["schemas"]["PaperNoteCounts"];
+            };
+        };
         /**
          * NoteCreate
          * @description An anchored note (`anchor`), or a note on a paper saved without a PDF (`paper_id`, with an optional `quote` from
@@ -4378,6 +4410,15 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** PaperNoteCounts */
+        PaperNoteCounts: {
+            /** Notes */
+            notes: number;
+            /** Highlights */
+            highlights: number;
+            /** Ai Notes */
+            ai_notes: number;
         };
         /** PaperOut */
         PaperOut: {
@@ -5879,6 +5920,39 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    paper_note_counts_api_papers_note_counts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoteCountsIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteCountsOut"];
+                };
             };
             /** @description Validation Error */
             422: {
