@@ -13,6 +13,7 @@ import type { DeckPaper } from './deck/deckModel'
 import { LatexEditor } from './LatexEditor'
 import { replaceSpan } from './pdfEdit'
 import type { PreambleEdit } from './results/insertBlock'
+import { InsertMenu } from './results/InsertMenu'
 
 const AUTOSAVE_MS = 1000
 const SAVE_LABEL: Record<SaveState, string> = {
@@ -45,6 +46,8 @@ type Props = {
   onCite?: (paperId: string) => void
   /** Puts a table or figure at the cursor with the packages it needs (the Insert menu, next). */
   onInsertBlock?: (code: string, packages: string[]) => Promise<{ ok: true } | { ok: false; message: string }>
+  /** Every file's live text, for unique labels. */
+  labelTexts?: () => string[]
   /** Hands the page a way to insert text at the editor's cursor, as a normal edit (optionally with a preamble edit in the same change). */
   registerInsert?: (insert: ((text: string, block?: boolean, preamble?: PreambleEdit) => void) | null) => void
   registerFindEvidence?: (run: (() => boolean) | null) => void
@@ -207,6 +210,7 @@ export function SourcePane(props: Props) {
       <div className="flex items-center gap-3 border-b border-glass-border px-3 py-1.5">
         <span className="min-w-0 flex-1 truncate text-sm font-medium">{path}</span>
         <span aria-live="polite" className="text-xs text-muted-foreground">{SAVE_LABEL[state]}</span>
+        {props.onInsertBlock && <InsertMenu manuscriptId={manuscriptId} labelTexts={props.labelTexts ?? (() => [])} onInsert={props.onInsertBlock} />}
         <Button size="sm" disabled={compiling || text === null} onClick={() => void compileNow()}>
           {compiling && <Loader2 aria-hidden className="animate-spin motion-reduce:animate-none" />}
           {compiling ? 'Compiling…' : 'Compile'}
