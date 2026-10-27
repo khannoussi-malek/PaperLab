@@ -11,6 +11,7 @@ import type { DeckAction } from './deckGestures'
 import { PaperDeck } from './PaperDeck'
 
 const RANK_DELAY_MS = 500
+const RANK_MAX_CHARS = 20_000 // RankIn's max_length: more is a 422
 
 export type DeckColumnProps = {
   manuscriptId: string
@@ -100,7 +101,7 @@ export function DeckColumn({ manuscriptId, sectionKey, sectionText, allTexts, on
     let live = true
     const timer = setTimeout(() => {
       if (!text.current.trim()) return setRanked([])
-      api.rankPapers(manuscriptId, text.current).then((r) => live && setRanked(r.paper_ids), () => {})
+      api.rankPapers(manuscriptId, text.current.slice(0, RANK_MAX_CHARS)).then((r) => live && setRanked(r.paper_ids), () => {})
     }, RANK_DELAY_MS)
     return () => { live = false; clearTimeout(timer) }
   }, [manuscriptId, sectionKey])
