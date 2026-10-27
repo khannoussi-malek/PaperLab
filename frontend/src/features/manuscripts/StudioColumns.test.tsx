@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from '@testing-library/react'
 import { act } from '@testing-library/react'
-import { afterEach, beforeEach, expect, test } from 'vitest'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import type { PanelLimits } from '@/components/panelWidth'
 import { StudioColumns, type StudioColumn } from './StudioColumns'
 
@@ -108,4 +108,46 @@ test('revealing Papers on a wide screen leaves the PDF and the remembered tab al
   rerender(<StudioColumns columns={shared} reveal={{ id: 'papers', n: 1 }} />)
   expect(JSON.parse(localStorage.getItem('paperlab-studio-collapsed')!)).toEqual(['pdf'])
   expect(localStorage.getItem('paperlab-studio-tab')).not.toBe('papers')
+})
+
+// The studio's own width (not the window's) decides: a ResizeObserver on the grid, driven by hand here.
+let measure: (w: number) => void
+const measured = (container: number, inner = 1280) => {
+  vi.stubGlobal('ResizeObserver', class { constructor(cb: (e: unknown[]) => void) { measure = (w) => act(() => cb([{ contentRect: { width: w } }])) } observe() {} unobserve() {} disconnect() {} })
+  setWidth(inner)
+  const view = render(<StudioColumns columns={sectioned} />)
+  measure(container)
+  return view
+}
+const sectioned: StudioColumn[] = [
+  { id: 'sections', label: 'Sections', content: <button>nav</button>, limits: { storageKey: 'm-s', defaultWidth: 240, minWidth: 180, maxShare: 0.25 } },
+  { id: 'editor', label: 'Editor', content: <button>ed</button> },
+  { id: 'pdf', label: 'PDF', content: <button>pdf page</button>, limits: { storageKey: 'm-p', defaultWidth: 520, minWidth: 360, maxShare: 0.6 }, shareWith: 'papers' },
+  { id: 'papers', label: 'Papers', content: <button>deck</button>, limits: { storageKey: 'm-k', defaultWidth: 320, minWidth: 260, maxShare: 0.3 } },
+]
+const grid = (c: HTMLElement) => (c.firstChild as HTMLElement).style.gridTemplateColumns
+afterEach(() => vi.unstubAllGlobals())
+
+test('a 1044 px studio cannot fit all four columns plus a 420 px editor: PDF and Papers share, the editor flexes', () => {
+  const { container } = measured(1044, 1280) // a 1280 window, so the old window rule would have said "wide"
+  expect(screen.getByRole('tab', { name: 'Papers' })).toBeInTheDocument()
+  expect(grid(container)).toContain('minmax(0,1fr)')
+  expect(grid(container)).not.toContain('420px')
+})
+
+test('a 1500 px studio shows four columns, the editor never under 420 px', () => {
+  const { container } = measured(1500, 1500)
+  expect(screen.queryByRole('tab')).toBeNull()
+  expect(screen.getAllByRole('region')).toHaveLength(4)
+  expect(grid(container)).toContain('minmax(420px,1fr)')
+})
+
+test('collapsing Sections frees only 208 px: at 1044 the rest still needs more than that, at 1300 it fits', () => {
+  measured(1044, 1280)
+  fireEvent.click(screen.getByRole('button', { name: 'Collapse Sections' }))
+  // 32 rail + 520 + 320 + 420 = 1292 > 1044: still shared
+  expect(screen.getByRole('tab', { name: 'Papers' })).toBeInTheDocument()
+  measure(1300) // 1292 <= 1300: now four columns
+  expect(screen.queryByRole('tab')).toBeNull() // (the grid string is not asserted: jsdom drops a template with a rail in it)
+  expect(screen.getAllByRole('region')).toHaveLength(3)
 })

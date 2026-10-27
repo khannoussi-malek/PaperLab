@@ -51,6 +51,9 @@ function SharedTabs({ tabs, active, onActive }: { tabs: { id: string; label: str
 
 const COLLAPSED_KEY = 'paperlab-studio-collapsed'
 const RAIL = '2rem'
+const RAIL_PX = 32
+/** The editor never gets less than this; when the fixed columns would leave it less, the PDF and Papers share a column. */
+const EDITOR_MIN = 420
 
 function loadCollapsed(): string[] {
   try {
@@ -63,9 +66,34 @@ function loadCollapsed(): string[] {
 
 /** Resizable, collapsible columns side by side. F6 / Shift+F6 move focus between the open ones. */
 export function StudioColumns({ columns: all, reveal }: { columns: StudioColumn[]; reveal?: { id: string; n: number } }) {
-  const narrow = useNarrow()
   const [activeTab, setActiveTab] = useState(() => { try { return browserStorage()?.getItem(TAB_KEY) ?? '' } catch { return '' } })
   useEffect(() => { try { browserStorage()?.setItem(TAB_KEY, activeTab) } catch { /* ponytail: blocked storage only loses the choice */ } }, [activeTab])
+  const root = useRef<HTMLDivElement>(null)
+  const [collapsed, setCollapsed] = useState(loadCollapsed)
+  const [widths, setWidths] = useState(() =>
+    Object.fromEntries(all.flatMap((c) => (c.limits ? [[c.id, loadPanelWidth(c.limits, browserStorage())]] : []))),
+  )
+  useEffect(() => {
+    try { browserStorage()?.setItem(COLLAPSED_KEY, JSON.stringify(collapsed)) } catch { /* ponytail: blocked storage only loses the choice */ }
+  }, [collapsed])
+  useEffect(() => all.forEach((c) => c.limits && widths[c.id] !== undefined && savePanelWidth(c.limits, browserStorage(), widths[c.id])), [widths]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The studio's own width decides, not the window's: the app rail and the saved column widths both take room.
+  // Until the first measurement, the window width is the guess.
+  const guess = useNarrow()
+  const [room, setRoom] = useState<number | null>(null)
+  useEffect(() => {
+    const el = root.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver((entries) => setRoom(entries[entries.length - 1].contentRect.width))
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+  const fixed = all.reduce(
+    (sum, c) => sum + (!c.limits ? 0 : collapsed.includes(c.id) ? RAIL_PX : clampPanelWidth(c.limits, widths[c.id] ?? c.limits.defaultWidth, window.innerWidth)),
+    0,
+  )
+  const narrow = room === null ? guess : fixed + EDITOR_MIN > room
   const columns = narrow ? all.flatMap((c): StudioColumn[] => {
     const partner = all.find((o) => o.id === c.shareWith)
     if (partner) {
@@ -78,15 +106,6 @@ export function StudioColumns({ columns: all, reveal }: { columns: StudioColumn[
     }
     return all.some((o) => o.shareWith === c.id) ? [] : [c]
   }) : all
-  const root = useRef<HTMLDivElement>(null)
-  const [collapsed, setCollapsed] = useState(loadCollapsed)
-  const [widths, setWidths] = useState(() =>
-    Object.fromEntries(all.flatMap((c) => (c.limits ? [[c.id, loadPanelWidth(c.limits, browserStorage())]] : []))),
-  )
-  useEffect(() => {
-    try { browserStorage()?.setItem(COLLAPSED_KEY, JSON.stringify(collapsed)) } catch { /* ponytail: blocked storage only loses the choice */ }
-  }, [collapsed])
-  useEffect(() => all.forEach((c) => c.limits && widths[c.id] !== undefined && savePanelWidth(c.limits, browserStorage(), widths[c.id])), [widths]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -115,7 +134,7 @@ export function StudioColumns({ columns: all, reveal }: { columns: StudioColumn[
   const editorAt = columns.findIndex((c) => !c.limits)
   const width = (c: StudioColumn) => (c.limits ? clampPanelWidth(c.limits, widths[c.id] ?? c.limits.defaultWidth, window.innerWidth) : 0)
   const track = (c: StudioColumn) =>
-    collapsed.includes(c.id) ? RAIL : c.id === flexId || !c.limits ? 'minmax(0,1fr)' : panelTrack(c.limits, widths[c.id] ?? c.limits.defaultWidth)
+    collapsed.includes(c.id) ? RAIL : !c.limits && !narrow ? `minmax(${EDITOR_MIN}px,1fr)` : c.id === flexId || !c.limits ? 'minmax(0,1fr)' : panelTrack(c.limits, widths[c.id] ?? c.limits.defaultWidth)
 
   return (
     <div ref={root} className="grid min-h-0 flex-1 overflow-hidden" style={{ gridTemplateColumns: columns.map(track).join(' ') }}>
