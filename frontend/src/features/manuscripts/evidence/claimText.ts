@@ -2,7 +2,7 @@ import { sentenceAt } from '../pdfEdit'
 
 const COMMENT = /(?<!\\)%.*$/gm
 const BLANK_LINE = /\r?\n[ \t]*\r?\n/g
-const DROPPED = /\\(?:[a-zA-Z]*cite[a-zA-Z]*|ref|eqref|label)\*?(?:\[[^\]]*\])*\{[^{}]*\}/g
+const DROPPED = /\\(?:[a-zA-Z]*cite[a-zA-Z]*|ref|eqref|label|chapter|section|subsection|subsubsection|paragraph)\*?(?:\[[^\]]*\])*\{[^{}]*\}/g
 const WITH_ARG = /\\[a-zA-Z]+\*?(?:\[[^\]]*\])*\{([^{}]*)\}/g
 
 /** LaTeX source of one sentence as the plain text a reader (or a model) would see. */

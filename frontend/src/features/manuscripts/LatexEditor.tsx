@@ -27,8 +27,8 @@ type Props = {
   onShowInPdf?: (line: number) => void
   /** Mod-Alt-K with the cursor in a \cite{…} key list: the key under it. */
   onCiteKey?: (key: string) => void
-  /** Mod-E: find evidence for the selection, or the sentence at the cursor (from, to are equal then). */
-  onFindEvidence?: (from: number, to: number) => void
+  /** Mod-E: find evidence for the selection, or the sentence at the cursor (from, to are equal then), in the editor's own text. */
+  onFindEvidence?: (doc: string, from: number, to: number) => void
   /** Hands the page a way to insert text at the cursor (the last one when unfocused; the end if it never moved) as a normal edit, then focus the editor. */
   registerInsert?: (insert: ((text: string) => void) | null) => void
   /** Hands out a way to run Find evidence on the last cursor; it returns false until the cursor has been placed. */
@@ -156,7 +156,7 @@ export function LatexEditor({ value, onChange, errors, onSave, jumpTo, onCursor,
             },
           },
           // Mod-e is free: CodeMirror binds only Ctrl-e (line end), and only on macOS, where Mod is Cmd. Taken high anyway.
-          { key: 'Mod-e', run: (v) => { const { from, to } = v.state.selection.main; latest.current.onFindEvidence?.(from, to); return true } },
+          { key: 'Mod-e', run: (v) => { const { from, to } = v.state.selection.main; latest.current.onFindEvidence?.(v.state.doc.toString(), from, to); return true } },
           { key: 'Mod-Alt-p', run: (v) => (latest.current.onShowInPdf?.(v.state.doc.lineAt(v.state.selection.main.head).number), true) },
         ])),
         EditorView.updateListener.of((u) => {
@@ -173,7 +173,7 @@ export function LatexEditor({ value, onChange, errors, onSave, jumpTo, onCursor,
     latest.current.registerFindEvidence?.(() => {
       if (!moved.current) return false
       const { from, to } = editor.state.selection.main
-      latest.current.onFindEvidence?.(from, to)
+      latest.current.onFindEvidence?.(editor.state.doc.toString(), from, to)
       return true
     })
     latest.current.registerInsert?.((text) => {

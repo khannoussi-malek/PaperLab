@@ -8,7 +8,7 @@ import { ManuscriptPage } from './ManuscriptPage'
 
 const pdf = vi.hoisted(() => vi.fn((_url: string | null) => ({ doc: null, error: null })))
 // jsdom can't lay CodeMirror out, so here the editor is a textarea with the same props (LatexEditor.test.tsx runs the real one).
-type EditorProps = { value: string; onChange: (v: string) => void; onCursor?: (l: number) => void; onSectionStep?: (s: -1 | 1) => void; onShowInPdf?: (l: number) => void; onCiteKey?: (k: string) => void; registerInsert?: (f: ((t: string) => void) | null) => void; jumpTo?: { line: number; n: number } | null }
+type EditorProps = { value: string; onChange: (v: string) => void; onFindEvidence?: (doc: string, from: number, to: number) => void; onCursor?: (l: number) => void; onSectionStep?: (s: -1 | 1) => void; onShowInPdf?: (l: number) => void; onCiteKey?: (k: string) => void; registerInsert?: (f: ((t: string) => void) | null) => void; jumpTo?: { line: number; n: number } | null }
 const editor = vi.hoisted(() => ({ current: null as null | EditorProps }))
 vi.mock('./LatexEditor', async () => {
   const { useEffect, useRef } = await import('react')
@@ -808,6 +808,26 @@ test('Mod+Alt+K on a cite key opens that paper in the deck, already open', async
   await screen.findByRole('group', { name: 'Papers' })
   act(() => editor.current!.onCiteKey!('k1'))
   expect(await screen.findByRole('group', { name: 'Kappa paper' })).toBeInTheDocument()
+})
+
+test('Clear drops the evidence ask, so the deck remounting (wide to narrow) does not ask it again', async () => {
+  vi.spyOn(api, 'manuscriptPapers').mockResolvedValue([paper])
+  vi.spyOn(api, 'rankPapers').mockResolvedValue({ paper_ids: [] })
+  const find = vi.spyOn(api, 'findEvidence').mockResolvedValue({ sentence_hash: 'h', verdicts: 'unavailable', papers: [] })
+  widen()
+  renderPage()
+  await waitFor(() => expect(screen.getByLabelText('LaTeX source')).toHaveValue('hello'))
+  await screen.findByRole('group', { name: 'Papers' })
+  act(() => editor.current!.onFindEvidence!('Cats purr.', 2, 2))
+  await waitFor(() => expect(find).toHaveBeenCalledTimes(1))
+  fireEvent.click(await screen.findByRole('button', { name: 'Clear' }))
+  act(() => { Object.defineProperty(window, 'innerWidth', { value: 1024, configurable: true }); window.dispatchEvent(new Event('resize')) })
+  fireEvent.click(tab('Papers'))
+  await screen.findByRole('group', { name: 'Papers' })
+  await act(async () => { await new Promise((r) => setTimeout(r, 50)) })
+  expect(find).toHaveBeenCalledTimes(1)
+  act(() => editor.current!.onFindEvidence!('Cats purr.', 2, 2)) // a new ask still runs
+  await waitFor(() => expect(find).toHaveBeenCalledTimes(2))
 })
 
 test('Cmd+K jumps to a label in another file, opens a paper in the deck, and runs commands', async () => {

@@ -37,7 +37,7 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks() })
 
 function setup() {
-  const props = { manuscriptId: 'm1', sectionKey: 's', sectionText: 'x', allTexts: ['x'], onInsert: vi.fn(() => true), openKey: null, onFindEvidence: vi.fn(() => true) }
+  const props = { manuscriptId: 'm1', sectionKey: 's', sectionText: 'x', allTexts: ['x'], onInsert: vi.fn(() => true), openKey: null, onFindEvidence: vi.fn(() => true), onClearEvidence: vi.fn() }
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const ui = (ask: { doc: string; from: number; to: number; n: number } | null) => (
     <QueryClientProvider client={client}><DeckColumn {...props} evidenceAsk={ask} /></QueryClientProvider>
@@ -69,7 +69,7 @@ it('polls every 2 seconds while a check is queued or running and then shows the 
   await waitFor(() => expect(rows).toHaveBeenCalledTimes(1))
   rows.mockResolvedValue([row('pc', { status: 'done', verdict: 'supported', reason: 'It says so', quote: 'Cats do purr', page: 2 }), row('pb', { status: 'running' })])
   await tick(2100)
-  await waitFor(() => expect(status()).toContain('Gamma 2020, evidence 2, Supports'))
+  await waitFor(() => expect(status()).toContain('Gamma 2020, evidence 2, AI: Supports'))
   const calls = rows.mock.calls.length
   rows.mockResolvedValue([row('pc', { status: 'done', verdict: 'supported' }), row('pb', { status: 'done', verdict: 'not_addressed' })])
   await tick(2100)
@@ -79,14 +79,15 @@ it('polls every 2 seconds while a check is queued or running and then shows the 
   expect(rows.mock.calls.length).toBe(done) // all finished: it stops by itself
 })
 
-it('Clear (button or Esc) leaves evidence mode and stops polling', async () => {
-  const { ask } = setup()
+it('Clear (button or Esc) leaves evidence mode, stops polling and drops the page\'s ask', async () => {
+  const { ask, props } = setup()
   await screen.findByRole('group', { name: 'Papers' })
   ask()
   await screen.findByText(/Evidence for:/)
   await waitFor(() => expect(rows).toHaveBeenCalled())
   fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
   expect(screen.queryByText(/Evidence for:/)).toBeNull()
+  expect(props.onClearEvidence).toHaveBeenCalledTimes(1) // so a remounted column never asks it again
   await tick(500)
   const n = rows.mock.calls.length
   await tick(6000)
@@ -95,6 +96,22 @@ it('Clear (button or Esc) leaves evidence mode and stops polling', async () => {
   await screen.findByText(/Evidence for:/)
   fireEvent.keyDown(screen.getByRole('group', { name: 'Papers' }), { key: 'Escape' })
   expect(screen.queryByText(/Evidence for:/)).toBeNull()
+  expect(props.onClearEvidence).toHaveBeenCalledTimes(2)
+})
+
+it('a poll that fails once keeps polling and says nothing', async () => {
+  const { ask } = setup()
+  await screen.findByRole('group', { name: 'Papers' })
+  ask()
+  await screen.findByText(/Evidence for:/)
+  await waitFor(() => expect(rows).toHaveBeenCalledTimes(1))
+  rows.mockRejectedValueOnce(new Error('blip'))
+  await tick(2100)
+  await waitFor(() => expect(rows).toHaveBeenCalledTimes(2))
+  rows.mockResolvedValue([row('pc', { status: 'done', verdict: 'supported' }), row('pb', { status: 'done', verdict: 'supported' })])
+  await tick(2100)
+  await waitFor(() => expect(status()).toContain('Gamma 2020, evidence 2, AI: Supports'))
+  expect(screen.queryByText("Couldn't load the verdicts.")).toBeNull()
 })
 
 it('a new ask stops the old polling', async () => {
@@ -191,12 +208,15 @@ it('Mod+E in the deck does the same, and takes the key', async () => {
   expect(props.onFindEvidence).toHaveBeenCalledTimes(1)
 })
 
-it('stops polling when the verdicts cannot be loaded, says so, and Retry loads them again', async () => {
+it('stops polling when the verdicts keep failing to load, says so, and Retry loads them again', async () => {
   rows.mockRejectedValue(new Error('boom'))
   const { ask } = setup()
   await screen.findByRole('group', { name: 'Papers' })
   ask()
+  await screen.findByText(/Evidence for:/)
+  await tick(4500) // tried three times
   expect(await screen.findByText("Couldn't load the verdicts.")).toBeTruthy()
+  expect(rows).toHaveBeenCalledTimes(3)
   const calls = rows.mock.calls.length
   await tick(6000)
   expect(rows.mock.calls.length).toBe(calls)

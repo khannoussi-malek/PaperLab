@@ -33,6 +33,12 @@ describe('sentenceAtCursor', () => {
     expect(sentenceAtCursor('', 0, 0)).toBeNull()
   })
 
+  it('leaves section titles out of the claim', () => {
+    const doc = '\\section{Introduction}\nWrite your introduction here. More.'
+    expect(sentenceAtCursor(doc, doc.indexOf('your'), doc.indexOf('your'))?.plain).toBe('Write your introduction here.')
+    expect(sentenceAtCursor(String.raw`\subsection*{A} \paragraph{B} \chapter{C} \subsubsection{D} Text.`, 0, 0)?.plain).toBe('Text.')
+  })
+
   it('reads past a comment that holds a full stop', () => {
     const doc = 'We show % note. more\nthat it works.'
     const at = doc.indexOf('works')
