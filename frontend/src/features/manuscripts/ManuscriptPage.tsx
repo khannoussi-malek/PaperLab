@@ -2,7 +2,7 @@ import { useQueries } from '@tanstack/react-query'
 import { Download, FolderInput, History, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, ApiError } from '@/api/client'
-import { useCompileManuscript, useManuscript } from '@/api/queries'
+import { useCompileManuscript, useManuscript, useManuscriptPapers, usePinPaper } from '@/api/queries'
 import { AppShell } from '@/components/AppShell'
 import { Button } from '@/components/ui/button'
 import { LoadError } from '@/features/library/ErrorAlert'
@@ -33,6 +33,9 @@ import { useLeaveWarning } from './useLeaveWarning'
 /** The writing studio: files and outline | source | PDF. `file` is the `?file=` of the route; null is the main file. */
 export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscriptId: string; file: string | null; line?: number | null }) {
   const manuscript = useManuscript(manuscriptId)
+  const libraryPapers = useManuscriptPapers(manuscriptId)
+  const pin = usePinPaper()
+  const pinPaper = useCallback((paperId: string) => pin.mutate({ id: manuscriptId, paperId }), [pin.mutate, manuscriptId]) // eslint-disable-line react-hooks/exhaustive-deps
   const compile = useCompileManuscript()
   const data = manuscript.data
   const [live, setLive] = useState<Record<string, string>>({})
@@ -282,6 +285,8 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
                     registerReplace={registerReplace}
                     registerInsert={registerInsert}
                     onCiteKey={showCited}
+                    citeOptions={libraryPapers.data}
+                    onCite={pinPaper}
                   />
                 ),
               },
