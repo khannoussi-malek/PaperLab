@@ -81,12 +81,12 @@ export function StudioColumns({ columns: all, reveal }: { columns: StudioColumn[
   const root = useRef<HTMLDivElement>(null)
   const [collapsed, setCollapsed] = useState(loadCollapsed)
   const [widths, setWidths] = useState(() =>
-    Object.fromEntries(columns.flatMap((c) => (c.limits ? [[c.id, loadPanelWidth(c.limits, browserStorage())]] : []))),
+    Object.fromEntries(all.flatMap((c) => (c.limits ? [[c.id, loadPanelWidth(c.limits, browserStorage())]] : []))),
   )
   useEffect(() => {
     try { browserStorage()?.setItem(COLLAPSED_KEY, JSON.stringify(collapsed)) } catch { /* ponytail: blocked storage only loses the choice */ }
   }, [collapsed])
-  useEffect(() => columns.forEach((c) => c.limits && widths[c.id] !== undefined && savePanelWidth(c.limits, browserStorage(), widths[c.id])), [widths]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => all.forEach((c) => c.limits && widths[c.id] !== undefined && savePanelWidth(c.limits, browserStorage(), widths[c.id])), [widths]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -104,8 +104,8 @@ export function StudioColumns({ columns: all, reveal }: { columns: StudioColumn[
 
   useEffect(() => {
     if (!reveal) return
-    const host = all.find((c) => c.shareWith === reveal.id)?.id ?? reveal.id // the column the revealed one sits in when narrow
-    setActiveTab(reveal.id)
+    const host = narrow ? (all.find((c) => c.shareWith === reveal.id)?.id ?? reveal.id) : reveal.id // narrow: the column it shares
+    if (narrow) setActiveTab(reveal.id)
     setCollapsed((c) => c.filter((x) => x !== reveal.id && x !== host))
   }, [reveal?.n]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -113,9 +113,9 @@ export function StudioColumns({ columns: all, reveal }: { columns: StudioColumn[
   const open = columns.filter((c) => !collapsed.includes(c.id))
   const flexId = (open.find((c) => !c.limits) ?? open[open.length - 1])?.id // the column that takes what is left
   const editorAt = columns.findIndex((c) => !c.limits)
-  const width = (c: StudioColumn) => (c.limits ? clampPanelWidth(c.limits, widths[c.id], window.innerWidth) : 0)
+  const width = (c: StudioColumn) => (c.limits ? clampPanelWidth(c.limits, widths[c.id] ?? c.limits.defaultWidth, window.innerWidth) : 0)
   const track = (c: StudioColumn) =>
-    collapsed.includes(c.id) ? RAIL : c.id === flexId || !c.limits ? 'minmax(0,1fr)' : panelTrack(c.limits, widths[c.id])
+    collapsed.includes(c.id) ? RAIL : c.id === flexId || !c.limits ? 'minmax(0,1fr)' : panelTrack(c.limits, widths[c.id] ?? c.limits.defaultWidth)
 
   return (
     <div ref={root} className="grid min-h-0 flex-1 overflow-hidden" style={{ gridTemplateColumns: columns.map(track).join(' ') }}>

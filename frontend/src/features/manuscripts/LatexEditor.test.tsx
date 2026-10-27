@@ -102,3 +102,11 @@ test('insert goes to the last cursor (the end if it never moved), is a normal ed
   unmount()
   expect(insert).toBeNull()
 })
+
+test('an insert never replaces a selection left in an unfocused editor', () => {
+  let insert: ((t: string) => void) | null = null
+  const { container } = render(<LatexEditor value="abc" onChange={() => {}} errors={[]} onSave={() => {}} registerInsert={(f) => { insert = f }} />)
+  cm(container).dispatch({ selection: { anchor: 0, head: 2 } })
+  insert!('X')
+  expect(cm(container).state.doc.toString()).toBe('abXc')
+})

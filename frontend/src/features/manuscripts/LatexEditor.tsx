@@ -156,10 +156,10 @@ export function LatexEditor({ value, onChange, errors, onSave, jumpTo, onCursor,
     })
     view.current = editor
     latest.current.registerInsert?.((text) => {
-      const at = moved.current ? editor.state.selection.main : { from: editor.state.doc.length, to: editor.state.doc.length }
+      const at = moved.current ? editor.state.selection.main.head : editor.state.doc.length // never over a selection
       editor.dispatch({
-        changes: { from: at.from, to: at.to, insert: text },
-        selection: { anchor: at.from + text.length },
+        changes: { from: at, insert: text },
+        selection: { anchor: at + text.length },
         scrollIntoView: true,
         userEvent: 'input.paste', // a normal edit: reported to onChange (autosave) and undoable
       })
