@@ -1063,7 +1063,8 @@ The studio's fourth column, "Papers": the workspace's papers as a 3D deck of car
   order; a new turn finishes the running one at once. With the OS set to reduce motion the deck and the book cut plainly:
   no leaf element is created. The ui-ux-pro-max search (carousel / cover flow / keyboard / reduced motion) returned only the
   generic reduced-motion and keyboard-navigation rules, nothing new.
-- **Narrow windows:** under about 1280 px the PDF and the deck share the third column as two tabs.
+- **Narrow studios:** when the studio can't fit every column at its width plus a 420 px editor, the PDF and the deck
+  share the third column as two tabs (← → move between them). The studio's own width decides, not the window's.
 - **Test hooks:** `data-deck-card`, `data-book-tab`, `aria-roledescription` "paper deck" / "paper book", a turning leaf's
   faces carry `data-shade`.
 
