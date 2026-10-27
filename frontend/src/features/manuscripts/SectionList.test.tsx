@@ -19,7 +19,7 @@ const ITEMS = [
 
 function setup(over: Partial<React.ComponentProps<typeof SectionList>> = {}) {
   const props = {
-    manuscriptId: 'm1', main: 'main.tex', texts: TEXTS, errorsByFile: {}, current: { path: 'sections/intro.tex', line: 1 },
+    manuscriptId: 'm1', main: 'main.tex', texts: TEXTS, filePaths: ['main.tex', 'sections/intro.tex', 'sections/method.tex'], errorsByFile: {}, current: { path: 'sections/intro.tex', line: 1 },
     items: ITEMS, onOpen: vi.fn(), onJump: vi.fn(), flushCurrent: vi.fn(async () => true), ...over,
   }
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
@@ -124,4 +124,41 @@ test('Split into files shows only for single-file manuscripts', async () => {
   setup({ texts: { 'main.tex': '\\section{One}\nx\n\\section{Two}\ny' }, current: { path: 'main.tex', line: 1 } })
   fireEvent.click(screen.getByRole('button', { name: 'Split into files' }))
   await waitFor(() => expect(split).toHaveBeenCalledWith('m1'))
+})
+
+test('a section whose text is still loading is not called missing', () => {
+  const { 'sections/method.tex': _m, ...loaded } = TEXTS
+  setup({ texts: loaded })
+  expect(row(/method/)).toHaveTextContent('Loading')
+  expect(row(/method/)).not.toHaveTextContent('File missing')
+  expect(row(/gone/)).toHaveTextContent('File missing')
+})
+
+test('no empty state before main.tex has loaded', () => {
+  setup({ texts: {} })
+  expect(screen.queryByText(/No sections yet/)).toBeNull()
+  expect(screen.getByText('Loading sections…')).toBeInTheDocument()
+})
+
+test('a refused move does not leave focus to be stolen by a later one', async () => {
+  const move = vi.spyOn(api, 'moveSection').mockRejectedValueOnce(new Error('boom')).mockResolvedValue(undefined)
+  setup()
+  fireEvent.keyDown(row(/Introduction/), { key: 'ArrowDown', altKey: true })
+  await waitFor(() => expect(move).toHaveBeenCalledTimes(1))
+  row(/Method/).focus()
+  fireEvent.keyDown(row(/Method/), { key: 'ArrowUp', altKey: true })
+  await waitFor(() => expect(move).toHaveBeenCalledTimes(2))
+  await new Promise((r) => setTimeout(r, 20))
+  expect(row(/Introduction/)).not.toHaveFocus()
+})
+
+test('a double Delete sends one request', async () => {
+  const del = vi.spyOn(api, 'deleteSection').mockResolvedValue(undefined)
+  setup()
+  fireEvent.keyDown(row(/Method/), { key: 'Delete' })
+  const btn = await screen.findByRole('button', { name: 'Delete' })
+  fireEvent.click(btn)
+  fireEvent.click(btn)
+  await waitFor(() => expect(del).toHaveBeenCalled())
+  expect(del).toHaveBeenCalledTimes(1)
 })

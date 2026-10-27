@@ -8,7 +8,8 @@ const END_MARKERS = ['\\bibliographystyle', '\\bibliography{', '\\printbibliogra
 const uncomment = (raw: string) => raw.replace(COMMENT, '$1')
 
 /** One row per \input / \include of `main`; with none, one per top-level \section of `main` itself. */
-export function sectionRows(files: Record<string, string>, main: string): SectionRow[] {
+/** `known` are the manuscript's file paths: one of them with no text yet is still loading, not missing. */
+export function sectionRows(files: Record<string, string>, main: string, known?: ReadonlySet<string>): SectionRow[] {
   const lines = (files[main] ?? '').split('\n').map(uncomment)
   const rows: SectionRow[] = []
   lines.forEach((text, i) => {
@@ -16,7 +17,7 @@ export function sectionRows(files: Record<string, string>, main: string): Sectio
       const path = texName(m[1])
       const body = files[path]
       const title = body === undefined ? undefined : body.split('\n').map(uncomment).join('\n').match(SECTION)?.[1].trim()
-      rows.push({ path, title: title || path.replace(/^.*\//, '').replace(/\.tex$/, ''), line: i + 1, inMain: false, missing: body === undefined })
+      rows.push({ path, title: title || path.replace(/^.*\//, '').replace(/\.tex$/, ''), line: i + 1, inMain: false, missing: body === undefined && !known?.has(path) })
     }
   })
   if (rows.length) return rows

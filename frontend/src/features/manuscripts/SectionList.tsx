@@ -25,6 +25,8 @@ type Props = {
   main: string
   /** Text of every loaded .tex file, unsaved typing included. */
   texts: Record<string, string>
+  /** Every file path of the manuscript; one of these without text is still loading, not missing. */
+  filePaths: readonly string[]
   /** Compile errors per file. */
   errorsByFile: Record<string, number>
   current: { path: string; line: number }
@@ -37,7 +39,7 @@ type Props = {
 type Dlg = { kind: 'new'; after: string | null } | { kind: 'rename' | 'delete'; row: SectionRow } | null
 
 /** The paper as a list of sections: number, title, words and a status dot; new, rename, reorder, delete, split. */
-export function SectionList({ manuscriptId, main, texts, errorsByFile, current, items, onOpen, onJump, flushCurrent }: Props) {
+export function SectionList({ manuscriptId, main, texts, filePaths, errorsByFile, current, items, onOpen, onJump, flushCurrent }: Props) {
   const add = useAddSection()
   const split = useSplitSections()
   const retitle = useRetitleSection()
@@ -47,7 +49,7 @@ export function SectionList({ manuscriptId, main, texts, errorsByFile, current, 
   const [error, setError] = useState<string | null>(null)
   const buttons = useRef(new Map<string, HTMLButtonElement>())
   const refocus = useRef<string | null>(null)
-  const rows = sectionRows(texts, main)
+  const rows = sectionRows(texts, main, new Set(filePaths))
   const busy = add.isPending || split.isPending || retitle.isPending || move.isPending || remove.isPending
   const singleFile = rows.length > 0 && rows.every((r) => r.inMain)
   const key = (r: SectionRow) => `${r.path}:${r.line}`
@@ -64,7 +66,16 @@ export function SectionList({ manuscriptId, main, texts, errorsByFile, current, 
   const onError = (e: Error) => setError(manuscriptFailure(e))
   const go = (path: string) => window.location.assign(manuscriptHref(manuscriptId, path))
   // Every operation saves the open editor first and stops if that fails (the editor shows why).
-  const run = async (op: () => void) => { setError(null); if (await flushCurrent()) op() }
+  const working = useRef(false) // one operation at a time, flush included
+  const run = async (op: () => void, onFlushFailed?: () => void) => {
+    if (working.current) return
+    working.current = true
+    try {
+      setError(null)
+      if (await flushCurrent()) op()
+      else onFlushFailed?.()
+    } finally { working.current = false }
+  }
 
   const addSection = (title: string, after: string | null) =>
     run(() => add.mutate({ id: manuscriptId, title, after }, { onSuccess: (r) => { close(); go(r.path) }, onError }))
@@ -74,8 +85,7 @@ export function SectionList({ manuscriptId, main, texts, errorsByFile, current, 
     run(() => remove.mutate({ id: manuscriptId, path: row.path }, { onSuccess: () => { close(); if (row.path === current.path) go(main) }, onError }))
   const moveTo = (row: SectionRow, to: number) => {
     if (to < 0 || to >= rows.length) return
-    refocus.current = key(row)
-    void run(() => move.mutate({ id: manuscriptId, path: row.path, to }, { onError }))
+    void run(() => move.mutate({ id: manuscriptId, path: row.path, to }, { onSuccess: () => { refocus.current = key(row) }, onError }))
   }
   const splitFiles = () => run(() => split.mutate(manuscriptId, { onError }))
 
@@ -103,13 +113,16 @@ export function SectionList({ manuscriptId, main, texts, errorsByFile, current, 
         </Button>
       </div>
       {error && !dlg && <Alert variant="destructive" className="mx-2 mb-1 w-auto"><AlertDescription>{error}</AlertDescription></Alert>}
-      {rows.length === 0 ? (
+      {rows.length === 0 && texts[main] === undefined ? (
+        <p className="px-2 text-sm text-muted-foreground">Loading sections…</p>
+      ) : rows.length === 0 ? (
         <p className="px-2 text-sm text-muted-foreground">No sections yet. Add the first one.</p>
       ) : (
         <ul className="flex flex-col">
           {rows.map((row, i) => {
             const text = sectionText(texts, row)
-            const st = row.missing ? null : sectionStatus(text, row.inMain ? 0 : (errorsByFile[row.path] ?? 0)) // ponytail: rows inside main.tex show no compile errors
+            const pending = !row.missing && texts[row.path] === undefined
+            const st = row.missing || pending ? null : sectionStatus(text, row.inMain ? 0 : (errorsByFile[row.path] ?? 0)) // ponytail: rows inside main.tex show no compile errors
             const subs = row === openRow ? items.filter((it) => it.level > 1 && it.file === row.path && (!row.inMain || it.line > row.line && (rows[i + 1]?.line ?? Infinity) > it.line)) : []
             return (
               <li key={key(row)} onKeyDown={(e) => onKeyDown(e, row, i)}>
@@ -131,6 +144,8 @@ export function SectionList({ manuscriptId, main, texts, errorsByFile, current, 
                         <span aria-hidden title={st.label} className={cn('size-2 shrink-0 rounded-full', DOT[st.status])} />
                         <span className="sr-only">{st.label}</span>
                       </>
+                    ) : pending ? (
+                      <span className="shrink-0 text-xs text-muted-foreground">Loading…</span>
                     ) : (
                       <span className="shrink-0 text-xs text-destructive">File missing</span>
                     )}
