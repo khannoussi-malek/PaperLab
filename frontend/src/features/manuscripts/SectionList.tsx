@@ -98,7 +98,7 @@ export function SectionList({ manuscriptId, main, texts, filePaths, errorsByFile
     else if (e.key === 'Enter') { e.preventDefault(); onOpen(row) }
     else if (e.key === 'n' || e.key === 'N') { e.preventDefault(); setError(null); setDlg({ kind: 'new', after: row.inMain ? null : row.path }) }
     else if (e.key === 'F2' && !row.inMain) { e.preventDefault(); setError(null); setDlg({ kind: 'rename', row }) }
-    else if (e.key === 'Delete' && !row.inMain) { e.preventDefault(); setError(null); setDlg({ kind: 'delete', row }) }
+    else if ((e.key === 'Delete' || e.key === 'Backspace') && !row.inMain) { e.preventDefault(); setError(null); setDlg({ kind: 'delete', row }) }
   }
 
   const common = { open: true, onOpenChange: (o: boolean) => { if (!o) close() }, busy, error }

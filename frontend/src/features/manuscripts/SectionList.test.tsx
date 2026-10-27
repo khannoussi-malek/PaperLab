@@ -108,6 +108,14 @@ test('Delete asks, naming the file, then deletes', async () => {
   await waitFor(() => expect(del).toHaveBeenCalledWith('m1', 'sections/method.tex'))
 })
 
+test('Backspace (the Mac Delete key) asks too', async () => {
+  const del = vi.spyOn(api, 'deleteSection').mockResolvedValue(undefined)
+  setup()
+  fireEvent.keyDown(row(/Method/), { key: 'Backspace' })
+  expect(await screen.findByText('Delete sections/method.tex?')).toBeInTheDocument()
+  expect(del).not.toHaveBeenCalled()
+})
+
 test('the row menu has Move up and Move down', async () => {
   const move = vi.spyOn(api, 'moveSection').mockResolvedValue(undefined)
   setup()
