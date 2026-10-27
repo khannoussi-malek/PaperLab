@@ -25,8 +25,12 @@ test('a Key ideas brief is AI, cites its passage, and goes out of date when a ro
   await pickLens(page, 'Key ideas')
   await expect(card.locator('.brief-stale')).toContainText('Out of date: sections changed')
 
+  // Wait for the briefs to be read again (the stream's `done` refetches them), so the checks below see the saved brief,
+  // not the old stale one that is still on screen when the click returns. (A streamed POST's `finished()` never
+  // resolved here, so the re-read is the signal.)
+  const reread = page.waitForResponse((r) => r.request().method() === 'GET' && /\/briefs$/.test(new URL(r.url()).pathname))
   await card.getByRole('button', { name: 'Regenerate' }).click()
-  // The regenerated brief is saved and shown (`.brief-meta` only appears then) before it can count as not stale.
+  await reread
   await expect(card.locator('.brief-meta')).toContainText('fake:')
   await expect(card.locator('.brief-stale')).toHaveCount(0)
   await expect(card.locator('.brief-text')).toHaveText('Fake answer: the method is described here [C1].')
