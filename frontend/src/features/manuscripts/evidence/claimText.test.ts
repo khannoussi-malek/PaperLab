@@ -32,4 +32,21 @@ describe('sentenceAtCursor', () => {
     expect(sentenceAtCursor(String.raw`\citep{x} % only`, 0, 0)).toBeNull()
     expect(sentenceAtCursor('', 0, 0)).toBeNull()
   })
+
+  it('reads past a comment that holds a full stop', () => {
+    const doc = 'We show % note. more\nthat it works.'
+    const at = doc.indexOf('works')
+    expect(sentenceAtCursor(doc, at, at)?.plain).toBe('We show that it works.')
+  })
+
+  it('handles environments, spacing and escaped characters', () => {
+    const doc = String.raw`\begin{center}A \& B\_c \#1 costs \$5 and \$6\\ ok\,fine.\end{center}`
+    expect(sentenceAtCursor(doc, 0, 0)?.plain).toBe('A & B_c #1 costs $5 and $6 ok fine.')
+  })
+
+  it('finds paragraphs with CRLF line ends', () => {
+    const doc = 'Alpha beta\r\n\r\nGamma delta'
+    const at = doc.indexOf('Gamma')
+    expect(sentenceAtCursor(doc, at, at)?.plain).toBe('Gamma delta')
+  })
 })
