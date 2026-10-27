@@ -1,0 +1,48 @@
+% PaperLab: not a template. The images compile each template's main.tex a second time with this block \input after
+% \begin{document} (and booktabs, pgfplots, graphicx in the preamble), so every class fetches the font sizes its own
+% tables and charts use: a compile never downloads (TECTONIC_ONLY_CACHED). Needs warm-figure.png beside it.
+\begin{table}[t]
+\centering
+\begin{tabular}{lrr}
+\toprule
+System & F1 & Acc \\
+\midrule
+BERT-B & $88.5 \pm 0.3$ & $0.90 \pm 0.02$ \\
+BERT-L & \textbf{$90.9 \pm 0.1$} & \textbf{0.93} \\
+\bottomrule
+\end{tabular}
+\caption{Scores \citep{smith2021deep}}
+\label{tab:warm-scores}
+\end{table}
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}
+\begin{axis}[ybar, width=\linewidth, xlabel={System}, ylabel={F1}, symbolic x coords={a,b}, xtick=data, legend pos=outer north east]
+\addplot[error bars/.cd, y dir=both, y explicit] table[col sep=comma, row sep=\\, x=x, y=y, y error=err] {x,y,err\\ a,88.5,0.3\\ b,90.9,0\\};
+\addlegendentry{F1}
+\addplot table[col sep=comma, row sep=\\, x=x, y=y] {x,y\\ a,0.4\\ b,0.2\\};
+\addlegendentry{Std}
+\end{axis}
+\end{tikzpicture}
+\caption{Grouped bars}
+\label{fig:warm-bars}
+\end{figure}
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}
+\begin{axis}[width=\linewidth, xlabel={Std}, ylabel={F1}, xmode=log, xmin=1e-1, xmax=1e0, ymode=log, ymin=1e1, ymax=1e2]
+\addplot table[col sep=comma, row sep=\\, x=x, y=y] {x,y\\ 0.4,88.5\\ 0.2,90.9\\};
+\end{axis}
+\end{tikzpicture}
+\caption{Log axes}
+\label{fig:warm-log}
+\end{figure}
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{warm-figure}
+\caption{A picture}
+\label{fig:warm-picture}
+\end{figure}
+Inline $x_i^2 + \alpha_{j}^{k} \pm 10^{-3}$ and display maths
+\[ \sum_{i=1}^{n} x_i^{2} = \int_0^1 f(t)\,dt \pm \sigma_{\max}^2 \]
+citing \citep{lee2020graph}.

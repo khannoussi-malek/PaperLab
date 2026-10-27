@@ -15,6 +15,10 @@ const MOVES_DEFAULT = /@moves-default|@moves-paper-sources|@moves-setup/
 // runs only as its own project, on that stack, and skips itself on a stack that has the model.
 const NO_SEARCH_MODEL = /@no-search-model/
 
+// Compile-heavy specs (a real Tectonic compile through the worker queue) carry this tag: run four at once and the
+// compiles queue behind each other past their timeouts, so they run one at a time beside the parallel project.
+const COMPILE = /@compile/
+
 // The release stack (desktop/docker-compose.yml as project paperlab-release-e2e on :5290: the release image, no search model), run as its own project
 // with E2E_RELEASE=1 and E2E_BASE_URL=http://127.0.0.1:5290 (README, Development). These files show that the base
 // download is enough to read, take notes and chat with short papers, and that the first-run setup works there.
@@ -40,13 +44,18 @@ export default defineConfig({
   projects: [
     {
       name: 'parallel',
-      grepInvert: [MOVES_DEFAULT, NO_SEARCH_MODEL],
+      grepInvert: [MOVES_DEFAULT, NO_SEARCH_MODEL, COMPILE],
     },
     {
       name: 'default-mover',
       grep: MOVES_DEFAULT,
       workers: 1,
       dependencies: ['parallel'],
+    },
+    {
+      name: 'compile',
+      grep: COMPILE,
+      workers: 1,
     },
     {
       name: 'no-search-model',

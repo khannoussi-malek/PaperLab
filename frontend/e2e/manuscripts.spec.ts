@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { expect, test } from './fixtures'
 
 // Real worker + Tectonic: write in the Write tab, compile, see a PDF, hit a stale-save conflict, download the zip.
-test('Write a manuscript, compile it, resolve a conflict and download the Overleaf zip', async ({
+test('Write a manuscript, compile it, resolve a conflict and download the Overleaf zip', { tag: '@compile' }, async ({
   page, context, request, workspaceId, paperId,
 }) => {
   test.setTimeout(240_000)
@@ -77,7 +77,7 @@ test('Write a manuscript, compile it, resolve a conflict and download the Overle
 
 // The sectioned template: sections list, a new section moved with the keyboard, the PDF following the list, and an
 // edit made from the PDF that lands in the source and in the next compile.
-test('Write a sectioned manuscript, reorder it and edit a sentence from the PDF', async ({ page, request, workspaceId }) => {
+test('Write a sectioned manuscript, reorder it and edit a sentence from the PDF', { tag: '@compile' }, async ({ page, request, workspaceId }) => {
   test.setTimeout(300_000)
   let manuscriptId = ''
   try {
