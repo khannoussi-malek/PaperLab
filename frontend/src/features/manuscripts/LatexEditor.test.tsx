@@ -119,12 +119,23 @@ test('an inserted comment (an AI note) lands on lines of its own, so it never co
   insert!('% AI note (not your text): x')
   expect(view.state.doc.toString()).toBe('We show that \n% AI note (not your text): x\nresults hold.')
   expect(view.state.doc.lineAt(view.state.selection.main.head).text).toBe('results hold.') // outside the comment
-  // At a line start or end, no blank line is added on that side.
+  // At a line start no blank line goes before it.
   view.dispatch({ selection: { anchor: 0 } })
   insert!('% a')
   expect(view.state.doc.line(1).text).toBe('% a')
   expect(view.state.doc.line(2).text).toBe('We show that ')
-  view.dispatch({ selection: { anchor: view.state.doc.length } })
+})
+
+test('after a comment inserted at a line end (or on an empty line), what you type next is on its own, uncommented line', () => {
+  let insert: ((t: string) => void) | null = null
+  const { container } = render(<LatexEditor value={'results hold.\n\nNext.'} onChange={() => {}} errors={[]} onSave={() => {}} registerInsert={(f) => { insert = f }} />)
+  const view = cm(container)
+  const type = (word: string) => view.dispatch(view.state.replaceSelection(word))
+  view.dispatch({ selection: { anchor: 'results hold.'.length } })
   insert!('% b')
-  expect(view.state.doc.toString().endsWith('results hold.\n% b')).toBe(true)
+  type('Typed')
+  view.dispatch({ selection: { anchor: view.state.doc.line(4).from } }) // the empty line
+  insert!('% c')
+  type('More')
+  expect(view.state.doc.toString()).toBe('results hold.\n% b\nTyped\n% c\nMore\nNext.')
 })

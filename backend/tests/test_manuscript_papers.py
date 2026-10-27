@@ -170,3 +170,33 @@ async def test_a_bib_built_while_a_pin_is_open_waits_for_it_and_leaves_one_row()
             await s.execute(delete(Paper).where(Paper.id == paper.id))
             await s.commit()
         await engine.dispose()
+
+
+@pytest.mark.xdist_group("manuscript_rows")  # commits real rows on separate connections
+async def test_a_compile_building_the_bib_and_a_new_file_saved_meanwhile_both_finish():
+    """The worker's pass has UPDATEd the manuscript (FOR NO KEY UPDATE) when build_bib runs; a file insert meanwhile
+    holds FOR KEY SHARE (its foreign key) and waits to bump the manuscript. A plain FOR UPDATE here deadlocked."""
+    engine = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)
+    maker = async_sessionmaker(engine, expire_on_commit=False)
+    async with maker() as s:
+        ws, _, m = await setup(s, "Locks", name=f"locks {uuid.uuid4()}")
+        await s.commit()
+    try:
+        async with maker() as compiling, maker() as saving:
+            manuscript = await compiling.get(Manuscript, m.id)
+            manuscript.compile_status = "running"
+            await compiling.flush()  # as _prepare: the row is held FOR NO KEY UPDATE
+            insert_file = asyncio.create_task(
+                manuscripts._store(saving, m.id, "new.tex", None, text="x", data=None))
+            await asyncio.sleep(0.3)
+            assert not insert_file.done()  # inserted, now waiting to bump the manuscript
+            await asyncio.wait_for(build_bib(compiling, manuscript, {}), 5)
+            await compiling.commit()
+            await asyncio.wait_for(insert_file, 5)
+            await saving.commit()
+    finally:
+        async with maker() as s:
+            await s.execute(delete(Manuscript).where(Manuscript.id == m.id))
+            await s.execute(delete(Workspace).where(Workspace.id == ws.id))
+            await s.commit()
+        await engine.dispose()

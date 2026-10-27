@@ -166,10 +166,10 @@ export function LatexEditor({ value, onChange, errors, onSave, jumpTo, onCursor,
     view.current = editor
     latest.current.registerInsert?.((text) => {
       const at = moved.current ? editor.state.selection.main.head : editor.state.doc.length // never over a selection
-      // A comment (an AI note, D118) gets lines of its own: mid-line it would comment out the rest of the researcher's line.
-      const line = editor.state.doc.lineAt(at)
+      // A comment (an AI note, D118) gets lines of its own: mid-line it would comment out the rest of the researcher's
+      // line, and it always ends with a line break so the cursor (placed after it) is never left inside the comment.
       const own = text.startsWith('%')
-      const insert = `${own && at > line.from ? '\n' : ''}${text}${own && at < line.to ? '\n' : ''}`
+      const insert = own ? `${at > editor.state.doc.lineAt(at).from ? '\n' : ''}${text}\n` : text
       editor.dispatch({
         changes: { from: at, insert },
         selection: { anchor: at + insert.length },
