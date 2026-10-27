@@ -7,7 +7,8 @@ import { ChartDialog } from './ChartDialog'
 import type { InsertResult } from './useInsertBlock'
 
 const toImage = vi.fn(async (..._a: unknown[]) => 'data:image/png;base64,AAAA')
-const newPlot = vi.fn(async (..._a: unknown[]) => undefined)
+let attached: boolean[] = []
+const newPlot = vi.fn(async (...a: unknown[]) => { attached.push((a[0] as HTMLElement).isConnected) })
 const purge = vi.fn()
 vi.mock('@/features/charts/loadPlotly', () => ({ loadPlotly: async () => ({ toImage, newPlot, purge }) }))
 const compileSpy = vi.hoisted(() => vi.fn())
@@ -38,7 +39,7 @@ function setup(spec: unknown, insert = vi.fn(async (): Promise<InsertResult> => 
   )
   return { insert, onOpenChange }
 }
-afterEach(() => { vi.restoreAllMocks(); pgf.fail = false; document.documentElement.classList.remove('dark'); toImage.mockClear(); newPlot.mockClear(); purge.mockClear(); compileSpy.mockClear() })
+afterEach(() => { vi.restoreAllMocks(); pgf.fail = false; document.documentElement.classList.remove('dark'); toImage.mockClear(); newPlot.mockClear(); attached = []; purge.mockClear(); compileSpy.mockClear() })
 
 globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} }
 Element.prototype.scrollIntoView ??= () => {}
@@ -99,6 +100,8 @@ test('the picture is built off-screen in the light theme on white, even when the
   const [div, , layout] = newPlot.mock.calls[0] as unknown as [HTMLElement, unknown, Record<string, unknown>]
   expect(layout).toMatchObject({ paper_bgcolor: '#ffffff', plot_bgcolor: '#ffffff', width: 650 })
   expect(toImage.mock.calls[0][0]).toBe(div)
+  expect(attached).toEqual([true])
+  expect(div.style.left).toBe('-10000px')
   expect(div.isConnected).toBe(false)
 })
 
