@@ -277,14 +277,19 @@ describe('workspace tags in the URL', () => {
 describe('manuscript routes', () => {
   const mid = '11111111-2222-3333-4444-555555555555'
   it('parses #/manuscripts/<id>?file=sections/intro.tex', () => {
-    expect(parseRoute(`#/manuscripts/${mid}?file=sections/intro.tex`)).toEqual({ name: 'manuscript', manuscriptId: mid, file: 'sections/intro.tex' })
-    expect(parseRoute(`#/manuscripts/${mid}`)).toEqual({ name: 'manuscript', manuscriptId: mid, file: null })
+    expect(parseRoute(`#/manuscripts/${mid}?file=sections/intro.tex`)).toEqual({ name: 'manuscript', manuscriptId: mid, file: 'sections/intro.tex', line: null })
+    expect(parseRoute(`#/manuscripts/${mid}`)).toEqual({ name: 'manuscript', manuscriptId: mid, file: null, line: null })
   })
   it('manuscriptHref round-trips', () => {
     expect(manuscriptHref(mid)).toBe(`#/manuscripts/${mid}`)
     for (const file of ['main.tex', 'sections/my intro&1.tex']) {
-      expect(parseRoute(manuscriptHref(mid, file))).toEqual({ name: 'manuscript', manuscriptId: mid, file })
+      expect(parseRoute(manuscriptHref(mid, file))).toEqual({ name: 'manuscript', manuscriptId: mid, file, line: null })
     }
+  })
+  it('carries a line: ?file=…&line=12', () => {
+    expect(manuscriptHref(mid, 'sections/a.tex', 12)).toBe(`#/manuscripts/${mid}?file=sections%2Fa.tex&line=12`)
+    expect(parseRoute(manuscriptHref(mid, 'sections/a.tex', 12))).toEqual({ name: 'manuscript', manuscriptId: mid, file: 'sections/a.tex', line: 12 })
+    expect(parseRoute(`#/manuscripts/${mid}?file=a.tex&line=zero`)).toMatchObject({ line: null })
   })
   it('workspace ?tab=write is allowed', () => {
     const id = '11111111-2222-3333-4444-666666666666'

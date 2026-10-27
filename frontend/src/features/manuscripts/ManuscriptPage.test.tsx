@@ -8,9 +8,9 @@ import { ManuscriptPage } from './ManuscriptPage'
 
 const pdf = vi.hoisted(() => vi.fn((_url: string | null) => ({ doc: null, error: null })))
 // jsdom can't lay CodeMirror out, so here the editor is a textarea with the same props (LatexEditor.test.tsx runs the real one).
-const editor = vi.hoisted(() => ({ current: null as null | { onCursor?: (l: number) => void; onSectionStep?: (s: -1 | 1) => void } }))
+const editor = vi.hoisted(() => ({ current: null as null | { onCursor?: (l: number) => void; onSectionStep?: (s: -1 | 1) => void; onShowInPdf?: (l: number) => void } }))
 vi.mock('./LatexEditor', () => ({
-  LatexEditor: (props: { value: string; onChange: (v: string) => void; onCursor?: (l: number) => void; onSectionStep?: (s: -1 | 1) => void }) => {
+  LatexEditor: (props: { value: string; onChange: (v: string) => void; onCursor?: (l: number) => void; onSectionStep?: (s: -1 | 1) => void; onShowInPdf?: (l: number) => void }) => {
     editor.current = props
     return <textarea aria-label="LaTeX source" value={props.value} onChange={(e) => props.onChange(e.target.value)} />
   },
@@ -454,4 +454,58 @@ test('the breadcrumb follows the cursor, and Mod+Alt+Down opens the next section
   expect(crumbs).toHaveTextContent('Method›Data')
   act(() => editor.current!.onSectionStep!(1))
   await waitFor(() => expect(window.location.hash).toContain('sections%2Fb.tex'))
+})
+
+// --- PDF <-> source ---
+const GOOD = { compile_status: 'ok' as const, compiled_at: T3 }
+const pages = () => screen.getByLabelText('PDF pages')
+const withPdf = () => pdf.mockReturnValue({ doc: { numPages: 3 } as never, error: null })
+
+test('showing a line in the PDF scrolls to the page the lookup returns', async () => {
+  withPdf()
+  vi.spyOn(api, 'getManuscript').mockResolvedValue(detail(GOOD))
+  const forward = vi.spyOn(api, 'syncForward').mockResolvedValue({ page: 2, x: 72, y: 300 })
+  renderPage()
+  await screen.findByLabelText('LaTeX source')
+  await waitFor(() => expect(forward).toHaveBeenCalledWith('m1', 'main.tex', 1)) // once per new good compile
+  forward.mockClear()
+  act(() => editor.current!.onShowInPdf!(7))
+  await waitFor(() => expect(forward).toHaveBeenCalledWith('m1', 'main.tex', 7))
+  const page2 = pages().querySelector('[data-page="2"]')
+  expect(page2).not.toBeNull()
+})
+
+test('opening a section looks its line up', async () => {
+  withPdf()
+  server['sections/x.tex'] = { text: '\\section{X}\nhi', at: T2 }
+  server['main.tex'] = { text: '\\input{sections/x}', at: T2 }
+  vi.spyOn(api, 'getManuscript').mockResolvedValue(detail({ files: [...detail().files, { path: 'sections/x.tex', size: 3, updated_at: T2 }] }))
+  const forward = vi.spyOn(api, 'syncForward').mockResolvedValue({ page: 3, x: 0, y: 10 })
+  renderPage('sections/x.tex')
+  fireEvent.click(await screen.findByRole('button', { name: /^1\s*X/ }))
+  await waitFor(() => expect(forward).toHaveBeenCalledWith('m1', 'sections/x.tex', 1))
+})
+
+test('ctrl-click on a page opens the source the lookup names', async () => {
+  withPdf()
+  vi.spyOn(api, 'getManuscript').mockResolvedValue(detail())
+  const inverse = vi.spyOn(api, 'syncInverse').mockResolvedValue({ file: 'b.tex', line: 12 })
+  renderPage()
+  await screen.findByLabelText('LaTeX source')
+  fireEvent.click(pages().querySelector('[data-page="2"]')!, { ctrlKey: true, clientX: 0, clientY: 0 })
+  await waitFor(() => expect(inverse).toHaveBeenCalledWith('m1', 2, expect.any(Number), expect.any(Number)))
+  await waitFor(() => expect(window.location.hash).toBe('#/manuscripts/m1?file=b.tex&line=12'))
+  window.location.hash = ''
+})
+
+test('no_sync is silent', async () => {
+  withPdf()
+  vi.spyOn(api, 'getManuscript').mockResolvedValue(detail(GOOD))
+  const forward = vi.spyOn(api, 'syncForward').mockRejectedValue(new ApiError('no_sync', 404, { detail: 'no_sync' }))
+  vi.spyOn(api, 'syncInverse').mockRejectedValue(new ApiError('no_sync', 404, { detail: 'no_sync' }))
+  renderPage()
+  await waitFor(() => expect(forward).toHaveBeenCalled())
+  fireEvent.click(pages().querySelector('[data-page="1"]')!, { metaKey: true })
+  await new Promise((r) => setTimeout(r, 0))
+  expect(screen.queryByRole('alert')).toBeNull()
 })
