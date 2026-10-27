@@ -68,3 +68,37 @@ test('double-click reports the word, its page point and a rect', () => {
   fireEvent.doubleClick(document.querySelector('[data-page="2"]')!, { clientX: 40, clientY: 90 })
   expect(edit).toHaveBeenCalledWith(2, 40 / SCALE, 90 / SCALE, 'Dogs', expect.objectContaining({ left: 40, bottom: 90 }))
 })
+
+test('E on the pages opens the edit box at the visible centre, with no word', () => {
+  const edit = vi.fn()
+  const at = vi.fn()
+  render(<PdfPane manuscript={m} width={636} target={null} onSourceAt={at} onEditAt={edit} />)
+  const box = screen.getByLabelText('PDF pages')
+  Object.defineProperty(box, 'clientHeight', { value: 200, configurable: true })
+  vi.spyOn(box, 'getBoundingClientRect').mockReturnValue(rect(0, 200))
+  ;[[1, -400, 60], [2, 90, 300], [3, 310, 500]].forEach(([n, t, b]) =>
+    vi.spyOn(document.querySelector(`[data-page="${n}"]`)!, 'getBoundingClientRect').mockReturnValue(rect(t, b)))
+  fireEvent.keyDown(box, { key: 'e', metaKey: true }) // not ours
+  expect(edit).not.toHaveBeenCalled()
+  fireEvent.keyDown(box, { key: 'e' }) // centre (50, 100) is 10 pt into page 2
+  expect(edit).toHaveBeenCalledWith(2, 50 / SCALE, 10 / SCALE, '', expect.objectContaining({ left: 50, top: 100 }))
+  expect(at).not.toHaveBeenCalled() // Enter stays "jump to source"
+  fireEvent.keyDown(box, { key: 'Enter' })
+  expect(at).toHaveBeenCalledWith(2, 50 / SCALE, 10 / SCALE)
+})
+
+test('the PDF an edit made keeps its scroll; any other new PDF goes back to the target', () => {
+  const target = { page: 2, y: 300, n: 1 }
+  const ui = (at: string, still: string | null) => (
+    <PdfPane manuscript={{ ...m, compiled_at: at }} width={636} target={target} stillStamp={still} onSourceAt={() => {}} />
+  )
+  const view = render(ui('2026-10-03T00:00:00Z', null))
+  const box = screen.getByLabelText('PDF pages')
+  expect(box.scrollTop).toBe(300 * SCALE)
+  fireEvent.wheel(box)
+  box.scrollTop = 42
+  view.rerender(ui('2026-10-04T00:00:00Z', '2026-10-04T00:00:00Z')) // the edit's compile: a new doc, same target
+  expect(box.scrollTop).toBe(42)
+  view.rerender(ui('2026-10-05T00:00:00Z', '2026-10-04T00:00:00Z')) // a later compile follows the target again
+  expect(box.scrollTop).toBe(42 + 300 * SCALE) // jsdom rects are all 0, so placing adds the current scroll
+})

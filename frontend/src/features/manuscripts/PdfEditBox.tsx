@@ -7,12 +7,13 @@ const MARGIN = 8
 type Props = {
   anchor: DOMRect
   initial: string
-  /** Shown instead of the editor (text LaTeX made); only Open in source is offered. */
+  /** Shown instead of the editor (text LaTeX made); only Open in source is offered, when there is a source. */
   notice?: string
   /** Rejects with a message the box shows; the box stays open. */
   onSave: (text: string) => Promise<void>
   onCancel: () => void
-  onOpenSource: () => void
+  /** Absent when the spot has no source of the user's (a file LaTeX wrote, like main.bbl). */
+  onOpenSource?: () => void
 }
 
 /** A small editor anchored at a spot of the PDF pane (its nearest positioned parent), clamped to stay visible. */
@@ -60,7 +61,7 @@ export function PdfEditBox({ anchor, initial, notice, onSave, onCancel, onOpenSo
       )}
       {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
       <div className="flex items-center gap-2">
-        <Button variant="link" size="sm" className="px-0" onClick={onOpenSource}>Open in source</Button>
+        {onOpenSource && <Button variant="link" size="sm" className="px-0" onClick={onOpenSource}>Open in source</Button>}
         <span className="flex-1" />
         <Button variant="outline" size="sm" onClick={cancel}>Cancel</Button>
         {!notice && <Button size="sm" disabled={busy} onClick={() => void save()}>Save</Button>}
