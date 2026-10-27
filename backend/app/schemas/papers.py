@@ -149,3 +149,21 @@ class FoundPdfsSeen(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     ids: list[uuid.UUID]
+
+
+class NoteCountsIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    paper_ids: list[uuid.UUID]
+
+
+class PaperNoteCounts(BaseModel):
+    notes: int
+    highlights: int
+    ai_notes: int
+
+
+class NoteCountsOut(BaseModel):
+    """Notes, highlights and AI notes per paper id (zeros for a paper with none)."""
+
+    counts: dict[uuid.UUID, PaperNoteCounts]

@@ -9,6 +9,7 @@ export type ManuscriptFileText = components['schemas']['FileTextOut']
 export type ManuscriptSnapshot = components['schemas']['SnapshotOut']
 export type EvidenceFound = components['schemas']['EvidenceFoundOut']
 export type EvidenceRow = components['schemas']['EvidenceRowOut']
+export type NoteCounts = Record<string, components['schemas']['PaperNoteCounts']>
 export type CitablePaper = components['schemas']['CitablePaperOut']
 export type ManuscriptCreate = components['schemas']['ManuscriptCreate']
 export type ManuscriptPatch = components['schemas']['ManuscriptPatch']
@@ -417,6 +418,8 @@ export const api = {
   switchSearchSource: (body: SearchSourceIn) =>
     request<{ papers: number }>('/api/embedding/source', sendJson('PUT', body)),
   paperEvents: (paperId: string) => request<PaperEvent[]>(`/api/papers/${paperId}/events`),
+  noteCounts: (ids: string[]) =>
+    request<components['schemas']['NoteCountsOut']>('/api/papers/note-counts', sendJson('POST', { paper_ids: ids })).then((r) => r.counts),
   foundPdfs: () => request<FoundPdf[]>('/api/papers/found-pdfs'),
   markFoundPdfsSeen: (ids: string[]) => request<void>('/api/papers/found-pdfs/seen', sendJson('POST', { ids })),
   paperSources: () => request<PaperSources>('/api/paper-sources'),

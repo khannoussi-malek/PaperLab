@@ -1399,6 +1399,12 @@ export const useManuscript = (id: string) =>
   })
 
 /** The papers a manuscript can cite, with their keys and note counts. */
+/** Notes, highlights and AI notes for many papers in one request; keyed by the sorted ids. */
+export const useNoteCounts = (ids: string[]) => {
+  const sorted = [...ids].sort()
+  return useQuery({ queryKey: ['noteCounts', sorted], queryFn: () => api.noteCounts(sorted), enabled: sorted.length > 0 })
+}
+
 export const useManuscriptPapers = (id: string) =>
   useQuery({ queryKey: keys.manuscriptPapers(id), queryFn: () => api.manuscriptPapers(id) })
 
