@@ -49,7 +49,6 @@ PAPER_ID_COLUMNS = [
     ("evidence_cards", "paper_id"),
     ("paper_events", "paper_id"),
     ("section_role_overrides", "paper_id"),
-
     ("manuscript_cite_keys", "paper_id"),
     ("manuscript_evidence", "paper_id"),
 ]
@@ -138,7 +137,6 @@ async def seed_both(session):
         "INSERT INTO section_role_overrides (paper_id, section_title, role) VALUES (:m, '2 Method', 'conclusion')",
         "INSERT INTO section_role_overrides (paper_id, section_title, role) VALUES (:k, '1 Introduction', 'intro')",
         "INSERT INTO section_role_overrides (paper_id, section_title, role) VALUES (:m, '1 Introduction', 'abstract')",
-
         "WITH ms AS (INSERT INTO manuscripts (title) VALUES ('Draft') RETURNING id) "
         "INSERT INTO manuscript_cite_keys (manuscript_id, key, paper_id, bibtex) "
         "SELECT id, 'sleep2021', :m, '@article{sleep2021}' FROM ms",
