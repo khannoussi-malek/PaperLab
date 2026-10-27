@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ChartSpec } from '@/api/client'
-import { MINE, RUN, SCORE, STD, bertTable, cell, data, id, ownData, series, seriesChart } from '@/features/charts/testData'
+import { F1, MINE, RUN, SCORE, STD, bertTable, cell, data, id, ownData, series, seriesChart } from '@/features/charts/testData'
 import { pgfplotsSupport, toPgfplots } from './pgfplots'
 
 const opts = { caption: 'F1 by system_', label: 'fig:f1' }
@@ -86,6 +86,51 @@ describe('toPgfplots', () => {
     const tex = render(spec, bertTable)
     expect(tex).toContain('\\addlegendentry{F1 \\& co $\\times$2}')
     expect(tex).toContain('ylabel={100\\% sure}')
+  })
+})
+
+describe('log axes', () => {
+  const log = { y: { label: '', scale: 'log' as const } }
+
+  it('pads a narrow range out to the surrounding powers of ten, which is what keeps TeX from overflowing', () => {
+    const tex = render(seriesChart('bar', [series()], { axes: log }), bertTable)
+    expect(tex).toContain('ymode=log,\n    ymin=1e1,\n    ymax=1e2,')
+  })
+
+  it('pads x too, and keeps a single power of ten from collapsing to an empty range', () => {
+    const spec = seriesChart('scatter', [series({ x: STD, multiply: 1 })], { axes: { x: { label: '', scale: 'log' }, y: { label: '', scale: 'log' } } })
+    const tex = render(spec, bertTable)
+    expect(tex).toContain('xmin=1e-1,\n    xmax=1e0')
+    expect(tex).toContain('ymin=1e1,\n    ymax=1e2')
+    const exact = seriesChart('scatter', [series({ x: STD, multiply: 10 })], { axes: log })
+    expect(render(exact, bertTable)).toContain('ymin=1e2,\n    ymax=1e3')
+  })
+
+  it('sends zero, negative and error-bar-reaching-zero values to a picture', () => {
+    const reason = "A log axis can't show zero or negative values, so it goes in as a picture."
+    const zero = seriesChart('bar', [series({ multiply: 0 })], { axes: log })
+    expect(pgfplotsSupport(zero, data(bertTable))).toEqual({ ok: false, reason })
+    const negative = seriesChart('bar', [series({ multiply: -1 })], { axes: log })
+    expect(pgfplotsSupport(negative, data(bertTable))).toEqual({ ok: false, reason })
+    const xLog = seriesChart('scatter', [series({ x: STD, y: STD })], { axes: { x: { label: '', scale: 'log' }, y: { label: '', scale: 'linear' } } })
+    expect(pgfplotsSupport(xLog, data(bertTable))).toEqual({ ok: true, notes: [] })
+    const xNeg = { ...bertTable, rows: bertTable.rows.map((r) => ({ ...r, cells: { ...r.cells, [STD]: cell('0', 0) } })) }
+    expect(pgfplotsSupport(xLog, data(xNeg))).toEqual({ ok: false, reason })
+  })
+})
+
+describe('empty and partial data', () => {
+  it('is not ok when no series can be drawn', () => {
+    const lost = seriesChart('bar', [series({ dataset_id: MINE })])
+    const support = pgfplotsSupport(lost, data(bertTable))
+    expect(support.ok).toBe(false)
+    expect(() => render(lost, bertTable)).toThrow()
+  })
+
+  it('leaves out categories that no series has a value for', () => {
+    const blank = { ...bertTable, rows: [bertTable.rows[0], { ...bertTable.rows[1], cells: { ...bertTable.rows[1].cells, [F1]: cell('', null) } }] }
+    const tex = render(seriesChart('bar', [series()]), blank)
+    expect(tex).toContain('symbolic x coords={BERT-B}')
   })
 })
 
