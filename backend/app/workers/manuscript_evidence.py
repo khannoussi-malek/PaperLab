@@ -1,8 +1,10 @@
 """ARQ job: a verdict for each paper's passages on one sentence, one paper at a time in rank order (M27 v2 stage 3).
 
 The model comes from ctx["llm"] when a test sets it, else the default connection's model (verify_claim resolves it).
-Each step is its own short transaction; the model call runs outside any. A write lands only while its row is still
-the `running` one this job took, so a newer ask that re-queued the row is never overwritten."""
+Taking a row and writing its result are short transactions of their own. verify_claim runs in a session of its own
+whose read transaction stays open across the model call (it commits after, with the llm_outputs row). A write lands
+only while its row is still the `running` one this job took, so a newer ask that re-queued the row is never
+overwritten."""
 
 import logging
 import uuid
@@ -38,6 +40,20 @@ async def _take(mid: uuid.UUID, sentence_hash: str):
         stamp = await session.scalar(
             update(ManuscriptEvidence).where(ManuscriptEvidence.id == row.id)
             .values(status="running", updated_at=func.clock_timestamp()).returning(ManuscriptEvidence.updated_at)
+        )
+        # The rows still waiting are alive too, so they never read as interrupted while the job runs. Skip locked:
+        # a row another job is taking right now is not waiting, and waiting on it could deadlock the two takes.
+        waiting = (
+            select(ManuscriptEvidence.id)
+            .where(
+                ManuscriptEvidence.manuscript_id == mid,
+                ManuscriptEvidence.sentence_hash == sentence_hash,
+                ManuscriptEvidence.status == "queued",
+            )
+            .with_for_update(skip_locked=True)
+        )
+        await session.execute(
+            update(ManuscriptEvidence).where(ManuscriptEvidence.id.in_(waiting)).values(updated_at=func.clock_timestamp())
         )
         await session.commit()
         return row.id, row.paper_id, row.sentence, stamp

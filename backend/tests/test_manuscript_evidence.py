@@ -227,6 +227,45 @@ async def test_a_model_error_fails_that_row_with_its_code(session, embedder, loc
     assert [(r.status, r.reason) for r in await all_rows(session, m.id)] == [("failed", "no_model")]
 
 
+async def test_queued_rows_behind_a_fresh_running_row_never_read_as_interrupted(session, embedder,
+                                                                                   local_default_model):
+    _, m = await library(session, embedder, "Alpha", "Beta")
+    out = await ev.find(session, m.id, SENTENCE, embedder=embedder)
+    await age(session, 6)  # waited their turn behind a slow model
+    first = (await all_rows(session, m.id))[0]
+    first.status, first.updated_at = "running", datetime.now(UTC)
+    await session.flush()
+    assert [r["status"] for r in await ev.rows(session, m.id, out["sentence_hash"])] == ["running", "queued"]
+
+
+async def test_taking_a_row_touches_the_rows_still_waiting(session, embedder, local_default_model):
+    _, m = await library(session, embedder, "Alpha", "Beta", "Gamma")
+    out = await ev.find(session, m.id, SENTENCE, embedder=embedder)
+    await age(session, 6)
+    await worker._take(m.id, out["sentence_hash"])
+    rows = await all_rows(session, m.id)
+    assert [r.status for r in rows] == ["running", "queued", "queued"]
+    assert all(datetime.now(UTC) - r.updated_at < timedelta(minutes=1) for r in rows)
+
+
+async def test_asking_about_another_sentence_stops_the_older_queued_checks(session, embedder, local_default_model):
+    _, m = await library(session, embedder, "Alpha", "Beta")
+    first = await ev.find(session, m.id, SENTENCE, embedder=embedder)
+    (await all_rows(session, m.id))[0].status = "running"  # the job is on it: it finishes that one, then stops
+    await session.flush()
+    other = await ev.find(session, m.id, "Coffee helps focus.", embedder=embedder)
+    assert other["verdicts"] == "queued"
+
+    async def states(h):
+        return [(r["status"], r["reason"]) for r in await ev.rows(session, m.id, h)]
+
+    assert await states(first["sentence_hash"]) == [("running", None), ("failed", "superseded")]
+    assert {s for s, _ in await states(other["sentence_hash"])} == {"queued"}
+    await ev.find(session, m.id, SENTENCE, embedder=embedder)  # asking again re-queues it
+    assert await states(first["sentence_hash"]) == [("running", None), ("queued", None)]
+    assert set(await states(other["sentence_hash"])) == {("failed", "superseded")}
+
+
 async def test_two_jobs_on_real_connections_check_every_paper_once(monkeypatch):
     from app.db import SessionLocal
     monkeypatch.setattr(worker, "SessionLocal", SessionLocal)
