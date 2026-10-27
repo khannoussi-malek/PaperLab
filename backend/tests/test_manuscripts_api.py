@@ -327,3 +327,25 @@ async def test_synctex_lookups_404_without_an_index_and_answer_with_one(client):
     none = await client.get(f"/api/manuscripts/{m['id']}/synctex/forward?file=other.tex&line=1")
     assert none.status_code == 404 and none.json()["detail"] == "no_sync"
     assert (await client.get(f"/api/manuscripts/{uuid.uuid4()}/synctex/forward?file=a&line=1")).status_code == 404
+
+
+async def test_papers_pin_and_rank_routes(client, session):
+    from app.core import workspaces
+    from app.models import Paper
+    ws = Workspace(name=f"W {uuid.uuid4().hex[:6]}")
+    session.add(ws)
+    paper = Paper(title="Deep learning", authors=["Jane Smith"], year=2021)
+    session.add(paper)
+    await session.flush()
+    await workspaces.add_paper(session, ws.id, paper.id)
+    m = await make(client, workspace_id=str(ws.id))
+    listed = (await client.get(f"/api/manuscripts/{m['id']}/papers")).json()
+    assert len(listed) == 1 and listed[0]["paper_id"] == str(paper.id) and listed[0]["pinned"] is False
+    pinned = await client.post(f"/api/manuscripts/{m['id']}/papers/{paper.id}/pin")
+    assert pinned.json() == {"key": listed[0]["key"]}
+    assert (await client.get(f"/api/manuscripts/{m['id']}/papers")).json()[0]["pinned"] is True
+    assert (await client.post(f"/api/manuscripts/{m['id']}/papers/{uuid.uuid4()}/pin")).status_code == 404
+    assert (await client.get(f"/api/manuscripts/{uuid.uuid4()}/papers")).status_code == 404
+    rank = f"/api/manuscripts/{m['id']}/papers/rank"
+    assert (await client.post(rank, json={"text": " "})).json() == {"paper_ids": []}
+    assert (await client.post(rank, json={"text": "x" * 20_001})).status_code == 422

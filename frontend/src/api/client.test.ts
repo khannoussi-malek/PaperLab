@@ -173,3 +173,20 @@ describe('section calls', () => {
     ])
   })
 })
+
+describe('paper deck calls', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  it('lists, pins and ranks through the manuscript paper routes', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response('{}'))
+    await api.manuscriptPapers('m')
+    await api.pinPaper('m', 'p')
+    await api.rankPapers('m', 'some text')
+    const calls = fetchMock.mock.calls.map((c) => [c[0], (c[1] as RequestInit | undefined)?.method, (c[1] as RequestInit | undefined)?.body])
+    expect(calls).toEqual([
+      ['/api/manuscripts/m/papers', undefined, undefined],
+      ['/api/manuscripts/m/papers/p/pin', 'POST', undefined],
+      ['/api/manuscripts/m/papers/rank', 'POST', JSON.stringify({ text: 'some text' })],
+    ])
+  })
+})

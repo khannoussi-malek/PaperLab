@@ -16,6 +16,7 @@
     "typecheck:e2e": "tsc -p tsconfig.e2e.json"
   },
   "dependencies": {
+    "@codemirror/autocomplete": "6.20.4",
     "@codemirror/language": "6.13.1",
     "@codemirror/legacy-modes": "6.5.5",
     "@codemirror/state": "6.7.6",

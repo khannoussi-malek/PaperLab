@@ -2,7 +2,7 @@ import { useQueries } from '@tanstack/react-query'
 import { Download, FolderInput, History, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, ApiError } from '@/api/client'
-import { useCompileManuscript, useManuscript } from '@/api/queries'
+import { useCompileManuscript, useManuscript, useManuscriptPapers, usePapersFollowCompile, usePinPaper } from '@/api/queries'
 import { AppShell } from '@/components/AppShell'
 import { Button } from '@/components/ui/button'
 import { LoadError } from '@/features/library/ErrorAlert'
@@ -17,23 +17,30 @@ import { HistoryDialog } from './HistoryDialog'
 import { Breadcrumb } from './Breadcrumb'
 import { crumbsAt, outline } from './outline'
 import { SectionList } from './SectionList'
-import { openRowIndex, sectionRows, type SectionRow } from './sections'
+import { openRowIndex, sectionRows, sectionText, type SectionRow } from './sections'
+import { DeckColumn } from './deck/DeckColumn'
 import { StudioColumns } from './StudioColumns'
 import { PdfPane, type PdfTarget } from './PdfPane'
 import { PdfEditBox } from './PdfEditBox'
 import { findEditable, type Span } from './pdfEdit'
-import { MANUSCRIPT_PDF, MANUSCRIPT_SECTIONS } from './pdfPanel'
+import { MANUSCRIPT_PAPERS, MANUSCRIPT_PDF, MANUSCRIPT_SECTIONS } from './pdfPanel'
 import type { SaveState } from './autosave'
 import { keptTexts, useKeptTexts } from './keptTexts'
 import { KeptTextAlert } from './KeptTextAlert'
+import { JumpPalette } from './JumpPalette'
+import { jumpTargets, type Target } from './jumpTargets'
 import { SourcePane } from './SourcePane'
 import { useLeaveWarning } from './useLeaveWarning'
 
 /** The writing studio: files and outline | source | PDF. `file` is the `?file=` of the route; null is the main file. */
 export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscriptId: string; file: string | null; line?: number | null }) {
   const manuscript = useManuscript(manuscriptId)
+  const libraryPapers = useManuscriptPapers(manuscriptId)
+  const pin = usePinPaper()
+  const pinPaper = useCallback((paperId: string) => pin.mutate({ id: manuscriptId, paperId }), [pin.mutate, manuscriptId]) // eslint-disable-line react-hooks/exhaustive-deps
   const compile = useCompileManuscript()
   const data = manuscript.data
+  usePapersFollowCompile(manuscriptId, data?.compiled_at)
   const [live, setLive] = useState<Record<string, string>>({})
   const [jump, setJump] = useState<{ line: number; n: number } | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
@@ -52,6 +59,33 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
   const onState = useCallback((p: string, s: SaveState) => setSaveStates((all) => ({ ...all, [p]: s })), [])
   const replaceRef = useRef<((line: number, start: number, end: number, text: string) => void) | null>(null)
   const registerReplace = useCallback((f: typeof replaceRef.current) => { replaceRef.current = f }, [])
+  const insertRef = useRef<((text: string) => void) | null>(null)
+  const registerInsert = useCallback((f: typeof insertRef.current) => { insertRef.current = f }, [])
+  const insertAtCursor = useCallback((text: string) => {
+    if (!insertRef.current) return false
+    insertRef.current(text)
+    return true
+  }, [])
+  const [openKey, setOpenKey] = useState<{ key: string; n: number } | null>(null)
+  const [reveal, setReveal] = useState<{ id: string; n: number } | null>(null)
+  const showCited = useCallback((key: string) => {
+    setOpenKey((k) => ({ key, n: (k?.n ?? 0) + 1 }))
+    setReveal((r) => ({ id: 'papers', n: (r?.n ?? 0) + 1 }))
+  }, [])
+  // Only an explicit Show in PDF brings the PDF forward (its tab, when it shares one with Papers); following a compile never does.
+  const revealPdf = useCallback(() => setReveal((r) => ({ id: 'pdf', n: (r?.n ?? 0) + 1 })), [])
+  const [paletteOpen, setPaletteOpen] = useState(false)
+  const [sectionAsk, setSectionAsk] = useState<{ kind: 'new' | 'split'; n: number } | null>(null)
+  useEffect(() => { // Cmd/Ctrl+K anywhere in the studio; CodeMirror leaves it alone, so it bubbles up from the editor too
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() !== 'k' || !(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey || e.defaultPrevented) return
+      if (document.querySelector('[role=dialog][data-state=open]')) return // History, Move, Delete or the palette itself
+      e.preventDefault()
+      setPaletteOpen(true)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [])
   const registerFlush = useCallback((f: (() => Promise<boolean>) | null) => { flushRef.current = f }, [])
 
   const path = data && (file && data.files.some((f) => f.path === file) ? file : data.main_file)
@@ -65,6 +99,14 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
     const files = Object.fromEntries(texFiles.flatMap((f, i) => (texQueries[i].data ? [[f.path, texQueries[i].data.text]] : [])))
     return { ...files, ...live }
   }, [texts, live])
+  const allTexts = useMemo(() => Object.values(fileTexts), [fileTexts])
+  // The section being written (its key changes when another one is opened), for the deck's order and ranking.
+  const section = useMemo(() => {
+    if (!data || !path) return { key: '', text: '' }
+    const rows = sectionRows(fileTexts, data.main_file, new Set(data.files.map((f) => f.path)))
+    const row = rows[openRowIndex(rows, path, cursor && cursor.path === path ? cursor.line : 1)]
+    return row && !row.missing ? { key: `${row.path}:${row.line}`, text: sectionText(fileTexts, row) } : { key: path, text: fileTexts[path] ?? '' }
+  }, [fileTexts, data, path, cursor])
   const items = useMemo(() => (data ? outline(fileTexts, data.main_file) : []), [data?.main_file, fileTexts])
   const errorsByFile = useMemo(
     () => parseCompileErrors(data?.compile_errors).reduce<Record<string, number>>((n, e) => ({ ...n, [e.file]: (n[e.file] ?? 0) + 1 }), {}),
@@ -171,10 +213,14 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
     setEditCompile({ from: data?.compiled_at ?? null })
     compile.mutate(manuscriptId, { onError: () => setEditCompile(null) })
   }
+  const rows = useMemo(() => (data ? sectionRows(fileTexts, data.main_file, new Set(data.files.map((f) => f.path))) : []), [data, fileTexts])
+  const targets = useMemo(() => jumpTargets(rows, items, fileTexts, libraryPapers.data ?? []), [rows, items, fileTexts, libraryPapers.data])
+  const singleFile = rows.length > 0 && rows.every((r) => r.inMain)
+  const ask = (kind: 'new' | 'split') => setSectionAsk((a) => ({ kind, n: (a?.n ?? 0) + 1 }))
+  const pick = (t: Target) => (t.kind === 'paper' ? showCited(t.key) : jumpTo(t.file, t.line))
   const openSection = (row: SectionRow) => jumpTo(row.path, row.inMain ? row.line : 1)
   const stepSection = (step: -1 | 1) => {
     if (!data || !path) return
-    const rows = sectionRows(fileTexts, data.main_file, new Set(data.files.map((f) => f.path)))
     const at = openRowIndex(rows, path, cursorLine)
     const next = rows[at === -1 && step === 1 ? 0 : at + step]
     if (next && !next.missing) openSection(next)
@@ -229,6 +275,7 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
                       flushCurrent={flushCurrent}
                       onOpen={openSection}
                       onJump={jumpTo}
+                      request={sectionAsk}
                     />
                     <details className="px-0">
                       <summary className="cursor-pointer px-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">All files</summary>
@@ -253,15 +300,19 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
                     onCompile={() => compile.mutate(manuscriptId)}
                     onCursor={(line) => setCursor({ path, line })}
                     onSectionStep={stepSection}
-                    onShowInPdf={(ln) => showInPdf(path, ln)}
+                    onShowInPdf={(ln) => { showInPdf(path, ln); revealPdf() }}
                     onText={onText}
                     onState={onState}
                     registerFlush={registerFlush}
                     registerReplace={registerReplace}
+                    registerInsert={registerInsert}
+                    onCiteKey={showCited}
+                    citeOptions={libraryPapers.data}
+                    onCite={pinPaper}
                   />
                 ),
               },
-              { id: 'pdf', label: 'PDF', limits: MANUSCRIPT_PDF, content: (width) => <PdfPane manuscript={data} width={width} target={target} stillStamp={stillStamp} onSourceAt={sourceAt} onEditAt={editAt}>
+              { id: 'pdf', label: 'PDF', limits: MANUSCRIPT_PDF, shareWith: 'papers', content: (width) => <PdfPane manuscript={data} width={width} target={target} stillStamp={stillStamp} onSourceAt={sourceAt} onEditAt={editAt}>
                 {edit && (
                   <PdfEditBox
                     key={edit.id}
@@ -274,9 +325,30 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
                   />
                 )}
               </PdfPane> },
+              {
+                id: 'papers',
+                label: 'Papers',
+                limits: MANUSCRIPT_PAPERS,
+                content: <DeckColumn manuscriptId={manuscriptId} sectionKey={section.key} sectionText={section.text} allTexts={allTexts} onInsert={insertAtCursor} openKey={openKey} />,
+              },
             ]}
+            reveal={reveal ?? undefined}
           />
         </>
+      )}
+      {data && path && (
+        <JumpPalette
+          open={paletteOpen}
+          onOpenChange={setPaletteOpen}
+          targets={targets}
+          onPick={pick}
+          commands={[
+            { id: 'compile', label: 'Compile', run: () => compile.mutate(manuscriptId) },
+            { id: 'new', label: 'New section', run: () => ask('new') },
+            ...(singleFile ? [{ id: 'split', label: 'Split into files', run: () => ask('split') }] : []),
+            { id: 'pdf', label: 'Show in PDF', run: () => { showInPdf(path, cursorLine); revealPdf() } },
+          ]}
+        />
       )}
       {data && (
         <>

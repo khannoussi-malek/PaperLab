@@ -7,6 +7,7 @@ export type ManuscriptTemplate = components['schemas']['TemplateOut']
 export type ManuscriptFile = components['schemas']['FileOut']
 export type ManuscriptFileText = components['schemas']['FileTextOut']
 export type ManuscriptSnapshot = components['schemas']['SnapshotOut']
+export type CitablePaper = components['schemas']['CitablePaperOut']
 export type ManuscriptCreate = components['schemas']['ManuscriptCreate']
 export type ManuscriptPatch = components['schemas']['ManuscriptPatch']
 export type Paper = components['schemas']['PaperOut']
@@ -492,6 +493,10 @@ export const api = {
     request<ManuscriptFile>(`/api/manuscripts/${id}/files/${manuscriptPath(path)}/rename`, sendJson('POST', { new_path: newPath })),
   deleteManuscriptFile: (id: string, path: string) =>
     request<void>(`/api/manuscripts/${id}/files/${manuscriptPath(path)}`, { method: 'DELETE' }),
+  manuscriptPapers: (id: string) => request<CitablePaper[]>(`/api/manuscripts/${id}/papers`),
+  pinPaper: (id: string, paperId: string) => request<{ key: string }>(`/api/manuscripts/${id}/papers/${paperId}/pin`, { method: 'POST' }),
+  rankPapers: (id: string, text: string) =>
+    request<{ paper_ids: string[] }>(`/api/manuscripts/${id}/papers/rank`, sendJson('POST', { text })),
   addSection: (id: string, title: string, after: string | null) =>
     request<{ path: string }>(`/api/manuscripts/${id}/sections`, sendJson('POST', { title, after })),
   splitSections: (id: string) => request<{ paths: string[] }>(`/api/manuscripts/${id}/sections/split`, { method: 'POST' }),

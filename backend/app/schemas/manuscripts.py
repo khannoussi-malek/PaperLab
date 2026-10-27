@@ -136,3 +136,30 @@ class SnapshotOut(BaseModel):
     id: uuid.UUID
     reason: str
     created_at: datetime
+
+
+class CitablePaperOut(BaseModel):
+    paper_id: uuid.UUID
+    key: str
+    pinned: bool
+    title: str
+    first_author: str | None
+    year: int | None
+    has_pdf: bool
+    notes: int
+    highlights: int
+    ai_notes: int
+
+
+class PinKeyOut(BaseModel):
+    key: str
+
+
+class RankIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    text: str = Field(max_length=20_000)
+
+
+class RankOut(BaseModel):
+    paper_ids: list[uuid.UUID]

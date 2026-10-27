@@ -71,3 +71,71 @@ test('Alt-ArrowUp still moves the line (CodeMirror\'s own binding)', () => {
   expect(view.state.doc.toString()).toBe('b\na')
   expect(onSectionStep).not.toHaveBeenCalled()
 })
+
+test('Mod-Alt-K reports the cite key under the cursor, and only then', () => {
+  const onCiteKey = vi.fn()
+  const { container } = render(<LatexEditor value={'a \\citep{lewis20, b}\nplain'} onChange={() => {}} errors={[]} onSave={() => {}} onCiteKey={onCiteKey} />)
+  const view = cm(container)
+  view.dispatch({ selection: { anchor: 12 } })
+  press(container, { key: 'k', code: 'KeyK', ctrlKey: true, altKey: true })
+  press(container, { key: 'k', code: 'KeyK', metaKey: true, altKey: true })
+  expect(onCiteKey).toHaveBeenCalledWith('lewis20')
+  onCiteKey.mockClear()
+  view.dispatch({ selection: { anchor: view.state.doc.line(2).from + 2 } })
+  press(container, { key: 'k', code: 'KeyK', ctrlKey: true, altKey: true })
+  press(container, { key: 'k', code: 'KeyK', metaKey: true, altKey: true })
+  expect(onCiteKey).not.toHaveBeenCalled()
+})
+
+test('insert goes to the last cursor (the end if it never moved), is a normal edit, and takes focus', () => {
+  const onChange = vi.fn()
+  let insert: ((t: string) => void) | null = null
+  const { container, unmount } = render(<LatexEditor value="ab" onChange={onChange} errors={[]} onSave={() => {}} registerInsert={(f) => { insert = f }} />)
+  insert!('X')
+  expect(cm(container).state.doc.toString()).toBe('abX')
+  expect(onChange).toHaveBeenLastCalledWith('abX')
+  expect(cm(container).hasFocus).toBe(true)
+  cm(container).dispatch({ selection: { anchor: 1 } })
+  cm(container).contentDOM.blur()
+  insert!('Y')
+  expect(onChange).toHaveBeenLastCalledWith('aYbX')
+  unmount()
+  expect(insert).toBeNull()
+})
+
+test('an insert never replaces a selection left in an unfocused editor', () => {
+  let insert: ((t: string) => void) | null = null
+  const { container } = render(<LatexEditor value="abc" onChange={() => {}} errors={[]} onSave={() => {}} registerInsert={(f) => { insert = f }} />)
+  cm(container).dispatch({ selection: { anchor: 0, head: 2 } })
+  insert!('X')
+  expect(cm(container).state.doc.toString()).toBe('abXc')
+})
+
+test('an inserted comment (an AI note) lands on lines of its own, so it never comments out the researcher\'s text', () => {
+  let insert: ((t: string) => void) | null = null
+  const { container } = render(<LatexEditor value="We show that results hold." onChange={() => {}} errors={[]} onSave={() => {}} registerInsert={(f) => { insert = f }} />)
+  const view = cm(container)
+  view.dispatch({ selection: { anchor: 'We show that '.length } })
+  insert!('% AI note (not your text): x')
+  expect(view.state.doc.toString()).toBe('We show that \n% AI note (not your text): x\nresults hold.')
+  expect(view.state.doc.lineAt(view.state.selection.main.head).text).toBe('results hold.') // outside the comment
+  // At a line start no blank line goes before it.
+  view.dispatch({ selection: { anchor: 0 } })
+  insert!('% a')
+  expect(view.state.doc.line(1).text).toBe('% a')
+  expect(view.state.doc.line(2).text).toBe('We show that ')
+})
+
+test('after a comment inserted at a line end (or on an empty line), what you type next is on its own, uncommented line', () => {
+  let insert: ((t: string) => void) | null = null
+  const { container } = render(<LatexEditor value={'results hold.\n\nNext.'} onChange={() => {}} errors={[]} onSave={() => {}} registerInsert={(f) => { insert = f }} />)
+  const view = cm(container)
+  const type = (word: string) => view.dispatch(view.state.replaceSelection(word))
+  view.dispatch({ selection: { anchor: 'results hold.'.length } })
+  insert!('% b')
+  type('Typed')
+  view.dispatch({ selection: { anchor: view.state.doc.line(4).from } }) // the empty line
+  insert!('% c')
+  type('More')
+  expect(view.state.doc.toString()).toBe('results hold.\n% b\nTyped\n% c\nMore\nNext.')
+})
