@@ -201,6 +201,7 @@ async def test_compiles_a_minimal_article(real, tmp_path):
     (tmp_path / "main.tex").write_text(ARTICLE % "Hello PaperLab")
     res = await lc.compile_dir(tmp_path, "main.tex")
     assert res.ok and res.pdf.startswith(b"%PDF") and res.errors == []
+    assert res.synctex is not None and res.synctex[:2] == b"\x1f\x8b"
 
 
 @tectonic

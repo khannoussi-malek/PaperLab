@@ -1,10 +1,11 @@
+import json
 import mimetypes
 import uuid
 from datetime import datetime, timezone
 from pathlib import PurePosixPath
 from urllib.parse import quote
 
-from fastapi import APIRouter, Form, Response, UploadFile
+from fastapi import APIRouter, Form, Query, Response, UploadFile
 from fastapi.responses import FileResponse
 
 from app.api.deps import SessionDep
@@ -15,6 +16,7 @@ from app.core import (
     manuscript_templates,
     manuscript_zip,
     manuscripts,
+    synctex,
 )
 from app.core import manuscript_paths as paths
 from app.core.errors import Conflict, InvalidInput, NotFound
@@ -35,6 +37,8 @@ from app.schemas.manuscripts import (
     SectionPathsOut,
     SectionTitleIn,
     SnapshotOut,
+    SyncPointOut,
+    SyncSourceOut,
     TemplateOut,
 )
 
@@ -231,6 +235,34 @@ async def get_pdf(manuscript_id: uuid.UUID, session: SessionDep) -> FileResponse
     if not target.is_file():
         raise NotFound("no_pdf")
     return FileResponse(target, media_type="application/pdf")
+
+
+async def _sync_index(session, manuscript_id: uuid.UUID) -> dict:
+    await manuscripts.get(session, manuscript_id)
+    try:
+        return json.loads(manuscripts.sync_path(manuscript_id).read_text())
+    except (OSError, ValueError):
+        raise NotFound("no_sync") from None
+
+
+@router.get("/api/manuscripts/{manuscript_id}/synctex/forward")
+async def sync_forward(
+    manuscript_id: uuid.UUID, session: SessionDep, file: str, line: int = Query(ge=1)
+) -> SyncPointOut:
+    found = synctex.forward(await _sync_index(session, manuscript_id), file, line)
+    if found is None:
+        raise NotFound("no_sync")
+    return SyncPointOut(**found)
+
+
+@router.get("/api/manuscripts/{manuscript_id}/synctex/inverse")
+async def sync_inverse(
+    manuscript_id: uuid.UUID, session: SessionDep, page: int = Query(ge=1), x: float = 0, y: float = 0
+) -> SyncSourceOut:
+    found = synctex.inverse(await _sync_index(session, manuscript_id), page, x, y)
+    if found is None:
+        raise NotFound("no_sync")
+    return SyncSourceOut(**found)
 
 
 @router.get("/api/manuscripts/{manuscript_id}/snapshots")
