@@ -1,7 +1,8 @@
 import { X } from 'lucide-react'
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { turnDirection, type BookItem, type DeckPaper } from './deckModel'
+import { startPaperDrag } from '../citeCompletion'
+import { insertText, turnDirection, type BookItem, type DeckPaper } from './deckModel'
 import { PAGE_CLASS, turnLeaf } from './pageTurn'
 import { useReducedMotion } from './useReducedMotion'
 
@@ -191,7 +192,7 @@ export function PaperBook({ paper, items, selected, onSelect, onInsert, onOpenRe
         {!items.length && <p className="text-xs text-muted-foreground">No notes on this paper yet</p>}
         <ul className="space-y-1.5">
           {items.map((it, j) => (
-            <li key={it.id}>
+            <li key={it.id} draggable onDragStart={(e) => startPaperDrag(e, paper.paper_id, insertText(it, paper.key))}>
               <button
                 type="button"
                 onClick={() => pick(j)}

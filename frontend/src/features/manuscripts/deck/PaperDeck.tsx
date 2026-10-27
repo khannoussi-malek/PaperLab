@@ -1,7 +1,8 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useEffect, useId, useRef, type KeyboardEvent } from 'react'
+import { startPaperDrag } from '../citeCompletion'
 import { useReducedMotion } from './useReducedMotion'
-import { cardTransform, windowAround, type DeckPaper } from './deckModel'
+import { cardTransform, insertText, windowAround, type DeckPaper } from './deckModel'
 
 const FLIP_MS = 500
 const WHEEL_GAP_MS = 120
@@ -44,6 +45,8 @@ function Card({ paper, offset, cited, still, onClick }: { paper: DeckPaper; offs
       data-deck-card={paper.paper_id}
       aria-hidden="true"
       onClick={onClick}
+      draggable={offset === 0}
+      onDragStart={(e) => startPaperDrag(e, paper.paper_id, insertText(null, paper.key))}
       style={{ transform, zIndex, opacity, transition: still ? 'none' : `transform ${FLIP_MS}ms cubic-bezier(.2,.8,.2,1), opacity ${FLIP_MS}ms` }}
       className="absolute left-1/2 top-10 -ml-[75px] h-[205px] w-[150px] cursor-pointer rounded-md bg-white p-3 font-serif text-[10px] text-neutral-800 shadow-[0_10px_26px_rgba(0,0,0,.22)] [backface-visibility:hidden]"
     >

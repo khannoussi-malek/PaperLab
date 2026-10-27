@@ -5,7 +5,10 @@ import { Annotation, Compartment, Prec, RangeSetBuilder, Transaction } from '@co
 import { EditorView, GutterMarker, gutter, keymap } from '@codemirror/view'
 import { basicSetup } from 'codemirror'
 import { useEffect, useRef, useState } from 'react'
+import { autocompletion } from '@codemirror/autocomplete'
 import { citeKeyAt } from './deck/citeKeyAt'
+import type { DeckPaper } from './deck/deckModel'
+import { citeSource, paperDrop } from './citeCompletion'
 
 type LineError = { line: number; message: string }
 type Props = {
@@ -26,6 +29,10 @@ type Props = {
   onCiteKey?: (key: string) => void
   /** Hands the page a way to insert text at the cursor (the last one when unfocused; the end if it never moved) as a normal edit, then focus the editor. */
   registerInsert?: (insert: ((text: string) => void) | null) => void
+  /** The library's papers, offered as keys inside \cite{…}. */
+  citeOptions?: DeckPaper[]
+  /** A key was picked from the list, or a dragged paper was dropped: pin this paper. */
+  onCite?: (paperId: string) => void
   label?: string
 }
 
@@ -103,15 +110,15 @@ const highlight = syntaxHighlighting(
 const FromHost = Annotation.define<boolean>()
 
 /** CodeMirror 6 with LaTeX highlighting, as one controlled-ish component: `value` in, `onChange` out. */
-export function LatexEditor({ value, onChange, errors, onSave, jumpTo, onCursor, onSectionStep, onShowInPdf, onCiteKey, registerInsert, label = 'LaTeX source' }: Props) {
+export function LatexEditor({ value, onChange, errors, onSave, jumpTo, onCursor, onSectionStep, onShowInPdf, onCiteKey, registerInsert, citeOptions, onCite, label = 'LaTeX source' }: Props) {
   const host = useRef<HTMLDivElement>(null)
   const view = useRef<EditorView | null>(null)
   const errorSlot = useRef(new Compartment())
   const themeSlot = useRef(new Compartment())
   const dark = useAppIsDark()
   // The view is built once; callbacks go through a ref so it never holds a stale one.
-  const latest = useRef({ onChange, onSave, onCursor, onSectionStep, onShowInPdf, onCiteKey, registerInsert })
-  latest.current = { onChange, onSave, onCursor, onSectionStep, onShowInPdf, onCiteKey, registerInsert }
+  const latest = useRef({ citeOptions, onCite, onChange, onSave, onCursor, onSectionStep, onShowInPdf, onCiteKey, registerInsert })
+  latest.current = { citeOptions, onCite, onChange, onSave, onCursor, onSectionStep, onShowInPdf, onCiteKey, registerInsert }
   const moved = useRef(false) // whether the cursor was ever placed; if not, an insert goes to the end
   const cursorLine = useRef(0)
 
@@ -121,6 +128,8 @@ export function LatexEditor({ value, onChange, errors, onSave, jumpTo, onCursor,
       parent: host.current!,
       extensions: [
         basicSetup,
+        autocompletion({ override: [citeSource(() => ({ papers: latest.current.citeOptions ?? [], onCite: latest.current.onCite }))], icons: false }),
+        paperDrop(() => latest.current.onCite),
         StreamLanguage.define(stex),
         EditorView.lineWrapping,
         themeSlot.current.of(latexTheme(dark)),
