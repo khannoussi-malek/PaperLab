@@ -11,6 +11,11 @@ export type HandsModeProps = {
   onSelect: (id: string) => void
   /** A two-finger flick: 1 steps to the next linked paper, -1 to the previous. */
   onHop?: (step: 1 | -1) => void
+  /** Replaces the status line for a mode, and the gestures line: other views have other gestures. */
+  text?: Partial<Record<HandMode | 'starting', string>>
+  gestures?: string
+  /** While true the camera and status keep running, but no callback fires and the hold resets. */
+  paused?: boolean
 }
 
 export const MODE_TEXT: Record<HandMode | 'starting', string> = {
@@ -61,7 +66,13 @@ export default function HandsMode(props: HandsModeProps) {
       const [next, moves] = handStep(hands, seen)
       hands = next
       setMode(moves.mode)
-      const { onTurn, onZoom, pickAt, onSelect, onHop } = latest.current
+      const { onTurn, onZoom, pickAt, onSelect, onHop, paused } = latest.current
+      if (paused) {
+        dwell = initialDwell()
+        opened = null
+        setPointer(null)
+        return
+      }
       if (moves.turn) onTurn(moves.turn.azimuth, moves.turn.polar)
       if (moves.zoom !== null) onZoom(moves.zoom)
       if (moves.hop) onHop?.(moves.hop)
@@ -108,9 +119,9 @@ export default function HandsMode(props: HandsModeProps) {
         {/* Mirrored like a selfie, so moving a hand right moves it right on screen too. */}
         <video ref={video} aria-hidden muted playsInline className="w-40 -scale-x-100 rounded-md border bg-black/40" />
         <p role="status" className="rounded-md bg-background/85 px-2 py-1 text-xs">
-          {problem ? PROBLEM_TEXT[problem] : MODE_TEXT[mode]}
+          {problem ? PROBLEM_TEXT[problem] : (props.text?.[mode] ?? MODE_TEXT[mode])}
         </p>
-        {!problem && <p className="rounded-md bg-background/85 px-2 py-1 text-xs text-muted-foreground">{GESTURES}</p>}
+        {!problem && <p className="rounded-md bg-background/85 px-2 py-1 text-xs text-muted-foreground">{props.gestures ?? GESTURES}</p>}
       </div>
       {pointer && (
         <div

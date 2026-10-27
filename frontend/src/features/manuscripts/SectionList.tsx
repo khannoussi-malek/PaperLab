@@ -35,11 +35,13 @@ type Props = {
   onJump: (file: string, line: number) => void
   /** Saves the open file's pending text; false when it could not, so nothing is rewritten under it. */
   flushCurrent: () => Promise<boolean>
+  /** The palette asks for the New section dialog or a split; a new `n` asks again. */
+  request?: { kind: 'new' | 'split'; n: number } | null
 }
 type Dlg = { kind: 'new'; after: string | null } | { kind: 'rename' | 'delete'; row: SectionRow } | null
 
 /** The paper as a list of sections: number, title, words and a status dot; new, rename, reorder, delete, split. */
-export function SectionList({ manuscriptId, main, texts, filePaths, errorsByFile, current, items, onOpen, onJump, flushCurrent }: Props) {
+export function SectionList({ manuscriptId, main, texts, filePaths, errorsByFile, current, items, onOpen, onJump, flushCurrent, request }: Props) {
   const add = useAddSection()
   const split = useSplitSections()
   const retitle = useRetitleSection()
@@ -86,6 +88,14 @@ export function SectionList({ manuscriptId, main, texts, filePaths, errorsByFile
     void run(() => move.mutate({ id: manuscriptId, path: row.path, to }, { onSuccess: () => { refocus.current = key(row) }, onError }))
   }
   const splitFiles = () => run(() => split.mutate(manuscriptId, { onError }))
+
+  const asked = useRef(request?.n ?? 0) // only requests made after mount count
+  useEffect(() => {
+    if (!request || request.n === asked.current) return
+    asked.current = request.n
+    if (request.kind === 'new') { setError(null); setDlg({ kind: 'new', after: null }) }
+    else if (singleFile) void splitFiles()
+  }) // eslint-disable-line react-hooks/exhaustive-deps
 
   const onKeyDown = (e: React.KeyboardEvent, row: SectionRow, i: number) => {
     if (!(e.target as HTMLElement).closest('[data-section-row]')) return

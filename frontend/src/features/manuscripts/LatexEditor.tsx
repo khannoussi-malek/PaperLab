@@ -5,6 +5,10 @@ import { Annotation, Compartment, Prec, RangeSetBuilder, Transaction } from '@co
 import { EditorView, GutterMarker, gutter, keymap } from '@codemirror/view'
 import { basicSetup } from 'codemirror'
 import { useEffect, useRef, useState } from 'react'
+import { autocompletion } from '@codemirror/autocomplete'
+import { citeKeyAt } from './deck/citeKeyAt'
+import type { DeckPaper } from './deck/deckModel'
+import { citeSource, paperDrop } from './citeCompletion'
 
 type LineError = { line: number; message: string }
 type Props = {
@@ -21,6 +25,14 @@ type Props = {
   onSectionStep?: (step: -1 | 1) => void
   /** Mod-Alt-P: show the cursor's line in the PDF. */
   onShowInPdf?: (line: number) => void
+  /** Mod-Alt-K with the cursor in a \cite{…} key list: the key under it. */
+  onCiteKey?: (key: string) => void
+  /** Hands the page a way to insert text at the cursor (the last one when unfocused; the end if it never moved) as a normal edit, then focus the editor. */
+  registerInsert?: (insert: ((text: string) => void) | null) => void
+  /** The library's papers, offered as keys inside \cite{…}. */
+  citeOptions?: DeckPaper[]
+  /** A key was picked from the list, or a dragged paper was dropped: pin this paper. */
+  onCite?: (paperId: string) => void
   label?: string
 }
 
@@ -98,15 +110,16 @@ const highlight = syntaxHighlighting(
 const FromHost = Annotation.define<boolean>()
 
 /** CodeMirror 6 with LaTeX highlighting, as one controlled-ish component: `value` in, `onChange` out. */
-export function LatexEditor({ value, onChange, errors, onSave, jumpTo, onCursor, onSectionStep, onShowInPdf, label = 'LaTeX source' }: Props) {
+export function LatexEditor({ value, onChange, errors, onSave, jumpTo, onCursor, onSectionStep, onShowInPdf, onCiteKey, registerInsert, citeOptions, onCite, label = 'LaTeX source' }: Props) {
   const host = useRef<HTMLDivElement>(null)
   const view = useRef<EditorView | null>(null)
   const errorSlot = useRef(new Compartment())
   const themeSlot = useRef(new Compartment())
   const dark = useAppIsDark()
   // The view is built once; callbacks go through a ref so it never holds a stale one.
-  const latest = useRef({ onChange, onSave, onCursor, onSectionStep, onShowInPdf })
-  latest.current = { onChange, onSave, onCursor, onSectionStep, onShowInPdf }
+  const latest = useRef({ citeOptions, onCite, onChange, onSave, onCursor, onSectionStep, onShowInPdf, onCiteKey, registerInsert })
+  latest.current = { citeOptions, onCite, onChange, onSave, onCursor, onSectionStep, onShowInPdf, onCiteKey, registerInsert }
+  const moved = useRef(false) // whether the cursor was ever placed; if not, an insert goes to the end
   const cursorLine = useRef(0)
 
   useEffect(() => {
@@ -115,6 +128,8 @@ export function LatexEditor({ value, onChange, errors, onSave, jumpTo, onCursor,
       parent: host.current!,
       extensions: [
         basicSetup,
+        autocompletion({ override: [citeSource(() => ({ papers: latest.current.citeOptions ?? [], onCite: latest.current.onCite }))], icons: false }),
+        paperDrop(() => latest.current.onCite),
         StreamLanguage.define(stex),
         EditorView.lineWrapping,
         themeSlot.current.of(latexTheme(dark)),
@@ -126,9 +141,20 @@ export function LatexEditor({ value, onChange, errors, onSave, jumpTo, onCursor,
         Prec.high(keymap.of([
           { key: 'Mod-Alt-ArrowUp', run: () => (latest.current.onSectionStep?.(-1), true) },
           { key: 'Mod-Alt-ArrowDown', run: () => (latest.current.onSectionStep?.(1), true) },
+          {
+            key: 'Mod-Alt-k',
+            run: (v) => {
+              const head = v.state.selection.main.head
+              const line = v.state.doc.lineAt(head)
+              const key = citeKeyAt(line.text, head - line.from)
+              if (key) latest.current.onCiteKey?.(key)
+              return !!key
+            },
+          },
           { key: 'Mod-Alt-p', run: (v) => (latest.current.onShowInPdf?.(v.state.doc.lineAt(v.state.selection.main.head).number), true) },
         ])),
         EditorView.updateListener.of((u) => {
+          if (u.selectionSet) moved.current = true
           if (u.selectionSet || u.docChanged) {
             const line = u.state.doc.lineAt(u.state.selection.main.head).number
             if (line !== cursorLine.current) { cursorLine.current = line; latest.current.onCursor?.(line) }
@@ -138,7 +164,21 @@ export function LatexEditor({ value, onChange, errors, onSave, jumpTo, onCursor,
       ],
     })
     view.current = editor
-    return () => editor.destroy()
+    latest.current.registerInsert?.((text) => {
+      const at = moved.current ? editor.state.selection.main.head : editor.state.doc.length // never over a selection
+      // A comment (an AI note, D118) gets lines of its own: mid-line it would comment out the rest of the researcher's
+      // line, and it always ends with a line break so the cursor (placed after it) is never left inside the comment.
+      const own = text.startsWith('%')
+      const insert = own ? `${at > editor.state.doc.lineAt(at).from ? '\n' : ''}${text}\n` : text
+      editor.dispatch({
+        changes: { from: at, insert },
+        selection: { anchor: at + insert.length },
+        scrollIntoView: true,
+        userEvent: 'input.paste', // a normal edit: reported to onChange (autosave) and undoable
+      })
+      editor.focus()
+    })
+    return () => { latest.current.registerInsert?.(null); editor.destroy() }
     // ponytail: built once per mount; the page remounts it per file, and the effects below carry later changes.
   }, [])
 

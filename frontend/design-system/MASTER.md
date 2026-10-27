@@ -1040,6 +1040,34 @@ is a `dialog` anchored under the word and clamped inside the pane; Enter saves, 
 PDF pages, errors show inline in the box, and text LaTeX generated gets only "Open in source". The ui-ux-pro-max search
 (multi-pane / breadcrumb / inline edit) returned only the generic progress and inline-validation rules, nothing new.
 
+## Paper deck
+
+The studio's fourth column, "Papers": the workspace's papers as a 3D deck of cards, one open as a book.
+
+- **Cards:** title, author and year, small badges for notes (N), highlights (H), AI notes (A) and "cited". The deck is a
+  `group` with `aria-roledescription="paper deck"` and a polite live region ("Lewis 2020, 2 notes, 1 highlight, paper 2 of
+  5"). Only about 7 cards around the current one are in the DOM. Flip is transform/opacity only (~500 ms ease-out).
+- **Keys (deck):** left/right flip, Home/End, a letter jumps to a title, Enter opens. A search box sits above it.
+- **Book:** the open paper's items are pages; each has a tab on the right edge. Yellow = your notes and highlights, purple
+  = AI notes, and each tab also carries a letter (N, H, A) and the page, so colour is never the only signal. Up/down (or
+  left/right) move between items, **i** inserts, **o** opens the reader at that note, Esc closes.
+- **Insert:** paper -> `\citep{key}`; highlight -> the quote in ``quotes'' plus `\citep[p.~N]{key}`; your note -> its text
+  plus `\citep`; an AI note -> comment lines only ("% AI note (not your text): ..."), never prose. Every insert pins the
+  key so it is in the bibliography, goes to the open file's last cursor position, and returns focus to the editor.
+- **Other ways in:** `\cite{` completion lists the workspace's papers; dragging a card or a book item into the source
+  inserts the same text; Mod+Alt+K on a `\cite{key}` opens that paper; Cmd/Ctrl+K "Jump to..." finds sections, labels and papers.
+- **Hands:** a small "Hands" toggle, off until pressed (it turns the camera on); help copy "The camera picture stays on
+  this computer." It acts only while the pointer or focus is in the column and never within 2 s of a keystroke, and a
+  gesture never inserts or edits text.
+- **Motion and reduced motion:** the page turn is a ~850 ms leaf (lift, bend, shading, cast shadow) that follows reading
+  order; a new turn finishes the running one at once. With the OS set to reduce motion the deck and the book cut plainly:
+  no leaf element is created. The ui-ux-pro-max search (carousel / cover flow / keyboard / reduced motion) returned only the
+  generic reduced-motion and keyboard-navigation rules, nothing new.
+- **Narrow studios:** when the studio can't fit every column at its width plus a 420 px editor, the PDF and the deck
+  share the third column as two tabs (← → move between them). The studio's own width decides, not the window's.
+- **Test hooks:** `data-deck-card`, `data-book-tab`, `aria-roledescription` "paper deck" / "paper book", a turning leaf's
+  faces carry `data-shade`.
+
 ## Pre-delivery check (from ui-ux-pro-max Quick Reference §1–§3)
 
 Run through this before finishing any UI task, in **both** themes:

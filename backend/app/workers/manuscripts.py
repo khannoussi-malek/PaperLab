@@ -81,6 +81,10 @@ async def _prepare(mid: uuid.UUID):
         manuscript.compile_started_at = datetime.now(UTC)  # keeps the stale window honest on every pass
         rows = (await session.execute(select(ManuscriptFile.path, ManuscriptFile.text, ManuscriptFile.data)
                                       .where(ManuscriptFile.manuscript_id == mid))).all()
+        # The UPDATE of compile_requested/status above was autoflushed by the files query, so this transaction already
+        # holds the manuscript row FOR NO KEY UPDATE; build_bib asks for that same lock (never the stronger FOR UPDATE,
+        # which would deadlock with a file insert's KEY SHARE), and a pin (FOR UPDATE) waits for the commit below
+        # instead of inserting a key this pass is about to insert too.
         bib = await build_bib(session, manuscript, {p: t for p, t, _ in rows if t is not None})
         main_file = manuscript.main_file
         await session.commit()
