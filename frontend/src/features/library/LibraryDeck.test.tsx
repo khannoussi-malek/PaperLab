@@ -1,0 +1,102 @@
+// @vitest-environment jsdom
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { api, type Paper } from '@/api/client'
+
+vi.mock('../graph/hands/HandsMode', () => ({ default: () => null }))
+import { LibraryDeck } from './LibraryDeck'
+
+const mk = (id: string, title: string, over: Partial<Paper> = {}) =>
+  ({ id: `p${id}`, title, authors: [title], year: 2020, has_pdf: true, ...over }) as Paper
+const papers = [mk('a', 'Alpha'), mk('b', 'Beta'), mk('c', 'Gamma')]
+const note = (id: string, body: string, over: Record<string, unknown> = {}) =>
+  ({ id, body, provenance: 'human', anchors: [], paper_ids: ['pa'], ...over })
+
+let counts: ReturnType<typeof vi.spyOn>
+let open: ReturnType<typeof vi.fn>
+beforeEach(() => {
+  counts = vi.spyOn(api, 'noteCounts').mockResolvedValue({ pa: { notes: 2, highlights: 1, ai_notes: 0 } })
+  vi.spyOn(api, 'listNotes').mockResolvedValue([
+    note('n1', 'my thought') as never,
+    note('n2', 'AI says', { provenance: 'llm' }) as never,
+    note('n3', 'hl', { anchors: [{ paper_id: 'pa', page: 4, quoted_text: 'quoted bit' }] }) as never,
+  ])
+  open = vi.fn()
+  vi.stubGlobal('open', open)
+})
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals() })
+
+function setup(list: Paper[] = papers) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return render(<QueryClientProvider client={client}><LibraryDeck papers={list} /></QueryClientProvider>)
+}
+const deck = () => screen.findByRole('group', { name: 'Papers' })
+const status = () => screen.getAllByRole('status').map((s) => s.textContent).join(' | ')
+
+it('opens on the first paper in the given order, with one counts request and badges', async () => {
+  setup()
+  await deck()
+  await waitFor(() => expect(status()).toContain('Alpha 2020, 2 notes, 1 highlight, paper 1 of 3'))
+  expect(counts).toHaveBeenCalledTimes(1)
+  expect(counts).toHaveBeenCalledWith(['pa', 'pb', 'pc'])
+})
+
+it('only ~7 cards are in the DOM for 500 papers, with one counts request', async () => {
+  const many = Array.from({ length: 500 }, (_, i) => mk(String(i), `Paper ${i}`))
+  setup(many)
+  await deck()
+  expect(document.querySelectorAll('[data-deck-card]').length).toBeLessThanOrEqual(7)
+  expect(counts).toHaveBeenCalledTimes(1)
+  expect(counts.mock.calls[0][0]).toHaveLength(500)
+})
+
+it('renders papers without authors, year, pdf or notes in the deck and the book', async () => {
+  vi.mocked(api.listNotes).mockResolvedValue([])
+  setup([mk('x', 'Bare', { authors: [], year: null, has_pdf: false })])
+  fireEvent.keyDown(await deck(), { key: 'Enter' })
+  expect(await screen.findByRole('group', { name: 'Bare' })).toBeTruthy()
+  expect(screen.getAllByText('No notes on this paper yet').length).toBeGreaterThan(0)
+})
+
+it('an open paper shows its notes and highlights, with no insert buttons, and ignores i', async () => {
+  setup()
+  fireEvent.keyDown(await deck(), { key: 'Enter' })
+  const book = await screen.findByRole('group', { name: 'Alpha' })
+  expect(screen.getByText('my thought')).toBeTruthy()
+  expect(screen.getByText('quoted bit')).toBeTruthy()
+  expect(screen.getByText('AI says')).toBeTruthy()
+  expect(screen.queryByText(/Insert/)).toBeNull()
+  fireEvent.keyDown(book, { key: 'i' })
+  expect(open).not.toHaveBeenCalled()
+})
+
+it('Open in reader opens a new tab: the paper, or the selected note', async () => {
+  setup()
+  fireEvent.keyDown(await deck(), { key: 'Enter' })
+  const book = await screen.findByRole('group', { name: 'Alpha' })
+  fireEvent.keyDown(book, { key: 'o' })
+  expect(open).toHaveBeenLastCalledWith(expect.stringMatching(/^#\/papers\/pa\?note=/), '_blank', 'noopener')
+  fireEvent.click(screen.getByText('Open in reader'))
+  expect(open).toHaveBeenCalledTimes(2)
+})
+
+it('keys: arrows flip with a live-region announcement, Esc in the book returns to the deck', async () => {
+  setup()
+  const d = await deck()
+  fireEvent.keyDown(d, { key: 'ArrowRight' })
+  expect(status()).toContain('Beta 2020')
+  expect(status()).toContain('paper 2 of 3')
+  fireEvent.keyDown(d, { key: 'Enter' })
+  fireEvent.keyDown(await screen.findByRole('group', { name: 'Beta' }), { key: 'Escape' })
+  expect(await deck()).toBeTruthy()
+})
+
+it('keeps your place when the list is reordered', async () => {
+  const view = setup()
+  fireEvent.keyDown(await deck(), { key: 'ArrowRight' })
+  const client = new QueryClient()
+  view.rerender(<QueryClientProvider client={client}><LibraryDeck papers={[papers[2], papers[1], papers[0]]} /></QueryClientProvider>)
+  expect(status()).toContain('Beta 2020')
+  expect(status()).toContain('paper 2 of 3')
+})

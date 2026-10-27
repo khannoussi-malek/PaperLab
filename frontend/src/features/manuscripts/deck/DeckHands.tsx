@@ -23,12 +23,14 @@ export type DeckHandsProps = {
   onSelect: (id: string, kind: 'card' | 'tab') => void
   /** The column went out of sight (collapsed, or tabbed away): the camera is off and Hands must be turned on again. */
   onHidden: () => void
+  /** Keystrokes pause the gestures for TYPING_PAUSE_MS. False: only keystrokes inside an input in the column do. */
+  typingPause?: boolean
 }
 
 const TARGETS = '[data-deck-card],[data-book-tab]'
 
 /** Hands mode over the deck column. It never edits text: it only moves the deck. */
-export function DeckHands({ column, onAction, onSelect, onHidden }: DeckHandsProps) {
+export function DeckHands({ column, onAction, onSelect, onHidden, typingPause = true }: DeckHandsProps) {
   const overlay = useRef<HTMLDivElement>(null)
   const totals = useRef(initialTotals)
   const [inDeck, setInDeck] = useState(false)
@@ -57,7 +59,8 @@ export function DeckHands({ column, onAction, onSelect, onHidden }: DeckHandsPro
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined
     const within = (t: EventTarget | null) => t instanceof Node && !!column.current?.contains(t)
-    const onKey = () => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!typingPause && !(e.target instanceof HTMLInputElement && within(e.target))) return
       setTyping(true)
       clearTimeout(timer)
       timer = setTimeout(() => setTyping(false), TYPING_PAUSE_MS)
@@ -82,7 +85,7 @@ export function DeckHands({ column, onAction, onSelect, onHidden }: DeckHandsPro
       col?.removeEventListener('pointerleave', away)
       window.removeEventListener('blur', away)
     }
-  }, [column])
+  }, [column, typingPause])
 
   const pickAt = useCallback((x: number, y: number) => {
     const r = overlay.current?.getBoundingClientRect()
