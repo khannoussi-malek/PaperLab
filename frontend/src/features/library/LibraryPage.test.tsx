@@ -75,9 +75,10 @@ test('the List | Deck switch defaults to list, remembers deck, and the deck offe
   expect(screen.queryByLabelText('Select Alpha')).toBeNull()
   expect(screen.queryByRole('button', { name: 'Export selected…' })).toBeNull()
   expect(localStorage.getItem('paperlab-library-view')).toBe('deck')
+  fireEvent.click(screen.getByRole('button', { name: 'List' }))
+  expect(screen.getByRole('status').textContent).toBe('1 selected') // the pick survives the round trip
+  fireEvent.click(screen.getByRole('button', { name: 'Deck' }))
   unmount()
   render(<QueryClientProvider client={new QueryClient()}><LibraryPage /></QueryClientProvider>)
   expect(view()).toBe('deck')
-  fireEvent.click(screen.getByRole('button', { name: 'List' }))
-  expect(screen.getByRole('status').textContent).toBe('1 selected') // the pick survives the round trip
 })
