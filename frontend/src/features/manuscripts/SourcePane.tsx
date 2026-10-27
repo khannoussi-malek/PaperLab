@@ -48,6 +48,8 @@ type Props = {
   onInsertBlock?: (code: string, packages: string[]) => Promise<{ ok: true } | { ok: false; message: string }>
   /** Every file's live text, for unique labels. */
   labelTexts?: () => string[]
+  /** The manuscript's file paths, for a unique name for an uploaded picture. */
+  filePaths?: () => string[]
   /** Hands the page a way to insert text at the editor's cursor, as a normal edit (optionally with a preamble edit in the same change). */
   registerInsert?: (insert: ((text: string, block?: boolean, preamble?: PreambleEdit) => void) | null) => void
   registerFindEvidence?: (run: (() => boolean) | null) => void
@@ -210,7 +212,7 @@ export function SourcePane(props: Props) {
       <div className="flex items-center gap-3 border-b border-glass-border px-3 py-1.5">
         <span className="min-w-0 flex-1 truncate text-sm font-medium">{path}</span>
         <span aria-live="polite" className="text-xs text-muted-foreground">{SAVE_LABEL[state]}</span>
-        {props.onInsertBlock && <InsertMenu manuscriptId={manuscriptId} labelTexts={props.labelTexts ?? (() => [])} onInsert={props.onInsertBlock} />}
+        {props.onInsertBlock && <InsertMenu manuscriptId={manuscriptId} labelTexts={props.labelTexts ?? (() => [])} filePaths={props.filePaths ?? (() => [])} onInsert={props.onInsertBlock} />}
         <Button size="sm" disabled={compiling || text === null} onClick={() => void compileNow()}>
           {compiling && <Loader2 aria-hidden className="animate-spin motion-reduce:animate-none" />}
           {compiling ? 'Compiling…' : 'Compile'}
