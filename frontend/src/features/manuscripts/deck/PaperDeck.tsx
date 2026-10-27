@@ -1,11 +1,13 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { useEffect, useId, useRef, type KeyboardEvent } from 'react'
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
 import { startPaperDrag } from '../citeCompletion'
 import { useReducedMotion } from './useReducedMotion'
 import { cardTransform, insertText, windowAround, type DeckPaper, type VerdictView } from './deckModel'
 
 const FLIP_MS = 500
 const WHEEL_GAP_MS = 120
+const STAGE_PX = 340 // the cards are laid out for this height
+const FILL_GAP_PX = 24
 
 export type PaperDeckProps = {
   papers: DeckPaper[]
@@ -23,6 +25,8 @@ export type PaperDeckProps = {
   cited?: Set<string>
   /** Evidence mode: by paper id, how many passages the paper has and what the model said about them. */
   evidence?: Map<string, { count: number; verdict: VerdictView }>
+  /** Fill the window from the deck down, scaling the cards with it (the library view). Off: a fixed 340px column. */
+  fill?: boolean
 }
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
@@ -54,7 +58,7 @@ function Card({ paper, offset, cited, still, onClick, ev, draggable }: { draggab
       draggable={!!draggable && offset === 0}
       onDragStart={(e) => startPaperDrag(e, paper.paper_id, insertText(null, paper.key))}
       style={{ transform, zIndex, opacity, transition: still ? 'none' : `transform ${FLIP_MS}ms cubic-bezier(.2,.8,.2,1), opacity ${FLIP_MS}ms` }}
-      className="absolute left-1/2 top-10 -ml-[75px] h-[205px] w-[150px] cursor-pointer rounded-md bg-white p-3 font-serif text-[10px] text-neutral-800 shadow-[0_10px_26px_rgba(0,0,0,.22)] [backface-visibility:hidden]"
+      className="absolute left-1/2 top-10 -ml-[75px] h-[205px] w-[150px] cursor-pointer overflow-hidden rounded-md bg-white p-3 font-serif text-[10px] text-neutral-800 shadow-[0_10px_26px_rgba(0,0,0,.22)] [backface-visibility:hidden]"
     >
       <b className="mb-1.5 block line-clamp-4 text-xs">{paper.title}</b>
       <div className="mb-2 text-neutral-500">{byline(paper)}</div>
@@ -79,7 +83,7 @@ function Card({ paper, offset, cited, still, onClick, ev, draggable }: { draggab
 }
 
 /** A controlled 3D deck of papers. It knows nothing about manuscripts: the parent filters, orders and owns `current`. */
-export function PaperDeck({ papers, current, onCurrent, onOpen, filter, onFilter, label, cited, evidence, draggable }: PaperDeckProps) {
+export function PaperDeck({ papers, current, onCurrent, onOpen, filter, onFilter, label, cited, evidence, draggable, fill }: PaperDeckProps) {
   const still = useReducedMotion()
   const hintId = useId()
   const stage = useRef<HTMLDivElement>(null)
@@ -90,6 +94,20 @@ export function PaperDeck({ papers, current, onCurrent, onOpen, filter, onFilter
   }
 
   // A non-passive wheel listener, so the page does not scroll while the deck flips.
+  const [fitPx, setFitPx] = useState<number | null>(null)
+  const fillPx = fill ? fitPx : null
+  const hasPapers = papers.length > 0 // the stage only exists with papers
+  useEffect(() => {
+    if (!fill || !hasPapers) return
+    const fit = () => {
+      const top = (stage.current?.getBoundingClientRect().top ?? 0) + window.scrollY
+      setFitPx(Math.max(STAGE_PX, window.innerHeight - top - FILL_GAP_PX))
+    }
+    fit()
+    window.addEventListener('resize', fit)
+    return () => window.removeEventListener('resize', fit)
+  }, [fill, hasPapers])
+
   const live = useRef({ go, current })
   live.current = { go, current }
   const lastWheel = useRef(0)
@@ -160,9 +178,10 @@ export function PaperDeck({ papers, current, onCurrent, onOpen, filter, onFilter
         aria-describedby={hintId}
         tabIndex={0}
         onKeyDown={onKeyDown}
+        style={fillPx ? { height: fillPx } : undefined}
         className="relative h-[340px] select-none overflow-hidden rounded-lg border border-border bg-background [perspective:1400px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <div className="absolute inset-0 [transform-style:preserve-3d]">
+        <div className="absolute inset-0 origin-top [transform-style:preserve-3d]" style={fillPx ? { transform: `scale(${fillPx / STAGE_PX})` } : undefined}>
           {windowAround(papers.length, current).map((i) => (
             <Card
               key={papers[i].paper_id}

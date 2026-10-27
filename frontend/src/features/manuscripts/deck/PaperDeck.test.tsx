@@ -154,3 +154,18 @@ it('cards drag only when asked, and the search box only with onFilter', () => {
   expect(screen.getByRole('searchbox')).toBeTruthy()
 })
 
+
+it('fills the window below it when asked, scaling the cards with it, and keeps 340px otherwise', () => {
+  vi.stubGlobal('innerHeight', 1000)
+  const { deck, unmountDeck } = (() => {
+    const r = render(<PaperDeck papers={[mk(0)]} current={0} onCurrent={vi.fn()} onOpen={vi.fn()} label="Papers" fill />)
+    return { deck: screen.getByRole('group', { name: 'Papers' }), unmountDeck: r.unmount }
+  })()
+  expect(deck.style.height).toBe('976px') // jsdom puts it at the top; 24px bottom gap
+  expect((deck.firstElementChild as HTMLElement).style.transform).toBe(`scale(${976 / 340})`)
+  act(() => { vi.stubGlobal('innerHeight', 200); window.dispatchEvent(new Event('resize')) })
+  expect(deck.style.height).toBe('340px') // never smaller than the column deck
+  unmountDeck()
+  render(<PaperDeck papers={[mk(0)]} current={0} onCurrent={vi.fn()} onOpen={vi.fn()} label="Papers" />)
+  expect(screen.getByRole('group', { name: 'Papers' }).style.height).toBe('')
+})
