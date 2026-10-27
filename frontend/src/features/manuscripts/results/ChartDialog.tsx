@@ -103,6 +103,7 @@ export function ChartDialog({ open, onOpenChange, manuscriptId, labelTexts, file
     const div = document.createElement('div')
     div.style.cssText = `position:fixed;left:-10000px;top:0;width:${EXPORT_WIDTH}px`
     const height = Math.round(EXPORT_WIDTH * FALLBACK_ASPECT)
+    document.body.appendChild(div)
     try {
       await Plotly.newPlot(div, compiled.traces, { ...compiled.layout, paper_bgcolor: '#ffffff', plot_bgcolor: '#ffffff', width: EXPORT_WIDTH, height, autosize: false }, { staticPlot: true })
       return await Plotly.toImage(div as never, { format: 'png', width: EXPORT_WIDTH, height, scale: EXPORT_SCALE })
