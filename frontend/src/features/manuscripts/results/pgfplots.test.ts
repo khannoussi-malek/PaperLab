@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ChartSpec } from '@/api/client'
-import { BERT, MINE, RUN, SCORE, STD, bertTable, cell, data, id, ownData, series, seriesChart } from '@/features/charts/testData'
+import { MINE, RUN, SCORE, STD, bertTable, cell, data, id, ownData, series, seriesChart } from '@/features/charts/testData'
 import { pgfplotsSupport, toPgfplots } from './pgfplots'
 
 const opts = { caption: 'F1 by system_', label: 'fig:f1' }
