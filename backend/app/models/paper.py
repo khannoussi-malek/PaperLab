@@ -4,8 +4,8 @@ from enum import StrEnum
 from typing import Any
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import DateTime, ForeignKey, SmallInteger, Text, exists, func, select, text
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB, aggregate_order_by
+from sqlalchemy import Column, DateTime, ForeignKey, SmallInteger, Table, Text, exists, func, select, text
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID, aggregate_order_by
 from sqlalchemy.orm import Mapped, column_property, mapped_column
 
 from app.models.base import Base
@@ -121,4 +121,16 @@ class Chunk(Base):
 # True when the paper has chunks; loaded with every paper so evidence_access needs no query.
 Paper.has_chunks = column_property(
     exists().where(Chunk.paper_id == Paper.id).correlate_except(Chunk)
+)
+
+
+# M16 (D48): the reader's own section roles. Roles are computed on request; only these fixes are stored.
+# A Core Table like workspace_papers: upserted, deleted and read in bulk.
+section_role_overrides = Table(
+    "section_role_overrides",
+    Base.metadata,
+    Column("paper_id", UUID(as_uuid=True), ForeignKey("papers.id", ondelete="CASCADE"), primary_key=True),
+    Column("section_title", Text, primary_key=True),
+    Column("role", Text, nullable=False),
+    Column("updated_at", DateTime(timezone=True), server_default=text("now()")),
 )

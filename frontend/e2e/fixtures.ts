@@ -14,6 +14,8 @@ export const TABLE_FIXTURE_FILE = fileURLToPath(new URL('./fixtures/table-paper.
 export const TABLE_LINE = 'Our best model reaches'
 /** Twelve pages, about 30,000 characters: too long for chat to send whole, so asking it needs the search model. */
 export const LONG_FIXTURE_FILE = fileURLToPath(new URL('./fixtures/long-paper.pdf', import.meta.url))
+/** The start of the long paper's first line, on page 1. */
+export const LONG_FIRST_LINE = '1 On retrieval' // once on page 1: openReader's visibility check is strict
 export type Rect = [number, number, number, number]
 
 export async function uploadAndWaitUntilReady(
@@ -274,6 +276,12 @@ export async function openReader(page: Page, paperId: string, firstLine = FIRST_
   const line = page.locator('.pdf-page[data-page="1"] .textLayer span', { hasText: firstLine })
   await expect(line).toBeVisible()
   return line
+}
+
+/** Picks a reading lens in the reader's toolbar. */
+export async function pickLens(page: Page, label: string) {
+  await page.getByRole('combobox', { name: 'Lens' }).click()
+  await page.getByRole('option', { name: label }).click()
 }
 
 /** Drags a box over `region` (PDF points, top-left origin) on a page, at whatever zoom the reader shows. */

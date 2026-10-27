@@ -14,6 +14,8 @@ class LLMOutput(Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, server_default=text("gen_random_uuid()"))
     paper_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("papers.id", ondelete="CASCADE"))
     kind: Mapped[str] = mapped_column(Text)
+    # The lens the output was written from (M16 D50): a brief's lens; 'full' for every chat answer until lens chat.
+    lens: Mapped[str] = mapped_column(Text, server_default=text("'full'"))
     question: Mapped[str | None] = mapped_column(Text)
     content: Mapped[str] = mapped_column(Text)
     # C{i} is source_chunks[i-1]. No FK on array elements: a re-ingest deletes chunks, and their
