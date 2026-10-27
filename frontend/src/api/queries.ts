@@ -52,6 +52,7 @@ import {
   type SearchRunCreate,
   type SearchSourceIn,
   type SnowballRequest,
+  type NoteCounts,
 } from './client'
 
 export const PAPERS_POLL_MS = 2000
@@ -1400,10 +1401,18 @@ export const useManuscript = (id: string) =>
     refetchInterval: (query) => manuscriptPollInterval(query.state.data, query.state.status === 'error'),
   })
 
-/** Notes, highlights and AI notes for many papers in one request; keyed by the sorted ids. */
+/** The API takes at most this many paper ids per request. */
+export const NOTE_COUNTS_MAX_IDS = 2000
+export async function noteCountsChunked(ids: string[]) {
+  const chunks: string[][] = []
+  for (let i = 0; i < ids.length; i += NOTE_COUNTS_MAX_IDS) chunks.push(ids.slice(i, i + NOTE_COUNTS_MAX_IDS))
+  return Object.assign({}, ...(await Promise.all(chunks.map((c) => api.noteCounts(c))))) as NoteCounts
+}
+
+/** Notes, highlights and AI notes for many papers (one request per 2000); keyed by the sorted ids. */
 export const useNoteCounts = (ids: string[]) => {
   const sorted = [...ids].sort()
-  return useQuery({ queryKey: keys.noteCounts(sorted), queryFn: () => api.noteCounts(sorted), enabled: sorted.length > 0, placeholderData: keepPreviousData })
+  return useQuery({ queryKey: keys.noteCounts(sorted), queryFn: () => noteCountsChunked(sorted), enabled: sorted.length > 0, placeholderData: keepPreviousData })
 }
 
 /** The papers a manuscript can cite, with their keys and note counts. */

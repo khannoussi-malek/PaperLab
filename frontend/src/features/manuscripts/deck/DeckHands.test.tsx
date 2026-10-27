@@ -8,7 +8,7 @@ vi.mock('../../graph/hands/HandsMode', () => ({ default: (p: Record<string, unkn
 
 import { DeckHands, TYPING_PAUSE_MS } from './DeckHands'
 
-function Host({ onAction = vi.fn(), onSelect = vi.fn(), onHidden = vi.fn(), typingPause = true }) {
+function Host({ onAction = vi.fn(), onSelect = vi.fn(), onHidden = vi.fn() }) {
   const column = useRef<HTMLDivElement>(null)
   return (
     <div data-testid="studio">
@@ -16,7 +16,7 @@ function Host({ onAction = vi.fn(), onSelect = vi.fn(), onHidden = vi.fn(), typi
       <div ref={column}>
         <button data-testid="inside">x</button>
         <div data-deck-card="p1" aria-label="Alpha" />
-        <input data-testid="filter" /><DeckHands column={column} onAction={onAction} onSelect={onSelect} onHidden={onHidden} typingPause={typingPause} />
+        <input data-testid="filter" /><DeckHands column={column} onAction={onAction} onSelect={onSelect} onHidden={onHidden} />
       </div>
     </div>
   )
@@ -97,14 +97,11 @@ it('resuming after a pause starts the glide and spread totals afresh', () => {
   expect(onAction).not.toHaveBeenCalled()
 })
 
-it('without the typing pause, only keystrokes in an input inside the deck pause it', () => {
-  const { getByTestId } = render(<Host typingPause={false} />)
-  fireEvent.focusIn(getByTestId('inside'))
-  fireEvent.keyDown(getByTestId('editor'), { key: 'a' })
-  fireEvent.keyDown(document.body, { key: 'b' })
-  expect(paused()).toBe(false)
-  fireEvent.keyDown(getByTestId('filter'), { key: 'c' })
-  expect(paused()).toBe(true)
-  act(() => { vi.advanceTimersByTime(TYPING_PAUSE_MS) })
-  expect(paused()).toBe(false)
+it('turns the camera off when a Radix tabpanel around the column goes inactive', async () => {
+  const onHidden = vi.fn()
+  const { getByTestId } = render(<div role="tabpanel" data-state="active" data-testid="panel"><Host onHidden={onHidden} /></div>)
+  expect(hm.mounted).toBe(1)
+  await act(async () => { getByTestId('panel').setAttribute('data-state', 'inactive') })
+  expect(hm.mounted).toBe(0)
+  expect(onHidden).toHaveBeenCalled()
 })

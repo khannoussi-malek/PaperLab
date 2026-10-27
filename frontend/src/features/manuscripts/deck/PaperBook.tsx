@@ -15,7 +15,7 @@ export type PaperBookProps = {
   onInsert?: (item: BookItem | null) => void
   onOpenReader: (item: BookItem | null) => void
   onClose: () => void
-  /** Items can be dragged out (to the editor), and the \\citep line shows. Off by default. */
+  /** Items can be dragged out (to the editor). Off by default. The \\citep header line follows `onInsert`, not this. */
   draggable?: boolean
   /** Evidence mode: what the model said about this paper, shown under a selected passage. */
   verdict?: VerdictView | null
