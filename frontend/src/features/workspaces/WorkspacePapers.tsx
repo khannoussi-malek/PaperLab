@@ -6,6 +6,7 @@ import { FindPapersButton } from '@/features/discovery/FindPapersButton'
 import { ErrorAlert, LoadError } from '@/features/library/ErrorAlert'
 import { PaperList } from '@/features/library/PaperList'
 import { ImportFromZoteroButton } from '@/features/library/ImportFromZoteroButton'
+import { ViewSwitch, usePaperView } from '@/features/library/ViewSwitch'
 import { UploadPdfsButton } from '@/features/library/UploadPdfsButton'
 import type { TagMatch } from '@/lib/route'
 import { AddPapersDialog } from './AddPapersDialog'
@@ -35,6 +36,7 @@ export function WorkspacePapers({
   const tagMap = paperTags.data ?? {}
   const upload = useUploadPapers(workspaceId)
   const [adding, setAdding] = useState(false)
+  const [view, setView] = usePaperView('paperlab-workspace-papers-view')
   const [visible, setVisible] = useState<string[] | null>(null)
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set())
 
@@ -82,8 +84,11 @@ export function WorkspacePapers({
         <div className="flex items-start gap-6">
           <TagSidebar {...filterProps} />
           <div className="flex min-w-0 flex-1 flex-col gap-3">
-            <TagFilterMenu {...filterProps} />
-            {selectedIds.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <TagFilterMenu {...filterProps} />
+              <ViewSwitch view={view} onChange={setView} />
+            </div>
+            {view === 'list' && selectedIds.length > 0 && (
               <div className="flex flex-wrap items-center gap-2">
                 <span role="status" className="text-sm">{selectedIds.length} selected</span>
                 <TagPicker workspaceId={workspaceId} mode="add" paperIds={selectedIds} onDone={() => setPicked(new Set())} />
@@ -93,7 +98,8 @@ export function WorkspacePapers({
               </div>
             )}
             <PaperList
-              selection={{ selected: new Set(selectedIds), onToggle: toggle }}
+              selection={view === 'list' ? { selected: new Set(selectedIds), onToggle: toggle } : undefined}
+              view={view}
               papers={list}
               onVisibleChange={setVisible}
               workspaceId={workspaceId}
