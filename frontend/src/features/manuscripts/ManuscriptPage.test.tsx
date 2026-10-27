@@ -881,18 +881,20 @@ test('shared tabs: Mod+Alt+P and the palette\'s Show in PDF bring the PDF tab fo
   await waitFor(() => expect(tab('PDF')).toHaveAttribute('aria-selected', 'true'))
 })
 
-test('shared tabs: the PDF following a finished compile never takes the Papers tab away', async () => {
+test('shared tabs: the PDF following a finished compile never takes the Papers tab away; the papers refresh', async () => {
   withPdf()
   const get = vi.spyOn(api, 'getManuscript').mockResolvedValue(detail(GOOD))
-  vi.spyOn(api, 'manuscriptPapers').mockResolvedValue([])
+  const papers = vi.spyOn(api, 'manuscriptPapers').mockResolvedValue([])
   vi.spyOn(api, 'saveManuscriptFile').mockResolvedValue(saved())
   vi.spyOn(api, 'compileManuscript').mockResolvedValue({ state: 'queued' })
   const forward = vi.spyOn(api, 'syncForward').mockResolvedValue({ page: 1, x: 0, y: 0 })
   renderPage()
   await waitFor(() => expect(forward).toHaveBeenCalledTimes(1))
   fireEvent.click(tab('Papers'))
+  const before = papers.mock.calls.length
   get.mockResolvedValue(detail({ compile_status: 'ok', compiled_at: T4 }))
   ctrlS(await type('hello again'))
   await waitFor(() => expect(forward).toHaveBeenCalledTimes(2))
   expect(tab('Papers')).toHaveAttribute('aria-selected', 'true')
+  await waitFor(() => expect(papers.mock.calls.length).toBeGreaterThan(before)) // the compile pinned what it cites
 })

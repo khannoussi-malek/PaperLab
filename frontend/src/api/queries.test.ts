@@ -18,6 +18,9 @@ import {
   useSetEligibility,
   manuscriptPollInterval,
   useSaveManuscriptFile,
+  useAddSection,
+  useManuscriptPapers,
+  usePapersFollowCompile,
   useWorkspaceMutations,
   useSnowball,
   useUploadHitPdf,
@@ -376,6 +379,36 @@ describe('manuscript hooks', () => {
     result.current.mutate({ id: 'm', path: '../x', text: 'x', base: null })
     await waitFor(() => expect(result.current.isError).toBe(true))
     expect(result.current.error).toBeInstanceOf(ApiError)
+  })
+
+  describe('the papers a manuscript can cite', () => {
+    const watch = (client: QueryClient, compiledAt: string | null | undefined) =>
+      renderHook(({ at }) => ({ papers: useManuscriptPapers('m'), save: useSaveManuscriptFile(), add: useAddSection(), follow: usePapersFollowCompile('m', at) }),
+        { wrapper: withQueryClient(client), initialProps: { at: compiledAt } })
+
+    it('an autosave does not refetch them; a section operation does', async () => {
+      const list = vi.spyOn(api, 'manuscriptPapers').mockResolvedValue([])
+      vi.spyOn(api, 'saveManuscriptFile').mockResolvedValue({ path: 'main.tex', size: 1, updated_at: 'T3' })
+      vi.spyOn(api, 'addSection').mockResolvedValue({} as never)
+      const { result } = watch(quiet(), null)
+      await waitFor(() => expect(result.current.papers.isSuccess).toBe(true))
+      await result.current.save.mutateAsync({ id: 'm', path: 'main.tex', text: 'x', base: null })
+      await new Promise((r) => setTimeout(r, 0))
+      expect(list).toHaveBeenCalledTimes(1)
+      await result.current.add.mutateAsync({ id: 'm', title: 'New', after: null })
+      await waitFor(() => expect(list).toHaveBeenCalledTimes(2))
+    })
+
+    it('a finished compile (a new compiled_at) refetches them; the first one seen does not', async () => {
+      const list = vi.spyOn(api, 'manuscriptPapers').mockResolvedValue([])
+      const { result, rerender } = watch(quiet(), undefined)
+      await waitFor(() => expect(result.current.papers.isSuccess).toBe(true))
+      rerender({ at: 'T1' }) // the manuscript loaded
+      await new Promise((r) => setTimeout(r, 0))
+      expect(list).toHaveBeenCalledTimes(1)
+      rerender({ at: 'T2' })
+      await waitFor(() => expect(list).toHaveBeenCalledTimes(2))
+    })
   })
 
   it('deleting a workspace refreshes the manuscripts', async () => {

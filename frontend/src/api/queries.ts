@@ -75,7 +75,9 @@ export const keys = {
   manuscriptList: (workspaceId: string | null) => ['manuscripts', 'list', workspaceId ?? 'orphans'] as const,
   manuscript: (id: string) => ['manuscripts', id] as const,
   manuscriptFile: (id: string, path: string) => ['manuscripts', id, 'file', path] as const,
-  manuscriptPapers: (id: string) => ['manuscripts', id, 'papers'] as const,
+  // Not under ['manuscripts', id]: an autosave invalidates that, and the papers only change on a pin, a section or
+  // file operation, or a compile (which pins the keys it cites).
+  manuscriptPapers: (id: string) => ['manuscriptPapers', id] as const,
   manuscriptSnapshots: (id: string) => ['manuscripts', id, 'snapshots'] as const,
   papers: ['papers'] as const,
   paper: (id: string) => ['papers', id] as const,
@@ -1400,6 +1402,16 @@ export const useManuscript = (id: string) =>
 export const useManuscriptPapers = (id: string) =>
   useQuery({ queryKey: keys.manuscriptPapers(id), queryFn: () => api.manuscriptPapers(id) })
 
+/** A compile pins the keys it cited, so each new compiled_at (not the first one seen) refetches the papers. */
+export function usePapersFollowCompile(id: string, compiledAt: string | null | undefined) {
+  const client = useQueryClient()
+  const seen = useRef(compiledAt)
+  useEffect(() => {
+    if (seen.current !== undefined && compiledAt !== seen.current) void client.invalidateQueries({ queryKey: keys.manuscriptPapers(id) })
+    seen.current = compiledAt
+  }, [client, id, compiledAt])
+}
+
 export function usePinPaper() {
   const client = useQueryClient()
   return useMutation({
@@ -1457,7 +1469,11 @@ export function useRestoreSnapshot() {
 
 function useManuscriptMutation<V, R>(mutationFn: (variables: V) => Promise<R>) {
   const client = useQueryClient()
-  return useMutation({ mutationFn, onSuccess: () => client.invalidateQueries({ queryKey: keys.manuscripts }) })
+  return useMutation({
+    mutationFn,
+    onSuccess: () =>
+      Promise.all([client.invalidateQueries({ queryKey: keys.manuscripts }), client.invalidateQueries({ queryKey: ['manuscriptPapers'] })]),
+  })
 }
 
 export const useCreateManuscript = () => useManuscriptMutation((body: ManuscriptCreate) => api.createManuscript(body))

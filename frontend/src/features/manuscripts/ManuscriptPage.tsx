@@ -2,7 +2,7 @@ import { useQueries } from '@tanstack/react-query'
 import { Download, FolderInput, History, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, ApiError } from '@/api/client'
-import { useCompileManuscript, useManuscript, useManuscriptPapers, usePinPaper } from '@/api/queries'
+import { useCompileManuscript, useManuscript, useManuscriptPapers, usePapersFollowCompile, usePinPaper } from '@/api/queries'
 import { AppShell } from '@/components/AppShell'
 import { Button } from '@/components/ui/button'
 import { LoadError } from '@/features/library/ErrorAlert'
@@ -40,6 +40,7 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
   const pinPaper = useCallback((paperId: string) => pin.mutate({ id: manuscriptId, paperId }), [pin.mutate, manuscriptId]) // eslint-disable-line react-hooks/exhaustive-deps
   const compile = useCompileManuscript()
   const data = manuscript.data
+  usePapersFollowCompile(manuscriptId, data?.compiled_at)
   const [live, setLive] = useState<Record<string, string>>({})
   const [jump, setJump] = useState<{ line: number; n: number } | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
