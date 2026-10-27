@@ -1,20 +1,27 @@
 import { sentenceAt } from '../pdfEdit'
 
 const COMMENT = /(?<!\\)%.*$/gm
+const BLANK_LINE = /\r?\n[ \t]*\r?\n/g
 const DROPPED = /\\(?:[a-zA-Z]*cite[a-zA-Z]*|ref|eqref|label)\*?(?:\[[^\]]*\])*\{[^{}]*\}/g
 const WITH_ARG = /\\[a-zA-Z]+\*?(?:\[[^\]]*\])*\{([^{}]*)\}/g
 
 /** LaTeX source of one sentence as the plain text a reader (or a model) would see. */
 function toPlain(tex: string): string {
-  let s = tex.replace(COMMENT, '').replace(DROPPED, '')
+  let s = tex
+    .replace(COMMENT, '')
+    .replace(DROPPED, '')
+    .replace(/\\(?:begin|end)\{[^{}]*\}/g, '')
+    .replace(/\\\$/g, '\u0000') // an escaped dollar is text, not math
   for (let prev = ''; prev !== s; ) {
     prev = s
     s = s.replace(WITH_ARG, '$1') // innermost first, so nested commands unwrap in passes
   }
   return s
     .replace(/\\[a-zA-Z]+\*?/g, '')
-    .replace(/\\%/g, '%')
+    .replace(/\\\\|\\,/g, ' ')
+    .replace(/\\([%&_#])/g, '$1')
     .replace(/\$([^$]*)\$/g, '$1')
+    .replace(/\u0000/g, '$')
     .replace(/~/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
@@ -30,13 +37,19 @@ export function sentenceAtCursor(
   if (from !== to) {
     text = doc.slice(Math.min(from, to), Math.max(from, to))
   } else {
-    const before = doc.slice(0, from)
-    const gap = before.lastIndexOf('\n\n')
-    const start = gap < 0 ? 0 : gap + 2
-    const stop = doc.indexOf('\n\n', from)
-    const para = doc.slice(start, stop < 0 ? doc.length : stop)
+    let start = 0
+    let stop = doc.length
+    for (const m of doc.matchAll(BLANK_LINE)) {
+      if (m.index + m[0].length <= from) start = m.index + m[0].length
+      else if (m.index >= from) {
+        stop = m.index
+        break
+      }
+    }
+    // comments become spaces of the same length, so a full stop inside one splits nothing and offsets stay valid
+    const para = doc.slice(start, stop).replace(COMMENT, (c) => ' '.repeat(c.length))
     const span = sentenceAt(para, from - start)
-    text = para.slice(span.start, span.end)
+    text = doc.slice(start + span.start, start + span.end)
   }
   text = text.trim()
   const plain = toPlain(text)
