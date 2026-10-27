@@ -68,7 +68,7 @@ async def list_papers(session: AsyncSession, mid: uuid.UUID) -> list[dict]:
 
 async def pin(session: AsyncSession, mid: uuid.UUID, paper_id: uuid.UUID) -> str:
     await manuscripts.get(session, mid)  # 404 first
-    # Serialise pins on one manuscript: two racing inserts would add the same (manuscript, key) row. Read the pins after.
+    # Serialise pins on one manuscript (racing inserts would add the same row); read the pins after the lock.
     manuscript = await session.scalar(
         select(Manuscript).where(Manuscript.id == mid).with_for_update().execution_options(populate_existing=True)
     )
