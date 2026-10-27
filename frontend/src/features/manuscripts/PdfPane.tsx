@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type KeyboardEvent, type MouseEvent } from 'react'
+import { useCallback, useEffect, useRef, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { api, type ManuscriptDetail } from '@/api/client'
 import { PdfPage } from '../reader/PdfPage'
@@ -17,10 +17,14 @@ type Props = {
   target: PdfTarget | null
   /** The source of a PDF spot: ctrl/cmd-click on a page, or Enter for the visible centre. x/y in points. */
   onSourceAt: (page: number, x: number, y: number) => void
+  /** A double-click on text: the page point, the selected word and where it sits on screen. */
+  onEditAt?: (page: number, x: number, y: number, word: string, rect: DOMRect) => void
+  /** Overlays positioned within the pane (the edit box). */
+  children?: ReactNode
 }
 
 /** The compiled PDF, with the compile's errors above it. The pane's width is the parent's, so loading never moves it. */
-export function PdfPane({ manuscript: m, width, target, onSourceAt }: Props) {
+export function PdfPane({ manuscript: m, width, target, onSourceAt, onEditAt, children }: Props) {
   // The URL carries compiled_at, so each good compile is fetched again. A failed compile also stamps compiled_at but
   // leaves the last PDF on disk, so the URL keeps the last good stamp and that PDF stays on screen.
   const goodAt = useRef<string | null>(null)
@@ -55,6 +59,15 @@ export function PdfPane({ manuscript: m, width, target, onSourceAt }: Props) {
     onSourceAt(Number(el.dataset.page), (x - r.left) / scale, (y - r.top) / scale)
   }
   const click = (e: MouseEvent<HTMLDivElement>) => { if (e.ctrlKey || e.metaKey) report(e.currentTarget, e.clientX, e.clientY) }
+  const dblClick = (e: MouseEvent<HTMLDivElement>) => {
+    const sel = window.getSelection()
+    const word = sel?.toString().trim() ?? ''
+    if (!onEditAt || !word) return
+    const box = sel && sel.rangeCount > 0 ? sel.getRangeAt(0).getBoundingClientRect?.() : undefined
+    const rect = box && (box.width || box.height) ? box : ({ left: e.clientX, right: e.clientX, top: e.clientY, bottom: e.clientY, width: 0, height: 0, x: e.clientX, y: e.clientY } as DOMRect)
+    const r = e.currentTarget.getBoundingClientRect()
+    onEditAt(Number(e.currentTarget.dataset.page), (e.clientX - r.left) / scale, (e.clientY - r.top) / scale, word, rect)
+  }
   const enter = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key !== 'Enter' || e.target !== e.currentTarget) return
     const r = e.currentTarget.getBoundingClientRect()
@@ -67,7 +80,7 @@ export function PdfPane({ manuscript: m, width, target, onSourceAt }: Props) {
   }
 
   return (
-    <section aria-label="PDF preview" className="flex h-full min-h-0 flex-col">
+    <section aria-label="PDF preview" className="relative flex h-full min-h-0 flex-col">
       {m.compile_status === 'failed' && (
         <Alert variant="destructive" className="m-2 w-auto">
           <AlertDescription>
@@ -92,7 +105,7 @@ export function PdfPane({ manuscript: m, width, target, onSourceAt }: Props) {
         {doc ? (
           <div ref={pagesRef} className="flex flex-col items-center gap-3">
             {Array.from({ length: doc.numPages }, (_, i) => i + 1).map((n) => (
-              <div key={n} data-page={n} onClick={click}><PdfPage doc={doc} pageNumber={n} scale={scale} /></div>
+              <div key={n} data-page={n} onClick={click} onDoubleClick={dblClick}><PdfPage doc={doc} pageNumber={n} scale={scale} /></div>
             ))}
           </div>
         ) : (
@@ -101,6 +114,7 @@ export function PdfPane({ manuscript: m, width, target, onSourceAt }: Props) {
           </p>
         )}
       </div>
+      {children}
     </section>
   )
 }

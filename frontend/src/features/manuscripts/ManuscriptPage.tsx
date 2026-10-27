@@ -1,7 +1,7 @@
 import { useQueries } from '@tanstack/react-query'
 import { Download, FolderInput, History, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { api } from '@/api/client'
+import { api, ApiError } from '@/api/client'
 import { useCompileManuscript, useManuscript } from '@/api/queries'
 import { AppShell } from '@/components/AppShell'
 import { Button } from '@/components/ui/button'
@@ -20,6 +20,8 @@ import { SectionList } from './SectionList'
 import { openRowIndex, sectionRows, type SectionRow } from './sections'
 import { StudioColumns } from './StudioColumns'
 import { PdfPane, type PdfTarget } from './PdfPane'
+import { PdfEditBox } from './PdfEditBox'
+import { findEditable, type Span } from './pdfEdit'
 import { MANUSCRIPT_PDF, MANUSCRIPT_SECTIONS } from './pdfPanel'
 import type { SaveState } from './autosave'
 import { keptTexts, useKeptTexts } from './keptTexts'
@@ -48,6 +50,8 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
   const flushCurrent = useCallback(async () => (await flushRef.current?.()) ?? true, [])
   const [cursor, setCursor] = useState<{ path: string; line: number } | null>(null)
   const onState = useCallback((p: string, s: SaveState) => setSaveStates((all) => ({ ...all, [p]: s })), [])
+  const replaceRef = useRef<((line: number, start: number, end: number, text: string) => void) | null>(null)
+  const registerReplace = useCallback((f: typeof replaceRef.current) => { replaceRef.current = f }, [])
   const registerFlush = useCallback((f: (() => Promise<boolean>) | null) => { flushRef.current = f }, [])
 
   const path = data && (file && data.files.some((f) => f.path === file) ? file : data.main_file)
@@ -99,6 +103,50 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
       if (r.file === path) setJump((j) => ({ line: r.line, n: (j?.n ?? 0) + 1 }))
       else window.location.assign(manuscriptHref(manuscriptId, r.file, r.line))
     }, () => {})
+  }
+  // Edit from the PDF: the sentence behind a double-clicked word, or a note that LaTeX made it.
+  const [edit, setEdit] = useState<{ anchor: DOMRect; file: string; line: number; at: Span | null; initial: string; base: string | null } | null>(null)
+  const editId = useRef(0)
+  const textsRef = useRef(fileTexts)
+  textsRef.current = fileTexts
+  const editAt = (page: number, x: number, y: number, word: string, anchor: DOMRect) => {
+    const id = ++editId.current
+    const from = path
+    void (async () => {
+      const r = await api.syncInverse(manuscriptId, page, x, y)
+      if (id !== editId.current || from !== latest.current.path) return // a newer double-click, or another file opened meanwhile
+      let text: string | undefined = r.file === from ? textsRef.current[r.file] : undefined // the editor's buffer when it is open
+      let base: string | null = null
+      if (text === undefined) {
+        const fresh = await api.getManuscriptFile(manuscriptId, r.file)
+        if (id !== editId.current || from !== latest.current.path) return
+        text = fresh.text
+        base = fresh.updated_at
+      }
+      const lines = text.split('\n')
+      const at = findEditable(lines, r.line, word)
+      setEdit({ anchor, file: r.file, line: r.line, at, initial: at ? lines[at.line - 1].slice(at.start, at.end) : '', base })
+    })().catch(() => {}) // no index or no network: stay quiet
+  }
+  const saveEdit = async (replacement: string) => {
+    if (!edit?.at) return
+    const { file: target, at, initial } = edit
+    const changed = new Error('This file changed since. Open it in the editor to edit it.')
+    if (target === latest.current.path) {
+      const now = textsRef.current[target]?.split('\n')[at.line - 1]?.slice(at.start, at.end)
+      if (now !== initial || !replaceRef.current) throw changed // typed over since the box opened
+      replaceRef.current(at.line, at.start, at.end, replacement)
+      if (!(await flushCurrent())) throw changed // saved before compiling, so the compile sees it
+    } else {
+      const lines = (await api.getManuscriptFile(manuscriptId, target))
+      const row = lines.text.split('\n')
+      if (row[at.line - 1]?.slice(at.start, at.end) !== initial) throw changed
+      row[at.line - 1] = row[at.line - 1].slice(0, at.start) + replacement + row[at.line - 1].slice(at.end)
+      try { await api.saveManuscriptFile(manuscriptId, target, row.join('\n'), lines.updated_at) }
+      catch (e) { throw e instanceof ApiError && e.code === 'file_changed' ? changed : e }
+    }
+    setEdit(null)
+    compile.mutate(manuscriptId)
   }
   const openSection = (row: SectionRow) => jumpTo(row.path, row.inMain ? row.line : 1)
   const stepSection = (step: -1 | 1) => {
@@ -186,10 +234,23 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
                     onText={onText}
                     onState={onState}
                     registerFlush={registerFlush}
+                    registerReplace={registerReplace}
                   />
                 ),
               },
-              { id: 'pdf', label: 'PDF', limits: MANUSCRIPT_PDF, content: (width) => <PdfPane manuscript={data} width={width} target={target} onSourceAt={sourceAt} /> },
+              { id: 'pdf', label: 'PDF', limits: MANUSCRIPT_PDF, content: (width) => <PdfPane manuscript={data} width={width} target={target} onSourceAt={sourceAt} onEditAt={editAt}>
+                {edit && (
+                  <PdfEditBox
+                    key={`${edit.file}:${edit.line}`}
+                    anchor={edit.anchor}
+                    initial={edit.initial}
+                    notice={edit.at ? undefined : 'This text is made by LaTeX (a citation, a number or the reference list).'}
+                    onSave={saveEdit}
+                    onCancel={() => setEdit(null)}
+                    onOpenSource={() => { jumpTo(edit.file, edit.line); setEdit(null) }}
+                  />
+                )}
+              </PdfPane> },
             ]}
           />
         </>

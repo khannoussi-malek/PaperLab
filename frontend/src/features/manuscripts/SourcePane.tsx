@@ -10,6 +10,7 @@ import { manuscriptErrorMessage, manuscriptFailure } from './errors'
 import { keptTexts, useKeptTexts, type KeptText } from './keptTexts'
 import { KeptTextAlert } from './KeptTextAlert'
 import { LatexEditor } from './LatexEditor'
+import { replaceSpan } from './pdfEdit'
 
 const AUTOSAVE_MS = 1000
 const SAVE_LABEL: Record<SaveState, string> = {
@@ -35,6 +36,8 @@ type Props = {
   onState: (path: string, state: SaveState) => void
   /** Hands the page a way to save what is pending; it resolves true when nothing is left unsaved. */
   registerFlush: (flush: (() => Promise<boolean>) | null) => void
+  /** Hands the page a way to replace part of a line in the editor's buffer, as a normal edit (autosave picks it up). */
+  registerReplace?: (replace: ((line: number, start: number, end: number, text: string) => void) | null) => void
 }
 
 /**
@@ -169,11 +172,23 @@ export function SourcePane(props: Props) {
     void auto.keepMine()
   }
 
+  const textNow = useRef<string | null>(null)
+  textNow.current = text
   const change = (next: string) => {
+    textNow.current = next
     setText(next)
     onText(path, next)
     auto.change(next)
   }
+
+  useEffect(() => {
+    live.current.registerReplace?.((line, start, end, replacement) => {
+      if (textNow.current !== null) changeRef.current(replaceSpan(textNow.current, { line, start, end }, replacement))
+    })
+    return () => live.current.registerReplace?.(null)
+  }, [path])
+  const changeRef = useRef(change)
+  changeRef.current = change
 
   return (
     <section aria-label={`Editing ${path}`} className="flex h-full min-h-0 flex-col">
