@@ -1503,6 +1503,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/manuscripts/{manuscript_id}/evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Find Evidence */
+        post: operations["find_evidence_api_manuscripts__manuscript_id__evidence_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/evidence/{sentence_hash}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Evidence Rows */
+        get: operations["evidence_rows_api_manuscripts__manuscript_id__evidence__sentence_hash__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/manuscripts/{manuscript_id}/papers/{paper_id}/pin": {
         parameters: {
             query?: never;
@@ -3339,6 +3373,72 @@ export interface components {
             message: string;
             /** Retryable */
             retryable: boolean;
+        };
+        /** EvidenceFoundOut */
+        EvidenceFoundOut: {
+            /** Sentence Hash */
+            sentence_hash: string;
+            /** Papers */
+            papers: components["schemas"]["EvidencePaperOut"][];
+            /**
+             * Verdicts
+             * @enum {string}
+             */
+            verdicts: "queued" | "unavailable";
+        };
+        /** EvidenceIn */
+        EvidenceIn: {
+            /** Sentence */
+            sentence: string;
+        };
+        /** EvidencePaperOut */
+        EvidencePaperOut: {
+            /**
+             * Paper Id
+             * Format: uuid
+             */
+            paper_id: string;
+            /** Key */
+            key: string;
+            /** Passages */
+            passages: components["schemas"]["EvidencePassageOut"][];
+        };
+        /** EvidencePassageOut */
+        EvidencePassageOut: {
+            /**
+             * Chunk Id
+             * Format: uuid
+             */
+            chunk_id: string;
+            /** Page */
+            page: number;
+            /** Text */
+            text: string;
+        };
+        /** EvidenceRowOut */
+        EvidenceRowOut: {
+            /**
+             * Paper Id
+             * Format: uuid
+             */
+            paper_id: string;
+            /** Rank */
+            rank: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "done" | "failed" | "interrupted";
+            /** Verdict */
+            verdict: string | null;
+            /** Reason */
+            reason: string | null;
+            /** Quote */
+            quote: string | null;
+            /** Page */
+            page: number | null;
+            /** Output Id */
+            output_id: string | null;
         };
         /** ExportIn */
         ExportIn: {
@@ -9052,6 +9152,73 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RankOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    find_evidence_api_manuscripts__manuscript_id__evidence_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EvidenceIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceFoundOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    evidence_rows_api_manuscripts__manuscript_id__evidence__sentence_hash__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+                sentence_hash: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceRowOut"][];
                 };
             };
             /** @description Validation Error */
