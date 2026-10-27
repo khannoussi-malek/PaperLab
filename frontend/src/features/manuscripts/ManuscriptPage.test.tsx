@@ -8,9 +8,9 @@ import { ManuscriptPage } from './ManuscriptPage'
 
 const pdf = vi.hoisted(() => vi.fn((_url: string | null) => ({ doc: null, error: null })))
 // jsdom can't lay CodeMirror out, so here the editor is a textarea with the same props (LatexEditor.test.tsx runs the real one).
-const editor = vi.hoisted(() => ({ current: null as null | { onCursor?: (l: number) => void; onSectionStep?: (s: -1 | 1) => void; onShowInPdf?: (l: number) => void } }))
+const editor = vi.hoisted(() => ({ current: null as null | { onCursor?: (l: number) => void; onSectionStep?: (s: -1 | 1) => void; onShowInPdf?: (l: number) => void; jumpTo?: { line: number; n: number } | null } }))
 vi.mock('./LatexEditor', () => ({
-  LatexEditor: (props: { value: string; onChange: (v: string) => void; onCursor?: (l: number) => void; onSectionStep?: (s: -1 | 1) => void; onShowInPdf?: (l: number) => void }) => {
+  LatexEditor: (props: { value: string; onChange: (v: string) => void; onCursor?: (l: number) => void; onSectionStep?: (s: -1 | 1) => void; onShowInPdf?: (l: number) => void; jumpTo?: { line: number; n: number } | null }) => {
     editor.current = props
     return <textarea aria-label="LaTeX source" value={props.value} onChange={(e) => props.onChange(e.target.value)} />
   },
@@ -508,4 +508,48 @@ test('no_sync is silent', async () => {
   fireEvent.click(pages().querySelector('[data-page="1"]')!, { metaKey: true })
   await new Promise((r) => setTimeout(r, 0))
   expect(screen.queryByRole('alert')).toBeNull()
+})
+
+const deferred = <T,>() => { let resolve!: (v: T) => void; const promise = new Promise<T>((r) => { resolve = r }); return { promise, resolve } }
+
+test('only the newest forward lookup moves the PDF', async () => {
+  withPdf()
+  vi.spyOn(api, 'getManuscript').mockResolvedValue(detail())
+  const first = deferred<{ page: number; x: number; y: number }>()
+  const second = deferred<{ page: number; x: number; y: number }>()
+  vi.spyOn(api, 'syncForward').mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise)
+  renderPage()
+  await screen.findByLabelText('LaTeX source')
+  act(() => editor.current!.onShowInPdf!(3))
+  act(() => editor.current!.onShowInPdf!(5))
+  await act(async () => { second.resolve({ page: 2, x: 0, y: 999 }) })
+  const landed = pages().scrollTop
+  expect(landed).toBeGreaterThan(300)
+  await act(async () => { first.resolve({ page: 1, x: 0, y: 100 }) }) // older answer arrives late
+  expect(pages().scrollTop).toBe(landed)
+})
+
+test('an inverse lookup that answers after another file opened is dropped', async () => {
+  withPdf()
+  vi.spyOn(api, 'getManuscript').mockResolvedValue(detail())
+  const late = deferred<{ file: string; line: number }>()
+  vi.spyOn(api, 'syncInverse').mockReturnValue(late.promise)
+  const view = renderPage()
+  await screen.findByLabelText('LaTeX source')
+  fireEvent.click(pages().querySelector('[data-page="1"]')!, { ctrlKey: true })
+  view.open('b.tex')
+  await waitFor(() => expect(screen.getByLabelText('LaTeX source')).toHaveValue('bee'))
+  await act(async () => { late.resolve({ file: 'b.tex', line: 99 }) })
+  expect(editor.current!.jumpTo?.line).not.toBe(99)
+  expect(window.location.hash).toBe('')
+})
+
+test('?line= on the same file jumps again', async () => {
+  vi.spyOn(api, 'getManuscript').mockResolvedValue(detail())
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const ui = (l: number) => <QueryClientProvider client={client}><ManuscriptPage manuscriptId="m1" file="b.tex" line={l} /></QueryClientProvider>
+  const view = render(ui(3))
+  await waitFor(() => expect(editor.current?.jumpTo?.line).toBe(3))
+  view.rerender(ui(8))
+  await waitFor(() => expect(editor.current?.jumpTo?.line).toBe(8))
 })

@@ -68,14 +68,17 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
   )
   const errors = useMemo(() => (path && data ? errorsFor(data.compile_errors, path) : []), [data?.compile_errors, path])
 
-  useEffect(() => setJump(path === file && line ? { line, n: 1 } : null), [path]) // a jump belongs to the file it was made in; ?line= starts one
+  useEffect(() => setJump(path === file && line ? { line, n: 1 } : null), [path, file, line]) // a jump belongs to the file it was made in; ?line= starts one
 
   const [target, setTarget] = useState<PdfTarget | null>(null)
   const latest = useRef({ path, line: line ?? 1 })
   latest.current = { path, line: cursor && cursor.path === path ? cursor.line : (line ?? 1) }
   // Best effort and silent: no index, no match or no network just leaves the PDF where it is.
+  const forwardId = useRef(0) // only the newest forward lookup may move the PDF
+  const inverseId = useRef(0)
   const showInPdf = useCallback((f: string, ln: number) => {
-    api.syncForward(manuscriptId, f, ln).then((r) => setTarget((t) => ({ page: r.page, y: r.y, n: (t?.n ?? 0) + 1 })), () => {})
+    const id = ++forwardId.current
+    api.syncForward(manuscriptId, f, ln).then((r) => { if (id === forwardId.current) setTarget((t) => ({ page: r.page, y: r.y, n: (t?.n ?? 0) + 1 })) }, () => {})
   }, [manuscriptId])
   const goodStamp = data?.compile_status === 'ok' ? data.compiled_at : null
   useEffect(() => { // once per new good compile, and when a file opens on one; never per cursor move
@@ -89,7 +92,10 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
     else window.location.assign(manuscriptHref(manuscriptId, f, line))
   }
   const sourceAt = (page: number, x: number, y: number) => {
+    const id = ++inverseId.current
+    const from = path
     api.syncInverse(manuscriptId, page, x, y).then((r) => {
+      if (id !== inverseId.current || from !== latest.current.path) return // a newer click, or another file opened meanwhile
       if (r.file === path) setJump((j) => ({ line: r.line, n: (j?.n ?? 0) + 1 }))
       else window.location.assign(manuscriptHref(manuscriptId, r.file, r.line))
     }, () => {})

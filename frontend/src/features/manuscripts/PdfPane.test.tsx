@@ -31,3 +31,32 @@ test('Enter on the pages uses the visible centre', () => {
   fireEvent.keyDown(screen.getByLabelText('PDF pages'), { key: 'Enter' })
   expect(at).toHaveBeenCalledTimes(1)
 })
+
+const rect = (top: number, bottom: number) => ({ top, bottom, left: 0, right: 100, width: 100, height: bottom - top, x: 0, y: top, toJSON: () => ({}) }) as DOMRect
+
+test('Enter in a gap between pages picks the nearest page', () => {
+  const at = vi.fn()
+  render(<PdfPane manuscript={m} width={636} target={null} onSourceAt={at} />)
+  const box = screen.getByLabelText('PDF pages')
+  Object.defineProperty(box, 'clientHeight', { value: 200, configurable: true })
+  vi.spyOn(box, 'getBoundingClientRect').mockReturnValue(rect(0, 200))
+  ;[[1, 0, 60], [2, 110, 300], [3, 310, 500]].forEach(([n, t, b]) =>
+    vi.spyOn(document.querySelector(`[data-page="${n}"]`)!, 'getBoundingClientRect').mockReturnValue(rect(t, b)))
+  fireEvent.keyDown(box, { key: 'Enter' }) // centre y = 100, between page 1 and page 2
+  expect(at).toHaveBeenCalledWith(2, expect.any(Number), expect.any(Number))
+})
+
+test('the target is placed again when pages change size under it, until the user scrolls', () => {
+  let fire = () => {}
+  vi.stubGlobal('ResizeObserver', class { constructor(cb: () => void) { fire = cb } observe() {} disconnect() {} })
+  render(<PdfPane manuscript={m} width={636} target={{ page: 2, y: 0, n: 1 }} onSourceAt={() => {}} />)
+  const box = screen.getByLabelText('PDF pages')
+  vi.spyOn(document.querySelector('[data-page="2"]')!, 'getBoundingClientRect').mockReturnValue(rect(1600, 2400)) // page 1 grew to A4
+  fire()
+  expect(box.scrollTop).toBe(1600)
+  fireEvent.wheel(box)
+  box.scrollTop = 5
+  fire()
+  expect(box.scrollTop).toBe(5)
+  vi.unstubAllGlobals()
+})
