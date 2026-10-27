@@ -109,6 +109,7 @@ export function ManuscriptPage({ manuscriptId, file }: { manuscriptId: string; f
               manuscriptId={manuscriptId}
               main={data.main_file}
               texts={fileTexts}
+              filePaths={data.files.map((f) => f.path)}
               errorsByFile={errorsByFile}
               current={{ path, line: cursorLine }}
               items={items}

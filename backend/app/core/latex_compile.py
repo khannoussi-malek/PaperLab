@@ -53,7 +53,10 @@ def parse_errors(log: str, main_file: str = "main.tex") -> list[dict]:
 
 def _entry(m: re.Match, kind: str) -> dict:
     line = m.groupdict().get("line")
-    return {"file": m.group("file"), "line": int(line) if line else None, "message": m.group("message"), "kind": kind}
+    file = m.group("file")
+    if file and "." not in file.rsplit("/", 1)[-1]:  # Tectonic names an \input file without its extension
+        file += ".tex"
+    return {"file": file, "line": int(line) if line else None, "message": m.group("message"), "kind": kind}
 
 
 def _outside(stderr: str) -> bool:
