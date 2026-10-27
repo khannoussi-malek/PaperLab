@@ -170,3 +170,33 @@ test('a double Delete sends one request', async () => {
   await waitFor(() => expect(del).toHaveBeenCalled())
   expect(del).toHaveBeenCalledTimes(1)
 })
+
+const single = { 'main.tex': '\\section{One}\nx\n\\section{Two}\ny' }
+function mountWith(request: { kind: 'new' | 'split'; n: number }, over: Partial<React.ComponentProps<typeof SectionList>> = {}) {
+  const props = {
+    manuscriptId: 'm1', main: 'main.tex', texts: single, filePaths: ['main.tex'], errorsByFile: {}, current: { path: 'main.tex', line: 1 },
+    items: [], onOpen: vi.fn(), onJump: vi.fn(), flushCurrent: vi.fn(async () => true) as ReturnType<typeof vi.fn> & (() => Promise<boolean>), ...over,
+  }
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
+  const ui = (r: typeof request) => <QueryClientProvider client={client}><SectionList {...props} request={r} /></QueryClientProvider>
+  const view = render(ui(request))
+  return { props, ask: (r: typeof request) => view.rerender(ui(r)) }
+}
+
+test('a request made before the list mounted is not replayed; a later one is, after saving', async () => {
+  const split = vi.spyOn(api, 'splitSections').mockResolvedValue({ paths: [] })
+  const { props, ask } = mountWith({ kind: 'split', n: 3 })
+  await new Promise((r) => setTimeout(r, 0))
+  expect(props.flushCurrent).not.toHaveBeenCalled()
+  expect(split).not.toHaveBeenCalled()
+  ask({ kind: 'split', n: 4 })
+  await waitFor(() => expect(split).toHaveBeenCalledWith('m1'))
+  expect(props.flushCurrent.mock.invocationCallOrder[0]).toBeLessThan(split.mock.invocationCallOrder[0])
+})
+
+test('a new-section request opens the New section dialog', async () => {
+  const { ask } = mountWith({ kind: 'new', n: 1 })
+  expect(screen.queryByRole('dialog')).toBeNull()
+  ask({ kind: 'new', n: 2 })
+  expect(await screen.findByRole('dialog')).toHaveTextContent('New section')
+})

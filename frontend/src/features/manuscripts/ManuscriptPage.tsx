@@ -76,6 +76,7 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
   useEffect(() => { // Cmd/Ctrl+K anywhere in the studio; CodeMirror leaves it alone, so it bubbles up from the editor too
     const onKey = (e: KeyboardEvent) => {
       if (e.key.toLowerCase() !== 'k' || !(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey || e.defaultPrevented) return
+      if (document.querySelector('[role=dialog][data-state=open]')) return // History, Move, Delete or the palette itself
       e.preventDefault()
       setPaletteOpen(true)
     }
@@ -217,7 +218,6 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
   const openSection = (row: SectionRow) => jumpTo(row.path, row.inMain ? row.line : 1)
   const stepSection = (step: -1 | 1) => {
     if (!data || !path) return
-    const rows = sectionRows(fileTexts, data.main_file, new Set(data.files.map((f) => f.path)))
     const at = openRowIndex(rows, path, cursorLine)
     const next = rows[at === -1 && step === 1 ? 0 : at + step]
     if (next && !next.missing) openSection(next)

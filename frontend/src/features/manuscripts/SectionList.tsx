@@ -89,7 +89,7 @@ export function SectionList({ manuscriptId, main, texts, filePaths, errorsByFile
   }
   const splitFiles = () => run(() => split.mutate(manuscriptId, { onError }))
 
-  const asked = useRef(0)
+  const asked = useRef(request?.n ?? 0) // only requests made after mount count
   useEffect(() => {
     if (!request || request.n === asked.current) return
     asked.current = request.n
