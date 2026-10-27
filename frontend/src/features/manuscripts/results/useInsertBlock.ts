@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useRef } from 'react'
 import { api, ApiError } from '@/api/client'
-import { MAIN_CHANGED, ensurePackages } from './insertBlock'
+import { MAIN_CHANGED, ensurePackages, preambleEdit, type PreambleEdit } from './insertBlock'
 
 export type InsertResult = { ok: true } | { ok: false; message: string }
 
@@ -12,21 +12,21 @@ type Deps = {
   openPath: string | null
   /** The live text of a file (the editor's buffer when it is open). */
   getText: (path: string) => string | undefined
-  /** An edit of the open editor's buffer at a 1-based line and 0-based column. */
-  replace: (line: number, col: number, text: string) => void
-  canReplace: () => boolean
+  /** Whether an editor is open to insert into. */
   hasEditor: () => boolean
-  /** The stage 2 cursor-aware insert; false when no editor is open. */
-  insert: (text: string, block: boolean) => boolean
+  /** The stage 2 cursor-aware insert; with `preamble` that edit goes in the same editor change. False when no editor is open. */
+  insert: (text: string, block: boolean, preamble?: PreambleEdit) => boolean
 }
 
 const NO_EDITOR = 'Open a .tex file in the editor to insert into.'
-const BEGIN = '\\begin{document}'
+const NO_MAIN = 'Open the main file in the editor and try again.'
+const GONE = 'The packages were added; insert the block again.'
 
 /**
  * Puts a results block at the cursor on lines of its own, after the main file's preamble has the packages it needs.
- * The preamble edit is conflict-safe like the PDF edit box's: the editor buffer when main is open, else a save based
- * on the file's updated_at; a 409 refuses and inserts nothing.
+ * Main open: the preamble lines and the block are two changes of one editor transaction (atomic, one undo), so
+ * neither can overwrite the other. Another file open: a save of main based on its updated_at; a 409 refuses and
+ * inserts nothing.
  */
 export function useInsertBlock(deps: Deps): (code: string, packages: string[]) => Promise<InsertResult> {
   const queryClient = useQueryClient()
@@ -37,27 +37,22 @@ export function useInsertBlock(deps: Deps): (code: string, packages: string[]) =
     if (!d.mainFile) return { ok: false, message: 'The manuscript is still loading.' }
     if (!d.hasEditor()) return { ok: false, message: NO_EDITOR } // before anything is written
     try {
-      if (d.openPath === d.mainFile && d.canReplace()) {
-        const text = d.getText(d.mainFile) ?? ''
-        const next = ensurePackages(text, packages)
-        if (next !== null) {
-          const at = text.indexOf(BEGIN)
-          const lines = text.slice(0, at).split('\n')
-          const col = lines[lines.length - 1].length
-          d.replace(lines.length, col, next.slice(at, at + next.length - text.length))
-        }
-      } else {
-        const fresh = await api.getManuscriptFile(d.manuscriptId, d.mainFile)
-        const next = ensurePackages(fresh.text, packages)
-        if (next !== null) {
-          await api.saveManuscriptFile(d.manuscriptId, d.mainFile, next, fresh.updated_at)
-          void queryClient.invalidateQueries({ queryKey: ['manuscripts', d.manuscriptId, 'file', d.mainFile] })
-        }
+      if (d.openPath === d.mainFile) {
+        const text = d.getText(d.mainFile)
+        if (text === undefined) return { ok: false, message: NO_MAIN } // never a based save under a live buffer
+        return d.insert(code, true, preambleEdit(text, packages) ?? undefined) ? { ok: true } : { ok: false, message: NO_EDITOR }
+      }
+      const fresh = await api.getManuscriptFile(d.manuscriptId, d.mainFile)
+      const next = ensurePackages(fresh.text, packages)
+      if (!latest.current.hasEditor()) return { ok: false, message: NO_EDITOR } // closed while fetching: still nothing written
+      if (next !== null) {
+        await api.saveManuscriptFile(d.manuscriptId, d.mainFile, next, fresh.updated_at)
+        void queryClient.invalidateQueries({ queryKey: ['manuscripts', d.manuscriptId, 'file', d.mainFile] })
       }
     } catch (e) {
       if (e instanceof ApiError && e.code === 'file_changed') return { ok: false, message: MAIN_CHANGED }
       return { ok: false, message: e instanceof Error ? e.message : String(e) }
     }
-    return latest.current.insert(code, true) ? { ok: true } : { ok: false, message: NO_EDITOR }
+    return latest.current.insert(code, true) ? { ok: true } : { ok: false, message: GONE } // ensurePackages is idempotent: retrying is harmless
   }, [queryClient])
 }

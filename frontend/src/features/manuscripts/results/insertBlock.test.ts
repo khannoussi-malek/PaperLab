@@ -24,6 +24,11 @@ describe('ensurePackages', () => {
     expect(ensurePackages(main, ['booktabs'])).toBe('% \\usepackage{booktabs}\n\\usepackage{booktabs}\n\\begin{document}\n\\end{document}')
   })
 
+  it('ignores a \\begin{document} inside a comment', () => {
+    const main = '% old: \\begin{document}\n\\begin{document}\n\\end{document}'
+    expect(ensurePackages(main, ['booktabs'])).toBe('% old: \\begin{document}\n\\usepackage{booktabs}\n\\begin{document}\n\\end{document}')
+  })
+
   it('says so when there is no \\begin{document}', () => {
     expect(() => ensurePackages('\\usepackage{a}', ['booktabs'])).toThrow('begin{document}')
   })

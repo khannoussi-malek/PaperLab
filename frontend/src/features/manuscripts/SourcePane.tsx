@@ -12,6 +12,7 @@ import { KeptTextAlert } from './KeptTextAlert'
 import type { DeckPaper } from './deck/deckModel'
 import { LatexEditor } from './LatexEditor'
 import { replaceSpan } from './pdfEdit'
+import type { PreambleEdit } from './results/insertBlock'
 
 const AUTOSAVE_MS = 1000
 const SAVE_LABEL: Record<SaveState, string> = {
@@ -42,10 +43,10 @@ type Props = {
   onFindEvidence?: (doc: string, from: number, to: number) => void
   citeOptions?: DeckPaper[]
   onCite?: (paperId: string) => void
-  /** Hands the page a way to insert text at the editor's cursor, as a normal edit. */
   /** Puts a table or figure at the cursor with the packages it needs (the Insert menu, next). */
   onInsertBlock?: (code: string, packages: string[]) => Promise<{ ok: true } | { ok: false; message: string }>
-  registerInsert?: (insert: ((text: string, block?: boolean) => void) | null) => void
+  /** Hands the page a way to insert text at the editor's cursor, as a normal edit (optionally with a preamble edit in the same change). */
+  registerInsert?: (insert: ((text: string, block?: boolean, preamble?: PreambleEdit) => void) | null) => void
   registerFindEvidence?: (run: (() => boolean) | null) => void
   /** Hands the page a way to replace part of a line in the editor's buffer, as a normal edit (autosave picks it up). */
   registerReplace?: (replace: ((line: number, start: number, end: number, text: string) => void) | null) => void
