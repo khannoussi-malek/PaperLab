@@ -61,6 +61,9 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
   const registerReplace = useCallback((f: typeof replaceRef.current) => { replaceRef.current = f }, [])
   const insertRef = useRef<((text: string) => void) | null>(null)
   const registerInsert = useCallback((f: typeof insertRef.current) => { insertRef.current = f }, [])
+  const findRef = useRef<(() => boolean) | null>(null)
+  const registerFindEvidence = useCallback((f: typeof findRef.current) => { findRef.current = f }, [])
+  const findFromDeck = useCallback(() => findRef.current?.() ?? false, [])
   const insertAtCursor = useCallback((text: string) => {
     if (!insertRef.current) return false
     insertRef.current(text)
@@ -311,6 +314,7 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
                     registerFlush={registerFlush}
                     registerReplace={registerReplace}
                     registerInsert={registerInsert}
+                    registerFindEvidence={registerFindEvidence}
                     onCiteKey={showCited}
                     onFindEvidence={findEvidence}
                     citeOptions={libraryPapers.data}
@@ -335,7 +339,7 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
                 id: 'papers',
                 label: 'Papers',
                 limits: MANUSCRIPT_PAPERS,
-                content: <DeckColumn manuscriptId={manuscriptId} sectionKey={section.key} sectionText={section.text} allTexts={allTexts} onInsert={insertAtCursor} openKey={openKey} evidenceAsk={evidenceAsk} />,
+                content: <DeckColumn manuscriptId={manuscriptId} sectionKey={section.key} sectionText={section.text} allTexts={allTexts} onInsert={insertAtCursor} openKey={openKey} evidenceAsk={evidenceAsk} onFindEvidence={findFromDeck} />,
               },
             ]}
             reveal={reveal ?? undefined}

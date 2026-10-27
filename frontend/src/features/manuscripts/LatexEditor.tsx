@@ -31,6 +31,8 @@ type Props = {
   onFindEvidence?: (from: number, to: number) => void
   /** Hands the page a way to insert text at the cursor (the last one when unfocused; the end if it never moved) as a normal edit, then focus the editor. */
   registerInsert?: (insert: ((text: string) => void) | null) => void
+  /** Hands out a way to run Find evidence on the last cursor; it returns false until the cursor has been placed. */
+  registerFindEvidence?: (run: (() => boolean) | null) => void
   /** The library's papers, offered as keys inside \cite{…}. */
   citeOptions?: DeckPaper[]
   /** A key was picked from the list, or a dragged paper was dropped: pin this paper. */
@@ -112,15 +114,15 @@ const highlight = syntaxHighlighting(
 const FromHost = Annotation.define<boolean>()
 
 /** CodeMirror 6 with LaTeX highlighting, as one controlled-ish component: `value` in, `onChange` out. */
-export function LatexEditor({ value, onChange, errors, onSave, jumpTo, onCursor, onSectionStep, onShowInPdf, onCiteKey, onFindEvidence, registerInsert, citeOptions, onCite, label = 'LaTeX source' }: Props) {
+export function LatexEditor({ value, onChange, errors, onSave, jumpTo, onCursor, onSectionStep, onShowInPdf, onCiteKey, onFindEvidence, registerInsert, registerFindEvidence, citeOptions, onCite, label = 'LaTeX source' }: Props) {
   const host = useRef<HTMLDivElement>(null)
   const view = useRef<EditorView | null>(null)
   const errorSlot = useRef(new Compartment())
   const themeSlot = useRef(new Compartment())
   const dark = useAppIsDark()
   // The view is built once; callbacks go through a ref so it never holds a stale one.
-  const latest = useRef({ citeOptions, onCite, onChange, onSave, onCursor, onSectionStep, onShowInPdf, onCiteKey, onFindEvidence, registerInsert })
-  latest.current = { citeOptions, onCite, onChange, onSave, onCursor, onSectionStep, onShowInPdf, onCiteKey, onFindEvidence, registerInsert }
+  const latest = useRef({ citeOptions, onCite, onChange, onSave, onCursor, onSectionStep, onShowInPdf, onCiteKey, onFindEvidence, registerInsert, registerFindEvidence })
+  latest.current = { citeOptions, onCite, onChange, onSave, onCursor, onSectionStep, onShowInPdf, onCiteKey, onFindEvidence, registerInsert, registerFindEvidence }
   const moved = useRef(false) // whether the cursor was ever placed; if not, an insert goes to the end
   const cursorLine = useRef(0)
 
@@ -168,6 +170,12 @@ export function LatexEditor({ value, onChange, errors, onSave, jumpTo, onCursor,
       ],
     })
     view.current = editor
+    latest.current.registerFindEvidence?.(() => {
+      if (!moved.current) return false
+      const { from, to } = editor.state.selection.main
+      latest.current.onFindEvidence?.(from, to)
+      return true
+    })
     latest.current.registerInsert?.((text) => {
       const at = moved.current ? editor.state.selection.main.head : editor.state.doc.length // never over a selection
       // A comment (an AI note, D118) gets lines of its own: mid-line it would comment out the rest of the researcher's
@@ -182,7 +190,7 @@ export function LatexEditor({ value, onChange, errors, onSave, jumpTo, onCursor,
       })
       editor.focus()
     })
-    return () => { latest.current.registerInsert?.(null); editor.destroy() }
+    return () => { latest.current.registerInsert?.(null); latest.current.registerFindEvidence?.(null); editor.destroy() }
     // ponytail: built once per mount; the page remounts it per file, and the effects below carry later changes.
   }, [])
 
