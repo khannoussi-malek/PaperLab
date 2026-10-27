@@ -110,3 +110,34 @@ async def test_an_operation_makes_an_open_main_stale(session):
     await ops.add(session, m.id, title="New", after=None)
     with pytest.raises(Conflict, match="file_changed"):
         await manuscripts.save_text(session, m.id, "main.tex", "old buffer", base=base)
+
+
+@pytest.mark.parametrize("op", ["retitle", "delete", "move"])
+async def test_the_section_row_is_locked_right_after_main_before_any_read_or_snapshot(session, monkeypatch, op):
+    """A save of the section committed between our read and our write would be overwritten (or deleted) after the
+    client was told it saved; locking main then the section row first keeps that save out until we commit."""
+    m = await new(session)
+    events: list[tuple] = []
+    real_file, real_take, real_text = manuscripts._file, manuscript_history.take, manuscripts.get_text
+
+    async def file_(s, mid, path, *, lock=False):
+        events.append(("lock" if lock else "read", path))
+        return await real_file(s, mid, path, lock=lock)
+
+    async def take(*a, **kw):
+        events.append(("snapshot",))
+        return await real_take(*a, **kw)
+
+    async def get_text(s, mid, path):
+        events.append(("text", path))
+        return await real_text(s, mid, path)
+
+    monkeypatch.setattr(manuscripts, "_file", file_)
+    monkeypatch.setattr(manuscript_history, "take", take)
+    monkeypatch.setattr(manuscripts, "get_text", get_text)
+    call = {"retitle": lambda: ops.retitle(session, m.id, "sections/method.tex", title="Methods"),
+            "delete": lambda: ops.delete(session, m.id, "sections/method.tex"),
+            "move": lambda: ops.move(session, m.id, "sections/method.tex", to=0)}[op]
+    await call()
+    assert events[:2] == [("lock", "main.tex"), ("lock", "sections/method.tex")]
+    assert ("snapshot",) in events
