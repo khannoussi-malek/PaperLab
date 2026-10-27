@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Lens, Section } from '@/api/client'
+import { api, type Lens, type Section } from '@/api/client'
 import { LensPanel } from './LensPanel'
 import type { LensReader } from './useLensReader'
 
@@ -13,11 +13,14 @@ vi.mock('./queries', () => ({
   useInvalidateBriefs: () => vi.fn(),
 }))
 
-const panel = (id: string) => {
-  const lens = { id, label: id === 'full' ? 'Full paper' : 'Key ideas', chunk_ids: ['c1'], positional_fallback: false, missing_roles: [] } as unknown as Lens
+const client = new QueryClient()
+const tree = (id: string) => {
+  const label = { full: 'Full paper', key_ideas: 'Key ideas', method: 'How they did it' }[id]
+  const lens = { id, label, chunk_ids: ['c1'], positional_fallback: false, missing_roles: [] } as unknown as Lens
   const reader = { lens, sections: [] as Section[], sectionsQuery: { error: null } } as unknown as LensReader
-  render(<QueryClientProvider client={new QueryClient()}><LensPanel paperId="p1" reader={reader} hasPdf /></QueryClientProvider>)
+  return <QueryClientProvider client={client}><LensPanel paperId="p1" reader={reader} hasPdf /></QueryClientProvider>
 }
+const panel = (id: string) => render(tree(id))
 
 beforeEach(() => {
   briefs = { data: [], isPending: false, error: null, refetch: vi.fn() }
@@ -47,5 +50,19 @@ describe('LensPanel brief card', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('briefs down')
     expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Generate brief' })).toBeNull()
+  })
+
+  it('a brief refused for want of a model links to Settings and keeps Generate, also after switching lens and back', async () => {
+    vi.spyOn(api, 'generateBrief').mockResolvedValue(Response.json({ detail: 'no_model' }, { status: 409 }))
+    const { rerender } = panel('key_ideas')
+    fireEvent.click(screen.getByRole('button', { name: 'Generate brief' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Add a model in Settings to write briefs.')
+    expect(screen.getByRole('link', { name: 'Open settings' })).toHaveAttribute('href', '#/settings/models')
+    expect(screen.getByRole('button', { name: 'Generate brief' })).toBeInTheDocument()
+
+    rerender(tree('method'))
+    expect(screen.getByRole('button', { name: 'Generate brief' })).toBeInTheDocument()
+    rerender(tree('key_ideas'))
+    expect(screen.getByRole('button', { name: 'Generate brief' })).toBeInTheDocument()
   })
 })
