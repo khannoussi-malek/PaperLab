@@ -2,7 +2,7 @@ export type OutlineItem = { level: 1 | 2 | 3; title: string; file: string; line:
 
 const LEVELS = { section: 1, subsection: 2, subsubsection: 3 } as const
 // A heading, or an \input / \include to follow.
-const TOKEN = /\\(subsubsection|subsection|section)\*?(?:\[[^\]]*\])?\{([^}]*)\}|\\(?:input|include)\{([^}]+)\}/g
+const TOKEN = /\\(subsubsection|subsection|section)\*?(?:\[[^\]]*\])?\{([^}]*)\}|\\(?:input|include)\s*\{\s*([^{}]*?)\s*\}/g
 export const COMMENT = /(^|[^\\])%.*/
 
 export const texName = (name: string) => (name.trim().endsWith('.tex') ? name.trim() : `${name.trim()}.tex`)

@@ -15,6 +15,7 @@ describe('sectionRows', () => {
   it('handles spaces, include, comments, escaped percent, two per line and brace-less input', () => {
     const rows = (t: string) => sectionRows({ 'main.tex': t }, 'main.tex').map((r) => r.path)
     expect(rows('\\input{ a }\\include{b}\n')).toEqual(['a.tex', 'b.tex'])
+    expect(rows('\\input {sections/x}\n')).toEqual(['sections/x.tex'])
     expect(rows('\\input sections/x\n')).toEqual([])
     expect(rows('\\input{a} % \\input{b}\n100\\% \\input{c}\n')).toEqual(['a.tex', 'c.tex'])
   })
@@ -31,6 +32,16 @@ describe('sectionRows', () => {
     ])
     expect(sectionText({ 'main.tex': main }, rows[0])).toBe('\\section{One}\nx\n\\subsection{Sub}\ny')
     expect(sectionText({ 'main.tex': main }, rows[1])).toBe('\\section*{Two}\nz')
+  })
+  it('reads \section with a space before the brace', () => {
+    expect(sectionRows({ 'main.tex': '\\section {Spaced}' }, 'main.tex')[0].title).toBe('Spaced')
+  })
+  it('ends an in-main section at bibliography and appendix markers', () => {
+    for (const end of ['\\bibliographystyle{x}', '\\bibliography{x}', '\\printbibliography', '\\appendix', '\\end{document}', 'ok % \\appendix\nmore']) {
+      const main = `\\section{A}\nbody\n${end}\nafter`
+      const [row] = sectionRows({ 'main.tex': main }, 'main.tex')
+      expect(sectionText({ 'main.tex': main }, row)).toBe(end.includes('%') ? `\\section{A}\nbody\n${end}\nafter` : '\\section{A}\nbody')
+    }
   })
   it('sectionText returns the whole file for a file row, empty for a missing one', () => {
     const files = { 'main.tex': '\\input{s/a}\\input{s/b}', 's/a.tex': 'AAA' }

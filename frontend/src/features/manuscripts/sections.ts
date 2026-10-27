@@ -2,8 +2,9 @@ import { COMMENT, texName } from './outline'
 
 export type SectionRow = { path: string; title: string; line: number; inMain: boolean; missing: boolean }
 
-const INPUT = /\\(?:input|include)\{([^}]+)\}/g
-const SECTION = /\\section\*?(?:\[[^\]]*\])?\{([^}]*)\}/
+const INPUT = /\\(?:input|include)\s*\{\s*([^{}]*?)\s*\}/g
+const SECTION = /\\section\*?\s*(?:\[[^\]]*\]\s*)?\{([^}]*)\}/
+const END_MARKERS = ['\\bibliographystyle', '\\bibliography{', '\\printbibliography', '\\appendix', '\\end{document}']
 const uncomment = (raw: string) => raw.replace(COMMENT, '$1')
 
 /** One row per \input / \include of `main`; with none, one per top-level \section of `main` itself. */
@@ -32,7 +33,7 @@ export function sectionText(files: Record<string, string>, row: SectionRow): str
   if (!row.inMain) return text
   const lines = text.split('\n')
   const rest = lines.slice(row.line)
-  const stop = rest.findIndex((l) => SECTION.test(uncomment(l)) || /\\end\{document\}/.test(l))
+  const stop = rest.findIndex((l) => SECTION.test(uncomment(l)) || END_MARKERS.some((m) => uncomment(l).includes(m)))
   return lines.slice(row.line - 1, stop === -1 ? undefined : row.line + stop).join('\n')
 }
 
