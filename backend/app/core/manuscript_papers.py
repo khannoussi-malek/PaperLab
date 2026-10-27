@@ -11,7 +11,7 @@ from app.core.citations_export import _bibtex
 from app.core.errors import NotFound
 from app.core.manuscript_bib import key_state
 from app.core.retrieval import retrieve
-from app.models import ManuscriptCiteKey, Paper, note_anchors, note_papers
+from app.models import Manuscript, ManuscriptCiteKey, Paper, note_anchors, note_papers
 from app.models.note import Note, Provenance
 
 AI = (Provenance.LLM, Provenance.LLM_EDITED)
@@ -67,7 +67,11 @@ async def list_papers(session: AsyncSession, mid: uuid.UUID) -> list[dict]:
 
 
 async def pin(session: AsyncSession, mid: uuid.UUID, paper_id: uuid.UUID) -> str:
-    manuscript = await manuscripts.get(session, mid)
+    await manuscripts.get(session, mid)  # 404 first
+    # Serialise pins on one manuscript: two racing inserts would add the same (manuscript, key) row. Read the pins after.
+    manuscript = await session.scalar(
+        select(Manuscript).where(Manuscript.id == mid).with_for_update().execution_options(populate_existing=True)
+    )
     items, _, pins, generated = await key_state(session, manuscript)
     pid = str(paper_id)
     if pid in pins:

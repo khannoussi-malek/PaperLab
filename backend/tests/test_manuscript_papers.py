@@ -1,13 +1,12 @@
-
 import pytest
-from conftest import unit_vector
-from sqlalchemy import insert
+from conftest import FakeEmbedder, unit_vector
+from sqlalchemy import func, insert, select
 
 from app.core import manuscript_papers as mp
 from app.core import manuscripts, workspaces
 from app.core.errors import Conflict, NotFound
 from app.core.manuscript_bib import build_bib
-from app.models import Chunk, Note, Paper, Provenance, Workspace, note_anchors, note_papers
+from app.models import Chunk, ManuscriptCiteKey, Note, Paper, Provenance, Workspace, note_anchors, note_papers
 
 pytestmark = pytest.mark.anyio
 
@@ -98,7 +97,30 @@ async def test_rank_orders_by_relevance_and_dedupes(session, embedder):
 
 
 async def test_rank_propagates_a_failing_search_source(session):
-    from conftest import FakeEmbedder
     _, _, m = await setup(session, "A")
     with pytest.raises(Conflict):
         await mp.rank(session, m.id, "x", embedder=FakeEmbedder(refuse="down"))
+
+
+async def test_pinning_twice_leaves_one_row_and_one_key(session):
+    _, (a, _), m = await setup(session, "A", "B")
+    keys = [await mp.pin(session, m.id, a.id) for _ in range(2)]
+    rows = await session.scalar(select(func.count()).select_from(ManuscriptCiteKey).where(
+        ManuscriptCiteKey.manuscript_id == m.id))
+    assert keys[0] == keys[1] and rows == 1
+
+
+async def test_papers_with_the_same_base_key_get_distinct_pinned_keys(session):
+    _, (a, b), m = await setup(session, "Deep learning", "Deep learning too")
+    keys = {await mp.pin(session, m.id, a.id), await mp.pin(session, m.id, b.id)}
+    assert len(keys) == 2
+    assert {r["key"] for r in await mp.list_papers(session, m.id)} == keys
+
+
+async def test_a_note_anchored_on_one_of_its_papers_is_a_note_on_the_other(session):
+    _, (a, b), m = await setup(session, "A", "B")
+    n = await note(session, Provenance.HUMAN, a, anchored=True)
+    await session.execute(insert(note_papers).values(note_id=n.id, paper_id=b.id))
+    rows = {r["paper_id"]: r for r in await mp.list_papers(session, m.id)}
+    assert (rows[a.id]["highlights"], rows[a.id]["notes"]) == (1, 0)
+    assert (rows[b.id]["highlights"], rows[b.id]["notes"]) == (0, 1)
