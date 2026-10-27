@@ -5,6 +5,7 @@ import { Annotation, Compartment, Prec, RangeSetBuilder, Transaction } from '@co
 import { EditorView, GutterMarker, gutter, keymap } from '@codemirror/view'
 import { basicSetup } from 'codemirror'
 import { useEffect, useRef, useState } from 'react'
+import { citeKeyAt } from './deck/citeKeyAt'
 
 type LineError = { line: number; message: string }
 type Props = {
@@ -21,6 +22,10 @@ type Props = {
   onSectionStep?: (step: -1 | 1) => void
   /** Mod-Alt-P: show the cursor's line in the PDF. */
   onShowInPdf?: (line: number) => void
+  /** Mod-Alt-K with the cursor in a \cite{…} key list: the key under it. */
+  onCiteKey?: (key: string) => void
+  /** Hands the page a way to insert text at the cursor (the last one when unfocused; the end if it never moved) as a normal edit, then focus the editor. */
+  registerInsert?: (insert: ((text: string) => void) | null) => void
   label?: string
 }
 
@@ -98,15 +103,16 @@ const highlight = syntaxHighlighting(
 const FromHost = Annotation.define<boolean>()
 
 /** CodeMirror 6 with LaTeX highlighting, as one controlled-ish component: `value` in, `onChange` out. */
-export function LatexEditor({ value, onChange, errors, onSave, jumpTo, onCursor, onSectionStep, onShowInPdf, label = 'LaTeX source' }: Props) {
+export function LatexEditor({ value, onChange, errors, onSave, jumpTo, onCursor, onSectionStep, onShowInPdf, onCiteKey, registerInsert, label = 'LaTeX source' }: Props) {
   const host = useRef<HTMLDivElement>(null)
   const view = useRef<EditorView | null>(null)
   const errorSlot = useRef(new Compartment())
   const themeSlot = useRef(new Compartment())
   const dark = useAppIsDark()
   // The view is built once; callbacks go through a ref so it never holds a stale one.
-  const latest = useRef({ onChange, onSave, onCursor, onSectionStep, onShowInPdf })
-  latest.current = { onChange, onSave, onCursor, onSectionStep, onShowInPdf }
+  const latest = useRef({ onChange, onSave, onCursor, onSectionStep, onShowInPdf, onCiteKey, registerInsert })
+  latest.current = { onChange, onSave, onCursor, onSectionStep, onShowInPdf, onCiteKey, registerInsert }
+  const moved = useRef(false) // whether the cursor was ever placed; if not, an insert goes to the end
   const cursorLine = useRef(0)
 
   useEffect(() => {
@@ -126,9 +132,20 @@ export function LatexEditor({ value, onChange, errors, onSave, jumpTo, onCursor,
         Prec.high(keymap.of([
           { key: 'Mod-Alt-ArrowUp', run: () => (latest.current.onSectionStep?.(-1), true) },
           { key: 'Mod-Alt-ArrowDown', run: () => (latest.current.onSectionStep?.(1), true) },
+          {
+            key: 'Mod-Alt-k',
+            run: (v) => {
+              const head = v.state.selection.main.head
+              const line = v.state.doc.lineAt(head)
+              const key = citeKeyAt(line.text, head - line.from)
+              if (key) latest.current.onCiteKey?.(key)
+              return !!key
+            },
+          },
           { key: 'Mod-Alt-p', run: (v) => (latest.current.onShowInPdf?.(v.state.doc.lineAt(v.state.selection.main.head).number), true) },
         ])),
         EditorView.updateListener.of((u) => {
+          if (u.selectionSet) moved.current = true
           if (u.selectionSet || u.docChanged) {
             const line = u.state.doc.lineAt(u.state.selection.main.head).number
             if (line !== cursorLine.current) { cursorLine.current = line; latest.current.onCursor?.(line) }
@@ -138,7 +155,17 @@ export function LatexEditor({ value, onChange, errors, onSave, jumpTo, onCursor,
       ],
     })
     view.current = editor
-    return () => editor.destroy()
+    latest.current.registerInsert?.((text) => {
+      const at = moved.current ? editor.state.selection.main : { from: editor.state.doc.length, to: editor.state.doc.length }
+      editor.dispatch({
+        changes: { from: at.from, to: at.to, insert: text },
+        selection: { anchor: at.from + text.length },
+        scrollIntoView: true,
+        userEvent: 'input.paste', // a normal edit: reported to onChange (autosave) and undoable
+      })
+      editor.focus()
+    })
+    return () => { latest.current.registerInsert?.(null); editor.destroy() }
     // ponytail: built once per mount; the page remounts it per file, and the effects below carry later changes.
   }, [])
 

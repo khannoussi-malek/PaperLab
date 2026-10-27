@@ -17,12 +17,13 @@ import { HistoryDialog } from './HistoryDialog'
 import { Breadcrumb } from './Breadcrumb'
 import { crumbsAt, outline } from './outline'
 import { SectionList } from './SectionList'
-import { openRowIndex, sectionRows, type SectionRow } from './sections'
+import { openRowIndex, sectionRows, sectionText, type SectionRow } from './sections'
+import { DeckColumn } from './deck/DeckColumn'
 import { StudioColumns } from './StudioColumns'
 import { PdfPane, type PdfTarget } from './PdfPane'
 import { PdfEditBox } from './PdfEditBox'
 import { findEditable, type Span } from './pdfEdit'
-import { MANUSCRIPT_PDF, MANUSCRIPT_SECTIONS } from './pdfPanel'
+import { MANUSCRIPT_PAPERS, MANUSCRIPT_PDF, MANUSCRIPT_SECTIONS } from './pdfPanel'
 import type { SaveState } from './autosave'
 import { keptTexts, useKeptTexts } from './keptTexts'
 import { KeptTextAlert } from './KeptTextAlert'
@@ -52,6 +53,19 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
   const onState = useCallback((p: string, s: SaveState) => setSaveStates((all) => ({ ...all, [p]: s })), [])
   const replaceRef = useRef<((line: number, start: number, end: number, text: string) => void) | null>(null)
   const registerReplace = useCallback((f: typeof replaceRef.current) => { replaceRef.current = f }, [])
+  const insertRef = useRef<((text: string) => void) | null>(null)
+  const registerInsert = useCallback((f: typeof insertRef.current) => { insertRef.current = f }, [])
+  const insertAtCursor = useCallback((text: string) => {
+    if (!insertRef.current) return false
+    insertRef.current(text)
+    return true
+  }, [])
+  const [openKey, setOpenKey] = useState<{ key: string; n: number } | null>(null)
+  const [reveal, setReveal] = useState<{ id: string; n: number } | null>(null)
+  const showCited = useCallback((key: string) => {
+    setOpenKey((k) => ({ key, n: (k?.n ?? 0) + 1 }))
+    setReveal((r) => ({ id: 'papers', n: (r?.n ?? 0) + 1 }))
+  }, [])
   const registerFlush = useCallback((f: (() => Promise<boolean>) | null) => { flushRef.current = f }, [])
 
   const path = data && (file && data.files.some((f) => f.path === file) ? file : data.main_file)
@@ -65,6 +79,14 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
     const files = Object.fromEntries(texFiles.flatMap((f, i) => (texQueries[i].data ? [[f.path, texQueries[i].data.text]] : [])))
     return { ...files, ...live }
   }, [texts, live])
+  const allTexts = useMemo(() => Object.values(fileTexts), [fileTexts])
+  // The section being written (its key changes when another one is opened), for the deck's order and ranking.
+  const section = useMemo(() => {
+    if (!data || !path) return { key: '', text: '' }
+    const rows = sectionRows(fileTexts, data.main_file, new Set(data.files.map((f) => f.path)))
+    const row = rows[openRowIndex(rows, path, cursor && cursor.path === path ? cursor.line : 1)]
+    return row && !row.missing ? { key: `${row.path}:${row.line}`, text: sectionText(fileTexts, row) } : { key: path, text: fileTexts[path] ?? '' }
+  }, [fileTexts, data, path, cursor])
   const items = useMemo(() => (data ? outline(fileTexts, data.main_file) : []), [data?.main_file, fileTexts])
   const errorsByFile = useMemo(
     () => parseCompileErrors(data?.compile_errors).reduce<Record<string, number>>((n, e) => ({ ...n, [e.file]: (n[e.file] ?? 0) + 1 }), {}),
@@ -258,10 +280,12 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
                     onState={onState}
                     registerFlush={registerFlush}
                     registerReplace={registerReplace}
+                    registerInsert={registerInsert}
+                    onCiteKey={showCited}
                   />
                 ),
               },
-              { id: 'pdf', label: 'PDF', limits: MANUSCRIPT_PDF, content: (width) => <PdfPane manuscript={data} width={width} target={target} stillStamp={stillStamp} onSourceAt={sourceAt} onEditAt={editAt}>
+              { id: 'pdf', label: 'PDF', limits: MANUSCRIPT_PDF, shareWith: 'papers', content: (width) => <PdfPane manuscript={data} width={width} target={target} stillStamp={stillStamp} onSourceAt={sourceAt} onEditAt={editAt}>
                 {edit && (
                   <PdfEditBox
                     key={edit.id}
@@ -274,7 +298,14 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
                   />
                 )}
               </PdfPane> },
+              {
+                id: 'papers',
+                label: 'Papers',
+                limits: MANUSCRIPT_PAPERS,
+                content: <DeckColumn manuscriptId={manuscriptId} sectionKey={section.key} sectionText={section.text} allTexts={allTexts} onInsert={insertAtCursor} openKey={openKey} />,
+              },
             ]}
+            reveal={reveal ?? undefined}
           />
         </>
       )}

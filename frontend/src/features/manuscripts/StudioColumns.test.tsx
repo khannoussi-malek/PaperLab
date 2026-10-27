@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from '@testing-library/react'
-import { beforeEach, expect, test } from 'vitest'
+import { act } from '@testing-library/react'
+import { afterEach, beforeEach, expect, test } from 'vitest'
 import type { PanelLimits } from '@/components/panelWidth'
 import { StudioColumns, type StudioColumn } from './StudioColumns'
 
@@ -44,4 +45,49 @@ test('F6 is left alone once the studio is gone', () => {
   const e = new KeyboardEvent('keydown', { key: 'F6', cancelable: true })
   document.dispatchEvent(e)
   expect(e.defaultPrevented).toBe(false)
+})
+
+const wide = window.innerWidth
+const setWidth = (w: number) => act(() => { Object.defineProperty(window, 'innerWidth', { value: w, configurable: true }); window.dispatchEvent(new Event('resize')) })
+afterEach(() => setWidth(wide))
+const shared: StudioColumn[] = [
+  { id: 'editor', label: 'Editor', content: <button>ed</button> },
+  { id: 'pdf', label: 'PDF', content: <button>pdf page</button>, limits: limits('t-pdf'), shareWith: 'papers' },
+  { id: 'papers', label: 'Papers', content: <button>deck</button>, limits: limits('t-papers') },
+]
+
+test('wide enough, the PDF and the papers are two columns', () => {
+  setWidth(1400)
+  render(<StudioColumns columns={shared} />)
+  expect(screen.getByRole('region', { name: 'PDF' })).toBeInTheDocument()
+  expect(screen.getByRole('region', { name: 'Papers' })).toBeInTheDocument()
+  expect(screen.queryByRole('tab')).toBeNull()
+})
+
+test('under 1280 px they share one column as tabs, and the chosen tab is remembered', () => {
+  setWidth(1000)
+  const { unmount } = render(<StudioColumns columns={shared} />)
+  expect(screen.getAllByRole('region')).toHaveLength(2)
+  expect(screen.getByRole('tab', { name: 'PDF' })).toHaveAttribute('aria-selected', 'true')
+  expect(screen.getByText('deck')).not.toBeVisible()
+  fireEvent.click(screen.getByRole('tab', { name: 'Papers' }))
+  expect(screen.getByText('deck')).toBeVisible()
+  expect(screen.getByText('pdf page')).not.toBeVisible()
+  unmount()
+  render(<StudioColumns columns={shared} />)
+  expect(screen.getByRole('tab', { name: 'Papers' })).toHaveAttribute('aria-selected', 'true')
+})
+
+test('crossing the breakpoint while open switches layout', () => {
+  setWidth(1400)
+  render(<StudioColumns columns={shared} />)
+  setWidth(900)
+  expect(screen.getByRole('tab', { name: 'Papers' })).toBeInTheDocument()
+})
+
+test('reveal opens the Papers tab', () => {
+  setWidth(1000)
+  const { rerender } = render(<StudioColumns columns={shared} />)
+  rerender(<StudioColumns columns={shared} reveal={{ id: 'papers', n: 1 }} />)
+  expect(screen.getByText('deck')).toBeVisible()
 })
