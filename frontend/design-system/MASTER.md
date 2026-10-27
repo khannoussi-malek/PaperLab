@@ -1068,6 +1068,20 @@ The studio's fourth column, "Papers": the workspace's papers as a 3D deck of car
 - **Test hooks:** `data-deck-card`, `data-book-tab`, `aria-roledescription` "paper deck" / "paper book", a turning leaf's
   faces carry `data-shade`.
 
+## Evidence in the deck
+
+- **Find evidence:** Cmd/Ctrl+E in the editor, or a "Find evidence" button (and the same key) on the Papers column, for the
+  selection or the sentence at the editor's last cursor. With no cursor yet: "Put the cursor in a sentence first."
+- **Header:** a blue strip over the deck, "Evidence for: '...'", with Clear (Esc on the deck does the same). Messages sit
+  in it: "Finding evidence...", "No passages found in this workspace's papers.", "Add a model in Settings to get verdicts",
+  and "Couldn't load the verdicts." with Retry.
+- **Cards and book:** papers with passages come first in rank order and carry a blue "E n" badge. An open paper shows its
+  passages as blue E tabs in page order, ahead of its notes, each with the page and the text. Opening one in the reader
+  lands on the passage.
+- **Verdicts:** Supports, Partly supports, Doesn't support, Doesn't address, Can't tell, always marked AI, with the model's
+  reason and quote. Checking happens one paper at a time; a card reads "Checking..." until its turn.
+- **Inserting:** `i` or "Cite this paper" puts in `\citep{key}` only. Nothing the model wrote is ever inserted.
+
 ## Pre-delivery check (from ui-ux-pro-max Quick Reference §1–§3)
 
 Run through this before finishing any UI task, in **both** themes:
