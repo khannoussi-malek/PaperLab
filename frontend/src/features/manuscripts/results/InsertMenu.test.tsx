@@ -12,7 +12,7 @@ test('the Insert button opens a menu whose Table item opens the table dialog', a
   vi.spyOn(api, 'listDatasets').mockResolvedValue([])
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <InsertMenu manuscriptId="m1" labelTexts={() => []} onInsert={async () => ({ ok: true })} />
+      <InsertMenu manuscriptId="m1" labelTexts={() => []} filePaths={() => []} onInsert={async () => ({ ok: true })} />
     </QueryClientProvider>,
   )
   fireEvent.keyDown(screen.getByRole('button', { name: 'Insert' }), { key: 'Enter' })
@@ -25,7 +25,7 @@ function open() {
   render(
     <QueryClientProvider client={new QueryClient()}>
       <section><div className="cm-content" tabIndex={0} data-testid="editor" />
-        <InsertMenu manuscriptId="m1" labelTexts={() => []} onInsert={async () => ({ ok: true })} />
+        <InsertMenu manuscriptId="m1" labelTexts={() => []} filePaths={() => []} onInsert={async () => ({ ok: true })} />
       </section>
     </QueryClientProvider>,
   )
@@ -52,4 +52,16 @@ test('Esc returns focus to the Insert button', async () => {
   fireEvent.keyDown(await screen.findByRole('dialog'), { key: 'Escape' })
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   await waitFor(() => expect(document.activeElement).toBe(button))
+})
+
+test('the Chart item opens the chart dialog', async () => {
+  vi.spyOn(api, 'listCharts').mockResolvedValue([])
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <InsertMenu manuscriptId="m1" labelTexts={() => []} filePaths={() => []} onInsert={async () => ({ ok: true })} />
+    </QueryClientProvider>,
+  )
+  fireEvent.keyDown(screen.getByRole('button', { name: 'Insert' }), { key: 'Enter' })
+  fireEvent.click(await screen.findByRole('menuitem', { name: 'Chart…' }))
+  expect(await screen.findByRole('dialog', { name: 'Insert a chart' })).toBeInTheDocument()
 })

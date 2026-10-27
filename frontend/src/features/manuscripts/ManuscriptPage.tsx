@@ -324,6 +324,7 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
                     registerInsert={registerInsert}
                     onInsertBlock={insertBlock}
                     labelTexts={() => Object.values(textsRef.current)}
+                    filePaths={() => data.files.map((f) => f.path)}
                     registerFindEvidence={registerFindEvidence}
                     onCiteKey={showCited}
                     onFindEvidence={findEvidence}
