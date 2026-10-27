@@ -23,14 +23,12 @@ export type DeckHandsProps = {
   onSelect: (id: string, kind: 'card' | 'tab') => void
   /** The column went out of sight (collapsed, or tabbed away): the camera is off and Hands must be turned on again. */
   onHidden: () => void
-  /** Keystrokes pause the gestures for TYPING_PAUSE_MS. False: only keystrokes inside an input in the column do. */
-  typingPause?: boolean
 }
 
 const TARGETS = '[data-deck-card],[data-book-tab]'
 
 /** Hands mode over the deck column. It never edits text: it only moves the deck. */
-export function DeckHands({ column, onAction, onSelect, onHidden, typingPause = true }: DeckHandsProps) {
+export function DeckHands({ column, onAction, onSelect, onHidden }: DeckHandsProps) {
   const overlay = useRef<HTMLDivElement>(null)
   const totals = useRef(initialTotals)
   const [inDeck, setInDeck] = useState(false)
@@ -39,16 +37,16 @@ export function DeckHands({ column, onAction, onSelect, onHidden, typingPause = 
   const hiddenCb = useRef(onHidden)
   hiddenCb.current = onHidden
 
-  // StudioColumns keeps hidden columns mounted, so watch for [hidden] on the column or any ancestor.
+  // Hidden columns and workspace tabs stay mounted: watch for [hidden] or an inactive Radix tabpanel on the column or any ancestor.
   useEffect(() => {
     const check = () => {
-      if (!column.current?.closest('[hidden]')) return
+      if (!column.current?.closest('[hidden],[role=tabpanel][data-state=inactive]')) return
       setHidden(true)
       hiddenCb.current()
     }
     check()
     const observer = new MutationObserver(check)
-    observer.observe(document.body, { attributes: true, attributeFilter: ['hidden'], subtree: true })
+    observer.observe(document.body, { attributes: true, attributeFilter: ['hidden', 'data-state', 'class'], subtree: true })
     return () => observer.disconnect()
   }, [column])
 
@@ -59,8 +57,7 @@ export function DeckHands({ column, onAction, onSelect, onHidden, typingPause = 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined
     const within = (t: EventTarget | null) => t instanceof Node && !!column.current?.contains(t)
-    const onKey = (e: KeyboardEvent) => {
-      if (!typingPause && !(e.target instanceof HTMLInputElement && within(e.target))) return
+    const onKey = () => {
       setTyping(true)
       clearTimeout(timer)
       timer = setTimeout(() => setTyping(false), TYPING_PAUSE_MS)
@@ -85,7 +82,7 @@ export function DeckHands({ column, onAction, onSelect, onHidden, typingPause = 
       col?.removeEventListener('pointerleave', away)
       window.removeEventListener('blur', away)
     }
-  }, [column, typingPause])
+  }, [column])
 
   const pickAt = useCallback((x: number, y: number) => {
     const r = overlay.current?.getBoundingClientRect()

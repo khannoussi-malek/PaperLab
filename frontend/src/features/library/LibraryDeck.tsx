@@ -62,6 +62,7 @@ export function LibraryDeck({ papers }: { papers: Paper[] }) {
   const shown = deckPapers // exactly what the list shows; its toolbar is the only search
   const at = Math.max(0, shown.findIndex((p) => p.paper_id === currentId)) // by id, so a reorder never moves you off your paper
   const open = deckPapers.find((p) => p.paper_id === openId) ?? null
+  useEffect(() => { if (openId && !open) closeBook() }, [openId, open]) // the search hid the open paper
 
   const onHands = (a: DeckAction) => {
     if (a.type === 'step') {
@@ -69,7 +70,7 @@ export function LibraryDeck({ papers }: { papers: Paper[] }) {
       else if (shown.length) setCurrentId(shown[Math.min(Math.max(at + a.by, 0), shown.length - 1)].paper_id)
     } else if (a.type === 'open') {
       if (!open && shown[at]) { setCurrentId(shown[at].paper_id); setOpenId(shown[at].paper_id) }
-    } else setOpenId(null)
+    } else closeBook()
   }
   const onHold = (id: string, kind: 'card' | 'tab') => {
     if (kind === 'tab') return book.current?.selectId(id)
@@ -95,7 +96,7 @@ export function LibraryDeck({ papers }: { papers: Paper[] }) {
           label="Papers"
         />
       )}
-      {hands && <DeckHands column={column} onAction={onHands} onSelect={onHold} onHidden={() => setHands(false)} typingPause={false} />}
+      {hands && <DeckHands column={column} onAction={onHands} onSelect={onHold} onHidden={() => setHands(false)} />}
     </div>
   )
 }

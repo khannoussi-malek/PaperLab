@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { api, type Paper } from '@/api/client'
 
-vi.mock('../graph/hands/HandsMode', () => ({ default: () => null }))
+const hm = vi.hoisted(() => ({ props: null as null | Record<string, (...a: never[]) => void> }))
+vi.mock('../graph/hands/HandsMode', () => ({ default: (p: never) => { hm.props = p; return null } }))
 import { LibraryDeck } from './LibraryDeck'
 
 const mk = (id: string, title: string, over: Partial<Paper> = {}) =>
@@ -98,9 +99,9 @@ it('keeps your place when the list is reordered', async () => {
   const view = setup()
   fireEvent.keyDown(await deck(), { key: 'ArrowRight' })
   const client = new QueryClient()
-  view.rerender(<QueryClientProvider client={client}><LibraryDeck papers={[papers[2], papers[1], papers[0]]} /></QueryClientProvider>)
+  view.rerender(<QueryClientProvider client={client}><LibraryDeck papers={[papers[0], papers[2], papers[1]]} /></QueryClientProvider>)
   expect(status()).toContain('Beta 2020')
-  expect(status()).toContain('paper 2 of 3')
+  expect(status()).toContain('paper 3 of 3')
 })
 
 it('the deck has no search box of its own and no drag handles or cite keys', async () => {
@@ -117,4 +118,26 @@ it('keeps the badges while the counts for a changed list load', async () => {
   const client = new QueryClient()
   view.rerender(<QueryClientProvider client={client}><LibraryDeck papers={[papers[0], papers[1]]} /></QueryClientProvider>)
   expect(status()).toContain('2 notes')
+})
+
+it('closes the open book and refocuses the deck when the search hides that paper', async () => {
+  const view = setup()
+  fireEvent.keyDown(await deck(), { key: 'Enter' })
+  await screen.findByRole('group', { name: 'Alpha' })
+  const client = new QueryClient()
+  view.rerender(<QueryClientProvider client={client}><LibraryDeck papers={[papers[1], papers[2]]} /></QueryClientProvider>)
+  const d = await deck()
+  await waitFor(() => expect(document.activeElement).toBe(d))
+  view.rerender(<QueryClientProvider client={client}><LibraryDeck papers={papers} /></QueryClientProvider>)
+  expect(screen.queryByRole('group', { name: 'Alpha' })).toBeNull() // it does not reopen when the paper returns
+})
+
+it('a Hands close gesture closes the book and refocuses the deck', async () => {
+  setup()
+  fireEvent.click(screen.getByRole('button', { name: 'Hands' }))
+  fireEvent.keyDown(await deck(), { key: 'Enter' })
+  await screen.findByRole('group', { name: 'Alpha' })
+  act(() => hm.props!.onZoom(0.01 as never)) // both hands together
+  const d = await deck()
+  await waitFor(() => expect(document.activeElement).toBe(d))
 })
