@@ -58,7 +58,7 @@ describe('LensPanel states', () => {
 describe('SectionRow', () => {
   const row = (s: Section, onRoleChange: (role: Role | null) => void = () => {}, busy = false) =>
     render(<SectionRow section={s} busy={busy} onJump={() => {}} onRoleChange={onRoleChange} />)
-  const openMenu = () => fireEvent.keyDown(screen.getByRole('button', { name: 'Section actions for 2 Method' }), { key: 'Enter' })
+  const openMenu = () => fireEvent.keyDown(screen.getByRole('button', { name: 'Section actions for 2 Method, page 2' }), { key: 'Enter' })
 
   it('marks a fixed role with "you" and shows its page', () => {
     row(section({ source: 'user' }))
@@ -85,7 +85,7 @@ describe('SectionRow', () => {
 
   it('keeps the menu trigger enabled while a save is pending, so focus is not lost', () => {
     row(section(), () => {}, true)
-    expect(screen.getByRole('button', { name: 'Section actions for 2 Method' })).not.toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Section actions for 2 Method, page 2' })).not.toBeDisabled()
     openMenu()
     expect(screen.getByRole('menuitemradio', { name: 'Conclusion' })).toHaveAttribute('aria-disabled', 'true')
   })
@@ -93,6 +93,17 @@ describe('SectionRow', () => {
   it('says what the "you" marker means', () => {
     row(section({ source: 'user' }))
     expect(screen.getByText('fixed by')).toBeInTheDocument()
+  })
+
+  it('names each menu by its heading and page, so a repeated heading still has a unique button', () => {
+    render(
+      <ul>
+        <SectionRow section={section({ title: 'Results', page: 4, first_chunk_id: 'a' })} busy={false} onJump={() => {}} onRoleChange={() => {}} />
+        <SectionRow section={section({ title: 'Results', page: 9, first_chunk_id: 'b' })} busy={false} onJump={() => {}} onRoleChange={() => {}} />
+      </ul>,
+    )
+    expect(screen.getByRole('button', { name: 'Section actions for Results, page 4' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Section actions for Results, page 9' })).toBeInTheDocument()
   })
 
   it('offers no menu on text before the first heading', () => {

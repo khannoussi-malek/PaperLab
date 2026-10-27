@@ -57,7 +57,7 @@ export function SectionRow({ section, busy, onJump, onRoleChange }: Props) {
       {section.title !== null && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" aria-label={`Section actions for ${section.title}`}>
+            <Button variant="ghost" size="icon" aria-label={`Section actions for ${section.title}, page ${section.page}`}>
               <Ellipsis aria-hidden />
             </Button>
           </DropdownMenuTrigger>
