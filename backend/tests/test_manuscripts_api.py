@@ -349,3 +349,21 @@ async def test_papers_pin_and_rank_routes(client, session):
     rank = f"/api/manuscripts/{m['id']}/papers/rank"
     assert (await client.post(rank, json={"text": " "})).json() == {"paper_ids": []}
     assert (await client.post(rank, json={"text": "x" * 20_001})).status_code == 422
+
+
+async def test_evidence_routes(client, session, arq):
+    ws = Workspace(name=f"W {uuid.uuid4().hex[:6]}")
+    session.add(ws)
+    await session.flush()
+    bare, m = await make(client), await make(client, workspace_id=str(ws.id))
+    url = "/api/manuscripts/{}/evidence"
+    refused = await client.post(url.format(bare["id"]), json={"sentence": "Sleep helps."})
+    assert (refused.status_code, refused.json()["detail"]) == (422, "no_workspace")
+    empty = await client.post(url.format(m["id"]), json={"sentence": "  "})
+    assert (empty.status_code, empty.json()["detail"]) == (422, "empty_claim")
+    assert (await client.post(url.format(uuid.uuid4()), json={"sentence": "x"})).status_code == 404
+    found = await client.post(url.format(m["id"]), json={"sentence": "Sleep helps."})  # no papers yet
+    assert found.status_code == 200 and found.json()["papers"] == [] and arq.jobs == []
+    h = found.json()["sentence_hash"]
+    assert (await client.get(f"{url.format(m['id'])}/{h}")).json() == []
+    assert (await client.get(f"{url.format(uuid.uuid4())}/{h}")).status_code == 404

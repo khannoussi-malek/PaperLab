@@ -139,3 +139,13 @@ test('after a comment inserted at a line end (or on an empty line), what you typ
   type('More')
   expect(view.state.doc.toString()).toBe('results hold.\n% b\nTyped\n% c\nMore\nNext.')
 })
+
+test('Mod-e asks to find evidence for the selection or cursor, and nothing else takes the key', () => {
+  const onFindEvidence = vi.fn()
+  const { container } = render(<LatexEditor value={'One. Two.'} onChange={() => {}} errors={[]} onSave={() => {}} onFindEvidence={onFindEvidence} />)
+  const view = cm(container)
+  view.dispatch({ selection: { anchor: 2, head: 5 } })
+  const notPrevented = press(container, { key: 'e', code: 'KeyE', ctrlKey: true })
+  expect(onFindEvidence).toHaveBeenCalledWith('One. Two.', 2, 5) // the editor's own text, with its own positions
+  expect(notPrevented).toBe(false) // handled: the browser does not see it
+})

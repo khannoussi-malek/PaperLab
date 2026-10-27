@@ -2,7 +2,17 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, LargeBinary, Text, text
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Integer,
+    LargeBinary,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -60,3 +70,28 @@ class ManuscriptSnapshot(Base):
     reason: Mapped[str] = mapped_column(Text)  # compile | autosave | before_restore | before_sections
     files: Mapped[dict[str, str]] = mapped_column(JSONB)  # {path: text}
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=NOW)
+
+
+class ManuscriptEvidence(Base):
+    """One paper's passages and verdict for one sentence of a manuscript (hash: sha256 of its plain text)."""
+
+    __tablename__ = "manuscript_evidence"
+    __table_args__ = (
+        UniqueConstraint("manuscript_id", "sentence_hash", "paper_id", name="uq_manuscript_evidence_sentence_paper"),
+        CheckConstraint("status IN ('queued', 'running', 'done', 'failed')", name="ck_manuscript_evidence_status"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, server_default=text("gen_random_uuid()"))
+    manuscript_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("manuscripts.id", ondelete="CASCADE"))
+    sentence_hash: Mapped[str] = mapped_column(Text)
+    sentence: Mapped[str] = mapped_column(Text)
+    paper_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("papers.id", ondelete="CASCADE"))
+    rank: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(Text)  # queued | running | done | failed
+    verdict: Mapped[str | None] = mapped_column(Text)
+    reason: Mapped[str | None] = mapped_column(Text)
+    quote: Mapped[str | None] = mapped_column(Text)
+    page: Mapped[int | None] = mapped_column(Integer)
+    output_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("llm_outputs.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=NOW)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=NOW)

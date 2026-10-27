@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
@@ -163,3 +163,38 @@ class RankIn(BaseModel):
 
 class RankOut(BaseModel):
     paper_ids: list[uuid.UUID]
+
+
+class EvidenceIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    sentence: str = Field(max_length=20_000)  # the core says what is too long, with its own code
+
+
+class EvidencePassageOut(BaseModel):
+    chunk_id: uuid.UUID
+    page: int
+    text: str
+
+
+class EvidencePaperOut(BaseModel):
+    paper_id: uuid.UUID
+    key: str
+    passages: list[EvidencePassageOut]
+
+
+class EvidenceFoundOut(BaseModel):
+    sentence_hash: str
+    papers: list[EvidencePaperOut]
+    verdicts: Literal["queued", "unavailable"]
+
+
+class EvidenceRowOut(BaseModel):
+    paper_id: uuid.UUID
+    rank: int
+    status: Literal["queued", "running", "done", "failed", "interrupted"]
+    verdict: str | None
+    reason: str | None
+    quote: str | None
+    page: int | None
+    output_id: uuid.UUID | None

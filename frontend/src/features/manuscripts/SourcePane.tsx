@@ -38,10 +38,13 @@ type Props = {
   /** Hands the page a way to save what is pending; it resolves true when nothing is left unsaved. */
   registerFlush: (flush: (() => Promise<boolean>) | null) => void
   onCiteKey?: (key: string) => void
+  /** Mod-E: the open file's text and the selection (or cursor) to find evidence for. */
+  onFindEvidence?: (doc: string, from: number, to: number) => void
   citeOptions?: DeckPaper[]
   onCite?: (paperId: string) => void
   /** Hands the page a way to insert text at the editor's cursor, as a normal edit. */
   registerInsert?: (insert: ((text: string) => void) | null) => void
+  registerFindEvidence?: (run: (() => boolean) | null) => void
   /** Hands the page a way to replace part of a line in the editor's buffer, as a normal edit (autosave picks it up). */
   registerReplace?: (replace: ((line: number, start: number, end: number, text: string) => void) | null) => void
 }
@@ -231,7 +234,7 @@ export function SourcePane(props: Props) {
       {file.error && <Alert variant="destructive" className="m-2 w-auto"><AlertDescription>{file.error.message}</AlertDescription></Alert>}
       <div className="min-h-0 flex-1">
         {text === null ? (!file.error && <TabSkeleton label="Loading file" />) : (
-          <LatexEditor value={text} onChange={change} errors={errors} jumpTo={jumpTo} onCursor={props.onCursor} onSectionStep={props.onSectionStep} onShowInPdf={props.onShowInPdf} onCiteKey={props.onCiteKey} citeOptions={props.citeOptions} onCite={props.onCite} registerInsert={props.registerInsert} onSave={() => void compileNow()} />
+          <LatexEditor value={text} onChange={change} errors={errors} jumpTo={jumpTo} onCursor={props.onCursor} onSectionStep={props.onSectionStep} onShowInPdf={props.onShowInPdf} onCiteKey={props.onCiteKey} onFindEvidence={props.onFindEvidence} citeOptions={props.citeOptions} onCite={props.onCite} registerInsert={props.registerInsert} registerFindEvidence={props.registerFindEvidence} onSave={() => void compileNow()} />
         )}
       </div>
     </section>
