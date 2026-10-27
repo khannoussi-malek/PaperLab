@@ -212,7 +212,7 @@ export function SourcePane(props: Props) {
       <div className="flex items-center gap-3 border-b border-glass-border px-3 py-1.5">
         <span className="min-w-0 flex-1 truncate text-sm font-medium">{path}</span>
         <span aria-live="polite" className="text-xs text-muted-foreground">{SAVE_LABEL[state]}</span>
-        {props.onInsertBlock && <InsertMenu manuscriptId={manuscriptId} labelTexts={props.labelTexts ?? (() => [])} filePaths={props.filePaths ?? (() => [])} onInsert={props.onInsertBlock} />}
+        {props.onInsertBlock && /\.tex$/i.test(path) && <InsertMenu manuscriptId={manuscriptId} labelTexts={props.labelTexts ?? (() => [])} filePaths={props.filePaths ?? (() => [])} onInsert={props.onInsertBlock} />}
         <Button size="sm" disabled={compiling || text === null} onClick={() => void compileNow()}>
           {compiling && <Loader2 aria-hidden className="animate-spin motion-reduce:animate-none" />}
           {compiling ? 'Compiling…' : 'Compile'}
