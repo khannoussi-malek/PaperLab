@@ -323,6 +323,7 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
                     registerReplace={registerReplace}
                     registerInsert={registerInsert}
                     onInsertBlock={insertBlock}
+                    labelTexts={() => Object.values(textsRef.current)}
                     registerFindEvidence={registerFindEvidence}
                     onCiteKey={showCited}
                     onFindEvidence={findEvidence}
