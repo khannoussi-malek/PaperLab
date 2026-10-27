@@ -35,7 +35,7 @@ async function showTab(page: Page, name: string) {
 // Run wide (own Papers column) and at Playwright's default 1280x720 (Papers is a tab beside the PDF).
 // 1920 leaves room for every column; at 1600 the studio first guesses wide and then measures narrow (remounting the deck), so that size is not used.
 for (const size of [{ width: 1920, height: 1080 }, { width: 1280, height: 720 }]) {
-  test(`Cite from the paper deck at ${size.width}px: open a paper, insert its highlight, compile, complete a key, jump to a label`, async ({
+  test(`Cite from the paper deck at ${size.width}px: open a paper, insert its highlight, compile, complete a key, jump to a label`, { tag: '@compile' }, async ({
     page, request, workspaceId, paperId, tablePaperId,
   }) => {
     test.setTimeout(300_000)
@@ -117,7 +117,7 @@ for (const size of [{ width: 1920, height: 1080 }, { width: 1280, height: 720 }]
 }
 
 // Reduced motion: opening a paper and moving between its items are plain cuts, with no leaf in the DOM.
-test('The paper book turns no leaf with reduced motion', async ({ page, request, workspaceId, paperId }) => {
+test('The paper book turns no leaf with reduced motion', { tag: '@compile' }, async ({ page, request, workspaceId, paperId }) => {
   await page.setViewportSize({ width: 1920, height: 1080 })
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await addToWorkspace(request, workspaceId, paperId)
@@ -156,7 +156,7 @@ test('The paper book turns no leaf with reduced motion', async ({ page, request,
 // Find evidence: a sentence in the editor -> Mod+E -> the paper with matching text comes first, with an E badge and an E tab
 // holding the passage. The e2e stack runs the fake LLM and seeds a default model; the fake's reply to a claim check is not
 // the JSON a verdict needs, so every check ends as "Can't tell" -- the label proves the whole queue ran.
-test('Find evidence for a sentence: E badge, E tab, a verdict, insert only the citation, Esc clears, and the deck button asks again', async ({
+test('Find evidence for a sentence: E badge, E tab, a verdict, insert only the citation, Esc clears, and the deck button asks again', { tag: '@compile' }, async ({
   page, request, workspaceId, paperId, tablePaperId,
 }) => {
   test.setTimeout(300_000)

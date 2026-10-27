@@ -5,7 +5,7 @@ const CSV = 'System,F1\nBERT-B,88.5\nBERT-L,90.9\nGPT-S,87.2\n'
 const TSV = 'Model\tScore\nAlpha\t41.5\nBeta\t77.25\n'
 
 // Real worker + Tectonic: insert a table (from a dataset, from a paste) and a chart (pgfplots, picture) at the cursor.
-test('Insert tables and charts into a manuscript, compile, and keep a chart picture as figures/*.png', async ({ page, request, workspaceId, dataName }) => {
+test('Insert tables and charts into a manuscript, compile, and keep a chart picture as figures/*.png', { tag: '@compile' }, async ({ page, request, workspaceId, dataName }) => {
   test.setTimeout(420_000)
   const dataset = await addOwnData(request, `${dataName} scores`, CSV)
   await addChart(request, `${dataName} bars`, barSpec(dataset, 'System', ['F1']))
