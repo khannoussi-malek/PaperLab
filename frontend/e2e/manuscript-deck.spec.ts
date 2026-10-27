@@ -189,6 +189,9 @@ test('Find evidence for a sentence: E badge, E tab, a verdict, insert only the c
     await expect(eTab).toHaveAttribute('aria-label', /^Evidence passage/)
     await expect(book(page)).toContainText('A note keeps the exact page and region')
     await expect(book(page).getByText("Can't tell")).toBeVisible({ timeout: 90_000 })
+    // A check that ran and could not tell, never one that did not finish: the reason says what the model did.
+    await expect(book(page)).toContainText("The model's answer couldn't be read.")
+    await expect(book(page)).not.toContainText("Check didn't finish")
 
     await page.keyboard.press('i') // only the citation goes in, never passage text
     await expect(content).toContainText(/\\citep\{[^}\s]+\}/, { timeout: 15_000 })
@@ -199,6 +202,8 @@ test('Find evidence for a sentence: E badge, E tab, a verdict, insert only the c
     await book(page).focus()
     await page.keyboard.press('Escape') // closes the book, back on the deck
     await expect(book(page)).toHaveCount(0)
+    await expect(status).toContainText("AI: Can't tell") // every verdict is marked AI, on the card and read out
+    await expect(deck(page).locator('[data-deck-verdict]').first()).toContainText(/AI\s*Can't tell/)
     await page.keyboard.press('Escape') // clears evidence mode
     await expect(header).toHaveCount(0)
     await expect(deck(page).getByText(/^E \d+$/)).toHaveCount(0)

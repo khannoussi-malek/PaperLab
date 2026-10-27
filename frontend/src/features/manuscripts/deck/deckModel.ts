@@ -84,7 +84,7 @@ export function windowAround(n: number, current: number, radius = 3): number[] {
 }
 
 /** What the model said about one paper, as the book and the deck show it. `label` null = no verdict to show. */
-export type VerdictView = { label: string | null; text: string; ai: boolean; quote: string | null; reason: string | null }
+export type VerdictView = { label: string | null; text: string; ai: boolean; quote: string | null; reason: string | null; page: number | null }
 
 const VERDICT_LABEL: Record<string, string> = {
   supported: 'Supports',
@@ -94,14 +94,25 @@ const VERDICT_LABEL: Record<string, string> = {
   cannot_verify: "Can't tell",
 }
 export const NO_MODEL = 'Add a model in Settings to get verdicts'
+// The codes a check can end with, in plain words. A done row's reason is otherwise the model's own sentence.
+const REASON: Record<string, string> = {
+  model_error: "The model's answer couldn't be read.",
+  no_text: 'This paper has no text to check.',
+  not_ready: 'This paper is still being read.',
+  no_model: NO_MODEL,
+  queue_unavailable: "Checks couldn't start. Try again.",
+}
 
 export function verdictView(row: EvidenceRow | undefined, unavailable: boolean): VerdictView {
-  const plain = (text: string, label: string | null = text): VerdictView => ({ label, text, ai: false, quote: null, reason: null })
+  const plain = (text: string, label: string | null = text, reason: string | null = null): VerdictView => ({ label, text, ai: false, quote: null, reason, page: null })
   if (unavailable) return plain(NO_MODEL, null)
   if (!row || row.status === 'queued' || row.status === 'running') return plain('Checking…')
-  if (row.status !== 'done') return plain("Can't tell")
+  if (row.status !== 'done') { // failed or interrupted: no verdict, never to be mistaken for "Can't tell"
+    const text = row.reason === 'superseded' ? 'Stopped: you asked about another sentence.' : "Check didn't finish. Find evidence again."
+    return plain(text, text, REASON[row.reason ?? ''] ?? null)
+  }
   const text = VERDICT_LABEL[row.verdict ?? ''] ?? "Can't tell"
-  return { label: text, text, ai: true, quote: row.quote, reason: row.reason }
+  return { label: text, text, ai: true, quote: row.quote, reason: (row.reason && REASON[row.reason]) ?? row.reason, page: row.page }
 }
 
 /** One blue E item per passage, in page order. */
