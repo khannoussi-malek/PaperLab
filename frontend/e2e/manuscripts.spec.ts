@@ -131,9 +131,14 @@ test('Write a sectioned manuscript, reorder it and edit a sentence from the PDF'
     // Double-click "Report" in the PDF, change the word, Enter: the source and, after the compile, the PDF follow.
     const word = pdf.locator('span[role="presentation"]', { hasText: 'Report your results' })
     await word.scrollIntoViewIfNeeded()
-    await word.dblclick({ position: { x: 15, y: 5 } })
     const box = page.getByRole('dialog', { name: 'Edit from the PDF' })
     const area = box.getByLabel('Edit this text')
+    // The left edge of the sentence maps to it too (SyncTeX picks the box under the click, not a neighbour).
+    await word.dblclick({ position: { x: 2, y: 5 } })
+    await expect(area).toHaveValue(/Report/)
+    await area.press('Escape')
+    await expect(box).toBeHidden()
+    await word.dblclick({ position: { x: 15, y: 5 } })
     await expect(area).toHaveValue(/Report/)
     await area.fill((await area.inputValue()).replace('Report', 'Describe'))
     await area.press('Enter')
