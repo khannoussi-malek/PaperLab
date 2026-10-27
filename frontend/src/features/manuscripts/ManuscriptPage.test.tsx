@@ -809,3 +809,35 @@ test('Mod+Alt+K on a cite key opens that paper in the deck, already open', async
   act(() => editor.current!.onCiteKey!('k1'))
   expect(await screen.findByRole('group', { name: 'Kappa paper' })).toBeInTheDocument()
 })
+
+test('Cmd+K jumps to a label in another file, opens a paper in the deck, and runs commands', async () => {
+  server['main.tex'].text = '\\section{Intro}\n\\input{b}'
+  server['b.tex'].text = '\\section{Methods}\nsee \\label{tab:data}'
+  vi.spyOn(api, 'manuscriptPapers').mockResolvedValue([paper])
+  vi.spyOn(api, 'listNotes').mockResolvedValue([])
+  vi.spyOn(api, 'rankPapers').mockResolvedValue({ paper_ids: [] })
+  const compile = vi.spyOn(api, 'compileManuscript').mockResolvedValue({ state: 'queued' })
+  Element.prototype.scrollIntoView = vi.fn() // jsdom has none; cmdk scrolls the active item
+  const assign = vi.fn()
+  vi.stubGlobal('location', { ...window.location, assign })
+  widen()
+  renderPage()
+  const box = await screen.findByLabelText('LaTeX source')
+  await waitFor(() => expect(box).toHaveValue('\\section{Intro}\n\\input{b}'))
+  fireEvent.keyDown(box, { key: 'k', ctrlKey: true }) // from inside the editor
+  const input = await screen.findByPlaceholderText(/Jump to a section/)
+  fireEvent.change(input, { target: { value: 'tabdata' } })
+  fireEvent.click(await screen.findByText('tab:data'))
+  expect(assign).toHaveBeenCalledWith(expect.stringContaining('b.tex'))
+  expect(assign.mock.calls[0][0]).toContain('line=2')
+  await waitFor(() => expect(screen.queryByPlaceholderText(/Jump to a section/)).toBeNull())
+
+  fireEvent.keyDown(document.body, { key: 'k', metaKey: true })
+  fireEvent.change(await screen.findByPlaceholderText(/Jump to a section/), { target: { value: 'Kappa' } })
+  fireEvent.click(within(await screen.findByRole('dialog')).getByText('Kappa paper'))
+  expect(await screen.findByRole('group', { name: 'Kappa paper' })).toBeInTheDocument()
+
+  fireEvent.keyDown(document.body, { key: 'k', ctrlKey: true })
+  fireEvent.click(within(await screen.findByRole('dialog')).getByText('Compile'))
+  await waitFor(() => expect(compile).toHaveBeenCalled())
+})
