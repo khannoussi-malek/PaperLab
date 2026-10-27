@@ -49,9 +49,11 @@ async def key_state(session: AsyncSession, manuscript: Manuscript):
 async def build_bib(session: AsyncSession, manuscript: Manuscript, sources: dict[str, str]) -> str:
     """The whole .bib text. Cited keys that match a generated key are pinned; pinned entries are refreshed from their
     paper, and one whose paper is gone (or left the workspace) keeps its stored entry."""
-    # Locks the manuscript row as manuscript_papers.pin does, so a pin in flight commits before the pins are read
-    # (else both insert the same key: a unique violation). Held until the caller's transaction ends.
-    await session.execute(select(Manuscript.id).where(Manuscript.id == manuscript.id).with_for_update())
+    # Locks the manuscript row so a pin in flight (FOR UPDATE) commits before the pins are read (else both insert the
+    # same key: a unique violation). Held until the caller's transaction ends. NO KEY UPDATE, as the rest of the app:
+    # a plain FOR UPDATE would conflict with a file insert's KEY SHARE (its foreign key) and deadlock with it.
+    locked = select(Manuscript.id).where(Manuscript.id == manuscript.id).with_for_update(key_share=True)
+    await session.execute(locked)
     items, rows, pins, generated = await key_state(session, manuscript)
     for key in cited_keys(sources.values()):
         if key in generated and key not in rows:
