@@ -3,7 +3,7 @@ import type { Chunk, LensId } from '@/api/client'
 import { usePaperChunks, usePaperSections } from './queries'
 import type { PdfRect } from '@/features/reader/coords'
 import type { ReaderTab } from '@/lib/route'
-import { fadeRects, lensRuns, stepRun } from './lenses'
+import { fadeRects, hasHeadings, lensRuns, stepRun } from './lenses'
 
 /**
  * The reader's lens (spec §5): the picked lens (Full paper on opening, not remembered), its sections and chunks, the
@@ -59,6 +59,8 @@ export function useLensReader(paperId: string, tab: ReaderTab, onJump: (page: nu
     lens,
     lenses: sectionsQuery.data?.lenses ?? [],
     sections: sectionsQuery.data?.sections ?? [],
+    /** Some section has a heading, so Full paper offers Change role (the empty-lens hint says so only then). */
+    headed: hasHeadings(sectionsQuery.data?.sections ?? []),
     sectionsQuery,
     chunks: chunks.data,
     runCount: runs.length,

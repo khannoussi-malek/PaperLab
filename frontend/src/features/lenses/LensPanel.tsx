@@ -25,7 +25,7 @@ export function LensPanel({ paperId, reader, hasPdf }: Props) {
     )
   }
   if (!lens) return <Shell><p role="status" className="text-sm text-muted-foreground">Reading the sections…</p></Shell>
-  const notice = lensNotice(lens, hasPdf)
+  const notice = lensNotice(lens, hasPdf, reader.headed)
   return (
     <Shell>
       <h2 className="font-heading text-lg font-semibold">{lens.label}</h2>

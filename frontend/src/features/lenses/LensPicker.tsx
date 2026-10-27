@@ -2,11 +2,13 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import type { LensId } from '@/api/client'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { lensNotice } from './lenses'
 import type { LensReader } from './useLensReader'
 
 /** The toolbar's lens: a Select of the API's lenses, then ◀ n/N ▶ over the lens's runs (spec §5). */
 export function LensPicker({ reader }: { reader: LensReader }) {
   const { lensId, lens, lenses, runCount, runIndex } = reader
+  const notice = lens && lensNotice(lens, true, reader.headed)
   return (
     <div className="flex items-center gap-1">
       <Select value={lensId} onValueChange={(value) => reader.pick(value as LensId)} disabled={lenses.length === 0}>
@@ -46,6 +48,10 @@ export function LensPicker({ reader }: { reader: LensReader }) {
           </Button>
         </>
       )}
+      {/* Always mounted, so a screen reader hears the line when a pick fills it. */}
+      <span className="lens-empty max-w-64 text-xs leading-tight text-muted-foreground" aria-live="polite">
+        {notice?.kind === 'empty' ? notice.text : ''}
+      </span>
     </div>
   )
 }
