@@ -21,16 +21,38 @@ export type DeckHandsProps = {
   onAction: (action: DeckAction) => void
   /** A hold on a card or a book tab. */
   onSelect: (id: string, kind: 'card' | 'tab') => void
+  /** The column went out of sight (collapsed, or tabbed away): the camera is off and Hands must be turned on again. */
+  onHidden: () => void
 }
 
 const TARGETS = '[data-deck-card],[data-book-tab]'
 
 /** Hands mode over the deck column. It never edits text: it only moves the deck. */
-export function DeckHands({ column, onAction, onSelect }: DeckHandsProps) {
+export function DeckHands({ column, onAction, onSelect, onHidden }: DeckHandsProps) {
   const overlay = useRef<HTMLDivElement>(null)
   const totals = useRef(initialTotals)
   const [inDeck, setInDeck] = useState(false)
   const [typing, setTyping] = useState(false)
+  const [hidden, setHidden] = useState(false)
+  const hiddenCb = useRef(onHidden)
+  hiddenCb.current = onHidden
+
+  // StudioColumns keeps hidden columns mounted, so watch for [hidden] on the column or any ancestor.
+  useEffect(() => {
+    const check = () => {
+      if (!column.current?.closest('[hidden]')) return
+      setHidden(true)
+      hiddenCb.current()
+    }
+    check()
+    const observer = new MutationObserver(check)
+    observer.observe(document.body, { attributes: true, attributeFilter: ['hidden'], subtree: true })
+    return () => observer.disconnect()
+  }, [column])
+
+  // Resuming after any pause starts the totals afresh, so it cannot fire a step at once.
+  const idle = !inDeck || typing
+  useEffect(() => { totals.current = initialTotals }, [idle])
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined
@@ -41,6 +63,10 @@ export function DeckHands({ column, onAction, onSelect }: DeckHandsProps) {
       timer = setTimeout(() => setTyping(false), TYPING_PAUSE_MS)
     }
     const track = (e: Event) => setInDeck(within(e.target))
+    const away = () => setInDeck(false)
+    const col = column.current
+    col?.addEventListener('pointerleave', away)
+    window.addEventListener('blur', away)
     const focusOut = () => setInDeck(within(document.activeElement))
     document.addEventListener('keydown', onKey, true)
     document.addEventListener('pointerover', track)
@@ -53,6 +79,8 @@ export function DeckHands({ column, onAction, onSelect }: DeckHandsProps) {
       document.removeEventListener('pointerover', track)
       document.removeEventListener('focusin', track)
       document.removeEventListener('focusout', focusOut)
+      col?.removeEventListener('pointerleave', away)
+      window.removeEventListener('blur', away)
     }
   }, [column])
 
@@ -70,10 +98,11 @@ export function DeckHands({ column, onAction, onSelect }: DeckHandsProps) {
     if (next[1]) onAction(next[1])
   }
 
+  if (hidden) return null
   return (
     <div ref={overlay} className="pointer-events-none absolute inset-0 z-20">
       <HandsMode
-        paused={!inDeck || typing}
+        paused={idle}
         text={DECK_TEXT}
         gestures={DECK_GESTURES}
         pickAt={pickAt}

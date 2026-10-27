@@ -160,7 +160,7 @@ export function DeckColumn({ manuscriptId, sectionKey, sectionText, allTexts, on
         />
       )}
     </div>
-    {hands && <DeckHands column={column} onAction={onHands} onSelect={onHold} />}
+    {hands && <DeckHands column={column} onAction={onHands} onSelect={onHold} onHidden={() => setHands(false)} />}
     </div>
   )
 }
