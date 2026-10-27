@@ -52,6 +52,7 @@ import {
   type SearchRunCreate,
   type SearchSourceIn,
   type SnowballRequest,
+  type NoteCounts,
 } from './client'
 
 export const PAPERS_POLL_MS = 2000
@@ -78,6 +79,8 @@ export const keys = {
   // Not under ['manuscripts', id]: an autosave invalidates that, and the papers only change on a pin, a section or
   // file operation, or a compile (which pins the keys it cites).
   manuscriptPapers: (id: string) => ['manuscriptPapers', id] as const,
+  // Per-paper note counts for a set of papers; ['noteCounts'] is the prefix a note change invalidates.
+  noteCounts: (sortedIds: string[]) => ['noteCounts', sortedIds] as const,
   manuscriptSnapshots: (id: string) => ['manuscripts', id, 'snapshots'] as const,
   papers: ['papers'] as const,
   paper: (id: string) => ['papers', id] as const,
@@ -150,7 +153,7 @@ export const keys = {
 /** Every list that shows notes: the Notes page's, a paper's, every workspace query (its Notes tab and count), and
  * paper chat's history (a saved suggestion's card lives there too). */
 export const isNotesList = (queryKey: readonly unknown[]) =>
-  queryKey[0] === 'notes' || queryKey[2] === 'notes' || queryKey[2] === 'chat' || queryKey[0] === 'workspaces'
+  queryKey[0] === 'notes' || queryKey[0] === 'noteCounts' || queryKey[2] === 'notes' || queryKey[2] === 'chat' || queryKey[0] === 'workspaces'
 
 /** Refetches every list that shows notes: after a note is saved, edited, moved between papers or deleted, or a chart
  * it shows changes. */
@@ -1397,6 +1400,20 @@ export const useManuscript = (id: string) =>
     queryFn: () => api.getManuscript(id),
     refetchInterval: (query) => manuscriptPollInterval(query.state.data, query.state.status === 'error'),
   })
+
+/** The API takes at most this many paper ids per request. */
+export const NOTE_COUNTS_MAX_IDS = 2000
+export async function noteCountsChunked(ids: string[]) {
+  const chunks: string[][] = []
+  for (let i = 0; i < ids.length; i += NOTE_COUNTS_MAX_IDS) chunks.push(ids.slice(i, i + NOTE_COUNTS_MAX_IDS))
+  return Object.assign({}, ...(await Promise.all(chunks.map((c) => api.noteCounts(c))))) as NoteCounts
+}
+
+/** Notes, highlights and AI notes for many papers (one request per 2000); keyed by the sorted ids. */
+export const useNoteCounts = (ids: string[]) => {
+  const sorted = [...ids].sort()
+  return useQuery({ queryKey: keys.noteCounts(sorted), queryFn: () => noteCountsChunked(sorted), enabled: sorted.length > 0, placeholderData: keepPreviousData })
+}
 
 /** The papers a manuscript can cite, with their keys and note counts. */
 export const useManuscriptPapers = (id: string) =>

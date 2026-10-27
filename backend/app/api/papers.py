@@ -8,11 +8,22 @@ from app.api.deps import DiscoveryDep, SessionDep
 from app.config import settings
 from app.core import discovery, enrichment, paper_events, papers, tags, workspaces
 from app.core.errors import Conflict, InvalidInput
+from app.core.note_counts import MAX_PAPERS, note_counts
 from app.core.pipeline import MAX_UPLOAD_PDF_BYTES
 from app.core.queue import INGEST_QUEUE
 from app.models import PaperStatus
 from app.schemas.discovery import CandidateOut
-from app.schemas.papers import ChunkOut, FoundPdfOut, FoundPdfsSeen, PaperEventOut, PaperOut, PaperUpdate, ReadingIn
+from app.schemas.papers import (
+    ChunkOut,
+    FoundPdfOut,
+    FoundPdfsSeen,
+    NoteCountsIn,
+    NoteCountsOut,
+    PaperEventOut,
+    PaperOut,
+    PaperUpdate,
+    ReadingIn,
+)
 from app.schemas.tags import PaperTagGroup
 
 router = APIRouter(prefix="/api/papers", tags=["papers"])
@@ -57,6 +68,13 @@ async def list_found_pdfs(session: SessionDep) -> list[FoundPdfOut]:
 @router.post("/found-pdfs/seen", status_code=204)
 async def mark_found_pdfs_seen(payload: FoundPdfsSeen, session: SessionDep) -> None:
     await paper_events.mark_seen(session, payload.ids)
+
+
+@router.post("/note-counts")
+async def paper_note_counts(payload: NoteCountsIn, session: SessionDep) -> NoteCountsOut:
+    if len(payload.paper_ids) > MAX_PAPERS:
+        raise InvalidInput("too_many_papers", max=MAX_PAPERS)
+    return NoteCountsOut(counts=await note_counts(session, payload.paper_ids))
 
 
 @router.get("/{paper_id}")

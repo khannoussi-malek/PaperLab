@@ -16,7 +16,7 @@ function Host({ onAction = vi.fn(), onSelect = vi.fn(), onHidden = vi.fn() }) {
       <div ref={column}>
         <button data-testid="inside">x</button>
         <div data-deck-card="p1" aria-label="Alpha" />
-        <DeckHands column={column} onAction={onAction} onSelect={onSelect} onHidden={onHidden} />
+        <input data-testid="filter" /><DeckHands column={column} onAction={onAction} onSelect={onSelect} onHidden={onHidden} />
       </div>
     </div>
   )
@@ -95,4 +95,13 @@ it('resuming after a pause starts the glide and spread totals afresh', () => {
   fireEvent.pointerOver(getByTestId('inside'))
   p().onTurn(0.3) // 0.3 + 0.3 would have stepped; afresh it does not
   expect(onAction).not.toHaveBeenCalled()
+})
+
+it('turns the camera off when a Radix tabpanel around the column goes inactive', async () => {
+  const onHidden = vi.fn()
+  const { getByTestId } = render(<div role="tabpanel" data-state="active" data-testid="panel"><Host onHidden={onHidden} /></div>)
+  expect(hm.mounted).toBe(1)
+  await act(async () => { getByTestId('panel').setAttribute('data-state', 'inactive') })
+  expect(hm.mounted).toBe(0)
+  expect(onHidden).toHaveBeenCalled()
 })

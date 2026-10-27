@@ -37,16 +37,16 @@ export function DeckHands({ column, onAction, onSelect, onHidden }: DeckHandsPro
   const hiddenCb = useRef(onHidden)
   hiddenCb.current = onHidden
 
-  // StudioColumns keeps hidden columns mounted, so watch for [hidden] on the column or any ancestor.
+  // Hidden columns and workspace tabs stay mounted: watch for [hidden] or an inactive Radix tabpanel on the column or any ancestor.
   useEffect(() => {
     const check = () => {
-      if (!column.current?.closest('[hidden]')) return
+      if (!column.current?.closest('[hidden],[role=tabpanel][data-state=inactive]')) return
       setHidden(true)
       hiddenCb.current()
     }
     check()
     const observer = new MutationObserver(check)
-    observer.observe(document.body, { attributes: true, attributeFilter: ['hidden'], subtree: true })
+    observer.observe(document.body, { attributes: true, attributeFilter: ['hidden', 'data-state', 'class'], subtree: true })
     return () => observer.disconnect()
   }, [column])
 

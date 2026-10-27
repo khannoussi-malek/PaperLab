@@ -20,6 +20,7 @@ import {
   useSaveManuscriptFile,
   useAddSection,
   useManuscriptPapers,
+  useNoteCounts,
   usePapersFollowCompile,
   useWorkspaceMutations,
   useSnowball,
@@ -223,6 +224,7 @@ describe('isNotesList', () => {
     expect(isNotesList(['papers', 'p1', 'chat'])).toBe(true)
     expect(isNotesList(['workspaces'])).toBe(true)
     expect(isNotesList(['workspaces', 'w1', 'notes'])).toBe(true)
+    expect(isNotesList(['noteCounts', ['p1']])).toBe(true)
   })
 
   it('is false for a paper or its chunks', () => {
@@ -419,5 +421,16 @@ describe('manuscript hooks', () => {
     result.current.remove.mutate('w1')
     await waitFor(() => expect(result.current.remove.isSuccess).toBe(true))
     expect(client.getQueryState(['manuscripts', 'list', 'orphans'])?.isInvalidated).toBe(true)
+  })
+})
+
+describe('useNoteCounts', () => {
+  it('asks for 2000 ids at a time and merges the answers', async () => {
+    const spy = vi.spyOn(api, 'noteCounts').mockImplementation(async (ids) => Object.fromEntries(ids.map((id) => [id, { notes: 1, highlights: 0, ai_notes: 0 }])))
+    const ids = Array.from({ length: 4500 }, (_, i) => `p${String(i).padStart(5, '0')}`)
+    const { result } = renderHook(() => useNoteCounts(ids), { wrapper: withQueryClient(new QueryClient({ defaultOptions: { queries: { retry: false } } })) })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(spy.mock.calls.map((c) => c[0].length)).toEqual([2000, 2000, 500])
+    expect(Object.keys(result.current.data!)).toHaveLength(4500)
   })
 })
