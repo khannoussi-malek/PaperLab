@@ -27,6 +27,8 @@ import { MANUSCRIPT_PAPERS, MANUSCRIPT_PDF, MANUSCRIPT_SECTIONS } from './pdfPan
 import type { SaveState } from './autosave'
 import { keptTexts, useKeptTexts } from './keptTexts'
 import { KeptTextAlert } from './KeptTextAlert'
+import { JumpPalette } from './JumpPalette'
+import { jumpTargets, type Target } from './jumpTargets'
 import { SourcePane } from './SourcePane'
 import { useLeaveWarning } from './useLeaveWarning'
 
@@ -68,6 +70,17 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
   const showCited = useCallback((key: string) => {
     setOpenKey((k) => ({ key, n: (k?.n ?? 0) + 1 }))
     setReveal((r) => ({ id: 'papers', n: (r?.n ?? 0) + 1 }))
+  }, [])
+  const [paletteOpen, setPaletteOpen] = useState(false)
+  const [sectionAsk, setSectionAsk] = useState<{ kind: 'new' | 'split'; n: number } | null>(null)
+  useEffect(() => { // Cmd/Ctrl+K anywhere in the studio; CodeMirror leaves it alone, so it bubbles up from the editor too
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() !== 'k' || !(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey || e.defaultPrevented) return
+      e.preventDefault()
+      setPaletteOpen(true)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
   }, [])
   const registerFlush = useCallback((f: (() => Promise<boolean>) | null) => { flushRef.current = f }, [])
 
@@ -196,6 +209,11 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
     setEditCompile({ from: data?.compiled_at ?? null })
     compile.mutate(manuscriptId, { onError: () => setEditCompile(null) })
   }
+  const rows = useMemo(() => (data ? sectionRows(fileTexts, data.main_file, new Set(data.files.map((f) => f.path))) : []), [data, fileTexts])
+  const targets = useMemo(() => jumpTargets(rows, items, fileTexts, libraryPapers.data ?? []), [rows, items, fileTexts, libraryPapers.data])
+  const singleFile = rows.length > 0 && rows.every((r) => r.inMain)
+  const ask = (kind: 'new' | 'split') => setSectionAsk((a) => ({ kind, n: (a?.n ?? 0) + 1 }))
+  const pick = (t: Target) => (t.kind === 'paper' ? showCited(t.key) : jumpTo(t.file, t.line))
   const openSection = (row: SectionRow) => jumpTo(row.path, row.inMain ? row.line : 1)
   const stepSection = (step: -1 | 1) => {
     if (!data || !path) return
@@ -254,6 +272,7 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
                       flushCurrent={flushCurrent}
                       onOpen={openSection}
                       onJump={jumpTo}
+                      request={sectionAsk}
                     />
                     <details className="px-0">
                       <summary className="cursor-pointer px-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">All files</summary>
@@ -313,6 +332,20 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
             reveal={reveal ?? undefined}
           />
         </>
+      )}
+      {data && path && (
+        <JumpPalette
+          open={paletteOpen}
+          onOpenChange={setPaletteOpen}
+          targets={targets}
+          onPick={pick}
+          commands={[
+            { id: 'compile', label: 'Compile', run: () => compile.mutate(manuscriptId) },
+            { id: 'new', label: 'New section', run: () => ask('new') },
+            ...(singleFile ? [{ id: 'split', label: 'Split into files', run: () => ask('split') }] : []),
+            { id: 'pdf', label: 'Show in PDF', run: () => showInPdf(path, cursorLine) },
+          ]}
+        />
       )}
       {data && (
         <>
