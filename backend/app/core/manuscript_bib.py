@@ -29,9 +29,9 @@ def cited_keys(sources: Iterable[str]) -> list[str]:
     return list(found)
 
 
-async def build_bib(session: AsyncSession, manuscript: Manuscript, sources: dict[str, str]) -> str:
-    """The whole .bib text. Cited keys that match a generated key are pinned; pinned entries are refreshed from their
-    paper, and one whose paper is gone (or left the workspace) keeps its stored entry."""
+async def key_state(session: AsyncSession, manuscript: Manuscript):
+    """(items by paper id, pin rows by key, pins {paper id: key}, generated {key: paper id}): the one place the .bib and
+    the paper deck get their keys from."""
     papers = await workspaces.papers(session, manuscript.workspace_id) if manuscript.workspace_id else []
     items = {str(p.id): csl_item(p) for p in papers}
     query = select(ManuscriptCiteKey).where(ManuscriptCiteKey.manuscript_id == manuscript.id)
@@ -43,6 +43,13 @@ async def build_bib(session: AsyncSession, manuscript: Manuscript, sources: dict
         pins.setdefault(str(r.paper_id) if r.paper_id else f"orphan:{r.key}", r.key)
     pins |= {f"orphan:{r.key}": r.key for r in rows.values() if r.key not in pins.values()}
     generated = {key: pid for pid, key in bibtex_keys(list(items.values()), pins).items()}
+    return items, rows, pins, generated
+
+
+async def build_bib(session: AsyncSession, manuscript: Manuscript, sources: dict[str, str]) -> str:
+    """The whole .bib text. Cited keys that match a generated key are pinned; pinned entries are refreshed from their
+    paper, and one whose paper is gone (or left the workspace) keeps its stored entry."""
+    items, rows, pins, generated = await key_state(session, manuscript)
     for key in cited_keys(sources.values()):
         if key in generated and key not in rows:
             rows[key] = ManuscriptCiteKey(

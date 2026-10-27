@@ -1469,6 +1469,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/manuscripts/{manuscript_id}/papers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Citable Papers */
+        get: operations["citable_papers_api_manuscripts__manuscript_id__papers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/papers/rank": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rank Papers */
+        post: operations["rank_papers_api_manuscripts__manuscript_id__papers_rank_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/papers/{paper_id}/pin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pin Paper */
+        post: operations["pin_paper_api_manuscripts__manuscript_id__papers__paper_id__pin_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/manuscripts/{manuscript_id}/compile": {
         parameters: {
             query?: never;
@@ -2927,6 +2978,32 @@ export interface components {
              * @description The abstract chunk of a paper saved without a PDF: no page to show or jump to.
              */
             readonly from_abstract: boolean;
+        };
+        /** CitablePaperOut */
+        CitablePaperOut: {
+            /**
+             * Paper Id
+             * Format: uuid
+             */
+            paper_id: string;
+            /** Key */
+            key: string;
+            /** Pinned */
+            pinned: boolean;
+            /** Title */
+            title: string;
+            /** First Author */
+            first_author: string | null;
+            /** Year */
+            year: number | null;
+            /** Has Pdf */
+            has_pdf: boolean;
+            /** Notes */
+            notes: number;
+            /** Highlights */
+            highlights: number;
+            /** Ai Notes */
+            ai_notes: number;
         };
         /** ClearHitsOut */
         ClearHitsOut: {
@@ -4398,6 +4475,11 @@ export interface components {
             /** Color By */
             color_by?: string | null;
         };
+        /** PinKeyOut */
+        PinKeyOut: {
+            /** Key */
+            key: string;
+        };
         /** PrismaExportOut */
         PrismaExportOut: {
             /** Identified */
@@ -4490,6 +4572,16 @@ export interface components {
         QueueOut: {
             /** Queued At */
             queued_at: string | null;
+        };
+        /** RankIn */
+        RankIn: {
+            /** Text */
+            text: string;
+        };
+        /** RankOut */
+        RankOut: {
+            /** Paper Ids */
+            paper_ids: string[];
         };
         /**
          * RankedHitsOut
@@ -8895,6 +8987,104 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    citable_papers_api_manuscripts__manuscript_id__papers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CitablePaperOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rank_papers_api_manuscripts__manuscript_id__papers_rank_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RankIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RankOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pin_paper_api_manuscripts__manuscript_id__papers__paper_id__pin_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+                paper_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PinKeyOut"];
+                };
             };
             /** @description Validation Error */
             422: {

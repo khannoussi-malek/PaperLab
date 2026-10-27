@@ -12,6 +12,7 @@ from app.api.deps import SessionDep
 from app.core import (
     manuscript_bib,
     manuscript_history,
+    manuscript_papers,
     manuscript_section_ops,
     manuscript_templates,
     manuscript_zip,
@@ -21,6 +22,7 @@ from app.core import (
 from app.core import manuscript_paths as paths
 from app.core.errors import Conflict, InvalidInput, NotFound
 from app.schemas.manuscripts import (
+    CitablePaperOut,
     CompileOut,
     FileOut,
     FilePut,
@@ -30,6 +32,9 @@ from app.schemas.manuscripts import (
     ManuscriptImportOut,
     ManuscriptOut,
     ManuscriptPatch,
+    PinKeyOut,
+    RankIn,
+    RankOut,
     RenameIn,
     SectionAddIn,
     SectionMoveIn,
@@ -221,6 +226,23 @@ async def delete_section(manuscript_id: uuid.UUID, path: str, session: SessionDe
     await manuscript_section_ops.delete(session, manuscript_id, path)
     await session.commit()
     return Response(status_code=204)
+
+
+@router.get("/api/manuscripts/{manuscript_id}/papers")
+async def citable_papers(manuscript_id: uuid.UUID, session: SessionDep) -> list[CitablePaperOut]:
+    return [CitablePaperOut(**p) for p in await manuscript_papers.list_papers(session, manuscript_id)]
+
+
+@router.post("/api/manuscripts/{manuscript_id}/papers/rank")
+async def rank_papers(manuscript_id: uuid.UUID, body: RankIn, session: SessionDep) -> RankOut:
+    return RankOut(paper_ids=await manuscript_papers.rank(session, manuscript_id, body.text))
+
+
+@router.post("/api/manuscripts/{manuscript_id}/papers/{paper_id}/pin")
+async def pin_paper(manuscript_id: uuid.UUID, paper_id: uuid.UUID, session: SessionDep) -> PinKeyOut:
+    key = await manuscript_papers.pin(session, manuscript_id, paper_id)
+    await session.commit()
+    return PinKeyOut(key=key)
 
 
 @router.post("/api/manuscripts/{manuscript_id}/compile", status_code=202)
