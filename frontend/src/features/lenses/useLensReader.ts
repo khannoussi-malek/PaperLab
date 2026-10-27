@@ -36,11 +36,22 @@ export function useLensReader(paperId: string, tab: ReaderTab, onJump: (page: nu
     return true
   }
 
-  // A picked lens opens on its first run; when its chunks are still loading, once they have.
+  // A chunk's passage; false while the chunks load (a Lens tab row can be clicked before they arrive).
+  function jumpTo(chunkId: string) {
+    if (!chunks.data) return false
+    const chunk = chunks.data.find((candidate) => candidate.id === chunkId)
+    if (chunk) onJump(chunk.page, chunk.bbox)
+    return true
+  }
+
+  // A picked lens opens on its first run, and a clicked section on its passage; when the chunks are still loading,
+  // once they have.
   const pending = useRef<LensId | null>(null)
+  const pendingChunk = useRef<string | null>(null)
   useEffect(() => {
     // a failed chunks load drops the jump, so a later fetch (the Lens tab) doesn't fire it by surprise
     if (pending.current && (chunks.isError || openFirstRun(pending.current))) pending.current = null
+    if (pendingChunk.current && (chunks.isError || jumpTo(pendingChunk.current))) pendingChunk.current = null
   })
 
   function pick(next: LensId) {
@@ -50,8 +61,7 @@ export function useLensReader(paperId: string, tab: ReaderTab, onJump: (page: nu
   }
 
   function jumpToChunk(chunkId: string) {
-    const chunk = chunks.data?.find((candidate) => candidate.id === chunkId)
-    if (chunk) onJump(chunk.page, chunk.bbox)
+    pendingChunk.current = jumpTo(chunkId) ? null : chunkId
   }
 
   return {
