@@ -2,11 +2,12 @@
 and one queued verdict per paper that app.workers.manuscript_evidence fills in."""
 
 import hashlib
+import logging
 import re
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import case, delete, func, select
+from sqlalchemy import and_, case, delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,6 +20,7 @@ MAX_SENTENCE = 2000
 PASSAGES = 8
 STALE_AFTER = timedelta(minutes=5)  # a row `running` this long lost its worker
 JOB = "verify_manuscript_evidence"
+logger = logging.getLogger(__name__)
 
 
 def sentence_hash(sentence: str) -> str:
@@ -49,15 +51,26 @@ async def find(session: AsyncSession, mid: uuid.UUID, sentence: str, *, embedder
         if c.paper_id in keys:
             grouped.setdefault(c.paper_id, []).append({"chunk_id": c.id, "page": c.page, "text": c.text})
     h = sentence_hash(sentence)
-    await _queue_rows(session, mid, h, sentence, list(grouped))
-    queued = await _has_model(session) and bool(grouped)
+    # No model, no rows: nothing would ever resolve them (the passages still show).
+    verdicts = "queued" if grouped and await _has_model(session) else "unavailable"
+    if verdicts == "queued":
+        await _queue_rows(session, mid, h, sentence, list(grouped))
     await session.commit()  # the job reads these rows on its own connection
-    if queued:
-        await queue.enqueue(JOB, str(mid), h)
+    if verdicts == "queued":
+        try:
+            await queue.enqueue(JOB, str(mid), h)
+        except Exception:
+            logger.exception("could not queue evidence checks for manuscript %s", mid)
+            await session.execute(update(ManuscriptEvidence).where(
+                ManuscriptEvidence.manuscript_id == mid, ManuscriptEvidence.sentence_hash == h,
+                ManuscriptEvidence.status == "queued",
+            ).values(status="failed", reason="queue_unavailable", updated_at=func.now()))
+            await session.commit()
+            verdicts = "unavailable"
     return {
         "sentence_hash": h,
         "papers": [{"paper_id": pid, "key": keys[pid], "passages": ps} for pid, ps in grouped.items()],
-        "verdicts": "queued" if queued else "unavailable",
+        "verdicts": verdicts,
     }
 
 
@@ -70,8 +83,12 @@ async def _queue_rows(session, mid, h, sentence, paper_ids: list[uuid.UUID]) -> 
     insert_ = insert(ManuscriptEvidence)
     table = ManuscriptEvidence.__table__
 
-    def reset(column, value):  # a done row keeps what it has
-        return case((table.c.status == "done", table.c[column]), else_=value)
+    keep = or_(  # a done row, or a check still running, keeps what it has
+        table.c.status == "done", and_(table.c.status == "running", table.c.updated_at > func.now() - STALE_AFTER)
+    )
+
+    def reset(column, value):
+        return case((keep, table.c[column]), else_=value)
 
     await session.execute(
         insert_.values([
@@ -100,7 +117,8 @@ async def rows(session: AsyncSession, mid: uuid.UUID, sentence_hash: str) -> lis
         {
             "paper_id": r.paper_id,
             "rank": r.rank,
-            "status": "interrupted" if r.status == "running" and now - r.updated_at >= STALE_AFTER else r.status,
+            "status": "interrupted" if r.status in ("queued", "running") and now - r.updated_at >= STALE_AFTER
+            else r.status,
             "verdict": r.verdict,
             "reason": r.reason,
             "quote": r.quote,

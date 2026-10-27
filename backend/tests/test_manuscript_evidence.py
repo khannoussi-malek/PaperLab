@@ -1,3 +1,4 @@
+import asyncio
 import json
 import uuid
 from contextlib import asynccontextmanager
@@ -5,12 +6,12 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from conftest import unit_vector
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 
 from app.core import manuscript_evidence as ev
 from app.core import manuscript_papers, manuscripts, queue, retrieval, workspaces
-from app.core.errors import InvalidInput
-from app.models import Chunk, LLMModel, ManuscriptEvidence, Paper, Workspace
+from app.core.errors import Conflict, InvalidInput
+from app.models import Chunk, LLMModel, LLMOutput, Manuscript, ManuscriptEvidence, Paper, Workspace
 from app.workers import manuscript_evidence as worker
 
 pytestmark = pytest.mark.anyio
@@ -73,7 +74,8 @@ async def library(session, embedder, *titles, with_ws=True):
 
 async def all_rows(session, mid):
     return list(await session.scalars(
-        select(ManuscriptEvidence).where(ManuscriptEvidence.manuscript_id == mid).order_by(ManuscriptEvidence.rank)
+        select(ManuscriptEvidence).where(ManuscriptEvidence.manuscript_id == mid)
+        .order_by(ManuscriptEvidence.rank).execution_options(populate_existing=True)
     ))
 
 
@@ -105,6 +107,7 @@ async def test_no_default_model_shows_passages_and_queues_nothing(session, embed
     _, m = await library(session, embedder, "Alpha")
     out = await ev.find(session, m.id, SENTENCE, embedder=embedder)
     assert out["verdicts"] == "unavailable" and len(out["papers"]) == 1 and arq.jobs == []
+    assert await all_rows(session, m.id) == [] and await ev.rows(session, m.id, out["sentence_hash"]) == []
 
 
 async def test_asking_twice_keeps_one_row_per_paper_and_done_rows(session, embedder, local_default_model):
@@ -168,5 +171,101 @@ async def test_a_long_running_row_reads_as_interrupted(session, embedder, local_
     assert [r["status"] for r in await ev.rows(session, m.id, out["sentence_hash"])] == ["interrupted"]
     await session.execute(update(ManuscriptEvidence).values(updated_at=datetime.now(UTC)))
     assert [r["status"] for r in await ev.rows(session, m.id, out["sentence_hash"])] == ["running"]
+    await age(session, 6)
     await ev.find(session, m.id, SENTENCE, embedder=embedder)  # asking again starts an interrupted row over
     assert (await all_rows(session, m.id))[0].status == "queued"
+
+
+async def age(session, minutes, **values):
+    await session.execute(update(ManuscriptEvidence).values(
+        updated_at=datetime.now(UTC) - timedelta(minutes=minutes), **values))
+
+
+async def test_a_queued_row_nobody_picked_up_reads_as_interrupted(session, embedder, local_default_model):
+    _, m = await library(session, embedder, "Alpha")
+    out = await ev.find(session, m.id, SENTENCE, embedder=embedder)
+    assert [r["status"] for r in await ev.rows(session, m.id, out["sentence_hash"])] == ["queued"]
+    await age(session, 6)
+    assert [r["status"] for r in await ev.rows(session, m.id, out["sentence_hash"])] == ["interrupted"]
+    await ev.find(session, m.id, SENTENCE, embedder=embedder)
+    assert [r["status"] for r in await ev.rows(session, m.id, out["sentence_hash"])] == ["queued"]
+
+
+async def test_a_queue_that_is_down_fails_the_rows_and_says_unavailable(session, embedder, local_default_model, arq):
+    async def down(*args, **kwargs):
+        raise ConnectionError("redis is gone")
+
+    arq.enqueue_job = down
+    _, m = await library(session, embedder, "Alpha", "Beta")
+    out = await ev.find(session, m.id, SENTENCE, embedder=embedder)
+    assert out["verdicts"] == "unavailable" and len(out["papers"]) == 2
+    assert [(r.status, r.reason) for r in await all_rows(session, m.id)] == [("failed", "queue_unavailable")] * 2
+
+
+async def test_asking_again_leaves_a_running_check_alone_but_restarts_failed_ones(session, embedder,
+                                                                                  local_default_model):
+    _, m = await library(session, embedder, "Alpha", "Beta")
+    await ev.find(session, m.id, SENTENCE, embedder=embedder)
+    first, second = await all_rows(session, m.id)
+    first.status, second.status, second.reason = "running", "failed", "check_failed"
+    await session.flush()
+    await ev.find(session, m.id, SENTENCE, embedder=embedder)
+    rows = await all_rows(session, m.id)
+    assert [(r.status, r.reason) for r in rows] == [("running", None), ("queued", None)]
+
+
+async def test_a_model_error_fails_that_row_with_its_code(session, embedder, local_default_model):
+    _, m = await library(session, embedder, "Alpha")
+    out = await ev.find(session, m.id, SENTENCE, embedder=embedder)
+
+    class NoModel(Scripted):
+        async def stream(self, system, prompt):
+            raise Conflict("no_model")
+            yield
+
+    await worker.verify_manuscript_evidence({"llm": NoModel()}, str(m.id), out["sentence_hash"])
+    assert [(r.status, r.reason) for r in await all_rows(session, m.id)] == [("failed", "no_model")]
+
+
+async def test_two_jobs_on_real_connections_check_every_paper_once(monkeypatch):
+    from app.db import SessionLocal
+    monkeypatch.setattr(worker, "SessionLocal", SessionLocal)
+    async with SessionLocal() as s:
+        ws = Workspace(name=f"W {uuid.uuid4().hex[:6]}")
+        s.add(ws)
+        await s.flush()
+        m = await manuscripts.create(s, title="M", template="article", workspace_id=ws.id)
+        papers = [Paper(title=f"P{i}", file_path="/x.pdf", status="ready") for i in range(3)]
+        s.add_all(papers)
+        await s.flush()
+        for i, p in enumerate(papers):
+            s.add(Chunk(paper_id=p.id, ordinal=0, page=1, bbox=[[1, 2, 3, 4]], text=f"text {i}",
+                        embedding=unit_vector(f"c{i}"), embed_model="test", strategy_ver=1))
+            s.add(ManuscriptEvidence(manuscript_id=m.id, sentence_hash="h", sentence=SENTENCE, paper_id=p.id,
+                                     rank=i, status="queued"))
+        await s.commit()
+        mid, pids = m.id, [p.id for p in papers]
+
+    class Counting:
+        model, connection_name = "fake:counting", "Test"
+        calls = 0
+
+        async def stream(self, system, prompt):
+            Counting.calls += 1
+            await asyncio.sleep(0.05)
+            yield verdict("not_addressed")
+
+    try:
+        await asyncio.gather(*(worker.verify_manuscript_evidence({"llm": Counting()}, str(mid), "h")
+                               for _ in range(2)))
+        async with SessionLocal() as s:
+            statuses = list(await s.scalars(select(ManuscriptEvidence.status).where(
+                ManuscriptEvidence.manuscript_id == mid)))
+        assert Counting.calls == 3 and statuses == ["done"] * 3
+    finally:
+        async with SessionLocal() as s:
+            await s.execute(delete(LLMOutput).where(LLMOutput.paper_id.in_(pids)))
+            await s.execute(delete(Manuscript).where(Manuscript.id == mid))  # its evidence goes with it
+            await s.execute(delete(Paper).where(Paper.id.in_(pids)))
+            await s.execute(delete(Workspace).where(Workspace.id == ws.id))
+            await s.commit()
