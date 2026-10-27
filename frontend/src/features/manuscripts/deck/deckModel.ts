@@ -53,11 +53,17 @@ export function bookItems(notes: Note[], paperId: string): BookItem[] {
 
 const AI_PREFIX = '% AI note (not your text): '
 
+const BREAK = /\r\n|[\r\n\u2028\u2029\u0085]/
+const BREAKS = /(?:\s*(?:\r\n|[\r\n\u2028\u2029\u0085])\s*)+/g
+const UNSAFE_KEY = /[{}%\\\s]|^$/
+
 export function insertText(item: BookItem | null, key: string): string {
+  if (UNSAFE_KEY.test(key)) throw new Error(`Unsafe citation key: ${JSON.stringify(key)}`)
   if (!item) return `\\citep{${key}}`
-  if (item.kind === 'ai') return item.text.split('\n').map((l) => AI_PREFIX + l).join('\n')
-  if (item.kind === 'highlight') return `\`\`${latexEscape(item.text)}'' \\citep[p.~${item.page}]{${key}}`
-  return `${latexEscape(item.text)} \\citep{${key}}`
+  if (item.kind === 'ai') return item.text.split(BREAK).map((l) => AI_PREFIX + l).join('\n')
+  const text = latexEscape(item.text.replace(BREAKS, ' '))
+  if (item.kind === 'highlight') return `\`\`${text}'' \\citep[p.~${item.page}]{${key}}`
+  return `${text} \\citep{${key}}`
 }
 
 export const turnDirection = (from: number, to: number): 'fwd' | 'bwd' => (to >= from ? 'fwd' : 'bwd')

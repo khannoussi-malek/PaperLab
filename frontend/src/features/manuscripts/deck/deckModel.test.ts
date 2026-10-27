@@ -80,6 +80,25 @@ describe('insertText', () => {
   })
 })
 
+describe('insertText safety', () => {
+  const it0 = (kind: 'highlight' | 'note' | 'ai', text: string) => ({ id: 'i', kind, page: 1, text, noteId: 'n' })
+  it('keeps every line of an AI note a comment, whatever the line break', () => {
+    for (const text of ['a\r\\input{x}', 'a\u2028\\input{x}', 'a\u2029b', 'a\r\nb\nc']) {
+      const lines = insertText(it0('ai', text), 'k').split(/\r\n|[\r\n\u2028\u2029\u0085]/)
+      expect(lines.length).toBeGreaterThan(1)
+      for (const l of lines) expect(l.startsWith('% AI note (not your text): ')).toBe(true)
+    }
+  })
+  it('refuses a key that could break out of the citation', () => {
+    for (const key of ['a}b', 'a{b', 'a%b', 'a\\b', 'a b', 'a\nb', ''])
+      expect(() => insertText(null, key)).toThrow()
+  })
+  it('collapses line breaks in notes and quotes to one space', () => {
+    expect(insertText(it0('note', 'one\n\n  two\r\nthree'), 'k')).toBe('one two three \\citep{k}')
+    expect(insertText(it0('highlight', 'a\n\nb'), 'k')).toBe("``a b'' \\citep[p.~1]{k}")
+  })
+})
+
 describe('latexEscape', () => {
   it('escapes every special', () => {
     expect(latexEscape('\\ # $ % & _ { } ~ ^')).toBe(
