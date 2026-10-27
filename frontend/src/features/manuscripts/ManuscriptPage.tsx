@@ -67,9 +67,14 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
     return true
   }, [])
   const [openKey, setOpenKey] = useState<{ key: string; n: number } | null>(null)
+  const [evidenceAsk, setEvidenceAsk] = useState<{ doc: string; from: number; to: number; n: number } | null>(null)
   const [reveal, setReveal] = useState<{ id: string; n: number } | null>(null)
   const showCited = useCallback((key: string) => {
     setOpenKey((k) => ({ key, n: (k?.n ?? 0) + 1 }))
+    setReveal((r) => ({ id: 'papers', n: (r?.n ?? 0) + 1 }))
+  }, [])
+  const findEvidence = useCallback((doc: string, from: number, to: number) => {
+    setEvidenceAsk((a) => ({ doc, from, to, n: (a?.n ?? 0) + 1 }))
     setReveal((r) => ({ id: 'papers', n: (r?.n ?? 0) + 1 }))
   }, [])
   // Only an explicit Show in PDF brings the PDF forward (its tab, when it shares one with Papers); following a compile never does.
@@ -307,6 +312,7 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
                     registerReplace={registerReplace}
                     registerInsert={registerInsert}
                     onCiteKey={showCited}
+                    onFindEvidence={findEvidence}
                     citeOptions={libraryPapers.data}
                     onCite={pinPaper}
                   />
@@ -329,7 +335,7 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
                 id: 'papers',
                 label: 'Papers',
                 limits: MANUSCRIPT_PAPERS,
-                content: <DeckColumn manuscriptId={manuscriptId} sectionKey={section.key} sectionText={section.text} allTexts={allTexts} onInsert={insertAtCursor} openKey={openKey} />,
+                content: <DeckColumn manuscriptId={manuscriptId} sectionKey={section.key} sectionText={section.text} allTexts={allTexts} onInsert={insertAtCursor} openKey={openKey} evidenceAsk={evidenceAsk} />,
               },
             ]}
             reveal={reveal ?? undefined}
