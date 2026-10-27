@@ -192,7 +192,9 @@ export function PaperBook({ paper, items, selected, onSelect, onInsert, onOpenRe
         {!items.length && <p className="text-xs text-muted-foreground">No notes on this paper yet</p>}
         <ul className="space-y-1.5">
           {items.map((it, j) => (
-            <li key={it.id} draggable onDragStart={(e) => startPaperDrag(e, paper.paper_id, insertText(it, paper.key))}>
+            // An AI note is not draggable: a drop lands mid-line, where its comment would swallow the rest of the line.
+            // Its Insert button puts it on lines of its own.
+            <li key={it.id} draggable={it.kind !== 'ai'} onDragStart={(e) => { if (it.kind !== 'ai') startPaperDrag(e, paper.paper_id, insertText(it, paper.key)) }}>
               <button
                 type="button"
                 onClick={() => pick(j)}

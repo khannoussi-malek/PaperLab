@@ -106,6 +106,16 @@ describe('PaperBook', () => {
     errors.mockRestore()
   })
 
+  it('an AI note is not draggable (a drop would land mid-line); your own notes are', () => {
+    render(<Harness />)
+    const li = (text: string) => screen.getByText(text).closest('li')!
+    expect(li('model said')).toHaveAttribute('draggable', 'false')
+    expect(li('my note')).toHaveAttribute('draggable', 'true')
+    const setData = vi.fn()
+    fireEvent.dragStart(li('model said'), { dataTransfer: { setData, types: [] } })
+    expect(setData).not.toHaveBeenCalled()
+  })
+
   it('announces the item', () => {
     render(<Harness />)
     expect(screen.getByRole('status').textContent).toBe('Your highlight, page 2: first quote. 1 of 3.')
