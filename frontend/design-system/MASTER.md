@@ -1132,6 +1132,16 @@ The library and a workspace's Papers tab can show their papers as the studio's d
   reason and quote. Checking happens one paper at a time; a card reads "Checking..." until its turn.
 - **Inserting:** `i` or "Cite this paper" puts in `\citep{key}` only. Nothing the model wrote is ever inserted.
 
+## Inserting results
+
+The editor toolbar's **Insert** button (outline, small, with a chevron) opens a menu with "Table…" and "Chart…". Each opens a dialog; nothing is written until **Insert**.
+
+- **Table…** has a "Saved dataset" tab (a searchable list) and a "Paste" tab (Excel, Sheets or CSV text; the first row is the header). Beside it: decimal places, best value (no bold, highest, lowest), caption and label. A "Table" tab previews the cells; a "LaTeX" tab shows the exact booktabs code.
+- **Chart…** lists your saved charts. Bar, line and scatter go in as a pgfplots figure; every other type goes in as a 1950 px wide PNG (`figures/<name>.png`), and a muted note says why: "pgfplots can't draw this chart type, so it goes in as a picture." Trend lines are dropped from pgfplots, with a note. The primary button reads "Insert" or "Insert as a picture".
+- The block is a `table` or `figure` with a caption and a unique `\label`, placed on lines of its own at the cursor; missing packages (`booktabs`, `pgfplots`, `graphicx`) are added to the preamble in the same change.
+- A picture is always drawn in the light theme on white, so it prints well whatever the app theme.
+- If the main file changed under you, the insert is refused ("The main file changed. Open it and try again.") and nothing is written. Errors sit in an `Alert` in the dialog; the dialog closes on success and focus returns to the editor.
+
 ## Pre-delivery check (from ui-ux-pro-max Quick Reference §1–§3)
 
 Run through this before finishing any UI task, in **both** themes:
