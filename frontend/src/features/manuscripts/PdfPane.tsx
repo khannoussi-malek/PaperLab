@@ -15,16 +15,18 @@ type Props = {
   width: number
   /** A point (page 1-based, y in points from the page top) to bring a third of the way down the pane. */
   target: PdfTarget | null
+  /** The compile whose PDF stays where it is when it arrives (an edit from the PDF made it), not placed at `target`. */
+  stillStamp?: string | null
   /** The source of a PDF spot: ctrl/cmd-click on a page, or Enter for the visible centre. x/y in points. */
   onSourceAt: (page: number, x: number, y: number) => void
-  /** A double-click on text: the page point, the selected word and where it sits on screen. */
+  /** A double-click on text, or E for the visible centre (word ''): the page point, the word and where it sits. */
   onEditAt?: (page: number, x: number, y: number, word: string, rect: DOMRect) => void
   /** Overlays positioned within the pane (the edit box). */
   children?: ReactNode
 }
 
 /** The compiled PDF, with the compile's errors above it. The pane's width is the parent's, so loading never moves it. */
-export function PdfPane({ manuscript: m, width, target, onSourceAt, onEditAt, children }: Props) {
+export function PdfPane({ manuscript: m, width, target, stillStamp, onSourceAt, onEditAt, children }: Props) {
   // The URL carries compiled_at, so each good compile is fetched again. A failed compile also stamps compiled_at but
   // leaves the last PDF on disk, so the URL keeps the last good stamp and that PDF stays on screen.
   const goodAt = useRef<string | null>(null)
@@ -46,7 +48,14 @@ export function PdfPane({ manuscript: m, width, target, onSourceAt, onEditAt, ch
     if (!box || !page || !target) return
     box.scrollTop = page.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop + target.y * scale - box.clientHeight / 3
   }, [target, scale])
-  useEffect(() => { pending.current = true; place() }, [target, doc]) // eslint-disable-line react-hooks/exhaustive-deps -- not on a resize of the column
+  const placed = useRef<PdfTarget | null>(null)
+  useEffect(() => {
+    // A new PDF re-applies the target, except the one an edit from the PDF made: that keeps the scroll it has.
+    if (target === placed.current && stamp === stillStamp) { pending.current = false; return }
+    placed.current = target
+    pending.current = true
+    place()
+  }, [target, doc]) // eslint-disable-line react-hooks/exhaustive-deps -- not on a resize of the column
   useEffect(() => { // pages learn their real size after mounting; re-apply the target as the stack grows
     const stack = pagesRef.current
     if (!stack || typeof ResizeObserver === 'undefined') return
@@ -68,15 +77,31 @@ export function PdfPane({ manuscript: m, width, target, onSourceAt, onEditAt, ch
     const r = e.currentTarget.getBoundingClientRect()
     onEditAt(Number(e.currentTarget.dataset.page), (e.clientX - r.left) / scale, (e.clientY - r.top) / scale, word, rect)
   }
-  const enter = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.key !== 'Enter' || e.target !== e.currentTarget) return
-    const r = e.currentTarget.getBoundingClientRect()
+  /** The visible centre of the pane and the page nearest it. */
+  const centre = (pane: HTMLElement) => {
+    const r = pane.getBoundingClientRect()
     const cx = r.left + r.width / 2
-    const cy = r.top + e.currentTarget.clientHeight / 2
-    const pagesEls = Array.from(e.currentTarget.querySelectorAll<HTMLElement>('[data-page]'))
+    const cy = r.top + pane.clientHeight / 2
+    const pagesEls = Array.from(pane.querySelectorAll<HTMLElement>('[data-page]'))
     const gap = (p: HTMLElement) => { const b = p.getBoundingClientRect(); return cy < b.top ? b.top - cy : Math.max(0, cy - b.bottom) }
-    const hit = pagesEls.reduce<HTMLElement | undefined>((best, p) => (!best || gap(p) < gap(best) ? p : best), undefined) // the page nearest the centre
-    if (hit) { e.preventDefault(); report(hit, cx, cy) }
+    const hit = pagesEls.reduce<HTMLElement | undefined>((best, p) => (!best || gap(p) < gap(best) ? p : best), undefined)
+    return hit && { hit, cx, cy }
+  }
+  const keyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.target !== e.currentTarget) return
+    if (e.key === 'Enter') { // source of the visible centre
+      const c = centre(e.currentTarget)
+      if (c) { e.preventDefault(); report(c.hit, c.cx, c.cy) }
+    } else if ((e.key === 'e' || e.key === 'E') && onEditAt && !e.metaKey && !e.ctrlKey && !e.altKey) { // edit box there
+      const c = centre(e.currentTarget)
+      if (!c) return
+      e.preventDefault()
+      // ponytail: no word, so the box holds the whole SyncTeX line; a selection left from an earlier double-click
+      // would point at another spot, so it is ignored.
+      const p = c.hit.getBoundingClientRect()
+      const at = { left: c.cx, right: c.cx, top: c.cy, bottom: c.cy, width: 0, height: 0, x: c.cx, y: c.cy } as DOMRect
+      onEditAt(Number(c.hit.dataset.page), (c.cx - p.left) / scale, (c.cy - p.top) / scale, '', at)
+    }
   }
 
   return (
@@ -101,7 +126,7 @@ export function PdfPane({ manuscript: m, width, target, onSourceAt, onEditAt, ch
           </AlertDescription>
         </Alert>
       )}
-      <div className="min-h-0 flex-1 overflow-auto bg-muted/40 p-3" tabIndex={0} aria-label="PDF pages" ref={scroller} onKeyDown={enter} onWheel={() => { pending.current = false }} onPointerDown={() => { pending.current = false }}>
+      <div className="min-h-0 flex-1 overflow-auto bg-muted/40 p-3" tabIndex={0} aria-label="PDF pages" ref={scroller} onKeyDown={keyDown} onWheel={() => { pending.current = false }} onPointerDown={() => { pending.current = false }}>
         {doc ? (
           <div ref={pagesRef} className="flex flex-col items-center gap-3">
             {Array.from({ length: doc.numPages }, (_, i) => i + 1).map((n) => (

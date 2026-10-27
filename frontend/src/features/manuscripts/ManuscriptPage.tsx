@@ -85,9 +85,22 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
     api.syncForward(manuscriptId, f, ln).then((r) => { if (id === forwardId.current) setTarget((t) => ({ page: r.page, y: r.y, n: (t?.n ?? 0) + 1 })) }, () => {})
   }, [manuscriptId])
   const goodStamp = data?.compile_status === 'ok' ? data.compiled_at : null
+  // A compile started by an edit from the PDF keeps the PDF where it is. `editCompile` holds compiled_at when it
+  // started; once a compile is stored after that, a good one's stamp becomes `stillStamp`: no forward lookup for it,
+  // and PdfPane leaves its PDF at the scroll it has. Set during render, so the PDF and the stamp arrive together.
+  const [editCompile, setEditCompile] = useState<{ from: string | null } | null>(null)
+  const [stillStamp, setStillStamp] = useState<string | null>(null)
+  if (editCompile && data && data.compiled_at !== editCompile.from) {
+    if (goodStamp) setStillStamp(goodStamp)
+    setEditCompile(null)
+  }
+  const seenStamp = useRef<string | null>(null)
   useEffect(() => { // once per new good compile, and when a file opens on one; never per cursor move
+    const fresh = goodStamp !== seenStamp.current
+    seenStamp.current = goodStamp
+    if (fresh && goodStamp && goodStamp === stillStamp) return // the compile of an edit from the PDF
     if (goodStamp && latest.current.path) showInPdf(latest.current.path, latest.current.line)
-  }, [goodStamp, path, showInPdf])
+  }, [goodStamp, path, showInPdf, stillStamp])
 
   const compiling = compile.isPending || data?.compile_status === 'running' || data?.compile_requested === true
   const cursorLine = cursor && cursor.path === path ? cursor.line : 1 // a cursor belongs to the file it is in
@@ -95,17 +108,19 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
     if (f === path) { setJump((j) => ({ line, n: (j?.n ?? 0) + 1 })); showInPdf(f, line) }
     else window.location.assign(manuscriptHref(manuscriptId, f, line))
   }
+  const isOwn = (f: string) => data?.files.some((x) => x.path === f) ?? false
   const sourceAt = (page: number, x: number, y: number) => {
     const id = ++inverseId.current
     const from = path
     api.syncInverse(manuscriptId, page, x, y).then((r) => {
       if (id !== inverseId.current || from !== latest.current.path) return // a newer click, or another file opened meanwhile
+      if (!isOwn(r.file)) return // made by LaTeX (main.bbl): nothing of the user's to open
       if (r.file === path) setJump((j) => ({ line: r.line, n: (j?.n ?? 0) + 1 }))
       else window.location.assign(manuscriptHref(manuscriptId, r.file, r.line))
     }, () => {})
   }
   // Edit from the PDF: the sentence behind a double-clicked word, or a note that LaTeX made it.
-  const [edit, setEdit] = useState<{ id: number; anchor: DOMRect; file: string; line: number; at: Span | null; initial: string; notice?: string } | null>(null)
+  const [edit, setEdit] = useState<{ id: number; anchor: DOMRect; file: string; line: number; at: Span | null; initial: string; notice?: string; generated?: boolean } | null>(null)
   const editId = useRef(0)
   const textsRef = useRef(fileTexts)
   textsRef.current = fileTexts
@@ -115,6 +130,10 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
     void (async () => {
       const r = await api.syncInverse(manuscriptId, page, x, y)
       if (id !== editId.current || from !== latest.current.path) return // a newer double-click, or another file opened meanwhile
+      if (!isOwn(r.file)) { // a file LaTeX wrote (main.bbl): nothing to edit or open
+        setEdit({ id, anchor, file: r.file, line: r.line, at: null, initial: '', generated: true })
+        return
+      }
       let text: string | undefined = r.file === from ? textsRef.current[r.file] : undefined // the editor's buffer when it is open
       if (text === undefined) {
         const fresh = await api.getManuscriptFile(manuscriptId, r.file)
@@ -122,7 +141,8 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
         text = fresh.text
       }
       const lines = text.split('\n')
-      const at = findEditable(lines, r.line, word)
+      const whole = lines[r.line - 1] === undefined ? null : { line: r.line, start: 0, end: lines[r.line - 1].length }
+      const at = word ? findEditable(lines, r.line, word) : whole // E on the pane has no word: the whole SyncTeX line
       setEdit({ id, anchor, file: r.file, line: r.line, at, initial: at ? lines[at.line - 1].slice(at.start, at.end) : '' })
     })().catch(() => {}) // no index or no network: stay quiet
   }
@@ -148,7 +168,8 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
       catch (e) { throw e instanceof ApiError && e.code === 'file_changed' ? changed : e }
     }
     setEdit(null)
-    compile.mutate(manuscriptId)
+    setEditCompile({ from: data?.compiled_at ?? null })
+    compile.mutate(manuscriptId, { onError: () => setEditCompile(null) })
   }
   const openSection = (row: SectionRow) => jumpTo(row.path, row.inMain ? row.line : 1)
   const stepSection = (step: -1 | 1) => {
@@ -240,7 +261,7 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
                   />
                 ),
               },
-              { id: 'pdf', label: 'PDF', limits: MANUSCRIPT_PDF, content: (width) => <PdfPane manuscript={data} width={width} target={target} onSourceAt={sourceAt} onEditAt={editAt}>
+              { id: 'pdf', label: 'PDF', limits: MANUSCRIPT_PDF, content: (width) => <PdfPane manuscript={data} width={width} target={target} stillStamp={stillStamp} onSourceAt={sourceAt} onEditAt={editAt}>
                 {edit && (
                   <PdfEditBox
                     key={edit.id}
@@ -249,7 +270,7 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
                     notice={edit.notice ?? (edit.at ? undefined : 'This text is made by LaTeX (a citation, a number or the reference list).')}
                     onSave={saveEdit}
                     onCancel={() => setEdit(null)}
-                    onOpenSource={() => { jumpTo(edit.file, edit.line); setEdit(null) }}
+                    onOpenSource={edit.generated ? undefined : () => { jumpTo(edit.file, edit.line); setEdit(null) }}
                   />
                 )}
               </PdfPane> },

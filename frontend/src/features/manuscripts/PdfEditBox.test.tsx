@@ -53,3 +53,9 @@ test('a notice replaces the editor', () => {
   expect(screen.queryByRole('textbox')).toBeNull()
   expect(screen.getByRole('button', { name: 'Open in source' })).toBeInTheDocument()
 })
+
+test('a notice without a source offers no Open in source', () => {
+  setup({ notice: 'This text is made by LaTeX.', onOpenSource: undefined })
+  expect(screen.getByText('This text is made by LaTeX.')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Open in source' })).toBeNull()
+})
