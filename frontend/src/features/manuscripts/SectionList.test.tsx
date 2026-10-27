@@ -191,7 +191,7 @@ test('a request made before the list mounted is not replayed; a later one is, af
   expect(split).not.toHaveBeenCalled()
   ask({ kind: 'split', n: 4 })
   await waitFor(() => expect(split).toHaveBeenCalledWith('m1'))
-  expect(props.flushCurrent.mock.invocationCallOrder[0]).toBeLessThan(split.mock.invocationCallOrder[0])
+  expect(vi.mocked(props.flushCurrent).mock.invocationCallOrder[0]).toBeLessThan(split.mock.invocationCallOrder[0])
 })
 
 test('a new-section request opens the New section dialog', async () => {
