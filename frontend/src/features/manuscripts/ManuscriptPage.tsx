@@ -4,11 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '@/api/client'
 import { useCompileManuscript, useManuscript } from '@/api/queries'
 import { AppShell } from '@/components/AppShell'
-import { loadPanelWidth, panelTrack, savePanelWidth } from '@/components/panelWidth'
-import { PanelResizeHandle } from '@/components/PanelResizeHandle'
 import { Button } from '@/components/ui/button'
 import { LoadError } from '@/features/library/ErrorAlert'
-import { browserStorage } from '@/features/notes/highlightColors'
 import { TabSkeleton } from '@/features/workspaces/TabStates'
 import { manuscriptHref, workspaceHref } from '@/lib/route'
 import { errorsFor, parseCompileErrors } from './compileErrors'
@@ -17,10 +14,13 @@ import { FileList } from './FileList'
 import { FinalStepsChecklist } from './FinalStepsChecklist'
 import { DeleteManuscriptDialog, MoveManuscriptDialog } from './ManuscriptDialogs'
 import { HistoryDialog } from './HistoryDialog'
-import { outline } from './outline'
+import { Breadcrumb } from './Breadcrumb'
+import { crumbsAt, outline } from './outline'
 import { SectionList } from './SectionList'
+import { openRowIndex, sectionRows, type SectionRow } from './sections'
+import { StudioColumns } from './StudioColumns'
 import { PdfPane } from './PdfPane'
-import { MANUSCRIPT_PDF } from './pdfPanel'
+import { MANUSCRIPT_PDF, MANUSCRIPT_SECTIONS } from './pdfPanel'
 import type { SaveState } from './autosave'
 import { keptTexts, useKeptTexts } from './keptTexts'
 import { KeptTextAlert } from './KeptTextAlert'
@@ -46,11 +46,9 @@ export function ManuscriptPage({ manuscriptId, file }: { manuscriptId: string; f
     [],
   )
   const flushCurrent = useCallback(async () => (await flushRef.current?.()) ?? true, [])
-  const cursorLine = jump?.line ?? 1 // ponytail: the editor does not report its cursor, so the last jump stands in
+  const [cursor, setCursor] = useState<{ path: string; line: number } | null>(null)
   const onState = useCallback((p: string, s: SaveState) => setSaveStates((all) => ({ ...all, [p]: s })), [])
   const registerFlush = useCallback((f: (() => Promise<boolean>) | null) => { flushRef.current = f }, [])
-  const [pdfWidth, setPdfWidth] = useState(() => loadPanelWidth(MANUSCRIPT_PDF, browserStorage()))
-  useEffect(() => savePanelWidth(MANUSCRIPT_PDF, browserStorage(), pdfWidth), [pdfWidth])
 
   const path = data && (file && data.files.some((f) => f.path === file) ? file : data.main_file)
   // Same keys as the editor's own query, so the open file is fetched once; the others feed the outline.
@@ -73,7 +71,19 @@ export function ManuscriptPage({ manuscriptId, file }: { manuscriptId: string; f
   useEffect(() => setJump(null), [path]) // a jump belongs to the file it was made in
 
   const compiling = compile.isPending || data?.compile_status === 'running' || data?.compile_requested === true
-  const clamped = Math.min(Math.max(pdfWidth, MANUSCRIPT_PDF.minWidth), Math.floor(window.innerWidth * MANUSCRIPT_PDF.maxShare))
+  const cursorLine = cursor && cursor.path === path ? cursor.line : 1 // a cursor belongs to the file it is in
+  const jumpTo = (f: string, line: number) => {
+    if (f === path) setJump((j) => ({ line, n: (j?.n ?? 0) + 1 }))
+    else window.location.assign(manuscriptHref(manuscriptId, f))
+  }
+  const openSection = (row: SectionRow) => jumpTo(row.path, row.inMain ? row.line : 1)
+  const stepSection = (step: -1 | 1) => {
+    if (!data || !path) return
+    const rows = sectionRows(fileTexts, data.main_file, new Set(data.files.map((f) => f.path)))
+    const at = openRowIndex(rows, path, cursorLine)
+    const next = rows[at === -1 && step === 1 ? 0 : at + step]
+    if (next && !next.missing) openSection(next)
+  }
 
   return (
     <AppShell
@@ -103,50 +113,61 @@ export function ManuscriptPage({ manuscriptId, file }: { manuscriptId: string; f
         />
       ))}
       {data && path && (
-        <div className="grid min-h-0 flex-1 overflow-hidden" style={{ gridTemplateColumns: `14rem minmax(0,1fr) ${panelTrack(MANUSCRIPT_PDF, pdfWidth)}` }}>
-          <div className="flex min-h-0 flex-col gap-4 overflow-auto border-r border-glass-border py-2">
-            <SectionList
-              manuscriptId={manuscriptId}
-              main={data.main_file}
-              texts={fileTexts}
-              filePaths={data.files.map((f) => f.path)}
-              errorsByFile={errorsByFile}
-              current={{ path, line: cursorLine }}
-              items={items}
-              flushCurrent={flushCurrent}
-              onOpen={(row) => {
-                if (row.path === path) setJump((j) => ({ line: row.inMain ? row.line : 1, n: (j?.n ?? 0) + 1 }))
-                else window.location.assign(manuscriptHref(manuscriptId, row.path))
-              }}
-              onJump={(f, line) => {
-                if (f === path) setJump((j) => ({ line, n: (j?.n ?? 0) + 1 }))
-                else window.location.assign(manuscriptHref(manuscriptId, f))
-              }}
-            />
-            <details className="px-0">
-              <summary className="cursor-pointer px-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">All files</summary>
-              <FileList manuscriptId={manuscriptId} files={data.files} current={path} main={data.main_file} flushCurrent={flushCurrent} />
-            </details>
-            <FinalStepsChecklist manuscriptId={manuscriptId} checklist={data.checklist} />
-          </div>
-          <SourcePane
-            key={path}
-            manuscriptId={manuscriptId}
-            path={path}
-            errors={errors}
-            jumpTo={jump}
-            compiling={compiling}
-            compileError={compile.error ? manuscriptFailure(compile.error) : null}
-            onCompile={() => compile.mutate(manuscriptId)}
-            onText={onText}
-            onState={onState}
-            registerFlush={registerFlush}
+        <>
+          <Breadcrumb crumbs={crumbsAt(items, path, cursorLine)} onJump={jumpTo} />
+          <StudioColumns
+            columns={[
+              {
+                id: 'sections',
+                label: 'Sections',
+                limits: MANUSCRIPT_SECTIONS,
+                content: (
+                  <div className="flex h-full min-h-0 flex-col gap-4 overflow-auto py-2">
+                    <SectionList
+                      manuscriptId={manuscriptId}
+                      main={data.main_file}
+                      texts={fileTexts}
+                      filePaths={data.files.map((f) => f.path)}
+                      errorsByFile={errorsByFile}
+                      current={{ path, line: cursorLine }}
+                      items={items}
+                      flushCurrent={flushCurrent}
+                      onOpen={openSection}
+                      onJump={jumpTo}
+                    />
+                    <details className="px-0">
+                      <summary className="cursor-pointer px-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">All files</summary>
+                      <FileList manuscriptId={manuscriptId} files={data.files} current={path} main={data.main_file} flushCurrent={flushCurrent} />
+                    </details>
+                    <FinalStepsChecklist manuscriptId={manuscriptId} checklist={data.checklist} />
+                  </div>
+                ),
+              },
+              {
+                id: 'editor',
+                label: 'Editor',
+                content: (
+                  <SourcePane
+                    key={path}
+                    manuscriptId={manuscriptId}
+                    path={path}
+                    errors={errors}
+                    jumpTo={jump}
+                    compiling={compiling}
+                    compileError={compile.error ? manuscriptFailure(compile.error) : null}
+                    onCompile={() => compile.mutate(manuscriptId)}
+                    onCursor={(line) => setCursor({ path, line })}
+                    onSectionStep={stepSection}
+                    onText={onText}
+                    onState={onState}
+                    registerFlush={registerFlush}
+                  />
+                ),
+              },
+              { id: 'pdf', label: 'PDF', limits: MANUSCRIPT_PDF, content: (width) => <PdfPane manuscript={data} width={width} /> },
+            ]}
           />
-          <div className="relative min-h-0 border-l border-glass-border">
-            <PanelResizeHandle limits={MANUSCRIPT_PDF} width={clamped} onWidthChange={setPdfWidth} label="Resize PDF" />
-            <PdfPane manuscript={data} width={clamped} />
-          </div>
-        </div>
+        </>
       )}
       {data && (
         <>

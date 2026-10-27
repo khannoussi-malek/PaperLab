@@ -51,3 +51,9 @@ export function wordCount(tex: string): number {
     .replace(/\\[a-zA-Z]+\*?/g, ' ')
   return plain.match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu)?.length ?? 0
 }
+
+/** The row the cursor is in: the last one at or above `line` in a single-file paper, else the row of the open file. */
+export function openRowIndex(rows: SectionRow[], path: string, line: number): number {
+  const single = rows.length > 0 && rows.every((r) => r.inMain)
+  return single ? rows.reduce((at, r, i) => (r.line <= line ? i : at), -1) : rows.findIndex((r) => r.path === path)
+}

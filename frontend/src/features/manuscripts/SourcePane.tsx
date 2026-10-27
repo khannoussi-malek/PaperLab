@@ -27,6 +27,9 @@ type Props = {
   compiling: boolean
   compileError: string | null
   onCompile: () => void
+  onCursor?: (line: number) => void
+  onSectionStep?: (step: -1 | 1) => void
+  onShowInPdf?: (line: number) => void
   /** The text as it now is (for the outline), or null once it is the server's again. */
   onText: (path: string, text: string | null) => void
   onState: (path: string, state: SaveState) => void
@@ -207,7 +210,7 @@ export function SourcePane(props: Props) {
       {file.error && <Alert variant="destructive" className="m-2 w-auto"><AlertDescription>{file.error.message}</AlertDescription></Alert>}
       <div className="min-h-0 flex-1">
         {text === null ? (!file.error && <TabSkeleton label="Loading file" />) : (
-          <LatexEditor value={text} onChange={change} errors={errors} jumpTo={jumpTo} onSave={() => void compileNow()} />
+          <LatexEditor value={text} onChange={change} errors={errors} jumpTo={jumpTo} onCursor={props.onCursor} onSectionStep={props.onSectionStep} onShowInPdf={props.onShowInPdf} onSave={() => void compileNow()} />
         )}
       </div>
     </section>
