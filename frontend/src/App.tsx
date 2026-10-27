@@ -47,7 +47,7 @@ function Page() {
     return <ReaderPage key={route.paperId} paperId={route.paperId} tab={route.tab} target={route.target} />
   }
   if (route.name === 'manuscript') {
-    return <ManuscriptRoute key={route.manuscriptId} manuscriptId={route.manuscriptId} file={route.file} />
+    return <ManuscriptRoute key={route.manuscriptId} manuscriptId={route.manuscriptId} file={route.file} line={route.line} />
   }
   if (route.name === 'charts') {
     return <ChartsPage />

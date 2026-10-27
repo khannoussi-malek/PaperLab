@@ -19,7 +19,7 @@ import { crumbsAt, outline } from './outline'
 import { SectionList } from './SectionList'
 import { openRowIndex, sectionRows, type SectionRow } from './sections'
 import { StudioColumns } from './StudioColumns'
-import { PdfPane } from './PdfPane'
+import { PdfPane, type PdfTarget } from './PdfPane'
 import { MANUSCRIPT_PDF, MANUSCRIPT_SECTIONS } from './pdfPanel'
 import type { SaveState } from './autosave'
 import { keptTexts, useKeptTexts } from './keptTexts'
@@ -28,7 +28,7 @@ import { SourcePane } from './SourcePane'
 import { useLeaveWarning } from './useLeaveWarning'
 
 /** The writing studio: files and outline | source | PDF. `file` is the `?file=` of the route; null is the main file. */
-export function ManuscriptPage({ manuscriptId, file }: { manuscriptId: string; file: string | null }) {
+export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscriptId: string; file: string | null; line?: number | null }) {
   const manuscript = useManuscript(manuscriptId)
   const compile = useCompileManuscript()
   const data = manuscript.data
@@ -68,13 +68,31 @@ export function ManuscriptPage({ manuscriptId, file }: { manuscriptId: string; f
   )
   const errors = useMemo(() => (path && data ? errorsFor(data.compile_errors, path) : []), [data?.compile_errors, path])
 
-  useEffect(() => setJump(null), [path]) // a jump belongs to the file it was made in
+  useEffect(() => setJump(path === file && line ? { line, n: 1 } : null), [path]) // a jump belongs to the file it was made in; ?line= starts one
+
+  const [target, setTarget] = useState<PdfTarget | null>(null)
+  const latest = useRef({ path, line: line ?? 1 })
+  latest.current = { path, line: cursor && cursor.path === path ? cursor.line : (line ?? 1) }
+  // Best effort and silent: no index, no match or no network just leaves the PDF where it is.
+  const showInPdf = useCallback((f: string, ln: number) => {
+    api.syncForward(manuscriptId, f, ln).then((r) => setTarget((t) => ({ page: r.page, y: r.y, n: (t?.n ?? 0) + 1 })), () => {})
+  }, [manuscriptId])
+  const goodStamp = data?.compile_status === 'ok' ? data.compiled_at : null
+  useEffect(() => { // once per new good compile, and when a file opens on one; never per cursor move
+    if (goodStamp && latest.current.path) showInPdf(latest.current.path, latest.current.line)
+  }, [goodStamp, path, showInPdf])
 
   const compiling = compile.isPending || data?.compile_status === 'running' || data?.compile_requested === true
   const cursorLine = cursor && cursor.path === path ? cursor.line : 1 // a cursor belongs to the file it is in
   const jumpTo = (f: string, line: number) => {
-    if (f === path) setJump((j) => ({ line, n: (j?.n ?? 0) + 1 }))
-    else window.location.assign(manuscriptHref(manuscriptId, f))
+    if (f === path) { setJump((j) => ({ line, n: (j?.n ?? 0) + 1 })); showInPdf(f, line) }
+    else window.location.assign(manuscriptHref(manuscriptId, f, line))
+  }
+  const sourceAt = (page: number, x: number, y: number) => {
+    api.syncInverse(manuscriptId, page, x, y).then((r) => {
+      if (r.file === path) setJump((j) => ({ line: r.line, n: (j?.n ?? 0) + 1 }))
+      else window.location.assign(manuscriptHref(manuscriptId, r.file, r.line))
+    }, () => {})
   }
   const openSection = (row: SectionRow) => jumpTo(row.path, row.inMain ? row.line : 1)
   const stepSection = (step: -1 | 1) => {
@@ -158,13 +176,14 @@ export function ManuscriptPage({ manuscriptId, file }: { manuscriptId: string; f
                     onCompile={() => compile.mutate(manuscriptId)}
                     onCursor={(line) => setCursor({ path, line })}
                     onSectionStep={stepSection}
+                    onShowInPdf={(ln) => showInPdf(path, ln)}
                     onText={onText}
                     onState={onState}
                     registerFlush={registerFlush}
                   />
                 ),
               },
-              { id: 'pdf', label: 'PDF', limits: MANUSCRIPT_PDF, content: (width) => <PdfPane manuscript={data} width={width} /> },
+              { id: 'pdf', label: 'PDF', limits: MANUSCRIPT_PDF, content: (width) => <PdfPane manuscript={data} width={width} target={target} onSourceAt={sourceAt} /> },
             ]}
           />
         </>
