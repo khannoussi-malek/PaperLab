@@ -3,6 +3,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { api, type CitablePaper } from '@/api/client'
+
+vi.mock('../../graph/hands/HandsMode', () => ({ default: () => null }))
 import { DeckColumn } from './DeckColumn'
 
 const mk = (id: string, title: string, over: Partial<CitablePaper> = {}): CitablePaper => ({
