@@ -7,7 +7,7 @@ from app.models.graph import PaperLink
 from app.models.harvest import HarvestCursor
 from app.models.llm_connection import LLMConnection, LLMModel
 from app.models.llm_output import LLMOutput
-from app.models.manuscript import Manuscript, ManuscriptCiteKey, ManuscriptFile, ManuscriptSnapshot
+from app.models.manuscript import Manuscript, ManuscriptCiteKey, ManuscriptEvidence, ManuscriptFile, ManuscriptSnapshot
 from app.models.note import Note, Provenance, note_anchors, note_papers
 from app.models.paper import Chunk, Paper, PaperStatus
 from app.models.paper_event import PaperEvent
@@ -36,6 +36,7 @@ __all__ = [
     "LLMOutput",
     "Manuscript",
     "ManuscriptCiteKey",
+    "ManuscriptEvidence",
     "ManuscriptFile",
     "ManuscriptSnapshot",
     "Note",

@@ -49,6 +49,7 @@ PAPER_ID_COLUMNS = [
     ("evidence_cards", "paper_id"),
     ("paper_events", "paper_id"),
     ("manuscript_cite_keys", "paper_id"),
+    ("manuscript_evidence", "paper_id"),
 ]
 
 
@@ -135,6 +136,12 @@ async def seed_both(session):
         "WITH ms AS (INSERT INTO manuscripts (title) VALUES ('Draft') RETURNING id) "
         "INSERT INTO manuscript_cite_keys (manuscript_id, key, paper_id, bibtex) "
         "SELECT id, 'sleep2021', :m, '@article{sleep2021}' FROM ms",
+        # M's rows for sentences a and b; K already has one for a, so M's a goes and its b moves
+        "WITH ms AS (INSERT INTO manuscripts (title) VALUES ('Evidence') RETURNING id), "
+        "k AS (INSERT INTO manuscript_evidence (manuscript_id, sentence_hash, sentence, paper_id, rank, status) "
+        "SELECT id, 'a', 'A.', :k, 0, 'queued' FROM ms) "
+        "INSERT INTO manuscript_evidence (manuscript_id, sentence_hash, sentence, paper_id, rank, status) "
+        "SELECT id, h, 'S.', :m, 1, 'queued' FROM ms, (VALUES ('a'), ('b')) v(h)",
     ]:
         await session.execute(text(statement), p)
     await workspaces.add_paper(session, ws.id, m.id)  # a duplicate of K's membership
@@ -174,6 +181,7 @@ MOVED = {
     "evidence_cards": 1,
     "paper_events": 1,
     "manuscript_cite_keys": 1,
+    "manuscript_evidence": 1,  # M's b; its a duplicated K's
     "awaiting_hits_retrieved": 1,
 }
 
@@ -197,6 +205,7 @@ AFTER = {  # K's rows after the merge: its own plus M's moved or unioned ones
     "search_run_eligibility.paper_id": 2,
     "evidence_cards.paper_id": 1,
     "manuscript_cite_keys.paper_id": 1,
+    "manuscript_evidence.paper_id": 2,
     "paper_events.paper_id": 2,  # M's moved one, and the merge's own pdf_attached for K (R21)
 }
 
