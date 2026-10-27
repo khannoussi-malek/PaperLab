@@ -46,7 +46,6 @@ function OpenBook({ paper, controls, onClose }: { paper: DeckPaper; controls: Mu
 export function LibraryDeck({ papers }: { papers: Paper[] }) {
   const counts = useNoteCounts(useMemo(() => papers.map((p) => p.id), [papers]))
   const deckPapers = useMemo(() => papers.map((p) => toDeckPaper(p, counts.data?.[p.id])), [papers, counts.data])
-  const [filter, setFilter] = useState('')
   const [currentId, setCurrentId] = useState<string | null>(null)
   const [openId, setOpenId] = useState<string | null>(null)
   const [hands, setHands] = useState(false) // off until asked: it turns the camera on
@@ -60,10 +59,7 @@ export function LibraryDeck({ papers }: { papers: Paper[] }) {
     column.current?.querySelector<HTMLElement>('[aria-roledescription="paper deck"]')?.focus()
   }, [openId])
 
-  const shown = useMemo(() => {
-    const q = filter.trim().toLowerCase()
-    return q ? deckPapers.filter((p) => [p.title, p.first_author, p.year].join(' ').toLowerCase().includes(q)) : deckPapers
-  }, [deckPapers, filter])
+  const shown = deckPapers // exactly what the list shows; its toolbar is the only search
   const at = Math.max(0, shown.findIndex((p) => p.paper_id === currentId)) // by id, so a reorder never moves you off your paper
   const open = deckPapers.find((p) => p.paper_id === openId) ?? null
 
@@ -96,8 +92,6 @@ export function LibraryDeck({ papers }: { papers: Paper[] }) {
           current={at}
           onCurrent={(i) => setCurrentId(shown[i]?.paper_id ?? null)}
           onOpen={(i) => { setCurrentId(shown[i].paper_id); setOpenId(shown[i].paper_id) }}
-          filter={filter}
-          onFilter={setFilter}
           label="Papers"
         />
       )}

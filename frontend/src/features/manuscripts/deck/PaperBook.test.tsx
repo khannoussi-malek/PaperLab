@@ -107,7 +107,7 @@ describe('PaperBook', () => {
   })
 
   it('an AI note is not draggable (a drop would land mid-line); your own notes are', () => {
-    render(<Harness />)
+    render(<Harness draggable />)
     const li = (text: string) => screen.getByText(text).closest('li')!
     expect(li('model said')).toHaveAttribute('draggable', 'false')
     expect(li('my note')).toHaveAttribute('draggable', 'true')
@@ -130,8 +130,16 @@ describe('PaperBook', () => {
   })
 })
 
-it('without onInsert there are no insert buttons and i does nothing', () => {
+it('without onInsert there are no insert buttons or \\citep header, and i is left alone', () => {
   const { container } = render(<PaperBook paper={paper} items={items} selected={0} onSelect={() => {}} onOpenReader={() => {}} onClose={() => {}} />)
   expect(screen.queryByText(/Insert/)).toBeNull()
-  fireEvent.keyDown(container.firstElementChild!, { key: 'i' })
+  expect(container.textContent).not.toContain('\\citep')
+  expect(fireEvent.keyDown(container.firstElementChild!, { key: 'i' })).toBe(true) // not prevented: nothing handled it
+})
+
+it('items are draggable only when asked', () => {
+  const { container, rerender } = render(<PaperBook paper={paper} items={items} selected={0} onSelect={() => {}} onOpenReader={() => {}} onClose={() => {}} />)
+  expect(container.querySelectorAll('li[draggable="true"]')).toHaveLength(0)
+  rerender(<PaperBook paper={paper} items={items} selected={0} onSelect={() => {}} onOpenReader={() => {}} onClose={() => {}} draggable />)
+  expect(container.querySelectorAll('li[draggable="true"]')).toHaveLength(2) // the AI note never drags
 })
