@@ -27,6 +27,8 @@ type Props = {
   onShowInPdf?: (line: number) => void
   /** Mod-Alt-K with the cursor in a \cite{…} key list: the key under it. */
   onCiteKey?: (key: string) => void
+  /** Mod-E: find evidence for the selection, or the sentence at the cursor (from, to are equal then). */
+  onFindEvidence?: (from: number, to: number) => void
   /** Hands the page a way to insert text at the cursor (the last one when unfocused; the end if it never moved) as a normal edit, then focus the editor. */
   registerInsert?: (insert: ((text: string) => void) | null) => void
   /** The library's papers, offered as keys inside \cite{…}. */
@@ -110,15 +112,15 @@ const highlight = syntaxHighlighting(
 const FromHost = Annotation.define<boolean>()
 
 /** CodeMirror 6 with LaTeX highlighting, as one controlled-ish component: `value` in, `onChange` out. */
-export function LatexEditor({ value, onChange, errors, onSave, jumpTo, onCursor, onSectionStep, onShowInPdf, onCiteKey, registerInsert, citeOptions, onCite, label = 'LaTeX source' }: Props) {
+export function LatexEditor({ value, onChange, errors, onSave, jumpTo, onCursor, onSectionStep, onShowInPdf, onCiteKey, onFindEvidence, registerInsert, citeOptions, onCite, label = 'LaTeX source' }: Props) {
   const host = useRef<HTMLDivElement>(null)
   const view = useRef<EditorView | null>(null)
   const errorSlot = useRef(new Compartment())
   const themeSlot = useRef(new Compartment())
   const dark = useAppIsDark()
   // The view is built once; callbacks go through a ref so it never holds a stale one.
-  const latest = useRef({ citeOptions, onCite, onChange, onSave, onCursor, onSectionStep, onShowInPdf, onCiteKey, registerInsert })
-  latest.current = { citeOptions, onCite, onChange, onSave, onCursor, onSectionStep, onShowInPdf, onCiteKey, registerInsert }
+  const latest = useRef({ citeOptions, onCite, onChange, onSave, onCursor, onSectionStep, onShowInPdf, onCiteKey, onFindEvidence, registerInsert })
+  latest.current = { citeOptions, onCite, onChange, onSave, onCursor, onSectionStep, onShowInPdf, onCiteKey, onFindEvidence, registerInsert }
   const moved = useRef(false) // whether the cursor was ever placed; if not, an insert goes to the end
   const cursorLine = useRef(0)
 
@@ -151,6 +153,8 @@ export function LatexEditor({ value, onChange, errors, onSave, jumpTo, onCursor,
               return !!key
             },
           },
+          // Mod-e is free: CodeMirror binds only Ctrl-e (line end), and only on macOS, where Mod is Cmd. Taken high anyway.
+          { key: 'Mod-e', run: (v) => { const { from, to } = v.state.selection.main; latest.current.onFindEvidence?.(from, to); return true } },
           { key: 'Mod-Alt-p', run: (v) => (latest.current.onShowInPdf?.(v.state.doc.lineAt(v.state.selection.main.head).number), true) },
         ])),
         EditorView.updateListener.of((u) => {

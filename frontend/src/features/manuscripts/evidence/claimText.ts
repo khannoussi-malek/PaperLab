@@ -12,13 +12,14 @@ function toPlain(tex: string): string {
     .replace(DROPPED, '')
     .replace(/\\(?:begin|end)\{[^{}]*\}/g, '')
     .replace(/\\\$/g, '\u0000') // an escaped dollar is text, not math
+    .replace(/\\\\/g, ' ') // a LaTeX line break, before the command strip reads `\\bc` as `\bc`
   for (let prev = ''; prev !== s; ) {
     prev = s
     s = s.replace(WITH_ARG, '$1') // innermost first, so nested commands unwrap in passes
   }
   return s
     .replace(/\\[a-zA-Z]+\*?/g, '')
-    .replace(/\\\\|\\,/g, ' ')
+    .replace(/\\,/g, ' ')
     .replace(/\\([%&_#])/g, '$1')
     .replace(/\$([^$]*)\$/g, '$1')
     .replace(/\u0000/g, '$')

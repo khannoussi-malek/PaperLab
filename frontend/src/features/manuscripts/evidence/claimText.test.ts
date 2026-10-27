@@ -49,4 +49,8 @@ describe('sentenceAtCursor', () => {
     const at = doc.indexOf('Gamma')
     expect(sentenceAtCursor(doc, at, at)?.plain).toBe('Gamma delta')
   })
+
+  it('reads a LaTeX line break glued to a word as a space, not a command', () => {
+    expect(sentenceAtCursor(String.raw`a\\bc`, 0, 0)?.plain).toBe('a bc')
+  })
 })

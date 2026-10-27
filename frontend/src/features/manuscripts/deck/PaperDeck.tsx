@@ -2,7 +2,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useEffect, useId, useRef, type KeyboardEvent } from 'react'
 import { startPaperDrag } from '../citeCompletion'
 import { useReducedMotion } from './useReducedMotion'
-import { cardTransform, insertText, windowAround, type DeckPaper } from './deckModel'
+import { cardTransform, insertText, windowAround, type DeckPaper, type VerdictView } from './deckModel'
 
 const FLIP_MS = 500
 const WHEEL_GAP_MS = 120
@@ -18,6 +18,8 @@ export type PaperDeckProps = {
   label: string
   /** Paper KEYS (the cite keys, `DeckPaper.key`) that get a "cited" tag. */
   cited?: Set<string>
+  /** Evidence mode: by paper id, how many passages the paper has and what the model said about them. */
+  evidence?: Map<string, { count: number; verdict: VerdictView }>
 }
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
@@ -26,9 +28,10 @@ function byline(p: DeckPaper): string {
   return [p.first_author, p.year].filter(Boolean).join(' ')
 }
 
-function announce(p: DeckPaper, i: number, n: number, cited: boolean): string {
+function announce(p: DeckPaper, i: number, n: number, cited: boolean, ev?: { count: number; verdict: VerdictView }): string {
   const parts = [byline(p) || p.title]
   if (cited) parts.push('cited')
+  if (ev) parts.push(`evidence ${ev.count}`, ev.verdict.text)
   if (p.notes) parts.push(plural(p.notes, 'note'))
   if (p.highlights) parts.push(plural(p.highlights, 'highlight'))
   if (p.ai_notes) parts.push(plural(p.ai_notes, 'AI note'))
@@ -38,7 +41,7 @@ function announce(p: DeckPaper, i: number, n: number, cited: boolean): string {
 
 const BADGE = 'rounded px-1.5 py-px font-sans text-[9px]'
 
-function Card({ paper, offset, cited, still, onClick }: { paper: DeckPaper; offset: number; cited: boolean; still: boolean; onClick: () => void }) {
+function Card({ paper, offset, cited, still, onClick, ev }: { paper: DeckPaper; offset: number; cited: boolean; still: boolean; onClick: () => void; ev?: { count: number; verdict: VerdictView } }) {
   const { transform, zIndex, opacity } = cardTransform(offset)
   return (
     <div
@@ -55,7 +58,9 @@ function Card({ paper, offset, cited, still, onClick }: { paper: DeckPaper; offs
       {[78, 92, 66, 85, 70, 95, 74, 88, 62].map((w, i) => (
         <div key={i} className="my-1 h-1 rounded-sm bg-neutral-200" style={{ width: `${w}%` }} />
       ))}
+      {ev?.verdict.label && <div className="absolute inset-x-3 bottom-7 truncate font-sans text-[10px] font-semibold text-blue-800">{ev.verdict.label}</div>}
       <div className="absolute inset-x-3 bottom-2.5 flex gap-1">
+        {ev && <span className={`${BADGE} bg-blue-100 text-blue-900`}>E {ev.count}</span>}
         {paper.notes > 0 && <span className={`${BADGE} bg-yellow-100 text-yellow-900`}>{paper.notes} N</span>}
         {paper.highlights > 0 && <span className={`${BADGE} bg-yellow-100 text-yellow-900`}>{paper.highlights} H</span>}
         {paper.ai_notes > 0 && <span className={`${BADGE} bg-purple-100 text-purple-900`}>{paper.ai_notes} A</span>}
@@ -66,7 +71,7 @@ function Card({ paper, offset, cited, still, onClick }: { paper: DeckPaper; offs
 }
 
 /** A controlled 3D deck of papers. It knows nothing about manuscripts: the parent filters, orders and owns `current`. */
-export function PaperDeck({ papers, current, onCurrent, onOpen, filter, onFilter, label, cited }: PaperDeckProps) {
+export function PaperDeck({ papers, current, onCurrent, onOpen, filter, onFilter, label, cited, evidence }: PaperDeckProps) {
   const still = useReducedMotion()
   const hintId = useId()
   const stage = useRef<HTMLDivElement>(null)
@@ -156,6 +161,7 @@ export function PaperDeck({ papers, current, onCurrent, onOpen, filter, onFilter
               paper={papers[i]}
               offset={i - current}
               cited={!!cited?.has(papers[i].key)}
+              ev={evidence?.get(papers[i].paper_id)}
               still={still}
               onClick={() => (i === current ? onOpen(i) : go(i))}
             />
@@ -172,7 +178,7 @@ export function PaperDeck({ papers, current, onCurrent, onOpen, filter, onFilter
         </div>
       </div>
       <p id={hintId} className="sr-only">Left and right arrows flip through the papers. Enter opens one.</p>
-      <p role="status" aria-live="polite" className="sr-only">{announce(papers[current], current, papers.length, !!cited?.has(papers[current].key))}</p>
+      <p role="status" aria-live="polite" className="sr-only">{announce(papers[current], current, papers.length, !!cited?.has(papers[current].key), evidence?.get(papers[current].paper_id))}</p>
     </div>
   )
 }
