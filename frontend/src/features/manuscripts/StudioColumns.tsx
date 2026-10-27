@@ -1,5 +1,5 @@
 import { ChevronsLeft, ChevronsRight } from 'lucide-react'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { loadPanelWidth, panelTrack, savePanelWidth, clampPanelWidth, type PanelLimits } from '@/components/panelWidth'
 import { PanelResizeHandle } from '@/components/PanelResizeHandle'
 import { browserStorage } from '@/features/notes/highlightColors'
@@ -27,14 +27,24 @@ function useNarrow() {
   return narrow
 }
 
-/** Both panels stay mounted (a deck or a PDF keeps its state); only the active one shows. */
+/** Both panels stay mounted (a deck or a PDF keeps its state); only the active one shows. ARIA tabs: ← → move (and
+ * select), only the selected tab is in the tab order. */
 function SharedTabs({ tabs, active, onActive }: { tabs: { id: string; label: string; body: ReactNode }[]; active: string; onActive: (id: string) => void }) {
+  const onKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0
+    if (!step) return
+    e.preventDefault()
+    const at = tabs.findIndex((t) => t.id === active)
+    const next = tabs[(at + step + tabs.length) % tabs.length].id
+    onActive(next)
+    document.getElementById(`studio-tab-${next}`)?.focus()
+  }
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div role="tablist" className="flex shrink-0 gap-1 border-b border-glass-border px-2">
+      <div role="tablist" onKeyDown={onKeyDown} className="flex shrink-0 gap-1 border-b border-glass-border px-2">
         {tabs.map((t) => (
           <button key={t.id} type="button" role="tab" id={`studio-tab-${t.id}`} aria-selected={t.id === active} aria-controls={`studio-panel-${t.id}`}
-            onClick={() => onActive(t.id)}
+            tabIndex={t.id === active ? 0 : -1} onClick={() => onActive(t.id)}
             className={`-mb-px border-b-2 px-2 py-1 text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${t.id === active ? 'border-primary font-medium' : 'border-transparent text-muted-foreground'}`}>
             {t.label}
           </button>
