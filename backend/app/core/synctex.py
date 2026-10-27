@@ -5,6 +5,7 @@ import re
 
 SP_PER_POINT = 65781.76
 _RECORD = re.compile(r"^([hvxkg$\[(])(\d+),(\d+)(?:,-?\d+)?:(-?\d+),(-?\d+)")
+_BOXES = frozenset("hv[(")
 _INPUT = re.compile(r"^Input:(\d+):(.*)$")
 
 
@@ -19,7 +20,7 @@ def _relative(path: str, root: str) -> str | None:
 
 
 def index(data: bytes, root: str) -> dict:
-    """{"inputs": [rel paths], "records": [[page, input_i, line, x, y], ...]}; x/y in points, from the top-left."""
+    """{"inputs": [rel paths], "records": [[page, input_i, line, x, y, kind], ...]}; points from the top-left."""
     unit, x_off, y_off, page = 1.0, 0.0, 0.0, 0
     tags: dict[str, int] = {}  # SyncTeX tag -> position in `inputs`
     inputs: list[str] = []
@@ -45,7 +46,7 @@ def index(data: bytes, root: str) -> dict:
             if i is not None and line > 0:
                 x = (int(m.group(4)) + x_off) * unit / SP_PER_POINT
                 y = (int(m.group(5)) + y_off) * unit / SP_PER_POINT
-                records.append([page, i, line, round(x, 2), round(y, 2)])
+                records.append([page, i, line, round(x, 2), round(y, 2), m.group(1)])
     return {"inputs": inputs, "records": records}
 
 
@@ -61,12 +62,16 @@ def forward(idx: dict, file: str, line: int) -> dict | None:
         target = max(r[2] for r in mine)
     else:
         return None
-    page, _, _, x, y = min((r for r in mine if r[2] == target), key=lambda r: (r[0], r[4]))
-    return {"page": page, "x": x, "y": y}
+    best = min((r for r in mine if r[2] == target), key=lambda r: (r[0], r[4]))
+    return {"page": best[0], "x": best[3], "y": best[4]}
 
 
 def inverse(idx: dict, page: int, x: float, y: float) -> dict | None:
     on_page = [r for r in idx["records"] if r[0] == page]
+    # Box records sit at the box origin (the left margin) and would beat the text under a click near the edge;
+    # a record without a kind (an older index) counts as a point.
+    points = [r for r in on_page if len(r) < 6 or r[5] not in _BOXES]
+    on_page = points or on_page
     if not on_page:
         return None
     best = min(on_page, key=lambda r: (round(abs(r[4] - y) / 2), abs(r[3] - x)))

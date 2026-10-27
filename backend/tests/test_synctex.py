@@ -52,3 +52,22 @@ def test_inverse_round_trips(idx, line):
 
 def test_inverse_on_an_empty_page_is_none(idx):
     assert synctex.inverse(idx, 9, 10, 10) is None
+
+
+SHORT = Path(__file__).parent / "fixtures" / "synctex_short" / "main.synctex.gz"
+SHORT_ROOT = "/private/var/folders/38/hhp3h54n0cl3jkzlhbb7bn080000gp/T/tmp.hJsx4iunUW"
+
+
+def test_a_click_at_the_left_edge_of_a_short_section_stays_in_that_section():
+    idx = synctex.index(SHORT.read_bytes(), SHORT_ROOT)
+    p = synctex.forward(idx, "sections/a.tex", 1)
+    for dx in (0, 20):
+        hit = synctex.inverse(idx, p["page"], p["x"] - dx, p["y"])
+        assert hit == {"file": "sections/a.tex", "line": 1}
+
+
+def test_an_index_without_kinds_counts_as_points_and_a_page_of_boxes_still_answers():
+    old = {"inputs": ["a.tex"], "records": [[1, 0, 3, 72.0, 100.0]]}
+    assert synctex.inverse(old, 1, 70, 100) == {"file": "a.tex", "line": 3}
+    boxes = {"inputs": ["a.tex"], "records": [[1, 0, 4, 72.0, 100.0, "("]]}
+    assert synctex.inverse(boxes, 1, 70, 100) == {"file": "a.tex", "line": 4}
