@@ -272,6 +272,16 @@ async def test_an_ok_compile_writes_the_index_and_a_failed_one_keeps_it(session,
     assert path.read_bytes() == first
 
 
+async def test_an_ok_compile_without_synctex_drops_the_old_index(session, monkeypatch):
+    m = await new(session)
+    fake_compile_with_sync(monkeypatch, OK)
+    await worker.compile_manuscript({}, str(m.id))
+    assert manuscripts.sync_path(m.id).exists()
+    fake_compile(monkeypatch, OK)  # a good PDF but no SyncTeX: the old index would point at the old layout
+    await worker.compile_manuscript({}, str(m.id))
+    assert not manuscripts.sync_path(m.id).exists()
+
+
 async def test_deleting_a_manuscript_removes_its_index(session):
     m = await new(session)
     path = manuscripts.sync_path(m.id)
@@ -297,3 +307,35 @@ async def test_a_real_compile_indexes_main_tex(session, monkeypatch):
     idx = json.loads(manuscripts.sync_path(m.id).read_text())
     assert "main.tex" in idx["inputs"] and idx["records"]
     assert all(not i.startswith("/") for i in idx["inputs"])
+
+
+@pytest.mark.tectonic
+@pytest.mark.skipif(not os.environ.get("TECTONIC_BIN"), reason="TECTONIC_BIN unset (scripts/tectonic-dev.sh)")
+async def test_splitting_a_real_paper_into_files_keeps_the_pdf_text(session, monkeypatch):
+    from pathlib import Path
+
+    import pymupdf
+
+    from app.config import settings
+    from app.core import manuscript_section_ops as ops
+    monkeypatch.setattr(settings, "tectonic_bin", os.environ["TECTONIC_BIN"])
+    monkeypatch.setattr(settings, "tectonic_only_cached", True)
+    if os.environ.get("TECTONIC_CACHE_DIR"):
+        monkeypatch.setattr(settings, "tectonic_cache_dir", Path(os.environ["TECTONIC_CACHE_DIR"]))
+    main = ("\\documentclass{article}\n\\begin{document}\nWords before any section.\n"
+            "\\section{Introduction}\nCats sleep most of the day.\n\\section{Method}\nWe watched twelve cats.\n"
+            "\\section{Results}\nNine of them slept at noon.\n\\end{document}\n")
+    m = await manuscripts.create_from_files(session, title="P", workspace_id=None, files={"main.tex": main},
+                                            main_file="main.tex")
+
+    async def pdf_text() -> str:
+        manuscripts.pdf_path(m.id).unlink(missing_ok=True)  # only this compile's PDF can be read below
+        await worker.compile_manuscript({}, str(m.id))
+        doc = pymupdf.open(stream=manuscripts.pdf_path(m.id).read_bytes(), filetype="pdf")
+        return " ".join("".join(p.get_text() for p in doc).split())
+
+    before = await pdf_text()
+    assert "Nine of them slept at noon." in before and "3 Results" in before
+    assert await ops.split_main(session, m.id) == ["sections/introduction.tex", "sections/method.tex",
+                                                   "sections/results.tex"]
+    assert await pdf_text() == before

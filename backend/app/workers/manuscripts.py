@@ -111,6 +111,8 @@ async def _store(mid: uuid.UUID, result, sync: dict | None = None) -> bool:
             _write_atomic(manuscripts.pdf_path(mid), result.pdf)
             if sync is not None:
                 _write_atomic(manuscripts.sync_path(mid), json.dumps(sync).encode())
+            else:  # an index of the old PDF would point the edit box at the wrong spot
+                manuscripts.sync_path(mid).unlink(missing_ok=True)
             await manuscript_history.take(session, mid, "compile")
         await session.execute(update(Manuscript).where(Manuscript.id == mid).values(
             compile_status="ok" if result.ok else "failed", compile_log=result.log,
