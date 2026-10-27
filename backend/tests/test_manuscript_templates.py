@@ -1,4 +1,5 @@
 import os
+import re
 from pathlib import Path
 
 import pymupdf
@@ -10,6 +11,11 @@ from app.core import manuscript_templates as mt
 from app.core.errors import InvalidInput
 
 NAMES = sorted(mt.TEMPLATES)
+SLUGS = ["introduction", "related-work", "method", "results", "discussion", "conclusion"]
+
+
+def joined(name):
+    return "\n".join(mt.files(name).values())
 BIB = (
     "@article{smith2021deep, author={Smith, Jane}, title={Deep Learning for Papers},"
     " journal={Journal of Examples}, year={2021}}\n"
@@ -29,23 +35,34 @@ def test_labels():
 
 
 @pytest.mark.parametrize("name", NAMES)
+def test_every_template_is_split_into_sections(name):
+    files = mt.files(name)
+    assert sorted(files) == ["main.tex"] + sorted(f"sections/{s}.tex" for s in SLUGS)
+    inputs = re.findall(r"^\\input\{(sections/[a-z-]+)\}$", files["main.tex"], re.M)
+    assert inputs == [f"sections/{s}" for s in SLUGS]
+    for s in SLUGS:
+        assert files[f"sections/{s}.tex"].lstrip().startswith("\\section{")
+    assert "\\section{" not in files["main.tex"]
+
+
+@pytest.mark.parametrize("name", NAMES)
 def test_every_template_is_engine_neutral(name):
-    tex = mt.files(name)["main.tex"]
+    tex = joined(name)
     assert not [w for w in ("fontspec", "\\setmainfont", "luacode") if w in tex]
     assert tex.startswith("% PaperLab: ")
 
 
 @pytest.mark.parametrize("name", NAMES)
 def test_every_template_cites_paperlab_bib(name):
-    tex = mt.files(name)["main.tex"]
+    tex = joined(name)
     assert "\\bibliography{paperlab}" in tex and "\\bibliographystyle{" in tex
     assert "\\cite" in tex and "\\fbox" in tex
 
 
 @pytest.mark.parametrize("name", NAMES)
 def test_every_template_has_imrad_sections(name):
-    tex = mt.files(name)["main.tex"]
-    for sec in ("Introduction", "Methods", "Results", "Discussion"):
+    tex = joined(name)
+    for sec in ("Introduction", "Related work", "Method", "Results", "Discussion", "Conclusion"):
         assert "\\section{%s}" % sec in tex
 
 
@@ -64,6 +81,7 @@ async def test_every_template_compiles(name, tmp_path, monkeypatch):
     if os.environ.get("TECTONIC_CACHE_DIR"):
         monkeypatch.setattr(settings, "tectonic_cache_dir", Path(os.environ["TECTONIC_CACHE_DIR"]))
     for fname, body in {**mt.files(name), "paperlab.bib": BIB}.items():
+        (tmp_path / fname).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / fname).write_text(body)
     res = await lc.compile_dir(tmp_path, "main.tex")
     assert res.ok, res.log[-2000:]

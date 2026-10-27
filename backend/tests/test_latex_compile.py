@@ -201,6 +201,7 @@ async def test_compiles_a_minimal_article(real, tmp_path):
     (tmp_path / "main.tex").write_text(ARTICLE % "Hello PaperLab")
     res = await lc.compile_dir(tmp_path, "main.tex")
     assert res.ok and res.pdf.startswith(b"%PDF") and res.errors == []
+    assert res.synctex is not None and res.synctex[:2] == b"\x1f\x8b"
 
 
 @tectonic
@@ -289,3 +290,8 @@ async def test_relative_traversal_is_recorded(real, tmp_path):
     (tmp_path / "main.tex").write_text(ARTICLE % "\\input{../../../../../../../../etc/hosts}")
     res = await lc.compile_dir(tmp_path, "main.tex")
     print("TRAVERSAL ok=%s friendly=%s errors=%s\n%s" % (res.ok, res.friendly, res.errors, res.log))
+
+
+def test_parse_errors_adds_tex_to_an_input_file_named_without_it():
+    errs = lc.parse_errors("error: sections/x:2: Undefined control sequence")
+    assert [(e["file"], e["line"]) for e in errs] == [("sections/x.tex", 2)]

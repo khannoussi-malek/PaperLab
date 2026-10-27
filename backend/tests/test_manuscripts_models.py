@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from test_paper_merges import EVIDENCE, PROOF, kept, merged
 
 from app.core import merges
-from app.models import Manuscript, ManuscriptCiteKey, ManuscriptFile, Workspace
+from app.models import Manuscript, ManuscriptCiteKey, ManuscriptFile, ManuscriptSnapshot, Workspace
 
 pytestmark = pytest.mark.anyio
 
@@ -59,3 +59,9 @@ async def test_merge_moves_a_pinned_key_to_the_kept_paper(session):
         select(ManuscriptCiteKey).where(ManuscriptCiteKey.key == "sleep2021").execution_options(populate_existing=True)
     )
     assert key.paper_id == k.id
+
+
+async def test_a_snapshot_may_have_the_before_sections_reason(session):
+    m = await manuscript(session)
+    session.add(ManuscriptSnapshot(manuscript_id=m.id, reason="before_sections", files={}))
+    await session.flush()

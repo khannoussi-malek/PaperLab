@@ -35,7 +35,7 @@ async def test_create_get_patch_delete(client, session):
     m = await make(client, workspace_id=str(ws.id))
     assert m["workspace_id"] == str(ws.id)
     got = (await client.get(f"/api/manuscripts/{m['id']}")).json()
-    assert [f["path"] for f in got["files"]] == ["main.tex"] and got["compile_status"] == "never"
+    assert "main.tex" in [f["path"] for f in got["files"]] and got["compile_status"] == "never"
     patched = await client.patch(f"/api/manuscripts/{m['id']}", json={"title": "New", "workspace_id": None})
     assert patched.json()["title"] == "New" and patched.json()["workspace_id"] is None
     assert (await client.patch(f"/api/manuscripts/{m['id']}", json={"main_file": "x.md"})).status_code == 422
@@ -121,7 +121,7 @@ async def test_upload_over_the_cap_is_refused_whatever_content_length_says(clien
     lying = await client.send(request)
     assert lying.status_code == 409 and lying.json()["detail"] == "file_too_large"
     files = (await client.get(f"/api/manuscripts/{m['id']}")).json()["files"]
-    assert [f["path"] for f in files] == ["main.tex"]
+    assert "a.png" not in [f["path"] for f in files]
 
 
 async def test_compile_twice_is_queued_then_again(client, arq):
@@ -263,3 +263,67 @@ async def test_export_is_named_after_the_title(client, title, ascii_name, star):
     disposition = out.headers["content-disposition"]
     assert disposition == f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{star}"
     assert "\n" not in disposition and "\r" not in disposition
+
+
+async def test_section_routes(client):
+    m = await make(client)
+    base = f"/api/manuscripts/{m['id']}"
+    added = await client.post(f"{base}/sections", json={"title": "Threats", "after": "sections/method.tex"})
+    assert added.status_code == 201 and added.json() == {"path": "sections/threats.tex"}
+    renamed = await client.post(f"{base}/sections/sections/threats.tex/retitle", json={"title": "Limits"})
+    assert renamed.status_code == 200 and renamed.json() == {"path": "sections/limits.tex"}
+    assert (await client.post(f"{base}/sections/sections/limits.tex/move", json={"to": 0})).status_code == 204
+    main = (await client.get(f"{base}/files/main.tex")).json()["text"]
+    assert main.index("sections/limits") < main.index("sections/introduction")
+    assert (await client.delete(f"{base}/sections/sections/limits.tex")).status_code == 204
+    assert "sections/limits" not in (await client.get(f"{base}/files/main.tex")).json()["text"]
+    assert (await client.post(f"{base}/sections/split")).json()["detail"] == "no_sections"  # already split
+
+
+async def test_split_route_cuts_a_one_file_manuscript(client):
+    m = await make(client)
+    base = f"/api/manuscripts/{m['id']}"
+    text = "\\documentclass{article}\n\\begin{document}\n\\section{One}\na\n\\section{Two}\nb\n\\end{document}\n"
+    current = (await client.get(f"{base}/files/main.tex")).json()["updated_at"]
+    put = await client.put(f"{base}/files/main.tex", json={"text": text, "base_updated_at": current})
+    assert put.status_code == 200, put.text
+    split = await client.post(f"{base}/sections/split")
+    assert split.status_code == 200 and split.json() == {"paths": ["sections/one.tex", "sections/two.tex"]}
+
+
+async def test_section_route_errors(client, session):
+    m = await make(client)
+    base = f"/api/manuscripts/{m['id']}"
+    bad = await client.post(f"{base}/sections/main.tex/retitle", json={"title": "X"})
+    assert bad.status_code == 422 and bad.json()["detail"] == "not_a_section"
+    assert (await client.post(f"{base}/sections", json={"title": "  "})).json()["detail"] == "bad_title"
+    ghost = f"/api/manuscripts/{uuid.uuid4()}"
+    assert (await client.post(f"{ghost}/sections", json={"title": "X"})).status_code == 404
+    assert (await client.delete(f"{ghost}/sections/sections/x.tex")).status_code == 404
+    assert (await client.post(f"{ghost}/sections/split")).status_code == 404
+
+
+async def test_failing_section_op_leaves_no_snapshot(client):
+    m = await make(client)
+    base = f"/api/manuscripts/{m['id']}"
+    assert (await client.delete(f"{base}/sections/main.tex")).json()["detail"] == "not_a_section"
+    reasons = [s["reason"] for s in (await client.get(f"{base}/snapshots")).json()]
+    assert "before_sections" not in reasons
+
+
+async def test_synctex_lookups_404_without_an_index_and_answer_with_one(client):
+    m = await make(client)
+    for url in (f"/api/manuscripts/{m['id']}/synctex/forward?file=main.tex&line=3",
+                f"/api/manuscripts/{m['id']}/synctex/inverse?page=1&x=10&y=10"):
+        r = await client.get(url)
+        assert r.status_code == 404 and r.json()["detail"] == "no_sync"
+    target = manuscripts.sync_path(uuid.UUID(m["id"]))
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text('{"inputs": ["main.tex"], "records": [[2, 0, 5, 72.0, 100.5]]}')
+    fwd = await client.get(f"/api/manuscripts/{m['id']}/synctex/forward?file=main.tex&line=3")
+    assert fwd.json() == {"page": 2, "x": 72.0, "y": 100.5}
+    inv = await client.get(f"/api/manuscripts/{m['id']}/synctex/inverse?page=2&x=70&y=100")
+    assert inv.json() == {"file": "main.tex", "line": 5}
+    none = await client.get(f"/api/manuscripts/{m['id']}/synctex/forward?file=other.tex&line=1")
+    assert none.status_code == 404 and none.json()["detail"] == "no_sync"
+    assert (await client.get(f"/api/manuscripts/{uuid.uuid4()}/synctex/forward?file=a&line=1")).status_code == 404

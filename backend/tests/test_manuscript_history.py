@@ -9,6 +9,9 @@ from app.core.errors import Conflict, NotFound
 from app.models import ManuscriptSnapshot
 
 pytestmark = pytest.mark.anyio
+SECTION_FILES = [
+    f"sections/{s}.tex" for s in ("introduction", "related-work", "method", "results", "discussion", "conclusion")
+]
 
 
 async def new(session):
@@ -46,7 +49,7 @@ async def test_restore_snapshots_first_and_matches_text_files_exactly(session):
     files = {f.path: (await manuscripts.read(session, m.id, f.path)).text for f in listed}
     assert files == dict(snap.files)
     before = [s for s in await history.list_(session, m.id) if s.reason == "before_restore"]
-    assert len(before) == 1 and set(before[0].files) == {"main.tex", "extra.tex"}
+    assert len(before) == 1 and set(before[0].files) == {"main.tex", "extra.tex", *SECTION_FILES}
 
 
 async def test_restore_leaves_binaries(session):
@@ -77,7 +80,7 @@ async def test_unknown_snapshot_and_another_manuscripts_snapshot(session):
     with pytest.raises(NotFound, match="unknown_snapshot"):
         await history.restore(session, mine.id, foreign.id)
     assert len(await history.list_(session, mine.id)) == before
-    assert {f.path for f in await manuscripts.files(session, mine.id)} == {"m.tex", "main.tex"}
+    assert {f.path for f in await manuscripts.files(session, mine.id)} == {"m.tex", "main.tex", *SECTION_FILES}
 
 
 async def test_restore_skips_files_whose_text_is_unchanged(session):

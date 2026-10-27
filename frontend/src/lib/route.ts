@@ -22,7 +22,7 @@ export type Route =
   // `runId` is the active search run, round-tripped through the URL (I1) so a page reload doesn't lose track of
   // it — null when there's none, same convention as `target` above.
   | { name: 'workspace'; workspaceId: string; tab: WorkspaceTab; runId: string | null; tags: string[]; match: TagMatch }
-  | { name: 'manuscript'; manuscriptId: string; file: string | null }
+  | { name: 'manuscript'; manuscriptId: string; file: string | null; line: number | null }
   | { name: 'charts' }
   | { name: 'chart'; chartId: string }
   | { name: 'chart-builder'; chartId: string | null; datasetId: string | null }
@@ -104,7 +104,9 @@ export function parseRoute(hash: string): Route {
   const manuscript = MANUSCRIPT_HASH.exec(hash)
   if (manuscript) {
     if (!UUID.test(manuscript[1])) return { name: 'library' }
-    return { name: 'manuscript', manuscriptId: manuscript[1], file: new URLSearchParams(manuscript[2]).get('file') || null }
+    const query = new URLSearchParams(manuscript[2])
+    const line = Number(query.get('line'))
+    return { name: 'manuscript', manuscriptId: manuscript[1], file: query.get('file') || null, line: Number.isInteger(line) && line > 0 ? line : null }
   }
   const charts = CHARTS_HASH.exec(hash)
   if (charts) return chartsRoute(charts)
@@ -201,8 +203,8 @@ export const referencesHref = (workspaceId?: string | null) =>
   workspaceId ? `#/references?workspace=${workspaceId}` : '#/references'
 export const setupHref = SETUP_HASH
 /** A manuscript's editor, optionally on one of its files. */
-export const manuscriptHref = (manuscriptId: string, file?: string | null) =>
-  file ? `#/manuscripts/${manuscriptId}?${new URLSearchParams({ file })}` : `#/manuscripts/${manuscriptId}`
+export const manuscriptHref = (manuscriptId: string, file?: string | null, line?: number | null) =>
+  file ? `#/manuscripts/${manuscriptId}?${new URLSearchParams(line ? { file, line: String(line) } : { file })}` : `#/manuscripts/${manuscriptId}`
 export const chartsHref = '#/charts'
 export const chartHref = (chartId: string) => `#/charts/${chartId}`
 export const editChartHref = (chartId: string) => `#/charts/${chartId}/edit`

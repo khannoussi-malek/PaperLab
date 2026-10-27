@@ -1,14 +1,23 @@
+import json
 import mimetypes
 import uuid
 from datetime import datetime, timezone
 from pathlib import PurePosixPath
 from urllib.parse import quote
 
-from fastapi import APIRouter, Form, Response, UploadFile
+from fastapi import APIRouter, Form, Query, Response, UploadFile
 from fastapi.responses import FileResponse
 
 from app.api.deps import SessionDep
-from app.core import manuscript_bib, manuscript_history, manuscript_templates, manuscript_zip, manuscripts
+from app.core import (
+    manuscript_bib,
+    manuscript_history,
+    manuscript_section_ops,
+    manuscript_templates,
+    manuscript_zip,
+    manuscripts,
+    synctex,
+)
 from app.core import manuscript_paths as paths
 from app.core.errors import Conflict, InvalidInput, NotFound
 from app.schemas.manuscripts import (
@@ -22,7 +31,14 @@ from app.schemas.manuscripts import (
     ManuscriptOut,
     ManuscriptPatch,
     RenameIn,
+    SectionAddIn,
+    SectionMoveIn,
+    SectionPathOut,
+    SectionPathsOut,
+    SectionTitleIn,
     SnapshotOut,
+    SyncPointOut,
+    SyncSourceOut,
     TemplateOut,
 )
 
@@ -168,6 +184,45 @@ async def delete_file(manuscript_id: uuid.UUID, path: str, session: SessionDep) 
     return Response(status_code=204)
 
 
+# Section routes commit only after the operation returns; get_session closes without a commit, so a failing op
+# rolls back the snapshot it took first.
+@router.post("/api/manuscripts/{manuscript_id}/sections", status_code=201)
+async def add_section(manuscript_id: uuid.UUID, payload: SectionAddIn, session: SessionDep) -> SectionPathOut:
+    path = await manuscript_section_ops.add(session, manuscript_id, title=payload.title, after=payload.after)
+    await session.commit()
+    return SectionPathOut(path=path)
+
+
+@router.post("/api/manuscripts/{manuscript_id}/sections/split")
+async def split_sections(manuscript_id: uuid.UUID, session: SessionDep) -> SectionPathsOut:
+    paths = await manuscript_section_ops.split_main(session, manuscript_id)
+    await session.commit()
+    return SectionPathsOut(paths=paths)
+
+
+@router.post("/api/manuscripts/{manuscript_id}/sections/{path:path}/retitle")
+async def retitle_section(
+    manuscript_id: uuid.UUID, path: str, payload: SectionTitleIn, session: SessionDep
+) -> SectionPathOut:
+    new_path = await manuscript_section_ops.retitle(session, manuscript_id, path, title=payload.title)
+    await session.commit()
+    return SectionPathOut(path=new_path)
+
+
+@router.post("/api/manuscripts/{manuscript_id}/sections/{path:path}/move", status_code=204)
+async def move_section(manuscript_id: uuid.UUID, path: str, payload: SectionMoveIn, session: SessionDep) -> Response:
+    await manuscript_section_ops.move(session, manuscript_id, path, to=payload.to)
+    await session.commit()
+    return Response(status_code=204)
+
+
+@router.delete("/api/manuscripts/{manuscript_id}/sections/{path:path}", status_code=204)
+async def delete_section(manuscript_id: uuid.UUID, path: str, session: SessionDep) -> Response:
+    await manuscript_section_ops.delete(session, manuscript_id, path)
+    await session.commit()
+    return Response(status_code=204)
+
+
 @router.post("/api/manuscripts/{manuscript_id}/compile", status_code=202)
 async def compile_manuscript(manuscript_id: uuid.UUID, session: SessionDep) -> CompileOut:
     return CompileOut(state=await manuscripts.request_compile(session, manuscript_id, now=datetime.now(timezone.utc)))
@@ -180,6 +235,34 @@ async def get_pdf(manuscript_id: uuid.UUID, session: SessionDep) -> FileResponse
     if not target.is_file():
         raise NotFound("no_pdf")
     return FileResponse(target, media_type="application/pdf")
+
+
+async def _sync_index(session, manuscript_id: uuid.UUID) -> dict:
+    await manuscripts.get(session, manuscript_id)
+    try:
+        return json.loads(manuscripts.sync_path(manuscript_id).read_text())
+    except (OSError, ValueError):
+        raise NotFound("no_sync") from None
+
+
+@router.get("/api/manuscripts/{manuscript_id}/synctex/forward")
+async def sync_forward(
+    manuscript_id: uuid.UUID, session: SessionDep, file: str, line: int = Query(ge=1)
+) -> SyncPointOut:
+    found = synctex.forward(await _sync_index(session, manuscript_id), file, line)
+    if found is None:
+        raise NotFound("no_sync")
+    return SyncPointOut(**found)
+
+
+@router.get("/api/manuscripts/{manuscript_id}/synctex/inverse")
+async def sync_inverse(
+    manuscript_id: uuid.UUID, session: SessionDep, page: int = Query(ge=1), x: float = 0, y: float = 0
+) -> SyncSourceOut:
+    found = synctex.inverse(await _sync_index(session, manuscript_id), page, x, y)
+    if found is None:
+        raise NotFound("no_sync")
+    return SyncSourceOut(**found)
 
 
 @router.get("/api/manuscripts/{manuscript_id}/snapshots")

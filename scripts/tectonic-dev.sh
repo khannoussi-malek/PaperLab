@@ -34,10 +34,12 @@ Warm-up \citep{none}.
 \end{document}
 TEX
 (cd "$WARM" && "$BIN" -X compile natbib.tex >/dev/null)
-for t in "$ROOT"/backend/app/manuscript_templates/*.tex; do
-  [ -e "$t" ] || continue
-  cp -R "$(dirname "$t")/." "$WARM/t/" 2>/dev/null || { mkdir -p "$WARM/t"; cp -R "$(dirname "$t")/." "$WARM/t/"; }
-  (cd "$WARM/t" && "$BIN" -X compile "$(basename "$t")" >/dev/null) || echo "warm-up failed for $t" >&2
+T="$ROOT/backend/app/manuscript_templates"
+for t in "$T"/*/; do
+  rm -rf "$WARM/t"; mkdir -p "$WARM/t"; cp -R "$t". "$WARM/t"; cp "$T/warm.bib" "$WARM/t/paperlab.bib"
+  (cd "$WARM/t" && "$BIN" -X compile main.tex >/dev/null) || echo "warm-up failed for $t" >&2
 done
+rm -rf "$WARM/t"; mkdir -p "$WARM/t"; cp "$T/warm-packages.tex" "$WARM/t/main.tex"
+(cd "$WARM/t" && "$BIN" -X compile main.tex >/dev/null) || echo "warm-up failed for warm-packages.tex" >&2
 echo "export TECTONIC_BIN=$BIN"
 echo "export TECTONIC_CACHE_DIR=$TOOLS/tectonic-cache"

@@ -15,4 +15,5 @@ TEMPLATES = {
 def files(template: str) -> dict[str, str]:
     if template not in TEMPLATES:
         raise InvalidInput("unknown_template")
-    return {"main.tex": (DIR / f"{template}.tex").read_text()}
+    root = DIR / template
+    return {str(f.relative_to(root)): f.read_text() for f in sorted(root.rglob("*.tex"))}

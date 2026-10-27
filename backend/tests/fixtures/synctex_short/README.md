@@ -1,0 +1,1 @@
+Shaped like the sectioned template: `main.tex` inputs a one-sentence `sections/a.tex`, then `sections/b.tex` with a `\section`. Made with Tectonic 0.17.0 (`scripts/tectonic-dev.sh`): `tectonic -X compile main.tex --untrusted --keep-logs --synctex` in a temp dir; `main.synctex.gz` is the unedited output. Its input paths start with that temp dir (`ROOT` in `tests/test_synctex.py`).

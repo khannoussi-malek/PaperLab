@@ -6,8 +6,8 @@ WORKDIR /src
 COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --no-dev --no-install-project
 
-# Tectonic, pinned and checked, with its package cache warmed by compiling every .tex in manuscript_templates: the
-# five templates and warm-packages.tex (common packages; not a template). Compiles only ever read this cache
+# Tectonic, pinned and checked, with its package cache warmed by compiling main.tex of every template folder in
+# manuscript_templates, and warm-packages.tex (common packages; not a template). Compiles only ever read this cache
 # (TECTONIC_ONLY_CACHED), so acmart's ~20 s cold start is already paid and nothing is downloaded at compile time.
 FROM python:3.12-slim AS tex
 ARG TARGETARCH
@@ -30,11 +30,11 @@ with tarfile.open("/tmp/tectonic.tgz") as tar:
     tar.extract("tectonic", "/usr/local/bin")
 PY
 COPY app/manuscript_templates /templates
-RUN for t in /templates/*.tex; do \
-      d=$(mktemp -d) && cp "$t" "$d/main.tex" && cp /templates/warm.bib "$d/paperlab.bib" \
+RUN for t in /templates/*/; do \
+      d=$(mktemp -d) && cp -R "$t". "$d" && cp /templates/warm.bib "$d/paperlab.bib" \
       && (cd "$d" && tectonic -X compile main.tex) || exit 1; \
     done \
-    && d=$(mktemp -d) && cd "$d" \
+    && d=$(mktemp -d) && cd "$d" && cp /templates/warm-packages.tex main.tex && tectonic -X compile main.tex \
     && printf '\\documentclass{article}\\usepackage{verbatim}\\begin{document}\n\\begin{verbatim}\nx\n\\end{verbatim}\n\\end{document}\n' > main.tex \
     && tectonic -X compile main.tex && rm -rf /tmp/* \
     && chmod -R u=rwX,go=rX /tectonic-cache

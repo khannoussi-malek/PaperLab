@@ -7,3 +7,11 @@ export const MANUSCRIPT_PDF: PanelLimits = {
   minWidth: 360,
   maxShare: 0.6,
 }
+
+/** The sections column: a quarter of the window at most. */
+export const MANUSCRIPT_SECTIONS: PanelLimits = {
+  storageKey: 'paperlab-manuscript-sections-width',
+  defaultWidth: 240,
+  minWidth: 180,
+  maxShare: 0.25,
+}

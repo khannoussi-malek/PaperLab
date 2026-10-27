@@ -33,3 +33,41 @@ test('follows the app switching to dark', async () => {
   await waitFor(() => expect(isDark()).toBe(true))
   document.documentElement.classList.remove('dark')
 })
+
+const cm = (container: HTMLElement) => EditorView.findFromDOM(container.querySelector<HTMLElement>('.cm-editor')!)!
+const press = (container: HTMLElement, init: KeyboardEventInit) =>
+  container.querySelector('.cm-content')!.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }))
+
+test('reports the cursor line (1-based) when the selection moves, not on every keystroke elsewhere', () => {
+  const onCursor = vi.fn()
+  const { container } = render(<LatexEditor value={'a\nb\nc'} onChange={() => {}} errors={[]} onSave={() => {}} onCursor={onCursor} />)
+  const view = cm(container)
+  view.dispatch({ selection: { anchor: view.state.doc.line(3).from } })
+  expect(onCursor).toHaveBeenLastCalledWith(3)
+  onCursor.mockClear()
+  view.dispatch({ selection: { anchor: view.state.doc.line(3).from + 1 } }) // same line
+  expect(onCursor).not.toHaveBeenCalled()
+})
+
+test('Mod-Alt-Up/Down step sections and Mod-Alt-P shows the line in the PDF', () => {
+  const onSectionStep = vi.fn()
+  const onShowInPdf = vi.fn()
+  const { container } = render(<LatexEditor value={'a\nb'} onChange={() => {}} errors={[]} onSave={() => {}} onSectionStep={onSectionStep} onShowInPdf={onShowInPdf} />)
+  const view = cm(container)
+  view.dispatch({ selection: { anchor: view.state.doc.line(2).from } })
+  press(container, { key: 'ArrowUp', ctrlKey: true, altKey: true })
+  press(container, { key: 'ArrowDown', ctrlKey: true, altKey: true })
+  press(container, { key: 'p', code: 'KeyP', ctrlKey: true, altKey: true })
+  expect(onSectionStep.mock.calls).toEqual([[-1], [1]])
+  expect(onShowInPdf).toHaveBeenCalledWith(2)
+})
+
+test('Alt-ArrowUp still moves the line (CodeMirror\'s own binding)', () => {
+  const onSectionStep = vi.fn()
+  const { container } = render(<LatexEditor value={'a\nb'} onChange={() => {}} errors={[]} onSave={() => {}} onSectionStep={onSectionStep} />)
+  const view = cm(container)
+  view.dispatch({ selection: { anchor: view.state.doc.line(2).from } })
+  press(container, { key: 'ArrowUp', altKey: true })
+  expect(view.state.doc.toString()).toBe('b\na')
+  expect(onSectionStep).not.toHaveBeenCalled()
+})
