@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PaperDeck } from './PaperDeck'
 import type { DeckPaper } from './deckModel'
@@ -58,7 +58,7 @@ describe('PaperDeck', () => {
     expect(screen.getByText('1 N')).toBeTruthy()
     expect(screen.getByText('2 H')).toBeTruthy()
     expect(screen.getByText('3 A')).toBeTruthy()
-    expect(screen.getByRole('status').textContent).toBe('Bare, 1 note, 2 highlights, 3 AI notes, paper 1 of 1')
+    expect(screen.getByRole('status').textContent).toBe('Bare, cited, 1 note, 2 highlights, 3 AI notes, paper 1 of 1')
   })
 
   it('shows the two empty states', () => {
@@ -81,5 +81,50 @@ describe('PaperDeck', () => {
     document.body.innerHTML = ''
     const again = setup(five)
     expect((again.deck.querySelector('[data-deck-card="p1"]') as HTMLElement).style.transition).toBe('none')
+  })
+
+  it('describes how it works', () => {
+    const { deck } = setup(five)
+    const hint = document.getElementById(deck.getAttribute('aria-describedby')!)!
+    expect(hint.textContent).toBe('Left and right arrows flip through the papers. Enter opens one.')
+  })
+
+  it('announces a cited paper', () => {
+    setup(five, 1, { cited: new Set(['k1']) })
+    expect(screen.getByRole('status').textContent).toBe('Lewis 2020, cited, paper 2 of 5')
+  })
+
+  it('leaves keys on the Next button to the button', () => {
+    const { onOpen, onCurrent } = setup(five)
+    const next = screen.getByRole('button', { name: 'Next paper' })
+    fireEvent.keyDown(next, { key: 'Enter' })
+    expect(onOpen).not.toHaveBeenCalled()
+    fireEvent.click(next)
+    expect(onCurrent).toHaveBeenLastCalledWith(2)
+  })
+
+  it('cycles through matching letters', () => {
+    const ts = [0, 1, 2].map((i) => mk(i, { title: `T${i}` }))
+    const { onCurrent, deck } = setup(ts, 0)
+    fireEvent.keyDown(deck, { key: 't' }); expect(onCurrent).toHaveBeenLastCalledWith(1)
+    fireEvent.keyDown(deck, { key: 't' }); expect(onCurrent).toHaveBeenCalledTimes(2)
+  })
+
+  it('wraps the letter jump from the last match to the first', () => {
+    const ts = [0, 1, 2].map((i) => mk(i, { title: `T${i}` }))
+    const { onCurrent, deck } = setup(ts, 2)
+    fireEvent.keyDown(deck, { key: 't' }); expect(onCurrent).toHaveBeenLastCalledWith(0)
+  })
+
+  it('follows the reduced-motion setting while open', () => {
+    let fire = () => {}
+    const mq = { matches: false, addEventListener: (_: string, f: () => void) => { fire = f }, removeEventListener() {} }
+    vi.stubGlobal('matchMedia', () => mq)
+    const { deck } = setup(five)
+    const card = () => deck.querySelector('[data-deck-card="p1"]') as HTMLElement
+    expect(card().style.transition).toContain('500ms')
+    mq.matches = true
+    act(() => fire())
+    expect(card().style.transition).toBe('none')
   })
 })
