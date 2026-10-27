@@ -31,7 +31,7 @@ function byline(p: DeckPaper): string {
 function announce(p: DeckPaper, i: number, n: number, cited: boolean, ev?: { count: number; verdict: VerdictView }): string {
   const parts = [byline(p) || p.title]
   if (cited) parts.push('cited')
-  if (ev) parts.push(`evidence ${ev.count}`, ev.verdict.text)
+  if (ev) parts.push(`evidence ${ev.count}`, ev.verdict.ai ? `AI: ${ev.verdict.text}` : ev.verdict.text)
   if (p.notes) parts.push(plural(p.notes, 'note'))
   if (p.highlights) parts.push(plural(p.highlights, 'highlight'))
   if (p.ai_notes) parts.push(plural(p.ai_notes, 'AI note'))
@@ -58,7 +58,12 @@ function Card({ paper, offset, cited, still, onClick, ev }: { paper: DeckPaper; 
       {[78, 92, 66, 85, 70, 95, 74, 88, 62].map((w, i) => (
         <div key={i} className="my-1 h-1 rounded-sm bg-neutral-200" style={{ width: `${w}%` }} />
       ))}
-      {ev?.verdict.label && <div className="absolute inset-x-3 bottom-7 truncate font-sans text-[10px] font-semibold text-blue-800">{ev.verdict.label}</div>}
+      {ev?.verdict.label && (
+        <div data-deck-verdict className="absolute inset-x-3 bottom-7 truncate font-sans text-[10px] font-semibold text-blue-800">
+          {ev.verdict.ai && <span className={`${BADGE} mr-1 bg-purple-100 text-purple-900`}>AI</span>}
+          {ev.verdict.label}
+        </div>
+      )}
       <div className="absolute inset-x-3 bottom-2.5 flex gap-1">
         {ev && <span className={`${BADGE} bg-blue-100 text-blue-900`}>E {ev.count}</span>}
         {paper.notes > 0 && <span className={`${BADGE} bg-yellow-100 text-yellow-900`}>{paper.notes} N</span>}

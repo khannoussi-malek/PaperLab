@@ -89,6 +89,21 @@ describe('PaperDeck', () => {
     expect(hint.textContent).toBe('Left and right arrows flip through the papers. Enter opens one.')
   })
 
+  it('marks a verdict as AI on the card and when it is read out', () => {
+    const verdict = { label: 'Supports', text: 'Supports', ai: true, quote: null, reason: null, page: null }
+    const { deck } = setup([mk(0)], 0, { evidence: new Map([['p0', { count: 2, verdict }]]) })
+    const label = deck.querySelector('[data-deck-verdict]')!
+    expect(label.textContent).toBe('AISupports')
+    expect(screen.getByRole('status').textContent).toBe('Lewis 2020, evidence 2, AI: Supports, paper 1 of 1')
+  })
+
+  it('a check with no verdict is not marked AI', () => {
+    const verdict = { label: 'Checking…', text: 'Checking…', ai: false, quote: null, reason: null, page: null }
+    const { deck } = setup([mk(0)], 0, { evidence: new Map([['p0', { count: 1, verdict }]]) })
+    expect(deck.querySelector('[data-deck-verdict]')!.textContent).toBe('Checking…')
+    expect(screen.getByRole('status').textContent).toBe('Lewis 2020, evidence 1, Checking…, paper 1 of 1')
+  })
+
   it('announces a cited paper', () => {
     setup(five, 1, { cited: new Set(['k1']) })
     expect(screen.getByRole('status').textContent).toBe('Lewis 2020, cited, paper 2 of 5')

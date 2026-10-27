@@ -116,6 +116,14 @@ describe('PaperBook', () => {
     expect(setData).not.toHaveBeenCalled()
   })
 
+  it("shows the verdict under a selected passage, marked AI, with its quote's page", () => {
+    const ev: BookItem[] = [{ id: 'k1:e', kind: 'evidence', page: 3, text: 'a passage', noteId: 'k1', chunkId: 'k1' }]
+    const verdict = { label: 'Supports', text: 'Supports', ai: true, quote: 'Cats do purr', reason: 'It says so', page: 7 }
+    render(<Harness list={ev} verdict={verdict} />)
+    expect(screen.getByText('AI')).toBeTruthy()
+    expect(screen.getByText(/Cats do purr/).closest('p')!.textContent).toBe('“Cats do purr” p. 7')
+  })
+
   it('announces the item', () => {
     render(<Harness />)
     expect(screen.getByRole('status').textContent).toBe('Your highlight, page 2: first quote. 1 of 3.')

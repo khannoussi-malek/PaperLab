@@ -212,7 +212,7 @@ export function PaperBook({ paper, items, selected, onSelect, onInsert, onOpenRe
                 <div className="mt-1 rounded-md bg-muted p-2 text-xs">
                   {verdict.ai && <span className="mr-1 rounded bg-purple-100 px-1.5 py-px text-purple-900">AI</span>}
                   <b>{verdict.text}</b>
-                  {verdict.quote && <p className="mt-1 italic">“{verdict.quote}”</p>}
+                  {verdict.quote && <p className="mt-1"><span className="italic">“{verdict.quote}”</span>{verdict.page != null && <span className="text-muted-foreground"> p. {verdict.page}</span>}</p>}
                   {verdict.reason && <p className="mt-1 text-muted-foreground">{verdict.reason}</p>}
                 </div>
               )}
