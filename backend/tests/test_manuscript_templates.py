@@ -109,3 +109,40 @@ async def test_the_warm_package_list_compiles_from_the_cache_alone(tmp_path, mon
     (tmp_path / "main.tex").write_text(WARM.read_text())
     res = await lc.compile_dir(tmp_path, "main.tex")
     assert res.ok, res.log[-2000:]
+
+
+LOG_AXIS_PAPER = r"""\documentclass{article}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\begin{document}
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}
+\begin{axis}[ybar, symbolic x coords={a,b}, xtick=data, width=\linewidth, ymode=log, ymin=1e1, ymax=1e2]
+\addplot table[col sep=comma, row sep=\\, x=x, y=y] {
+x,y\\
+a,88.5\\
+b,90.9\\
+};
+\end{axis}
+\end{tikzpicture}
+\caption{Narrow log range}
+\end{figure}
+${\scriptstyle a_1 + \alpha^2} + {\scriptscriptstyle b_2 + \beta^3} + x^{2^{2}}$
+\end{document}
+"""
+
+
+@pytest.mark.tectonic
+@pytest.mark.skipif(not os.environ.get("TECTONIC_BIN"), reason="TECTONIC_BIN unset (scripts/tectonic-dev.sh)")
+@pytest.mark.anyio
+async def test_a_log_axis_figure_and_script_size_maths_compile_from_the_cache_alone(tmp_path, monkeypatch):
+    # Tick labels like 10^2 and script-size maths use cmr5/cmr7/cmmi5/cmmi7: warm-packages.tex must have fetched them.
+    monkeypatch.setattr(settings, "tectonic_bin", os.environ["TECTONIC_BIN"])
+    monkeypatch.setattr(settings, "tectonic_only_cached", True)
+    if os.environ.get("TECTONIC_CACHE_DIR"):
+        monkeypatch.setattr(settings, "tectonic_cache_dir", Path(os.environ["TECTONIC_CACHE_DIR"]))
+    (tmp_path / "main.tex").write_text(LOG_AXIS_PAPER)
+    res = await lc.compile_dir(tmp_path, "main.tex")
+    assert res.ok, res.log[-2000:]
+    assert res.pdf.startswith(b"%PDF")
