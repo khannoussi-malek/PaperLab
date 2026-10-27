@@ -149,3 +149,15 @@ test('Mod-e asks to find evidence for the selection or cursor, and nothing else 
   expect(onFindEvidence).toHaveBeenCalledWith('One. Two.', 2, 5) // the editor's own text, with its own positions
   expect(notPrevented).toBe(false) // handled: the browser does not see it
 })
+
+test('an inserted block gets lines of its own: a break before unless at a line start, after unless at a line end', () => {
+  let insert: ((t: string, block?: boolean) => void) | null = null
+  const { container } = render(<LatexEditor value={'ab cd\n\nend'} onChange={() => {}} errors={[]} onSave={() => {}} registerInsert={(f) => { insert = f }} />)
+  const view = cm(container)
+  view.dispatch({ selection: { anchor: 3 } })
+  insert!('\\begin{table}', true)
+  expect(view.state.doc.toString()).toBe('ab \n\\begin{table}\ncd\n\nend')
+  view.dispatch({ selection: { anchor: view.state.doc.toString().indexOf('\n\nend') + 1 } }) // the empty line
+  insert!('T', true)
+  expect(view.state.doc.toString()).toBe('ab \n\\begin{table}\ncd\nT\nend')
+})

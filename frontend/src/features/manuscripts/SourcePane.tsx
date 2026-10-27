@@ -43,7 +43,9 @@ type Props = {
   citeOptions?: DeckPaper[]
   onCite?: (paperId: string) => void
   /** Hands the page a way to insert text at the editor's cursor, as a normal edit. */
-  registerInsert?: (insert: ((text: string) => void) | null) => void
+  /** Puts a table or figure at the cursor with the packages it needs (the Insert menu, next). */
+  onInsertBlock?: (code: string, packages: string[]) => Promise<{ ok: true } | { ok: false; message: string }>
+  registerInsert?: (insert: ((text: string, block?: boolean) => void) | null) => void
   registerFindEvidence?: (run: (() => boolean) | null) => void
   /** Hands the page a way to replace part of a line in the editor's buffer, as a normal edit (autosave picks it up). */
   registerReplace?: (replace: ((line: number, start: number, end: number, text: string) => void) | null) => void
