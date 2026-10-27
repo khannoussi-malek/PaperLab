@@ -111,3 +111,9 @@ it('closing the book (Esc or Back to the deck) puts focus back on the deck, not 
   fireEvent.click(await screen.findByRole('button', { name: 'Back to the deck' }))
   await waitFor(() => expect(screen.getByRole('group', { name: 'Papers' })).toHaveFocus())
 })
+
+it('ranks on at most the first 20 000 characters of a long section (the API refuses more)', async () => {
+  setup({ sectionText: 'x'.repeat(25_000) })
+  await waitFor(() => expect(rank).toHaveBeenCalled(), { timeout: 2000 })
+  expect(rank.mock.calls[0][1]).toHaveLength(20_000)
+})
