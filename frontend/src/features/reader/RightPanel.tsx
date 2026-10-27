@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { glass } from '@/components/glass'
 import { fadeIn } from '@/components/motion'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -18,13 +18,25 @@ type Props = {
   similar: ReactNode
   references: ReactNode
   evidence: ReactNode
+  lens: ReactNode
 }
 
 // Both panels stay mounted, so a streaming answer, a note draft and each panel's scroll position survive a
 // tab switch. `text-base` undoes TabsContent's `text-sm`, which would shrink the note cards.
 const panel = cn('flex min-h-0 flex-1 flex-col text-base data-[state=inactive]:hidden', fadeIn)
 
-export function RightPanel({ tab, onTabChange, width, onWidthChange, notes, chat, data, similar, references, evidence }: Props) {
+export function RightPanel({ tab, onTabChange, width, onWidthChange, notes, chat, data, similar, references, evidence, lens }: Props) {
+  const listRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    // Keep the active tab inside the scrolling list. Sets the list's own scrollLeft, so no ancestor (the page) scrolls.
+    const list = listRef.current
+    const active = list?.querySelector('[data-state="active"]')
+    if (!list || !active) return
+    const box = list.getBoundingClientRect()
+    const tabBox = active.getBoundingClientRect()
+    if (tabBox.left < box.left) list.scrollLeft += tabBox.left - box.left
+    else if (tabBox.right > box.right) list.scrollLeft += tabBox.right - box.right
+  }, [tab])
   return (
     <Tabs
       value={tab}
@@ -32,13 +44,14 @@ export function RightPanel({ tab, onTabChange, width, onWidthChange, notes, chat
       className={cn('reader-panel relative min-h-0 gap-0 border-l border-glass-border', glass)}
     >
       <PanelResizeHandle limits={READER_PANEL} width={width} onWidthChange={onWidthChange} />
-      <TabsList id="reader-panel-tabs" className="mx-4 mt-3 w-auto">
+      <TabsList ref={listRef} id="reader-panel-tabs" className="mx-4 mt-3 w-auto justify-start overflow-x-auto">
         <TabsTrigger value="notes">Notes</TabsTrigger>
         <TabsTrigger value="chat">Chat</TabsTrigger>
         <TabsTrigger value="data">Data</TabsTrigger>
         <TabsTrigger value="similar">Similar</TabsTrigger>
         <TabsTrigger value="references">References</TabsTrigger>
         <TabsTrigger value="evidence">Evidence</TabsTrigger>
+        <TabsTrigger value="lens">Lens</TabsTrigger>
       </TabsList>
       <TabsContent value="notes" forceMount className={panel}>
         {notes}
@@ -57,6 +70,9 @@ export function RightPanel({ tab, onTabChange, width, onWidthChange, notes, chat
       </TabsContent>
       <TabsContent value="evidence" forceMount className={panel}>
         {evidence}
+      </TabsContent>
+      <TabsContent value="lens" forceMount className={panel}>
+        {lens}
       </TabsContent>
     </Tabs>
   )

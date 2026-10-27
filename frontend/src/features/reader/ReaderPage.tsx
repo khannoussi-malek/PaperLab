@@ -24,6 +24,10 @@ import { DataPanel } from '../data/DataPanel'
 import { NumberMarks } from '../data/NumberMarks'
 import { numberMarks, tableMarkerAt, tableMarks } from '../data/pageMarks'
 import { useCaptureDrag } from '../data/useCaptureDrag'
+import { LensFade } from '../lenses/LensFade'
+import { LensPanel } from '../lenses/LensPanel'
+import { LensPicker } from '../lenses/LensPicker'
+import { useLensReader } from '../lenses/useLensReader'
 import { SimilarTab } from '../discovery/SimilarTab'
 import { browserStorage, highlightFill, loadLastColor, saveLastColor } from '../notes/highlightColors'
 import { NoteHoverCard } from '../notes/NoteHoverCard'
@@ -182,6 +186,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
   }, [flash, doc])
 
   const flashChunk = (page: number, rects: PdfRect[]) => setFlash({ id: Date.now(), page, rects })
+  const lensReader = useLensReader(paperId, tab, flashChunk)
 
   // Once the Notes tab is showing, bring a just-promoted note's card into view.
   useEffect(() => {
@@ -441,6 +446,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
           onCaptureChange={captureDrag.setCapturing}
           onOpenReferences={() => showTab('references')}
           tags={paper.data && <PaperTagChips paperId={paper.data.id} />}
+          lensControl={<LensPicker reader={lensReader} />}
         />
         {paper.data?.is_retracted && <RetractionBanner paper={paper.data} />}
         {paper.data?.published_doi && <PublishedVersionBanner paper={paper.data} />}
@@ -490,6 +496,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
         {doc &&
           Array.from({ length: doc.numPages }, (_, i) => i + 1).map((pageNumber) => (
             <PdfPage key={pageNumber} doc={doc} pageNumber={pageNumber} scale={scale}>
+              <LensFade rects={lensReader.fadeOn(pageNumber)} scale={scale} />
               {(highlightsByPage.get(pageNumber) ?? []).map((h) => (
                 <div
                   key={h.key}
@@ -631,6 +638,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
         similar={<SimilarTab paperId={paperId} active={tab === 'similar'} />}
         references={<ReferencesTab paperId={paperId} active={tab === 'references'} />}
         evidence={<EvidencePanel paperId={paperId} hasPdf={!noPdf} onShowRegion={flashChunk} />}
+        lens={<LensPanel paperId={paperId} reader={lensReader} hasPdf={!noPdf} />}
       />
 
       {numberDraft && (

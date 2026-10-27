@@ -45,6 +45,11 @@ vi.mock('../notes/NotesPanel', () => ({
   },
 }))
 vi.mock('../data/DataPanel', () => ({ DataPanel: () => null }))
+vi.mock('../lenses/queries', () => ({
+  usePaperSections: () => ({ data: undefined }),
+  usePaperChunks: () => ({ data: undefined }),
+}))
+vi.mock('../lenses/LensPanel', () => ({ LensPanel: () => null }))
 vi.mock('../discovery/SimilarTab', () => ({ SimilarTab: () => null }))
 vi.mock('../references/ReferencesTab', () => ({ ReferencesTab: () => null }))
 vi.mock('../evidence/EvidencePanel', () => ({ EvidencePanel: () => null }))

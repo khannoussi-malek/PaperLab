@@ -14,7 +14,22 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import TypeAdapter
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from app.api import charts, chat, datasets, discovery, embedding, graph, health, links, llm, notes, papers, workspaces
+from app.api import (
+    briefs,
+    charts,
+    chat,
+    datasets,
+    discovery,
+    embedding,
+    graph,
+    health,
+    lenses,
+    links,
+    llm,
+    notes,
+    papers,
+    workspaces,
+)
 from app.api import citations as citations_api
 from app.api import evidence_cards as evidence_cards_api
 from app.api import manuscripts as manuscripts_api
@@ -89,6 +104,8 @@ def create_app() -> FastAPI:
     app = FastAPI(title="PaperLab", lifespan=lifespan)
     app.include_router(health.router)
     app.include_router(papers.router)
+    app.include_router(lenses.router)
+    app.include_router(briefs.router)
     app.include_router(reading_bridge_api.router)
     app.include_router(reading_bridge_api.workspace_router)
     app.include_router(notes.router)

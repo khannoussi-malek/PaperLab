@@ -9,7 +9,7 @@ from app.models.llm_connection import LLMConnection, LLMModel
 from app.models.llm_output import LLMOutput
 from app.models.manuscript import Manuscript, ManuscriptCiteKey, ManuscriptEvidence, ManuscriptFile, ManuscriptSnapshot
 from app.models.note import Note, Provenance, note_anchors, note_papers
-from app.models.paper import Chunk, Paper, PaperStatus
+from app.models.paper import Chunk, Paper, PaperStatus, section_role_overrides
 from app.models.paper_event import PaperEvent
 from app.models.paper_merge import PaperMerge
 from app.models.paper_sources import PaperSources
@@ -62,5 +62,6 @@ __all__ = [
     "paper_tags",
     "paper_authors",
     "paper_topics",
+    "section_role_overrides",
     "workspace_papers",
 ]

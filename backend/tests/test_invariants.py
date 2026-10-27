@@ -392,3 +392,26 @@ async def test_note_papers_migration_links_every_anchored_pair_and_cascades(scra
     assert links == sorted([(note, first), (note, second)])
     assert left == [second]
     assert (kept, links_after) == (1, 0)
+
+
+@pytest.mark.anyio
+async def test_0058_round_trip(scratch_url):
+    """M16: section_role_overrides and llm_outputs.lens exist at head, and go on a downgrade to the revision before
+    (PREV, `0057`). If the migration is renumbered (K21), PREV here moves with it."""
+    dsn = scratch_url.render_as_string(hide_password=False)
+    alembic(dsn, "upgrade", "head")
+    scratch = create_async_engine(scratch_url)
+    lens_default = (
+        "SELECT column_default FROM information_schema.columns "
+        "WHERE table_name = 'llm_outputs' AND column_name = 'lens'"
+    )
+    async with scratch.connect() as conn:
+        table = (await conn.execute(text("SELECT to_regclass('section_role_overrides')"))).scalar()
+        default = (await conn.execute(text(lens_default))).scalar()
+    alembic(dsn, "downgrade", "0057")
+    async with scratch.connect() as conn:
+        gone = (await conn.execute(text("SELECT to_regclass('section_role_overrides')"))).scalar()
+        no_lens = (await conn.execute(text(lens_default))).scalar()
+    await scratch.dispose()
+    assert table is not None and default == "'full'::text"
+    assert gone is None and no_lens is None

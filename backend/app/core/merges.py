@@ -96,6 +96,7 @@ STEPS = (
     # K's abstract chunk goes before M's chunks come: they reuse its ordinal 0 (UNIQUE paper_id, ordinal).
     _Step("chunks_dropped", "chunks", f"t.paper_id = :k AND t.page = {ABSTRACT_PAGE}"),
     _move("chunks"),
+    _union("section_role_overrides", ["section_title"]),  # the reader's role fixes (M16): K's win, M's others move
     _move("llm_outputs"),
     _union_by_copy("note_papers", "note_id"),  # before note_anchors, whose FK is (note_id, paper_id) there
     _union("note_anchors", ["note_id", "page", "bbox"]),

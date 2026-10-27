@@ -1029,6 +1029,42 @@ sticky cells from covering content) and *ARIA Labels* (High); `"3d visualization
   papers" table, the "Connected papers" region, the "Papers" heading, "Clear focus", "Link to another paper…", "Paper
   to link to", "Label", "Save link", "Edit label for …" and "Remove link to …".
 
+## Reading lenses
+
+From ui-ux-pro-max (`search.py "…" --domain ux`, 2026-09-19): *Focus States* (High) and *Truncation* (Medium) for "dim
+unfocused content reading focus mode"; *Active State* (Medium) and *Smooth Scroll* (High) for "previous next section
+navigation counter"; *Disclaimer* (High) and *Feedback Loop* (Low) for "AI generated summary card label";
+"overflowing tabs narrow panel" returned nothing.
+
+- **Lens picker:** in `ReaderToolbar`, after Reading and before Capture table: a `sm` shadcn `Select` named "Lens",
+  listing the API's lenses in its order (Full paper, Key ideas, Critical check, How they did it, Related work). The
+  reader always opens on Full paper; the pick isn't remembered.
+- **Steps:** when the lens isn't Full paper and has sections, ghost icon buttons "Previous lens section" /
+  "Next lens section" (`ChevronLeft` / `ChevronRight`) around `.lens-step` (`n/N`, `tabular-nums`,
+  `aria-live="polite"`). A run is a stretch of consecutive lens passages. Picking a lens goes to its first run; a step
+  flashes the run's first passage through the reader's one smooth scroll path (`.chunk-flash`). The end buttons
+  disable.
+- **Fading:** `.lens-fade` rects over every passage outside the lens, `bg-white/65` (the page's own white, so both
+  themes), drawn under the highlights so the reader's marks stay clear. Headings and figures are no passage's rect,
+  so they stay readable as signposts.
+- **Lens tab:** the seventh tab, after Evidence; at the 320 px minimum the tab list fits or scrolls sideways (`overflow-x-auto`) with the active tab kept in view, never smaller type. For a paper without a PDF the `aside` holds only a muted `.lens-notice`, "Lenses read a paper's sections. Attach its PDF to use them." Otherwise an `aside` "Lens": the lens label (`h2`, `font-heading`), a muted
+  `.lens-notice` line when the lens is empty, shows the start and end of the paper, or (Critical check) has no
+  limitations section, then the `ul` "Sections". Each `li.lens-section[data-role]` is a `button.lens-jump` (the
+  heading, truncated with the full text in `title`, or "Before the first heading"; an outline `.role-chip`; `.role-fixed`
+  "you" once the reader has fixed it; "p. N"; a `line-clamp-2` preview) that flashes the section's first passage, and a
+  ghost `Ellipsis` button "Section actions for <heading>" opening a `DropdownMenu`: label "Change role", then a radio
+  group of "Automatic" and the ten roles. Text before the first heading has no menu (it has no heading to fix). A failed
+  fix shows an `ErrorAlert` above the list.
+- **Brief card:** in the Lens tab for any lens but Full paper, unless the lens is empty. A `section` "<lens> brief",
+  `.brief-card`. Before a brief: a muted line "An AI summary of this lens, with citations to its passages." and a
+  primary `sm` "Generate brief" (`Sparkles`). While writing and once saved: the opaque `bg-provenance-llm-surface`
+  (never glass), a `ProvenanceBadge` "AI", `.brief-meta` "<model> · <date>", then `.brief-text` rendered as chat
+  answers are (markdown; `.brief-cite` buttons flash their passage). `.brief-partial` "Based on part of this lens" when
+  the lens didn't fit; `.brief-stale` "Out of date: sections changed" with an outline `xs` "Regenerate" after a role fix
+  or a re-ingest changed the lens. A failure shows a destructive `Alert` with Retry when it can be retried. A brief
+  has no Save as note.
+- **Stable hooks and names:** `.lens-fade`, `.lens-step`, `.lens-panel`, `.lens-notice`, `li.lens-section[data-role]`, `button.lens-jump`, `.role-chip`, `.role-fixed`, `.brief-card`, `.brief-meta`, `.brief-text`, `.brief-cite`, `.brief-partial`, `.brief-stale`; the tab and aside "Lens", "Sections", "Section actions for <heading>", "Change role", "Automatic", "Previous lens section", "Next lens section", "Generate brief", "Regenerate".
+
 ## Writing studio columns
 
 Order: Sections | Source (the flexible column) | PDF. Each column is a `region` (F6 / Shift+F6 cycle focus between them) with a
