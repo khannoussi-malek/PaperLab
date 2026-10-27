@@ -2,7 +2,7 @@ import { X } from 'lucide-react'
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { startPaperDrag } from '../citeCompletion'
-import { insertText, turnDirection, type BookItem, type DeckPaper } from './deckModel'
+import { insertText, turnDirection, type BookItem, type DeckPaper, type VerdictView } from './deckModel'
 import { PAGE_CLASS, turnLeaf } from './pageTurn'
 import { useReducedMotion } from './useReducedMotion'
 
@@ -15,16 +15,19 @@ export type PaperBookProps = {
   onInsert: (item: BookItem | null) => void
   onOpenReader: (item: BookItem | null) => void
   onClose: () => void
+  /** Evidence mode: what the model said about this paper, shown under a selected passage. */
+  verdict?: VerdictView | null
 }
 
 const KIND = {
   highlight: { name: 'Your highlight', letter: 'H', tab: 'bg-yellow-300 text-yellow-950', mark: 'bg-yellow-200', chip: 'bg-yellow-100 text-yellow-900' },
   note: { name: 'Your note', letter: 'N', tab: 'bg-yellow-300 text-yellow-950', mark: 'bg-yellow-200', chip: 'bg-yellow-100 text-yellow-900' },
   ai: { name: 'AI note', letter: 'A', tab: 'bg-purple-300 text-purple-950', mark: 'bg-purple-200', chip: 'bg-purple-100 text-purple-900' },
+  evidence: { name: 'Evidence passage', letter: 'E', tab: 'bg-blue-300 text-blue-950', mark: 'bg-blue-200', chip: 'bg-blue-100 text-blue-900' },
 } as const
 
 const insertLabel = (item: BookItem) =>
-  item.kind === 'ai' ? 'Insert as comment' : item.kind === 'highlight' ? 'Insert quote + \\citep' : 'Insert note + \\citep'
+  item.kind === 'evidence' ? 'Cite this paper' : item.kind === 'ai' ? 'Insert as comment' : item.kind === 'highlight' ? 'Insert quote + \\citep' : 'Insert note + \\citep'
 
 const announce = (items: BookItem[], i: number) => {
   const it = items[i]
@@ -72,7 +75,7 @@ const html = (node: ReactNode) => renderToStaticMarkup(<>{node}</>)
 
 type Pages = { l: number; r: number; lHidden: boolean }
 
-export function PaperBook({ paper, items, selected, onSelect, onInsert, onOpenReader, onClose }: PaperBookProps) {
+export function PaperBook({ paper, items, selected, onSelect, onInsert, onOpenReader, onClose, verdict }: PaperBookProps) {
   const still = useReducedMotion()
   const root = useRef<HTMLDivElement>(null)
   const book = useRef<HTMLDivElement>(null)
@@ -205,6 +208,14 @@ export function PaperBook({ paper, items, selected, onSelect, onInsert, onOpenRe
                 {it.page != null && <span className="text-muted-foreground">p.{it.page}</span>}
                 <span className={`mt-1 block ${j === sel ? '' : 'line-clamp-2'}`}>{it.text}</span>
               </button>
+              {j === sel && it.kind === 'evidence' && verdict && (
+                <div className="mt-1 rounded-md bg-muted p-2 text-xs">
+                  {verdict.ai && <span className="mr-1 rounded bg-purple-100 px-1.5 py-px text-purple-900">AI</span>}
+                  <b>{verdict.text}</b>
+                  {verdict.quote && <p className="mt-1"><span className="italic">“{verdict.quote}”</span>{verdict.page != null && <span className="text-muted-foreground"> p. {verdict.page}</span>}</p>}
+                  {verdict.reason && <p className="mt-1 text-muted-foreground">{verdict.reason}</p>}
+                </div>
+              )}
               {j === sel && (
                 <button type="button" onClick={() => onInsert(it)} className={`${btn} mt-1`}>{insertLabel(it)}</button>
               )}

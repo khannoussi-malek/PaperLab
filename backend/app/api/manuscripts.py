@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse
 from app.api.deps import SessionDep
 from app.core import (
     manuscript_bib,
+    manuscript_evidence,
     manuscript_history,
     manuscript_papers,
     manuscript_section_ops,
@@ -24,6 +25,9 @@ from app.core.errors import Conflict, InvalidInput, NotFound
 from app.schemas.manuscripts import (
     CitablePaperOut,
     CompileOut,
+    EvidenceFoundOut,
+    EvidenceIn,
+    EvidenceRowOut,
     FileOut,
     FilePut,
     FileTextOut,
@@ -236,6 +240,16 @@ async def citable_papers(manuscript_id: uuid.UUID, session: SessionDep) -> list[
 @router.post("/api/manuscripts/{manuscript_id}/papers/rank")
 async def rank_papers(manuscript_id: uuid.UUID, body: RankIn, session: SessionDep) -> RankOut:
     return RankOut(paper_ids=await manuscript_papers.rank(session, manuscript_id, body.text))
+
+
+@router.post("/api/manuscripts/{manuscript_id}/evidence")
+async def find_evidence(manuscript_id: uuid.UUID, body: EvidenceIn, session: SessionDep) -> EvidenceFoundOut:
+    return EvidenceFoundOut(**await manuscript_evidence.find(session, manuscript_id, body.sentence))
+
+
+@router.get("/api/manuscripts/{manuscript_id}/evidence/{sentence_hash}")
+async def evidence_rows(manuscript_id: uuid.UUID, sentence_hash: str, session: SessionDep) -> list[EvidenceRowOut]:
+    return [EvidenceRowOut(**r) for r in await manuscript_evidence.rows(session, manuscript_id, sentence_hash)]
 
 
 @router.post("/api/manuscripts/{manuscript_id}/papers/{paper_id}/pin")

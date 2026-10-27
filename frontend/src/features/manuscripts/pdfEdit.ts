@@ -8,7 +8,7 @@ const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 const masked = (line: string) => line.replace(/\\[a-zA-Z]+\*?/g, (c) => ' '.repeat(c.length))
 
 /** The sentence of `line` (split at . ? ! before a space, or the line's ends) that holds the word at `index`. */
-function sentenceAt(line: string, index: number): { start: number; end: number } {
+export function sentenceAt(line: string, index: number): { start: number; end: number } {
   let start = 0
   for (const m of line.matchAll(/[.?!]\s+/g)) {
     const next = m.index + m[0].length

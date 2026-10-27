@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { CitablePaper, Note } from '@/api/client'
-import { bookItems, cardTransform, citedKeys, deckOrder, insertText, turnDirection, windowAround } from './deckModel'
+import type { EvidenceRow } from '@/api/client'
+import { bookItems, cardTransform, citedKeys, deckOrder, insertText, NO_MODEL, turnDirection, verdictView, windowAround } from './deckModel'
 import { latexEscape } from './latex'
 
 const paper = (id: string, title: string): CitablePaper => ({
@@ -122,5 +123,33 @@ describe('motion helpers', () => {
     expect(windowAround(10, 9)).toEqual([6, 7, 8, 9])
     expect(windowAround(10, 5, 1)).toEqual([4, 5, 6])
     expect(windowAround(0, 0)).toEqual([])
+  })
+})
+
+describe('verdictView', () => {
+  const row = (over: Partial<EvidenceRow>): EvidenceRow =>
+    ({ paper_id: 'p', rank: 0, status: 'done', verdict: null, reason: null, quote: null, page: null, output_id: null, ...over }) as EvidenceRow
+
+  it('a finished check that could not tell is not the same as a check that did not finish', () => {
+    const tell = verdictView(row({ verdict: 'cannot_verify', reason: 'model_error' }), false)
+    expect(tell).toMatchObject({ label: "Can't tell", ai: true, reason: "The model's answer couldn't be read." })
+    for (const status of ['failed', 'interrupted'] as const) {
+      expect(verdictView(row({ status, reason: 'check_failed' }), false)).toMatchObject({ label: "Check didn't finish. Find evidence again.", ai: false, reason: null })
+    }
+    expect(verdictView(row({ status: 'failed', reason: 'superseded' }), false).text).toBe('Stopped: you asked about another sentence.')
+  })
+
+  it('says each reason code in plain words, and nothing for a code it does not know', () => {
+    const reason = (status: EvidenceRow['status'], code: string) => verdictView(row({ status, verdict: 'cannot_verify', reason: code }), false).reason
+    expect(reason('done', 'no_text')).toBe('This paper has no text to check.')
+    expect(reason('done', 'not_ready')).toBe('This paper is still being read.')
+    expect(reason('failed', 'no_model')).toBe(NO_MODEL)
+    expect(reason('failed', 'queue_unavailable')).toBe("Checks couldn't start. Try again.")
+    expect(reason('failed', 'paper_gone')).toBeNull()
+    expect(reason('done', 'Only in mice.')).toBe('Only in mice.') // the model's own words
+  })
+
+  it("keeps the quote's page", () => {
+    expect(verdictView(row({ verdict: 'supported', quote: 'q', page: 4 }), false).page).toBe(4)
   })
 })
