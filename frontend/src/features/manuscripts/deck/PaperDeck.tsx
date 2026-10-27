@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
 import { cardTransform, windowAround, type DeckPaper } from './deckModel'
 
 const FLIP_MS = 500
@@ -20,16 +20,29 @@ export type PaperDeckProps = {
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 
-function reducedMotion(): boolean {
-  return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
+const REDUCED = '(prefers-reduced-motion: reduce)'
+
+/** Follows the OS setting, also while the deck is open. */
+function useReducedMotion(): boolean {
+  const [still, setStill] = useState(() => typeof matchMedia === 'function' && matchMedia(REDUCED).matches)
+  useEffect(() => {
+    if (typeof matchMedia !== 'function') return
+    const mq = matchMedia(REDUCED)
+    const onChange = () => setStill(mq.matches)
+    onChange()
+    mq.addEventListener?.('change', onChange)
+    return () => mq.removeEventListener?.('change', onChange)
+  }, [])
+  return still
 }
 
 function byline(p: DeckPaper): string {
   return [p.first_author, p.year].filter(Boolean).join(' ')
 }
 
-function announce(p: DeckPaper, i: number, n: number): string {
+function announce(p: DeckPaper, i: number, n: number, cited: boolean): string {
   const parts = [byline(p) || p.title]
+  if (cited) parts.push('cited')
   if (p.notes) parts.push(plural(p.notes, 'note'))
   if (p.highlights) parts.push(plural(p.highlights, 'highlight'))
   if (p.ai_notes) parts.push(plural(p.ai_notes, 'AI note'))
@@ -66,7 +79,8 @@ function Card({ paper, offset, cited, still, onClick }: { paper: DeckPaper; offs
 
 /** A controlled 3D deck of papers. It knows nothing about manuscripts: the parent filters, orders and owns `current`. */
 export function PaperDeck({ papers, current, onCurrent, onOpen, filter, onFilter, label, cited }: PaperDeckProps) {
-  const [still] = useState(reducedMotion)
+  const still = useReducedMotion()
+  const hintId = useId()
   const stage = useRef<HTMLDivElement>(null)
   const last = papers.length - 1
   const go = (i: number) => {
@@ -92,6 +106,7 @@ export function PaperDeck({ papers, current, onCurrent, onOpen, filter, onFilter
   }, [papers.length])
 
   const onKeyDown = (e: KeyboardEvent) => {
+    if (e.target !== e.currentTarget) return
     if (e.ctrlKey || e.metaKey || e.altKey || !papers.length) return
     const k = e.key
     if (k === 'ArrowRight') go(current + 1)
@@ -100,7 +115,11 @@ export function PaperDeck({ papers, current, onCurrent, onOpen, filter, onFilter
     else if (k === 'End') go(last)
     else if (k === 'Enter' || k === ' ') onOpen(current)
     else if (/^[a-z]$/i.test(k)) {
-      const j = papers.findIndex((p, i) => i !== current && p.title.toLowerCase().startsWith(k.toLowerCase()))
+      const at = (d: number) => (current + d) % papers.length
+      let j = -1
+      for (let d = 1; d < papers.length && j < 0; d++) {
+        if (papers[at(d)].title.toLowerCase().startsWith(k.toLowerCase())) j = at(d)
+      }
       if (j < 0) return
       go(j)
     } else return
@@ -137,6 +156,7 @@ export function PaperDeck({ papers, current, onCurrent, onOpen, filter, onFilter
         role="group"
         aria-roledescription="paper deck"
         aria-label={label}
+        aria-describedby={hintId}
         tabIndex={0}
         onKeyDown={onKeyDown}
         className="relative h-[340px] select-none overflow-hidden rounded-lg border border-border bg-background [perspective:1400px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -163,7 +183,8 @@ export function PaperDeck({ papers, current, onCurrent, onOpen, filter, onFilter
           </button>
         </div>
       </div>
-      <p role="status" aria-live="polite" className="sr-only">{announce(papers[current], current, papers.length)}</p>
+      <p id={hintId} className="sr-only">Left and right arrows flip through the papers. Enter opens one.</p>
+      <p role="status" aria-live="polite" className="sr-only">{announce(papers[current], current, papers.length, !!cited?.has(papers[current].key))}</p>
     </div>
   )
 }
