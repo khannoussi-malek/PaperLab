@@ -91,3 +91,21 @@ test('reveal opens the Papers tab', () => {
   rerender(<StudioColumns columns={shared} reveal={{ id: 'papers', n: 1 }} />)
   expect(screen.getByText('deck')).toBeVisible()
 })
+
+test('widening past the breakpoint keeps a valid grid (no undefined width)', () => {
+  setWidth(1000)
+  const { container } = render(<StudioColumns columns={shared} />)
+  setWidth(1400)
+  const template = (container.firstChild as HTMLElement).style.gridTemplateColumns
+  expect(template).not.toBe('')
+  expect(template).not.toContain('undefined')
+})
+
+test('revealing Papers on a wide screen leaves the PDF and the remembered tab alone', () => {
+  setWidth(1400)
+  localStorage.setItem('paperlab-studio-collapsed', JSON.stringify(['pdf', 'papers']))
+  const { rerender } = render(<StudioColumns columns={shared} />)
+  rerender(<StudioColumns columns={shared} reveal={{ id: 'papers', n: 1 }} />)
+  expect(JSON.parse(localStorage.getItem('paperlab-studio-collapsed')!)).toEqual(['pdf'])
+  expect(localStorage.getItem('paperlab-studio-tab')).not.toBe('papers')
+})
