@@ -26,7 +26,7 @@ export function usePaperView(key: string): [PaperView, (view: PaperView) => void
 
 export function ViewSwitch({ view, onChange }: { view: PaperView; onChange: (view: PaperView) => void }) {
   return (
-    <div role="group" aria-label="View" className="flex gap-1">
+    <div role="group" aria-label="Show papers as" className="flex gap-1">
       {(['list', 'deck'] as const).map((v) => (
         <Button key={v} size="sm" variant={view === v ? 'secondary' : 'ghost'} aria-pressed={view === v} onClick={() => onChange(v)}>
           {v === 'list' ? 'List' : 'Deck'}
