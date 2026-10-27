@@ -7,7 +7,7 @@ import re
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import and_, case, delete, func, or_, select, update
+from sqlalchemy import and_, case, delete, func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -51,6 +51,9 @@ async def find(session: AsyncSession, mid: uuid.UUID, sentence: str, *, embedder
         if c.paper_id in keys:
             grouped.setdefault(c.paper_id, []).append({"chunk_id": c.id, "page": c.page, "text": c.text})
     h = sentence_hash(sentence)
+    # Asks on one manuscript take turns from here to the commit (which releases the lock): each then sees the rows the
+    # other wrote, so the later one always stops the earlier one's checks, and two never lock each other's rows.
+    await session.execute(text("SELECT pg_advisory_xact_lock(hashtext(:mid))"), {"mid": str(mid)})
     # Another sentence's checks still waiting would keep the model busy for nothing: stop them (a running job ends after
     # the row it is on, since it only takes queued rows). Asking about that sentence again re-queues them.
     await session.execute(update(ManuscriptEvidence).where(
