@@ -189,7 +189,7 @@ def test_both_images_pin_the_same_tectonic_and_the_release_image_keeps_the_sandb
         assert "--chown=tex" not in d and "chown tex" not in d
         assert "chmod -R u=rwX,go=rX /tectonic-cache" in d
         assert re.search(r"^ENV TECTONIC_ONLY_CACHED=1$", d, re.M)
-        assert "/templates/*.tex" in d  # every .tex there is compiled into the cache, warm-packages.tex included
+        assert "/templates/*/" in d and "/templates/warm-packages.tex" in d  # every template folder and the warm list
     assert re.search(r"^RUN chmod 750 /src$", release, re.M)  # tex can't enter the app's code
     for ignore in ("backend/.dockerignore", ".dockerignore"):
         assert ".tools" in (ROOT / ignore).read_text()

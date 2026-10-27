@@ -1029,6 +1029,17 @@ sticky cells from covering content) and *ARIA Labels* (High); `"3d visualization
   papers" table, the "Connected papers" region, the "Papers" heading, "Clear focus", "Link to another paper…", "Paper
   to link to", "Label", "Save link", "Edit label for …" and "Remove link to …".
 
+## Writing studio columns
+
+Order: Sections | Source (the flexible column) | PDF. Each column is a `region` (F6 / Shift+F6 cycle focus between them) with a
+collapse button; a collapsed column leaves a thin rail with an "Expand {name}" button and its name set vertically.
+Sections and PDF resize from the edge facing the editor (`separator` "Resize {name}"; the sections handle is on its right
+edge). Section rows read number, title, word count and a status dot; the dot is never alone: a screen-reader label
+("Empty", "Error", "To do", "OK") travels with it and its `title` says the same. The PDF edit box (double-click a word)
+is a `dialog` anchored under the word and clamped inside the pane; Enter saves, Escape cancels and returns focus to the
+PDF pages, errors show inline in the box, and text LaTeX generated gets only "Open in source". The ui-ux-pro-max search
+(multi-pane / breadcrumb / inline edit) returned only the generic progress and inline-validation rules, nothing new.
+
 ## Pre-delivery check (from ui-ux-pro-max Quick Reference §1–§3)
 
 Run through this before finishing any UI task, in **both** themes:

@@ -1,6 +1,7 @@
 """ARQ job: compile a manuscript with Tectonic on the main worker (M27a). Loops while another compile was requested."""
 
 import asyncio
+import json
 import logging
 import os
 import tempfile
@@ -11,7 +12,7 @@ from pathlib import Path
 from sqlalchemy import select, update
 
 from app.config import settings
-from app.core import manuscript_history, manuscripts
+from app.core import manuscript_history, manuscripts, synctex
 from app.core.latex_compile import COMPILE_TIMEOUT, compile_dir
 from app.core.manuscript_bib import build_bib
 from app.db import SessionLocal
@@ -46,17 +47,27 @@ def _write_files(workdir: Path, rows) -> None:
         target.write_bytes(data if text is None else text.encode())
 
 
-def _write_pdf(manuscript_id: uuid.UUID, pdf: bytes) -> None:
-    target = manuscripts.pdf_path(manuscript_id)
+def _write_atomic(target: Path, data: bytes) -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=target.parent, suffix=".tmp")
     try:
         with os.fdopen(fd, "wb") as f:
-            f.write(pdf)
+            f.write(data)
         os.replace(tmp, target)
     except BaseException:
         Path(tmp).unlink(missing_ok=True)
         raise
+
+
+def _sync_index(result, root: str) -> dict | None:
+    """The SyncTeX index of an ok compile; a missing or unreadable file never fails the compile."""
+    if not result.ok or result.synctex is None:
+        return None
+    try:
+        return synctex.index(result.synctex, root)
+    except (OSError, ValueError, EOFError):
+        logger.warning("unreadable SyncTeX output; no index kept")
+        return None
 
 
 async def _prepare(mid: uuid.UUID):
@@ -84,10 +95,12 @@ async def _run_tectonic(main_file: str, rows, bib: str):
         _write_files(workdir, rows)
         # beside the main file: that is where \bibliography{paperlab} is looked up
         (workdir / main_file).parent.joinpath("paperlab.bib").write_text(bib, encoding="utf-8")
-        return await compile_dir(workdir, main_file)
+        result = await compile_dir(workdir, main_file)
+        # resolved: Tectonic writes the real path into SyncTeX (macOS /var is /private/var)
+        return result, await asyncio.to_thread(_sync_index, result, str(workdir.resolve()))
 
 
-async def _store(mid: uuid.UUID, result) -> bool:
+async def _store(mid: uuid.UUID, result, sync: dict | None = None) -> bool:
     """Short transaction 2: the result. False (nothing written) when the manuscript was deleted meanwhile."""
     async with SessionLocal() as session:
         # NO KEY UPDATE keeps a delete out until we commit, yet lets the snapshot's foreign key through.
@@ -95,7 +108,11 @@ async def _store(mid: uuid.UUID, result) -> bool:
         if await session.scalar(locked) is None:
             return False
         if result.ok and result.pdf is not None:
-            _write_pdf(mid, result.pdf)
+            _write_atomic(manuscripts.pdf_path(mid), result.pdf)
+            if sync is not None:
+                _write_atomic(manuscripts.sync_path(mid), json.dumps(sync).encode())
+            else:  # an index of the old PDF would point the edit box at the wrong spot
+                manuscripts.sync_path(mid).unlink(missing_ok=True)
             await manuscript_history.take(session, mid, "compile")
         await session.execute(update(Manuscript).where(Manuscript.id == mid).values(
             compile_status="ok" if result.ok else "failed", compile_log=result.log,
@@ -124,8 +141,8 @@ async def compile_manuscript(ctx: dict, manuscript_id: str) -> None:
                 prepared = await _prepare(mid)
                 if prepared is None:
                     return  # deleted meanwhile
-                result = await _run_tectonic(*prepared)
-                if not await _store(mid, result):
+                result, sync = await _run_tectonic(*prepared)
+                if not await _store(mid, result, sync):
                     return
             async with SessionLocal() as session:
                 again = bool(await session.scalar(select(Manuscript.compile_requested).where(Manuscript.id == mid)))

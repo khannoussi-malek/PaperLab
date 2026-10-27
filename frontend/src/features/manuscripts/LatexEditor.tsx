@@ -1,7 +1,7 @@
 import { HighlightStyle, StreamLanguage, syntaxHighlighting } from '@codemirror/language'
 import { tags } from '@lezer/highlight'
 import { stex } from '@codemirror/legacy-modes/mode/stex'
-import { Annotation, Compartment, RangeSetBuilder, Transaction } from '@codemirror/state'
+import { Annotation, Compartment, Prec, RangeSetBuilder, Transaction } from '@codemirror/state'
 import { EditorView, GutterMarker, gutter, keymap } from '@codemirror/view'
 import { basicSetup } from 'codemirror'
 import { useEffect, useRef, useState } from 'react'
@@ -15,6 +15,12 @@ type Props = {
   onSave: () => void
   /** Move the cursor to this line; a new `n` jumps again to the same line. */
   jumpTo?: { line: number; n: number } | null
+  /** The cursor's line (1-based), whenever it moves to another line. */
+  onCursor?: (line: number) => void
+  /** Mod-Alt-Up / Down: the previous / next section. */
+  onSectionStep?: (step: -1 | 1) => void
+  /** Mod-Alt-P: show the cursor's line in the PDF. */
+  onShowInPdf?: (line: number) => void
   label?: string
 }
 
@@ -92,15 +98,16 @@ const highlight = syntaxHighlighting(
 const FromHost = Annotation.define<boolean>()
 
 /** CodeMirror 6 with LaTeX highlighting, as one controlled-ish component: `value` in, `onChange` out. */
-export function LatexEditor({ value, onChange, errors, onSave, jumpTo, label = 'LaTeX source' }: Props) {
+export function LatexEditor({ value, onChange, errors, onSave, jumpTo, onCursor, onSectionStep, onShowInPdf, label = 'LaTeX source' }: Props) {
   const host = useRef<HTMLDivElement>(null)
   const view = useRef<EditorView | null>(null)
   const errorSlot = useRef(new Compartment())
   const themeSlot = useRef(new Compartment())
   const dark = useAppIsDark()
   // The view is built once; callbacks go through a ref so it never holds a stale one.
-  const latest = useRef({ onChange, onSave })
-  latest.current = { onChange, onSave }
+  const latest = useRef({ onChange, onSave, onCursor, onSectionStep, onShowInPdf })
+  latest.current = { onChange, onSave, onCursor, onSectionStep, onShowInPdf }
+  const cursorLine = useRef(0)
 
   useEffect(() => {
     const editor = new EditorView({
@@ -115,7 +122,17 @@ export function LatexEditor({ value, onChange, errors, onSave, jumpTo, label = '
         EditorView.contentAttributes.of({ 'aria-label': label }),
         errorSlot.current.of(errorGutter(errors)),
         keymap.of([{ key: 'Mod-s', run: () => (latest.current.onSave(), true) }]),
+        // Mod-Alt, not Alt: CodeMirror's own Alt-Up / Down move the line. High precedence so basicSetup never sees these.
+        Prec.high(keymap.of([
+          { key: 'Mod-Alt-ArrowUp', run: () => (latest.current.onSectionStep?.(-1), true) },
+          { key: 'Mod-Alt-ArrowDown', run: () => (latest.current.onSectionStep?.(1), true) },
+          { key: 'Mod-Alt-p', run: (v) => (latest.current.onShowInPdf?.(v.state.doc.lineAt(v.state.selection.main.head).number), true) },
+        ])),
         EditorView.updateListener.of((u) => {
+          if (u.selectionSet || u.docChanged) {
+            const line = u.state.doc.lineAt(u.state.selection.main.head).number
+            if (line !== cursorLine.current) { cursorLine.current = line; latest.current.onCursor?.(line) }
+          }
           if (u.docChanged && !u.transactions.some((t) => t.annotation(FromHost))) latest.current.onChange(u.state.doc.toString())
         }),
       ],

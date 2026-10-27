@@ -88,8 +88,46 @@ class RenameIn(BaseModel):
     new_path: str
 
 
+class SectionAddIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str
+    after: str | None = None
+
+
+class SectionTitleIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str
+
+
+class SectionMoveIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    to: int = Field(ge=0)
+
+
+class SectionPathOut(BaseModel):
+    path: str
+
+
+class SectionPathsOut(BaseModel):
+    paths: list[str]
+
+
 class CompileOut(BaseModel):
     state: str  # queued | again
+
+
+class SyncPointOut(BaseModel):
+    page: int
+    x: float
+    y: float
+
+
+class SyncSourceOut(BaseModel):
+    file: str
+    line: int
 
 
 class SnapshotOut(BaseModel):

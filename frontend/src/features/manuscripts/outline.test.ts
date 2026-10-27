@@ -1,5 +1,5 @@
-import { expect, test } from 'vitest'
-import { outline } from './outline'
+import { describe, expect, it, test } from 'vitest'
+import { crumbsAt, outline, type OutlineItem } from './outline'
 
 test('reads sections in order', () => {
   const files = { 'main.tex': '\\section{Intro}\ntext\n\\subsection{Aim}\n\\subsubsection{Detail}\n\\section{End}' }
@@ -30,4 +30,18 @@ test('starred sections', () => {
     [1, 'Intro'],
     [2, 'Aim'],
   ])
+})
+
+describe('crumbsAt', () => {
+  const items: OutlineItem[] = [
+    { level: 1, title: 'A', file: 'main.tex', line: 3 },
+    { level: 2, title: 'A1', file: 'main.tex', line: 6 },
+    { level: 1, title: 'B', file: 'main.tex', line: 10 },
+  ]
+  it('returns the section and subsection containing a line', () => {
+    expect(crumbsAt(items, 'main.tex', 7).map((i) => i.title)).toEqual(['A', 'A1'])
+    expect(crumbsAt(items, 'main.tex', 11).map((i) => i.title)).toEqual(['B'])
+    expect(crumbsAt(items, 'main.tex', 1)).toEqual([])
+    expect(crumbsAt(items, 'other.tex', 7)).toEqual([])
+  })
 })

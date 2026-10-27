@@ -151,3 +151,25 @@ describe('request errors', () => {
     expect(await failWith(new Response(JSON.stringify({ detail: 'x', tried: [] }), { status: 500 }))).toBeInstanceOf(ApiError)
   })
 })
+
+describe('section calls', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  it('retitleSection encodes the path like the other file calls', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ path: 'x' })))
+    await api.retitleSection('m', 'sections/my notes.tex', 'New')
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('/api/manuscripts/m/sections/sections/my%20notes.tex/retitle')
+    expect(init).toMatchObject({ method: 'POST', body: JSON.stringify({ title: 'New' }) })
+  })
+
+  it('moveSection and deleteSection hit the section routes', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response(null, { status: 204 }))
+    await api.moveSection('m', 'sections/a.tex', 2)
+    await api.deleteSection('m', 'sections/a.tex')
+    expect(fetchMock.mock.calls.map((c) => [c[0], (c[1] as RequestInit).method])).toEqual([
+      ['/api/manuscripts/m/sections/sections/a.tex/move', 'POST'],
+      ['/api/manuscripts/m/sections/sections/a.tex', 'DELETE'],
+    ])
+  })
+})

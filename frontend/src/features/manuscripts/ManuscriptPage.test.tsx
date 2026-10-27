@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { api, ApiError, type ManuscriptDetail } from '@/api/client'
 import { keptTexts } from './keptTexts'
@@ -8,10 +8,12 @@ import { ManuscriptPage } from './ManuscriptPage'
 
 const pdf = vi.hoisted(() => vi.fn((_url: string | null) => ({ doc: null, error: null })))
 // jsdom can't lay CodeMirror out, so here the editor is a textarea with the same props (LatexEditor.test.tsx runs the real one).
+const editor = vi.hoisted(() => ({ current: null as null | { onCursor?: (l: number) => void; onSectionStep?: (s: -1 | 1) => void; onShowInPdf?: (l: number) => void; jumpTo?: { line: number; n: number } | null } }))
 vi.mock('./LatexEditor', () => ({
-  LatexEditor: ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
-    <textarea aria-label="LaTeX source" value={value} onChange={(e) => onChange(e.target.value)} />
-  ),
+  LatexEditor: (props: { value: string; onChange: (v: string) => void; onCursor?: (l: number) => void; onSectionStep?: (s: -1 | 1) => void; onShowInPdf?: (l: number) => void; jumpTo?: { line: number; n: number } | null }) => {
+    editor.current = props
+    return <textarea aria-label="LaTeX source" value={props.value} onChange={(e) => props.onChange(e.target.value)} />
+  },
 }))
 vi.mock('@/components/AppShell', () => ({
   AppShell: ({ title, actions, status, children }: { title: string; actions?: React.ReactNode; status?: React.ReactNode; children: React.ReactNode }) => (
@@ -418,4 +420,352 @@ test('the header moves the manuscript and deletes it after asking in the app', a
   fireEvent.click(await screen.findByRole('button', { name: 'Delete manuscript' }))
   await waitFor(() => expect(remove).toHaveBeenCalledWith('m1'))
   await waitFor(() => expect(window.location.hash).toBe('#/workspaces/w1?tab=write'))
+})
+
+test('the left column lists sections from main.tex, with the other files under All files', async () => {
+  server = {
+    'main.tex': { text: '\\input{sections/intro}', at: T2 },
+    'sections/intro.tex': { text: '\\section{Introduction}\nhi', at: T2 },
+  }
+  vi.spyOn(api, 'getManuscript').mockResolvedValue(detail({
+    files: [{ path: 'main.tex', size: 5, updated_at: T2 }, { path: 'sections/intro.tex', size: 3, updated_at: T2 }],
+  }))
+  renderPage()
+  expect(await screen.findByRole('button', { name: /^1\s*Introduction/ })).toBeInTheDocument()
+  expect(screen.getByText('All files')).toBeInTheDocument()
+  expect(screen.queryByRole('navigation', { name: 'Outline' })).toBeNull()
+})
+
+test('the breadcrumb follows the cursor, and Mod+Alt+Down opens the next section', async () => {
+  server = {
+    'main.tex': { text: '\\input{sections/a}\n\\input{sections/b}', at: T2 },
+    'sections/a.tex': { text: '\\section{Method}\nx\n\\subsection{Data}\ny', at: T2 },
+    'sections/b.tex': { text: '\\section{Results}\nz', at: T2 },
+  }
+  vi.spyOn(api, 'getManuscript').mockResolvedValue(detail({
+    files: ['main.tex', 'sections/a.tex', 'sections/b.tex'].map((p) => ({ path: p, size: 5, updated_at: T2 })),
+  }))
+  window.location.hash = ''
+  renderPage('sections/a.tex')
+  await screen.findByLabelText('LaTeX source')
+  await waitFor(() => expect(editor.current?.onCursor).toBeDefined())
+  act(() => editor.current!.onCursor!(4))
+  const crumbs = await screen.findByRole('navigation', { name: 'Where you are' })
+  expect(crumbs).toHaveTextContent('Method›Data')
+  act(() => editor.current!.onSectionStep!(1))
+  await waitFor(() => expect(window.location.hash).toContain('sections%2Fb.tex'))
+})
+
+// --- PDF <-> source ---
+const GOOD = { compile_status: 'ok' as const, compiled_at: T3 }
+const pages = () => screen.getByLabelText('PDF pages')
+const withPdf = () => pdf.mockReturnValue({ doc: { numPages: 3 } as never, error: null })
+
+test('showing a line in the PDF scrolls to the page the lookup returns', async () => {
+  withPdf()
+  vi.spyOn(api, 'getManuscript').mockResolvedValue(detail(GOOD))
+  const forward = vi.spyOn(api, 'syncForward').mockResolvedValue({ page: 2, x: 72, y: 300 })
+  renderPage()
+  await screen.findByLabelText('LaTeX source')
+  await waitFor(() => expect(forward).toHaveBeenCalledWith('m1', 'main.tex', 1)) // once per new good compile
+  forward.mockClear()
+  act(() => editor.current!.onShowInPdf!(7))
+  await waitFor(() => expect(forward).toHaveBeenCalledWith('m1', 'main.tex', 7))
+  const page2 = pages().querySelector('[data-page="2"]')
+  expect(page2).not.toBeNull()
+})
+
+test('opening a section looks its line up', async () => {
+  withPdf()
+  server['sections/x.tex'] = { text: '\\section{X}\nhi', at: T2 }
+  server['main.tex'] = { text: '\\input{sections/x}', at: T2 }
+  vi.spyOn(api, 'getManuscript').mockResolvedValue(detail({ files: [...detail().files, { path: 'sections/x.tex', size: 3, updated_at: T2 }] }))
+  const forward = vi.spyOn(api, 'syncForward').mockResolvedValue({ page: 3, x: 0, y: 10 })
+  renderPage('sections/x.tex')
+  fireEvent.click(await screen.findByRole('button', { name: /^1\s*X/ }))
+  await waitFor(() => expect(forward).toHaveBeenCalledWith('m1', 'sections/x.tex', 1))
+})
+
+test('ctrl-click on a page opens the source the lookup names', async () => {
+  withPdf()
+  vi.spyOn(api, 'getManuscript').mockResolvedValue(detail())
+  const inverse = vi.spyOn(api, 'syncInverse').mockResolvedValue({ file: 'b.tex', line: 12 })
+  renderPage()
+  await screen.findByLabelText('LaTeX source')
+  fireEvent.click(pages().querySelector('[data-page="2"]')!, { ctrlKey: true, clientX: 0, clientY: 0 })
+  await waitFor(() => expect(inverse).toHaveBeenCalledWith('m1', 2, expect.any(Number), expect.any(Number)))
+  await waitFor(() => expect(window.location.hash).toBe('#/manuscripts/m1?file=b.tex&line=12'))
+  window.location.hash = ''
+})
+
+test('no_sync is silent', async () => {
+  withPdf()
+  vi.spyOn(api, 'getManuscript').mockResolvedValue(detail(GOOD))
+  const forward = vi.spyOn(api, 'syncForward').mockRejectedValue(new ApiError('no_sync', 404, { detail: 'no_sync' }))
+  vi.spyOn(api, 'syncInverse').mockRejectedValue(new ApiError('no_sync', 404, { detail: 'no_sync' }))
+  renderPage()
+  await waitFor(() => expect(forward).toHaveBeenCalled())
+  fireEvent.click(pages().querySelector('[data-page="1"]')!, { metaKey: true })
+  await new Promise((r) => setTimeout(r, 0))
+  expect(screen.queryByRole('alert')).toBeNull()
+})
+
+const deferred = <T,>() => { let resolve!: (v: T) => void; const promise = new Promise<T>((r) => { resolve = r }); return { promise, resolve } }
+
+test('only the newest forward lookup moves the PDF', async () => {
+  withPdf()
+  vi.spyOn(api, 'getManuscript').mockResolvedValue(detail())
+  const first = deferred<{ page: number; x: number; y: number }>()
+  const second = deferred<{ page: number; x: number; y: number }>()
+  vi.spyOn(api, 'syncForward').mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise)
+  renderPage()
+  await screen.findByLabelText('LaTeX source')
+  act(() => editor.current!.onShowInPdf!(3))
+  act(() => editor.current!.onShowInPdf!(5))
+  await act(async () => { second.resolve({ page: 2, x: 0, y: 999 }) })
+  const landed = pages().scrollTop
+  expect(landed).toBeGreaterThan(300)
+  await act(async () => { first.resolve({ page: 1, x: 0, y: 100 }) }) // older answer arrives late
+  expect(pages().scrollTop).toBe(landed)
+})
+
+test('an inverse lookup that answers after another file opened is dropped', async () => {
+  withPdf()
+  vi.spyOn(api, 'getManuscript').mockResolvedValue(detail())
+  const late = deferred<{ file: string; line: number }>()
+  vi.spyOn(api, 'syncInverse').mockReturnValue(late.promise)
+  const view = renderPage()
+  await screen.findByLabelText('LaTeX source')
+  fireEvent.click(pages().querySelector('[data-page="1"]')!, { ctrlKey: true })
+  view.open('b.tex')
+  await waitFor(() => expect(screen.getByLabelText('LaTeX source')).toHaveValue('bee'))
+  await act(async () => { late.resolve({ file: 'b.tex', line: 99 }) })
+  expect(editor.current!.jumpTo?.line).not.toBe(99)
+  expect(window.location.hash).toBe('')
+})
+
+test('?line= on the same file jumps again', async () => {
+  vi.spyOn(api, 'getManuscript').mockResolvedValue(detail())
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const ui = (l: number) => <QueryClientProvider client={client}><ManuscriptPage manuscriptId="m1" file="b.tex" line={l} /></QueryClientProvider>
+  const view = render(ui(3))
+  await waitFor(() => expect(editor.current?.jumpTo?.line).toBe(3))
+  view.rerender(ui(8))
+  await waitFor(() => expect(editor.current?.jumpTo?.line).toBe(8))
+})
+
+// ---- edit from the PDF ----
+const dbl = (word: string, page = 1) => {
+  vi.spyOn(window, 'getSelection').mockReturnValue({ toString: () => word, rangeCount: 0 } as unknown as Selection)
+  fireEvent.doubleClick(pages().querySelector(`[data-page="${page}"]`)!, { clientX: 5, clientY: 5 })
+}
+const editBox = () => screen.findByRole('textbox', { name: 'Edit this text' })
+
+test('double-click edits the sentence through the open editor, then compiles', async () => {
+  withPdf()
+  server['main.tex'] = { text: 'Intro line.\nWe study cats. Dogs bark.', at: T2 }
+  vi.spyOn(api, 'getManuscript').mockResolvedValue(detail(GOOD))
+  vi.spyOn(api, 'syncForward').mockRejectedValue(new Error('x'))
+  vi.spyOn(api, 'syncInverse').mockResolvedValue({ file: 'main.tex', line: 2 })
+  const order: string[] = []
+  const save = vi.spyOn(api, 'saveManuscriptFile').mockImplementation(async () => { order.push('save'); return saved() })
+  vi.spyOn(api, 'compileManuscript').mockImplementation(async () => { order.push('compile'); return { state: 'queued' } })
+  renderPage()
+  const src = await screen.findByLabelText('LaTeX source')
+  await waitFor(() => expect(src).toHaveValue('Intro line.\nWe study cats. Dogs bark.'))
+  dbl('Dogs')
+  const box = await editBox()
+  expect(box).toHaveValue('Dogs bark.')
+  fireEvent.change(box, { target: { value: 'Cats purr.' } })
+  fireEvent.keyDown(box, { key: 'Enter' })
+  await waitFor(() => expect(order).toEqual(['save', 'compile']))
+  expect(save).toHaveBeenCalledWith('m1', 'main.tex', 'Intro line.\nWe study cats. Cats purr.', T2)
+  expect(screen.getByLabelText('LaTeX source')).toHaveValue('Intro line.\nWe study cats. Cats purr.')
+})
+
+test('another file is saved through the API with its base, then compiled', async () => {
+  withPdf()
+  server['b.tex'] = { text: 'Bees hum loudly.', at: T3 }
+  vi.spyOn(api, 'getManuscript').mockResolvedValue(detail(GOOD))
+  vi.spyOn(api, 'syncForward').mockRejectedValue(new Error('x'))
+  vi.spyOn(api, 'syncInverse').mockResolvedValue({ file: 'b.tex', line: 1 })
+  const save = vi.spyOn(api, 'saveManuscriptFile').mockResolvedValue({ path: 'b.tex', size: 1, updated_at: T4 })
+  const compile = vi.spyOn(api, 'compileManuscript').mockResolvedValue({ state: 'queued' })
+  renderPage()
+  await screen.findByLabelText('LaTeX source')
+  dbl('Bees')
+  fireEvent.change(await editBox(), { target: { value: 'Bees buzz.' } })
+  fireEvent.keyDown(screen.getByRole('textbox', { name: 'Edit this text' }), { key: 'Enter' })
+  await waitFor(() => expect(compile).toHaveBeenCalled())
+  expect(save).toHaveBeenCalledWith('m1', 'b.tex', 'Bees buzz.', T3)
+})
+
+test('a stale base shows the message and writes nothing', async () => {
+  withPdf()
+  server['b.tex'] = { text: 'Bees hum loudly.', at: T3 }
+  vi.spyOn(api, 'getManuscript').mockResolvedValue(detail(GOOD))
+  vi.spyOn(api, 'syncForward').mockRejectedValue(new Error('x'))
+  vi.spyOn(api, 'syncInverse').mockResolvedValue({ file: 'b.tex', line: 1 })
+  vi.spyOn(api, 'saveManuscriptFile').mockRejectedValue(conflict())
+  const compile = vi.spyOn(api, 'compileManuscript').mockResolvedValue({ state: 'queued' })
+  renderPage()
+  await screen.findByLabelText('LaTeX source')
+  dbl('Bees')
+  await editBox()
+  fireEvent.keyDown(screen.getByRole('textbox', { name: 'Edit this text' }), { key: 'Enter' })
+  expect(await screen.findByText('This file changed since. Open it in the editor to edit it.')).toBeInTheDocument()
+  expect(compile).not.toHaveBeenCalled()
+})
+
+test('text made by LaTeX offers Open in source and edits nothing', async () => {
+  withPdf()
+  server['main.tex'] = { text: 'See \\cite{smith}.', at: T2 }
+  vi.spyOn(api, 'getManuscript').mockResolvedValue(detail(GOOD))
+  vi.spyOn(api, 'syncForward').mockRejectedValue(new Error('x'))
+  vi.spyOn(api, 'syncInverse').mockResolvedValue({ file: 'main.tex', line: 1 })
+  const save = vi.spyOn(api, 'saveManuscriptFile')
+  renderPage()
+  await screen.findByLabelText('LaTeX source')
+  dbl('[1]')
+  expect(await screen.findByText(/This text is made by LaTeX/)).toBeInTheDocument()
+  expect(screen.queryByRole('textbox', { name: 'Edit this text' })).toBeNull()
+  expect(save).not.toHaveBeenCalled()
+})
+
+test('a double-click answered after another file opened is dropped', async () => {
+  withPdf()
+  vi.spyOn(api, 'getManuscript').mockResolvedValue(detail())
+  const late = deferred<{ file: string; line: number }>()
+  vi.spyOn(api, 'syncInverse').mockReturnValue(late.promise)
+  const view = renderPage()
+  await screen.findByLabelText('LaTeX source')
+  dbl('hello')
+  view.open('b.tex')
+  await waitFor(() => expect(screen.getByLabelText('LaTeX source')).toHaveValue('bee'))
+  await act(async () => { late.resolve({ file: 'main.tex', line: 1 }) })
+  expect(screen.queryByRole('textbox', { name: 'Edit this text' })).toBeNull()
+})
+
+test('a second double-click on the same line opens its own sentence', async () => {
+  withPdf()
+  server['main.tex'] = { text: 'We study cats. Dogs bark.', at: T2 }
+  vi.spyOn(api, 'getManuscript').mockResolvedValue(detail(GOOD))
+  vi.spyOn(api, 'syncForward').mockRejectedValue(new Error('x'))
+  vi.spyOn(api, 'syncInverse').mockResolvedValue({ file: 'main.tex', line: 1 })
+  const save = vi.spyOn(api, 'saveManuscriptFile').mockResolvedValue(saved())
+  vi.spyOn(api, 'compileManuscript').mockResolvedValue({ state: 'queued' })
+  renderPage()
+  await waitFor(() => expect(screen.getByLabelText('LaTeX source')).toHaveValue('We study cats. Dogs bark.'))
+  dbl('cats')
+  await waitFor(async () => expect(await editBox()).toHaveValue('We study cats.'))
+  dbl('Dogs')
+  await waitFor(() => expect(screen.getByRole('textbox', { name: 'Edit this text' })).toHaveValue('Dogs bark.'))
+  fireEvent.keyDown(screen.getByRole('textbox', { name: 'Edit this text' }), { key: 'Enter' })
+  await waitFor(() => expect(save).toHaveBeenCalledWith('m1', 'main.tex', 'We study cats. Dogs bark.', T2))
+})
+
+test('typing over the sentence after the box opened is refused and writes nothing', async () => {
+  withPdf()
+  server['main.tex'] = { text: 'Dogs bark.', at: T2 }
+  vi.spyOn(api, 'getManuscript').mockResolvedValue(detail(GOOD))
+  vi.spyOn(api, 'syncForward').mockRejectedValue(new Error('x'))
+  vi.spyOn(api, 'syncInverse').mockResolvedValue({ file: 'main.tex', line: 1 })
+  const compile = vi.spyOn(api, 'compileManuscript').mockResolvedValue({ state: 'queued' })
+  renderPage()
+  await waitFor(() => expect(screen.getByLabelText('LaTeX source')).toHaveValue('Dogs bark.'))
+  dbl('Dogs')
+  await editBox()
+  const save = vi.spyOn(api, 'saveManuscriptFile').mockResolvedValue(saved())
+  fireEvent.change(screen.getByLabelText('LaTeX source'), { target: { value: 'Dogs howl.' } })
+  fireEvent.keyDown(screen.getByRole('textbox', { name: 'Edit this text' }), { key: 'Enter' })
+  expect(await screen.findByText('This file changed since. Open it in the editor to edit it.')).toBeInTheDocument()
+  expect(screen.getByLabelText('LaTeX source')).toHaveValue('Dogs howl.')
+  expect(compile).not.toHaveBeenCalled()
+  expect(save).not.toHaveBeenCalled()
+})
+
+test('when the editor cannot save, the box closes with a plain note and nothing compiles', async () => {
+  withPdf()
+  server['main.tex'] = { text: 'Dogs bark.', at: T2 }
+  vi.spyOn(api, 'getManuscript').mockResolvedValue(detail(GOOD))
+  vi.spyOn(api, 'syncForward').mockRejectedValue(new Error('x'))
+  vi.spyOn(api, 'syncInverse').mockResolvedValue({ file: 'main.tex', line: 1 })
+  vi.spyOn(api, 'saveManuscriptFile').mockRejectedValue(new ApiError('bad_path', 400, { detail: 'bad_path' }))
+  const compile = vi.spyOn(api, 'compileManuscript').mockResolvedValue({ state: 'queued' })
+  renderPage()
+  await waitFor(() => expect(screen.getByLabelText('LaTeX source')).toHaveValue('Dogs bark.'))
+  dbl('Dogs')
+  fireEvent.change(await editBox(), { target: { value: 'Cats purr.' } })
+  fireEvent.keyDown(screen.getByRole('textbox', { name: 'Edit this text' }), { key: 'Enter' })
+  expect(await screen.findByText("Your change is in the editor but couldn't be saved yet. The editor shows why.")).toBeInTheDocument()
+  expect(screen.queryByRole('textbox', { name: 'Edit this text' })).toBeNull()
+  expect(screen.getByLabelText('LaTeX source')).toHaveValue('Cats purr.')
+  expect(compile).not.toHaveBeenCalled()
+})
+
+test('a spot in a file LaTeX wrote (main.bbl) shows the notice without Open in source, and ctrl-click stays put', async () => {
+  withPdf()
+  vi.spyOn(api, 'getManuscript').mockResolvedValue(detail(GOOD))
+  vi.spyOn(api, 'syncForward').mockRejectedValue(new Error('x'))
+  const inverse = vi.spyOn(api, 'syncInverse').mockResolvedValue({ file: 'main.bbl', line: 3 })
+  const save = vi.spyOn(api, 'saveManuscriptFile')
+  renderPage()
+  await screen.findByLabelText('LaTeX source')
+  dbl('Smith')
+  expect(await screen.findByText(/This text is made by LaTeX/)).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Open in source' })).toBeNull()
+  expect(screen.queryByRole('textbox', { name: 'Edit this text' })).toBeNull()
+  fireEvent.click(pages().querySelector('[data-page="2"]')!, { metaKey: true })
+  await waitFor(() => expect(inverse).toHaveBeenCalledTimes(2))
+  await new Promise((r) => setTimeout(r, 0))
+  expect(window.location.hash).toBe('')
+  expect(editor.current!.jumpTo?.line).not.toBe(3)
+  expect(save).not.toHaveBeenCalled()
+})
+
+test('E on the PDF pages opens the box on the whole SyncTeX line at the visible centre', async () => {
+  withPdf()
+  server['main.tex'] = { text: 'Intro.\n\\section{Results} We found it. It works.\nEnd.', at: T2 }
+  vi.spyOn(api, 'getManuscript').mockResolvedValue(detail(GOOD))
+  vi.spyOn(api, 'syncForward').mockRejectedValue(new Error('x'))
+  const inverse = vi.spyOn(api, 'syncInverse').mockResolvedValue({ file: 'main.tex', line: 2 })
+  renderPage()
+  await waitFor(() => expect(screen.getByLabelText('LaTeX source')).toHaveValue('Intro.\n\\section{Results} We found it. It works.\nEnd.'))
+  fireEvent.keyDown(pages(), { key: 'e' })
+  expect(await editBox()).toHaveValue('\\section{Results} We found it. It works.')
+  expect(inverse).toHaveBeenCalledWith('m1', expect.any(Number), expect.any(Number), expect.any(Number))
+})
+
+test('a compile started by an edit from the PDF keeps the PDF where it is; the next compile follows the cursor', async () => {
+  const docs = new Map<string | null, object>()
+  pdf.mockImplementation((url: string | null) => {
+    if (!docs.has(url)) docs.set(url, { numPages: 3 })
+    return { doc: docs.get(url) as never, error: null }
+  })
+  server['main.tex'] = { text: 'Dogs bark.', at: T2 }
+  const get = vi.spyOn(api, 'getManuscript').mockResolvedValue(detail(GOOD))
+  const forward = vi.spyOn(api, 'syncForward').mockResolvedValue({ page: 2, x: 0, y: 300 })
+  vi.spyOn(api, 'syncInverse').mockResolvedValue({ file: 'main.tex', line: 1 })
+  vi.spyOn(api, 'saveManuscriptFile').mockResolvedValue(saved())
+  const compile = vi.spyOn(api, 'compileManuscript').mockResolvedValue({ state: 'queued' })
+  renderPage()
+  await waitFor(() => expect(forward).toHaveBeenCalledTimes(1))
+  await waitFor(() => expect(pages().scrollTop).toBeGreaterThan(0))
+  fireEvent.wheel(pages())
+  pages().scrollTop = 7 // the reader scrolled to the spot they edit
+  await waitFor(() => expect(screen.getByLabelText('LaTeX source')).toHaveValue('Dogs bark.'))
+  get.mockResolvedValue(detail({ compile_status: 'ok', compiled_at: T4 }))
+  dbl('Dogs')
+  fireEvent.change(await editBox(), { target: { value: 'Cats purr.' } })
+  fireEvent.keyDown(screen.getByRole('textbox', { name: 'Edit this text' }), { key: 'Enter' })
+  await waitFor(() => expect(compile).toHaveBeenCalledTimes(1))
+  await waitFor(() => expect(pdf).toHaveBeenLastCalledWith(expect.stringContaining(encodeURIComponent(T4))))
+  await new Promise((r) => setTimeout(r, 0))
+  expect(forward).toHaveBeenCalledTimes(1)
+  expect(pages().scrollTop).toBe(7)
+  // A compile from the editor follows the cursor again.
+  get.mockResolvedValue(detail({ compile_status: 'ok', compiled_at: '2026-10-05T00:00:00Z' }))
+  act(() => { fireEvent.keyDown(screen.getByLabelText('LaTeX source'), { key: 's', ctrlKey: true }) })
+  await waitFor(() => expect(forward).toHaveBeenCalledTimes(2))
+  await waitFor(() => expect(pages().scrollTop).toBeGreaterThan(7)) // placed again (jsdom rects are 0, so it adds up)
 })

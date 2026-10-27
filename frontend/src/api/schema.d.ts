@@ -1384,6 +1384,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/manuscripts/{manuscript_id}/sections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Section */
+        post: operations["add_section_api_manuscripts__manuscript_id__sections_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/sections/split": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Split Sections */
+        post: operations["split_sections_api_manuscripts__manuscript_id__sections_split_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/sections/{path}/retitle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retitle Section */
+        post: operations["retitle_section_api_manuscripts__manuscript_id__sections__path__retitle_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/sections/{path}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Move Section */
+        post: operations["move_section_api_manuscripts__manuscript_id__sections__path__move_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/sections/{path}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Section */
+        delete: operations["delete_section_api_manuscripts__manuscript_id__sections__path__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/manuscripts/{manuscript_id}/compile": {
         parameters: {
             query?: never;
@@ -1410,6 +1495,40 @@ export interface paths {
         };
         /** Get Pdf */
         get: operations["get_pdf_api_manuscripts__manuscript_id__pdf_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/synctex/forward": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Sync Forward */
+        get: operations["sync_forward_api_manuscripts__manuscript_id__synctex_forward_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/synctex/inverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Sync Inverse */
+        get: operations["sync_inverse_api_manuscripts__manuscript_id__synctex_inverse_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5017,6 +5136,33 @@ export interface components {
             /** Label */
             label: string;
         };
+        /** SectionAddIn */
+        SectionAddIn: {
+            /** Title */
+            title: string;
+            /** After */
+            after?: string | null;
+        };
+        /** SectionMoveIn */
+        SectionMoveIn: {
+            /** To */
+            to: number;
+        };
+        /** SectionPathOut */
+        SectionPathOut: {
+            /** Path */
+            path: string;
+        };
+        /** SectionPathsOut */
+        SectionPathsOut: {
+            /** Paths */
+            paths: string[];
+        };
+        /** SectionTitleIn */
+        SectionTitleIn: {
+            /** Title */
+            title: string;
+        };
         /**
          * Series
          * @description One series: a y column (and x, z, error columns) from one dataset, optionally only some of its rows.
@@ -5252,6 +5398,22 @@ export interface components {
              * Format: uuid
              */
             z: string;
+        };
+        /** SyncPointOut */
+        SyncPointOut: {
+            /** Page */
+            page: number;
+            /** X */
+            x: number;
+            /** Y */
+            y: number;
+        };
+        /** SyncSourceOut */
+        SyncSourceOut: {
+            /** File */
+            file: string;
+            /** Line */
+            line: number;
         };
         /** TablePreviewOut */
         TablePreviewOut: {
@@ -8579,6 +8741,172 @@ export interface operations {
             };
         };
     };
+    add_section_api_manuscripts__manuscript_id__sections_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SectionAddIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SectionPathOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    split_sections_api_manuscripts__manuscript_id__sections_split_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SectionPathsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retitle_section_api_manuscripts__manuscript_id__sections__path__retitle_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+                path: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SectionTitleIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SectionPathOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    move_section_api_manuscripts__manuscript_id__sections__path__move_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+                path: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SectionMoveIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_section_api_manuscripts__manuscript_id__sections__path__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+                path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     compile_manuscript_api_manuscripts__manuscript_id__compile_post: {
         parameters: {
             query?: never;
@@ -8627,6 +8955,75 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sync_forward_api_manuscripts__manuscript_id__synctex_forward_get: {
+        parameters: {
+            query: {
+                file: string;
+                line: number;
+            };
+            header?: never;
+            path: {
+                manuscript_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncPointOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sync_inverse_api_manuscripts__manuscript_id__synctex_inverse_get: {
+        parameters: {
+            query: {
+                page: number;
+                x?: number;
+                y?: number;
+            };
+            header?: never;
+            path: {
+                manuscript_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncSourceOut"];
+                };
             };
             /** @description Validation Error */
             422: {
