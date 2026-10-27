@@ -54,7 +54,7 @@ it('is paused for 2 s after a keystroke anywhere, then resumes', () => {
 it('maps hand callbacks to deck actions and holds to card or tab selects', () => {
   const onAction = vi.fn()
   const onSelect = vi.fn()
-  render(<Host onAction={onAction} onSelect={onSelect} onHidden={onHidden} />)
+  render(<Host onAction={onAction} onSelect={onSelect} />)
   const p = hm.props as { onHop: (n: number) => void; onZoom: (f: number) => void; onTurn: (a: number) => void; onSelect: (id: string) => void }
   p.onHop(1)
   p.onZoom(1.3)
