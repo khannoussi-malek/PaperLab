@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { ApiError } from '@/api/client'
 import { useAllDatasets, useDataset, usePinPaper } from '@/api/queries'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -30,13 +30,16 @@ function Preview({ table }: { table: TableInput }) {
 }
 
 /** Inserts a table from a saved dataset or a paste, as a booktabs `table` at the cursor. */
-export function TableDialog({ open, onOpenChange, manuscriptId, labelTexts, onInsert }: {
+export function TableDialog({ open, onOpenChange, manuscriptId, labelTexts, onInsert, onClosed }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   manuscriptId: string
   labelTexts: () => string[]
   onInsert: (code: string, packages: string[]) => Promise<InsertResult>
+  /** After the dialog closes, who gets focus back: the caller decides (the editor after an insert, else the Insert button). */
+  onClosed?: (inserted: boolean) => void
 }) {
+  const inserted = useRef(false)
   const datasets = useAllDatasets()
   const pin = usePinPaper()
   const [source, setSource] = useState<'dataset' | 'paste'>('dataset')
@@ -85,7 +88,10 @@ export function TableDialog({ open, onOpenChange, manuscriptId, labelTexts, onIn
       const built = build(cite)
       if (!('code' in built)) return setError(built.problem)
       const result = await onInsert(built.code, ['booktabs'])
-      if (result.ok) onOpenChange(false)
+      if (result.ok) {
+        inserted.current = true
+        onOpenChange(false)
+      }
       else setError(result.message)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -96,7 +102,7 @@ export function TableDialog({ open, onOpenChange, manuscriptId, labelTexts, onIn
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl" onCloseAutoFocus={(e) => { e.preventDefault(); onClosed?.(inserted.current) }}>
         <DialogHeader>
           <DialogTitle>Insert a table</DialogTitle>
           <DialogDescription>From a saved dataset or a paste, as a booktabs table at your cursor.</DialogDescription>
