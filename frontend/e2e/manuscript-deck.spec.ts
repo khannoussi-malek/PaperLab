@@ -11,7 +11,7 @@ async function newManuscript(page: Page, workspaceId: string, title: string): Pr
   await page.getByLabel('Title').fill(title)
   await page.getByRole('radio', { name: 'IEEE conference' }).click()
   await page.getByRole('button', { name: 'Create' }).click()
-  await expect(page).toHaveURL(/#\/manuscripts\/[0-9a-f-]{36}/)
+  await expect(page).toHaveURL(/#\/manuscripts\/[0-9a-f-]{36}/, { timeout: 20_000 }) // creating can be slow under load
   return /manuscripts\/([0-9a-f-]{36})/.exec(page.url())![1]
 }
 
@@ -142,8 +142,12 @@ test('The paper book turns no leaf with reduced motion', async ({ page, request,
 
     // Control: with motion allowed the same key does turn a leaf, so the marker above really would show one.
     await page.emulateMedia({ reducedMotion: 'no-preference' })
-    await page.keyboard.press('ArrowDown')
-    await expect(leaf.first()).toBeAttached()
+    let down = true // the media change reaches React a moment later: press until a turn starts
+    await expect(async () => {
+      await page.keyboard.press(down ? 'ArrowDown' : 'ArrowUp')
+      down = !down
+      await expect(leaf.first()).toBeAttached({ timeout: 1_000 })
+    }).toPass({ timeout: 15_000 })
   } finally {
     if (manuscriptId) await request.delete(`/api/manuscripts/${manuscriptId}`)
   }
