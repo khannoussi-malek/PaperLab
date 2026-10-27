@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
 import { api } from '@/api/client'
 import { useManuscriptPapers, useNotes, usePinPaper } from '@/api/queries'
 import { TabSkeleton } from '@/features/workspaces/TabStates'
@@ -6,6 +6,8 @@ import { noteHref, readerHref } from '@/lib/route'
 import { manuscriptFailure } from '../errors'
 import { bookItems, citedKeys, deckOrder, insertText, type BookItem, type DeckPaper } from './deckModel'
 import { PaperBook } from './PaperBook'
+import { DeckHands, HANDS_HELP } from './DeckHands'
+import type { DeckAction } from './deckGestures'
 import { PaperDeck } from './PaperDeck'
 
 const RANK_DELAY_MS = 500
@@ -23,13 +25,23 @@ export type DeckColumnProps = {
   openKey: { key: string; n: number } | null
 }
 
+/** What the hands can do to an open book: move between its items, or turn to one by id. */
+type BookControls = { step: (by: 1 | -1) => void; selectId: (id: string) => void }
+
 const openReader = (href: string) => window.open(href, '_blank', 'noopener')
 
-function OpenBook({ manuscriptId, paper, onInsert, onClose, onNotice }: { manuscriptId: string; paper: DeckPaper; onInsert: DeckColumnProps['onInsert']; onClose: () => void; onNotice: (s: string | null) => void }) {
+function OpenBook({ manuscriptId, paper, onInsert, onClose, onNotice, controls }: { controls: MutableRefObject<BookControls | null>; manuscriptId: string; paper: DeckPaper; onInsert: DeckColumnProps['onInsert']; onClose: () => void; onNotice: (s: string | null) => void }) {
   const notes = useNotes(paper.paper_id)
   const pin = usePinPaper()
   const items = useMemo(() => bookItems(notes.data ?? [], paper.paper_id), [notes.data, paper.paper_id])
   const [selected, setSelected] = useState(0)
+  useEffect(() => {
+    controls.current = {
+      step: (by) => setSelected((i) => Math.min(Math.max(i + by, 0), Math.max(items.length - 1, 0))),
+      selectId: (id) => { const i = items.findIndex((it) => it.id === id); if (i >= 0) setSelected(i) },
+    }
+    return () => { controls.current = null }
+  }, [controls, items])
 
   const insert = async (item: BookItem | null) => {
     onNotice(null)
@@ -68,6 +80,9 @@ export function DeckColumn({ manuscriptId, sectionKey, sectionText, allTexts, on
   const [openId, setOpenId] = useState<string | null>(null)
   const [ranked, setRanked] = useState<string[]>([])
   const [notice, setNotice] = useState<string | null>(null)
+  const [hands, setHands] = useState(false) // off until asked: it turns the camera on
+  const column = useRef<HTMLDivElement>(null)
+  const book = useRef<BookControls | null>(null)
 
   // Once per section opened (after a pause), never per keystroke; no ranking is fine, so a failure is silent.
   const text = useRef(sectionText)
@@ -91,6 +106,21 @@ export function DeckColumn({ manuscriptId, sectionKey, sectionText, allTexts, on
   const at = Math.max(0, shown.findIndex((p) => p.paper_id === currentId)) // by id, so a reorder never changes the paper you are on
   const open = ordered.find((p) => p.paper_id === openId) ?? null
 
+  const onHands = (a: DeckAction) => {
+    if (a.type === 'step') {
+      if (book.current) book.current.step(a.by)
+      else if (shown.length) setCurrentId(shown[Math.min(Math.max(at + a.by, 0), shown.length - 1)].paper_id)
+    } else if (a.type === 'open') {
+      if (!open && shown[at]) { setCurrentId(shown[at].paper_id); setOpenId(shown[at].paper_id) }
+    } else setOpenId(null)
+  }
+  const onHold = (id: string, kind: 'card' | 'tab') => {
+    if (kind === 'tab') return book.current?.selectId(id)
+    if (open) return
+    if (id === shown[at]?.paper_id) setOpenId(id) // a second hold on the front card opens it
+    else setCurrentId(id)
+  }
+
   const handled = useRef(0)
   useEffect(() => {
     if (!openKey || openKey.n === handled.current || !papers.data) return
@@ -108,10 +138,15 @@ export function DeckColumn({ manuscriptId, sectionKey, sectionText, allTexts, on
 
   const cited = new Set([...inSection, ...elsewhere])
   return (
+    <div ref={column} className="relative h-full">
     <div className="h-full overflow-auto p-2">
+      <div className="mb-1 flex items-center justify-end gap-2">
+        {hands && <span className="text-[11px] text-muted-foreground">{HANDS_HELP}</span>}
+        <button type="button" aria-pressed={hands} onClick={() => setHands((h) => !h)} className="rounded-md border border-border px-2 py-0.5 text-xs aria-pressed:bg-primary aria-pressed:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Hands</button>
+      </div>
       {notice && <p role="status" className="mb-2 rounded-md border border-border bg-muted px-2 py-1 text-xs">{notice}</p>}
       {open ? (
-        <OpenBook key={open.paper_id} manuscriptId={manuscriptId} paper={open} onInsert={onInsert} onClose={() => setOpenId(null)} onNotice={setNotice} />
+        <OpenBook key={open.paper_id} manuscriptId={manuscriptId} paper={open} onInsert={onInsert} onClose={() => setOpenId(null)} onNotice={setNotice} controls={book} />
       ) : (
         <PaperDeck
           papers={shown}
@@ -124,6 +159,8 @@ export function DeckColumn({ manuscriptId, sectionKey, sectionText, allTexts, on
           cited={cited}
         />
       )}
+    </div>
+    {hands && <DeckHands column={column} onAction={onHands} onSelect={onHold} />}
     </div>
   )
 }
