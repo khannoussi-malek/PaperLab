@@ -90,6 +90,13 @@ describe('lensNotice', () => {
     expect(lensNotice(critical)).toEqual({ kind: 'missing', text: 'No limitations section found in this paper.' })
   })
 
+  it('does not send a paper with no headings to Full paper to fix a role (Full paper has no menu then)', () => {
+    expect(lensNotice(lens({ id: 'related', label: 'Related work', chunk_ids: [] }), true, false)).toEqual({
+      kind: 'empty',
+      text: 'This paper has no sections for Related work.',
+    })
+  })
+
   it('gives an empty Critical check the empty state, not the limitations line', () => {
     const critical = lens({ id: 'critical', label: 'Critical check', chunk_ids: [], missing_roles: ['limitations'] })
     expect(lensNotice(critical)?.kind).toBe('empty')
@@ -142,6 +149,15 @@ describe('briefProblem', () => {
       message: NO_PDF_LENS_TEXT,
       retryable: false,
       reindex: false,
+    })
+  })
+
+  it('sends a missing model to Settings to write briefs, not to chat', () => {
+    expect(briefProblem(409, 'no_model', 'Key ideas')).toEqual({
+      message: 'Add a model in Settings to write briefs.',
+      retryable: false,
+      reindex: false,
+      settings: true,
     })
   })
 

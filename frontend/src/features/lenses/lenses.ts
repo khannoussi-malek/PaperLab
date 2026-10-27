@@ -42,16 +42,20 @@ export type LensNotice = { kind: 'no_pdf' | 'empty' | 'fallback' | 'missing'; te
 /** A paper without a PDF has no sections, so every lens is empty and none of the section notices apply (R1). */
 export const NO_PDF_LENS_TEXT = "Lenses read a paper's sections. Attach its PDF to use them."
 
-export const emptyLensText = (label: string) =>
-  `This paper has no sections for ${label}. Switch to Full paper to fix a section's role.`
+/** `headed`: the paper has a heading. Without one Full paper has no Change role menu, so the hint is dropped. */
+export const emptyLensText = (label: string, headed = true) =>
+  `This paper has no sections for ${label}.${headed ? " Switch to Full paper to fix a section's role." : ''}`
+
+/** Whether any section has a heading, so a role can be fixed in Full paper. */
+export const hasHeadings = (sections: Pick<Section, 'title'>[]) => sections.some((section) => section.title !== null)
 
 type NoticeFields = Pick<Lens, 'id' | 'label' | 'chunk_ids' | 'positional_fallback' | 'missing_roles'>
 
 /** What the Lens tab says above a lens's sections, if anything (spec §2). Without a PDF it says only that. */
-export function lensNotice(lens: NoticeFields, hasPdf = true): LensNotice | null {
+export function lensNotice(lens: NoticeFields, hasPdf = true, headed = true): LensNotice | null {
   if (!hasPdf) return { kind: 'no_pdf', text: NO_PDF_LENS_TEXT }
   if (lens.id === 'full') return null
-  if (lens.chunk_ids.length === 0) return { kind: 'empty', text: emptyLensText(lens.label) }
+  if (lens.chunk_ids.length === 0) return { kind: 'empty', text: emptyLensText(lens.label, headed) }
   if (lens.positional_fallback) {
     return { kind: 'fallback', text: 'No Introduction or Conclusion headings found. Showing the start and end of the paper.' }
   }
@@ -72,5 +76,6 @@ export function lensSections(sections: Section[], lens: Pick<Lens, 'id' | 'chunk
 export function briefProblem(status: number, detail: string, lensLabel: string): ChatProblem {
   if (detail === 'lens_empty') return { message: emptyLensText(lensLabel), retryable: false, reindex: false }
   if (detail === 'needs_full_text') return { message: NO_PDF_LENS_TEXT, retryable: false, reindex: false }
+  if (detail === 'no_model') return { message: 'Add a model in Settings to write briefs.', retryable: false, reindex: false, settings: true }
   return refusal(status, detail)
 }
