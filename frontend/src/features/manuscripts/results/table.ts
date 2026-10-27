@@ -13,17 +13,24 @@ const plain = (s: string) => Number(s.replace(/,/g, ''))
 
 /** A pasted cell: a number, optionally `± error` and `%`; anything else (including `1.234,5`) stays text. */
 const toCell = (text: string): TableCell => {
-  const raw = text.trim()
-  const m = CELL.exec(raw)
+  const raw = text
+  const m = CELL.exec(raw.trim())
   return { raw, value: m ? plain(m[1]) : null, error: m?.[2] ? plain(m[2]) : null }
 }
 
 /** RFC 4180 reader with a chosen delimiter: quoted fields keep delimiters and newlines, `""` is a quote. */
-function splitRecords(text: string, delim: string): string[][] {
+function splitRecords(input: string, delim: string): string[][] {
+  const text = input.replace(/^\ufeff/, '')
   const rows: string[][] = []
   let row: string[] = []
   let field = ''
   let quoted = false
+  let wasQuoted = false
+  const endField = () => {
+    row.push(wasQuoted ? field : field.trim())
+    field = ''
+    wasQuoted = false
+  }
   for (let i = 0; i < text.length; i++) {
     const c = text[i]
     if (quoted) {
@@ -31,29 +38,26 @@ function splitRecords(text: string, delim: string): string[][] {
       else if (text[i + 1] === '"') {
         field += '"'
         i++
-      }
-      else quoted = false
-    } else if (c === '"' && field === '') quoted = true
-    else if (c === delim) {
-      row.push(field)
+      } else quoted = false
+    } else if (c === '"' && !wasQuoted && field.trim() === '') {
+      quoted = wasQuoted = true
       field = ''
-    }
+    } else if (c === delim) endField()
     else if (c === '\n' || c === '\r') {
       if (c === '\r' && text[i + 1] === '\n') i++
-      row.push(field)
+      endField()
       rows.push(row)
       row = []
-      field = ''
-    } else field += c
+    } else if (!wasQuoted || c.trim() !== '') field += c
   }
-  row.push(field)
+  endField()
   rows.push(row)
   return rows
 }
 
 /** TSV if any line has a tab, else CSV; the first row is the headers. Ragged rows are padded, empty trailing rows and columns dropped. */
 export function parsePasted(text: string): TableInput {
-  const grid = splitRecords(text, text.includes('\t') ? '\t' : ',').map((r) => r.map((f) => f.trim()))
+  const grid = splitRecords(text, text.includes('\t') ? '\t' : ',')
   while (grid.length && grid[grid.length - 1].every((f) => f === '')) grid.pop()
   const width = grid.reduce((w, r) => {
     const last = r.findLastIndex((f) => f !== '')
@@ -81,19 +85,23 @@ export function datasetToTable(detail: Dataset): TableInput {
   }
 }
 
+const oneLine = (text: string) => latexEscape(text.replace(/\s*[\n\r\t]+\s*/g, ' '))
+
 const showNumber = (cell: TableCell, decimals: number | null): string => {
-  const pct = cell.raw.trimEnd().endsWith('%') ? '\\%' : ''
-  if (cell.value === null) return latexEscape(cell.raw)
-  if (decimals === null) {
-    const parts = cell.raw.split(PM_SPLIT)
-    if (parts.length === 2) return `$${latexEscape(parts[0])} \\pm ${latexEscape(parts[1])}$`
-    return cell.error === null ? latexEscape(cell.raw) : `$${latexEscape(cell.raw)} \\pm ${cell.error}$`
+  if (cell.value === null) return oneLine(cell.raw)
+  const [first, second] = cell.raw.trim().split(PM_SPLIT)
+  const clean = CELL.test(cell.raw.trim())
+  const num = (n: number, pct: boolean) => (decimals === null ? String(n) : n.toFixed(decimals)) + (pct ? '\\%' : '')
+  if (clean && decimals === null) {
+    return second === undefined ? oneLine(cell.raw.trim()) : `$${latexEscape(first)} \\pm ${latexEscape(second)}$`
   }
-  const v = cell.value.toFixed(decimals) + pct
-  return cell.error === null ? v : `$${v} \\pm ${cell.error.toFixed(decimals)}${pct}$`
+  const v = clean && decimals !== null ? num(cell.value, first.includes('%')) : num(cell.value, false)
+  if (cell.error === null) return decimals === null ? oneLine(cell.raw) : v
+  return `$${v} \\pm ${num(cell.error, clean && !!second?.includes('%'))}$`
 }
 
 export function toBooktabs(t: TableInput, opts: BooktabsOptions): string {
+  if (t.headers.length === 0) throw new Error('The table has no columns.')
   const numeric = t.headers.map((_, c) => {
     const filled = t.rows.map((r) => r[c]).filter((x) => x && x.raw !== '')
     return c > 0 && filled.length > 0 && filled.every((x) => x.value !== null)
@@ -108,7 +116,7 @@ export function toBooktabs(t: TableInput, opts: BooktabsOptions): string {
     line(
       t.headers.map((_, c) => {
         const cell = r[c] ?? { raw: '', value: null, error: null }
-        if (!numeric[c] || cell.raw === '') return latexEscape(cell.raw)
+        if (!numeric[c] || cell.raw === '') return oneLine(cell.raw)
         const text = showNumber(cell, opts.decimals)
         return best[c] !== null && cell.value === best[c] ? `\\textbf{${text}}` : text
       }),
@@ -119,7 +127,7 @@ export function toBooktabs(t: TableInput, opts: BooktabsOptions): string {
     '\\centering',
     `\\begin{tabular}{${numeric.map((n) => (n ? 'r' : 'l')).join('')}}`,
     '\\toprule',
-    line(t.headers.map(latexEscape)),
+    line(t.headers.map(oneLine)),
     '\\midrule',
     ...body,
     '\\bottomrule',

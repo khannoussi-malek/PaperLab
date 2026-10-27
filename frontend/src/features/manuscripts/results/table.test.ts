@@ -34,6 +34,34 @@ describe('parsePasted', () => {
   })
 })
 
+describe('fix round 1', () => {
+  const cell = (column_id: string, raw: string, value: number | null, error: number | null) => ({ column_id, raw, value, error })
+  const one = (raw: string, value: number, error: number) =>
+    ({ headers: ['M', 'F'], rows: [[cell('', 'A', null, null), cell('', raw, value, error)]] })
+  it('blank paste gives no columns and toBooktabs refuses it', () => {
+    expect(parsePasted('  \n ').headers).toEqual([])
+    expect(() => toBooktabs(parsePasted(''), opts)).toThrow(/no columns/i)
+  })
+  it('falls back to numbers when a dataset raw does not split on the error sign', () => {
+    expect(toBooktabs(one('88 ± 1 (n=3)', 88, 1), opts)).toContain('A & $88 \\pm 1$ \\\\')
+    expect(toBooktabs(one('88.5 (±1.2)', 88.5, 1.2), { ...opts, decimals: 2 })).toContain('A & $88.50 \\pm 1.20$ \\\\')
+  })
+  it('strips a leading BOM', () => {
+    const t = parsePasted('\ufeff"a, b",c\n1,2')
+    expect(t.headers).toEqual(['a, b', 'c'])
+  })
+  it('keeps % on a percent value with an error in decimals mode', () => {
+    expect(toBooktabs(parsePasted('M\tF\nA\t85% ± 2'), { ...opts, decimals: 1 })).toContain('$85.0\\% \\pm 2.0$')
+  })
+  it('collapses tabs and newlines inside cell text on output', () => {
+    expect(toBooktabs(parsePasted('M\tN\n"a\nb\tc"\tx'), opts)).toContain('a b c & x')
+  })
+  it('opens a quote after leading whitespace, keeps spaces inside quotes, reads CRLF', () => {
+    const t = parsePasted('a,b\r\nx, " y, z "\r\n')
+    expect(texts(t)).toEqual([['x', ' y, z ']])
+  })
+})
+
 describe('toBooktabs', () => {
   it('writes the plain table', () => {
     expect(toBooktabs(parsePasted('Model\tF1\nBERT\t88.5\nGPT\t90'), opts)).toBe(
