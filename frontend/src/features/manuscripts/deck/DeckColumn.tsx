@@ -83,6 +83,15 @@ export function DeckColumn({ manuscriptId, sectionKey, sectionText, allTexts, on
   const [hands, setHands] = useState(false) // off until asked: it turns the camera on
   const column = useRef<HTMLDivElement>(null)
   const book = useRef<BookControls | null>(null)
+  // Esc / Back to the deck: the book leaves the DOM, so focus goes back to the deck, never to <body>.
+  // Not for a hand gesture: focus may be in the editor then.
+  const refocus = useRef(false)
+  const closeBook = () => { refocus.current = true; setOpenId(null) }
+  useEffect(() => {
+    if (openId || !refocus.current) return
+    refocus.current = false
+    column.current?.querySelector<HTMLElement>('[aria-roledescription="paper deck"]')?.focus()
+  }, [openId])
 
   // Once per section opened (after a pause), never per keystroke; no ranking is fine, so a failure is silent.
   const text = useRef(sectionText)
@@ -146,7 +155,7 @@ export function DeckColumn({ manuscriptId, sectionKey, sectionText, allTexts, on
       </div>
       {notice && <p role="status" className="mb-2 rounded-md border border-border bg-muted px-2 py-1 text-xs">{notice}</p>}
       {open ? (
-        <OpenBook key={open.paper_id} manuscriptId={manuscriptId} paper={open} onInsert={onInsert} onClose={() => setOpenId(null)} onNotice={setNotice} controls={book} />
+        <OpenBook key={open.paper_id} manuscriptId={manuscriptId} paper={open} onInsert={onInsert} onClose={closeBook} onNotice={setNotice} controls={book} />
       ) : (
         <PaperDeck
           papers={shown}

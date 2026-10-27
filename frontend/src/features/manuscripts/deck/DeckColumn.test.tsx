@@ -101,3 +101,13 @@ it('has a Hands toggle, off by default, that says the camera stays on this compu
   expect(toggle).toHaveAttribute('aria-pressed', 'true')
   expect(screen.getByText('The camera picture stays on this computer.')).toBeInTheDocument()
 })
+
+it('closing the book (Esc or Back to the deck) puts focus back on the deck, not on the page', async () => {
+  setup()
+  fireEvent.keyDown(await deck(), { key: 'Enter' })
+  fireEvent.keyDown(await screen.findByRole('group', { name: 'Gamma' }), { key: 'Escape' })
+  await waitFor(() => expect(screen.getByRole('group', { name: 'Papers' })).toHaveFocus())
+  fireEvent.keyDown(await deck(), { key: 'Enter' })
+  fireEvent.click(await screen.findByRole('button', { name: 'Back to the deck' }))
+  await waitFor(() => expect(screen.getByRole('group', { name: 'Papers' })).toHaveFocus())
+})
