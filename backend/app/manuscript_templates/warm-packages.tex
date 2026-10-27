@@ -34,6 +34,14 @@ Warm text with \textbf{bold}, \textit{italic}, \texttt{mono}, \textsc{small caps
 \begin{tabular}{lr}\toprule a & 1 \\ \midrule \multirow{2}{*}{b} & 2 \\ & 3 \\ \bottomrule\end{tabular}
 \begin{tikzpicture}\draw (0,0) -- (1,1);\end{tikzpicture}
 \begin{tikzpicture}\begin{axis}[width=4cm]\addplot {x^2};\end{axis}\end{tikzpicture}
+% Log-axis tick labels (10^2) and script-size maths need the small Computer Modern fonts (cmr5, cmr7, cmmi5, cmmi7 ...)
+\begin{tikzpicture}\begin{axis}[ymode=log,xmode=log,ymin=1,ymax=1000,xmin=1,xmax=1000,width=4cm]\addplot coordinates {(1,2) (10,200) (100,900)};\end{axis}\end{tikzpicture}
+% The packages above switch maths to Times/Latin Modern; plain article papers use Computer Modern, so load its small sizes by name
+{\fontencoding{OT1}\fontfamily{cmr}\selectfont \fontsize{5}{6}\selectfont a \fontsize{6}{7}\selectfont b \fontsize{7}{8}\selectfont c \fontsize{8}{9}\selectfont d \fontsize{9}{10}\selectfont e \bfseries\fontsize{5}{6}\selectfont f \fontsize{7}{8}\selectfont g}
+{\fontencoding{OML}\fontfamily{cmm}\fontshape{it}\selectfont \fontsize{5}{6}\selectfont a \fontsize{6}{7}\selectfont b \fontsize{7}{8}\selectfont c \fontsize{8}{9}\selectfont d \fontsize{9}{10}\selectfont e \fontsize{10}{12}\selectfont f}
+{\fontencoding{OMS}\fontfamily{cmsy}\fontshape{n}\selectfont \fontsize{5}{6}\selectfont a \fontsize{7}{8}\selectfont b \fontsize{10}{12}\selectfont c}
+{\fontencoding{OMX}\fontfamily{cmex}\fontshape{n}\selectfont \fontsize{10}{12}\selectfont a}
+$x^{2^{2}} + y_{i_{j}} + {\scriptstyle a_1 + \alpha^2} + {\scriptscriptstyle b_2 + \beta^3} + 10^{-3}$
 \begin{lstlisting}
 int main() { return 0; }
 \end{lstlisting}
