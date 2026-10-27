@@ -166,9 +166,13 @@ export function LatexEditor({ value, onChange, errors, onSave, jumpTo, onCursor,
     view.current = editor
     latest.current.registerInsert?.((text) => {
       const at = moved.current ? editor.state.selection.main.head : editor.state.doc.length // never over a selection
+      // A comment (an AI note, D118) gets lines of its own: mid-line it would comment out the rest of the researcher's line.
+      const line = editor.state.doc.lineAt(at)
+      const own = text.startsWith('%')
+      const insert = `${own && at > line.from ? '\n' : ''}${text}${own && at < line.to ? '\n' : ''}`
       editor.dispatch({
-        changes: { from: at, insert: text },
-        selection: { anchor: at + text.length },
+        changes: { from: at, insert },
+        selection: { anchor: at + insert.length },
         scrollIntoView: true,
         userEvent: 'input.paste', // a normal edit: reported to onChange (autosave) and undoable
       })

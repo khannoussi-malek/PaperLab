@@ -110,3 +110,21 @@ test('an insert never replaces a selection left in an unfocused editor', () => {
   insert!('X')
   expect(cm(container).state.doc.toString()).toBe('abXc')
 })
+
+test('an inserted comment (an AI note) lands on lines of its own, so it never comments out the researcher\'s text', () => {
+  let insert: ((t: string) => void) | null = null
+  const { container } = render(<LatexEditor value="We show that results hold." onChange={() => {}} errors={[]} onSave={() => {}} registerInsert={(f) => { insert = f }} />)
+  const view = cm(container)
+  view.dispatch({ selection: { anchor: 'We show that '.length } })
+  insert!('% AI note (not your text): x')
+  expect(view.state.doc.toString()).toBe('We show that \n% AI note (not your text): x\nresults hold.')
+  expect(view.state.doc.lineAt(view.state.selection.main.head).text).toBe('results hold.') // outside the comment
+  // At a line start or end, no blank line is added on that side.
+  view.dispatch({ selection: { anchor: 0 } })
+  insert!('% a')
+  expect(view.state.doc.line(1).text).toBe('% a')
+  expect(view.state.doc.line(2).text).toBe('We show that ')
+  view.dispatch({ selection: { anchor: view.state.doc.length } })
+  insert!('% b')
+  expect(view.state.doc.toString().endsWith('results hold.\n% b')).toBe(true)
+})
