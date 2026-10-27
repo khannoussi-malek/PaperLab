@@ -94,9 +94,10 @@ function addPlot(s: Live, categorical: boolean, legend: boolean): string {
 
 /** The chart as a full `figure`: data embedded inline, one \addplot per series. Call only when pgfplotsSupport is ok. */
 export function toPgfplots(spec: ChartSpec, data: ResolvedData, opts: { caption: string; label: string }): string {
-  if (!isSeries(spec)) throw new Error(PICTURE_REASON)
+  const support = pgfplotsSupport(spec, data)
+  if (!support.ok) throw new Error(support.reason)
+  if (!isSeries(spec)) throw new Error(PICTURE_REASON) // narrows the type; unreachable after the check
   const live = liveSeries(spec, data)
-  if (live.length === 0) throw new Error(NO_DATA_REASON)
   const byId = new Map(data.datasets.map((d) => [d.id, d]))
   const first = live[0]
   const firstData = byId.get(first.series.dataset_id)
