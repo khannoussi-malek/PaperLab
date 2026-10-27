@@ -94,6 +94,7 @@ export function LibraryDeck({ papers }: { papers: Paper[] }) {
           onCurrent={(i) => setCurrentId(shown[i]?.paper_id ?? null)}
           onOpen={(i) => { setCurrentId(shown[i].paper_id); setOpenId(shown[i].paper_id) }}
           label="Papers"
+          fill
         />
       )}
       {hands && <DeckHands column={column} onAction={onHands} onSelect={onHold} onHidden={() => setHands(false)} />}
