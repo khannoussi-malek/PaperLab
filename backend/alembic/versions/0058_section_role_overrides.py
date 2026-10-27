@@ -7,8 +7,8 @@ Create Date: 2026-10-25
 
 from alembic import op
 
-# K21: the next free revision when the branch was cut, chained to the head then. If another branch takes this number
-# first, renumber the file, revision, down_revision, this docstring and test_invariants.py's downgrade target.
+# K21: renumbered to follow main's 0057 (manuscript evidence). If another migration lands on main first, renumber again:
+# the file, revision, down_revision, this docstring and test_invariants.py's downgrade target.
 revision = "0058"
 down_revision = "0057"
 branch_labels = None
