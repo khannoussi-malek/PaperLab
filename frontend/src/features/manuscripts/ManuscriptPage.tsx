@@ -29,6 +29,7 @@ import { keptTexts, useKeptTexts } from './keptTexts'
 import { KeptTextAlert } from './KeptTextAlert'
 import { JumpPalette } from './JumpPalette'
 import { jumpTargets, type Target } from './jumpTargets'
+import type { PreambleEdit } from './results/insertBlock'
 import { useInsertBlock } from './results/useInsertBlock'
 import { SourcePane } from './SourcePane'
 import { useLeaveWarning } from './useLeaveWarning'
@@ -60,14 +61,14 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
   const onState = useCallback((p: string, s: SaveState) => setSaveStates((all) => ({ ...all, [p]: s })), [])
   const replaceRef = useRef<((line: number, start: number, end: number, text: string) => void) | null>(null)
   const registerReplace = useCallback((f: typeof replaceRef.current) => { replaceRef.current = f }, [])
-  const insertRef = useRef<((text: string, block?: boolean) => void) | null>(null)
+  const insertRef = useRef<((text: string, block?: boolean, preamble?: PreambleEdit) => void) | null>(null)
   const registerInsert = useCallback((f: typeof insertRef.current) => { insertRef.current = f }, [])
   const findRef = useRef<(() => boolean) | null>(null)
   const registerFindEvidence = useCallback((f: typeof findRef.current) => { findRef.current = f }, [])
   const findFromDeck = useCallback(() => findRef.current?.() ?? false, [])
-  const insertAtCursor = useCallback((text: string, block = false) => {
+  const insertAtCursor = useCallback((text: string, block = false, preamble?: PreambleEdit) => {
     if (!insertRef.current) return false
-    insertRef.current(text, block)
+    insertRef.current(text, block, preamble)
     return true
   }, [])
   const [openKey, setOpenKey] = useState<{ key: string; n: number } | null>(null)
@@ -226,7 +227,7 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
   }
   const insertBlock = useInsertBlock({
     manuscriptId, mainFile: data?.main_file ?? null, openPath: path ?? null, getText: (p) => textsRef.current[p],
-    replace: (line, col, text) => replaceRef.current?.(line, col, col, text), canReplace: () => !!replaceRef.current, hasEditor: () => !!insertRef.current, insert: insertAtCursor,
+    hasEditor: () => !!insertRef.current, insert: insertAtCursor,
   })
   const rows = useMemo(() => (data ? sectionRows(fileTexts, data.main_file, new Set(data.files.map((f) => f.path))) : []), [data, fileTexts])
   const targets = useMemo(() => jumpTargets(rows, items, fileTexts, libraryPapers.data ?? []), [rows, items, fileTexts, libraryPapers.data])
