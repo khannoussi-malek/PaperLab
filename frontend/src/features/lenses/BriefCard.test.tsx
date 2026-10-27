@@ -70,4 +70,18 @@ describe('BriefCard', () => {
     expect(document.querySelector('.brief-text')).toHaveTextContent('The method')
     expect(document.querySelector('.brief-meta')).toHaveTextContent('fake:m')
   })
+
+  it('gives a failed brief that wrote nothing and has nothing saved its Generate back, with the error above', () => {
+    const { onGenerate } = card({ stream: { ...idle, status: 'error', lens: 'key_ideas', problem: { message: 'The model failed.', retryable: false, reindex: false } } })
+    expect(screen.getByRole('alert')).toHaveTextContent('The model failed.')
+    fireEvent.click(screen.getByRole('button', { name: 'Generate brief' }))
+    expect(onGenerate).toHaveBeenCalled()
+  })
+
+  it('links a missing model to Settings → Models', () => {
+    card({ stream: { ...idle, status: 'error', lens: 'key_ideas', problem: { message: 'Add a model in Settings to write briefs.', retryable: false, reindex: false, settings: true } } })
+    expect(screen.getByRole('alert')).toHaveTextContent('Add a model in Settings to write briefs.')
+    expect(screen.getByRole('link', { name: 'Open settings' })).toHaveAttribute('href', '#/settings/models')
+    expect(screen.getByRole('button', { name: 'Generate brief' })).toBeInTheDocument()
+  })
 })

@@ -7,6 +7,7 @@ import { describeSource, splitCitations } from '@/features/chat/citations'
 import { markdownPieces } from '@/features/chat/markdown'
 import { renderPieces } from '@/features/chat/renderPieces'
 import { ProvenanceBadge } from '@/features/notes/ProvenanceBadge'
+import { settingsSectionHref } from '@/lib/route'
 import type { BriefStream } from './useBriefStream'
 
 type Props = {
@@ -25,8 +26,8 @@ type Props = {
 export function BriefCard({ lens, saved, stream, onGenerate, onCite }: Props) {
   const mine = stream.lens === lens.id && stream.status !== 'idle'
   const failed = mine && stream.status === 'error' && stream.problem !== null
-  // A failed brief that wrote nothing gives the card back to the saved one; the error sits above it.
-  const live = mine && !(stream.status === 'done' && saved?.id === stream.outputId) && !(failed && saved && stream.segments.length === 0)
+  // A failed brief that wrote nothing gives the card back: to the saved one, or to Generate; the error sits above it.
+  const live = mine && !(stream.status === 'done' && saved?.id === stream.outputId) && !(failed && stream.segments.length === 0)
   const busy = live && (stream.status === 'sources' || stream.status === 'streaming')
   const content = live ? stream.segments.map((s) => (s.kind === 'text' ? s.text : `[${s.label}]`)).join('') : (saved?.content ?? '')
   const sources = live ? (stream.sources ?? []) : (saved?.sources ?? [])
@@ -50,9 +51,31 @@ export function BriefCard({ lens, saved, stream, onGenerate, onCite }: Props) {
       )
     })
 
+  const problem = failed ? stream.problem : null
+  const alert = problem && (
+    <Alert variant="destructive" className="w-full border-glass-border">
+      <AlertDescription>{problem.message}</AlertDescription>
+      {(problem.retryable || problem.settings) && (
+        <AlertAction>
+          {problem.retryable && (
+            <Button variant="outline" size="xs" onClick={onGenerate}>
+              Retry
+            </Button>
+          )}
+          {problem.settings && (
+            <Button variant="outline" size="xs" asChild>
+              <a href={settingsSectionHref('models')}>Open settings</a>
+            </Button>
+          )}
+        </AlertAction>
+      )}
+    </Alert>
+  )
+
   if (!live && !saved) {
     return (
       <section aria-label={`${lens.label} brief`} className="brief-card flex flex-col items-start gap-2 rounded-2xl p-3.5 ring-1 ring-glass-border">
+        {alert}
         <p className="text-sm text-muted-foreground">An AI summary of this lens, with citations to its passages.</p>
         <Button size="sm" onClick={onGenerate}>
           <Sparkles aria-hidden />
@@ -72,18 +95,7 @@ export function BriefCard({ lens, saved, stream, onGenerate, onCite }: Props) {
           </span>
         )}
       </header>
-      {failed && stream.problem && (
-        <Alert variant="destructive" className="border-glass-border">
-          <AlertDescription>{stream.problem.message}</AlertDescription>
-          {stream.problem.retryable && (
-            <AlertAction>
-              <Button variant="outline" size="xs" onClick={onGenerate}>
-                Retry
-              </Button>
-            </AlertAction>
-          )}
-        </Alert>
-      )}
+      {alert}
       {busy && content === '' ? (
         <p role="status" className="text-sm text-muted-foreground">
           Writing the brief…
