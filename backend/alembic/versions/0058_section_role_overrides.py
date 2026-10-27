@@ -1,7 +1,7 @@
 """section role overrides: the reader's own section roles, and the lens an output was written from
 
-Revision ID: 0054
-Revises: 0053
+Revision ID: 0058
+Revises: 0057
 Create Date: 2026-10-25
 """
 
@@ -9,8 +9,8 @@ from alembic import op
 
 # K21: the next free revision when the branch was cut, chained to the head then. If another branch takes this number
 # first, renumber the file, revision, down_revision, this docstring and test_invariants.py's downgrade target.
-revision = "0054"
-down_revision = "0053"
+revision = "0058"
+down_revision = "0057"
 branch_labels = None
 depends_on = None
 
