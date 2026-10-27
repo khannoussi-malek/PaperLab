@@ -105,7 +105,7 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
     }, () => {})
   }
   // Edit from the PDF: the sentence behind a double-clicked word, or a note that LaTeX made it.
-  const [edit, setEdit] = useState<{ anchor: DOMRect; file: string; line: number; at: Span | null; initial: string; base: string | null } | null>(null)
+  const [edit, setEdit] = useState<{ id: number; anchor: DOMRect; file: string; line: number; at: Span | null; initial: string; notice?: string } | null>(null)
   const editId = useRef(0)
   const textsRef = useRef(fileTexts)
   textsRef.current = fileTexts
@@ -116,16 +116,14 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
       const r = await api.syncInverse(manuscriptId, page, x, y)
       if (id !== editId.current || from !== latest.current.path) return // a newer double-click, or another file opened meanwhile
       let text: string | undefined = r.file === from ? textsRef.current[r.file] : undefined // the editor's buffer when it is open
-      let base: string | null = null
       if (text === undefined) {
         const fresh = await api.getManuscriptFile(manuscriptId, r.file)
         if (id !== editId.current || from !== latest.current.path) return
         text = fresh.text
-        base = fresh.updated_at
       }
       const lines = text.split('\n')
       const at = findEditable(lines, r.line, word)
-      setEdit({ anchor, file: r.file, line: r.line, at, initial: at ? lines[at.line - 1].slice(at.start, at.end) : '', base })
+      setEdit({ id, anchor, file: r.file, line: r.line, at, initial: at ? lines[at.line - 1].slice(at.start, at.end) : '' })
     })().catch(() => {}) // no index or no network: stay quiet
   }
   const saveEdit = async (replacement: string) => {
@@ -136,7 +134,11 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
       const now = textsRef.current[target]?.split('\n')[at.line - 1]?.slice(at.start, at.end)
       if (now !== initial || !replaceRef.current) throw changed // typed over since the box opened
       replaceRef.current(at.line, at.start, at.end, replacement)
-      if (!(await flushCurrent())) throw changed // saved before compiling, so the compile sees it
+      if (!(await flushCurrent())) { // saved before compiling, so the compile sees it
+        // The text is in the editor, so a retry here could never match; the editor shows why it didn't save.
+        setEdit({ ...edit, id: ++editId.current, at: null, notice: "Your change is in the editor but couldn't be saved yet. The editor shows why." })
+        return
+      }
     } else {
       const lines = (await api.getManuscriptFile(manuscriptId, target))
       const row = lines.text.split('\n')
@@ -241,10 +243,10 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
               { id: 'pdf', label: 'PDF', limits: MANUSCRIPT_PDF, content: (width) => <PdfPane manuscript={data} width={width} target={target} onSourceAt={sourceAt} onEditAt={editAt}>
                 {edit && (
                   <PdfEditBox
-                    key={`${edit.file}:${edit.line}`}
+                    key={edit.id}
                     anchor={edit.anchor}
                     initial={edit.initial}
-                    notice={edit.at ? undefined : 'This text is made by LaTeX (a citation, a number or the reference list).'}
+                    notice={edit.notice ?? (edit.at ? undefined : 'This text is made by LaTeX (a citation, a number or the reference list).')}
                     onSave={saveEdit}
                     onCancel={() => setEdit(null)}
                     onOpenSource={() => { jumpTo(edit.file, edit.line); setEdit(null) }}
