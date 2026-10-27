@@ -8,7 +8,7 @@ vi.mock('../../graph/hands/HandsMode', () => ({ default: (p: Record<string, unkn
 
 import { DeckHands, TYPING_PAUSE_MS } from './DeckHands'
 
-function Host({ onAction = vi.fn(), onSelect = vi.fn(), onHidden = vi.fn() }) {
+function Host({ onAction = vi.fn(), onSelect = vi.fn(), onHidden = vi.fn(), typingPause = true }) {
   const column = useRef<HTMLDivElement>(null)
   return (
     <div data-testid="studio">
@@ -16,7 +16,7 @@ function Host({ onAction = vi.fn(), onSelect = vi.fn(), onHidden = vi.fn() }) {
       <div ref={column}>
         <button data-testid="inside">x</button>
         <div data-deck-card="p1" aria-label="Alpha" />
-        <DeckHands column={column} onAction={onAction} onSelect={onSelect} onHidden={onHidden} />
+        <input data-testid="filter" /><DeckHands column={column} onAction={onAction} onSelect={onSelect} onHidden={onHidden} typingPause={typingPause} />
       </div>
     </div>
   )
@@ -95,4 +95,16 @@ it('resuming after a pause starts the glide and spread totals afresh', () => {
   fireEvent.pointerOver(getByTestId('inside'))
   p().onTurn(0.3) // 0.3 + 0.3 would have stepped; afresh it does not
   expect(onAction).not.toHaveBeenCalled()
+})
+
+it('without the typing pause, only keystrokes in an input inside the deck pause it', () => {
+  const { getByTestId } = render(<Host typingPause={false} />)
+  fireEvent.focusIn(getByTestId('inside'))
+  fireEvent.keyDown(getByTestId('editor'), { key: 'a' })
+  fireEvent.keyDown(document.body, { key: 'b' })
+  expect(paused()).toBe(false)
+  fireEvent.keyDown(getByTestId('filter'), { key: 'c' })
+  expect(paused()).toBe(true)
+  act(() => { vi.advanceTimersByTime(TYPING_PAUSE_MS) })
+  expect(paused()).toBe(false)
 })

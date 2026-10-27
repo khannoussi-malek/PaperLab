@@ -1,8 +1,14 @@
-import type { CitablePaper, EvidenceRow, Note } from '@/api/client'
+import type { CitablePaper, EvidenceRow, Note, Paper } from '@/api/client'
 import { latexEscape } from './latex'
 
 /** The papers route's row, as the API returns it. */
 export type DeckPaper = CitablePaper
+
+/** A library paper as the deck shows it. No cite key here, so the id stands in; nothing inserts from this deck. */
+export const toDeckPaper = (p: Paper, counts?: { notes: number; highlights: number; ai_notes: number }): DeckPaper => ({
+  paper_id: p.id, key: p.id, pinned: false, title: p.title, first_author: p.authors[0] ?? null, year: p.year, has_pdf: p.has_pdf,
+  notes: counts?.notes ?? 0, highlights: counts?.highlights ?? 0, ai_notes: counts?.ai_notes ?? 0,
+})
 
 export type BookItem = { id: string; kind: 'highlight' | 'note' | 'ai' | 'evidence'; page: number | null; text: string; noteId: string; chunkId?: string }
 

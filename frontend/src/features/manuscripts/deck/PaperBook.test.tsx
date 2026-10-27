@@ -129,3 +129,9 @@ describe('PaperBook', () => {
     expect(screen.getByRole('status').textContent).toBe('Your highlight, page 2: first quote. 1 of 3.')
   })
 })
+
+it('without onInsert there are no insert buttons and i does nothing', () => {
+  const { container } = render(<PaperBook paper={paper} items={items} selected={0} onSelect={() => {}} onOpenReader={() => {}} onClose={() => {}} />)
+  expect(screen.queryByText(/Insert/)).toBeNull()
+  fireEvent.keyDown(container.firstElementChild!, { key: 'i' })
+})
