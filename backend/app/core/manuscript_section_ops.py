@@ -18,6 +18,12 @@ async def _open(session, mid: uuid.UUID) -> tuple[str, str, set[str]]:
     return main_path, row.text or "", taken
 
 
+async def _lock(session, mid: uuid.UUID, path: str):
+    """The section's row, locked right after main's (always that order) and before it is read or snapshotted, so a
+    save of it can't land between our read and our write. None when the file is missing."""
+    return await manuscripts._file(session, mid, path, lock=True)
+
+
 async def add(session, mid: uuid.UUID, *, title: str, after: str | None) -> str:
     title = sec.check_title(title)
     main_path, main, taken = await _open(session, mid)
@@ -32,7 +38,8 @@ async def add(session, mid: uuid.UUID, *, title: str, after: str | None) -> str:
 async def retitle(session, mid: uuid.UUID, path: str, *, title: str) -> str:
     title = sec.check_title(title)
     main_path, main, taken = await _open(session, mid)
-    text = await manuscripts.get_text(session, mid, path)
+    row = await _lock(session, mid, path)
+    text = row.text if row is not None else None
     if text is None:
         raise InvalidInput("not_a_section")
     new_path = sec.section_path(title, taken - {path}) if path.startswith(sec.SECTIONS_DIR + "/") else path
@@ -47,6 +54,7 @@ async def retitle(session, mid: uuid.UUID, path: str, *, title: str) -> str:
 
 async def move(session, mid: uuid.UUID, path: str, *, to: int) -> None:
     main_path, main, _ = await _open(session, mid)
+    await _lock(session, mid, path)
     new_main = sec.move_input(main, path, to)
     await manuscript_history.take(session, mid, REASON)
     await manuscripts.upsert_text(session, mid, main_path, new_main)
@@ -56,6 +64,7 @@ async def delete(session, mid: uuid.UUID, path: str) -> None:
     main_path, main, taken = await _open(session, mid)
     if path == main_path:
         raise InvalidInput("not_a_section")
+    await _lock(session, mid, path)
     new_main = sec.drop_input(main, path)
     await manuscript_history.take(session, mid, REASON)
     await manuscripts.upsert_text(session, mid, main_path, new_main)
