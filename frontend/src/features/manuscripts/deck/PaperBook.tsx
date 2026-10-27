@@ -76,8 +76,13 @@ export function PaperBook({ paper, items, selected, onSelect, onInsert, onOpenRe
   const root = useRef<HTMLDivElement>(null)
   const book = useRef<HTMLDivElement>(null)
   const turn = useRef<{ finish(): void } | null>(null)
-  const shown = useRef(selected)
   const sel = Math.min(Math.max(selected, 0), Math.max(items.length - 1, 0))
+  const shown = useRef(sel)
+  const mounted = useRef(false)
+  useEffect(() => { // declared first, so its cleanup runs before the turn is finished on unmount
+    mounted.current = true
+    return () => { mounted.current = false }
+  }, [])
   const [pages, setPages] = useState<Pages>({ l: sel, r: sel, lHidden: true })
   const live = useRef({ items, sel, still })
   live.current = { items, sel, still }
@@ -86,7 +91,7 @@ export function PaperBook({ paper, items, selected, onSelect, onInsert, onOpenRe
   useEffect(() => {
     root.current?.focus()
     const { items: its, sel: s, still: st } = live.current
-    const land = () => setPages((p) => ({ ...p, l: s, lHidden: false }))
+    const land = () => mounted.current && setPages((p) => ({ ...p, l: s, lHidden: false }))
     if (!its.length || !book.current) {
       setPages((p) => ({ ...p, lHidden: false }))
       return
@@ -105,8 +110,8 @@ export function PaperBook({ paper, items, selected, onSelect, onInsert, onOpenRe
     const [a, b] = [items[from], items[sel]]
     const opts =
       dir === 'fwd'
-        ? { uncover: () => setPages((p) => ({ ...p, r: sel })), land: () => setPages((p) => ({ ...p, l: sel })) }
-        : { uncover: () => setPages((p) => ({ ...p, l: sel })), land: () => setPages((p) => ({ ...p, r: sel })) }
+        ? { uncover: () => mounted.current && setPages((p) => ({ ...p, r: sel })), land: () => mounted.current && setPages((p) => ({ ...p, l: sel })) }
+        : { uncover: () => mounted.current && setPages((p) => ({ ...p, l: sel })), land: () => mounted.current && setPages((p) => ({ ...p, r: sel })) }
     turn.current = turnLeaf(
       book.current,
       dir,

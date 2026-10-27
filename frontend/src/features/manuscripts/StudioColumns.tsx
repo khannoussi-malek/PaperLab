@@ -5,7 +5,49 @@ import { PanelResizeHandle } from '@/components/PanelResizeHandle'
 import { browserStorage } from '@/features/notes/highlightColors'
 
 /** One column of the studio. No `limits` = the flexible one (the editor). A function `content` gets the column's width in px. */
-export type StudioColumn = { id: string; label: string; content: ReactNode | ((width: number) => ReactNode); limits?: PanelLimits }
+export type StudioColumn = {
+  id: string
+  label: string
+  content: ReactNode | ((width: number) => ReactNode)
+  limits?: PanelLimits
+  /** Below NARROW_PX this column and the one with this id share one column as two tabs (this column's tab first). */
+  shareWith?: string
+}
+
+const NARROW_PX = 1280
+const TAB_KEY = 'paperlab-studio-tab'
+
+function useNarrow() {
+  const [narrow, setNarrow] = useState(() => window.innerWidth < NARROW_PX)
+  useEffect(() => {
+    const onResize = () => setNarrow(window.innerWidth < NARROW_PX)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+  return narrow
+}
+
+/** Both panels stay mounted (a deck or a PDF keeps its state); only the active one shows. */
+function SharedTabs({ tabs, active, onActive }: { tabs: { id: string; label: string; body: ReactNode }[]; active: string; onActive: (id: string) => void }) {
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div role="tablist" className="flex shrink-0 gap-1 border-b border-glass-border px-2">
+        {tabs.map((t) => (
+          <button key={t.id} type="button" role="tab" id={`studio-tab-${t.id}`} aria-selected={t.id === active} aria-controls={`studio-panel-${t.id}`}
+            onClick={() => onActive(t.id)}
+            className={`-mb-px border-b-2 px-2 py-1 text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${t.id === active ? 'border-primary font-medium' : 'border-transparent text-muted-foreground'}`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {tabs.map((t) => (
+        <div key={t.id} role="tabpanel" id={`studio-panel-${t.id}`} aria-labelledby={`studio-tab-${t.id}`} hidden={t.id !== active} className="min-h-0 flex-1 overflow-hidden">
+          {t.body}
+        </div>
+      ))}
+    </div>
+  )
+}
 
 const COLLAPSED_KEY = 'paperlab-studio-collapsed'
 const RAIL = '2rem'
@@ -20,7 +62,22 @@ function loadCollapsed(): string[] {
 }
 
 /** Resizable, collapsible columns side by side. F6 / Shift+F6 move focus between the open ones. */
-export function StudioColumns({ columns }: { columns: StudioColumn[] }) {
+export function StudioColumns({ columns: all, reveal }: { columns: StudioColumn[]; reveal?: { id: string; n: number } }) {
+  const narrow = useNarrow()
+  const [activeTab, setActiveTab] = useState(() => { try { return browserStorage()?.getItem(TAB_KEY) ?? '' } catch { return '' } })
+  useEffect(() => { try { browserStorage()?.setItem(TAB_KEY, activeTab) } catch { /* ponytail: blocked storage only loses the choice */ } }, [activeTab])
+  const columns = narrow ? all.flatMap((c): StudioColumn[] => {
+    const partner = all.find((o) => o.id === c.shareWith)
+    if (partner) {
+      const parts = [c, partner]
+      const active = parts.some((p) => p.id === activeTab) ? activeTab : c.id
+      return [{ ...c, label: `${c.label} and ${partner.label}`, content: (w) => (
+        <SharedTabs active={active} onActive={setActiveTab}
+          tabs={parts.map((p) => ({ id: p.id, label: p.label, body: typeof p.content === 'function' ? p.content(w) : p.content }))} />
+      ) }]
+    }
+    return all.some((o) => o.shareWith === c.id) ? [] : [c]
+  }) : all
   const root = useRef<HTMLDivElement>(null)
   const [collapsed, setCollapsed] = useState(loadCollapsed)
   const [widths, setWidths] = useState(() =>
@@ -44,6 +101,13 @@ export function StudioColumns({ columns }: { columns: StudioColumn[] }) {
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [])
+
+  useEffect(() => {
+    if (!reveal) return
+    const host = all.find((c) => c.shareWith === reveal.id)?.id ?? reveal.id // the column the revealed one sits in when narrow
+    setActiveTab(reveal.id)
+    setCollapsed((c) => c.filter((x) => x !== reveal.id && x !== host))
+  }, [reveal?.n]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggle = (id: string) => setCollapsed((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]))
   const open = columns.filter((c) => !collapsed.includes(c.id))

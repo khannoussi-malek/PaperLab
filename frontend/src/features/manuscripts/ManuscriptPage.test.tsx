@@ -8,13 +8,21 @@ import { ManuscriptPage } from './ManuscriptPage'
 
 const pdf = vi.hoisted(() => vi.fn((_url: string | null) => ({ doc: null, error: null })))
 // jsdom can't lay CodeMirror out, so here the editor is a textarea with the same props (LatexEditor.test.tsx runs the real one).
-const editor = vi.hoisted(() => ({ current: null as null | { onCursor?: (l: number) => void; onSectionStep?: (s: -1 | 1) => void; onShowInPdf?: (l: number) => void; jumpTo?: { line: number; n: number } | null } }))
-vi.mock('./LatexEditor', () => ({
-  LatexEditor: (props: { value: string; onChange: (v: string) => void; onCursor?: (l: number) => void; onSectionStep?: (s: -1 | 1) => void; onShowInPdf?: (l: number) => void; jumpTo?: { line: number; n: number } | null }) => {
-    editor.current = props
-    return <textarea aria-label="LaTeX source" value={props.value} onChange={(e) => props.onChange(e.target.value)} />
-  },
-}))
+type EditorProps = { value: string; onChange: (v: string) => void; onCursor?: (l: number) => void; onSectionStep?: (s: -1 | 1) => void; onShowInPdf?: (l: number) => void; onCiteKey?: (k: string) => void; registerInsert?: (f: ((t: string) => void) | null) => void; jumpTo?: { line: number; n: number } | null }
+const editor = vi.hoisted(() => ({ current: null as null | EditorProps }))
+vi.mock('./LatexEditor', async () => {
+  const { useEffect, useRef } = await import('react')
+  return {
+    LatexEditor: (props: EditorProps) => {
+      editor.current = props
+      const now = useRef(props)
+      now.current = props
+      // Like the real one: an insert is a normal edit at the end here (the cursor logic is tested in LatexEditor.test.tsx).
+      useEffect(() => { props.registerInsert?.((t) => now.current.onChange(now.current.value + t)); return () => props.registerInsert?.(null) }, [])
+      return <textarea aria-label="LaTeX source" value={props.value} onChange={(e) => props.onChange(e.target.value)} />
+    },
+  }
+})
 vi.mock('@/components/AppShell', () => ({
   AppShell: ({ title, actions, status, children }: { title: string; actions?: React.ReactNode; status?: React.ReactNode; children: React.ReactNode }) => (
     <div><h1>{title}</h1>{actions}<main>{children}</main>{status}</div>
@@ -768,4 +776,36 @@ test('a compile started by an edit from the PDF keeps the PDF where it is; the n
   act(() => { fireEvent.keyDown(screen.getByLabelText('LaTeX source'), { key: 's', ctrlKey: true }) })
   await waitFor(() => expect(forward).toHaveBeenCalledTimes(2))
   await waitFor(() => expect(pages().scrollTop).toBeGreaterThan(7)) // placed again (jsdom rects are 0, so it adds up)
+})
+
+const widen = () => Object.defineProperty(window, 'innerWidth', { value: 1400, configurable: true }) // jsdom is 1024: narrow, so the deck would sit in a hidden tab
+afterEach(() => Object.defineProperty(window, 'innerWidth', { value: 1024, configurable: true }))
+const paper = { paper_id: 'pk', key: 'k1', pinned: false, title: 'Kappa paper', first_author: 'Kappa', year: 2021, has_pdf: true, notes: 0, highlights: 0, ai_notes: 0 }
+
+test('inserting from the deck pins the paper, puts the cite in the open file and autosaves it', async () => {
+  vi.spyOn(api, 'manuscriptPapers').mockResolvedValue([paper])
+  vi.spyOn(api, 'listNotes').mockResolvedValue([])
+  vi.spyOn(api, 'rankPapers').mockResolvedValue({ paper_ids: [] })
+  const pin = vi.spyOn(api, 'pinPaper').mockResolvedValue({ key: 'k1' })
+  const save = vi.spyOn(api, 'saveManuscriptFile').mockResolvedValue(saved())
+  widen()
+  renderPage()
+  const box = await screen.findByLabelText('LaTeX source')
+  await waitFor(() => expect(box).toHaveValue('hello'))
+  fireEvent.keyDown(await screen.findByRole('group', { name: 'Papers' }), { key: 'Enter' })
+  fireEvent.click(await screen.findByText('Insert \\citep{k1}'))
+  await waitFor(() => expect(box).toHaveValue('hello\\citep{k1}'))
+  expect(pin).toHaveBeenCalledWith('m1', 'pk')
+  await waitFor(() => expect(save).toHaveBeenCalledWith('m1', 'main.tex', 'hello\\citep{k1}', T2), { timeout: 3000 })
+})
+
+test('Mod+Alt+K on a cite key opens that paper in the deck, already open', async () => {
+  vi.spyOn(api, 'manuscriptPapers').mockResolvedValue([paper])
+  vi.spyOn(api, 'listNotes').mockResolvedValue([])
+  vi.spyOn(api, 'rankPapers').mockResolvedValue({ paper_ids: [] })
+  widen()
+  renderPage()
+  await screen.findByRole('group', { name: 'Papers' })
+  act(() => editor.current!.onCiteKey!('k1'))
+  expect(await screen.findByRole('group', { name: 'Kappa paper' })).toBeInTheDocument()
 })

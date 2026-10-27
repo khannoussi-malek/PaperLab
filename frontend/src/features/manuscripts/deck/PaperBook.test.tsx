@@ -91,6 +91,21 @@ describe('PaperBook', () => {
     fireEvent.keyDown(book(), { key: 'ArrowDown' })
   })
 
+  it('starts from the clamped selection, so an out-of-range one turns nothing but the cover', () => {
+    render(<Harness start={9} />)
+    expect(turnSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('a turn that lands after the book is gone sets nothing', () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { unmount } = render(<Harness />)
+    const land = turnSpy.mock.calls[0][4]?.land
+    unmount()
+    land?.()
+    expect(errors).not.toHaveBeenCalled()
+    errors.mockRestore()
+  })
+
   it('announces the item', () => {
     render(<Harness />)
     expect(screen.getByRole('status').textContent).toBe('Your highlight, page 2: first quote. 1 of 3.')

@@ -15,3 +15,11 @@ export const MANUSCRIPT_SECTIONS: PanelLimits = {
   minWidth: 180,
   maxShare: 0.25,
 }
+
+/** The papers column (the deck beside the editor). */
+export const MANUSCRIPT_PAPERS: PanelLimits = {
+  storageKey: 'paperlab-manuscript-papers-width',
+  defaultWidth: 320,
+  minWidth: 260,
+  maxShare: 0.3,
+}
