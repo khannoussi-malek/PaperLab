@@ -35,9 +35,14 @@ Warm-up \citep{none}.
 TEX
 (cd "$WARM" && "$BIN" -X compile natbib.tex >/dev/null)
 T="$ROOT/backend/app/manuscript_templates"
+WITH_RESULTS='/^\\begin\{document\}/ && !d { print "\\usepackage{booktabs,pgfplots,graphicx}"; print "\\pgfplotsset{compat=1.18}"; print; print "\\input{warm-results}"; d = 1; next } { print }'
 for t in "$T"/*/; do
   rm -rf "$WARM/t"; mkdir -p "$WARM/t"; cp -R "$t". "$WARM/t"; cp "$T/warm.bib" "$WARM/t/paperlab.bib"
   (cd "$WARM/t" && "$BIN" -X compile main.tex >/dev/null) || echo "warm-up failed for $t" >&2
+  # Again with warm-results.tex inserted: each class fetches the font sizes its own tables and charts use.
+  cp "$T/warm-results.tex" "$T/warm-figure.png" "$WARM/t"
+  awk "$WITH_RESULTS" "$WARM/t/main.tex" > "$WARM/t/results.tex"
+  (cd "$WARM/t" && "$BIN" -X compile results.tex >/dev/null) || echo "results warm-up failed for $t" >&2
 done
 rm -rf "$WARM/t"; mkdir -p "$WARM/t"; cp "$T/warm-packages.tex" "$WARM/t/main.tex"
 (cd "$WARM/t" && "$BIN" -X compile main.tex >/dev/null) || echo "warm-up failed for warm-packages.tex" >&2

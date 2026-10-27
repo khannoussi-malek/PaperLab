@@ -19,7 +19,8 @@ COPY backend/pyproject.toml backend/uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --no-dev --no-install-project
 
 # Tectonic, pinned and checked, with its package cache warmed by compiling main.tex of every template folder in
-# manuscript_templates, and warm-packages.tex (common packages; not a template). Compiles only ever read this cache
+# manuscript_templates (twice: the second time with warm-results.tex inserted, so each class fetches the font sizes its
+# own tables and charts use), and warm-packages.tex (common packages; not a template). Compiles only ever read this cache
 # (TECTONIC_ONLY_CACHED), so acmart's ~20 s cold start is already paid and nothing is downloaded at compile time.
 FROM python:3.12-slim AS tex
 ARG TARGETARCH
@@ -44,7 +45,10 @@ PY
 COPY backend/app/manuscript_templates /templates
 RUN for t in /templates/*/; do \
       d=$(mktemp -d) && cp -R "$t". "$d" && cp /templates/warm.bib "$d/paperlab.bib" \
-      && (cd "$d" && tectonic -X compile main.tex) || exit 1; \
+      && (cd "$d" && tectonic -X compile main.tex) \
+      && cp /templates/warm-results.tex /templates/warm-figure.png "$d" \
+      && awk '/^\\begin\{document\}/ && !d { print "\\usepackage{booktabs,pgfplots,graphicx}"; print "\\pgfplotsset{compat=1.18}"; print; print "\\input{warm-results}"; d = 1; next } { print }' "$d/main.tex" > "$d/results.tex" \
+      && (cd "$d" && tectonic -X compile results.tex) || exit 1; \
     done \
     && d=$(mktemp -d) && cd "$d" && cp /templates/warm-packages.tex main.tex && tectonic -X compile main.tex \
     && printf '\\documentclass{article}\\usepackage{verbatim}\\begin{document}\n\\begin{verbatim}\nx\n\\end{verbatim}\n\\end{document}\n' > main.tex \
