@@ -151,7 +151,8 @@ async def test_job_skips_a_row_a_newer_ask_already_finished(session, embedder, l
 
     class Newer(Scripted):  # while the model "thinks", a newer ask finishes the row the job is on
         async def stream(self, system, prompt):
-            await session.execute(update(ManuscriptEvidence).where(ManuscriptEvidence.rank == 0)
+            await session.execute(update(ManuscriptEvidence)
+                                  .where(ManuscriptEvidence.manuscript_id == m.id, ManuscriptEvidence.rank == 0)
                                   .values(status="done", verdict="supported", reason="newer"))
             async for x in super().stream(system, prompt):
                 yield x
@@ -167,17 +168,20 @@ async def test_a_long_running_row_reads_as_interrupted(session, embedder, local_
     _, m = await library(session, embedder, "Alpha")
     out = await ev.find(session, m.id, SENTENCE, embedder=embedder)
     old = datetime.now(UTC) - timedelta(minutes=6)
-    await session.execute(update(ManuscriptEvidence).values(status="running", updated_at=old))
+    await session.execute(update(ManuscriptEvidence).where(ManuscriptEvidence.manuscript_id == m.id)
+                          .values(status="running", updated_at=old))
     assert [r["status"] for r in await ev.rows(session, m.id, out["sentence_hash"])] == ["interrupted"]
-    await session.execute(update(ManuscriptEvidence).values(updated_at=datetime.now(UTC)))
+    await session.execute(update(ManuscriptEvidence).where(ManuscriptEvidence.manuscript_id == m.id)
+                          .values(updated_at=datetime.now(UTC)))
     assert [r["status"] for r in await ev.rows(session, m.id, out["sentence_hash"])] == ["running"]
-    await age(session, 6)
+    await age(session, m.id, 6)
     await ev.find(session, m.id, SENTENCE, embedder=embedder)  # asking again starts an interrupted row over
     assert (await all_rows(session, m.id))[0].status == "queued"
 
 
-async def age(session, minutes, **values):
-    await session.execute(update(ManuscriptEvidence).values(
+async def age(session, mid, minutes, **values):
+    """Only this manuscript's rows: an unscoped update would lock every test's rows until this test rolls back."""
+    await session.execute(update(ManuscriptEvidence).where(ManuscriptEvidence.manuscript_id == mid).values(
         updated_at=datetime.now(UTC) - timedelta(minutes=minutes), **values))
 
 
@@ -185,7 +189,7 @@ async def test_a_queued_row_nobody_picked_up_reads_as_interrupted(session, embed
     _, m = await library(session, embedder, "Alpha")
     out = await ev.find(session, m.id, SENTENCE, embedder=embedder)
     assert [r["status"] for r in await ev.rows(session, m.id, out["sentence_hash"])] == ["queued"]
-    await age(session, 6)
+    await age(session, m.id, 6)
     assert [r["status"] for r in await ev.rows(session, m.id, out["sentence_hash"])] == ["interrupted"]
     await ev.find(session, m.id, SENTENCE, embedder=embedder)
     assert [r["status"] for r in await ev.rows(session, m.id, out["sentence_hash"])] == ["queued"]
@@ -231,7 +235,7 @@ async def test_queued_rows_behind_a_fresh_running_row_never_read_as_interrupted(
                                                                                    local_default_model):
     _, m = await library(session, embedder, "Alpha", "Beta")
     out = await ev.find(session, m.id, SENTENCE, embedder=embedder)
-    await age(session, 6)  # waited their turn behind a slow model
+    await age(session, m.id, 6)  # waited their turn behind a slow model
     first = (await all_rows(session, m.id))[0]
     first.status, first.updated_at = "running", datetime.now(UTC)
     await session.flush()
@@ -241,7 +245,7 @@ async def test_queued_rows_behind_a_fresh_running_row_never_read_as_interrupted(
 async def test_taking_a_row_touches_the_rows_still_waiting(session, embedder, local_default_model):
     _, m = await library(session, embedder, "Alpha", "Beta", "Gamma")
     out = await ev.find(session, m.id, SENTENCE, embedder=embedder)
-    await age(session, 6)
+    await age(session, m.id, 6)
     await worker._take(m.id, out["sentence_hash"])
     rows = await all_rows(session, m.id)
     assert [r.status for r in rows] == ["running", "queued", "queued"]
@@ -307,4 +311,55 @@ async def test_two_jobs_on_real_connections_check_every_paper_once(monkeypatch):
             await s.execute(delete(Manuscript).where(Manuscript.id == mid))  # its evidence goes with it
             await s.execute(delete(Paper).where(Paper.id.in_(pids)))
             await s.execute(delete(Workspace).where(Workspace.id == ws.id))
+            await s.commit()
+
+
+async def test_two_asks_at_once_on_real_connections_take_turns(embedder, monkeypatch):
+    from app.db import SessionLocal
+
+    async def has_model(session):
+        return True
+
+    monkeypatch.setattr(ev, "_has_model", has_model)
+    both_retrieved = asyncio.Barrier(2)  # both asks reach their writes together
+
+    async def retrieve_then_wait(*args, **kwargs):
+        out = await retrieval.retrieve(*args, **kwargs)
+        await both_retrieved.wait()
+        return out
+
+    monkeypatch.setattr(ev, "retrieve", retrieve_then_wait)
+    async with SessionLocal() as s:
+        ws = Workspace(name=f"W {uuid.uuid4().hex[:6]}")
+        s.add(ws)
+        await s.flush()
+        m = await manuscripts.create(s, title="M", template="article", workspace_id=ws.id)
+        papers = [Paper(title=f"P{i}", file_path="/x.pdf", status="ready") for i in range(2)]
+        s.add_all(papers)
+        await s.flush()
+        for i, p in enumerate(papers):
+            await workspaces.add_paper(s, ws.id, p.id)
+            s.add(Chunk(paper_id=p.id, ordinal=0, page=1, bbox=[[1, 2, 3, 4]], text=f"text {i}",
+                        embedding=unit_vector(f"c{i}"), embed_model="test", strategy_ver=1))
+        await s.commit()
+        mid, wid, pids = m.id, ws.id, [p.id for p in papers]
+
+    async def ask(sentence):
+        async with SessionLocal() as s:
+            return await ev.find(s, mid, sentence, embedder=embedder)
+
+    try:
+        outs = await asyncio.gather(ask(SENTENCE), ask("Coffee helps focus."))
+        assert all(o["verdicts"] == "queued" for o in outs)
+        async with SessionLocal() as s:
+            found = [(r.sentence_hash, r.status, r.reason) for r in await s.scalars(
+                select(ManuscriptEvidence).where(ManuscriptEvidence.manuscript_id == mid))]
+        queued = {h for h, status, _ in found if status == "queued"}
+        assert len(queued) == 1  # the later ask's; the earlier one's waiting checks were stopped
+        assert {(status, reason) for h, status, reason in found if h not in queued} == {("failed", "superseded")}
+    finally:
+        async with SessionLocal() as s:
+            await s.execute(delete(Manuscript).where(Manuscript.id == mid))  # its evidence goes with it
+            await s.execute(delete(Paper).where(Paper.id.in_(pids)))
+            await s.execute(delete(Workspace).where(Workspace.id == wid))
             await s.commit()
