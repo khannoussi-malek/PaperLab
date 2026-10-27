@@ -85,6 +85,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/papers/note-counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Paper Note Counts */
+        post: operations["paper_note_counts_api_papers_note_counts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/papers/{paper_id}": {
         parameters: {
             query?: never;
@@ -1311,6 +1328,451 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/templates/manuscripts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Templates */
+        get: operations["list_templates_api_templates_manuscripts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/manuscripts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Workspace Manuscripts */
+        get: operations["list_workspace_manuscripts_api_workspaces__workspace_id__manuscripts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Orphan Manuscripts
+         * @description Manuscripts with no workspace (`orphans=true`; the only listing here).
+         */
+        get: operations["list_orphan_manuscripts_api_manuscripts_get"];
+        put?: never;
+        /** Create Manuscript */
+        post: operations["create_manuscript_api_manuscripts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Manuscript
+         * @description An Overleaf zip as a new manuscript, all or nothing.
+         */
+        post: operations["import_manuscript_api_manuscripts_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Manuscript */
+        get: operations["get_manuscript_api_manuscripts__manuscript_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Manuscript */
+        delete: operations["delete_manuscript_api_manuscripts__manuscript_id__delete"];
+        options?: never;
+        head?: never;
+        /** Patch Manuscript */
+        patch: operations["patch_manuscript_api_manuscripts__manuscript_id__patch"];
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/files/{path}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get File
+         * @description A text file as JSON, a binary as its bytes.
+         */
+        get: operations["get_file_api_manuscripts__manuscript_id__files__path__get"];
+        /**
+         * Put File
+         * @description 409 file_changed (with updated_at) when the file moved on since base_updated_at; 409 file_exists with no base.
+         */
+        put: operations["put_file_api_manuscripts__manuscript_id__files__path__put"];
+        post?: never;
+        /** Delete File */
+        delete: operations["delete_file_api_manuscripts__manuscript_id__files__path__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/uploads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload File
+         * @description A binary (overwrites) or a new text file (409 file_exists when there is one).
+         */
+        post: operations["upload_file_api_manuscripts__manuscript_id__uploads_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/files/{path}/rename": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rename File */
+        post: operations["rename_file_api_manuscripts__manuscript_id__files__path__rename_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/sections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Section */
+        post: operations["add_section_api_manuscripts__manuscript_id__sections_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/sections/split": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Split Sections */
+        post: operations["split_sections_api_manuscripts__manuscript_id__sections_split_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/sections/{path}/retitle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retitle Section */
+        post: operations["retitle_section_api_manuscripts__manuscript_id__sections__path__retitle_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/sections/{path}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Move Section */
+        post: operations["move_section_api_manuscripts__manuscript_id__sections__path__move_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/sections/{path}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Section */
+        delete: operations["delete_section_api_manuscripts__manuscript_id__sections__path__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/papers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Citable Papers */
+        get: operations["citable_papers_api_manuscripts__manuscript_id__papers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/papers/rank": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rank Papers */
+        post: operations["rank_papers_api_manuscripts__manuscript_id__papers_rank_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Find Evidence */
+        post: operations["find_evidence_api_manuscripts__manuscript_id__evidence_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/evidence/{sentence_hash}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Evidence Rows */
+        get: operations["evidence_rows_api_manuscripts__manuscript_id__evidence__sentence_hash__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/papers/{paper_id}/pin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pin Paper */
+        post: operations["pin_paper_api_manuscripts__manuscript_id__papers__paper_id__pin_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/compile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Compile Manuscript */
+        post: operations["compile_manuscript_api_manuscripts__manuscript_id__compile_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Pdf */
+        get: operations["get_pdf_api_manuscripts__manuscript_id__pdf_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/synctex/forward": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Sync Forward */
+        get: operations["sync_forward_api_manuscripts__manuscript_id__synctex_forward_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/synctex/inverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Sync Inverse */
+        get: operations["sync_inverse_api_manuscripts__manuscript_id__synctex_inverse_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/snapshots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Snapshots */
+        get: operations["list_snapshots_api_manuscripts__manuscript_id__snapshots_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/snapshots/{snapshot_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore Snapshot */
+        post: operations["restore_snapshot_api_manuscripts__manuscript_id__snapshots__snapshot_id__restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/export.zip": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export Zip */
+        get: operations["export_zip_api_manuscripts__manuscript_id__export_zip_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/papers/{paper_id}/tables/preview": {
         parameters: {
             query?: never;
@@ -2221,6 +2683,13 @@ export interface components {
             /** Name */
             name?: string | null;
         };
+        /** Body_import_manuscript_api_manuscripts_import_post */
+        Body_import_manuscript_api_manuscripts_import_post: {
+            /** File */
+            file: string;
+            /** Workspace Id */
+            workspace_id?: string | null;
+        };
         /** Body_import_notes_api_notes_import_post */
         Body_import_notes_api_notes_import_post: {
             /** Files */
@@ -2242,6 +2711,13 @@ export interface components {
              * @default false
              */
             save_without_pdf: boolean;
+        };
+        /** Body_upload_file_api_manuscripts__manuscript_id__uploads_post */
+        Body_upload_file_api_manuscripts__manuscript_id__uploads_post: {
+            /** File */
+            file: string;
+            /** Path */
+            path: string;
         };
         /** Body_upload_hit_pdf_api_workspaces__workspace_id__search_hits__hit_id__upload_post */
         Body_upload_hit_pdf_api_workspaces__workspace_id__search_hits__hit_id__upload_post: {
@@ -2669,6 +3145,32 @@ export interface components {
              */
             readonly from_abstract: boolean;
         };
+        /** CitablePaperOut */
+        CitablePaperOut: {
+            /**
+             * Paper Id
+             * Format: uuid
+             */
+            paper_id: string;
+            /** Key */
+            key: string;
+            /** Pinned */
+            pinned: boolean;
+            /** Title */
+            title: string;
+            /** First Author */
+            first_author: string | null;
+            /** Year */
+            year: number | null;
+            /** Has Pdf */
+            has_pdf: boolean;
+            /** Notes */
+            notes: number;
+            /** Highlights */
+            highlights: number;
+            /** Ai Notes */
+            ai_notes: number;
+        };
         /** ClearHitsOut */
         ClearHitsOut: {
             /** Deleted */
@@ -2699,6 +3201,11 @@ export interface components {
             name: string;
             /** Unit */
             unit: string | null;
+        };
+        /** CompileOut */
+        CompileOut: {
+            /** State */
+            state: string;
         };
         /** ConnectionCheckOut */
         ConnectionCheckOut: {
@@ -2999,6 +3506,72 @@ export interface components {
             /** Retryable */
             retryable: boolean;
         };
+        /** EvidenceFoundOut */
+        EvidenceFoundOut: {
+            /** Sentence Hash */
+            sentence_hash: string;
+            /** Papers */
+            papers: components["schemas"]["EvidencePaperOut"][];
+            /**
+             * Verdicts
+             * @enum {string}
+             */
+            verdicts: "queued" | "unavailable";
+        };
+        /** EvidenceIn */
+        EvidenceIn: {
+            /** Sentence */
+            sentence: string;
+        };
+        /** EvidencePaperOut */
+        EvidencePaperOut: {
+            /**
+             * Paper Id
+             * Format: uuid
+             */
+            paper_id: string;
+            /** Key */
+            key: string;
+            /** Passages */
+            passages: components["schemas"]["EvidencePassageOut"][];
+        };
+        /** EvidencePassageOut */
+        EvidencePassageOut: {
+            /**
+             * Chunk Id
+             * Format: uuid
+             */
+            chunk_id: string;
+            /** Page */
+            page: number;
+            /** Text */
+            text: string;
+        };
+        /** EvidenceRowOut */
+        EvidenceRowOut: {
+            /**
+             * Paper Id
+             * Format: uuid
+             */
+            paper_id: string;
+            /** Rank */
+            rank: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "done" | "failed" | "interrupted";
+            /** Verdict */
+            verdict: string | null;
+            /** Reason */
+            reason: string | null;
+            /** Quote */
+            quote: string | null;
+            /** Page */
+            page: number | null;
+            /** Output Id */
+            output_id: string | null;
+        };
         /** ExportIn */
         ExportIn: {
             /** Paper Ids */
@@ -3014,6 +3587,37 @@ export interface components {
             title: string;
             /** Reason */
             reason: string;
+        };
+        /** FileOut */
+        FileOut: {
+            /** Path */
+            path: string;
+            /** Size */
+            size: number;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** FilePut */
+        FilePut: {
+            /** Text */
+            text: string;
+            /** Base Updated At */
+            base_updated_at?: string | null;
+        };
+        /** FileTextOut */
+        FileTextOut: {
+            /** Path */
+            path: string;
+            /** Text */
+            text: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
         /**
          * FoundPdfOut
@@ -3461,6 +4065,157 @@ export interface components {
             /** Label */
             label: string;
         };
+        /** ManuscriptCreate */
+        ManuscriptCreate: {
+            /** Title */
+            title: string;
+            /** Template */
+            template: string;
+            /** Workspace Id */
+            workspace_id?: string | null;
+        };
+        /** ManuscriptDetailOut */
+        ManuscriptDetailOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Workspace Id */
+            workspace_id: string | null;
+            /** Title */
+            title: string;
+            /** Main File */
+            main_file: string;
+            /** Checklist */
+            checklist: {
+                [key: string]: unknown;
+            };
+            /** Compile Status */
+            compile_status: string;
+            /** Compile Requested */
+            compile_requested: boolean;
+            /** Compiled At */
+            compiled_at: string | null;
+            /** Compile Log */
+            compile_log: string | null;
+            /** Compile Friendly */
+            compile_friendly: string | null;
+            /** Compile Errors */
+            compile_errors: unknown[];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Files */
+            files: components["schemas"]["FileOut"][];
+        };
+        /** ManuscriptImportOut */
+        ManuscriptImportOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Workspace Id */
+            workspace_id: string | null;
+            /** Title */
+            title: string;
+            /** Main File */
+            main_file: string;
+            /** Checklist */
+            checklist: {
+                [key: string]: unknown;
+            };
+            /** Compile Status */
+            compile_status: string;
+            /** Compile Requested */
+            compile_requested: boolean;
+            /** Compiled At */
+            compiled_at: string | null;
+            /** Compile Log */
+            compile_log: string | null;
+            /** Compile Friendly */
+            compile_friendly: string | null;
+            /** Compile Errors */
+            compile_errors: unknown[];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Files */
+            files: components["schemas"]["FileOut"][];
+            /** Skipped */
+            skipped: string[];
+        };
+        /** ManuscriptOut */
+        ManuscriptOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Workspace Id */
+            workspace_id: string | null;
+            /** Title */
+            title: string;
+            /** Main File */
+            main_file: string;
+            /** Checklist */
+            checklist: {
+                [key: string]: unknown;
+            };
+            /** Compile Status */
+            compile_status: string;
+            /** Compile Requested */
+            compile_requested: boolean;
+            /** Compiled At */
+            compiled_at: string | null;
+            /** Compile Log */
+            compile_log: string | null;
+            /** Compile Friendly */
+            compile_friendly: string | null;
+            /** Compile Errors */
+            compile_errors: unknown[];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * ManuscriptPatch
+         * @description Send only what changes: workspace_id null moves the manuscript out of its workspace.
+         */
+        ManuscriptPatch: {
+            /** Title */
+            title?: string | null;
+            /** Workspace Id */
+            workspace_id?: string | null;
+            /** Main File */
+            main_file?: string | null;
+            /** Checklist */
+            checklist?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** McpCheckOut */
         McpCheckOut: {
             /** Ok */
@@ -3574,6 +4329,21 @@ export interface components {
              * @default []
              */
             free_copies: string[];
+        };
+        /** NoteCountsIn */
+        NoteCountsIn: {
+            /** Paper Ids */
+            paper_ids: string[];
+        };
+        /**
+         * NoteCountsOut
+         * @description Notes, highlights and AI notes per paper id (zeros for a paper with none).
+         */
+        NoteCountsOut: {
+            /** Counts */
+            counts: {
+                [key: string]: components["schemas"]["PaperNoteCounts"];
+            };
         };
         /**
          * NoteCreate
@@ -3772,6 +4542,15 @@ export interface components {
              */
             created_at: string;
         };
+        /** PaperNoteCounts */
+        PaperNoteCounts: {
+            /** Notes */
+            notes: number;
+            /** Highlights */
+            highlights: number;
+            /** Ai Notes */
+            ai_notes: number;
+        };
         /** PaperOut */
         PaperOut: {
             /**
@@ -3968,6 +4747,11 @@ export interface components {
             /** Color By */
             color_by?: string | null;
         };
+        /** PinKeyOut */
+        PinKeyOut: {
+            /** Key */
+            key: string;
+        };
         /** PrismaExportOut */
         PrismaExportOut: {
             /** Identified */
@@ -4060,6 +4844,16 @@ export interface components {
         QueueOut: {
             /** Queued At */
             queued_at: string | null;
+        };
+        /** RankIn */
+        RankIn: {
+            /** Text */
+            text: string;
+        };
+        /** RankOut */
+        RankOut: {
+            /** Paper Ids */
+            paper_ids: string[];
         };
         /**
          * RankedHitsOut
@@ -4242,6 +5036,11 @@ export interface components {
              * @default false
              */
             missing_only: boolean;
+        };
+        /** RenameIn */
+        RenameIn: {
+            /** New Path */
+            new_path: string;
         };
         /** ResolveRequest */
         ResolveRequest: {
@@ -4701,6 +5500,18 @@ export interface components {
             /** Label */
             label: string;
         };
+        /** SectionAddIn */
+        SectionAddIn: {
+            /** Title */
+            title: string;
+            /** After */
+            after?: string | null;
+        };
+        /** SectionMoveIn */
+        SectionMoveIn: {
+            /** To */
+            to: number;
+        };
         /** SectionOut */
         SectionOut: {
             /** Title */
@@ -4727,12 +5538,27 @@ export interface components {
             /** Preview */
             preview: string;
         };
+        /** SectionPathOut */
+        SectionPathOut: {
+            /** Path */
+            path: string;
+        };
+        /** SectionPathsOut */
+        SectionPathsOut: {
+            /** Paths */
+            paths: string[];
+        };
         /** SectionRoleIn */
         SectionRoleIn: {
             /** Section Title */
             section_title: string;
             /** Role */
             role: ("abstract" | "intro" | "related" | "method" | "results" | "discussion" | "limitations" | "conclusion" | "back" | "other") | null;
+        };
+        /** SectionTitleIn */
+        SectionTitleIn: {
+            /** Title */
+            title: string;
         };
         /** SectionsOut */
         SectionsOut: {
@@ -4815,6 +5641,21 @@ export interface components {
         SetupOut: {
             /** Done */
             done: boolean;
+        };
+        /** SnapshotOut */
+        SnapshotOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Reason */
+            reason: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /** SnowballOut */
         SnowballOut: {
@@ -4962,6 +5803,22 @@ export interface components {
              */
             z: string;
         };
+        /** SyncPointOut */
+        SyncPointOut: {
+            /** Page */
+            page: number;
+            /** X */
+            x: number;
+            /** Y */
+            y: number;
+        };
+        /** SyncSourceOut */
+        SyncSourceOut: {
+            /** File */
+            file: string;
+            /** Line */
+            line: number;
+        };
         /** TablePreviewOut */
         TablePreviewOut: {
             /** Name */
@@ -5040,6 +5897,13 @@ export interface components {
             unchanged: number;
             /** Skipped */
             skipped: string[];
+        };
+        /** TemplateOut */
+        TemplateOut: {
+            /** Name */
+            name: string;
+            /** Label */
+            label: string;
         };
         /** TokenEvent */
         TokenEvent: {
@@ -5227,6 +6091,39 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    paper_note_counts_api_papers_note_counts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoteCountsIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteCountsOut"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -7975,6 +8872,970 @@ export interface operations {
             header?: never;
             path: {
                 workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_templates_api_templates_manuscripts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateOut"][];
+                };
+            };
+        };
+    };
+    list_workspace_manuscripts_api_workspaces__workspace_id__manuscripts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManuscriptOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_orphan_manuscripts_api_manuscripts_get: {
+        parameters: {
+            query: {
+                orphans: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManuscriptOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_manuscript_api_manuscripts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManuscriptCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManuscriptDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_manuscript_api_manuscripts_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_manuscript_api_manuscripts_import_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManuscriptImportOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_manuscript_api_manuscripts__manuscript_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManuscriptDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_manuscript_api_manuscripts__manuscript_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_manuscript_api_manuscripts__manuscript_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManuscriptPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManuscriptDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_file_api_manuscripts__manuscript_id__files__path__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+                path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileTextOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_file_api_manuscripts__manuscript_id__files__path__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+                path: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FilePut"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_file_api_manuscripts__manuscript_id__files__path__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+                path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_file_api_manuscripts__manuscript_id__uploads_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_file_api_manuscripts__manuscript_id__uploads_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rename_file_api_manuscripts__manuscript_id__files__path__rename_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+                path: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_section_api_manuscripts__manuscript_id__sections_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SectionAddIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SectionPathOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    split_sections_api_manuscripts__manuscript_id__sections_split_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SectionPathsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retitle_section_api_manuscripts__manuscript_id__sections__path__retitle_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+                path: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SectionTitleIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SectionPathOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    move_section_api_manuscripts__manuscript_id__sections__path__move_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+                path: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SectionMoveIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_section_api_manuscripts__manuscript_id__sections__path__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+                path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    citable_papers_api_manuscripts__manuscript_id__papers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CitablePaperOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rank_papers_api_manuscripts__manuscript_id__papers_rank_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RankIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RankOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    find_evidence_api_manuscripts__manuscript_id__evidence_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EvidenceIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceFoundOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    evidence_rows_api_manuscripts__manuscript_id__evidence__sentence_hash__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+                sentence_hash: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceRowOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pin_paper_api_manuscripts__manuscript_id__papers__paper_id__pin_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+                paper_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PinKeyOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    compile_manuscript_api_manuscripts__manuscript_id__compile_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompileOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_pdf_api_manuscripts__manuscript_id__pdf_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sync_forward_api_manuscripts__manuscript_id__synctex_forward_get: {
+        parameters: {
+            query: {
+                file: string;
+                line: number;
+            };
+            header?: never;
+            path: {
+                manuscript_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncPointOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sync_inverse_api_manuscripts__manuscript_id__synctex_inverse_get: {
+        parameters: {
+            query: {
+                page: number;
+                x?: number;
+                y?: number;
+            };
+            header?: never;
+            path: {
+                manuscript_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncSourceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_snapshots_api_manuscripts__manuscript_id__snapshots_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SnapshotOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_snapshot_api_manuscripts__manuscript_id__snapshots__snapshot_id__restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+                snapshot_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_zip_api_manuscripts__manuscript_id__export_zip_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
             };
             cookie?: never;
         };

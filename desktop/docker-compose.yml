@@ -14,6 +14,12 @@ x-app: &app
     - pdfs:/data/pdfs
     - models:/models
 
+# What the worker and the ingest worker share; only the worker compiles, so only it gets TECTONIC_USER.
+x-worker-env: &worker-env
+  LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+  DISCOVERY_PROVIDER: ${DISCOVERY_PROVIDER:-live}
+  PAPERLAB_STACK: ${COMPOSE_PROJECT_NAME}
+
 services:
   db:
     # Pinned: an update never moves Postgres or pgvector underneath a library.
@@ -76,9 +82,8 @@ services:
     # with Docker itself, so nothing starts with the computer.
     restart: on-failure
     environment:
-      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
-      DISCOVERY_PROVIDER: ${DISCOVERY_PROVIDER:-live}
-      PAPERLAB_STACK: ${COMPOSE_PROJECT_NAME}
+      <<: *worker-env
+      TECTONIC_USER: tex # manuscripts compile as this unprivileged account
     extra_hosts: ["host.docker.internal:host-gateway"]
     depends_on:
       migrate:
@@ -88,6 +93,7 @@ services:
 
   ingest-worker:
     <<: *worker
+    environment: *worker-env
     # A paper's ingest and re-embed, one paper at a time: ten at once ran the worker out of memory.
     command: ["arq", "app.workers.settings.IngestWorkerSettings"]
 

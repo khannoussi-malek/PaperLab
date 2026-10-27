@@ -2,7 +2,7 @@
 # The E2E stack: its own compose project, volumes and ports, so a test run never touches your library
 # (project `paperlab` on 8000/5180/5433). Fake providers run only here.
 #   scripts/e2e-stack.sh up [--no-search-model] [--live-providers]   start or recreate it, wait for the proxy
-#   scripts/e2e-stack.sh down | reset                                 stop it | stop it and delete its volumes
+#   scripts/e2e-stack.sh down | reset                                 stop it (and its unnamed volumes) | stop it and delete all its volumes
 #   scripts/e2e-stack.sh status | exec <service> <command…>
 set -eu
 cd "$(dirname "$0")/.."
@@ -41,7 +41,7 @@ up() {
 
 case "${1:-}" in
   up) shift; up "$@" ;;
-  down) docker compose -p "$PROJECT" down ;;
+  down) docker compose -p "$PROJECT" rm -sfv && docker compose -p "$PROJECT" down ;; # rm -v: the containers' unnamed volumes (node_modules) go too; named ones stay
   reset) docker compose -p "$PROJECT" down -v ;;
   status) docker compose -p "$PROJECT" ps ;;
   exec) shift; docker compose -p "$PROJECT" exec -T "$@" ;;

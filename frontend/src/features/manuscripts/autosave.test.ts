@@ -1,0 +1,126 @@
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
+import { createAutosave } from './autosave'
+
+beforeEach(() => vi.useFakeTimers())
+afterEach(() => vi.useRealTimers())
+
+test('saves 1 s after the last change', async () => {
+  const save = vi.fn().mockResolvedValue({ conflict: false })
+  const auto = createAutosave({ delayMs: 1000, save })
+  auto.change('a')
+  await vi.advanceTimersByTimeAsync(600)
+  auto.change('ab')
+  await vi.advanceTimersByTimeAsync(999)
+  expect(save).not.toHaveBeenCalled()
+  expect(auto.state).toBe('unsaved')
+  await vi.advanceTimersByTimeAsync(1)
+  expect(save).toHaveBeenCalledOnce()
+  expect(save).toHaveBeenCalledWith('ab')
+  expect(auto.state).toBe('saved')
+})
+
+test('flush saves now', async () => {
+  const save = vi.fn().mockResolvedValue({ conflict: false })
+  const auto = createAutosave({ delayMs: 1000, save })
+  auto.change('x')
+  await auto.flush()
+  expect(save).toHaveBeenCalledWith('x')
+  await vi.advanceTimersByTimeAsync(2000)
+  expect(save).toHaveBeenCalledOnce()
+})
+
+test('conflict stops autosave', async () => {
+  const save = vi.fn().mockResolvedValue({ conflict: true })
+  const auto = createAutosave({ delayMs: 1000, save })
+  auto.change('x')
+  await vi.advanceTimersByTimeAsync(1000)
+  expect(auto.state).toBe('conflict')
+  auto.change('xy')
+  await auto.flush()
+  await vi.advanceTimersByTimeAsync(5000)
+  expect(save).toHaveBeenCalledOnce()
+  auto.reload()
+  auto.change('z')
+  await vi.advanceTimersByTimeAsync(1000)
+  expect(save).toHaveBeenCalledTimes(2)
+})
+
+test('a failed save retries after 5 s and keeps the text meanwhile', async () => {
+  const save = vi.fn().mockRejectedValueOnce(new Error('down')).mockResolvedValue({ conflict: false })
+  const onError = vi.fn()
+  const auto = createAutosave({ delayMs: 1000, save, onError })
+  auto.change('x')
+  await vi.advanceTimersByTimeAsync(1000)
+  expect(auto.state).toBe('unsaved')
+  expect(auto.unsavedText).toBe('x')
+  expect(onError).toHaveBeenCalledOnce()
+  await vi.advanceTimersByTimeAsync(4999)
+  expect(save).toHaveBeenCalledOnce()
+  await vi.advanceTimersByTimeAsync(1)
+  expect(save).toHaveBeenCalledTimes(2)
+  expect(auto.state).toBe('saved')
+})
+
+test('a disposed autosave does not retry', async () => {
+  const save = vi.fn().mockRejectedValue(new Error('down'))
+  const auto = createAutosave({ delayMs: 1000, save, onError: () => {} })
+  auto.change('x')
+  const done = auto.flush()
+  auto.dispose()
+  await done
+  await vi.advanceTimersByTimeAsync(20000)
+  expect(save).toHaveBeenCalledOnce()
+})
+
+test('a conflict keeps the text, and keepMine saves it again', async () => {
+  const save = vi.fn().mockResolvedValueOnce({ conflict: true }).mockResolvedValue({ conflict: false })
+  const auto = createAutosave({ delayMs: 1000, save })
+  auto.change('mine')
+  await vi.advanceTimersByTimeAsync(1000)
+  expect(auto.state).toBe('conflict')
+  expect(auto.unsavedText).toBe('mine')
+  await auto.keepMine()
+  expect(save).toHaveBeenLastCalledWith('mine')
+  expect(auto.state).toBe('saved')
+})
+
+test('a failure that is not retryable stops at once and says so', async () => {
+  const save = vi.fn().mockRejectedValue(new Error('422'))
+  const onError = vi.fn()
+  const auto = createAutosave({ delayMs: 1000, save, onError, retryable: () => false })
+  auto.change('x')
+  await vi.advanceTimersByTimeAsync(30000)
+  expect(save).toHaveBeenCalledOnce()
+  expect(onError).toHaveBeenCalledWith(expect.any(Error), false)
+  expect(auto.state).toBe('unsaved')
+})
+
+test('retries stop after 6 attempts', async () => {
+  const save = vi.fn().mockRejectedValue(new Error('503'))
+  const onError = vi.fn()
+  const auto = createAutosave({ delayMs: 1000, save, onError })
+  auto.change('x')
+  await vi.advanceTimersByTimeAsync(1000 + 6 * 5000 + 60000)
+  expect(save).toHaveBeenCalledTimes(7)
+  expect(onError).toHaveBeenLastCalledWith(expect.any(Error), false)
+})
+
+test('text typed while a save is in flight is kept and saved next', async () => {
+  let finish: (v: { conflict: boolean }) => void = () => {}
+  const save = vi.fn()
+    .mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+    .mockResolvedValue({ conflict: false })
+  const auto = createAutosave({ delayMs: 1000, save })
+  auto.change('a')
+  await vi.advanceTimersByTimeAsync(1000)
+  expect(auto.state).toBe('saving')
+  auto.change('ab') // typed while 'a' is on its way
+  finish({ conflict: false })
+  await vi.advanceTimersByTimeAsync(0)
+  expect(auto.state).toBe('unsaved')
+  expect(auto.unsavedText).toBe('ab')
+  await vi.advanceTimersByTimeAsync(1000)
+  expect(save).toHaveBeenLastCalledWith('ab')
+  expect(auto.state).toBe('saved')
+  expect(auto.unsavedText).toBeNull()
+})

@@ -13,7 +13,10 @@ import { sameCandidate } from '@/features/discovery/candidateMeta'
 import { ALREADY_SAVED } from '@/features/chat/noteBlocks'
 import {
   api,
+  ApiError,
   PaperMergedError,
+  type ManuscriptCreate,
+  type ManuscriptPatch,
   type BulkHitReviewUpdate,
   type Candidate,
   type ChartSpec,
@@ -49,6 +52,7 @@ import {
   type SearchRunCreate,
   type SearchSourceIn,
   type SnowballRequest,
+  type NoteCounts,
 } from './client'
 
 export const PAPERS_POLL_MS = 2000
@@ -67,6 +71,17 @@ export const queryClient: QueryClient = new QueryClient({
 })
 
 export const keys = {
+  // Every manuscript query starts with this, so one invalidation refreshes lists, details, files and history.
+  manuscripts: ['manuscripts'] as const,
+  manuscriptList: (workspaceId: string | null) => ['manuscripts', 'list', workspaceId ?? 'orphans'] as const,
+  manuscript: (id: string) => ['manuscripts', id] as const,
+  manuscriptFile: (id: string, path: string) => ['manuscripts', id, 'file', path] as const,
+  // Not under ['manuscripts', id]: an autosave invalidates that, and the papers only change on a pin, a section or
+  // file operation, or a compile (which pins the keys it cites).
+  manuscriptPapers: (id: string) => ['manuscriptPapers', id] as const,
+  // Per-paper note counts for a set of papers; ['noteCounts'] is the prefix a note change invalidates.
+  noteCounts: (sortedIds: string[]) => ['noteCounts', sortedIds] as const,
+  manuscriptSnapshots: (id: string) => ['manuscripts', id, 'snapshots'] as const,
   papers: ['papers'] as const,
   paper: (id: string) => ['papers', id] as const,
   notes: (paperId: string) => ['papers', paperId, 'notes'] as const,
@@ -138,7 +153,7 @@ export const keys = {
 /** Every list that shows notes: the Notes page's, a paper's, every workspace query (its Notes tab and count), and
  * paper chat's history (a saved suggestion's card lives there too). */
 export const isNotesList = (queryKey: readonly unknown[]) =>
-  queryKey[0] === 'notes' || queryKey[2] === 'notes' || queryKey[2] === 'chat' || queryKey[0] === 'workspaces'
+  queryKey[0] === 'notes' || queryKey[0] === 'noteCounts' || queryKey[2] === 'notes' || queryKey[2] === 'chat' || queryKey[0] === 'workspaces'
 
 /** Refetches every list that shows notes: after a note is saved, edited, moved between papers or deleted, or a chart
  * it shows changes. */
@@ -385,7 +400,9 @@ export function useWorkspaceMutations() {
     remove: useMutation({
       mutationFn: api.deleteWorkspace,
       // Papers keep existing, but their `workspace_ids` lose this workspace.
-      onSuccess: () => Promise.all([onSuccess(), client.invalidateQueries({ queryKey: keys.papers })]),
+      // A manuscript in it is left without a workspace.
+      onSuccess: () =>
+        Promise.all([onSuccess(), client.invalidateQueries({ queryKey: keys.papers }), client.invalidateQueries({ queryKey: keys.manuscripts })]),
     }),
   }
 }
@@ -1362,3 +1379,141 @@ export function useDeleteTag(ws: string) {
     onSuccess: () => invalidateTags(client, ws),
   })
 }
+
+const COMPILE_POLL_MS = 1000
+
+/** A workspace's manuscripts, or (null) those with no workspace. */
+export const useManuscripts = (workspaceId: string | null) =>
+  useQuery({ queryKey: keys.manuscriptList(workspaceId), queryFn: () => api.listManuscripts(workspaceId) })
+
+export const useManuscriptTemplates = () =>
+  useQuery({ queryKey: ['manuscripts', 'templates'], queryFn: api.listManuscriptTemplates, staleTime: Infinity })
+
+/** Poll while compiling or while another pass is asked for; stop on error so a failing server isn't hammered. */
+export const manuscriptPollInterval = (data: { compile_status: string; compile_requested?: boolean } | undefined, failed: boolean) =>
+  !failed && (data?.compile_status === 'running' || data?.compile_requested === true) ? COMPILE_POLL_MS : false
+
+/** One manuscript with its files; polls while it compiles. */
+export const useManuscript = (id: string) =>
+  useQuery({
+    queryKey: keys.manuscript(id),
+    queryFn: () => api.getManuscript(id),
+    refetchInterval: (query) => manuscriptPollInterval(query.state.data, query.state.status === 'error'),
+  })
+
+/** The API takes at most this many paper ids per request. */
+export const NOTE_COUNTS_MAX_IDS = 2000
+export async function noteCountsChunked(ids: string[]) {
+  const chunks: string[][] = []
+  for (let i = 0; i < ids.length; i += NOTE_COUNTS_MAX_IDS) chunks.push(ids.slice(i, i + NOTE_COUNTS_MAX_IDS))
+  return Object.assign({}, ...(await Promise.all(chunks.map((c) => api.noteCounts(c))))) as NoteCounts
+}
+
+/** Notes, highlights and AI notes for many papers (one request per 2000); keyed by the sorted ids. */
+export const useNoteCounts = (ids: string[]) => {
+  const sorted = [...ids].sort()
+  return useQuery({ queryKey: keys.noteCounts(sorted), queryFn: () => noteCountsChunked(sorted), enabled: sorted.length > 0, placeholderData: keepPreviousData })
+}
+
+/** The papers a manuscript can cite, with their keys and note counts. */
+export const useManuscriptPapers = (id: string) =>
+  useQuery({ queryKey: keys.manuscriptPapers(id), queryFn: () => api.manuscriptPapers(id) })
+
+/** A compile pins the keys it cited, so each new compiled_at (not the first one seen) refetches the papers. */
+export function usePapersFollowCompile(id: string, compiledAt: string | null | undefined) {
+  const client = useQueryClient()
+  const seen = useRef(compiledAt)
+  useEffect(() => {
+    if (seen.current !== undefined && compiledAt !== seen.current) void client.invalidateQueries({ queryKey: keys.manuscriptPapers(id) })
+    seen.current = compiledAt
+  }, [client, id, compiledAt])
+}
+
+export function usePinPaper() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (v: { id: string; paperId: string }) => api.pinPaper(v.id, v.paperId),
+    onSuccess: (_key, v) => client.invalidateQueries({ queryKey: keys.manuscriptPapers(v.id) }),
+  })
+}
+
+export const useManuscriptFile = (id: string, path: string | null) =>
+  useQuery({
+    queryKey: keys.manuscriptFile(id, path ?? ''),
+    queryFn: () => api.getManuscriptFile(id, path!),
+    enabled: path !== null,
+  })
+
+export type SaveResult = { conflict: boolean; updatedAt: string }
+
+/** Saves a text file. A stale save (409 file_changed) resolves to `{ conflict: true, updatedAt }`; other errors throw. */
+export function useSaveManuscriptFile() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: async (v: { id: string; path: string; text: string; base: string | null }): Promise<SaveResult> => {
+      try {
+        const saved = await api.saveManuscriptFile(v.id, v.path, v.text, v.base)
+        return { conflict: false, updatedAt: saved.updated_at }
+      } catch (error) {
+        if (error instanceof ApiError && error.code === 'file_changed' && typeof error.body.updated_at === 'string')
+          return { conflict: true, updatedAt: error.body.updated_at }
+        throw error
+      }
+    },
+    onSuccess: (result, v) =>
+      result.conflict ? undefined : client.invalidateQueries({ queryKey: keys.manuscript(v.id) }),
+  })
+}
+
+export function useCompileManuscript() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.compileManuscript(id),
+    onSuccess: (_state, id) => client.invalidateQueries({ queryKey: keys.manuscript(id) }),
+  })
+}
+
+export const useManuscriptSnapshots = (id: string) =>
+  useQuery({ queryKey: keys.manuscriptSnapshots(id), queryFn: () => api.listManuscriptSnapshots(id) })
+
+export function useRestoreSnapshot() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (v: { id: string; snapshotId: string }) => api.restoreManuscriptSnapshot(v.id, v.snapshotId),
+    onSuccess: (_done, v) => client.invalidateQueries({ queryKey: keys.manuscript(v.id) }),
+  })
+}
+
+function useManuscriptMutation<V, R>(mutationFn: (variables: V) => Promise<R>) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn,
+    onSuccess: () =>
+      Promise.all([client.invalidateQueries({ queryKey: keys.manuscripts }), client.invalidateQueries({ queryKey: ['manuscriptPapers'] })]),
+  })
+}
+
+export const useCreateManuscript = () => useManuscriptMutation((body: ManuscriptCreate) => api.createManuscript(body))
+export const useImportManuscript = () =>
+  useManuscriptMutation((v: { file: File; workspaceId: string | null }) => api.importManuscript(v.file, v.workspaceId))
+export const useUpdateManuscript = () =>
+  useManuscriptMutation((v: { id: string; patch: ManuscriptPatch }) => api.updateManuscript(v.id, v.patch))
+export const useDeleteManuscript = () => useManuscriptMutation((id: string) => api.deleteManuscript(id))
+/** A new, empty text file (a PUT with no base: 409 file_exists when there is one). */
+export const useCreateManuscriptFile = () =>
+  useManuscriptMutation((v: { id: string; path: string }) => api.saveManuscriptFile(v.id, v.path, '', null))
+export const useUploadManuscriptFile = () =>
+  useManuscriptMutation((v: { id: string; path: string; file: File }) => api.uploadManuscriptFile(v.id, v.path, v.file))
+export const useRenameManuscriptFile = () =>
+  useManuscriptMutation((v: { id: string; path: string; newPath: string }) => api.renameManuscriptFile(v.id, v.path, v.newPath))
+export const useAddSection = () =>
+  useManuscriptMutation((v: { id: string; title: string; after: string | null }) => api.addSection(v.id, v.title, v.after))
+export const useSplitSections = () => useManuscriptMutation((id: string) => api.splitSections(id))
+export const useRetitleSection = () =>
+  useManuscriptMutation((v: { id: string; path: string; title: string }) => api.retitleSection(v.id, v.path, v.title))
+export const useMoveSection = () =>
+  useManuscriptMutation((v: { id: string; path: string; to: number }) => api.moveSection(v.id, v.path, v.to))
+export const useDeleteSection = () =>
+  useManuscriptMutation((v: { id: string; path: string }) => api.deleteSection(v.id, v.path))
+export const useDeleteManuscriptFile = () =>
+  useManuscriptMutation((v: { id: string; path: string }) => api.deleteManuscriptFile(v.id, v.path))

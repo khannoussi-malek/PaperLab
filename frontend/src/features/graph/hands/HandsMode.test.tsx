@@ -111,3 +111,26 @@ it('hops to the next linked paper on a two-finger flick to the right', async () 
   expect(onHop).toHaveBeenCalledTimes(1)
   expect(onHop).toHaveBeenCalledWith(1)
 })
+
+it('shows overridden copy for a mode and the gestures line', async () => {
+  render(<HandsMode {...props()} text={{ point: 'Aim at a tab' }} gestures="Custom gestures" />)
+  await vi.waitFor(() => expect(tracker.onFrame).not.toBeNull())
+  feed(repeat([f.point], 4))
+  expect(screen.getByRole('status')).toHaveTextContent('Aim at a tab')
+  expect(screen.getByText('Custom gestures')).toBeInTheDocument()
+})
+
+it('while paused keeps the status but fires nothing and restarts the hold', async () => {
+  const p = props()
+  const onHop = vi.fn()
+  const { rerender } = render(<HandsMode {...p} onHop={onHop} paused />)
+  await vi.waitFor(() => expect(tracker.onFrame).not.toBeNull())
+  feed(repeat([f.point], 16))
+  expect(screen.getByRole('status')).toHaveTextContent(MODE_TEXT.point)
+  expect(p.onSelect).not.toHaveBeenCalled()
+  rerender(<HandsMode {...p} onHop={onHop} />)
+  feed(repeat([f.point], 5), 5000) // 0.4 s: the paused hold did not carry over
+  expect(p.onSelect).not.toHaveBeenCalled()
+  feed(repeat([f.point], 12), 6000)
+  expect(p.onSelect).toHaveBeenCalledTimes(1)
+})

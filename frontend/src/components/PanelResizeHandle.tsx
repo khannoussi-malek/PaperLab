@@ -11,6 +11,8 @@ type Props = {
   label?: string
   /** Pixels between the panel's right edge and the window's, when the panel isn't flush to it (a padded pane). */
   inset?: number
+  /** Which edge of the panel the handle sits on; a panel flush to the left of its row uses 'right'. */
+  edge?: 'left' | 'right'
 }
 
 /**
@@ -18,7 +20,7 @@ type Props = {
  * to go back to the default width. The panel is flush right, so its width is the window width minus the pointer's x,
  * less whatever padding sits outside it.
  */
-export function PanelResizeHandle({ limits, width, onWidthChange, label = 'Resize panel', inset = 0 }: Props) {
+export function PanelResizeHandle({ limits, width, onWidthChange, label = 'Resize panel', inset = 0, edge = 'left' }: Props) {
   const resize = (next: number) => onWidthChange(clampPanelWidth(limits, next, window.innerWidth))
 
   function startDrag(event: PointerEvent<HTMLDivElement>) {
@@ -28,12 +30,13 @@ export function PanelResizeHandle({ limits, width, onWidthChange, label = 'Resiz
   }
 
   function drag(event: PointerEvent<HTMLDivElement>) {
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) resize(window.innerWidth - inset - event.clientX)
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) resize(edge === 'left' ? window.innerWidth - inset - event.clientX : event.clientX - inset)
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     const step = { ArrowLeft: KEY_STEP_PX, ArrowRight: -KEY_STEP_PX }[event.key]
-    if (step) resize(width + step)
+    const signed = step && (edge === 'left' ? step : -step)
+    if (signed) resize(width + signed)
     else if (event.key === 'Enter') onWidthChange(limits.defaultWidth)
     else return
     event.preventDefault()
@@ -48,7 +51,7 @@ export function PanelResizeHandle({ limits, width, onWidthChange, label = 'Resiz
       aria-valuemin={limits.minWidth}
       aria-valuemax={maxPanelWidth(limits, window.innerWidth)}
       tabIndex={0}
-      className="group absolute inset-y-0 -left-1.5 z-10 w-3 cursor-col-resize touch-none outline-none"
+      className={`group absolute inset-y-0 ${edge === 'left' ? '-left-1.5' : '-right-1.5'} z-10 w-3 cursor-col-resize touch-none outline-none`}
       onPointerDown={startDrag}
       onPointerMove={drag}
       onDoubleClick={() => onWidthChange(limits.defaultWidth)}

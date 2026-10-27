@@ -1,0 +1,1 @@
+Made with Tectonic 0.17.0 (`scripts/tectonic-dev.sh`): `tectonic -X compile main.tex --untrusted --keep-logs --synctex` in a temp dir holding `main.tex` and `sections/body.tex`; `main.synctex.gz` is the output, unedited. Its input paths start with that temp dir (`ROOT` in `tests/test_synctex.py`).
