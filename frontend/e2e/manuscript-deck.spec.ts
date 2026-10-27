@@ -152,3 +152,62 @@ test('The paper book turns no leaf with reduced motion', async ({ page, request,
     if (manuscriptId) await request.delete(`/api/manuscripts/${manuscriptId}`)
   }
 })
+
+// Find evidence: a sentence in the editor -> Mod+E -> the paper with matching text comes first, with an E badge and an E tab
+// holding the passage. The e2e stack runs the fake LLM and seeds a default model; the fake's reply to a claim check is not
+// the JSON a verdict needs, so every check ends as "Can't tell" -- the label proves the whole queue ran.
+test('Find evidence for a sentence: E badge, E tab, a verdict, insert only the citation, Esc clears, and the deck button asks again', async ({
+  page, request, workspaceId, paperId, tablePaperId,
+}) => {
+  test.setTimeout(300_000)
+  await page.setViewportSize({ width: 1920, height: 1080 })
+  await addToWorkspace(request, workspaceId, tablePaperId, paperId) // the evidence paper added last, so only evidence puts it first
+  let manuscriptId = ''
+  try {
+    manuscriptId = await newManuscript(page, workspaceId, `E2E evidence ${randomUUID().slice(0, 8)}`)
+    const content = page.locator('.cm-content')
+    const sentence = 'A note keeps the exact page and region of the passage it came from.'
+    await content.locator('.cm-line', { hasText: 'Write your abstract here.' }).click()
+    await page.keyboard.press('End')
+    await page.keyboard.press('Enter')
+    await page.keyboard.type(sentence)
+    await page.keyboard.press('ArrowLeft') // inside the sentence
+
+    await page.keyboard.press('ControlOrMeta+e')
+    const header = page.getByText(/^Evidence for:/)
+    await expect(header).toContainText(sentence.slice(0, 20), { timeout: 60_000 })
+    const status = page.locator('p[role=status][aria-live=polite]').filter({ hasText: /paper \d+ of \d+/ })
+    await expect(status).toContainText(/evidence \d+/, { timeout: 30_000 })
+    await expect(status).toContainText('PaperLab E2E Fixture') // first card
+    await expect(status).toContainText('paper 1 of 2')
+    await expect(deck(page).getByText(/^E \d+$/).first()).toBeVisible() // the other paper may have passages too
+
+    await deck(page).focus()
+    await page.keyboard.press('Enter')
+    await expect(book(page)).toBeFocused()
+    const eTab = book(page).locator('[data-book-tab]').first()
+    await expect(eTab).toHaveAttribute('aria-label', /^Evidence passage/)
+    await expect(book(page)).toContainText('A note keeps the exact page and region')
+    await expect(book(page).getByText("Can't tell")).toBeVisible({ timeout: 90_000 })
+
+    await page.keyboard.press('i') // only the citation goes in, never passage text
+    await expect(content).toContainText(/\\citep\{[^}\s]+\}/, { timeout: 15_000 })
+    await expect(content).not.toContainText('\\citep[')
+    await expect(content).not.toContainText("``")
+    await expect(content).toBeFocused()
+
+    await book(page).focus()
+    await page.keyboard.press('Escape') // closes the book, back on the deck
+    await expect(book(page)).toHaveCount(0)
+    await page.keyboard.press('Escape') // clears evidence mode
+    await expect(header).toHaveCount(0)
+    await expect(deck(page).getByText(/^E \d+$/)).toHaveCount(0)
+
+    await content.locator('.cm-line', { hasText: 'A note keeps the exact page' }).click() // the button asks about the editor's last cursor
+    await page.getByRole('button', { name: 'Find evidence' }).click()
+    await expect(header).toBeVisible({ timeout: 60_000 })
+    await expect(deck(page).getByText(/^E \d+$/).first()).toBeVisible({ timeout: 30_000 })
+  } finally {
+    if (manuscriptId) await request.delete(`/api/manuscripts/${manuscriptId}`)
+  }
+})
