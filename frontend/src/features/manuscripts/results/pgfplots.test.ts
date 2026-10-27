@@ -117,6 +117,10 @@ describe('log axes', () => {
     const xNeg = { ...bertTable, rows: bertTable.rows.map((r) => ({ ...r, cells: { ...r.cells, [STD]: cell('0', 0) } })) }
     expect(pgfplotsSupport(xLog, data(xNeg))).toEqual({ ok: false, reason })
   })
+
+  it('refuses to write a log axis with a value <= 0 even when the support check was skipped', () => {
+    expect(() => render(seriesChart('bar', [series({ multiply: 0 })], { axes: log }), bertTable)).toThrow("A log axis can't show zero")
+  })
 })
 
 describe('empty and partial data', () => {
