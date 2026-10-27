@@ -25,7 +25,7 @@ test('the Lens tab lists the lens, and a role fix stays after a reload until Aut
   await panel.getByRole('button', { name: 'Section actions for 2 Method' }).click()
   await page.getByRole('menuitemradio', { name: 'Conclusion' }).click()
   await expect(method.locator('.role-chip')).toHaveText('Conclusion')
-  await expect(method.locator('.role-fixed')).toHaveText('you')
+  await expect(method.locator('.role-fixed')).toHaveText('fixed by you')
 
   // It is kept: after a reload (the hash keeps the tab; the lens starts on Full paper again) it is in Key ideas.
   await page.reload()
