@@ -918,3 +918,14 @@ test('shared tabs: the PDF following a finished compile never takes the Papers t
   expect(tab('Papers')).toHaveAttribute('aria-selected', 'true')
   await waitFor(() => expect(papers.mock.calls.length).toBeGreaterThan(before)) // the compile pinned what it cites
 })
+
+test('the Insert menu shows only while a .tex file is open', async () => {
+  server['paperlab.bib'] = { text: '@misc{k}', at: T2 }
+  vi.spyOn(api, 'getManuscript').mockResolvedValue(detail({ files: [...detail().files, { path: 'paperlab.bib', size: 8, updated_at: T2 }] }))
+  const view = renderPage()
+  await waitFor(() => expect(screen.getByLabelText('LaTeX source')).toHaveValue('hello'))
+  expect(screen.getByRole('button', { name: 'Insert' })).toBeInTheDocument()
+  view.open('paperlab.bib')
+  await waitFor(() => expect(screen.getByLabelText('LaTeX source')).toHaveValue('@misc{k}'))
+  expect(screen.queryByRole('button', { name: 'Insert' })).toBeNull()
+})

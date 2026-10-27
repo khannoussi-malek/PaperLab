@@ -9,6 +9,7 @@ import { autocompletion } from '@codemirror/autocomplete'
 import { citeKeyAt } from './deck/citeKeyAt'
 import type { DeckPaper } from './deck/deckModel'
 import { citeSource, paperDrop } from './citeCompletion'
+import { ownLine, type PreambleEdit } from './results/insertBlock'
 
 type LineError = { line: number; message: string }
 type Props = {
@@ -30,7 +31,7 @@ type Props = {
   /** Mod-E: find evidence for the selection, or the sentence at the cursor (from, to are equal then), in the editor's own text. */
   onFindEvidence?: (doc: string, from: number, to: number) => void
   /** Hands the page a way to insert text at the cursor (the last one when unfocused; the end if it never moved) as a normal edit, then focus the editor. */
-  registerInsert?: (insert: ((text: string) => void) | null) => void
+  registerInsert?: (insert: ((text: string, block?: boolean, preamble?: PreambleEdit) => void) | null) => void
   /** Hands out a way to run Find evidence on the last cursor; it returns false until the cursor has been placed. */
   registerFindEvidence?: (run: (() => boolean) | null) => void
   /** The library's papers, offered as keys inside \cite{…}. */
@@ -176,15 +177,20 @@ export function LatexEditor({ value, onChange, errors, onSave, jumpTo, onCursor,
       latest.current.onFindEvidence?.(editor.state.doc.toString(), from, to)
       return true
     })
-    latest.current.registerInsert?.((text) => {
+    latest.current.registerInsert?.((text, block, preamble) => {
       const at = moved.current ? editor.state.selection.main.head : editor.state.doc.length // never over a selection
       // A comment (an AI note, D118) gets lines of its own: mid-line it would comment out the rest of the researcher's
       // line, and it always ends with a line break so the cursor (placed after it) is never left inside the comment.
       const own = text.startsWith('%')
-      const insert = own ? `${at > editor.state.doc.lineAt(at).from ? '\n' : ''}${text}\n` : text
+      const line = editor.state.doc.lineAt(at)
+      // A block (a table or figure) gets lines of its own too, but needs no extra break when it lands at a line end.
+      const insert = block ? ownLine(text, at === line.from, at === line.to) : own ? `${at > line.from ? '\n' : ''}${text}\n` : text
+      // The preamble lines (positions in the document as it is now) and the text go in one transaction: atomic and one undo.
+      const pre = preamble ? [{ from: editor.state.doc.line(preamble.line).from + preamble.col, insert: preamble.text }] : []
+      const changes = editor.state.changes([...pre, { from: at, insert }])
       editor.dispatch({
-        changes: { from: at, insert },
-        selection: { anchor: at + insert.length },
+        changes,
+        selection: { anchor: changes.mapPos(at, 1) },
         scrollIntoView: true,
         userEvent: 'input.paste', // a normal edit: reported to onChange (autosave) and undoable
       })
