@@ -51,6 +51,12 @@ async def find(session: AsyncSession, mid: uuid.UUID, sentence: str, *, embedder
         if c.paper_id in keys:
             grouped.setdefault(c.paper_id, []).append({"chunk_id": c.id, "page": c.page, "text": c.text})
     h = sentence_hash(sentence)
+    # Another sentence's checks still waiting would keep the model busy for nothing: stop them (a running job ends after
+    # the row it is on, since it only takes queued rows). Asking about that sentence again re-queues them.
+    await session.execute(update(ManuscriptEvidence).where(
+        ManuscriptEvidence.manuscript_id == mid, ManuscriptEvidence.sentence_hash != h,
+        ManuscriptEvidence.status == "queued",
+    ).values(status="failed", reason="superseded", updated_at=func.now()))
     # No model, no rows: nothing would ever resolve them (the passages still show).
     verdicts = "queued" if grouped and await _has_model(session) else "unavailable"
     if verdicts == "queued":
@@ -112,13 +118,25 @@ async def rows(session: AsyncSession, mid: uuid.UUID, sentence_hash: str) -> lis
         .where(ManuscriptEvidence.manuscript_id == mid, ManuscriptEvidence.sentence_hash == sentence_hash)
         .order_by(ManuscriptEvidence.rank)
     )
+    found = list(found)
     now = datetime.now(UTC)
+
+    def stale(r) -> bool:
+        return now - r.updated_at >= STALE_AFTER
+
+    # A queued row waits its turn while a live job works through the rows before it.
+    working = any(r.status == "running" and not stale(r) for r in found)
+
+    def status(r) -> str:
+        if (r.status == "running" and stale(r)) or (r.status == "queued" and stale(r) and not working):
+            return "interrupted"
+        return r.status
+
     return [
         {
             "paper_id": r.paper_id,
             "rank": r.rank,
-            "status": "interrupted" if r.status in ("queued", "running") and now - r.updated_at >= STALE_AFTER
-            else r.status,
+            "status": status(r),
             "verdict": r.verdict,
             "reason": r.reason,
             "quote": r.quote,
