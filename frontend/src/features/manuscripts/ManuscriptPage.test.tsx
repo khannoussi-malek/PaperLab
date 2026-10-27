@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { api, ApiError, type ManuscriptDetail } from '@/api/client'
 import { keptTexts } from './keptTexts'
@@ -8,10 +8,12 @@ import { ManuscriptPage } from './ManuscriptPage'
 
 const pdf = vi.hoisted(() => vi.fn((_url: string | null) => ({ doc: null, error: null })))
 // jsdom can't lay CodeMirror out, so here the editor is a textarea with the same props (LatexEditor.test.tsx runs the real one).
+const editor = vi.hoisted(() => ({ current: null as null | { onCursor?: (l: number) => void; onSectionStep?: (s: -1 | 1) => void } }))
 vi.mock('./LatexEditor', () => ({
-  LatexEditor: ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
-    <textarea aria-label="LaTeX source" value={value} onChange={(e) => onChange(e.target.value)} />
-  ),
+  LatexEditor: (props: { value: string; onChange: (v: string) => void; onCursor?: (l: number) => void; onSectionStep?: (s: -1 | 1) => void }) => {
+    editor.current = props
+    return <textarea aria-label="LaTeX source" value={props.value} onChange={(e) => props.onChange(e.target.value)} />
+  },
 }))
 vi.mock('@/components/AppShell', () => ({
   AppShell: ({ title, actions, status, children }: { title: string; actions?: React.ReactNode; status?: React.ReactNode; children: React.ReactNode }) => (
@@ -432,4 +434,24 @@ test('the left column lists sections from main.tex, with the other files under A
   expect(await screen.findByRole('button', { name: /^1\s*Introduction/ })).toBeInTheDocument()
   expect(screen.getByText('All files')).toBeInTheDocument()
   expect(screen.queryByRole('navigation', { name: 'Outline' })).toBeNull()
+})
+
+test('the breadcrumb follows the cursor, and Mod+Alt+Down opens the next section', async () => {
+  server = {
+    'main.tex': { text: '\\input{sections/a}\n\\input{sections/b}', at: T2 },
+    'sections/a.tex': { text: '\\section{Method}\nx\n\\subsection{Data}\ny', at: T2 },
+    'sections/b.tex': { text: '\\section{Results}\nz', at: T2 },
+  }
+  vi.spyOn(api, 'getManuscript').mockResolvedValue(detail({
+    files: ['main.tex', 'sections/a.tex', 'sections/b.tex'].map((p) => ({ path: p, size: 5, updated_at: T2 })),
+  }))
+  window.location.hash = ''
+  renderPage('sections/a.tex')
+  await screen.findByLabelText('LaTeX source')
+  await waitFor(() => expect(editor.current?.onCursor).toBeDefined())
+  act(() => editor.current!.onCursor!(4))
+  const crumbs = await screen.findByRole('navigation', { name: 'Where you are' })
+  expect(crumbs).toHaveTextContent('Method›Data')
+  act(() => editor.current!.onSectionStep!(1))
+  await waitFor(() => expect(window.location.hash).toContain('sections%2Fb.tex'))
 })

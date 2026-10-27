@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils'
 import { manuscriptFailure } from './errors'
 import type { OutlineItem } from './outline'
 import { DeleteSectionDialog, SectionTitleDialog } from './SectionDialogs'
-import { sectionRows, sectionText, wordCount, type SectionRow } from './sections'
+import { openRowIndex, sectionRows, sectionText, wordCount, type SectionRow } from './sections'
 import { sectionStatus, type SectionStatus } from './sectionStatus'
 
 const DOT: Record<SectionStatus, string> = {
@@ -53,9 +53,7 @@ export function SectionList({ manuscriptId, main, texts, filePaths, errorsByFile
   const busy = add.isPending || split.isPending || retitle.isPending || move.isPending || remove.isPending
   const singleFile = rows.length > 0 && rows.every((r) => r.inMain)
   const key = (r: SectionRow) => `${r.path}:${r.line}`
-  const openRow = singleFile
-    ? [...rows].reverse().find((r) => r.line <= current.line)
-    : rows.find((r) => r.path === current.path)
+  const openRow = rows[openRowIndex(rows, current.path, current.line)]
 
   useEffect(() => { // a moved row keeps the keyboard focus
     if (refocus.current) buttons.current.get(refocus.current)?.focus()
