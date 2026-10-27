@@ -32,6 +32,7 @@ class CompileResult:
     log: str
     errors: list[dict]
     friendly: str | None
+    synctex: bytes | None = None  # <main stem>.synctex.gz, read like the PDF
 
 
 def parse_errors(log: str, main_file: str = "main.tex") -> list[dict]:
@@ -77,7 +78,8 @@ def _clean_log(stderr: str, main_log: str) -> str:
 
 
 def finish(
-    returncode: int, stderr: str, main_log: str, pdf: bytes | None, main_file: str = "main.tex"
+    returncode: int, stderr: str, main_log: str, pdf: bytes | None, main_file: str = "main.tex",
+    synctex: bytes | None = None,
 ) -> CompileResult:
     """Turns a finished run into a result. Reaching outside the project voids the PDF even at rc=0 (layer 2)."""
     friendly = friendly_message(stderr)
@@ -92,6 +94,7 @@ def finish(
         log=_clean_log(stderr, main_log),
         errors=errors,
         friendly=friendly,
+        synctex=synctex if ok else None,
     )
 
 
@@ -171,5 +174,7 @@ async def compile_dir(workdir: Path, main_file: str, *, timeout: float = COMPILE
     output = workdir / Path(main_file)  # Tectonic writes its PDF and log beside the main file, nested or not
     pdf_path = output.with_suffix(".pdf")
     pdf = pdf_path.read_bytes() if pdf_path.exists() else None
+    sync_path = output.with_suffix(".synctex.gz")
+    synctex = sync_path.read_bytes() if sync_path.exists() else None
     main_log = _read_log(output.with_suffix(".log"))
-    return finish(proc.returncode, out.decode(errors="replace"), main_log, pdf, main_file)
+    return finish(proc.returncode, out.decode(errors="replace"), main_log, pdf, main_file, synctex)

@@ -88,6 +88,7 @@ async def delete(session: AsyncSession, manuscript_id: uuid.UUID) -> None:
     await get(session, manuscript_id)
     await session.execute(delete_rows(Manuscript).where(Manuscript.id == manuscript_id))
     pdf_path(manuscript_id).unlink(missing_ok=True)
+    sync_path(manuscript_id).unlink(missing_ok=True)
 
 
 async def files(session: AsyncSession, manuscript_id: uuid.UUID) -> list[ManuscriptFile]:
@@ -223,6 +224,10 @@ def interrupted(manuscript: Manuscript, now: datetime) -> bool:
 
 def pdf_path(manuscript_id: uuid.UUID) -> Path:
     return settings.pdf_dir / "manuscripts" / f"{manuscript_id}.pdf"
+
+
+def sync_path(manuscript_id: uuid.UUID) -> Path:
+    return settings.pdf_dir / "manuscripts" / f"{manuscript_id}.sync.json"
 
 
 async def request_compile(session: AsyncSession, manuscript_id: uuid.UUID, *, now: datetime) -> str:

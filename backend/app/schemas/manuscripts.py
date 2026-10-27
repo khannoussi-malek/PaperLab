@@ -119,6 +119,17 @@ class CompileOut(BaseModel):
     state: str  # queued | again
 
 
+class SyncPointOut(BaseModel):
+    page: int
+    x: float
+    y: float
+
+
+class SyncSourceOut(BaseModel):
+    file: str
+    line: int
+
+
 class SnapshotOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

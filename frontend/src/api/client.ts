@@ -507,6 +507,13 @@ export const api = {
   /** `compiledAt` is in the URL so a new compile is a new URL and pdf.js fetches it again. */
   manuscriptPdfUrl: (id: string, compiledAt?: string | null) =>
     `/api/manuscripts/${id}/pdf${compiledAt ? `?v=${encodeURIComponent(compiledAt)}` : ''}`,
+  /** Where a source line lands in the PDF. Rejects 404 no_sync when there is no index or no match. */
+  syncForward: (id: string, file: string, line: number) =>
+    request<{ page: number; x: number; y: number }>(
+      `/api/manuscripts/${id}/synctex/forward?file=${encodeURIComponent(file)}&line=${line}`),
+  /** Which source line a PDF spot comes from (page 1-based, x/y in points from the top-left). 404 no_sync too. */
+  syncInverse: (id: string, page: number, x: number, y: number) =>
+    request<{ file: string; line: number }>(`/api/manuscripts/${id}/synctex/inverse?page=${page}&x=${x}&y=${y}`),
   manuscriptExportUrl: (id: string) => `/api/manuscripts/${id}/export.zip`,
   listManuscriptSnapshots: (id: string) => request<ManuscriptSnapshot[]>(`/api/manuscripts/${id}/snapshots`),
   restoreManuscriptSnapshot: (id: string, snapshotId: string) =>
