@@ -6,14 +6,17 @@ import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { loadPlotly } from '@/features/charts/loadPlotly'
 import { ChartView } from '@/features/charts/ChartView'
+import { compileChart } from '@/features/charts/compile'
+import { loadPlotly } from '@/features/charts/loadPlotly'
 import { latexEscape } from '../deck/latex'
 import { slug, uniqueLabel } from './insertBlock'
 import { pgfplotsSupport, toPgfplots } from './pgfplots'
 import type { InsertResult } from './useInsertBlock'
 
-const PNG_WIDTH = 1950 // 6.5 inches at 300 dpi
+// 6.5 inches at 300 dpi is 1950 px. Laid out at 650 css px and exported at scale 3, the 13 px chart text prints at about 9 pt.
+const EXPORT_WIDTH = 650
+const EXPORT_SCALE = 3
 const FALLBACK_ASPECT = 0.6
 
 const dataUrlToFile = (url: string, name: string): File => {
@@ -43,7 +46,6 @@ export function ChartDialog({ open, onOpenChange, manuscriptId, labelTexts, file
   onClosed?: (inserted: boolean) => void
 }) {
   const inserted = useRef(false)
-  const preview = useRef<HTMLDivElement>(null)
   const charts = useCharts()
   const upload = useUploadManuscriptFile()
   const [chartId, setChartId] = useState<string | null>(null)
@@ -60,14 +62,15 @@ export function ChartDialog({ open, onOpenChange, manuscriptId, labelTexts, file
   const shownLabel = label ?? uniqueLabel(labelTexts(), `fig:${slug(title || 'chart')}`)
   const ready = resolved.data && !resolved.isPlaceholderData ? resolved.data : null
   const support = useMemo(() => (ready ? pgfplotsSupport(ready.spec, ready.data) : null), [ready])
-  const latex = useMemo(() => {
-    if (!ready || !support?.ok) return null
+  const built = useMemo<{ latex: string | null; problem: string | null }>(() => {
+    if (!ready || !support?.ok) return { latex: null, problem: null }
     try {
-      return toPgfplots(ready.spec, ready.data, { caption: latexEscape(shownCaption), label: shownLabel.trim() })
+      return { latex: toPgfplots(ready.spec, ready.data, { caption: latexEscape(shownCaption), label: shownLabel.trim() }), problem: null }
     } catch (e) {
-      return e instanceof Error ? e.message : String(e)
+      return { latex: null, problem: e instanceof Error ? e.message : String(e) }
     }
   }, [ready, support, shownCaption, shownLabel])
+  const { latex, problem } = built
 
   const finish = (result: InsertResult) => {
     if (result.ok) {
@@ -80,7 +83,7 @@ export function ChartDialog({ open, onOpenChange, manuscriptId, labelTexts, file
   }
 
   const insertPgfplots = async () => {
-    if (!latex || !support?.ok) return
+    if (!latex) return
     setBusy(true)
     setError(null)
     try {
@@ -92,16 +95,29 @@ export function ChartDialog({ open, onOpenChange, manuscriptId, labelTexts, file
     }
   }
 
+  /** The chart in the light theme on white, drawn in a hidden detached div: the live preview follows the app theme. */
+  const exportPng = async (): Promise<string> => {
+    if (!ready) throw new Error("The chart isn't drawn yet.")
+    const Plotly = await loadPlotly()
+    const compiled = compileChart(ready.spec, ready.data, 'light')
+    const div = document.createElement('div')
+    div.style.cssText = `position:fixed;left:-10000px;top:0;width:${EXPORT_WIDTH}px`
+    const height = Math.round(EXPORT_WIDTH * FALLBACK_ASPECT)
+    try {
+      await Plotly.newPlot(div, compiled.traces, { ...compiled.layout, paper_bgcolor: '#ffffff', plot_bgcolor: '#ffffff', width: EXPORT_WIDTH, height, autosize: false }, { staticPlot: true })
+      return await Plotly.toImage(div as never, { format: 'png', width: EXPORT_WIDTH, height, scale: EXPORT_SCALE })
+    } finally {
+      Plotly.purge(div)
+      div.remove()
+    }
+  }
+
   const insertPicture = async () => {
-    const graph = preview.current?.querySelector<HTMLElement>('.js-plotly-plot')
-    if (!graph) return setError("The chart isn't drawn yet.")
     setBusy(true)
     setError(null)
     let path = ''
     try {
-      const Plotly = await loadPlotly()
-      const aspect = graph.clientWidth ? graph.clientHeight / graph.clientWidth : FALLBACK_ASPECT
-      const url = await Plotly.toImage(graph as never, { format: 'png', width: PNG_WIDTH, height: Math.round(PNG_WIDTH * (aspect || FALLBACK_ASPECT)), scale: 1 })
+      const url = await exportPng()
       path = uniquePath(filePaths(), slug(title || 'chart'))
       await upload.mutateAsync({ id: manuscriptId, path, file: dataUrlToFile(url, path.slice(path.lastIndexOf('/') + 1)) })
     } catch (e) {
@@ -148,6 +164,7 @@ export function ChartDialog({ open, onOpenChange, manuscriptId, labelTexts, file
             <Input value={shownLabel} onChange={(e) => setLabel(e.target.value)} />
           </label>
         </div>
+        {problem && <Alert variant="destructive"><AlertDescription>{problem}</AlertDescription></Alert>}
         {support && !support.ok && <p role="status" className="text-sm text-muted-foreground">{support.reason}</p>}
         {support?.ok && support.notes.map((n) => <p key={n} role="status" className="text-sm text-muted-foreground">{n}</p>)}
         <Tabs defaultValue="chart">
@@ -156,7 +173,7 @@ export function ChartDialog({ open, onOpenChange, manuscriptId, labelTexts, file
             <TabsTrigger value="latex" disabled={!support?.ok}>LaTeX</TabsTrigger>
           </TabsList>
           <TabsContent value="chart" forceMount className="data-[state=inactive]:hidden">
-            <div ref={preview}>{spec ? <ChartView spec={spec} height={260} staticPlot withTable={false} /> : <p className="text-sm text-muted-foreground">Pick a chart to preview it.</p>}</div>
+            <div>{spec ? <ChartView spec={spec} height={260} staticPlot withTable={false} /> : <p className="text-sm text-muted-foreground">Pick a chart to preview it.</p>}</div>
           </TabsContent>
           <TabsContent value="latex">
             {latex && <pre className="max-h-60 overflow-auto rounded-lg border border-glass-border p-2 text-xs">{latex}</pre>}
@@ -166,8 +183,8 @@ export function ChartDialog({ open, onOpenChange, manuscriptId, labelTexts, file
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           {support && !support.ok
-            ? <Button type="button" disabled={busy} onClick={() => void insertPicture()}>Insert as a picture</Button>
-            : <Button type="button" disabled={busy || !support?.ok} onClick={() => void insertPgfplots()}>Insert</Button>}
+            ? <Button type="button" disabled={busy || !ready} onClick={() => void insertPicture()}>Insert as a picture</Button>
+            : <Button type="button" disabled={busy || !latex} onClick={() => void insertPgfplots()}>Insert</Button>}
         </DialogFooter>
       </DialogContent>
     </Dialog>
