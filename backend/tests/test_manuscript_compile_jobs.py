@@ -267,7 +267,7 @@ async def test_an_ok_compile_writes_the_index_and_a_failed_one_keeps_it(session,
     await worker.compile_manuscript({}, str(m.id))
     path = manuscripts.sync_path(m.id)
     first = path.read_bytes()
-    assert json.loads(first) == {"inputs": ["main.tex"], "records": [[1, 0, 5, 1.52, 3.04]]}
+    assert json.loads(first) == {"inputs": ["main.tex"], "records": [[1, 0, 5, 1.52, 3.04, "("]]}
     await worker.compile_manuscript({}, str(m.id))
     assert path.read_bytes() == first
 
