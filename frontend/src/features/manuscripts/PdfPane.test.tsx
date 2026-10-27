@@ -60,3 +60,11 @@ test('the target is placed again when pages change size under it, until the user
   expect(box.scrollTop).toBe(5)
   vi.unstubAllGlobals()
 })
+
+test('double-click reports the word, its page point and a rect', () => {
+  const edit = vi.fn()
+  vi.spyOn(window, 'getSelection').mockReturnValue({ toString: () => ' Dogs ', rangeCount: 0 } as unknown as Selection)
+  render(<PdfPane manuscript={m} width={636} target={null} onSourceAt={() => {}} onEditAt={edit} />)
+  fireEvent.doubleClick(document.querySelector('[data-page="2"]')!, { clientX: 40, clientY: 90 })
+  expect(edit).toHaveBeenCalledWith(2, 40 / SCALE, 90 / SCALE, 'Dogs', expect.objectContaining({ left: 40, bottom: 90 }))
+})
