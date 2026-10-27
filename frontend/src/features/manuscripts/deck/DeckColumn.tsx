@@ -15,6 +15,7 @@ import { PaperDeck } from './PaperDeck'
 const RANK_DELAY_MS = 500
 const RANK_MAX_CHARS = 20_000 // RankIn's max_length: more is a 422
 const EVIDENCE_POLL_MS = 2000
+const POLL_RETRIES = 2
 
 const EVIDENCE_ERRORS: Record<string, string> = {
   no_workspace: "This manuscript isn't in a workspace, so there are no papers to search.",
@@ -42,6 +43,8 @@ export type DeckColumnProps = {
   evidenceAsk?: { doc: string; from: number; to: number; n: number } | null
   /** The deck's Find evidence button and Mod+E: run it on the editor's last cursor. False when there is none yet. */
   onFindEvidence?: () => boolean
+  /** Evidence mode was cleared: forget the ask, so a remounted column does not run it again. */
+  onClearEvidence?: () => void
 }
 
 /** What the hands can do to an open book: move between its items, or turn to one by id. */
@@ -94,7 +97,7 @@ function OpenBook({ manuscriptId, paper, onInsert, onClose, onNotice, controls, 
 }
 
 /** The Papers column: the workspace's papers as a deck, ordered for the section being written; open one to insert from it. */
-export function DeckColumn({ manuscriptId, sectionKey, sectionText, allTexts, onInsert, openKey, evidenceAsk, onFindEvidence }: DeckColumnProps) {
+export function DeckColumn({ manuscriptId, sectionKey, sectionText, allTexts, onInsert, openKey, evidenceAsk, onFindEvidence, onClearEvidence }: DeckColumnProps) {
   const papers = useManuscriptPapers(manuscriptId)
   const [filter, setFilter] = useState('')
   const [currentId, setCurrentId] = useState<string | null>(null)
@@ -131,7 +134,7 @@ export function DeckColumn({ manuscriptId, sectionKey, sectionText, allTexts, on
     return () => { live = false; clearTimeout(timer) }
   }, [manuscriptId, sectionKey])
 
-  const clearEvidence = () => { lastAsk.current += 1; setEvidence(null); setEvidenceMsg(null); setFinding(false) }
+  const clearEvidence = () => { lastAsk.current += 1; setEvidence(null); setEvidenceMsg(null); setFinding(false); onClearEvidence?.() }
   useEffect(() => () => { lastAsk.current = -1 }, [])
   useEffect(() => {
     if (!evidenceAsk || evidenceAsk.n === handledAsk.current) return
@@ -155,6 +158,9 @@ export function DeckColumn({ manuscriptId, sectionKey, sectionText, allTexts, on
     queryFn: () => api.evidenceRows(manuscriptId, hash!),
     enabled: !!hash && !unavailable,
     gcTime: 0,
+    // A poll that fails is tried again on the next beat; only three failures in a row stop the polling (and say so).
+    retry: POLL_RETRIES,
+    retryDelay: EVIDENCE_POLL_MS,
     refetchInterval: (q) => {
       if (q.state.status === 'error') return false
       const d = q.state.data as EvidenceRow[] | undefined

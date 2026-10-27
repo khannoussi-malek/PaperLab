@@ -146,6 +146,6 @@ test('Mod-e asks to find evidence for the selection or cursor, and nothing else 
   const view = cm(container)
   view.dispatch({ selection: { anchor: 2, head: 5 } })
   const notPrevented = press(container, { key: 'e', code: 'KeyE', ctrlKey: true })
-  expect(onFindEvidence).toHaveBeenCalledWith(2, 5)
+  expect(onFindEvidence).toHaveBeenCalledWith('One. Two.', 2, 5) // the editor's own text, with its own positions
   expect(notPrevented).toBe(false) // handled: the browser does not see it
 })

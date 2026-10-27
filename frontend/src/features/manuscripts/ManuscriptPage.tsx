@@ -76,10 +76,12 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
     setOpenKey((k) => ({ key, n: (k?.n ?? 0) + 1 }))
     setReveal((r) => ({ id: 'papers', n: (r?.n ?? 0) + 1 }))
   }, [])
+  const asks = useRef(0) // never restarts, so an ask after Clear is never mistaken for one the deck already ran
   const findEvidence = useCallback((doc: string, from: number, to: number) => {
-    setEvidenceAsk((a) => ({ doc, from, to, n: (a?.n ?? 0) + 1 }))
+    setEvidenceAsk({ doc, from, to, n: ++asks.current })
     setReveal((r) => ({ id: 'papers', n: (r?.n ?? 0) + 1 }))
   }, [])
+  const clearEvidence = useCallback(() => setEvidenceAsk(null), []) // a remounted deck must not ask it again
   // Only an explicit Show in PDF brings the PDF forward (its tab, when it shares one with Papers); following a compile never does.
   const revealPdf = useCallback(() => setReveal((r) => ({ id: 'pdf', n: (r?.n ?? 0) + 1 })), [])
   const [paletteOpen, setPaletteOpen] = useState(false)
@@ -339,7 +341,7 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
                 id: 'papers',
                 label: 'Papers',
                 limits: MANUSCRIPT_PAPERS,
-                content: <DeckColumn manuscriptId={manuscriptId} sectionKey={section.key} sectionText={section.text} allTexts={allTexts} onInsert={insertAtCursor} openKey={openKey} evidenceAsk={evidenceAsk} onFindEvidence={findFromDeck} />,
+                content: <DeckColumn manuscriptId={manuscriptId} sectionKey={section.key} sectionText={section.text} allTexts={allTexts} onInsert={insertAtCursor} openKey={openKey} evidenceAsk={evidenceAsk} onFindEvidence={findFromDeck} onClearEvidence={clearEvidence} />,
               },
             ]}
             reveal={reveal ?? undefined}

@@ -234,7 +234,7 @@ export function SourcePane(props: Props) {
       {file.error && <Alert variant="destructive" className="m-2 w-auto"><AlertDescription>{file.error.message}</AlertDescription></Alert>}
       <div className="min-h-0 flex-1">
         {text === null ? (!file.error && <TabSkeleton label="Loading file" />) : (
-          <LatexEditor value={text} onChange={change} errors={errors} jumpTo={jumpTo} onCursor={props.onCursor} onSectionStep={props.onSectionStep} onShowInPdf={props.onShowInPdf} onCiteKey={props.onCiteKey} onFindEvidence={(from, to) => props.onFindEvidence?.(text, from, to)} citeOptions={props.citeOptions} onCite={props.onCite} registerInsert={props.registerInsert} registerFindEvidence={props.registerFindEvidence} onSave={() => void compileNow()} />
+          <LatexEditor value={text} onChange={change} errors={errors} jumpTo={jumpTo} onCursor={props.onCursor} onSectionStep={props.onSectionStep} onShowInPdf={props.onShowInPdf} onCiteKey={props.onCiteKey} onFindEvidence={props.onFindEvidence} citeOptions={props.citeOptions} onCite={props.onCite} registerInsert={props.registerInsert} registerFindEvidence={props.registerFindEvidence} onSave={() => void compileNow()} />
         )}
       </div>
     </section>
