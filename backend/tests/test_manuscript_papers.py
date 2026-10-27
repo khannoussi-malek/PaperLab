@@ -179,7 +179,7 @@ async def test_a_compile_building_the_bib_and_a_new_file_saved_meanwhile_both_fi
     engine = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)
     maker = async_sessionmaker(engine, expire_on_commit=False)
     async with maker() as s:
-        ws, _, m = await setup(s, "Locks", name=f"locks {uuid.uuid4()}")
+        ws, papers, m = await setup(s, "Locks", name=f"locks {uuid.uuid4()}")
         await s.commit()
     try:
         async with maker() as compiling, maker() as saving:
@@ -198,5 +198,6 @@ async def test_a_compile_building_the_bib_and_a_new_file_saved_meanwhile_both_fi
         async with maker() as s:
             await s.execute(delete(Manuscript).where(Manuscript.id == m.id))
             await s.execute(delete(Workspace).where(Workspace.id == ws.id))
+            await s.execute(delete(Paper).where(Paper.id.in_([p.id for p in papers])))
             await s.commit()
         await engine.dispose()
