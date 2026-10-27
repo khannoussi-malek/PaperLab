@@ -93,9 +93,10 @@ const showNumber = (cell: TableCell, decimals: number | null): string => {
   const clean = CELL.test(cell.raw.trim())
   const num = (n: number, pct: boolean) => (decimals === null ? String(n) : n.toFixed(decimals)) + (pct ? '\\%' : '')
   if (clean && decimals === null) {
-    return second === undefined ? oneLine(cell.raw.trim()) : `$${latexEscape(first)} \\pm ${latexEscape(second)}$`
+    if (second !== undefined) return `$${latexEscape(first)} \\pm ${latexEscape(second)}$`
+    return cell.error === null ? oneLine(cell.raw.trim()) : `$${latexEscape(first)} \\pm ${cell.error}$`
   }
-  const v = clean && decimals !== null ? num(cell.value, first.includes('%')) : num(cell.value, false)
+  const v = num(cell.value, /^\s*[+-]?[\d.,]+\s*%/.test(cell.raw))
   if (cell.error === null) return decimals === null ? oneLine(cell.raw) : v
   return `$${v} \\pm ${num(cell.error, clean && !!second?.includes('%'))}$`
 }
@@ -103,7 +104,7 @@ const showNumber = (cell: TableCell, decimals: number | null): string => {
 export function toBooktabs(t: TableInput, opts: BooktabsOptions): string {
   if (t.headers.length === 0) throw new Error('The table has no columns.')
   const numeric = t.headers.map((_, c) => {
-    const filled = t.rows.map((r) => r[c]).filter((x) => x && x.raw !== '')
+    const filled = t.rows.map((r) => r[c]).filter((x) => x && x.raw.trim() !== '')
     return c > 0 && filled.length > 0 && filled.every((x) => x.value !== null)
   })
   const best = numeric.map((isNum, c) => {
@@ -116,7 +117,7 @@ export function toBooktabs(t: TableInput, opts: BooktabsOptions): string {
     line(
       t.headers.map((_, c) => {
         const cell = r[c] ?? { raw: '', value: null, error: null }
-        if (!numeric[c] || cell.raw === '') return oneLine(cell.raw)
+        if (!numeric[c] || cell.raw.trim() === '') return oneLine(cell.raw)
         const text = showNumber(cell, opts.decimals)
         return best[c] !== null && cell.value === best[c] ? `\\textbf{${text}}` : text
       }),

@@ -62,6 +62,22 @@ describe('fix round 1', () => {
   })
 })
 
+describe('fix round 2', () => {
+  const cell = (raw: string, value: number | null, error: number | null) => ({ raw, value, error })
+  const one = (c: ReturnType<typeof cell>) => ({ headers: ['M', 'F'], rows: [[cell('A', null, null), c]] })
+  it('shows the error of a clean raw without a sign', () => {
+    expect(toBooktabs(one(cell('88.5', 88.5, 1.2)), opts)).toContain('A & $88.5 \\pm 1.2$ \\\\')
+    expect(toBooktabs(one(cell('88.5', 88.5, 1.2)), { ...opts, decimals: 1 })).toContain('A & $88.5 \\pm 1.2$ \\\\')
+  })
+  it('counts a whitespace-only cell as empty', () => {
+    const t = { headers: ['M', 'F'], rows: [[cell('A', null, null), cell('1', 1, null)], [cell('B', null, null), cell(' ', null, null)]] }
+    expect(toBooktabs(t, opts)).toContain('{lr}')
+  })
+  it('keeps % on the fallback path', () => {
+    expect(toBooktabs(one(cell('85.2% (±1.1)', 85.2, 1.1)), opts)).toContain('$85.2\\% \\pm 1.1$')
+  })
+})
+
 describe('toBooktabs', () => {
   it('writes the plain table', () => {
     expect(toBooktabs(parsePasted('Model\tF1\nBERT\t88.5\nGPT\t90'), opts)).toBe(
