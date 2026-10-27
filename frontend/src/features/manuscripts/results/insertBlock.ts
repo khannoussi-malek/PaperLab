@@ -48,6 +48,12 @@ export function ensurePackages(mainText: string, packages: string[]): string | n
 /** The label-safe form of a dataset or chart name. */
 export const slug = (name: string): string => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'untitled'
 
+/** A typed label safe in `\label{}` (each run of braces, `%`, `#`, `\` or spaces becomes `-`), unique against the texts; '' if nothing is left. */
+export function typedLabel(texts: string[], typed: string): string {
+  const clean = typed.trim().replace(/[{}%#\\\s]+/g, '-')
+  return clean ? uniqueLabel(texts, clean) : ''
+}
+
 /** `base`, or `base-2`, `base-3`... when a `\label{}` in any of the texts already uses it. */
 export function uniqueLabel(texts: string[], base: string): string {
   const used = new Set(texts.flatMap((t) => [...t.matchAll(/\\label\{([^}]*)\}/g)].map((m) => m[1].trim())))

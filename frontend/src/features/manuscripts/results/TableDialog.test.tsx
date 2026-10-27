@@ -124,3 +124,46 @@ test('a pin error other than 404 is shown and nothing is inserted', async () => 
   expect(await screen.findByText('boom')).toBeInTheDocument()
   expect(insert).not.toHaveBeenCalled()
 })
+
+test('a typed label loses the characters that break \\label and is made unique', async () => {
+  vi.spyOn(api, 'listDatasets').mockResolvedValue([])
+  const { insert } = setup(['\\label{tab:-x-y-z}'])
+  fireEvent.mouseDown(screen.getByRole('tab', { name: 'Paste' }))
+  fireEvent.change(screen.getByLabelText('Paste a table'), { target: { value: 'Model\tF1\nBERT\t88' } })
+  fireEvent.change(screen.getByLabelText('Label'), { target: { value: ' tab:{x}%#\\y z ' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Insert' }))
+  await waitFor(() => expect(insert).toHaveBeenCalled())
+  expect((insert.mock.calls[0] as unknown as [string])[0]).toContain('\\label{tab:-x-y-z-2}')
+})
+
+test('a label typed as nothing usable falls back to the one made from the name', async () => {
+  vi.spyOn(api, 'listDatasets').mockResolvedValue([])
+  const { insert } = setup()
+  fireEvent.mouseDown(screen.getByRole('tab', { name: 'Paste' }))
+  fireEvent.change(screen.getByLabelText('Paste a table'), { target: { value: 'Model\tF1\nBERT\t88' } })
+  fireEvent.change(screen.getByLabelText('Label'), { target: { value: '  ' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Insert' }))
+  await waitFor(() => expect(insert).toHaveBeenCalled())
+  expect((insert.mock.calls[0] as unknown as [string])[0]).toContain('\\label{tab:table}')
+})
+
+test('the dataset list says Loading… until it loads, and No datasets found. only when it is empty', async () => {
+  let done: (v: DatasetSummary[]) => void = () => {}
+  vi.spyOn(api, 'listDatasets').mockReturnValue(new Promise((r) => { done = r }))
+  setup()
+  expect(await screen.findByText('Loading…')).toBeInTheDocument()
+  expect(screen.queryByText('No datasets found.')).toBeNull()
+  done([])
+  expect(await screen.findByText('No datasets found.')).toBeInTheDocument()
+  expect(screen.queryByText('Loading…')).toBeNull()
+})
+
+test('the chosen dataset is marked and announced', async () => {
+  withDataset()
+  setup()
+  const item = await screen.findByRole('option', { name: /Main results/ })
+  expect(item).toHaveAttribute('aria-checked', 'false')
+  await pick()
+  await waitFor(() => expect(item).toHaveAttribute('aria-checked', 'true'))
+  expect(screen.getByText('Chosen: Main results')).toHaveAttribute('role', 'status')
+})

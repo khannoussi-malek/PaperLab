@@ -10,7 +10,7 @@ import { ChartView } from '@/features/charts/ChartView'
 import { compileChart } from '@/features/charts/compile'
 import { loadPlotly } from '@/features/charts/loadPlotly'
 import { latexEscape } from '../deck/latex'
-import { slug, uniqueLabel } from './insertBlock'
+import { slug, typedLabel, uniqueLabel } from './insertBlock'
 import { pgfplotsSupport, toPgfplots } from './pgfplots'
 import type { InsertResult } from './useInsertBlock'
 
@@ -33,7 +33,7 @@ function uniquePath(files: string[], base: string): string {
 }
 
 const figure = (body: string, caption: string, label: string) =>
-  `\\begin{figure}[htbp]\n\\centering\n${body}\n\\caption{${caption}}\n\\label{${label}}\n\\end{figure}`
+  `\\begin{figure}[t]\n\\centering\n${body}\n\\caption{${caption}}\n\\label{${label}}\n\\end{figure}`
 
 /** Inserts a saved chart: pgfplots when it can be drawn in LaTeX, else a PNG picture uploaded to the manuscript. */
 export function ChartDialog({ open, onOpenChange, manuscriptId, labelTexts, filePaths, onInsert, onClosed }: {
@@ -58,18 +58,21 @@ export function ChartDialog({ open, onOpenChange, manuscriptId, labelTexts, file
   const [error, setError] = useState<string | null>(null)
 
   const title = chart.data?.title ?? ''
+  const chosen = charts.data?.find((c) => c.id === chartId)
   const shownCaption = caption ?? title
-  const shownLabel = label ?? uniqueLabel(labelTexts(), `fig:${slug(title || 'chart')}`)
+  const autoLabel = uniqueLabel(labelTexts(), `fig:${slug(title || 'chart')}`)
+  const shownLabel = label ?? autoLabel
+  const finalLabel = label === null ? autoLabel : typedLabel(labelTexts(), label) || autoLabel
   const ready = resolved.data && !resolved.isPlaceholderData ? resolved.data : null
   const support = useMemo(() => (ready ? pgfplotsSupport(ready.spec, ready.data) : null), [ready])
   const built = useMemo<{ latex: string | null; problem: string | null }>(() => {
     if (!ready || !support?.ok) return { latex: null, problem: null }
     try {
-      return { latex: toPgfplots(ready.spec, ready.data, { caption: latexEscape(shownCaption), label: shownLabel.trim() }), problem: null }
+      return { latex: toPgfplots(ready.spec, ready.data, { caption: latexEscape(shownCaption), label: finalLabel }), problem: null }
     } catch (e) {
       return { latex: null, problem: e instanceof Error ? e.message : String(e) }
     }
-  }, [ready, support, shownCaption, shownLabel])
+  }, [ready, support, shownCaption, finalLabel])
   const { latex, problem } = built
 
   const finish = (result: InsertResult) => {
@@ -127,7 +130,7 @@ export function ChartDialog({ open, onOpenChange, manuscriptId, labelTexts, file
       return
     }
     try {
-      const code = figure(`\\includegraphics[width=\\linewidth]{${path.replace(/\.png$/, '')}}`, latexEscape(shownCaption), shownLabel.trim())
+      const code = figure(`\\includegraphics[width=\\linewidth]{${path.replace(/\.png$/, '')}}`, latexEscape(shownCaption), finalLabel)
       const result = await onInsert(code, ['graphicx'])
       if (!result.ok) setError(`${result.message} The picture was saved as ${path}; insert it again.`)
       else finish(result)
@@ -148,14 +151,16 @@ export function ChartDialog({ open, onOpenChange, manuscriptId, labelTexts, file
         <Command className="h-40 border">
           <CommandInput placeholder="Search charts…" />
           <CommandList>
-            <CommandEmpty>{charts.isError ? "Couldn't load your charts." : 'No charts found.'}</CommandEmpty>
+            <CommandEmpty>{charts.isError ? "Couldn't load your charts." : charts.isPending ? 'Loading…' : 'No charts found.'}</CommandEmpty>
             {(charts.data ?? []).map((c) => (
-              <CommandItem key={c.id} value={`${c.title} ${c.id}`} data-checked={c.id === chartId} onSelect={() => { setChartId(c.id); setCaption(null); setLabel(null); setError(null) }}>
+              <CommandItem key={c.id} value={`${c.title} ${c.id}`} data-checked={c.id === chartId} aria-checked={c.id === chartId} onSelect={() => { setChartId(c.id); setCaption(null); setLabel(null); setError(null) }}>
                 {c.title}<span className="ml-2 text-xs text-muted-foreground">{c.type}</span>
               </CommandItem>
             ))}
           </CommandList>
         </Command>
+        {/* cmdk owns aria-selected (the highlighted row), so the choice is aria-checked plus this status. */}
+        <p role="status" className="sr-only">{chosen ? `Chosen: ${chosen.title}` : ''}</p>
         {chart.isError && <p className="text-sm text-destructive">Couldn't load that chart.</p>}
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="flex flex-col gap-1 text-sm">Caption

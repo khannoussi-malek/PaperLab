@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { latexEscape } from '../deck/latex'
-import { slug, uniqueLabel } from './insertBlock'
+import { slug, typedLabel, uniqueLabel } from './insertBlock'
 import { datasetToTable, parsePasted, toBooktabs, type TableInput } from './table'
 import type { InsertResult } from './useInsertBlock'
 
@@ -57,14 +57,17 @@ export function TableDialog({ open, onOpenChange, manuscriptId, labelTexts, onIn
     if (source === 'paste') return pasted.trim() ? parsePasted(pasted) : null
     return detail.data ? datasetToTable(detail.data) : null
   }, [source, pasted, detail.data])
+  const chosen = datasets.data?.find((d) => d.id === datasetId)
   const name = source === 'dataset' ? detail.data?.name ?? '' : ''
   const shownCaption = caption ?? name
-  const shownLabel = label ?? uniqueLabel(labelTexts(), `tab:${slug(name || 'table')}`)
+  const autoLabel = uniqueLabel(labelTexts(), `tab:${slug(name || 'table')}`)
+  const shownLabel = label ?? autoLabel
+  const finalLabel = label === null ? autoLabel : typedLabel(labelTexts(), label) || autoLabel
   const sourceNote = (cite: string) => (table?.source ? ` Source: ${cite}` : '')
   const build = (cite: string): { code: string } | { problem: string } => {
     if (!table) return { problem: '' }
     try {
-      return { code: toBooktabs(table, { decimals: decimals === 'none' ? null : Number(decimals), best, caption: latexEscape(shownCaption) + sourceNote(cite), label: shownLabel.trim() }) }
+      return { code: toBooktabs(table, { decimals: decimals === 'none' ? null : Number(decimals), best, caption: latexEscape(shownCaption) + sourceNote(cite), label: finalLabel }) }
     } catch (e) {
       return { problem: e instanceof Error ? e.message : String(e) }
     }
@@ -116,14 +119,16 @@ export function TableDialog({ open, onOpenChange, manuscriptId, labelTexts, onIn
             <Command className="h-48 border">
               <CommandInput placeholder="Search datasets…" />
               <CommandList>
-                <CommandEmpty>{datasets.isError ? "Couldn't load your datasets." : 'No datasets found.'}</CommandEmpty>
+                <CommandEmpty>{datasets.isError ? "Couldn't load your datasets." : datasets.isPending ? 'Loading…' : 'No datasets found.'}</CommandEmpty>
                 {(datasets.data ?? []).map((d) => (
-                  <CommandItem key={d.id} value={`${d.name} ${d.id}`} data-checked={d.id === datasetId} onSelect={() => { setDatasetId(d.id); setCaption(null); setLabel(null) }}>
+                  <CommandItem key={d.id} value={`${d.name} ${d.id}`} data-checked={d.id === datasetId} aria-checked={d.id === datasetId} onSelect={() => { setDatasetId(d.id); setCaption(null); setLabel(null) }}>
                     {d.name}{d.paper_title && <span className="ml-2 truncate text-xs text-muted-foreground">{d.paper_title}</span>}
                   </CommandItem>
                 ))}
               </CommandList>
             </Command>
+            {/* cmdk owns aria-selected (the highlighted row), so the choice is aria-checked plus this status. */}
+            <p role="status" className="sr-only">{chosen ? `Chosen: ${chosen.name}` : ''}</p>
             {detail.isError && <p className="mt-2 text-sm text-destructive">Couldn't load that dataset.</p>}
           </TabsContent>
           <TabsContent value="paste">

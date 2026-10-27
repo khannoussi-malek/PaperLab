@@ -27,14 +27,14 @@ const data = { datasets: [{ id: 'd1', name: 'D', columns: [{ id: 'x', name: 'X' 
 const barSpec = { type: 'bar', series: [{ dataset_id: 'd1', x: 'x', y: 'y', name: '', multiply: 1, trend: null, error: null, row_filter: null }] }
 const boxSpec = { type: 'box', series: [{ dataset_id: 'd1', x: 'x', y: 'y', name: '', multiply: 1, trend: null, error: null, row_filter: null }] }
 
-function setup(spec: unknown, insert = vi.fn(async (): Promise<InsertResult> => ({ ok: true }))) {
+function setup(spec: unknown, insert = vi.fn(async (): Promise<InsertResult> => ({ ok: true })), texts: string[] = []) {
   vi.spyOn(api, 'listCharts').mockResolvedValue([{ id: 'c1', title: 'My Chart', type: 'bar' } as unknown as ChartSummary])
   vi.spyOn(api, 'getChart').mockResolvedValue({ id: 'c1', title: 'My Chart', spec } as unknown as Chart)
   vi.spyOn(api, 'resolveChart').mockResolvedValue(data)
   const onOpenChange = vi.fn()
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })}>
-      <ChartDialog open onOpenChange={onOpenChange} manuscriptId="m1" labelTexts={() => []} filePaths={() => ['figures/my-chart.png']} onInsert={insert} />
+      <ChartDialog open onOpenChange={onOpenChange} manuscriptId="m1" labelTexts={() => texts} filePaths={() => ['figures/my-chart.png']} onInsert={insert} />
     </QueryClientProvider>,
   )
   return { insert, onOpenChange }
@@ -127,4 +127,48 @@ test('Insert as a picture waits for the chart data', async () => {
   await waitFor(() => expect(api.resolveChart).toHaveBeenCalled())
   expect(screen.queryByRole('button', { name: 'Insert as a picture' })).toBeNull()
   expect(screen.getByRole('button', { name: 'Insert' })).toBeDisabled()
+})
+
+test('a typed label loses the characters that break \\label and is made unique', async () => {
+  const { insert } = setup(barSpec, undefined, ['\\label{fig:-x-y-z}'])
+  fireEvent.click(await screen.findByText('My Chart'))
+  fireEvent.change(screen.getByLabelText('Label'), { target: { value: ' fig:{x}%#\\y z ' } })
+  const button = screen.getByRole('button', { name: 'Insert' })
+  await waitFor(() => expect(button).toBeEnabled())
+  fireEvent.click(button)
+  await waitFor(() => expect(insert).toHaveBeenCalled())
+  expect((insert.mock.calls[0] as unknown as [string])[0]).toContain('\\label{fig:-x-y-z-2}')
+})
+
+test('the picture figure is placed [t], like pgfplots figures and tables', async () => {
+  vi.spyOn(api, 'uploadManuscriptFile').mockResolvedValue({} as never)
+  const { insert } = setup(boxSpec)
+  fireEvent.click(await screen.findByText('My Chart'))
+  fireEvent.click(await screen.findByRole('button', { name: 'Insert as a picture' }))
+  await waitFor(() => expect(insert).toHaveBeenCalled())
+  expect((insert.mock.calls[0] as unknown as [string])[0].startsWith('\\begin{figure}[t]\n')).toBe(true)
+})
+
+test('the chart list says Loading… until it loads, and No charts found. only when it is empty', async () => {
+  let done: (v: ChartSummary[]) => void = () => {}
+  vi.spyOn(api, 'listCharts').mockReturnValue(new Promise((r) => { done = r }))
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <ChartDialog open onOpenChange={vi.fn()} manuscriptId="m1" labelTexts={() => []} filePaths={() => []} onInsert={vi.fn()} />
+    </QueryClientProvider>,
+  )
+  expect(await screen.findByText('Loading…')).toBeInTheDocument()
+  expect(screen.queryByText('No charts found.')).toBeNull()
+  done([])
+  expect(await screen.findByText('No charts found.')).toBeInTheDocument()
+  expect(screen.queryByText('Loading…')).toBeNull()
+})
+
+test('the chosen chart is marked and announced', async () => {
+  setup(barSpec)
+  const item = await screen.findByRole('option', { name: /My Chart/ })
+  expect(item).toHaveAttribute('aria-checked', 'false')
+  fireEvent.click(screen.getByText('My Chart'))
+  await waitFor(() => expect(item).toHaveAttribute('aria-checked', 'true'))
+  expect(screen.getByText('Chosen: My Chart')).toHaveAttribute('role', 'status')
 })
