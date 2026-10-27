@@ -8,8 +8,8 @@ from app.core.errors import InvalidInput
 
 MAX_TITLE = 200
 SECTIONS_DIR = "sections"
-_INPUT = re.compile(r"\\(?:input|include)\s*\{\s*([^{}]*?)\s*\}")
-_SECTION = re.compile(r"\\section(\*?)\s*\{")
+_INPUT = re.compile(r"\\(input|include)\s*\{\s*([^{}]*?)\s*\}")
+_SECTION = re.compile(r"\\section(\*?)\s*(?:\[[^\]]*\]\s*)?\{")  # an optional [short title] first
 END_MARKERS = ("\\bibliographystyle", "\\bibliography{", "\\printbibliography", "\\appendix", "\\end{document}")
 
 
@@ -33,16 +33,39 @@ def _line_inputs(line: str) -> list[re.Match]:
     return list(_INPUT.finditer(_code(line)))
 
 
+def _begin_index(lines: list[str]) -> int | None:
+    return next((i for i, ln in enumerate(lines) if "\\begin{document}" in _code(ln)), None)
+
+
+def _end_index(lines: list[str]) -> int | None:
+    """The first end marker after `\\begin{document}` (a preamble `\\bibliographystyle` is not one)."""
+    begin = _begin_index(lines)
+    start = 0 if begin is None else begin + 1
+    return next((i for i in range(start, len(lines)) if any(k in _code(lines[i]) for k in END_MARKERS)), None)
+
+
 def _slots(lines: list[str]) -> list[tuple[int, re.Match]]:
-    return [(i, m) for i, line in enumerate(lines) for m in _line_inputs(line)]
+    """The section `\\input`s: those in the body, before the first end marker. A main without `\\begin{document}`
+    (an `\\input`-ed preamble style) counts them all."""
+    begin = _begin_index(lines)
+    if begin is None:
+        lo, hi = 0, len(lines)
+    else:
+        end = _end_index(lines)
+        lo, hi = begin + 1, len(lines) if end is None else end
+    return [(i, m) for i in range(lo, hi) for m in _line_inputs(lines[i])]
 
 
 def input_lines(main: str) -> list[InputLine]:
-    return [InputLine(i, _tex(m.group(1))) for i, m in _slots(main.splitlines())]
+    return [InputLine(i, _target(m)) for i, m in _slots(main.splitlines())]
 
 
-def _canonical(path: str) -> str:
-    return "\\input{" + path.removesuffix(".tex") + "}"
+def _target(m: re.Match) -> str:
+    return _tex(m.group(2))
+
+
+def _canonical(path: str, command: str = "input") -> str:
+    return f"\\{command}{{" + path.removesuffix(".tex") + "}"
 
 
 def _require(main: str, path: str) -> None:
@@ -80,20 +103,17 @@ def check_title(title: str) -> str:
         depth += (ch == "{") - (ch == "}")
         if depth < 0:
             break
-    if not title or len(title) > MAX_TITLE or depth != 0 or re.search(r"[\r\n]|(?<!\\)%", title):
+    lone_backslash = (len(title) - len(title.rstrip("\\"))) % 2  # `Results\` would eat the closing brace
+    if not title or len(title) > MAX_TITLE or depth != 0 or lone_backslash or re.search(r"[\r\n]|(?<!\\)%", title):
         raise InvalidInput("bad_title")
     return title
-
-
-def _end_index(lines: list[str]) -> int | None:
-    return next((i for i, ln in enumerate(lines) if any(k in _code(ln) for k in END_MARKERS)), None)
 
 
 def insert_input(main: str, path: str, after: str | None) -> str:
     lines = _keep_ends(main)
     if after is not None:
         _require(main, after)
-        at = max(i for i, m in _slots(lines) if _tex(m.group(1)) == after) + 1
+        at = max(i for i, m in _slots(lines) if _target(m) == after) + 1
     elif slots := _slots(lines):
         at = slots[-1][0] + 1
     elif (at := _end_index(lines)) is None:
@@ -107,24 +127,25 @@ def move_input(main: str, path: str, to: int) -> str:
     _require(main, path)
     lines = _keep_ends(main)
     slots = _slots(lines)
-    targets = [_tex(m.group(1)) for _, m in slots]
-    targets.remove(path)
-    targets.insert(max(0, min(to, len(targets))), path)
-    return _replace_slots(lines, slots, [_canonical(t) for t in targets])
+    texts = [m.group(0) for _, m in slots]  # each slot moves as written: \include stays \include
+    moved = texts.pop([_target(m) for _, m in slots].index(path))
+    texts.insert(max(0, min(to, len(texts))), moved)
+    return _replace_slots(lines, slots, texts)
 
 
 def retarget_input(main: str, old: str, new: str) -> str:
     _require(main, old)
     lines = _keep_ends(main)
     slots = _slots(lines)
-    return _replace_slots(lines, slots, [_canonical(new) if _tex(m.group(1)) == old else m.group(0) for _, m in slots])
+    texts = [_canonical(new, m.group(1)) if _target(m) == old else m.group(0) for _, m in slots]  # \include stays
+    return _replace_slots(lines, slots, texts)
 
 
 def drop_input(main: str, path: str) -> str:
     _require(main, path)
     lines = _keep_ends(main)
     slots = _slots(lines)
-    return _replace_slots(lines, slots, [None if _tex(m.group(1)) == path else m.group(0) for _, m in slots])
+    return _replace_slots(lines, slots, [None if _target(m) == path else m.group(0) for _, m in slots])
 
 
 def _title_span(code: str) -> tuple[int, int] | None:

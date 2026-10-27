@@ -19,6 +19,14 @@ describe('sectionRows', () => {
     expect(rows('\\input sections/x\n')).toEqual([])
     expect(rows('\\input{a} % \\input{b}\n100\\% \\input{c}\n')).toEqual(['a.tex', 'c.tex'])
   })
+  it('counts only body inputs before the first end marker (same case as the backend)', () => {
+    const PRE = '\\documentclass{article}\n\\input{macros}\n\\bibliographystyle{plain}\n\\begin{document}\n\\input{sections/a}\n\\input{sections/b}\n\\appendix\n\\input{sections/app}\n\\bibliography{x}\n\\end{document}\n'
+    const rows = (t: string) => sectionRows({ 'main.tex': t }, 'main.tex').map((r) => r.path)
+    expect(rows(PRE)).toEqual(['sections/a.tex', 'sections/b.tex'])
+    expect(rows('\\input{a}\n\\bibliography{x}\n\\input{b}\n')).toEqual(['a.tex', 'b.tex']) // no \begin{document}: all
+    const single = '\\input{macros}\n\\begin{document}\n\\section{One}\nx\n\\end{document}\n'
+    expect(sectionRows({ 'main.tex': single }, 'main.tex')).toEqual([{ path: 'main.tex', title: 'One', line: 3, inMain: true, missing: false }])
+  })
   it('marks a missing file instead of crashing', () => {
     const [row] = sectionRows({ 'main.tex': '\\input{sections/gone}' }, 'main.tex')
     expect(row).toMatchObject({ path: 'sections/gone.tex', title: 'gone', missing: true })

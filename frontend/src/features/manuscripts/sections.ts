@@ -12,7 +12,11 @@ const uncomment = (raw: string) => raw.replace(COMMENT, '$1')
 export function sectionRows(files: Record<string, string>, main: string, known?: ReadonlySet<string>): SectionRow[] {
   const lines = (files[main] ?? '').split('\n').map(uncomment)
   const rows: SectionRow[] = []
+  // Section inputs live in the body, before the first end marker; without \begin{document} (a style), all count.
+  const begin = lines.findIndex((l) => l.includes('\\begin{document}'))
+  const end = begin === -1 ? -1 : lines.findIndex((l, i) => i > begin && END_MARKERS.some((m) => l.includes(m)))
   lines.forEach((text, i) => {
+    if (begin !== -1 && (i <= begin || (end !== -1 && i >= end))) return
     for (const m of text.matchAll(INPUT)) {
       const path = texName(m[1])
       const body = files[path]
