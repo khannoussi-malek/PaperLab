@@ -88,3 +88,14 @@ it('a key that is not in the library says so', async () => {
   again({ openKey: { key: 'zzz', n: 1 } })
   expect(await screen.findByText(/zzz/)).toBeTruthy()
 })
+
+it('has a Hands toggle, off by default, that says the camera stays on this computer', async () => {
+  setup()
+  await deck()
+  const toggle = screen.getByRole('button', { name: 'Hands' })
+  expect(toggle).toHaveAttribute('aria-pressed', 'false')
+  expect(screen.queryByText('The camera picture stays on this computer.')).toBeNull()
+  fireEvent.click(toggle)
+  expect(toggle).toHaveAttribute('aria-pressed', 'true')
+  expect(screen.getByText('The camera picture stays on this computer.')).toBeInTheDocument()
+})
