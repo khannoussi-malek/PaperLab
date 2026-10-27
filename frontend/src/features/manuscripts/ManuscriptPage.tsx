@@ -71,6 +71,8 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
     setOpenKey((k) => ({ key, n: (k?.n ?? 0) + 1 }))
     setReveal((r) => ({ id: 'papers', n: (r?.n ?? 0) + 1 }))
   }, [])
+  // Only an explicit Show in PDF brings the PDF forward (its tab, when it shares one with Papers); following a compile never does.
+  const revealPdf = useCallback(() => setReveal((r) => ({ id: 'pdf', n: (r?.n ?? 0) + 1 })), [])
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [sectionAsk, setSectionAsk] = useState<{ kind: 'new' | 'split'; n: number } | null>(null)
   useEffect(() => { // Cmd/Ctrl+K anywhere in the studio; CodeMirror leaves it alone, so it bubbles up from the editor too
@@ -297,7 +299,7 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
                     onCompile={() => compile.mutate(manuscriptId)}
                     onCursor={(line) => setCursor({ path, line })}
                     onSectionStep={stepSection}
-                    onShowInPdf={(ln) => showInPdf(path, ln)}
+                    onShowInPdf={(ln) => { showInPdf(path, ln); revealPdf() }}
                     onText={onText}
                     onState={onState}
                     registerFlush={registerFlush}
@@ -343,7 +345,7 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
             { id: 'compile', label: 'Compile', run: () => compile.mutate(manuscriptId) },
             { id: 'new', label: 'New section', run: () => ask('new') },
             ...(singleFile ? [{ id: 'split', label: 'Split into files', run: () => ask('split') }] : []),
-            { id: 'pdf', label: 'Show in PDF', run: () => showInPdf(path, cursorLine) },
+            { id: 'pdf', label: 'Show in PDF', run: () => { showInPdf(path, cursorLine); revealPdf() } },
           ]}
         />
       )}
