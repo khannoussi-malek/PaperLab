@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 const hm = vi.hoisted(() => ({ props: null as null | Record<string, unknown>, mounted: 0 }))
-vi.mock('../../graph/hands/HandsMode', () => ({ default: (p: Record<string, unknown>) => { hm.props = p; useEffect(() => { hm.mounted++; return () => { hm.mounted-- } }, []); return null } }))
+vi.mock('../../graph/hands/HandsMode', () => ({ default: function FakeHandsMode(p: Record<string, unknown>) { hm.props = p; useEffect(() => { hm.mounted++; return () => { hm.mounted-- } }, []); return null } }))
 
 import { DeckHands, TYPING_PAUSE_MS } from './DeckHands'
 
