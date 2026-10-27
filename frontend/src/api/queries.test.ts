@@ -223,6 +223,7 @@ describe('isNotesList', () => {
     expect(isNotesList(['papers', 'p1', 'chat'])).toBe(true)
     expect(isNotesList(['workspaces'])).toBe(true)
     expect(isNotesList(['workspaces', 'w1', 'notes'])).toBe(true)
+    expect(isNotesList(['noteCounts', ['p1']])).toBe(true)
   })
 
   it('is false for a paper or its chunks', () => {

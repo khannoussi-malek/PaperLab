@@ -25,7 +25,7 @@ async def note_counts(session: AsyncSession, paper_ids: list[uuid.UUID]) -> dict
     query = (
         select(note_papers.c.paper_id, kind.label("kind"), func.count().label("n"))
         .join(Note, Note.id == note_papers.c.note_id)
-        .where(note_papers.c.paper_id.in_(counts))
+        .where(note_papers.c.paper_id.in_(list(counts)))
         .group_by(note_papers.c.paper_id, kind)
     )
     for paper_id, k, n in await session.execute(query):
