@@ -15,6 +15,8 @@ export type PaperBookProps = {
   onInsert?: (item: BookItem | null) => void
   onOpenReader: (item: BookItem | null) => void
   onClose: () => void
+  /** Items can be dragged out (to the editor), and the \\citep line shows. Off by default. */
+  draggable?: boolean
   /** Evidence mode: what the model said about this paper, shown under a selected passage. */
   verdict?: VerdictView | null
 }
@@ -75,7 +77,7 @@ const html = (node: ReactNode) => renderToStaticMarkup(<>{node}</>)
 
 type Pages = { l: number; r: number; lHidden: boolean }
 
-export function PaperBook({ paper, items, selected, onSelect, onInsert, onOpenReader, onClose, verdict }: PaperBookProps) {
+export function PaperBook({ paper, items, selected, onSelect, onInsert, onOpenReader, onClose, verdict, draggable }: PaperBookProps) {
   const still = useReducedMotion()
   const root = useRef<HTMLDivElement>(null)
   const book = useRef<HTMLDivElement>(null)
@@ -190,14 +192,14 @@ export function PaperBook({ paper, items, selected, onSelect, onInsert, onOpenRe
       </div>
       <div className="mt-2 text-sm">
         <div className="font-semibold">{paper.title}</div>
-        <div className="mb-2 text-xs text-muted-foreground">{[byline(paper), `\\citep{${paper.key}}`].filter(Boolean).join(' · ')}</div>
+        <div className="mb-2 text-xs text-muted-foreground">{[byline(paper), onInsert && `\\citep{${paper.key}}`].filter(Boolean).join(' · ')}</div>
         {onInsert && <button type="button" onClick={() => onInsert(null)} className={`${btn} mb-2`}>{`Insert \\citep{${paper.key}}`}</button>}
         {!items.length && <p className="text-xs text-muted-foreground">No notes on this paper yet</p>}
         <ul className="space-y-1.5">
           {items.map((it, j) => (
             // An AI note is not draggable: a drop lands mid-line, where its comment would swallow the rest of the line.
             // Its Insert button puts it on lines of its own.
-            <li key={it.id} draggable={it.kind !== 'ai'} onDragStart={(e) => { if (it.kind !== 'ai') startPaperDrag(e, paper.paper_id, insertText(it, paper.key)) }}>
+            <li key={it.id} draggable={!!draggable && it.kind !== 'ai'} onDragStart={(e) => { if (draggable && it.kind !== 'ai') startPaperDrag(e, paper.paper_id, insertText(it, paper.key)) }}>
               <button
                 type="button"
                 onClick={() => pick(j)}

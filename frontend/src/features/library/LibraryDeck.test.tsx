@@ -67,8 +67,10 @@ it('an open paper shows its notes and highlights, with no insert buttons, and ig
   expect(screen.getByText('quoted bit')).toBeTruthy()
   expect(screen.getByText('AI says')).toBeTruthy()
   expect(screen.queryByText(/Insert/)).toBeNull()
-  fireEvent.keyDown(book, { key: 'i' })
+  expect(fireEvent.keyDown(book, { key: 'i' })).toBe(true)
   expect(open).not.toHaveBeenCalled()
+  expect(document.body.textContent).not.toContain('\\citep')
+  expect(document.querySelectorAll('[draggable="true"]')).toHaveLength(0)
 })
 
 it('Open in reader opens a new tab: the paper, or the selected note', async () => {
@@ -99,4 +101,20 @@ it('keeps your place when the list is reordered', async () => {
   view.rerender(<QueryClientProvider client={client}><LibraryDeck papers={[papers[2], papers[1], papers[0]]} /></QueryClientProvider>)
   expect(status()).toContain('Beta 2020')
   expect(status()).toContain('paper 2 of 3')
+})
+
+it('the deck has no search box of its own and no drag handles or cite keys', async () => {
+  setup()
+  await deck()
+  expect(screen.queryByRole('searchbox')).toBeNull()
+  expect(document.querySelectorAll('[draggable="true"]')).toHaveLength(0)
+})
+
+it('keeps the badges while the counts for a changed list load', async () => {
+  const view = setup()
+  await waitFor(() => expect(status()).toContain('2 notes'))
+  counts.mockReturnValue(new Promise(() => {}))
+  const client = new QueryClient()
+  view.rerender(<QueryClientProvider client={client}><LibraryDeck papers={[papers[0], papers[1]]} /></QueryClientProvider>)
+  expect(status()).toContain('2 notes')
 })

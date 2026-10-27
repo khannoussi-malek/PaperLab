@@ -117,3 +117,10 @@ it('ranks on at most the first 20 000 characters of a long section (the API refu
   await waitFor(() => expect(rank).toHaveBeenCalled(), { timeout: 2000 })
   expect(rank.mock.calls[0][1]).toHaveLength(20_000)
 })
+
+it('keeps the studio draggable: the front card and the open book items', async () => {
+  setup()
+  await deck()
+  expect(document.querySelectorAll('[data-deck-card][draggable="true"]')).toHaveLength(1)
+})
+

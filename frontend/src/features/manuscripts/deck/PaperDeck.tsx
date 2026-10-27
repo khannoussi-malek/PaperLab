@@ -12,8 +12,11 @@ export type PaperDeckProps = {
   current: number
   onCurrent: (i: number) => void
   onOpen: (i: number) => void
-  filter: string
-  onFilter: (s: string) => void
+  /** Without `onFilter` the deck has no search box of its own. */
+  filter?: string
+  onFilter?: (s: string) => void
+  /** The front card can be dragged out (to the editor). Off by default. */
+  draggable?: boolean
   /** Accessible name of the deck, e.g. "Papers". */
   label: string
   /** Paper KEYS (the cite keys, `DeckPaper.key`) that get a "cited" tag. */
@@ -41,14 +44,14 @@ function announce(p: DeckPaper, i: number, n: number, cited: boolean, ev?: { cou
 
 const BADGE = 'rounded px-1.5 py-px font-sans text-[9px]'
 
-function Card({ paper, offset, cited, still, onClick, ev }: { paper: DeckPaper; offset: number; cited: boolean; still: boolean; onClick: () => void; ev?: { count: number; verdict: VerdictView } }) {
+function Card({ paper, offset, cited, still, onClick, ev, draggable }: { draggable?: boolean; paper: DeckPaper; offset: number; cited: boolean; still: boolean; onClick: () => void; ev?: { count: number; verdict: VerdictView } }) {
   const { transform, zIndex, opacity } = cardTransform(offset)
   return (
     <div
       data-deck-card={paper.paper_id}
       aria-hidden="true"
       onClick={onClick}
-      draggable={offset === 0}
+      draggable={!!draggable && offset === 0}
       onDragStart={(e) => startPaperDrag(e, paper.paper_id, insertText(null, paper.key))}
       style={{ transform, zIndex, opacity, transition: still ? 'none' : `transform ${FLIP_MS}ms cubic-bezier(.2,.8,.2,1), opacity ${FLIP_MS}ms` }}
       className="absolute left-1/2 top-10 -ml-[75px] h-[205px] w-[150px] cursor-pointer rounded-md bg-white p-3 font-serif text-[10px] text-neutral-800 shadow-[0_10px_26px_rgba(0,0,0,.22)] [backface-visibility:hidden]"
@@ -76,7 +79,7 @@ function Card({ paper, offset, cited, still, onClick, ev }: { paper: DeckPaper; 
 }
 
 /** A controlled 3D deck of papers. It knows nothing about manuscripts: the parent filters, orders and owns `current`. */
-export function PaperDeck({ papers, current, onCurrent, onOpen, filter, onFilter, label, cited, evidence }: PaperDeckProps) {
+export function PaperDeck({ papers, current, onCurrent, onOpen, filter, onFilter, label, cited, evidence, draggable }: PaperDeckProps) {
   const still = useReducedMotion()
   const hintId = useId()
   const stage = useRef<HTMLDivElement>(null)
@@ -124,12 +127,12 @@ export function PaperDeck({ papers, current, onCurrent, onOpen, filter, onFilter
     e.preventDefault()
   }
 
-  const searchBox = (
+  const searchBox = onFilter && (
     <input
       type="search"
       aria-label="Search papers"
       placeholder="Search papers"
-      value={filter}
+      value={filter ?? ''}
       onChange={(e) => onFilter(e.target.value)}
       className="mb-2 h-8 w-full rounded-md border border-input bg-background px-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     />
@@ -167,6 +170,7 @@ export function PaperDeck({ papers, current, onCurrent, onOpen, filter, onFilter
               offset={i - current}
               cited={!!cited?.has(papers[i].key)}
               ev={evidence?.get(papers[i].paper_id)}
+              draggable={draggable}
               still={still}
               onClick={() => (i === current ? onOpen(i) : go(i))}
             />
