@@ -119,7 +119,7 @@ SPAWNER = "sleep 30 & echo $! > child.pid\necho $$ > parent.pid\nwait\n"
 
 async def test_timeout_kills_the_whole_group_and_reports(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "tectonic_bin", _script(tmp_path / "slow", SPAWNER))
-    res = await lc.compile_dir(tmp_path, "main.tex", timeout=1)
+    res = await lc.compile_dir(tmp_path, "main.tex", timeout=3)
     assert (res.ok, res.pdf, res.friendly) == (False, None, "compile_timeout")
     assert await _gone(int((tmp_path / "child.pid").read_text()))
 
