@@ -75,6 +75,7 @@ export const keys = {
   manuscriptList: (workspaceId: string | null) => ['manuscripts', 'list', workspaceId ?? 'orphans'] as const,
   manuscript: (id: string) => ['manuscripts', id] as const,
   manuscriptFile: (id: string, path: string) => ['manuscripts', id, 'file', path] as const,
+  manuscriptPapers: (id: string) => ['manuscripts', id, 'papers'] as const,
   manuscriptSnapshots: (id: string) => ['manuscripts', id, 'snapshots'] as const,
   papers: ['papers'] as const,
   paper: (id: string) => ['papers', id] as const,
@@ -1394,6 +1395,18 @@ export const useManuscript = (id: string) =>
     queryFn: () => api.getManuscript(id),
     refetchInterval: (query) => manuscriptPollInterval(query.state.data, query.state.status === 'error'),
   })
+
+/** The papers a manuscript can cite, with their keys and note counts. */
+export const useManuscriptPapers = (id: string) =>
+  useQuery({ queryKey: keys.manuscriptPapers(id), queryFn: () => api.manuscriptPapers(id) })
+
+export function usePinPaper() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (v: { id: string; paperId: string }) => api.pinPaper(v.id, v.paperId),
+    onSuccess: (_key, v) => client.invalidateQueries({ queryKey: keys.manuscriptPapers(v.id) }),
+  })
+}
 
 export const useManuscriptFile = (id: string, path: string | null) =>
   useQuery({
