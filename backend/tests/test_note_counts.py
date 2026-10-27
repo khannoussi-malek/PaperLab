@@ -50,3 +50,16 @@ async def test_endpoint_returns_counts_and_caps_at_2000(client, session):
     assert ok.json() == {"counts": {str(a.id): {"notes": 1, "highlights": 0, "ai_notes": 0}}}
     big = await client.post("/api/papers/note-counts", json={"paper_ids": [str(uuid.uuid4()) for _ in range(2001)]})
     assert big.status_code == 422 and "too_many_papers" in big.text
+
+
+async def test_endpoint_rejects_a_malformed_id_and_tolerates_duplicates_and_an_empty_list(client, session):
+    a = await paper(session)
+    await note(session, Provenance.HUMAN, a)
+    await session.commit()
+    bad = await client.post("/api/papers/note-counts", json={"paper_ids": ["not-a-uuid"]})
+    assert bad.status_code == 422
+    dup = await client.post("/api/papers/note-counts", json={"paper_ids": [str(a.id), str(a.id)]})
+    assert dup.status_code == 200
+    assert dup.json() == {"counts": {str(a.id): {"notes": 1, "highlights": 0, "ai_notes": 0}}}
+    empty = await client.post("/api/papers/note-counts", json={"paper_ids": []})
+    assert empty.status_code == 200 and empty.json() == {"counts": {}}
