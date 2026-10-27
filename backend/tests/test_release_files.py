@@ -98,7 +98,10 @@ def test_the_dev_stack_runs_the_ingest_worker_beside_the_worker():
 
     assert "app.workers.settings.WorkerSettings" in services["worker"]["command"]
     assert "app.workers.settings.IngestWorkerSettings" in services["ingest-worker"]["command"]
-    assert services["ingest-worker"]["environment"] == services["worker"]["environment"]
+    # the ingest worker never compiles a manuscript, so it alone lacks the worker's TECTONIC_USER
+    assert services["ingest-worker"]["environment"] == {
+        k: v for k, v in services["worker"]["environment"].items() if k != "TECTONIC_USER"
+    }
 
 
 def test_no_env_file_is_needed_in_either_stack():
@@ -169,3 +172,24 @@ def test_each_system_builds_its_installers_and_the_release_stays_a_draft():
     ]
     assert "desktop/package.json" in jobs["check"]["steps"][-1]["run"]  # the tag must be the app's version
     assert "gh release create" in text and "--draft" in text
+
+
+def test_both_images_pin_the_same_tectonic_and_the_release_image_keeps_the_sandbox():
+    dev, release = (ROOT / "backend/Dockerfile").read_text(), (ROOT / "Dockerfile").read_text()
+    pinned = [re.search(r'VERSION = "([^"]+)"', d).group(1) for d in (dev, release)]
+    assert pinned[0] == pinned[1] == "0.17.0"
+    for d in (dev, release):
+        assert sorted(re.findall(r'"[0-9a-f]{64}"', d)) == [
+            '"8533d07f9ccbd7a65824b9e0459041bca34af1eb33daba48f59215593753a3b7"',
+            '"b10954a95404f3ab2328d2fa59a5ebab8e657f893fab096f98be8db7c0c979b8"',
+        ]
+        assert "--uid 999 --gid 999" in d
+        # The cache is root's and read-only to tex (dirs 755, files 644), and compiles never fetch (final review C1).
+        assert re.search(r"^COPY --from=tex /tectonic-cache /tectonic-cache$", d, re.M)
+        assert "--chown=tex" not in d and "chown tex" not in d
+        assert "chmod -R u=rwX,go=rX /tectonic-cache" in d
+        assert re.search(r"^ENV TECTONIC_ONLY_CACHED=1$", d, re.M)
+        assert "/templates/*/" in d and "/templates/warm-packages.tex" in d  # every template folder and the warm list
+    assert re.search(r"^RUN chmod 750 /src$", release, re.M)  # tex can't enter the app's code
+    for ignore in ("backend/.dockerignore", ".dockerignore"):
+        assert ".tools" in (ROOT / ignore).read_text()

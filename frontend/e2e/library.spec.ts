@@ -60,7 +60,7 @@ test('upload a PDF through the UI, watch it become ready, then delete it', async
   await page.goto('/')
   const [uploaded] = await Promise.all([
     page.waitForResponse((r) => r.url().endsWith('/api/papers') && r.request().method() === 'POST'),
-    page.locator('input[type="file"]').setInputFiles(FIXTURE_FILE),
+    page.locator('input[type="file"][accept="application/pdf"]').setInputFiles(FIXTURE_FILE),
   ])
   const { id } = await uploaded.json()
 
@@ -82,7 +82,7 @@ test('upload a PDF through the UI, watch it become ready, then delete it', async
 test('a non-PDF upload shows the error and creates no paper', async ({ page, request }) => {
   await page.goto('/')
   await page
-    .locator('input[type="file"]')
+    .locator('input[type="file"][accept="application/pdf"]')
     .setInputFiles({ name: 'not-a-paper.txt', mimeType: 'text/plain', buffer: Buffer.from('plain text') })
 
   await expect(page.getByRole('alert')).toContainText('is not a PDF')

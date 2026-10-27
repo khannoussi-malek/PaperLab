@@ -16,6 +16,19 @@ x-backend: &backend
     redis:
       condition: service_healthy
 
+# What the main and the ingest worker share; only the main worker compiles, so only it gets TECTONIC_USER.
+x-worker-env: &worker-env
+  DISCOVERY_PROVIDER: ${DISCOVERY_PROVIDER:-live}
+  # Search sources behind a model connection embed here, so the E2E stack's fake providers must reach the worker
+  # too: a real source would record real names while the API reads `fake:` ones.
+  LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+  # The built-in search model's folder. E2E's no-search-model run points it at an empty one (README).
+  MODELS_DIR: ${MODELS_DIR:-/models}
+  # Threads the search model may use; unset it takes min(4, cores). Uncomment to change that.
+  # EMBED_THREADS: 4
+  PAPERLAB_STACK: ${COMPOSE_PROJECT_NAME}
+  DEV_RELOAD: ${DEV_RELOAD:-} # see the api
+
 services:
   db:
     image: pgvector/pgvector:pg16
@@ -65,16 +78,8 @@ services:
     restart: on-failure # see the api
     # The References fetch runs here, so the E2E stack's fake discovery must reach the worker too.
     environment:
-      DISCOVERY_PROVIDER: ${DISCOVERY_PROVIDER:-live}
-      # Search sources behind a model connection embed here, so the E2E stack's fake providers must reach the worker
-      # too: a real source would record real names while the API reads `fake:` ones.
-      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
-      # The built-in search model's folder. E2E's no-search-model run points it at an empty one (README).
-      MODELS_DIR: ${MODELS_DIR:-/models}
-      # Threads the search model may use; unset it takes min(4, cores). Uncomment to change that.
-      # EMBED_THREADS: 4
-      PAPERLAB_STACK: ${COMPOSE_PROJECT_NAME}
-      DEV_RELOAD: ${DEV_RELOAD:-} # see the api
+      <<: *worker-env
+      TECTONIC_USER: tex # manuscripts compile as this unprivileged account (the ingest worker never compiles)
     # With DEV_RELOAD, watchfiles, not `arq --watch`: that restarts the worker in-process and never re-imports changed
     # code.
     command: >-
@@ -83,6 +88,7 @@ services:
 
   ingest-worker:
     <<: *worker
+    environment: *worker-env
     # A paper's ingest and re-embed, one paper at a time: ten at once ran the worker out of memory.
     command: >-
       sh -c 'if [ -n "$$DEV_RELOAD" ]; then exec watchfiles --filter python "arq app.workers.settings.IngestWorkerSettings" app;

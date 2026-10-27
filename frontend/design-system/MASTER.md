@@ -272,6 +272,25 @@ minimum and the share of the window it may take — so two panels share the code
 |---|---|---|---|---|---|
 | Reader, Notes \| Chat (`READER_PANEL`) | "Resize panel" | 360 | 320 | 60% | `paperlab-panel-width` |
 | Charts preview (`CHART_PREVIEW`) | "Resize preview" | 440 | 320 | 50% | `paperlab-chart-preview-width` |
+| Manuscript PDF (`MANUSCRIPT_PDF`) | "Resize PDF" | 520 | 360 | 60% | `paperlab-manuscript-pdf-width` |
+
+## Manuscript editor
+
+`#/manuscripts/:id[?file=]`, lazy-loaded so CodeMirror stays out of the main bundle. Three panes in the shell, tab order
+left to right: files, outline and final steps (14 rem) | the source (CodeMirror, LaTeX highlighting) | the PDF
+(`MANUSCRIPT_PDF`, keeps its width while loading). The source header holds the save state (`aria-live="polite"`:
+"Saved", "Saving…", "Unsaved changes", "Changed in another tab") and Compile, which shows a spinner and is disabled
+while it runs. Autosave fires 1 s after the last keystroke; Ctrl/Cmd+S saves, then compiles.
+- **Errors:** a compile failure shows in the PDF pane's `role="alert"` (a friendly sentence, or `file:line message`),
+  with a red dot in the source gutter per line. A save conflict is a `role="alert"` banner over the source with two choices, "Keep my version" (saves
+  the user's text over the newest server version) and "Load theirs"; the user's text is never dropped without a click.
+  Text a closed file could not save is kept (outliving the page, until saved or "Load theirs") and shown as an
+  alert with "Open it"; reopening it against a newer server version is a conflict, never a silent overwrite. The
+  browser asks before the tab is closed while anything is unsaved. A network or 5xx failure retries every 5 s, up to
+  6 times; a 4xx shows its message and stops.
+- **Theme:** CodeMirror is styled from the app's tokens (`--background`, `--foreground`, `--muted`, `--primary`,
+  `--accent`, `--ring`), so it follows light and dark with the rest of the window; no bundled theme package.
+- **History** (toolbar) lists snapshots; restoring asks inside the dialog, never with a browser prompt.
 
 ## Motion
 
@@ -1045,6 +1064,73 @@ navigation counter"; *Disclaimer* (High) and *Feedback Loop* (Low) for "AI gener
   or a re-ingest changed the lens. A failure shows a destructive `Alert` with Retry when it can be retried. A brief
   has no Save as note.
 - **Stable hooks and names:** `.lens-fade`, `.lens-step`, `.lens-panel`, `.lens-notice`, `li.lens-section[data-role]`, `button.lens-jump`, `.role-chip`, `.role-fixed`, `.brief-card`, `.brief-meta`, `.brief-text`, `.brief-cite`, `.brief-partial`, `.brief-stale`; the tab and aside "Lens", "Sections", "Section actions for <heading>", "Change role", "Automatic", "Previous lens section", "Next lens section", "Generate brief", "Regenerate".
+
+## Writing studio columns
+
+Order: Sections | Source (the flexible column) | PDF. Each column is a `region` (F6 / Shift+F6 cycle focus between them) with a
+collapse button; a collapsed column leaves a thin rail with an "Expand {name}" button and its name set vertically.
+Sections and PDF resize from the edge facing the editor (`separator` "Resize {name}"; the sections handle is on its right
+edge). Section rows read number, title, word count and a status dot; the dot is never alone: a screen-reader label
+("Empty", "Error", "To do", "OK") travels with it and its `title` says the same. The PDF edit box (double-click a word)
+is a `dialog` anchored under the word and clamped inside the pane; Enter saves, Escape cancels and returns focus to the
+PDF pages, errors show inline in the box, and text LaTeX generated gets only "Open in source". The ui-ux-pro-max search
+(multi-pane / breadcrumb / inline edit) returned only the generic progress and inline-validation rules, nothing new.
+
+## Paper deck
+
+The studio's fourth column, "Papers": the workspace's papers as a 3D deck of cards, one open as a book.
+
+- **Cards:** title, author and year, small badges for notes (N), highlights (H), AI notes (A) and "cited". The deck is a
+  `group` with `aria-roledescription="paper deck"` and a polite live region ("Lewis 2020, 2 notes, 1 highlight, paper 2 of
+  5"). Only about 7 cards around the current one are in the DOM. Flip is transform/opacity only (~500 ms ease-out).
+- **Keys (deck):** left/right flip, Home/End, a letter jumps to a title, Enter opens. A search box sits above it.
+- **Book:** the open paper's items are pages; each has a tab on the right edge. Yellow = your notes and highlights, purple
+  = AI notes, and each tab also carries a letter (N, H, A) and the page, so colour is never the only signal. Up/down (or
+  left/right) move between items, **i** inserts, **o** opens the reader at that note, Esc closes.
+- **Insert:** paper -> `\citep{key}`; highlight -> the quote in ``quotes'' plus `\citep[p.~N]{key}`; your note -> its text
+  plus `\citep`; an AI note -> comment lines only ("% AI note (not your text): ..."), never prose. Every insert pins the
+  key so it is in the bibliography, goes to the open file's last cursor position, and returns focus to the editor.
+- **Other ways in:** `\cite{` completion lists the workspace's papers; dragging a card or a book item into the source
+  inserts the same text; Mod+Alt+K on a `\cite{key}` opens that paper; Cmd/Ctrl+K "Jump to..." finds sections, labels and papers.
+- **Hands:** a small "Hands" toggle, off until pressed (it turns the camera on); help copy "The camera picture stays on
+  this computer." It acts only while the pointer or focus is in the column and never within 2 s of a keystroke, and a
+  gesture never inserts or edits text.
+- **Motion and reduced motion:** the page turn is a ~850 ms leaf (lift, bend, shading, cast shadow) that follows reading
+  order; a new turn finishes the running one at once. With the OS set to reduce motion the deck and the book cut plainly:
+  no leaf element is created. The ui-ux-pro-max search (carousel / cover flow / keyboard / reduced motion) returned only the
+  generic reduced-motion and keyboard-navigation rules, nothing new.
+- **Narrow studios:** when the studio can't fit every column at its width plus a 420 px editor, the PDF and the deck
+  share the third column as two tabs (← → move between them). The studio's own width decides, not the window's.
+- **Test hooks:** `data-deck-card`, `data-book-tab`, `aria-roledescription` "paper deck" / "paper book", a turning leaf's
+  faces carry `data-shade`.
+
+## Deck view of the library
+
+The library and a workspace's Papers tab can show their papers as the studio's deck instead of the list.
+
+- **Switch:** a "Show papers as" group of two toggle buttons, List and Deck (`aria-pressed`), above the papers. List is the
+  default; the choice is remembered per page and browser (`paperlab-library-view`, `paperlab-workspace-papers-view`).
+- **Same papers, same order:** the deck shows exactly what the list shows (its search, sort and the workspace tag filter),
+  so the list's toolbar is the only search. Switching back keeps the search text, sort, tags and selection.
+- **Read only:** no insert actions, no checkboxes, no row actions menu and no "Remove from workspace" in the deck. An open
+  paper shows its notes and highlights (yellow H/N, purple A) and `o` or "Open in reader" opens the reader in a new tab
+  at that note, or at the paper. Keys, motion, live region and Hands are the studio deck's (Hands off until asked; no
+  typing pause here).
+- **Counts:** one counts request covers the visible papers; only about seven cards are in the DOM.
+
+## Evidence in the deck
+
+- **Find evidence:** Cmd/Ctrl+E in the editor, or a "Find evidence" button (and the same key) on the Papers column, for the
+  selection or the sentence at the editor's last cursor. With no cursor yet: "Put the cursor in a sentence first."
+- **Header:** a blue strip over the deck, "Evidence for: '...'", with Clear (Esc on the deck does the same). Messages sit
+  in it: "Finding evidence...", "No passages found in this workspace's papers.", "Add a model in Settings to get verdicts",
+  and "Couldn't load the verdicts." with Retry.
+- **Cards and book:** papers with passages come first in rank order and carry a blue "E n" badge. An open paper shows its
+  passages as blue E tabs in page order, ahead of its notes, each with the page and the text. Opening one in the reader
+  lands on the passage.
+- **Verdicts:** Supports, Partly supports, Doesn't support, Doesn't address, Can't tell, always marked AI, with the model's
+  reason and quote. Checking happens one paper at a time; a card reads "Checking..." until its turn.
+- **Inserting:** `i` or "Cite this paper" puts in `\citep{key}` only. Nothing the model wrote is ever inserted.
 
 ## Pre-delivery check (from ui-ux-pro-max Quick Reference §1–§3)
 

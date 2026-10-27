@@ -8,9 +8,12 @@ import { Scene3D } from '@/features/scene3d/Scene3D'
 import { cn } from '@/lib/utils'
 import { FindPapersButton } from '../discovery/FindPapersButton'
 import { ExportSelectedMenu } from '../workspaces/ExportSelectedMenu'
+import { ManuscriptList } from '../manuscripts/ManuscriptList'
+import { useManuscripts } from '@/api/queries'
 import { ErrorAlert, LoadError } from './ErrorAlert'
 import { PaperList } from './PaperList'
 import { FoundPdfsNotice } from './FoundPdfsNotice'
+import { ViewSwitch, usePaperView } from './ViewSwitch'
 import { SearchNotice } from './SearchNotice'
 import { ImportFromZoteroButton } from './ImportFromZoteroButton'
 import { UploadPdfsButton } from './UploadPdfsButton'
@@ -20,9 +23,11 @@ const loadLibraryScene = () => import('@/features/scene3d/directors/library')
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`
 
 export function LibraryPage() {
+  const orphans = useManuscripts(null)
   const papers = usePapers()
   const upload = useUploadPapers()
   const list = papers.data
+  const [view, setView] = usePaperView('paperlab-library-view')
   const [visible, setVisible] = useState<string[] | null>(null)
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set())
   // A pick hidden by the list's own search is kept, but only the rows on screen are counted and exported.
@@ -65,15 +70,23 @@ export function LibraryPage() {
           </div>
         ) : (
           <div className="flex flex-col gap-3">
-            {selectedIds.length > 0 && (
+            <ViewSwitch view={view} onChange={setView} />
+            {view === 'list' && selectedIds.length > 0 && (
               <div className="flex flex-wrap items-center gap-2">
                 <span role="status" className="text-sm">{selectedIds.length} selected</span>
                 <ExportSelectedMenu paperIds={selectedIds} />
                 <Button variant="ghost" size="sm" onClick={() => setPicked(new Set())}>Clear</Button>
               </div>
             )}
-            <PaperList papers={list} selection={{ selected: new Set(selectedIds), onToggle: toggle }} onVisibleChange={setVisible} />
+            <PaperList papers={list} selection={view === 'list' ? { selected: new Set(selectedIds), onToggle: toggle } : undefined} onVisibleChange={setVisible} view={view} />
           </div>
+        )}
+
+        {!!orphans.data?.length && (
+          <section aria-labelledby="orphan-manuscripts" className="flex flex-col gap-1">
+            <h2 id="orphan-manuscripts" className="text-base font-medium">Manuscripts without a workspace</h2>
+            <ManuscriptList workspaceId={null} />
+          </section>
         )}
       </div>
     </AppShell>

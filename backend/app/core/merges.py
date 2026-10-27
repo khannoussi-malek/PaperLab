@@ -121,6 +121,8 @@ STEPS = (
     # K's card can only be the failed needs_full_text one (no PDF); a real card would collide below and roll back.
     _Step("evidence_cards_dropped", "evidence_cards", "t.paper_id = :k AND t.status = 'failed'"),
     _move("evidence_cards"),
+    _union("manuscript_cite_keys", ["manuscript_id", "key"]),  # a key K already pins keeps K's paper
+    _union("manuscript_evidence", ["manuscript_id", "sentence_hash"]),  # K's verdict for a sentence wins
     _move("paper_events"),  # M's history (R21) is K's now
 )
 _AWAITING = (

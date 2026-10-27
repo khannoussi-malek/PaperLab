@@ -1,0 +1,41 @@
+% PaperLab: not a template. The image compiles this once so the packages papers commonly load are in Tectonic's
+% read-only cache: compiles never download (TECTONIC_ONLY_CACHED), so a package missing here fails as package_missing.
+\documentclass{article}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{mathptmx}
+\usepackage[english]{babel}
+\usepackage{amsmath,amssymb,amsthm,mathtools,bm}
+\usepackage{graphicx,xcolor}
+\usepackage{url}
+\usepackage{booktabs,multirow,makecell,colortbl,tabularx,longtable,threeparttable,array}
+\usepackage{caption,subcaption,float,wrapfig}
+\usepackage{tikz,pgfplots}
+\pgfplotsset{compat=1.18}
+\usepackage{siunitx}
+\usepackage{algorithm,algpseudocode}
+% algorithm2e defines the same environment as algorithm: hide it so both packages load (and are cached)
+\makeatletter\let\algorithm\relax\let\endalgorithm\relax\let\listofalgorithms\relax
+\expandafter\let\csname algorithm*\endcsname\relax\expandafter\let\csname endalgorithm*\endcsname\relax\makeatother
+\usepackage[ruled]{algorithm2e}
+\usepackage{listings}
+\usepackage{enumitem}
+\usepackage{geometry}
+\usepackage{microtype}
+\usepackage{xspace,comment,soul,ulem,csquotes}
+\usepackage[numbers]{natbib}
+\usepackage{hyperref}
+\usepackage{cleveref}
+\begin{document}
+Warm text with \textbf{bold}, \textit{italic}, \texttt{mono}, \textsc{small caps} and $\bm{x} = \sum_{i=1}^{n} \alpha_i
+\mathbb{R}$, \SI{3.5}{\metre}, \hl{soul} and \uline{ulem}, \enquote{quotes}, \url{https://example.org}.
+{\fontfamily{ptm}\selectfont Times \textbf{bold} \textit{italic}} {\fontfamily{lmr}\selectfont Latin Modern}
+{\fontencoding{OT1}\selectfont OT1 \textbf{bold} \textit{italic}}
+\begin{tabular}{lr}\toprule a & 1 \\ \midrule \multirow{2}{*}{b} & 2 \\ & 3 \\ \bottomrule\end{tabular}
+\begin{tikzpicture}\draw (0,0) -- (1,1);\end{tikzpicture}
+\begin{tikzpicture}\begin{axis}[width=4cm]\addplot {x^2};\end{axis}\end{tikzpicture}
+\begin{lstlisting}
+int main() { return 0; }
+\end{lstlisting}
+\begin{itemize}[noitemsep]\item one\end{itemize}
+\end{document}

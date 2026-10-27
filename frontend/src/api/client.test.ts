@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
-import { AlreadyInLibraryError, api, errorDetail, PaperMergedError } from './client'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { AlreadyInLibraryError, ApiError, api, errorDetail, NoFreePdfError, PaperMergedError } from './client'
 
 const jsonResponse = (body: unknown) => new Response(JSON.stringify(body), { status: 422 })
 
@@ -105,5 +105,88 @@ describe('Zotero import forms', () => {
   it.each([true, false])('startImport sends save_without_pdf=%s', async (flag) => {
     const form = await sentForm(() => api.startImport(file, {}, true, flag))
     expect(form.get('save_without_pdf')).toBe(String(flag))
+  })
+})
+
+describe('request errors', () => {
+  const failWith = (res: Response) => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(res)
+    return api.getManuscript('m').catch((e: unknown) => e)
+  }
+  afterEach(() => vi.restoreAllMocks())
+
+  it('a JSON error body gives an ApiError with code and body', async () => {
+    const e = await failWith(new Response(JSON.stringify({ detail: 'bad_path', path: 'x' }), { status: 422 }))
+    expect(e).toBeInstanceOf(ApiError)
+    expect(e).toMatchObject({ status: 422, code: 'bad_path', message: 'bad_path', body: { path: 'x' } })
+  })
+
+  it('an HTML 502 keeps the status text as its message', async () => {
+    const e = await failWith(new Response('<html>bad gateway</html>', { status: 502, statusText: 'Bad Gateway' }))
+    expect(e).toBeInstanceOf(ApiError)
+    expect(e).toMatchObject({ status: 502, message: 'Bad Gateway', code: 'Bad Gateway', body: {} })
+  })
+
+  it('an empty body does not crash', async () => {
+    const e = await failWith(new Response(null, { status: 500, statusText: 'Server Error' }))
+    expect(e).toMatchObject({ status: 500, message: 'Server Error', body: {} })
+  })
+
+  it('a JSON null body does not throw a TypeError', async () => {
+    const e = await failWith(new Response('null', { status: 500, statusText: 'Server Error' }))
+    expect(e).toBeInstanceOf(ApiError)
+    expect(e).toMatchObject({ status: 500, body: {} })
+  })
+
+  it('a 422 body holding paper_id is an ApiError, not AlreadyInLibraryError', async () => {
+    const e = await failWith(new Response(JSON.stringify({ detail: 'x', paper_id: 'p1' }), { status: 422 }))
+    expect(e).toBeInstanceOf(ApiError)
+    expect(e).not.toBeInstanceOf(AlreadyInLibraryError)
+  })
+
+  it('a 409 holding paper_id is still AlreadyInLibraryError, a 410 kept_id PaperMergedError, a 409 tried NoFreePdfError', async () => {
+    expect(await failWith(new Response(JSON.stringify({ detail: 'x', paper_id: 'p1' }), { status: 409 }))).toBeInstanceOf(AlreadyInLibraryError)
+    expect(await failWith(new Response(JSON.stringify({ detail: 'x', kept_id: 'p2' }), { status: 410 }))).toBeInstanceOf(PaperMergedError)
+    expect(await failWith(new Response(JSON.stringify({ detail: 'x', tried: [] }), { status: 409 }))).toBeInstanceOf(NoFreePdfError)
+    expect(await failWith(new Response(JSON.stringify({ detail: 'x', tried: [] }), { status: 500 }))).toBeInstanceOf(ApiError)
+  })
+})
+
+describe('section calls', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  it('retitleSection encodes the path like the other file calls', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ path: 'x' })))
+    await api.retitleSection('m', 'sections/my notes.tex', 'New')
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('/api/manuscripts/m/sections/sections/my%20notes.tex/retitle')
+    expect(init).toMatchObject({ method: 'POST', body: JSON.stringify({ title: 'New' }) })
+  })
+
+  it('moveSection and deleteSection hit the section routes', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response(null, { status: 204 }))
+    await api.moveSection('m', 'sections/a.tex', 2)
+    await api.deleteSection('m', 'sections/a.tex')
+    expect(fetchMock.mock.calls.map((c) => [c[0], (c[1] as RequestInit).method])).toEqual([
+      ['/api/manuscripts/m/sections/sections/a.tex/move', 'POST'],
+      ['/api/manuscripts/m/sections/sections/a.tex', 'DELETE'],
+    ])
+  })
+})
+
+describe('paper deck calls', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  it('lists, pins and ranks through the manuscript paper routes', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response('{}'))
+    await api.manuscriptPapers('m')
+    await api.pinPaper('m', 'p')
+    await api.rankPapers('m', 'some text')
+    const calls = fetchMock.mock.calls.map((c) => [c[0], (c[1] as RequestInit | undefined)?.method, (c[1] as RequestInit | undefined)?.body])
+    expect(calls).toEqual([
+      ['/api/manuscripts/m/papers', undefined, undefined],
+      ['/api/manuscripts/m/papers/p/pin', 'POST', undefined],
+      ['/api/manuscripts/m/papers/rank', 'POST', JSON.stringify({ text: 'some text' })],
+    ])
   })
 })

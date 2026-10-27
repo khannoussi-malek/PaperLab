@@ -40,7 +40,7 @@ function setup(tags: string[], match: 'any' | 'all' = 'any', data: Paper[] | nul
   return onTagsChange
 }
 
-afterEach(() => { cleanup(); vi.restoreAllMocks() })
+afterEach(() => { localStorage.clear(); cleanup(); vi.restoreAllMocks() })
 
 const rows = () => Array.from(document.querySelectorAll('li.paper-row')).map((r) => r.querySelector('a')?.textContent)
 
@@ -206,4 +206,20 @@ test('a paper without a PDF is badged in its row, with no pages flying and no st
   expect(row).toHaveTextContent('No PDF yet')
   expect(row.querySelector('.embedding-page')).toBeNull()
   expect(row.querySelector('.status')).toHaveClass('sr-only')
+})
+
+test('the Deck view drops checkboxes and the selection bar; List brings them back with the pick kept', () => {
+  setup([])
+  fireEvent.click(screen.getAllByRole('checkbox')[0])
+  expect(screen.getByText('1 selected')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Deck' }))
+  expect(localStorage.getItem('paperlab-workspace-papers-view')).toBe('deck')
+  expect(screen.queryByRole('checkbox')).toBeNull()
+  expect(screen.queryByText('1 selected')).toBeNull()
+  expect(screen.queryByRole('button', { name: /Remove from workspace/ })).toBeNull()
+  expect(screen.getByRole('group', { name: 'Show papers as' })).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Paper actions' })).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'List' }))
+  expect(screen.getAllByRole('button', { name: 'Paper actions' }).length).toBeGreaterThan(0)
+  expect(screen.getByText('1 selected')).toBeInTheDocument()
 })

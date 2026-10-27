@@ -16,6 +16,7 @@ export const WORKSPACE_TABS: readonly TabMeta[] = [
   { value: 'notes', group: 'papers', label: 'Notes', stepLine: 'Every note on these papers, grouped by paper. Highlight a passage in the reader to add one.' },
   { value: 'chat', group: 'papers', label: 'Chat', stepLine: 'Ask questions across these papers and your notes. Answers cite the passages they use.' },
   { value: 'evidence', group: 'papers', label: 'Evidence', stepLine: "One row per paper. AI pulls out each study's design, sample, findings and limitations, with quotes you can check." },
+  { value: 'write', group: 'papers', label: 'Write', stepLine: 'Write your own paper in LaTeX, cite these papers, and compile it to PDF.' },
   { value: 'search', group: 'review', label: 'Search & screen', step: 1, stepLine: 'Step 1 of 5. Search paper sources, then mark each result relevant or not from its title and abstract.' },
   { value: 'acquisition', group: 'review', label: 'Get PDFs', step: 2, stepLine: 'Step 2 of 5. Relevant papers with no free PDF found. Get each one yourself and upload it.' },
   { value: 'screening', group: 'review', label: 'Full-text review', step: 3, stepLine: 'Step 3 of 5. Read each imported paper and decide whether it meets your criteria.' },
