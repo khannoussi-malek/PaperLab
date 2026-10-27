@@ -1,18 +1,33 @@
+import asyncio
+import uuid
+
 import pytest
-from conftest import FakeEmbedder, unit_vector
-from sqlalchemy import func, insert, select
+from conftest import TEST_DATABASE_URL, FakeEmbedder, unit_vector
+from sqlalchemy import delete, func, insert, select
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from app.core import manuscript_papers as mp
 from app.core import manuscripts, workspaces
 from app.core.errors import Conflict, NotFound
 from app.core.manuscript_bib import build_bib
-from app.models import Chunk, ManuscriptCiteKey, Note, Paper, Provenance, Workspace, note_anchors, note_papers
+from app.models import (
+    Chunk,
+    Manuscript,
+    ManuscriptCiteKey,
+    Note,
+    Paper,
+    Provenance,
+    Workspace,
+    note_anchors,
+    note_papers,
+)
 
 pytestmark = pytest.mark.anyio
 
 
-async def setup(session, *titles, with_ws=True, pdf=True):
-    ws = Workspace(name="W")
+async def setup(session, *titles, with_ws=True, pdf=True, name="W"):
+    ws = Workspace(name=name)
     session.add(ws)
     await session.flush()
     papers = []
@@ -124,3 +139,34 @@ async def test_a_note_anchored_on_one_of_its_papers_is_a_note_on_the_other(sessi
     rows = {r["paper_id"]: r for r in await mp.list_papers(session, m.id)}
     assert (rows[a.id]["highlights"], rows[a.id]["notes"]) == (1, 0)
     assert (rows[b.id]["highlights"], rows[b.id]["notes"]) == (0, 1)
+
+
+@pytest.mark.xdist_group("manuscript_rows")  # commits real rows on separate connections
+async def test_a_bib_built_while_a_pin_is_open_waits_for_it_and_leaves_one_row():
+    """Export's build_bib racing a pin: the rolled-back shared session can't show locking, so two real ones."""
+    engine = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)
+    maker = async_sessionmaker(engine, expire_on_commit=False)
+    async with maker() as s:
+        ws, (paper,), m = await setup(s, "Racing pins", name=f"race {uuid.uuid4()}")  # committed: a name of its own
+        await s.commit()
+    try:
+        async with maker() as pinning, maker() as exporting:
+            key = await mp.pin(pinning, m.id, paper.id)  # its transaction holds the manuscript row
+            manuscript = await exporting.get(Manuscript, m.id)
+            racing = asyncio.create_task(build_bib(exporting, manuscript, {"main.tex": f"\\cite{{{key}}}"}))
+            await asyncio.sleep(0.3)
+            assert not racing.done()  # waits for the pin
+            await pinning.commit()
+            assert f"{{{key}," in await racing
+            await exporting.commit()
+        async with maker() as s:
+            rows = await s.scalar(select(func.count()).select_from(ManuscriptCiteKey).where(
+                ManuscriptCiteKey.manuscript_id == m.id))
+        assert rows == 1
+    finally:
+        async with maker() as s:
+            await s.execute(delete(Manuscript).where(Manuscript.id == m.id))
+            await s.execute(delete(Workspace).where(Workspace.id == ws.id))
+            await s.execute(delete(Paper).where(Paper.id == paper.id))
+            await s.commit()
+        await engine.dispose()
