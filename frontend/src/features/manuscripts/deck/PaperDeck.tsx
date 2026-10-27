@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useId, useRef, type KeyboardEvent } from 'react'
+import { useReducedMotion } from './useReducedMotion'
 import { cardTransform, windowAround, type DeckPaper } from './deckModel'
 
 const FLIP_MS = 500
@@ -19,22 +20,6 @@ export type PaperDeckProps = {
 }
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
-
-const REDUCED = '(prefers-reduced-motion: reduce)'
-
-/** Follows the OS setting, also while the deck is open. */
-function useReducedMotion(): boolean {
-  const [still, setStill] = useState(() => typeof matchMedia === 'function' && matchMedia(REDUCED).matches)
-  useEffect(() => {
-    if (typeof matchMedia !== 'function') return
-    const mq = matchMedia(REDUCED)
-    const onChange = () => setStill(mq.matches)
-    onChange()
-    mq.addEventListener?.('change', onChange)
-    return () => mq.removeEventListener?.('change', onChange)
-  }, [])
-  return still
-}
 
 function byline(p: DeckPaper): string {
   return [p.first_author, p.year].filter(Boolean).join(' ')
