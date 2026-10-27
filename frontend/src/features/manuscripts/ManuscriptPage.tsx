@@ -11,14 +11,14 @@ import { LoadError } from '@/features/library/ErrorAlert'
 import { browserStorage } from '@/features/notes/highlightColors'
 import { TabSkeleton } from '@/features/workspaces/TabStates'
 import { manuscriptHref, workspaceHref } from '@/lib/route'
-import { errorsFor } from './compileErrors'
+import { errorsFor, parseCompileErrors } from './compileErrors'
 import { manuscriptFailure } from './errors'
 import { FileList } from './FileList'
 import { FinalStepsChecklist } from './FinalStepsChecklist'
 import { DeleteManuscriptDialog, MoveManuscriptDialog } from './ManuscriptDialogs'
 import { HistoryDialog } from './HistoryDialog'
 import { outline } from './outline'
-import { OutlinePanel } from './OutlinePanel'
+import { SectionList } from './SectionList'
 import { PdfPane } from './PdfPane'
 import { MANUSCRIPT_PDF } from './pdfPanel'
 import type { SaveState } from './autosave'
@@ -45,6 +45,8 @@ export function ManuscriptPage({ manuscriptId, file }: { manuscriptId: string; f
       setLive((l) => (text === null ? Object.fromEntries(Object.entries(l).filter(([k]) => k !== p)) : { ...l, [p]: text })),
     [],
   )
+  const flushCurrent = useCallback(async () => (await flushRef.current?.()) ?? true, [])
+  const cursorLine = jump?.line ?? 1 // ponytail: the editor does not report its cursor, so the last jump stands in
   const onState = useCallback((p: string, s: SaveState) => setSaveStates((all) => ({ ...all, [p]: s })), [])
   const registerFlush = useCallback((f: (() => Promise<boolean>) | null) => { flushRef.current = f }, [])
   const [pdfWidth, setPdfWidth] = useState(() => loadPanelWidth(MANUSCRIPT_PDF, browserStorage()))
@@ -57,10 +59,15 @@ export function ManuscriptPage({ manuscriptId, file }: { manuscriptId: string; f
     queries: texFiles.map((f) => ({ queryKey: ['manuscripts', manuscriptId, 'file', f.path], queryFn: () => api.getManuscriptFile(manuscriptId, f.path) })),
   })
   const texts = texQueries.map((q) => q.data?.text).join('\u0000')
-  const items = useMemo(() => {
+  const fileTexts = useMemo(() => {
     const files = Object.fromEntries(texFiles.flatMap((f, i) => (texQueries[i].data ? [[f.path, texQueries[i].data.text]] : [])))
-    return data ? outline({ ...files, ...live }, data.main_file) : []
-  }, [data?.main_file, texts, live])
+    return { ...files, ...live }
+  }, [texts, live])
+  const items = useMemo(() => (data ? outline(fileTexts, data.main_file) : []), [data?.main_file, fileTexts])
+  const errorsByFile = useMemo(
+    () => parseCompileErrors(data?.compile_errors).reduce<Record<string, number>>((n, e) => ({ ...n, [e.file]: (n[e.file] ?? 0) + 1 }), {}),
+    [data?.compile_errors],
+  )
   const errors = useMemo(() => (path && data ? errorsFor(data.compile_errors, path) : []), [data?.compile_errors, path])
 
   useEffect(() => setJump(null), [path]) // a jump belongs to the file it was made in
@@ -98,9 +105,27 @@ export function ManuscriptPage({ manuscriptId, file }: { manuscriptId: string; f
       {data && path && (
         <div className="grid min-h-0 flex-1 overflow-hidden" style={{ gridTemplateColumns: `14rem minmax(0,1fr) ${panelTrack(MANUSCRIPT_PDF, pdfWidth)}` }}>
           <div className="flex min-h-0 flex-col gap-4 overflow-auto border-r border-glass-border py-2">
-            <FileList manuscriptId={manuscriptId} files={data.files} current={path} main={data.main_file}
-              flushCurrent={async () => (await flushRef.current?.()) ?? true} />
-            <OutlinePanel manuscriptId={manuscriptId} items={items} currentFile={path} onJump={(line) => setJump((j) => ({ line, n: (j?.n ?? 0) + 1 }))} />
+            <SectionList
+              manuscriptId={manuscriptId}
+              main={data.main_file}
+              texts={fileTexts}
+              errorsByFile={errorsByFile}
+              current={{ path, line: cursorLine }}
+              items={items}
+              flushCurrent={flushCurrent}
+              onOpen={(row) => {
+                if (row.path === path) setJump((j) => ({ line: row.inMain ? row.line : 1, n: (j?.n ?? 0) + 1 }))
+                else window.location.assign(manuscriptHref(manuscriptId, row.path))
+              }}
+              onJump={(f, line) => {
+                if (f === path) setJump((j) => ({ line, n: (j?.n ?? 0) + 1 }))
+                else window.location.assign(manuscriptHref(manuscriptId, f))
+              }}
+            />
+            <details className="px-0">
+              <summary className="cursor-pointer px-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">All files</summary>
+              <FileList manuscriptId={manuscriptId} files={data.files} current={path} main={data.main_file} flushCurrent={flushCurrent} />
+            </details>
             <FinalStepsChecklist manuscriptId={manuscriptId} checklist={data.checklist} />
           </div>
           <SourcePane

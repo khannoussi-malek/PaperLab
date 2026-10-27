@@ -419,3 +419,17 @@ test('the header moves the manuscript and deletes it after asking in the app', a
   await waitFor(() => expect(remove).toHaveBeenCalledWith('m1'))
   await waitFor(() => expect(window.location.hash).toBe('#/workspaces/w1?tab=write'))
 })
+
+test('the left column lists sections from main.tex, with the other files under All files', async () => {
+  server = {
+    'main.tex': { text: '\\input{sections/intro}', at: T2 },
+    'sections/intro.tex': { text: '\\section{Introduction}\nhi', at: T2 },
+  }
+  vi.spyOn(api, 'getManuscript').mockResolvedValue(detail({
+    files: [{ path: 'main.tex', size: 5, updated_at: T2 }, { path: 'sections/intro.tex', size: 3, updated_at: T2 }],
+  }))
+  renderPage()
+  expect(await screen.findByRole('button', { name: /^1\s*Introduction/ })).toBeInTheDocument()
+  expect(screen.getByText('All files')).toBeInTheDocument()
+  expect(screen.queryByRole('navigation', { name: 'Outline' })).toBeNull()
+})
