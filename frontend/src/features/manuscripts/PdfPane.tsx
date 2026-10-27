@@ -1,4 +1,4 @@
-import { useEffect, useRef, type KeyboardEvent, type MouseEvent } from 'react'
+import { useCallback, useEffect, useRef, type KeyboardEvent, type MouseEvent } from 'react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { api, type ManuscriptDetail } from '@/api/client'
 import { PdfPage } from '../reader/PdfPage'
@@ -34,13 +34,22 @@ export function PdfPane({ manuscript: m, width, target, onSourceAt }: Props) {
   const scale = Math.max(0.4, (width - GUTTERS_PX) / PAGE_WIDTH_PT)
 
   const scroller = useRef<HTMLDivElement>(null)
-  useEffect(() => {
+  const pagesRef = useRef<HTMLDivElement>(null)
+  const pending = useRef(false) // a target not yet settled: pages still measuring move it, the user's own scrolling cancels it
+  const place = useCallback(() => {
     const box = scroller.current
     const page = box?.querySelector<HTMLElement>(`[data-page="${target?.page}"]`)
     if (!box || !page || !target) return
     box.scrollTop = page.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop + target.y * scale - box.clientHeight / 3
-  }, [target, doc]) // eslint-disable-line react-hooks/exhaustive-deps -- a new compile redraws the pages, so scroll again
-
+  }, [target, scale])
+  useEffect(() => { pending.current = true; place() }, [target, doc]) // eslint-disable-line react-hooks/exhaustive-deps -- not on a resize of the column
+  useEffect(() => { // pages learn their real size after mounting; re-apply the target as the stack grows
+    const stack = pagesRef.current
+    if (!stack || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(() => { if (pending.current) place() })
+    ro.observe(stack)
+    return () => ro.disconnect()
+  }, [place, doc])
   const report = (el: HTMLElement, x: number, y: number) => {
     const r = el.getBoundingClientRect()
     onSourceAt(Number(el.dataset.page), (x - r.left) / scale, (y - r.top) / scale)
@@ -52,7 +61,8 @@ export function PdfPane({ manuscript: m, width, target, onSourceAt }: Props) {
     const cx = r.left + r.width / 2
     const cy = r.top + e.currentTarget.clientHeight / 2
     const pagesEls = Array.from(e.currentTarget.querySelectorAll<HTMLElement>('[data-page]'))
-    const hit = pagesEls.find((p) => { const b = p.getBoundingClientRect(); return b.top <= cy && cy <= b.bottom }) ?? pagesEls[0]
+    const gap = (p: HTMLElement) => { const b = p.getBoundingClientRect(); return cy < b.top ? b.top - cy : Math.max(0, cy - b.bottom) }
+    const hit = pagesEls.reduce<HTMLElement | undefined>((best, p) => (!best || gap(p) < gap(best) ? p : best), undefined) // the page nearest the centre
     if (hit) { e.preventDefault(); report(hit, cx, cy) }
   }
 
@@ -78,9 +88,9 @@ export function PdfPane({ manuscript: m, width, target, onSourceAt }: Props) {
           </AlertDescription>
         </Alert>
       )}
-      <div className="min-h-0 flex-1 overflow-auto bg-muted/40 p-3" tabIndex={0} aria-label="PDF pages" ref={scroller} onKeyDown={enter}>
+      <div className="min-h-0 flex-1 overflow-auto bg-muted/40 p-3" tabIndex={0} aria-label="PDF pages" ref={scroller} onKeyDown={enter} onWheel={() => { pending.current = false }} onPointerDown={() => { pending.current = false }}>
         {doc ? (
-          <div className="flex flex-col items-center gap-3">
+          <div ref={pagesRef} className="flex flex-col items-center gap-3">
             {Array.from({ length: doc.numPages }, (_, i) => i + 1).map((n) => (
               <div key={n} data-page={n} onClick={click}><PdfPage doc={doc} pageNumber={n} scale={scale} /></div>
             ))}
