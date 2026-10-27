@@ -90,6 +90,7 @@ function OpenBook({ manuscriptId, paper, onInsert, onClose, onNotice, controls, 
         onInsert={(item) => void insert(item)}
         onOpenReader={(item) => openReader(!item ? readerHref(paper.paper_id) : item.chunkId ? chunkHref(paper.paper_id, item.chunkId, item.page ?? 1) : noteHref(paper.paper_id, item.noteId))}
         verdict={verdict}
+        draggable
         onClose={onClose}
       />
     </>
@@ -260,6 +261,7 @@ export function DeckColumn({ manuscriptId, sectionKey, sectionText, allTexts, on
           label="Papers"
           cited={cited}
           evidence={evidenceById}
+          draggable
         />
       )}
     </div>

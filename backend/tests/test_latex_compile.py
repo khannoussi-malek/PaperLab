@@ -1,6 +1,7 @@
 import asyncio
 import os
 import stat
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -114,18 +115,26 @@ async def _gone(pid: int) -> bool:
     return False
 
 
-SPAWNER = "sleep 30 & echo $! > child.pid\necho $$ > parent.pid\nwait\n"
+SPAWNER = '[ "$1" = warm ] && exit 0\n' + "sleep 30 & echo $! > child.pid\necho $$ > parent.pid\nwait\n"
 
 
-async def test_timeout_kills_the_whole_group_and_reports(tmp_path, monkeypatch):
-    monkeypatch.setattr(settings, "tectonic_bin", _script(tmp_path / "slow", SPAWNER))
+@pytest.fixture(scope="module")
+def spawner(tmp_path_factory):
+    """Written once and run once: macOS scans a new executable on first launch (~3 s), which would eat a short timeout."""
+    path = _script(tmp_path_factory.mktemp("spawner") / "slow", SPAWNER)
+    subprocess.run([path, "warm"], check=True)
+    return path
+
+
+async def test_timeout_kills_the_whole_group_and_reports(tmp_path, monkeypatch, spawner):
+    monkeypatch.setattr(settings, "tectonic_bin", spawner)
     res = await lc.compile_dir(tmp_path, "main.tex", timeout=1)
     assert (res.ok, res.pdf, res.friendly) == (False, None, "compile_timeout")
     assert await _gone(int((tmp_path / "child.pid").read_text()))
 
 
-async def test_cancel_kills_the_group_and_propagates(tmp_path, monkeypatch):
-    monkeypatch.setattr(settings, "tectonic_bin", _script(tmp_path / "slow", SPAWNER))
+async def test_cancel_kills_the_group_and_propagates(tmp_path, monkeypatch, spawner):
+    monkeypatch.setattr(settings, "tectonic_bin", spawner)
     task = asyncio.create_task(lc.compile_dir(tmp_path, "main.tex"))
     for _ in range(50):
         if (tmp_path / "child.pid").exists() and (tmp_path / "parent.pid").exists():

@@ -20,6 +20,7 @@ import { NoMatches, PaperSearch } from './PaperSearch'
 import { PaperPreview } from './PaperPreview'
 import { SourceBadges } from '../reader/SourceBadges'
 import { byline, matchesPaper, pageCountLabel } from './paperMeta'
+import { LibraryDeck } from './LibraryDeck'
 
 /** Skimming the list with the mouse shouldn't open a PDF for every row it crosses. */
 const HOVER_PREVIEW_DELAY_MS = 150
@@ -157,13 +158,15 @@ type Props = {
   selection?: Selection
   /** Called with the ids of the rows the list's own search and reading filter leave showing. */
   onVisibleChange?: (ids: string[]) => void
+  /** `deck` shows the papers the toolbar leaves as a 3D deck, without selection or row actions. */
+  view?: 'list' | 'deck'
 }
 
 /**
  * A search bar over paper rows, beside a preview of the hovered or focused one. The library and each workspace's Papers
  * tab use it.
  */
-export function PaperList({ papers, workspaceId, tagsByPaper, onTagClick, activeTags, emptyMessage, selection, onVisibleChange }: Props) {
+export function PaperList({ papers, workspaceId, tagsByPaper, onTagClick, activeTags, emptyMessage, selection, onVisibleChange, view = 'list' }: Props) {
   const remove = useDeletePaper()
   const membership = useWorkspaceMembership()
   const reading = useSetReading()
@@ -215,7 +218,7 @@ export function PaperList({ papers, workspaceId, tagsByPaper, onTagClick, active
           <AlertDescription>{error.message}</AlertDescription>
         </Alert>
       )}
-      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
+      <div className={cn('grid items-start gap-4', view === 'list' && 'lg:grid-cols-[minmax(0,1fr)_22rem]')}>
         <div className="flex min-w-0 flex-col gap-3">
           <div className="flex gap-2">
             <div className="flex-1">
@@ -251,6 +254,8 @@ export function PaperList({ papers, workspaceId, tagsByPaper, onTagClick, active
             <p className="text-muted-foreground">{emptyMessage}</p>
           ) : shown.length === 0 ? (
             <NoMatches query={query} filter={filter} onClear={clearSearch} onShowAll={() => setFilter('all')} />
+          ) : view === 'deck' ? (
+            <LibraryDeck papers={shown} />
           ) : (
             <Card className={cn('gap-0 py-0 ring-glass-border', glass)}>
               <ul className="divide-y divide-border">
@@ -276,7 +281,7 @@ export function PaperList({ papers, workspaceId, tagsByPaper, onTagClick, active
           )}
         </div>
         {/* Desktop only: the preview follows hover and focus, which a touch screen doesn't have. */}
-        {previewed && (
+        {previewed && view === 'list' && (
           <div className="sticky top-0 hidden lg:block">
             <PaperPreview paper={previewed} />
           </div>

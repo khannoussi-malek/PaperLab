@@ -143,3 +143,14 @@ describe('PaperDeck', () => {
     expect(card().style.transition).toBe('none')
   })
 })
+
+it('cards drag only when asked, and the search box only with onFilter', () => {
+  const { unmount } = render(<PaperDeck papers={[0, 1, 2].map((i) => mk(i))} current={0} onCurrent={vi.fn()} onOpen={vi.fn()} label="Papers" />)
+  expect(document.querySelectorAll('[data-deck-card][draggable="true"]')).toHaveLength(0)
+  expect(screen.queryByRole('searchbox')).toBeNull()
+  unmount()
+  render(<PaperDeck papers={[0, 1, 2].map((i) => mk(i))} current={0} onCurrent={vi.fn()} onOpen={vi.fn()} filter="" onFilter={vi.fn()} label="Papers" draggable />)
+  expect(document.querySelectorAll('[data-deck-card][draggable="true"]')).toHaveLength(1)
+  expect(screen.getByRole('searchbox')).toBeTruthy()
+})
+

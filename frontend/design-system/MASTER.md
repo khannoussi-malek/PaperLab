@@ -1068,6 +1068,20 @@ The studio's fourth column, "Papers": the workspace's papers as a 3D deck of car
 - **Test hooks:** `data-deck-card`, `data-book-tab`, `aria-roledescription` "paper deck" / "paper book", a turning leaf's
   faces carry `data-shade`.
 
+## Deck view of the library
+
+The library and a workspace's Papers tab can show their papers as the studio's deck instead of the list.
+
+- **Switch:** a "Show papers as" group of two toggle buttons, List and Deck (`aria-pressed`), above the papers. List is the
+  default; the choice is remembered per page and browser (`paperlab-library-view`, `paperlab-workspace-papers-view`).
+- **Same papers, same order:** the deck shows exactly what the list shows (its search, sort and the workspace tag filter),
+  so the list's toolbar is the only search. Switching back keeps the search text, sort, tags and selection.
+- **Read only:** no insert actions, no checkboxes, no row actions menu and no "Remove from workspace" in the deck. An open
+  paper shows its notes and highlights (yellow H/N, purple A) and `o` or "Open in reader" opens the reader in a new tab
+  at that note, or at the paper. Keys, motion, live region and Hands are the studio deck's (Hands off until asked; no
+  typing pause here).
+- **Counts:** one counts request covers the visible papers; only about seven cards are in the DOM.
+
 ## Evidence in the deck
 
 - **Find evidence:** Cmd/Ctrl+E in the editor, or a "Find evidence" button (and the same key) on the Papers column, for the

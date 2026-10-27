@@ -18,12 +18,12 @@ vi.mock('../discovery/FindPapersButton', () => ({ FindPapersButton: () => null }
 type Selection = { selected: ReadonlySet<string>; onToggle: (id: string) => void }
 // The real list pulls in pdfjs, which needs a worker: a checkbox per paper stands in for its rows.
 vi.mock('./PaperList', () => ({
-  PaperList: ({ papers, selection }: { papers: { id: string; title: string }[]; selection?: Selection }) => (
-    <ul>
+  PaperList: ({ papers, selection, view }: { papers: { id: string; title: string }[]; selection?: Selection; view?: string }) => (
+    <ul data-view={view}>
       {papers.map((p) => (
         <li key={p.id}>
-          <input type="checkbox" aria-label={`Select ${p.title}`} checked={selection?.selected.has(p.id) ?? false}
-            onChange={() => selection?.onToggle(p.id)} />
+          {selection && <input type="checkbox" aria-label={`Select ${p.title}`} checked={selection.selected.has(p.id)}
+            onChange={() => selection.onToggle(p.id)} />}
         </li>
       ))}
     </ul>
@@ -32,6 +32,7 @@ vi.mock('./PaperList', () => ({
 vi.mock('@/features/graph/viewModel', () => ({ hasWebGL: () => false }))
 vi.stubGlobal('matchMedia', () => ({ matches: false }))
 afterEach(() => {
+  localStorage.clear()
   state.papers = []
   vi.restoreAllMocks()
 })
@@ -59,4 +60,25 @@ test('ticked papers get a selection bar that exports just them, with no workspac
   await waitFor(() => expect(spy).toHaveBeenCalledWith(['a', 'c'], 'bibtex', undefined))
   fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
   expect(screen.queryByText('2 selected')).toBeNull()
+})
+
+test('the List | Deck switch defaults to list, remembers deck, and the deck offers no selection', () => {
+  state.papers = [{ id: 'a', title: 'Alpha' }]
+  const { unmount } = render(<QueryClientProvider client={new QueryClient()}><LibraryPage /></QueryClientProvider>)
+  const view = () => document.querySelector('ul')?.getAttribute('data-view')
+  expect(view()).toBe('list')
+  expect(screen.getByRole('button', { name: 'List' })).toHaveAttribute('aria-pressed', 'true')
+  fireEvent.click(screen.getByLabelText('Select Alpha'))
+  expect(screen.getByRole('status').textContent).toBe('1 selected')
+  fireEvent.click(screen.getByRole('button', { name: 'Deck' }))
+  expect(view()).toBe('deck')
+  expect(screen.queryByLabelText('Select Alpha')).toBeNull()
+  expect(screen.queryByRole('button', { name: 'Export selected…' })).toBeNull()
+  expect(localStorage.getItem('paperlab-library-view')).toBe('deck')
+  fireEvent.click(screen.getByRole('button', { name: 'List' }))
+  expect(screen.getByRole('status').textContent).toBe('1 selected') // the pick survives the round trip
+  fireEvent.click(screen.getByRole('button', { name: 'Deck' }))
+  unmount()
+  render(<QueryClientProvider client={new QueryClient()}><LibraryPage /></QueryClientProvider>)
+  expect(view()).toBe('deck')
 })
