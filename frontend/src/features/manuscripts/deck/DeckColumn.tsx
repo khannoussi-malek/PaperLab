@@ -40,6 +40,8 @@ export type DeckColumnProps = {
   openKey: { key: string; n: number } | null
   /** Mod+E in the editor: find evidence for the selection, or the sentence at the cursor. A new `n` asks again. */
   evidenceAsk?: { doc: string; from: number; to: number; n: number } | null
+  /** The deck's Find evidence button and Mod+E: run it on the editor's last cursor. False when there is none yet. */
+  onFindEvidence?: () => boolean
 }
 
 /** What the hands can do to an open book: move between its items, or turn to one by id. */
@@ -52,6 +54,7 @@ function OpenBook({ manuscriptId, paper, onInsert, onClose, onNotice, controls, 
   const pin = usePinPaper()
   const items = useMemo(() => [...evidenceItems(passages), ...bookItems(notes.data ?? [], paper.paper_id)], [notes.data, paper.paper_id, passages])
   const [selected, setSelected] = useState(0)
+  useEffect(() => setSelected(0), [passages]) // new passages: never point silently at a different item
   useEffect(() => {
     controls.current = {
       step: (by) => setSelected((i) => Math.min(Math.max(i + by, 0), Math.max(items.length - 1, 0))),
@@ -91,7 +94,7 @@ function OpenBook({ manuscriptId, paper, onInsert, onClose, onNotice, controls, 
 }
 
 /** The Papers column: the workspace's papers as a deck, ordered for the section being written; open one to insert from it. */
-export function DeckColumn({ manuscriptId, sectionKey, sectionText, allTexts, onInsert, openKey, evidenceAsk }: DeckColumnProps) {
+export function DeckColumn({ manuscriptId, sectionKey, sectionText, allTexts, onInsert, openKey, evidenceAsk, onFindEvidence }: DeckColumnProps) {
   const papers = useManuscriptPapers(manuscriptId)
   const [filter, setFilter] = useState('')
   const [currentId, setCurrentId] = useState<string | null>(null)
@@ -153,10 +156,17 @@ export function DeckColumn({ manuscriptId, sectionKey, sectionText, allTexts, on
     enabled: !!hash && !unavailable,
     gcTime: 0,
     refetchInterval: (q) => {
+      if (q.state.status === 'error') return false
       const d = q.state.data as EvidenceRow[] | undefined
       return !d || d.some((r) => r.status === 'queued' || r.status === 'running') ? EVIDENCE_POLL_MS : false
     },
   })
+  const findFromDeck = () => {
+    if (!onFindEvidence) return
+    if (onFindEvidence()) return
+    clearEvidence()
+    setEvidenceMsg(EVIDENCE_ERRORS.empty_claim)
+  }
   const evidenceById = useMemo(() => {
     const byPaper = new Map(rows.data?.map((r) => [r.paper_id, r]))
     return new Map((evidence?.found.papers ?? []).map((p) => [p.paper_id, { count: p.passages.length, passages: p.passages, verdict: verdictView(byPaper.get(p.paper_id), unavailable) }]))
@@ -207,10 +217,11 @@ export function DeckColumn({ manuscriptId, sectionKey, sectionText, allTexts, on
 
   const cited = new Set([...inSection, ...elsewhere])
   return (
-    <div ref={column} className="relative h-full" onKeyDown={(e) => { if (e.key === 'Escape' && !open && (evidence || evidenceMsg || finding)) { clearEvidence(); e.preventDefault() } }}>
+    <div ref={column} className="relative h-full" onKeyDown={(e) => { if (e.key.toLowerCase() === 'e' && (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && onFindEvidence) { e.preventDefault(); findFromDeck(); return } if (e.key === 'Escape' && !open && (evidence || evidenceMsg || finding)) { clearEvidence(); e.preventDefault() } }}>
     <div className="h-full overflow-auto p-2">
       <div className="mb-1 flex items-center justify-end gap-2">
         {hands && <span className="text-[11px] text-muted-foreground">{HANDS_HELP}</span>}
+        {onFindEvidence && <button type="button" onClick={findFromDeck} className="rounded-md border border-blue-300 px-2 py-0.5 text-xs text-blue-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-blue-800 dark:text-blue-100">Find evidence</button>}
         <button type="button" aria-pressed={hands} onClick={() => setHands((h) => !h)} className="rounded-md border border-border px-2 py-0.5 text-xs aria-pressed:bg-primary aria-pressed:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Hands</button>
       </div>
       {(evidence || evidenceMsg || finding) && (
@@ -221,6 +232,11 @@ export function DeckColumn({ manuscriptId, sectionKey, sectionText, allTexts, on
           </div>
           {evidenceMsg && <p role="alert" className="mt-1">{evidenceMsg}</p>}
           {evidence && !evidence.found.papers.length && <p className="mt-1">No passages found in this workspace's papers.</p>}
+          {rows.isError && (
+            <p role="alert" className="mt-1 flex items-center gap-2">Couldn't load the verdicts.
+              <button type="button" onClick={() => void rows.refetch()} className="rounded-md border border-blue-300 px-2 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Retry</button>
+            </p>
+          )}
           {unavailable && evidence.found.papers.length > 0 && <p className="mt-1">{NO_MODEL}</p>}
         </div>
       )}

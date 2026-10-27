@@ -37,7 +37,7 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks() })
 
 function setup() {
-  const props = { manuscriptId: 'm1', sectionKey: 's', sectionText: 'x', allTexts: ['x'], onInsert: vi.fn(() => true), openKey: null }
+  const props = { manuscriptId: 'm1', sectionKey: 's', sectionText: 'x', allTexts: ['x'], onInsert: vi.fn(() => true), openKey: null, onFindEvidence: vi.fn(() => true) }
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const ui = (ask: { doc: string; from: number; to: number; n: number } | null) => (
     <QueryClientProvider client={client}><DeckColumn {...props} evidenceAsk={ask} /></QueryClientProvider>
@@ -169,4 +169,54 @@ it('an open paper has blue E tabs in page order; inserting one gives only the ci
   const open = vi.spyOn(window, 'open').mockReturnValue(null)
   fireEvent.click(screen.getByRole('button', { name: 'Open in reader' }))
   expect(open).toHaveBeenCalledWith('#/papers/pc?chunk=k1&page=2', '_blank', 'noopener')
+})
+
+it('a Find evidence button on the deck asks the editor, and says so when there is no cursor yet', async () => {
+  const { props } = setup()
+  await screen.findByRole('group', { name: 'Papers' })
+  fireEvent.click(screen.getByRole('button', { name: 'Find evidence' }))
+  expect(props.onFindEvidence).toHaveBeenCalledTimes(1)
+  expect(screen.queryByText('Put the cursor in a sentence first.')).toBeNull()
+  props.onFindEvidence.mockReturnValue(false)
+  fireEvent.click(screen.getByRole('button', { name: 'Find evidence' }))
+  expect(await screen.findByText('Put the cursor in a sentence first.')).toBeTruthy()
+})
+
+it('Mod+E in the deck does the same, and takes the key', async () => {
+  const { props } = setup()
+  const deck = await screen.findByRole('group', { name: 'Papers' })
+  expect(fireEvent.keyDown(deck, { key: 'e', ctrlKey: true })).toBe(false) // default prevented
+  expect(props.onFindEvidence).toHaveBeenCalledTimes(1)
+  fireEvent.keyDown(deck, { key: 'e' })
+  expect(props.onFindEvidence).toHaveBeenCalledTimes(1)
+})
+
+it('stops polling when the verdicts cannot be loaded, says so, and Retry loads them again', async () => {
+  rows.mockRejectedValue(new Error('boom'))
+  const { ask } = setup()
+  await screen.findByRole('group', { name: 'Papers' })
+  ask()
+  expect(await screen.findByText("Couldn't load the verdicts.")).toBeTruthy()
+  const calls = rows.mock.calls.length
+  await tick(6000)
+  expect(rows.mock.calls.length).toBe(calls)
+  rows.mockResolvedValue([row('pc', { status: 'done', verdict: 'supported', reason: 'ok', quote: 'q', page: 2 }), row('pb')])
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+  await waitFor(() => expect(screen.queryByText("Couldn't load the verdicts.")).toBeNull())
+  expect(rows.mock.calls.length).toBeGreaterThan(calls)
+})
+
+it('an open book goes back to its first item when the evidence passages change', async () => {
+  const { ask } = setup()
+  await screen.findByRole('group', { name: 'Papers' })
+  ask()
+  await screen.findByText(/Evidence for:/)
+  fireEvent.keyDown(screen.getByRole('group', { name: 'Papers' }), { key: 'Enter' })
+  await screen.findByRole('group', { name: 'Gamma' })
+  const current = () => document.querySelector('[data-book-tab][aria-current=true]')?.getAttribute('aria-label')
+  fireEvent.keyDown(screen.getByRole('group', { name: 'Gamma' }), { key: 'ArrowDown' })
+  await waitFor(() => expect(current()).toBe('Evidence passage, page 5'))
+  find.mockResolvedValue(found({ sentence_hash: 'h2', papers: [{ paper_id: 'pc', key: 'c1', passages: [{ chunk_id: 'k9', page: 8, text: 'New one' }, { chunk_id: 'k8', page: 9, text: 'New two' }] }] }))
+  ask('Cats purr. Dogs bark.', 2, 2)
+  await waitFor(() => expect(current()).toBe('Evidence passage, page 8'))
 })
