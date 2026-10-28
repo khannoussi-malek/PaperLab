@@ -51,6 +51,7 @@ PAPER_ID_COLUMNS = [
     ("section_role_overrides", "paper_id"),
     ("manuscript_cite_keys", "paper_id"),
     ("manuscript_evidence", "paper_id"),
+    ("manuscript_claim_checks", "paper_id"),
 ]
 
 
@@ -146,6 +147,13 @@ async def seed_both(session):
         "SELECT id, 'a', 'A.', :k, 0, 'queued' FROM ms) "
         "INSERT INTO manuscript_evidence (manuscript_id, sentence_hash, sentence, paper_id, rank, status) "
         "SELECT id, h, 'S.', :m, 1, 'queued' FROM ms, (VALUES ('a'), ('b')) v(h)",
+        # the same for the reviewer's checks: M's b moves, M's a duplicates K's
+        "WITH ms AS (INSERT INTO manuscripts (title) VALUES ('Review') RETURNING id), "
+        "k AS (INSERT INTO manuscript_claim_checks (manuscript_id, file_path, sentence_hash, sentence, plain, ord, "
+        "kind, paper_id, status) SELECT id, 'main.tex', 'a', 'A.', 'A.', 0, 'cited', :k, 'queued' FROM ms) "
+        "INSERT INTO manuscript_claim_checks (manuscript_id, file_path, sentence_hash, sentence, plain, ord, "
+        "kind, paper_id, status) SELECT id, 'main.tex', h, 'S.', 'S.', 1, 'cited', :m, 'queued' "
+        "FROM ms, (VALUES ('a'), ('b')) v(h)",
     ]:
         await session.execute(text(statement), p)
     await workspaces.add_paper(session, ws.id, m.id)  # a duplicate of K's membership
@@ -187,6 +195,7 @@ MOVED = {
     "paper_events": 1,
     "manuscript_cite_keys": 1,
     "manuscript_evidence": 1,  # M's b; its a duplicated K's
+    "manuscript_claim_checks": 1,  # likewise
     "awaiting_hits_retrieved": 1,
 }
 
@@ -212,6 +221,7 @@ AFTER = {  # K's rows after the merge: its own plus M's moved or unioned ones
     "evidence_cards.paper_id": 1,
     "manuscript_cite_keys.paper_id": 1,
     "manuscript_evidence.paper_id": 2,
+    "manuscript_claim_checks.paper_id": 2,
     "paper_events.paper_id": 2,  # M's moved one, and the merge's own pdf_attached for K (R21)
 }
 

@@ -6,7 +6,17 @@ from sqlalchemy.exc import IntegrityError
 from test_paper_merges import EVIDENCE, PROOF, kept, merged
 
 from app.core import merges
-from app.models import Manuscript, ManuscriptCiteKey, ManuscriptEvidence, ManuscriptFile, ManuscriptSnapshot, Workspace
+from app.models import (
+    Manuscript,
+    ManuscriptCiteKey,
+    ManuscriptClaimCheck,
+    ManuscriptClaimDismissal,
+    ManuscriptEvidence,
+    ManuscriptFile,
+    ManuscriptReviewRun,
+    ManuscriptSnapshot,
+    Workspace,
+)
 
 pytestmark = pytest.mark.anyio
 
@@ -152,3 +162,103 @@ async def test_merge_repoints_evidence_and_drops_the_duplicate(session):
         {"m": ms.id},
     )
     assert rows.all() == [("a", k.id, "queued"), ("b", k.id, "done")]
+
+
+def run_of(ms, **fields) -> ManuscriptReviewRun:
+    return ManuscriptReviewRun(
+        manuscript_id=ms.id, file_path="main.tex", status="queued", total=3, include_uncited=False, **fields
+    )
+
+
+def check(ms, paper=None, **fields) -> ManuscriptClaimCheck:
+    fields = {"kind": "cited" if paper else "uncited", "status": "queued", "sentence_hash": "h"} | fields
+    return ManuscriptClaimCheck(
+        manuscript_id=ms.id, file_path="main.tex", sentence="Sleep helps.", plain="Sleep helps.", ord=0,
+        paper_id=paper.id if paper else None, **fields,
+    )  # fmt: skip
+
+
+async def rejects(session, row) -> None:
+    with pytest.raises(IntegrityError):
+        async with session.begin_nested():
+            session.add(row)
+            await session.flush()
+
+
+async def test_a_run_starts_with_zero_done_skipped_and_no_cancel(session):
+    ms = await manuscript(session)
+    run = run_of(ms)
+    session.add(run)
+    await session.flush()
+    await session.refresh(run)
+    assert (run.done, run.uncited_skipped, run.cancel_requested, run.reason) == (0, 0, False, None)
+    assert run.created_at and run.updated_at
+    bad = ManuscriptReviewRun(manuscript_id=ms.id, file_path="m", status="paused", total=1, include_uncited=True)
+    await rejects(session, bad)
+
+
+async def test_check_kind_and_status_must_be_known_ones(session):
+    ms, p = await manuscript(session), await kept(session)
+    await rejects(session, check(ms, p, kind="maybe"))
+    await rejects(session, check(ms, p, status="cancelled"))
+
+
+async def test_one_check_per_sentence_and_paper_but_cited_and_uncited_coexist(session):
+    ms, p = await manuscript(session), await kept(session)
+    session.add_all([check(ms, p), check(ms, None)])
+    await session.flush()
+    await rejects(session, check(ms, p, cite_key="other"))
+    await rejects(session, check(ms, None))
+    q = await kept(session, doi="10.1/other")
+    session.add(check(ms, q))  # another paper for the same sentence is fine
+    await session.flush()
+
+
+async def test_deleting_a_paper_deletes_its_checks_and_a_run_keeps_its_rows(session):
+    ms, p, q = await manuscript(session), await kept(session), await kept(session, doi="10.1/other")
+    run = run_of(ms)
+    session.add(run)
+    await session.flush()
+    session.add_all([check(ms, p, run_id=run.id), check(ms, q, run_id=run.id, sentence_hash="g")])
+    await session.flush()
+    await session.execute(text("DELETE FROM papers WHERE id = :p"), {"p": p.id})
+    await session.execute(text("DELETE FROM manuscript_review_runs WHERE id = :r"), {"r": run.id})
+    rows = await session.execute(text("SELECT paper_id, run_id FROM manuscript_claim_checks WHERE manuscript_id = :m"),
+                                 {"m": ms.id})  # fmt: skip
+    assert rows.all() == [(q.id, None)]
+    await session.commit()
+    await session.execute(text("DELETE FROM papers WHERE id = :p"), {"p": q.id})
+    await session.commit()
+
+
+async def test_deleting_the_manuscript_removes_runs_checks_and_dismissals(session):
+    ms = await manuscript(session)
+    session.add_all([run_of(ms), check(ms, None), ManuscriptClaimDismissal(manuscript_id=ms.id, sentence_hash="h")])
+    await session.flush()
+    await session.execute(text("DELETE FROM manuscripts WHERE id = :m"), {"m": ms.id})
+    for table in ("manuscript_review_runs", "manuscript_claim_checks", "manuscript_claim_dismissals"):
+        assert await session.scalar(text(f"SELECT count(*) FROM {table} WHERE manuscript_id = :m"), {"m": ms.id}) == 0  # noqa: S608
+
+
+async def test_a_sentence_is_dismissed_once(session):
+    ms = await manuscript(session)
+    session.add(ManuscriptClaimDismissal(manuscript_id=ms.id, sentence_hash="h"))
+    await session.flush()
+    await rejects(session, ManuscriptClaimDismissal(manuscript_id=ms.id, sentence_hash="h"))
+
+
+async def test_merge_repoints_checks_and_drops_the_duplicate(session):
+    k, m = await kept(session), await merged(session)
+    ms = await manuscript(session)
+    session.add_all([
+        check(ms, m, sentence_hash="a", status="done", cite_key="m"),
+        check(ms, m, sentence_hash="b", status="done", cite_key="m"),
+        check(ms, k, sentence_hash="a", cite_key="k"),  # a different key for the same sentence still collides
+        check(ms, None, sentence_hash="a"),
+    ])  # fmt: skip
+    await session.commit()
+    await merges.merge(session, m.id, k.id, identifier=PROOF, evidence=EVIDENCE)
+    rows = await session.execute(
+        text("SELECT sentence_hash, paper_id, status FROM manuscript_claim_checks WHERE manuscript_id = :m "
+             "ORDER BY 1, 2 NULLS LAST"), {"m": ms.id})  # fmt: skip
+    assert rows.all() == [("a", k.id, "queued"), ("a", None, "queued"), ("b", k.id, "done")]
