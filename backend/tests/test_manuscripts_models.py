@@ -171,7 +171,10 @@ def run_of(ms, **fields) -> ManuscriptReviewRun:
 
 
 def check(ms, paper=None, **fields) -> ManuscriptClaimCheck:
-    fields = {"kind": "cited" if paper else "uncited", "status": "queued", "sentence_hash": "h"} | fields
+    kind = "cited" if paper or fields.get("cite_key") else "uncited"
+    fields = {"kind": kind, "status": "queued", "sentence_hash": "h"} | fields
+    if paper:
+        fields = {"cite_key": "k"} | fields
     return ManuscriptClaimCheck(
         manuscript_id=ms.id, file_path="main.tex", sentence="Sleep helps.", plain="Sleep helps.", ord=0,
         paper_id=paper.id if paper else None, **fields,
@@ -226,9 +229,23 @@ async def test_deleting_a_paper_deletes_its_checks_and_a_run_keeps_its_rows(sess
     rows = await session.execute(text("SELECT paper_id, run_id FROM manuscript_claim_checks WHERE manuscript_id = :m"),
                                  {"m": ms.id})  # fmt: skip
     assert rows.all() == [(q.id, None)]
-    await session.commit()
-    await session.execute(text("DELETE FROM papers WHERE id = :p"), {"p": q.id})
-    await session.commit()
+    await session.rollback()  # nothing to clean up: the papers and manuscript were never committed
+
+
+async def test_one_sentence_holds_several_unresolved_keys_but_each_once(session):
+    ms = await manuscript(session)
+    session.add_all([check(ms, cite_key="x"), check(ms, cite_key="y"), check(ms, None)])
+    await session.flush()
+    await rejects(session, check(ms, cite_key="x"))
+    await rejects(session, check(ms, None))  # still one uncited row per sentence
+
+
+async def test_an_uncited_row_has_no_paper_or_key_and_a_cited_one_has_a_key(session):
+    ms, p = await manuscript(session), await kept(session)
+    await rejects(session, check(ms, p, kind="uncited"))
+    await rejects(session, check(ms, None, kind="uncited", cite_key="x"))
+    await rejects(session, check(ms, None, kind="cited"))
+    await rejects(session, check(ms, p, cite_key=None))
 
 
 async def test_deleting_the_manuscript_removes_runs_checks_and_dismissals(session):
@@ -262,3 +279,16 @@ async def test_merge_repoints_checks_and_drops_the_duplicate(session):
         text("SELECT sentence_hash, paper_id, status FROM manuscript_claim_checks WHERE manuscript_id = :m "
              "ORDER BY 1, 2 NULLS LAST"), {"m": ms.id})  # fmt: skip
     assert rows.all() == [("a", k.id, "queued"), ("a", None, "queued"), ("b", k.id, "done")]
+
+
+async def test_merge_moves_a_cited_row_when_k_holds_only_an_uncited_one(session):
+    k, m = await kept(session), await merged(session)
+    ms = await manuscript(session)
+    session.add_all([check(ms, m, status="done"), check(ms, None), check(ms, None, cite_key="gone", sentence_hash="u")])
+    await session.commit()
+    await merges.merge(session, m.id, k.id, identifier=PROOF, evidence=EVIDENCE)
+    rows = await session.execute(
+        text("SELECT paper_id, kind FROM manuscript_claim_checks WHERE manuscript_id = :m ORDER BY 2, 1 NULLS LAST"),
+        {"m": ms.id},
+    )
+    assert rows.all() == [(k.id, "cited"), (None, "cited"), (None, "uncited")]

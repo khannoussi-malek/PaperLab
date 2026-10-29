@@ -132,15 +132,19 @@ class ManuscriptClaimCheck(Base):
         CheckConstraint(
             "status IN ('queued', 'running', 'done', 'failed')", name="ck_manuscript_claim_checks_status"
         ),
+        CheckConstraint(
+            "(kind = 'uncited' AND paper_id IS NULL AND cite_key IS NULL) OR (kind = 'cited' AND cite_key IS NOT NULL)",
+            name="ck_manuscript_claim_checks_shape",
+        ),
         Index(
             "uq_manuscript_claim_checks_cited",
             "manuscript_id", "file_path", "sentence_hash", "paper_id",
             unique=True,
             postgresql_where=text("paper_id IS NOT NULL"),
         ),
-        Index(
-            "uq_manuscript_claim_checks_uncited",
-            "manuscript_id", "file_path", "sentence_hash",
+        Index(  # a key that resolved to no paper (paper_id NULL): once per key; an uncited row has cite_key NULL
+            "uq_manuscript_claim_checks_unresolved",
+            "manuscript_id", "file_path", "sentence_hash", text("COALESCE(cite_key, '')"),
             unique=True,
             postgresql_where=text("paper_id IS NULL"),
         ),
