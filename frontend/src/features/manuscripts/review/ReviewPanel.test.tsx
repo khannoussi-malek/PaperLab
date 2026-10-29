@@ -129,3 +129,16 @@ test('an uncited row that failed or could not be verified is not offered as a cl
   expect(screen.getByText('Stopped before this one was checked.')).toBeInTheDocument()
   expect(screen.getByText("The model didn't give a usable answer")).toBeInTheDocument()
 })
+
+test('queued and running rows are pending, not failures; a done cannot_verify one is', () => {
+  show({ items: [
+    { ...claim, id: 'q', status: 'queued', verdict: null, sentence_hash: 'q', sentence: 'Queued one.' },
+    { ...claim, id: 'r', status: 'running', verdict: null, sentence_hash: 'r', sentence: 'Running one.' },
+    item({ id: 'c', sentence_hash: 'c', status: 'queued', verdict: null, reason: null }),
+    { ...claim, id: 'd', status: 'done', verdict: 'cannot_verify', reason: 'model_error', sentence_hash: 'd' },
+  ] })
+  expect(screen.getAllByText('Checking…')).toHaveLength(3)
+  expect(screen.getAllByText("Couldn't check")).toHaveLength(1)
+  expect(screen.queryByRole('button', { name: 'Find papers' })).toBeNull()
+  expect(screen.queryByRole('button', { name: 'Not a claim' })).toBeNull()
+})

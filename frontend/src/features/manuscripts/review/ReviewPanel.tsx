@@ -3,7 +3,7 @@ import { useState, type ReactNode } from 'react'
 import type { CheckItem } from '@/api/client'
 import { Button } from '@/components/ui/button'
 import { chunkHref } from '@/lib/route'
-import { couldntCheck, isLive, itemTone, reasonCopy, VERDICT_LABEL, type Tone } from './reviewModel'
+import { couldntCheck, isLive, isPending, itemTone, reasonCopy, VERDICT_LABEL, type Tone } from './reviewModel'
 import { useCiteProposals, type useReview } from './useReview'
 
 type Review = Pick<ReturnType<typeof useReview>, 'run' | 'items' | 'dismissed' | 'startError' | 'cancel' | 'dismiss' | 'restore'>
@@ -43,13 +43,14 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
 
 function CitedRow({ item, onJump }: { item: CheckItem; onJump: Props['onJump'] }) {
   const failed = couldntCheck(item)
+  const pending = isPending(item)
   const reason = item.reason && !failed ? item.reason : null
   const open = () => window.open(chunkHref(item.paper_id!, item.chunk_id!, item.page ?? 1), '_blank', 'noopener')
   return (
     <li className={`rounded-md border border-l-4 bg-card/60 px-2.5 py-1.5 text-sm ${TONE[itemTone(item)]}`}>
       <div className="flex flex-wrap items-center gap-2 text-xs">
-        <span className="font-medium">{VERDICT_LABEL[item.verdict ?? ''] ?? 'Not checked'}</span>
-        {item.verdict && AI}
+        <span className="font-medium">{pending ? 'Checking…' : VERDICT_LABEL[item.verdict ?? ''] ?? 'Not checked'}</span>
+        {item.verdict && !pending && AI}
         {item.cite_key && <code>{item.cite_key}</code>}
       </div>
       <button type="button" className="mt-0.5 block w-full rounded text-left hover:underline focus-visible:ring-2 focus-visible:ring-ring" onClick={() => onJump(item.sentence_hash)}>{item.sentence}</button>
@@ -69,6 +70,14 @@ function ClaimRow({ item, manuscriptId, dismissed, review, onJump, onCite }: { i
   const found = useCiteProposals(manuscriptId, item.sentence)
   const [problem, setProblem] = useState<string | null>(null)
   const cite = async (paperId: string) => setProblem(await onCite(item.sentence_hash, paperId))
+  if (isPending(item)) {
+    return (
+      <li className={`rounded-md border border-l-4 bg-card/60 px-2.5 py-1.5 text-sm ${TONE.muted}`}>
+        <span className="text-xs font-medium">Checking…</span>
+        <button type="button" className="mt-0.5 block w-full rounded text-left hover:underline focus-visible:ring-2 focus-visible:ring-ring" onClick={() => onJump(item.sentence_hash)}>{item.sentence}</button>
+      </li>
+    )
+  }
   if (couldntCheck(item)) {
     return (
       <li className={`rounded-md border border-l-4 bg-card/60 px-2.5 py-1.5 text-sm ${TONE.muted}`}>

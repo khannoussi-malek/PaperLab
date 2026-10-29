@@ -66,6 +66,7 @@ const REASON_COPY: Record<string, string> = {
   claim_too_long: 'This sentence is too long to check',
   empty_claim: 'There was nothing to check in this sentence',
   claim_scope: "This sentence couldn't be matched to a paper",
+  no_model: 'No model is set up. Add one in Settings.',
   cancelled: 'Stopped before this one was checked.',
   model_error: "The model didn't give a usable answer",
   check_failed: "The model didn't give a usable answer",
@@ -74,7 +75,11 @@ const REASON_COPY: Record<string, string> = {
 export const reasonCopy = (reason: string | null): string => (reason && REASON_COPY[reason]) || "This one couldn't be checked."
 export const REASON_CODES = Object.keys(REASON_COPY)
 
-/** A row the reviewer could not judge (as opposed to a finding). */
-export const couldntCheck = (item: Pick<CheckItem, 'status' | 'verdict'>) => item.status === 'failed' || item.status === 'interrupted' || item.verdict === 'cannot_verify' || !item.verdict
+/** Not judged yet: waiting for its turn or being checked now. */
+export const isPending = (item: Pick<CheckItem, 'status'>) => item.status === 'queued' || item.status === 'running'
+
+/** A settled row the reviewer could not judge (as opposed to a finding). */
+export const couldntCheck = (item: Pick<CheckItem, 'status' | 'verdict'>) =>
+  item.status === 'failed' || item.status === 'interrupted' || (item.status === 'done' && (item.verdict === 'cannot_verify' || !item.verdict))
 
 export const isLive = (run: { status: string } | null) => run?.status === 'queued' || run?.status === 'running'
