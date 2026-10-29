@@ -66,4 +66,27 @@ describe('CardClock', () => {
     tick(250)
     expect(clock.read()).toEqual({ card_ms: 250, pdf_ms: 250, pdf_opened: false })
   })
+
+  it('caps pdf time at 30 minutes too', () => {
+    const { clock, tick } = make()
+    clock.setPdfShown(true)
+    tick(3_600_000)
+    expect(clock.read().pdf_ms).toBe(1_800_000)
+  })
+
+  it('stays inactive across reset', () => {
+    const { clock, tick } = make()
+    clock.setActive(false)
+    clock.reset()
+    tick(5000)
+    expect(clock.read().card_ms).toBe(0)
+  })
+
+  it('an interaction while inactive but shown still counts as opened', () => {
+    const { clock } = make()
+    clock.setPdfShown(true)
+    clock.setActive(false)
+    clock.interact()
+    expect(clock.read().pdf_opened).toBe(true)
+  })
 })
