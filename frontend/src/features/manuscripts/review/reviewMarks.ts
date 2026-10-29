@@ -58,7 +58,7 @@ const theme = EditorView.baseTheme({
   '.cm-review-warn': { textDecorationColor: 'var(--review-warn, #d97706)' },
   '.cm-review-bad': { textDecorationColor: 'var(--destructive)' },
   '.cm-review-muted': { textDecorationColor: 'var(--muted-foreground)' },
-  '.cm-review-badge': { fontSize: '0.75em', margin: '0 2px', padding: '0 3px', borderRadius: '3px', backgroundColor: '#f3e8ff', color: '#581c87' },
+  '.cm-review-badge': { fontSize: '0.75em', margin: '0 2px', padding: '0 3px', borderRadius: '3px', backgroundColor: 'var(--provenance-llm-surface)', color: 'var(--provenance-llm)' },
 })
 
 export const reviewExtension = () => [field, theme]
@@ -69,6 +69,8 @@ export type ReviewHandle = {
   /** Selects the sentence and focuses the editor. */
   reveal: (hash: string) => void
   selection: () => { from: number; to: number } | null
+  /** Whether the sentence is still in the text as it is now (asks the server to locate it afresh). */
+  canCite: (hash: string) => Promise<boolean>
   applyCite: (hash: string, key: string) => Promise<'ok' | 'changed'>
 }
 
@@ -80,6 +82,12 @@ export function reviewHandle(view: EditorView, locate: (text: string) => Promise
       if (deco.spec.hash === hash && !found) found = { start: from, end: to }
     })
     return found
+  }
+  // The sentence in the text as it is now; null when it is gone, or the text moved on while we asked.
+  const find = async (hash: string) => {
+    const sent = view.state.doc.toString()
+    const span = (await locate(sent)).find((s) => s.hash === hash)
+    return span && view.state.doc.toString() === sent ? { sent, span } : null
   }
   return {
     setMarks: (marks) => view.dispatch({ effects: setReviewMarks.of(marks) }),
@@ -94,12 +102,13 @@ export function reviewHandle(view: EditorView, locate: (text: string) => Promise
       const { from, to } = view.state.selection.main
       return from === to ? null : { from, to }
     },
+    async canCite(hash) {
+      return !!(await find(hash))
+    },
     async applyCite(hash, key) {
-      const sent = view.state.doc.toString()
-      const sentences = await locate(sent)
-      const span = sentences.find((s) => s.hash === hash)
-      // The text moved on while we asked, or the sentence is no longer there: insert nothing.
-      if (!span || view.state.doc.toString() !== sent) return 'changed'
+      const found = await find(hash)
+      if (!found) return 'changed'
+      const { sent, span } = found
       const { from, insert } = citeThisEdit(sent, span, key)
       view.dispatch({ changes: { from, insert }, selection: { anchor: from + insert.length }, userEvent: 'input.paste', scrollIntoView: true })
       return 'ok'

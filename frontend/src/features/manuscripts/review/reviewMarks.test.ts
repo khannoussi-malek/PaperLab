@@ -52,3 +52,10 @@ test('applyCite refuses when the sentence changed', async () => {
   expect(await h.applyCite('a', 'k')).toBe('changed')
   expect(v.state.doc.toString()).toBe('Models help a lot.')
 })
+
+test('canCite says whether the sentence is still there', async () => {
+  const v = make('Models help.')
+  expect(await reviewHandle(v, async () => [{ hash: 'a', start: 0, end: 12, keys: [] }]).canCite('a')).toBe(true)
+  expect(await reviewHandle(v, async () => []).canCite('a')).toBe(false)
+  expect(v.state.doc.toString()).toBe('Models help.')
+})
