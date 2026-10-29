@@ -1,0 +1,33 @@
+# Gate for the uncited-claim classifier (run: python -m evals.claim_detect_eval). No paper needed.
+# expected: claim (a fact, result or attribution a reader wants a source for) or not_claim (the author's own plan,
+# term, method step, a question, a transition). A missed claim is the worse error, hence claim_recall_min.
+gates:
+  accuracy_min: 0.8
+  claim_recall_min: 0.85
+cases:
+  - {sentence: "The Transformer reached 28.4 BLEU on the WMT 2014 English-to-German task.", expected: claim}
+  - {sentence: "Prior work shows that dropout reduces overfitting in small networks.", expected: claim}
+  - {sentence: "Sleep deprivation causes a measurable drop in working memory.", expected: claim}
+  - {sentence: "Roughly 40% of surveyed developers reported skipping code review under deadline pressure.", expected: claim}
+  - {sentence: "Our approach is faster than gradient boosting on tabular data.", expected: claim}
+  - {sentence: "Several studies have found that retrieval-augmented models hallucinate less.", expected: claim}
+  - {sentence: "Mindfulness training improves attention in adults.", expected: claim}
+  - {sentence: "The global market for batteries doubled between 2015 and 2020.", expected: claim}
+  - {sentence: "Smith and Lee demonstrated that the effect disappears at larger sample sizes.", expected: claim}
+  - {sentence: "Larger language models are consistently better at few-shot reasoning than smaller ones.", expected: claim}
+  - {sentence: "Urban heat islands raise night-time temperatures by up to 5 degrees.", expected: claim}
+  - {sentence: "Peer review has been shown to miss most methodological errors.", expected: claim}
+  - {sentence: "In this section we describe the study design.", expected: not_claim}
+  - {sentence: "We define a stale citation as one whose source paper has since been retracted.", expected: not_claim}
+  - {sentence: "We trained the model for ten epochs on a single GPU.", expected: not_claim}
+  - {sentence: "How does annotation quality affect downstream accuracy?", expected: not_claim}
+  - {sentence: "Having introduced the dataset, we now turn to the evaluation.", expected: not_claim}
+  - {sentence: "The rest of this paper is organised as follows.", expected: not_claim}
+  - {sentence: "We call this procedure iterative pruning.", expected: not_claim}
+  - {sentence: "First, we collected the interview transcripts and removed names.", expected: not_claim}
+  - {sentence: "Next, we discuss the limitations of this design.", expected: not_claim}
+  - {sentence: "We plan to extend the analysis to more languages in future work.", expected: not_claim}
+  - {sentence: "What remains unclear is whether the result holds outside the lab?", expected: not_claim}
+  - {sentence: "Throughout, we write x for the input vector and y for the label.", expected: not_claim}
+  - {sentence: "We split the corpus into training and test sets by author.", expected: not_claim}
+  - {sentence: "This section reviews related work.", expected: not_claim}

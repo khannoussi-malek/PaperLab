@@ -260,6 +260,23 @@ def fake_screening_reply(prompt: str) -> str:
 _FIRST_PASSAGE = re.compile(r"\[1\] \(page [^)]*\) (.*?)(?:\n\n\[2\] |\Z)", re.DOTALL)
 
 
+def fake_claim_check_reply(prompt: str) -> str:
+    """A supported verdict on the fake stack, with the first numbered passage's first words as the quote (so the
+    quote check keeps it); not_addressed when no passage carries text."""
+    passage = _FIRST_PASSAGE.search(prompt)
+    quote = " ".join(passage.group(1).split()[:10]) if passage else ""
+    if len(quote.split()) < 3:
+        return json.dumps({"verdict": "not_addressed", "passage": None, "quote": "", "reason": "Fake: no passage."})
+    return json.dumps({"verdict": "supported", "passage": 1, "quote": quote, "reason": "Fake: the passage says so."})
+
+
+def fake_claim_detect_reply(prompt: str) -> str:
+    """A claim when the sentence has a digit or the word "show"."""
+    sentence = prompt.split("Sentence:\n", 1)[-1]
+    flag = any(c.isdigit() for c in sentence) or "show" in sentence.lower()
+    return json.dumps({"is_claim": flag, "reason": "Fake: a number or 'show'." if flag else "Fake: neither."})
+
+
 def fake_evidence_card_reply(prompt: str) -> str:
     """The evidence-card JSON on the fake stack: the first numbered passage's first words, copied exactly, as the
     research question, design and one finding. The value is the quote itself, so every number in it is in the quote."""
@@ -339,6 +356,8 @@ class FakeLLM:
         from app.core.chat import WORKSPACE_SYSTEM_PROMPT
 
         # Same reason: note_suggestions → core.chat → retrieval → embedding → http_embedders → this module.
+        from app.core.claim_detect import SYSTEM_PROMPT as CLAIM_DETECT_SYSTEM_PROMPT
+        from app.core.claims import SYSTEM_PROMPT as CLAIM_CHECK_SYSTEM_PROMPT
         from app.core.evidence_cards import SYSTEM_PROMPT as EVIDENCE_CARD_SYSTEM_PROMPT
         from app.core.note_suggestions import SYSTEM_PROMPT as NOTE_SUGGESTIONS_SYSTEM_PROMPT
         from app.core.screening_suggest import SYSTEM_PROMPT as SCREENING_SYSTEM_PROMPT
@@ -357,6 +376,10 @@ class FakeLLM:
             tokens = [fake_screening_reply(prompt)]
         elif system == EVIDENCE_CARD_SYSTEM_PROMPT:
             tokens = [fake_evidence_card_reply(prompt)]
+        elif system == CLAIM_CHECK_SYSTEM_PROMPT:
+            tokens = [fake_claim_check_reply(prompt)]
+        elif system == CLAIM_DETECT_SYSTEM_PROMPT:
+            tokens = [fake_claim_detect_reply(prompt)]
         else:
             tokens = FAKE_TOKENS
         for index, token in enumerate(tokens):
