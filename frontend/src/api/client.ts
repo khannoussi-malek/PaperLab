@@ -10,6 +10,7 @@ export type ManuscriptSnapshot = components['schemas']['SnapshotOut']
 export type EvidenceFound = components['schemas']['EvidenceFoundOut']
 export type EvidenceRow = components['schemas']['EvidenceRowOut']
 export type NoteCounts = Record<string, components['schemas']['PaperNoteCounts']>
+export type MissingKey = components['schemas']['MissingKeyOut']
 export type CitablePaper = components['schemas']['CitablePaperOut']
 export type ManuscriptCreate = components['schemas']['ManuscriptCreate']
 export type ManuscriptPatch = components['schemas']['ManuscriptPatch']
@@ -521,6 +522,7 @@ export const api = {
   deleteManuscriptFile: (id: string, path: string) =>
     request<void>(`/api/manuscripts/${id}/files/${manuscriptPath(path)}`, { method: 'DELETE' }),
   manuscriptPapers: (id: string) => request<CitablePaper[]>(`/api/manuscripts/${id}/papers`),
+  missingKeys: (id: string) => request<MissingKey[]>(`/api/manuscripts/${id}/missing-keys`),
   pinPaper: (id: string, paperId: string) => request<{ key: string }>(`/api/manuscripts/${id}/papers/${paperId}/pin`, { method: 'POST' }),
   rankPapers: (id: string, text: string) =>
     request<{ paper_ids: string[] }>(`/api/manuscripts/${id}/papers/rank`, sendJson('POST', { text })),

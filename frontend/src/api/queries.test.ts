@@ -20,6 +20,7 @@ import {
   useSaveManuscriptFile,
   useAddSection,
   useManuscriptPapers,
+  useMissingKeys,
   useNoteCounts,
   usePapersFollowCompile,
   useWorkspaceMutations,
@@ -381,6 +382,17 @@ describe('manuscript hooks', () => {
     result.current.mutate({ id: 'm', path: '../x', text: 'x', base: null })
     await waitFor(() => expect(result.current.isError).toBe(true))
     expect(result.current.error).toBeInstanceOf(ApiError)
+  })
+
+  it('the missing keys refetch when compiled_at changes', async () => {
+    const list = vi.spyOn(api, 'missingKeys').mockResolvedValue([])
+    const { result, rerender } = renderHook(({ at }) => useMissingKeys('m', at), {
+      wrapper: withQueryClient(quiet()),
+      initialProps: { at: 'T1' },
+    })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    rerender({ at: 'T2' })
+    await waitFor(() => expect(list).toHaveBeenCalledTimes(2))
   })
 
   describe('the papers a manuscript can cite', () => {
