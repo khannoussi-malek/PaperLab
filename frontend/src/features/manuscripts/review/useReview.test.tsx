@@ -9,7 +9,7 @@ import { reviewStartError, useCiteProposals, useReview } from './useReview'
 const wrapper = ({ children }: { children: ReactNode }) => (
   <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>{children}</QueryClientProvider>
 )
-const state = (status: string): ReviewState => ({ run: { id: 'r1', status } as ReviewState['run'], items: [], dismissed: [] })
+const state = (status: string, file = 'main.tex'): ReviewState => ({ run: { id: 'r1', status, file } as ReviewState['run'], items: [], dismissed: [] })
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers() })
 
 test('polls while running, stops when done, and on unmount', async () => {
@@ -23,7 +23,7 @@ test('polls while running, stops when done, and on unmount', async () => {
   await act(() => vi.advanceTimersByTimeAsync(10000))
   expect(spy.mock.calls.length).toBe(calls)
 
-  spy.mockResolvedValue(state('running'))
+  spy.mockResolvedValue(state('running', 'other.tex'))
   const second = renderHook(() => useReview('m', 'other.tex'), { wrapper })
   await waitFor(() => expect(second.result.current.run?.status).toBe('running'))
   second.unmount()
@@ -78,4 +78,11 @@ test('no matching paper says so', async () => {
   const { result } = renderHook(() => useCiteProposals('m', 'A claim here.'), { wrapper })
   act(() => result.current.ask())
   await waitFor(() => expect(result.current.message).toBe('No paper in this workspace speaks to this.'))
+})
+
+test("another file's run is not this file's result, but still counts as a check running", async () => {
+  vi.spyOn(api, 'reviewState').mockResolvedValue(state('running', 'main.tex'))
+  const { result } = renderHook(() => useReview('m', 'intro.tex'), { wrapper })
+  await waitFor(() => expect(result.current.anyRun?.status).toBe('running'))
+  expect(result.current.run).toBeNull()
 })
