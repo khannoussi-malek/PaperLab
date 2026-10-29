@@ -68,6 +68,10 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=now, nullable=False),
         sa.CheckConstraint("kind IN ('cited', 'uncited')", name="ck_manuscript_claim_checks_kind"),
         sa.CheckConstraint(
+            "(kind = 'uncited' AND paper_id IS NULL AND cite_key IS NULL) OR (kind = 'cited' AND cite_key IS NOT NULL)",
+            name="ck_manuscript_claim_checks_shape",
+        ),
+        sa.CheckConstraint(
             "status IN ('queued', 'running', 'done', 'failed')", name="ck_manuscript_claim_checks_status"
         ),
     )
@@ -79,9 +83,9 @@ def upgrade() -> None:
         postgresql_where=sa.text("paper_id IS NOT NULL"),
     )
     op.create_index(
-        "uq_manuscript_claim_checks_uncited",
+        "uq_manuscript_claim_checks_unresolved",
         "manuscript_claim_checks",
-        ["manuscript_id", "file_path", "sentence_hash"],
+        ["manuscript_id", "file_path", "sentence_hash", sa.text("COALESCE(cite_key, '')")],
         unique=True,
         postgresql_where=sa.text("paper_id IS NULL"),
     )
