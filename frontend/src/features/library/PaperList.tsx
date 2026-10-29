@@ -273,7 +273,7 @@ export function PaperList({ papers, workspaceId, tagsByPaper, onTagClick, active
                     onPreview={preview}
                     onDelete={onDelete}
                     onMembershipChange={(row, id, member) => membership.mutate({ workspaceId: id, paperIds: [row.id], member })}
-                    onReadingChange={(row, changes) => reading.mutate({ paperId: row.id, changes })}
+                    onReadingChange={(row, changes) => reading.mutate({ paperId: row.id, changes, source: 'library' })}
                   />
                 ))}
               </ul>

@@ -145,6 +145,7 @@ export const keys = {
   libraryGraph: (workspaceId: string | null) => ['graph', workspaceId ?? 'library'] as const,
   // The Notes page's lists: every note, one paper's, or those on no paper.
   allNotes: (paper: string | null) => ['notes', paper ?? 'all'] as const,
+  triageEvents: (paperId: string) => ['papers', paperId, 'triage-events'] as const,
   readingContext: (paperId: string) => ['papers', paperId, 'reading-context'] as const,
   // A prefix of every readingQueue key below (whatever `runId`), like prismaRoot above — small and cheap to
   // invalidate wholesale whenever a screening/import action could change which papers (or priorities) it lists.
@@ -268,17 +269,23 @@ export function useUpdatePaper(paperId: string) {
 export function useSetReading() {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: ({ paperId, changes }: { paperId: string; changes: ReadingIn }) => api.setReading(paperId, changes),
+    mutationFn: ({ paperId, changes, source }: { paperId: string; changes: ReadingIn; source?: 'reader' | 'library' }) =>
+      api.setReading(paperId, changes, source),
     onSuccess: (paper, { paperId }) => {
       client.setQueryData(keys.paper(paperId), paper)
       return Promise.all([
         client.invalidateQueries({ queryKey: keys.papers, exact: true }),
         client.invalidateQueries({ queryKey: keys.workspaces }),
         client.invalidateQueries({ queryKey: keys.graph }),
+        client.invalidateQueries({ queryKey: keys.triageEvents(paperId) }),
       ])
     },
   })
 }
+
+/** A paper's reading history; `enabled` keeps a closed popover from fetching. */
+export const useTriageEvents = (paperId: string, enabled: boolean) =>
+  useQuery({ queryKey: keys.triageEvents(paperId), queryFn: () => api.triageEvents(paperId), enabled })
 
 /** Uploads PDFs one by one; with a `workspaceId` (a workspace's Papers tab) each also joins that workspace. */
 export function useUploadPapers(workspaceId?: string) {

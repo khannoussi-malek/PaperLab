@@ -11,6 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { ErrorAlert } from '@/features/library/ErrorAlert'
 import { cn } from '@/lib/utils'
+import { ReadingHistory } from './ReadingHistory'
 import { LEVELS, nextPass, readingChip, TRIAGES, UNDECIDED_LABEL, type Triage } from './passes'
 
 type Props = {
@@ -152,6 +153,7 @@ export function ReadingControl({ paper, onOpenReferences }: Props) {
         ) : (
           <p className="text-sm">You’ve finished all three passes.</p>
         )}
+        <ReadingHistory paperId={paper.id} enabled={open} />
         <p className="mt-3 text-xs text-muted-foreground">Only you set this. PaperLab never marks a pass for you.</p>
       </PopoverContent>
     </Popover>
