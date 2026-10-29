@@ -97,3 +97,29 @@ it('departing renders an inert clone for 220 ms and a second commit is never hel
   act(() => { vi.advanceTimersByTime(220) })
   expect(document.querySelector('[data-triage-departing]')).toBeNull()
 })
+
+it('two departures 50 ms apart are two clones, each gone 220 ms after its own start', () => {
+  const { rerender } = render(<DeskStage {...base} />)
+  rerender(<DeskStage {...base} departing={{ pile: 'skim' }} />)
+  act(() => { vi.advanceTimersByTime(50) })
+  rerender(<DeskStage {...base} departing={{ pile: 'later' }} />)
+  expect(document.querySelectorAll('[data-triage-departing]')).toHaveLength(2)
+  act(() => { vi.advanceTimersByTime(170) })
+  expect(document.querySelectorAll('[data-triage-departing]')).toHaveLength(1)
+  act(() => { vi.advanceTimersByTime(50) })
+  expect(document.querySelectorAll('[data-triage-departing]')).toHaveLength(0)
+})
+
+it('a reset to null or a reduced flip mid-flight still removes the clone', () => {
+  const { rerender } = render(<DeskStage {...base} />)
+  rerender(<DeskStage {...base} departing={{ pile: 'skim' }} />)
+  rerender(<DeskStage {...base} departing={null} reduced />)
+  act(() => { vi.advanceTimersByTime(220) })
+  expect(document.querySelector('[data-triage-departing]')).toBeNull()
+})
+
+it('the clone sits in the light paper scope', () => {
+  const { rerender } = render(<DeskStage {...base} />)
+  rerender(<DeskStage {...base} departing={{ pile: 'skim' }} />)
+  expect(document.querySelector('[data-triage-departing]')).toHaveClass('paper-surface')
+})

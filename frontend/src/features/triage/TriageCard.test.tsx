@@ -110,3 +110,9 @@ it('has no Show in PDF button unless asked, and passes the page when it is', asy
   ;(await screen.findByRole('button', { name: /Show in PDF/ })).click()
   expect(onShow).toHaveBeenCalledWith(9)
 })
+
+it('sits in the light paper scope in both themes', () => {
+  withSections([])
+  show(mk())
+  expect(screen.getByRole('group', { name: 'Attention' })).toHaveClass('paper-surface')
+})

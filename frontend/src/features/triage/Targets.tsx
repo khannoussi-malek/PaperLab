@@ -41,7 +41,7 @@ export function Targets({ counts, layout, active, onCommit }: Props) {
           >
             <Icon aria-hidden className="size-4" />
             <span>{label}</span>
-            <b aria-hidden className="min-w-4 text-right tabular-nums">{counts[pile]}</b>
+            <b className="min-w-4 text-right tabular-nums">{counts[pile]}</b>
           </button>
         )
       })}

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Paper } from '@/api/client'
 import { cn } from '@/lib/utils'
 import type { DeskLayout } from './layout'
@@ -33,11 +33,11 @@ type Props = {
   reduced: boolean
 }
 
-const PAPER = 'border-[#e6dfcc] bg-[#fbf8f0] text-stone-800'
+const PAPER = 'paper-surface border-[#e6dfcc]'
 const DOTS =
   'bg-muted bg-[radial-gradient(circle_at_1px_1px,color-mix(in_srgb,var(--muted-foreground)_22%,transparent)_1px,transparent_0)] bg-[length:18px_18px]'
 
-function Clone({ item }: { item: Departing & { id: number } }) {
+function Clone({ item, onDone }: { item: Departing & { id: number }; onDone: (id: number) => void }) {
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const dir = PILES[item.pile].target
@@ -46,14 +46,17 @@ function Clone({ item }: { item: Departing & { id: number } }) {
       [{ transform: 'none', opacity: 1 }, { transform: dir ? OUT[dir] : 'translateY(-40px)', opacity: 0 }],
       { duration: DEPARTURE_MS, easing: 'ease-out', fill: 'forwards' },
     )
-  }, [item.pile])
+    // each clone owns its removal: later departures, resets or a reduced flip never cancel it
+    const t = setTimeout(() => onDone(item.id), DEPARTURE_MS)
+    return () => clearTimeout(t)
+  }, [item.pile, item.id, onDone])
   return (
     <div
       ref={ref}
       data-triage-departing={item.pile}
       aria-hidden="true"
       inert
-      className={cn('pointer-events-none absolute inset-x-0 top-0 z-30 rounded-xl border p-6 font-serif text-xl font-semibold shadow-xl', PAPER)}
+      className={cn('paper-surface pointer-events-none absolute inset-x-0 top-0 z-30 rounded-xl border border-[#e6dfcc] p-6 font-heading text-xl font-semibold shadow-xl')}
     >
       {item.paper?.title}
     </div>
@@ -68,13 +71,13 @@ export function DeskStage({ top, behind, counts, layout, hot, hovering, departin
   const seq = useRef(0)
   const single = layout === 'single'
 
+  const handled = useRef<Departing | null>(null)
   useEffect(() => {
-    if (!departing || reduced) return
-    const id = ++seq.current
-    setClones((c) => [...c, { ...departing, id }])
-    const t = setTimeout(() => setClones((c) => c.filter((x) => x.id !== id)), DEPARTURE_MS)
-    return () => clearTimeout(t)
+    if (!departing || reduced || handled.current === departing) return
+    handled.current = departing // StrictMode runs effects twice: one departure, one clone
+    setClones((c) => [...c, { ...departing, id: ++seq.current }])
   }, [departing, reduced])
+  const drop = useCallback((id: number) => setClones((c) => c.filter((x) => x.id !== id)), [])
 
   useCardDrag(cardRef, {
     enabled: !single,
@@ -122,7 +125,7 @@ export function DeskStage({ top, behind, counts, layout, hot, hovering, departin
               data-triage-stamp
               aria-hidden="true"
               className={cn(
-                'pointer-events-none absolute right-4 top-4 rounded-md border-2 border-primary bg-[#fbf8f0] px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider text-primary',
+                'pointer-events-none absolute right-4 top-4 rounded-md border-2 border-primary bg-paper px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider text-primary',
                 !reduced && 'rotate-[8deg] motion-safe:animate-in motion-safe:fade-in motion-safe:duration-150',
               )}
             >
@@ -130,7 +133,7 @@ export function DeskStage({ top, behind, counts, layout, hot, hovering, departin
             </span>
           )}
         </div>
-        {clones.map((c) => <Clone key={c.id} item={c} />)}
+        {clones.map((c) => <Clone key={c.id} item={c} onDone={drop} />)}
       </div>
     </div>
   )
