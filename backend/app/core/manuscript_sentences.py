@@ -131,6 +131,9 @@ def _mask(text: str) -> str:
     return "".join(chars)
 
 
+LOOKBACK = 64  # the last word before a period is never longer than this
+
+
 def _chunk_ends(chunk: str):
     """Yield the (exclusive) end offset of each sentence in a chunk free of blank lines and boundaries."""
     for m in re.finditer(r"[.?!]", chunk):
@@ -139,7 +142,7 @@ def _chunk_ends(chunk: str):
             i += len(c)
         if i < len(chunk) and not chunk[i].isspace():
             continue
-        word = LAST_WORD.search(chunk[: m.start()]) if m.group() == "." else None
+        word = LAST_WORD.search(chunk, max(0, m.start() - LOOKBACK), m.start()) if m.group() == "." else None
         word = word.group() if word else ""
         if word in ABBREVIATIONS or (len(word) == 1 and word.isupper()):
             continue
@@ -195,3 +198,8 @@ def cite_spans(text: str) -> list[tuple[str, int]]:
         for key in m.group(1).split(",")
         if key.strip()
     ]
+
+
+def normalize_newlines(text: str) -> str:
+    """CRLF and lone CR become LF, as in the editor's buffer, so offsets and line numbers agree."""
+    return text.replace("\r\n", "\n").replace("\r", "\n")

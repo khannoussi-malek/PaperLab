@@ -446,3 +446,16 @@ async def test_over_long_uncited_sentences_take_no_classify_slot(session):
     _, _, m = await doc(session, lambda k: f"{long} {short}", "Alpha")
     run = await go(session, m)
     assert run["uncited_skipped"] == 0 and run["total"] == 31
+
+
+async def test_crlf_file_starts_with_the_same_rows_as_its_lf_twin(session):
+    _, keys, m = await doc(session, basic, "Alpha", "Beta")
+    lf = (await manuscripts.read(session, m.id, "main.tex")).text
+    twin = lf.replace(". ", ".\r\n\r\n")
+    await manuscripts.upsert_text(session, m.id, "main.tex", twin)
+    await go(session, m)
+    crlf_rows = [(r.sentence_hash, r.kind) for r in await rows(session, m.id)]
+    await session.execute(update(ManuscriptReviewRun).values(status="done"))
+    await manuscripts.upsert_text(session, m.id, "main.tex", twin.replace("\r\n", "\n"))
+    await go(session, m)
+    assert [(r.sentence_hash, r.kind) for r in await rows(session, m.id)] == crlf_rows

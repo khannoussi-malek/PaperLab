@@ -2,6 +2,7 @@
 cited paper) and one per uncited sentence, and report progress. app.workers.manuscript_review judges them one at a time.
 The reviewer only judges: no response carries wording for the researcher's text (D118)."""
 
+import asyncio
 import logging
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -13,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import llm_connections, manuscript_papers, manuscripts, queue
 from app.core import manuscript_paths as paths
 from app.core.errors import Conflict, InvalidInput, NotFound
-from app.core.manuscript_sentences import Sentence, in_range, split_sentences
+from app.core.manuscript_sentences import Sentence, in_range, normalize_newlines, split_sentences
 from app.models import (
     ManuscriptClaimCheck,
     ManuscriptClaimDismissal,
@@ -131,9 +132,10 @@ async def start(
         raise Conflict("file_changed", updated_at=source.updated_at)
     if _live(await _latest(session, mid)):
         raise Conflict("review_running")
-    sentences = split_sentences(source.text)
+    source_text = normalize_newlines(source.text)  # the editor's buffer is always \n
+    sentences = await asyncio.to_thread(split_sentences, source_text)
     if selection is not None:  # UTF-16 offsets in, as the editor counts them; the splitter counts code points
-        selection = (from_utf16(source.text, selection[0]), from_utf16(source.text, selection[1]))
+        selection = (from_utf16(source_text, selection[0]), from_utf16(source_text, selection[1]))
     targets = sentences if selection is None else in_range(sentences, *selection)
     papers = {p["key"]: p["paper_id"] for p in await manuscript_papers.list_papers(session, mid)}
     rows, skipped = plan(targets, papers, include_uncited)

@@ -77,3 +77,9 @@ async def test_route(client, session):
     import uuid
 
     assert (await client.get(f"/api/manuscripts/{uuid.uuid4()}/missing-keys")).status_code == 404
+
+
+async def test_crlf_files_report_the_editors_line_numbers(session):
+    _, _, m = await setup(session, "Deep learning")
+    await put(session, m, "main.tex", "Hi.\r\n\r\nSee \\cite{nowhere}.\r\n")
+    assert await missing_keys(session, m.id) == [{"key": "nowhere", "file": "main.tex", "line": 3}]

@@ -106,3 +106,22 @@ def test_emph_at_sentence_end_and_range_boundary():
     text = "First sentence is right here. Second sentence is right there."
     sents = split_sentences(text)
     assert [x.raw[:5] for x in in_range(sents, sents[0].end, sents[0].end)] == ["First"]
+
+
+def test_one_long_paragraph_splits_in_linear_time():
+    import time
+
+    text = "This is a sentence about retrieval and long papers. " * 4000  # ~200 KB, no blank line
+    t0 = time.perf_counter()
+    assert len(split_sentences(text)) == 4000
+    assert time.perf_counter() - t0 < 2
+
+
+def test_crlf_text_gives_the_same_sentences_once_normalised():
+    from app.core.manuscript_sentences import normalize_newlines
+
+    crlf = TEX.replace("\n", "\r\n")
+    assert [(s.start, s.end, s.hash) for s in split_sentences(normalize_newlines(crlf))] == [
+        (s.start, s.end, s.hash) for s in split_sentences(TEX)
+    ]
+    assert normalize_newlines("a\rb\r\nc") == "a\nb\nc"

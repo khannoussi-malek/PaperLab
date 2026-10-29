@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import manuscripts
 from app.core.manuscript_bib import key_state
 from app.core.manuscript_paths import RESERVED
-from app.core.manuscript_sentences import cite_spans
+from app.core.manuscript_sentences import cite_spans, normalize_newlines
 from app.models import ManuscriptFile
 
 ENTRY = re.compile(r"^\s*@(\w+)\s*\{\s*([^,\s]+)\s*,", re.MULTILINE)
@@ -24,7 +24,7 @@ async def missing_keys(session: AsyncSession, mid: uuid.UUID) -> list[dict]:
         .where(ManuscriptFile.manuscript_id == mid, ManuscriptFile.text.is_not(None))
         .order_by(ManuscriptFile.path)
     )
-    files = [(path, text) for path, text in await session.execute(query)]
+    files = [(path, normalize_newlines(text)) for path, text in await session.execute(query)]
     _, rows, _, generated = await key_state(session, manuscript)
     known = set(generated) | set(rows)
     for path, text in files:
