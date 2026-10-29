@@ -10,7 +10,7 @@ afterEach(() => { cleanup(); vi.restoreAllMocks() })
 const SUMMARY = { per_pile: { read_closely: 12, skim: 20, later: 8, not_relevant: 6 }, skipped: 3, card_ms: 14 * 60_000 + 20_000, pdf_opened: 31, decided: 46 }
 function show(over = {}) {
   vi.spyOn(api, 'triageSummary').mockResolvedValue(SUMMARY as never)
-  const p = { sessionId: 's1', skipped: 3, canReviewSkipped: true, newSince: 0, undo: { label: "Skim 'Lewis 2020'", count: 2 }, onUndo: vi.fn(), onReviewSkipped: vi.fn(), onShowKept: vi.fn(), onAddNew: vi.fn(), onBack: vi.fn(), ...over }
+  const p = { sessionId: 's1', skipped: 3, canReviewSkipped: true, newSince: 0, undo: { label: "Skim 'Lewis 2020'", count: 2 }, onUndo: vi.fn(), onReviewSkipped: vi.fn(), onShowKept: vi.fn(), onAddNew: vi.fn(), onStartOver: vi.fn(), onBack: vi.fn(), ...over }
   render(<QueryClientProvider client={new QueryClient()}><TriageDone {...p} /></QueryClientProvider>)
   return p
 }
@@ -27,8 +27,6 @@ it('reports the session in the piles\' own words, with the time and the PDF fact
 })
 
 it('offers Review the skipped only when any, and disables it while a write is pending', () => {
-  const { unmount } = render(<div />)
-  unmount()
   const p = show()
   fireEvent.click(screen.getByRole('button', { name: 'Review the skipped (3)' }))
   expect(p.onReviewSkipped).toHaveBeenCalled()

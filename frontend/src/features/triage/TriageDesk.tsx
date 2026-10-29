@@ -57,7 +57,7 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
   const [includeDecided, setInclude] = useState(false)
   // The chips belong to the card they opened on: another top card (an undo, a failed save) closes them.
   const [reasonsFor, setReasonsFor] = useState<string | null>(null)
-  const [rowNote, setRowNote] = useState('')
+  const [held, setHeld] = useState<Pile | null>(null)
   const [helpOpen, setHelpOpen] = useState(false)
   const [departing, setDeparting] = useState<{ pile: Pile; paper: Paper } | null>(null)
   const [clock] = useState(() => new CardClock())
@@ -96,7 +96,6 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
   const go = (pile: Pile, reason?: string, note?: string) => {
     if (!top) return
     setReasons(false)
-    setRowNote('')
     setDeparting({ pile, paper: top })
     session.decide(pile, { reason, note, clock: clock.read() })
     focusRoot()
@@ -106,13 +105,11 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
     if (!top) return
     if (pile !== 'not_relevant') return go(pile)
     setReasons(true)
-    setRowNote(say.reasonRow())
     focusRoot()
   }
-  const cancelReason = () => { setReasons(false); setRowNote(''); focusRoot() }
+  const cancelReason = () => { setReasons(false); focusRoot() }
   const undo = () => {
     setReasons(false)
-    setRowNote('')
     session.undo()
     focusRoot()
   }
@@ -120,6 +117,7 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
     reasonsShowing: reasons,
     helpOpen,
     onPile: choose,
+    onHold: setHeld,
     onReason: (n) => root.current?.querySelectorAll<HTMLElement>('[data-reason-chip]')[n - 1]?.click(),
     cancelReason,
     closeHelp: () => setHelpOpen(false),
@@ -129,6 +127,10 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
     openHelp: () => setHelpOpen(true),
     focusAbstract: () => root.current?.querySelector<HTMLElement>('[aria-label="Abstract"]')?.focus(),
   })
+
+  // A done-screen button unmounts with its action: the keys must keep working, so focus goes to the desk.
+  const keepFocus = (f: () => void) => () => { f(); focusRoot() }
+  const startOver = () => { setReasons(false); session.startOver() }
 
   const last = state.done.at(-1)
   const lastPaper = last && library.find((p) => p.id === last.id)
@@ -155,9 +157,10 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
         onOrder={changeOrder}
         onIncludeDecided={toggleInclude}
         onExit={exit}
+        onStartOver={empty || finished ? undefined : keepFocus(startOver)}
       />
       <ShortcutHelp open={helpOpen} onOpenChange={setHelpOpen} />
-      <DeskStatus announcement={rowNote || session.announcement} alert={session.alert} />
+      <DeskStatus announcement={reasons ? say.reasonRow() : session.announcement} alert={session.alert} />
       {empty ? (
         <TriageEmpty canInclude={!includeDecided} onInclude={() => toggleInclude(true)} onBack={exit} />
       ) : finished ? (
@@ -168,9 +171,10 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
           newSince={newSince(state, papers, { includeDecided })}
           undo={undoInfo}
           onUndo={undo}
-          onReviewSkipped={session.reviewSkipped}
-          onShowKept={onShowKept}
-          onAddNew={session.addNew}
+          onReviewSkipped={keepFocus(session.reviewSkipped)}
+          onShowKept={keepFocus(onShowKept)}
+          onAddNew={keepFocus(session.addNew)}
+          onStartOver={keepFocus(startOver)}
           onBack={exit}
         />
       ) : top ? (
@@ -181,7 +185,7 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
               behind={state.unseen.slice(1, 3).flatMap((id) => library.find((p) => p.id === id) ?? [])}
               counts={countsByPile(state)}
               layout={layout}
-              hot={null}
+              hot={held ?? (reasons ? 'not_relevant' : null)}
               hovering={reasons ? 'not_relevant' : null}
               departing={departing}
               onCommit={choose}

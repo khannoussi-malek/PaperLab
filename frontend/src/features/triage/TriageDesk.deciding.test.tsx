@@ -207,3 +207,70 @@ it('the done screen reports the session, Undo brings the last card back and Revi
   expect(title()).toBe('Middle')
   expect(onExit).not.toHaveBeenCalled()
 })
+
+const clickReal = (el: HTMLElement) => { el.focus(); fireEvent.click(el) }
+const finish = async (root: Element) => {
+  key(root, '1'); key(root, ' '); key(root, '2')
+  await screen.findByText('That is the whole stack.')
+}
+
+it('Start over from the done screen opens a new session and a fresh stack without resending decisions', async () => {
+  const { root } = setup()
+  const first = sessionStorage.getItem('paperlab-triage-session:library')
+  await finish(root)
+  await waitFor(() => expect(decide).toHaveBeenCalledTimes(3))
+  clickReal(screen.getByRole('button', { name: 'Start over' }))
+  const second = sessionStorage.getItem('paperlab-triage-session:library')
+  expect(second).not.toBeNull()
+  expect(second).not.toBe(first)
+  expect(decided()).toBe('0')
+  expect(screen.getByText(/Triage · your library · 3 left of 3/)).toBeInTheDocument()
+  expect(title()).toBe('Old one')
+  expect(decide).toHaveBeenCalledTimes(3)
+  key(document.activeElement!, '1')
+  await waitFor(() => expect(decide).toHaveBeenCalledTimes(4))
+  expect((decide.mock.calls[3][1] as { session_id: string }).session_id).toBe(second)
+})
+
+it('the bar offers Start over while cards are left', () => {
+  setup()
+  key(screen.getByRole('group', { name: 'Triage' }), '1')
+  fireEvent.click(screen.getByRole('button', { name: 'Start over' }))
+  expect(decided()).toBe('0')
+})
+
+it('after Review the skipped, Show kept and Start over a key sent to the active element is handled', async () => {
+  const { root } = setup()
+  await finish(root)
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Review the skipped (1)' })).toBeEnabled())
+  clickReal(screen.getByRole('button', { name: 'Review the skipped (1)' }))
+  expect(document.activeElement).toBe(root)
+  key(document.activeElement!, '3')
+  await waitFor(() => expect(decide).toHaveBeenCalledTimes(4))
+  clickReal(await screen.findByRole('button', { name: 'Show kept papers in the list' }))
+  expect(document.activeElement).toBe(root)
+  clickReal(screen.getByRole('button', { name: 'Start over' }))
+  expect(document.activeElement).toBe(root)
+  key(document.activeElement!, '2')
+  expect(title()).toBe('Middle')
+})
+
+it('a held pile key shows its stamp and lights nothing else; keyup and blur clear it', () => {
+  const { root } = setup()
+  expect(document.querySelector('[data-triage-stamp]')).toBeNull()
+  key(root, '4')
+  expect(document.querySelector('[data-triage-stamp]')).toHaveTextContent('Not relevant')
+  fireEvent.keyUp(root, { key: '4' })
+  // chips are showing: the stamp and the target stay
+  expect(document.querySelector('[data-triage-stamp]')).toHaveTextContent('Not relevant')
+  key(root, 'Escape')
+  expect(document.querySelector('[data-triage-stamp]')).toBeNull()
+  key(root, 'ArrowRight')
+  expect(document.querySelector('[data-triage-stamp]')).toHaveTextContent('Read closely')
+  fireEvent.keyUp(root, { key: 'ArrowRight' })
+  expect(document.querySelector('[data-triage-stamp]')).toBeNull()
+  key(root, '2')
+  expect(document.querySelector('[data-triage-stamp]')).toHaveTextContent('Skim')
+  fireEvent.blur(window)
+  expect(document.querySelector('[data-triage-stamp]')).toBeNull()
+})
