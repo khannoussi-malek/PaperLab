@@ -35,7 +35,7 @@ export function useCardDrag(ref: RefObject<HTMLElement | null>, opts: Opts) {
       start = null
       moved = false
       document.body.style.userSelect = prevSelect
-      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('keydown', onKey, true)
     }
     const cancel = () => {
       end()
@@ -43,7 +43,8 @@ export function useCardDrag(ref: RefObject<HTMLElement | null>, opts: Opts) {
       latest.current.onCancel()
     }
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') cancel()
+      // capture + stop: Esc ends the drag only, the desk's own Esc (leave) must not also fire
+      if (e.key === 'Escape') { e.stopPropagation(); cancel() }
     }
     const onDown = (e: PointerEvent) => {
       if (e.button !== 0 || start || (e.target as Element).closest(NO_DRAG)) return
@@ -52,7 +53,7 @@ export function useCardDrag(ref: RefObject<HTMLElement | null>, opts: Opts) {
       el.style.transition = 'none'
       prevSelect = document.body.style.userSelect
       document.body.style.userSelect = 'none'
-      window.addEventListener('keydown', onKey)
+      window.addEventListener('keydown', onKey, true)
     }
     const onMove = (e: PointerEvent) => {
       if (!start || e.pointerId !== start.id) return
@@ -80,7 +81,7 @@ export function useCardDrag(ref: RefObject<HTMLElement | null>, opts: Opts) {
       el.removeEventListener('pointermove', onMove)
       el.removeEventListener('pointerup', onUp)
       el.removeEventListener('pointercancel', cancel)
-      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('keydown', onKey, true)
       if (start) document.body.style.userSelect = prevSelect
     }
   }, [ref, enabled])
