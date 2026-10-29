@@ -1,0 +1,30 @@
+\documentclass{article}
+\usepackage{amsmath}
+\title{A sample with many hazards in the preamble.}
+\begin{document}
+\maketitle
+\begin{abstract}
+We study retrieval for long papers and report gains.
+\end{abstract}
+\section{Introduction. Not a sentence at all here}
+Smith et al. (2020) show that dense retrieval beats keyword search \citep{smith2020}.
+Fig.~3 shows the main effect of chunk size on recall \citep{a,b}.
+The gap is significant when p < 0.05. Another claim holds e.g.\ this one \citet{lee19}.
+% A hidden comment with \cite{ghost} inside it that is ignored.
+This sentence spans
+two lines and is cited \citep{span}.
+\begin{equation}
+  E = mc^2. And more stuff.
+\end{equation}
+\begin{itemize}
+\item First item says something quite useful here
+\item Second item is also a full sentence \citep{item2}.
+\end{itemize}
+A paragraph ends at the blank line without any period
+
+Short one.
+\begin{figure}
+\caption{A caption that must never become a sentence.}
+\end{figure}
+Dr. Jones reports 100\% accuracy at 0.95 confidence level.
+\end{document}
