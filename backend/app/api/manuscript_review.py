@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 
 from fastapi import APIRouter, Query, Response
@@ -34,7 +35,7 @@ async def review_state(manuscript_id: uuid.UUID, session: SessionDep, file: str 
 @router.post(BASE + "/locate")
 async def locate(manuscript_id: uuid.UUID, body: LocateIn, session: SessionDep) -> LocateOut:
     await manuscripts.get(session, manuscript_id)
-    return LocateOut(sentences=review.locate(body.text))
+    return LocateOut(sentences=await asyncio.to_thread(review.locate, body.text))
 
 
 @router.post(BASE + "/{run_id}/cancel")
