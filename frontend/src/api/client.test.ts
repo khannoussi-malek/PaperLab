@@ -189,4 +189,23 @@ describe('paper deck calls', () => {
       ['/api/manuscripts/m/papers/rank', 'POST', JSON.stringify({ text: 'some text' })],
     ])
   })
+
+  it('starts, reads, cancels, locates and dismisses through the review routes', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response('{}'))
+    await api.startReview('m', { file: 'a b.tex', base: 'b', from: 1, to: 2 })
+    await api.reviewState('m', 'a b.tex')
+    await api.cancelReview('m', 'r')
+    await api.locateSentences('m', 'x')
+    await api.dismissClaim('m', 'h')
+    await api.restoreClaim('m', 'h')
+    const calls = fetchMock.mock.calls.map((c) => [c[0], (c[1] as RequestInit | undefined)?.method])
+    expect(calls).toEqual([
+      ['/api/manuscripts/m/review', 'POST'],
+      ['/api/manuscripts/m/review?file=a%20b.tex', undefined],
+      ['/api/manuscripts/m/review/r/cancel', 'POST'],
+      ['/api/manuscripts/m/review/locate', 'POST'],
+      ['/api/manuscripts/m/review/dismissals/h', 'PUT'],
+      ['/api/manuscripts/m/review/dismissals/h', 'DELETE'],
+    ])
+  })
 })
