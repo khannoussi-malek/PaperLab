@@ -28,6 +28,7 @@ from app.api import (
     llm,
     notes,
     papers,
+    triage,
     workspaces,
 )
 from app.api import citations as citations_api
@@ -105,6 +106,7 @@ def create_app() -> FastAPI:
     app = FastAPI(title="PaperLab", lifespan=lifespan)
     app.include_router(health.router)
     app.include_router(papers.router)
+    app.include_router(triage.router)
     app.include_router(lenses.router)
     app.include_router(briefs.router)
     app.include_router(reading_bridge_api.router)
@@ -134,7 +136,7 @@ def create_app() -> FastAPI:
     async def domain_error(_: Request, exc: DomainError) -> JSONResponse:
         # no_free_pdf says what it tried and where a free copy may be (M63)
         extra = {key: exc.details[key] for key in ("tried", "free_copies") if key in exc.details}
-        for key in ("path", "limit", "count"):  # manuscript errors name the file and the cap (M27a)
+        for key in ("path", "limit", "count", "allowed", "max"):  # extras: manuscript file and cap (M27a), allowed/max
             if key in exc.details:
                 extra[key] = exc.details[key]
         if "updated_at" in exc.details:  # file_changed: the file's clock; pydantic's UTC form (Z) matches the bodies

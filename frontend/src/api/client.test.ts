@@ -209,3 +209,28 @@ describe('paper deck calls', () => {
     ])
   })
 })
+
+describe('api.setReading and api.triageEvents', () => {
+  afterEach(() => vi.unstubAllGlobals())
+  const stub = () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ events: [{ id: 'e1' }] }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    return fetchMock
+  }
+  const headers = (m: ReturnType<typeof stub>) => (m.mock.calls[0][1] as RequestInit).headers as Record<string, string>
+
+  it('sends X-PaperLab-Source only when a source is given', async () => {
+    const m = stub()
+    await api.setReading('p1', { triage: 'keep' }, 'library')
+    expect(headers(m)['X-PaperLab-Source']).toBe('library')
+    const n = stub()
+    await api.setReading('p1', { triage: 'keep' })
+    expect(headers(n)).not.toHaveProperty('X-PaperLab-Source')
+  })
+
+  it('unwraps the events list', async () => {
+    const m = stub()
+    expect(await api.triageEvents('p1')).toEqual([{ id: 'e1' }])
+    expect(m.mock.calls[0][0]).toBe('/api/papers/p1/triage-events')
+  })
+})

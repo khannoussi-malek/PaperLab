@@ -22,6 +22,7 @@ export type ManuscriptPatch = components['schemas']['ManuscriptPatch']
 export type Paper = components['schemas']['PaperOut']
 export type PaperUpdate = components['schemas']['PaperUpdate']
 export type ReadingIn = components['schemas']['ReadingIn']
+export type TriageEvent = components['schemas']['TriageEventOut']
 export type EvidenceCard = components['schemas']['CardOut']
 export type EvidenceCardRow = components['schemas']['CardRowOut']
 export type EvidenceChange = components['schemas']['EditIn']['changes'][number]
@@ -296,8 +297,13 @@ export const api = {
   },
   updatePaper: (id: string, update: PaperUpdate) => request<Paper>(`/api/papers/${id}`, sendJson('PATCH', update)),
   /** The reader's own record (D118, D119): passes finished, keep/later/drop, or both. A field left out keeps its
-   * value. 422 for an out-of-range pass, an unknown decision, or an empty body. */
-  setReading: (id: string, changes: ReadingIn) => request<Paper>(`/api/papers/${id}/reading`, sendJson('PUT', changes)),
+   * value. 422 for an out-of-range pass, an unknown decision, or an empty body. `source` names where the change came
+   * from (`reader` is the server's default, `library` the row menu). */
+  setReading: (id: string, changes: ReadingIn, source?: 'reader' | 'library') => {
+    const init = sendJson('PUT', changes)
+    return request<Paper>(`/api/papers/${id}/reading`, source ? { ...init, headers: { ...init.headers, 'X-PaperLab-Source': source } } : init)
+  },
+  triageEvents: async (id: string) => (await request<{ events: TriageEvent[] }>(`/api/papers/${id}/triage-events`)).events,
   deletePaper: (id: string) => request<void>(`/api/papers/${id}`, { method: 'DELETE' }),
   /** Attaches `file` to a paper saved without a PDF; it then ingests. 409 already_has_pdf, 422 not_a_pdf / pdf_too_large. */
   uploadPaperPdf: (id: string, file: File) => {

@@ -1,7 +1,7 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Form, Request, Response, UploadFile
+from fastapi import APIRouter, Form, Header, Request, Response, UploadFile
 from fastapi.responses import FileResponse
 
 from app.api.deps import DiscoveryDep, SessionDep
@@ -98,10 +98,16 @@ async def correct_paper(paper_id: uuid.UUID, payload: PaperUpdate, request: Requ
 
 
 @router.put("/{paper_id}/reading")
-async def set_reading(paper_id: uuid.UUID, payload: ReadingIn, session: SessionDep) -> PaperOut:
+async def set_reading(
+    paper_id: uuid.UUID,
+    payload: ReadingIn,
+    session: SessionDep,
+    x_paperlab_source: Annotated[str, Header()] = "reader",
+) -> PaperOut:
     """The reader's passes finished and decision (D119). Only the fields sent change. 404 unknown paper; 422 for an
-    empty body, a level outside 0–3, a null level, an unknown decision or any other field."""
-    return await papers.set_reading(session, paper_id, payload.model_dump(exclude_unset=True))
+    empty body, a level outside 0–3, a null level, an unknown decision or any other field. The optional
+    X-PaperLab-Source header (reader, library) says where the change came from; any other value is 422."""
+    return await papers.set_reading(session, paper_id, payload.model_dump(exclude_unset=True), source=x_paperlab_source)
 
 
 @router.delete("/{paper_id}", status_code=204)

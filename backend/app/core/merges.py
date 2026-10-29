@@ -126,6 +126,7 @@ STEPS = (
     # a check is "the same" by sentence alone: the unique index has no cite_key, so a different key would collide
     _union("manuscript_claim_checks", ["manuscript_id", "file_path", "sentence_hash"]),
     _move("paper_events"),  # M's history (R21) is K's now
+    _move("triage_events"),  # and so are M's reading decisions
 )
 _AWAITING = (
     "SELECT count(*) FROM workspace_search_hits WHERE paper_id IN (:k, :m) AND acquisition_status = 'awaiting_pdf'"
