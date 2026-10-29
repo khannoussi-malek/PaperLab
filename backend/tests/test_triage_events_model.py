@@ -39,7 +39,6 @@ async def refuses(session, paper_id, **over):
 async def test_a_desk_drop_needs_a_reason(session):
     p = await paper(session)
     await refuses(session, p, pile="not_relevant")
-    await event(session, p, pile="not_relevant", source="reader")
     await event(session, p, pile="not_relevant", reason="off topic")
     await event(session, p)
 
@@ -94,3 +93,11 @@ async def test_deleting_a_paper_removes_its_events_and_undo_pair(session):
         await session.execute(text("SELECT count(*) FROM triage_events WHERE paper_id = :p"), {"p": p})
     ).scalar_one()
     assert left == 0
+
+
+async def test_the_pile_goes_with_the_desk(session):
+    p = await paper(session)
+    await refuses(session, p, pile=None)
+    await refuses(session, p, source="reader")
+    await refuses(session, p, source="library")
+    await event(session, p, source="reader", pile=None)

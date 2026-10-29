@@ -141,8 +141,7 @@ async def seed_both(session):
         "VALUES (:m, 'desk', 'skim', 0, 1, gen_random_uuid(), gen_random_uuid()) RETURNING id, paper_id) "
         "INSERT INTO triage_events (paper_id, source, before_pass, after_pass, undone_event_id) "
         "SELECT paper_id, 'undo', 1, 0, id FROM e",
-        "INSERT INTO triage_events (paper_id, source, pile, before_pass, after_pass) "
-        "VALUES (:m, 'reader', 'skim', 0, 1)",
+        "INSERT INTO triage_events (paper_id, source, before_pass, after_pass) VALUES (:m, 'reader', 0, 1)",
         "INSERT INTO section_role_overrides (paper_id, section_title, role) VALUES (:m, '2 Method', 'conclusion')",
         "INSERT INTO section_role_overrides (paper_id, section_title, role) VALUES (:k, '1 Introduction', 'intro')",
         "INSERT INTO section_role_overrides (paper_id, section_title, role) VALUES (:m, '1 Introduction', 'abstract')",

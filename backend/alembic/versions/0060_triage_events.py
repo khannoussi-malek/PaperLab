@@ -37,7 +37,9 @@ def upgrade() -> None:
         sa.Column("pdf_ms", sa.Integer(), nullable=True),
         sa.Column("card_ms", sa.Integer(), nullable=True),
         sa.Column("undone_event_id", UUID(as_uuid=True), sa.ForeignKey("triage_events.id"), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.text("clock_timestamp()"), nullable=False
+        ),
         sa.CheckConstraint("source IN ('desk', 'reader', 'library', 'undo')", name="ck_triage_events_source"),
         sa.CheckConstraint(
             "pile IN ('read_closely', 'skim', 'later', 'not_relevant', 'skip')", name="ck_triage_events_pile"
@@ -55,6 +57,7 @@ def upgrade() -> None:
             name="ck_triage_events_drop_reason",
         ),
         sa.CheckConstraint("(source = 'undo') = (undone_event_id IS NOT NULL)", name="ck_triage_events_undo_target"),
+        sa.CheckConstraint("(source = 'desk') = (pile IS NOT NULL)", name="ck_triage_events_pile_source"),
     )
     op.create_index("ix_triage_events_paper_created", "triage_events", ["paper_id", sa.text("created_at DESC")])
     op.create_index("ix_triage_events_session_created", "triage_events", ["session_id", "created_at"])
