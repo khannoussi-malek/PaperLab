@@ -415,3 +415,22 @@ async def test_0058_round_trip(scratch_url):
     await scratch.dispose()
     assert table is not None and default == "'full'::text"
     assert gone is None and no_lens is None
+
+
+@pytest.mark.anyio
+async def test_0060_round_trip(scratch_url, database_url):
+    """triage_events exists at head, goes on a downgrade to 0059 and comes back."""
+    dsn = scratch_url.render_as_string(hide_password=False)
+    assert make_url(database_url).database.startswith("paperlab_triage")  # the throwaway DB, never the live one
+    alembic(dsn, "upgrade", "head")
+    scratch = create_async_engine(scratch_url)
+    async with scratch.connect() as conn:
+        table = (await conn.execute(text("SELECT to_regclass('triage_events')"))).scalar()
+    alembic(dsn, "downgrade", "0059")
+    async with scratch.connect() as conn:
+        gone = (await conn.execute(text("SELECT to_regclass('triage_events')"))).scalar()
+    alembic(dsn, "upgrade", "head")
+    async with scratch.connect() as conn:
+        back = (await conn.execute(text("SELECT to_regclass('triage_events')"))).scalar()
+    await scratch.dispose()
+    assert table is not None and gone is None and back is not None

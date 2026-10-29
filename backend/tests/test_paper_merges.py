@@ -48,6 +48,7 @@ PAPER_ID_COLUMNS = [
     ("search_run_eligibility", "paper_id"),
     ("evidence_cards", "paper_id"),
     ("paper_events", "paper_id"),
+    ("triage_events", "paper_id"),
     ("section_role_overrides", "paper_id"),
     ("manuscript_cite_keys", "paper_id"),
     ("manuscript_evidence", "paper_id"),
@@ -135,6 +136,7 @@ async def seed_both(session):
         "INSERT INTO paper_links (from_paper, to_paper, label) VALUES (:y, :m, 'Y knows M')",  # duplicates K-Y
         "INSERT INTO evidence_cards (paper_id, status, fields) VALUES (:m, 'ready', '{\"x\": 1}')",
         "INSERT INTO paper_events (paper_id, kind) VALUES (:m, 'pdf_attached')",
+        "INSERT INTO triage_events (paper_id, source, pile, before_pass, after_pass) VALUES (:m, 'desk', 'skim', 0, 1)",
         "INSERT INTO section_role_overrides (paper_id, section_title, role) VALUES (:m, '2 Method', 'conclusion')",
         "INSERT INTO section_role_overrides (paper_id, section_title, role) VALUES (:k, '1 Introduction', 'intro')",
         "INSERT INTO section_role_overrides (paper_id, section_title, role) VALUES (:m, '1 Introduction', 'abstract')",
@@ -194,6 +196,7 @@ MOVED = {
     "evidence_cards_dropped": 1,  # K's needs-full-text placeholder
     "evidence_cards": 1,
     "paper_events": 1,
+    "triage_events": 1,
     "manuscript_cite_keys": 1,
     "manuscript_evidence": 1,  # M's b; its a duplicated K's
     "manuscript_claim_checks": 1,  # likewise
@@ -223,6 +226,7 @@ AFTER = {  # K's rows after the merge: its own plus M's moved or unioned ones
     "manuscript_cite_keys.paper_id": 1,
     "manuscript_evidence.paper_id": 2,
     "manuscript_claim_checks.paper_id": 2,
+    "triage_events.paper_id": 1,
     "paper_events.paper_id": 2,  # M's moved one, and the merge's own pdf_attached for K (R21)
 }
 
