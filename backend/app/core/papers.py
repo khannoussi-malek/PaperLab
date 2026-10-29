@@ -162,10 +162,20 @@ async def get_paper(session: AsyncSession, paper_id: uuid.UUID, *, lock: bool = 
     return paper
 
 
-async def set_reading(session: AsyncSession, paper_id: uuid.UUID, changes: dict[str, Any]) -> Paper:
+READING_SOURCES = ("reader", "library")
+
+
+async def set_reading(
+    session: AsyncSession, paper_id: uuid.UUID, changes: dict[str, Any], *, source: str = "reader"
+) -> Paper:
     """The reader's own record of a paper: passes finished and their decision (D118, D119). Only the keys sent change.
     Never touches manual_fields. Raises NotFound, InvalidInput("reading_pass_out_of_range", allowed=[0, 3]),
-    InvalidInput("unknown_triage", allowed=[...]), InvalidInput("nothing_to_set")."""
+    InvalidInput("unknown_triage", allowed=[...]), InvalidInput("nothing_to_set"),
+    InvalidInput("unknown_source", allowed=["reader", "library"]). A real change also appends one triage event."""
+    from app.core import triage  # triage imports this module
+
+    if source not in READING_SOURCES:
+        raise InvalidInput("unknown_source", allowed=list(READING_SOURCES))
     values = {key: changes[key] for key in ("reading_pass", "triage") if key in changes}
     if not values:
         raise InvalidInput("nothing_to_set")
@@ -173,8 +183,12 @@ async def set_reading(session: AsyncSession, paper_id: uuid.UUID, changes: dict[
         raise InvalidInput("reading_pass_out_of_range", allowed=[READING_PASSES[0], READING_PASSES[-1]])
     if values.get("triage") is not None and values["triage"] not in TRIAGES:
         raise InvalidInput("unknown_triage", allowed=list(TRIAGES))
-    paper = await get_paper(session, paper_id)
+    paper = await get_paper(session, paper_id, lock=True)  # lock order: the papers row first
+    before = (paper.triage, paper.reading_pass)
+    after = (values.get("triage", before[0]), values.get("reading_pass", before[1]))
     await session.execute(update(Paper).where(Paper.id == paper_id).values(**values))
+    if after != before:
+        triage.log_change(session, paper, source=source, before=before, after=after)
     await session.commit()
     await session.refresh(paper)
     return paper
