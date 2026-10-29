@@ -150,7 +150,8 @@ async def seed_both(session):
         # the same for the reviewer's checks: M's b moves, M's a duplicates K's
         "WITH ms AS (INSERT INTO manuscripts (title) VALUES ('Review') RETURNING id), "
         "k AS (INSERT INTO manuscript_claim_checks (manuscript_id, file_path, sentence_hash, sentence, plain, ord, "
-        "kind, cite_key, paper_id, status) SELECT id, 'main.tex', 'a', 'A.', 'A.', 0, 'cited', 'k', :k, 'queued' FROM ms) "
+        "kind, cite_key, paper_id, status) SELECT id, 'main.tex', 'a', 'A.', 'A.', 0, 'cited', 'k', :k, 'queued' "
+        "FROM ms) "
         "INSERT INTO manuscript_claim_checks (manuscript_id, file_path, sentence_hash, sentence, plain, ord, "
         "kind, cite_key, paper_id, status) SELECT id, 'main.tex', h, 'S.', 'S.', 1, 'cited', 'm', :m, 'queued' "
         "FROM ms, (VALUES ('a'), ('b')) v(h)",
