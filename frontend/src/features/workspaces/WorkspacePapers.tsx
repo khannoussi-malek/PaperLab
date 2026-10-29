@@ -36,7 +36,7 @@ export function WorkspacePapers({
   const tagMap = paperTags.data ?? {}
   const upload = useUploadPapers(workspaceId)
   const [adding, setAdding] = useState(false)
-  const [view, setView] = usePaperView('paperlab-workspace-papers-view')
+  const [view, setView, exitTriage] = usePaperView('paperlab-workspace-papers-view', `workspace:${workspaceId}`)
   const [visible, setVisible] = useState<string[] | null>(null)
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set())
 
@@ -100,6 +100,11 @@ export function WorkspacePapers({
             <PaperList
               selection={view === 'list' ? { selected: new Set(selectedIds), onToggle: toggle } : undefined}
               view={view}
+              libraryPapers={all}
+              triageScope={`workspace:${workspaceId}`}
+              sourceLabel="this workspace"
+              onTriageExit={exitTriage}
+              onShowKept={() => setView('list')}
               papers={list}
               onVisibleChange={setVisible}
               workspaceId={workspaceId}

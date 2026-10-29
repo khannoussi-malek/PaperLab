@@ -21,6 +21,8 @@ import { PaperPreview } from './PaperPreview'
 import { SourceBadges } from '../reader/SourceBadges'
 import { byline, matchesPaper, pageCountLabel, quietStatus } from './paperMeta'
 import { LibraryDeck } from './LibraryDeck'
+import { TriageDesk } from '../triage/TriageDesk'
+import type { PaperView } from './ViewSwitch'
 
 /** Skimming the list with the mouse shouldn't open a PDF for every row it crosses. */
 const HOVER_PREVIEW_DELAY_MS = 150
@@ -156,15 +158,22 @@ type Props = {
   selection?: Selection
   /** Called with the ids of the rows the list's own search and reading filter leave showing. */
   onVisibleChange?: (ids: string[]) => void
-  /** `deck` shows the papers the toolbar leaves as a 3D deck, without selection or row actions. */
-  view?: 'list' | 'deck'
+  /** `deck` shows the papers the toolbar leaves as a 3D deck, `triage` as a desk to sort them: neither offers selection or row actions. */
+  view?: PaperView
+  /** Triage only: the session's scope (`library` or `workspace:<id>`), its name in the bar, and where Exit and "show kept" go. */
+  /** Triage only: every paper loaded for the scope, unfiltered (defaults to `papers`). */
+  libraryPapers?: Paper[]
+  triageScope?: string
+  sourceLabel?: string
+  onTriageExit?: () => void
+  onShowKept?: () => void
 }
 
 /**
  * A search bar over paper rows, beside a preview of the hovered or focused one. The library and each workspace's Papers
  * tab use it.
  */
-export function PaperList({ papers, workspaceId, tagsByPaper, onTagClick, activeTags, emptyMessage, selection, onVisibleChange, view = 'list' }: Props) {
+export function PaperList({ papers, workspaceId, tagsByPaper, onTagClick, activeTags, emptyMessage, selection, onVisibleChange, view = 'list', libraryPapers, triageScope = 'library', sourceLabel = 'your library', onTriageExit, onShowKept }: Props) {
   const remove = useDeletePaper()
   const membership = useWorkspaceMembership()
   const reading = useSetReading()
@@ -205,6 +214,8 @@ export function PaperList({ papers, workspaceId, tagsByPaper, onTagClick, active
     remove.mutate(paper.id)
   }
 
+  // The desk re-freezes its stack when any of these change.
+  const filterKey = [query, filter, activeTags?.join(',') ?? '', workspaceId ?? ''].join('|')
   const error = remove.error ?? membership.error ?? reading.error
   // Falls back to the first paper, so the panel is never empty and a deleted paper's preview goes away.
   const previewed = shown.find((paper) => paper.id === previewId) ?? shown[0]
@@ -252,6 +263,17 @@ export function PaperList({ papers, workspaceId, tagsByPaper, onTagClick, active
             <p className="text-muted-foreground">{emptyMessage}</p>
           ) : shown.length === 0 ? (
             <NoMatches query={query} filter={filter} onClear={clearSearch} onShowAll={() => setFilter('all')} />
+          ) : view === 'triage' ? (
+            <TriageDesk
+              papers={shown}
+              library={libraryPapers ?? papers}
+              scope={triageScope}
+              sourceLabel={sourceLabel}
+              filterKey={filterKey}
+              workspaceId={workspaceId}
+              onExit={() => onTriageExit?.()}
+              onShowKept={() => onShowKept?.()}
+            />
           ) : view === 'deck' ? (
             <LibraryDeck papers={shown} />
           ) : (
