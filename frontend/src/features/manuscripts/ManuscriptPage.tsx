@@ -328,6 +328,7 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
                     registerFindEvidence={registerFindEvidence}
                     onCiteKey={showCited}
                     onFindEvidence={findEvidence}
+                    workspaceId={data.workspace_id}
                     citeOptions={libraryPapers.data}
                     onCite={pinPaper}
                   />

@@ -9,6 +9,8 @@ import { autocompletion } from '@codemirror/autocomplete'
 import { citeKeyAt } from './deck/citeKeyAt'
 import type { DeckPaper } from './deck/deckModel'
 import { citeSource, paperDrop } from './citeCompletion'
+import { reviewExtension, reviewHandle, type ReviewHandle } from './review/reviewMarks'
+import type { ReviewSentence } from '@/api/client'
 import { ownLine, type PreambleEdit } from './results/insertBlock'
 
 type LineError = { line: number; message: string }
@@ -34,6 +36,10 @@ type Props = {
   registerInsert?: (insert: ((text: string, block?: boolean, preamble?: PreambleEdit) => void) | null) => void
   /** Hands out a way to run Find evidence on the last cursor; it returns false until the cursor has been placed. */
   registerFindEvidence?: (run: (() => boolean) | null) => void
+  /** Hands out the reviewer's hold on the editor: marks, sentence spans and Cite this. */
+  registerReview?: (handle: ReviewHandle | null) => void
+  /** Finds the sentences of a text (UTF-16 offsets); Cite this uses it on the text as it is at the click. */
+  reviewLocate?: (text: string) => Promise<ReviewSentence[]>
   /** The library's papers, offered as keys inside \cite{…}. */
   citeOptions?: DeckPaper[]
   /** A key was picked from the list, or a dragged paper was dropped: pin this paper. */
@@ -115,15 +121,15 @@ const highlight = syntaxHighlighting(
 const FromHost = Annotation.define<boolean>()
 
 /** CodeMirror 6 with LaTeX highlighting, as one controlled-ish component: `value` in, `onChange` out. */
-export function LatexEditor({ value, onChange, errors, onSave, jumpTo, onCursor, onSectionStep, onShowInPdf, onCiteKey, onFindEvidence, registerInsert, registerFindEvidence, citeOptions, onCite, label = 'LaTeX source' }: Props) {
+export function LatexEditor({ value, onChange, errors, onSave, jumpTo, onCursor, onSectionStep, onShowInPdf, onCiteKey, onFindEvidence, registerInsert, registerFindEvidence, registerReview, reviewLocate, citeOptions, onCite, label = 'LaTeX source' }: Props) {
   const host = useRef<HTMLDivElement>(null)
   const view = useRef<EditorView | null>(null)
   const errorSlot = useRef(new Compartment())
   const themeSlot = useRef(new Compartment())
   const dark = useAppIsDark()
   // The view is built once; callbacks go through a ref so it never holds a stale one.
-  const latest = useRef({ citeOptions, onCite, onChange, onSave, onCursor, onSectionStep, onShowInPdf, onCiteKey, onFindEvidence, registerInsert, registerFindEvidence })
-  latest.current = { citeOptions, onCite, onChange, onSave, onCursor, onSectionStep, onShowInPdf, onCiteKey, onFindEvidence, registerInsert, registerFindEvidence }
+  const latest = useRef({ citeOptions, onCite, onChange, onSave, onCursor, onSectionStep, onShowInPdf, onCiteKey, onFindEvidence, registerInsert, registerFindEvidence, registerReview, reviewLocate })
+  latest.current = { citeOptions, onCite, onChange, onSave, onCursor, onSectionStep, onShowInPdf, onCiteKey, onFindEvidence, registerInsert, registerFindEvidence, registerReview, reviewLocate }
   const moved = useRef(false) // whether the cursor was ever placed; if not, an insert goes to the end
   const cursorLine = useRef(0)
 
@@ -139,6 +145,7 @@ export function LatexEditor({ value, onChange, errors, onSave, jumpTo, onCursor,
         EditorView.lineWrapping,
         themeSlot.current.of(latexTheme(dark)),
         highlight,
+        reviewExtension(),
         EditorView.contentAttributes.of({ 'aria-label': label }),
         errorSlot.current.of(errorGutter(errors)),
         keymap.of([{ key: 'Mod-s', run: () => (latest.current.onSave(), true) }]),
@@ -196,7 +203,8 @@ export function LatexEditor({ value, onChange, errors, onSave, jumpTo, onCursor,
       })
       editor.focus()
     })
-    return () => { latest.current.registerInsert?.(null); latest.current.registerFindEvidence?.(null); editor.destroy() }
+    latest.current.registerReview?.(reviewHandle(editor, (t) => latest.current.reviewLocate?.(t) ?? Promise.resolve([])))
+    return () => { latest.current.registerReview?.(null); latest.current.registerInsert?.(null); latest.current.registerFindEvidence?.(null); editor.destroy() }
     // ponytail: built once per mount; the page remounts it per file, and the effects below carry later changes.
   }, [])
 
