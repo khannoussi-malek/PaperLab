@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook } from '@testing-library/react'
-import { createElement, type ReactNode } from 'react'
+import { createElement, StrictMode, type ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { api, ApiError, type Paper, type TriageDecision, type TriageDecisionIn } from '@/api/client'
 import { closeSession } from './sessionId'
@@ -38,13 +38,18 @@ beforeEach(() => {
 })
 afterEach(() => vi.restoreAllMocks())
 
-function setup(extra: { filterKey?: string; ps?: Paper[] } = {}) {
+type Props = { filterKey: string; queueFrom: Paper[]; library: Paper[]; libraryReady: boolean }
+const base = (ps: Paper[] = papers, filterKey = 'f1'): Props => ({ filterKey, queueFrom: ps, library: ps, libraryReady: true })
+
+function setup(extra: { filterKey?: string; ps?: Paper[]; strict?: boolean } = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  const wrapper = ({ children }: { children: ReactNode }) => createElement(QueryClientProvider, { client }, children)
+  const wrapper = ({ children }: { children: ReactNode }) => {
+    const inner = createElement(QueryClientProvider, { client }, children)
+    return extra.strict ? createElement(StrictMode, null, inner) : inner
+  }
   return renderHook(
-    (p: { filterKey: string; ps: Paper[] }) =>
-      useTriageSession({ scope: 'all', papers: p.ps, filterKey: p.filterKey, order: 'list', includeDecided: false }),
-    { wrapper, initialProps: { filterKey: extra.filterKey ?? 'f1', ps: extra.ps ?? papers } },
+    (p: Props) => useTriageSession({ scope: 'all', ...p, order: 'list', includeDecided: false }),
+    { wrapper, initialProps: base(extra.ps, extra.filterKey) },
   )
 }
 const decide = (h: ReturnType<typeof setup>, pile: 'read_closely' | 'skim' | 'not_relevant' | 'skip' = 'skim', reason?: string) =>
@@ -165,7 +170,7 @@ describe('useTriageSession ordering', () => {
     const three = papers.slice(0, 3)
     const h = setup({ ps: three })
     expect(progress(h.result.current.state).total).toBe(3)
-    h.rerender({ filterKey: 'f1', ps: three.filter((p) => p.id !== 'b') })
+    h.rerender(base(three.filter((p) => p.id !== 'b')))
     expect(progress(h.result.current.state).total).toBe(2)
     decide(h); decide(h)
     await flush()
@@ -225,13 +230,67 @@ describe('useTriageSession ordering', () => {
   })
 })
 
+describe('useTriageSession library and queue lists', () => {
+  it('a decided paper that leaves queueFrom (the filter drops it) can still be undone and returns as top', async () => {
+    const h = setup()
+    decide(h)
+    await flush()
+    h.rerender({ ...base(), queueFrom: papers.filter((p) => p.id !== 'a') })
+    expect(h.result.current.state.done.map((d) => d.id)).toEqual(['a'])
+    act(() => h.result.current.undo())
+    expect(h.result.current.top?.id).toBe('a')
+    expect(progress(h.result.current.state)).toMatchObject({ decided: 0, total: 4 })
+  })
+
+  it('a library that is briefly empty and not ready vanishes nothing', async () => {
+    const h = setup()
+    h.rerender({ ...base(), library: [], libraryReady: false })
+    expect(progress(h.result.current.state).total).toBe(4)
+    expect(h.result.current.state.unseen).toHaveLength(4)
+    h.rerender({ ...base(), library: [], libraryReady: true }) // still empty: never mass-vanish
+    expect(h.result.current.state.unseen).toHaveLength(4)
+  })
+
+  it('a paper removed from a ready library vanishes', async () => {
+    const h = setup()
+    h.rerender({ ...base(), library: papers.filter((p) => p.id !== 'a') })
+    expect(h.result.current.state.unseen).toEqual(['b', 'c', 'd'])
+    expect(progress(h.result.current.state).total).toBe(3)
+  })
+
+  it('a failed undo can be retried: same event id, and Retry sends it again', async () => {
+    const h = setup()
+    decide(h)
+    await flush()
+    await send(0)
+    act(() => h.result.current.undo())
+    await flush()
+    await act(async () => undoCalls[0].reject(new Error('offline'))); await flush()
+    expect(h.result.current.alert?.message).toContain("Couldn't undo: offline")
+    expect(h.result.current.top?.id).toBe('b') // the decision stands again
+    await act(async () => h.result.current.alert?.retry?.()); await flush()
+    expect(undoCalls).toHaveLength(2)
+    expect(undoCalls[1].eventId).toBe(undoCalls[0].eventId)
+    expect(h.result.current.top?.id).toBe('a')
+  })
+
+  it('under StrictMode a same-key rerender does not re-freeze (decisions and counts stay)', async () => {
+    const h = setup({ strict: true })
+    decide(h)
+    await flush()
+    h.rerender(base())
+    expect(progress(h.result.current.state)).toMatchObject({ decided: 1, total: 4 })
+    expect(h.result.current.state.unseen).toEqual(['b', 'c', 'd'])
+  })
+})
+
 describe('useTriageSession session', () => {
   it('keeps the session id across a remount and refreeze on filterKey keeps the id and counts', async () => {
     const h = setup()
     const id = h.result.current.sessionId
     decide(h)
     await flush()
-    h.rerender({ filterKey: 'f2', ps: papers })
+    h.rerender(base(papers, 'f2'))
     expect(h.result.current.sessionId).toBe(id)
     expect(progress(h.result.current.state).decided).toBe(1)
     h.unmount()
