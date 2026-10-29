@@ -47,10 +47,10 @@ export function TriageCard({ paper, onShowInPdf }: { paper: Paper; onShowInPdf?:
       role="group"
       aria-labelledby={`triage-title-${paper.id}`}
       data-triage-card
-      className="flex flex-col gap-3 rounded-xl border border-glass-border bg-card p-6"
+      className="flex flex-col gap-3 rounded-xl border border-[#e6dfcc] bg-[#fbf8f0] p-6 text-stone-800 shadow-[0_22px_40px_-16px_rgba(15,23,42,.45)] [--foreground:#292524] [--muted-foreground:#57534e] [color-scheme:light]"
     >
       {paper.is_retracted && <RetractionBanner paper={paper} />}
-      <h2 id={`triage-title-${paper.id}`} className="font-heading text-xl font-semibold wrap-anywhere">{paper.title}</h2>
+      <h2 id={`triage-title-${paper.id}`} className="font-serif text-xl font-semibold wrap-anywhere">{paper.title}</h2>
       {meta && <p className="text-sm text-muted-foreground">{meta}</p>}
       <div className="flex flex-wrap gap-1.5"><SourceBadges paper={paper} /></div>
       {decided && <DecidedLine paper={paper} />}
