@@ -418,10 +418,10 @@ async def test_0058_round_trip(scratch_url):
 
 
 @pytest.mark.anyio
-async def test_0060_round_trip(scratch_url, database_url):
+async def test_0060_round_trip(scratch_url):
     """triage_events exists at head, goes on a downgrade to 0059 and comes back."""
     dsn = scratch_url.render_as_string(hide_password=False)
-    assert make_url(database_url).database.startswith("paperlab_triage")  # the throwaway DB, never the live one
+    assert scratch_url.database.startswith("paperlab_migrations_")  # the fixture's fresh DB, never a shared one
     alembic(dsn, "upgrade", "head")
     scratch = create_async_engine(scratch_url)
     async with scratch.connect() as conn:
