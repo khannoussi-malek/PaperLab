@@ -1586,6 +1586,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/manuscripts/{manuscript_id}/missing-keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Missing Keys */
+        get: operations["missing_keys_api_manuscripts__manuscript_id__missing_keys_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/manuscripts/{manuscript_id}/papers/rank": {
         parameters: {
             query?: never;
@@ -4229,6 +4246,15 @@ export interface components {
         McpSetupOut: {
             /** Folder */
             folder: string | null;
+        };
+        /** MissingKeyOut */
+        MissingKeyOut: {
+            /** Key */
+            key: string;
+            /** File */
+            file: string;
+            /** Line */
+            line: number;
         };
         /** MissingOut */
         MissingOut: {
@@ -9493,6 +9519,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CitablePaperOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    missing_keys_api_manuscripts__manuscript_id__missing_keys_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MissingKeyOut"][];
                 };
             };
             /** @description Validation Error */

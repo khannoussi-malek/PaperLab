@@ -13,6 +13,7 @@ from app.core import (
     manuscript_bib,
     manuscript_evidence,
     manuscript_history,
+    manuscript_missing_keys,
     manuscript_papers,
     manuscript_section_ops,
     manuscript_templates,
@@ -36,6 +37,7 @@ from app.schemas.manuscripts import (
     ManuscriptImportOut,
     ManuscriptOut,
     ManuscriptPatch,
+    MissingKeyOut,
     PinKeyOut,
     RankIn,
     RankOut,
@@ -235,6 +237,11 @@ async def delete_section(manuscript_id: uuid.UUID, path: str, session: SessionDe
 @router.get("/api/manuscripts/{manuscript_id}/papers")
 async def citable_papers(manuscript_id: uuid.UUID, session: SessionDep) -> list[CitablePaperOut]:
     return [CitablePaperOut(**p) for p in await manuscript_papers.list_papers(session, manuscript_id)]
+
+
+@router.get("/api/manuscripts/{manuscript_id}/missing-keys")
+async def missing_keys(manuscript_id: uuid.UUID, session: SessionDep) -> list[MissingKeyOut]:
+    return [MissingKeyOut(**k) for k in await manuscript_missing_keys.missing_keys(session, manuscript_id)]
 
 
 @router.post("/api/manuscripts/{manuscript_id}/papers/rank")
