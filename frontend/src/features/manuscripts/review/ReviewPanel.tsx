@@ -3,7 +3,7 @@ import { useState, type ReactNode } from 'react'
 import type { CheckItem } from '@/api/client'
 import { Button } from '@/components/ui/button'
 import { chunkHref } from '@/lib/route'
-import { isLive, itemTone, reasonCopy, VERDICT_LABEL, type Tone } from './reviewModel'
+import { couldntCheck, isLive, itemTone, reasonCopy, VERDICT_LABEL, type Tone } from './reviewModel'
 import { useCiteProposals, type useReview } from './useReview'
 
 type Review = Pick<ReturnType<typeof useReview>, 'run' | 'items' | 'dismissed' | 'startError' | 'cancel' | 'dismiss' | 'restore'>
@@ -25,7 +25,7 @@ const writeOpen = (open: boolean) => { try { localStorage.setItem(OPEN_KEY, Stri
 const TONE: Record<Tone, string> = {
   good: 'border-l-green-600', warn: 'border-l-amber-600', bad: 'border-l-destructive', muted: 'border-l-muted-foreground',
 }
-const AI = <span className="rounded bg-purple-100 px-1.5 py-px text-xs text-purple-900">AI</span>
+const AI = <span className="rounded bg-provenance-llm-surface px-1.5 py-px text-xs text-provenance-llm">AI</span>
 const RUN_NOTE: Record<string, string> = {
   cancelled: 'The check was cancelled. Run it again whenever you like.',
   interrupted: 'The check was interrupted. Run it again.',
@@ -42,7 +42,7 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
 }
 
 function CitedRow({ item, onJump }: { item: CheckItem; onJump: Props['onJump'] }) {
-  const failed = item.status === 'failed' || item.verdict === 'cannot_verify' || !item.verdict
+  const failed = couldntCheck(item)
   const reason = item.reason && !failed ? item.reason : null
   const open = () => window.open(chunkHref(item.paper_id!, item.chunk_id!, item.page ?? 1), '_blank', 'noopener')
   return (
@@ -69,6 +69,15 @@ function ClaimRow({ item, manuscriptId, dismissed, review, onJump, onCite }: { i
   const found = useCiteProposals(manuscriptId, item.sentence)
   const [problem, setProblem] = useState<string | null>(null)
   const cite = async (paperId: string) => setProblem(await onCite(item.sentence_hash, paperId))
+  if (couldntCheck(item)) {
+    return (
+      <li className={`rounded-md border border-l-4 bg-card/60 px-2.5 py-1.5 text-sm ${TONE.muted}`}>
+        <span className="text-xs font-medium">Couldn't check</span>
+        <button type="button" className="mt-0.5 block w-full rounded text-left hover:underline focus-visible:ring-2 focus-visible:ring-ring" onClick={() => onJump(item.sentence_hash)}>{item.sentence}</button>
+        <p className="text-xs text-muted-foreground">{reasonCopy(item.reason)}</p>
+      </li>
+    )
+  }
   if (dismissed) {
     return (
       <li className="flex items-center gap-2 rounded-md px-2.5 py-1 text-xs text-muted-foreground">

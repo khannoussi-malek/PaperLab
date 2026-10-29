@@ -3,13 +3,18 @@ import type { ReviewHandle } from './reviewMarks'
 
 export const CHANGED = 'That sentence changed. Check again.'
 
-/** Pins the paper (adding it to the workspace first if the library doesn't hold it), then inserts `\citep{key}`. Returns a problem to show, or null. */
+/** Checks the sentence is unchanged, then pins the paper (adding it to the workspace first if the library doesn't hold it), then inserts `\citep{key}`. Returns a problem to show, or null. */
 export async function citeThis(
-  { manuscriptId, workspaceId, handle }: { manuscriptId: string; workspaceId: string | null; handle: Pick<ReviewHandle, 'applyCite'> | null },
+  { manuscriptId, workspaceId, handle }: { manuscriptId: string; workspaceId: string | null; handle: Pick<ReviewHandle, 'canCite' | 'applyCite'> | null },
   hash: string,
   paperId: string,
 ): Promise<string | null> {
   if (!handle) return 'The editor is not ready. Try again.'
+  try {
+    if (!(await handle.canCite(hash))) return CHANGED // nothing pinned or added
+  } catch {
+    return 'Something went wrong. Please try again.'
+  }
   let key: string
   try {
     try {

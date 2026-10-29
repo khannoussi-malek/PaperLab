@@ -117,3 +117,15 @@ test('collapses and remembers it', async () => {
   show({ items: [item({})] })
   await waitFor(() => expect(screen.queryByText('Citations')).toBeNull())
 })
+
+test('an uncited row that failed or could not be verified is not offered as a claim', () => {
+  show({ items: [
+    { ...claim, id: 'f1', status: 'failed', verdict: null, reason: 'cancelled', sentence_hash: 'f1' },
+    { ...claim, id: 'f2', verdict: 'cannot_verify', reason: 'model_error', sentence_hash: 'f2' },
+  ] })
+  expect(screen.queryByText('Needs a citation')).toBeNull()
+  expect(screen.queryByRole('button', { name: 'Find papers' })).toBeNull()
+  expect(screen.getAllByText("Couldn't check")).toHaveLength(2)
+  expect(screen.getByText('Stopped before this one was checked.')).toBeInTheDocument()
+  expect(screen.getByText("The model didn't give a usable answer")).toBeInTheDocument()
+})

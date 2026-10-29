@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import type { CheckItem } from '@/api/client'
-import { citeThisEdit, itemTone, marksFor, VERDICT_LABEL } from './reviewModel'
+import { citeThisEdit, reasonCopy, REASON_CODES, itemTone, marksFor, VERDICT_LABEL } from './reviewModel'
 
 const item = (o: Partial<CheckItem>): CheckItem => ({ id: 'i', kind: 'cited', sentence_hash: 'h1', verdict: 'supported', ...o }) as CheckItem
 const span = (hash: string, start: number, end: number) => ({ hash, start, end, keys: [] })
@@ -52,4 +52,13 @@ describe('citeThisEdit', () => {
     expect(() => citeThisEdit('A b.', { start: 0, end: 4 }, 'a}b')).toThrow()
     expect(() => citeThisEdit('A b.', { start: 0, end: 4 }, '')).toThrow()
   })
+})
+
+test('every stored reason has its own plain copy; unknown codes are not blamed on the model', () => {
+  expect(REASON_CODES.sort()).toEqual(['cancelled', 'check_failed', 'claim_scope', 'claim_too_long', 'empty_claim', 'key_not_found', 'model_error', 'no_text', 'not_ready', 'paper_not_in_library'])
+  expect(reasonCopy('cancelled')).toBe('Stopped before this one was checked.')
+  expect(reasonCopy('key_not_found')).toBe('This key matches no paper in the library')
+  expect(reasonCopy('model_error')).toBe("The model didn't give a usable answer")
+  expect(reasonCopy('something_new')).toBe("This one couldn't be checked.")
+  expect(reasonCopy(null)).toBe("This one couldn't be checked.")
 })
