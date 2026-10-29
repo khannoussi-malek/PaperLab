@@ -14,13 +14,14 @@ type Props = {
   onReviewSkipped: () => void
   onShowKept: () => void
   onAddNew: () => void
+  onStartOver: () => void
   onBack: () => void
 }
 
 const minutes = (ms: number) => (ms < 60_000 ? 'under a minute' : `about ${Math.round(ms / 60_000)} min`)
 
 /** The end of the stack: what the session did, as plain facts, and the ways on. */
-export function TriageDone({ sessionId, skipped, canReviewSkipped, newSince, undo, onUndo, onReviewSkipped, onShowKept, onAddNew, onBack }: Props) {
+export function TriageDone({ sessionId, skipped, canReviewSkipped, newSince, undo, onUndo, onReviewSkipped, onShowKept, onAddNew, onStartOver, onBack }: Props) {
   const { data } = useTriageSummary(sessionId, true)
   return (
     <div className="grid gap-4 rounded-xl border border-glass-border bg-glass px-6 py-8">
@@ -39,6 +40,7 @@ export function TriageDone({ sessionId, skipped, canReviewSkipped, newSince, und
         {skipped > 0 && <Button disabled={!canReviewSkipped} onClick={onReviewSkipped}>Review the skipped ({skipped})</Button>}
         <Button variant="secondary" onClick={onShowKept}>Show kept papers in the list</Button>
         {newSince > 0 && <Button variant="secondary" onClick={onAddNew}>Add {newSince} new {newSince === 1 ? 'paper' : 'papers'}</Button>}
+        <Button variant="secondary" onClick={onStartOver}>Start over</Button>
         <Button variant="outline" onClick={onBack}>Back to the list</Button>
         <UndoButton undo={undo} onUndo={onUndo} />
       </div>

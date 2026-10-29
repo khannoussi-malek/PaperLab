@@ -5,7 +5,7 @@ import { keys } from '@/api/queries'
 import * as say from './announce'
 import { buildDecision, type Pile } from './piles'
 import { buildQueue, emptyQueue, progress, queueReducer, type DoneEntry, type Order } from './queue'
-import { openSession } from './sessionId'
+import { closeSession, openSession } from './sessionId'
 import { createWriter } from './triageWriter'
 
 type Clock = { card_ms: number; pdf_ms: number; pdf_opened: boolean }
@@ -35,7 +35,9 @@ const reasonOf = (e: unknown) => (e instanceof Error ? e.message : 'something we
  * undone. A paper missing from a ready, non-empty `library` is deleted elsewhere and leaves the session. */
 export function useTriageSession({ scope, queueFrom, library, libraryReady, filterKey, order: initialOrder, includeDecided: initialInclude }: Opts) {
   const client = useQueryClient()
-  const [sessionId] = useState(() => openSession(scope))
+  const [sessionId, setSessionId] = useState(() => openSession(scope))
+  const sessionRef = useRef(sessionId)
+  sessionRef.current = sessionId
   const [order, setOrderState] = useState(initialOrder)
   const [includeDecided, setIncludeDecided] = useState(initialInclude)
   const seed = useRef(Math.floor(Math.random() * 2 ** 31))
@@ -71,7 +73,7 @@ export function useTriageSession({ scope, queueFrom, library, libraryReady, filt
       client.invalidateQueries({ queryKey: keys.workspaces }),
       client.invalidateQueries({ queryKey: keys.graph }),
       client.invalidateQueries({ queryKey: keys.triageEvents(paperId) }),
-      client.invalidateQueries({ queryKey: ['triage-summary', sessionId] }),
+      client.invalidateQueries({ queryKey: ['triage-summary', sessionRef.current] }),
     ])
 
   const write = useCallback((entry: DoneEntry) => {
@@ -173,6 +175,16 @@ export function useTriageSession({ scope, queueFrom, library, libraryReady, filt
     if (pendingRef.current === 0) dispatch({ type: 'reviewSkipped' })
   }, [])
 
+  /** Ends this session and opens a fresh one over the current list; saved decisions stay saved. */
+  const startOver = useCallback(() => {
+    closeSession(scope)
+    setSessionId(openSession(scope))
+    const l = live.current
+    const { ids } = buildQueue(l.queueFrom, { order: l.order, seed: seed.current, includeDecided: l.includeDecided, exclude: new Set() })
+    dispatch({ type: 'start', ids, seed: seed.current, order: l.order })
+    setAlert(null)
+  }, [scope])
+
   /** Papers that arrived after the freeze join the stack; what is decided or skipped stays out. */
   const addNew = useCallback(() => {
     const l = live.current
@@ -214,6 +226,6 @@ export function useTriageSession({ scope, queueFrom, library, libraryReady, filt
 
   return {
     state, top, sessionId, notReady, alert, announcement, pending, canReviewSkipped: pending === 0,
-    decide, undo, skip, setOrder, setIncludeDecided, reviewSkipped, addNew, dismissAlert: () => setAlert(null),
+    decide, undo, skip, setOrder, setIncludeDecided, reviewSkipped, addNew, startOver, dismissAlert: () => setAlert(null),
   }
 }

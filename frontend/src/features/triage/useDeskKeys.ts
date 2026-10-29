@@ -14,6 +14,8 @@ export type DeskKeyHandlers = {
   togglePdf: () => void
   openHelp: () => void
   focusAbstract: () => void
+  /** The pile whose key is held down (null on release or blur): its stamp shows. */
+  onHold?: (pile: Pile | null) => void
 }
 
 // Where the element keeps its own keys: buttons, fields, the abstract scroller, anything in the PDF column.
@@ -80,9 +82,16 @@ export function useDeskKeys(rootRef: RefObject<HTMLElement | null>, handlers: De
       }
       if (lower === 'a') { done(); h.focusAbstract(); return }
       const pile = pileForKey(k)
-      if (pile) { done(); h.onPile(pile) }
+      if (pile) { done(); h.onHold?.(pile); h.onPile(pile) }
     }
+    const release = () => latest.current.onHold?.(null)
     root.addEventListener('keydown', onKey)
-    return () => root.removeEventListener('keydown', onKey)
+    root.addEventListener('keyup', release)
+    window.addEventListener('blur', release)
+    return () => {
+      root.removeEventListener('keydown', onKey)
+      root.removeEventListener('keyup', release)
+      window.removeEventListener('blur', release)
+    }
   }, [rootRef])
 }
