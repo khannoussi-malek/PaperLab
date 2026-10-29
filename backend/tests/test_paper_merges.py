@@ -136,7 +136,12 @@ async def seed_both(session):
         "INSERT INTO paper_links (from_paper, to_paper, label) VALUES (:y, :m, 'Y knows M')",  # duplicates K-Y
         "INSERT INTO evidence_cards (paper_id, status, fields) VALUES (:m, 'ready', '{\"x\": 1}')",
         "INSERT INTO paper_events (paper_id, kind) VALUES (:m, 'pdf_attached')",
-        "INSERT INTO triage_events (paper_id, source, pile, before_pass, after_pass) VALUES (:m, 'desk', 'skim', 0, 1)",
+        # a desk event with its retry key, and an undo pair: all three move to K, the undo still pointing at its event
+        "WITH e AS (INSERT INTO triage_events (paper_id, source, pile, before_pass, after_pass, session_id, client_id) "
+        "VALUES (:m, 'desk', 'skim', 0, 1, gen_random_uuid(), gen_random_uuid()) RETURNING id, paper_id) "
+        "INSERT INTO triage_events (paper_id, source, before_pass, after_pass, undone_event_id) "
+        "SELECT paper_id, 'undo', 1, 0, id FROM e",
+        "INSERT INTO triage_events (paper_id, source, pile, before_pass, after_pass) VALUES (:m, 'reader', 'skim', 0, 1)",
         "INSERT INTO section_role_overrides (paper_id, section_title, role) VALUES (:m, '2 Method', 'conclusion')",
         "INSERT INTO section_role_overrides (paper_id, section_title, role) VALUES (:k, '1 Introduction', 'intro')",
         "INSERT INTO section_role_overrides (paper_id, section_title, role) VALUES (:m, '1 Introduction', 'abstract')",
@@ -196,7 +201,7 @@ MOVED = {
     "evidence_cards_dropped": 1,  # K's needs-full-text placeholder
     "evidence_cards": 1,
     "paper_events": 1,
-    "triage_events": 1,
+    "triage_events": 3,
     "manuscript_cite_keys": 1,
     "manuscript_evidence": 1,  # M's b; its a duplicated K's
     "manuscript_claim_checks": 1,  # likewise
@@ -226,7 +231,7 @@ AFTER = {  # K's rows after the merge: its own plus M's moved or unioned ones
     "manuscript_cite_keys.paper_id": 1,
     "manuscript_evidence.paper_id": 2,
     "manuscript_claim_checks.paper_id": 2,
-    "triage_events.paper_id": 1,
+    "triage_events.paper_id": 3,
     "paper_events.paper_id": 2,  # M's moved one, and the merge's own pdf_attached for K (R21)
 }
 
@@ -260,6 +265,11 @@ async def test_a_merge_preserves_every_paper_id_row(session):
     )
     assert (await session.execute(kept_fix)).scalar_one() == "intro"  # K's fix wins a clash
     assert set((await rows_of(session, m.id)).values()) == {0}
+    pair = await session.execute(text(
+        "SELECT u.paper_id = :k AND e.paper_id = :k AND e.session_id IS NOT NULL AND e.client_id IS NOT NULL "
+        "FROM triage_events u JOIN triage_events e ON e.id = u.undone_event_id WHERE u.source = 'undo'"
+    ), {"k": k.id})  # fmt: skip
+    assert pair.scalar_one() is True  # the undo pair moved intact
     assert await session.get(Paper, m.id, populate_existing=True) is None
     k = await session.get(Paper, k.id, populate_existing=True)
     assert (k.has_pdf, k.file_path, k.page_count, k.status, k.evidence_access) == (True, FILE, 9, "ready", "full_text")
