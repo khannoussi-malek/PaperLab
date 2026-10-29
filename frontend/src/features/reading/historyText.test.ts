@@ -33,7 +33,11 @@ describe('describeEvent', () => {
   })
   it('reads a library change from before and after, with no reason', () => {
     const e = event({ source: 'library', before_pass: 1, after_pass: 1, before_triage: null, after_triage: 'later', created_at: at(14, 10) })
-    expect(line(e)).toBe('29 Oct, 14:10 · Pass 1 → Pass 1 · Later · from the library menu')
+    expect(line(e)).toBe('29 Oct, 14:10 · Pass 1 → Pass 1, Later · from the library menu')
+  })
+  it('keeps level and decision together on both sides of the arrow', () => {
+    const e = event({ source: 'reader', before_pass: 1, before_triage: 'later', after_pass: 2, after_triage: 'keep' })
+    expect(describeEvent(e).what).toBe('Pass 1, Later → Pass 2, Keep')
   })
   it('reads a reader change and a drop from the library without a reason', () => {
     expect(line(event({ source: 'reader', before_triage: 'keep', after_triage: null }))).toBe(
