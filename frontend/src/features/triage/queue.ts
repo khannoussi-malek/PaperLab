@@ -99,6 +99,7 @@ export type QueueAction =
   | { type: 'reorder'; order: Order; papers: readonly Paper[] }
   | { type: 'refreeze'; papers: readonly Paper[]; opts: Omit<QueueOpts, 'exclude'> }
   | { type: 'reviewSkipped' }
+  | { type: 'vanish'; ids: readonly string[] }
 
 export const emptyQueue: QueueState = { unseen: [], skipped: [], done: [], left: [], total: 0, seed: 0, order: 'oldest' }
 
@@ -169,6 +170,11 @@ export function queueReducer(state: QueueState = emptyQueue, action: QueueAction
       const exclude = new Set([...state.done.map((d) => d.id), ...state.skipped, ...state.left])
       const { ids } = buildQueue(action.papers, { ...action.opts, exclude })
       return withTotal({ ...state, unseen: ids, seed: action.opts.seed, order: action.opts.order })
+    }
+    case 'vanish': {
+      // Papers deleted elsewhere leave the session: out of the stack, the skipped list and the total.
+      const gone = new Set(action.ids)
+      return withTotal({ ...state, unseen: state.unseen.filter((id) => !gone.has(id)), skipped: state.skipped.filter((id) => !gone.has(id)) })
     }
     case 'reviewSkipped':
       // The skip entries go: those cards are undecided again, so undo and the pile counts see only real decisions.

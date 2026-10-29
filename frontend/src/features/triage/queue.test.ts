@@ -210,6 +210,16 @@ describe('queueReducer', () => {
   })
 })
 
+describe('vanish', () => {
+  it('removes deleted papers from the stack, skipped list and total', () => {
+    let s = queueReducer(started(['a', 'b', 'c']), { type: 'decide', entry: entry('a', 'skip') })
+    s = queueReducer(s, { type: 'vanish', ids: ['a', 'c'] })
+    expect(s.unseen).toEqual(['b'])
+    expect(s.skipped).toEqual([])
+    expect(s.total).toBe(1)
+  })
+})
+
 describe('newSince', () => {
   it('counts only new, ready, undecided papers', () => {
     const s = queueReducer(started(['a', 'b']), { type: 'decide', entry: entry('a') })

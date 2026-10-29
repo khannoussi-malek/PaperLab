@@ -5,7 +5,7 @@ import { createElement, type ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { api, ApiError, type Paper, type TriageDecision, type TriageDecisionIn } from '@/api/client'
 import { closeSession } from './sessionId'
-import { progress, current } from './queue'
+import { current, isDone, progress } from './queue'
 import { useTriageSession } from './useTriageSession'
 
 const clock = { card_ms: 1000, pdf_ms: 0, pdf_opened: false }
@@ -115,15 +115,76 @@ describe('useTriageSession ordering', () => {
     expect(h.result.current.alert).toBeNull()
   })
 
-  it('a queued undo for a failed decide sends nothing and the next POST still goes', async () => {
+  it('a queued undo for a failed decide sends nothing, offers no Retry, and the next POST still goes', async () => {
     const h = setup()
-    decide(h); decide(h)
+    decide(h); decide(h) // a, b
     await flush()
-    act(() => h.result.current.undo()) // undoes b
+    act(() => h.result.current.undo()) // takes b back
+    await flush()
+    await act(async () => calls[0].resolve()); await flush() // a saved, b's POST goes next
+    expect(calls.map((c) => c.paperId)).toEqual(['a', 'b'])
+    await act(async () => calls[1].reject(new Error('offline'))); await flush()
+    expect(undoCalls).toHaveLength(0)
+    expect(h.result.current.alert).toBeNull()
+    expect(h.result.current.top?.id).toBe('b')
+    expect(progress(h.result.current.state).decided).toBe(1)
+    expect(calls).toHaveLength(2)
+  })
+
+  it('a decide undone while its POST is pending, then failing: no alert, no retry, progress 0', async () => {
+    const h = setup()
+    decide(h)
+    await flush()
+    act(() => h.result.current.undo())
+    await act(async () => calls[0].reject(new Error('offline'))); await flush()
+    expect(h.result.current.alert).toBeNull()
+    expect(progress(h.result.current.state).decided).toBe(0)
+    expect(h.result.current.top?.id).toBe('a')
+    expect(calls).toHaveLength(1)
+    expect(undoCalls).toHaveLength(0)
+  })
+
+  it('decide, undo, decide again: the first POST failing leaves only the second decision', async () => {
+    const h = setup()
+    decide(h)
+    await flush()
+    act(() => h.result.current.undo())
+    decide(h)
     await flush()
     await act(async () => calls[0].reject(new Error('offline'))); await flush()
-    expect(undoCalls).toHaveLength(0)
-    expect(h.result.current.top?.id).toBe('a')
+    expect(h.result.current.alert).toBeNull()
+    expect(progress(h.result.current.state).decided).toBe(1)
+    expect(h.result.current.top?.id).toBe('b')
+    expect(calls.map((c) => c.paperId)).toEqual(['a', 'a'])
+    expect(calls[1].body.client_id).not.toBe(calls[0].body.client_id)
+    await send(1)
+    expect(progress(h.result.current.state).decided).toBe(1)
+  })
+
+  it('a paper deleted elsewhere leaves the session: total 2, deciding the others reaches done', async () => {
+    const three = papers.slice(0, 3)
+    const h = setup({ ps: three })
+    expect(progress(h.result.current.state).total).toBe(3)
+    h.rerender({ filterKey: 'f1', ps: three.filter((p) => p.id !== 'b') })
+    expect(progress(h.result.current.state).total).toBe(2)
+    decide(h); decide(h)
+    await flush()
+    expect(isDone(h.result.current.state)).toBe(true)
+    expect(h.result.current.top).toBeNull()
+    expect(progress(h.result.current.state)).toMatchObject({ decided: 2, total: 2 })
+  })
+
+  it('announces each new card after the decision; an undo announces alone', async () => {
+    const h = setup()
+    expect(h.result.current.announcement).toContain('Paper 1 of 4')
+    decide(h)
+    await flush()
+    expect(h.result.current.announcement).toContain('1 of 4 done')
+    expect(h.result.current.announcement).toContain('Paper 2 of 4')
+    act(() => h.result.current.undo())
+    await flush()
+    expect(h.result.current.announcement).toContain('Decision undone')
+    expect(h.result.current.announcement).not.toContain('Paper 1 of 4')
   })
 
   it('a 409 changed_since on undo drops the paper from the session with the elsewhere message', async () => {
