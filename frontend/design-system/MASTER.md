@@ -1142,6 +1142,20 @@ The editor toolbar's **Insert** button (outline, small, with a chevron) opens a 
 - A picture is always drawn in the light theme on white, so it prints well whatever the app theme.
 - If the main file changed under you, the insert is refused ("The main file changed. Open it and try again.") and nothing is written. Errors sit in an `Alert` in the dialog; the dialog closes on success and focus returns to the editor.
 
+## The reviewer
+
+A **Review** button (outline, small, chevron) sits in the editor toolbar. Its menu has "Check citations"; it is disabled with "Pick a workspace first" when the manuscript has no workspace, and while a check runs. A live run shows "Checking N of M…" with a Cancel button beside it. A selection is checked on its own (unchecked sentences included); with no selection the whole file is.
+
+- **AI badge.** Everything the model judged carries a small `AI` chip (`provenance-llm` tokens), in the editor as `⟨AI⟩ <verdict>` after the sentence and in the panel beside the verdict. The model never appears unlabelled.
+- **Tones, always with words.** A dotted underline in the editor and a left border in the panel: green for "Supports", amber for "Partly supports" and "Needs a citation", red for "Doesn't support", muted for "Doesn't address", "Can't tell", "Checking…" and "Couldn't check". Colour is never the only signal: the verdict text sits on every mark and row, and the underline is dotted, not just coloured. A sentence with several checks takes its worst tone.
+- **The panel** ("Citation check", under the editor, collapsible, open state remembered) has groups: **Citations** (one row per sentence and cited paper: verdict, key, the sentence, the model's reason, and the quote with a "Page N" link that opens the reader in a new tab), **Claims with no citation** ("Needs a citation", with "Find papers" and "Not a claim"), and **Changed since checked** (sentences edited or gone since the check, each with "Check again"). Clicking a sentence selects it in the editor. A finished run that was cancelled, interrupted or failed says so in one plain line; "Add a model in Settings to run the reviewer." when no model is set; "Nothing to check — no sentences cite a paper." when empty.
+- **Checking… and Couldn't check.** A queued or running row reads "Checking…" in muted tone. A row the model could not judge reads "Couldn't check" with a plain reason; an unknown reason is never blamed on the model.
+- **Cite this.** "Find papers" asks for proposals (workspace and pinned papers only); each shows its key, page and quote with a "Cite this" button. A click checks the sentence is still in the text, pins the paper, then inserts `\citep{key}` before the sentence's final punctuation (one leading space if needed). A problem (sentence changed, paper not added) shows in a status line under the row and nothing is written.
+- **Dismissals.** "Not a claim" collapses the row to "Dismissed · sentence" with "Restore". Dismissals are stored per manuscript, so they survive a reload.
+- **Skipped sentences.** Beyond 30 uncited sentences the rest are not checked; the panel says "N more sentences weren't checked. Select them to check." ("1 more sentence wasn't checked. Select it to check.")
+- **Cited but not found.** Under the PDF, a list of keys that match no paper in the library or the .bib files (LaTeX prints [?]), each with `file:line`; clicking one jumps the editor there. It shows 20, then "and N more".
+- **The rule.** Nothing the model wrote is ever inserted. Reasons and quotes are shown to read, never copied into the text; the only thing a button writes is `\citep{key}`, on a click.
+
 ## Pre-delivery check (from ui-ux-pro-max Quick Reference §1–§3)
 
 Run through this before finishing any UI task, in **both** themes:
