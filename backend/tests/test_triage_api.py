@@ -206,3 +206,20 @@ async def test_openapi_lists_the_new_paths_and_mcp_has_no_triage_tool(client):
     async with Client(server.mcp) as mcp:
         names = [tool.name for tool in (await mcp.list_tools()).tools]
     assert not [n for n in names if "triage" in n]
+
+
+def test_card_ms_above_the_cap_is_clamped_not_refused():
+    from app.schemas.triage import CARD_MS_CAP, TriageDecisionIn
+
+    body = {"pile": "skim", "session_id": str(uuid.uuid4())}
+    assert TriageDecisionIn(**body, card_ms=CARD_MS_CAP * 10).card_ms == CARD_MS_CAP
+    assert TriageDecisionIn(**body, card_ms=5).card_ms == 5
+
+
+def test_the_request_pile_literal_matches_the_core_piles():
+    from typing import get_args
+
+    from app.core import triage
+    from app.schemas.triage import TriageDecisionIn
+
+    assert get_args(TriageDecisionIn.model_fields["pile"].annotation) == tuple(triage.PILES)

@@ -30,7 +30,7 @@ class TriageEvent(Base):
     pdf_ms: Mapped[int | None] = mapped_column(Integer)
     card_ms: Mapped[int | None] = mapped_column(Integer)
     undone_event_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("triage_events.id"))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("clock_timestamp()"))
 
     __table_args__ = (
         CheckConstraint("source IN ('desk', 'reader', 'library', 'undo')", name="ck_triage_events_source"),
@@ -51,6 +51,7 @@ class TriageEvent(Base):
             name="ck_triage_events_drop_reason",
         ),
         CheckConstraint("(source = 'undo') = (undone_event_id IS NOT NULL)", name="ck_triage_events_undo_target"),
+        CheckConstraint("(source = 'desk') = (pile IS NOT NULL)", name="ck_triage_events_pile_source"),
         Index("ix_triage_events_paper_created", "paper_id", text("created_at DESC")),
         Index("ix_triage_events_session_created", "session_id", "created_at"),
         Index(
