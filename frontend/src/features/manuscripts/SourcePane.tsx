@@ -1,6 +1,6 @@
 import { Loader2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { ApiError } from '@/api/client'
+import { api, ApiError } from '@/api/client'
 import { useManuscriptFile, useSaveManuscriptFile } from '@/api/queries'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -14,6 +14,11 @@ import { LatexEditor } from './LatexEditor'
 import { replaceSpan } from './pdfEdit'
 import type { PreambleEdit } from './results/insertBlock'
 import { InsertMenu } from './results/InsertMenu'
+import { ReviewMenu } from './review/ReviewMenu'
+import { ReviewPanel } from './review/ReviewPanel'
+import type { ReviewHandle } from './review/reviewMarks'
+import { useReview } from './review/useReview'
+import { useReviewInEditor } from './review/useReviewInEditor'
 
 const AUTOSAVE_MS = 1000
 const SAVE_LABEL: Record<SaveState, string> = {
@@ -42,6 +47,8 @@ type Props = {
   onCiteKey?: (key: string) => void
   /** Mod-E: the open file's text and the selection (or cursor) to find evidence for. */
   onFindEvidence?: (doc: string, from: number, to: number) => void
+  /** The manuscript's workspace; the reviewer checks citations against its papers. */
+  workspaceId?: string | null
   citeOptions?: DeckPaper[]
   onCite?: (paperId: string) => void
   /** Puts a table or figure at the cursor with the packages it needs (the Insert menu, next). */
@@ -207,12 +214,18 @@ export function SourcePane(props: Props) {
   const changeRef = useRef(change)
   changeRef.current = change
 
+  const isTex = /\.tex$/i.test(path)
+  const review = useReview(manuscriptId, path, isTex)
+  const [reviewHandleRef, setReviewHandle] = useState<ReviewHandle | null>(null)
+  const inEditor = useReviewInEditor({ manuscriptId, workspaceId: props.workspaceId ?? null, review, text, handle: reviewHandleRef, flush: flushNow, getBase: () => base.current })
+
   return (
     <section aria-label={`Editing ${path}`} className="flex h-full min-h-0 flex-col">
       <div className="flex items-center gap-3 border-b border-glass-border px-3 py-1.5">
         <span className="min-w-0 flex-1 truncate text-sm font-medium">{path}</span>
         <span aria-live="polite" className="text-xs text-muted-foreground">{SAVE_LABEL[state]}</span>
         {props.onInsertBlock && /\.tex$/i.test(path) && <InsertMenu manuscriptId={manuscriptId} labelTexts={props.labelTexts ?? (() => [])} filePaths={props.filePaths ?? (() => [])} onInsert={props.onInsertBlock} />}
+        {isTex && <ReviewMenu hasWorkspace={!!props.workspaceId} run={review.anyRun} onCheck={() => void inEditor.check()} onCancel={() => void review.cancel()} />}
         <Button size="sm" disabled={compiling || text === null} onClick={() => void compileNow()}>
           {compiling && <Loader2 aria-hidden className="animate-spin motion-reduce:animate-none" />}
           {compiling ? 'Compiling…' : 'Compile'}
@@ -243,9 +256,10 @@ export function SourcePane(props: Props) {
       {file.error && <Alert variant="destructive" className="m-2 w-auto"><AlertDescription>{file.error.message}</AlertDescription></Alert>}
       <div className="min-h-0 flex-1">
         {text === null ? (!file.error && <TabSkeleton label="Loading file" />) : (
-          <LatexEditor value={text} onChange={change} errors={errors} jumpTo={jumpTo} onCursor={props.onCursor} onSectionStep={props.onSectionStep} onShowInPdf={props.onShowInPdf} onCiteKey={props.onCiteKey} onFindEvidence={props.onFindEvidence} citeOptions={props.citeOptions} onCite={props.onCite} registerInsert={props.registerInsert} registerFindEvidence={props.registerFindEvidence} onSave={() => void compileNow()} />
+          <LatexEditor value={text} onChange={change} errors={errors} jumpTo={jumpTo} onCursor={props.onCursor} onSectionStep={props.onSectionStep} onShowInPdf={props.onShowInPdf} onCiteKey={props.onCiteKey} onFindEvidence={props.onFindEvidence} citeOptions={props.citeOptions} onCite={props.onCite} registerInsert={props.registerInsert} registerFindEvidence={props.registerFindEvidence} registerReview={setReviewHandle} reviewLocate={(t) => api.locateSentences(manuscriptId, t).then((r) => r.sentences)} onSave={() => void compileNow()} />
         )}
       </div>
+      {isTex && <ReviewPanel manuscriptId={manuscriptId} review={review} stale={inEditor.stale} onJump={inEditor.jump} onCite={inEditor.cite} onCheckAgain={() => void inEditor.check()} />}
     </section>
   )
 }

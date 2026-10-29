@@ -198,3 +198,9 @@ class EvidenceRowOut(BaseModel):
     quote: str | None
     page: int | None
     output_id: uuid.UUID | None
+
+
+class MissingKeyOut(BaseModel):
+    key: str
+    file: str
+    line: int

@@ -10,6 +10,12 @@ export type ManuscriptSnapshot = components['schemas']['SnapshotOut']
 export type EvidenceFound = components['schemas']['EvidenceFoundOut']
 export type EvidenceRow = components['schemas']['EvidenceRowOut']
 export type NoteCounts = Record<string, components['schemas']['PaperNoteCounts']>
+export type MissingKey = components['schemas']['MissingKeyOut']
+export type ReviewRun = components['schemas']['ReviewRunOut']
+export type CheckItem = components['schemas']['CheckItemOut']
+export type ReviewState = components['schemas']['ReviewOut']
+export type ReviewSentence = components['schemas']['SentenceOut']
+export type ReviewStart = { file: string; base: string; from?: number | null; to?: number | null; include_uncited?: boolean }
 export type CitablePaper = components['schemas']['CitablePaperOut']
 export type ManuscriptCreate = components['schemas']['ManuscriptCreate']
 export type ManuscriptPatch = components['schemas']['ManuscriptPatch']
@@ -521,6 +527,19 @@ export const api = {
   deleteManuscriptFile: (id: string, path: string) =>
     request<void>(`/api/manuscripts/${id}/files/${manuscriptPath(path)}`, { method: 'DELETE' }),
   manuscriptPapers: (id: string) => request<CitablePaper[]>(`/api/manuscripts/${id}/papers`),
+  missingKeys: (id: string) => request<MissingKey[]>(`/api/manuscripts/${id}/missing-keys`),
+  startReview: (id: string, body: ReviewStart) =>
+    request<ReviewRun>(`/api/manuscripts/${id}/review`, sendJson('POST', body)),
+  reviewState: (id: string, file: string) =>
+    request<ReviewState>(`/api/manuscripts/${id}/review?file=${encodeURIComponent(file)}`),
+  cancelReview: (id: string, runId: string) =>
+    request<ReviewRun>(`/api/manuscripts/${id}/review/${runId}/cancel`, { method: 'POST' }),
+  locateSentences: (id: string, text: string) =>
+    request<{ sentences: ReviewSentence[] }>(`/api/manuscripts/${id}/review/locate`, sendJson('POST', { text })),
+  dismissClaim: (id: string, hash: string) =>
+    request<void>(`/api/manuscripts/${id}/review/dismissals/${hash}`, { method: 'PUT' }),
+  restoreClaim: (id: string, hash: string) =>
+    request<void>(`/api/manuscripts/${id}/review/dismissals/${hash}`, { method: 'DELETE' }),
   pinPaper: (id: string, paperId: string) => request<{ key: string }>(`/api/manuscripts/${id}/papers/${paperId}/pin`, { method: 'POST' }),
   rankPapers: (id: string, text: string) =>
     request<{ paper_ids: string[] }>(`/api/manuscripts/${id}/papers/rank`, sendJson('POST', { text })),

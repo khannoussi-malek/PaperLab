@@ -81,6 +81,8 @@ export const keys = {
   manuscriptPapers: (id: string) => ['manuscriptPapers', id] as const,
   // Per-paper note counts for a set of papers; ['noteCounts'] is the prefix a note change invalidates.
   noteCounts: (sortedIds: string[]) => ['noteCounts', sortedIds] as const,
+  // Keyed by compiledAt: a new compile refetches. Under ['manuscripts', id] so an autosave refreshes it too.
+  missingKeys: (id: string, compiledAt: string | null | undefined) => ['manuscripts', id, 'missingKeys', compiledAt ?? null] as const,
   manuscriptSnapshots: (id: string) => ['manuscripts', id, 'snapshots'] as const,
   papers: ['papers'] as const,
   paper: (id: string) => ['papers', id] as const,
@@ -1418,6 +1420,14 @@ export const useNoteCounts = (ids: string[]) => {
 /** The papers a manuscript can cite, with their keys and note counts. */
 export const useManuscriptPapers = (id: string) =>
   useQuery({ queryKey: keys.manuscriptPapers(id), queryFn: () => api.manuscriptPapers(id) })
+
+/** Keys the source cites that match no paper or .bib entry; refetched on each compile and on window focus. */
+export const useMissingKeys = (id: string, compiledAt: string | null | undefined) =>
+  useQuery({
+    queryKey: keys.missingKeys(id, compiledAt),
+    queryFn: () => api.missingKeys(id),
+    refetchOnWindowFocus: 'always',
+  })
 
 /** A compile pins the keys it cited, so each new compiled_at (not the first one seen) refetches the papers. */
 export function usePapersFollowCompile(id: string, compiledAt: string | null | undefined) {

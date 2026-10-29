@@ -20,6 +20,7 @@ import { SectionList } from './SectionList'
 import { openRowIndex, sectionRows, sectionText, type SectionRow } from './sections'
 import { DeckColumn } from './deck/DeckColumn'
 import { StudioColumns } from './StudioColumns'
+import { MissingCites } from './MissingCites'
 import { PdfPane, type PdfTarget } from './PdfPane'
 import { PdfEditBox } from './PdfEditBox'
 import { findEditable, type Span } from './pdfEdit'
@@ -328,12 +329,13 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
                     registerFindEvidence={registerFindEvidence}
                     onCiteKey={showCited}
                     onFindEvidence={findEvidence}
+                    workspaceId={data.workspace_id}
                     citeOptions={libraryPapers.data}
                     onCite={pinPaper}
                   />
                 ),
               },
-              { id: 'pdf', label: 'PDF', limits: MANUSCRIPT_PDF, shareWith: 'papers', content: (width) => <PdfPane manuscript={data} width={width} target={target} stillStamp={stillStamp} onSourceAt={sourceAt} onEditAt={editAt}>
+              { id: 'pdf', label: 'PDF', limits: MANUSCRIPT_PDF, shareWith: 'papers', content: (width) => <div className="flex h-full min-h-0 flex-col"><div className="min-h-0 flex-1"><PdfPane manuscript={data} width={width} target={target} stillStamp={stillStamp} onSourceAt={sourceAt} onEditAt={editAt}>
                 {edit && (
                   <PdfEditBox
                     key={edit.id}
@@ -345,7 +347,7 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
                     onOpenSource={edit.generated ? undefined : () => { jumpTo(edit.file, edit.line); setEdit(null) }}
                   />
                 )}
-              </PdfPane> },
+              </PdfPane></div><MissingCites manuscriptId={manuscriptId} compiledAt={data?.compiled_at} onJump={jumpTo} /></div> },
               {
                 id: 'papers',
                 label: 'Papers',

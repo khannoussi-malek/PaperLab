@@ -1586,6 +1586,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/manuscripts/{manuscript_id}/missing-keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Missing Keys */
+        get: operations["missing_keys_api_manuscripts__manuscript_id__missing_keys_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/manuscripts/{manuscript_id}/papers/rank": {
         parameters: {
             query?: never;
@@ -1768,6 +1785,76 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Review State */
+        get: operations["review_state_api_manuscripts__manuscript_id__review_get"];
+        put?: never;
+        /** Start Review */
+        post: operations["start_review_api_manuscripts__manuscript_id__review_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/review/locate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Locate */
+        post: operations["locate_api_manuscripts__manuscript_id__review_locate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/review/{run_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Review */
+        post: operations["cancel_review_api_manuscripts__manuscript_id__review__run_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/review/dismissals/{sentence_hash}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Dismiss Claim */
+        put: operations["dismiss_claim_api_manuscripts__manuscript_id__review_dismissals__sentence_hash__put"];
+        post?: never;
+        /** Restore Claim */
+        delete: operations["restore_claim_api_manuscripts__manuscript_id__review_dismissals__sentence_hash__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -3115,6 +3202,58 @@ export interface components {
             /** From Abstract */
             from_abstract: boolean;
         };
+        /** CheckItemOut */
+        CheckItemOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "cited" | "uncited";
+            /** File */
+            file: string;
+            /** Sentence Hash */
+            sentence_hash: string;
+            /** Sentence */
+            sentence: string;
+            /** Ord */
+            ord: number;
+            /** Cite Key */
+            cite_key: string | null;
+            /** Paper Id */
+            paper_id: string | null;
+            /** Paper Title */
+            paper_title: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "done" | "failed" | "interrupted";
+            /** Verdict */
+            verdict: string | null;
+            /** Reason */
+            reason: string | null;
+            /** Quote */
+            quote: string | null;
+            /** Page */
+            page: number | null;
+            /** Chunk Id */
+            chunk_id: string | null;
+            /** Output Id */
+            output_id: string | null;
+            /** Model */
+            model: string | null;
+            /**
+             * Ai
+             * @default true
+             * @constant
+             */
+            ai: true;
+        };
         /** ChunkOut */
         ChunkOut: {
             /**
@@ -4065,6 +4204,16 @@ export interface components {
             /** Label */
             label: string;
         };
+        /** LocateIn */
+        LocateIn: {
+            /** Text */
+            text: string;
+        };
+        /** LocateOut */
+        LocateOut: {
+            /** Sentences */
+            sentences: components["schemas"]["SentenceOut"][];
+        };
         /** ManuscriptCreate */
         ManuscriptCreate: {
             /** Title */
@@ -4229,6 +4378,15 @@ export interface components {
         McpSetupOut: {
             /** Folder */
             folder: string | null;
+        };
+        /** MissingKeyOut */
+        MissingKeyOut: {
+            /** Key */
+            key: string;
+            /** File */
+            file: string;
+            /** Line */
+            line: number;
         };
         /** MissingOut */
         MissingOut: {
@@ -5137,6 +5295,69 @@ export interface components {
                 [key: string]: components["schemas"]["ResolvedCellOut"];
             };
         };
+        /** ReviewIn */
+        ReviewIn: {
+            /** File */
+            file: string;
+            /**
+             * Base
+             * Format: date-time
+             */
+            base: string;
+            /**
+             * From
+             * @description UTF-16 code units, as in JavaScript strings
+             */
+            from?: number | null;
+            /**
+             * To
+             * @description UTF-16 code units, as in JavaScript strings
+             */
+            to?: number | null;
+            /**
+             * Include Uncited
+             * @default true
+             */
+            include_uncited: boolean;
+        };
+        /** ReviewOut */
+        ReviewOut: {
+            run: components["schemas"]["ReviewRunOut"] | null;
+            /** Items */
+            items: components["schemas"]["CheckItemOut"][];
+            /** Dismissed */
+            dismissed: string[];
+        };
+        /** ReviewRunOut */
+        ReviewRunOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** File */
+            file: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "done" | "failed" | "cancelled" | "interrupted";
+            /** Total */
+            total: number;
+            /** Done */
+            done: number;
+            /** Reason */
+            reason: string | null;
+            /** Include Uncited */
+            include_uncited: boolean;
+            /** Uncited Skipped */
+            uncited_skipped: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /** RowIn */
         RowIn: {
             /** Id */
@@ -5566,6 +5787,23 @@ export interface components {
             sections: components["schemas"]["SectionOut"][];
             /** Lenses */
             lenses: components["schemas"]["LensOut"][];
+        };
+        /** SentenceOut */
+        SentenceOut: {
+            /**
+             * Start
+             * @description UTF-16 code units, as in JavaScript strings
+             */
+            start: number;
+            /**
+             * End
+             * @description UTF-16 code units, as in JavaScript strings
+             */
+            end: number;
+            /** Hash */
+            hash: string;
+            /** Keys */
+            keys: string[];
         };
         /**
          * Series
@@ -9506,6 +9744,37 @@ export interface operations {
             };
         };
     };
+    missing_keys_api_manuscripts__manuscript_id__missing_keys_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MissingKeyOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     rank_papers_api_manuscripts__manuscript_id__papers_rank_post: {
         parameters: {
             query?: never;
@@ -9849,6 +10118,201 @@ export interface operations {
                 content: {
                     "application/json": unknown;
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    review_state_api_manuscripts__manuscript_id__review_get: {
+        parameters: {
+            query: {
+                file: string;
+            };
+            header?: never;
+            path: {
+                manuscript_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_review_api_manuscripts__manuscript_id__review_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewRunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    locate_api_manuscripts__manuscript_id__review_locate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LocateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_review_api_manuscripts__manuscript_id__review__run_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewRunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dismiss_claim_api_manuscripts__manuscript_id__review_dismissals__sentence_hash__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+                sentence_hash: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_claim_api_manuscripts__manuscript_id__review_dismissals__sentence_hash__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+                sentence_hash: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
