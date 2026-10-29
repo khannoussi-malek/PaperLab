@@ -12,8 +12,8 @@ class ReviewIn(BaseModel):
 
     file: str
     base: AwareDatetime  # the file's updated_at the editor last saw
-    from_: int | None = Field(None, alias="from", ge=0)
-    to: int | None = Field(None, ge=0)
+    from_: int | None = Field(None, alias="from", ge=0, description="UTF-16 code units, as in JavaScript strings")
+    to: int | None = Field(None, ge=0, description="UTF-16 code units, as in JavaScript strings")
     include_uncited: bool = True
 
 
@@ -63,8 +63,8 @@ class LocateIn(BaseModel):
 
 
 class SentenceOut(BaseModel):
-    start: int
-    end: int
+    start: int = Field(description="UTF-16 code units, as in JavaScript strings")
+    end: int = Field(description="UTF-16 code units, as in JavaScript strings")
     hash: str
     keys: list[str]
 

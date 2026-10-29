@@ -400,3 +400,45 @@ async def test_locate_returns_the_spans_and_refuses_huge_text(session):
     assert text[got[0]["start"] : got[0]["end"]].endswith("\\citep{a,b}.") and len(got[0]["hash"]) == 64
     with pytest.raises(InvalidInput):
         mr.locate("x" * (2 * 1024**2 + 1))
+
+
+def u16(s: str, i: int) -> int:
+    return len(s[:i].encode("utf-16-le")) // 2
+
+
+MATH = (
+    "Let \U0001d53c be the mean \U0001f600 here. "
+    "Sleep improves memory consolidation \\citep{a}. Walking is good for health."
+)
+
+
+async def test_locate_speaks_utf16_offsets(session):
+    got = mr.locate(MATH)
+    assert len(got) == 3
+    for s, expected in zip(got, [MATH.index("Let"), MATH.index("Sleep"), MATH.index("Walking")]):
+        assert s["start"] == u16(MATH, expected)
+    js = MATH.encode("utf-16-le")  # JS slice(start, end) works on these code units
+    sliced = [js[2 * s["start"] : 2 * s["end"]].decode("utf-16-le") for s in got]
+    assert sliced[1] == "Sleep improves memory consolidation \\citep{a}." and sliced[2] == "Walking is good for health."
+
+
+async def test_a_selection_in_utf16_offsets_picks_the_right_sentence(session):
+    _, _, m = await doc(session, lambda k: MATH, "Alpha")
+    at = u16(MATH, MATH.index("Walking")) + 2  # a code-point reading of this would land in the next sentence's end
+    await go(session, m, selection=(at, at + 1))
+    [r] = await rows(session, m.id)
+    assert r.sentence == "Walking is good for health."
+    assert mr.from_utf16("a\U0001d53cb", 2) == 1 and mr.from_utf16("a\U0001d53cb", 3) == 2  # inside a pair rounds down
+
+
+async def test_a_run_with_nothing_to_judge_is_done_and_not_queued(session, arq):
+    _, _, m = await doc(session, lambda k: "Word " * 500 + "ends here.", "Alpha")
+    assert (await go(session, m))["status"] == "done" and arq.jobs == []
+
+
+async def test_over_long_uncited_sentences_take_no_classify_slot(session):
+    long = "Word " * 500 + "ends here."
+    short = " ".join(f"Plain statement number {i} about the world." for i in range(30))
+    _, _, m = await doc(session, lambda k: f"{long} {short}", "Alpha")
+    run = await go(session, m)
+    assert run["uncited_skipped"] == 0 and run["total"] == 31

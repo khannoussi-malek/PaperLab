@@ -5304,9 +5304,15 @@ export interface components {
              * Format: date-time
              */
             base: string;
-            /** From */
+            /**
+             * From
+             * @description UTF-16 code units, as in JavaScript strings
+             */
             from?: number | null;
-            /** To */
+            /**
+             * To
+             * @description UTF-16 code units, as in JavaScript strings
+             */
             to?: number | null;
             /**
              * Include Uncited
@@ -5784,9 +5790,15 @@ export interface components {
         };
         /** SentenceOut */
         SentenceOut: {
-            /** Start */
+            /**
+             * Start
+             * @description UTF-16 code units, as in JavaScript strings
+             */
             start: number;
-            /** End */
+            /**
+             * End
+             * @description UTF-16 code units, as in JavaScript strings
+             */
             end: number;
             /** Hash */
             hash: string;
