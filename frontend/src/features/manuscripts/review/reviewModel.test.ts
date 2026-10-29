@@ -29,6 +29,13 @@ describe('marksFor', () => {
   })
 })
 
+test('marksFor: settled claims whose sentence changed are not stale', () => {
+  const nc = item({ id: 'n', kind: 'uncited', verdict: 'not_claim', sentence_hash: 'x1' })
+  const dis = item({ id: 'd', kind: 'uncited', verdict: 'claim', sentence_hash: 'x2' })
+  const cited = item({ id: 'c', sentence_hash: 'x3' })
+  expect(marksFor([nc, dis, cited], [], ['x2']).stale).toEqual([cited])
+})
+
 describe('citeThisEdit', () => {
   const run = (doc: string, key = 'k1') => {
     const e = citeThisEdit(doc, { start: 0, end: doc.length }, key)

@@ -31,9 +31,10 @@ export function marksFor(items: CheckItem[], spans: ReviewSentence[], dismissed:
   const grouped = new Map<string, Mark>()
   const stale: CheckItem[] = []
   for (const item of items) {
+    // Settled claims need no re-check when their sentence changes, so they are never "stale".
+    if (item.kind === 'uncited' && (item.verdict === 'not_claim' || gone.has(item.sentence_hash))) continue
     const span = byHash.get(item.sentence_hash)
     if (!span) { stale.push(item); continue }
-    if (item.kind === 'uncited' && (item.verdict === 'not_claim' || gone.has(item.sentence_hash))) continue
     const mark = grouped.get(span.hash)
     if (mark) grouped.set(span.hash, { ...mark, items: [...mark.items, item] })
     else grouped.set(span.hash, { from: span.start, to: span.end, items: [item] })
@@ -56,3 +57,14 @@ export function citeThisEdit(doc: string, span: { start: number; end: number }, 
   const lead = at === 0 || /[\s~]/.test(prev) ? '' : ' '
   return { from: at, insert: `${lead}\\citep{${key}}` }
 }
+
+const REASON_COPY: Record<string, string> = {
+  key_not_found: 'This key matches no paper in the library',
+  no_text: 'This paper has no text yet',
+  claim_too_long: 'This sentence is too long to check',
+  check_failed: "The model didn't give a usable answer",
+}
+/** A failed or unverifiable row's reason in plain words. */
+export const reasonCopy = (reason: string | null): string => (reason && REASON_COPY[reason]) || "The model didn't give a usable answer"
+
+export const isLive = (run: { status: string } | null) => run?.status === 'queued' || run?.status === 'running'

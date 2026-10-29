@@ -21,12 +21,13 @@ export function reviewStartError(e: unknown): string {
 
 export type ReviewSelection = { from?: number | null; to?: number | null; includeUncited?: boolean }
 
-export function useReview(manuscriptId: string, file: string) {
+export function useReview(manuscriptId: string, file: string, enabled = true) {
   const qc = useQueryClient()
   const key = ['manuscriptReview', manuscriptId, file]
   const state = useQuery({
     queryKey: key,
     queryFn: () => api.reviewState(manuscriptId, file),
+    enabled,
     refetchInterval: (q) => {
       const s = (q.state.data as ReviewState | undefined)?.run?.status
       return s === 'queued' || s === 'running' ? POLL_MS : false
