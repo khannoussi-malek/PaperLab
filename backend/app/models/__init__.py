@@ -26,6 +26,7 @@ from app.models.references import ExternalRef, NoteEmbedding, paper_references
 from app.models.saved_search import SavedSearch
 from app.models.setup import Setup
 from app.models.tag import WorkspaceTag, hit_tags, paper_tags
+from app.models.triage_event import TriageEvent
 from app.models.workspace import Workspace, workspace_papers
 
 __all__ = [
@@ -62,6 +63,7 @@ __all__ = [
     "Provenance",
     "SavedSearch",
     "Setup",
+    "TriageEvent",
     "Workspace",
     "WorkspaceTag",
     "cell_table",
