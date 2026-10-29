@@ -96,6 +96,7 @@ Defined in `src/index.css` as CSS variables and exposed to Tailwind through `@th
 | `highlight-draft` | blue 25% | same | The pending selection. Saved highlights use their note's colour (see "Highlight colours") |
 | `glass` / `glass-strong` | white 70% / white 85% | slate-800 55% / slate-800 92% | Frosted chrome / cards and floating surfaces |
 | `glass-border` | slate-400 35% | white 10% | Hairline on glass |
+| `paper` | #fbf8f0 | #fbf8f0 | Card surface for paper-like cards (triage card); light in both themes inside a `.paper-surface` scope that re-declares the light tokens. Measured AA: foreground #0f172a on paper 16.9:1, muted-foreground #475569 on paper 7.1:1 |
 | `ambient-1` / `ambient-2` (body glow) | blue 12% / violet 10% | blue 18% / violet 16% | Radial glows behind the glass |
 | `on-page-ring` | `#2563eb` | same | Focus ring for controls on the always-white PDF page (citation buttons); fixed across themes so dark theme still keeps 3:1 |
 

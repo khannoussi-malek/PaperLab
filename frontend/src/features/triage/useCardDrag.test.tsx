@@ -78,3 +78,21 @@ it('does nothing when disabled', () => {
   drag(screen.getByTestId('text'), 150, 0)
   expect(onCommit).not.toHaveBeenCalled()
 })
+
+it('a plain click does not cancel', () => {
+  const onCancel = vi.fn()
+  render(<Probe onCommit={vi.fn()} onCancel={onCancel} />)
+  const el = screen.getByTestId('text')
+  fireEvent.pointerDown(el, { clientX: 5, clientY: 5, pointerId: 1, button: 0 })
+  fireEvent.pointerUp(el, { clientX: 5, clientY: 5, pointerId: 1 })
+  expect(onCancel).not.toHaveBeenCalled()
+})
+
+it('ignores a second pointer', () => {
+  const onCommit = vi.fn()
+  render(<Probe onCommit={onCommit} onCancel={vi.fn()} />)
+  const el = screen.getByTestId('text')
+  fireEvent.pointerDown(el, { clientX: 0, clientY: 0, pointerId: 1, button: 0 })
+  fireEvent.pointerUp(el, { clientX: 200, clientY: 0, pointerId: 2 })
+  expect(onCommit).not.toHaveBeenCalled()
+})

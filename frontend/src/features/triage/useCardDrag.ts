@@ -23,6 +23,7 @@ export function useCardDrag(ref: RefObject<HTMLElement | null>, opts: Opts) {
     const el = ref.current
     if (!el || !enabled) return
     let start: { x: number; y: number; id: number } | null = null
+    let moved = false
 
     const reset = () => {
       const { reduced } = latest.current
@@ -31,6 +32,8 @@ export function useCardDrag(ref: RefObject<HTMLElement | null>, opts: Opts) {
     }
     const end = () => {
       start = null
+      moved = false
+      document.body.style.userSelect = ''
       window.removeEventListener('keydown', onKey)
     }
     const cancel = () => {
@@ -46,19 +49,21 @@ export function useCardDrag(ref: RefObject<HTMLElement | null>, opts: Opts) {
       start = { x: e.clientX, y: e.clientY, id: e.pointerId }
       el.setPointerCapture?.(e.pointerId)
       el.style.transition = 'none'
+      document.body.style.userSelect = 'none'
       window.addEventListener('keydown', onKey)
     }
     const onMove = (e: PointerEvent) => {
-      if (!start) return
+      if (!start || e.pointerId !== start.id) return
+      moved = true
       const dx = e.clientX - start.x
       const dy = e.clientY - start.y
       el.style.transform = `translate(${dx}px, ${dy}px) rotate(${dx / 14}deg)`
       latest.current.onProgress(dx, dy, pileForDrag(dx, dy, latest.current.min))
     }
     const onUp = (e: PointerEvent) => {
-      if (!start) return
+      if (!start || e.pointerId !== start.id) return
       const pile = pileForDrag(e.clientX - start.x, e.clientY - start.y, latest.current.min)
-      if (!pile) return cancel()
+      if (!pile) return moved ? cancel() : (end(), reset())
       end()
       el.style.transition = 'none'
       el.style.transform = ''
