@@ -88,17 +88,20 @@ async def test_manual_fields_stay_untouched(session):
 
 @pytest.fixture
 def slow_first_lock(monkeypatch):
-    """The first get_paper call holds its transaction open a moment after reading, so the second always collides."""
-    real, calls = papers.get_paper, []
+    """The first get_paper call sets `held` once it has read the paper, then keeps its transaction open a moment, so
+    a second session started on `held` always collides with it."""
+    real, calls, held = papers.get_paper, [], asyncio.Event()
 
     async def slow(session, paper_id, **kw):
         paper = await real(session, paper_id, **kw)
         calls.append(1)
         if len(calls) == 1:
+            held.set()
             await asyncio.sleep(0.4)
         return paper
 
     monkeypatch.setattr(papers, "get_paper", slow)
+    return held
 
 
 async def test_set_reading_and_decide_racing_chain_their_events(slow_first_lock):
@@ -112,7 +115,7 @@ async def test_set_reading_and_decide_racing_chain_their_events(slow_first_lock)
                 await papers.set_reading(s, paper.id, {"triage": "later"})
 
         async def desk():
-            await asyncio.sleep(0.1)
+            await slow_first_lock.wait()
             async with AsyncSession(engine, expire_on_commit=False) as s:
                 await triage.decide(s, paper.id, pile="skim", session_id=uuid.uuid4())
 
