@@ -81,3 +81,11 @@ it('Esc leaves once and removes the session', () => {
   expect(onExit).toHaveBeenCalledTimes(1)
   expect(sessionStorage.getItem('paperlab-triage-session:library')).toBeNull()
 })
+
+it('prefetches the sections of the next two cards only', async () => {
+  const { api } = await import('@/api/client')
+  const spy = vi.spyOn(api, 'paperSections').mockResolvedValue({ sections: [], lenses: [] } as never)
+  setup([...base, mk('4', 'Fourth')])
+  await vi.waitFor(() => expect(spy.mock.calls.map((c) => c[0]).sort()).toEqual(['1', '2', '3']))
+  spy.mockRestore()
+})

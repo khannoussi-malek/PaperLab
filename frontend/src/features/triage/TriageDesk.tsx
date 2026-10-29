@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import type { Paper } from '@/api/client'
+import { prefetchPaperSections } from '@/features/lenses/queries'
 import { browserStorage } from '@/features/notes/highlightColors'
+import { TriageCard } from './TriageCard'
 import { TriageBar } from './TriageBar'
 import { TriageEmpty } from './TriageEmpty'
 import { deskLayout, useDeskWidth } from './layout'
@@ -44,6 +47,11 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
   })
   const { state, top, notReady } = session
   useEffect(() => root.current?.focus(), [])
+  const client = useQueryClient()
+  const nextTwo = state.unseen.slice(1, 3).filter((id) => library.find((p) => p.id === id)?.has_pdf).join(',')
+  useEffect(() => {
+    for (const id of nextTwo.split(',').filter(Boolean)) void prefetchPaperSections(client, id)
+  }, [client, nextTwo])
 
   const exit = () => {
     closeSession(scope)
@@ -94,9 +102,7 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
       {empty ? (
         <TriageEmpty canInclude={!includeDecided} onInclude={() => toggleInclude(true)} onBack={exit} />
       ) : top ? (
-        <article className="rounded-xl border border-glass-border p-6">
-          <h2 className="font-heading text-xl font-semibold wrap-anywhere">{top.title}</h2>
-        </article>
+        <TriageCard paper={top} />
       ) : (
         <p className="text-muted-foreground">That is the whole stack for now.</p>
       )}
