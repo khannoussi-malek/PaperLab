@@ -132,7 +132,8 @@ export interface paths {
         /**
          * Set Reading
          * @description The reader's passes finished and decision (D119). Only the fields sent change. 404 unknown paper; 422 for an
-         *     empty body, a level outside 0–3, a null level, an unknown decision or any other field.
+         *     empty body, a level outside 0–3, a null level, an unknown decision or any other field. The optional
+         *     X-PaperLab-Source header (reader, library) says where the change came from; any other value is 422.
          */
         put: operations["set_reading_api_papers__paper_id__reading_put"];
         post?: never;
@@ -286,6 +287,101 @@ export interface paths {
         };
         /** Paper Tags */
         get: operations["paper_tags_api_papers__paper_id__tags_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/papers/{paper_id}/triage-decisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decide
+         * @description A desk decision. 201; 200 with the first result when `client_id` was already used (a retry). 404 unknown
+         *     paper, 410 merged, 422 reason_required | unknown_reason (with allowed) | note_too_long.
+         */
+        post: operations["decide_api_papers__paper_id__triage_decisions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/papers/{paper_id}/triage-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Paper History */
+        get: operations["paper_history_api_papers__paper_id__triage_events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/triage-events/{event_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Add Reason
+         * @description Add a reason and/or note to a desk decision made in the last few minutes. A field not sent stays as it was.
+         */
+        patch: operations["add_reason_api_triage_events__event_id__patch"];
+        trace?: never;
+    };
+    "/api/triage-events/{event_id}/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Undo
+         * @description 409 changed_since | already_undone | not_a_desk_event.
+         */
+        post: operations["undo_api_triage_events__event_id__undo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/triage-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Summary */
+        get: operations["summary_api_triage_summary_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -6148,6 +6244,116 @@ export interface components {
             /** Text */
             text: string;
         };
+        /** TriageDecisionIn */
+        TriageDecisionIn: {
+            /**
+             * Pile
+             * @enum {string}
+             */
+            pile: "read_closely" | "skim" | "later" | "not_relevant" | "skip";
+            /**
+             * Session Id
+             * Format: uuid
+             */
+            session_id: string;
+            /** Client Id */
+            client_id?: string | null;
+            /** Reason */
+            reason?: string | null;
+            /** Note */
+            note?: string | null;
+            /** Fivecs */
+            fivecs?: number | null;
+            /**
+             * Pdf Opened
+             * @default false
+             */
+            pdf_opened: boolean;
+            /** Pdf Ms */
+            pdf_ms?: number | null;
+            /** Card Ms */
+            card_ms?: number | null;
+        };
+        /** TriageDecisionOut */
+        TriageDecisionOut: {
+            paper: components["schemas"]["PaperOut"];
+            event: components["schemas"]["TriageEventOut"];
+        };
+        /** TriageEventOut */
+        TriageEventOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Paper Id
+             * Format: uuid
+             */
+            paper_id: string;
+            /** Session Id */
+            session_id: string | null;
+            /** Client Id */
+            client_id: string | null;
+            /** Source */
+            source: string;
+            /** Pile */
+            pile: string | null;
+            /** Before Triage */
+            before_triage: string | null;
+            /** After Triage */
+            after_triage: string | null;
+            /** Before Pass */
+            before_pass: number;
+            /** After Pass */
+            after_pass: number;
+            /** Reason */
+            reason: string | null;
+            /** Note */
+            note: string | null;
+            /** Fivecs */
+            fivecs: number | null;
+            /** Pdf Opened */
+            pdf_opened: boolean;
+            /** Pdf Ms */
+            pdf_ms: number | null;
+            /** Card Ms */
+            card_ms: number | null;
+            /** Undone Event Id */
+            undone_event_id: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** TriageHistoryOut */
+        TriageHistoryOut: {
+            /** Events */
+            events: components["schemas"]["TriageEventOut"][];
+        };
+        /** TriageReasonIn */
+        TriageReasonIn: {
+            /** Reason */
+            reason?: string | null;
+            /** Note */
+            note?: string | null;
+        };
+        /** TriageSummaryOut */
+        TriageSummaryOut: {
+            /** Per Pile */
+            per_pile: {
+                [key: string]: number;
+            };
+            /** Skipped */
+            skipped: number;
+            /** Card Ms */
+            card_ms: number;
+            /** Pdf Opened */
+            pdf_opened: number;
+            /** Decided */
+            decided: number;
+        };
         /** UnfetchedPaperOut */
         UnfetchedPaperOut: {
             /**
@@ -6472,7 +6678,9 @@ export interface operations {
     set_reading_api_papers__paper_id__reading_put: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-paperlab-source"?: string;
+            };
             path: {
                 paper_id: string;
             };
@@ -6743,6 +6951,169 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PaperTagGroup"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decide_api_papers__paper_id__triage_decisions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                paper_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TriageDecisionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TriageDecisionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    paper_history_api_papers__paper_id__triage_events_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                paper_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TriageHistoryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_reason_api_triage_events__event_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                event_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TriageReasonIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TriageEventOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    undo_api_triage_events__event_id__undo_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                event_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TriageDecisionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    summary_api_triage_summary_get: {
+        parameters: {
+            query: {
+                session_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TriageSummaryOut"];
                 };
             };
             /** @description Validation Error */
