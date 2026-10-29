@@ -16,6 +16,9 @@ import {
   useApplyTag,
   useBulkPatchSearchHits,
   useSetEligibility,
+  keys,
+  useSetReading,
+  useTriageEvents,
   manuscriptPollInterval,
   useSaveManuscriptFile,
   useAddSection,
@@ -444,5 +447,36 @@ describe('useNoteCounts', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(spy.mock.calls.map((c) => c[0].length)).toEqual([2000, 2000, 500])
     expect(Object.keys(result.current.data!)).toHaveLength(4500)
+  })
+})
+
+describe('triage events', () => {
+  afterEach(() => vi.restoreAllMocks())
+  const wrapper = (client: QueryClient) => ({ children }: { children: ReactNode }) =>
+    createElement(QueryClientProvider, { client }, children)
+
+  it('has a stable key per paper', () => {
+    expect(keys.triageEvents('p1')).toEqual(['papers', 'p1', 'triage-events'])
+  })
+
+  it('useTriageEvents waits for enabled', async () => {
+    const spy = vi.spyOn(api, 'triageEvents').mockResolvedValue([])
+    const client = new QueryClient()
+    const { rerender } = renderHook(({ on }) => useTriageEvents('p1', on), { wrapper: wrapper(client), initialProps: { on: false } })
+    expect(spy).not.toHaveBeenCalled()
+    rerender({ on: true })
+    await waitFor(() => expect(spy).toHaveBeenCalledTimes(1))
+  })
+
+  it('useSetReading passes the source and refreshes the paper history', async () => {
+    const put = vi.spyOn(api, 'setReading').mockResolvedValue({ id: 'p1' } as Paper)
+    const client = new QueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+    const { result } = renderHook(() => useSetReading(), { wrapper: wrapper(client) })
+    result.current.mutate({ paperId: 'p1', changes: { triage: 'keep' }, source: 'library' })
+    await waitFor(() => expect(put).toHaveBeenCalledWith('p1', { triage: 'keep' }, 'library'))
+    await waitFor(() =>
+      expect(invalidate.mock.calls.map((c) => JSON.stringify(c[0]?.queryKey))).toContain('["papers","p1","triage-events"]')
+    )
   })
 })
