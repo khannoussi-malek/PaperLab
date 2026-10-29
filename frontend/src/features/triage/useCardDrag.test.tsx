@@ -96,3 +96,13 @@ it('ignores a second pointer', () => {
   fireEvent.pointerUp(el, { clientX: 200, clientY: 0, pointerId: 2 })
   expect(onCommit).not.toHaveBeenCalled()
 })
+
+it('unmounting mid-drag restores the body text selection', () => {
+  document.body.style.userSelect = 'text'
+  const { unmount } = render(<Probe onCommit={vi.fn()} onCancel={vi.fn()} />)
+  fireEvent.pointerDown(screen.getByTestId('text'), { clientX: 0, clientY: 0, pointerId: 1, button: 0 })
+  expect(document.body.style.userSelect).toBe('none')
+  unmount()
+  expect(document.body.style.userSelect).toBe('text')
+  document.body.style.userSelect = ''
+})

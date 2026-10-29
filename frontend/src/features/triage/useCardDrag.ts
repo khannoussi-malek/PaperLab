@@ -24,6 +24,7 @@ export function useCardDrag(ref: RefObject<HTMLElement | null>, opts: Opts) {
     if (!el || !enabled) return
     let start: { x: number; y: number; id: number } | null = null
     let moved = false
+    let prevSelect = ''
 
     const reset = () => {
       const { reduced } = latest.current
@@ -33,7 +34,7 @@ export function useCardDrag(ref: RefObject<HTMLElement | null>, opts: Opts) {
     const end = () => {
       start = null
       moved = false
-      document.body.style.userSelect = ''
+      document.body.style.userSelect = prevSelect
       window.removeEventListener('keydown', onKey)
     }
     const cancel = () => {
@@ -49,6 +50,7 @@ export function useCardDrag(ref: RefObject<HTMLElement | null>, opts: Opts) {
       start = { x: e.clientX, y: e.clientY, id: e.pointerId }
       el.setPointerCapture?.(e.pointerId)
       el.style.transition = 'none'
+      prevSelect = document.body.style.userSelect
       document.body.style.userSelect = 'none'
       window.addEventListener('keydown', onKey)
     }
@@ -79,6 +81,7 @@ export function useCardDrag(ref: RefObject<HTMLElement | null>, opts: Opts) {
       el.removeEventListener('pointerup', onUp)
       el.removeEventListener('pointercancel', cancel)
       window.removeEventListener('keydown', onKey)
+      if (start) document.body.style.userSelect = prevSelect
     }
   }, [ref, enabled])
 }
