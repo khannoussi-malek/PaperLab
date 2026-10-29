@@ -1,4 +1,4 @@
-/** Card time is capped so a card left open overnight doesn't read as a 9 hour look. */
+/** Card and PDF time are capped so a card left open overnight doesn't read as a 9 hour look. */
 const CARD_CAP_MS = 1_800_000
 
 /** Times one card: card and PDF time run only while active (tab visible, window focused). */
@@ -33,7 +33,7 @@ export class CardClock {
 
   read() {
     this.flush()
-    return { card_ms: Math.min(this.card, CARD_CAP_MS), pdf_ms: this.pdf, pdf_opened: this.opened }
+    return { card_ms: Math.min(this.card, CARD_CAP_MS), pdf_ms: Math.min(this.pdf, CARD_CAP_MS), pdf_opened: this.opened }
   }
 
   reset() {

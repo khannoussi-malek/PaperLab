@@ -85,7 +85,8 @@ export type DoneEntry = {
   status: 'pending' | 'saved'
 }
 
-export type QueueState = { unseen: string[]; skipped: string[]; done: DoneEntry[]; total: number; seed: number; order: Order }
+/** `left` holds papers whose undo was refused: they left the session for good and never come back. */
+export type QueueState = { unseen: string[]; skipped: string[]; done: DoneEntry[]; left: string[]; total: number; seed: number; order: Order }
 
 export type QueueAction =
   | { type: 'start'; ids: string[]; seed: number; order: Order }
@@ -99,7 +100,7 @@ export type QueueAction =
   | { type: 'refreeze'; papers: readonly Paper[]; opts: Omit<QueueOpts, 'exclude'> }
   | { type: 'reviewSkipped' }
 
-export const emptyQueue: QueueState = { unseen: [], skipped: [], done: [], total: 0, seed: 0, order: 'oldest' }
+export const emptyQueue: QueueState = { unseen: [], skipped: [], done: [], left: [], total: 0, seed: 0, order: 'oldest' }
 
 const without = (list: readonly string[], id: string) => list.filter((x) => x !== id)
 const decidedCount = (done: readonly DoneEntry[]) => done.filter((d) => d.pile !== 'skip').length
@@ -116,7 +117,7 @@ const restore = (s: QueueState, entry: DoneEntry): QueueState => ({
 export function queueReducer(state: QueueState = emptyQueue, action: QueueAction): QueueState {
   switch (action.type) {
     case 'start':
-      return { unseen: action.ids, skipped: [], done: [], total: action.ids.length, seed: action.seed, order: action.order }
+      return { unseen: action.ids, skipped: [], done: [], left: [], total: action.ids.length, seed: action.seed, order: action.order }
     case 'decide': {
       const { entry } = action
       // A card decided again after "Review the skipped" replaces its old skip entry.
@@ -149,12 +150,13 @@ export function queueReducer(state: QueueState = emptyQueue, action: QueueAction
         done: [...state.done.filter((d) => d.clientId !== action.entry.clientId), action.entry],
       }
     case 'undoRefused':
-      return {
+      return withTotal({
         ...state,
         unseen: without(state.unseen, action.entry.id),
         skipped: without(state.skipped, action.entry.id),
         done: state.done.filter((d) => d.clientId !== action.entry.clientId),
-      }
+        left: [...without(state.left, action.entry.id), action.entry.id],
+      })
     case 'reorder': {
       const [head, ...rest] = state.unseen
       const tail = new Set(rest)
@@ -164,12 +166,13 @@ export function queueReducer(state: QueueState = emptyQueue, action: QueueAction
       return { ...state, order: action.order, unseen: head === undefined ? [] : [head, ...sorted, ...unknown] }
     }
     case 'refreeze': {
-      const exclude = new Set([...state.done.map((d) => d.id), ...state.skipped])
+      const exclude = new Set([...state.done.map((d) => d.id), ...state.skipped, ...state.left])
       const { ids } = buildQueue(action.papers, { ...action.opts, exclude })
       return withTotal({ ...state, unseen: ids, seed: action.opts.seed, order: action.opts.order })
     }
     case 'reviewSkipped':
-      return { ...state, unseen: state.skipped, skipped: [] }
+      // The skip entries go: those cards are undecided again, so undo and the pile counts see only real decisions.
+      return { ...state, unseen: state.skipped, skipped: [], done: state.done.filter((d) => d.pile !== 'skip') }
     default:
       return state // the stack is frozen: list refetches, uploads and reorders never reach it
   }
@@ -188,6 +191,6 @@ export function countsByPile(s: QueueState): Record<Pile, number> {
 
 /** Ready papers that arrived after the freeze: not in the stack, skipped or decided. */
 export function newSince(s: QueueState, papers: readonly Paper[], o: { includeDecided: boolean }): number {
-  const exclude = new Set([...s.unseen, ...s.skipped, ...s.done.map((d) => d.id)])
+  const exclude = new Set([...s.unseen, ...s.skipped, ...s.left, ...s.done.map((d) => d.id)])
   return buildQueue(papers, { order: 'list', seed: 0, ...o, exclude }).ids.length
 }
