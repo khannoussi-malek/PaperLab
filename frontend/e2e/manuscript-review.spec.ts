@@ -35,16 +35,14 @@ test('Review a manuscript: check citations, cite a claim, edit, dismiss, list mi
     const content = page.locator('.cm-content')
     await expect(content).toContainText(CLAIM)
 
-    // Review > Check citations: progress, then verdicts.
-    // The fake model is quick, so the progress line may be gone before it is seen: watch for it from before the click and accept the finished state, but report which happened.
-    const progress = page.getByText(/Checking \d+ of \d+…/).first().waitFor({ timeout: 30_000 }).then(() => true, () => false)
+    // Review > Check citations, then verdicts.
+    // The "Checking N of M…" line and Cancel are unit-tested (ReviewMenu.test.tsx, ReviewPanel.test.tsx): the fake model finishes too fast to assert them here.
     await page.getByRole('button', { name: 'Review' }).click()
     await page.getByRole('menuitem', { name: 'Check citations' }).click()
     const panel = page.getByRole('region', { name: 'Citation check' })
     await expect(panel).toBeVisible({ timeout: 30_000 })
     const citedRow = panel.getByRole('listitem').filter({ hasText: 'Highlights are the anchor' })
     await expect(citedRow.getByText('Supports', { exact: true })).toBeVisible({ timeout: 120_000 })
-    test.info().annotations.push({ type: 'progress line seen', description: String(await progress) })
     await expect(citedRow.getByText('AI', { exact: true })).toBeVisible() // the provenance chip in the panel
     await expect(panel.getByText('Needs a citation', { exact: true })).toHaveCount(2)
     await expect(content.locator('.cm-review-badge', { hasText: /AI.*Supports/ })).toBeVisible() // and in the editor
