@@ -32,6 +32,7 @@ from app.api import (
 )
 from app.api import citations as citations_api
 from app.api import evidence_cards as evidence_cards_api
+from app.api import manuscript_review as manuscript_review_api
 from app.api import manuscripts as manuscripts_api
 from app.api import mcp as mcp_api
 from app.api import paper_sources as paper_sources_api
@@ -116,6 +117,7 @@ def create_app() -> FastAPI:
     app.include_router(saved_searches_api.router)
     app.include_router(evidence_cards_api.router)
     app.include_router(manuscripts_api.router)
+    app.include_router(manuscript_review_api.router)
     app.include_router(datasets.router)
     app.include_router(charts.router)
     app.include_router(llm.router)
@@ -132,7 +134,7 @@ def create_app() -> FastAPI:
     async def domain_error(_: Request, exc: DomainError) -> JSONResponse:
         # no_free_pdf says what it tried and where a free copy may be (M63)
         extra = {key: exc.details[key] for key in ("tried", "free_copies") if key in exc.details}
-        for key in ("path", "limit"):  # manuscript errors name the file and the cap (M27a)
+        for key in ("path", "limit", "count"):  # manuscript errors name the file and the cap (M27a)
             if key in exc.details:
                 extra[key] = exc.details[key]
         if "updated_at" in exc.details:  # file_changed: the file's clock; pydantic's UTC form (Z) matches the bodies

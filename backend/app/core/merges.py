@@ -123,6 +123,8 @@ STEPS = (
     _move("evidence_cards"),
     _union("manuscript_cite_keys", ["manuscript_id", "key"]),  # a key K already pins keeps K's paper
     _union("manuscript_evidence", ["manuscript_id", "sentence_hash"]),  # K's verdict for a sentence wins
+    # a check is "the same" by sentence alone: the unique index has no cite_key, so a different key would collide
+    _union("manuscript_claim_checks", ["manuscript_id", "file_path", "sentence_hash"]),
     _move("paper_events"),  # M's history (R21) is K's now
 )
 _AWAITING = (

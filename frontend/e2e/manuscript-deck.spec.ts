@@ -154,8 +154,9 @@ test('The paper book turns no leaf with reduced motion', { tag: '@compile' }, as
 })
 
 // Find evidence: a sentence in the editor -> Mod+E -> the paper with matching text comes first, with an E badge and an E tab
-// holding the passage. The e2e stack runs the fake LLM and seeds a default model; the fake's reply to a claim check is not
-// the JSON a verdict needs, so every check ends as "Can't tell" -- the label proves the whole queue ran.
+// holding the passage. The e2e stack runs the fake LLM and seeds a default model; the fake's reply to a claim check is a
+// supported verdict with a quote copied from the first passage, so every check ends as "Supports" -- the label proves
+// the whole queue ran. The unreadable-answer path is covered by deckModel.test.ts.
 test('Find evidence for a sentence: E badge, E tab, a verdict, insert only the citation, Esc clears, and the deck button asks again', { tag: '@compile' }, async ({
   page, request, workspaceId, paperId, tablePaperId,
 }) => {
@@ -188,9 +189,9 @@ test('Find evidence for a sentence: E badge, E tab, a verdict, insert only the c
     const eTab = book(page).locator('[data-book-tab]').first()
     await expect(eTab).toHaveAttribute('aria-label', /^Evidence passage/)
     await expect(book(page)).toContainText('A note keeps the exact page and region')
-    await expect(book(page).getByText("Can't tell")).toBeVisible({ timeout: 90_000 })
-    // A check that ran and could not tell, never one that did not finish: the reason says what the model did.
-    await expect(book(page)).toContainText("The model's answer couldn't be read.")
+    await expect(book(page).getByText('Supports', { exact: true })).toBeVisible({ timeout: 90_000 })
+    // A check that ran and gave a verdict, never one that did not finish: the reason is the fake's.
+    await expect(book(page)).toContainText('Fake: the passage says so.')
     await expect(book(page)).not.toContainText("Check didn't finish")
 
     await page.keyboard.press('i') // only the citation goes in, never passage text
@@ -202,8 +203,8 @@ test('Find evidence for a sentence: E badge, E tab, a verdict, insert only the c
     await book(page).focus()
     await page.keyboard.press('Escape') // closes the book, back on the deck
     await expect(book(page)).toHaveCount(0)
-    await expect(status).toContainText("AI: Can't tell") // every verdict is marked AI, on the card and read out
-    await expect(deck(page).locator('[data-deck-verdict]').first()).toContainText(/AI\s*Can't tell/)
+    await expect(status).toContainText('AI: Supports') // every verdict is marked AI, on the card and read out
+    await expect(deck(page).locator('[data-deck-verdict]').first()).toContainText(/AI\s*Supports/)
     await page.keyboard.press('Escape') // clears evidence mode
     await expect(header).toHaveCount(0)
     await expect(deck(page).getByText(/^E \d+$/)).toHaveCount(0)

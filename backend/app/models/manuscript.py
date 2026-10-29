@@ -7,6 +7,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     LargeBinary,
     Text,
@@ -95,3 +96,90 @@ class ManuscriptEvidence(Base):
     output_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("llm_outputs.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=NOW)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=NOW)
+
+
+class ManuscriptReviewRun(Base):
+    """One pass of the citation reviewer over one file of a manuscript."""
+
+    __tablename__ = "manuscript_review_runs"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('queued', 'running', 'done', 'failed', 'cancelled')", name="ck_manuscript_review_runs_status"
+        ),
+        Index("ix_manuscript_review_runs_manuscript", "manuscript_id", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, server_default=text("gen_random_uuid()"))
+    manuscript_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("manuscripts.id", ondelete="CASCADE"))
+    file_path: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(Text)  # queued | running | done | failed | cancelled
+    total: Mapped[int] = mapped_column(Integer)
+    done: Mapped[int] = mapped_column(Integer, server_default=text("0"))
+    reason: Mapped[str | None] = mapped_column(Text)
+    include_uncited: Mapped[bool] = mapped_column(Boolean)
+    uncited_skipped: Mapped[int] = mapped_column(Integer, server_default=text("0"))
+    cancel_requested: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=NOW)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=NOW)
+
+
+class ManuscriptClaimCheck(Base):
+    """The reviewer's verdict on one sentence and one cited paper (paper_id NULL: an uncited sentence)."""
+
+    __tablename__ = "manuscript_claim_checks"
+    __table_args__ = (
+        CheckConstraint("kind IN ('cited', 'uncited')", name="ck_manuscript_claim_checks_kind"),
+        CheckConstraint(
+            "status IN ('queued', 'running', 'done', 'failed')", name="ck_manuscript_claim_checks_status"
+        ),
+        CheckConstraint(
+            "(kind = 'uncited' AND paper_id IS NULL AND cite_key IS NULL) OR (kind = 'cited' AND cite_key IS NOT NULL)",
+            name="ck_manuscript_claim_checks_shape",
+        ),
+        Index(
+            "uq_manuscript_claim_checks_cited",
+            "manuscript_id", "file_path", "sentence_hash", "paper_id",
+            unique=True,
+            postgresql_where=text("paper_id IS NOT NULL"),
+        ),
+        Index(  # a key that resolved to no paper (paper_id NULL): once per key; an uncited row has cite_key NULL
+            "uq_manuscript_claim_checks_unresolved",
+            "manuscript_id", "file_path", "sentence_hash", text("COALESCE(cite_key, '')"),
+            unique=True,
+            postgresql_where=text("paper_id IS NULL"),
+        ),
+        Index("ix_manuscript_claim_checks_file", "manuscript_id", "file_path"),
+        Index("ix_manuscript_claim_checks_paper", "paper_id"),
+    )  # fmt: skip
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, server_default=text("gen_random_uuid()"))
+    manuscript_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("manuscripts.id", ondelete="CASCADE"))
+    run_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("manuscript_review_runs.id", ondelete="SET NULL"))
+    file_path: Mapped[str] = mapped_column(Text)
+    sentence_hash: Mapped[str] = mapped_column(Text)
+    sentence: Mapped[str] = mapped_column(Text)  # the raw source sentence, whitespace-normalised
+    plain: Mapped[str] = mapped_column(Text)
+    ord: Mapped[int] = mapped_column(Integer)  # document order
+    kind: Mapped[str] = mapped_column(Text)  # cited | uncited
+    cite_key: Mapped[str | None] = mapped_column(Text)
+    paper_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("papers.id", ondelete="CASCADE"))
+    status: Mapped[str] = mapped_column(Text)  # queued | running | done | failed
+    verdict: Mapped[str | None] = mapped_column(Text)
+    reason: Mapped[str | None] = mapped_column(Text)
+    quote: Mapped[str | None] = mapped_column(Text)
+    page: Mapped[int | None] = mapped_column(Integer)
+    chunk_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("chunks.id", ondelete="SET NULL"))
+    output_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("llm_outputs.id", ondelete="SET NULL"))
+    model: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=NOW)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=NOW)
+
+
+class ManuscriptClaimDismissal(Base):
+    """A sentence the researcher waved off: the reviewer stops flagging it."""
+
+    __tablename__ = "manuscript_claim_dismissals"
+
+    manuscript_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("manuscripts.id", ondelete="CASCADE"), primary_key=True)
+    sentence_hash: Mapped[str] = mapped_column(Text, primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=NOW)
