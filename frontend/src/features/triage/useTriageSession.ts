@@ -71,6 +71,7 @@ export function useTriageSession({ scope, queueFrom, library, libraryReady, filt
       client.invalidateQueries({ queryKey: keys.workspaces }),
       client.invalidateQueries({ queryKey: keys.graph }),
       client.invalidateQueries({ queryKey: keys.triageEvents(paperId) }),
+      client.invalidateQueries({ queryKey: ['triage-summary', sessionId] }),
     ])
 
   const write = useCallback((entry: DoneEntry) => {
@@ -172,6 +173,12 @@ export function useTriageSession({ scope, queueFrom, library, libraryReady, filt
     if (pendingRef.current === 0) dispatch({ type: 'reviewSkipped' })
   }, [])
 
+  /** Papers that arrived after the freeze join the stack; what is decided or skipped stays out. */
+  const addNew = useCallback(() => {
+    const l = live.current
+    dispatch({ type: 'refreeze', papers: l.queueFrom, opts: { order: l.order, seed: seed.current, includeDecided: l.includeDecided } })
+  }, [])
+
   // The filter or include-decided changed: rebuild the stack, keeping the session and what is already decided.
   const lastKey = useRef(`${filterKey}|${includeDecided}`)
   useEffect(() => {
@@ -207,6 +214,6 @@ export function useTriageSession({ scope, queueFrom, library, libraryReady, filt
 
   return {
     state, top, sessionId, notReady, alert, announcement, pending, canReviewSkipped: pending === 0,
-    decide, undo, skip, setOrder, setIncludeDecided, reviewSkipped, dismissAlert: () => setAlert(null),
+    decide, undo, skip, setOrder, setIncludeDecided, reviewSkipped, addNew, dismissAlert: () => setAlert(null),
   }
 }
