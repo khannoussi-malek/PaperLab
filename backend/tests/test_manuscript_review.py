@@ -234,9 +234,9 @@ async def test_two_starts_at_once_only_one_runs(monkeypatch):
 
     monkeypatch.setattr(mr.llm_connections, "resolve", resolve)
     async with SessionLocal() as s:
-        _, _, m = await doc(s, basic, "Alpha", "Beta")
+        papers, _, m = await doc(s, basic, "Alpha", "Beta")
         await s.commit()
-        mid = m.id
+        mid, pids = m.id, [p.id for p in papers]
 
     async def one():
         async with SessionLocal() as s:
@@ -251,12 +251,16 @@ async def test_two_starts_at_once_only_one_runs(monkeypatch):
         assert "review_running" in outs
     finally:
         async with SessionLocal() as s:
-            from app.models import Manuscript, Workspace
+            from app.models import Manuscript, Paper, Workspace
 
             ws = await s.scalar(select(Manuscript.workspace_id).where(Manuscript.id == mid))
             await s.execute(delete(Manuscript).where(Manuscript.id == mid))
             await s.execute(delete(Workspace).where(Workspace.id == ws))
+            await s.execute(
+                delete(Paper).where(Paper.id.in_(pids))
+            )  # chunks go with them; papers outlive the manuscript
             await s.commit()
+            assert not list(await s.scalars(select(Paper.id).where(Paper.id.in_(pids))))
         await engine.dispose()
 
 
