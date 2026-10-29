@@ -35,6 +35,8 @@ export function useTriageSession({ scope, papers, filterKey, order: initialOrder
   const live = useRef({ state, papers, order, includeDecided })
   live.current = { state, papers, order, includeDecided }
   const pendingRef = useRef(0)
+  // Text that leads the next new-card announcement; `exclusive` replaces it (an undo, a failure).
+  const note = useRef<{ text: string; exclusive: boolean } | null>(null)
   const bodies = useRef(new Map<string, TriageDecisionIn>())
   const writer = useRef<ReturnType<typeof createWriter<DoneEntry>> | null>(null)
   writer.current ??= createWriter<DoneEntry>({
@@ -64,21 +66,34 @@ export function useTriageSession({ scope, papers, filterKey, order: initialOrder
         dispatch({ type: 'settle', clientId: entry.clientId, eventId: res.eventId })
         void invalidate(entry.id)
       } else if (res.status === 'failed') {
-        dispatch({ type: 'fail', clientId: entry.clientId })
+        // Only the live decision matters: one the reader already undid or made again is dropped silently.
+        if (!live.current.state.done.some((d) => d.clientId === entry.clientId)) return
         const message = `Couldn't save: ${reasonOf(res.error)}`
-        setAlert({ message, retry: () => { setAlert(null); dispatch({ type: 'decide', entry }); write(entry) } })
-        setAnnouncement(say.failed(reasonOf(res.error)))
+        note.current = { text: say.failed(reasonOf(res.error)), exclusive: true }
+        dispatch({ type: 'fail', clientId: entry.clientId })
+        setAlert({
+          message,
+          retry: () => {
+            setAlert(null)
+            if (!live.current.state.unseen.includes(entry.id)) return
+            dispatch({ type: 'decide', entry })
+            write(entry)
+          },
+        })
+        setAnnouncement(note.current.text)
       }
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const topId = state.unseen.find((id) => papers.some((p) => p.id === id)) ?? null
-  const top = papers.find((p) => p.id === topId) ?? null
+  const topOf = (s: typeof state, ps: readonly Paper[]) => ps.find((p) => p.id === s.unseen[0]) ?? null
+  const top = topOf(state, papers)
+  const topId = top?.id ?? null
 
   const decide = useCallback((pile: Pile, o: { reason?: string; note?: string; clock?: Clock } = {}) => {
-    const paper = top
+    const paper = topOf(live.current.state, live.current.papers)
     if (!paper) return
+    setAlert(null) // a stale failure alert must not outlive a new decision
     const clientId = crypto.randomUUID()
     let body: TriageDecisionIn
     try {
@@ -91,28 +106,41 @@ export function useTriageSession({ scope, papers, filterKey, order: initialOrder
     const entry: DoneEntry = { id: paper.id, clientId, pile, before: { triage: paper.triage, pass: paper.reading_pass }, eventId: null, status: 'pending' }
     const { state: s } = live.current
     dispatch({ type: 'decide', entry })
-    setAnnouncement(say.decided(paper, pile, o.reason, progress(s).decided + (pile === 'skip' ? 0 : 1), s.total))
+    const text = say.decided(paper, pile, o.reason, progress(s).decided + (pile === 'skip' ? 0 : 1), s.total)
+    note.current = { text, exclusive: false }
+    setAnnouncement(text)
     write(entry)
-  }, [top, sessionId, write])
+  }, [sessionId, write])
 
   const undo = useCallback(() => {
     const entry = live.current.state.done.at(-1)
     if (!entry) return
+    const paper = paperOf(entry.id)
+    if (paper) {
+      note.current = { text: say.undone(paper), exclusive: true }
+      setAnnouncement(note.current.text)
+    }
     dispatch({ type: 'undo' })
     bump(1)
     void writer.current!.undo(entry).then((res) => {
       bump(-1)
       if (res.status === 'saved') {
         void invalidate(entry.id)
-        const paper = paperOf(entry.id)
-        if (paper) setAnnouncement(say.undone(paper))
       } else if (res.status === 'refused') {
         dispatch({ type: 'undoRefused', entry })
         setAlert({ message: ELSEWHERE })
         setAnnouncement(ELSEWHERE)
       } else if (res.status === 'failed') {
+        // Re-decided meanwhile: the new decision stands, the old undo is moot.
+        if (live.current.state.done.some((d) => d.id === entry.id)) return
         dispatch({ type: 'undoFailed', entry })
-        setAlert({ message: `Couldn't undo: ${reasonOf(res.error)}`, retry: () => { setAlert(null); undo() } })
+        setAlert({
+          message: `Couldn't undo: ${reasonOf(res.error)}`,
+          retry: () => {
+            setAlert(null)
+            if (live.current.state.done.at(-1)?.clientId === entry.clientId) undo()
+          },
+        })
       }
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -130,12 +158,34 @@ export function useTriageSession({ scope, papers, filterKey, order: initialOrder
   }, [])
 
   // The filter or include-decided changed: rebuild the stack, keeping the session and what is already decided.
-  const first = useRef(true)
+  const lastKey = useRef(`${filterKey}|${includeDecided}`)
   useEffect(() => {
-    if (first.current) { first.current = false; return }
+    const key = `${filterKey}|${includeDecided}`
+    if (lastKey.current === key) return // mount, or StrictMode's second mount
+    lastKey.current = key
     const l = live.current
     dispatch({ type: 'refreeze', papers: l.papers, opts: { order: l.order, seed: seed.current, includeDecided: l.includeDecided } })
   }, [filterKey, includeDecided])
+
+  // Papers deleted elsewhere leave the session (keyed on the ids, not on every render).
+  const queuedIds = state.unseen.concat(state.skipped).join(',')
+  const liveIds = useMemo(() => new Set(papers.map((p) => p.id)), [papers])
+  useEffect(() => {
+    const gone = queuedIds === '' ? [] : queuedIds.split(',').filter((id) => !liveIds.has(id))
+    if (gone.length) dispatch({ type: 'vanish', ids: gone })
+  }, [queuedIds, liveIds])
+
+  // Each new top card is announced, after the decision text that caused it (an undo or failure text stands alone).
+  useEffect(() => {
+    const { state: s, papers: ps } = live.current
+    const card = topOf(s, ps)
+    const n = note.current
+    note.current = null
+    const next = card ? say.newCard(card, s.total - s.unseen.length, s.total) : ''
+    const text = n?.exclusive ? n.text : [n?.text, next].filter(Boolean).join(' ')
+    if (text) setAnnouncement(text)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topId])
 
   const notReady = useMemo(() => buildQueue(papers, { order, seed: seed.current, includeDecided, exclude: new Set() }).notReady, [papers, order, includeDecided])
 
