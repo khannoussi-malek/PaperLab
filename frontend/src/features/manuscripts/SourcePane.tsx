@@ -225,7 +225,7 @@ export function SourcePane(props: Props) {
         <span className="min-w-0 flex-1 truncate text-sm font-medium">{path}</span>
         <span aria-live="polite" className="text-xs text-muted-foreground">{SAVE_LABEL[state]}</span>
         {props.onInsertBlock && /\.tex$/i.test(path) && <InsertMenu manuscriptId={manuscriptId} labelTexts={props.labelTexts ?? (() => [])} filePaths={props.filePaths ?? (() => [])} onInsert={props.onInsertBlock} />}
-        {isTex && <ReviewMenu hasWorkspace={!!props.workspaceId} run={review.run} onCheck={() => void inEditor.check()} onCancel={() => void review.cancel()} />}
+        {isTex && <ReviewMenu hasWorkspace={!!props.workspaceId} run={review.anyRun} onCheck={() => void inEditor.check()} onCancel={() => void review.cancel()} />}
         <Button size="sm" disabled={compiling || text === null} onClick={() => void compileNow()}>
           {compiling && <Loader2 aria-hidden className="animate-spin motion-reduce:animate-none" />}
           {compiling ? 'Compiling…' : 'Compile'}

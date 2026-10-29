@@ -50,7 +50,10 @@ export function useReview(manuscriptId: string, file: string, enabled = true) {
   const restore = useMutation({ mutationFn: (hash: string) => api.restoreClaim(manuscriptId, hash), onSettled: refresh })
   return {
     state: state.data,
-    run: state.data?.run ?? null,
+    /** The run for the open file; the latest run may belong to another file. */
+    run: state.data?.run?.file === file ? state.data.run : null,
+    /** The manuscript's latest run whatever its file: drives the menu's progress line and Cancel. */
+    anyRun: state.data?.run ?? null,
     items: state.data?.items ?? [],
     dismissed: state.data?.dismissed ?? [],
     isLoading: state.isLoading,
