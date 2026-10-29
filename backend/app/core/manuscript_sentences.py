@@ -9,16 +9,19 @@ from pylatexenc.latex2text import LatexNodes2Text
 from app.core.manuscript_bib import CITE, COMMENT
 
 LATEX = LatexNodes2Text()
-SKIP_ENVS = (
-    "equation|align|gather|multline|eqnarray|displaymath|tabular|table|figure|tikzpicture|axis|lstlisting|verbatim"
-    "|minted|thebibliography"
-)
-# Masked with BOUNDARY (a sentence never crosses it) or IGNORED (a space: the sentence runs on through it).
-BOUNDARY, IGNORED = "\0", " "
-SKIPPED = [
-    re.compile(rf"\\begin\{{({SKIP_ENVS})(\*?)\}}.*?\\end\{{\1\2\}}", re.S),
+FLOAT_ENVS = "tabular|table|figure|tikzpicture|axis|lstlisting|verbatim|minted|thebibliography"
+MATH_ENVS = "equation|align|gather|multline|eqnarray|displaymath"
+# Masked with BOUNDARY (a sentence never crosses it), MATH (invisible to sentence ends: the sentence runs on through
+# it) or IGNORED (a space).
+BOUNDARY, MATH, IGNORED = "\0", "\1", " "
+FLOATS = re.compile(rf"\\begin\{{({FLOAT_ENVS})(\*?)\}}.*?\\end\{{\1\2\}}", re.S)
+DISPLAY_MATH = [
+    re.compile(rf"\\begin\{{({MATH_ENVS})(\*?)\}}.*?\\end\{{\1\2\}}", re.S),
     re.compile(r"(?<!\\)\$\$.*?(?<!\\)\$\$", re.S),
     re.compile(r"\\\[.*?\\\]", re.S),
+]
+INLINE_MATH = [re.compile(r"(?<!\\)\$[^$]*?(?<!\\)\$", re.S), re.compile(r"\\\(.*?\\\)", re.S)]
+TOKENS = [
     re.compile(r"\\(?:begin|end)\{[^}]*\}(?:\[[^\]]*\])?"),
     re.compile(r"\\item\b(?:\s*\[[^\]]*\])?"),
     re.compile(r"\\(?:maketitle|bibliographystyle\{[^}]*\})"),
@@ -46,6 +49,8 @@ ABBREVIATIONS = {
     "approx",
     "resp",
 }
+INITIALISM = re.compile(r"(?:[A-Za-z]\.)+[A-Za-z]")
+WS = " \t\r\n" + MATH
 LAST_WORD = re.compile(r"[A-Za-z][A-Za-z.]*$")
 BLANK_LINE = re.compile(r"\n[ \t]*\n")
 CLOSERS = (")", '"', "''", "}")
@@ -69,6 +74,8 @@ def claim_hash(raw: str) -> str:
 
 def to_plain(raw: str) -> str:
     text = COMMENT.sub("", raw)
+    for pattern in DISPLAY_MATH:
+        text = pattern.sub(" [math] ", text)
     text = re.sub(r"~?\s*" + CITE.pattern, "", text)
     text = re.sub(r"\\(?:label|ref)\{[^}]*\}", "", text).replace("~", " ")
     return " ".join(LATEX.latex_to_text(text).split())
@@ -107,11 +114,20 @@ def _mask(text: str) -> str:
     end = text.find("\\end{document}")
     if end >= 0:
         put(end, len(text), BOUNDARY)
-    for pattern in SKIPPED:
-        for m in pattern.finditer(text):
-            put(m.start(), m.end(), BOUNDARY)
-    for m in ARG_COMMANDS.finditer(text):
+
+    def run(pattern: re.Pattern, fill: str) -> None:
+        for m in pattern.finditer("".join(chars)):
+            put(m.start(), m.end(), fill)
+
+    run(FLOATS, BOUNDARY)
+    for pattern in DISPLAY_MATH:
+        run(pattern, MATH)
+    for pattern in TOKENS:
+        run(pattern, BOUNDARY)
+    for m in ARG_COMMANDS.finditer("".join(chars)):
         put(m.start(), _brace_end(text, m.end() - 1), IGNORED if m.group(1) in IGNORED_COMMANDS else BOUNDARY)
+    for pattern in INLINE_MATH:
+        run(pattern, MATH)
     return "".join(chars)
 
 
@@ -119,15 +135,17 @@ def _chunk_ends(chunk: str):
     """Yield the (exclusive) end offset of each sentence in a chunk free of blank lines and boundaries."""
     for m in re.finditer(r"[.?!]", chunk):
         i = m.end()
-        if m.group() == "." and (
-            (w := LAST_WORD.search(chunk[: m.start()]))
-            and (w.group() in ABBREVIATIONS or len(w.group()) == 1 and w.group().isupper())
-        ):
-            continue
         while (c := next((c for c in CLOSERS if chunk.startswith(c, i)), None)) is not None:
             i += len(c)
-        if i == len(chunk) or chunk[i].isspace():
-            yield i
+        if i < len(chunk) and not chunk[i].isspace():
+            continue
+        word = LAST_WORD.search(chunk[: m.start()]) if m.group() == "." else None
+        word = word.group() if word else ""
+        if word in ABBREVIATIONS or (len(word) == 1 and word.isupper()):
+            continue
+        if i < len(chunk) and INITIALISM.fullmatch(word):  # U.S. in mid-text; at a chunk end it does end
+            continue
+        yield i
     yield len(chunk)
 
 
@@ -143,8 +161,8 @@ def split_sentences(text: str) -> list[Sentence]:
             chunk, pos = segment.group()[a:b], 0
             for stop in _chunk_ends(chunk):
                 piece = chunk[pos:stop]
-                lead = len(piece) - len(piece.lstrip())
-                start, end = base + a + pos + lead, base + a + pos + len(piece.rstrip())
+                lead = len(piece) - len(piece.lstrip(WS))
+                start, end = base + a + pos + lead, base + a + pos + len(piece.rstrip(WS))
                 pos = stop
                 raw = text[start:end]
                 if not raw.strip():

@@ -64,3 +64,45 @@ def test_in_range_overlap_and_cursor():
 def test_to_plain():
     raw = "As \\emph{shown} in Fig.~3 with $x$ \\citep{a} we gain 5\\% more."
     assert to_plain(raw) == "As shown in Fig. 3 with x we gain 5% more."
+
+
+def _one(text: str):
+    sents = split_sentences(text)
+    assert [(s.start, s.end) for s in sents] == [(0, len(text))]
+    return sents[0]
+
+
+def test_display_math_stays_inside_the_sentence():
+    tail = " where L is the cross-entropy loss \\citep{a}."
+    for body in ("\\begin{equation} L = \\sum x. \\end{equation}", "\\[ L = \\sum x. \\]", "$$ L = \\sum x. $$"):
+        s = _one("The loss is given by " + body + tail)
+        assert s.keys == ("a",)
+        assert s.plain == "The loss is given by [math] where L is the cross-entropy loss."
+
+
+def test_floats_still_end_the_sentence():
+    text = "The results are listed below\n\\begin{table}\nx\n\\end{table}\nand then we go on and on."
+    assert [s.raw for s in split_sentences(text)] == [
+        "The results are listed below",
+        "and then we go on and on.",
+    ]
+
+
+def test_inline_math_period_and_initialisms():
+    _one("We set $a. b = 2$ in all runs of the model.")
+    _one("We set \\(a. b = 2\\) in all runs of the model.")
+    _one("Data from the U.S. census were used in the analysis.")
+    assert [
+        s.raw for s in split_sentences("We used i.i.d. samples throughout.\n\nThen we left for the U.S.\n\nDone.")
+    ] == [
+        "We used i.i.d. samples throughout.",
+        "Then we left for the U.S.",
+    ]
+
+
+def test_emph_at_sentence_end_and_range_boundary():
+    s = _one("Our estimator is \\emph{robust}.")
+    assert s.plain == "Our estimator is robust."
+    text = "First sentence is right here. Second sentence is right there."
+    sents = split_sentences(text)
+    assert [x.raw[:5] for x in in_range(sents, sents[0].end, sents[0].end)] == ["First"]
