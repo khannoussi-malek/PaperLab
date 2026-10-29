@@ -10,30 +10,45 @@ import { createWriter } from './triageWriter'
 
 type Clock = { card_ms: number; pdf_ms: number; pdf_opened: boolean }
 export type Alert = { message: string; retry?: () => void }
-type Opts = { scope: string; papers: readonly Paper[]; filterKey: string; order: Order; includeDecided: boolean }
+type Opts = {
+  scope: string
+  /** The list's filtered papers: used only to build and re-freeze the queue (and for `newSince`). */
+  queueFrom: readonly Paper[]
+  /** Every paper loaded for this scope, unfiltered: used for each card lookup and to spot papers deleted elsewhere. */
+  library: readonly Paper[]
+  /** False while `library` is loading or refetching with no data: nothing vanishes until it is true. */
+  libraryReady: boolean
+  filterKey: string
+  order: Order
+  includeDecided: boolean
+}
 
 const ELSEWHERE = 'This paper was changed elsewhere since. Open it to change it.'
 const NEEDS_REASON = 'Pick a reason before marking a paper not relevant.'
 const NO_CLOCK: Clock = { card_ms: 0, pdf_ms: 0, pdf_opened: false }
 const reasonOf = (e: unknown) => (e instanceof Error ? e.message : 'something went wrong')
 
-/** The desk's whole session: the frozen queue, ordered writes (decide, skip, undo) and the alert and announcement text. */
-export function useTriageSession({ scope, papers, filterKey, order: initialOrder, includeDecided: initialInclude }: Opts) {
+/**
+ * The desk's whole session: the frozen queue, ordered writes (decide, skip, undo) and the alert and announcement text.
+ * Two paper arrays: `queueFrom` (the list's filtered papers) only builds and re-freezes the stack; `library` (every paper
+ * loaded for the scope, unfiltered) serves every card lookup, so a decided paper that leaves the filter can still be
+ * undone. A paper missing from a ready, non-empty `library` is deleted elsewhere and leaves the session. */
+export function useTriageSession({ scope, queueFrom, library, libraryReady, filterKey, order: initialOrder, includeDecided: initialInclude }: Opts) {
   const client = useQueryClient()
   const [sessionId] = useState(() => openSession(scope))
   const [order, setOrderState] = useState(initialOrder)
   const [includeDecided, setIncludeDecided] = useState(initialInclude)
   const seed = useRef(Math.floor(Math.random() * 2 ** 31))
   const [state, dispatch] = useReducer(queueReducer, emptyQueue, (s) =>
-    queueReducer(s, { type: 'start', ids: buildQueue(papers, { order, seed: seed.current, includeDecided, exclude: new Set() }).ids, seed: seed.current, order }),
+    queueReducer(s, { type: 'start', ids: buildQueue(queueFrom, { order, seed: seed.current, includeDecided, exclude: new Set() }).ids, seed: seed.current, order }),
   )
   const [alert, setAlert] = useState<Alert | null>(null)
   const [announcement, setAnnouncement] = useState('')
   const [pending, setPending] = useState(0)
 
   // Latest values for callbacks that run after a write settles.
-  const live = useRef({ state, papers, order, includeDecided })
-  live.current = { state, papers, order, includeDecided }
+  const live = useRef({ state, queueFrom, library, order, includeDecided })
+  live.current = { state, queueFrom, library, order, includeDecided }
   const pendingRef = useRef(0)
   // Text that leads the next new-card announcement; `exclusive` replaces it (an undo, a failure).
   const note = useRef<{ text: string; exclusive: boolean } | null>(null)
@@ -48,7 +63,7 @@ export function useTriageSession({ scope, papers, filterKey, order: initialOrder
     undo: (eventId) => api.undoTriage(eventId),
   })
 
-  const paperOf = (id: string) => live.current.papers.find((p) => p.id === id)
+  const paperOf = (id: string) => live.current.library.find((p) => p.id === id)
   const bump = (by: 1 | -1) => { pendingRef.current += by; setPending(pendingRef.current) }
   const invalidate = (paperId: string) =>
     Promise.all([
@@ -87,11 +102,11 @@ export function useTriageSession({ scope, papers, filterKey, order: initialOrder
   }, [])
 
   const topOf = (s: typeof state, ps: readonly Paper[]) => ps.find((p) => p.id === s.unseen[0]) ?? null
-  const top = topOf(state, papers)
+  const top = topOf(state, library)
   const topId = top?.id ?? null
 
   const decide = useCallback((pile: Pile, o: { reason?: string; note?: string; clock?: Clock } = {}) => {
-    const paper = topOf(live.current.state, live.current.papers)
+    const paper = topOf(live.current.state, live.current.library)
     if (!paper) return
     setAlert(null) // a stale failure alert must not outlive a new decision
     const clientId = crypto.randomUUID()
@@ -150,7 +165,7 @@ export function useTriageSession({ scope, papers, filterKey, order: initialOrder
 
   const setOrder = useCallback((o: Order) => {
     setOrderState(o)
-    dispatch({ type: 'reorder', order: o, papers: live.current.papers })
+    dispatch({ type: 'reorder', order: o, papers: live.current.library })
   }, [])
 
   const reviewSkipped = useCallback(() => {
@@ -164,21 +179,22 @@ export function useTriageSession({ scope, papers, filterKey, order: initialOrder
     if (lastKey.current === key) return // mount, or StrictMode's second mount
     lastKey.current = key
     const l = live.current
-    dispatch({ type: 'refreeze', papers: l.papers, opts: { order: l.order, seed: seed.current, includeDecided: l.includeDecided } })
+    dispatch({ type: 'refreeze', papers: l.queueFrom, opts: { order: l.order, seed: seed.current, includeDecided: l.includeDecided } })
   }, [filterKey, includeDecided])
 
   // Papers deleted elsewhere leave the session (keyed on the ids, not on every render).
   const queuedIds = state.unseen.concat(state.skipped).join(',')
-  const liveIds = useMemo(() => new Set(papers.map((p) => p.id)), [papers])
+  const liveIds = useMemo(() => new Set(library.map((p) => p.id)), [library])
   useEffect(() => {
+    if (!libraryReady || liveIds.size === 0) return
     const gone = queuedIds === '' ? [] : queuedIds.split(',').filter((id) => !liveIds.has(id))
     if (gone.length) dispatch({ type: 'vanish', ids: gone })
-  }, [queuedIds, liveIds])
+  }, [queuedIds, liveIds, libraryReady])
 
   // Each new top card is announced, after the decision text that caused it (an undo or failure text stands alone).
   useEffect(() => {
-    const { state: s, papers: ps } = live.current
-    const card = topOf(s, ps)
+    const { state: s, library: lib } = live.current
+    const card = topOf(s, lib)
     const n = note.current
     note.current = null
     const next = card ? say.newCard(card, s.total - s.unseen.length, s.total) : ''
@@ -187,7 +203,7 @@ export function useTriageSession({ scope, papers, filterKey, order: initialOrder
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topId])
 
-  const notReady = useMemo(() => buildQueue(papers, { order, seed: seed.current, includeDecided, exclude: new Set() }).notReady, [papers, order, includeDecided])
+  const notReady = useMemo(() => buildQueue(queueFrom, { order, seed: seed.current, includeDecided, exclude: new Set() }).notReady, [queueFrom, order, includeDecided])
 
   return {
     state, top, sessionId, notReady, alert, announcement, pending, canReviewSkipped: pending === 0,
