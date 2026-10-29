@@ -47,14 +47,38 @@ def _row(s: Sentence, ord_: int, kind: str, key: str | None, paper_id: uuid.UUID
     return row
 
 
+def to_utf16(text_: str, offsets: list[int]) -> list[int]:
+    """Code-point offsets into `text_` as UTF-16 code-unit offsets (what JavaScript and CodeMirror index by)."""
+    out, units, at = [], 0, 0
+    for offset in sorted(set(offsets)):
+        units += sum(2 if ord(c) > 0xFFFF else 1 for c in text_[at:offset])
+        at = offset
+        out.append((offset, units))
+    table = dict(out)
+    return [table[o] for o in offsets]
+
+
+def from_utf16(text_: str, offset: int) -> int:
+    """A UTF-16 offset as a code-point offset; one inside a surrogate pair rounds to the character containing it."""
+    units = 0
+    for i, c in enumerate(text_):
+        units += 2 if ord(c) > 0xFFFF else 1
+        if units > offset:
+            return i
+    return len(text_)
+
+
 def plan(targets: list[Sentence], papers: dict[str, uuid.UUID], include_uncited: bool) -> tuple[list[dict], int]:
     """The rows to insert in document order (cited first, then uncited) and the uncited sentences left unchecked."""
     unique = list({s.hash: s for s in targets}.values())
     cited, uncited = [s for s in unique if s.keys], [s for s in unique if not s.keys]
     pairs = {(s.hash, papers.get(k) or k): (s, k) for s in cited for k in s.keys}  # one row per sentence and paper
     rows = [_row(s, 0, "cited", k, papers.get(k)) for s, k in pairs.values()]
-    skipped = max(0, len(uncited) - MAX_UNCITED) if include_uncited else 0
-    rows += [_row(s, 0, "uncited", None, None) for s in uncited[:MAX_UNCITED]] if include_uncited else []
+    short = [s for s in uncited if len(s.plain) <= MAX_PLAIN]  # an over-long one needs no model call, so no slot
+    long = [s for s in uncited if len(s.plain) > MAX_PLAIN]
+    skipped = max(0, len(short) - MAX_UNCITED) if include_uncited else 0
+    kept = sorted(short[:MAX_UNCITED] + long, key=lambda s: s.start)
+    rows += [_row(s, 0, "uncited", None, None) for s in kept] if include_uncited else []
     return [r | {"ord": i} for i, r in enumerate(rows)], skipped
 
 
@@ -108,13 +132,15 @@ async def start(
     if _live(await _latest(session, mid)):
         raise Conflict("review_running")
     sentences = split_sentences(source.text)
+    if selection is not None:  # UTF-16 offsets in, as the editor counts them; the splitter counts code points
+        selection = (from_utf16(source.text, selection[0]), from_utf16(source.text, selection[1]))
     targets = sentences if selection is None else in_range(sentences, *selection)
     papers = {p["key"]: p["paper_id"] for p in await manuscript_papers.list_papers(session, mid)}
     rows, skipped = plan(targets, papers, include_uncited)
     pairs = sum(r["status"] == "queued" and r["kind"] == "cited" for r in rows)
     if pairs > MAX_PAIRS:
         raise InvalidInput("too_many_claims", detail=f"{pairs} checks", count=pairs)
-    await _replace_rows(session, mid, file, {s.hash for s in sentences}, {s.hash for s in targets})
+    await _replace_rows(session, mid, file, {s.hash for s in sentences}, {r["sentence_hash"] for r in rows})
     waiting = sum(r["status"] == "queued" for r in rows)
     run = ManuscriptReviewRun(
         manuscript_id=mid,
@@ -253,4 +279,9 @@ async def restore(session: AsyncSession, mid: uuid.UUID, sentence_hash: str) -> 
 def locate(text_: str) -> list[dict]:
     if len(text_) > paths.MAX_TEXT:
         raise InvalidInput("text_too_long", limit=paths.MAX_TEXT)
-    return [{"start": s.start, "end": s.end, "hash": s.hash, "keys": list(s.keys)} for s in split_sentences(text_)]
+    found = split_sentences(text_)
+    spans = to_utf16(text_, [o for s in found for o in (s.start, s.end)])  # UTF-16 code units, as in JS strings
+    return [
+        {"start": spans[2 * i], "end": spans[2 * i + 1], "hash": s.hash, "keys": list(s.keys)}
+        for i, s in enumerate(found)
+    ]

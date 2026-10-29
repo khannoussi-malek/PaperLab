@@ -152,3 +152,14 @@ async def test_error_codes_and_body_aliases(client, session):
     assert ok.status_code == 202
     assert (await client.post(f"{base}/{uuid.uuid4()}/cancel")).status_code == 404
     assert (await client.post(base + "/locate", json={"text": "x" * (2 * 1024**2 + 1)})).status_code == 422
+
+
+async def test_too_many_claims_names_the_count(client, session):
+    ws, papers, m = await setup(session, "Alpha", name=f"W {uuid.uuid4().hex[:8]}")
+    key = (await manuscript_papers.list_papers(session, m.id))[0]["key"]
+    text = " ".join(f"Claim number {i} is well established \\cite{{{key}}}." for i in range(31))
+    await manuscripts.upsert_text(session, m.id, "main.tex", text)
+    later = (datetime.now(UTC) + timedelta(days=1)).isoformat()
+    out = await client.post(f"/api/manuscripts/{m.id}/review", json={"file": "main.tex", "base": later})
+    assert out.status_code == 422 and out.json()["count"] == 31
+    assert (await client.post(f"/api/manuscripts/{uuid.uuid4()}/review/locate", json={"text": "x"})).status_code == 404

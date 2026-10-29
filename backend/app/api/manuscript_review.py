@@ -4,6 +4,7 @@ from fastapi import APIRouter, Query, Response
 
 from app.api.deps import SessionDep
 from app.core import manuscript_review as review
+from app.core import manuscripts
 from app.schemas.manuscript_review import LocateIn, LocateOut, ReviewIn, ReviewOut, ReviewRunOut
 
 router = APIRouter(tags=["manuscripts"])
@@ -32,6 +33,7 @@ async def review_state(manuscript_id: uuid.UUID, session: SessionDep, file: str 
 
 @router.post(BASE + "/locate")
 async def locate(manuscript_id: uuid.UUID, body: LocateIn, session: SessionDep) -> LocateOut:
+    await manuscripts.get(session, manuscript_id)
     return LocateOut(sentences=review.locate(body.text))
 
 
