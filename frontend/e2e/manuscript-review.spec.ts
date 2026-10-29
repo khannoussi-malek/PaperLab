@@ -36,19 +36,24 @@ test('Review a manuscript: check citations, cite a claim, edit, dismiss, list mi
     await expect(content).toContainText(CLAIM)
 
     // Review > Check citations: progress, then verdicts.
+    // The fake model is quick, so the progress line may be gone before it is seen: watch for it from before the click and accept the finished state, but report which happened.
+    const progress = page.getByText(/Checking \d+ of \d+…/).first().waitFor({ timeout: 30_000 }).then(() => true, () => false)
     await page.getByRole('button', { name: 'Review' }).click()
     await page.getByRole('menuitem', { name: 'Check citations' }).click()
     const panel = page.getByRole('region', { name: 'Citation check' })
     await expect(panel).toBeVisible({ timeout: 30_000 })
-    await expect(panel.getByText('Supports')).toBeVisible({ timeout: 120_000 })
-    await expect(panel.getByText('Needs a citation')).toHaveCount(2)
-    await expect(content.locator('.cm-review-badge', { hasText: 'Supports' })).toBeVisible()
-    await expect(content.locator('.cm-review-badge', { hasText: 'Needs a citation' })).toHaveCount(2)
+    const citedRow = panel.getByRole('listitem').filter({ hasText: 'Highlights are the anchor' })
+    await expect(citedRow.getByText('Supports', { exact: true })).toBeVisible({ timeout: 120_000 })
+    test.info().annotations.push({ type: 'progress line seen', description: String(await progress) })
+    await expect(citedRow.getByText('AI', { exact: true })).toBeVisible() // the provenance chip in the panel
+    await expect(panel.getByText('Needs a citation', { exact: true })).toHaveCount(2)
+    await expect(content.locator('.cm-review-badge', { hasText: /AI.*Supports/ })).toBeVisible() // and in the editor
+    await expect(content.locator('.cm-review-badge', { hasText: /AI.*Needs a citation/ })).toHaveCount(2)
     await expect(panel).not.toContainText(NOT_CLAIM)
 
     // The quote opens the reader in a new tab.
     const popup = page.waitForEvent('popup')
-    await panel.getByRole('link', { name: /^Page \d+$/ }).first().click()
+    await citedRow.getByRole('link', { name: /^Page \d+$/ }).click()
     const reader = await popup
     await expect(reader).toHaveURL(/#\/papers\//)
     await reader.close()
@@ -56,21 +61,29 @@ test('Review a manuscript: check citations, cite a claim, edit, dismiss, list mi
     // Find papers > Cite this: only \citep{key} goes in, before the full stop.
     const claim = panel.getByRole('listitem').filter({ hasText: CLAIM })
     await claim.getByRole('button', { name: 'Find papers' }).click()
-    await claim.getByRole('button', { name: 'Cite this' }).first().click()
+    await claim.getByRole('button', { name: 'Cite this' }).click()
     const cited = initial.replace(CLAIM, CLAIM.replace(/\.$/, '') + ` \\citep{${key}}.`)
     await expect.poll(source, { timeout: 30_000 }).toBe(cited)
 
     // Compile ok.
     await page.getByRole('button', { name: 'Compile' }).first().click()
     await expect.poll(async () => {
-      try { return ((await (await request.get(`/api/manuscripts/${manuscriptId}`, { timeout: 30_000 })).json()) as { compile_status: string }).compile_status } catch { return 'pending' } // busy while Tectonic runs
+      try {
+        return ((await (await request.get(`/api/manuscripts/${manuscriptId}`, { timeout: 30_000 })).json()) as { compile_status: string }).compile_status
+      } catch (e) {
+        if (e instanceof Error && /Timeout|ECONNRESET|socket hang up/.test(e.message)) return 'pending' // slow while Tectonic runs; anything else fails the test
+        throw e
+      }
     }, { timeout: 240_000 }).toBe('ok')
 
     // Edit the cited sentence: its annotation moves to "Changed since checked".
     await content.locator('.cm-line', { hasText: 'Highlights are the anchor' }).click()
     await page.keyboard.press('Home')
     await page.keyboard.type('Indeed, ')
-    await expect(panel.getByRole('heading', { name: 'Changed since checked' })).toBeVisible({ timeout: 20_000 })
+    const changed = panel.getByRole('heading', { name: 'Changed since checked' }).locator('xpath=..')
+    await expect(changed.getByRole('listitem').filter({ hasText: 'Highlights are the anchor' })).toBeVisible({ timeout: 20_000 })
+    await expect(content.locator('.cm-review-badge', { hasText: /AI.*Supports/ })).toHaveCount(0)
+    await expect(content.locator('.cm-review-badge', { hasText: /AI.*Needs a citation/ })).toHaveCount(1) // the other claim keeps its mark
 
     // Not a claim on the other claim; it stays dismissed after a reload.
     const other = panel.getByRole('listitem').filter({ hasText: CLAIM_B })
@@ -81,9 +94,12 @@ test('Review a manuscript: check citations, cite a claim, edit, dismiss, list mi
 
     // Cited but not found lists the ghost key with its line; clicking it jumps there.
     const missing = page.getByRole('region', { name: 'Cited but not found' })
-    await expect(missing).toContainText(GHOST, { timeout: 60_000 })
-    await missing.getByRole('button', { name: new RegExp(GHOST) }).click()
+    const ghostLine = initial.split('\n').findIndex((l) => l.includes(`\\citep{${GHOST}}`)) + 1
+    const row = missing.getByRole('button', { name: new RegExp(GHOST) })
+    await expect(row).toContainText(`main.tex:${ghostLine}`, { timeout: 60_000 })
+    await row.click()
     await expect(page.locator('.cm-activeLine')).toContainText(`\\citep{${GHOST}}`)
+    await expect(page.locator('.cm-lineNumbers .cm-activeLineGutter')).toContainText(String(ghostLine))
   } finally {
     if (manuscriptId) await request.delete(`/api/manuscripts/${manuscriptId}`)
   }
