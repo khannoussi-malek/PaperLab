@@ -1,0 +1,58 @@
+import type { CheckItem, ReviewSentence } from '@/api/client'
+
+export const VERDICT_LABEL: Record<string, string> = {
+  supported: 'Supports',
+  partially_supported: 'Partly supports',
+  not_supported: "Doesn't support",
+  not_addressed: "Doesn't address",
+  cannot_verify: "Can't tell",
+  claim: 'Needs a citation',
+  not_claim: 'Not a claim',
+}
+
+export type Tone = 'good' | 'warn' | 'bad' | 'muted'
+
+export function itemTone(item: Pick<CheckItem, 'verdict'>): Tone {
+  switch (item.verdict) {
+    case 'supported': return 'good'
+    case 'partially_supported':
+    case 'claim': return 'warn'
+    case 'not_supported': return 'bad'
+    default: return 'muted'
+  }
+}
+
+export type Mark = { from: number; to: number; items: CheckItem[] }
+
+/** Joins results to the sentences the editor holds now, by hash; items whose sentence changed or vanished are stale. */
+export function marksFor(items: CheckItem[], spans: ReviewSentence[], dismissed: readonly string[] = []): { marks: Mark[]; stale: CheckItem[] } {
+  const byHash = new Map(spans.map((s) => [s.hash, s]))
+  const gone = new Set(dismissed)
+  const grouped = new Map<string, Mark>()
+  const stale: CheckItem[] = []
+  for (const item of items) {
+    const span = byHash.get(item.sentence_hash)
+    if (!span) { stale.push(item); continue }
+    if (item.kind === 'uncited' && (item.verdict === 'not_claim' || gone.has(item.sentence_hash))) continue
+    const mark = grouped.get(span.hash)
+    if (mark) grouped.set(span.hash, { ...mark, items: [...mark.items, item] })
+    else grouped.set(span.hash, { from: span.start, to: span.end, items: [item] })
+  }
+  return { marks: [...grouped.values()].sort((a, b) => a.from - b.from), stale }
+}
+
+const SAFE_KEY = /^[\w:.+-]+$/
+const END = /[.?!]/
+const CLOSERS = /[)"}]/
+
+/** Where `\citep{key}` goes: before the sentence's final . ? or ! (closers after it stay after). */
+export function citeThisEdit(doc: string, span: { start: number; end: number }, key: string): { from: number; insert: string } {
+  if (!SAFE_KEY.test(key)) throw new Error(`Unsafe citation key: ${JSON.stringify(key)}`)
+  let at = span.end
+  while (at > span.start && CLOSERS.test(doc[at - 1])) at--
+  if (!(at > span.start && END.test(doc[at - 1]))) at = span.end // no terminal mark: cite at the very end
+  else at--
+  const prev = doc[at - 1]
+  const lead = at === 0 || /[\s~]/.test(prev) ? '' : ' '
+  return { from: at, insert: `${lead}\\citep{${key}}` }
+}
