@@ -1,13 +1,14 @@
 """The triage desk's decisions (D119): a pile moves a paper's `triage` / `reading_pass` and appends one event."""
 
 import uuid
+from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import papers
-from app.core.errors import InvalidInput
+from app.core.errors import Conflict, InvalidInput, NotFound
 from app.models import Paper, TriageEvent
 
 # pile -> (triage it sets, pass it raises to at least). None: leave it alone. The one place the mapping is written.
@@ -125,3 +126,112 @@ async def decide(
         raise
     await session.refresh(paper)
     return paper, event, False
+
+
+async def undo(session: AsyncSession, event_id: uuid.UUID) -> tuple[Paper, TriageEvent]:
+    """Put a desk decision back as it was, if the paper still sits where the decision left it. Raises NotFound
+    (unknown_event), Gone, Conflict (not_a_desk_event, already_undone, changed_since)."""
+    event = await session.get(TriageEvent, event_id)
+    if event is None:
+        raise NotFound("unknown_event")
+    paper = await papers.get_paper(session, event.paper_id, lock=True)  # lock order: the papers row first
+    event = await session.get(TriageEvent, event_id, populate_existing=True)
+    if event is None:
+        raise NotFound("unknown_event")
+    if event.source != "desk":
+        raise Conflict("not_a_desk_event")
+    if await session.scalar(select(TriageEvent.id).where(TriageEvent.undone_event_id == event_id)):
+        raise Conflict("already_undone")
+    now_state = (paper.triage, paper.reading_pass)
+    if now_state != (event.after_triage, event.after_pass):
+        raise Conflict("changed_since")
+    restored = (event.before_triage, event.before_pass)
+    if restored != now_state:  # a skip moved nothing
+        await session.execute(
+            update(Paper).where(Paper.id == paper.id).values(triage=restored[0], reading_pass=restored[1])
+        )
+    undo_event = log_change(session, paper, source="undo", before=now_state, after=restored, undone_event_id=event_id)
+    try:
+        await session.commit()
+    except IntegrityError:  # the unique index on undone_event_id is the backstop for the check above
+        await session.rollback()
+        raise Conflict("already_undone") from None
+    await session.refresh(paper)
+    return paper, undo_event
+
+
+UNSET = object()  # a reason not sent, as against sent as null
+
+
+async def add_reason(
+    session: AsyncSession,
+    event_id: uuid.UUID,
+    *,
+    reason: str | None | object = UNSET,
+    note: str | None = None,
+    now: datetime | None = None,
+) -> TriageEvent:
+    """Fill the reason and/or note of a desk decision made less than DESK_LATE_REASON_MINUTES ago. A drop's reason
+    can be changed, never removed (pass `reason` only when it was sent). Raises NotFound, Conflict
+    (not_a_desk_event, late_reason_window), InvalidInput (reason_required, unknown_reason, note_too_long)."""
+    event = await session.get(TriageEvent, event_id, populate_existing=True)
+    if event is None:
+        raise NotFound("unknown_event")
+    if event.source != "desk":
+        raise Conflict("not_a_desk_event")
+    if (now or datetime.now(UTC)) - event.created_at > timedelta(minutes=DESK_LATE_REASON_MINUTES):
+        raise Conflict("late_reason_window")
+    new_reason = None if reason is UNSET or not reason else reason
+    if (event.pile == "not_relevant" and reason is not UNSET and new_reason is None) or (
+        new_reason is None and note is None
+    ):
+        raise InvalidInput("reason_required", allowed=list(REASONS[event.pile]))
+    check_reason(event.pile, new_reason or event.reason, note)
+    if new_reason is not None:
+        event.reason = new_reason
+    if note is not None:
+        event.note = note
+    await session.commit()
+    return event
+
+
+async def history(session: AsyncSession, paper_id: uuid.UUID) -> list[TriageEvent]:
+    """A paper's events, newest first. Raises NotFound, Gone."""
+    await papers.get_paper(session, paper_id)
+    rows = await session.scalars(
+        select(TriageEvent)
+        .where(TriageEvent.paper_id == paper_id)
+        .order_by(TriageEvent.created_at.desc(), TriageEvent.id.desc())
+    )
+    return list(rows)
+
+
+async def summary(session: AsyncSession, session_id: uuid.UUID) -> dict:
+    """What a desk session decided, leaving out decisions a later undo took back. Unknown session: all zeros."""
+    undone = select(TriageEvent.undone_event_id).where(TriageEvent.undone_event_id.is_not(None))
+    rows = await session.execute(
+        select(
+            TriageEvent.pile,
+            func.count(),
+            func.coalesce(func.sum(TriageEvent.card_ms), 0),
+            func.count().filter(TriageEvent.pdf_opened),
+        )
+        .where(TriageEvent.session_id == session_id, TriageEvent.source == "desk", TriageEvent.id.not_in(undone))
+        .group_by(TriageEvent.pile)
+    )
+    per_pile: dict[str, int] = {}
+    skipped = card_ms = pdf_opened = 0
+    for pile, n, ms, pdf in rows:
+        if pile == "skip":
+            skipped = n
+        else:
+            per_pile[pile] = n
+        card_ms += int(ms)
+        pdf_opened += pdf
+    return {
+        "per_pile": per_pile,
+        "skipped": skipped,
+        "card_ms": card_ms,
+        "pdf_opened": pdf_opened,
+        "decided": sum(per_pile.values()),
+    }

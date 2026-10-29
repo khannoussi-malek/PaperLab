@@ -62,3 +62,15 @@ class TriageReasonIn(BaseModel):
 
     reason: str | None = None
     note: str | None = None
+
+
+class TriageHistoryOut(BaseModel):
+    events: list[TriageEventOut]
+
+
+class TriageSummaryOut(BaseModel):
+    per_pile: dict[str, int]
+    skipped: int
+    card_ms: int
+    pdf_opened: int
+    decided: int
