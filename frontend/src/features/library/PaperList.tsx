@@ -19,7 +19,7 @@ import { PaperContextMenu, PaperMenu } from './PaperMenu'
 import { NoMatches, PaperSearch } from './PaperSearch'
 import { PaperPreview } from './PaperPreview'
 import { SourceBadges } from '../reader/SourceBadges'
-import { byline, matchesPaper, pageCountLabel } from './paperMeta'
+import { byline, matchesPaper, pageCountLabel, quietStatus } from './paperMeta'
 import { LibraryDeck } from './LibraryDeck'
 
 /** Skimming the list with the mouse shouldn't open a PDF for every row it crosses. */
@@ -29,8 +29,6 @@ const STAGGER_MS = 40
 const MAX_STAGGER_STEPS = 6
 
 const isIngesting = (paper: Paper) => paper.status !== 'ready' && paper.status !== 'failed'
-/** Ready is the normal state, and a paper without a PDF never ingests (its abstract embeds in a moment): neither shows. */
-const quietStatus = (paper: Paper) => paper.status === 'ready' || (paper.has_pdf === false && paper.status !== 'failed')
 
 type RowProps = {
   paper: Paper
