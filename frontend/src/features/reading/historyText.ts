@@ -23,7 +23,8 @@ const when = (iso: string) => {
   const d = new Date(iso)
   return `${d.getDate()} ${MONTHS[d.getMonth()]}, ${two(d.getHours())}:${two(d.getMinutes())}`
 }
-const state = (pass: number, triage: string | null) => readingChip(pass, triage as Triage | null) ?? UNDECIDED
+// readingChip joins level and decision with " · ", which is also the row's separator; a comma keeps a state in one piece.
+const state = (pass: number, triage: string | null) => readingChip(pass, triage as Triage | null)?.replace(' · ', ', ') ?? UNDECIDED
 
 /** One history row in words: when, what changed, why (reason and PDF use), and where it came from. */
 export function describeEvent(e: TriageEvent): { when: string; what: string; why: string | null; where: string } {

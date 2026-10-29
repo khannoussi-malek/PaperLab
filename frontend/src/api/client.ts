@@ -297,8 +297,8 @@ export const api = {
   },
   updatePaper: (id: string, update: PaperUpdate) => request<Paper>(`/api/papers/${id}`, sendJson('PATCH', update)),
   /** The reader's own record (D118, D119): passes finished, keep/later/drop, or both. A field left out keeps its
-   * value. 422 for an out-of-range pass, an unknown decision, or an empty body. */
-  /** `source` names where the change came from (`reader` is the server's default, `library` the row menu). */
+   * value. 422 for an out-of-range pass, an unknown decision, or an empty body. `source` names where the change came
+   * from (`reader` is the server's default, `library` the row menu). */
   setReading: (id: string, changes: ReadingIn, source?: 'reader' | 'library') => {
     const init = sendJson('PUT', changes)
     return request<Paper>(`/api/papers/${id}/reading`, source ? { ...init, headers: { ...init.headers, 'X-PaperLab-Source': source } } : init)
