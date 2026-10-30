@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import type { Paper } from '@/api/client'
+import { api, type Paper } from '@/api/client'
+import { Button } from '@/components/ui/button'
 import { prefetchPaperSections } from '@/features/lenses/queries'
 import { browserStorage } from '@/features/notes/highlightColors'
 import { paperLabel } from '@/features/library/paperMeta'
 import { useReducedMotion } from '@/features/manuscripts/deck/useReducedMotion'
 import * as say from './announce'
-import { CardClock } from './cardClock'
 import { DeskStage } from './DeskStage'
 import { PILES, REASONS, type Pile } from './piles'
 import { ReasonChips } from './ReasonChips'
@@ -17,7 +17,10 @@ import { TriageDone } from './TriageDone'
 import { TriageEmpty } from './TriageEmpty'
 import { deskLayout, useDeskWidth } from './layout'
 import { countsByPile, newSince, ORDERS, progress, type Order } from './queue'
+import { retainOnly, prefetchPdf } from './pdfCache'
 import { closeSession } from './sessionId'
+import { TriagePdf } from './TriagePdf'
+import { useCardClock } from './useCardClock'
 import { useDeskKeys } from './useDeskKeys'
 import { useTriageSession } from './useTriageSession'
 
@@ -33,6 +36,16 @@ function storedOrder(scope: string): Order {
   }
 }
 
+const PDF_KEY = 'paperlab-triage-pdf'
+
+function storedPdfOn(): boolean {
+  try {
+    return browserStorage()?.getItem(PDF_KEY) !== '0'
+  } catch {
+    return true
+  }
+}
+
 type Props = {
   /** The list's filtered papers: they build (and re-freeze) the stack. */
   papers: Paper[]
@@ -45,12 +58,10 @@ type Props = {
   workspaceId?: string
   onExit: () => void
   onShowKept: () => void
-  /** The `P` key: Task 8's PDF column toggles here. */
-  onTogglePdf?: () => void
 }
 
 /** The triage desk: stage, controls, reason chips, the one key handler and the done screen. */
-export function TriageDesk({ papers, library, libraryReady = true, scope, sourceLabel, filterKey, onExit, onShowKept, onTogglePdf }: Props) {
+export function TriageDesk({ papers, library, libraryReady = true, scope, sourceLabel, filterKey, onExit, onShowKept }: Props) {
   const root = useRef<HTMLElement>(null)
   const layout = deskLayout(useDeskWidth(root))
   const reduced = useReducedMotion()
@@ -60,18 +71,36 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
   const [held, setHeld] = useState<Pile | null>(null)
   const [helpOpen, setHelpOpen] = useState(false)
   const [departing, setDeparting] = useState<{ pile: Pile; paper: Paper } | null>(null)
-  const [clock] = useState(() => new CardClock())
+  const [pdfOn, setPdfOn] = useState(storedPdfOn)
   const session = useTriageSession({
     scope, queueFrom: papers, library, libraryReady, filterKey, order: storedOrder(scope), includeDecided: false,
   })
   const { state, top, notReady } = session
   useEffect(() => root.current?.focus(), [])
   const topId = top?.id
-  useEffect(() => clock.reset(), [topId, clock])
+  const showPdf = layout === 'wide' && pdfOn && Boolean(top?.has_pdf)
+  const clock = useCardClock(topId, { pdfShown: showPdf })
+  const togglePdf = () => {
+    const next = !pdfOn
+    setPdfOn(next)
+    try {
+      browserStorage()?.setItem(PDF_KEY, next ? '1' : '0')
+    } catch {
+      // ponytail: an unwritable store only means the choice is forgotten on reload
+    }
+  }
   const reasons = reasonsFor !== null && reasonsFor === topId
   const setReasons = (on: boolean) => setReasonsFor(on ? (topId ?? null) : null)
   const client = useQueryClient()
   const nextTwo = state.unseen.slice(1, 3).filter((id) => library.find((p) => p.id === id)?.has_pdf).join(',')
+  // The documents worth keeping: this card, the next two and the one just decided; the rest are let go.
+  const lastDone = state.done.at(-1)?.id
+  const keep = [top?.id, ...nextTwo.split(','), lastDone].filter((id): id is string => Boolean(id) && Boolean(library.find((p) => p.id === id)?.has_pdf)).map(api.paperFileUrl)
+  const keepKey = keep.join('|')
+  useEffect(() => {
+    retainOnly(keepKey ? keepKey.split('|') : [])
+    if (showPdf) for (const url of nextTwo.split(',').filter(Boolean).map(api.paperFileUrl)) prefetchPdf(url)
+  }, [keepKey, nextTwo, showPdf])
   useEffect(() => {
     for (const id of nextTwo.split(',').filter(Boolean)) void prefetchPaperSections(client, id)
   }, [client, nextTwo])
@@ -124,7 +153,7 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
     closeHelp: () => setHelpOpen(false),
     exit,
     undo,
-    togglePdf: () => onTogglePdf?.(),
+    togglePdf,
     openHelp: () => setHelpOpen(true),
     focusAbstract: () => root.current?.querySelector<HTMLElement>('[aria-label="Abstract"]')?.focus(),
   })
@@ -182,12 +211,27 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
         />
       ) : top ? (
         <>
-          <div data-triage-region tabIndex={-1} className="outline-none">
+          {layout === 'wide' && (
+            <div className="flex justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                aria-pressed={showPdf}
+                disabled={!top.has_pdf}
+                title={top.has_pdf ? undefined : 'No PDF for this paper'}
+                onClick={() => { togglePdf(); focusRoot() }}
+              >
+                PDF (P)
+              </Button>
+            </div>
+          )}
+          <div className={showPdf ? 'flex items-start gap-3' : undefined}>
+          <div data-triage-region tabIndex={-1} className={showPdf ? 'min-w-0 flex-1 outline-none' : 'outline-none'}>
             <DeskStage
               top={top}
               behind={state.unseen.slice(1, 3).flatMap((id) => library.find((p) => p.id === id) ?? [])}
               counts={countsByPile(state)}
-              layout={layout}
+              layout={showPdf ? 'tabs' : layout}
               hot={held ?? (reasons ? 'not_relevant' : null)}
               hovering={reasons ? 'not_relevant' : null}
               departing={departing}
@@ -195,6 +239,12 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
               onHover={() => {}}
               reduced={reduced}
             />
+          </div>
+          {showPdf && (
+            <div className="sticky top-2 w-[52%] shrink-0">
+              <TriagePdf key={top.id} paperId={top.id} active target={null} onInteract={clock.interact} />
+            </div>
+          )}
           </div>
           {reasons && <ReasonChips reasons={REASONS.not_relevant} noteFor="other" onPick={(r, note) => go('not_relevant', r, note)} onCancel={cancelReason} />}
           <TriageControls layout={layout} undo={undoInfo} onUndo={undo} onDecide={choose} progress={progress(state)} />
