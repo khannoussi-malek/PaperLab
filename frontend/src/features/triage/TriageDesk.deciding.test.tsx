@@ -3,6 +3,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest'
 import { api, type Paper } from '@/api/client'
+vi.mock('./pdfCache', () => ({ useCachedPdf: () => ({ doc: null, error: null }), retainOnly: vi.fn(), prefetchPdf: vi.fn() }))
+vi.mock('../reader/PdfPage', () => ({ PdfPage: () => null }))
 import { TriageDesk } from './TriageDesk'
 
 beforeAll(() => {

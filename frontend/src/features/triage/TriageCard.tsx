@@ -1,6 +1,7 @@
 import type { Paper } from '@/api/client'
 import { useTriageEvents } from '@/api/queries'
 import { Button } from '@/components/ui/button'
+import { GetPdfActions } from '@/features/library/GetPdfActions'
 import { byline, pageCountLabel } from '@/features/library/paperMeta'
 import { readingChip } from '@/features/reading/passes'
 import { describeEvent } from '@/features/reading/historyText'
@@ -61,6 +62,12 @@ export function TriageCard({ paper, onShowInPdf }: { paper: Paper; onShowInPdf?:
       >
         {paper.abstract?.trim() || <span className="text-muted-foreground">No abstract</span>}
       </div>
+      {!paper.has_pdf && (
+        <div className="space-y-2">
+          <p className="text-sm text-muted-foreground">No PDF for this paper.</p>
+          <GetPdfActions paperId={paper.id} title={paper.title} />
+        </div>
+      )}
       <Conclusion paper={paper} onShowInPdf={onShowInPdf} />
     </article>
   )
