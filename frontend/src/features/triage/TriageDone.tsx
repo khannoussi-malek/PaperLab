@@ -1,5 +1,6 @@
 import { useTriageSummary } from '@/api/queries'
 import { Button } from '@/components/ui/button'
+import { SAVING } from './TriageBar'
 import { UndoButton } from './TriageControls'
 import { PILES, PILE_ORDER } from './piles'
 
@@ -8,6 +9,7 @@ type Props = {
   skipped: number
   /** False while a write is pending: the skipped cards' state isn't settled yet. */
   canReviewSkipped: boolean
+  canStartOver: boolean
   newSince: number
   undo: { label: string; count: number } | null
   onUndo: () => void
@@ -21,7 +23,7 @@ type Props = {
 const minutes = (ms: number) => (ms < 60_000 ? 'under a minute' : `about ${Math.round(ms / 60_000)} min`)
 
 /** The end of the stack: what the session did, as plain facts, and the ways on. */
-export function TriageDone({ sessionId, skipped, canReviewSkipped, newSince, undo, onUndo, onReviewSkipped, onShowKept, onAddNew, onStartOver, onBack }: Props) {
+export function TriageDone({ sessionId, skipped, canReviewSkipped, canStartOver, newSince, undo, onUndo, onReviewSkipped, onShowKept, onAddNew, onStartOver, onBack }: Props) {
   const { data } = useTriageSummary(sessionId, true)
   return (
     <div className="grid gap-4 rounded-xl border border-glass-border bg-glass px-6 py-8">
@@ -37,10 +39,10 @@ export function TriageDone({ sessionId, skipped, canReviewSkipped, newSince, und
         </ul>
       )}
       <div className="flex flex-wrap items-center gap-2">
-        {skipped > 0 && <Button disabled={!canReviewSkipped} onClick={onReviewSkipped}>Review the skipped ({skipped})</Button>}
+        {skipped > 0 && <Button disabled={!canReviewSkipped} title={canReviewSkipped ? undefined : SAVING} onClick={onReviewSkipped}>Review the skipped ({skipped})</Button>}
         <Button variant="secondary" onClick={onShowKept}>Show kept papers in the list</Button>
         {newSince > 0 && <Button variant="secondary" onClick={onAddNew}>Add {newSince} new {newSince === 1 ? 'paper' : 'papers'}</Button>}
-        <Button variant="secondary" onClick={onStartOver}>Start over</Button>
+        <Button variant="secondary" disabled={!canStartOver} title={canStartOver ? undefined : SAVING} onClick={onStartOver}>Start over</Button>
         <Button variant="outline" onClick={onBack}>Back to the list</Button>
         <UndoButton undo={undo} onUndo={onUndo} />
       </div>
