@@ -232,9 +232,10 @@ it('Start over from the done screen opens a new session and a fresh stack withou
   expect((decide.mock.calls[3][1] as { session_id: string }).session_id).toBe(second)
 })
 
-it('the bar offers Start over while cards are left', () => {
+it('the bar offers Start over while cards are left', async () => {
   setup()
   key(screen.getByRole('group', { name: 'Triage' }), '1')
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Start over' })).toBeEnabled())
   fireEvent.click(screen.getByRole('button', { name: 'Start over' }))
   expect(decided()).toBe('0')
 })
@@ -265,12 +266,27 @@ it('a held pile key shows its stamp and lights nothing else; keyup and blur clea
   expect(document.querySelector('[data-triage-stamp]')).toHaveTextContent('Not relevant')
   key(root, 'Escape')
   expect(document.querySelector('[data-triage-stamp]')).toBeNull()
+  // a key that commits leaves no stamp on the next card
   key(root, 'ArrowRight')
-  expect(document.querySelector('[data-triage-stamp]')).toHaveTextContent('Read closely')
-  fireEvent.keyUp(root, { key: 'ArrowRight' })
+  expect(title()).toBe('Middle')
   expect(document.querySelector('[data-triage-stamp]')).toBeNull()
   key(root, '2')
-  expect(document.querySelector('[data-triage-stamp]')).toHaveTextContent('Skim')
+  expect(document.querySelector('[data-triage-stamp]')).toBeNull()
   fireEvent.blur(window)
   expect(document.querySelector('[data-triage-stamp]')).toBeNull()
+})
+
+it('Start over waits for pending saves: disabled with a reason, enabled once they land', async () => {
+  let release!: (v: unknown) => void
+  decide.mockImplementationOnce((() => new Promise((r) => { release = r })) as never)
+  const { root } = setup()
+  key(root, '1')
+  const bar = screen.getByRole('button', { name: 'Start over' })
+  expect(bar).toBeDisabled()
+  expect(bar).toHaveAttribute('title', 'Saving… try again in a moment')
+  key(root, ' '); key(root, '2')
+  await screen.findByText('That is the whole stack.')
+  expect(screen.getByRole('button', { name: 'Start over' })).toBeDisabled()
+  release({ event: { id: 'late' } })
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Start over' })).toBeEnabled())
 })

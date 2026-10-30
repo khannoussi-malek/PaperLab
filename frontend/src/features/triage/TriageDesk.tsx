@@ -96,6 +96,7 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
   const go = (pile: Pile, reason?: string, note?: string) => {
     if (!top) return
     setReasons(false)
+    setHeld(null) // the stamp belongs to the card the key acted on, not the next one
     setDeparting({ pile, paper: top })
     session.decide(pile, { reason, note, clock: clock.read() })
     focusRoot()
@@ -130,7 +131,7 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
 
   // A done-screen button unmounts with its action: the keys must keep working, so focus goes to the desk.
   const keepFocus = (f: () => void) => () => { f(); focusRoot() }
-  const startOver = () => { setReasons(false); session.startOver() }
+  const startOver = () => { setReasons(false); setDeparting(null); session.startOver() }
 
   const last = state.done.at(-1)
   const lastPaper = last && library.find((p) => p.id === last.id)
@@ -158,6 +159,7 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
         onIncludeDecided={toggleInclude}
         onExit={exit}
         onStartOver={empty || finished ? undefined : keepFocus(startOver)}
+        canStartOver={session.canStartOver}
       />
       <ShortcutHelp open={helpOpen} onOpenChange={setHelpOpen} />
       <DeskStatus announcement={reasons ? say.reasonRow() : session.announcement} alert={session.alert} />
@@ -168,6 +170,7 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
           sessionId={session.sessionId}
           skipped={state.skipped.length}
           canReviewSkipped={session.canReviewSkipped}
+          canStartOver={session.canStartOver}
           newSince={newSince(state, papers, { includeDecided })}
           undo={undoInfo}
           onUndo={undo}

@@ -177,12 +177,14 @@ export function useTriageSession({ scope, queueFrom, library, libraryReady, filt
 
   /** Ends this session and opens a fresh one over the current list; saved decisions stay saved. */
   const startOver = useCallback(() => {
+    if (pendingRef.current > 0) return // a pending write's outcome would be lost or its paper decided twice
     closeSession(scope)
     setSessionId(openSession(scope))
     const l = live.current
     const { ids } = buildQueue(l.queueFrom, { order: l.order, seed: seed.current, includeDecided: l.includeDecided, exclude: new Set() })
     dispatch({ type: 'start', ids, seed: seed.current, order: l.order })
     setAlert(null)
+    setAnnouncement('')
   }, [scope])
 
   /** Papers that arrived after the freeze join the stack; what is decided or skipped stays out. */
@@ -225,7 +227,7 @@ export function useTriageSession({ scope, queueFrom, library, libraryReady, filt
   const notReady = useMemo(() => buildQueue(queueFrom, { order, seed: seed.current, includeDecided, exclude: new Set() }).notReady, [queueFrom, order, includeDecided])
 
   return {
-    state, top, sessionId, notReady, alert, announcement, pending, canReviewSkipped: pending === 0,
+    state, top, sessionId, notReady, alert, announcement, pending, canReviewSkipped: pending === 0, canStartOver: pending === 0,
     decide, undo, skip, setOrder, setIncludeDecided, reviewSkipped, addNew, startOver, dismissAlert: () => setAlert(null),
   }
 }

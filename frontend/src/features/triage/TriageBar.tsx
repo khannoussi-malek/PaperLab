@@ -4,6 +4,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch'
 import { ORDERS, type Order } from './queue'
 
+export const SAVING = 'Saving… try again in a moment'
+
 type Props = {
   sourceLabel: string
   left: number
@@ -16,9 +18,10 @@ type Props = {
   onExit: () => void
   /** Absent on the done screen, which has its own. */
   onStartOver?: () => void
+  canStartOver?: boolean
 }
 
-export function TriageBar({ sourceLabel, left, total, notReady, order, includeDecided, onOrder, onIncludeDecided, onExit, onStartOver }: Props) {
+export function TriageBar({ sourceLabel, left, total, notReady, order, includeDecided, onOrder, onIncludeDecided, onExit, onStartOver, canStartOver = true }: Props) {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
       <p className="text-sm font-medium">
@@ -41,7 +44,7 @@ export function TriageBar({ sourceLabel, left, total, notReady, order, includeDe
           <Switch id="triage-include" checked={includeDecided} onCheckedChange={onIncludeDecided} />
           <Label htmlFor="triage-include">Include decided papers</Label>
         </div>
-        {onStartOver && <Button variant="ghost" size="sm" onClick={onStartOver}>Start over</Button>}
+        {onStartOver && <Button variant="ghost" size="sm" disabled={!canStartOver} title={canStartOver ? undefined : SAVING} onClick={onStartOver}>Start over</Button>}
         <Button variant="outline" size="sm" onClick={onExit}>Exit (Esc)</Button>
       </div>
     </div>
