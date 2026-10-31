@@ -1,4 +1,5 @@
-"""Vector top-k over chunks, scoped to papers or a workspace, with a per-paper diversity cap."""
+"""Top-k over chunks, by vector or fused with a keyword ranking (HYBRID_SEARCH), scoped to papers or a workspace, with a
+per-paper diversity cap."""
 
 import asyncio
 import uuid
@@ -41,10 +42,71 @@ LIMIT :k
 """
 
 
-def _nearest(in_papers: bool, in_chunks: bool):
+# Hybrid search: the vector candidates and up to as many keyword candidates, fused by reciprocal rank (each list adds
+# 1 / (RRF_K + rank)), then the same per-paper cap. The keyword score sums each question word's IDF over the scope,
+# not ts_rank: ts_rank has no IDF, so "patient" counts as much as "itraconazole", and websearch_to_tsquery ANDs every
+# word, which a whole question never matches. Matches go through the GIN index on tsv first, then only they are scored.
+# ponytail: 'english' stemming won't join "haemodialysis" to "dialysis"; the vector half has to carry those.
+# The vector ranks count from the far end: relaxed_order (below) can return `nearest` slightly out of order, and a
+# window ORDER BY distance would take that order as already sorted. Postgres can't take it as sorted DESC.
+RRF_K = 60
+_HYBRID = """
+WITH vector AS (
+  SELECT id, count(*) OVER () + 1 - row_number() OVER (ORDER BY distance DESC) AS rank
+  FROM (
+    SELECT id, embedding <=> :q AS distance
+    FROM chunks
+    WHERE embedding IS NOT NULL {scope}
+    ORDER BY embedding <=> :q
+    LIMIT :candidates
+  ) AS nearest
+),
+terms AS MATERIALIZED (
+  SELECT DISTINCT quote_literal(lexeme)::tsquery AS term
+  FROM unnest(tsvector_to_array(to_tsvector('english', :question))) AS lexeme
+),
+total AS (SELECT count(*)::float AS n FROM chunks WHERE embedding IS NOT NULL {scope}),
+weights AS MATERIALIZED (
+  SELECT term, ln((SELECT n FROM total) / df) AS weight
+  FROM (
+    SELECT term, (SELECT count(*) FROM chunks WHERE embedding IS NOT NULL {scope} AND tsv @@ term) AS df
+    FROM terms
+  ) AS counted
+  WHERE df > 0 AND df < (SELECT n FROM total)  -- a word in every chunk tells them apart by nothing
+),
+lexical AS (
+  SELECT id, rank() OVER (ORDER BY score DESC) AS rank  -- ties share a rank, so they leave the vector order alone
+  FROM (
+    SELECT id, (SELECT sum(weight) FROM weights WHERE tsv @@ weights.term) AS score
+    FROM chunks
+    WHERE embedding IS NOT NULL {scope} AND tsv @@ (SELECT string_agg(term::text, ' | ')::tsquery FROM weights)
+    ORDER BY score DESC, id
+    LIMIT :candidates
+  ) AS matched
+),
+fused AS (
+  SELECT id, sum(1.0 / (:rrf_k + rank)) AS score
+  FROM (SELECT id, rank FROM vector UNION ALL SELECT id, rank FROM lexical) AS both_lists
+  GROUP BY id
+),
+ranked AS (
+  SELECT c.id, c.paper_id, c.page, c.section_title, c.bbox, c.text, c.embedding <=> :q AS distance, f.score,
+    row_number() OVER (PARTITION BY c.paper_id ORDER BY f.score DESC, c.embedding <=> :q) AS nth
+  FROM fused AS f JOIN chunks AS c ON c.id = f.id
+)
+SELECT id, paper_id, page, section_title, bbox, text, distance
+FROM ranked
+WHERE nth <= :per_paper
+ORDER BY score DESC, distance
+LIMIT :k
+"""
+
+
+def _nearest(in_papers: bool, in_chunks: bool, hybrid: bool = False):
     """The candidate query with its scope: papers, given chunks (M16, D49), both or neither."""
     scope = ("AND paper_id = ANY(:paper_ids) " if in_papers else "") + ("AND id = ANY(:chunk_ids)" if in_chunks else "")
-    return text(_NEAREST.format(scope=scope)).bindparams(bindparam("q", type_=Vector(768)))
+    query = _HYBRID if hybrid else _NEAREST
+    return text(query.format(scope=scope)).bindparams(bindparam("q", type_=Vector(768)))
 
 
 # With a filter, HNSW otherwise post-filters within ef_search (40) candidates and can silently return nothing.
@@ -165,7 +227,9 @@ async def retrieve(
         raise Conflict(QUESTION_FAILED.format(reason=str(exc).rstrip("."))) from exc
     params = {"q": question, "k": k, "candidates": max(CANDIDATES, k)}
     params["per_paper"] = k if per_paper is None else per_paper
-    statement = _nearest(paper_ids is not None, chunk_ids is not None)
+    statement = _nearest(paper_ids is not None, chunk_ids is not None, settings.hybrid_search)
+    if settings.hybrid_search:
+        params |= {"question": query, "rrf_k": RRF_K}
     if paper_ids is not None:
         params["paper_ids"] = list(paper_ids)
     if chunk_ids is not None:
