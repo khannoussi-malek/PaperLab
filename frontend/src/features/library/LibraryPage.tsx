@@ -27,7 +27,7 @@ export function LibraryPage() {
   const papers = usePapers()
   const upload = useUploadPapers()
   const list = papers.data
-  const [view, setView] = usePaperView('paperlab-library-view')
+  const [view, setView, exitTriage] = usePaperView('paperlab-library-view', 'library')
   const [visible, setVisible] = useState<string[] | null>(null)
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set())
   // A pick hidden by the list's own search is kept, but only the rows on screen are counted and exported.
@@ -78,7 +78,7 @@ export function LibraryPage() {
                 <Button variant="ghost" size="sm" onClick={() => setPicked(new Set())}>Clear</Button>
               </div>
             )}
-            <PaperList papers={list} selection={view === 'list' ? { selected: new Set(selectedIds), onToggle: toggle } : undefined} onVisibleChange={setVisible} view={view} />
+            <PaperList papers={list} selection={view === 'list' ? { selected: new Set(selectedIds), onToggle: toggle } : undefined} onVisibleChange={setVisible} view={view} triageScope="library" sourceLabel="your library" onTriageExit={exitTriage} onShowKept={() => setView('list')} />
           </div>
         )}
 

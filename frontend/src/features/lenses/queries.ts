@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { api, type SectionRoleIn } from '@/api/client'
 
 // Every key starts with ['papers', paperId], like api/queries.ts's, so Re-index (`keys.paper(paperId)`) refreshes them.
@@ -9,8 +9,12 @@ const keys = {
 }
 
 /** Every section with its role, and every lens with its chunks (the lens picker, fading and the Lens tab). */
-export const usePaperSections = (paperId: string) =>
-  useQuery({ queryKey: keys.sections(paperId), queryFn: () => api.paperSections(paperId) })
+export const usePaperSections = (paperId: string, enabled = true) =>
+  useQuery({ queryKey: keys.sections(paperId), queryFn: () => api.paperSections(paperId), enabled })
+
+/** Warms the sections `usePaperSections` will ask for (the triage desk's next cards). */
+export const prefetchPaperSections = (client: QueryClient, paperId: string) =>
+  client.prefetchQuery({ queryKey: keys.sections(paperId), queryFn: () => api.paperSections(paperId) })
 
 /** All of a paper's chunks, fetched only when `enabled`: a lens other than Full paper, or the Lens tab. */
 export const usePaperChunks = (paperId: string, enabled: boolean) =>

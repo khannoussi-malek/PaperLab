@@ -23,6 +23,9 @@ export type Paper = components['schemas']['PaperOut']
 export type PaperUpdate = components['schemas']['PaperUpdate']
 export type ReadingIn = components['schemas']['ReadingIn']
 export type TriageEvent = components['schemas']['TriageEventOut']
+export type TriageDecisionIn = components['schemas']['TriageDecisionIn']
+export type TriageDecision = components['schemas']['TriageDecisionOut']
+export type TriageSummary = components['schemas']['TriageSummaryOut']
 export type EvidenceCard = components['schemas']['CardOut']
 export type EvidenceCardRow = components['schemas']['CardRowOut']
 export type EvidenceChange = components['schemas']['EditIn']['changes'][number]
@@ -236,6 +239,9 @@ export class ApiError extends Error {
   }
 }
 
+/** True for a 409 ApiError whose server code is `code` (changed_since, already_undone, not_a_desk_event). */
+export const isConflict = (e: unknown, code: string) => e instanceof ApiError && e.status === 409 && e.code === code
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, init)
   if (!response.ok) {
@@ -304,6 +310,9 @@ export const api = {
     return request<Paper>(`/api/papers/${id}/reading`, source ? { ...init, headers: { ...init.headers, 'X-PaperLab-Source': source } } : init)
   },
   triageEvents: async (id: string) => (await request<{ events: TriageEvent[] }>(`/api/papers/${id}/triage-events`)).events,
+  decideTriage: (paperId: string, body: TriageDecisionIn) => request<TriageDecision>(`/api/papers/${paperId}/triage-decisions`, sendJson('POST', body)),
+  undoTriage: (eventId: string) => request<TriageDecision>(`/api/triage-events/${eventId}/undo`, { method: 'POST' }),
+  triageSummary: (sessionId: string) => request<TriageSummary>(`/api/triage-summary?session_id=${encodeURIComponent(sessionId)}`),
   deletePaper: (id: string) => request<void>(`/api/papers/${id}`, { method: 'DELETE' }),
   /** Attaches `file` to a paper saved without a PDF; it then ingests. 409 already_has_pdf, 422 not_a_pdf / pdf_too_large. */
   uploadPaperPdf: (id: string, file: File) => {
