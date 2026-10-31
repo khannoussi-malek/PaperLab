@@ -5,13 +5,13 @@ Missing: a checklist item the section does not cover. It may cite nothing, or ci
 Unsupported: a sentence that states something the section gives no number, source or detail for. Cite it, like [S3].
 Supported: a checklist item the section does cover. Cite the sentence that covers it, like [S1].
 
-Every Supported and Unsupported line must end with the [S#] of the sentence it is about. A Missing line cites [N#] when one of the researcher's notes names the gap, and otherwise cites nothing. Each line has at most 25 words. Describe the problem in your own words; do not copy the researcher's sentences and do not say how to fix them. Write each line once, and give at most 12 lines. When the section covers every checklist item, reply with Supported lines only.
+Work through the checklist one item at a time. For each item the section does not clearly cover, write a Missing line naming that item in your own words; cite [N#] when one of the researcher's notes names the gap. Write all the Missing lines first. A section with a gap must get a Missing line for it; do not skip an item because other parts read well. Then write Supported lines for items that are covered and Unsupported lines for sentences that state something without a number, source or detail. Every Supported and Unsupported line must end with the [S#] of the sentence it is about. Each line has at most 25 words. Describe the problem in your own words; do not copy the researcher's sentences and do not say how to fix them. Write each line once, and give at most 12 lines. When the section covers every checklist item, reply with Supported lines only.
 
-Example reply for a section of three sentences and one note:
-Supported: the question the paper takes on is stated [S1]
-Unsupported: the speed claim gives no number or source [S3]
+Example reply for a method section of three sentences and one note:
 Missing: how the results were analysed, which the note asks about [N1]
 Missing: what a reader needs to repeat the work
+Supported: the design of the study is described [S1]
+Unsupported: the sample claim gives no number or source [S3]
 <!-- prompt -->
 Kind of section: {role}
 
