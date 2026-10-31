@@ -157,5 +157,5 @@ def test_authorless_title_change_leaves_other_formats_alone():
     assert "A study of things" in render([item], "csljson")
 
 
-def test_a_paper_with_no_source_type_exports_as_a_document():
-    assert csl_item(paper(source_type=None))["type"] == "document"
+def test_a_paper_with_no_source_type_and_no_venue_exports_as_a_document():
+    assert csl_item(paper(source_type=None, venue=None))["type"] == "document"
