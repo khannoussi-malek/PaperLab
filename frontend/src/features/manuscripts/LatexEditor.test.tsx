@@ -3,7 +3,7 @@ import { render, waitFor } from '@testing-library/react'
 import { expect, test, vi } from 'vitest'
 import { EditorState } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
-import { undoDepth } from '@codemirror/commands'
+import { undo, undoDepth } from '@codemirror/commands'
 import { LatexEditor, latexTheme } from './LatexEditor'
 
 test('shows the text and follows a new value', () => {
@@ -179,4 +179,24 @@ test('a new value from outside is not undoable', () => {
   const { container, rerender } = render(<LatexEditor value="one" onChange={() => {}} errors={[]} onSave={() => {}} />)
   rerender(<LatexEditor value="two" onChange={() => {}} errors={[]} onSave={() => {}} />)
   expect(undoDepth(cm(container).state)).toBe(0)
+})
+
+test('Ctrl+Z after an outside update brings nothing back from before it', () => {
+  const onChange = vi.fn()
+  const { container, rerender } = render(<LatexEditor value="one two" onChange={onChange} errors={[]} onSave={() => {}} />)
+  const view = cm(container)
+  view.dispatch({ changes: { from: 0, to: 3, insert: 'ONE' }, userEvent: 'input.type' }) // the owner typed
+  expect(undoDepth(view.state)).toBe(1)
+  onChange.mockClear()
+  rerender(<LatexEditor value="claude wrote this" onChange={onChange} errors={[]} onSave={() => {}} />)
+  expect(undoDepth(view.state)).toBe(0)
+  undo(view)
+  expect(view.state.doc.toString()).toBe('claude wrote this')
+  expect(onChange).not.toHaveBeenCalled() // nothing to autosave
+})
+
+test('an outside update keeps the current theme and gutter', () => {
+  const { container, rerender } = render(<LatexEditor value="a" onChange={() => {}} errors={[{ line: 1, message: 'bad' }]} onSave={() => {}} />)
+  rerender(<LatexEditor value="b" onChange={() => {}} errors={[{ line: 1, message: 'bad' }]} onSave={() => {}} />)
+  expect(container.querySelector('.cm-lint-marker, [title="bad"]')).not.toBeNull()
 })

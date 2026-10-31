@@ -1,7 +1,7 @@
 import { HighlightStyle, StreamLanguage, syntaxHighlighting } from '@codemirror/language'
 import { tags } from '@lezer/highlight'
 import { stex } from '@codemirror/legacy-modes/mode/stex'
-import { Annotation, Compartment, EditorState, Prec, RangeSetBuilder, Transaction } from '@codemirror/state'
+import { Compartment, EditorState, type Extension, Prec, RangeSetBuilder } from '@codemirror/state'
 import { EditorView, GutterMarker, gutter, keymap } from '@codemirror/view'
 import { basicSetup } from 'codemirror'
 import { useEffect, useRef, useState } from 'react'
@@ -117,9 +117,6 @@ const highlight = syntaxHighlighting(
   ]),
 )
 
-// Marks a change the host made (a new `value`), so it is not reported back as an edit and never enters undo history.
-const FromHost = Annotation.define<boolean>()
-
 /** CodeMirror 6 with LaTeX highlighting, as one controlled-ish component: `value` in, `onChange` out. */
 export function LatexEditor({ value, onChange, errors, onSave, jumpTo, onCursor, onSectionStep, onShowInPdf, onCiteKey, onFindEvidence, registerInsert, registerFindEvidence, registerReview, reviewLocate, citeOptions, onCite, label = 'LaTeX source' }: Props) {
   const host = useRef<HTMLDivElement>(null)
@@ -132,12 +129,10 @@ export function LatexEditor({ value, onChange, errors, onSave, jumpTo, onCursor,
   latest.current = { citeOptions, onCite, onChange, onSave, onCursor, onSectionStep, onShowInPdf, onCiteKey, onFindEvidence, registerInsert, registerFindEvidence, registerReview, reviewLocate }
   const moved = useRef(false) // whether the cursor was ever placed; if not, an insert goes to the end
   const cursorLine = useRef(0)
+  const exts = useRef<Extension[]>([])
 
   useEffect(() => {
-    const editor = new EditorView({
-      doc: value,
-      parent: host.current!,
-      extensions: [
+    const extensions = [
         basicSetup,
         autocompletion({ override: [citeSource(() => ({ papers: latest.current.citeOptions ?? [], onCite: latest.current.onCite }))], icons: false }),
         paperDrop(() => latest.current.onCite),
@@ -173,10 +168,11 @@ export function LatexEditor({ value, onChange, errors, onSave, jumpTo, onCursor,
             const line = u.state.doc.lineAt(u.state.selection.main.head).number
             if (line !== cursorLine.current) { cursorLine.current = line; latest.current.onCursor?.(line) }
           }
-          if (u.docChanged && !u.transactions.some((t) => t.annotation(FromHost))) latest.current.onChange(u.state.doc.toString())
+          if (u.docChanged) latest.current.onChange(u.state.doc.toString())
         }),
-      ],
-    })
+    ]
+    exts.current = extensions
+    const editor = new EditorView({ doc: value, parent: host.current!, extensions })
     view.current = editor
     latest.current.registerFindEvidence?.(() => {
       if (!moved.current) return false
@@ -216,11 +212,10 @@ export function LatexEditor({ value, onChange, errors, onSave, jumpTo, onCursor,
     const old = editor.state.doc.lineAt(head)
     const next = EditorState.create({ doc: value }).doc
     const anchor = old.number > next.lines ? next.length : Math.min(next.line(old.number).from + (head - old.from), next.line(old.number).to)
-    editor.dispatch({
-      changes: { from: 0, to: editor.state.doc.length, insert: value },
-      selection: { anchor },
-      annotations: [FromHost.of(true), Transaction.addToHistory.of(false)],
-    })
+    // A fresh state: undo history must not carry pre-change edits across an outside replace (Ctrl+Z would bring old
+    // text back at the wrong place, and autosave it). setState reports no edit, so nothing is saved.
+    editor.setState(EditorState.create({ doc: value, selection: { anchor }, extensions: exts.current }))
+    editor.dispatch({ effects: [themeSlot.current.reconfigure(latexTheme(dark)), errorSlot.current.reconfigure(errorGutter(errors))] })
   }, [value])
 
   useEffect(() => {

@@ -168,6 +168,14 @@ test('History labels a snapshot taken before a Claude edit and still offers Rest
   expect(screen.getByRole('button', { name: /Restore/ })).toBeInTheDocument()
 })
 
+test('History says "Before changing sections" for a section change', async () => {
+  vi.spyOn(api, 'listManuscriptSnapshots').mockResolvedValue([{ id: 's1', reason: 'before_sections', created_at: T2 }])
+  renderPage()
+  fireEvent.click(await screen.findByRole('button', { name: 'History' }))
+  expect(await screen.findByText('Before changing sections')).toBeInTheDocument()
+  expect(screen.queryByText('before_sections')).toBeNull()
+})
+
 test('a failed compile keeps the last PDF on screen', async () => {
   vi.spyOn(api, 'getManuscript').mockResolvedValue(detail({ compile_status: 'failed', compiled_at: T3 }))
   renderPage()
@@ -1052,6 +1060,17 @@ test('typing between the poll and its answer keeps the typed text', async () => 
   await tick(2500) // the answer arrives
   expect(box).toHaveValue('typed meanwhile')
   expect(screen.queryByText('Updated by Claude (MCP)')).toBeNull()
+})
+
+test('a write that lands while the owner saves is picked up once the save settles', async () => {
+  vi.spyOn(api, 'saveManuscriptFile').mockImplementation(async () => {
+    server['main.tex'] = { text: 'Claude after my save', at: '2026-10-05T00:00:00Z' } // Claude writes just after the save committed
+    return saved()
+  })
+  const box = await renderPolling()
+  fireEvent.change(box, { target: { value: 'my words' } })
+  await tick(1500)
+  await waitFor(() => expect(box).toHaveValue('Claude after my save'))
 })
 
 test('stops polling once unmounted', async () => {

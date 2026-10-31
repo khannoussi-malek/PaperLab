@@ -14,6 +14,7 @@ const REASON: Record<string, string> = {
   compile: 'Compiled', autosave: 'Autosaved',
   before_restore: 'Before a restore',
   before_mcp: 'Before a Claude edit (MCP)',
+  before_sections: 'Before changing sections',
 }
 const when = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 
