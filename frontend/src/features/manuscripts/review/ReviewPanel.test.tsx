@@ -2,7 +2,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
-import { api, type CheckItem } from '@/api/client'
+import { api, ApiError, type CheckItem } from '@/api/client'
 import { ReviewPanel } from './ReviewPanel'
 
 const item = (o: Partial<CheckItem>): CheckItem => ({ id: 'i1', kind: 'cited', file: 'main.tex', sentence_hash: 'h1', sentence: 'Models help a lot.', ord: 0, cite_key: 'lewis2020', paper_id: 'p1', paper_title: 'Lewis', status: 'done', verdict: 'supported', reason: 'It says so.', quote: 'models help', page: 4, chunk_id: 'c1', output_id: null, model: 'm', ai: true, ...o })
@@ -141,4 +141,38 @@ test('queued and running rows are pending, not failures; a done cannot_verify on
   expect(screen.getAllByText("Couldn't check")).toHaveLength(1)
   expect(screen.queryByRole('button', { name: 'Find papers' })).toBeNull()
   expect(screen.queryByRole('button', { name: 'Not a claim' })).toBeNull()
+})
+
+const remote = () => new ApiError('remote_model_needs_confirm', 409, { detail: 'remote_model_needs_confirm', model: 'Cloud', host: 'api.example.com' })
+
+test('Find papers asks before a cloud model; Send finds again with the yes', async () => {
+  const find = vi.spyOn(api, 'findEvidence').mockRejectedValueOnce(remote()).mockResolvedValue({ sentence_hash: 'h9', verdicts: 'unavailable', papers: [{ paper_id: '1', key: 'k1', passages: [{ chunk_id: 'c', page: 1, text: 't' }] }] })
+  show({ items: [claim] })
+  fireEvent.click(screen.getByRole('button', { name: 'Find papers' }))
+  expect(await screen.findByRole('dialog', { name: 'Send to api.example.com?' })).toHaveTextContent('Your text will be sent to api.example.com and may cost money. Send it?')
+  expect(find).toHaveBeenLastCalledWith('m', 'Everyone agrees.', false)
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+  expect(await screen.findByRole('button', { name: 'Cite this' })).toBeInTheDocument()
+  expect(find).toHaveBeenCalledTimes(2)
+  expect(find).toHaveBeenLastCalledWith('m', 'Everyone agrees.', true)
+})
+
+test('Cancel on the cloud question sends nothing and leaves the row as it was', async () => {
+  const find = vi.spyOn(api, 'findEvidence').mockRejectedValue(remote())
+  show({ items: [claim] })
+  fireEvent.click(screen.getByRole('button', { name: 'Find papers' }))
+  await screen.findByRole('dialog')
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  expect(find).toHaveBeenCalledTimes(1)
+  expect(screen.getByRole('button', { name: 'Find papers' })).toBeEnabled()
+  expect(screen.queryByRole('status')).toBeNull()
+})
+
+test('a local Find papers never asks', async () => {
+  vi.spyOn(api, 'findEvidence').mockResolvedValue({ sentence_hash: 'h9', verdicts: 'unavailable', papers: [] })
+  show({ items: [claim] })
+  fireEvent.click(screen.getByRole('button', { name: 'Find papers' }))
+  expect(await screen.findByText('No paper in this workspace speaks to this.')).toBeInTheDocument()
+  expect(screen.queryByRole('dialog')).toBeNull()
 })

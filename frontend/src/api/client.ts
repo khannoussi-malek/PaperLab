@@ -585,8 +585,8 @@ export const api = {
   pinPaper: (id: string, paperId: string) => request<{ key: string }>(`/api/manuscripts/${id}/papers/${paperId}/pin`, { method: 'POST' }),
   rankPapers: (id: string, text: string) =>
     request<{ paper_ids: string[] }>(`/api/manuscripts/${id}/papers/rank`, sendJson('POST', { text })),
-  findEvidence: (id: string, sentence: string) =>
-    request<EvidenceFound>(`/api/manuscripts/${id}/evidence`, sendJson('POST', { sentence })),
+  findEvidence: (id: string, sentence: string, confirmRemote = false) =>
+    request<EvidenceFound>(`/api/manuscripts/${id}/evidence`, sendJson('POST', { sentence, confirm_remote: confirmRemote })),
   evidenceRows: (id: string, hash: string) => request<EvidenceRow[]>(`/api/manuscripts/${id}/evidence/${hash}`),
   addSection: (id: string, title: string, after: string | null) =>
     request<{ path: string }>(`/api/manuscripts/${id}/sections`, sendJson('POST', { title, after })),

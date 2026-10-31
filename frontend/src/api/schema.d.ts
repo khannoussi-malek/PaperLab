@@ -3965,6 +3965,11 @@ export interface components {
         EvidenceIn: {
             /** Sentence */
             sentence: string;
+            /**
+             * Confirm Remote
+             * @default false
+             */
+            confirm_remote: boolean;
         };
         /** EvidencePaperOut */
         EvidencePaperOut: {
