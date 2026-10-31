@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 COMPILE_JOB_TIMEOUT = 4 * (COMPILE_TIMEOUT + 30)
 # One Tectonic run per worker process: they share a cache and each takes memory.
-_COMPILE_LOCK = asyncio.Lock()
+COMPILE_LOCK = asyncio.Lock()
 # The user's PDFs stay root-only while Tectonic runs as another user (isolation layer 3). WorkerSettings has no
 # on_startup (see settings.py), so the first compile in the process does it.
 _PDF_DIR_LOCKED = False
@@ -141,7 +141,7 @@ async def compile_manuscript(ctx: dict, manuscript_id: str) -> None:
     again = True
     while again:
         try:
-            async with _COMPILE_LOCK:  # taken first, so time spent waiting never counts toward the stale window
+            async with COMPILE_LOCK:  # taken first, so time spent waiting never counts toward the stale window
                 prepared = await _prepare(mid)
                 if prepared is None:
                     return  # deleted meanwhile

@@ -32,7 +32,7 @@ async def real(arq, pdf_dir, monkeypatch):
 
     monkeypatch.setattr(queue, "_pool", arq)
     monkeypatch.setattr(worker, "SessionLocal", factory)
-    monkeypatch.setattr(worker, "_COMPILE_LOCK", asyncio.Lock())  # a lock remembers the loop it first waited in
+    monkeypatch.setattr(worker, "COMPILE_LOCK", asyncio.Lock())  # a lock remembers the loop it first waited in
     ids = []
 
     async def new():

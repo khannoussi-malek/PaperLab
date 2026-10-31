@@ -21,6 +21,8 @@ export type SectionFinding = components['schemas']['FindingOut']
 export type SectionRef = components['schemas']['RefOut']
 export type SectionSpan = components['schemas']['SectionSpanOut']
 export type SectionReviewStart = components['schemas']['SectionReviewIn']
+export type Diagram = components['schemas']['DiagramOut']
+export type DiagramStart = components['schemas']['DiagramIn']
 export type CitablePaper = components['schemas']['CitablePaperOut']
 export type ManuscriptCreate = components['schemas']['ManuscriptCreate']
 export type ManuscriptPatch = components['schemas']['ManuscriptPatch']
@@ -566,6 +568,18 @@ export const api = {
     request<{ reviews: SectionReview[] }>(`/api/manuscripts/${id}/section-review?file=${encodeURIComponent(file)}`),
   cancelSectionReview: (id: string, reviewId: string) =>
     request<SectionReview>(`/api/manuscripts/${id}/section-review/${reviewId}/cancel`, { method: 'POST' }),
+  createDiagram: (id: string, body: DiagramStart) =>
+    request<Diagram>(`/api/manuscripts/${id}/diagrams`, sendJson('POST', body)),
+  diagram: (id: string, diagramId: string) => request<Diagram>(`/api/manuscripts/${id}/diagrams/${diagramId}`),
+  setDiagramCode: (id: string, diagramId: string, code: string) =>
+    request<Diagram>(`/api/manuscripts/${id}/diagrams/${diagramId}/code`, sendJson('PUT', { code })),
+  cancelDiagram: (id: string, diagramId: string) =>
+    request<Diagram>(`/api/manuscripts/${id}/diagrams/${diagramId}/cancel`, { method: 'POST' }),
+  deleteDiagram: (id: string, diagramId: string) =>
+    request<void>(`/api/manuscripts/${id}/diagrams/${diagramId}`, { method: 'DELETE' }),
+  /** `stamp` (the row's updated_at) is in the URL so a new preview is a new URL and pdf.js fetches it again. */
+  manuscriptDiagramPdfUrl: (id: string, diagramId: string, stamp: string) =>
+    `/api/manuscripts/${id}/diagrams/${diagramId}/pdf?v=${encodeURIComponent(stamp)}`,
   locateSections: (id: string, file: string, text: string) =>
     request<{ sections: SectionSpan[] }>(`/api/manuscripts/${id}/section-review/locate`, sendJson('POST', { file, text })),
   pinPaper: (id: string, paperId: string) => request<{ key: string }>(`/api/manuscripts/${id}/papers/${paperId}/pin`, { method: 'POST' }),
