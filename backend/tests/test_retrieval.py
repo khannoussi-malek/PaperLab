@@ -421,3 +421,29 @@ async def test_hybrid_search_keeps_the_vector_order_among_tied_keyword_matches(s
 
     # The three matches tie on the keyword score: they rise together, nearest first, ahead of the plain ones.
     assert [r.text for r in found] == [texts[i] for i in (1, 2, 4, 0, 3, 5)]
+
+
+async def test_hybrid_search_keeps_the_nearest_of_more_tied_matches_than_it_takes(session, embedder, monkeypatch):
+    # 50 chunks tie on the keyword score and only 40 keyword candidates are taken: the nearest 40 must be the ones.
+    hybrid(monkeypatch, True)
+    question = f"{RARE} interactions"
+    query = unit_vector(uuid.uuid4().hex)
+    embedder.vectors[f"search_query: {question}"] = query
+    paper = Paper(title="Many ties", file_path="/many.pdf", status="ready")
+    session.add(paper)
+    await session.flush()
+    # Ids sort the other way round from distance, so a tie cut by id would keep the 40 farthest.
+    ids = sorted((uuid.uuid4() for _ in range(60)), reverse=True)
+    texts = [(f"Tied {RARE} chunk {i}", 0.1 + 0.01 * i) for i in range(50)] + [("Plain", 5.0)] * 10
+    session.add_all(
+        Chunk(
+            id=ids[i], paper_id=paper.id, ordinal=i, page=1, bbox=[[1, 2, 3, 4]], text=text,
+            embedding=at_spread(query, spread), embed_model="test", strategy_ver=1,
+        )
+        for i, (text, spread) in enumerate(texts)
+    )
+    await session.commit()
+
+    found = await retrieve(session, question, paper_ids=[paper.id], k=8, embedder=embedder)
+
+    assert [r.text for r in found] == [f"Tied {RARE} chunk {i}" for i in range(8)]

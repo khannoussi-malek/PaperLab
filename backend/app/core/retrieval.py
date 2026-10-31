@@ -80,7 +80,7 @@ lexical AS (
     SELECT id, (SELECT sum(weight) FROM weights WHERE tsv @@ weights.term) AS score
     FROM chunks
     WHERE embedding IS NOT NULL {scope} AND tsv @@ (SELECT string_agg(term::text, ' | ')::tsquery FROM weights)
-    ORDER BY score DESC, id
+    ORDER BY score DESC, embedding <=> :q, id  -- more ties than candidates: keep the nearest
     LIMIT :candidates
   ) AS matched
 ),
@@ -199,8 +199,9 @@ async def retrieve(
     per_paper: int | None = None,
     chunk_ids: list[uuid.UUID] | None = None,
 ) -> list[RetrievedChunk]:
-    """The k chunks nearest to the query, closest first. embedder=None embeds the question with the active search
-    source (query_embedder); a source that fails raises Conflict with QUESTION_FAILED's sentence (D155).
+    """The k chunks nearest to the query, closest first (with HYBRID_SEARCH, best fused rank first). embedder=None
+    embeds the question with the active search source (query_embedder); a source that fails raises Conflict with
+    QUESTION_FAILED's sentence (D155).
 
     Scope: paper_ids, workspace_id, or neither (the whole library). A scope that resolves to 2+ papers (a
     workspace with several members, or 2+ paper_ids) keeps at most per_paper (default MAX_PER_PAPER) chunks
