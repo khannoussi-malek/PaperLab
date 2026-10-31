@@ -3,6 +3,7 @@ import { useState, type ReactNode } from 'react'
 import type { CheckItem, SectionReview } from '@/api/client'
 import { Button } from '@/components/ui/button'
 import { chunkHref } from '@/lib/route'
+import { RemoteConfirmDialog } from './RemoteConfirm'
 import { SectionFindings } from './SectionFindings'
 import { statusLine } from './sectionReviewModel'
 import { couldntCheck, isLive, isPending, itemTone, reasonCopy, VERDICT_LABEL, type Tone } from './reviewModel'
@@ -118,6 +119,7 @@ function ClaimRow({ item, manuscriptId, dismissed, review, onJump, onCite }: { i
         <Button size="xs" variant="outline" disabled={found.pending} onClick={found.ask}>{found.pending ? 'Finding…' : 'Find papers'}</Button>
         <Button size="xs" variant="ghost" onClick={() => void review.dismiss(item.sentence_hash)}>Not a claim</Button>
       </div>
+      <RemoteConfirmDialog what="text" host={found.confirmHost} onSend={found.confirm} onCancel={found.dismissConfirm} />
       {(found.message || problem) && <p role="status" className="mt-1 text-xs text-muted-foreground">{problem ?? found.message}</p>}
       {found.proposals.length > 0 && (
         <ul className="mt-1.5 space-y-1">

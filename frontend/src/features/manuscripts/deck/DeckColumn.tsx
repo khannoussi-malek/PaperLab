@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api, ApiError, type EvidenceFound, type EvidenceRow } from '@/api/client'
 import { useManuscriptPapers, useNotes, usePinPaper } from '@/api/queries'
 import { TabSkeleton } from '@/features/workspaces/TabStates'
 import { chunkHref, noteHref, readerHref } from '@/lib/route'
 import { manuscriptFailure } from '../errors'
+import { RemoteConfirmDialog } from '../review/RemoteConfirm'
+import { remoteHost } from '../review/reviewModel'
 import { sentenceAtCursor } from '../evidence/claimText'
 import { bookItems, citedKeys, deckOrder, evidenceFirst, evidenceItems, insertText, NO_MODEL, verdictView, type BookItem, type DeckPaper, type VerdictView } from './deckModel'
 import { PaperBook } from './PaperBook'
@@ -108,6 +110,9 @@ export function DeckColumn({ manuscriptId, sectionKey, sectionText, allTexts, on
   const [evidence, setEvidence] = useState<Evidence | null>(null)
   const [evidenceMsg, setEvidenceMsg] = useState<string | null>(null) // an error, or "Finding evidence…"
   const [finding, setFinding] = useState(false)
+  const [confirm, setConfirm] = useState<{ host: string; sentence: string } | null>(null) // a cloud model needs a yes first
+  const shownNow = useRef({ evidence, evidenceMsg }) // what a remote refusal puts back: Cancel leaves the column as it was
+  shownNow.current = { evidence, evidenceMsg }
   const handledAsk = useRef(0)
   const lastAsk = useRef(0) // the newest ask; an older answer arriving late is dropped. 0 once unmounted.
   const [hands, setHands] = useState(false) // off until asked: it turns the camera on
@@ -137,20 +142,31 @@ export function DeckColumn({ manuscriptId, sectionKey, sectionText, allTexts, on
 
   const clearEvidence = () => { lastAsk.current += 1; setEvidence(null); setEvidenceMsg(null); setFinding(false); onClearEvidence?.() }
   useEffect(() => () => { lastAsk.current = -1 }, [])
+  const find = useCallback((plain: string, confirmRemote: boolean) => {
+    const ask = ++lastAsk.current
+    const before = shownNow.current
+    setEvidence(null) // the old check stops polling now
+    setEvidenceMsg(null)
+    setFinding(true)
+    setConfirm(null)
+    api.findEvidence(manuscriptId, plain, confirmRemote).then(
+      (found) => { if (lastAsk.current === ask) { setEvidence({ sentence: plain, found }); setFinding(false) } },
+      (e) => {
+        if (lastAsk.current !== ask) return
+        const host = remoteHost(e)
+        if (host) { setEvidence(before.evidence); setEvidenceMsg(before.evidenceMsg); setConfirm({ host, sentence: plain }) }
+        else setEvidenceMsg(evidenceError(e))
+        setFinding(false)
+      },
+    )
+  }, [manuscriptId])
   useEffect(() => {
     if (!evidenceAsk || evidenceAsk.n === handledAsk.current) return
     handledAsk.current = evidenceAsk.n
-    const ask = ++lastAsk.current
-    setEvidence(null) // the old check stops polling now
     const sentence = sentenceAtCursor(evidenceAsk.doc, evidenceAsk.from, evidenceAsk.to)
-    if (!sentence) return setEvidenceMsg(EVIDENCE_ERRORS.empty_claim), setFinding(false)
-    setEvidenceMsg(null)
-    setFinding(true)
-    api.findEvidence(manuscriptId, sentence.plain).then(
-      (found) => { if (lastAsk.current === ask) { setEvidence({ sentence: sentence.plain, found }); setFinding(false) } },
-      (e) => { if (lastAsk.current === ask) { setEvidenceMsg(evidenceError(e)); setFinding(false) } },
-    )
-  }, [evidenceAsk, manuscriptId])
+    if (!sentence) { lastAsk.current += 1; setEvidence(null); setEvidenceMsg(EVIDENCE_ERRORS.empty_claim); setFinding(false); return }
+    find(sentence.plain, false)
+  }, [evidenceAsk, find])
 
   const hash = evidence?.found.sentence_hash
   const unavailable = evidence?.found.verdicts === 'unavailable'
@@ -266,6 +282,7 @@ export function DeckColumn({ manuscriptId, sectionKey, sectionText, allTexts, on
       )}
     </div>
     {hands && <DeckHands column={column} onAction={onHands} onSelect={onHold} onHidden={() => setHands(false)} />}
+    <RemoteConfirmDialog what="text" host={confirm?.host ?? null} onSend={() => confirm && find(confirm.sentence, true)} onCancel={() => setConfirm(null)} />
     </div>
   )
 }

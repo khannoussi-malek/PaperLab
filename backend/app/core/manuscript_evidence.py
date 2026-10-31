@@ -12,7 +12,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import llm_connections, manuscript_papers, manuscripts, queue
-from app.core.errors import Conflict, InvalidInput
+from app.core.errors import Conflict, InvalidInput, error_code
 from app.core.retrieval import retrieve
 from app.models import ManuscriptEvidence
 
@@ -27,15 +27,20 @@ def sentence_hash(sentence: str) -> str:
     return hashlib.sha256(re.sub(r"\s+", " ", sentence.strip()).lower().encode()).hexdigest()
 
 
-async def _has_model(session: AsyncSession) -> bool:
+async def _has_model(session: AsyncSession, confirm_remote: bool) -> bool:
+    """False with no default model (the passages still show); a remote one without the researcher's yes refuses."""
     try:
-        await llm_connections.resolve(session, None)
-    except Conflict:
-        return False
+        await llm_connections.refuse_unconfirmed_remote(session, confirm_remote)
+    except Conflict as exc:
+        if error_code(exc) == "no_model":
+            return False
+        raise
     return True
 
 
-async def find(session: AsyncSession, mid: uuid.UUID, sentence: str, *, embedder=None) -> dict:
+async def find(
+    session: AsyncSession, mid: uuid.UUID, sentence: str, *, embedder=None, confirm_remote: bool = False
+) -> dict:
     sentence = sentence.strip()
     if not sentence:
         raise InvalidInput("empty_claim", detail="The sentence is empty.")
@@ -44,6 +49,7 @@ async def find(session: AsyncSession, mid: uuid.UUID, sentence: str, *, embedder
     manuscript = await manuscripts.get(session, mid)
     if manuscript.workspace_id is None:
         raise InvalidInput("no_workspace", detail="Pick a workspace for this manuscript to find evidence.")
+    has_model = await _has_model(session, confirm_remote)  # before anything is read: a remote one needs a yes
     keys = {p["paper_id"]: p["key"] for p in await manuscript_papers.list_papers(session, mid)}
     chunks = await retrieve(session, sentence, workspace_id=manuscript.workspace_id, k=PASSAGES, embedder=embedder)
     grouped: dict[uuid.UUID, list[dict]] = {}
@@ -61,9 +67,9 @@ async def find(session: AsyncSession, mid: uuid.UUID, sentence: str, *, embedder
         ManuscriptEvidence.status == "queued",
     ).values(status="failed", reason="superseded", updated_at=func.now()))
     # No model, no rows: nothing would ever resolve them (the passages still show).
-    verdicts = "queued" if grouped and await _has_model(session) else "unavailable"
+    verdicts = "queued" if grouped and has_model else "unavailable"
     if verdicts == "queued":
-        await _queue_rows(session, mid, h, sentence, list(grouped))
+        await _queue_rows(session, mid, h, sentence, list(grouped), confirm_remote)
     await session.commit()  # the job reads these rows on its own connection
     if verdicts == "queued":
         try:
@@ -83,7 +89,7 @@ async def find(session: AsyncSession, mid: uuid.UUID, sentence: str, *, embedder
     }
 
 
-async def _queue_rows(session, mid, h, sentence, paper_ids: list[uuid.UUID]) -> None:
+async def _queue_rows(session, mid, h, sentence, paper_ids: list[uuid.UUID], confirm_remote: bool) -> None:
     """One row per paper in rank order; a `done` row stays, every other one starts over."""
     where = (ManuscriptEvidence.manuscript_id == mid, ManuscriptEvidence.sentence_hash == h)
     await session.execute(delete(ManuscriptEvidence).where(*where, ManuscriptEvidence.paper_id.not_in(paper_ids)))
@@ -102,11 +108,12 @@ async def _queue_rows(session, mid, h, sentence, paper_ids: list[uuid.UUID]) -> 
     await session.execute(
         insert_.values([
             {"manuscript_id": mid, "sentence_hash": h, "sentence": sentence, "paper_id": pid, "rank": i,
-             "status": "queued"}
+             "status": "queued", "confirm_remote": confirm_remote}
             for i, pid in enumerate(paper_ids)
         ]).on_conflict_do_update(
             constraint="uq_manuscript_evidence_sentence_paper",
             set_={"rank": insert_.excluded.rank, "status": reset("status", "queued"),
+                  "confirm_remote": insert_.excluded.confirm_remote,
                   "verdict": reset("verdict", None), "reason": reset("reason", None),
                   "quote": reset("quote", None), "page": reset("page", None),
                   "output_id": reset("output_id", None), "updated_at": reset("updated_at", func.now())},
