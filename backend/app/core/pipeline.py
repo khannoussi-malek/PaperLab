@@ -269,6 +269,8 @@ async def _add_found(
     match = next(
         (c for c in found.results if (c.doi or "").lower() == value or c.external_ids.get("arxiv") == value), None
     )
+    if match is None and kind == "doi":  # Crossref's /works/{doi} answers an alias DOI with its canonical record
+        match = next((c for c in found.results if "crossref" in c.sources), None)
     if match is None:
         raise NotFound("no_matching_paper", identifier=value)
     if match.paper_id is not None:

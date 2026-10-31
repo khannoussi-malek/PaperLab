@@ -132,3 +132,42 @@ async def test_published_doi_is_recorded_even_when_the_source_type_is_locked(ses
     client, _ = fake_crossref({"type": "posted-content", "relation": {"is-preprint-of": [{"id": "10.1234/pub"}]}})
     await enrich(session, paper, client)
     assert (paper.source_type, paper.published_doi) == (None, "10.1234/pub")
+
+
+ANDERSON_WORK = {
+    "type": "proceedings-article",
+    "author": [
+        {"given": "Barrett R.", "family": "Anderson"},
+        {"given": "Jash Hemant", "family": "Shah"},
+        {"given": "Max", "family": "Kreminski"},
+    ],
+    "issued": {"date-parts": [[2024, 6, 23]]},
+    "container-title": ["Creativity and Cognition"],
+}
+ANDERSON_PAGE = "Homogenization Effects of Large Language Models on Human Creative Ideation\nBARRETT R. ANDERSON\n"
+
+
+async def enrich_upload(session, paper, page):
+    client, _ = fake_crossref(ANDERSON_WORK)
+    await enrichment.enrich_paper(session, None, paper.id, hints(text=page), crossref_http=client)
+    await session.refresh(paper)
+    return paper
+
+
+async def test_without_openalex_crossref_fills_an_uploads_authors_year_and_venue(session):
+    paper = await enrich_upload(session, await add_paper(session, doi=DOI), ANDERSON_PAGE)
+    assert paper.authors == ["Barrett R. Anderson", "Jash Hemant Shah", "Max Kreminski"]
+    assert (paper.year, paper.venue, paper.source_type) == (2024, "Creativity and Cognition", "proceedings")
+    assert paper.field_sources["bibliographic"] == "crossref"
+
+
+async def test_crossref_fills_nothing_when_its_first_author_is_not_on_page_one(session):
+    page = "Some other paper\nJane Doe\n"  # the DOI on page 1 was a cited paper's
+    paper = await enrich_upload(session, await add_paper(session, doi=DOI), page)
+    assert (paper.authors, paper.year, paper.venue) == ([], None, None)
+
+
+async def test_crossref_never_overwrites_an_uploads_known_authors_or_year(session):
+    paper = await add_paper(session, doi=DOI, authors=["A. Anderson"], year=2023)
+    paper = await enrich_upload(session, paper, ANDERSON_PAGE)
+    assert (paper.authors, paper.year, paper.venue) == (["A. Anderson"], 2023, "Creativity and Cognition")

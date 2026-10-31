@@ -114,7 +114,8 @@ async def test_one_enrichment_makes_one_crossref_request(session):
 
 
 async def test_nothing_left_to_learn_asks_nobody(session):
-    paper = await add_paper(session, doi=DOI, source_type="book", volume="1", issue="2", pages="3", editors=["A"])
+    known = {"volume": "1", "issue": "2", "pages": "3", "editors": ["A"], "authors": ["B"], "year": 1, "venue": "V"}
+    paper = await add_paper(session, doi=DOI, source_type="book", **known)  # nothing left for any Crossref fill
     client, seen = fake_crossref(CROSSREF)
     await enrichment.enrich_paper(session, None, paper.id, hints(), crossref_http=client)
     assert seen == []

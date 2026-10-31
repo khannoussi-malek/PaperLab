@@ -394,6 +394,30 @@ async def test_a_doi_that_matches_no_search_result_is_no_matching_paper(monkeypa
     assert response.is_error and response.structured_content["error"] == "no_matching_paper"
 
 
+async def test_a_doi_only_another_source_answered_is_still_no_matching_paper(monkeypatch):
+    async def search(_session, _providers, _query):
+        return discovery.SearchResult([Candidate(title="Other", doi="10.1234/other", sources=("openalex",))], [])
+
+    monkeypatch.setattr(discovery, "search", search)
+    response = await call("add_paper", identifier=FREE_DOI)
+    assert response.is_error and response.structured_content["error"] == "no_matching_paper"
+
+
+async def test_an_alias_doi_crossref_resolved_saves_the_paper_under_the_canonical_doi(session, jobs, monkeypatch):
+    # Crossref redirects an alias (10.5465/amr.2001.4378025) to its canonical DOI (10.2307/259123).
+    alias, canonical = f"{discovery_fake.DOI_PREFIX}alias", f"{discovery_fake.DOI_PREFIX}canonical"
+
+    async def search(_session, _providers, _query):
+        found = Candidate(title="Unpacking Creativity", doi=canonical, abstract="A.", sources=("openalex", "crossref"))
+        return discovery.SearchResult([found], [])
+
+    monkeypatch.setattr(discovery, "search", search)
+    added = result(await call("add_paper", identifier=alias, save_without_pdf=True))
+
+    assert added["status"] == "saved_without_pdf"
+    assert (await session.get(Paper, uuid.UUID(added["paper_id"]))).doi == canonical
+
+
 async def test_a_failed_paper_already_in_the_library_is_queued_again(session, jobs, monkeypatch, tmp_path):
     paper, _, _ = await chunked_paper(session, tmp_path, title="Failed one")
     await papers.set_status(session, paper.id, PaperStatus.FAILED, "boom")

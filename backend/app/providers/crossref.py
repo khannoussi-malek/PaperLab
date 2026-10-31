@@ -20,7 +20,10 @@ def new_client(
     *, email: str | None = None, api_key: str | None = None, transport: httpx.AsyncBaseTransport | None = None
 ) -> httpx.AsyncClient:
     params = {"mailto": email} if email else {}
-    return httpx.AsyncClient(base_url=BASE_URL, params=params, timeout=TIMEOUT, transport=transport)
+    # An alias DOI answers 301 to its canonical one (10.5465/amr.2001.4378025 -> 10.2307/259123).
+    return httpx.AsyncClient(
+        base_url=BASE_URL, params=params, timeout=TIMEOUT, transport=transport, follow_redirects=True
+    )
 
 
 # ponytail: no retry on 429, as in openalex.py. The contact email moves requests to the faster polite pool.
