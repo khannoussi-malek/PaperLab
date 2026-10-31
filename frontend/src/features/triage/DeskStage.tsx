@@ -31,6 +31,8 @@ type Props = {
   onCommit: (pile: Pile) => void
   onHover: (pile: Pile | null) => void
   reduced: boolean
+  /** The conclusion's Show in PDF: passed only when the paper has a PDF. */
+  onShowInPdf?: (page: number) => void
 }
 
 const PAPER = 'paper-surface border-[#e6dfcc]'
@@ -64,7 +66,7 @@ function Clone({ item, onDone }: { item: Departing & { id: number }; onDone: (id
 }
 
 /** The desk: a dotted surface, the card on top of its stack, four glass targets and the drag that picks one. */
-export function DeskStage({ top, behind, counts, layout, hot, hovering, departing, onCommit, onHover, reduced }: Props) {
+export function DeskStage({ top, behind, counts, layout, hot, hovering, departing, onCommit, onHover, reduced, onShowInPdf }: Props) {
   const cardRef = useRef<HTMLDivElement>(null)
   const [dragPile, setDragPile] = useState<Pile | null>(null)
   const [clones, setClones] = useState<(Departing & { id: number })[]>([])
@@ -119,7 +121,7 @@ export function DeskStage({ top, behind, counts, layout, hot, hovering, departin
             hovering === 'not_relevant' && !reduced && '-translate-x-6 -rotate-3 motion-safe:transition-transform',
           )}
         >
-          <TriageCard paper={top} />
+          <TriageCard paper={top} onShowInPdf={onShowInPdf} />
           {stamped && (
             <span
               data-triage-stamp
