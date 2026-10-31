@@ -12,6 +12,7 @@ vi.mock('./pdfCache', () => ({
   prefetchPdf: vi.fn(),
 }))
 import { TriageDesk } from './TriageDesk'
+import { retainOnly } from './pdfCache'
 
 let decide: ReturnType<typeof vi.spyOn>
 beforeAll(() => {
@@ -101,4 +102,34 @@ it('a paper without a PDF has no column, says so, offers Get PDF, and still deci
   act(() => { fireEvent.keyDown(root, { key: '2' }) })
   await waitFor(() => expect(decide).toHaveBeenCalled())
   expect(sent().pdf_opened).toBe(false)
+})
+
+it('keeps exactly the current, the next two and the one just decided', async () => {
+  const papers = [mk('1'), mk('2'), mk('3'), mk('4'), mk('5')]
+  const root = setup(papers)
+  const kept = () => [...(vi.mocked(retainOnly).mock.calls.at(-1)?.[0] ?? [])].sort()
+  const url = (...ids: string[]) => ids.map((i) => api.paperFileUrl(i)).sort()
+  await waitFor(() => expect(kept()).toEqual(url('1', '2', '3')))
+  fireEvent.keyDown(root, { key: '2' })
+  await waitFor(() => expect(kept()).toEqual(url('1', '2', '3', '4')))
+  fireEvent.keyDown(root, { key: '2' })
+  await waitFor(() => expect(kept()).toEqual(url('2', '3', '4', '5')))
+})
+
+it('P from inside the column, and U, leave focus on the desk so the keys still work', async () => {
+  const root = setup()
+  const box = await screen.findByLabelText('PDF pages')
+  box.focus()
+  fireEvent.keyDown(box, { key: 'p' })
+  await waitFor(() => expect(column()).toBeNull())
+  await waitFor(() => expect(root).toHaveFocus())
+  fireEvent.keyDown(root, { key: '2' })
+  await waitFor(() => expect(decide).toHaveBeenCalledTimes(1))
+  const next = await screen.findByRole('region', { name: 'PDF' }).catch(() => null)
+  expect(next).toBeNull() // hidden by P above
+  fireEvent.keyDown(root, { key: 'p' })
+  const again = await screen.findByLabelText('PDF pages')
+  again.focus()
+  fireEvent.keyDown(again, { key: 'u' })
+  await waitFor(() => expect(root).toHaveFocus())
 })

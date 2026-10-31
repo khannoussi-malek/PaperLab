@@ -30,7 +30,9 @@ function dropIfIdle(url: string) {
 
 /** Start fetching a document nobody has mounted yet. */
 export function prefetchPdf(url: string) { open(url) }
-export function acquirePdf(url: string): Entry { const e = open(url); e.refs++; return e }
+export function acquirePdf(url: string): Entry {
+  if (entries.get(url)?.error && entries.get(url)?.refs === 0) entries.delete(url) // a failed fetch is retried, not remembered
+  const e = open(url); e.refs++; return e }
 export function releasePdf(url: string) {
   const e = entries.get(url)
   if (e) { e.refs--; dropIfIdle(url) }

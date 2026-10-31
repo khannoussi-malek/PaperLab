@@ -10,6 +10,7 @@ import { usePdfInteraction } from './usePdfInteraction'
 const PAGE_WIDTH_PT = 612
 const GUTTERS_PX = 24
 const FIT_INDEX = 1 // ZOOM_STEPS[1] is 1x: the page fills the column
+const SCROLL_KEYS = ['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' ']
 const LAST_ZOOM = ZOOM_STEPS.length - 1
 
 type Jump = { page: number; n: number }
@@ -102,7 +103,8 @@ function Column({ paperId, target, onInteract, onPage }: Omit<Props, 'active'>) 
   }
   const keys = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.target !== e.currentTarget || e.ctrlKey || e.metaKey || e.altKey) return
-    const handled = ['[', ']', 'PageUp', 'PageDown', '+', '=', '-', '0'].includes(e.key)
+    if (SCROLL_KEYS.includes(e.key)) pending.current = false // the reader is scrolling: a jump no longer owns the view
+    const handled = (e.key === '[' || e.key === 'PageUp' ? page > 1 : e.key === ']' || e.key === 'PageDown' ? page < total : ['+', '=', '-', '0'].includes(e.key))
     if (e.key === '[' || e.key === 'PageUp') turn(page - 1)
     else if (e.key === ']' || e.key === 'PageDown') turn(page + 1)
     else if (e.key === '+' || e.key === '=') zoomTo(zoom + 1)
@@ -130,6 +132,7 @@ function Column({ paperId, target, onInteract, onPage }: Omit<Props, 'active'>) 
         onKeyDown={keys}
         onScroll={measure}
         onWheel={() => { pending.current = false }}
+        onTouchMove={() => { pending.current = false }}
         onPointerDown={() => { pending.current = false }}
         className="min-h-0 flex-1 overflow-auto bg-muted/40 p-3 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
       >
