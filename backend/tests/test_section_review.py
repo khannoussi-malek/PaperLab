@@ -6,6 +6,12 @@ from app.providers.llm import FakeLLM
 
 pytestmark = pytest.mark.anyio
 
+SENT = [
+    "We sampled forty users from three campuses and logged every click for two weeks.",
+    "Sleep is vital for health every night.",
+    "Results held in both groups.",
+]
+
 
 class Scripted:
     model, connection_name = "fake:scripted", "Test"
@@ -41,7 +47,7 @@ def test_parse_keeps_well_formed_lines():
         "Supported: the aim is stated [S1] and noted [N1]\n"
         "Missing: the gap in [N1]"
     )
-    findings, dropped = sr.parse_findings(reply, 2, 1)
+    findings, dropped = sr.parse_findings(reply, SENT[:2], 1)
     assert dropped == 0
     assert [f.kind for f in findings] == ["missing", "unsupported", "supported", "missing"]
     assert findings[0].refs == ()
@@ -50,7 +56,7 @@ def test_parse_keeps_well_formed_lines():
 
 def test_parse_ignores_chatter_around_lines():
     reply = "Sure, here is my review:\n\n- Missing: no data source named.\nHope this helps!\n"
-    findings, dropped = sr.parse_findings(reply, 1, 0)
+    findings, dropped = sr.parse_findings(reply, SENT[:1], 0)
     assert [f.kind for f in findings] == ["missing"] and dropped == 0
 
 
@@ -81,7 +87,7 @@ def test_parse_ignores_chatter_around_lines():
     ],
 )
 def test_parse_drops_each_bad_kind(line):
-    findings, dropped = sr.parse_findings(line, 2, 1)
+    findings, dropped = sr.parse_findings(line, SENT[:2], 1)
     assert findings == [] and dropped == 1
 
 
@@ -90,7 +96,7 @@ def test_parse_markdown_numbering_spacing_and_duplicates():
         "**Missing:** no baseline.\n1. Supported : aim is clear [S1]\n2) *Unsupported:* a claim [S2]\n"
         "**Missing:** no baseline.\n- Missing:   no   baseline."
     )
-    findings, dropped = sr.parse_findings(reply, 2, 0)
+    findings, dropped = sr.parse_findings(reply, SENT[:2], 0)
     assert [(f.kind, f.point) for f in findings] == [
         ("missing", "no baseline."),
         ("supported", "aim is clear [S1]"),
@@ -99,11 +105,51 @@ def test_parse_markdown_numbering_spacing_and_duplicates():
     assert dropped == 0
 
 
-def test_parse_short_quote_is_fine_and_caps_at_12():
-    findings, dropped = sr.parse_findings('Supported: says "sleep is vital" [S1]', 1, 0)
+PROBES = [
+    "Missing: a line like 'Our method beats the baseline by 12%'",
+    "Missing: you might phrase it as: sleep is vital",
+    "Supported: try saying the aim is clear [S1]",
+    "Unsupported: the claim could be worded as follows - sleep matters [S1]",
+    "Missing: how about: Sleep is vital for health",
+    "Supported: [S1] says We sampled forty users from three campuses and logged every click",
+    "Unsupported: We sampled forty users from three campuses and logged every click for two weeks [S1]",
+    "Supported: a sentence like Sleep is vital for health every night [S1]",
+    "Missing: phrase it as Sleep is vital [S1]",
+    "Unsupported: suggested text - Sleep is vital for health every night [S2]",
+    "Missing: say it in \u2018Sleep is vital\u2019",
+    'Missing: consider "Sleep is vital for health every night"',
+    'Missing: reword to "Sleep is vital"',
+    "Missing: rewrite it as \u201cSleep is vital for health every night.\u201d",
+    "**Missing:** say: Sleep is vital for health",
+    "Rewrite it as: Sleep is vital.",
+    "Missing: add a sentence about it \u2014 Sleep is vital for health",
+    "Missing: use \u00abSleep\u00bb or \u201eSleep\u201c here",
+    'Missing: write "Sleep is vital',
+    "Missing: for instance a baseline",
+    "Missing: change this to a number",
+]
+LEGIT = [
+    "Missing: the research gap is not stated [N2]",
+    "Supported: the sample size is reported [S3]",
+    "Unsupported: the claim of a 12% gain lacks a source [S4]",
+    "Missing: how the results were analysed",
+]
+
+
+@pytest.mark.parametrize("line", PROBES)
+def test_every_probe_is_dropped(line):
+    assert sr.parse_findings(line, [*SENT, "s4"], 2) == ([], 1)
+
+
+@pytest.mark.parametrize("line", LEGIT)
+def test_legitimate_points_are_kept(line):
+    findings, dropped = sr.parse_findings(line, [*SENT, "The gain was 12%."], 2)
     assert len(findings) == 1 and dropped == 0
+
+
+def test_caps_at_12():
     many = "\n".join(f"Missing: gap number {i}" for i in range(15))
-    assert [len(x) if isinstance(x, list) else x for x in sr.parse_findings(many, 1, 0)] == [12, 3]
+    assert [len(x) if isinstance(x, list) else x for x in sr.parse_findings(many, SENT[:1], 0)] == [12, 3]
 
 
 async def test_review_one_call():
