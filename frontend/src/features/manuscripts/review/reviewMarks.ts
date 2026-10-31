@@ -66,9 +66,11 @@ export const reviewExtension = () => [field, theme]
 export type ReviewHandle = {
   setMarks: (marks: Mark[]) => void
   spanOf: (hash: string) => { start: number; end: number } | null
-  /** Selects the sentence and focuses the editor. */
+  /** Selects the sentence and focuses the editor; a sentence without a mark is located afresh. */
   reveal: (hash: string) => void
   selection: () => { from: number; to: number } | null
+  /** The cursor (the selection's head), UTF-16. */
+  cursor: () => number
   /** Whether the sentence is still in the text as it is now (asks the server to locate it afresh). */
   canCite: (hash: string) => Promise<boolean>
   applyCite: (hash: string, key: string) => Promise<'ok' | 'changed'>
@@ -89,15 +91,19 @@ export function reviewHandle(view: EditorView, locate: (text: string) => Promise
     const span = (await locate(sent)).find((s) => s.hash === hash)
     return span && view.state.doc.toString() === sent ? { sent, span } : null
   }
+  const select = (span: { start: number; end: number }) => {
+    view.dispatch({ selection: { anchor: span.start, head: span.end }, effects: EditorView.scrollIntoView(span.start, { y: 'center' }) })
+    view.focus()
+  }
   return {
     setMarks: (marks) => view.dispatch({ effects: setReviewMarks.of(marks) }),
     spanOf,
     reveal: (hash) => {
       const span = spanOf(hash)
-      if (!span) return
-      view.dispatch({ selection: { anchor: span.start, head: span.end }, effects: EditorView.scrollIntoView(span.start, { y: 'center' }) })
-      view.focus()
+      if (span) select(span)
+      else void find(hash).then((f) => f && select(f.span), () => {}) // a section review's sentence carries no mark
     },
+    cursor: () => view.state.selection.main.head,
     selection: () => {
       const { from, to } = view.state.selection.main
       return from === to ? null : { from, to }

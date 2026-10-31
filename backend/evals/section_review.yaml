@@ -1,0 +1,116 @@
+# Gate for the section review (run: python -m evals.section_review_eval). No paper needed.
+# Per case: role, the section's sentences, optional notes. expect_missing: [] = a complete section; otherwise a
+# list of keyword groups, each met when any keyword appears in some Missing: line. expect_note: a Missing: line
+# should cite that note. No model grades a model.
+gates:
+  missing_recall_min: 0.6
+  complete_clean_min: 0.6
+  usable_lines_min: 0.8
+cases:
+  - role: abstract
+    sentences:
+      - "Teams struggle to keep reviews fast when pull requests grow large."
+      - "We analysed 12,000 pull requests from 40 open-source projects."
+      - "Reviews of requests over 400 lines took 2.3 times longer and found 30% fewer defects."
+      - "Reviewers should therefore ask authors to split large changes."
+    expect_missing: []
+  - role: abstract
+    sentences:
+      - "Teams struggle to keep reviews fast when pull requests grow large."
+      - "We analysed 12,000 pull requests from 40 open-source projects."
+    expect_missing: [[result, finding, number, outcome], [mean, takeaway, implication, reader]]
+  - role: intro
+    sentences:
+      - "Code review is how most teams catch defects before release."
+      - "Earlier studies measured review speed but not how request size changes what reviewers notice."
+      - "We ask whether larger pull requests receive shallower reviews."
+      - "This paper contributes a dataset of 12,000 reviews and a depth measure for them."
+    expect_missing: []
+  - role: intro
+    sentences:
+      - "Code review is how most teams catch defects before release."
+      - "Earlier studies measured review speed but not how request size changes what reviewers notice."
+      - "Many teams use it."
+    notes:
+      - "State the research question here."
+    expect_missing: [[question, aim, research question], [contribut, adds, new]]
+    expect_note: N1
+  - role: related
+    sentences:
+      - "Work on review speed (Smith 2018, Lee 2020) treats time to first comment as the main signal."
+      - "Work on review quality (Park 2019, Gomez 2021) counts defects found after merge."
+      - "Unlike both groups, we measure what reviewers read within a single request."
+      - "Neither group looks inside a request, which leaves depth of reading open."
+    expect_missing: []
+  - role: related
+    sentences:
+      - "Smith 2018 measured time to first comment."
+      - "Lee 2020 measured the share of requests merged on the first try."
+      - "Park 2019 counted defects found after merge."
+      - "Gomez 2021 surveyed reviewers about workload."
+    expect_missing: [[group, theme, organi], [differ, compare, relat], [gap, open, leave]]
+  - role: method
+    sentences:
+      - "We used a cross-sectional design over merged pull requests."
+      - "The data came from 40 public GitHub projects, sampled from the top 200 by stars, 2019 to 2022."
+      - "Review depth is the share of changed lines that a reviewer commented on or marked as viewed."
+      - "We fitted a mixed-effects model with project as a random effect and request size as the predictor."
+      - "Scripts and the sampled project list are archived at a public repository."
+    expect_missing: []
+  - role: method
+    sentences:
+      - "We used a cross-sectional design over merged pull requests."
+      - "The data came from 40 public GitHub projects."
+    notes:
+      - "Say how review depth is computed."
+    expect_missing: [[measure, metric, defin, depth], [analys, model, statistic], [reproduc, repeat, archive, script]]
+    expect_note: N1
+  - role: results
+    sentences:
+      - "Larger requests received shallower reviews, answering our main question."
+      - "Median depth fell from 0.71 for requests under 100 lines to 0.38 for those over 400 (IQR 0.22 to 0.18)."
+      - "Against the project-level baseline of 0.60, only the largest size band fell significantly."
+      - "We take up why this happens in the discussion."
+    expect_missing: []
+  - role: results
+    sentences:
+      - "Larger requests received shallower reviews."
+      - "Reviewers seemed to rush because they dislike long diffs."
+    notes:
+      - "Add the numbers and a comparison here."
+    expect_missing: [[number, figure, spread, uncertain, statistic], [baseline, compar, alternative]]
+    expect_note: N1
+  - role: discussion
+    sentences:
+      - "Our results mean that review depth drops as requests grow, which answers the question we asked."
+      - "This agrees with Smith 2018 on speed and extends Park 2019 to depth of reading."
+      - "Two projects showed the opposite trend, which we trace to a bot that auto-approves small changes."
+      - "Practitioners can cap request size or require a second reviewer past 400 lines."
+    expect_missing: []
+  - role: discussion
+    sentences:
+      - "Our results mean that review depth drops as requests grow."
+      - "Many teams will find this useful."
+    expect_missing: [[context, earlier, prior, related, literature], [surpris, unexpected, mixed, unusual], [implication, practice, practition]]
+  - role: limitations
+    sentences:
+      - "Our sample is limited to public projects, so private industrial teams may differ."
+      - "Comment counts under-measure silent reading, which could make large requests look shallower than they are."
+      - "We reran the analysis on a hand-labelled subset of 300 requests to check this."
+    expect_missing: []
+  - role: limitations
+    sentences:
+      - "This study has some limitations."
+      - "Future work could address them."
+    expect_missing: [[threat, validity, limit, sample, bias], [effect, affect, conclusion, impact], [handled, mitigat, addressed, done]]
+  - role: conclusion
+    sentences:
+      - "We asked whether larger pull requests receive shallower reviews, and they do."
+      - "Across 12,000 requests, depth fell by almost half from the smallest to the largest band."
+      - "Future work should test whether splitting requests restores depth."
+    expect_missing: []
+  - role: conclusion
+    sentences:
+      - "We introduced a new dataset of 12,000 requests with a score of 0.91 agreement."
+      - "We also ran a new survey of 500 developers."
+    expect_missing: [[answer, question, research question], [future, next]]

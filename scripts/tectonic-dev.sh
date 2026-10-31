@@ -46,5 +46,7 @@ for t in "$T"/*/; do
 done
 rm -rf "$WARM/t"; mkdir -p "$WARM/t"; cp "$T/warm-packages.tex" "$WARM/t/main.tex"
 (cd "$WARM/t" && "$BIN" -X compile main.tex >/dev/null) || echo "warm-up failed for warm-packages.tex" >&2
+cp "$T/warm-diagram.tex" "$WARM/t/main.tex"
+(cd "$WARM/t" && "$BIN" -X compile main.tex >/dev/null) || echo "warm-up failed for warm-diagram.tex" >&2
 echo "export TECTONIC_BIN=$BIN"
 echo "export TECTONIC_CACHE_DIR=$TOOLS/tectonic-cache"

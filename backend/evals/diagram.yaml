@@ -1,0 +1,42 @@
+# Gate for diagram drawing (run: python -m evals.diagram_eval). No paper needed; needs Tectonic.
+# Per case: the researcher's description and the nodes it names; each must appear (case-insensitive substring)
+# among the picture's node labels. A label with a word the description never says counts as invented.
+gates:
+  compile_rate_min: 0.75
+  nodes_present_min: 0.8
+  invented_label_rate_max: 0.15
+cases:
+  # pipelines
+  - description: "Raw text goes to a tokenizer, then to an embedding layer, then to a classifier."
+    nodes: [raw text, tokenizer, embedding, classifier]
+  - description: "Survey responses are cleaned, then coded, then analysed."
+    nodes: [survey responses, cleaned, coded, analysed]
+  - description: "Images pass through data augmentation, a ResNet backbone and a softmax output."
+    nodes: [images, augmentation, ResNet, softmax]
+  # architectures
+  - description: "An encoder turns the input into a latent code, and a decoder turns the latent code into the output."
+    nodes: [encoder, input, latent code, decoder, output]
+  - description: "A web client talks to an API server, which reads and writes a database and a cache."
+    nodes: [web client, API server, database, cache]
+  - description: "The retriever finds passages from the paper library; the reader model answers using those passages."
+    nodes: [retriever, passages, paper library, reader]
+  # loops
+  - description: "Plan, act, observe, reflect, and go back to plan."
+    nodes: [plan, act, observe, reflect]
+  - description: "The agent sends an action to the environment, and the environment returns a reward and a new state to the agent."
+    nodes: [agent, environment, reward, state]
+  # fan-out
+  - description: "A central dataset feeds three models: logistic regression, random forest and a neural network."
+    nodes: [dataset, logistic regression, random forest, neural network]
+  - description: "The coordinator sends tasks to worker A, worker B and worker C."
+    nodes: [coordinator, worker A, worker B, worker C]
+  # two lanes
+  - description: "Two parallel lanes: in the control group, participants take a pretest and then a posttest; in the treatment group, participants take a pretest, a training session and then a posttest."
+    nodes: [control group, treatment group, pretest, training, posttest]
+  - description: "The audio stream goes to a speech recognizer; the video stream goes to a face detector; both outputs meet in a fusion module."
+    nodes: [audio stream, speech recognizer, video stream, face detector, fusion module]
+  # decisions
+  - description: "Screen each paper: if the title is relevant, read the abstract; if the abstract is relevant, read the full text; otherwise exclude it."
+    nodes: [title, abstract, full text, exclude]
+  - description: "Sensor readings go to an anomaly detector; anomalies trigger an alert, normal readings go to storage."
+    nodes: [sensor readings, anomaly detector, alert, storage]

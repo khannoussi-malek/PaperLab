@@ -183,3 +183,66 @@ class ManuscriptClaimDismissal(Base):
     manuscript_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("manuscripts.id", ondelete="CASCADE"), primary_key=True)
     sentence_hash: Mapped[str] = mapped_column(Text, primary_key=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=NOW)
+
+
+ROLES = "'abstract', 'intro', 'related', 'method', 'results', 'discussion', 'limitations', 'conclusion'"
+
+
+class ManuscriptSectionReview(Base):
+    """The AI's check of one section against what its role needs; it judges and never writes text."""
+
+    __tablename__ = "manuscript_section_reviews"
+    __table_args__ = (
+        CheckConstraint(f"role IN ({ROLES})", name="ck_manuscript_section_reviews_role"),
+        CheckConstraint("role_source IN ('guessed', 'chosen')", name="ck_manuscript_section_reviews_role_source"),
+        CheckConstraint(
+            "status IN ('queued', 'running', 'done', 'failed')", name="ck_manuscript_section_reviews_status"
+        ),
+        UniqueConstraint("manuscript_id", "file_path", "section_hash", name="uq_manuscript_section_reviews_section"),
+        Index("ix_manuscript_section_reviews_file", "manuscript_id", "file_path"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, server_default=text("gen_random_uuid()"))
+    manuscript_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("manuscripts.id", ondelete="CASCADE"))
+    file_path: Mapped[str] = mapped_column(Text)
+    section_hash: Mapped[str] = mapped_column(Text)
+    title: Mapped[str] = mapped_column(Text)
+    role: Mapped[str] = mapped_column(Text)
+    role_source: Mapped[str] = mapped_column(Text)  # guessed | chosen
+    status: Mapped[str] = mapped_column(Text)  # queued | running | done | failed
+    source: Mapped[str] = mapped_column(Text)  # the section's text as of base, at most 60 000 chars
+    inputs: Mapped[dict[str, Any]] = mapped_column(JSONB)  # {"sentences": [...], "notes": [...]}
+    findings: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)  # [{"kind", "point", "refs"}]
+    dropped: Mapped[int] = mapped_column(Integer, server_default=text("0"))
+    confirm_remote: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))  # re-checked by the job
+    reason: Mapped[str | None] = mapped_column(Text)
+    model: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=NOW)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=NOW)
+
+
+class ManuscriptDiagram(Base):
+    """A TikZ picture generated from the researcher's own description; inserted only on a click."""
+
+    __tablename__ = "manuscript_diagrams"
+    __table_args__ = (
+        CheckConstraint("status IN ('queued', 'running', 'done', 'failed')", name="ck_manuscript_diagrams_status"),
+        Index("ix_manuscript_diagrams_manuscript", "manuscript_id", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, server_default=text("gen_random_uuid()"))
+    manuscript_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("manuscripts.id", ondelete="CASCADE"))
+    description: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(Text)  # queued | running | done | failed
+    code: Mapped[str | None] = mapped_column(Text)  # the picture only
+    libraries: Mapped[list[str]] = mapped_column(JSONB, server_default=text("'[]'::jsonb"))
+    compiled: Mapped[bool | None] = mapped_column(Boolean)
+    errors: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, server_default=text("'[]'::jsonb"))
+    labels_not_in_description: Mapped[list[str]] = mapped_column(JSONB, server_default=text("'[]'::jsonb"))
+    preview_pdf: Mapped[bytes | None] = mapped_column(LargeBinary)  # at most 300 KB
+    reason: Mapped[str | None] = mapped_column(Text)
+    model: Mapped[str | None] = mapped_column(Text)
+    prompt_version: Mapped[int | None] = mapped_column(Integer)
+    confirm_remote: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))  # re-checked by the job
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=NOW)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=NOW)

@@ -1956,6 +1956,144 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/manuscripts/{manuscript_id}/section-review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Section Reviews */
+        get: operations["section_reviews_api_manuscripts__manuscript_id__section_review_get"];
+        put?: never;
+        /** Start Section Review */
+        post: operations["start_section_review_api_manuscripts__manuscript_id__section_review_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/section-review/locate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Locate Sections */
+        post: operations["locate_sections_api_manuscripts__manuscript_id__section_review_locate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/section-review/{review_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Section Review */
+        post: operations["cancel_section_review_api_manuscripts__manuscript_id__section_review__review_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/diagrams": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Diagram */
+        post: operations["create_diagram_api_manuscripts__manuscript_id__diagrams_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/diagrams/{diagram_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Diagram */
+        get: operations["get_diagram_api_manuscripts__manuscript_id__diagrams__diagram_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Diagram */
+        delete: operations["delete_diagram_api_manuscripts__manuscript_id__diagrams__diagram_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/diagrams/{diagram_id}/code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set Diagram Code */
+        put: operations["set_diagram_code_api_manuscripts__manuscript_id__diagrams__diagram_id__code_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/diagrams/{diagram_id}/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Diagram Pdf */
+        get: operations["diagram_pdf_api_manuscripts__manuscript_id__diagrams__diagram_id__pdf_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/diagrams/{diagram_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Diagram */
+        post: operations["cancel_diagram_api_manuscripts__manuscript_id__diagrams__diagram_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/papers/{paper_id}/tables/preview": {
         parameters: {
             query?: never;
@@ -3636,6 +3774,76 @@ export interface components {
              */
             model_id: string;
         };
+        /** DiagramCodeIn */
+        DiagramCodeIn: {
+            /** Code */
+            code: string;
+        };
+        /** DiagramErrorOut */
+        DiagramErrorOut: {
+            /**
+             * Line
+             * @description counted from the first line of the picture
+             */
+            line: number | null;
+            /** Message */
+            message: string;
+        };
+        /** DiagramIn */
+        DiagramIn: {
+            /** Description */
+            description: string;
+            /**
+             * Confirm Remote
+             * @default false
+             */
+            confirm_remote: boolean;
+        };
+        /** DiagramOut */
+        DiagramOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Description */
+            description: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "done" | "failed" | "interrupted";
+            /** Code */
+            code: string | null;
+            /** Libraries */
+            libraries: string[];
+            /** Compiled */
+            compiled: boolean | null;
+            /** Errors */
+            errors: components["schemas"]["DiagramErrorOut"][];
+            /** Labels Not In Description */
+            labels_not_in_description: string[];
+            /** Reason */
+            reason: string | null;
+            /** Model */
+            model: string | null;
+            /**
+             * Ai
+             * @default true
+             * @constant
+             */
+            ai: true;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
         /** DoneEvent */
         DoneEvent: {
             /**
@@ -3853,6 +4061,18 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** FindingOut */
+        FindingOut: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "missing" | "unsupported" | "supported";
+            /** Point */
+            point: string;
+            /** Refs */
+            refs: components["schemas"]["RefOut"][];
         };
         /**
          * FoundPdfOut
@@ -5188,6 +5408,26 @@ export interface components {
             /** Total */
             total: number;
         };
+        /** RefOut */
+        RefOut: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "sentence" | "note";
+            /** N */
+            n: number;
+            /** Hash */
+            hash?: string | null;
+            /** Preview */
+            preview?: string | null;
+            /** Note Id */
+            note_id?: string | null;
+            /** Paper Id */
+            paper_id?: string | null;
+            /** Label */
+            label?: string | null;
+        };
         /**
          * ReferenceOut
          * @description A reference or citing work, ranked for this library. `cocitation` counts the library papers linked to it the
@@ -5415,6 +5655,11 @@ export interface components {
              * @default true
              */
             include_uncited: boolean;
+            /**
+             * Confirm Remote
+             * @default false
+             */
+            confirm_remote: boolean;
         };
         /** ReviewOut */
         ReviewOut: {
@@ -5824,6 +6069,18 @@ export interface components {
             /** After */
             after?: string | null;
         };
+        /** SectionLocateIn */
+        SectionLocateIn: {
+            /** File */
+            file: string;
+            /** Text */
+            text: string;
+        };
+        /** SectionLocateOut */
+        SectionLocateOut: {
+            /** Sections */
+            sections: components["schemas"]["SectionSpanOut"][];
+        };
         /** SectionMoveIn */
         SectionMoveIn: {
             /** To */
@@ -5865,12 +6122,108 @@ export interface components {
             /** Paths */
             paths: string[];
         };
+        /** SectionReviewIn */
+        SectionReviewIn: {
+            /** File */
+            file: string;
+            /**
+             * Base
+             * Format: date-time
+             */
+            base: string;
+            /**
+             * At
+             * @description UTF-16 code units, as in JavaScript strings
+             */
+            at: number;
+            /** Role */
+            role?: string | null;
+            /**
+             * Confirm Remote
+             * @default false
+             */
+            confirm_remote: boolean;
+        };
+        /** SectionReviewOut */
+        SectionReviewOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** File */
+            file: string;
+            /** Section Hash */
+            section_hash: string;
+            /** Title */
+            title: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "abstract" | "intro" | "related" | "method" | "results" | "discussion" | "limitations" | "conclusion" | "back" | "other";
+            /**
+             * Role Source
+             * @enum {string}
+             */
+            role_source: "guessed" | "chosen";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "done" | "failed" | "interrupted";
+            /** Reason */
+            reason: string | null;
+            /** Findings */
+            findings: components["schemas"]["FindingOut"][];
+            /** Dropped */
+            dropped: number;
+            /** Model */
+            model: string | null;
+            /**
+             * Ai
+             * @default true
+             * @constant
+             */
+            ai: true;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** SectionReviewsOut */
+        SectionReviewsOut: {
+            /** Reviews */
+            reviews: components["schemas"]["SectionReviewOut"][];
+        };
         /** SectionRoleIn */
         SectionRoleIn: {
             /** Section Title */
             section_title: string;
             /** Role */
             role: ("abstract" | "intro" | "related" | "method" | "results" | "discussion" | "limitations" | "conclusion" | "back" | "other") | null;
+        };
+        /** SectionSpanOut */
+        SectionSpanOut: {
+            /** Title */
+            title: string;
+            /**
+             * Start
+             * @description UTF-16 code units, as in JavaScript strings
+             */
+            start: number;
+            /**
+             * End
+             * @description UTF-16 code units, as in JavaScript strings
+             */
+            end: number;
+            /** Hash */
+            hash: string;
+            /** Words */
+            words: number;
+            /** Guess */
+            guess: ("abstract" | "intro" | "related" | "method" | "results" | "discussion" | "limitations" | "conclusion" | "back" | "other") | null;
         };
         /** SectionTitleIn */
         SectionTitleIn: {
@@ -10684,6 +11037,338 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    section_reviews_api_manuscripts__manuscript_id__section_review_get: {
+        parameters: {
+            query: {
+                file: string;
+            };
+            header?: never;
+            path: {
+                manuscript_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SectionReviewsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_section_review_api_manuscripts__manuscript_id__section_review_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SectionReviewIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SectionReviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    locate_sections_api_manuscripts__manuscript_id__section_review_locate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SectionLocateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SectionLocateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_section_review_api_manuscripts__manuscript_id__section_review__review_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+                review_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SectionReviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_diagram_api_manuscripts__manuscript_id__diagrams_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiagramIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiagramOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_diagram_api_manuscripts__manuscript_id__diagrams__diagram_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+                diagram_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiagramOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_diagram_api_manuscripts__manuscript_id__diagrams__diagram_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+                diagram_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_diagram_code_api_manuscripts__manuscript_id__diagrams__diagram_id__code_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+                diagram_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiagramCodeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiagramOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    diagram_pdf_api_manuscripts__manuscript_id__diagrams__diagram_id__pdf_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+                diagram_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_diagram_api_manuscripts__manuscript_id__diagrams__diagram_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+                diagram_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiagramOut"];
+                };
             };
             /** @description Validation Error */
             422: {
