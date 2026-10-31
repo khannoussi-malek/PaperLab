@@ -172,3 +172,33 @@ async def test_a_paper_that_left_the_workspace_keeps_its_stored_entry(session):
     await workspaces.remove_paper(session, ws.id, p.id)
     bib = await build_bib(session, m, {})
     assert "@misc{smith2021deep," in bib
+
+
+async def test_a_manuscript_bib_carries_publishing_fields_only(session):
+    ws, (p,), m = await setup(session, "Praise and creativity")
+    p.venue, p.volume, p.issue, p.pages = "Creativity Research Journal", "18", "3", "385-388"
+    p.doi, p.peer_reviewed, p.abstract = "10.1207/s15326934crj1803_13", "true", "Long."  # library notes would follow
+    await session.flush()
+    bib = await build_bib(session, m, {"main.tex": "\\cite{smith2021praise}"})
+    assert "@article{smith2021praise," in bib and "journal = {Creativity Research Journal}" in bib
+    assert "volume = {18}" in bib and "pages = {385--388}" in bib and "doi = {10.1207/s15326934crj1803_13}" in bib
+    for leak in ("in PaperLab", "peer-reviewed", "Source:", "keywords", "abstract", "annote"):
+        assert leak not in bib, leak
+
+
+async def test_a_preprint_keeps_its_genre_note_in_a_manuscript_bib(session):
+    ws, (p,), m = await setup(session, "Large models")
+    p.source_type = "preprint"
+    await session.flush()
+    bib = await build_bib(session, m, {})
+    assert "note = {Preprint}" in bib and "in PaperLab" not in bib
+
+
+def test_the_library_export_still_carries_paperlabs_notes():
+    from types import SimpleNamespace
+
+    paper = SimpleNamespace(
+        id="p1", title="T", authors=["Jane Smith"], year=2020, venue="J", doi=None, source_type="journal_article",
+        peer_reviewed="true", evidence_access="abstract", published_doi=None, oa_url=None,
+    )
+    assert "abstract only in PaperLab" in _bibtex([csl_item(paper)])

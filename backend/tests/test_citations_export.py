@@ -34,11 +34,25 @@ def paper(**kw):
         ("magazine", "article-magazine"),
         ("thesis", "thesis"),
         ("other", "document"),
-        (None, "document"),
     ],
 )
 def test_source_type_maps_to_csl_type(source_type, csl):
     assert csl_item(paper(source_type=source_type))["type"] == csl
+
+
+@pytest.mark.parametrize(
+    "venue,csl",
+    [
+        ("Creativity Research Journal", "article-journal"),  # a journal: @article with journal=
+        ("Proceedings of the 16th Conference on Creativity & Cognition", "paper-conference"),
+        ("ICLR", "paper-conference"),
+        ("NeurIPS 2023 Workshop on Creativity", "paper-conference"),
+        (None, "document"),  # nothing known: @misc
+    ],
+)
+def test_an_unknown_type_is_read_from_a_known_venue(venue, csl):
+    item = csl_item(paper(source_type=None, venue=venue))
+    assert item["type"] == csl and item.get("container-title") == venue
 
 
 def test_a_journal_article_carries_the_basics():

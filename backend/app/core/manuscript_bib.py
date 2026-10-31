@@ -64,9 +64,9 @@ async def build_bib(session: AsyncSession, manuscript: Manuscript, sources: dict
             pins[generated[key]] = key
     for row in rows.values():
         if row.paper_id and (item := items.get(str(row.paper_id))):
-            row.bibtex = _bibtex([item], {item["id"]: row.key})
+            row.bibtex = _bibtex([item], {item["id"]: row.key}, publish=True)
     await session.flush()
     # stored entries: a paper gone or out of the workspace, and a merged paper's second key
     orphans = [r.bibtex for _, r in sorted(rows.items())
                if str(r.paper_id) not in items or pins.get(str(r.paper_id)) != r.key]
-    return _bibtex(list(items.values()), pins) + "".join(orphans)
+    return _bibtex(list(items.values()), pins, publish=True) + "".join(orphans)
