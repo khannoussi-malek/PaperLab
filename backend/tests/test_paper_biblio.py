@@ -154,7 +154,7 @@ async def test_the_backfill_sends_openalex_its_api_key(monkeypatch):
     async def fake_session():
         yield None
 
-    async def run(_session, _cr, _oa):
+    async def run(_session, _cr, _oa, **_):
         return {}
 
     monkeypatch.setattr(backfill_biblio, "SessionLocal", fake_session)
