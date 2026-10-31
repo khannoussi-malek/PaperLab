@@ -1463,6 +1463,7 @@ export const useManuscriptFile = (id: string, path: string | null) =>
     queryKey: keys.manuscriptFile(id, path ?? ''),
     queryFn: () => api.getManuscriptFile(id, path!),
     enabled: path !== null,
+    refetchOnWindowFocus: false, // the editor re-reads on focus itself, and only while its buffer is clean
   })
 
 export type SaveResult = { conflict: boolean; updatedAt: string }

@@ -94,3 +94,60 @@ async def test_restore_skips_files_whose_text_is_unchanged(session):
     await history.restore(session, m.id, snap.id)
     assert (await manuscripts.read(session, m.id, "a.tex")).updated_at == stamp
     assert (await manuscripts.read(session, m.id, "b.tex")).text == "old"
+
+
+async def test_pruning_keeps_owner_snapshots_apart_from_mcp_ones(session):
+    m = await new(session)
+    for _ in range(3):
+        await history.take(session, m.id, "autosave")
+    for _ in range(60):
+        await history.take(session, m.id, history.MCP_REASON)
+    reasons = [s.reason for s in await history.list_(session, m.id)]
+    assert reasons.count("autosave") == 3 and reasons.count("before_mcp") == history.MCP_KEEP == 20
+
+
+async def test_mcp_snapshots_do_not_crowd_out_the_owners_fifty(session):
+    m = await new(session)
+    for _ in range(55):
+        await history.take(session, m.id, "autosave")
+    for _ in range(5):
+        await history.take(session, m.id, "before_mcp")
+    reasons = [s.reason for s in await history.list_(session, m.id)]
+    assert reasons.count("autosave") == 50 and reasons.count("before_mcp") == 5
+
+
+async def claude_write(session, mid, text):
+    """What the MCP does: base is the file's updated_at, snapshot is before_mcp."""
+    row = await manuscripts.read(session, mid, "main.tex")
+    await manuscripts.save_text(session, mid, "main.tex", text, base=row.updated_at, snapshot=history.MCP_REASON)
+
+
+async def owner_pool(session, mid):
+    return [s for s in await history.list_(session, mid) if s.reason != history.MCP_REASON]
+
+
+async def test_the_owners_latest_text_survives_a_long_claude_session(session):
+    """The owner snapshotted at t0, typed Y two minutes later (no autosave is due), then Claude took over."""
+    m = await new(session)
+    await history.take(session, m.id, "autosave")  # t0
+    await manuscripts.upsert_text(session, m.id, "main.tex", "OWNER Y")  # typed after t0, no snapshot of it yet
+    await claude_write(session, m.id, "claude 0")
+    for i in range(1, 26):
+        await claude_write(session, m.id, f"claude {i}")
+    assert any(s.files.get("main.tex") == "OWNER Y" for s in await owner_pool(session, m.id))
+
+
+async def test_a_pure_claude_loop_adds_at_most_one_owner_snapshot(session):
+    m = await new(session)
+    await history.take(session, m.id, "autosave")
+    before = len(await owner_pool(session, m.id))
+    for i in range(30):
+        await claude_write(session, m.id, f"claude {i}")
+    assert len(await owner_pool(session, m.id)) <= before + 1
+
+
+async def test_maybe_autosave_ignores_before_mcp_snapshots(session):
+    m = await new(session)
+    session.add(ManuscriptSnapshot(manuscript_id=m.id, reason=history.MCP_REASON, files={}))
+    await session.flush()
+    assert await history.maybe_autosave(session, m.id, now=datetime.now(timezone.utc)) is True

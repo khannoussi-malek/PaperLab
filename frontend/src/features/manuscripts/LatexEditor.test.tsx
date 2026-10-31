@@ -3,6 +3,7 @@ import { render, waitFor } from '@testing-library/react'
 import { expect, test, vi } from 'vitest'
 import { EditorState } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
+import { undo, undoDepth } from '@codemirror/commands'
 import { LatexEditor, latexTheme } from './LatexEditor'
 
 test('shows the text and follows a new value', () => {
@@ -160,4 +161,42 @@ test('an inserted block gets lines of its own: a break before unless at a line s
   view.dispatch({ selection: { anchor: view.state.doc.toString().indexOf('\n\nend') + 1 } }) // the empty line
   insert!('T', true)
   expect(view.state.doc.toString()).toBe('ab \n\\begin{table}\ncd\nT\nend')
+})
+
+test('a new value from outside keeps the cursor on its line and column, clamped to the new text', () => {
+  const { container, rerender } = render(<LatexEditor value={'one\ntwo words\nthree'} onChange={() => {}} errors={[]} onSave={() => {}} />)
+  const view = cm(container)
+  view.dispatch({ selection: { anchor: view.state.doc.line(2).from + 5 } })
+  rerender(<LatexEditor value={'one\ntwo wo more\nthree\nfour'} onChange={() => {}} errors={[]} onSave={() => {}} />)
+  expect(view.state.selection.main.head).toBe(view.state.doc.line(2).from + 5)
+  rerender(<LatexEditor value={'a\nbc'} onChange={() => {}} errors={[]} onSave={() => {}} />)
+  expect(view.state.selection.main.head).toBe(view.state.doc.line(2).to) // clamped to the shorter line
+  rerender(<LatexEditor value={'x'} onChange={() => {}} errors={[]} onSave={() => {}} />)
+  expect(view.state.selection.main.head).toBe(1) // line gone: the end
+})
+
+test('a new value from outside is not undoable', () => {
+  const { container, rerender } = render(<LatexEditor value="one" onChange={() => {}} errors={[]} onSave={() => {}} />)
+  rerender(<LatexEditor value="two" onChange={() => {}} errors={[]} onSave={() => {}} />)
+  expect(undoDepth(cm(container).state)).toBe(0)
+})
+
+test('Ctrl+Z after an outside update brings nothing back from before it', () => {
+  const onChange = vi.fn()
+  const { container, rerender } = render(<LatexEditor value="one two" onChange={onChange} errors={[]} onSave={() => {}} />)
+  const view = cm(container)
+  view.dispatch({ changes: { from: 0, to: 3, insert: 'ONE' }, userEvent: 'input.type' }) // the owner typed
+  expect(undoDepth(view.state)).toBe(1)
+  onChange.mockClear()
+  rerender(<LatexEditor value="claude wrote this" onChange={onChange} errors={[]} onSave={() => {}} />)
+  expect(undoDepth(view.state)).toBe(0)
+  undo(view)
+  expect(view.state.doc.toString()).toBe('claude wrote this')
+  expect(onChange).not.toHaveBeenCalled() // nothing to autosave
+})
+
+test('an outside update keeps the current theme and gutter', () => {
+  const { container, rerender } = render(<LatexEditor value="a" onChange={() => {}} errors={[{ line: 1, message: 'bad' }]} onSave={() => {}} />)
+  rerender(<LatexEditor value="b" onChange={() => {}} errors={[{ line: 1, message: 'bad' }]} onSave={() => {}} />)
+  expect(container.querySelector('.cm-lint-marker, [title="bad"]')).not.toBeNull()
 })

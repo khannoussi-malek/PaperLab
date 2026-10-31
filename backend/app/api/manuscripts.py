@@ -60,10 +60,9 @@ CHUNK = 1024**2
 def _out(manuscript) -> ManuscriptOut:
     """A `running` with no live job behind it reads as failed (read-time only; request_compile treats it as stale)."""
     out = ManuscriptOut.model_validate(manuscript)
-    if manuscripts.interrupted(manuscript, datetime.now(timezone.utc)):
-        out = out.model_copy(update={"compile_status": "failed", "compile_friendly": "compile_interrupted",
-                                     "compile_requested": False})
-    return out
+    status, friendly, requested = manuscripts.read_state(manuscript, datetime.now(timezone.utc))
+    return out.model_copy(update={"compile_status": status, "compile_friendly": friendly,
+                                  "compile_requested": requested})
 
 
 async def _detail(session: SessionDep, manuscript) -> ManuscriptDetailOut:
