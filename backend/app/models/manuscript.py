@@ -68,7 +68,7 @@ class ManuscriptSnapshot(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, server_default=text("gen_random_uuid()"))
     manuscript_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("manuscripts.id", ondelete="CASCADE"))
-    reason: Mapped[str] = mapped_column(Text)  # compile | autosave | before_restore | before_sections
+    reason: Mapped[str] = mapped_column(Text)  # compile | autosave | before_restore | before_sections | before_mcp
     files: Mapped[dict[str, str]] = mapped_column(JSONB)  # {path: text}
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=NOW)
 

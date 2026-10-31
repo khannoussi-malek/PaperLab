@@ -12,6 +12,8 @@ from app.core.manuscript_paths import is_text
 from app.models import ManuscriptFile, ManuscriptSnapshot
 
 KEEP = 50
+MCP_REASON = "before_mcp"
+MCP_KEEP = 20  # Claude's edits are kept apart so a busy session cannot push the owner's snapshots out
 AUTOSAVE_EVERY = timedelta(minutes=10)
 
 
@@ -25,10 +27,13 @@ async def take(session: AsyncSession, manuscript_id: uuid.UUID, reason: str) -> 
     session.add(snap)
     await session.flush()
     await session.refresh(snap)
-    newest = select(ManuscriptSnapshot.id).where(ManuscriptSnapshot.manuscript_id == manuscript_id) \
-        .order_by(ManuscriptSnapshot.created_at.desc(), ManuscriptSnapshot.id).limit(KEEP)
-    await session.execute(delete(ManuscriptSnapshot).where(
-        ManuscriptSnapshot.manuscript_id == manuscript_id, ManuscriptSnapshot.id.not_in(newest)))
+    for is_mcp, keep in ((False, KEEP), (True, MCP_KEEP)):
+        group = ManuscriptSnapshot.manuscript_id == manuscript_id
+        is_kind = ManuscriptSnapshot.reason == MCP_REASON
+        group = group & (is_kind if is_mcp else ~is_kind)
+        newest = select(ManuscriptSnapshot.id).where(group) \
+            .order_by(ManuscriptSnapshot.created_at.desc(), ManuscriptSnapshot.id).limit(keep)
+        await session.execute(delete(ManuscriptSnapshot).where(group, ManuscriptSnapshot.id.not_in(newest)))
     return snap
 
 
