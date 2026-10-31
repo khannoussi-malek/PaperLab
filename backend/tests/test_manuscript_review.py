@@ -360,7 +360,7 @@ async def test_cancel_stops_after_the_row_in_flight(session):
 async def test_a_write_with_a_stale_stamp_is_ignored(session):
     _, _, m = await doc(session, lambda k: f"Sleep improves memory consolidation \\cite{{{k[0]}}}.", "Alpha")
     run = await go(session, m)
-    row_id, _, _, _, stamp = await worker._take(run["id"])
+    row_id, *_, stamp = await worker._take(run["id"])
     await worker._write(run["id"], row_id, stamp + timedelta(seconds=1), status="done", verdict="supported")
     [r] = await rows(session, m.id)
     assert (r.status, r.verdict) == ("running", None)

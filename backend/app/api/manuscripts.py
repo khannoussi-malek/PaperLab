@@ -250,7 +250,9 @@ async def rank_papers(manuscript_id: uuid.UUID, body: RankIn, session: SessionDe
 
 @router.post("/api/manuscripts/{manuscript_id}/evidence")
 async def find_evidence(manuscript_id: uuid.UUID, body: EvidenceIn, session: SessionDep) -> EvidenceFoundOut:
-    return EvidenceFoundOut(**await manuscript_evidence.find(session, manuscript_id, body.sentence))
+    return EvidenceFoundOut(
+        **await manuscript_evidence.find(session, manuscript_id, body.sentence, confirm_remote=body.confirm_remote)
+    )
 
 
 @router.get("/api/manuscripts/{manuscript_id}/evidence/{sentence_hash}")

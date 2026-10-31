@@ -169,6 +169,7 @@ class EvidenceIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     sentence: str = Field(max_length=20_000)  # the core says what is too long, with its own code
+    confirm_remote: bool = False
 
 
 class EvidencePassageOut(BaseModel):
