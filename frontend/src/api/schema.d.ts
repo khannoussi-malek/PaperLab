@@ -1876,7 +1876,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Export Zip */
+        /**
+         * Export Zip
+         * @description Every file and paperlab.bib, plus the last compiled PDF unless `pdf=false` (the LaTeX source alone).
+         */
         get: operations["export_zip_api_manuscripts__manuscript_id__export_zip_get"];
         put?: never;
         post?: never;
@@ -4585,6 +4588,11 @@ export interface components {
             updated_at: string;
             /** Files */
             files: components["schemas"]["FileOut"][];
+            /**
+             * Has Pdf
+             * @description A compiled PDF is on disk (a first compile that failed stamps compiled_at but writes none).
+             */
+            readonly has_pdf: boolean;
         };
         /** ManuscriptImportOut */
         ManuscriptImportOut: {
@@ -4629,6 +4637,11 @@ export interface components {
             files: components["schemas"]["FileOut"][];
             /** Skipped */
             skipped: string[];
+            /**
+             * Has Pdf
+             * @description A compiled PDF is on disk (a first compile that failed stamps compiled_at but writes none).
+             */
+            readonly has_pdf: boolean;
         };
         /** ManuscriptOut */
         ManuscriptOut: {
@@ -4669,6 +4682,11 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            /**
+             * Has Pdf
+             * @description A compiled PDF is on disk (a first compile that failed stamps compiled_at but writes none).
+             */
+            readonly has_pdf: boolean;
         };
         /**
          * ManuscriptPatch
@@ -10830,7 +10848,9 @@ export interface operations {
     };
     export_zip_api_manuscripts__manuscript_id__export_zip_get: {
         parameters: {
-            query?: never;
+            query?: {
+                pdf?: boolean;
+            };
             header?: never;
             path: {
                 manuscript_id: string;

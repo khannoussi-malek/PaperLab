@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
+import { Download } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
 import { api, type ManuscriptDetail } from '@/api/client'
 import { PdfPage } from '../reader/PdfPage'
 import { usePdfDocument } from '../reader/usePdfDocument'
@@ -125,6 +127,11 @@ export function PdfPane({ manuscript: m, width, target, stillStamp, onSourceAt, 
             )}
           </AlertDescription>
         </Alert>
+      )}
+      {doc && stamp && (
+        <Button variant="secondary" size="icon" asChild className="absolute top-2 right-4 z-10 shadow-sm">
+          <a href={api.manuscriptPdfUrl(m.id, stamp)} download={`${m.title}.pdf`} aria-label="Download PDF" title="Download PDF"><Download aria-hidden /></a>
+        </Button>
       )}
       <div className="min-h-0 flex-1 overflow-auto bg-muted/40 p-3" tabIndex={0} aria-label="PDF pages" ref={scroller} onKeyDown={keyDown} onWheel={() => { pending.current = false }} onPointerDown={() => { pending.current = false }}>
         {doc ? (

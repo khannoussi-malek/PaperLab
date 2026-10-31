@@ -610,7 +610,9 @@ export const api = {
   /** Which source line a PDF spot comes from (page 1-based, x/y in points from the top-left). 404 no_sync too. */
   syncInverse: (id: string, page: number, x: number, y: number) =>
     request<{ file: string; line: number }>(`/api/manuscripts/${id}/synctex/inverse?page=${page}&x=${x}&y=${y}`),
-  manuscriptExportUrl: (id: string) => `/api/manuscripts/${id}/export.zip`,
+  /** `pdf: false`: the LaTeX source and paperlab.bib alone, without the compiled PDF. */
+  manuscriptExportUrl: (id: string, { pdf = true }: { pdf?: boolean } = {}) =>
+    `/api/manuscripts/${id}/export.zip${pdf ? '' : '?pdf=false'}`,
   listManuscriptSnapshots: (id: string) => request<ManuscriptSnapshot[]>(`/api/manuscripts/${id}/snapshots`),
   restoreManuscriptSnapshot: (id: string, snapshotId: string) =>
     request<void>(`/api/manuscripts/${id}/snapshots/${snapshotId}/restore`, { method: 'POST' }),

@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, computed_field, model_validator
 
 
 class TemplateOut(BaseModel):
@@ -40,6 +40,14 @@ class ManuscriptOut(BaseModel):
     compile_errors: list[Any]
     created_at: datetime
     updated_at: datetime
+
+    @computed_field
+    @property
+    def has_pdf(self) -> bool:
+        """A compiled PDF is on disk (a first compile that failed stamps compiled_at but writes none)."""
+        from app.core.manuscripts import pdf_path  # ponytail: schemas stay import-light; one stat per manuscript
+
+        return pdf_path(self.id).is_file()
 
 
 class ManuscriptDetailOut(ManuscriptOut):
