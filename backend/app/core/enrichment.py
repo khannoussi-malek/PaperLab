@@ -7,6 +7,7 @@
 - A field the user corrected (papers.manual_fields) is never overwritten by the PDF or by OpenAlex.
 """
 
+import html
 import logging
 import re
 import unicodedata
@@ -405,6 +406,28 @@ def crossref_biblio(work: dict[str, Any]) -> dict[str, Any]:
     return {**fields, "editors": [e for e in editors if e] or None}
 
 
+def _crossref_year(work: dict[str, Any]) -> int | None:
+    for key in ("published-print", "issued"):  # the issue's date, else the earliest
+        [year, *_] = ((work.get(key) or {}).get("date-parts") or [[None]])[0] or [None]
+        if year:
+            return int(year)
+    return None
+
+
+def align_with_crossref(paper: Paper, work: dict[str, Any]) -> dict[str, Any]:
+    """Corrections from the Crossref work for the paper's own DOI: the issue year (published-print, else issued) over
+    an online-first or preprint year, the journal's name at the time (container-title) over its current one, and the
+    full page range over its lone first page. Never title, authors or DOI, never a manual field, and nothing for a
+    preprint copy, which keeps its own year."""
+    if is_preprint_copy(paper) or work.get("type") == "posted-content":
+        return {}
+    venue = html.unescape(next(iter(work.get("container-title") or []), None) or "").strip() or None
+    page = (work.get("page") or "").strip()
+    lone_first = bool(paper.pages) and paper.pages.strip() == re.split(r"\s*[-–]\s*", page)[0] != page
+    found = {"year": _crossref_year(work), "venue": venue, "pages": page if lone_first else None}
+    return {k: v for k, v in found.items() if v and v != getattr(paper, k) and k not in paper.manual_fields}
+
+
 async def fill_biblio(
     session: AsyncSession,
     paper_id: uuid.UUID,
@@ -413,27 +436,33 @@ async def fill_biblio(
     *,
     openalex_work: dict[str, Any] | None = None,
     crossref_works: dict[str, dict | None] | None = None,
+    align: bool = True,
 ) -> bool:
     """Fills volume, issue, pages, editors, pmid and pmcid that are still NULL, never past manual_fields and never over
-    a value already held. Crossref wins over OpenAlex. `openalex_work` is a work already fetched; `crossref_works` is
-    the per-enrichment cache shared with `fill_source_type`. Source errors are logged, never raised. True when a
-    request went out."""
+    a value already held. Crossref wins over OpenAlex. With `align`, the DOI is trusted to be the paper's own and
+    Crossref's year, venue and page range correct the stored ones (`align_with_crossref`). `openalex_work` is a work
+    already fetched; `crossref_works` is the per-enrichment cache shared with `fill_source_type`. Source errors are
+    logged, never raised. True when a request went out."""
     paper = await get_paper(session, paper_id)
     await session.refresh(paper)
     doi = normalize_doi(paper.doi or "")
     cache = {} if crossref_works is None else crossref_works
     found: dict[str, Any] = {}
+    corrections: dict[str, Any] = {}
     asked = False
     crossref_fields = ("volume", "issue", "pages", "editors")
+    align = align and not is_preprint_copy(paper)
     if (
         doi
         and crossref_http
         and not doi.startswith(ARXIV_DOI_PREFIX)
-        and any(getattr(paper, f) is None for f in crossref_fields)
+        and (align or any(getattr(paper, f) is None for f in crossref_fields))
     ):
         asked = doi not in cache
         try:
-            found |= crossref_biblio(await _crossref_work(crossref_http, doi, cache) or {})
+            work = await _crossref_work(crossref_http, doi, cache) or {}
+            found |= crossref_biblio(work)
+            corrections = align_with_crossref(paper, work) if align and work else {}
         except (httpx.HTTPError, KeyError, TypeError, AttributeError) as exc:
             logger.warning("Crossref biblio lookup failed for paper %s: %r", paper_id, exc)
     wanted = ("volume", "issue", "pages", "pmid", "pmcid")
@@ -452,6 +481,9 @@ async def fill_biblio(
         for source in ("openalex", "crossref"):  # OpenAlex first, so a group both filled reads Crossref, the winner
             if part := {k: v for k, v in fields.items() if (k in from_crossref) == (source == "crossref")}:
                 await _write(session, paper, part, source)
+    if corrections:  # a lone first page is never NULL, so these never overlap the fills above
+        await _write(session, paper, corrections, "crossref")
+    if fields or corrections:
         await session.commit()
     return asked
 
@@ -522,7 +554,8 @@ async def enrich_paper(
                 collisions = await _write(session, paper, fallback, "pdf")  # never replaces what an earlier match found
         await session.commit()
         await fill_source_type(session, paper_id, None, crossref_http, crossref_works)
-        await fill_biblio(session, paper_id, crossref_http, crossref_works=crossref_works)
+        # A DOI from page 1 can be a cited paper's: only _fill_from_crossref's checked fill may set year and venue.
+        await fill_biblio(session, paper_id, crossref_http, crossref_works=crossref_works, align=False)
         await _fill_from_crossref(session, paper_id, hints, crossref_http, crossref_works)
         return collisions
 
