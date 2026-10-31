@@ -10,7 +10,7 @@ from sqlalchemy import select, update
 from test_manuscript_papers import setup
 
 from app.config import settings
-from app.core import diagram_compile, latex_compile, llm_connections, queue
+from app.core import diagram_compile, queue
 from app.core import manuscript_diagrams as md
 from app.core.errors import Conflict, InvalidInput, NotFound
 from app.models import LLMConnection, LLMModel
@@ -138,7 +138,6 @@ async def test_no_model_and_a_remote_model_needs_confirming(session, arq):
         await md.create(session, m.id, description=DESC, confirm_remote=False)
     assert arq.jobs == []
     assert (await md.create(session, m.id, description=DESC, confirm_remote=True))["status"] == "queued"
-    assert llm_connections  # imported for the helper the core calls
 
 
 async def test_generation_stores_code_and_a_preview(session):
@@ -271,7 +270,6 @@ async def test_the_fake_model_and_real_tectonic_make_a_real_pdf(session, monkeyp
     got = await md.state(session, m.id, out["id"])
     assert (got["status"], got["compiled"]) == ("done", True), got
     assert (await md.pdf(session, m.id, out["id"])).startswith(b"%PDF")
-    assert latex_compile  # the real compile path, no stub
 
 
 async def test_an_older_compile_never_overwrites_the_one_that_took_the_row_after_it(session):
@@ -285,3 +283,13 @@ async def test_an_older_compile_never_overwrites_the_one_that_took_the_row_after
     assert (await md.state(session, m.id, got["id"]))["status"] == "running"
     await worker._write(got["id"], second[3], status="done", compiled=False)
     assert (await md.state(session, m.id, got["id"]))["compiled"] is False
+
+
+async def test_a_queue_that_is_down_fails_the_row(session, monkeypatch):
+    async def down(*args):
+        raise ConnectionError("redis is down")
+
+    m = await manuscript(session)
+    monkeypatch.setattr(queue, "enqueue", down)
+    out = await md.create(session, m.id, description=DESC, confirm_remote=False)
+    assert (out["status"], out["reason"]) == ("failed", "queue_unavailable")
