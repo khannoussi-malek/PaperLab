@@ -139,3 +139,18 @@ async def test_error_codes_and_extra_fields(client, session):
         await client.post(f"/api/manuscripts/{uuid.uuid4()}/section-review/locate", json={"file": "a", "text": "x"})
     ).status_code == 404
     assert (await client.post(base, json=ok)).status_code == 202
+
+
+async def test_a_remote_model_answers_409_naming_the_model_and_host(client, session, arq):
+    from test_remote_confirm import _remote
+
+    _, _, m = await setup(session, "Alpha", name=f"W {uuid.uuid4().hex[:8]}")
+    await manuscripts.upsert_text(session, m.id, "main.tex", TEXT)
+    await _remote(session)
+    later = (datetime.now(UTC) + timedelta(days=1)).isoformat()
+    refused = await client.post(
+        f"/api/manuscripts/{m.id}/section-review", json={"file": "main.tex", "base": later, "at": 3}
+    )
+    assert refused.status_code == 409
+    assert refused.json() == {"detail": "remote_model_needs_confirm", "model": "Cloud · big", "host": "api.example.com"}
+    assert arq.jobs == []
