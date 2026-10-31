@@ -1,4 +1,4 @@
-import { ApiError, type CheckItem, type ReviewSentence } from '@/api/client'
+import { isConflict, type ApiError, type CheckItem, type ReviewSentence } from '@/api/client'
 
 export const VERDICT_LABEL: Record<string, string> = {
   supported: 'Supports',
@@ -86,5 +86,5 @@ export const isLive = (run: { status: string } | null) => run?.status === 'queue
 
 /** Where the text would go when the start refused for a remote model (409 remote_model_needs_confirm), else null. */
 export function remoteHost(e: unknown): string | null {
-  return e instanceof ApiError && e.status === 409 && e.code === 'remote_model_needs_confirm' ? String(e.body.host ?? 'a remote model') : null
+  return isConflict(e, 'remote_model_needs_confirm') ? String((e as ApiError).body.host ?? 'a remote model') : null
 }

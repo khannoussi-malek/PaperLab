@@ -42,7 +42,7 @@ test('a chosen role says so', () => {
 test('a sentence chip moves the selection; a note chip opens the note in a new tab; a removed note is no link', () => {
   const open = vi.spyOn(window, 'open').mockReturnValue(null)
   const { onJump } = show(review())
-  fireEvent.click(screen.getByRole('button', { name: /S2 · Sleep improves memory in adults\.…/ }))
+  fireEvent.click(screen.getByRole('button', { name: 'S2 · Sleep improves memory in adults.' }))
   expect(onJump).toHaveBeenCalledWith('h2')
   fireEvent.click(screen.getByRole('button', { name: /Note · Smith 2021 p\.4/ }))
   expect(open).toHaveBeenCalledWith('#/papers/p1?note=n1', '_blank', 'noopener')
@@ -84,18 +84,43 @@ test('without a workspace it says the notes were not used', () => {
   expect(screen.getByText("Your notes weren't used — pick a workspace to include them.")).toBeInTheDocument()
 })
 
-test('a stale review is greyed with Review again', () => {
+test('a stale review is greyed with Review again, off while a review is live', () => {
   const r = review()
   const { onReviewAgain } = show(r, { stale: true })
   fireEvent.click(screen.getByRole('button', { name: 'Review again' }))
   expect(onReviewAgain).toHaveBeenCalledWith(r)
+  document.body.innerHTML = ''
+  show(r, { stale: true, busy: true })
+  expect(screen.getByRole('button', { name: 'Review again' })).toBeDisabled()
+})
+
+test('one polite status region, there before any review, announces start and finish', () => {
+  const base = { run: null, items: [], dismissed: [], startError: null, cancel: vi.fn(), dismiss: vi.fn(), restore: vi.fn() } as never
+  const panel = (reviews: SectionReview[]) => (
+    <QueryClientProvider client={new QueryClient()}>
+      <ReviewPanel manuscriptId="m" review={base} stale={[]} onJump={() => {}} onCite={async () => null} onCheckAgain={() => {}}
+        sections={{ reviews, stale: [], hasWorkspace: true, onCancel: vi.fn(), onReviewAgain: vi.fn() }} />
+    </QueryClientProvider>
+  )
+  const { rerender } = render(panel([]))
+  const region = screen.getByRole('status', { name: 'Section review status' })
+  expect(region).toHaveAttribute('aria-live', 'polite')
+  expect(region).toHaveTextContent(/^$/)
+  rerender(panel([review({ status: 'running', findings: [] })]))
+  expect(screen.getByRole('status', { name: 'Section review status' })).toBe(region)
+  expect(region).toHaveTextContent('Reviewing “Our approach”…')
+  rerender(panel([review()]))
+  expect(screen.getByRole('status', { name: 'Section review status' })).toBe(region)
+  expect(region).toHaveTextContent('Review of “Our approach” done: 1 missing, 1 unsupported, 1 supported.')
 })
 
 test('D118: nothing in a finding can be copied or inserted', () => {
   const write = vi.fn()
   Object.assign(navigator, { clipboard: { writeText: write } })
+  vi.spyOn(window, 'open').mockReturnValue(null)
   show(review())
   const names = screen.getAllByRole('button').map((b) => b.textContent ?? '')
+  expect(names.length).toBeGreaterThan(0)
   expect(names.every((n) => /^(S\d|Note) · /.test(n))).toBe(true) // only the chips, which move the selection or open a note
   expect(screen.queryByRole('button', { name: /copy|insert|apply|use|replace|cite/i })).toBeNull()
   expect(screen.queryByRole('link')).toBeNull()

@@ -4,6 +4,7 @@ import type { CheckItem, SectionReview } from '@/api/client'
 import { Button } from '@/components/ui/button'
 import { chunkHref } from '@/lib/route'
 import { SectionFindings } from './SectionFindings'
+import { statusLine } from './sectionReviewModel'
 import { couldntCheck, isLive, isPending, itemTone, reasonCopy, VERDICT_LABEL, type Tone } from './reviewModel'
 import { useCiteProposals, type useReview } from './useReview'
 
@@ -23,6 +24,8 @@ type Props = {
     /** Reviews whose section changed since. */
     stale: SectionReview[]
     hasWorkspace: boolean
+    /** A section review is queued or running. */
+    live?: boolean
     onCancel: (id: string) => void
     onReviewAgain: (review: SectionReview) => void
   }
@@ -131,11 +134,11 @@ function ClaimRow({ item, manuscriptId, dismissed, review, onJump, onCite }: { i
   )
 }
 
-function SectionReviews({ reviews, stale, hasWorkspace, onCancel, onReviewAgain, onJump }: NonNullable<Props['sections']> & Pick<Props, 'onJump'>) {
+function SectionReviews({ reviews, stale, hasWorkspace, live: busy = false, onCancel, onReviewAgain, onJump }: NonNullable<Props['sections']> & Pick<Props, 'onJump'>) {
   const staleIds = new Set(stale.map((r) => r.id))
   const live = reviews.filter((r) => !staleIds.has(r.id))
   const card = (r: SectionReview, isStale: boolean) => (
-    <SectionFindings key={r.id} review={r} stale={isStale} hasWorkspace={hasWorkspace} onJump={onJump} onCancel={onCancel} onReviewAgain={onReviewAgain} />
+    <SectionFindings key={r.id} review={r} stale={isStale} busy={busy} hasWorkspace={hasWorkspace} onJump={onJump} onCancel={onCancel} onReviewAgain={onReviewAgain} />
   )
   return (
     <>
@@ -150,7 +153,13 @@ export function ReviewPanel({ manuscriptId, review, stale, onJump, onCite, onChe
   const [open, setOpen] = useState(readOpen)
   const { run, items, dismissed, startError } = review
   const sectionReviews = sections?.reviews ?? []
-  if (!run && items.length === 0 && !startError && sectionReviews.length === 0) return null
+  // Always mounted, so a review's start and finish are announced (a region created with its text is not).
+  const announcer = sections && (
+    <div role="status" aria-live="polite" aria-label="Section review status" className="sr-only">
+      {sectionReviews.map((r) => <p key={r.id}>{statusLine(r)}</p>)}
+    </div>
+  )
+  if (!run && items.length === 0 && !startError && sectionReviews.length === 0) return announcer ?? null
   const title = sectionReviews.length > 0 ? 'Review' : 'Citation check'
   const toggle = () => { writeOpen(!open); setOpen(!open) }
   const staleIds = new Set(stale.map((i) => i.id))
@@ -160,6 +169,8 @@ export function ReviewPanel({ manuscriptId, review, stale, onJump, onCite, onChe
   const finished = run && !isLive(run)
   const empty = finished && run.status === 'done' && items.length === 0
   return (
+    <>
+    {announcer}
     <section aria-label={title} className="max-h-[40%] shrink-0 overflow-auto border-t border-glass-border">
       <button type="button" aria-expanded={open} className="flex w-full items-center gap-1.5 px-3 py-1.5 text-left text-sm font-medium focus-visible:ring-2 focus-visible:ring-ring" onClick={toggle}>
         {open ? <ChevronDown aria-hidden className="size-4" /> : <ChevronRight aria-hidden className="size-4" />}
@@ -205,5 +216,6 @@ export function ReviewPanel({ manuscriptId, review, stale, onJump, onCite, onChe
         </div>
       )}
     </section>
+    </>
   )
 }

@@ -1,18 +1,10 @@
 import type { SectionRef, SectionReview } from '@/api/client'
 import { Button } from '@/components/ui/button'
 import { noteHref } from '@/lib/route'
-import { FINDING_ICON, FINDING_LABEL, findingTone, groupFindings, refChip, ROLE_LABEL } from './sectionReviewModel'
+import { failedReason, FINDING_ICON, FINDING_LABEL, findingTone, groupFindings, refChip, ROLE_LABEL } from './sectionReviewModel'
 
 const AI = <span className="rounded bg-provenance-llm-surface px-1.5 py-px text-xs text-provenance-llm">AI</span>
 const TONE_TEXT = { good: 'text-green-700 dark:text-green-500', warn: 'text-amber-700 dark:text-amber-500', bad: 'text-destructive', muted: 'text-muted-foreground' }
-const FAILED: Record<string, string> = {
-  cancelled: 'Cancelled',
-  model_error: "The model didn't give a usable answer",
-  check_failed: "The model didn't give a usable answer",
-  model_unavailable: "The model couldn't be reached. Try again.",
-  queue_unavailable: "The review couldn't start. Try again.",
-  no_model: 'Add a model in Settings to run the reviewer.',
-}
 const CHIP = 'rounded-full border px-2 py-px text-xs focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none'
 const isLive = (r: SectionReview) => r.status === 'queued' || r.status === 'running'
 
@@ -20,6 +12,8 @@ type Props = {
   review: SectionReview
   /** Its section changed since: greyed, with Review again. */
   stale: boolean
+  /** A review is queued or running: Review again would be refused. */
+  busy?: boolean
   hasWorkspace: boolean
   /** Selects the researcher's sentence in the editor. */
   onJump: (hash: string) => void
@@ -50,14 +44,14 @@ const Cancel = ({ review, onCancel }: Pick<Props, 'review' | 'onCancel'>) => (
 )
 
 /** One section review in the panel: what the reviewer found missing, unsupported and supported, by sentence and note. */
-export function SectionFindings({ review, stale, hasWorkspace, onJump, onCancel, onReviewAgain }: Props) {
+export function SectionFindings({ review, stale, busy = false, hasWorkspace, onJump, onCancel, onReviewAgain }: Props) {
   const title = `“${review.title}”`
   if (stale) {
     return (
       <li className="flex items-center gap-2 rounded-md border bg-muted/40 px-2.5 py-1.5 text-sm text-muted-foreground">
         <span className="min-w-0 flex-1 truncate">{title}</span>
         {isLive(review) && <Cancel review={review} onCancel={onCancel} />}
-        <Button size="xs" variant="outline" onClick={() => onReviewAgain(review)}>Review again</Button>
+        <Button size="xs" variant="outline" disabled={busy} onClick={() => onReviewAgain(review)}>Review again</Button>
       </li>
     )
   }
@@ -72,9 +66,9 @@ export function SectionFindings({ review, stale, hasWorkspace, onJump, onCancel,
         <p className="text-xs text-muted-foreground">
           Reviewed as: {ROLE_LABEL[review.role]}{review.role_source === 'chosen' && ' (you chose this)'}
         </p>
-        <div aria-live="polite">
+        <div>
           {isLive(review) && <p className="flex items-center gap-2 text-xs text-muted-foreground">Reviewing…<Cancel review={review} onCancel={onCancel} /></p>}
-          {review.status === 'failed' && <p className="text-xs text-muted-foreground">{FAILED[review.reason ?? ''] ?? "The review couldn't finish. Try again."}</p>}
+          {review.status === 'failed' && <p className="text-xs text-muted-foreground">{failedReason(review.reason)}</p>}
           {review.status === 'interrupted' && <p className="text-xs text-muted-foreground">The review was interrupted. Run it again.</p>}
           {review.status === 'done' && groups.length === 0 && <p className="text-xs text-muted-foreground">Nothing to report for this section.</p>}
         </div>

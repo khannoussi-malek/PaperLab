@@ -255,7 +255,7 @@ export function SourcePane(props: Props) {
   const [reviewHandleRef, setReviewHandle] = useState<ReviewHandle | null>(null)
   const sectionReview = useSectionReview(manuscriptId, path, isTex)
   const inEditor = useReviewInEditor({ manuscriptId, workspaceId: props.workspaceId ?? null, review, text, handle: reviewHandleRef, flush: flushNow, getBase: () => base.current, sections: { file: path, reviews: sectionReview.reviews } })
-  const [sectionTarget, setSectionTarget] = useState<{ at: number; section: SectionSpan | null; role?: Role } | null>(null)
+  const [sectionTarget, setSectionTarget] = useState<{ at: number; section: SectionSpan | null; role?: Role; gone?: boolean } | null>(null)
   // The section under the cursor, or for Review again the section of that title as the text now reads.
   const openSectionReview = async (again?: SectionReview) => {
     const now = textNow.current
@@ -264,7 +264,7 @@ export function SourcePane(props: Props) {
     const spans = await api.locateSections(manuscriptId, path, now).then((r) => r.sections, () => [] as SectionSpan[])
     const cursor = reviewHandleRef?.cursor() ?? 0
     const section = again ? spans.find((s) => s.title === again.title) ?? null : sectionAt(spans, cursor)
-    setSectionTarget({ at: again ? section?.start ?? 0 : cursor, section, role: again?.role_source === 'chosen' ? again.role : undefined })
+    setSectionTarget({ at: again ? section?.start ?? 0 : cursor, section, role: again?.role_source === 'chosen' ? again.role : undefined, gone: !!again && !section })
   }
   const startSectionReview = async (role: Role | null, confirmRemote: boolean) => {
     if (!(await flushNow())) throw new Error("Your latest changes aren't saved yet. Try again in a moment.")
@@ -323,7 +323,7 @@ export function SourcePane(props: Props) {
       {isTex && (
         <>
           <ReviewPanel manuscriptId={manuscriptId} review={review} stale={inEditor.stale} onJump={inEditor.jump} onCite={inEditor.cite} onCheckAgain={() => void inEditor.check()}
-            sections={{ reviews: sectionReview.reviews, stale: inEditor.sectionStale, hasWorkspace: !!props.workspaceId, onCancel: (id) => void sectionReview.cancel(id), onReviewAgain: (r) => void openSectionReview(r) }} />
+            sections={{ reviews: sectionReview.reviews, stale: inEditor.sectionStale, hasWorkspace: !!props.workspaceId, live: sectionReview.live, onCancel: (id) => void sectionReview.cancel(id), onReviewAgain: (r) => void openSectionReview(r) }} />
           <RemoteConfirmDialog what="text" host={review.confirmHost} onSend={() => void inEditor.check(true)} onCancel={review.dismissConfirm} />
           <SectionReviewDialog target={sectionTarget} onClose={() => setSectionTarget(null)} onStart={startSectionReview} />
         </>
