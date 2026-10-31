@@ -228,7 +228,7 @@ you can turn it off for an import. None of them send a paper's text.
 An MCP client you connect, such as Claude Desktop, receives what its tools return: passages from your papers, paper
 details (with your reading pass and decision) and workspace names, and every note on a paper marked as yours or AI. If it works on a manuscript, it also receives the text of the files it reads and the compile output.
 Claude Desktop and Claude Code send what the tools return to Anthropic.
-- **Your words are yours.** Claude can write in your manuscripts only through an MCP client you connect and approve call by call, and each change keeps an earlier version you can restore. PaperLab's own AI reviewer never writes your text.
+- **Your words are yours.** Claude can write in your manuscripts only through an MCP client you connect, and it asks you first (until you choose "Always allow"). Each change keeps an earlier version you can restore; History holds the newest 20 Claude edits, and your own history is kept apart. PaperLab's own AI reviewer never writes your text.
 - **Updates are announced, never installed.** Each time it opens, the desktop app asks GitHub whether a newer version
 is out and offers a download link when there is one. It is the only request the app makes on its own; turn it off in
 **Settings → Desktop app**.
@@ -459,7 +459,7 @@ Writing studio:
 - `get_compile_result`: the latest compile's status, errors with file and line, and page count;
 - `read_manuscript_pdf_text`: the compiled PDF's text, page by page.
 
-Claude Desktop asks you before each tool call, and a write to a manuscript keeps an earlier version in History, marked as a Claude edit. Every change names the version it was based on, so Claude cannot overwrite what you typed meanwhile. It cannot write `paperlab.bib`, which PaperLab generates from your papers, or delete a manuscript.
+Claude Desktop asks you before each tool call until you choose "Always allow" for it. A write to a manuscript keeps an earlier version in History, marked as a Claude edit; History holds the newest 20 of these, and your own autosaves and compiles are kept separately. Every change names the version it was based on, so Claude cannot overwrite what you typed meanwhile. It cannot write `paperlab.bib`, which PaperLab generates from your papers, or delete a manuscript.
 
 Checking claims:
 - `verify_claim`: whether a library paper supports a claim, with a quote from the paper;
