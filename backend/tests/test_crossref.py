@@ -94,3 +94,18 @@ async def test_an_alias_doi_follows_crossrefs_redirect_to_the_canonical_work():
         work = await crossref.get_work(client, "10.5465/amr.2001.4378025")
 
     assert work["DOI"] == "10.2307/259123"
+
+
+async def test_the_redirected_request_keeps_the_mailto():
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        if request.url.path == "/works/10.5465/amr.2001.4378025":
+            return httpx.Response(301, headers={"Location": "/works/10.2307/259123"})
+        return httpx.Response(200, json={"message": {"DOI": "10.2307/259123"}})
+
+    async with crossref.new_client(email="reader@example.org", transport=httpx.MockTransport(handler)) as client:
+        await crossref.get_work(client, "10.5465/amr.2001.4378025")
+
+    assert [r.url.params.get("mailto") for r in seen] == ["reader@example.org", "reader@example.org"]

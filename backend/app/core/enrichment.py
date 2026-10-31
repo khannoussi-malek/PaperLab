@@ -463,8 +463,11 @@ async def _fill_from_crossref(
     crossref_http: httpx.AsyncClient | None,
     crossref_works: dict[str, dict | None],
 ) -> None:
-    """Blank authors, year and venue from Crossref's record for the paper's DOI, when OpenAlex matched nothing. Only
-    when Crossref's first author's family name is on page 1: a DOI found on page 1 can be a cited paper's."""
+    """Blank authors, year and venue from Crossref's record for the paper's DOI, when OpenAlex matched nothing. A DOI
+    found on page 1 can be a cited paper's, so only when Crossref's first author's family name is on page 1 and its
+    year is within a year of the PDF's (as `is_confirmed_match`) or its title is the paper's."""
+    from app.core.candidates import from_crossref, normal_title  # noqa: PLC0415 (candidates imports this module)
+
     paper = await get_paper(session, paper_id)
     await session.refresh(paper)
     doi = normalize_doi(paper.doi or "")
@@ -473,19 +476,18 @@ async def _fill_from_crossref(
         return
     try:
         work = await _crossref_work(crossref_http, doi, crossref_works) or {}
-        authors = work.get("author") or []
-        if not authors or not _on_page(authors[0].get("family") or "", hints):
-            return
-        names = [" ".join(filter(None, (a.get("given"), a.get("family")))) or a.get("name") for a in authors]
-        found = {
-            "authors": [name for name in names if name],
-            "year": (((work.get("issued") or {}).get("date-parts") or [[None]])[0] or [None])[0],
-            "venue": next(iter(work.get("container-title") or []), None),
-        }
+        found = from_crossref(work) if work else None  # None: not a paper
+        family = ((work.get("author") or [{}])[0] or {}).get("family") or ""
     except (httpx.HTTPError, KeyError, TypeError, AttributeError) as exc:
         logger.warning("Crossref metadata lookup failed for paper %s: %r", paper_id, exc)
         return
-    if fields := {k: v for k, v in found.items() if v and getattr(paper, k) in (None, [])}:
+    if found is None or not _on_page(family, hints):
+        return
+    same_year = found.year is not None and any(abs(found.year - y) <= YEAR_TOLERANCE for y in hints.years)
+    if not same_year and normal_title(found.title) != normal_title(paper.title or ""):
+        return
+    known = {"authors": found.authors, "year": found.year, "venue": found.venue}
+    if fields := {k: v for k, v in known.items() if v and getattr(paper, k) in (None, [])}:
         await _write(session, paper, fields, "crossref")
         await session.commit()
 

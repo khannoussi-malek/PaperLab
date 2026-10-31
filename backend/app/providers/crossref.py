@@ -20,10 +20,7 @@ def new_client(
     *, email: str | None = None, api_key: str | None = None, transport: httpx.AsyncBaseTransport | None = None
 ) -> httpx.AsyncClient:
     params = {"mailto": email} if email else {}
-    # An alias DOI answers 301 to its canonical one (10.5465/amr.2001.4378025 -> 10.2307/259123).
-    return httpx.AsyncClient(
-        base_url=BASE_URL, params=params, timeout=TIMEOUT, transport=transport, follow_redirects=True
-    )
+    return httpx.AsyncClient(base_url=BASE_URL, params=params, timeout=TIMEOUT, transport=transport)
 
 
 # ponytail: no retry on 429, as in openalex.py. The contact email moves requests to the faster polite pool.
@@ -49,6 +46,8 @@ async def get_work(http: httpx.AsyncClient, doi: str) -> dict | None:
     """The work for `doi`, or None when Crossref has no such DOI."""
     # A DOI can contain "?" or other reserved characters; left bare they'd truncate the path into a query string.
     response = await http.get(f"/works/{quote(doi, safe='/:')}")
+    if response.is_redirect:  # an alias DOI: 301 to its canonical one. A fresh get keeps the client's mailto,
+        response = await http.get(response.headers["location"])  # which httpx's follow_redirects drops
     if response.status_code == 404:
         return None
     return json_body(response.raise_for_status())["message"]
