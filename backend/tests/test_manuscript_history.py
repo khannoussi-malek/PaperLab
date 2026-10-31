@@ -116,15 +116,34 @@ async def test_mcp_snapshots_do_not_crowd_out_the_owners_fifty(session):
     assert reasons.count("autosave") == 50 and reasons.count("before_mcp") == 5
 
 
-async def test_the_owners_text_survives_a_long_claude_session(session):
-    """Claude's snapshots must not silence the owner's autosave, or the owner's text lives only in Claude's pool."""
+async def claude_write(session, mid, text):
+    """What the MCP does: base is the file's updated_at, snapshot is before_mcp."""
+    row = await manuscripts.read(session, mid, "main.tex")
+    await manuscripts.save_text(session, mid, "main.tex", text, base=row.updated_at, snapshot=history.MCP_REASON)
+
+
+async def owner_pool(session, mid):
+    return [s for s in await history.list_(session, mid) if s.reason != history.MCP_REASON]
+
+
+async def test_the_owners_latest_text_survives_a_long_claude_session(session):
+    """The owner snapshotted at t0, typed Y two minutes later (no autosave is due), then Claude took over."""
     m = await new(session)
-    await manuscripts.upsert_text(session, m.id, "main.tex", "OWNER X")
-    for i in range(26):  # the first overwrites X, the rest are a long fix-the-errors session
-        await history.take(session, m.id, history.MCP_REASON)  # taken before each Claude write, as the MCP does
-        await manuscripts.upsert_text(session, m.id, "main.tex", f"claude {i}")
-    owner_pool = [s for s in await history.list_(session, m.id) if s.reason != history.MCP_REASON]
-    assert any(s.files.get("main.tex") == "OWNER X" for s in owner_pool)
+    await history.take(session, m.id, "autosave")  # t0
+    await manuscripts.upsert_text(session, m.id, "main.tex", "OWNER Y")  # typed after t0, no snapshot of it yet
+    await claude_write(session, m.id, "claude 0")
+    for i in range(1, 26):
+        await claude_write(session, m.id, f"claude {i}")
+    assert any(s.files.get("main.tex") == "OWNER Y" for s in await owner_pool(session, m.id))
+
+
+async def test_a_pure_claude_loop_adds_at_most_one_owner_snapshot(session):
+    m = await new(session)
+    await history.take(session, m.id, "autosave")
+    before = len(await owner_pool(session, m.id))
+    for i in range(30):
+        await claude_write(session, m.id, f"claude {i}")
+    assert len(await owner_pool(session, m.id)) <= before + 1
 
 
 async def test_maybe_autosave_ignores_before_mcp_snapshots(session):

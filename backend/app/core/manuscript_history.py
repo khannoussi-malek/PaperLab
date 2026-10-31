@@ -1,9 +1,9 @@
 """Manuscript snapshots: text files as of a moment, kept newest-50, restorable."""
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import manuscripts
@@ -18,8 +18,8 @@ AUTOSAVE_EVERY = timedelta(minutes=10)
 
 
 async def take(session: AsyncSession, manuscript_id: uuid.UUID, reason: str) -> ManuscriptSnapshot:
-    if reason == MCP_REASON:  # the owner's own text goes into the owner's pool before Claude can overwrite it
-        await maybe_autosave(session, manuscript_id, now=datetime.now(timezone.utc))
+    if reason == MCP_REASON and await _changed_since_last_snapshot(session, manuscript_id):
+        await take(session, manuscript_id, "autosave")  # the owner's latest text, before Claude writes
     rows = await session.execute(
         select(ManuscriptFile.path, ManuscriptFile.text)
         .where(ManuscriptFile.manuscript_id == manuscript_id, ManuscriptFile.text.is_not(None))
@@ -37,6 +37,21 @@ async def take(session: AsyncSession, manuscript_id: uuid.UUID, reason: str) -> 
             .order_by(ManuscriptSnapshot.created_at.desc(), ManuscriptSnapshot.id).limit(keep)
         await session.execute(delete(ManuscriptSnapshot).where(group, ManuscriptSnapshot.id.not_in(newest)))
     return snap
+
+
+async def _changed_since_last_snapshot(session: AsyncSession, manuscript_id: uuid.UUID) -> bool:
+    """A text file is newer than every snapshot. Claude's writes don't count: `settle` dates its snapshot after them."""
+    changed = await session.scalar(select(func.max(ManuscriptFile.updated_at)).where(
+        ManuscriptFile.manuscript_id == manuscript_id, ManuscriptFile.text.is_not(None)))
+    last = await session.scalar(
+        select(func.max(ManuscriptSnapshot.created_at)).where(ManuscriptSnapshot.manuscript_id == manuscript_id))
+    return changed is not None and (last is None or changed > last)
+
+
+async def settle(session: AsyncSession, snap: ManuscriptSnapshot) -> None:
+    """Call after the write the snapshot guards: dates the snapshot after it, so the write reads as already covered."""
+    await session.execute(update(ManuscriptSnapshot).where(ManuscriptSnapshot.id == snap.id)
+                          .values(created_at=func.clock_timestamp()))
 
 
 async def maybe_autosave(session: AsyncSession, manuscript_id: uuid.UUID, *, now: datetime) -> bool:
