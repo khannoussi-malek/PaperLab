@@ -1109,7 +1109,7 @@ The studio's fourth column, "Papers": the workspace's papers as a 3D deck of car
 
 The library and a workspace's Papers tab can show their papers as the studio's deck instead of the list.
 
-- **Switch:** a "Show papers as" group of two toggle buttons, List and Deck (`aria-pressed`), above the papers. List is the
+- **Switch:** a "Show papers as" group of toggle buttons, List, Deck and Triage (`aria-pressed`), above the papers. List is the
   default; the choice is remembered per page and browser (`paperlab-library-view`, `paperlab-workspace-papers-view`).
 - **Same papers, same order:** the deck shows exactly what the list shows (its search, sort and the workspace tag filter),
   so the list's toolbar is the only search. Switching back keeps the search text, sort, tags and selection.
@@ -1118,6 +1118,67 @@ The library and a workspace's Papers tab can show their papers as the studio's d
   at that note, or at the paper. Keys, motion, live region and Hands are the studio deck's (Hands off until asked; no
   typing pause here).
 - **Counts:** one counts request covers the visible papers; only about seven cards are in the DOM.
+
+## Triage desk
+
+A third view beside List and Deck ("Show papers as": List, Deck, Triage; remembered under the same keys) for sorting a
+stack of papers one card at a time. It takes the list's filtered papers; changing the list's search, filter or tags
+re-freezes the stack from the new list. The only reading state is `papers.triage` / `reading_pass`; the desk keeps just
+its frozen id list and the session's counters. Papers still being read in wait outside the stack ("N papers are still
+being read in").
+
+- **Layout, by the desk's own width** (`data-layout`): `wide` at 1100 px and up (the card on a dotted desk with four
+  glass targets around it, and the PDF column to its right at 52 %); `tabs` from 700 to 1099 px (targets in the corners,
+  a Paper | PDF tablist, both panels stay mounted so the PDF keeps its page); `single` under 700 px (one column: the card
+  and the controls, no targets, no drag, buttons at least 44 px tall without key hints, "Open PDF" opens a full-screen
+  sheet). Three zones: bar (source, "N left of M", order, "Include decided papers", Start over, Exit), stage, controls.
+- **Piles, keys, labels:** Read closely (→ or 1), Skim (↓ or 2), Later (↑ or 3), Not relevant (← or 4), Skip (Space or
+  5). The desk says "Not relevant"; the history keeps "Dropped". Targets and the five buttons show icon, word and count;
+  never colour alone. **Accent rule:** no new colour set. The hot target (drag, held key, or Not relevant while its reason
+  is asked) takes `primary` (border, text, ring) on the glass chip.
+- **Paper island:** the card, its edges behind it and the departing clone are `.paper-surface` (`--paper`, #fbf8f0, the same in both themes)
+  is a light island: `.paper-surface` re-declares every colour token to its light value and sets `color-scheme: light`,
+  with a fixed border `#e6dfcc`, so the paper reads the same in dark theme; the desk around it is `bg-muted` with a dot pattern. Everything else stays on tokens and `glass`.
+- **Card:** title, byline, source badges, the abstract in full (a focusable scroller, `aria-label="Abstract"`), the
+  conclusion with "Show in PDF (p. N)", and a retraction banner when needed. A paper with no PDF says "No PDF for this
+  paper" and offers the PDF actions; a decided paper (Include decided) shows its chip and last change.
+- **Stamp and held key:** while a pile key is held (or a drag is over a pile) a `primary`-bordered stamp with the pile's
+  word sits on the card (`data-triage-stamp`, `aria-hidden`); it is cleared on key up, window blur and commit.
+- **Not relevant asks why:** key 4 or the button shows a numbered chip row (off-topic, wrong method, low quality,
+  duplicate, already known, other) and sends nothing until a chip commits; "other" opens a one-line note (Enter commits).
+  Chip keys 1 to 6 act only while the chips are shown, and the other pile keys sleep; Esc cancels the chips first.
+- **Keymap and focus:** one native `keydown` listener on the desk root. Pile keys and A fire only outside buttons,
+  fields, the abstract and the PDF column; there only Esc, P, F6, ? and U are the desk's (the PDF column keeps its own
+  keys: arrows scroll, `[` `]` turn pages, + - 0 zoom). P toggles the PDF (column, tab or sheet); U or Ctrl/Cmd Z undoes;
+  ? lists the keys; F6 cycles card, PDF and controls; Esc leaves the desk after the chips and the help. **Focus rule:**
+  after every decision, undo or button press focus returns to the desk root (`aria-roledescription="triage desk"`,
+  `tabIndex=0`), and when the focused element is removed from inside the desk focus goes back to the root, so the keys keep
+  working.
+- **Motion:** a decided card leaves as a clone that animates `transform` and `opacity` only for 220 ms while the next card
+  is already live; the stamp fades in over 150 ms; a snap-back after a short drag is 200 ms. Under
+  `prefers-reduced-motion` there is no departing element, no edges, no tilt, no stamp animation and no snap transition:
+  the same decisions, instantly.
+- **Drag:** pointer down on the card (not on buttons, links, fields or the abstract), move 80 px or more along the
+  dominant axis and release to decide; less snaps back and writes nothing; Esc cancels the drag only. Off in `single`.
+- **Live region and alert:** an always-mounted polite `role=status` says each outcome ("Title. Skim. 3 of 10 done.",
+  "Decision undone", "Pick a reason, 1 to 6"); a failed save shows a `role=alert` strip with Retry and the card comes
+  back. Saves are ordered; an undo sent before its decision's event id exists waits for it.
+- **Done, Start over, Review the skipped:** an emptied stack shows what the session did (per pile, time, PDF opened for N
+  of M) and "Review the skipped (N)", "Show kept papers in the list", "Add N new papers", "Start over", Back and Undo.
+  A skipped card goes to a skipped list, not back on the stack. Review the skipped and Start over are disabled with "Saving…
+  try again in a moment" until every pending save has landed. The session id lives in `sessionStorage` and ends on
+  Start over, on Exit and on leaving the Triage view.
+- **PDF column and what "PDF opened" means:** a PDF paper opens with the column visible in `wide` (P hides it; the
+  choice is kept in `paperlab-triage-pdf`); `tabs` and `single` show it only when asked. The document is fetched only while
+  the column is mounted, and the next two papers' PDFs are prefetched. Each decision stores `card_ms`, `pdf_ms` and
+  `pdf_opened`. `pdf_opened` is true only after an **interaction** in the PDF column while it is shown: a wheel, touch or
+  key scroll (a scroll counts only when input came within 300 ms before it, so reflow and Show in PDF placement do not),
+  a page change, a zoom, a text selection, or Show in PDF. Visibility alone never counts. Time runs only while the tab is
+  visible and the window focused (`pdf_ms` only while the PDF is shown), and is capped at 30 minutes.
+- **Test hooks:** `[aria-roledescription="triage desk"]` with `data-layout`; `[data-triage-card]`,
+  `[data-triage-target=<pile>]`, `[data-triage-stamp]`, `[data-triage-departing=<pile>]`, `[data-triage-edge]`,
+  `[data-reason-chip=<reason>]`, `[data-triage-region]` (F6 stops), `[data-triage-pdf]` (the column; `aria-label="PDF"`
+  with the scroller `aria-label="PDF pages"`), `[data-desk-stage]`. End to end: `e2e/triage-desk.spec.ts`.
 
 ## Evidence in the deck
 
