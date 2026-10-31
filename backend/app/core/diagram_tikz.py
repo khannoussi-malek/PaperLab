@@ -20,40 +20,54 @@ ALLOWED_LIBRARIES: tuple[str, ...] = (
     "decorations.markings",
 )  # must equal the \usetikzlibrary set in manuscript_templates/warm-diagram.tex (a test checks)
 MAX_CHARS = 20_000
-# Matched anywhere, comments included, with any whitespace after the backslash: `\ input` is rejected too.
+# A control-sequence name is denied when it is one of these, or contains any of DENIED_PARTS (case ignored), so the
+# `@`, expl3, XeTeX and pgf spellings of the same operations are caught too (`\@@input`, `\file_get:nnN`,
+# `\XeTeXpdffile`, `\pgfimage`). Names are read twice, from the raw code (comments included) and with comments
+# stripped the way TeX does (a comment can join `\inp%⏎ut` back into `\input`), with any whitespace after the backslash.
 DENIED = (
     "usepackage",
+    "RequirePackage",
     "documentclass",
-    "input",
     "include",
-    "write",
-    "openout",
-    "openin",
-    "read",
-    "readline",
+    "includegraphics",
     "immediate",
-    "catcode",
     "directlua",
+    "scantokens",
+    "special",
     "caption",
     "label",
     "ref",
-    "includegraphics",
-    "csname",
-    "scantokens",
-    "InputIfFileExists",
-    "lstinputlisting",
-    "verbatiminput",
-    "special",
-    "openoutput",
-    "pdfobj",
-    "pdffiledump",
     "endinput",
+    "UseName",
+    "usetikzlibrary",
+    "usepgflibrary",
+    "usepgfmodule",
+    "gdef",
+    "xdef",
+    "global",
+    "AtEndDocument",
+    "AtBeginDocument",
+)  # ponytail: a denylist over TeX can't be complete; the compile sandbox (latex_compile) is the real wall
+DENIED_PARTS = (
+    "input",
+    "file",
+    "image",
+    "write",
+    "read",
+    "open",
+    "csname",
+    "catcode",
+    "makeat",
+    "explsyntax",
+    "xetex",
+    "hook",
+    "pdfobj",
 )
-_DENIED = re.compile(r"\\\s*(" + "|".join(DENIED) + r")(?![A-Za-z])")
+_CS = re.compile(r"\\\s*([A-Za-z@_:]+)")
+_COMMENT = re.compile(r"(\\.)|%[^\n]*(?:\n[ \t]*)?", re.S)
 _LIBS = re.compile(r"\\usetikzlibrary\s*\{([^}]*)\}")
 _BEGIN = re.compile(r"\\begin\s*\{tikzpicture\}")
 _END = re.compile(r"\\end\s*\{tikzpicture\}")
-_SHELL = re.compile(r"(?:\s|%[^\n]*)*\\begin\s*\{tikzpicture\}.*\\end\s*\{tikzpicture\}(?:\s|%[^\n]*)*", re.S)
 _NODE = re.compile(r"\\node(?![A-Za-z])")
 
 
@@ -67,6 +81,16 @@ def split_code(raw: str) -> tuple[list[str], str]:
     return libs, _LIBS.sub("", raw).strip()
 
 
+def strip_comments(code: str) -> str:
+    """Drops each `%` comment with its line end and the next line's leading blanks, as TeX reads it; `\\%` stays."""
+    return _COMMENT.sub(lambda m: m.group(1) or "", code)
+
+
+def _denied(name: str) -> bool:
+    low = name.lower()
+    return name in DENIED or any(part in low for part in DENIED_PARTS)
+
+
 def check(libraries: list[str], picture: str) -> list[str]:
     """Plain-language problems; empty when the picture is safe to compile and insert."""
     errors = [
@@ -76,9 +100,12 @@ def check(libraries: list[str], picture: str) -> list[str]:
     ]
     if len(picture) > MAX_CHARS:
         errors.append(f"The diagram code is too long ({MAX_CHARS:,} characters at most).")
-    if len(_BEGIN.findall(picture)) != 1 or len(_END.findall(picture)) != 1 or not _SHELL.fullmatch(picture):
+    code = strip_comments(picture).strip()
+    begins, ends = list(_BEGIN.finditer(code)), list(_END.finditer(code))
+    if len(begins) != 1 or len(ends) != 1 or begins[0].start() != 0 or ends[0].end() != len(code):
         errors.append("The diagram must be exactly one tikzpicture, with nothing but comments around it.")
-    for name in sorted(set(_DENIED.findall(picture))):
+    names = {n for text in (picture, code) for n in _CS.findall(text) if _denied(n)}
+    for name in sorted(names):
         errors.append(f"The diagram code uses \\{name}, which PaperLab doesn't allow in a diagram.")
     if "^^" in picture:
         errors.append("The diagram code uses a character escape (^^), which PaperLab doesn't allow.")
@@ -128,19 +155,20 @@ def _balanced(s: str, i: int) -> str | None:
     return s[i + 1 : end - 1] if s[end - 1 : end] == "}" else None
 
 
-def _norm(word: str) -> str:
+_WORD = re.compile(r"[^\W\d_]{2,}")
+
+
+def _said(word: str, known: set[str]) -> bool:
+    """`word` or its light singular/plural is in `known` (both lower case)."""
     w = word.lower()
-    return w[:-1] if len(w) > 3 and w.endswith("s") and not w.endswith("ss") else w
+    forms = {w, w + "s", w + "es", w[:-1] if w.endswith("s") else w, w[:-2] if w.endswith("es") else w}
+    return not forms.isdisjoint(known)
 
 
 def labels_not_in_description(picture: str, description: str) -> list[str]:
     """Labels with a word (2+ letters) the description never says; numbers and single letters are ignored."""
-    known = {_norm(w) for w in re.findall(r"[A-Za-z]{2,}", description)}
-    return [
-        label
-        for label in node_labels(picture)
-        if any(_norm(w) not in known for w in re.findall(r"[A-Za-z]{2,}", label))
-    ]
+    known = {w.lower() for w in _WORD.findall(description)}
+    return [label for label in node_labels(picture) if not all(_said(w, known) for w in _WORD.findall(label))]
 
 
 # `preview` crops the page to the picture. The `standalone` class would too, but it probes /dev/null, which the compile
@@ -151,6 +179,6 @@ PREAMBLE = (
 )
 
 
-def standalone_document(libraries: list[str], picture: str) -> str:
+def preview_document(libraries: list[str], picture: str) -> str:
     """The picture on a page cropped to it, so the preview isn't a mostly-empty letter page."""
     return f"{PREAMBLE}\\usetikzlibrary{{{','.join(libraries)}}}\n\\begin{{document}}\n{picture}\n\\end{{document}}\n"

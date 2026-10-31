@@ -19,18 +19,19 @@ class PreviewResult:
 
 
 async def preview(libraries: list[str], picture: str) -> PreviewResult:
-    if diagram_tikz.check(libraries, picture):  # the guard is re-run here: nothing unchecked is ever compiled
-        return PreviewResult(False, None, [], "diagram_invalid")
-    doc = diagram_tikz.standalone_document(libraries, picture)
+    if problems := diagram_tikz.check(libraries, picture):  # re-run here: nothing unchecked is ever compiled
+        return PreviewResult(False, None, [{"line": None, "message": m} for m in problems], "diagram_invalid")
+    doc = diagram_tikz.preview_document(libraries, picture)
     offset = doc[: doc.index(picture)].count("\n")  # wrapper lines before the picture
+    last = picture.count("\n") + 1
     with tempfile.TemporaryDirectory() as tmp:
         (Path(tmp) / "main.tex").write_text(doc)
         res = await latex_compile.compile_dir(Path(tmp), "main.tex", timeout=PREVIEW_TIMEOUT)
     errors = [
-        {"line": line if line is not None and line > 0 else None, "message": e["message"]}
+        {"line": line if line is not None and 0 < line <= last else None, "message": e["message"]}
         for e in res.errors
         if e["kind"] != "warning"
-        for line in [None if e["line"] is None else e["line"] - offset]
+        for line in [e["line"] - offset if e["line"] is not None and e["file"] == "main.tex" else None]
     ]
     if res.ok and len(res.pdf) > MAX_PDF:
         return PreviewResult(False, None, errors, "diagram_too_large")
