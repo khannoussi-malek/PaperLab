@@ -24,3 +24,10 @@ it('arrows on a focused tab change tab and stop there; the other tab is the one 
   expect(onTab).toHaveBeenLastCalledWith('pdf')
   expect(outer).not.toHaveBeenCalled()
 })
+
+it('from the PDF tab an arrow reaches Paper', () => {
+  const onTab = vi.fn()
+  render(<PdfTabs tab="pdf" onTab={onTab} />)
+  fireEvent.keyDown(screen.getByRole('tab', { name: 'PDF' }), { key: 'ArrowLeft' })
+  expect(onTab).toHaveBeenCalledWith('paper')
+})

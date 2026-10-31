@@ -21,10 +21,11 @@ export type DeskKeyHandlers = {
 // Where the element keeps its own keys: buttons, fields, the abstract scroller, anything in the PDF column.
 const OWN = 'button,a,input,textarea,select,[contenteditable],[role="tab"],[aria-label="Abstract"],[data-triage-pdf]'
 const TYPING = 'input,textarea,select,[contenteditable]'
-const REGIONS = '[data-triage-region]:not([hidden])'
+const REGIONS = '[data-triage-region]'
+const canFocus = (el: HTMLElement) => el.isConnected && !el.closest('[hidden],[inert],[aria-hidden="true"]')
 
 function cycleRegions(root: HTMLElement, back: boolean) {
-  const regions = [...root.querySelectorAll<HTMLElement>(REGIONS)]
+  const regions = [...root.querySelectorAll<HTMLElement>(REGIONS)].filter(canFocus)
   if (regions.length === 0) return false
   const at = regions.findIndex((r) => r.contains(document.activeElement))
   const n = regions.length
