@@ -24,22 +24,32 @@ export function preambleEdit(mainText: string, packages: string[]): PreambleEdit
   return { line: lines.length, col: lines[lines.length - 1].length, text: next.slice(at, at + next.length - mainText.length) }
 }
 
-/** The packages the preamble loads, comments ignored. */
-function loaded(preamble: string): Set<string> {
+const PACKAGE = /\\(?:usepackage|RequirePackage)(?:\[[^\]]*\])?\{([^}]*)\}/g
+const LIBRARY = /\\usetikzlibrary\{([^}]*)\}/g
+/** The pseudo-package that asks for `\usetikzlibrary{<name>}`; `tikz` itself is an ordinary package. */
+export const TIKZ_LIBRARY = 'tikzlibrary:'
+
+/** The names a command loads in the preamble (each `{a,b}` list split), comments ignored. */
+function loaded(preamble: string, command: RegExp): Set<string> {
   const code = preamble.split('\n').map((l) => l.replace(/(^|[^\\])%.*/, '$1')).join('\n')
-  const names = [...code.matchAll(/\\(?:usepackage|RequirePackage)(?:\[[^\]]*\])?\{([^}]*)\}/g)].flatMap((m) => m[1].split(','))
-  return new Set(names.map((n) => n.trim()))
+  return new Set([...code.matchAll(command)].flatMap((m) => m[1].split(',')).map((n) => n.trim()))
 }
 
 /**
- * `mainText` with the missing `\usepackage` lines (and pgfplots' compat setting) added just before `\begin{document}`;
- * null when nothing is missing.
+ * `mainText` with the missing `\usepackage` lines (and pgfplots' compat setting), then the missing
+ * `\usetikzlibrary` lines (entries `tikzlibrary:<name>`), added just before `\begin{document}`; null when nothing is missing.
  */
 export function ensurePackages(mainText: string, packages: string[]): string | null {
   const at = beginDocumentAt(mainText)
   if (at === -1) throw new Error("The main file has no \\begin{document}, so there's nowhere to add packages.")
-  const have = loaded(mainText.slice(0, at))
-  const lines = [...new Set(packages)].filter((p) => !have.has(p)).flatMap((p) => [`\\usepackage{${p}}`, ...(p === 'pgfplots' ? ['\\pgfplotsset{compat=1.18}'] : [])])
+  const preamble = mainText.slice(0, at)
+  const have = loaded(preamble, PACKAGE)
+  const haveLibs = loaded(preamble, LIBRARY)
+  const wanted = [...new Set(packages)]
+  const lines = [
+    ...wanted.filter((p) => !p.startsWith(TIKZ_LIBRARY) && !have.has(p)).flatMap((p) => [`\\usepackage{${p}}`, ...(p === 'pgfplots' ? ['\\pgfplotsset{compat=1.18}'] : [])]),
+    ...wanted.filter((p) => p.startsWith(TIKZ_LIBRARY)).map((p) => p.slice(TIKZ_LIBRARY.length)).filter((l) => !haveLibs.has(l)).map((l) => `\\usetikzlibrary{${l}}`),
+  ]
   if (lines.length === 0) return null
   const lead = at === 0 || mainText[at - 1] === '\n' ? '' : '\n'
   return `${mainText.slice(0, at)}${lead}${lines.join('\n')}\n${mainText.slice(at)}`

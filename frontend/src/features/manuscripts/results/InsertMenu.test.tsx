@@ -65,3 +65,16 @@ test('the Chart item opens the chart dialog', async () => {
   fireEvent.click(await screen.findByRole('menuitem', { name: 'Chart…' }))
   expect(await screen.findByRole('dialog', { name: 'Insert a chart' })).toBeInTheDocument()
 })
+
+test('the Diagram item sits beside Table and Chart and opens the diagram dialog', async () => {
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <InsertMenu manuscriptId="m1" labelTexts={() => []} filePaths={() => []} onInsert={async () => ({ ok: true })} />
+    </QueryClientProvider>,
+  )
+  fireEvent.keyDown(screen.getByRole('button', { name: 'Insert' }), { key: 'Enter' })
+  const items = await screen.findAllByRole('menuitem')
+  expect(items.map((i) => i.textContent)).toEqual(['Table…', 'Chart…', 'Diagram…'])
+  fireEvent.click(items[2])
+  expect(await screen.findByRole('dialog', { name: 'Draw a diagram' })).toBeInTheDocument()
+})
