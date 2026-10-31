@@ -62,3 +62,16 @@ it('cancels the pending check on unmount', () => {
   act(() => { vi.runAllTimers() })
   expect(spy).not.toHaveBeenCalled()
 })
+
+it('leaves focus alone after a press outside the desk on dead space', () => {
+  render(<Desk />)
+  const button = root().querySelector('button')!
+  button.focus()
+  act(() => {
+    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+    button.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: null }))
+    button.blur()
+  })
+  act(() => { vi.runAllTimers() })
+  expect(document.activeElement).not.toBe(root())
+})

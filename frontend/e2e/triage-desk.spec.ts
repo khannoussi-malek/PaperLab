@@ -192,6 +192,7 @@ test('reduced motion: nothing departs, the same decisions, and the keys-only run
 
   const one = await decideByKey(page, '1')
   await expect(d).toBeFocused()
+  await page.waitForTimeout(400) // past the 220 ms a clone would take
   await expect(page.locator('[data-triage-departing]')).toHaveCount(0)
   expect(await animation()).toBe('none')
   await page.keyboard.press('4')
@@ -254,22 +255,26 @@ test('a slow network never blocks the desk: two fast decisions, an undo at once,
   expect(Date.now() - started).toBeLessThan(1000) // the screen answered before the server did
   await expect.poll(async () => readingOf(request, a), { timeout: 15_000 }).toEqual({ triage: 'keep', pass: 0 })
   await expect.poll(async () => readingOf(request, b), { timeout: 15_000 }).toEqual({ triage: null, pass: 0 })
+  expect(await eventsOf(request, a)).toHaveLength(1) // the delayed decision was sent
   await page.unroute('**/triage-decisions')
 })
 
-test('P from inside the PDF column hides it, focus returns to the desk, and the next pile key is handled', async ({ page, request, paperId, secondPaperId }) => {
+test('pile keys sleep inside the PDF column; P hides it, focus returns to the desk, and the next pile key is handled', async ({ page, request, paperId, secondPaperId }) => {
   await page.setViewportSize(wide)
   const unique = await retitle(request, [paperId, secondPaperId])
   await openDesk(page, unique, 2)
   const scroller = page.getByLabel('PDF pages')
   await expect(scroller).toBeVisible()
+  const id = await topId(page) // read before any key
   await scroller.focus()
-  await page.keyboard.press('1') // inside the column the desk's pile keys sleep
-  const id = await topId(page)
+  await page.keyboard.press('1') // (a) inside the column the desk's pile keys sleep
+  await page.waitForTimeout(1000) // long enough for a wrongly sent decision to reach the server
+  expect(await topId(page)).toBe(id)
   expect(await eventsOf(request, id)).toHaveLength(0)
-  await page.keyboard.press('p')
+  await page.keyboard.press('p') // (b) P hides the column and the desk takes focus back
   await expect(pdfColumn(page)).toHaveCount(0)
   await expect(desk(page)).toBeFocused()
   await page.keyboard.press('1')
-  await expect.poll(async () => (await eventsOf(request, id)).map((e) => e.pile)).toEqual(['read_closely'])
+  await expect.poll(async () => (await eventsOf(request, id)).map((e) => `${e.source}:${e.pile}`)).toEqual(['desk:read_closely'])
+  expect(await topId(page)).not.toBe(id)
 })
