@@ -190,3 +190,8 @@ def test_drop_comments_removes_model_comments_and_keeps_escaped_percent():
     assert (
         dt.drop_comments("% intro\n\\node {A}; % tail\n\\node {50\\% done};\n") == "\\node {A};\n\\node {50\\% done};"
     )
+
+
+def test_a_word_before_a_colon_in_a_label_is_text_unless_it_is_a_position():  # final re-review minor
+    pic = "\\begin{tikzpicture}\\node[label=Note: x, pin=above left:Kept] {A};\\end{tikzpicture}"
+    assert dt.node_labels(pic) == ["A", "Note: x", "Kept"]
