@@ -67,6 +67,10 @@ async def list_for(session: AsyncSession, *, workspace_id: uuid.UUID | None) -> 
     return list(await session.scalars(select(Manuscript).where(where).order_by(Manuscript.updated_at.desc())))
 
 
+async def list_all(session: AsyncSession) -> list[Manuscript]:
+    return list(await session.scalars(select(Manuscript).order_by(Manuscript.updated_at.desc())))
+
+
 async def update(session: AsyncSession, manuscript_id: uuid.UUID, *, title=_UNSET, workspace_id=_UNSET,
                  main_file=_UNSET, checklist=_UNSET) -> Manuscript:
     manuscript = await get(session, manuscript_id)
