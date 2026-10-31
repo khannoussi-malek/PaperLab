@@ -48,9 +48,7 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "status IN ('queued', 'running', 'done', 'failed')", name="ck_manuscript_section_reviews_status"
         ),
-        sa.UniqueConstraint(
-            "manuscript_id", "file_path", "section_hash", name="uq_manuscript_section_reviews_section"
-        ),
+        sa.UniqueConstraint("manuscript_id", "file_path", "section_hash", name="uq_manuscript_section_reviews_section"),
     )
     op.create_index("ix_manuscript_section_reviews_file", "manuscript_section_reviews", ["manuscript_id", "file_path"])
     op.create_table(
