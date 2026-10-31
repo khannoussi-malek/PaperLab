@@ -16,7 +16,17 @@ from mcp.server.mcpserver import MCPServer
 from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import Field
 
-from app.core import citations_import_run, graph, library, notes, pipeline, screening, workspaces
+from app.core import (
+    citations_import_run,
+    graph,
+    library,
+    manuscript_agent,
+    manuscript_agent_compile,
+    notes,
+    pipeline,
+    screening,
+    workspaces,
+)
 from app.core.errors import DomainError, error_code
 from app.db import SessionLocal
 
@@ -57,11 +67,16 @@ mcp = MCPServer(
         "Citations: export_citations gives a workspace's papers as BibTeX, RIS, CSL-JSON or APA 7; "
         "import_citations brings in a Zotero export (poll a big one with its job_id). "
         "An AI suggestion on a hit is a suggestion, never a decision; only review_hits and "
-        "accept_suggestions record one, so ask the owner first."
+        "accept_suggestions record one, so ask the owner first. "
+        "Writing studio: list_manuscripts, create_manuscript, list_manuscript_files, read_manuscript_file, then "
+        "create/write/edit/rename/delete files (each write keeps an earlier version the owner can restore; pass the "
+        "`base` you read), add_manuscript_figure, compile_manuscript then get_compile_result, "
+        "read_manuscript_pdf_text."
     ),
 )
 sessions = SessionLocal  # tests point this at their rolled-back session
 READ_ONLY = ToolAnnotations(read_only_hint=True)
+DESTRUCTIVE = ToolAnnotations(destructive_hint=True)
 
 
 def recoverable(tool):
@@ -78,7 +93,9 @@ def recoverable(tool):
             if code != str(exc):
                 error = {"error": code, "detail": str(exc), **exc.details}
             return CallToolResult(
-                content=[TextContent(type="text", text=json.dumps(error))], structured_content=error, is_error=True
+                content=[TextContent(type="text", text=json.dumps(error, default=lambda o: o.isoformat()))],
+                structured_content=error,
+                is_error=True,
             )
 
     return call
@@ -278,8 +295,11 @@ async def add_papers(
 @mcp.tool()
 @recoverable
 async def import_citations(
-    path_or_text: str | None = None, workspace: str | None = None, fetch_free_pdfs: bool = True,
-    job_id: str | None = None, save_without_pdf: bool = False,
+    path_or_text: str | None = None,
+    workspace: str | None = None,
+    fetch_free_pdfs: bool = True,
+    job_id: str | None = None,
+    save_without_pdf: bool = False,
 ) -> citations_import_run.ImportProgressOut:
     """Use to import a Zotero export into the library, without duplicates. `path_or_text` is the path of a BibTeX,
     RIS or CSL-JSON file (20 MB at most) or of a Zotero "export with files" zip (200 MB) that the PaperLab server can
@@ -305,8 +325,11 @@ async def import_citations(
 @mcp.tool()
 @recoverable
 async def start_search_run(
-    workspace: str, query: str, sources: list[str] | None = None,
-    year_from: int | None = None, year_to: int | None = None,
+    workspace: str,
+    query: str,
+    sources: list[str] | None = None,
+    year_from: int | None = None,
+    year_to: int | None = None,
 ) -> pipeline.SearchRunOut:
     """Use to search the paper sources for a topic and collect every result into the workspace's hits for screening.
     Runs in the background; poll get_search_run. `sources` defaults to the ones turned on in Settings. Give
@@ -358,7 +381,10 @@ async def continue_search_run(run_id: uuid.UUID) -> pipeline.SearchRunOut:
 @mcp.tool(annotations=READ_ONLY)
 @recoverable
 async def list_hits(
-    workspace: str, run_id: uuid.UUID | None = None, status: str | None = None, cursor: str | None = None,
+    workspace: str,
+    run_id: uuid.UUID | None = None,
+    status: str | None = None,
+    cursor: str | None = None,
     limit: int = 50,
 ) -> pipeline.HitPage:
     """Use to read search results waiting for screening. Filter by run and by status (undecided, relevant,
@@ -372,7 +398,10 @@ async def list_hits(
 @mcp.tool(annotations=READ_ONLY)
 @recoverable
 async def get_screening_suggestions(
-    workspace: str, run_id: uuid.UUID | None = None, min_relevance: int | None = None, cursor: str | None = None,
+    workspace: str,
+    run_id: uuid.UUID | None = None,
+    min_relevance: int | None = None,
+    cursor: str | None = None,
 ) -> pipeline.HitPage:
     """Use to read the AI's suggestions on undecided hits, best score first. min_relevance (1 to 5) hides weaker
     ones; pass next_cursor back to page. Hits carry source_type, peer_review, published_doi and published_venue.
@@ -411,7 +440,10 @@ async def set_screening_criteria(
 @mcp.tool()
 @recoverable
 async def run_prescreen(
-    workspace: str, run_id: uuid.UUID | None = None, confirm: bool = False, allow_remote: bool = False,
+    workspace: str,
+    run_id: uuid.UUID | None = None,
+    confirm: bool = False,
+    allow_remote: bool = False,
     run_ids: list[uuid.UUID] | None = None,
 ) -> pipeline.ScreeningStateOut:
     """Use to have the default model suggest include, exclude or unsure for each undecided hit. It runs in the
@@ -485,7 +517,10 @@ async def accept_suggestions(
 @mcp.tool()
 @recoverable
 async def review_hits(
-    workspace: str, hit_ids: list[uuid.UUID], decision: str, reason: str | None = None,
+    workspace: str,
+    hit_ids: list[uuid.UUID],
+    decision: str,
+    reason: str | None = None,
     tags: list[str] | None = None,
 ) -> pipeline.ReviewResult:
     """Use to record the owner's title/abstract screening decision on hits: relevant, not_relevant (needs a reason:
@@ -542,8 +577,11 @@ async def get_prisma(workspace: str, run_id: uuid.UUID | None = None) -> pipelin
 @mcp.tool(annotations=READ_ONLY)
 @recoverable
 async def list_notes(
-    workspace: str | None = None, paper_id: uuid.UUID | None = None, author: str = "all",
-    tags: list[str] | None = None, match: Literal["any", "all"] = "any",
+    workspace: str | None = None,
+    paper_id: uuid.UUID | None = None,
+    author: str = "all",
+    tags: list[str] | None = None,
+    match: Literal["any", "all"] = "any",
 ) -> list[pipeline.LabelledNote]:
     """Use to read what has been noted on a workspace's papers or on one paper: give exactly one of workspace or
     paper_id. author: you (the owner's), ai (written by a model, including ones the owner edited, labelled AI · edited)
@@ -691,3 +729,145 @@ async def export_citations(
     {"format", "count", "text"}; text is ready to paste or save to a file."""
     async with sessions() as session:
         return await pipeline.export_citations_as(session, workspace, format, tags, match)
+
+
+@mcp.tool(annotations=READ_ONLY)
+@recoverable
+async def list_manuscripts(workspace: str | None = None) -> list[manuscript_agent.ManuscriptSummary]:
+    """Use to see the owner's writing-studio manuscripts (id, title, workspace, main file, compile status), all of
+    them or only those of one workspace."""
+    async with sessions() as session:
+        return await manuscript_agent.list_manuscripts(session, workspace)
+
+
+@mcp.tool()
+@recoverable
+async def create_manuscript(
+    title: str,
+    template: Literal["article", "ieee", "acm", "lncs", "elsevier"] = "article",
+    workspace: str | None = None,
+) -> manuscript_agent.ManuscriptCreated:
+    """Use to start a new manuscript from a template, optionally tied to a workspace (its papers become
+    paperlab.bib). A manuscript is main.tex plus sections/*.tex; the result lists its files."""
+    async with sessions() as session:
+        return await manuscript_agent.create_manuscript(session, title, template, workspace)
+
+
+@mcp.tool(annotations=READ_ONLY)
+@recoverable
+async def list_manuscript_files(manuscript_id: uuid.UUID) -> manuscript_agent.ManuscriptFiles:
+    """Use to see a manuscript's files (path, size, kind, updated_at), never their text. A manuscript is main.tex
+    plus sections/*.tex, so list its files before reading or writing."""
+    async with sessions() as session:
+        return await manuscript_agent.list_files(session, manuscript_id)
+
+
+@mcp.tool(annotations=READ_ONLY)
+@recoverable
+async def read_manuscript_file(
+    manuscript_id: uuid.UUID, path: str, start_line: int = 1, end_line: int | None = None
+) -> manuscript_agent.FileText:
+    """Use to read a text file of a manuscript, or a range of its lines. The result's updated_at is the `base` to
+    pass when you change that file."""
+    async with sessions() as session:
+        return await manuscript_agent.read_file(session, manuscript_id, path, start_line, end_line)
+
+
+@mcp.tool()
+@recoverable
+async def create_manuscript_file(manuscript_id: uuid.UUID, path: str, text: str) -> manuscript_agent.Written:
+    """Use to add a new text file (for example sections/results.tex) to a manuscript; an existing path is refused
+    with file_exists. Never write paperlab.bib: it is generated from the workspace's papers. Each write keeps an
+    earlier version the owner can restore from History, marked as a Claude edit."""
+    async with sessions() as session:
+        return await manuscript_agent.create_file(session, manuscript_id, path, text)
+
+
+@mcp.tool(annotations=DESTRUCTIVE)
+@recoverable
+async def write_manuscript_file(
+    manuscript_id: uuid.UUID, path: str, text: str, base: manuscript_agent.Base
+) -> manuscript_agent.Written:
+    """Use to replace a whole text file with new text; prefer edit_manuscript_file for a small change. Pass `base` =
+    the updated_at you last read for that file; on file_changed the owner may be typing, so re-read before trying
+    again. Never write paperlab.bib. Each write keeps an earlier version the owner can restore from History, marked
+    as a Claude edit. The owner's own words are theirs: change only what was asked."""
+    async with sessions() as session:
+        return await manuscript_agent.write_file(session, manuscript_id, path, text, base)
+
+
+@mcp.tool(annotations=DESTRUCTIVE)
+@recoverable
+async def edit_manuscript_file(
+    manuscript_id: uuid.UUID, path: str, old_text: str, new_text: str, base: manuscript_agent.Base
+) -> manuscript_agent.Written:
+    """Use to change part of a text file: old_text must match exactly once (no_match or ambiguous_match otherwise);
+    prefer this to write_manuscript_file for a small change. Pass `base` = the updated_at you last read; on
+    file_changed re-read before trying again. Never edit paperlab.bib. Each write keeps an earlier version the owner
+    can restore from History, marked as a Claude edit. Change only what was asked: the owner's own words are theirs."""
+    async with sessions() as session:
+        return await manuscript_agent.edit_file(session, manuscript_id, path, old_text, new_text, base)
+
+
+@mcp.tool(annotations=DESTRUCTIVE)
+@recoverable
+async def rename_manuscript_file(
+    manuscript_id: uuid.UUID, path: str, new_path: str, base: manuscript_agent.Base
+) -> manuscript_agent.Renamed:
+    """Use to rename or move a text file (not the main file). Pass `base` = the updated_at you last read; on
+    file_changed re-read before trying again. Each change keeps an earlier version the owner can restore from
+    History, marked as a Claude edit. paperlab.bib is reserved."""
+    async with sessions() as session:
+        return await manuscript_agent.rename_file(session, manuscript_id, path, new_path, base)
+
+
+@mcp.tool(annotations=DESTRUCTIVE)
+@recoverable
+async def delete_manuscript_file(
+    manuscript_id: uuid.UUID, path: str, base: manuscript_agent.Base
+) -> manuscript_agent.Deleted:
+    """Use to delete a text file, only when asked to. Pass `base` = the updated_at you last read; on file_changed
+    re-read before trying again. The deletion keeps an earlier version the owner can restore from History, marked as
+    a Claude edit. The owner's own words are theirs: change only what was asked."""
+    async with sessions() as session:
+        return await manuscript_agent.delete_file(session, manuscript_id, path, base)
+
+
+@mcp.tool()
+@recoverable
+async def add_manuscript_figure(manuscript_id: uuid.UUID, path: str, data_base64: str) -> manuscript_agent.FigureAdded:
+    """Use to add a figure (an image or PDF, base64) at a new path such as figures/plot.png; it never overwrites an
+    existing file. Reference it from a .tex file with \\includegraphics."""
+    async with sessions() as session:
+        return await manuscript_agent.add_figure(session, manuscript_id, path, data_base64)
+
+
+@mcp.tool()
+@recoverable
+async def compile_manuscript(manuscript_id: uuid.UUID) -> manuscript_agent_compile.CompileRequested:
+    """Use to compile a manuscript to PDF. It returns at once (state queued, or again if one is already running);
+    poll get_compile_result until finished."""
+    async with sessions() as session:
+        return await manuscript_agent_compile.compile_manuscript(session, manuscript_id)
+
+
+@mcp.tool(annotations=READ_ONLY)
+@recoverable
+async def get_compile_result(
+    manuscript_id: uuid.UUID, include_log: bool = False
+) -> manuscript_agent_compile.CompileView:
+    """Use to read a manuscript's latest compile: status (never, running, ok, failed), finished, errors with file and
+    line, and the PDF's page count. Poll after compile_manuscript until finished; include_log adds the log's tail."""
+    async with sessions() as session:
+        return await manuscript_agent_compile.get_compile_result(session, manuscript_id, include_log)
+
+
+@mcp.tool(annotations=READ_ONLY)
+@recoverable
+async def read_manuscript_pdf_text(
+    manuscript_id: uuid.UUID, first_page: int = 1, last_page: int | None = None
+) -> manuscript_agent_compile.PdfText:
+    """Use to read the text of a manuscript's compiled PDF page by page, to check how it came out; long ranges are
+    cut (next_page says where to continue). from_latest_compile=false means the PDF is older than the last compile."""
+    async with sessions() as session:
+        return await manuscript_agent_compile.read_pdf_text(session, manuscript_id, first_page, last_page)

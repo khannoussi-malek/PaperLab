@@ -67,6 +67,10 @@ async def list_for(session: AsyncSession, *, workspace_id: uuid.UUID | None) -> 
     return list(await session.scalars(select(Manuscript).where(where).order_by(Manuscript.updated_at.desc())))
 
 
+async def list_all(session: AsyncSession) -> list[Manuscript]:
+    return list(await session.scalars(select(Manuscript).order_by(Manuscript.updated_at.desc())))
+
+
 async def update(session: AsyncSession, manuscript_id: uuid.UUID, *, title=_UNSET, workspace_id=_UNSET,
                  main_file=_UNSET, checklist=_UNSET) -> Manuscript:
     manuscript = await get(session, manuscript_id)
@@ -162,7 +166,7 @@ async def upsert_text(session: AsyncSession, manuscript_id: uuid.UUID, path: str
 
 
 async def save_text(session: AsyncSession, manuscript_id: uuid.UUID, path: str, text: str, *,
-                    base: datetime | None) -> ManuscriptFile:
+                    base: datetime | None, snapshot: str | None = None) -> ManuscriptFile:
     await get(session, manuscript_id)
     _require_text(path)
     row = await _file(session, manuscript_id, path, lock=True)
@@ -173,53 +177,84 @@ async def save_text(session: AsyncSession, manuscript_id: uuid.UUID, path: str, 
     if base is not None and row.updated_at > base:
         raise Conflict("file_changed", updated_at=row.updated_at)
     await _check_caps(session, manuscript_id, len(text.encode()), paths.MAX_TEXT, row)
+    if snapshot is not None:  # the caller asked for its own snapshot, so no autosave on top
+        snap = await manuscript_history.take(session, manuscript_id, snapshot)
+        saved = await _store(session, manuscript_id, path, row, text=text, data=None)
+        await manuscript_history.settle(session, snap)
+        return saved
     saved = await _store(session, manuscript_id, path, row, text=text, data=None)
     await manuscript_history.maybe_autosave(session, manuscript_id, now=datetime.now(timezone.utc))
     return saved
 
 
-async def put_binary(session: AsyncSession, manuscript_id: uuid.UUID, path: str, data: bytes) -> ManuscriptFile:
+async def put_binary(session: AsyncSession, manuscript_id: uuid.UUID, path: str, data: bytes, *,
+                     create_only: bool = False) -> ManuscriptFile:
     await get(session, manuscript_id)
     if paths.is_text(paths.validate_path(path)):
         raise InvalidInput("unsupported_file_type")
     row = await _file(session, manuscript_id, path, lock=True)
+    if create_only and row is not None:  # decided under the row lock, so a racing add can't slip an overwrite in
+        raise Conflict("file_exists")
     await _check_caps(session, manuscript_id, len(data), paths.MAX_BINARY, row)
     return await _store(session, manuscript_id, path, row, text=None, data=data)
 
 
-async def rename(session: AsyncSession, manuscript_id: uuid.UUID, path: str, new_path: str) -> ManuscriptFile:
+def _check_base(row: ManuscriptFile, base: datetime | None) -> None:
+    if base is not None and row.updated_at > base:
+        raise Conflict("file_changed", updated_at=row.updated_at)
+
+
+async def rename(session: AsyncSession, manuscript_id: uuid.UUID, path: str, new_path: str, *,
+                 base: datetime | None = None, snapshot: str | None = None) -> ManuscriptFile:
     manuscript = await get(session, manuscript_id)
     paths.validate_path(new_path)
     row = await _file(session, manuscript_id, path, lock=True)
     if row is None:
         raise NotFound("unknown_file")
+    _check_base(row, base)
     if paths.is_text(path) != paths.is_text(new_path):
         raise InvalidInput("unsupported_file_type")
     if await _file(session, manuscript_id, new_path) is not None:
         raise Conflict("file_exists")
+    snap = await manuscript_history.take(session, manuscript_id, snapshot) if snapshot is not None else None
     await session.execute(update_rows(ManuscriptFile).where(ManuscriptFile.id == row.id)
                           .values(path=new_path, updated_at=_NOW))
     changes = {"main_file": new_path} if manuscript.main_file == path else {}
     await session.execute(update_rows(Manuscript).where(Manuscript.id == manuscript_id)
                           .values(updated_at=_NOW, **changes))
+    if snap is not None:
+        await manuscript_history.settle(session, snap)
     await session.refresh(row)
     return row
 
 
-async def remove(session: AsyncSession, manuscript_id: uuid.UUID, path: str) -> None:
+async def remove(session: AsyncSession, manuscript_id: uuid.UUID, path: str, *,
+                 base: datetime | None = None, snapshot: str | None = None) -> None:
     manuscript = await get(session, manuscript_id)
-    if await _file(session, manuscript_id, path, lock=True) is None:
+    row = await _file(session, manuscript_id, path, lock=True)
+    if row is None:
         raise NotFound("unknown_file")
+    _check_base(row, base)
     if path == manuscript.main_file:
         raise Conflict("main_file")
+    snap = await manuscript_history.take(session, manuscript_id, snapshot) if snapshot is not None else None
     await session.execute(delete_rows(ManuscriptFile).where(
         ManuscriptFile.manuscript_id == manuscript_id, ManuscriptFile.path == path))
     await session.execute(update_rows(Manuscript).where(Manuscript.id == manuscript_id).values(updated_at=_NOW))
+    if snap is not None:
+        await manuscript_history.settle(session, snap)
 
 
 def interrupted(manuscript: Manuscript, now: datetime) -> bool:
     started = manuscript.compile_started_at
     return manuscript.compile_status == "running" and (started is None or now - started >= STALE_AFTER)
+
+
+def read_state(manuscript: Manuscript, now: datetime) -> tuple[str, str | None, bool]:
+    """(status, friendly, requested) as a reader sees them: a `running` with no live job behind it reads as failed."""
+    if interrupted(manuscript, now):
+        return "failed", "compile_interrupted", False
+    return manuscript.compile_status, manuscript.compile_friendly, manuscript.compile_requested
 
 
 def pdf_path(manuscript_id: uuid.UUID) -> Path:

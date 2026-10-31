@@ -33,7 +33,15 @@ def test_mcp_server_has_no_sql_and_imports_only_core_services():
     others = {name.split(".")[0] for name in imported - ours} - set(sys.stdlib_module_names)
     assert ours and all(name == "app.db" or name.split(".")[:2] == ["app", "core"] for name in ours), ours
     assert others == {"mcp", "pydantic"}  # pydantic only for tool argument bounds (Field), never models or logic
-    assert [word for word in ("sqlalchemy", "select(", "text(", "execute(") if word in source] == []
+    assert "sqlalchemy" not in source and not SQL_CALL.search(source)
+
+
+SQL_CALL = re.compile(r"(?<!\w)(select|text|execute)\(")  # whole names: `.execute(` counts, `read_pdf_text(` doesn't
+
+
+def test_the_sql_matcher_flags_calls_not_longer_names():
+    assert SQL_CALL.search("text('select 1')") and SQL_CALL.search("await session.execute(")
+    assert not SQL_CALL.search("read_manuscript_pdf_text(")
 
 
 @pytest.mark.parametrize(
@@ -434,3 +442,27 @@ async def test_0060_round_trip(scratch_url):
         back = (await conn.execute(text("SELECT to_regclass('triage_events')"))).scalar()
     await scratch.dispose()
     assert table is not None and gone is None and back is not None
+
+
+@pytest.mark.anyio
+async def test_0061_round_trip(scratch_url):
+    """before_mcp snapshots insert at head, a downgrade to 0060 deletes them, and the upgrade brings the reason back."""
+    dsn = scratch_url.render_as_string(hide_password=False)
+    assert scratch_url.database.startswith("paperlab_migrations_")
+    alembic(dsn, "upgrade", "head")
+    scratch = create_async_engine(scratch_url)
+    async with scratch.begin() as conn:
+        await conn.execute(text("INSERT INTO manuscripts (title) VALUES ('M')"))
+        await conn.execute(text(
+            "INSERT INTO manuscript_snapshots (manuscript_id, reason, files) "
+            "SELECT id, r, '{}' FROM manuscripts, unnest(ARRAY['before_mcp', 'autosave']) r"))
+    alembic(dsn, "downgrade", "0060")
+    async with scratch.connect() as conn:
+        left = (await conn.execute(text("SELECT array_agg(reason) FROM manuscript_snapshots"))).scalar()
+    alembic(dsn, "upgrade", "head")
+    async with scratch.begin() as conn:
+        await conn.execute(text(
+            "INSERT INTO manuscript_snapshots (manuscript_id, reason, files) "
+            "SELECT id, 'before_mcp', '{}' FROM manuscripts"))
+    await scratch.dispose()
+    assert left == ["autosave"]

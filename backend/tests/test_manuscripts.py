@@ -144,3 +144,68 @@ async def test_not_found(session):
             await call
     with pytest.raises(NotFound, match="unknown_workspace"):
         await manuscripts.create(session, title="x", template="article", workspace_id=ghost)
+
+
+async def snaps(session, mid):
+    from app.core import manuscript_history as history
+    return await history.list_(session, mid)
+
+
+async def test_save_text_with_snapshot_keeps_the_old_files_and_skips_autosave(session):
+    m = await new(session)
+    f = await manuscripts.save_text(session, m.id, "a.tex", "old", base=None)
+    from app.core import manuscript_history as history
+    await history.take(session, m.id, "compile")
+    before = len(await snaps(session, m.id))
+    await manuscripts.save_text(session, m.id, "a.tex", "new", base=f.updated_at, snapshot="before_mcp")
+    listed = await snaps(session, m.id)
+    assert len(listed) == before + 1  # the one before_mcp, no autosave beside it
+    mcp = next(s for s in listed if s.reason == "before_mcp")
+    assert mcp.files["a.tex"] == "old"
+    assert await manuscripts.get_text(session, m.id, "a.tex") == "new"
+
+
+async def test_save_text_with_snapshot_but_no_prior_snapshot_takes_the_owners_autosave_then_its_own(session):
+    m = await new(session)
+    await manuscripts.save_text(session, m.id, "a.tex", "x", base=None, snapshot="before_mcp")
+    assert sorted(s.reason for s in await snaps(session, m.id)) == ["autosave", "before_mcp"]
+
+
+async def test_a_refused_save_with_snapshot_leaves_none(session):
+    m = await new(session)
+    f = await manuscripts.save_text(session, m.id, "a.tex", "x", base=None)
+    stale = f.updated_at - timedelta(seconds=1)
+    for kw in ({"base": stale}, {"base": None}):
+        with pytest.raises(Conflict):
+            await manuscripts.save_text(session, m.id, "a.tex", "y", snapshot="before_mcp", **kw)
+    with pytest.raises(Conflict, match="file_too_large"):
+        await manuscripts.save_text(session, m.id, "a.tex", "y" * (paths.MAX_TEXT + 1), base=f.updated_at,
+                                    snapshot="before_mcp")
+    assert all(s.reason != "before_mcp" for s in await snaps(session, m.id))
+
+
+async def test_rename_and_remove_check_base_and_snapshot_once(session):
+    m = await new(session)
+    f = await manuscripts.save_text(session, m.id, "a.tex", "x", base=None)
+    stale = f.updated_at - timedelta(seconds=1)
+    with pytest.raises(Conflict, match="file_changed"):
+        await manuscripts.rename(session, m.id, "a.tex", "b.tex", base=stale, snapshot="before_mcp")
+    with pytest.raises(Conflict, match="file_changed"):
+        await manuscripts.remove(session, m.id, "a.tex", base=stale, snapshot="before_mcp")
+    assert all(s.reason != "before_mcp" for s in await snaps(session, m.id))
+    await manuscripts.rename(session, m.id, "a.tex", "b.tex", base=f.updated_at, snapshot="before_mcp")
+    assert [s.reason for s in await snaps(session, m.id)].count("before_mcp") == 1
+    g = await manuscripts.read(session, m.id, "b.tex")
+    await manuscripts.remove(session, m.id, "b.tex", base=g.updated_at, snapshot="before_mcp")
+    mcp = [s for s in await snaps(session, m.id) if s.reason == "before_mcp"]
+    assert len(mcp) == 2 and any("b.tex" in s.files for s in mcp)
+
+
+async def test_a_refused_rename_or_remove_leaves_no_snapshot(session):
+    m = await new(session)
+    await manuscripts.save_text(session, m.id, "a.tex", "x", base=None)
+    with pytest.raises(Conflict):
+        await manuscripts.remove(session, m.id, m.main_file, snapshot="before_mcp")
+    with pytest.raises(NotFound):
+        await manuscripts.rename(session, m.id, "nope.tex", "c.tex", snapshot="before_mcp")
+    assert all(s.reason != "before_mcp" for s in await snaps(session, m.id))

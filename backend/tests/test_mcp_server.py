@@ -53,6 +53,11 @@ EXPECTED_TOOLS = {
     "generate_evidence_card": None, "get_evidence_card": True, "list_evidence_cards": True,
     "export_citations": True, "import_citations": None, "enrich_hits": None, "enrich_papers": None,
     "list_tags": True, "tag_papers": None, "untag_papers": None, "rename_tag": None, "delete_tag": None,
+    "list_manuscripts": True, "create_manuscript": None, "list_manuscript_files": True,
+    "read_manuscript_file": True, "create_manuscript_file": None, "write_manuscript_file": None,
+    "edit_manuscript_file": None, "rename_manuscript_file": None, "delete_manuscript_file": None,
+    "add_manuscript_figure": None, "compile_manuscript": None, "get_compile_result": True,
+    "read_manuscript_pdf_text": True,
 }
 
 
@@ -62,6 +67,13 @@ async def test_every_tool_and_which_of_them_only_read():
 
     hints = {name: tool.annotations and tool.annotations.read_only_hint for name, tool in tools.items()}
     assert hints == EXPECTED_TOOLS
+    destructive = {n for n, t in tools.items() if t.annotations and t.annotations.destructive_hint}
+    assert destructive == {
+        "write_manuscript_file",
+        "edit_manuscript_file",
+        "rename_manuscript_file",
+        "delete_manuscript_file",
+    }
     assert all(tool.output_schema for tool in tools.values())
     assert all(tool.description and tool.description.startswith("Use ") for name, tool in tools.items()
                if name not in ("search_library", "get_paper", "related_papers", "create_note"))
