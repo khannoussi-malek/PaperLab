@@ -21,6 +21,8 @@ import { useReview } from './review/useReview'
 import { useReviewInEditor } from './review/useReviewInEditor'
 
 const AUTOSAVE_MS = 1000
+const POLL_MS = 5000
+const NOTICE_MS = 8000
 const SAVE_LABEL: Record<SaveState, string> = {
   saved: 'Saved',
   saving: 'Saving…',
@@ -119,6 +121,30 @@ export function SourcePane(props: Props) {
     } else auto.change(kept.text)
   }
 
+  // A quiet line saying who changed the file: the newest snapshot's reason tells Claude's write from any other.
+  const [notice, setNotice] = useState<string | null>(null)
+  const announceOutside = async () => {
+    const reason = await api.listManuscriptSnapshots(manuscriptId).then((s) => s[0]?.reason, () => undefined)
+    setNotice(reason === 'before_mcp' ? 'Updated by Claude (MCP)' : 'Updated elsewhere')
+  }
+  useEffect(() => {
+    if (!notice) return
+    const timer = setTimeout(() => setNotice(null), NOTICE_MS)
+    return () => clearTimeout(timer)
+  }, [notice])
+
+  // While nothing here is unsaved, look for outside changes on focus and every few seconds (never while hidden). The
+  // effect below applies a newer version only if the buffer is still clean when the answer arrives.
+  const ready = text !== null && state === 'saved'
+  const { refetch } = file
+  useEffect(() => {
+    if (!ready) return
+    const poll = () => { if (document.visibilityState === 'visible') void refetch() }
+    const timer = setInterval(poll, POLL_MS)
+    window.addEventListener('focus', poll)
+    return () => { clearInterval(timer); window.removeEventListener('focus', poll) }
+  }, [ready, refetch])
+
   // Take the server's text the first time (or the kept text), and again when it changed under us (a restore) while
   // nothing here is unsaved.
   useEffect(() => {
@@ -134,6 +160,7 @@ export function SourcePane(props: Props) {
       base.current = data.updated_at
       setText(data.text)
       onText(path, null)
+      void announceOutside()
     }
   }, [file.data, auto, onText, path, manuscriptId])
 
@@ -230,6 +257,14 @@ export function SourcePane(props: Props) {
           {compiling && <Loader2 aria-hidden className="animate-spin motion-reduce:animate-none" />}
           {compiling ? 'Compiling…' : 'Compile'}
         </Button>
+      </div>
+      <div aria-live="polite">
+        {notice && (
+          <p className="flex items-center gap-2 border-b border-glass-border px-3 py-1 text-xs text-muted-foreground">
+            <span>{notice}</span>
+            <Button size="sm" variant="ghost" className="h-5 px-1 text-xs" onClick={() => setNotice(null)}>Dismiss</Button>
+          </p>
+        )}
       </div>
       {state === 'conflict' && (
         <Alert variant="destructive" className="m-2 w-auto">
