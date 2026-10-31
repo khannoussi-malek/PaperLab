@@ -1,6 +1,7 @@
 """The 13 manuscript tools through an in-process client, on the test's rolled-back session."""
 
 import base64
+import uuid
 from datetime import datetime, timezone
 
 import pymupdf
@@ -8,7 +9,7 @@ import pytest
 from mcp_fixtures import *  # noqa: F403
 from mcp_fixtures import call, result
 
-from app.core import manuscripts
+from app.core import manuscript_history, manuscripts
 from app.models import ManuscriptSnapshot
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("manuscript_rows")]
@@ -171,3 +172,89 @@ async def test_listing_twenty_files_carries_no_text():
 async def test_list_manuscripts_sees_the_new_one():
     made = await created()
     assert made["id"] in [m["id"] for m in result(await call("list_manuscripts"))]
+
+
+async def test_reserved_source_and_missing_source_paths():
+    mid = (await created())["id"]
+    now = datetime.now(timezone.utc).isoformat()
+    failed(await call("delete_manuscript_file", manuscript_id=mid, path="paperlab.bib", base=now), "reserved_path")
+    failed(
+        await call(
+            "rename_manuscript_file", manuscript_id=mid, path="paperlab.bib", new_path="sections/x.tex", base=now
+        ),
+        "reserved_path",
+    )
+    failed(await call("delete_manuscript_file", manuscript_id=mid, path="sections/ghost.tex", base=now), "unknown_file")
+    failed(
+        await call(
+            "rename_manuscript_file", manuscript_id=mid, path="sections/ghost.tex", new_path="sections/x.tex", base=now
+        ),
+        "unknown_file",
+    )
+
+
+async def text_files(mid):
+    files = result(await call("list_manuscript_files", manuscript_id=mid))["files"]
+    return {
+        f["path"]: result(await call("read_manuscript_file", manuscript_id=mid, path=f["path"]))["text"]
+        for f in files
+        if f["kind"] == "text"
+    }
+
+
+async def test_an_agent_writes_compiles_reads_and_the_owner_restores(session, client, jobs):
+    mid = (await created())["id"]
+    template = await text_files(mid)
+
+    main = result(await call("read_manuscript_file", manuscript_id=mid, path="main.tex"))
+    # a stale base fails with an updated_at that is itself a valid base on the retry
+    result(await call("create_manuscript_file", manuscript_id=mid, path="sections/extra.tex", text="Extra."))
+    extra = result(await call("read_manuscript_file", manuscript_id=mid, path="sections/extra.tex"))
+    body = failed(
+        await call("write_manuscript_file", manuscript_id=mid, path="sections/extra.tex", text="Extra 2.", base=OLD),
+        "file_changed",
+    )
+    retried = result(
+        await call(
+            "write_manuscript_file",
+            manuscript_id=mid,
+            path="sections/extra.tex",
+            text="Extra 2.",
+            base=body["updated_at"],
+        )
+    )
+    assert retried["path"] == "sections/extra.tex" and extra["updated_at"] <= body["updated_at"]
+
+    result(
+        await call(
+            "edit_manuscript_file",
+            manuscript_id=mid,
+            path="main.tex",
+            old_text="\\end{document}",
+            new_text="\\input{sections/extra}\n\\end{document}",
+            base=main["updated_at"],
+        )
+    )
+    result(await call("create_manuscript_file", manuscript_id=mid, path="refs.bib", text="@book{k, title={T}}"))
+
+    assert result(await call("compile_manuscript", manuscript_id=mid))["state"] == "queued"
+    assert len(jobs.jobs) == 1
+    manuscript = await manuscripts.get(session, mid)  # the worker, stubbed to succeed
+    manuscript.compile_status, manuscript.compiled_at = "ok", datetime.now(timezone.utc)
+    doc = pymupdf.open()
+    doc.new_page().insert_text((72, 72), "journey page")
+    path = manuscripts.pdf_path(manuscript.id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(doc.tobytes())
+    await session.flush()
+    assert result(await call("get_compile_result", manuscript_id=mid))["status"] == "ok"
+    pages = result(await call("read_manuscript_pdf_text", manuscript_id=mid))["pages"]
+    assert "journey page" in pages[0]["text"]
+
+    rows = await client.get(f"/api/manuscripts/{mid}/snapshots")
+    mcp = [s for s in rows.json() if s["reason"] == "before_mcp"]
+    assert len(mcp) == 4
+    await manuscript_history.restore(
+        session, uuid.UUID(mid), uuid.UUID(mcp[-1]["id"])
+    )  # the oldest: the template's files
+    assert await text_files(mid) == template

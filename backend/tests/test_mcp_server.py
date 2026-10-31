@@ -67,6 +67,13 @@ async def test_every_tool_and_which_of_them_only_read():
 
     hints = {name: tool.annotations and tool.annotations.read_only_hint for name, tool in tools.items()}
     assert hints == EXPECTED_TOOLS
+    destructive = {n for n, t in tools.items() if t.annotations and t.annotations.destructive_hint}
+    assert destructive == {
+        "write_manuscript_file",
+        "edit_manuscript_file",
+        "rename_manuscript_file",
+        "delete_manuscript_file",
+    }
     assert all(tool.output_schema for tool in tools.values())
     assert all(tool.description and tool.description.startswith("Use ") for name, tool in tools.items()
                if name not in ("search_library", "get_paper", "related_papers", "create_note"))
