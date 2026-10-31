@@ -1,0 +1,29 @@
+% PaperLab: not a template. The image compiles this once so every TikZ library a generated diagram may load is in
+% Tectonic's read-only cache (TECTONIC_ONLY_CACHED). Its \usetikzlibrary set must equal ALLOWED_LIBRARIES
+% (app/core/diagram_tikz.py); a test fails if they drift. Same preamble as diagram_tikz.PREAMBLE.
+\documentclass{article}
+\usepackage{tikz}
+\usepackage[active,tightpage]{preview}
+\PreviewEnvironment{tikzpicture}
+\setlength\PreviewBorder{4pt}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,shapes.misc,shapes.multipart}
+\usetikzlibrary{fit,calc,backgrounds,chains,matrix}
+\usetikzlibrary{decorations.pathreplacing,decorations.markings}
+\begin{document}
+\begin{tikzpicture}[node distance=8mm, >={Stealth[length=2mm]}, start chain=going right,
+  every node/.style={draw, font=\small}]
+  \node[rectangle, on chain] (a) {Input};
+  \node[diamond, aspect=2, on chain] (b) {Check};
+  \node[ellipse, on chain] (c) {Output};
+  \node[trapezium, below=of b] (d) {Store};
+  \node[rectangle split, rectangle split parts=2, below=of a] (e) {Top\nodepart{second}Bottom};
+  \draw[->] (a) -- (b);
+  \draw[->] ($(b)!0.5!(c)$) -- (c);
+  \draw[->, decoration={markings, mark=at position 0.5 with {\arrow{>}}}, postaction={decorate}] (b) -- (d);
+  \draw[decorate, decoration={brace, amplitude=4pt}] (a.north west) -- (c.north east);
+  \begin{scope}[on background layer]
+    \node[fit=(a)(b)(c), draw=gray, dashed, inner sep=4pt] {};
+  \end{scope}
+  \matrix[matrix of nodes, below=of e, nodes={draw}] (m) { 1 & 2 \\ 3 & 4 \\ };
+\end{tikzpicture}
+\end{document}

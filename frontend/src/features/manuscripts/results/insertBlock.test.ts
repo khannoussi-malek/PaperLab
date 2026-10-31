@@ -29,6 +29,18 @@ describe('ensurePackages', () => {
     expect(ensurePackages(main, ['booktabs'])).toBe('% old: \\begin{document}\n\\usepackage{booktabs}\n\\begin{document}\n\\end{document}')
   })
 
+  it('adds a TikZ library once, after tikz, and counts a combined or loaded one but not a commented one', () => {
+    const once = ensurePackages(MAIN, ['tikz', 'tikzlibrary:arrows.meta'])!
+    expect(once).toContain('\\usepackage{tikz}\n\\usetikzlibrary{arrows.meta}\n\\begin{document}')
+    expect(once.match(/usetikzlibrary/g)).toHaveLength(1)
+    expect(ensurePackages(once, ['tikz', 'tikzlibrary:arrows.meta'])).toBeNull()
+    const combined = '\\usepackage{tikz}\n\\usetikzlibrary{positioning, arrows.meta}\n\\begin{document}\n\\end{document}'
+    expect(ensurePackages(combined, ['tikz', 'tikzlibrary:arrows.meta', 'tikzlibrary:positioning'])).toBeNull()
+    const commented = '\\usepackage{tikz}\n% \\usetikzlibrary{arrows.meta}\n\\begin{document}\n\\end{document}'
+    expect(ensurePackages(commented, ['tikz', 'tikzlibrary:arrows.meta'])).toBe('\\usepackage{tikz}\n% \\usetikzlibrary{arrows.meta}\n\\usetikzlibrary{arrows.meta}\n\\begin{document}\n\\end{document}')
+    expect(ensurePackages(MAIN, ['tikzlibrary:shapes', 'tikzlibrary:shapes'])!.match(/usetikzlibrary\{shapes\}/g)).toHaveLength(1)
+  })
+
   it('says so when there is no \\begin{document}', () => {
     expect(() => ensurePackages('\\usepackage{a}', ['booktabs'])).toThrow('begin{document}')
   })

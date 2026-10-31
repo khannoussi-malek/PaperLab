@@ -15,6 +15,7 @@ class ReviewIn(BaseModel):
     from_: int | None = Field(None, alias="from", ge=0, description="UTF-16 code units, as in JavaScript strings")
     to: int | None = Field(None, ge=0, description="UTF-16 code units, as in JavaScript strings")
     include_uncited: bool = True
+    confirm_remote: bool = False  # a remote default model needs this (D190/D233)
 
 
 class ReviewRunOut(BaseModel):

@@ -1,8 +1,10 @@
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
-import type { CheckItem } from '@/api/client'
+import type { CheckItem, SectionReview } from '@/api/client'
 import { Button } from '@/components/ui/button'
 import { chunkHref } from '@/lib/route'
+import { SectionFindings } from './SectionFindings'
+import { statusLine } from './sectionReviewModel'
 import { couldntCheck, isLive, isPending, itemTone, reasonCopy, VERDICT_LABEL, type Tone } from './reviewModel'
 import { useCiteProposals, type useReview } from './useReview'
 
@@ -16,6 +18,19 @@ type Props = {
   /** Pins the paper and inserts its citation; resolves to a problem to show, or null. */
   onCite: (hash: string, paperId: string) => Promise<string | null>
   onCheckAgain: () => void
+  /** The open file's section reviews, shown above the citations. */
+  sections?: {
+    reviews: SectionReview[]
+    /** Reviews whose section changed since. */
+    stale: SectionReview[]
+    hasWorkspace: boolean
+    /** A section review is queued or running. */
+    live?: boolean
+    /** Polling the section reviews failed. */
+    lost?: boolean
+    onCancel: (id: string) => void
+    onReviewAgain: (review: SectionReview) => void
+  }
 }
 
 const OPEN_KEY = 'paperlab-review-panel-open'
@@ -121,11 +136,33 @@ function ClaimRow({ item, manuscriptId, dismissed, review, onJump, onCite }: { i
   )
 }
 
+function SectionReviews({ reviews, stale, hasWorkspace, live: busy = false, lost, onCancel, onReviewAgain, onJump }: NonNullable<Props['sections']> & Pick<Props, 'onJump'>) {
+  const staleIds = new Set(stale.map((r) => r.id))
+  const live = reviews.filter((r) => !staleIds.has(r.id))
+  const card = (r: SectionReview, isStale: boolean) => (
+    <SectionFindings key={r.id} review={r} stale={isStale} busy={busy} lost={lost} hasWorkspace={hasWorkspace} onJump={onJump} onCancel={onCancel} onReviewAgain={onReviewAgain} />
+  )
+  return (
+    <>
+      {live.length > 0 && <Group title="Section review">{live.map((r) => card(r, false))}</Group>}
+      {stale.length > 0 && <Group title="Changed since reviewed">{stale.map((r) => card(r, true))}</Group>}
+    </>
+  )
+}
+
 /** Results under the editor: the citations checked, claims with no citation, and what changed since. */
-export function ReviewPanel({ manuscriptId, review, stale, onJump, onCite, onCheckAgain }: Props) {
+export function ReviewPanel({ manuscriptId, review, stale, onJump, onCite, onCheckAgain, sections }: Props) {
   const [open, setOpen] = useState(readOpen)
   const { run, items, dismissed, startError } = review
-  if (!run && items.length === 0 && !startError) return null
+  const sectionReviews = sections?.reviews ?? []
+  // Always mounted, so a review's start and finish are announced (a region created with its text is not).
+  const announcer = sections && (
+    <div role="status" aria-live="polite" aria-label="Section review status" className="sr-only">
+      {sectionReviews.map((r) => <p key={r.id}>{statusLine(r, sections.lost)}</p>)}
+    </div>
+  )
+  if (!run && items.length === 0 && !startError && sectionReviews.length === 0) return announcer ?? null
+  const title = sectionReviews.length > 0 ? 'Review' : 'Citation check'
   const toggle = () => { writeOpen(!open); setOpen(!open) }
   const staleIds = new Set(stale.map((i) => i.id))
   const live = items.filter((i) => !staleIds.has(i.id))
@@ -134,13 +171,16 @@ export function ReviewPanel({ manuscriptId, review, stale, onJump, onCite, onChe
   const finished = run && !isLive(run)
   const empty = finished && run.status === 'done' && items.length === 0
   return (
-    <section aria-label="Citation check" className="max-h-[40%] shrink-0 overflow-auto border-t border-glass-border">
+    <>
+    {announcer}
+    <section aria-label={title} className="max-h-[40%] shrink-0 overflow-auto border-t border-glass-border">
       <button type="button" aria-expanded={open} className="flex w-full items-center gap-1.5 px-3 py-1.5 text-left text-sm font-medium focus-visible:ring-2 focus-visible:ring-ring" onClick={toggle}>
         {open ? <ChevronDown aria-hidden className="size-4" /> : <ChevronRight aria-hidden className="size-4" />}
-        Citation check
+        {title}
       </button>
       {open && (
         <div className="space-y-3 px-3 pb-3">
+          {sections && <SectionReviews {...sections} onJump={onJump} />}
           {run && isLive(run) && (
             <p className="flex items-center gap-2 text-xs text-muted-foreground" aria-live="polite">
               Checking {run.done} of {run.total}…
@@ -178,5 +218,6 @@ export function ReviewPanel({ manuscriptId, review, stale, onJump, onCite, onChe
         </div>
       )}
     </section>
+    </>
   )
 }

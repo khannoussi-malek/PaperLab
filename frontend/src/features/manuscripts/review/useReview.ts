@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError, type ReviewState } from '@/api/client'
+import { remoteHost } from './reviewModel'
 
 const POLL_MS = 2000
 
@@ -35,8 +36,8 @@ export function useReview(manuscriptId: string, file: string, enabled = true) {
   })
   const refresh = () => qc.invalidateQueries({ queryKey: key })
   const start = useMutation({
-    mutationFn: ({ base, selection }: { base: string; selection?: ReviewSelection }) =>
-      api.startReview(manuscriptId, { file, base, from: selection?.from, to: selection?.to, include_uncited: selection?.includeUncited }),
+    mutationFn: ({ base, selection, confirmRemote }: { base: string; selection?: ReviewSelection; confirmRemote: boolean }) =>
+      api.startReview(manuscriptId, { file, base, from: selection?.from, to: selection?.to, include_uncited: selection?.includeUncited, confirm_remote: confirmRemote }),
     onSettled: refresh,
   })
   const cancel = useMutation({
@@ -58,11 +59,14 @@ export function useReview(manuscriptId: string, file: string, enabled = true) {
     dismissed: state.data?.dismissed ?? [],
     isLoading: state.isLoading,
     /** `base` is the file's updated_at; the selection (UTF-16 offsets) limits the check to part of the file. */
-    start: (base: string, selection?: ReviewSelection) => start.mutateAsync({ base, selection }),
+    start: (base: string, selection?: ReviewSelection, confirmRemote = false) => start.mutateAsync({ base, selection, confirmRemote }),
     cancel: () => cancel.mutateAsync(),
     dismiss: (hash: string) => dismiss.mutateAsync(hash),
     restore: (hash: string) => restore.mutateAsync(hash),
-    startError: start.error ? reviewStartError(start.error) : null,
+    startError: start.error && !remoteHost(start.error) ? reviewStartError(start.error) : null,
+    /** Set when the start needs a yes before the text goes to a remote model; Send starts again with confirmRemote. */
+    confirmHost: remoteHost(start.error),
+    dismissConfirm: () => start.reset(),
   }
 }
 
