@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, renderHook, screen } from '@testing-library/react'
+import { act, fireEvent, render, renderHook, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { ViewSwitch, usePaperView } from './ViewSwitch'
 
@@ -15,9 +15,11 @@ it('renders List, Deck and Triage with aria-pressed on the current one', () => {
   expect(onChange).toHaveBeenCalledWith('deck')
 })
 
-it('restores a stored triage, and falls back to list for junk, null or a throwing store', () => {
+it('never restores triage: a stored triage, junk, null or a throwing store reopen on the list; deck is restored', () => {
   localStorage.setItem('k', 'triage')
-  expect(renderHook(() => usePaperView('k')).result.current[0]).toBe('triage')
+  expect(renderHook(() => usePaperView('k')).result.current[0]).toBe('list')
+  localStorage.setItem('k', 'deck')
+  expect(renderHook(() => usePaperView('k')).result.current[0]).toBe('deck')
   localStorage.setItem('k', 'garbage')
   expect(renderHook(() => usePaperView('k')).result.current[0]).toBe('list')
   localStorage.removeItem('k')
@@ -28,8 +30,8 @@ it('restores a stored triage, and falls back to list for junk, null or a throwin
 
 it('leaving triage ends that scope session', () => {
   sessionStorage.setItem('paperlab-triage-session:library', 'abc')
-  localStorage.setItem('k', 'triage')
   const { result } = renderHook(() => usePaperView('k', 'library'))
-  result.current[1]('deck')
+  act(() => result.current[1]('triage'))
+  act(() => result.current[1]('deck'))
   expect(sessionStorage.getItem('paperlab-triage-session:library')).toBeNull()
 })

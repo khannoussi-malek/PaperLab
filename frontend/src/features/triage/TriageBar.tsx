@@ -11,6 +11,8 @@ type Props = {
   left: number
   total: number
   notReady: number
+  /** Papers whose import failed: left out, with a count. */
+  failed?: number
   order: Order
   includeDecided: boolean
   onOrder: (order: Order) => void
@@ -21,7 +23,7 @@ type Props = {
   canStartOver?: boolean
 }
 
-export function TriageBar({ sourceLabel, left, total, notReady, order, includeDecided, onOrder, onIncludeDecided, onExit, onStartOver, canStartOver = true }: Props) {
+export function TriageBar({ sourceLabel, left, total, notReady, failed = 0, order, includeDecided, onOrder, onIncludeDecided, onExit, onStartOver, canStartOver = true }: Props) {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
       <p className="text-sm font-medium">
@@ -29,6 +31,11 @@ export function TriageBar({ sourceLabel, left, total, notReady, order, includeDe
         {notReady > 0 && (
           <span className="font-normal text-muted-foreground">
             {' '}· {notReady} {notReady === 1 ? 'paper is' : 'papers are'} still being read in and not in the stack yet
+          </span>
+        )}
+        {failed > 0 && (
+          <span className="font-normal text-muted-foreground">
+            {' '}· {failed} {failed === 1 ? 'paper' : 'papers'} couldn't be imported
           </span>
         )}
       </p>

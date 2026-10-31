@@ -283,11 +283,11 @@ export function useSetReading() {
   })
 }
 
-/** A paper's reading history; `enabled` keeps a closed popover from fetching. */
 /** A desk session's counts; `enabled` keeps it quiet until the summary is shown. */
 export const useTriageSummary = (sessionId: string, enabled: boolean) =>
   useQuery({ queryKey: ['triage-summary', sessionId] as const, queryFn: () => api.triageSummary(sessionId), enabled })
 
+/** A paper's reading history; `enabled` keeps a closed popover from fetching. */
 export const useTriageEvents = (paperId: string, enabled: boolean) =>
   useQuery({ queryKey: keys.triageEvents(paperId), queryFn: () => api.triageEvents(paperId), enabled })
 

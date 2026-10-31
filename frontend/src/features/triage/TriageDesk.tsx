@@ -49,13 +49,16 @@ type Props = {
   scope: string
   sourceLabel: string
   filterKey: string
+  /** The list's search box has text: an empty `papers` then means no match, not an empty view. */
+  searching?: boolean
+  onClearSearch?: () => void
   workspaceId?: string
   onExit: () => void
   onShowKept: () => void
 }
 
 /** The triage desk: stage, controls, reason chips, the one key handler and the done screen. */
-export function TriageDesk({ papers, library, libraryReady = true, scope, sourceLabel, filterKey, onExit, onShowKept }: Props) {
+export function TriageDesk({ papers, library, libraryReady = true, scope, sourceLabel, filterKey, searching = false, onClearSearch, onExit, onShowKept }: Props) {
   const root = useRef<HTMLElement>(null)
   const layout = deskLayout(useDeskWidth(root))
   const reduced = useReducedMotion()
@@ -68,8 +71,12 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
   const session = useTriageSession({
     scope, queueFrom: papers, library, libraryReady, filterKey, order: storedOrder(scope), includeDecided: false,
   })
-  const { state, top, notReady } = session
-  useEffect(() => root.current?.focus(), [])
+  const { state, top, notReady, failed } = session
+  // Take focus only from nowhere or from the view switch that opened the desk, never from a field the reader is typing in.
+  useEffect(() => {
+    const a = document.activeElement
+    if (!a || a === document.body || a.matches('[data-view-switch="triage"]')) root.current?.focus()
+  }, [])
   useKeepDeskFocus(root)
   useEffect(() => () => retainOnly([]), []) // leaving triage lets every kept document go
   const topId = top?.id
@@ -156,6 +163,7 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
   const lastPaper = last && library.find((p) => p.id === last.id)
   const undoInfo = last ? { label: lastPaper ? `${PILES[last.pile].label} '${paperLabel(lastPaper)}'` : PILES[last.pile].label, count: state.done.length } : null
   const finished = state.unseen.length === 0 && (state.total > 0 || state.done.length > 0)
+  const searchEmpty = searching && papers.length === 0
   const empty = state.total === 0 && state.done.length === 0
   return (
     <section
@@ -172,6 +180,7 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
         left={state.unseen.length}
         total={state.total}
         notReady={notReady}
+        failed={failed}
         order={state.order}
         includeDecided={includeDecided}
         onOrder={changeOrder}
@@ -182,7 +191,12 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
       />
       <ShortcutHelp open={helpOpen} onOpenChange={setHelpOpen} returnFocus={focusRoot} />
       <DeskStatus announcement={reasons ? say.reasonRow() : session.announcement} alert={session.alert} />
-      {empty ? (
+      {searchEmpty ? (
+        <div className="grid place-items-center gap-3 rounded-xl border border-dashed border-glass-border px-6 py-12 text-center">
+          <p className="text-muted-foreground">No paper in this view matches your search.</p>
+          <Button variant="outline" onClick={() => onClearSearch?.()}>Clear search</Button>
+        </div>
+      ) : empty ? (
         <TriageEmpty canInclude={!includeDecided} onInclude={() => toggleInclude(true)} onBack={exit} />
       ) : finished ? (
         <TriageDone
