@@ -23,6 +23,8 @@ import { useReviewInEditor } from './review/useReviewInEditor'
 const AUTOSAVE_MS = 1000
 const POLL_MS = 5000
 const NOTICE_MS = 8000
+// Snapshots this tab's own actions take (a restore, a section move/rename): no notice for those.
+const OWN_REASONS = ['before_restore', 'before_sections']
 const SAVE_LABEL: Record<SaveState, string> = {
   saved: 'Saved',
   saving: 'Saving…',
@@ -123,9 +125,12 @@ export function SourcePane(props: Props) {
 
   // A quiet line saying who changed the file: the newest snapshot's reason tells Claude's write from any other.
   const [notice, setNotice] = useState<string | null>(null)
+  const mounted = useRef(true)
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
   const announceOutside = async () => {
     const reason = await api.listManuscriptSnapshots(manuscriptId).then((s) => s[0]?.reason, () => undefined)
-    setNotice(reason === 'before_mcp' ? 'Updated by Claude (MCP)' : 'Updated elsewhere')
+    if (!mounted.current || (reason !== undefined && OWN_REASONS.includes(reason))) return // this tab's own change
+    setNotice(reason === 'before_mcp' ? 'Updated by Claude (MCP)' : reason === undefined ? 'Updated' : 'Updated elsewhere')
   }
   useEffect(() => {
     if (!notice) return
@@ -139,7 +144,7 @@ export function SourcePane(props: Props) {
   const { refetch } = file
   useEffect(() => {
     if (!ready) return
-    const poll = () => { if (document.visibilityState === 'visible') void refetch() }
+    const poll = () => { if (document.visibilityState === 'visible') void refetch({ cancelRefetch: false }) } // a slow answer is not cancelled by the next tick
     const timer = setInterval(poll, POLL_MS)
     window.addEventListener('focus', poll)
     return () => { clearInterval(timer); window.removeEventListener('focus', poll) }
