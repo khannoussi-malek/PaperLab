@@ -20,7 +20,7 @@ class Scripted:
 
 
 def test_prompt_loads_with_split_and_never_rewrite():
-    assert sr.PROMPT_VERSION == 1
+    assert sr.PROMPT_VERSION == 2
     assert "never writes, rewrites, quotes back or suggests wording" in sr.SYSTEM_PROMPT
     assert "{role}" in sr.PROMPT_TEMPLATE and "<!-- prompt -->" not in sr.SYSTEM_PROMPT
 
@@ -69,6 +69,15 @@ def test_parse_ignores_chatter_around_lines():
         "Unsupported: cites nothing at all",
         "Supported: cites nothing either",
         "Missing: try: adding a number",
+        "Supported: opening is clear [S1]. You could say: Sleep matters for health a lot.",
+        "Missing: Add a sentence such as Sleep is vital for health every night.",
+        "Missing: for example, write: sleep is vital",
+        'Missing: e.g. say "sleep"',
+        "Missing: use \u2018Sleep is vital for health every night\u2019 here",
+        "Missing: use \u00abSleep is vital for health every night\u00bb here",
+        "Missing: use \u201eSleep is vital for health every night\u201c here",
+        'Missing: write "Sleep is vital for health every night',
+        "Missing: write \u201cSleep is vital for health every night",
     ],
 )
 def test_parse_drops_each_bad_kind(line):
@@ -76,11 +85,25 @@ def test_parse_drops_each_bad_kind(line):
     assert findings == [] and dropped == 1
 
 
+def test_parse_markdown_numbering_spacing_and_duplicates():
+    reply = (
+        "**Missing:** no baseline.\n1. Supported : aim is clear [S1]\n2) *Unsupported:* a claim [S2]\n"
+        "**Missing:** no baseline.\n- Missing:   no   baseline."
+    )
+    findings, dropped = sr.parse_findings(reply, 2, 0)
+    assert [(f.kind, f.point) for f in findings] == [
+        ("missing", "no baseline."),
+        ("supported", "aim is clear [S1]"),
+        ("unsupported", "a claim [S2]"),
+    ]
+    assert dropped == 0
+
+
 def test_parse_short_quote_is_fine_and_caps_at_12():
     findings, dropped = sr.parse_findings('Supported: says "sleep is vital" [S1]', 1, 0)
     assert len(findings) == 1 and dropped == 0
     many = "\n".join(f"Missing: gap number {i}" for i in range(15))
-    assert len(sr.parse_findings(many, 1, 0)[0]) == 12
+    assert [len(x) if isinstance(x, list) else x for x in sr.parse_findings(many, 1, 0)] == [12, 3]
 
 
 async def test_review_one_call():

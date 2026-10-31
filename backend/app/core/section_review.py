@@ -9,7 +9,7 @@ from typing import Literal
 from app.core import prompts
 from app.core.section_rubrics import rubric_for
 
-PROMPT_VERSION = 1
+PROMPT_VERSION = 2
 SYSTEM_PROMPT, PROMPT_TEMPLATE = prompts.load("section_review", PROMPT_VERSION).split("\n<!-- prompt -->\n")
 MAX_WORDS = 25
 MAX_LINES = 12
@@ -20,10 +20,25 @@ RETRY = (
     "25 words, and cites [S#] or [N#] where it points at something."
 )
 
-_LINE = re.compile(r"^[\s\-*•]*(Missing|Unsupported|Supported):\s*(.+)$", re.IGNORECASE)
+_LINE = re.compile(r"^(Missing|Unsupported|Supported)\s*:\s*(.+)$", re.IGNORECASE)
+_PREFIX = re.compile(r"^[\s>\-\u2022]*(\d+[.)]\s*)?")
+_MARKUP = re.compile(r"[*_`]+")
 _REF = re.compile(r"\[([SN])(\d+)\]")
-_QUOTE = re.compile(r"[\"“”]([^\"“”]*)[\"“”]")
-_REWRITE = re.compile(r"(re-?write|replace (it|this)|should (read|say)|change (it|this) to|instead of|try:)", re.I)
+# Closed quoted runs in every style: "a", “a”, ‘a’, «a», „a“.
+_QUOTE = re.compile(
+    r"\"([^\"]*)\"|\u201c([^\u201c\u201d]*)[\u201c\u201d]|\u2018([^\u2018\u2019]*)\u2019|\u00ab([^\u00ab\u00bb]*)\u00bb"
+    r"|\u201e([^\u201e\u201c\u201d]*)[\u201c\u201d]"
+)
+_OPEN_QUOTE = re.compile(r"[\"\u201c\u2018\u00ab\u201e]([^\"\u201c\u201d\u2018\u2019\u00ab\u00bb\u201e]*)$")
+# Deliberately conservative (D118): "instead of" / "rewrite" also drop honest points; tune from the eval's dropped.
+_REWRITE = re.compile(
+    r"(re-?write|replace (it|this)|should (read|say)|change (it|this) to|instead of|try:"
+    r"|you (could|can|might|may) (say|write|use)|\b(add|use|write|say|insert):"
+    r"|\b(add|write|say|use|insert)\b[^.]*\bsuch as"
+    r"|(e\.g\.|for example|for instance),?\s*(write|say|use)\b"
+    r"|(e\.g\.|for example|for instance),?[^\"\u201c\u2018\u00ab\u201e:]*[:\"\u201c\u2018\u00ab\u201e])",
+    re.I,
+)
 
 Kind = Literal["missing", "unsupported", "supported"]
 
@@ -59,14 +74,25 @@ def build_prompt(role: str, sentences: list[str], notes: list[str]) -> str:
     return PROMPT_TEMPLATE.format(role=role, checklist=checklist, sentences=numbered, notes=noted)
 
 
+def _clean(line: str) -> str:
+    """The line without list numbering, bullets and markdown emphasis."""
+    return " ".join(_MARKUP.sub("", _PREFIX.sub("", line, count=1)).split())
+
+
+def _quoted_wording(point: str) -> bool:
+    runs = [next(g for g in m.groups() if g is not None) for m in _QUOTE.finditer(point)]
+    unclosed = _OPEN_QUOTE.search(_QUOTE.sub(" ", point))
+    return any(len(r.split()) >= MAX_QUOTE_WORDS for r in runs) or bool(
+        unclosed and len(unclosed.group(1).split()) >= MAX_QUOTE_WORDS
+    )
+
+
 def _finding(line: str, n_sentences: int, n_notes: int) -> Finding | None:
     match = _LINE.match(line)
     if not match:
         return None
     kind, point = match.group(1).lower(), match.group(2).strip()
-    if len(point.split()) > MAX_WORDS or _REWRITE.search(point):
-        return None
-    if any(len(q.split()) >= MAX_QUOTE_WORDS for q in _QUOTE.findall(point)):
+    if len(point.split()) > MAX_WORDS or _REWRITE.search(point) or _quoted_wording(point):
         return None
     refs = tuple(Ref(k, int(n)) for k, n in _REF.findall(point))
     if any(r.n < 1 or r.n > (n_sentences if r.kind == "S" else n_notes) for r in refs):
@@ -77,20 +103,24 @@ def _finding(line: str, n_sentences: int, n_notes: int) -> Finding | None:
 
 
 def parse_findings(reply: str, n_sentences: int, n_notes: int) -> tuple[list[Finding], int]:
-    """Kept lines (at most MAX_LINES) and the count of labelled-or-rewrite lines dropped.
+    """Kept lines (at most MAX_LINES) and the count of dropped ones, including lines past the cap.
 
     A line is a candidate when it starts with a label or reads like a rewrite offer; plain chatter is ignored.
+    An exact repeat of an earlier line is skipped silently.
     """
     kept: list[Finding] = []
+    seen: set[str] = set()
     dropped = 0
-    for line in reply.splitlines():
-        if not (_LINE.match(line) or _REWRITE.search(line)):
+    for raw in reply.splitlines():
+        line = _clean(raw)
+        if not (_LINE.match(line) or _REWRITE.search(line)) or line.lower() in seen:
             continue
+        seen.add(line.lower())
         finding = _finding(line, n_sentences, n_notes)
-        if finding is None:
-            dropped += 1
-        elif len(kept) < MAX_LINES:
+        if finding is not None and len(kept) < MAX_LINES:
             kept.append(finding)
+        else:
+            dropped += 1
     return kept, dropped
 
 
