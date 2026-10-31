@@ -190,6 +190,7 @@ def test_both_images_pin_the_same_tectonic_and_the_release_image_keeps_the_sandb
         assert "chmod -R u=rwX,go=rX /tectonic-cache" in d
         assert re.search(r"^ENV TECTONIC_ONLY_CACHED=1$", d, re.M)
         assert "/templates/*/" in d and "/templates/warm-packages.tex" in d  # every template folder and the warm list
+        assert "/templates/warm-diagram.tex" in d  # the TikZ libraries diagrams may load (M27e)
     assert re.search(r"^RUN chmod 750 /src$", release, re.M)  # tex can't enter the app's code
     for ignore in ("backend/.dockerignore", ".dockerignore"):
         assert ".tools" in (ROOT / ignore).read_text()
