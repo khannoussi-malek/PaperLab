@@ -1,6 +1,9 @@
 """Section review (M27 slice E): judge one manuscript section against its role's checklist. It answers only in
 Missing/Unsupported/Supported points that refer to the researcher's own sentences or notes, never replacement text
-(D118): the parser drops any line that looks like a rewrite. Writes no llm_outputs row; provenance is `model`."""
+(D118): the parser drops any line that looks like a rewrite. Writes no llm_outputs row; provenance is `model`.
+
+Accepted limit: a shape rule cannot catch every paraphrase. The review is display-only (never inserted into the
+source) and each point is capped at MAX_WORDS words, so what slips through is a short gist, not pasteable prose."""
 
 import re
 from dataclasses import dataclass
@@ -11,32 +14,36 @@ from app.core.section_rubrics import rubric_for
 
 PROMPT_VERSION = 2
 SYSTEM_PROMPT, PROMPT_TEMPLATE = prompts.load("section_review", PROMPT_VERSION).split("\n<!-- prompt -->\n")
-MAX_WORDS = 25
+MAX_WORDS = 20  # not counting [S#]/[N#] citations
 MAX_LINES = 12
 MODEL_ERROR = "model_error"
 RETRY = (
     "\n\nReply again with lines only. Each line starts with Missing:, Unsupported: or Supported:, has at most "
-    "25 words, and cites [S#] or [N#] where it points at something."
+    "20 words, and cites [S#] or [N#] where it points at something."
 )
 
 _LINE = re.compile(r"^(Missing|Unsupported|Supported)\s*:\s*(.+)$", re.IGNORECASE)
+_LABEL_START = re.compile(r"^(Missing|Unsupported|Supported)\b", re.IGNORECASE)
 _PREFIX = re.compile(r"^[\s>\-\u2022]*(\d+[.)]\s*)?")
-_MARKUP = re.compile(r"[*_`]+")
+_MARKUP = re.compile(r"[*_]+")  # backticks stay: they quote wording
 _REF = re.compile(r"\[([SN])(\d+)\]")
-# A point is judged by its shape (D118): no quoted span, no colon/dash introducing wording, no suggestion phrase,
-# no run copied from the section. Deliberately conservative: honest points that trip a rule are dropped and counted.
+# A point is judged by its shape (D118): no quote mark, no colon/semicolon/dash/bracket introducing 3+ words, no
+# suggestion phrase, no run copied from the section. Deliberately conservative: honest points that trip a rule
+# are dropped and counted.
+# Every quote-like code point except the apostrophe forms (' and \u2019), which count only when they open a word.
 _QUOTE = re.compile(
-    r"\"[^\"]*\"|\u201c[^\u201c\u201d]*[\u201c\u201d]|\u2018[^\u2018\u2019]*\u2019|\u00ab[^\u00ab\u00bb]*\u00bb"
-    r"|\u201e[^\u201e\u201c\u201d]*[\u201c\u201d]|(?<!\w)'[^'\s][^']*\s[^']*'(?!\w)"
+    '["`\u00ab\u00bb\u02ba\u02ee\u2018\u201a-\u201f\u2032-\u2037\u2039\u203a\u275b-\u2760'
+    "\u300c-\u300f\u301d-\u301f\uff02\uff07]|(?<!\\w)['\u2019](?=\\w)"
 )
-_OPEN_QUOTE = re.compile(r"[\"\u201c\u2018\u00ab\u201e]")
-_INTRODUCES = re.compile(r"(:\s+|\s?[\u2014\u2013]\s?|\s-\s)\S+(\s+\S+){2,}")
+_INTRODUCES = re.compile(r"(:\s+|;\s*|\s?[\u2014\u2013]\s?|\s-\s|[(\[{]\s*)[^\s)\]}]+(\s+[^\s)\]}]+){2,}")
 _SUGGEST = re.compile(
     r"\b(phrase|phrasing|reword|rephrase|rewrite|re-write|suggest(ed|ion)?|replace|instead of|such as|"
     r"for example|for instance|how about|word(ed|ing)?\s+(it\s+)?as|(say|saying|said)\s+as|"
     r"(line|sentence|phrase)\s+like|change\s+(it|this)\s+to|consider\s+(writing|adding|saying)|"
     r"should\s+(read|say)|you\s+(could|can|might|may)\s+(say|write|use)|try(ing)?\s+(saying|writing|adding|using)|"
-    r"try:)\b|\be\.g\.",
+    r"try:|says|saying|said|fram(e|ed|ing)\s+(it\s+)?as|along\s+the\s+lines\s+of|"
+    r"(open|opens|opening|begin|begins|beginning|start|starts|starting|lead|leads|leading)\s+with|"
+    r"the\s+sentence|a\s+statement|would\s+(be\s+clearer|read\s+better))\b|\be\.g\.",
     re.I,
 )
 COPY_WORDS = 6  # a point sharing this many consecutive words with a sentence of the section is copying it
@@ -91,11 +98,7 @@ def _grams(words: list[str]) -> set[tuple[str, ...]]:
 def _wording(point: str, copied: set[tuple[str, ...]]) -> bool:
     bare = _REF.sub(" ", point)
     return bool(
-        _QUOTE.search(point)
-        or _OPEN_QUOTE.search(point)
-        or _INTRODUCES.search(bare)
-        or _SUGGEST.search(point)
-        or _grams(_words(bare)) & copied
+        _QUOTE.search(point) or _INTRODUCES.search(bare) or _SUGGEST.search(point) or _grams(_words(bare)) & copied
     )
 
 
@@ -104,7 +107,7 @@ def _finding(line: str, n_sentences: int, n_notes: int, copied: set[tuple[str, .
     if not match:
         return None
     kind, point = match.group(1).lower(), match.group(2).strip()
-    if len(point.split()) > MAX_WORDS or _wording(point, copied):
+    if len(_REF.sub(" ", point).split()) > MAX_WORDS or _wording(point, copied):
         return None
     refs = tuple(Ref(k, int(n)) for k, n in _REF.findall(point))
     if any(r.n < 1 or r.n > (n_sentences if r.kind == "S" else n_notes) for r in refs):
@@ -117,7 +120,8 @@ def _finding(line: str, n_sentences: int, n_notes: int, copied: set[tuple[str, .
 def parse_findings(reply: str, sentences: list[str], n_notes: int) -> tuple[list[Finding], int]:
     """Kept lines (at most MAX_LINES) and the count of dropped ones, including lines past the cap.
 
-    A line is a candidate when it starts with a label or reads like a rewrite offer; plain chatter is ignored.
+    A line is a candidate when it starts with a label word or reads like a rewrite offer (a suggestion phrase or a
+    colon/dash/semicolon/bracket introducing wording); plain chatter is ignored.
     An exact repeat of an earlier line is skipped silently.
     """
     copied = set().union(*(_grams(_words(t)) for t in sentences)) if sentences else set()
@@ -126,7 +130,8 @@ def parse_findings(reply: str, sentences: list[str], n_notes: int) -> tuple[list
     dropped = 0
     for raw in reply.splitlines():
         line = _clean(raw)
-        if not (_LINE.match(line) or _SUGGEST.search(line)) or line.lower() in seen:
+        candidate = _LABEL_START.match(line) or _SUGGEST.search(line) or _INTRODUCES.search(_REF.sub(" ", line))
+        if not candidate or line.lower() in seen:
             continue
         seen.add(line.lower())
         finding = _finding(line, len(sentences), n_notes, copied)
