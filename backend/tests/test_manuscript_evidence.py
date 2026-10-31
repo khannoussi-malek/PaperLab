@@ -317,7 +317,7 @@ async def test_two_jobs_on_real_connections_check_every_paper_once(monkeypatch):
 async def test_two_asks_at_once_on_real_connections_take_turns(embedder, monkeypatch):
     from app.db import SessionLocal
 
-    async def has_model(session):
+    async def has_model(session, confirm_remote):
         return True
 
     monkeypatch.setattr(ev, "_has_model", has_model)

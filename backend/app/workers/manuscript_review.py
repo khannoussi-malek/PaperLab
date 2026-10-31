@@ -23,7 +23,7 @@ MAX_REASON = 300
 
 
 async def _take(run_id: uuid.UUID):
-    """The next queued row, marked running: (id, kind, paper_id, plain, stamp), or None."""
+    """The next queued row, marked running: (id, kind, paper_id, plain, confirm_remote, stamp), or None."""
     async with SessionLocal() as session:
         row = await session.scalar(
             select(Check)
@@ -48,8 +48,9 @@ async def _take(run_id: uuid.UUID):
         await session.execute(
             update(Run).where(Run.id == run_id).values(status="running", updated_at=func.clock_timestamp())
         )
+        confirmed = await session.scalar(select(Run.confirm_remote).where(Run.id == run_id))
         await session.commit()
-        return row.id, row.kind, row.paper_id, row.plain, stamp
+        return row.id, row.kind, row.paper_id, row.plain, confirmed, stamp
 
 
 async def _write(run_id: uuid.UUID, row_id: uuid.UUID, stamp, **values) -> None:
@@ -66,9 +67,12 @@ async def _write(run_id: uuid.UUID, row_id: uuid.UUID, stamp, **values) -> None:
         await session.commit()
 
 
-async def _judge(kind: str, paper_id, plain: str, llm) -> dict:
-    """The values to store for one row; raises what the model call raises."""
+async def _judge(kind: str, paper_id, plain: str, confirmed: bool, llm) -> dict:
+    """The values to store for one row; raises what the model call raises. The start's yes is checked again against
+    the default as it is now: one that became remote since then never gets the researcher's text unasked."""
     async with SessionLocal() as session:
+        if llm is None:
+            await llm_connections.refuse_unconfirmed_remote(session, confirmed)
         if kind == "cited":
             check = await claims.verify_claim(session, plain, paper_id=paper_id, llm=llm)
             await session.commit()  # the llm_outputs row
@@ -125,9 +129,9 @@ async def _cancelled(run_id: uuid.UUID) -> bool | None:
 async def check_manuscript_citations(ctx: dict, run_id: str) -> None:
     rid = uuid.UUID(run_id)
     while (stop := await _cancelled(rid)) is False and (taken := await _take(rid)) is not None:
-        row_id, kind, paper_id, plain, stamp = taken
+        row_id, kind, paper_id, plain, confirmed, stamp = taken
         try:
-            values = await _judge(kind, paper_id, plain, ctx.get("llm"))
+            values = await _judge(kind, paper_id, plain, confirmed, ctx.get("llm"))
         except DomainError as exc:
             values = {"status": "failed", "reason": error_code(exc)}
         except Exception:

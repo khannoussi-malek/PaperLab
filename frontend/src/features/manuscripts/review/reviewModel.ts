@@ -70,6 +70,7 @@ const REASON_COPY: Record<string, string> = {
   cancelled: 'Stopped before this one was checked.',
   model_error: "The model didn't give a usable answer",
   check_failed: "The model didn't give a usable answer",
+  remote_model_needs_confirm: 'The default model is now a cloud model. Check again to confirm sending your text.',
 }
 /** A failed or unverifiable row's reason in plain words; an unknown code is not blamed on the model. */
 export const reasonCopy = (reason: string | null): string => (reason && REASON_COPY[reason]) || "This one couldn't be checked."

@@ -149,6 +149,7 @@ async def start(
         manuscript_id=mid,
         file_path=file,
         status="queued" if waiting else "done",
+        confirm_remote=confirm_remote,
         total=len(rows),
         done=len(rows) - waiting,
         include_uncited=include_uncited,

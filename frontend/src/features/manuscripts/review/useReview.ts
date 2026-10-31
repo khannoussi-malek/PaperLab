@@ -90,15 +90,23 @@ export function useCiteProposals(manuscriptId: string, sentencePlain: string) {
   const found = asked?.sentence === sentencePlain ? asked.found : null // an edited sentence drops the old answer
   const [failed, setFailed] = useState<string | null>(null)
   const [finding, setFinding] = useState(false)
+  const [confirmHost, setConfirmHost] = useState<string | null>(null)
   const ticket = useRef(0)
   useEffect(() => () => { ticket.current += 1 }, [])
 
-  const ask = () => {
+  const ask = (confirmRemote = false) => {
     const mine = ++ticket.current
-    setAsked(null); setFailed(null); setFinding(true)
-    api.findEvidence(manuscriptId, sentencePlain).then(
+    const before = { asked, failed } // a remote refusal puts these back: Cancel leaves the row as it was
+    setAsked(null); setFailed(null); setFinding(true); setConfirmHost(null)
+    api.findEvidence(manuscriptId, sentencePlain, confirmRemote).then(
       (f) => { if (ticket.current === mine) { setAsked({ sentence: sentencePlain, found: f }); setFinding(false) } },
-      (e) => { if (ticket.current === mine) { setFailed(e instanceof Error ? e.message : 'Something went wrong. Please try again.'); setFinding(false) } },
+      (e) => {
+        if (ticket.current !== mine) return
+        const host = remoteHost(e)
+        if (host) { setAsked(before.asked); setFailed(before.failed); setConfirmHost(host) }
+        else setFailed(e instanceof Error ? e.message : 'Something went wrong. Please try again.')
+        setFinding(false)
+      },
     )
   }
 
@@ -134,7 +142,11 @@ export function useCiteProposals(manuscriptId: string, sentencePlain: string) {
   const settled = !!found && !finding && (unavailable || rows.isError || (!!rows.data && !rows.data.some((r) => r.status === 'queued' || r.status === 'running')))
   const pending = finding || (!!found && !settled)
   return {
-    ask,
+    ask: () => ask(),
+    /** Set when the find needs a yes before the sentence goes to a remote model; confirm asks again with it. */
+    confirmHost,
+    confirm: () => ask(true),
+    dismissConfirm: () => setConfirmHost(null),
     proposals,
     pending,
     message: failed ?? (found && !pending && proposals.length === 0 ? NO_PROPOSALS : null),
