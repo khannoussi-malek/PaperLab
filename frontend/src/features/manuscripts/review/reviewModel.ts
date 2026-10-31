@@ -1,4 +1,4 @@
-import type { CheckItem, ReviewSentence } from '@/api/client'
+import { ApiError, type CheckItem, type ReviewSentence } from '@/api/client'
 
 export const VERDICT_LABEL: Record<string, string> = {
   supported: 'Supports',
@@ -83,3 +83,8 @@ export const couldntCheck = (item: Pick<CheckItem, 'status' | 'verdict'>) =>
   item.status === 'failed' || item.status === 'interrupted' || (item.status === 'done' && (item.verdict === 'cannot_verify' || !item.verdict))
 
 export const isLive = (run: { status: string } | null) => run?.status === 'queued' || run?.status === 'running'
+
+/** Where the text would go when the start refused for a remote model (409 remote_model_needs_confirm), else null. */
+export function remoteHost(e: unknown): string | null {
+  return e instanceof ApiError && e.status === 409 && e.code === 'remote_model_needs_confirm' ? String(e.body.host ?? 'a remote model') : null
+}

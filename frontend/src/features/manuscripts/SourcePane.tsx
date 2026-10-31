@@ -1,6 +1,6 @@
 import { Loader2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { api, ApiError } from '@/api/client'
+import { api, ApiError, type Role, type SectionReview, type SectionSpan } from '@/api/client'
 import { useManuscriptFile, useSaveManuscriptFile } from '@/api/queries'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -19,6 +19,10 @@ import { ReviewPanel } from './review/ReviewPanel'
 import type { ReviewHandle } from './review/reviewMarks'
 import { useReview } from './review/useReview'
 import { useReviewInEditor } from './review/useReviewInEditor'
+import { RemoteConfirmDialog } from './review/RemoteConfirm'
+import { SectionReviewDialog } from './review/SectionReviewDialog'
+import { sectionAt } from './review/sectionReviewModel'
+import { useSectionReview } from './review/useSectionReview'
 
 const AUTOSAVE_MS = 1000
 const POLL_MS = 5000
@@ -249,7 +253,24 @@ export function SourcePane(props: Props) {
   const isTex = /\.tex$/i.test(path)
   const review = useReview(manuscriptId, path, isTex)
   const [reviewHandleRef, setReviewHandle] = useState<ReviewHandle | null>(null)
-  const inEditor = useReviewInEditor({ manuscriptId, workspaceId: props.workspaceId ?? null, review, text, handle: reviewHandleRef, flush: flushNow, getBase: () => base.current })
+  const sectionReview = useSectionReview(manuscriptId, path, isTex)
+  const inEditor = useReviewInEditor({ manuscriptId, workspaceId: props.workspaceId ?? null, review, text, handle: reviewHandleRef, flush: flushNow, getBase: () => base.current, sections: { file: path, reviews: sectionReview.reviews } })
+  const [sectionTarget, setSectionTarget] = useState<{ at: number; section: SectionSpan | null; role?: Role } | null>(null)
+  // The section under the cursor, or for Review again the section of that title as the text now reads.
+  const openSectionReview = async (again?: SectionReview) => {
+    const now = textNow.current
+    if (now === null) return
+    // ponytail: a failed locate reads as "no section here"; say more if it ever happens in practice
+    const spans = await api.locateSections(manuscriptId, path, now).then((r) => r.sections, () => [] as SectionSpan[])
+    const cursor = reviewHandleRef?.cursor() ?? 0
+    const section = again ? spans.find((s) => s.title === again.title) ?? null : sectionAt(spans, cursor)
+    setSectionTarget({ at: again ? section?.start ?? 0 : cursor, section, role: again?.role_source === 'chosen' ? again.role : undefined })
+  }
+  const startSectionReview = async (role: Role | null, confirmRemote: boolean) => {
+    if (!(await flushNow())) throw new Error("Your latest changes aren't saved yet. Try again in a moment.")
+    if (!base.current || !sectionTarget) throw new Error('The file is still loading. Try again.')
+    await sectionReview.start({ base: base.current, at: sectionTarget.at, role, confirmRemote })
+  }
 
   return (
     <section aria-label={`Editing ${path}`} className="flex h-full min-h-0 flex-col">
@@ -257,7 +278,7 @@ export function SourcePane(props: Props) {
         <span className="min-w-0 flex-1 truncate text-sm font-medium">{path}</span>
         <span aria-live="polite" className="text-xs text-muted-foreground">{SAVE_LABEL[state]}</span>
         {props.onInsertBlock && /\.tex$/i.test(path) && <InsertMenu manuscriptId={manuscriptId} labelTexts={props.labelTexts ?? (() => [])} filePaths={props.filePaths ?? (() => [])} onInsert={props.onInsertBlock} />}
-        {isTex && <ReviewMenu hasWorkspace={!!props.workspaceId} run={review.anyRun} onCheck={() => void inEditor.check()} onCancel={() => void review.cancel()} />}
+        {isTex && <ReviewMenu hasWorkspace={!!props.workspaceId} run={review.anyRun} onCheck={() => void inEditor.check()} onCancel={() => void review.cancel()} onReviewSection={() => void openSectionReview()} sectionLive={sectionReview.live} />}
         <Button size="sm" disabled={compiling || text === null} onClick={() => void compileNow()}>
           {compiling && <Loader2 aria-hidden className="animate-spin motion-reduce:animate-none" />}
           {compiling ? 'Compiling…' : 'Compile'}
@@ -299,7 +320,14 @@ export function SourcePane(props: Props) {
           <LatexEditor value={text} onChange={change} errors={errors} jumpTo={jumpTo} onCursor={props.onCursor} onSectionStep={props.onSectionStep} onShowInPdf={props.onShowInPdf} onCiteKey={props.onCiteKey} onFindEvidence={props.onFindEvidence} citeOptions={props.citeOptions} onCite={props.onCite} registerInsert={props.registerInsert} registerFindEvidence={props.registerFindEvidence} registerReview={setReviewHandle} reviewLocate={(t) => api.locateSentences(manuscriptId, t).then((r) => r.sentences)} onSave={() => void compileNow()} />
         )}
       </div>
-      {isTex && <ReviewPanel manuscriptId={manuscriptId} review={review} stale={inEditor.stale} onJump={inEditor.jump} onCite={inEditor.cite} onCheckAgain={() => void inEditor.check()} />}
+      {isTex && (
+        <>
+          <ReviewPanel manuscriptId={manuscriptId} review={review} stale={inEditor.stale} onJump={inEditor.jump} onCite={inEditor.cite} onCheckAgain={() => void inEditor.check()}
+            sections={{ reviews: sectionReview.reviews, stale: inEditor.sectionStale, hasWorkspace: !!props.workspaceId, onCancel: (id) => void sectionReview.cancel(id), onReviewAgain: (r) => void openSectionReview(r) }} />
+          <RemoteConfirmDialog what="text" host={review.confirmHost} onSend={() => void inEditor.check(true)} onCancel={review.dismissConfirm} />
+          <SectionReviewDialog target={sectionTarget} onClose={() => setSectionTarget(null)} onStart={startSectionReview} />
+        </>
+      )}
     </section>
   )
 }
