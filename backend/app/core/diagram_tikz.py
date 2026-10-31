@@ -63,7 +63,7 @@ DENIED_PARTS = (
     "hook",
     "pdfobj",
 )
-_CS = re.compile(r"\\\s*([A-Za-z@_:]+)")
+_CS = re.compile(r"\\(?:\s*([A-Za-z@_:]+)|.)", re.S)  # `\\` is one token: `{Token\\Input}` is text
 _COMMENT = re.compile(r"(\\.)|%[^\n]*(?:\n[ \t]*)?", re.S)
 _LIBS = re.compile(r"\\usetikzlibrary\s*\{([^}]*)\}")
 _BEGIN = re.compile(r"\\begin\s*\{tikzpicture\}")
@@ -104,7 +104,7 @@ def check(libraries: list[str], picture: str) -> list[str]:
     begins, ends = list(_BEGIN.finditer(code)), list(_END.finditer(code))
     if len(begins) != 1 or len(ends) != 1 or begins[0].start() != 0 or ends[0].end() != len(code):
         errors.append("The diagram must be exactly one tikzpicture, with nothing but comments around it.")
-    names = {n for text in (picture, code) for n in _CS.findall(text) if _denied(n)}
+    names = {n for text in (picture, code) for n in _CS.findall(text) if n and _denied(n)}
     for name in sorted(names):
         errors.append(f"The diagram code uses \\{name}, which PaperLab doesn't allow in a diagram.")
     if "^^" in picture:
