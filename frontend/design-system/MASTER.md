@@ -1218,6 +1218,17 @@ A **Review** button (outline, small, chevron) sits in the editor toolbar. Its me
 - **Cited but not found.** Under the PDF, a list of keys that match no paper in the library or the .bib files (LaTeX prints [?]), each with `file:line`; clicking one jumps the editor there. It shows 20, then "and N more".
 - **The rule.** Nothing the model wrote is ever inserted. Reasons and quotes are shown to read, never copied into the text; the only thing a button writes is `\citep{key}`, on a click.
 
+## Section review and diagrams
+
+The Review menu's second item, **Review this section**, reviews the top-level `\section` under the cursor (no workspace needed; without one the notes are left out and the card says so). Insert's third item, **Diagram…**, draws a TikZ figure from the researcher's own words.
+
+- **Role picker.** The dialog asks "Review “<title>” as:" with a select of the eight reviewable kinds, preset to PaperLab's guess. When it can't guess (an Acknowledgements heading), the select is empty, a muted line says "PaperLab couldn't tell what kind of section this is — choose one.", and **Review** stays disabled until one is chosen.
+- **Remote confirm.** With a remote model, the start (section review, diagram and "Check citations" alike) is refused until the researcher answers "Your section/text will be sent to <host> and may cost money. Send it?"; focus sits on **Cancel**, so Enter never spends money.
+- **The card** (in the panel, now titled "Review", under "Section review") shows the section title, the `AI` chip, "Reviewed as: <kind>" ("(you chose this)" when overridden), then groups with an icon and a word each: **Missing** (dashed circle, amber), **Unsupported** (triangle, red), **Supported** (check, green). Findings carry chips: `S<n> · <sentence start>` selects that sentence in the editor; `Note · <label>` opens the researcher's note in a new tab. A live review reads "Reviewing…" with Cancel; start and finish are announced in a polite live region.
+- **Stale cards.** Once the section is edited (or gone) the card collapses into **Changed since reviewed**, greyed, with "Review again".
+- **The diagram dialog** ("Draw a diagram") takes a description, then **Generate**. It shows the `AI` chip with "From your description: …", a spinner line while drawing, then a **Preview** tab (the compiled PDF) and a **LaTeX** tab (editable; "Update preview" recompiles, and Insert waits until it has). Labels not in the description are an amber warning; check or compile errors show in red, one per line, and disable **Insert**. Insert puts in one `figure` with the AI comment line, an empty `\caption{}` and a unique `fig:diagram-…` label, and adds `\usepackage{tikz}` and the `\usetikzlibrary` lines to the preamble once. Cancel or Esc drops the draft.
+- **The rule.** The section reviewer never returns text to insert: chips only select or open. The only model-made markup that ever reaches the source is a diagram, on an explicit Insert click, marked by its AI comment, with the prose and caption left to the researcher.
+
 ## Pre-delivery check (from ui-ux-pro-max Quick Reference §1–§3)
 
 Run through this before finishing any UI task, in **both** themes:
