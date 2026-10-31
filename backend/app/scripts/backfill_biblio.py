@@ -4,14 +4,18 @@ for the PubMed ids.
 Run once in the api container: `python -m app.scripts.backfill_biblio`. Paced (Crossref's polite pool allows about 3
 requests a second), idempotent (only NULL fields are filled), and never touches a field the owner set by hand.
 A paper with no PubMed record (most outside biomedicine) keeps a NULL pmid, so every rerun asks about it again:
-run it once after an upgrade, not on a schedule. Every paper it checks also gets Crossref's issue year, venue name at
-the time and full page range (`enrichment.align_with_crossref`); `--align` checks every paper with a DOI, even one
-with nothing left to fill, so the library's existing papers are corrected too.
+run it once after an upgrade, not on a schedule.
+
+`--align` checks every paper with a DOI, even one with nothing left to fill, and also corrects its year, venue and
+pages from Crossref (`enrichment.align_with_crossref`: the issue year, the journal's name at the time, the full page
+range; only on a DOI it trusts). `--report PATH` writes every change made as CSV: paper_id, doi, field, old, new.
 """
 
 import argparse
 import asyncio
+import csv
 import uuid
+from pathlib import Path
 
 import httpx
 from sqlalchemy import or_, select
@@ -46,20 +50,31 @@ async def run(
     delay: float = DELAY,
     only: list[uuid.UUID] | None = None,
     align: bool = False,
+    report: Path | str | None = None,
 ) -> dict[str, int]:
-    columns = [getattr(Paper, name) for name in (*enrichment.BIBLIO_FIELDS, "year", "venue")]
-    rows = (await session.execute(_selection(columns, only, align))).all()
+    names = (*enrichment.BIBLIO_FIELDS, "year", "venue")
+    columns = [getattr(Paper, name) for name in names]
+    rows = (await session.execute(_selection([Paper.doi, *columns], only, align))).all()
     summary = {"checked": len(rows), "updated": 0}
-    for paper_id, *before in rows:
-        asked = await enrichment.fill_biblio(session, paper_id, crossref_http, openalex_http)
-        after = (await session.execute(select(*columns).where(Paper.id == paper_id))).one()
-        summary["updated"] += list(after) != before
-        if asked:
-            await asyncio.sleep(delay)  # pacing only after a request
+    changes: list[tuple] = []
+    try:
+        for paper_id, doi, *before in rows:
+            asked = await enrichment.fill_biblio(session, paper_id, crossref_http, openalex_http, align=align)
+            after = (await session.execute(select(*columns).where(Paper.id == paper_id))).one()
+            summary["updated"] += list(after) != before
+            changes += [(paper_id, doi, n, old, new) for n, old, new in zip(names, before, after) if old != new]
+            if asked:
+                await asyncio.sleep(delay)  # pacing only after a request
+    finally:  # an interrupted run still records what it changed
+        if report:
+            with open(report, "w", newline="") as out:
+                writer = csv.writer(out)
+                writer.writerow(("paper_id", "doi", "field", "old", "new"))
+                writer.writerows((*row[:3], *("" if v is None else v for v in row[3:])) for row in changes)
     return summary
 
 
-async def main(dry_run: bool = False, align: bool = False) -> None:
+async def main(dry_run: bool = False, align: bool = False, report: str | None = None) -> None:
     async with SessionLocal() as session:
         if dry_run:
             count = len((await session.execute(_selection([Paper.id], align=align))).all())
@@ -71,7 +86,7 @@ async def main(dry_run: bool = False, align: bool = False) -> None:
         key = sources.api_keys["openalex"]
         oa = openalex.new_client(email=email, api_key=key) if sources.enabled["openalex"] else None
         try:
-            summary = await run(session, cr, oa, align=align)
+            summary = await run(session, cr, oa, align=align, report=report)
         finally:
             for client in (cr, oa):
                 if client:
@@ -85,10 +100,15 @@ def cli(argv: list[str] | None = None) -> None:
         "--dry-run", action="store_true", help="count the papers it would check; ask and change nothing"
     )
     parser.add_argument(
-        "--align", action="store_true", help="check every paper with a DOI, to correct its year, venue and pages"
+        "--align",
+        action="store_true",
+        help="check every paper with a DOI and correct its year, venue and pages from Crossref",
+    )
+    parser.add_argument(
+        "--report", metavar="PATH", help="write every change made as CSV (paper_id, doi, field, old, new)"
     )
     args = parser.parse_args(argv)
-    asyncio.run(main(dry_run=args.dry_run, align=args.align))
+    asyncio.run(main(dry_run=args.dry_run, align=args.align, report=args.report))
 
 
 if __name__ == "__main__":
