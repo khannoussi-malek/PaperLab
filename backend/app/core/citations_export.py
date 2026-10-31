@@ -44,7 +44,8 @@ MEETING = re.compile(
     r"\b(proceedings|conference|symposium|workshop|congress|colloquium|meeting|"
     r"iclr|icml|neurips|nips|aaai|ijcai|acl|emnlp|naacl|cvpr|iccv|eccv|kdd|sigir|cscw|uist)\b|"
     r"neural information processing systems|computer vision and pattern recognition|"
-    r"knowledge discovery and data mining|international conference",
+    r"knowledge discovery and data mining|international conference|"
+    r"\bCHI\s*'?\d{2,4}\b",  # "CHI '24", "CHI 2024": the conference by its short name and year
     re.IGNORECASE,
 )
 ORG_WORDS = {
