@@ -8,6 +8,7 @@ Named core_ac because `core` would read as app.core.
 import httpx
 
 from app.providers.arxiv import title_words
+from app.providers.http import retrying
 from app.providers.openalex import json_body
 
 BASE_URL = "https://api.core.ac.uk"
@@ -19,7 +20,7 @@ def new_client(
 ) -> httpx.AsyncClient:
     # The key rides in a header: httpx puts the URL, query string included, in its error messages.
     headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
-    return httpx.AsyncClient(base_url=BASE_URL, headers=headers, timeout=TIMEOUT, transport=transport)
+    return httpx.AsyncClient(base_url=BASE_URL, headers=headers, timeout=TIMEOUT, transport=retrying(transport))
 
 
 # ponytail: no retry on 429, as in openalex.py. A free key raises the limit.

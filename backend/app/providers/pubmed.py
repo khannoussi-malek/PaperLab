@@ -15,7 +15,7 @@ import xml.etree.ElementTree as ET
 
 import httpx
 
-from app.providers.http import RateLimited, shared_pacer
+from app.providers.http import RateLimited, retrying, shared_pacer
 from app.providers.openalex import json_body
 
 BASE_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
@@ -40,7 +40,7 @@ def new_client(
         # instead -- tests must stay isolated from each other's pacing state and from real wall-clock
         # delays, and from each other's event loops (a shared pacer's lock reused across pytest's
         # separate per-test loops crashed the backend suite before this split existed).
-        limited = RateLimited(httpx.AsyncHTTPTransport(), pacer=shared_pacer("eutils", api_key, min_interval))
+        limited = RateLimited(retrying(None), pacer=shared_pacer("eutils", api_key, min_interval))
     else:
         limited = RateLimited(transport, min_interval)
     return httpx.AsyncClient(base_url=BASE_URL, params=params, timeout=TIMEOUT, transport=limited)

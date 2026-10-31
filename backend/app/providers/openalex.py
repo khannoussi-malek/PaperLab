@@ -13,6 +13,8 @@ from urllib.parse import quote
 
 import httpx
 
+from app.providers.http import retrying
+
 BASE_URL = "https://api.openalex.org"
 TIMEOUT = httpx.Timeout(10.0)
 SEARCH_RESULTS = 5
@@ -43,7 +45,12 @@ def new_client(
     headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
     # follow_redirects: OpenAlex answers a merged-away work id with a 301 to the record it merged into.
     return httpx.AsyncClient(
-        base_url=BASE_URL, params=params, headers=headers, timeout=TIMEOUT, transport=transport, follow_redirects=True
+        base_url=BASE_URL,
+        params=params,
+        headers=headers,
+        timeout=TIMEOUT,
+        transport=retrying(transport),
+        follow_redirects=True,
     )
 
 
@@ -124,7 +131,9 @@ async def citing_works(http: httpx.AsyncClient, work_id: str, limit: int) -> lis
     return json_body(response.raise_for_status())["results"]
 
 
-async def search_page(http: httpx.AsyncClient, title: str, page_size: int, cursor: int) -> tuple[list[dict], int | None]:
+async def search_page(
+    http: httpx.AsyncClient, title: str, page_size: int, cursor: int
+) -> tuple[list[dict], int | None]:
     """One page of OpenAlex results."""
     params = {"filter": f"title.search:{title}", "per-page": page_size, "page": cursor, "select": WORK_FIELDS}
     response = await http.get("/works", params=params)

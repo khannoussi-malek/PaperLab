@@ -18,6 +18,7 @@ from urllib.parse import quote
 
 import httpx
 
+from app.providers.http import retrying
 from app.providers.openalex import json_body
 
 BASE_URL = "https://doaj.org/api"
@@ -33,7 +34,7 @@ def new_client(
 ) -> httpx.AsyncClient:
     # DOAJ takes neither a contact email nor a search-relevant key; both parameters exist only to satisfy
     # the uniform new_client(*, email=None, api_key=None, transport=None) signature every provider shares.
-    return httpx.AsyncClient(base_url=BASE_URL, timeout=TIMEOUT, transport=transport)
+    return httpx.AsyncClient(base_url=BASE_URL, timeout=TIMEOUT, transport=retrying(transport))
 
 
 def _checked(response: httpx.Response) -> httpx.Response:

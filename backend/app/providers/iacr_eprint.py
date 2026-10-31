@@ -22,6 +22,7 @@ from sqlalchemy import and_, or_, select
 from app.db import SessionLocal
 from app.models import ExternalRef
 from app.providers.arxiv import title_words
+from app.providers.http import retrying
 
 BASE_URL = "https://eprint.iacr.org"
 TIMEOUT = httpx.Timeout(30.0)  # a full ListRecords page can be a few hundred KB; generous on purpose.
@@ -43,7 +44,7 @@ def new_client(
     # satisfy the uniform new_client(*, email=None, api_key=None, transport=None) signature every
     # provider shares.
     return httpx.AsyncClient(
-        base_url=BASE_URL, timeout=TIMEOUT, transport=transport, headers={"User-Agent": _USER_AGENT}
+        base_url=BASE_URL, timeout=TIMEOUT, transport=retrying(transport), headers={"User-Agent": _USER_AGENT}
     )
 
 
