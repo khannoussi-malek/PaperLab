@@ -217,14 +217,28 @@ async def _written(session: AsyncSession, mid: uuid.UUID, row) -> Written:
     )
 
 
+def _require_base(row, base: Base) -> None:
+    """The base must be exactly the file's `updated_at` (what read_file returned): a guessed one is not a read."""
+    if row.updated_at != base:
+        raise Conflict("file_changed", updated_at=row.updated_at)
+
+
 @_committing
 async def create_file(session: AsyncSession, mid: uuid.UUID, path: str, text: str) -> Written:
-    row = await manuscripts.save_text(session, mid, path, text, base=None, snapshot=manuscript_history.MCP_REASON)
+    try:
+        row = await manuscripts.save_text(
+            session, mid, path, text, base=None, snapshot=manuscript_history.MCP_REASON
+        )
+    except IntegrityError:  # a racing create or rename of the same new path committed first
+        raise Conflict("file_exists") from None
     return await _written(session, mid, row)
 
 
 @_committing
 async def write_file(session: AsyncSession, mid: uuid.UUID, path: str, text: str, base: Base) -> Written:
+    if not paths.is_text(paths.validate_path(path)):
+        raise InvalidInput("unsupported_file_type")
+    _require_base(await _text_row(session, mid, path), base)
     row = await manuscripts.save_text(session, mid, path, text, base=base, snapshot=manuscript_history.MCP_REASON)
     return await _written(session, mid, row)
 
@@ -265,10 +279,15 @@ async def edit_file(
 async def rename_file(session: AsyncSession, mid: uuid.UUID, path: str, new_path: str, base: Base) -> Renamed:
     paths.validate_path(new_path)
     paths.validate_path(path)
-    await _text_row(session, mid, path)
+    _require_base(await _text_row(session, mid, path), base)
     if path == (await manuscripts.get(session, mid)).main_file:
         raise Conflict("main_file")  # a restore of the snapshot would fail without the new main file
-    row = await manuscripts.rename(session, mid, path, new_path, base=base, snapshot=manuscript_history.MCP_REASON)
+    try:
+        row = await manuscripts.rename(
+            session, mid, path, new_path, base=base, snapshot=manuscript_history.MCP_REASON
+        )
+    except IntegrityError:  # a racing create of the new path committed first
+        raise Conflict("file_exists") from None
     return Renamed(
         path=path, new_path=row.path, updated_at=row.updated_at, snapshot_id=await _snapshot_id(session, mid)
     )
@@ -277,7 +296,7 @@ async def rename_file(session: AsyncSession, mid: uuid.UUID, path: str, new_path
 @_committing
 async def delete_file(session: AsyncSession, mid: uuid.UUID, path: str, base: Base) -> Deleted:
     paths.validate_path(path)
-    await _text_row(session, mid, path)
+    _require_base(await _text_row(session, mid, path), base)
     await manuscripts.remove(session, mid, path, base=base, snapshot=manuscript_history.MCP_REASON)
     return Deleted(path=path, snapshot_id=await _snapshot_id(session, mid))
 

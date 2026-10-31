@@ -144,3 +144,26 @@ async def test_two_adds_of_the_same_new_figure_one_wins_and_the_bytes_are_the_wi
     winner = next(d for d, r in zip((b"one", b"two!"), results) if not isinstance(r, BaseException))
     async with maker() as s:
         assert (await manuscripts.read(s, mid, "figs/a.png")).data == winner
+
+
+async def test_a_racing_new_path_is_file_exists_for_create_and_rename(real, monkeypatch):
+    """The other writer's row commits after our existence check: the unique index decides, and we say file_exists."""
+    new, maker = real
+    mid = await new()
+    async with maker() as s:
+        await agent.create_file(s, mid, "taken.tex", "t")
+        await agent.create_file(s, mid, "other.tex", "o")
+        other = (await manuscripts.read(s, mid, "other.tex")).updated_at
+    real_file = manuscripts._file
+
+    async def blind(session, manuscript_id, path, *, lock=False):
+        row = await real_file(session, manuscript_id, path, lock=lock)
+        return None if path == "taken.tex" else row
+
+    monkeypatch.setattr(manuscripts, "_file", blind)
+    async with maker() as s:
+        with pytest.raises(Conflict, match="file_exists"):
+            await agent.rename_file(s, mid, "other.tex", "taken.tex", other)
+    async with maker() as s:
+        with pytest.raises(Conflict, match="file_exists"):
+            await agent.create_file(s, mid, "taken.tex", "c")

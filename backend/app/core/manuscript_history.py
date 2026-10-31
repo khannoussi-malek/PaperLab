@@ -1,7 +1,7 @@
 """Manuscript snapshots: text files as of a moment, kept newest-50, restorable."""
 
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,6 +18,8 @@ AUTOSAVE_EVERY = timedelta(minutes=10)
 
 
 async def take(session: AsyncSession, manuscript_id: uuid.UUID, reason: str) -> ManuscriptSnapshot:
+    if reason == MCP_REASON:  # the owner's own text goes into the owner's pool before Claude can overwrite it
+        await maybe_autosave(session, manuscript_id, now=datetime.now(timezone.utc))
     rows = await session.execute(
         select(ManuscriptFile.path, ManuscriptFile.text)
         .where(ManuscriptFile.manuscript_id == manuscript_id, ManuscriptFile.text.is_not(None))
@@ -39,7 +41,8 @@ async def take(session: AsyncSession, manuscript_id: uuid.UUID, reason: str) -> 
 
 async def maybe_autosave(session: AsyncSession, manuscript_id: uuid.UUID, *, now: datetime) -> bool:
     last = await session.scalar(
-        select(func.max(ManuscriptSnapshot.created_at)).where(ManuscriptSnapshot.manuscript_id == manuscript_id))
+        select(func.max(ManuscriptSnapshot.created_at)).where(
+            ManuscriptSnapshot.manuscript_id == manuscript_id, ManuscriptSnapshot.reason != MCP_REASON))
     if last is not None and now - last < AUTOSAVE_EVERY:
         return False
     await take(session, manuscript_id, "autosave")
