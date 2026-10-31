@@ -36,6 +36,20 @@ test('polls every 2 s only while a review is live, and not after unmount', async
   unmount()
 })
 
+test('a failing poll stops polling, says the review was lost and no longer counts as live', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  const spy = vi.spyOn(api, 'sectionReviews').mockResolvedValueOnce(reviews('running')).mockRejectedValue(new Error('down'))
+  const { result } = renderHook(() => useSectionReview('m', 'main.tex'), { wrapper })
+  await waitFor(() => expect(result.current.live).toBe(true))
+  expect(result.current.lost).toBe(false)
+  await act(() => vi.advanceTimersByTimeAsync(2100))
+  await waitFor(() => expect(result.current.lost).toBe(true))
+  expect(result.current.live).toBe(false)
+  const calls = spy.mock.calls.length
+  await act(() => vi.advanceTimersByTimeAsync(10000))
+  expect(spy.mock.calls.length).toBe(calls)
+})
+
 test('each start error has its own words; the remote signal is not an error', () => {
   const e = (code: string, status = 422) => new ApiError(code, status, { detail: code })
   expect(sectionStartError(e('unknown_role'))).toBe('Pick what kind of section this is.')

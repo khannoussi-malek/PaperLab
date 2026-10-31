@@ -60,6 +60,30 @@ test('queued and running say Reviewing… with Cancel', () => {
   }
 })
 
+test('a live review whose poll was lost says so, with Review again instead of Reviewing…', () => {
+  const r = review({ status: 'running', findings: [] })
+  const { onReviewAgain } = show(r, { lost: true })
+  expect(screen.queryByText('Reviewing…')).toBeNull()
+  expect(screen.getByText("Couldn't check on this review. Try Review again.")).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Review again' }))
+  expect(onReviewAgain).toHaveBeenCalledWith(r)
+  document.body.innerHTML = ''
+  show(review(), { lost: true }) // a finished review is unaffected
+  expect(screen.queryByText("Couldn't check on this review. Try Review again.")).toBeNull()
+})
+
+test('the panel passes a lost poll to the card and its announcer', () => {
+  const base = { run: null, items: [], dismissed: [], startError: null, cancel: vi.fn(), dismiss: vi.fn(), restore: vi.fn() } as never
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <ReviewPanel manuscriptId="m" review={base} stale={[]} onJump={() => {}} onCite={async () => null} onCheckAgain={() => {}}
+        sections={{ reviews: [review({ status: 'running', findings: [] })], stale: [], hasWorkspace: true, lost: true, onCancel: vi.fn(), onReviewAgain: vi.fn() }} />
+    </QueryClientProvider>,
+  )
+  expect(screen.getByRole('article')).toHaveTextContent("Couldn't check on this review. Try Review again.")
+  expect(screen.getByRole('status', { name: 'Section review status' })).toHaveTextContent("Couldn't check on “Our approach”. Try Review again.")
+})
+
 test('failed, cancelled and interrupted reviews say why in plain words', () => {
   show(review({ status: 'failed', reason: 'model_error', findings: [] }))
   expect(screen.getByText("The model didn't give a usable answer")).toBeInTheDocument()

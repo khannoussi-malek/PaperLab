@@ -323,7 +323,7 @@ export function SourcePane(props: Props) {
       {isTex && (
         <>
           <ReviewPanel manuscriptId={manuscriptId} review={review} stale={inEditor.stale} onJump={inEditor.jump} onCite={inEditor.cite} onCheckAgain={() => void inEditor.check()}
-            sections={{ reviews: sectionReview.reviews, stale: inEditor.sectionStale, hasWorkspace: !!props.workspaceId, live: sectionReview.live, onCancel: (id) => void sectionReview.cancel(id), onReviewAgain: (r) => void openSectionReview(r) }} />
+            sections={{ reviews: sectionReview.reviews, stale: inEditor.sectionStale, hasWorkspace: !!props.workspaceId, live: sectionReview.live, lost: sectionReview.lost, onCancel: (id) => void sectionReview.cancel(id), onReviewAgain: (r) => void openSectionReview(r) }} />
           <RemoteConfirmDialog what="text" host={review.confirmHost} onSend={() => void inEditor.check(true)} onCancel={review.dismissConfirm} />
           <SectionReviewDialog target={sectionTarget} onClose={() => setSectionTarget(null)} onStart={startSectionReview} />
         </>

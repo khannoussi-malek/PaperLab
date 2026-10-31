@@ -52,6 +52,19 @@ describe('plain words', () => {
     expect(diagramProblem(row())).toBeNull()
   })
 
+  it.each([
+    ['outside_file', "The diagram tried to read a file, which PaperLab doesn't allow."],
+    ['compile_failed', "PaperLab couldn't draw the preview. Try Update preview again."],
+    ['check_failed', 'Something went wrong while drawing. Try again.'],
+    ['no_model', 'Add a model in Settings to draw diagrams.'],
+    ['diagram_invalid', "The diagram code isn't allowed as written; see the problems listed."],
+    ['queue_unavailable', "PaperLab's background worker isn't running. Try again in a moment."],
+    ['remote_model_needs_confirm', 'The default model is now a cloud model. Start again to confirm sending your text.'],
+    ['library_not_cached', 'Something went wrong drawing the diagram. Try again.'], // never sent by the backend: the generic words
+  ])('a failed run with %s says so in the backend\'s words', (reason, words) => {
+    expect(diagramProblem(row({ status: 'failed', code: null, reason }))).toBe(words)
+  })
+
   it('maps start refusals; the remote question is not an error', () => {
     expect(diagramStartError(new ApiError('no_model', 409, { detail: 'no_model' }))).toBe('Add a model in Settings to draw a diagram.')
     expect(diagramStartError(new ApiError('diagram_running', 409, { detail: 'diagram_running' }))).toBe('A diagram is already being drawn. Wait for it or cancel it.')

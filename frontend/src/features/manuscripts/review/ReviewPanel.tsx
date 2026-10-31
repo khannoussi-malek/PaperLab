@@ -26,6 +26,8 @@ type Props = {
     hasWorkspace: boolean
     /** A section review is queued or running. */
     live?: boolean
+    /** Polling the section reviews failed. */
+    lost?: boolean
     onCancel: (id: string) => void
     onReviewAgain: (review: SectionReview) => void
   }
@@ -134,11 +136,11 @@ function ClaimRow({ item, manuscriptId, dismissed, review, onJump, onCite }: { i
   )
 }
 
-function SectionReviews({ reviews, stale, hasWorkspace, live: busy = false, onCancel, onReviewAgain, onJump }: NonNullable<Props['sections']> & Pick<Props, 'onJump'>) {
+function SectionReviews({ reviews, stale, hasWorkspace, live: busy = false, lost, onCancel, onReviewAgain, onJump }: NonNullable<Props['sections']> & Pick<Props, 'onJump'>) {
   const staleIds = new Set(stale.map((r) => r.id))
   const live = reviews.filter((r) => !staleIds.has(r.id))
   const card = (r: SectionReview, isStale: boolean) => (
-    <SectionFindings key={r.id} review={r} stale={isStale} busy={busy} hasWorkspace={hasWorkspace} onJump={onJump} onCancel={onCancel} onReviewAgain={onReviewAgain} />
+    <SectionFindings key={r.id} review={r} stale={isStale} busy={busy} lost={lost} hasWorkspace={hasWorkspace} onJump={onJump} onCancel={onCancel} onReviewAgain={onReviewAgain} />
   )
   return (
     <>
@@ -156,7 +158,7 @@ export function ReviewPanel({ manuscriptId, review, stale, onJump, onCite, onChe
   // Always mounted, so a review's start and finish are announced (a region created with its text is not).
   const announcer = sections && (
     <div role="status" aria-live="polite" aria-label="Section review status" className="sr-only">
-      {sectionReviews.map((r) => <p key={r.id}>{statusLine(r)}</p>)}
+      {sectionReviews.map((r) => <p key={r.id}>{statusLine(r, sections.lost)}</p>)}
     </div>
   )
   if (!run && items.length === 0 && !startError && sectionReviews.length === 0) return announcer ?? null

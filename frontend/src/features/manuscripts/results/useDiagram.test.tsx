@@ -58,3 +58,31 @@ test('create sends confirm_remote; edit, cancel, regenerate and discard name the
   expect(del).toHaveBeenLastCalledWith('m', 'd2')
   expect(result.current.diagram).toBeNull()
 })
+
+test('a failing poll stops polling and says the run was lost', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  vi.spyOn(api, 'createDiagram').mockResolvedValue(row('queued'))
+  const poll = vi.spyOn(api, 'diagram').mockRejectedValue(new Error('404'))
+  const { result } = renderHook(() => useDiagram('m'), { wrapper })
+  expect(result.current.lost).toBe(false)
+  await act(() => result.current.create('A to B', false))
+  await act(() => vi.advanceTimersByTimeAsync(2100))
+  await waitFor(() => expect(result.current.lost).toBe(true))
+  const calls = poll.mock.calls.length
+  await act(() => vi.advanceTimersByTimeAsync(10000))
+  expect(poll.mock.calls.length).toBe(calls)
+})
+
+test('closing while a run is being created deletes the new draft as soon as it exists', async () => {
+  let resolve!: (d: Diagram) => void
+  vi.spyOn(api, 'createDiagram').mockReturnValue(new Promise((r) => { resolve = r }))
+  vi.spyOn(api, 'diagram').mockResolvedValue(row('running'))
+  const del = vi.spyOn(api, 'deleteDiagram').mockResolvedValue(undefined)
+  const { result } = renderHook(() => useDiagram('m'), { wrapper })
+  let made!: Promise<unknown>
+  act(() => { made = result.current.create('A to B', false) })
+  await act(() => result.current.discard())
+  await act(async () => { resolve(row('queued', { id: 'late' })); await made })
+  expect(del).toHaveBeenCalledWith('m', 'late')
+  expect(result.current.diagram).toBeNull()
+})

@@ -227,3 +227,71 @@ test.each([
   expect(del).toHaveBeenCalledWith('m1', 'd1')
   expect(insert).not.toHaveBeenCalled()
 })
+
+function pendingInsert() {
+  let settle!: (r: InsertResult) => void
+  const insert = vi.fn((..._a: unknown[]) => new Promise<InsertResult>((r) => { settle = r }))
+  return { insert, settle: (r: InsertResult) => act(async () => settle(r)) }
+}
+const esc = () => fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
+const cancelButton = () => fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel' }))
+
+test.each([['Esc', esc], ['Cancel', cancelButton]])('%s during an Insert is ignored; a successful insert then closes with one DELETE', async (_, close) => {
+  const { insert, settle } = pendingInsert()
+  const { onOpenChange } = setup(() => [], insert)
+  await generate()
+  await waitFor(() => expect(button('Insert')).toBeEnabled())
+  await act(async () => fireEvent.click(button('Insert')))
+  await act(async () => close())
+  expect(onOpenChange).not.toHaveBeenCalled()
+  expect(del).not.toHaveBeenCalled()
+  await settle({ ok: true })
+  expect(onOpenChange).toHaveBeenCalledTimes(1)
+  expect(onOpenChange).toHaveBeenCalledWith(false)
+  expect(del).toHaveBeenCalledTimes(1)
+})
+
+test('Esc during an Insert that then fails keeps the dialog and shows why', async () => {
+  const { insert, settle } = pendingInsert()
+  const { onOpenChange } = setup(() => [], insert)
+  await generate()
+  await waitFor(() => expect(button('Insert')).toBeEnabled())
+  await act(async () => fireEvent.click(button('Insert')))
+  await act(async () => esc())
+  await settle({ ok: false, message: 'The main file changed. Open it and try again.' })
+  expect(screen.getByText('The main file changed. Open it and try again.')).toBeInTheDocument()
+  expect(onOpenChange).not.toHaveBeenCalled()
+  expect(del).not.toHaveBeenCalled()
+})
+
+test('a poll that fails stops the spinner and says the run was lost', async () => {
+  poll.mockRejectedValue(new Error('404'))
+  setup()
+  await generate()
+  expect(await screen.findByText('PaperLab lost touch with this run. Close and try again.')).toBeInTheDocument()
+  expect(screen.getByRole('status')).not.toHaveTextContent('Drawing your diagram…')
+  expect(screen.queryByRole('button', { name: 'Cancel drawing' })).toBeNull()
+})
+
+test('one polite status region, there before Generate, goes from drawing to done', async () => {
+  poll.mockResolvedValueOnce(row('running')).mockResolvedValue(drawn())
+  setup()
+  const region = screen.getByRole('status')
+  expect(region).toHaveTextContent(/^$/)
+  fireEvent.change(screen.getByLabelText('Describe your diagram in a few words'), { target: { value: DESC } })
+  await act(async () => fireEvent.click(button('Generate')))
+  expect(screen.getByRole('status')).toBe(region)
+  expect(region).toHaveTextContent('Drawing your diagram…')
+  await tick()
+  await tick()
+  await waitFor(() => expect(region).toHaveTextContent('Your diagram is ready.'))
+  expect(screen.getByRole('status')).toBe(region)
+})
+
+test('the status region says so when a run fails', async () => {
+  poll.mockResolvedValue(row('failed', { reason: 'model_error' }))
+  setup()
+  const region = screen.getByRole('status')
+  await generate()
+  await waitFor(() => expect(region).toHaveTextContent("Your diagram couldn't be drawn."))
+})
