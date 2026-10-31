@@ -114,3 +114,21 @@ async def test_mcp_snapshots_do_not_crowd_out_the_owners_fifty(session):
         await history.take(session, m.id, "before_mcp")
     reasons = [s.reason for s in await history.list_(session, m.id)]
     assert reasons.count("autosave") == 50 and reasons.count("before_mcp") == 5
+
+
+async def test_the_owners_text_survives_a_long_claude_session(session):
+    """Claude's snapshots must not silence the owner's autosave, or the owner's text lives only in Claude's pool."""
+    m = await new(session)
+    await manuscripts.upsert_text(session, m.id, "main.tex", "OWNER X")
+    for i in range(26):  # the first overwrites X, the rest are a long fix-the-errors session
+        await history.take(session, m.id, history.MCP_REASON)  # taken before each Claude write, as the MCP does
+        await manuscripts.upsert_text(session, m.id, "main.tex", f"claude {i}")
+    owner_pool = [s for s in await history.list_(session, m.id) if s.reason != history.MCP_REASON]
+    assert any(s.files.get("main.tex") == "OWNER X" for s in owner_pool)
+
+
+async def test_maybe_autosave_ignores_before_mcp_snapshots(session):
+    m = await new(session)
+    session.add(ManuscriptSnapshot(manuscript_id=m.id, reason=history.MCP_REASON, files={}))
+    await session.flush()
+    assert await history.maybe_autosave(session, m.id, now=datetime.now(timezone.utc)) is True

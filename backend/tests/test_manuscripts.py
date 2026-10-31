@@ -165,10 +165,10 @@ async def test_save_text_with_snapshot_keeps_the_old_files_and_skips_autosave(se
     assert await manuscripts.get_text(session, m.id, "a.tex") == "new"
 
 
-async def test_save_text_with_snapshot_but_no_prior_snapshot_makes_exactly_one(session):
+async def test_save_text_with_snapshot_but_no_prior_snapshot_takes_the_owners_autosave_then_its_own(session):
     m = await new(session)
     await manuscripts.save_text(session, m.id, "a.tex", "x", base=None, snapshot="before_mcp")
-    assert [s.reason for s in await snaps(session, m.id)] == ["before_mcp"]
+    assert sorted(s.reason for s in await snaps(session, m.id)) == ["autosave", "before_mcp"]
 
 
 async def test_a_refused_save_with_snapshot_leaves_none(session):

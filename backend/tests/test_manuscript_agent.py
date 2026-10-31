@@ -309,3 +309,36 @@ async def test_a_store_failure_leaves_no_snapshot_and_the_text_unchanged(session
         await agent.write_file(session, mid, "main.tex", "NEW", base)
     assert not await snaps(session, mid) and await text(session, mid, "main.tex") == old
     assert await session.scalar(select(func.count()).select_from(Manuscript)) >= 1  # the session is usable
+
+
+# --- the base must be exactly the file's updated_at ------------------------------------------------------------
+
+
+async def _two_saves(session):
+    mid = await new(session)
+    first = await updated(session, mid, "main.tex")
+    await agent.write_file(session, mid, "main.tex", "one", first)
+    return mid, first, await updated(session, mid, "main.tex")
+
+
+@pytest.mark.parametrize("which", ["future", "between"])
+async def test_a_guessed_base_is_file_changed_for_write_rename_and_delete(session, which):
+    mid, first, second = await _two_saves(session)
+    await agent.create_file(session, mid, "a.tex", "a")
+    row_time = await updated(session, mid, "a.tex")
+    guess = (
+        datetime.now(timezone.utc) + timedelta(hours=1) if which == "future" else row_time + timedelta(microseconds=1)
+    )
+    calls = [
+        agent.write_file(session, mid, "a.tex", "x", guess),
+        agent.rename_file(session, mid, "a.tex", "b.tex", guess),
+        agent.delete_file(session, mid, "a.tex", guess),
+    ]
+    for call in calls:
+        msg, details = await code(call, Conflict)
+        assert msg == "file_changed" and details["updated_at"] == row_time
+    assert await text(session, mid, "a.tex") == "a"
+    cur = await updated(session, mid, "main.tex")
+    await agent.write_file(session, mid, "main.tex", "ok", cur)  # the exact base works
+    await agent.rename_file(session, mid, "a.tex", "b.tex", row_time)
+    await agent.delete_file(session, mid, "b.tex", await updated(session, mid, "b.tex"))
