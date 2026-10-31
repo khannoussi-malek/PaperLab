@@ -10,6 +10,8 @@ import xml.etree.ElementTree as ET
 
 import httpx
 
+from app.providers.http import retrying
+
 BASE_URL = "https://export.arxiv.org"
 TIMEOUT = httpx.Timeout(10.0)
 MAX_TITLE_WORDS = 12
@@ -27,7 +29,7 @@ _ABS_ID = re.compile(r"arxiv\.org/abs/(.+?)(?:v\d+)?$")
 def new_client(
     *, email: str | None = None, api_key: str | None = None, transport: httpx.AsyncBaseTransport | None = None
 ) -> httpx.AsyncClient:
-    return httpx.AsyncClient(base_url=BASE_URL, timeout=TIMEOUT, transport=transport)
+    return httpx.AsyncClient(base_url=BASE_URL, timeout=TIMEOUT, transport=retrying(transport))
 
 
 # ponytail: no retry on 429, as in openalex.py, and nothing spaces requests 3 seconds apart: a reader searching faster

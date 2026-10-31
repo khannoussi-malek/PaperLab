@@ -44,7 +44,7 @@ import re
 
 import httpx
 
-from app.providers.http import RateLimited
+from app.providers.http import RateLimited, retrying
 
 BASE_URL = "https://www.ebi.ac.uk/europepmc/webservices/rest"
 TIMEOUT = httpx.Timeout(10.0)
@@ -61,7 +61,7 @@ def new_client(
 ) -> httpx.AsyncClient:
     # Europe PMC takes neither a contact email nor an API key; both parameters exist only to satisfy the
     # uniform new_client(*, email=None, api_key=None, transport=None) signature every provider shares.
-    limited = RateLimited(transport or httpx.AsyncHTTPTransport(), _MIN_INTERVAL)
+    limited = RateLimited(retrying(transport), _MIN_INTERVAL)
     return httpx.AsyncClient(base_url=BASE_URL, timeout=TIMEOUT, transport=limited)
 
 
