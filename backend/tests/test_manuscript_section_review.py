@@ -365,3 +365,9 @@ async def test_locate_of_a_main_with_inputs_has_no_spans_and_a_huge_text_refuses
     assert msr.locate("main.tex", main, "main.tex") == []
     with pytest.raises(InvalidInput, match="text_too_long"):
         msr.locate("main.tex", "x" * (3 * 1024**2), "main.tex")
+
+
+async def test_job_timeout_is_under_the_live_window():
+    from app.workers.manuscript_section_review import SECTION_REVIEW_JOB_TIMEOUT
+
+    assert SECTION_REVIEW_JOB_TIMEOUT < msr.LIVE.total_seconds()
