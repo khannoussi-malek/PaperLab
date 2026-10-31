@@ -286,6 +286,18 @@ def fake_section_review_reply(prompt: str) -> str:
     return "\n".join(lines)
 
 
+def fake_diagram_reply(prompt: str) -> str:
+    """One node per double-quoted phrase of the description (else its first three words), left to right with arrows."""
+    description = prompt.split("Description:\n", 1)[-1].split("\n\nLibraries you may load:", 1)[0]
+    phrases = re.findall(r'"([^"]+)"', description) or [" ".join(description.split()[:3])]
+    labels = [re.sub(r"[\\{}$&%#_^~]", "", p).strip() or "box" for p in phrases]
+    nodes = [f"\\node[draw] (n0) {{{labels[0]}}};"]
+    nodes += [f"\\node[draw, right=of n{i - 1}] (n{i}) {{{label}}};" for i, label in enumerate(labels[1:], 1)]
+    arrows = [f"\\draw[->] (n{i - 1}) -- (n{i});" for i in range(1, len(labels))]
+    head = "\\usetikzlibrary{arrows.meta,positioning}\n\\begin{tikzpicture}[>={Stealth}]"
+    return "\n".join(["<tikz>", head, *nodes, *arrows, "\\end{tikzpicture}", "</tikz>"])
+
+
 def fake_evidence_card_reply(prompt: str) -> str:
     """The evidence-card JSON on the fake stack: the first numbered passage's first words, copied exactly, as the
     research question, design and one finding. The value is the quote itself, so every number in it is in the quote."""
@@ -367,6 +379,7 @@ class FakeLLM:
         # Same reason: note_suggestions → core.chat → retrieval → embedding → http_embedders → this module.
         from app.core.claim_detect import SYSTEM_PROMPT as CLAIM_DETECT_SYSTEM_PROMPT
         from app.core.claims import SYSTEM_PROMPT as CLAIM_CHECK_SYSTEM_PROMPT
+        from app.core.diagram import SYSTEM_PROMPT as DIAGRAM_SYSTEM_PROMPT
         from app.core.evidence_cards import SYSTEM_PROMPT as EVIDENCE_CARD_SYSTEM_PROMPT
         from app.core.note_suggestions import SYSTEM_PROMPT as NOTE_SUGGESTIONS_SYSTEM_PROMPT
         from app.core.screening_suggest import SYSTEM_PROMPT as SCREENING_SYSTEM_PROMPT
@@ -392,6 +405,8 @@ class FakeLLM:
             tokens = [fake_claim_detect_reply(prompt)]
         elif system == SECTION_REVIEW_SYSTEM_PROMPT:
             tokens = [fake_section_review_reply(prompt)]
+        elif system == DIAGRAM_SYSTEM_PROMPT:
+            tokens = [fake_diagram_reply(prompt)]
         else:
             tokens = FAKE_TOKENS
         for index, token in enumerate(tokens):
