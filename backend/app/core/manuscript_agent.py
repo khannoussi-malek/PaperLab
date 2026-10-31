@@ -10,14 +10,16 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from pydantic import AwareDatetime
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import manuscript_history, manuscript_templates, manuscripts, workspaces
 from app.core import manuscript_paths as paths
 from app.core.errors import Conflict, InvalidInput
+from app.models import ManuscriptSnapshot
 
 Base = AwareDatetime  # the tools' `base` type, so server.py imports nothing new
-FIGURE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".pdf")
 MAX_TITLE = 200
 
 
@@ -186,7 +188,7 @@ async def read_file(
     row = await _text_row(session, mid, path)
     lines = row.text.splitlines(keepends=True)
     end = len(lines) if end_line is None else min(end_line, len(lines))
-    if start_line < 1 or (end_line is not None and start_line > end_line):
+    if start_line < 1 or start_line > max(end, 1) or (end_line is not None and start_line > end_line):
         raise InvalidInput("bad_line_range")
     return FileText(
         path=path,
@@ -201,8 +203,12 @@ async def read_file(
 
 async def _snapshot_id(session: AsyncSession, mid: uuid.UUID) -> uuid.UUID | None:
     """This transaction's `before_mcp` snapshot: the newest one."""
-    mine = [s for s in await manuscript_history.list_(session, mid) if s.reason == manuscript_history.MCP_REASON]
-    return mine[0].id if mine else None
+    return await session.scalar(
+        select(ManuscriptSnapshot.id)
+        .where(ManuscriptSnapshot.manuscript_id == mid, ManuscriptSnapshot.reason == manuscript_history.MCP_REASON)
+        .order_by(ManuscriptSnapshot.created_at.desc(), ManuscriptSnapshot.id)
+        .limit(1)
+    )
 
 
 async def _written(session: AsyncSession, mid: uuid.UUID, row) -> Written:
@@ -240,10 +246,17 @@ async def edit_file(
 ) -> Written:
     paths.validate_path(path)  # a hostile path answers its own code, not unknown_file
     row = await _text_row(session, mid, path)
-    if row.updated_at > base:  # early answer; save_text rechecks under the row lock
+    if row.updated_at > base:
         raise Conflict("file_changed", updated_at=row.updated_at)
+    # The recheck under the row lock is against the row the new text was computed from, not the caller's (maybe
+    # newer) base: an owner save landing since our unlocked read is refused, never overwritten.
     saved = await manuscripts.save_text(
-        session, mid, path, apply_edit(row.text, old_text, new_text), base=base, snapshot=manuscript_history.MCP_REASON
+        session,
+        mid,
+        path,
+        apply_edit(row.text, old_text, new_text),
+        base=row.updated_at,
+        snapshot=manuscript_history.MCP_REASON,
     )
     return await _written(session, mid, saved)
 
@@ -270,13 +283,14 @@ async def delete_file(session: AsyncSession, mid: uuid.UUID, path: str, base: Ba
 @_committing
 async def add_figure(session: AsyncSession, mid: uuid.UUID, path: str, data_base64: str) -> FigureAdded:
     paths.validate_path(path)
-    if not path.lower().endswith(FIGURE_EXTENSIONS):
+    if paths.is_text(path):
         raise InvalidInput("unsupported_file_type")
-    if path in {f.path for f in await manuscripts.files(session, mid)}:
-        raise Conflict("file_exists")  # never overwrite a binary
     try:
         data = base64.b64decode(data_base64, validate=True)
     except (binascii.Error, ValueError):
         raise InvalidInput("bad_base64") from None
-    row = await manuscripts.put_binary(session, mid, path, data)
+    try:
+        row = await manuscripts.put_binary(session, mid, path, data, create_only=True)  # never overwrite a binary
+    except IntegrityError:  # a racing add of the same new path committed first
+        raise Conflict("file_exists") from None
     return FigureAdded(path=path, size=row.size, updated_at=row.updated_at)

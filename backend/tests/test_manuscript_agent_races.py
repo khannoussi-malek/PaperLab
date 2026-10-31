@@ -1,7 +1,8 @@
 """The MCP against the owner's editor on real, separate connections (the shared test session can't show locking)."""
 
 import asyncio
-from datetime import datetime, timezone
+import base64
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import delete, func, select
@@ -101,4 +102,45 @@ async def test_both_at_once_with_the_same_base_one_wins_and_one_is_file_changed(
     mcp_won = not isinstance(results[1], BaseException)
     assert final == ("claude" if mcp_won else "owner")
     assert await mcp_snapshots(maker, mid) == (1 if mcp_won else 0)
-    assert datetime.now(timezone.utc) > (await base_of(maker, mid))
+
+
+async def test_an_edit_is_refused_when_the_owner_saves_between_its_read_and_its_save(real, monkeypatch):
+    """The caller's base is newer than the row (the manuscript's own updated_at, say), so only the row's own
+    updated_at can catch the owner save that lands after the unlocked read."""
+    new, maker = real
+    mid = await new()
+    late_base = datetime.now(timezone.utc) + timedelta(
+        hours=1
+    )  # newer than any save: only the row's own time can catch it
+    owner_base = await base_of(maker, mid)
+    original_save = manuscripts.save_text
+
+    async def owner_first(session, *args, **kwargs):
+        async with maker() as other:  # the owner's autosave commits after our read, before our save
+            await original_save(other, mid, "main.tex", "OWNER typed", base=owner_base)
+            await other.commit()
+        return await original_save(session, *args, **kwargs)
+
+    monkeypatch.setattr(manuscripts, "save_text", owner_first)
+    async with maker() as s:
+        with pytest.raises(Conflict, match="file_changed"):
+            await agent.edit_file(s, mid, "main.tex", "\\documentclass", "\\documentclass[x]", late_base)
+    async with maker() as s:
+        assert await manuscripts.get_text(s, mid, "main.tex") == "OWNER typed"
+    assert await mcp_snapshots(maker, mid) == 0
+
+
+async def test_two_adds_of_the_same_new_figure_one_wins_and_the_bytes_are_the_winners(real):
+    new, maker = real
+    mid = await new()
+
+    async def add(data):
+        async with maker() as s:
+            return await agent.add_figure(s, mid, "figs/a.png", base64.b64encode(data).decode())
+
+    results = await asyncio.gather(add(b"one"), add(b"two!"), return_exceptions=True)
+    failures = [r for r in results if isinstance(r, BaseException)]
+    assert len(failures) == 1 and isinstance(failures[0], Conflict) and str(failures[0]) == "file_exists"
+    winner = next(d for d, r in zip((b"one", b"two!"), results) if not isinstance(r, BaseException))
+    async with maker() as s:
+        assert (await manuscripts.read(s, mid, "figs/a.png")).data == winner
