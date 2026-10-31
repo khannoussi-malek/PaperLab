@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, fireEvent, cleanup } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup, within, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
@@ -9,6 +9,8 @@ import { PaperList } from '@/features/library/PaperList'
 import { WorkspacePapers } from './WorkspacePapers'
 import { tagSummary } from './tagFixtures'
 
+vi.mock('@/features/triage/pdfCache', () => ({ useCachedPdf: () => ({ doc: null, error: null }), retainOnly: vi.fn(), prefetchPdf: vi.fn() })) // pdfjs needs a worker
+vi.mock('@/features/reader/PdfPage', () => ({ PdfPage: () => null }))
 vi.mock('@/features/library/PaperPreview', () => ({ PaperPreview: () => null })) // pulls in pdfjs, which needs a worker
 vi.stubGlobal('matchMedia', () => ({ matches: false }))
 vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
@@ -16,7 +18,7 @@ Element.prototype.scrollIntoView = () => {}
 
 const paper = (id: string, title: string) => ({
   id, title, authors: [], year: null, venue: null, page_count: null, status: 'ready', status_error: null,
-  peer_reviewed: 'unknown', evidence_access: 'metadata', source_type: null, is_retracted: false,
+  peer_reviewed: 'unknown', evidence_access: 'metadata', source_type: null, is_retracted: false, triage: null, reading_pass: null,
 }) as unknown as Paper
 
 const papers = [paper('p1', 'Alpha trial'), paper('p2', 'Beta cohort'), paper('p3', 'Gamma study')]
@@ -40,7 +42,7 @@ function setup(tags: string[], match: 'any' | 'all' = 'any', data: Paper[] | nul
   return onTagsChange
 }
 
-afterEach(() => { localStorage.clear(); cleanup(); vi.restoreAllMocks() })
+afterEach(() => { localStorage.clear(); sessionStorage.clear(); cleanup(); vi.restoreAllMocks() })
 
 const rows = () => Array.from(document.querySelectorAll('li.paper-row')).map((r) => r.querySelector('a')?.textContent)
 
@@ -222,4 +224,16 @@ test('the Deck view drops checkboxes and the selection bar; List brings them bac
   fireEvent.click(screen.getByRole('button', { name: 'List' }))
   expect(screen.getAllByRole('button', { name: 'Paper actions' }).length).toBeGreaterThan(0)
   expect(screen.getByText('1 selected')).toBeInTheDocument()
+})
+
+test('the Triage view is offered beside List and Deck and opens the workspace desk', async () => {
+  setup([])
+  const group = screen.getByRole('group', { name: 'Show papers as' })
+  fireEvent.click(within(group).getByRole('button', { name: 'Triage' }))
+  expect(screen.getByRole('group', { name: 'Triage' })).toBeInTheDocument()
+  expect(screen.getByText(/Triage · this workspace · 3 left of 3/)).toBeInTheDocument()
+  expect(sessionStorage.getItem('paperlab-triage-session:workspace:w1')).not.toBeNull()
+  fireEvent.keyDown(screen.getByRole('group', { name: 'Triage' }), { key: 'Escape' })
+  expect(screen.queryByRole('group', { name: 'Triage' })).toBeNull()
+  await waitFor(() => expect(within(group).getByRole('button', { name: 'Triage' })).toHaveFocus())
 })

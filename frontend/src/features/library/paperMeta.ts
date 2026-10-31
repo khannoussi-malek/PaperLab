@@ -41,3 +41,7 @@ export function paperLabel(paper: Pick<Paper, 'title' | 'authors' | 'year'>): st
   if (family) return paper.year ? `${family} ${paper.year}` : family
   return paper.title.length > LABEL_CHARS ? `${paper.title.slice(0, LABEL_CHARS - 1)}…` : paper.title
 }
+
+/** Ready is the normal state, and a paper without a PDF never ingests (its abstract embeds in a moment): neither shows. */
+export const quietStatus = (paper: Pick<Paper, 'status' | 'has_pdf'>): boolean =>
+  paper.status === 'ready' || (paper.has_pdf === false && paper.status !== 'failed')

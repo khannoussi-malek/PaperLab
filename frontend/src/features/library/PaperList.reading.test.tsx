@@ -4,6 +4,8 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { api, type Paper } from '@/api/client'
 
+vi.mock('@/features/triage/pdfCache', () => ({ useCachedPdf: () => ({ doc: null, error: null }), retainOnly: vi.fn(), prefetchPdf: vi.fn() })) // pdfjs needs a worker
+vi.mock('@/features/reader/PdfPage', () => ({ PdfPage: () => null }))
 vi.mock('../graph/hands/HandsMode', () => ({ default: () => null }))
 vi.mock('./PaperPreview', () => ({ PaperPreview: () => <aside>preview</aside> }))
 import { PaperList } from './PaperList'

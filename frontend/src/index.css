@@ -35,6 +35,7 @@
     --color-glass: var(--glass);
     --color-glass-strong: var(--glass-strong);
     --color-glass-border: var(--glass-border);
+    --color-paper: var(--paper);
     --color-on-page-ring: var(--on-page-ring);
     --radius-sm: calc(var(--radius) * 0.6);
     --radius-md: calc(var(--radius) * 0.8);
@@ -45,7 +46,9 @@
     --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-:root {
+:root,
+/* A light island inside the dark theme (the triage card): re-declares every token above to its light value. */
+.paper-surface {
     --background: #f8fafc;
     --foreground: #0f172a;
     --card: #ffffff;
@@ -80,6 +83,14 @@
     /* Not redefined under .dark: controls sitting on the always-white PDF page (citation buttons) need a ring that
        still contrasts 3:1 there, which dark theme's --primary (#60a5fa) does not. */
     --on-page-ring: #2563eb;
+    /* Card surface for paper-like cards (triage); light in both themes. */
+    --paper: #fbf8f0;
+}
+
+.paper-surface {
+    background-color: var(--paper);
+    color: var(--foreground);
+    color-scheme: light;
 }
 
 .dark {
