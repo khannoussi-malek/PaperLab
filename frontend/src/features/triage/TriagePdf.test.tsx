@@ -124,3 +124,31 @@ it('a paper whose document is still loading says so quietly', () => {
   render(<TriagePdf paperId="p1" active target={null} onInteract={vi.fn()} />)
   expect(screen.getByLabelText('PDF pages')).toBeInTheDocument()
 })
+
+it('scroll keys end a jump: the counter follows the scroll and a late page-size change does not pull it back', async () => {
+  const observers: (() => void)[] = []
+  vi.stubGlobal('ResizeObserver', class { constructor(cb: () => void) { observers.push(cb) } observe() {} unobserve() {} disconnect() {} })
+  const onInteract = vi.fn()
+  const { rerender } = render(<TriagePdf paperId="p1" active target={null} onInteract={onInteract} />)
+  const box = await screen.findByLabelText('PDF pages')
+  await screen.findByText(/of 3/)
+  fakeLayout(box)
+  rerender(<TriagePdf paperId="p1" active target={{ page: 3, n: 1 }} onInteract={onInteract} />)
+  expect(screen.getByText('Page 3 of 3')).toBeInTheDocument()
+  fireEvent.keyDown(box, { key: 'ArrowDown' })
+  box.scrollTop = 20
+  fireEvent.scroll(box)
+  expect(screen.getByText('Page 1 of 3')).toBeInTheDocument()
+  observers.forEach((cb) => cb()) // pages finish measuring
+  expect(box.scrollTop).toBe(20)
+  vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
+})
+
+it.each([' ', 'Home', 'PageDown'])('%s also ends a pending jump', async (key) => {
+  const { box, onPage } = await setup({ target: { page: 3, n: 1 } })
+  fireEvent.keyDown(box, { key })
+  box.scrollTop = 0
+  fireEvent.scroll(box)
+  expect(onPage).toHaveBeenCalled()
+  expect(screen.getByText(/Page [12] of 3/)).toBeInTheDocument()
+})

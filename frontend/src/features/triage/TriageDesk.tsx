@@ -22,6 +22,7 @@ import { closeSession } from './sessionId'
 import { TriagePdf } from './TriagePdf'
 import { useCardClock } from './useCardClock'
 import { useDeskKeys } from './useDeskKeys'
+import { useKeepDeskFocus } from './useKeepDeskFocus'
 import { useTriageSession } from './useTriageSession'
 
 const DEFAULT_ORDER: Order = 'oldest'
@@ -77,6 +78,8 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
   })
   const { state, top, notReady } = session
   useEffect(() => root.current?.focus(), [])
+  useKeepDeskFocus(root)
+  useEffect(() => () => retainOnly([]), []) // leaving triage lets every kept document go
   const topId = top?.id
   const showPdf = layout === 'wide' && pdfOn && Boolean(top?.has_pdf)
   const clock = useCardClock(topId, { pdfShown: showPdf })
@@ -226,25 +229,25 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
             </div>
           )}
           <div className={showPdf ? 'flex items-start gap-3' : undefined}>
-          <div data-triage-region tabIndex={-1} className={showPdf ? 'min-w-0 flex-1 outline-none' : 'outline-none'}>
-            <DeskStage
-              top={top}
-              behind={state.unseen.slice(1, 3).flatMap((id) => library.find((p) => p.id === id) ?? [])}
-              counts={countsByPile(state)}
-              layout={showPdf ? 'tabs' : layout}
-              hot={held ?? (reasons ? 'not_relevant' : null)}
-              hovering={reasons ? 'not_relevant' : null}
-              departing={departing}
-              onCommit={choose}
-              onHover={() => {}}
-              reduced={reduced}
-            />
-          </div>
-          {showPdf && (
-            <div className="sticky top-2 w-[52%] shrink-0">
-              <TriagePdf key={top.id} paperId={top.id} active target={null} onInteract={clock.interact} />
+            <div data-triage-region tabIndex={-1} className={showPdf ? 'min-w-0 flex-1 outline-none' : 'outline-none'}>
+              <DeskStage
+                top={top}
+                behind={state.unseen.slice(1, 3).flatMap((id) => library.find((p) => p.id === id) ?? [])}
+                counts={countsByPile(state)}
+                layout={showPdf ? 'tabs' : layout}
+                hot={held ?? (reasons ? 'not_relevant' : null)}
+                hovering={reasons ? 'not_relevant' : null}
+                departing={departing}
+                onCommit={choose}
+                onHover={() => {}}
+                reduced={reduced}
+              />
             </div>
-          )}
+            {showPdf && (
+              <div className="sticky top-2 w-[52%] shrink-0">
+                <TriagePdf key={top.id} paperId={top.id} active target={null} onInteract={clock.interact} />
+              </div>
+            )}
           </div>
           {reasons && <ReasonChips reasons={REASONS.not_relevant} noteFor="other" onPick={(r, note) => go('not_relevant', r, note)} onCancel={cancelReason} />}
           <TriageControls layout={layout} undo={undoInfo} onUndo={undo} onDecide={choose} progress={progress(state)} />
