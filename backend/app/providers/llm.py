@@ -277,6 +277,15 @@ def fake_claim_detect_reply(prompt: str) -> str:
     return json.dumps({"is_claim": flag, "reason": "Fake: a number or 'show'." if flag else "Fake: neither."})
 
 
+def fake_section_review_reply(prompt: str) -> str:
+    """The first checklist item as Missing, and Supported on [S1] when a first sentence exists."""
+    item = re.search(r"Checklist:\n- (.+)", prompt)
+    lines = [f"Missing: {item.group(1)}" if item else "Missing: nothing to check"]
+    if "[S1]" in prompt:
+        lines.append("Supported: the opening states its topic [S1]")
+    return "\n".join(lines)
+
+
 def fake_evidence_card_reply(prompt: str) -> str:
     """The evidence-card JSON on the fake stack: the first numbered passage's first words, copied exactly, as the
     research question, design and one finding. The value is the quote itself, so every number in it is in the quote."""
@@ -362,6 +371,7 @@ class FakeLLM:
         from app.core.note_suggestions import SYSTEM_PROMPT as NOTE_SUGGESTIONS_SYSTEM_PROMPT
         from app.core.screening_suggest import SYSTEM_PROMPT as SCREENING_SYSTEM_PROMPT
         from app.core.screening_suggest import SYSTEM_PROMPT_V2 as SCREENING_SYSTEM_PROMPT_V2
+        from app.core.section_review import SYSTEM_PROMPT as SECTION_REVIEW_SYSTEM_PROMPT
 
         self.calls.append((system, prompt))
         if asks_for_notes(prompt):
@@ -380,6 +390,8 @@ class FakeLLM:
             tokens = [fake_claim_check_reply(prompt)]
         elif system == CLAIM_DETECT_SYSTEM_PROMPT:
             tokens = [fake_claim_detect_reply(prompt)]
+        elif system == SECTION_REVIEW_SYSTEM_PROMPT:
+            tokens = [fake_section_review_reply(prompt)]
         else:
             tokens = FAKE_TOKENS
         for index, token in enumerate(tokens):
