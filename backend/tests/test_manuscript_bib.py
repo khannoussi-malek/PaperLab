@@ -194,6 +194,56 @@ async def test_a_preprint_keeps_its_genre_note_in_a_manuscript_bib(session):
     assert "note = {Preprint}" in bib and "in PaperLab" not in bib
 
 
+LEAKS = ("in PaperLab", "peer-reviewed", "Source:", "keywords", "abstract", "annote")
+
+
+async def test_a_pinned_paper_that_left_the_workspace_leaks_no_library_fields(session):
+    from app.core import manuscript_papers
+
+    ws, (p,), m = await setup(session, "Praise and creativity")
+    p.peer_reviewed, p.abstract, p.source_type = "true", "Long.", "journal_article"  # has a PDF: full text
+    await session.flush()
+    key = await manuscript_papers.pin(session, m.id, p.id)
+    await workspaces.remove_paper(session, ws.id, p.id)
+    bib = await build_bib(session, m, {})
+    assert f"{{{key}," in bib and "Praise and creativity" in bib
+    for leak in LEAKS:
+        assert leak not in bib, leak
+
+
+async def test_an_old_stored_entry_loses_its_library_fields(session):
+    _, _, m = await setup(session)
+    old = (
+        "@article{smith2020old,\n\ttitle = {Old one},\n\tnote = {Source: journal article · peer-reviewed · full text"
+        " in PaperLab},\n\tabstract = {Long.},\n\tkeywords = {tag},\n\tdoi = {10.1/x},"
+        "\n\turl = {https://pdf.example/x.pdf}\n}\n"
+    )
+    session.add(ManuscriptCiteKey(manuscript_id=m.id, key="smith2020old", paper_id=None, bibtex=old))
+    await session.flush()
+    bib = await build_bib(session, m, {})
+    assert "@article{smith2020old," in bib and "Old one" in bib and "doi = {10.1/x}" in bib
+    for leak in (*LEAKS, "url ="):
+        assert leak not in bib, leak
+
+
+async def test_an_old_stored_preprint_entry_keeps_only_its_genre_note(session):
+    _, _, m = await setup(session)
+    old = "@misc{smith2020pre,\n\ttitle = {Pre},\n\tnote = {Preprint. Abstract only in PaperLab}\n}\n"
+    session.add(ManuscriptCiteKey(manuscript_id=m.id, key="smith2020pre", paper_id=None, bibtex=old))
+    await session.flush()
+    bib = await build_bib(session, m, {})
+    assert "note = {Preprint}" in bib and "in PaperLab" not in bib
+
+
+async def test_a_manuscript_bib_drops_the_url_when_a_doi_is_known(session):
+    _, (p, q), m = await setup(session, "With doi", "Without doi")
+    p.doi, p.oa_url, q.oa_url = "10.1/withdoi", "https://pdf.example/a.pdf", "https://pdf.example/b.pdf"
+    await session.flush()
+    bib = await build_bib(session, m, {})
+    assert "https://pdf.example/a.pdf" not in bib and "doi = {10.1/withdoi}" in bib
+    assert "url = {https://pdf.example/b.pdf}" in bib  # no DOI: the link is the only way to find it
+
+
 def test_the_library_export_still_carries_paperlabs_notes():
     from types import SimpleNamespace
 

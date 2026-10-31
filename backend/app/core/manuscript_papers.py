@@ -60,8 +60,8 @@ async def pin(session: AsyncSession, mid: uuid.UUID, paper_id: uuid.UUID) -> str
     if pid not in items:
         raise NotFound("unknown_paper")
     key = next(k for k, v in generated.items() if v == pid)
-    session.add(ManuscriptCiteKey(manuscript_id=mid, key=key, paper_id=paper_id,
-                                  bibtex=_bibtex([items[pid]], {pid: key})))
+    bibtex = _bibtex([items[pid]], {pid: key}, publish=True)
+    session.add(ManuscriptCiteKey(manuscript_id=mid, key=key, paper_id=paper_id, bibtex=bibtex))
     await session.flush()
     return key
 

@@ -147,9 +147,9 @@ ANDERSON_WORK = {
 ANDERSON_PAGE = "Homogenization Effects of Large Language Models on Human Creative Ideation\nBARRETT R. ANDERSON\n"
 
 
-async def enrich_upload(session, paper, page):
-    client, _ = fake_crossref(ANDERSON_WORK)
-    await enrichment.enrich_paper(session, None, paper.id, hints(text=page), crossref_http=client)
+async def enrich_upload(session, paper, page, years=(2024,), work=ANDERSON_WORK):
+    client, _ = fake_crossref(work)
+    await enrichment.enrich_paper(session, None, paper.id, hints(text=page, years=years), crossref_http=client)
     await session.refresh(paper)
     return paper
 
@@ -171,3 +171,24 @@ async def test_crossref_never_overwrites_an_uploads_known_authors_or_year(sessio
     paper = await add_paper(session, doi=DOI, authors=["A. Anderson"], year=2023)
     paper = await enrich_upload(session, paper, ANDERSON_PAGE)
     assert (paper.authors, paper.year, paper.venue) == (["A. Anderson"], 2023, "Creativity and Cognition")
+
+
+HE_WORK = {
+    "type": "journal-article",
+    "title": ["Deep Residual Learning for Image Recognition"],
+    "author": [{"given": "Kaiming", "family": "He"}],
+    "issued": {"date-parts": [[2016]]},
+    "container-title": ["CVPR"],
+}
+
+
+async def test_a_short_surname_on_a_page_that_cites_the_doi_fills_nothing_without_a_year_or_title_match(session):
+    page = "Our model\nAnn Lee\nWe build on He et al. [3], doi:10.9999/f6.test\n"  # cites He 2016; this is 2023
+    paper = await enrich_upload(session, await add_paper(session, doi=DOI), page, years=(2023,), work=HE_WORK)
+    assert (paper.authors, paper.year, paper.venue) == ([], None, None)
+
+
+async def test_a_matching_title_fills_without_a_year_hint(session):
+    paper = await add_paper(session, doi=DOI, title="Deep residual learning for image recognition")
+    paper = await enrich_upload(session, paper, "Kaiming He\n", years=(), work=HE_WORK)
+    assert (paper.authors, paper.year) == (["Kaiming He"], 2016)
