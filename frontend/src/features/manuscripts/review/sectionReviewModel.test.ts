@@ -1,7 +1,7 @@
 import { CircleDashed, Check, TriangleAlert } from 'lucide-react'
 import { expect, test } from 'vitest'
 import type { SectionReview, SectionSpan } from '@/api/client'
-import { FINDING_ICON, FINDING_LABEL, findingTone, groupFindings, REVIEWABLE_ROLES, refChip, ROLE_LABEL, sectionAt, staleReviews, statusLine } from './sectionReviewModel'
+import { failedReason, FINDING_ICON, FINDING_LABEL, findingTone, groupFindings, REVIEWABLE_ROLES, refChip, ROLE_LABEL, sectionAt, staleReviews, statusLine } from './sectionReviewModel'
 
 const review = (o: Partial<SectionReview> = {}): SectionReview => ({ id: 'r1', file: 'main.tex', section_hash: 'h1', title: 'Method', role: 'method', role_source: 'guessed', status: 'done', reason: null, findings: [], dropped: 0, model: 'm', ai: true, created_at: '2026-10-31T00:00:00Z', ...o })
 const span = (hash: string, start: number, end: number): SectionSpan => ({ title: hash, start, end, hash, words: 10, guess: 'method' })
@@ -57,4 +57,8 @@ test('a one-line status per review, for the announcer', () => {
   expect(statusLine(review({ status: 'failed', reason: 'model_error', title: 'Method' }))).toBe("Review of “Method” failed: The model didn't give a usable answer.")
   expect(statusLine(review({ status: 'failed', reason: 'cancelled', title: 'Method' }))).toBe('Review of “Method” failed: Cancelled.')
   expect(statusLine(review({ status: 'interrupted', title: 'Method' }))).toBe('Review of “Method” was interrupted.')
+})
+
+test('a review stopped because the default model turned remote says to start again', () => {
+  expect(failedReason('remote_model_needs_confirm')).toBe('The default model is now a cloud model. Start again to confirm sending your text.')
 })

@@ -25,14 +25,20 @@ export const editableCode = (d: Pick<Diagram, 'code' | 'libraries'>): string =>
 
 export const DIAGRAM_ERRORS: Record<string, string> = {
   compile_timeout: 'The diagram took too long to draw.',
+  compile_failed: "PaperLab couldn't draw the preview. Try Update preview again.",
+  check_failed: 'Something went wrong while drawing. Try again.',
   package_missing: "The diagram needs a LaTeX package PaperLab doesn't include offline.",
-  library_not_cached: "The diagram uses a TikZ library PaperLab doesn't include offline.",
+  outside_file: "The diagram tried to read a file, which PaperLab doesn't allow.",
+  diagram_invalid: "The diagram code isn't allowed as written; see the problems listed.",
   model_error: "The model didn't give a usable answer. Try again or describe it differently.",
   model_unavailable: "The model isn't answering. Check it in Settings and try again.",
+  no_model: 'Add a model in Settings to draw diagrams.',
+  remote_model_needs_confirm: 'The default model is now a cloud model. Start again to confirm sending your text.',
   diagram_too_large: 'The diagram is too large to preview. Try a simpler one.',
   cancelled: 'Stopped.',
-  queue_unavailable: "PaperLab couldn't start drawing. Try again in a moment.",
+  queue_unavailable: "PaperLab's background worker isn't running. Try again in a moment.",
 }
+export const LOST = 'PaperLab lost touch with this run. Close and try again.'
 const INTERRUPTED = 'The diagram stopped before it finished. Try again.'
 const DIDNT_COMPILE = "The diagram didn't compile."
 const FAILED = 'Something went wrong drawing the diagram. Try again.'

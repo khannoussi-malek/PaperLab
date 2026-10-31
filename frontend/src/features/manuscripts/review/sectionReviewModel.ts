@@ -44,13 +44,18 @@ const FAILED: Record<string, string> = {
   model_unavailable: "The model couldn't be reached. Try again.",
   queue_unavailable: "The review couldn't start. Try again.",
   no_model: 'Add a model in Settings to run the reviewer.',
+  remote_model_needs_confirm: 'The default model is now a cloud model. Start again to confirm sending your text.',
 }
 /** A failed review's reason in plain words. */
 export const failedReason = (reason: string | null) => FAILED[reason ?? ''] ?? "The review couldn't finish. Try again."
 
-/** One line for the panel's announcer: started, done (with counts), failed or interrupted. */
-export function statusLine(review: Pick<SectionReview, 'title' | 'status' | 'reason' | 'findings'>): string {
+/** A live review whose poll keeps failing: we can't tell how it is going. */
+export const LOST_REVIEW = "Couldn't check on this review. Try Review again."
+
+/** One line for the panel's announcer: started, done (with counts), failed, interrupted, or lost touch with. */
+export function statusLine(review: Pick<SectionReview, 'title' | 'status' | 'reason' | 'findings'>, lost = false): string {
   const title = `“${review.title}”`
+  if (lost && (review.status === 'queued' || review.status === 'running')) return `Couldn't check on ${title}. Try Review again.`
   switch (review.status) {
     case 'queued':
     case 'running': return `Reviewing ${title}…`

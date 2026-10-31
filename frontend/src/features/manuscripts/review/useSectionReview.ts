@@ -31,7 +31,8 @@ export function useSectionReview(manuscriptId: string, file: string, enabled = t
     queryKey: key,
     queryFn: () => api.sectionReviews(manuscriptId, file),
     enabled,
-    refetchInterval: (q) => (q.state.data?.reviews.some((r) => r.status === 'queued' || r.status === 'running') ? POLL_MS : false),
+    // A failing poll stops (as useReview does); the card says so instead of spinning.
+    refetchInterval: (q) => (q.state.status !== 'error' && q.state.data?.reviews.some((r) => r.status === 'queued' || r.status === 'running') ? POLL_MS : false),
   })
   const refresh = () => qc.invalidateQueries({ queryKey: key })
   const start = useMutation({
@@ -41,9 +42,12 @@ export function useSectionReview(manuscriptId: string, file: string, enabled = t
   })
   const cancel = useMutation({ mutationFn: (id: string) => api.cancelSectionReview(manuscriptId, id), onSettled: refresh })
   const reviews = state.data?.reviews ?? NONE
+  const lost = state.isError
   return {
     reviews,
-    live: reviews.some((r) => r.status === 'queued' || r.status === 'running'),
+    /** Polling failed: what the server says now is unknown, so Review again is offered. */
+    lost,
+    live: !lost && reviews.some((r) => r.status === 'queued' || r.status === 'running'),
     /** `base` is the file's updated_at, `at` the cursor (UTF-16); `role` only when the researcher overrode the guess. */
     start: (s: SectionStart) => start.mutateAsync(s),
     cancel: (id: string) => cancel.mutateAsync(id),

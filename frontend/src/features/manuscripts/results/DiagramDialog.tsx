@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { RemoteConfirm } from '../review/RemoteConfirm'
 import { remoteHost } from '../review/reviewModel'
-import { canInsert, diagramBlock, diagramLabel, diagramPackages, diagramProblem, diagramStartError, editableCode, isLive } from './diagramModel'
+import { canInsert, diagramBlock, diagramLabel, diagramPackages, diagramProblem, diagramStartError, editableCode, isLive, LOST } from './diagramModel'
 import { useDiagram } from './useDiagram'
 import type { InsertResult } from './useInsertBlock'
 
@@ -44,6 +44,8 @@ export function DiagramDialog({ open, onOpenChange, manuscriptId, labelTexts, on
     void d.discard()
     onOpenChange(false)
   }
+  // An Insert in flight decides: it closes on success or shows why it failed (Task 9 review, minor 1).
+  const dismiss = () => { if (!inserting.current) close() }
   const run = async (step: () => Promise<unknown>) => {
     setBusy(true)
     setError(null)
@@ -84,13 +86,16 @@ export function DiagramDialog({ open, onOpenChange, manuscriptId, labelTexts, on
     }
   }
 
-  const live = row !== null && isLive(row)
+  const live = row !== null && isLive(row) && !d.lost
   const shownCode = row ? (draft ?? editableCode(row)) : ''
   const dirty = row !== null && draft !== null && draft !== editableCode(row)
-  const problem = row && !live ? diagramProblem(row) : null
+  const problem = d.lost ? LOST : row && !live ? diagramProblem(row) : null
+  const status = row === null || d.lost ? ''
+    : live ? (row.code === null ? 'Drawing your diagram…' : 'Updating the preview…')
+    : canInsert(row) ? 'Your diagram is ready.' : "Your diagram couldn't be drawn."
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) close() }}>
+    <Dialog open={open} onOpenChange={(o) => { if (!o) dismiss() }}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl" onCloseAutoFocus={(e) => { e.preventDefault(); onClosed?.(inserted.current) }}>
         <DialogHeader>
           <DialogTitle>Draw a diagram</DialogTitle>
@@ -111,9 +116,15 @@ export function DiagramDialog({ open, onOpenChange, manuscriptId, labelTexts, on
               </div>
             ) : (
               <Draft row={row} manuscriptId={manuscriptId} live={live} busy={busy} tab={tab} onTab={setTab} code={shownCode} dirty={dirty}
-                onCode={setDraft} onUpdate={() => void run(async () => { await d.editCode(shownCode); setDraft(null) })}
-                onCancelRun={() => void run(d.cancel)} />
+                onCode={setDraft} onUpdate={() => void run(async () => { await d.editCode(shownCode); setDraft(null) })} />
             )}
+            {/* Always mounted, so the change from drawing to done or failed is announced (a region created with its text is not). */}
+            <div className="flex items-center gap-2 text-sm">
+              <p role="status" className="flex items-center gap-1.5">
+                {live && <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />}{status}
+              </p>
+              {live && <Button type="button" size="sm" variant="outline" aria-label="Cancel drawing" disabled={busy} onClick={() => void run(d.cancel)}>Cancel</Button>}
+            </div>
             <div aria-live="polite" className="space-y-1 text-sm">
               {error && <p className="text-destructive">{error}</p>}
               {problem && <p className="flex items-center gap-1.5 text-destructive"><TriangleAlert className="size-4 shrink-0" aria-hidden />{problem}</p>}
@@ -124,7 +135,7 @@ export function DiagramDialog({ open, onOpenChange, manuscriptId, labelTexts, on
               )}
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={close}>Cancel</Button>
+              <Button type="button" variant="outline" onClick={dismiss}>Cancel</Button>
               {row === null ? (
                 <Button type="button" disabled={busy || !description.trim()} onClick={() => void start(false)}>{busy ? 'Starting…' : 'Generate'}</Button>
               ) : (
@@ -141,7 +152,7 @@ export function DiagramDialog({ open, onOpenChange, manuscriptId, labelTexts, on
   )
 }
 
-function Draft({ row, manuscriptId, live, busy, tab, onTab, code, dirty, onCode, onUpdate, onCancelRun }: {
+function Draft({ row, manuscriptId, live, busy, tab, onTab, code, dirty, onCode, onUpdate }: {
   row: Diagram
   manuscriptId: string
   live: boolean
@@ -152,18 +163,11 @@ function Draft({ row, manuscriptId, live, busy, tab, onTab, code, dirty, onCode,
   dirty: boolean
   onCode: (code: string) => void
   onUpdate: () => void
-  onCancelRun: () => void
 }) {
   const drawn = row.status === 'done' && row.compiled === true
   return (
     <div className="space-y-3">
       <p className="flex items-center gap-2 text-sm">{AI}<span className="text-muted-foreground">From your description: {row.description}</span></p>
-      <div className="flex items-center gap-2 text-sm">
-        <p role="status" className="flex items-center gap-1.5">
-          {live && <><Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />{row.code === null ? 'Drawing your diagram…' : 'Updating the preview…'}</>}
-        </p>
-        {live && <Button type="button" size="sm" variant="outline" aria-label="Cancel drawing" disabled={busy} onClick={onCancelRun}>Cancel</Button>}
-      </div>
       {row.labels_not_in_description.length > 0 && (
         <p className="flex items-center gap-1.5 text-sm text-amber-700 dark:text-amber-500"><TriangleAlert className="size-4 shrink-0" aria-hidden />These labels weren't in your description: {row.labels_not_in_description.join(', ')}</p>
       )}
