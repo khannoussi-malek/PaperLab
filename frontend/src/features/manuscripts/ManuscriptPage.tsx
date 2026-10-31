@@ -1,5 +1,6 @@
 import { useQueries } from '@tanstack/react-query'
-import { Download, FolderInput, History, Trash2 } from 'lucide-react'
+import { FolderInput, History, Trash2 } from 'lucide-react'
+import { DownloadMenu } from './DownloadMenu'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, ApiError } from '@/api/client'
 import { useCompileManuscript, useManuscript, useManuscriptPapers, usePapersFollowCompile, usePinPaper } from '@/api/queries'
@@ -253,9 +254,7 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
           <Button variant="ghost" size="sm" onClick={() => setHistoryOpen(true)}><History aria-hidden />History</Button>
           <Button variant="ghost" size="sm" onClick={() => setDialog('move')}><FolderInput aria-hidden />Move</Button>
           <Button variant="ghost" size="sm" onClick={() => setDialog('delete')}><Trash2 aria-hidden />Delete</Button>
-          <Button variant="ghost" size="sm" asChild>
-            <a href={api.manuscriptExportUrl(manuscriptId)} download><Download aria-hidden />Download zip</a>
-          </Button>
+          <DownloadMenu manuscript={data} />
         </>
       )}
     >
