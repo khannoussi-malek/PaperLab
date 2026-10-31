@@ -53,6 +53,11 @@ EXPECTED_TOOLS = {
     "generate_evidence_card": None, "get_evidence_card": True, "list_evidence_cards": True,
     "export_citations": True, "import_citations": None, "enrich_hits": None, "enrich_papers": None,
     "list_tags": True, "tag_papers": None, "untag_papers": None, "rename_tag": None, "delete_tag": None,
+    "list_manuscripts": True, "create_manuscript": None, "list_manuscript_files": True,
+    "read_manuscript_file": True, "create_manuscript_file": None, "write_manuscript_file": None,
+    "edit_manuscript_file": None, "rename_manuscript_file": None, "delete_manuscript_file": None,
+    "add_manuscript_figure": None, "compile_manuscript": None, "get_compile_result": True,
+    "read_manuscript_pdf_text": True,
 }
 
 

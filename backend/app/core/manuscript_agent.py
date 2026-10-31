@@ -264,6 +264,7 @@ async def edit_file(
 @_committing
 async def rename_file(session: AsyncSession, mid: uuid.UUID, path: str, new_path: str, base: Base) -> Renamed:
     paths.validate_path(new_path)
+    paths.validate_path(path)
     await _text_row(session, mid, path)
     if path == (await manuscripts.get(session, mid)).main_file:
         raise Conflict("main_file")  # a restore of the snapshot would fail without the new main file
@@ -275,6 +276,7 @@ async def rename_file(session: AsyncSession, mid: uuid.UUID, path: str, new_path
 
 @_committing
 async def delete_file(session: AsyncSession, mid: uuid.UUID, path: str, base: Base) -> Deleted:
+    paths.validate_path(path)
     await _text_row(session, mid, path)
     await manuscripts.remove(session, mid, path, base=base, snapshot=manuscript_history.MCP_REASON)
     return Deleted(path=path, snapshot_id=await _snapshot_id(session, mid))
