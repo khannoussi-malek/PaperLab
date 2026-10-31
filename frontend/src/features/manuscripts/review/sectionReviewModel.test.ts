@@ -1,7 +1,7 @@
 import { CircleDashed, Check, TriangleAlert } from 'lucide-react'
 import { expect, test } from 'vitest'
 import type { SectionReview, SectionSpan } from '@/api/client'
-import { FINDING_ICON, FINDING_LABEL, findingTone, groupFindings, REVIEWABLE_ROLES, refChip, ROLE_LABEL, sectionAt, staleReviews } from './sectionReviewModel'
+import { FINDING_ICON, FINDING_LABEL, findingTone, groupFindings, REVIEWABLE_ROLES, refChip, ROLE_LABEL, sectionAt, staleReviews, statusLine } from './sectionReviewModel'
 
 const review = (o: Partial<SectionReview> = {}): SectionReview => ({ id: 'r1', file: 'main.tex', section_hash: 'h1', title: 'Method', role: 'method', role_source: 'guessed', status: 'done', reason: null, findings: [], dropped: 0, model: 'm', ai: true, created_at: '2026-10-31T00:00:00Z', ...o })
 const span = (hash: string, start: number, end: number): SectionSpan => ({ title: hash, start, end, hash, words: 10, guess: 'method' })
@@ -43,6 +43,18 @@ test('the section under the cursor: start inclusive, end exclusive, except the v
 
 test('ref chips read S3 · first words… and Note · label', () => {
   expect(refChip({ kind: 'sentence', n: 3, hash: 'h', preview: 'The model was trained' })).toBe('S3 · The model was trained…')
+  expect(refChip({ kind: 'sentence', n: 4, hash: 'h', preview: 'Sleep improves memory.' })).toBe('S4 · Sleep improves memory.')
+  expect(refChip({ kind: 'sentence', n: 5, hash: 'h', preview: 'Is it (really?)' })).toBe('S5 · Is it (really?)')
   expect(refChip({ kind: 'note', n: 1, note_id: 'n', paper_id: 'p', label: 'Smith 2021 p.4' })).toBe('Note · Smith 2021 p.4')
   expect(refChip({ kind: 'note', n: 2, note_id: null, paper_id: null, label: null })).toBe('Note · note removed')
+})
+
+test('a one-line status per review, for the announcer', () => {
+  const f = (kind: 'missing' | 'unsupported' | 'supported') => ({ kind, point: 'p', refs: [] })
+  expect(statusLine(review({ status: 'queued', title: 'Method' }))).toBe('Reviewing “Method”…')
+  expect(statusLine(review({ status: 'running', title: 'Method' }))).toBe('Reviewing “Method”…')
+  expect(statusLine(review({ title: 'Method', findings: [f('missing'), f('missing'), f('unsupported'), f('supported')] }))).toBe('Review of “Method” done: 2 missing, 1 unsupported, 1 supported.')
+  expect(statusLine(review({ status: 'failed', reason: 'model_error', title: 'Method' }))).toBe("Review of “Method” failed: The model didn't give a usable answer.")
+  expect(statusLine(review({ status: 'failed', reason: 'cancelled', title: 'Method' }))).toBe('Review of “Method” failed: Cancelled.')
+  expect(statusLine(review({ status: 'interrupted', title: 'Method' }))).toBe('Review of “Method” was interrupted.')
 })

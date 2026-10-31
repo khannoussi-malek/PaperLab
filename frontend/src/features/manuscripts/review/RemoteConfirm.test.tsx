@@ -32,6 +32,7 @@ test('Check citations on a remote model asks first; Send retries with confirm_re
   const dialog = await screen.findByRole('dialog', { name: 'Send to api.example.com?' })
   expect(dialog).toHaveTextContent('Your text will be sent to api.example.com and may cost money. Send it?')
   expect(screen.queryByText(/remote_model_needs_confirm/)).toBeNull() // a question, not an error
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus()) // Enter must not spend money
   expect(start).toHaveBeenLastCalledWith('m', expect.objectContaining({ confirm_remote: false }))
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Send' })))
   await waitFor(() => expect(start).toHaveBeenCalledTimes(2))

@@ -10,10 +10,11 @@ import { sectionStartError } from './useSectionReview'
 const SELECT_CLASS =
   'h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none'
 const NO_SECTION = 'Put the cursor inside a section first.'
+const GONE = "That section isn't in the file any more." // Review again, and no section has its title now
 
 type Props = {
   /** The section under the cursor (null: none); open while set. */
-  target: { section: Pick<SectionSpan, 'title' | 'guess'> | null; role?: Role | null } | null
+  target: { section: Pick<SectionSpan, 'title' | 'guess'> | null; role?: Role | null; gone?: boolean } | null
   onClose: () => void
   /** Saves what is pending, then starts; `role` is null when the guess stands. Rejects with the server's refusal. */
   onStart: (role: Role | null, confirmRemote: boolean) => Promise<unknown>
@@ -44,7 +45,7 @@ function Body({ target, onClose, onStart }: Props & { target: NonNullable<Props[
   if (!section) {
     return (
       <>
-        <p>{NO_SECTION}</p>
+        <p>{target.gone ? GONE : NO_SECTION}</p>
         <DialogFooter><Button variant="outline" onClick={onClose}>Close</Button></DialogFooter>
       </>
     )

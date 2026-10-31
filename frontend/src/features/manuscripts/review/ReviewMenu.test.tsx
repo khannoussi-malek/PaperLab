@@ -41,3 +41,10 @@ test('Review this section works without a workspace and is off while a section r
   fireEvent.keyDown(screen.getByRole('button', { name: /review/i }), { key: 'Enter' })
   expect(await screen.findByRole('menuitem', { name: 'Review this section' })).toHaveAttribute('aria-disabled', 'true')
 })
+
+test('"Pick a workspace first" sits right under Check citations', async () => {
+  render(<ReviewMenu hasWorkspace={false} run={null} onCheck={() => {}} onCancel={() => {}} onReviewSection={() => {}} />)
+  fireEvent.keyDown(screen.getByRole('button', { name: /review/i }), { key: 'Enter' })
+  const check = await screen.findByRole('menuitem', { name: 'Check citations' })
+  expect(check.nextElementSibling).toHaveTextContent('Pick a workspace first')
+})

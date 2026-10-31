@@ -6,8 +6,8 @@ import { SectionReviewDialog } from './SectionReviewDialog'
 
 const span = (o: Partial<SectionSpan> = {}): SectionSpan => ({ title: 'Our approach', start: 0, end: 50, hash: 'h', words: 40, guess: 'method', ...o })
 const remote = new ApiError('remote_model_needs_confirm', 409, { detail: 'remote_model_needs_confirm', model: 'Cloud · big', host: 'api.example.com' })
-function show(section: SectionSpan | null, onStart = vi.fn(async () => {}), onClose = vi.fn()) {
-  render(<SectionReviewDialog target={{ section }} onStart={onStart} onClose={onClose} />)
+function show(section: SectionSpan | null, onStart = vi.fn(async () => {}), onClose = vi.fn(), gone = false) {
+  render(<SectionReviewDialog target={{ section, gone }} onStart={onStart} onClose={onClose} />)
   return { onStart, onClose }
 }
 const select = () => screen.getByRole('combobox', { name: 'Review “Our approach” as:' })
@@ -45,6 +45,7 @@ test('a remote model asks first: Send retries with confirm_remote', async () => 
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Review' })))
   expect(await screen.findByText('Your section will be sent to api.example.com and may cost money. Send it?')).toBeInTheDocument()
   expect(onClose).not.toHaveBeenCalled()
+  expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus() // Enter must not spend money
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Send' })))
   expect(onStart).toHaveBeenLastCalledWith('discussion', true)
   await waitFor(() => expect(onClose).toHaveBeenCalled())
@@ -76,4 +77,10 @@ test('Escape closes it', async () => {
   const { onClose } = show(span())
   fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
   await waitFor(() => expect(onClose).toHaveBeenCalled())
+})
+
+test('Review again on a section that is gone says so', () => {
+  show(null, undefined, undefined, true)
+  expect(screen.getByText("That section isn't in the file any more.")).toBeInTheDocument()
+  expect(screen.queryByText('Put the cursor inside a section first.')).toBeNull()
 })

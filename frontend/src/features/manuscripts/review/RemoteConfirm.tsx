@@ -11,8 +11,8 @@ export function RemoteConfirm({ what, host, onSend, onCancel }: Props) {
     <>
       <p className="text-sm">{remoteQuestion(what, host)}</p>
       <DialogFooter>
-        <Button variant="outline" onClick={onCancel}>Cancel</Button>
-        <Button autoFocus onClick={onSend}>Send</Button>
+        <Button variant="outline" autoFocus onClick={onCancel}>Cancel</Button>{/* focus on Cancel: Enter must not spend money */}
+        <Button onClick={onSend}>Send</Button>
       </DialogFooter>
     </>
   )
