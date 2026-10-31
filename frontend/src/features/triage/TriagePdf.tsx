@@ -22,13 +22,15 @@ type Props = {
   target: Jump | null
   onInteract: () => void
   onPage?: (page: number, total: number) => void
+  /** The page this paper was left on: put back on mount, and never counted as an interaction. */
+  initialPage?: number
 }
 
-function Column({ paperId, target, onInteract, onPage }: Omit<Props, 'active'>) {
+function Column({ paperId, target, onInteract, onPage, initialPage }: Omit<Props, 'active'>) {
   const { doc, error } = useCachedPdf(api.paperFileUrl(paperId))
   const total = doc?.numPages ?? 0
   const [zoom, setZoom] = useState(FIT_INDEX)
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useState(initialPage ?? 1)
   const [jump, setJump] = useState<Jump | null>(null)
   const [width, setWidth] = useState(0)
   const [pageWidth, setPageWidth] = useState(PAGE_WIDTH_PT)
@@ -70,6 +72,7 @@ function Column({ paperId, target, onInteract, onPage }: Omit<Props, 'active'>) 
   }, [place, doc])
 
   const go = useCallback((n: number) => setJump({ page: n, n: ++seq.current }), [])
+  useEffect(() => { if (initialPage && initialPage > 1) go(initialPage) }, []) // eslint-disable-line react-hooks/exhaustive-deps -- on mount only
   const newTarget = useRef<Jump | null>(null)
   useEffect(() => {
     if (!target || target === newTarget.current) return

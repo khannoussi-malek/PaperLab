@@ -9,7 +9,7 @@ import { useReducedMotion } from '@/features/manuscripts/deck/useReducedMotion'
 import * as say from './announce'
 import { DeskStage } from './DeskStage'
 import { PdfSheet } from './PdfSheet'
-import { PdfTabs, type DeskTab } from './PdfTabs'
+import { PdfTabs } from './PdfTabs'
 import { PILES, REASONS, type Pile } from './piles'
 import { ReasonChips } from './ReasonChips'
 import { ShortcutHelp } from './ShortcutHelp'
@@ -23,6 +23,7 @@ import { retainOnly, prefetchPdf } from './pdfCache'
 import { closeSession } from './sessionId'
 import { TriagePdf } from './TriagePdf'
 import { useCardClock } from './useCardClock'
+import { useDeskPdf } from './useDeskPdf'
 import { useDeskKeys } from './useDeskKeys'
 import { useKeepDeskFocus } from './useKeepDeskFocus'
 import { useTriageSession } from './useTriageSession'
@@ -36,16 +37,6 @@ function storedOrder(scope: string): Order {
     return ORDERS.some((o) => o.value === v) ? (v as Order) : DEFAULT_ORDER
   } catch {
     return DEFAULT_ORDER
-  }
-}
-
-const PDF_KEY = 'paperlab-triage-pdf'
-
-function storedPdfOn(): boolean {
-  try {
-    return browserStorage()?.getItem(PDF_KEY) !== '0'
-  } catch {
-    return true
   }
 }
 
@@ -74,11 +65,6 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
   const [held, setHeld] = useState<Pile | null>(null)
   const [helpOpen, setHelpOpen] = useState(false)
   const [departing, setDeparting] = useState<{ pile: Pile; paper: Paper } | null>(null)
-  const [pdfOn, setPdfOn] = useState(storedPdfOn)
-  const [tab, setTab] = useState<DeskTab>('paper')
-  const [sheetOpen, setSheetOpen] = useState(false)
-  const [jump, setJump] = useState<{ paperId: string; page: number; n: number } | null>(null)
-  const showRequested = useRef(false)
   const session = useTriageSession({
     scope, queueFrom: papers, library, libraryReady, filterKey, order: storedOrder(scope), includeDecided: false,
   })
@@ -87,40 +73,12 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
   useKeepDeskFocus(root)
   useEffect(() => () => retainOnly([]), []) // leaving triage lets every kept document go
   const topId = top?.id
-  const hasPdf = Boolean(top?.has_pdf)
-  const showPdf = layout === 'wide' && pdfOn && hasPdf // the column beside the card
-  const tabsOn = layout === 'tabs' && hasPdf
-  const pdfTab = tabsOn && tab === 'pdf'
-  const sheetShown = layout === 'single' && hasPdf && sheetOpen
-  const pdfMounted = showPdf || tabsOn // both tab panels stay mounted: the PDF keeps its page
-  const clock = useCardClock(topId, { pdfShown: showPdf || pdfTab || sheetShown })
-  const togglePdf = () => {
-    if (layout === 'tabs') return hasPdf && setTab(tab === 'pdf' ? 'paper' : 'pdf')
-    if (layout === 'single') return hasPdf && setSheetOpen(true)
-    const next = !pdfOn
-    setPdfOn(next)
-    try {
-      browserStorage()?.setItem(PDF_KEY, next ? '1' : '0')
-    } catch {
-      // ponytail: an unwritable store only means the choice is forgotten on reload
-    }
-  }
-  const showInPdf = (page: number) => {
-    if (!topId) return
-    showRequested.current = true
-    if (layout === 'wide') setPdfOn(true)
-    else if (layout === 'tabs') setTab('pdf')
-    else setSheetOpen(true)
-    setJump((j) => ({ paperId: topId, page, n: (j?.n ?? 0) + 1 }))
-  }
+  const pdf = useDeskPdf(layout, top)
+  const { hasPdf, column: showPdf, tabsOn, pdfTab, sheetShown } = pdf
+  const clock = useCardClock(topId, { pdfShown: pdf.shown })
   // Showing the PDF and the jump land together, so the interaction waits until the clock sees it shown.
-  useEffect(() => {
-    if (showRequested.current && (showPdf || pdfTab || sheetShown)) {
-      showRequested.current = false
-      clock.interact()
-    }
-  })
-  const target = jump && jump.paperId === topId ? jump : null
+  useEffect(() => { if (pdf.takeShowRequest()) clock.interact() })
+  const target = pdf.target
   const reasons = reasonsFor !== null && reasonsFor === topId
   const setReasons = (on: boolean) => setReasonsFor(on ? (topId ?? null) : null)
   const client = useQueryClient()
@@ -131,8 +89,8 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
   const keepKey = keep.join('|')
   useEffect(() => {
     retainOnly(keepKey ? keepKey.split('|') : [])
-    if (pdfMounted) for (const url of nextTwo.split(',').filter(Boolean).map(api.paperFileUrl)) prefetchPdf(url)
-  }, [keepKey, nextTwo, pdfMounted])
+    if (pdf.mounted) for (const url of nextTwo.split(',').filter(Boolean).map(api.paperFileUrl)) prefetchPdf(url)
+  }, [keepKey, nextTwo, pdf.mounted])
   useEffect(() => {
     for (const id of nextTwo.split(',').filter(Boolean)) void prefetchPaperSections(client, id)
   }, [client, nextTwo])
@@ -185,7 +143,7 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
     closeHelp: () => setHelpOpen(false),
     exit,
     undo,
-    togglePdf,
+    togglePdf: pdf.toggle,
     openHelp: () => setHelpOpen(true),
     focusAbstract: () => root.current?.querySelector<HTMLElement>('[aria-label="Abstract"]')?.focus(),
   })
@@ -251,13 +209,13 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
                 aria-pressed={showPdf}
                 disabled={!top.has_pdf}
                 title={top.has_pdf ? undefined : 'No PDF for this paper'}
-                onClick={() => { togglePdf(); focusRoot() }}
+                onClick={() => { pdf.toggle(); focusRoot() }}
               >
                 PDF (P)
               </Button>
             </div>
           )}
-          {tabsOn && <PdfTabs tab={tab} onTab={(t) => { setTab(t); focusRoot() }} />}
+          {tabsOn && <PdfTabs tab={pdf.tab} onTab={(t) => { pdf.setTab(t); focusRoot() }} />}
           <div className={showPdf ? 'flex items-start gap-3' : undefined}>
             <div
               data-triage-region
@@ -265,6 +223,7 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
               hidden={pdfTab}
               role={tabsOn ? 'tabpanel' : undefined}
               id={tabsOn ? 'triage-panel-paper' : undefined}
+              aria-labelledby={tabsOn ? 'triage-tab-paper' : undefined}
               className={showPdf ? 'min-w-0 flex-1 outline-none' : 'outline-none'}
             >
               <DeskStage
@@ -278,20 +237,21 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
                 onCommit={choose}
                 onHover={() => {}}
                 reduced={reduced}
-                onShowInPdf={hasPdf ? showInPdf : undefined}
+                onShowInPdf={hasPdf ? pdf.showAt : undefined}
               />
             </div>
             <div
-              hidden={!pdfMounted || (tabsOn && !pdfTab)}
+              hidden={!pdf.mounted || (tabsOn && !pdfTab)}
               role={tabsOn ? 'tabpanel' : undefined}
               id={tabsOn ? 'triage-panel-pdf' : undefined}
+              aria-labelledby={tabsOn ? 'triage-tab-pdf' : undefined}
               className={showPdf ? 'sticky top-2 w-[52%] shrink-0' : undefined}
             >
-              {pdfMounted && <TriagePdf key={top.id} paperId={top.id} active target={target} onInteract={clock.interact} />}
+              {(showPdf || tabsOn) && <TriagePdf key={top.id} paperId={top.id} active target={target} initialPage={pdf.pageOf(top.id)} onPage={(p) => pdf.remember(top.id, p)} onInteract={clock.interact} />}
             </div>
           </div>
           {layout === 'single' && hasPdf && (
-            <PdfSheet open={sheetShown} onOpenChange={(o) => { setSheetOpen(o); if (!o) focusRoot() }} paperId={top.id} target={target} onInteract={clock.interact} />
+            <PdfSheet open={sheetShown} onOpenChange={(o) => { pdf.setSheetOpen(o); if (!o) focusRoot() }} paperId={top.id} target={target} initialPage={pdf.pageOf(top.id)} onPage={(p) => pdf.remember(top.id, p)} onInteract={clock.interact} />
           )}
           {reasons && <ReasonChips reasons={REASONS.not_relevant} noteFor="other" onPick={(r, note) => go('not_relevant', r, note)} onCancel={cancelReason} />}
           <TriageControls layout={layout} undo={undoInfo} onUndo={undo} onDecide={choose} progress={progress(state)} />

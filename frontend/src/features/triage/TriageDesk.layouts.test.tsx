@@ -12,6 +12,7 @@ vi.mock('./pdfCache', () => ({
   prefetchPdf: vi.fn(),
 }))
 import { TriageDesk } from './TriageDesk'
+import { TriagePdf } from './TriagePdf'
 
 const observers: (() => void)[] = []
 beforeAll(() => {
@@ -77,7 +78,6 @@ it('tabs: both panels stay mounted, P and a focused tab switch, arrows on the de
   expect(screen.getByRole('tab', { name: 'Paper' })).toHaveAttribute('aria-selected', 'true')
   expect(decide).not.toHaveBeenCalled()
   fireEvent.keyDown(root, { key: 'ArrowLeft' })
-  expect(await screen.findByRole('button', { name: /Cancel/i }).catch(() => null)).toBeDefined()
   expect(decide).not.toHaveBeenCalled() // Not relevant asks why first: the chips are the proof the arrow was a pile
   expect(document.querySelector('[data-reason-chip]')).not.toBeNull()
 })
@@ -134,4 +134,49 @@ it('resizing from wide to tabs keeps the card and the PDF page', async () => {
   expect(screen.getByRole('tab', { name: 'Paper' })).toBeInTheDocument()
   expect(screen.getByRole('heading', { level: 2 })).toBe(card)
   expect(screen.getByText('Page 4 of 5')).toBeInTheDocument()
+})
+
+it('wide to single and back keeps the PDF page', async () => {
+  setup(1400)
+  fireEvent.click(await showBtn())
+  await screen.findByText('Page 4 of 5')
+  resize(500)
+  expect(screen.queryByLabelText('PDF pages')).toBeNull()
+  resize(1400)
+  expect(await screen.findByText('Page 4 of 5')).toBeInTheDocument()
+})
+
+it('the sheet reopens on the page it was left on', async () => {
+  setup(500)
+  fireEvent.click(await showBtn())
+  await screen.findByText('Page 4 of 5')
+  fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
+  await waitFor(() => expect(screen.queryByLabelText('PDF pages')).toBeNull())
+  fireEvent.click(screen.getByRole('button', { name: 'Open PDF' }))
+  expect(await screen.findByText('Page 4 of 5')).toBeInTheDocument()
+})
+
+it('restoring a page is not an interaction', async () => {
+  const onInteract = vi.fn()
+  render(<QueryClientProvider client={new QueryClient()}><TriagePdf paperId="1" active target={null} initialPage={3} onInteract={onInteract} /></QueryClientProvider>)
+  expect(await screen.findByText('Page 3 of 5')).toBeInTheDocument()
+  expect(onInteract).not.toHaveBeenCalled()
+})
+
+it('P in the single layout opens the sheet and, inside it, closes it', async () => {
+  const root = setup(500)
+  fireEvent.keyDown(root, { key: 'p' })
+  const box = await screen.findByLabelText('PDF pages')
+  fireEvent.keyDown(box, { key: 'p' })
+  await waitFor(() => expect(screen.queryByLabelText('PDF pages')).toBeNull())
+})
+
+it('F6 skips the hidden PDF panel: card, then controls', async () => {
+  const root = setup(900)
+  await screen.findByLabelText('PDF pages')
+  const regions = () => [...root.querySelectorAll('[data-triage-region]')]
+  const card = regions()[0] as HTMLElement
+  card.focus()
+  fireEvent.keyDown(root, { key: 'F6' })
+  expect(regions().at(-1)).toHaveFocus() // the controls, not the PDF section inside the hidden panel
 })
