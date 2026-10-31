@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -8,7 +9,7 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.core import provenance
+from app.core import provenance, queue
 from app.core.chunking import STRATEGY_VERSION, ChunkDraft
 from app.core.errors import Conflict, Gone, InvalidInput, NotFound
 from app.core.source_types import DETAILS_SOURCES
@@ -61,6 +62,17 @@ def abstract_drafts(title: str, abstract: str | None) -> list[ChunkDraft]:
         return []
     text = abstract_chunk_text(title, abstract)
     return [ChunkDraft(ordinal=0, page=ABSTRACT_PAGE, bbox=[], section_title="Abstract", text=text)]
+
+
+async def queue_biblio_fill(paper: Paper) -> None:
+    """A paper saved without its PDF never runs ingest, so its volume, issue and pages would stay empty: queue the
+    job that fills them (workers/paper_biblio), when it has a DOI to ask about. A queue that is down only logs."""
+    if not paper.doi:
+        return
+    try:
+        await queue.enqueue("fill_paper_biblio", str(paper.id))
+    except Exception:
+        logging.getLogger(__name__).exception("could not queue the citation fields of %s", paper.id)
 
 
 async def create_metadata_paper(

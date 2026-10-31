@@ -146,7 +146,7 @@ async def test_mcp_add_paper_needs_the_explicit_argument(session, jobs, monkeypa
     assert saved["tried"] == [NO_ARXIV_MATCH] and saved["free_copies"] == []
     paper = await session.get(Paper, uuid.UUID(saved["paper_id"]))
     assert (paper.has_pdf, paper.details_source, paper.status) == (False, "openalex", PaperStatus.EMBEDDING)
-    assert jobs.jobs == [("index_abstract", saved["paper_id"])]
+    assert jobs.jobs == [("fill_paper_biblio", saved["paper_id"]), ("index_abstract", saved["paper_id"])]
 
 
 async def test_mcp_add_papers_saves_without_pdf_per_item_and_skips_the_job_without_an_abstract(jobs, monkeypatch):
@@ -155,7 +155,7 @@ async def test_mcp_add_papers_saves_without_pdf_per_item_and_skips_the_job_witho
     [item] = result(await call("add_papers", identifiers=[doi], save_without_pdf=True))
 
     assert item["status"] == "saved_without_pdf" and item["paper_id"] and item["error"] is None
-    assert jobs.jobs == []
+    assert jobs.jobs == [("fill_paper_biblio", item["paper_id"])]  # its citation fields, but no abstract to index
 
 
 async def test_re_adding_a_paper_saved_without_a_pdf_is_already_in_library(session, jobs, monkeypatch):
@@ -173,7 +173,7 @@ async def test_re_adding_a_paper_saved_without_a_pdf_is_already_in_library(sessi
     assert (again["status"], again["paper_id"]) == ("already_in_library", first["paper_id"])
     assert (plain["status"], plain["paper_id"]) == ("already_in_library", first["paper_id"])
     assert plain["note"] == pipeline.NO_COPY_NOTE
-    assert len(jobs.jobs) == 1  # only the first save's index_abstract
+    assert [j[0] for j in jobs.jobs] == ["fill_paper_biblio", "index_abstract"]  # only the first save's jobs
     assert await session.scalar(select(func.count()).select_from(Paper).where(Paper.doi == doi.lower())) == 1
 
 

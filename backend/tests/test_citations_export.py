@@ -271,3 +271,17 @@ def test_apa_is_sorted_by_author_and_one_paragraph_per_item():
     a, b = paper(authors=["Zed Zulu"], title="Zeta"), paper(authors=["Amy Abel"], title="Alpha")
     lines = render(items_of(a, b), "apa").strip().split("\n")
     assert [line.split(",")[0] for line in lines] == ["Abel", "Zulu"]
+
+
+@pytest.mark.parametrize(
+    "oa_url,doi",
+    [
+        ("https://doi.org/10.1145/3635636.3656204", "10.1145/3635636.3656204"),
+        ("http://dx.doi.org/10.1037/0022-3514.45.2.357", "10.1037/0022-3514.45.2.357"),
+        ("https://arxiv.org/pdf/2309.05196", None),  # a PDF link is not a DOI
+    ],
+)
+def test_a_doi_link_stands_in_for_a_missing_doi(oa_url, doi):
+    item = csl_item(paper(doi=None, oa_url=oa_url))
+    assert item.get("DOI") == doi
+    assert item.get("URL") == (None if doi else oa_url)  # the link isn't repeated once it is the DOI

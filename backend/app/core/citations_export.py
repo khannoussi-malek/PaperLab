@@ -32,6 +32,7 @@ CSL_TYPES = {
     "other": "document",
 }
 ARXIV_DOI_PREFIX = "10.48550/arxiv."
+DOI_LINK = re.compile(r"^https?://(?:dx\.)?doi\.org/(10\.\d{4,9}/\S+)$", re.IGNORECASE)
 # A paper of unknown type with a known venue is a journal article unless the venue reads as a meeting. Journal words
 # are read first: several journals carry a meeting word ("Proceedings of the National Academy", "History Workshop").
 # ponytail: words plus a few big acronyms; a venue table (or OpenAlex's source type) if this misfiles real venues.
@@ -160,9 +161,11 @@ def csl_item(paper, keywords: list[str] | None = None, notes: list[str] | None =
     for key, attr in (("abstract", "abstract"), ("ISSN", "issn"), ("PMID", "pmid"), ("PMCID", "pmcid")):
         if value := getattr(paper, attr, None):
             item[key] = value
-    if paper.doi:
-        item["DOI"] = paper.doi
-    if paper.oa_url:
+    # A paper saved from a doi.org link can hold its DOI only there: a reference list wants it as the DOI.
+    doi = paper.doi or ((m := DOI_LINK.match(paper.oa_url or "")) and m.group(1))
+    if doi:
+        item["DOI"] = doi
+    if paper.oa_url and not (doi and not paper.doi):
         item["URL"] = paper.oa_url
     if note := "\n".join(p for p in (_note(paper), *_extra_lines(paper)) if p):
         item["note"] = note
