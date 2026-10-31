@@ -1,7 +1,7 @@
 import { HighlightStyle, StreamLanguage, syntaxHighlighting } from '@codemirror/language'
 import { tags } from '@lezer/highlight'
 import { stex } from '@codemirror/legacy-modes/mode/stex'
-import { Annotation, Compartment, Prec, RangeSetBuilder, Transaction } from '@codemirror/state'
+import { Annotation, Compartment, EditorState, Prec, RangeSetBuilder, Transaction } from '@codemirror/state'
 import { EditorView, GutterMarker, gutter, keymap } from '@codemirror/view'
 import { basicSetup } from 'codemirror'
 import { useEffect, useRef, useState } from 'react'
@@ -211,8 +211,14 @@ export function LatexEditor({ value, onChange, errors, onSave, jumpTo, onCursor,
   useEffect(() => {
     const editor = view.current!
     if (editor.state.doc.toString() === value) return
+    // Keep the cursor on its line and column (clamped); a line that is gone puts it at the end.
+    const head = editor.state.selection.main.head
+    const old = editor.state.doc.lineAt(head)
+    const next = EditorState.create({ doc: value }).doc
+    const anchor = old.number > next.lines ? next.length : Math.min(next.line(old.number).from + (head - old.from), next.line(old.number).to)
     editor.dispatch({
       changes: { from: 0, to: editor.state.doc.length, insert: value },
+      selection: { anchor },
       annotations: [FromHost.of(true), Transaction.addToHistory.of(false)],
     })
   }, [value])

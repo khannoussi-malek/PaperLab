@@ -937,3 +937,75 @@ test('the Insert menu shows only while a .tex file is open', async () => {
   await waitFor(() => expect(screen.getByLabelText('LaTeX source')).toHaveValue('@misc{k}'))
   expect(screen.queryByRole('button', { name: 'Insert' })).toBeNull()
 })
+
+// --- the editor follows outside writes (Claude over MCP) while its buffer is clean ---
+const setVisibility = (state: 'visible' | 'hidden') => Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state })
+const outsideWrite = (reason: string) => {
+  server['main.tex'] = { text: 'hello from Claude', at: T3 }
+  vi.spyOn(api, 'listManuscriptSnapshots').mockResolvedValue([{ id: 's9', reason, created_at: T3 }])
+}
+const tick = (ms = 5000) => act(async () => { await vi.advanceTimersByTimeAsync(ms) })
+
+async function renderPolling() {
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  renderPage()
+  const box = await screen.findByLabelText('LaTeX source')
+  await waitFor(() => expect(box).toHaveValue('hello'))
+  return box
+}
+afterEach(() => { vi.useRealTimers(); setVisibility('visible') })
+
+test('a clean buffer picks up an outside write and says it was Claude', async () => {
+  const save = vi.spyOn(api, 'saveManuscriptFile').mockResolvedValue(saved())
+  const box = await renderPolling()
+  outsideWrite('before_mcp')
+  await tick()
+  await waitFor(() => expect(box).toHaveValue('hello from Claude'))
+  expect(await screen.findByText('Updated by Claude (MCP)')).toBeInTheDocument()
+  await tick(3000)
+  expect(save).not.toHaveBeenCalled() // the update is not the owner's edit
+  expect(screen.getByText('Saved')).toBeInTheDocument()
+})
+
+test('another kind of outside write reads "Updated elsewhere"', async () => {
+  const box = await renderPolling()
+  outsideWrite('autosave')
+  await tick()
+  await waitFor(() => expect(box).toHaveValue('hello from Claude'))
+  expect(await screen.findByText('Updated elsewhere')).toBeInTheDocument()
+})
+
+test('the notice can be dismissed', async () => {
+  await renderPolling()
+  outsideWrite('before_mcp')
+  await tick()
+  fireEvent.click(await screen.findByRole('button', { name: 'Dismiss' }))
+  expect(screen.queryByText('Updated by Claude (MCP)')).toBeNull()
+})
+
+test('a dirty buffer is never replaced and still reaches the conflict', async () => {
+  vi.spyOn(api, 'saveManuscriptFile').mockRejectedValue(conflict())
+  const box = await renderPolling()
+  fireEvent.change(box, { target: { value: 'my words' } })
+  outsideWrite('before_mcp')
+  await tick(5000)
+  expect(box).toHaveValue('my words')
+  expect(screen.queryByText('Updated by Claude (MCP)')).toBeNull()
+  await tick(1000) // the autosave fires and meets the newer version
+  expect(await screen.findByRole('button', { name: 'Keep my version' })).toBeInTheDocument()
+  expect(box).toHaveValue('my words')
+})
+
+test('does not read the file while the tab is hidden, and picks up when it is visible again', async () => {
+  const box = await renderPolling()
+  const reads = vi.mocked(api.getManuscriptFile)
+  setVisibility('hidden')
+  reads.mockClear()
+  outsideWrite('before_mcp')
+  await tick(15000)
+  expect(reads).not.toHaveBeenCalled()
+  expect(box).toHaveValue('hello')
+  setVisibility('visible')
+  act(() => { window.dispatchEvent(new Event('focus')) })
+  await waitFor(() => expect(box).toHaveValue('hello from Claude'))
+})
