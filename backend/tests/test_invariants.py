@@ -33,7 +33,15 @@ def test_mcp_server_has_no_sql_and_imports_only_core_services():
     others = {name.split(".")[0] for name in imported - ours} - set(sys.stdlib_module_names)
     assert ours and all(name == "app.db" or name.split(".")[:2] == ["app", "core"] for name in ours), ours
     assert others == {"mcp", "pydantic"}  # pydantic only for tool argument bounds (Field), never models or logic
-    assert [word for word in ("sqlalchemy", "select(", "text(", "execute(") if word in source] == []
+    assert "sqlalchemy" not in source and not SQL_CALL.search(source)
+
+
+SQL_CALL = re.compile(r"(?<!\w)(select|text|execute)\(")  # whole names: `.execute(` counts, `read_pdf_text(` doesn't
+
+
+def test_the_sql_matcher_flags_calls_not_longer_names():
+    assert SQL_CALL.search("text('select 1')") and SQL_CALL.search("await session.execute(")
+    assert not SQL_CALL.search("read_manuscript_pdf_text(")
 
 
 @pytest.mark.parametrize(
