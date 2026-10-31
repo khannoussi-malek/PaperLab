@@ -1009,3 +1009,58 @@ test('does not read the file while the tab is hidden, and picks up when it is vi
   act(() => { window.dispatchEvent(new Event('focus')) })
   await waitFor(() => expect(box).toHaveValue('hello from Claude'))
 })
+
+test('a restore from this tab shows no notice', async () => {
+  const box = await renderPolling()
+  outsideWrite('before_restore')
+  await tick()
+  await waitFor(() => expect(box).toHaveValue('hello from Claude'))
+  expect(screen.queryByText(/Updated/)).toBeNull()
+})
+
+test('a failed snapshot read still updates and says only "Updated"', async () => {
+  const box = await renderPolling()
+  outsideWrite('before_mcp')
+  vi.spyOn(api, 'listManuscriptSnapshots').mockRejectedValue(new Error('down'))
+  await tick()
+  await waitFor(() => expect(box).toHaveValue('hello from Claude'))
+  expect(await screen.findByText('Updated')).toBeInTheDocument()
+})
+
+test('a poll slower than the interval still completes', async () => {
+  const box = await renderPolling()
+  const real = vi.mocked(api.getManuscriptFile).getMockImplementation()!
+  const reads = vi.mocked(api.getManuscriptFile)
+  reads.mockImplementation((id, path) => new Promise((resolve) => setTimeout(() => resolve(real(id, path)), 7000)))
+  outsideWrite('before_mcp')
+  reads.mockClear()
+  await tick(5000) // poll 1 starts
+  await tick(5000) // tick 2 must not cancel it
+  await tick(3000) // poll 1 answers 7 s after it started
+  await waitFor(() => expect(box).toHaveValue('hello from Claude'))
+  expect(reads).toHaveBeenCalledTimes(1)
+})
+
+test('typing between the poll and its answer keeps the typed text', async () => {
+  vi.spyOn(api, 'saveManuscriptFile').mockResolvedValue(saved())
+  const box = await renderPolling()
+  const real = vi.mocked(api.getManuscriptFile).getMockImplementation()!
+  vi.mocked(api.getManuscriptFile).mockImplementation((id, path) => new Promise((resolve) => setTimeout(() => resolve(real(id, path)), 2000)))
+  outsideWrite('before_mcp')
+  await tick(5000) // poll sent
+  fireEvent.change(box, { target: { value: 'typed meanwhile' } })
+  await tick(2500) // the answer arrives
+  expect(box).toHaveValue('typed meanwhile')
+  expect(screen.queryByText('Updated by Claude (MCP)')).toBeNull()
+})
+
+test('stops polling once unmounted', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  const view = renderPage()
+  const box = await screen.findByLabelText('LaTeX source')
+  await waitFor(() => expect(box).toHaveValue('hello'))
+  view.unmount()
+  vi.mocked(api.getManuscriptFile).mockClear()
+  await tick(20000)
+  expect(api.getManuscriptFile).not.toHaveBeenCalled()
+})
