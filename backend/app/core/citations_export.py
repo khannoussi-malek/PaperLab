@@ -32,6 +32,22 @@ CSL_TYPES = {
     "other": "document",
 }
 ARXIV_DOI_PREFIX = "10.48550/arxiv."
+# A paper of unknown type with a known venue is a journal article unless the venue reads as a meeting. Journal words
+# are read first: several journals carry a meeting word ("Proceedings of the National Academy", "History Workshop").
+# ponytail: words plus a few big acronyms; a venue table (or OpenAlex's source type) if this misfiles real venues.
+JOURNAL = re.compile(
+    r"\b(journals?|transactions|letters|reviews?|pvldb)\b|mayo clinic proceedings|proceedings of the (national "
+    r"academy|royal society|acm on|vldb endowment)|^proceedings of the ieee$",
+    re.IGNORECASE,
+)
+MEETING = re.compile(
+    r"\b(proceedings|conference|symposium|workshop|congress|colloquium|meeting|"
+    r"iclr|icml|neurips|nips|aaai|ijcai|acl|emnlp|naacl|cvpr|iccv|eccv|kdd|sigir|cscw|uist)\b|"
+    r"neural information processing systems|computer vision and pattern recognition|"
+    r"knowledge discovery and data mining|international conference|"
+    r"\bCHI\s*'?\d{2,4}\b",  # "CHI '24", "CHI 2024": the conference by its short name and year
+    re.IGNORECASE,
+)
 ORG_WORDS = {
     "organization", "organisation", "university", "institute", "association", "group", "consortium", "committee",
     "society", "agency", "ministry", "team", "collaboration", "council", "center", "centre", "foundation",
@@ -77,6 +93,12 @@ def _person(name: str) -> dict:
     return {**person, "suffix": suffix} if suffix else person
 
 
+def _kind_from_venue(venue: str | None) -> str | None:
+    if not venue:
+        return None
+    return "proceedings" if MEETING.search(venue) and not JOURNAL.search(venue.strip()) else "journal_article"
+
+
 def _note(paper) -> str | None:
     label = (paper.source_type or "").replace("_", " ")
     preprint = paper.source_type == "preprint"  # the genre is already "Preprint"; don't say it twice
@@ -116,7 +138,7 @@ def csl_item(paper, keywords: list[str] | None = None, notes: list[str] | None =
     decision); the source type and "peer-reviewed" follow. Optional biblio fields are read when present."""
     item: dict = {
         "id": str(paper.id),
-        "type": CSL_TYPES.get(paper.source_type, "document"),
+        "type": CSL_TYPES.get(paper.source_type or _kind_from_venue(paper.venue), "document"),
         "title": paper.title,
     }
     if paper.authors:
@@ -258,7 +280,12 @@ def _note_lines(item: dict) -> list[str]:
     return [line for line in (". ".join(p for p in (item.get("genre"), first) if p), *rest) if line]
 
 
-def _bibtex_fields(item: dict) -> dict[str, str]:
+# What a published paper's reference list may print: PaperLab's own notes (source, peer review, how much of it the
+# library holds), keywords, abstracts and annotes stay in the library's exports only.
+LIBRARY_ONLY = ("abstract", "issn", "pmid", "pmcid", "keywords", "annote", "file")
+
+
+def _bibtex_fields(item: dict, publish: bool = False) -> dict[str, str]:
     kind = item["type"]
     container = item.get("container-title")
     fields = {
@@ -281,18 +308,42 @@ def _bibtex_fields(item: dict) -> dict[str, str]:
         "annote": "\n\n".join(item.get("_notes", [])),
         "file": item.get("_file"),  # set by citations_bundle: the PDF's path inside the zip
     }
+    if publish:
+        fields = {k: v for k, v in fields.items() if k not in LIBRARY_ONLY} | {"note": item.get("genre")}
     escaped = {k: v if k in ("author", "editor") else _tex(v) for k, v in fields.items()}
     # DOIs, URLs and the arXiv id are verbatim in BibTeX; escaping their underscores or percents would break the link.
     arxiv = arxiv_from_doi((item.get("DOI") or "").lower())
     extra = {"eprint": arxiv, "archivePrefix": "arXiv" if arxiv else None}
-    return {**escaped, "doi": item.get("DOI"), "url": item.get("URL"), **extra}
+    url = None if publish and item.get("DOI") else item.get("URL")  # a reference list links the DOI, not a PDF copy
+    return {**escaped, "doi": item.get("DOI"), "url": url, **extra}
 
 
-def _bibtex(items: list[dict], pinned: dict[str, str] | None = None) -> str:
+def _publish_field(field: bibtexparser.model.Field) -> bibtexparser.model.Field | None:
+    key = field.key.lower()
+    if key in LIBRARY_ONLY:
+        return None
+    if key == "note":  # every stored note is PaperLab's; a publishing note is the genre only ("Preprint")
+        return bibtexparser.model.Field("note", "Preprint") if str(field.value).startswith("Preprint") else None
+    return field
+
+
+def publishable(bibtex: str) -> str:
+    """Stored BibTeX entries (a manuscript's pin) with only publishing fields, as `_bibtex(..., publish=True)` writes
+    them: an entry stored before the manuscript bib dropped PaperLab's notes is cleaned when it is printed again."""
+    library = bibtexparser.Library()
+    for entry in bibtexparser.parse_string(bibtex).entries:
+        doi = any(f.key.lower() == "doi" for f in entry.fields)
+        fields = [f for f in map(_publish_field, entry.fields) if f and not (doi and f.key.lower() == "url")]
+        library.add(bibtexparser.model.Entry(entry.entry_type, entry.key, fields))
+    return bibtexparser.write_string(library) if library.entries else ""
+
+
+def _bibtex(items: list[dict], pinned: dict[str, str] | None = None, publish: bool = False) -> str:
+    """BibTeX entries. `publish`: for a manuscript's reference list (publishing fields only, see LIBRARY_ONLY)."""
     keys = bibtex_keys(items, pinned)
     library = bibtexparser.Library()
     for item in items:
-        fields = [bibtexparser.model.Field(k, v) for k, v in _bibtex_fields(item).items() if v]
+        fields = [bibtexparser.model.Field(k, v) for k, v in _bibtex_fields(item, publish).items() if v]
         entry_type = BIBTEX_TYPES.get(item["type"], "misc")
         library.add(bibtexparser.model.Entry(entry_type, keys[item["id"]], fields))
     return bibtexparser.write_string(library)

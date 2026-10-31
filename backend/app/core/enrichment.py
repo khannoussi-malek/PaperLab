@@ -71,7 +71,7 @@ def normalize_doi(value: str) -> str | None:
     match = _DOI.search(value)
     if match is None:
         return None
-    doi = match.group().lower()
+    doi = re.sub(r"^(10\.\d{4,9})/+", r"\1/", match.group().lower())  # OpenAlex's legacy APA "10.1037//…"
     while True:
         trimmed = doi.rstrip(".,;").removesuffix(".pdf")  # a publisher's PDF URL ends in the file's extension
         # A DOI may contain balanced brackets ("s0140-6736(20)30367-6"); only an unbalanced closing one is prose.
@@ -114,12 +114,16 @@ def _fold(text: str) -> str:
     return "".join(c for c in text if not unicodedata.combining(c)).casefold()
 
 
-def _first_author_matches(work: dict[str, Any], hints: PdfHints) -> bool:
-    authorships = work.get("authorships") or []
-    names = _fold(authorships[0]["author"]["display_name"]).split() if authorships else []
+def _on_page(family: str, hints: PdfHints) -> bool:
     # ponytail: the family name as a whole word on page 1. A name in a non-Latin script never matches: a miss,
     # never a wrong match.
-    return bool(names) and re.search(rf"\b{re.escape(names[-1])}\b", _fold(hints.text)) is not None
+    return bool(family) and re.search(rf"\b{re.escape(_fold(family))}\b", _fold(hints.text)) is not None
+
+
+def _first_author_matches(work: dict[str, Any], hints: PdfHints) -> bool:
+    authorships = work.get("authorships") or []
+    names = authorships[0]["author"]["display_name"].split() if authorships else []
+    return bool(names) and _on_page(names[-1], hints)
 
 
 def is_confirmed_match(work: dict[str, Any], hints: PdfHints) -> bool:
@@ -452,6 +456,42 @@ async def fill_biblio(
     return asked
 
 
+async def _fill_from_crossref(
+    session: AsyncSession,
+    paper_id: uuid.UUID,
+    hints: PdfHints,
+    crossref_http: httpx.AsyncClient | None,
+    crossref_works: dict[str, dict | None],
+) -> None:
+    """Blank authors, year and venue from Crossref's record for the paper's DOI, when OpenAlex matched nothing. A DOI
+    found on page 1 can be a cited paper's, so only when Crossref's first author's family name is on page 1 and its
+    year is within a year of the PDF's (as `is_confirmed_match`) or its title is the paper's."""
+    from app.core.candidates import from_crossref, normal_title  # noqa: PLC0415 (candidates imports this module)
+
+    paper = await get_paper(session, paper_id)
+    await session.refresh(paper)
+    doi = normalize_doi(paper.doi or "")
+    blank = paper.authors in (None, []) or paper.year is None or paper.venue is None
+    if not (doi and crossref_http and blank) or doi.startswith(ARXIV_DOI_PREFIX):
+        return
+    try:
+        work = await _crossref_work(crossref_http, doi, crossref_works) or {}
+        found = from_crossref(work) if work else None  # None: not a paper
+        family = ((work.get("author") or [{}])[0] or {}).get("family") or ""
+    except (httpx.HTTPError, KeyError, TypeError, AttributeError) as exc:
+        logger.warning("Crossref metadata lookup failed for paper %s: %r", paper_id, exc)
+        return
+    if found is None or not _on_page(family, hints):
+        return
+    same_year = found.year is not None and any(abs(found.year - y) <= YEAR_TOLERANCE for y in hints.years)
+    if not same_year and normal_title(found.title) != normal_title(paper.title or ""):
+        return
+    known = {"authors": found.authors, "year": found.year, "venue": found.venue}
+    if fields := {k: v for k, v in known.items() if v and getattr(paper, k) in (None, [])}:
+        await _write(session, paper, fields, "crossref")
+        await session.commit()
+
+
 async def enrich_paper(
     session: AsyncSession,
     http: httpx.AsyncClient | None,
@@ -483,6 +523,7 @@ async def enrich_paper(
         await session.commit()
         await fill_source_type(session, paper_id, None, crossref_http, crossref_works)
         await fill_biblio(session, paper_id, crossref_http, crossref_works=crossref_works)
+        await _fill_from_crossref(session, paper_id, hints, crossref_http, crossref_works)
         return collisions
 
     collisions = await _write(session, paper, work_fields(work), "openalex")

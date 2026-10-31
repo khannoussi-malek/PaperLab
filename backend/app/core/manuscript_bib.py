@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import workspaces
-from app.core.citations_export import _bibtex, bibtex_keys, csl_item
+from app.core.citations_export import _bibtex, bibtex_keys, csl_item, publishable
 from app.models import Manuscript, ManuscriptCiteKey
 
 # Any command with "cite" in its name: natbib's \citealt, \Citet, \citeyearpar…, biblatex's \parencite, \textcite,
@@ -64,9 +64,12 @@ async def build_bib(session: AsyncSession, manuscript: Manuscript, sources: dict
             pins[generated[key]] = key
     for row in rows.values():
         if row.paper_id and (item := items.get(str(row.paper_id))):
-            row.bibtex = _bibtex([item], {item["id"]: row.key})
+            row.bibtex = _bibtex([item], {item["id"]: row.key}, publish=True)
     await session.flush()
     # stored entries: a paper gone or out of the workspace, and a merged paper's second key
-    orphans = [r.bibtex for _, r in sorted(rows.items())
-               if str(r.paper_id) not in items or pins.get(str(r.paper_id)) != r.key]
-    return _bibtex(list(items.values()), pins) + "".join(orphans)
+    orphans = [
+        publishable(r.bibtex)
+        for _, r in sorted(rows.items())
+        if str(r.paper_id) not in items or pins.get(str(r.paper_id)) != r.key
+    ]
+    return _bibtex(list(items.values()), pins, publish=True) + "".join(orphans)

@@ -34,11 +34,68 @@ def paper(**kw):
         ("magazine", "article-magazine"),
         ("thesis", "thesis"),
         ("other", "document"),
-        (None, "document"),
     ],
 )
 def test_source_type_maps_to_csl_type(source_type, csl):
     assert csl_item(paper(source_type=source_type))["type"] == csl
+
+
+@pytest.mark.parametrize(
+    "venue,csl",
+    [
+        ("Creativity Research Journal", "article-journal"),  # a journal: @article with journal=
+        ("Proceedings of the 16th Conference on Creativity & Cognition", "paper-conference"),
+        ("ICLR", "paper-conference"),
+        ("NeurIPS 2023 Workshop on Creativity", "paper-conference"),
+        (None, "document"),  # nothing known: @misc
+    ],
+)
+def test_an_unknown_type_is_read_from_a_known_venue(venue, csl):
+    item = csl_item(paper(source_type=None, venue=venue))
+    assert item["type"] == csl and item.get("container-title") == venue
+
+
+@pytest.mark.parametrize(
+    "venue",
+    [
+        "Journal of Creative Behavior",
+        "IEEE Transactions on Pattern Analysis and Machine Intelligence",
+        "Pattern Recognition Letters",
+        "Review of General Psychology",
+        "Annual Reviews in Control",
+        "Proceedings of the National Academy of Sciences",
+        "Proceedings of the Royal Society B: Biological Sciences",
+        "Proceedings of the IEEE",
+        "Proceedings of the ACM on Human-Computer Interaction",
+        "PVLDB",
+        "Proceedings of the VLDB Endowment",
+        "Mayo Clinic Proceedings",
+        "History Workshop Journal",
+        "Tzu Chi University Medical Bulletin",  # a bare "chi" is no longer the CHI conference
+    ],
+)
+def test_a_journal_venue_is_a_journal_article_even_with_a_meeting_word(venue):
+    assert csl_item(paper(source_type=None, venue=venue))["type"] == "article-journal"
+
+
+@pytest.mark.parametrize(
+    "venue",
+    [
+        "Advances in Neural Information Processing Systems",
+        "IEEE/CVF Computer Vision and Pattern Recognition",
+        "ACM SIGKDD Knowledge Discovery and Data Mining",
+        "International Conference on Learning Representations",
+        "CHI Conference on Human Factors in Computing Systems",
+        "CHI '24",
+        "CHI 2024",
+        "Proceedings of the 2023 ACM Symposium on User Interface Software",
+        "Workshop on Creativity and AI",
+        "Proceedings of the IEEE International Conference on Computer Vision",  # not the journal Proc. IEEE
+        "Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition",
+    ],
+)
+def test_a_meeting_venue_is_a_conference_paper(venue):
+    assert csl_item(paper(source_type=None, venue=venue))["type"] == "paper-conference"
 
 
 def test_a_journal_article_carries_the_basics():
