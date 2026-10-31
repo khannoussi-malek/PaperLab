@@ -99,6 +99,11 @@ export function ConnectClaudePage() {
           <li>Record full-text eligibility and get your PRISMA counts.</li>
           <li>Read and, when you agree, set a workspace's research question and screening criteria.</li>
           <li>Read your notes, in one workspace or on one paper.</li>
+          <li>
+            Read, create and edit your manuscripts' files, compile them, and read the result and the PDF's text.
+            Claude Desktop asks you before each of these, and every change keeps an earlier version you can restore in
+            History.
+          </li>
         </ul>
         <p className="text-sm text-muted-foreground">
           Notes Claude saves are marked AI and highlighted on the lines they quote.
@@ -109,7 +114,8 @@ export function ConnectClaudePage() {
         <p className="text-sm">
           Passages from your papers, paper details (with your reading pass and decision) and workspace names, and
           every note on a paper, marked as yours or AI. It also receives search results (titles and abstracts), your
-          screening decisions and AI suggestions on them, workspace paper lists, PRISMA counts, and a workspace's research question and screening criteria. Claude Desktop and Claude Code send what the tools return to
+          screening decisions and AI suggestions on them, workspace paper lists, PRISMA counts, and a workspace's research question and screening criteria. When it works on a manuscript it also receives the text of the files it reads and the compile
+          output. Claude Desktop and Claude Code send what the tools return to
           Anthropic.
         </p>
       </Section>
@@ -219,7 +225,7 @@ export function ConnectClaudePage() {
         {check.data?.ok && (
           <p role="status" className="flex items-center gap-1.5 text-sm">
             <CircleCheck aria-hidden className="size-4 shrink-0 text-primary" />
-            The server answers with all 34 of its tools.
+            The server answers with all {check.data.tools.length} of its tools.
           </p>
         )}
         {check.data?.detail && <ErrorAlert message={check.data.detail} />}
