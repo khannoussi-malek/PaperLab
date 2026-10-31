@@ -46,7 +46,9 @@ async def add_paper(
         await workspaces.add_paper(session, payload.workspace_id, paper.id)
     if paper.has_pdf:
         await request.app.state.arq.enqueue_job("ingest_paper", str(paper.id), _queue_name=INGEST_QUEUE)
-    elif paper.abstract:
+        return paper
+    await papers.queue_biblio_fill(paper)
+    if paper.abstract:
         try:
             await request.app.state.arq.enqueue_job("index_abstract", str(paper.id), _queue_name=INGEST_QUEUE)
         except Exception:  # never stuck at `embedding`: ready without vectors, Settings' Try again embeds it

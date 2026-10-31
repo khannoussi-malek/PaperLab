@@ -28,6 +28,7 @@ from app.workers.manuscript_evidence import EVIDENCE_JOB_TIMEOUT, verify_manuscr
 from app.workers.manuscript_review import REVIEW_JOB_TIMEOUT, check_manuscript_citations
 from app.workers.manuscript_section_review import SECTION_REVIEW_JOB_TIMEOUT, review_manuscript_section
 from app.workers.manuscripts import COMPILE_JOB_TIMEOUT, compile_manuscript
+from app.workers.paper_biblio import fill_paper_biblio
 from app.workers.paper_enrichment import ENRICH_PAPERS_TIMEOUT, enrich_papers
 from app.workers.pdf_recheck import RECHECK_JOB_TIMEOUT, recheck_free_pdfs
 from app.workers.references import fetch_references
@@ -65,6 +66,7 @@ class WorkerSettings:
         # no stored result: the job id frees as soon as it ends, so a re-run after a rate-limited stop starts
         func(enrich_hits, timeout=ENRICH_JOB_TIMEOUT, keep_result=0),
         func(enrich_papers, timeout=ENRICH_PAPERS_TIMEOUT, keep_result=0),
+        func(fill_paper_biblio, timeout=60, max_tries=1, keep_result=0),
         func(suggest_screening, timeout=SUGGEST_JOB_TIMEOUT),
         func(generate_evidence_cards, timeout=EVIDENCE_CARDS_JOB_TIMEOUT, max_tries=EVIDENCE_CARDS_MAX_TRIES),
         func(verify_manuscript_evidence, timeout=EVIDENCE_JOB_TIMEOUT, max_tries=1),

@@ -251,6 +251,7 @@ async def _queued(session: AsyncSession, paper, workspace_uuid: uuid.UUID | None
 async def _saved_without_pdf(session, paper, workspace_uuid, tried, copies) -> AddPaperResult:
     if workspace_uuid is not None:
         await workspaces.add_paper(session, workspace_uuid, paper.id)
+    await papers.queue_biblio_fill(paper)
     if paper.abstract:
         try:
             await queue.enqueue("index_abstract", str(paper.id))
