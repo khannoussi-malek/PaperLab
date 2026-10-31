@@ -161,13 +161,13 @@ export function SourcePane(props: Props) {
       const kept = keptTexts.forManuscript(manuscriptId).filter((k) => k.path === path)
       if (kept.length !== 1) return setText(data.text)
       adopt(kept[0], data.updated_at)
-    } else if (data.updated_at !== base.current && auto.state === 'saved') {
+    } else if (Date.parse(data.updated_at) > Date.parse(base.current) && auto.state === 'saved') { // newer only: a stale answer never rolls back our own save
       base.current = data.updated_at
       setText(data.text)
       onText(path, null)
       void announceOutside()
     }
-  }, [file.data, auto, onText, path, manuscriptId])
+  }, [file.data, auto, state, onText, path, manuscriptId]) // `state`: a write that landed while saving is taken once saved
 
   useEffect(() => { live.current.onState(path, state) }, [state, path])
 
