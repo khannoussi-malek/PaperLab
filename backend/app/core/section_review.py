@@ -13,7 +13,6 @@ PROMPT_VERSION = 2
 SYSTEM_PROMPT, PROMPT_TEMPLATE = prompts.load("section_review", PROMPT_VERSION).split("\n<!-- prompt -->\n")
 MAX_WORDS = 25
 MAX_LINES = 12
-MAX_QUOTE_WORDS = 6
 MODEL_ERROR = "model_error"
 RETRY = (
     "\n\nReply again with lines only. Each line starts with Missing:, Unsupported: or Supported:, has at most "
@@ -24,21 +23,23 @@ _LINE = re.compile(r"^(Missing|Unsupported|Supported)\s*:\s*(.+)$", re.IGNORECAS
 _PREFIX = re.compile(r"^[\s>\-\u2022]*(\d+[.)]\s*)?")
 _MARKUP = re.compile(r"[*_`]+")
 _REF = re.compile(r"\[([SN])(\d+)\]")
-# Closed quoted runs in every style: "a", “a”, ‘a’, «a», „a“.
+# A point is judged by its shape (D118): no quoted span, no colon/dash introducing wording, no suggestion phrase,
+# no run copied from the section. Deliberately conservative: honest points that trip a rule are dropped and counted.
 _QUOTE = re.compile(
-    r"\"([^\"]*)\"|\u201c([^\u201c\u201d]*)[\u201c\u201d]|\u2018([^\u2018\u2019]*)\u2019|\u00ab([^\u00ab\u00bb]*)\u00bb"
-    r"|\u201e([^\u201e\u201c\u201d]*)[\u201c\u201d]"
+    r"\"[^\"]*\"|\u201c[^\u201c\u201d]*[\u201c\u201d]|\u2018[^\u2018\u2019]*\u2019|\u00ab[^\u00ab\u00bb]*\u00bb"
+    r"|\u201e[^\u201e\u201c\u201d]*[\u201c\u201d]|(?<!\w)'[^'\s][^']*\s[^']*'(?!\w)"
 )
-_OPEN_QUOTE = re.compile(r"[\"\u201c\u2018\u00ab\u201e]([^\"\u201c\u201d\u2018\u2019\u00ab\u00bb\u201e]*)$")
-# Deliberately conservative (D118): "instead of" / "rewrite" also drop honest points; tune from the eval's dropped.
-_REWRITE = re.compile(
-    r"(re-?write|replace (it|this)|should (read|say)|change (it|this) to|instead of|try:"
-    r"|you (could|can|might|may) (say|write|use)|\b(add|use|write|say|insert):"
-    r"|\b(add|write|say|use|insert)\b[^.]*\bsuch as"
-    r"|(e\.g\.|for example|for instance),?\s*(write|say|use)\b"
-    r"|(e\.g\.|for example|for instance),?[^\"\u201c\u2018\u00ab\u201e:]*[:\"\u201c\u2018\u00ab\u201e])",
+_OPEN_QUOTE = re.compile(r"[\"\u201c\u2018\u00ab\u201e]")
+_INTRODUCES = re.compile(r"(:\s+|\s?[\u2014\u2013]\s?|\s-\s)\S+(\s+\S+){2,}")
+_SUGGEST = re.compile(
+    r"\b(phrase|phrasing|reword|rephrase|rewrite|re-write|suggest(ed|ion)?|replace|instead of|such as|"
+    r"for example|for instance|how about|word(ed|ing)?\s+(it\s+)?as|(say|saying|said)\s+as|"
+    r"(line|sentence|phrase)\s+like|change\s+(it|this)\s+to|consider\s+(writing|adding|saying)|"
+    r"should\s+(read|say)|you\s+(could|can|might|may)\s+(say|write|use)|try(ing)?\s+(saying|writing|adding|using)|"
+    r"try:)\b|\be\.g\.",
     re.I,
 )
+COPY_WORDS = 6  # a point sharing this many consecutive words with a sentence of the section is copying it
 
 Kind = Literal["missing", "unsupported", "supported"]
 
@@ -79,20 +80,31 @@ def _clean(line: str) -> str:
     return " ".join(_MARKUP.sub("", _PREFIX.sub("", line, count=1)).split())
 
 
-def _quoted_wording(point: str) -> bool:
-    runs = [next(g for g in m.groups() if g is not None) for m in _QUOTE.finditer(point)]
-    unclosed = _OPEN_QUOTE.search(_QUOTE.sub(" ", point))
-    return any(len(r.split()) >= MAX_QUOTE_WORDS for r in runs) or bool(
-        unclosed and len(unclosed.group(1).split()) >= MAX_QUOTE_WORDS
+def _words(text: str) -> list[str]:
+    return re.findall(r"\w+", text.lower())
+
+
+def _grams(words: list[str]) -> set[tuple[str, ...]]:
+    return {tuple(words[i : i + COPY_WORDS]) for i in range(len(words) - COPY_WORDS + 1)}
+
+
+def _wording(point: str, copied: set[tuple[str, ...]]) -> bool:
+    bare = _REF.sub(" ", point)
+    return bool(
+        _QUOTE.search(point)
+        or _OPEN_QUOTE.search(point)
+        or _INTRODUCES.search(bare)
+        or _SUGGEST.search(point)
+        or _grams(_words(bare)) & copied
     )
 
 
-def _finding(line: str, n_sentences: int, n_notes: int) -> Finding | None:
+def _finding(line: str, n_sentences: int, n_notes: int, copied: set[tuple[str, ...]]) -> Finding | None:
     match = _LINE.match(line)
     if not match:
         return None
     kind, point = match.group(1).lower(), match.group(2).strip()
-    if len(point.split()) > MAX_WORDS or _REWRITE.search(point) or _quoted_wording(point):
+    if len(point.split()) > MAX_WORDS or _wording(point, copied):
         return None
     refs = tuple(Ref(k, int(n)) for k, n in _REF.findall(point))
     if any(r.n < 1 or r.n > (n_sentences if r.kind == "S" else n_notes) for r in refs):
@@ -102,21 +114,22 @@ def _finding(line: str, n_sentences: int, n_notes: int) -> Finding | None:
     return Finding(kind, point, refs)  # type: ignore[arg-type]
 
 
-def parse_findings(reply: str, n_sentences: int, n_notes: int) -> tuple[list[Finding], int]:
+def parse_findings(reply: str, sentences: list[str], n_notes: int) -> tuple[list[Finding], int]:
     """Kept lines (at most MAX_LINES) and the count of dropped ones, including lines past the cap.
 
     A line is a candidate when it starts with a label or reads like a rewrite offer; plain chatter is ignored.
     An exact repeat of an earlier line is skipped silently.
     """
+    copied = set().union(*(_grams(_words(t)) for t in sentences)) if sentences else set()
     kept: list[Finding] = []
     seen: set[str] = set()
     dropped = 0
     for raw in reply.splitlines():
         line = _clean(raw)
-        if not (_LINE.match(line) or _REWRITE.search(line)) or line.lower() in seen:
+        if not (_LINE.match(line) or _SUGGEST.search(line)) or line.lower() in seen:
             continue
         seen.add(line.lower())
-        finding = _finding(line, n_sentences, n_notes)
+        finding = _finding(line, len(sentences), n_notes, copied)
         if finding is not None and len(kept) < MAX_LINES:
             kept.append(finding)
         else:
@@ -129,7 +142,7 @@ async def review(role: str, sentences: list[str], notes: list[str], *, llm) -> R
     prompt = build_prompt(role, sentences, notes)
     for attempt in (prompt, prompt + RETRY):
         reply = "".join([t async for t in llm.stream(SYSTEM_PROMPT, attempt)])
-        findings, dropped = parse_findings(reply, len(sentences), len(notes))
+        findings, dropped = parse_findings(reply, sentences, len(notes))
         if findings:
             return Review(findings, dropped, model)
     raise ReviewFailed(MODEL_ERROR)
