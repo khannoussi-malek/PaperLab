@@ -55,10 +55,11 @@ describe('citeThisEdit', () => {
 })
 
 test('every stored reason has its own plain copy; unknown codes are not blamed on the model', () => {
-  expect(REASON_CODES.sort()).toEqual(['cancelled', 'check_failed', 'claim_scope', 'claim_too_long', 'empty_claim', 'key_not_found', 'model_error', 'no_model', 'no_text', 'not_ready', 'paper_not_in_library'])
+  expect(REASON_CODES.sort()).toEqual(['cancelled', 'check_failed', 'claim_scope', 'claim_too_long', 'empty_claim', 'key_not_found', 'model_error', 'no_model', 'no_text', 'not_ready', 'paper_not_in_library', 'remote_model_needs_confirm'])
   expect(reasonCopy('cancelled')).toBe('Stopped before this one was checked.')
   expect(reasonCopy('key_not_found')).toBe('This key matches no paper in the library')
   expect(reasonCopy('model_error')).toBe("The model didn't give a usable answer")
   expect(reasonCopy('something_new')).toBe("This one couldn't be checked.")
+  expect(reasonCopy('remote_model_needs_confirm')).toMatch(/now a cloud model/)
   expect(reasonCopy(null)).toBe("This one couldn't be checked.")
 })

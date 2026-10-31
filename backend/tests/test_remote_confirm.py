@@ -159,3 +159,22 @@ async def test_find_evidence_whose_default_turns_remote_is_refused_by_the_job(
     await evidence_worker.verify_manuscript_evidence({}, str(m.id), out["sentence_hash"])
     (row,) = await evidence_rows(session, m.id)
     assert (row.status, row.reason) == ("failed", "remote_model_needs_confirm")
+
+
+async def test_a_newer_ask_without_a_yes_does_not_inherit_an_old_one(session, embedder, arq, evidence_wiring):
+    from test_manuscript_evidence import SENTENCE
+
+    from app.core import manuscript_evidence as ev
+
+    library, _ = evidence_wiring
+    _, m = await library(session, embedder, "Alpha")
+    await _remote(session)
+    await ev.find(session, m.id, SENTENCE, embedder=embedder, confirm_remote=True)
+    await session.execute(update(LLMModel).values(is_default=False))  # back to local: no yes asked
+    local = LLMConnection(kind="ollama", label="Local", base_url="http://localhost:11434")
+    session.add(local)
+    await session.flush()
+    session.add(LLMModel(connection_id=local.id, name="small", is_default=True))
+    await session.flush()
+    await ev.find(session, m.id, SENTENCE, embedder=embedder)
+    assert [r.confirm_remote for r in await evidence_rows(session, m.id)] == [False]
