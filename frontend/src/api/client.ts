@@ -15,7 +15,12 @@ export type ReviewRun = components['schemas']['ReviewRunOut']
 export type CheckItem = components['schemas']['CheckItemOut']
 export type ReviewState = components['schemas']['ReviewOut']
 export type ReviewSentence = components['schemas']['SentenceOut']
-export type ReviewStart = { file: string; base: string; from?: number | null; to?: number | null; include_uncited?: boolean }
+export type ReviewStart = { file: string; base: string; from?: number | null; to?: number | null; include_uncited?: boolean; confirm_remote?: boolean }
+export type SectionReview = components['schemas']['SectionReviewOut']
+export type SectionFinding = components['schemas']['FindingOut']
+export type SectionRef = components['schemas']['RefOut']
+export type SectionSpan = components['schemas']['SectionSpanOut']
+export type SectionReviewStart = components['schemas']['SectionReviewIn']
 export type CitablePaper = components['schemas']['CitablePaperOut']
 export type ManuscriptCreate = components['schemas']['ManuscriptCreate']
 export type ManuscriptPatch = components['schemas']['ManuscriptPatch']
@@ -555,6 +560,14 @@ export const api = {
     request<void>(`/api/manuscripts/${id}/review/dismissals/${hash}`, { method: 'PUT' }),
   restoreClaim: (id: string, hash: string) =>
     request<void>(`/api/manuscripts/${id}/review/dismissals/${hash}`, { method: 'DELETE' }),
+  startSectionReview: (id: string, body: SectionReviewStart) =>
+    request<SectionReview>(`/api/manuscripts/${id}/section-review`, sendJson('POST', body)),
+  sectionReviews: (id: string, file: string) =>
+    request<{ reviews: SectionReview[] }>(`/api/manuscripts/${id}/section-review?file=${encodeURIComponent(file)}`),
+  cancelSectionReview: (id: string, reviewId: string) =>
+    request<SectionReview>(`/api/manuscripts/${id}/section-review/${reviewId}/cancel`, { method: 'POST' }),
+  locateSections: (id: string, file: string, text: string) =>
+    request<{ sections: SectionSpan[] }>(`/api/manuscripts/${id}/section-review/locate`, sendJson('POST', { file, text })),
   pinPaper: (id: string, paperId: string) => request<{ key: string }>(`/api/manuscripts/${id}/papers/${paperId}/pin`, { method: 'POST' }),
   rankPapers: (id: string, text: string) =>
     request<{ paper_ids: string[] }>(`/api/manuscripts/${id}/papers/rank`, sendJson('POST', { text })),

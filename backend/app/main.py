@@ -34,6 +34,7 @@ from app.api import (
 from app.api import citations as citations_api
 from app.api import evidence_cards as evidence_cards_api
 from app.api import manuscript_review as manuscript_review_api
+from app.api import manuscript_section_review as manuscript_section_review_api
 from app.api import manuscripts as manuscripts_api
 from app.api import mcp as mcp_api
 from app.api import paper_sources as paper_sources_api
@@ -120,6 +121,7 @@ def create_app() -> FastAPI:
     app.include_router(evidence_cards_api.router)
     app.include_router(manuscripts_api.router)
     app.include_router(manuscript_review_api.router)
+    app.include_router(manuscript_section_review_api.router)
     app.include_router(datasets.router)
     app.include_router(charts.router)
     app.include_router(llm.router)
@@ -141,6 +143,9 @@ def create_app() -> FastAPI:
                 extra[key] = exc.details[key]
         if "updated_at" in exc.details:  # file_changed: the file's clock; pydantic's UTC form (Z) matches the bodies
             extra["updated_at"] = TypeAdapter(datetime).dump_python(exc.details["updated_at"], mode="json")
+        for key in ("model", "host"):  # remote_model_needs_confirm names the model and where the text would go
+            if key in exc.details:
+                extra[key] = str(exc.details[key])
         for key in ("paper_id", "kept_id"):  # already_in_library (M66) and paper_merged (R19) say which paper
             if key in exc.details:
                 extra[key] = str(exc.details[key])

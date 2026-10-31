@@ -163,3 +163,28 @@ async def test_too_many_claims_names_the_count(client, session):
     out = await client.post(f"/api/manuscripts/{m.id}/review", json={"file": "main.tex", "base": later})
     assert out.status_code == 422 and out.json()["count"] == 31
     assert (await client.post(f"/api/manuscripts/{uuid.uuid4()}/review/locate", json={"text": "x"})).status_code == 404
+
+
+async def test_remote_default_model_needs_confirm_remote_in_the_body(client, session):
+    from sqlalchemy import update
+
+    from app.models import LLMConnection, LLMModel
+
+    ws, papers, m = await setup(session, "Alpha", name=f"W {uuid.uuid4().hex[:8]}")
+    await manuscripts.upsert_text(session, m.id, "main.tex", "Walking is good for health in most adults.")
+    await session.execute(update(LLMModel).values(is_default=False))
+    c = LLMConnection(kind="openai_compatible", label="Cloud", base_url="https://api.example.com/v1")
+    session.add(c)
+    await session.flush()
+    session.add(LLMModel(connection_id=c.id, name="big", is_default=True))
+    await session.flush()
+    later = (datetime.now(UTC) + timedelta(days=1)).isoformat()
+    url = f"/api/manuscripts/{m.id}/review"
+    refused = await client.post(url, json={"file": "main.tex", "base": later})
+    assert refused.status_code == 409
+    assert (refused.json()["detail"], refused.json()["host"], refused.json()["model"]) == (
+        "remote_model_needs_confirm",
+        "api.example.com",
+        "Cloud · big",
+    )
+    assert (await client.post(url, json={"file": "main.tex", "base": later, "confirm_remote": True})).status_code == 202

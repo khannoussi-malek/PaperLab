@@ -229,10 +229,10 @@ async def test_two_starts_at_once_only_one_runs(monkeypatch):
     engine = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)  # its own: the app's pool is tied to a loop
     SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
-    async def resolve(session, model_id):
+    async def allow(session, confirmed):
         return None
 
-    monkeypatch.setattr(mr.llm_connections, "resolve", resolve)
+    monkeypatch.setattr(mr.llm_connections, "refuse_unconfirmed_remote", allow)
     async with SessionLocal() as s:
         papers, _, m = await doc(s, basic, "Alpha", "Beta")
         await s.commit()

@@ -120,11 +120,12 @@ async def start(
     base: datetime,
     selection: tuple[int, int] | None,
     include_uncited: bool = True,
+    confirm_remote: bool = False,
 ) -> dict:
     # Starts on one manuscript take turns to the commit: the later one sees the earlier run and refuses.
     await session.execute(text("SELECT pg_advisory_xact_lock(hashtext(:mid))"), {"mid": str(mid)})
     await manuscripts.get(session, mid)
-    await llm_connections.resolve(session, None)  # Conflict("no_model") before any row
+    await llm_connections.refuse_unconfirmed_remote(session, confirm_remote)  # no_model / needs confirm, before any row
     source = await manuscripts.read(session, mid, file)
     if source.text is None or not file.endswith(".tex"):
         raise InvalidInput("not_tex", detail="The reviewer reads .tex files.")
