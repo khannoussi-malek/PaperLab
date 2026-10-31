@@ -9,6 +9,8 @@ import { PaperList } from '@/features/library/PaperList'
 import { WorkspacePapers } from './WorkspacePapers'
 import { tagSummary } from './tagFixtures'
 
+vi.mock('@/features/triage/pdfCache', () => ({ useCachedPdf: () => ({ doc: null, error: null }), retainOnly: vi.fn(), prefetchPdf: vi.fn() })) // pdfjs needs a worker
+vi.mock('@/features/reader/PdfPage', () => ({ PdfPage: () => null }))
 vi.mock('@/features/library/PaperPreview', () => ({ PaperPreview: () => null })) // pulls in pdfjs, which needs a worker
 vi.stubGlobal('matchMedia', () => ({ matches: false }))
 vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
