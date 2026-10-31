@@ -101,8 +101,9 @@ export function ConnectClaudePage() {
           <li>Read your notes, in one workspace or on one paper.</li>
           <li>
             Read, create and edit your manuscripts' files, compile them, and read the result and the PDF's text.
-            Claude Desktop asks you before each of these, and every change keeps an earlier version you can restore in
-            History.
+            Claude Desktop asks you before each of these until you choose "Always allow". Every change keeps an earlier
+            version you can restore in History, which holds the newest 20 Claude edits, and your own history is kept
+            separately.
           </li>
         </ul>
         <p className="text-sm text-muted-foreground">
