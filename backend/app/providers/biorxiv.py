@@ -24,6 +24,7 @@ from sqlalchemy import and_, or_, select
 from app.db import SessionLocal
 from app.models import ExternalRef
 from app.providers.arxiv import title_words
+from app.providers.http import retrying
 
 BASE_URL = "https://api.biorxiv.org"
 TIMEOUT = httpx.Timeout(30.0)
@@ -41,7 +42,7 @@ def new_client(
     # Identical for both servers -- the host, headers and timeout never depend on which server a later
     # call targets, so one function serves both bioRxiv's and medRxiv's own SourceSpec entries directly.
     return httpx.AsyncClient(
-        base_url=BASE_URL, timeout=TIMEOUT, transport=transport, headers={"User-Agent": _USER_AGENT}
+        base_url=BASE_URL, timeout=TIMEOUT, transport=retrying(transport), headers={"User-Agent": _USER_AGENT}
     )
 
 

@@ -99,3 +99,13 @@ class RateLimited(httpx.AsyncBaseTransport):
 
     async def aclose(self) -> None:
         await self.inner.aclose()
+
+
+CONNECT_RETRIES = 2
+
+
+def retrying(transport: httpx.AsyncBaseTransport | None) -> httpx.AsyncBaseTransport:
+    """A test's transport as given; else a real one that retries a failed connection (DNS, refused). Docker's DNS in
+    the worker fails a lookup now and then, and one blip left uploads without authors or year. httpx retries only
+    connection errors, never a request that reached the server."""
+    return transport or httpx.AsyncHTTPTransport(retries=CONNECT_RETRIES)
