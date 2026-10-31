@@ -180,7 +180,7 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
         onStartOver={empty || finished ? undefined : keepFocus(startOver)}
         canStartOver={session.canStartOver}
       />
-      <ShortcutHelp open={helpOpen} onOpenChange={setHelpOpen} />
+      <ShortcutHelp open={helpOpen} onOpenChange={setHelpOpen} returnFocus={focusRoot} />
       <DeskStatus announcement={reasons ? say.reasonRow() : session.announcement} alert={session.alert} />
       {empty ? (
         <TriageEmpty canInclude={!includeDecided} onInclude={() => toggleInclude(true)} onBack={exit} />
@@ -251,7 +251,7 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
             </div>
           </div>
           {layout === 'single' && hasPdf && (
-            <PdfSheet open={sheetShown} onOpenChange={(o) => { pdf.setSheetOpen(o); if (!o) focusRoot() }} paperId={top.id} target={target} initialPage={pdf.pageOf(top.id)} onPage={(p) => pdf.remember(top.id, p)} onInteract={clock.interact} />
+            <PdfSheet open={sheetShown} onOpenChange={(o) => { pdf.setSheetOpen(o); if (!o) focusRoot() }} paperId={top.id} target={target} initialPage={pdf.pageOf(top.id)} onPage={(p) => pdf.remember(top.id, p)} onInteract={clock.interact} returnFocus={focusRoot} />
           )}
           {reasons && <ReasonChips reasons={REASONS.not_relevant} noteFor="other" onPick={(r, note) => go('not_relevant', r, note)} onCancel={cancelReason} />}
           <TriageControls layout={layout} undo={undoInfo} onUndo={undo} onDecide={choose} progress={progress(state)} />

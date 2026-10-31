@@ -14,10 +14,10 @@ const ROWS: [string, string][] = [
 ]
 
 /** Only the keys that exist. */
-export function ShortcutHelp({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+export function ShortcutHelp({ open, onOpenChange, returnFocus }: { open: boolean; onOpenChange: (open: boolean) => void; returnFocus?: () => void }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent onCloseAutoFocus={(e) => { e.preventDefault(); returnFocus?.() }}>
         <DialogTitle>Keyboard shortcuts</DialogTitle>
         <DialogDescription>Not relevant asks for a reason first: then 1 to 6 pick it.</DialogDescription>
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
