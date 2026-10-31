@@ -19,6 +19,7 @@ established "no PDF, links are for identification only" precedent.
 
 import httpx
 
+from app.providers.http import retrying
 from app.providers.openalex import json_body
 
 BASE_URL = "https://api.openaire.eu/graph/v3"
@@ -36,7 +37,7 @@ def new_client(
     # exist only to satisfy the uniform new_client(*, email=None, api_key=None, transport=None) signature
     # every provider shares and are never used (ponytail: wire a real token-refresh flow if a later
     # milestone needs OpenAIRE's documented higher tier badly enough to justify building one).
-    return httpx.AsyncClient(base_url=BASE_URL, timeout=TIMEOUT, transport=transport)
+    return httpx.AsyncClient(base_url=BASE_URL, timeout=TIMEOUT, transport=retrying(transport))
 
 
 def _checked(response: httpx.Response) -> httpx.Response:

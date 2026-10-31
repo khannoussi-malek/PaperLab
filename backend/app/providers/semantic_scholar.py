@@ -8,7 +8,7 @@ from urllib.parse import quote
 
 import httpx
 
-from app.providers.http import RetryOn429
+from app.providers.http import RetryOn429, retrying
 from app.providers.openalex import json_body
 
 BASE_URL = "https://api.semanticscholar.org"
@@ -35,9 +35,9 @@ def new_client(
     # RETRY_DELAYS is read here, not captured as a default argument, so a test's monkeypatch of this module's own
     # RETRY_DELAYS (done before calling new_client) still takes effect.
     # retry_429=False for a caller that waits on Retry-After itself (hit_enrichment).
-    inner = transport or httpx.AsyncHTTPTransport()
-    retrying = RetryOn429(inner, RETRY_DELAYS) if retry_429 else inner
-    return httpx.AsyncClient(base_url=BASE_URL, headers=headers, timeout=TIMEOUT, transport=retrying)
+    inner = retrying(transport)
+    wrapped = RetryOn429(inner, RETRY_DELAYS) if retry_429 else inner
+    return httpx.AsyncClient(base_url=BASE_URL, headers=headers, timeout=TIMEOUT, transport=wrapped)
 
 
 # ponytail: a fixed 2s then 5s retry on 429, Retry-After ignored (S2 doesn't send one). Still busy after that raises;
