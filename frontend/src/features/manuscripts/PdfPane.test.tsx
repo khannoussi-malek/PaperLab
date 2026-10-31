@@ -102,3 +102,10 @@ test('the PDF an edit made keeps its scroll; any other new PDF goes back to the 
   view.rerender(ui('2026-10-05T00:00:00Z', '2026-10-04T00:00:00Z')) // a later compile follows the target again
   expect(box.scrollTop).toBe(42 + 300 * SCALE) // jsdom rects are all 0, so placing adds the current scroll
 })
+
+test('a shown PDF can be downloaded from the pane, named after the manuscript', () => {
+  render(<PdfPane manuscript={{ ...m, title: 'My Paper' } as ManuscriptDetail} width={636} target={null} onSourceAt={() => {}} />)
+  const link = screen.getByRole('link', { name: 'Download PDF' })
+  expect(link).toHaveAttribute('href', '/api/manuscripts/m1/pdf?v=2026-10-03T00%3A00%3A00Z')
+  expect(link).toHaveAttribute('download', 'My Paper.pdf')
+})

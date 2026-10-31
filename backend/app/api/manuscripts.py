@@ -323,7 +323,8 @@ async def restore_snapshot(manuscript_id: uuid.UUID, snapshot_id: uuid.UUID, ses
 
 
 @router.get("/api/manuscripts/{manuscript_id}/export.zip")
-async def export_zip(manuscript_id: uuid.UUID, session: SessionDep) -> Response:
+async def export_zip(manuscript_id: uuid.UUID, session: SessionDep, pdf: bool = True) -> Response:
+    """Every file and paperlab.bib, plus the last compiled PDF unless `pdf=false` (the LaTeX source alone)."""
     manuscript = await manuscripts.get(session, manuscript_id)
     listed = await manuscripts.files(session, manuscript_id)
     rows = [await manuscripts.read(session, manuscript_id, f.path) for f in listed]
@@ -331,8 +332,10 @@ async def export_zip(manuscript_id: uuid.UUID, session: SessionDep) -> Response:
     bib = await manuscript_bib.build_bib(session, manuscript, {p: c for p, c in files.items() if isinstance(c, str)})
     await session.commit()  # the keys the bib pinned, as a compile pins them
     target = manuscripts.pdf_path(manuscript_id)
-    data = manuscript_zip.write_zip(files, bib, target.read_bytes() if target.is_file() else None, manuscript.title)
+    compiled = target.read_bytes() if pdf and target.is_file() else None
+    data = manuscript_zip.write_zip(files, bib, compiled, manuscript.title)
+    ascii_name, name = (manuscript_zip.safe_name(manuscript.title), manuscript.title) if pdf else (
+        f"{manuscript_zip.safe_name(manuscript.title)}-latex", f"{manuscript.title} (LaTeX)")
     # an ASCII fallback, and RFC 5987's percent-encoded UTF-8 name, which can't carry a quote or a line break either
-    disposition = (f'attachment; filename="{manuscript_zip.safe_name(manuscript.title)}.zip"; '
-                   f"filename*=UTF-8''{quote(manuscript.title + '.zip', safe='')}")
+    disposition = f'attachment; filename="{ascii_name}.zip"; ' f"filename*=UTF-8''{quote(name + '.zip', safe='')}"
     return Response(data, media_type="application/zip", headers={"Content-Disposition": disposition})
