@@ -86,6 +86,8 @@ def test_a_journal_venue_is_a_journal_article_even_with_a_meeting_word(venue):
         "ACM SIGKDD Knowledge Discovery and Data Mining",
         "International Conference on Learning Representations",
         "CHI Conference on Human Factors in Computing Systems",
+        "CHI '24",
+        "CHI 2024",
         "Proceedings of the 2023 ACM Symposium on User Interface Software",
         "Workshop on Creativity and AI",
         "Proceedings of the IEEE International Conference on Computer Vision",  # not the journal Proc. IEEE
