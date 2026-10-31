@@ -23,6 +23,7 @@ async def start_review(manuscript_id: uuid.UUID, body: ReviewIn, session: Sessio
             base=body.base,
             selection=selection,
             include_uncited=body.include_uncited,
+            confirm_remote=body.confirm_remote,
         )
     )
 

@@ -21,6 +21,7 @@ from app.workers.hit_enrichment import ENRICH_JOB_TIMEOUT, enrich_hits
 from app.workers.ingest import INGEST_JOB_TIMEOUT, MAX_TRIES, index_abstract, ingest_paper, reembed_paper
 from app.workers.manuscript_evidence import EVIDENCE_JOB_TIMEOUT, verify_manuscript_evidence
 from app.workers.manuscript_review import REVIEW_JOB_TIMEOUT, check_manuscript_citations
+from app.workers.manuscript_section_review import SECTION_REVIEW_JOB_TIMEOUT, review_manuscript_section
 from app.workers.manuscripts import COMPILE_JOB_TIMEOUT, compile_manuscript
 from app.workers.paper_enrichment import ENRICH_PAPERS_TIMEOUT, enrich_papers
 from app.workers.pdf_recheck import RECHECK_JOB_TIMEOUT, recheck_free_pdfs
@@ -63,6 +64,7 @@ class WorkerSettings:
         func(generate_evidence_cards, timeout=EVIDENCE_CARDS_JOB_TIMEOUT, max_tries=EVIDENCE_CARDS_MAX_TRIES),
         func(verify_manuscript_evidence, timeout=EVIDENCE_JOB_TIMEOUT, max_tries=1),
         func(check_manuscript_citations, timeout=REVIEW_JOB_TIMEOUT, max_tries=1),
+        func(review_manuscript_section, timeout=SECTION_REVIEW_JOB_TIMEOUT, max_tries=1),
         func(compile_manuscript, timeout=COMPILE_JOB_TIMEOUT, max_tries=1),
         # one try: the job deletes its uploaded file when it ends, so a retry would have nothing to read
         func(import_citations, timeout=IMPORT_JOB_TIMEOUT, max_tries=1, keep_result=24 * 3600),
