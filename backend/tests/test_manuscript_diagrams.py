@@ -17,6 +17,7 @@ from app.models import LLMConnection, LLMModel
 from app.models import ManuscriptDiagram as Row
 from app.providers.llm import FakeLLM
 from app.workers import manuscript_diagrams as worker
+from app.workers import manuscript_section_review as worker_section
 from app.workers import manuscripts as compile_worker
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("manuscript_rows")]
@@ -51,13 +52,14 @@ class Compiler:
 
 
 @pytest.fixture(autouse=True)
-def wiring(session, arq, monkeypatch, local_default_model):
+def wiring(session, arq, monkeypatch, local_default_model, pdf_dir):
     @asynccontextmanager
     async def shared_session():
         yield session
 
     monkeypatch.setattr(queue, "_pool", arq)
     monkeypatch.setattr(worker, "SessionLocal", shared_session)
+    monkeypatch.setattr(worker_section, "SessionLocal", shared_session)  # _model resolves the default there
     monkeypatch.setattr(compile_worker, "COMPILE_LOCK", asyncio.Lock())  # a lock remembers the loop it first waited in
 
 
@@ -225,7 +227,7 @@ async def test_a_newer_edit_supersedes_a_compile_in_flight(session):
     await md.set_code(session, m.id, got["id"], PIC.replace("Decoder", "First"))
     taken = await worker._take(got["id"])  # the first compile starts
     await md.set_code(session, m.id, got["id"], PIC.replace("Decoder", "Second"))
-    await worker._write(got["id"], taken[3], status="done", compiled=True, preview_pdf=b"%PDF-old")
+    await worker._write(got["id"], taken[-1], status="done", compiled=True, preview_pdf=b"%PDF-old")
     now = await md.state(session, m.id, got["id"])
     assert (now["status"], now["compiled"]) == ("queued", None) and "Second" in now["code"]
 
@@ -235,7 +237,7 @@ async def test_cancel_then_a_late_write_is_ignored(session):
     out = await md.create(session, m.id, description=DESC, confirm_remote=False)
     taken = await worker._take(out["id"])
     cancelled = await md.cancel(session, m.id, out["id"])
-    await worker._write(out["id"], taken[3], status="done", code=PIC)
+    await worker._write(out["id"], taken[-1], status="done", code=PIC)
     now = await md.state(session, m.id, out["id"])
     assert (cancelled["status"], cancelled["reason"], now["status"], now["code"]) == (
         "failed",
@@ -279,9 +281,9 @@ async def test_an_older_compile_never_overwrites_the_one_that_took_the_row_after
     first = await worker._take(got["id"])
     await md.set_code(session, m.id, got["id"], PIC.replace("Decoder", "Second"))
     second = await worker._take(got["id"])  # running again, with a newer stamp
-    await worker._write(got["id"], first[3], status="done", compiled=True, preview_pdf=b"%PDF-old")
+    await worker._write(got["id"], first[-1], status="done", compiled=True, preview_pdf=b"%PDF-old")
     assert (await md.state(session, m.id, got["id"]))["status"] == "running"
-    await worker._write(got["id"], second[3], status="done", compiled=False)
+    await worker._write(got["id"], second[-1], status="done", compiled=False)
     assert (await md.state(session, m.id, got["id"]))["compiled"] is False
 
 
@@ -293,3 +295,48 @@ async def test_a_queue_that_is_down_fails_the_row(session, monkeypatch):
     monkeypatch.setattr(queue, "enqueue", down)
     out = await md.create(session, m.id, description=DESC, confirm_remote=False)
     assert (out["status"], out["reason"]) == ("failed", "queue_unavailable")
+
+
+async def remote_default(session):
+    await session.execute(update(LLMModel).values(is_default=False))
+    c = LLMConnection(kind="openai_compatible", label="Cloud", base_url="https://api.example.com/v1")
+    session.add(c)
+    await session.flush()
+    session.add(LLMModel(connection_id=c.id, name="big", is_default=True))
+    await session.flush()
+
+
+async def test_a_default_that_turns_remote_after_start_is_refused_by_the_job(session, monkeypatch):  # final M2
+    m = await manuscript(session)
+    out = await md.create(session, m.id, description=DESC, confirm_remote=False)  # local at start
+    await remote_default(session)
+
+    def boom(*a, **k):
+        raise AssertionError("a model was built")
+
+    monkeypatch.setattr(worker_section, "build_llm", boom)
+    await worker.generate_manuscript_diagram({}, str(out["id"]))
+    got = await md.state(session, m.id, out["id"])
+    assert (got["status"], got["reason"], got["code"]) == ("failed", "remote_model_needs_confirm", None)
+    confirmed = await md.create(session, m.id, description=DESC, confirm_remote=True)
+    row = await session.get(Row, confirmed["id"])
+    assert row.confirm_remote is True
+
+
+async def test_the_preview_locks_the_pdf_dir_first(session, monkeypatch):  # final I2
+    calls = []
+    monkeypatch.setattr(compile_worker, "_lock_pdf_dir", lambda: calls.append("locked"))
+    m = await manuscript(session)
+    await drawn(session, m)
+    assert calls == ["locked"]
+
+
+async def test_a_preview_that_crashes_after_generation_keeps_the_code(session):  # final M3
+    async def crash(libraries, picture):
+        raise OSError("tectonic would not start")
+
+    m = await manuscript(session)
+    out = await md.create(session, m.id, description=DESC, confirm_remote=False)
+    await worker.generate_manuscript_diagram({"llm": Scripted(REPLY), "compile": crash}, str(out["id"]))
+    got = await md.state(session, m.id, out["id"])
+    assert (got["status"], got["compiled"], got["reason"], got["code"]) == ("done", False, "compile_failed", PIC)

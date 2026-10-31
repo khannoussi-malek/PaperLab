@@ -13,8 +13,8 @@ from test_manuscript_papers import setup
 from app.core import manuscript_papers, manuscripts, queue
 from app.core import manuscript_section_review as msr
 from app.core.errors import Conflict, InvalidInput, NotFound
+from app.models import LLMConnection, LLMModel, Note, note_anchors, note_papers
 from app.models import ManuscriptSectionReview as Row
-from app.models import Note, note_anchors, note_papers
 from app.providers.base import LLMError, LLMUnavailable
 from app.workers import manuscript_section_review as worker
 
@@ -372,3 +372,22 @@ async def test_job_timeout_is_under_the_live_window():
     from app.workers.manuscript_section_review import SECTION_REVIEW_JOB_TIMEOUT
 
     assert SECTION_REVIEW_JOB_TIMEOUT < msr.LIVE.total_seconds()
+
+
+async def test_a_default_that_turns_remote_after_start_is_refused_by_the_job(session, monkeypatch):  # final M2
+    _, m = await doc(session)
+    out = await go(session, m)  # the default is local at start: no yes needed
+    await session.execute(update(LLMModel).values(is_default=False))
+    c = LLMConnection(kind="openai_compatible", label="Cloud", base_url="https://api.example.com/v1")
+    session.add(c)
+    await session.flush()
+    session.add(LLMModel(connection_id=c.id, name="big", is_default=True))
+    await session.flush()
+
+    def boom(*a, **k):
+        raise AssertionError("a model was built")
+
+    monkeypatch.setattr(worker, "build_llm", boom)
+    await worker.review_manuscript_section({}, str(out["id"]))
+    (row,) = await rows(session, m.id)
+    assert (row.status, row.reason, row.confirm_remote) == ("failed", "remote_model_needs_confirm", False)

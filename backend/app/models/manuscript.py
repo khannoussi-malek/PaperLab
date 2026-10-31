@@ -214,6 +214,7 @@ class ManuscriptSectionReview(Base):
     inputs: Mapped[dict[str, Any]] = mapped_column(JSONB)  # {"sentences": [...], "notes": [...]}
     findings: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)  # [{"kind", "point", "refs"}]
     dropped: Mapped[int] = mapped_column(Integer, server_default=text("0"))
+    confirm_remote: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))  # re-checked by the job
     reason: Mapped[str | None] = mapped_column(Text)
     model: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=NOW)
@@ -242,5 +243,6 @@ class ManuscriptDiagram(Base):
     reason: Mapped[str | None] = mapped_column(Text)
     model: Mapped[str | None] = mapped_column(Text)
     prompt_version: Mapped[int | None] = mapped_column(Integer)
+    confirm_remote: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))  # re-checked by the job
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=NOW)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=NOW)

@@ -23,7 +23,7 @@ DIAGRAM_JOB_TIMEOUT = 18 * 60  # under LIVE, so a run that still looks live real
 
 
 async def _take(did: uuid.UUID):
-    """(description, code, libraries, stamp) of a queued row, now running; None when gone or no longer queued."""
+    """(description, code, libraries, confirm_remote, stamp) of a queued row, now running; None when gone."""
     async with SessionLocal() as session:
         row = await session.scalar(
             select(Row).where(Row.id == did, Row.status == "queued").with_for_update(skip_locked=True)
@@ -37,7 +37,7 @@ async def _take(did: uuid.UUID):
             .returning(Row.updated_at)
         )
         await session.commit()
-        return row.description, row.code, list(row.libraries or []), stamp
+        return row.description, row.code, list(row.libraries or []), row.confirm_remote, stamp
 
 
 async def _write(did: uuid.UUID, stamp, **values) -> None:
@@ -57,6 +57,7 @@ async def _compile(libraries: list[str], picture: str, compile_fn) -> dict:
     # ponytail: the lock is per worker process and a manuscript compile can hold it a while; time spent waiting
     # counts toward LIVE, so a long queue reads `interrupted` — move the wait before _take if that shows up.
     async with compile_worker.COMPILE_LOCK:
+        compile_worker._lock_pdf_dir()  # Tectonic may run as tex: the PDFs go 0700 first, as for a manuscript
         res = await (compile_fn or diagram_compile.preview)(libraries, picture)
     return {
         "compiled": res.ok,
@@ -66,15 +67,20 @@ async def _compile(libraries: list[str], picture: str, compile_fn) -> dict:
     }
 
 
-async def _draw(description: str, ctx: dict) -> dict:
-    got = await diagram.generate(description, llm=await _model(ctx.get("llm")))
+async def _draw(description: str, confirmed: bool, ctx: dict) -> dict:
+    got = await diagram.generate(description, llm=await _model(ctx.get("llm"), confirmed))
     values = {
         "code": got.picture,
         "libraries": got.libraries,
         "labels_not_in_description": got.labels_not_in_description,
         "model": got.model,
     }
-    return {**values, **await _compile(got.libraries, got.picture, ctx.get("compile")), "status": "done"}
+    try:
+        preview = await _compile(got.libraries, got.picture, ctx.get("compile"))
+    except Exception:  # the model's code stays, so the researcher can try Update preview
+        logger.exception("diagram preview failed after generation")
+        preview = {"compiled": False, "reason": "compile_failed"}
+    return {**values, **preview, "status": "done"}
 
 
 async def generate_manuscript_diagram(ctx: dict, diagram_id: str) -> None:
@@ -82,9 +88,9 @@ async def generate_manuscript_diagram(ctx: dict, diagram_id: str) -> None:
     taken = await _take(did)
     if taken is None:
         return
-    description, _, _, stamp = taken
+    description, _, _, confirmed, stamp = taken
     try:
-        values = await _draw(description, ctx)
+        values = await _draw(description, confirmed, ctx)
     except DomainError as exc:
         values = {"status": "failed", "reason": error_code(exc)}
     except LLMUnavailable:
@@ -102,7 +108,7 @@ async def compile_manuscript_diagram(ctx: dict, diagram_id: str) -> None:
     taken = await _take(did)
     if taken is None:
         return
-    _, code, libraries, stamp = taken
+    _, code, libraries, _, stamp = taken
     try:
         values = {**await _compile(libraries, code or "", ctx.get("compile")), "status": "done"}
     except Exception:

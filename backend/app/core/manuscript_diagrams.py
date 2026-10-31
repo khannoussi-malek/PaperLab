@@ -95,6 +95,7 @@ async def create(session: AsyncSession, mid: uuid.UUID, *, description: str, con
         manuscript_id=mid,
         description=description,
         status="queued",
+        confirm_remote=confirm_remote,
         prompt_version=diagram.PROMPT_VERSION,
         created_at=func.clock_timestamp(),  # not now(): rows made in one transaction still sort newest last
         updated_at=func.clock_timestamp(),

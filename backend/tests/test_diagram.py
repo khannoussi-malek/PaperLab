@@ -69,3 +69,13 @@ async def test_the_fake_model_draws_named_phrases_and_passes_the_guard(descripti
     got = await dg.generate(description, llm=FakeLLM())
     assert got.errors == [] and got.labels_not_in_description == []
     assert set(got.libraries) <= set(dt.ALLOWED_LIBRARIES) and dt.node_labels(got.picture)
+
+
+async def test_model_comments_never_reach_the_picture():  # final review I1
+    reply = (
+        "<tikz>\n% Here is my explanation of the figure.\n"
+        + PIC.replace("{Encoder};", "{Encoder}; % reads text")
+        + "\n</tikz>"
+    )
+    got = await dg.generate("An encoder and a decoder.", llm=Scripted(reply))
+    assert "%" not in got.picture and "explanation" not in got.picture and "Encoder" in got.picture
