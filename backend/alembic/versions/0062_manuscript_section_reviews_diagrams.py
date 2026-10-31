@@ -39,6 +39,7 @@ def upgrade() -> None:
         sa.Column("inputs", JSONB(), nullable=False),
         sa.Column("findings", JSONB()),
         sa.Column("dropped", sa.Integer(), server_default=sa.text("0"), nullable=False),
+        sa.Column("confirm_remote", sa.Boolean(), server_default=sa.false(), nullable=False),  # the yes, for the job
         sa.Column("reason", sa.Text()),
         sa.Column("model", sa.Text()),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=now, nullable=False),
@@ -66,6 +67,7 @@ def upgrade() -> None:
         sa.Column("reason", sa.Text()),
         sa.Column("model", sa.Text()),
         sa.Column("prompt_version", sa.Integer()),
+        sa.Column("confirm_remote", sa.Boolean(), server_default=sa.false(), nullable=False),  # the yes, for the job
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=now, nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=now, nullable=False),
         sa.CheckConstraint("status IN ('queued', 'running', 'done', 'failed')", name="ck_manuscript_diagrams_status"),

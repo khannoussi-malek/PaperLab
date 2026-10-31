@@ -158,6 +158,7 @@ async def start(
         role=chosen_role,
         role_source=role_source,
         status="queued",
+        confirm_remote=confirm_remote,
         source=body,
         inputs={
             "sentences": [" ".join(s.plain.split()) for s in sentences],

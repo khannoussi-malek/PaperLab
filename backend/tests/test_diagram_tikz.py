@@ -93,7 +93,7 @@ def test_oversize_is_rejected():
 
 def test_node_labels_flatten_nested_braces_and_line_breaks():
     pic = "\\node[draw, label={[x]above:no}] (a) at (0,0) {Encoder \\\\ {\\textbf{block}} 2};\n\\node {Out};"
-    assert dt.node_labels(pic) == ["Encoder block 2", "Out"]
+    assert dt.node_labels(pic) == ["Encoder block 2", "Out", "no"]  # label= text counts too (final review I1)
 
 
 def test_labels_not_in_description_flags_a_cache():
@@ -166,3 +166,27 @@ def test_a_line_break_before_a_word_in_a_label_is_not_a_command():  # re-review 
     pic = "\\begin{tikzpicture}\\node {Token\\\\Input}; \\node {Raw\\\\Image};\\end{tikzpicture}"
     assert dt.check([], pic) == []
     assert dt.check([], pic.replace("Raw\\\\Image", "Raw\\\\ \\input{x}"))
+
+
+def test_labels_on_paths_edges_and_label_pin_options_are_read():  # final review I1
+    pic = (
+        "\\begin{tikzpicture}[node distance=8mm, every node/.style={draw}]\n"
+        "\\node (a) {Encoder};\n"
+        "\\node[right=of a, label=above:{Hidden prose}, pin={[red]90:Pinned words}] (b) {Decoder};\n"
+        "\\draw[->] (a) -- node[above] {model says hi} (b);\n"
+        "\\path (a) edge node {edge text} (b);\n"
+        "\\end{tikzpicture}"
+    )
+    assert dt.node_labels(pic) == ["Encoder", "Decoder", "model says hi", "edge text", "Hidden prose", "Pinned words"]
+    assert dt.labels_not_in_description(pic, "An encoder feeds a decoder.") == [
+        "model says hi",
+        "edge text",
+        "Hidden prose",
+        "Pinned words",
+    ]
+
+
+def test_drop_comments_removes_model_comments_and_keeps_escaped_percent():
+    assert (
+        dt.drop_comments("% intro\n\\node {A}; % tail\n\\node {50\\% done};\n") == "\\node {A};\n\\node {50\\% done};"
+    )

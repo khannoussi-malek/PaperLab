@@ -31,7 +31,7 @@ async def compiles(libraries, picture):
 
 
 @pytest.fixture(autouse=True)
-def wiring(session, arq, monkeypatch, local_default_model):
+def wiring(session, arq, monkeypatch, local_default_model, pdf_dir):
     @asynccontextmanager
     async def shared_session():
         yield session

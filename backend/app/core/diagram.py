@@ -52,6 +52,7 @@ async def generate(description: str, *, llm) -> Generated:
         code = parse_reply("".join([t async for t in llm.stream(SYSTEM_PROMPT, attempt)]))
         if code is not None:
             libraries, picture = diagram_tikz.split_code(code)
+            picture = diagram_tikz.drop_comments(picture)
             return Generated(
                 libraries,
                 picture,

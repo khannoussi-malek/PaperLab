@@ -68,7 +68,11 @@ _COMMENT = re.compile(r"(\\.)|%[^\n]*(?:\n[ \t]*)?", re.S)
 _LIBS = re.compile(r"\\usetikzlibrary\s*\{([^}]*)\}")
 _BEGIN = re.compile(r"\\begin\s*\{tikzpicture\}")
 _END = re.compile(r"\\end\s*\{tikzpicture\}")
-_NODE = re.compile(r"\\node(?![A-Za-z])")
+# Where a picture carries text: `\\node`, a `node` on a path or edge (`-- node[above] {yes} (b)`), and `label=` /
+# `pin=` options. `node distance`, `every node/.style` and `nodes=` are keys, not text.
+_NODE = re.compile(r"\\node(?![A-Za-z])|(?<![\w\\])node(?=\s*(?:[\[({]|at\b))")
+_LABEL_KEY = re.compile(r"(?<![A-Za-z])(?:label|pin)\s*=\s*")
+_POSITION = re.compile(r"^\s*(?:\[[^\]]*\])?\s*(?:[A-Za-z ]+|-?\d+(?:\.\d+)?):(?!:)")
 
 
 def split_code(raw: str) -> tuple[list[str], str]:
@@ -112,15 +116,41 @@ def check(libraries: list[str], picture: str) -> list[str]:
     return errors
 
 
+def _flat(text: str) -> str:
+    flat = re.sub(r"\\[A-Za-z]+", " ", text.replace("\\\\", " "))
+    return " ".join(flat.replace("{", " ").replace("}", " ").split())
+
+
+def _option_value(s: str, i: int) -> str:
+    """A `label=` / `pin=` value from `i`: a brace group, else up to the next `,` or `]`."""
+    if s[i : i + 1] == "{":
+        return _balanced(s, i) or ""
+    end = re.search(r"[,\]]", s[i:])
+    return s[i : i + end.start()] if end else s[i:]
+
+
 def node_labels(picture: str) -> list[str]:
-    """The `{…}` text of each `\\node`, braces and line breaks flattened."""
+    """Every text the picture shows: node texts (`\\node`, and `node` on paths and edges) and `label=`/`pin=` texts,
+    braces and line breaks flattened. ponytail: `matrix of nodes` cell text isn't read; parse cells if it matters."""
     out = []
     for m in _NODE.finditer(picture):
         text = _first_group(picture, m.end())
         if text is not None:
-            flat = re.sub(r"\\[A-Za-z]+", " ", text.replace("\\\\", " "))
-            out.append(" ".join(flat.replace("{", " ").replace("}", " ").split()))
-    return out
+            out.append(_flat(text))
+    for m in _LABEL_KEY.finditer(picture):
+        out.append(_flat(_POSITION.sub("", _option_value(picture, m.end()), count=1)))
+    return [label for label in out if label]
+
+
+def drop_comments(code: str) -> str:
+    """Model `%` comments removed (a comment-only line goes entirely); `\\%` stays. Generated code reaches the
+    researcher's file only through these lines, so no model prose rides along in a comment (D118)."""
+    lines = []
+    for line in code.split("\n"):
+        kept = re.sub(r"(\\.)|%.*", lambda m: m.group(1) or "", line).rstrip()
+        if kept or not line.lstrip().startswith("%"):
+            lines.append(kept)
+    return "\n".join(lines).strip()
 
 
 def _first_group(s: str, i: int) -> str | None:

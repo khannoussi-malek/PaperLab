@@ -22,7 +22,7 @@ PREVIEW_WORDS = 8
 
 
 async def _take(review_id: uuid.UUID):
-    """(role, inputs, stamp) of a queued row, now running; None when it is gone or no longer queued."""
+    """(role, inputs, confirm_remote, stamp) of a queued row, now running; None when it is gone or no longer queued."""
     async with SessionLocal() as session:
         row = await session.scalar(
             select(Row).where(Row.id == review_id, Row.status == "queued").with_for_update(skip_locked=True)
@@ -36,7 +36,7 @@ async def _take(review_id: uuid.UUID):
             .returning(Row.updated_at)
         )
         await session.commit()
-        return row.role, row.inputs, stamp
+        return row.role, row.inputs, row.confirm_remote, stamp
 
 
 async def _write(review_id: uuid.UUID, stamp, **values) -> None:
@@ -67,16 +67,20 @@ def _refs(finding: section_review.Finding, inputs: dict) -> list[dict]:
     return out
 
 
-async def _model(llm):
+async def _model(llm, confirmed: bool):
+    """The default model as it is now. The start's yes is checked again: the default may have become a remote model
+    while the job waited, and the researcher's text never goes to one they didn't confirm (Conflict, as at start)."""
     if llm is not None:
         return llm
     async with SessionLocal() as session:
+        await llm_connections.refuse_unconfirmed_remote(session, confirmed)
         connection, model = await llm_connections.resolve(session, None)
         return build_llm(connection, model.name)
 
 
-async def _judge(role: str, inputs: dict, llm) -> dict:
-    result = await section_review.review(role, inputs["sentences"], inputs["notes"], llm=await _model(llm))
+async def _judge(role: str, inputs: dict, confirmed: bool, llm) -> dict:
+    llm = await _model(llm, confirmed)
+    result = await section_review.review(role, inputs["sentences"], inputs["notes"], llm=llm)
     findings = [{"kind": f.kind, "point": f.point, "refs": _refs(f, inputs)} for f in result.findings]
     return {"status": "done", "findings": findings, "dropped": result.dropped, "model": result.model}
 
@@ -86,9 +90,9 @@ async def review_manuscript_section(ctx: dict, review_id: str) -> None:
     taken = await _take(rid)
     if taken is None:
         return
-    role, inputs, stamp = taken
+    role, inputs, confirmed, stamp = taken
     try:
-        values = await _judge(role, inputs, ctx.get("llm"))
+        values = await _judge(role, inputs, confirmed, ctx.get("llm"))
     except DomainError as exc:
         values = {"status": "failed", "reason": error_code(exc)}
     except LLMUnavailable:
