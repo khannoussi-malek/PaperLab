@@ -13,8 +13,10 @@ from app.models.manuscript import (
     ManuscriptClaimCheck,
     ManuscriptClaimDismissal,
     ManuscriptEvidence,
+    ManuscriptDiagram,
     ManuscriptFile,
     ManuscriptReviewRun,
+    ManuscriptSectionReview,
     ManuscriptSnapshot,
 )
 from app.models.note import Note, Provenance, note_anchors, note_papers
@@ -50,7 +52,9 @@ __all__ = [
     "ManuscriptClaimDismissal",
     "ManuscriptEvidence",
     "ManuscriptFile",
+    "ManuscriptDiagram",
     "ManuscriptReviewRun",
+    "ManuscriptSectionReview",
     "ManuscriptSnapshot",
     "Note",
     "NoteEmbedding",

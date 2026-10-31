@@ -12,8 +12,10 @@ from app.models import (
     ManuscriptClaimCheck,
     ManuscriptClaimDismissal,
     ManuscriptEvidence,
+    ManuscriptDiagram,
     ManuscriptFile,
     ManuscriptReviewRun,
+    ManuscriptSectionReview,
     ManuscriptSnapshot,
     Workspace,
 )
@@ -301,3 +303,53 @@ async def test_merge_moves_a_cited_row_when_k_holds_only_an_uncited_one(session)
         {"m": ms.id},
     )
     assert rows.all() == [(k.id, "cited"), (None, "cited"), (None, "uncited")]
+
+
+def section_review(ms, **fields) -> ManuscriptSectionReview:
+    base = {
+        "manuscript_id": ms.id, "file_path": "main.tex", "section_hash": "h1", "title": "Intro", "role": "intro",
+        "role_source": "guessed", "status": "queued", "source": "text", "inputs": {"sentences": [], "notes": []},
+    }  # fmt: skip
+    return ManuscriptSectionReview(**{**base, **fields})
+
+
+async def test_section_review_checks_reject_a_bad_role_source_or_status(session):
+    ms = await manuscript(session)
+    await rejects(session, section_review(ms, role="appendix"))
+    await rejects(session, section_review(ms, role_source="auto"))
+    await rejects(session, section_review(ms, status="cancelled"))
+    for role in ("abstract", "intro", "related", "method", "results", "discussion", "limitations", "conclusion"):
+        session.add(section_review(ms, role=role, section_hash=role))
+    await session.flush()
+
+
+async def test_a_section_review_has_defaults_and_one_row_per_section_hash(session):
+    ms = await manuscript(session)
+    row = section_review(ms)
+    session.add(row)
+    await session.flush()
+    await session.refresh(row)
+    assert (row.dropped, row.findings, row.reason, row.model) == (0, None, None, None)
+    await rejects(session, section_review(ms))
+    session.add_all([section_review(ms, section_hash="h2"), section_review(ms, file_path="b.tex")])
+    await session.flush()
+
+
+async def test_a_diagram_starts_empty_and_its_status_must_be_known(session):
+    ms = await manuscript(session)
+    d = ManuscriptDiagram(manuscript_id=ms.id, description="a box", status="queued")
+    session.add(d)
+    await session.flush()
+    await session.refresh(d)
+    assert (d.libraries, d.errors, d.labels_not_in_description) == ([], [], [])
+    assert (d.code, d.compiled, d.preview_pdf, d.prompt_version) == (None, None, None, None)
+    await rejects(session, ManuscriptDiagram(manuscript_id=ms.id, description="x", status="cancelled"))
+
+
+async def test_deleting_the_manuscript_removes_section_reviews_and_diagrams(session):
+    ms = await manuscript(session)
+    session.add_all([section_review(ms), ManuscriptDiagram(manuscript_id=ms.id, description="d", status="done")])
+    await session.flush()
+    await session.execute(text("DELETE FROM manuscripts WHERE id = :m"), {"m": ms.id})
+    for table in ("manuscript_section_reviews", "manuscript_diagrams"):
+        assert await session.scalar(text(f"SELECT count(*) FROM {table} WHERE manuscript_id = :m"), {"m": ms.id}) == 0  # noqa: S608
