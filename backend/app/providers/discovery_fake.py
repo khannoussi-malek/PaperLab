@@ -505,8 +505,10 @@ def _s2_handle(request: httpx.Request) -> httpx.Response:
 def _crossref_handle(request: httpx.Request) -> httpx.Response:
     if "offset" in request.url.params:
         return _crossref_search_page(request.url.params)
-    if request.url.path.startswith("/works/"):
-        return httpx.Response(200, json={"message": _crossref_item(*PAPERS[0])})
+    if request.url.path.startswith("/works/"):  # as the real one: the DOI's own record, else 404
+        doi = request.url.path.removeprefix("/works/").lower()
+        paper = next((p for p in PAPERS if p[1] == doi), None)
+        return httpx.Response(200, json={"message": _crossref_item(*paper)}) if paper else httpx.Response(404)
     return httpx.Response(200, json={"message": {"items": [_crossref_item(*paper) for paper in PAPERS]}})
 
 

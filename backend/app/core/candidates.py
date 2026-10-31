@@ -121,7 +121,7 @@ def arxiv_triage(entry: Mapping[str, Any]) -> tuple[str | None, str | None, str 
 
 
 def from_work(work: dict[str, Any]) -> Candidate:
-    doi = (work.get("doi") or "").removeprefix("https://doi.org/").lower() or None
+    doi = normalize_doi(work.get("doi") or "")
     best = work.get("best_oa_location") or {}
     locations = work.get("locations") or []
     location_urls = [

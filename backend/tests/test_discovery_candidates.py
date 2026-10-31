@@ -807,3 +807,8 @@ def test_bot_checked_hosts_go_last_and_no_url_is_dropped():
         "https://www.science.org/doi/pdf/10.1/y",
         "https://direct.mit.edu/tacl/x.pdf",
     ]
+
+
+def test_from_work_reads_openalexs_double_slash_doi_as_the_canonical_one():
+    work = {"doi": "https://doi.org/10.1037//0003-066x.56.4.337", "title": "T"}
+    assert from_work(work).doi == "10.1037/0003-066x.56.4.337"
