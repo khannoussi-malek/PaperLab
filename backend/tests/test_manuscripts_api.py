@@ -367,3 +367,29 @@ async def test_evidence_routes(client, session, arq):
     h = found.json()["sentence_hash"]
     assert (await client.get(f"{url.format(m['id'])}/{h}")).json() == []
     assert (await client.get(f"{url.format(uuid.uuid4())}/{h}")).status_code == 404
+
+
+async def test_has_pdf_says_whether_a_compiled_pdf_is_on_disk(client):
+    m = await make(client)
+    assert m["has_pdf"] is False
+    target = manuscripts.pdf_path(uuid.UUID(m["id"]))
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(b"%PDF-1.4")
+    assert (await client.get(f"/api/manuscripts/{m['id']}")).json()["has_pdf"] is True
+
+
+async def test_the_latex_only_export_leaves_the_pdf_out_and_says_so_in_its_name(client):
+    m = await make(client, title="My Paper")
+    target = manuscripts.pdf_path(uuid.UUID(m["id"]))
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(b"%PDF-1.4")
+    full = await client.get(f"/api/manuscripts/{m['id']}/export.zip")
+    source = await client.get(f"/api/manuscripts/{m['id']}/export.zip", params={"pdf": "false"})
+    with zipfile.ZipFile(io.BytesIO(full.content)) as z:
+        assert "My_Paper.pdf" in z.namelist()
+    with zipfile.ZipFile(io.BytesIO(source.content)) as z:
+        names = z.namelist()
+        assert "main.tex" in names and "paperlab.bib" in names and not any(n.endswith(".pdf") for n in names)
+    assert source.headers["content-disposition"] == (
+        "attachment; filename=\"My_Paper-latex.zip\"; filename*=UTF-8''My%20Paper%20%28LaTeX%29.zip"
+    )

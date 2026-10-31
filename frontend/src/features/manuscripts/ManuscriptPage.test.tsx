@@ -36,7 +36,7 @@ const T3 = '2026-10-03T00:00:00Z'
 const T4 = '2026-10-04T00:00:00Z'
 const detail = (over: Partial<ManuscriptDetail> = {}): ManuscriptDetail => ({
   id: 'm1', workspace_id: 'w1', title: 'Thesis', main_file: 'main.tex', checklist: {}, compile_status: 'idle',
-  compile_requested: false, compiled_at: null, compile_log: null, compile_friendly: null, compile_errors: [],
+  compile_requested: false, compiled_at: null, compile_log: null, compile_friendly: null, compile_errors: [], has_pdf: false,
   created_at: '2026-10-01T00:00:00Z', updated_at: T2,
   files: [{ path: 'main.tex', size: 5, updated_at: T2 }, { path: 'b.tex', size: 3, updated_at: T2 }], ...over,
 })
