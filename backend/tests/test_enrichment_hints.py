@@ -16,6 +16,11 @@ def test_normalize_doi_strips_sentence_punctuation_but_keeps_balanced_parenthese
     assert normalize_doi("10.1016/s0140-6736(20)30367-6;") == "10.1016/s0140-6736(20)30367-6"
 
 
+def test_normalize_doi_collapses_the_legacy_double_slash_after_the_prefix():
+    # OpenAlex stores APA's old DOIs as "10.1037//…"; Crossref and doi.org use one slash.
+    assert normalize_doi("https://doi.org/10.1037//0003-066X.56.4.337") == "10.1037/0003-066x.56.4.337"
+
+
 def test_normalize_doi_rejects_text_without_one():
     assert normalize_doi("not a doi") is None
     assert normalize_doi("10.12/too-short-prefix") is None

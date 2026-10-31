@@ -80,3 +80,17 @@ async def test_failures_raise_an_httpx_error(crossref_api, status, reply):
         await crossref.search(crossref_api.client, "BERT", 5)
     with pytest.raises(httpx.HTTPError):
         await crossref.get_work(crossref_api.client, BERT_DOI)
+
+
+async def test_an_alias_doi_follows_crossrefs_redirect_to_the_canonical_work():
+    # Crossref answers an alias DOI with 301 to the canonical one (probed 2026-10-31 on 10.5465/amr.2001.4378025).
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/works/10.5465/amr.2001.4378025":
+            return httpx.Response(301, headers={"Location": "/works/10.2307/259123"})
+        assert request.url.path == "/works/10.2307/259123"
+        return httpx.Response(200, json={"message": {"DOI": "10.2307/259123", "title": ["Unpacking Creativity"]}})
+
+    async with crossref.new_client(transport=httpx.MockTransport(handler)) as client:
+        work = await crossref.get_work(client, "10.5465/amr.2001.4378025")
+
+    assert work["DOI"] == "10.2307/259123"
