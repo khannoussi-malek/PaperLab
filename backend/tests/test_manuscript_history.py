@@ -94,3 +94,23 @@ async def test_restore_skips_files_whose_text_is_unchanged(session):
     await history.restore(session, m.id, snap.id)
     assert (await manuscripts.read(session, m.id, "a.tex")).updated_at == stamp
     assert (await manuscripts.read(session, m.id, "b.tex")).text == "old"
+
+
+async def test_pruning_keeps_owner_snapshots_apart_from_mcp_ones(session):
+    m = await new(session)
+    for _ in range(3):
+        await history.take(session, m.id, "autosave")
+    for _ in range(60):
+        await history.take(session, m.id, history.MCP_REASON)
+    reasons = [s.reason for s in await history.list_(session, m.id)]
+    assert reasons.count("autosave") == 3 and reasons.count("before_mcp") == history.MCP_KEEP == 20
+
+
+async def test_mcp_snapshots_do_not_crowd_out_the_owners_fifty(session):
+    m = await new(session)
+    for _ in range(55):
+        await history.take(session, m.id, "autosave")
+    for _ in range(5):
+        await history.take(session, m.id, "before_mcp")
+    reasons = [s.reason for s in await history.list_(session, m.id)]
+    assert reasons.count("autosave") == 50 and reasons.count("before_mcp") == 5

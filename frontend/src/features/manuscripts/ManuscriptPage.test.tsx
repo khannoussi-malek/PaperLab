@@ -160,6 +160,14 @@ test('History names each kind of snapshot', async () => {
   expect(screen.queryByText('autosave')).toBeNull()
 })
 
+test('History labels a snapshot taken before a Claude edit and still offers Restore', async () => {
+  vi.spyOn(api, 'listManuscriptSnapshots').mockResolvedValue([{ id: 's1', reason: 'before_mcp', created_at: T2 }])
+  renderPage()
+  fireEvent.click(await screen.findByRole('button', { name: 'History' }))
+  expect(await screen.findByText('Before a Claude edit (MCP)')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /Restore/ })).toBeInTheDocument()
+})
+
 test('a failed compile keeps the last PDF on screen', async () => {
   vi.spyOn(api, 'getManuscript').mockResolvedValue(detail({ compile_status: 'failed', compiled_at: T3 }))
   renderPage()

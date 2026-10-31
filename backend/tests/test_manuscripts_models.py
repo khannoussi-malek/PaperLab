@@ -77,6 +77,15 @@ async def test_a_snapshot_may_have_the_before_sections_reason(session):
     await session.flush()
 
 
+async def test_a_snapshot_may_have_the_before_mcp_reason_but_no_unknown_one(session):
+    m = await manuscript(session)
+    session.add(ManuscriptSnapshot(manuscript_id=m.id, reason="before_mcp", files={}))
+    await session.flush()
+    session.add(ManuscriptSnapshot(manuscript_id=m.id, reason="before_nothing", files={}))
+    with pytest.raises(IntegrityError):
+        await session.flush()
+
+
 def evidence(ms, paper, **fields) -> ManuscriptEvidence:
     return ManuscriptEvidence(
         manuscript_id=ms.id, sentence_hash="h", sentence="Sleep helps.", paper_id=paper.id, rank=0, **fields
