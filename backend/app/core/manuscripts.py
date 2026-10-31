@@ -246,6 +246,13 @@ def interrupted(manuscript: Manuscript, now: datetime) -> bool:
     return manuscript.compile_status == "running" and (started is None or now - started >= STALE_AFTER)
 
 
+def read_state(manuscript: Manuscript, now: datetime) -> tuple[str, str | None, bool]:
+    """(status, friendly, requested) as a reader sees them: a `running` with no live job behind it reads as failed."""
+    if interrupted(manuscript, now):
+        return "failed", "compile_interrupted", False
+    return manuscript.compile_status, manuscript.compile_friendly, manuscript.compile_requested
+
+
 def pdf_path(manuscript_id: uuid.UUID) -> Path:
     return settings.pdf_dir / "manuscripts" / f"{manuscript_id}.pdf"
 
