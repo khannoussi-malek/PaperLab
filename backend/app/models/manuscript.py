@@ -94,6 +94,7 @@ class ManuscriptEvidence(Base):
     quote: Mapped[str | None] = mapped_column(Text)
     page: Mapped[int | None] = mapped_column(Integer)
     output_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("llm_outputs.id", ondelete="SET NULL"))
+    confirm_remote: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))  # re-checked by the job
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=NOW)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=NOW)
 
@@ -119,6 +120,7 @@ class ManuscriptReviewRun(Base):
     include_uncited: Mapped[bool] = mapped_column(Boolean)
     uncited_skipped: Mapped[int] = mapped_column(Integer, server_default=text("0"))
     cancel_requested: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    confirm_remote: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))  # re-checked by the job
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=NOW)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=NOW)
 
