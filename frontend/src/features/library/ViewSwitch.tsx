@@ -7,15 +7,18 @@ export type PaperView = 'list' | 'deck' | 'triage'
 const VIEWS: readonly PaperView[] = ['list', 'deck', 'triage']
 const LABELS: Record<PaperView, string> = { list: 'List', deck: 'Deck', triage: 'Triage' }
 
+/** Triage is a deliberate visit, never a reopened state: only these two come back from storage. */
+const RESTORED: readonly PaperView[] = ['list', 'deck']
+
 /**
- * The page's view, remembered under `key`; storage that fails or holds junk falls back to the list. Leaving triage ends
+ * The page's view, remembered under `key`; storage that fails or holds junk (or a stored triage) falls back to the list. Leaving triage ends
  * the `triageScope` session. `exitTriage` goes back to the list and returns focus to the Triage switch button.
  */
 export function usePaperView(key: string, triageScope?: string): [PaperView, (view: PaperView) => void, () => void] {
   const [view, setView] = useState<PaperView>(() => {
     try {
       const stored = browserStorage()?.getItem(key)
-      return VIEWS.find((v) => v === stored) ?? 'list'
+      return RESTORED.find((v) => v === stored) ?? 'list'
     } catch {
       return 'list'
     }

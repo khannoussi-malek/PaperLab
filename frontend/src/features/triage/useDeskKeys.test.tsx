@@ -43,7 +43,7 @@ const KEYS: [string, Init, keyof DeskKeyHandlers, unknown[]][] = [
   ['Space', { key: ' ' }, 'onPile', ['skip']],
 ]
 const ALWAYS: [string, Init, keyof DeskKeyHandlers][] = [
-  ['p', { key: 'p' }, 'togglePdf'], ['u', { key: 'u' }, 'undo'], ['?', { key: '?', shiftKey: true }, 'openHelp'], ['Esc', { key: 'Escape' }, 'exit'],
+  ['p', { key: 'p' }, 'togglePdf'], ['u', { key: 'u' }, 'undo'], ['?', { key: '?', shiftKey: true }, 'openHelp'],
   ['Cmd+Z', { key: 'z', metaKey: true }, 'undo'], ['Ctrl+Z', { key: 'z', ctrlKey: true }, 'undo'],
 ]
 const fire = (id: string, init: Init) => fireEvent.keyDown(screen.getByTestId(id), init)
@@ -81,6 +81,26 @@ describe('key table', () => {
       fire(target, init)
       expect(called(h)).toEqual([fn])
     })
+  }
+})
+
+it('Esc exits from the desk, the card, a button and a field', () => {
+  for (const id of ['root', 'card', 'button', 'input']) {
+    const h = spies(); const { unmount } = render(<Desk h={h} />)
+    fire(id, { key: 'Escape' })
+    expect(called(h)).toEqual(['exit'])
+    unmount()
+  }
+})
+
+it('Esc in the PDF column or the abstract returns focus to the desk and does not exit', () => {
+  for (const id of ['pdf', 'pdfText', 'abstract']) {
+    const h = spies(); const { unmount } = render(<Desk h={h} />)
+    screen.getByTestId(id).focus()
+    fire(id, { key: 'Escape' })
+    expect(called(h)).toEqual([])
+    expect(screen.getByTestId('root')).toHaveFocus()
+    unmount()
   }
 })
 

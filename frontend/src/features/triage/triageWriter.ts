@@ -36,11 +36,13 @@ export function createWriter<E extends Entry>(api: {
         if (!eventId) return { status: 'noop' } // the decide never saved
         try {
           await api.undo(eventId)
-          eventIds.delete(entry.clientId)
-          return { status: 'saved', eventId }
         } catch (error) {
-          return isConflict(error, 'changed_since') ? { status: 'refused' } : { status: 'failed', error }
+          // A retry after a lost reply: the server already undid it, which is what was asked for.
+          if (!isConflict(error, 'already_undone'))
+            return isConflict(error, 'changed_since') ? { status: 'refused' } : { status: 'failed', error }
         }
+        eventIds.delete(entry.clientId)
+        return { status: 'saved', eventId }
       }),
   }
 }

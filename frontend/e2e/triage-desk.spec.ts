@@ -24,6 +24,10 @@ test('keys 1, 2, 3 sort three papers, the list shows each state, and U twice put
   await page.getByRole('button', { name: 'Show kept papers in the list' }).click()
   await expect(chip(page, first)).toHaveText('Reading: Keep')
   await expect(chip(page, second)).toHaveText('Reading: Pass 1 · Keep')
+  // "Show kept" sets the Reading filter to Keep: the Later paper is not listed until All papers is chosen.
+  await expect(rowOf(page, third)).toHaveCount(0)
+  await page.getByRole('combobox', { name: 'Reading' }).click()
+  await page.getByRole('option', { name: 'All papers' }).click()
   await expect(chip(page, third)).toHaveText('Reading: Later')
 
   // A new session: include decided papers, decide two again, then U twice restores both.
@@ -87,7 +91,8 @@ test('the PDF column is open for a PDF paper, P hides it for good, a paper witho
     await page.keyboard.press('p')
     await expect(pdfColumn(page)).toHaveCount(0)
     await page.reload()
-    await page.getByRole('searchbox', { name: 'Search papers' }).fill(unique) // the search is not remembered, the desk and the PDF choice are
+    await page.getByRole('searchbox', { name: 'Search papers' }).fill(unique) // the search is not remembered, nor is Triage (it reopens on the list); the PDF choice is
+    await switchTo(page, 'Triage')
     await expect(page.getByText('3 left of 3')).toBeVisible()
     await expect(pdfColumn(page)).toHaveCount(0)
     await desk(page).focus()
@@ -181,6 +186,15 @@ test('a long drag decides, a short one snaps back', async ({ page, request, pape
   expect(await topId(page)).not.toBe(first)
 })
 
+test('with motion on, the decided card departs as a clone that is still in flight 100 ms later (the control for the test below)', async ({ page, request, paperId, secondPaperId }) => {
+  await page.setViewportSize(wide)
+  const unique = await retitle(request, [paperId, secondPaperId])
+  await openDesk(page, unique, 2)
+  await decideByKey(page, '1')
+  await page.waitForTimeout(100)
+  expect(await page.locator('[data-triage-departing]').count()).toBe(1)
+})
+
 test('reduced motion: nothing departs, the same decisions, and the keys-only run keeps focus on the desk', async ({ page, request, paperId, secondPaperId, tablePaperId }) => {
   await page.setViewportSize(wide)
   await page.emulateMedia({ reducedMotion: 'reduce' })
@@ -192,8 +206,9 @@ test('reduced motion: nothing departs, the same decisions, and the keys-only run
 
   const one = await decideByKey(page, '1')
   await expect(d).toBeFocused()
-  await page.waitForTimeout(400) // past the 220 ms a clone would take
-  await expect(page.locator('[data-triage-departing]')).toHaveCount(0)
+  // Within ~100 ms of the key a clone would be mid-flight (it lasts 220 ms): with reduced motion none was ever made.
+  await page.waitForTimeout(100)
+  expect(await page.locator('[data-triage-departing]').count()).toBe(0) // a one-shot read: a retrying expect would wait the clone out
   expect(await animation()).toBe('none')
   await page.keyboard.press('4')
   await expect(page.getByRole('group', { name: 'Reason' })).toBeVisible()

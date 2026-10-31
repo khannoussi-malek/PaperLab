@@ -20,6 +20,7 @@ export type DeskKeyHandlers = {
 
 // Where the element keeps its own keys: buttons, fields, the abstract scroller, anything in the PDF column.
 const OWN = 'button,a,input,textarea,select,[contenteditable],[role="tab"],[aria-label="Abstract"],[data-triage-pdf]'
+const SCROLLERS = '[aria-label="Abstract"],[data-triage-pdf]'
 const TYPING = 'input,textarea,select,[contenteditable]'
 const REGIONS = '[data-triage-region]'
 const canFocus = (el: HTMLElement) => el.isConnected && !el.closest('[hidden],[inert],[aria-hidden="true"]')
@@ -59,6 +60,7 @@ export function useDeskKeys(rootRef: RefObject<HTMLElement | null>, handlers: De
         done()
         if (h.reasonsShowing) h.cancelReason()
         else if (h.helpOpen) h.closeHelp()
+        else if (target.closest(SCROLLERS)) root.focus() // out of the PDF or abstract, back to the desk, not out of it
         else h.exit()
         return
       }

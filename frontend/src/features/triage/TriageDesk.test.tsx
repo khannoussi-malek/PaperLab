@@ -42,6 +42,12 @@ it('counts papers still being read in', () => {
   expect(screen.getByText(/1 paper is still being read in/)).toBeInTheDocument()
 })
 
+it('counts papers that failed to import, apart from those still importing', () => {
+  setup([...base, mk('4', 'Broken', { status: 'failed' as Paper['status'] }), mk('5', 'Busy', { status: 'embedding' as Paper['status'] })])
+  expect(screen.getByText(/1 paper couldn't be imported/)).toBeInTheDocument()
+  expect(screen.getByText(/1 paper is still being read in/)).toBeInTheDocument()
+})
+
 it('Include decided adds the decided papers to the stack', () => {
   setup([mk('1', 'Done', { triage: 'keep' }), mk('2', 'Open')])
   expect(screen.getByText(/1 left of 1/)).toBeInTheDocument()

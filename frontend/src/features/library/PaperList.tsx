@@ -160,9 +160,9 @@ type Props = {
   onVisibleChange?: (ids: string[]) => void
   /** `deck` shows the papers the toolbar leaves as a 3D deck, `triage` as a desk to sort them: neither offers selection or row actions. */
   view?: PaperView
-  /** Triage only: the session's scope (`library` or `workspace:<id>`), its name in the bar, and where Exit and "show kept" go. */
   /** Triage only: every paper loaded for the scope, unfiltered (defaults to `papers`). */
   libraryPapers?: Paper[]
+  /** Triage only: the session's scope (`library` or `workspace:<id>`), its name in the bar, and where Exit and "show kept" go. */
   triageScope?: string
   sourceLabel?: string
   onTriageExit?: () => void
@@ -206,6 +206,13 @@ export function PaperList({ papers, workspaceId, tagsByPaper, onTagClick, active
   function clearSearch() {
     search('')
     searchInput.current?.focus()
+  }
+
+  // The desk unmounts with its button: focus goes to the List switch, and the list shows what was kept.
+  function showKept() {
+    setFilter('keep')
+    onShowKept?.()
+    queueMicrotask(() => document.querySelector<HTMLElement>('[data-view-switch="list"]')?.focus())
   }
 
   function onDelete(paper: Paper) {
@@ -261,19 +268,22 @@ export function PaperList({ papers, workspaceId, tagsByPaper, onTagClick, active
           </div>
           {shown.length === 0 && emptyMessage && papers.length === 0 ? (
             <p className="text-muted-foreground">{emptyMessage}</p>
-          ) : shown.length === 0 ? (
-            <NoMatches query={query} filter={filter} onClear={clearSearch} onShowAll={() => setFilter('all')} />
-          ) : view === 'triage' ? (
+          ) : view === 'triage' && papers.length > 0 ? (
+            // Kept mounted even when `shown` is empty: the session, its undo stack and any alert outlive a search with no match.
             <TriageDesk
               papers={shown}
+              searching={query.trim() !== ''}
+              onClearSearch={clearSearch}
               library={libraryPapers ?? papers}
               scope={triageScope}
               sourceLabel={sourceLabel}
               filterKey={filterKey}
               workspaceId={workspaceId}
               onExit={() => onTriageExit?.()}
-              onShowKept={() => onShowKept?.()}
+              onShowKept={showKept}
             />
+          ) : shown.length === 0 ? (
+            <NoMatches query={query} filter={filter} onClear={clearSearch} onShowAll={() => setFilter('all')} />
           ) : view === 'deck' ? (
             <LibraryDeck papers={shown} />
           ) : (

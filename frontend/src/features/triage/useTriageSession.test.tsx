@@ -136,6 +136,23 @@ describe('useTriageSession ordering', () => {
     expect(calls).toHaveLength(2)
   })
 
+  it('an undo whose reply was lost, retried and answered already_undone, settles as undone: card back, no alert', async () => {
+    const h = setup()
+    decide(h)
+    await flush()
+    await send(0)
+    act(() => h.result.current.undo())
+    await flush()
+    await act(async () => undoCalls[0].reject(new TypeError('network'))); await flush()
+    expect(h.result.current.alert?.message).toMatch(/Couldn't undo/)
+    act(() => h.result.current.alert!.retry!())
+    await flush()
+    await act(async () => undoCalls[1].reject(new ApiError('already_undone', 409, { detail: 'already_undone' }))); await flush()
+    expect(h.result.current.alert).toBeNull()
+    expect(h.result.current.top?.id).toBe('a')
+    expect(progress(h.result.current.state).decided).toBe(0)
+  })
+
   it('a decide undone while its POST is pending, then failing: no alert, no retry, progress 0', async () => {
     const h = setup()
     decide(h)

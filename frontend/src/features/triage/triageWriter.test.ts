@@ -91,4 +91,20 @@ describe('createWriter', () => {
     undos[1].d.reject(new Error('boom'))
     expect((await u2).status).toBe('failed')
   })
+
+  it('a 409 already_undone on undo (a lost reply, retried) is saved, and the event id is let go', async () => {
+    const { w, posts, undos } = setup()
+    const d1 = w.decide(e('a'))
+    await flush()
+    posts[0].d.resolve({ eventId: 'ea' })
+    await d1
+    const u1 = w.undo(e('a'))
+    await flush()
+    undos[0].d.reject(new TypeError('network'))
+    expect((await u1).status).toBe('failed')
+    const u2 = w.undo(e('a'))
+    await flush()
+    undos[1].d.reject(new ApiError('done', 409, { detail: 'already_undone' }))
+    expect(await u2).toEqual({ status: 'saved', eventId: 'ea' })
+  })
 })

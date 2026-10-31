@@ -224,10 +224,10 @@ export function useTriageSession({ scope, queueFrom, library, libraryReady, filt
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topId])
 
-  const notReady = useMemo(() => buildQueue(queueFrom, { order, seed: seed.current, includeDecided, exclude: new Set() }).notReady, [queueFrom, order, includeDecided])
+  const { notReady, failed } = useMemo(() => buildQueue(queueFrom, { order, seed: seed.current, includeDecided, exclude: new Set() }), [queueFrom, order, includeDecided])
 
   return {
-    state, top, sessionId, notReady, alert, announcement, pending, canReviewSkipped: pending === 0, canStartOver: pending === 0,
+    state, top, sessionId, notReady, failed, alert, announcement, pending, canReviewSkipped: pending === 0, canStartOver: pending === 0,
     decide, undo, skip, setOrder, setIncludeDecided, reviewSkipped, addNew, startOver, dismissAlert: () => setAlert(null),
   }
 }
