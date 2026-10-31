@@ -185,11 +185,14 @@ async def save_text(session: AsyncSession, manuscript_id: uuid.UUID, path: str, 
     return saved
 
 
-async def put_binary(session: AsyncSession, manuscript_id: uuid.UUID, path: str, data: bytes) -> ManuscriptFile:
+async def put_binary(session: AsyncSession, manuscript_id: uuid.UUID, path: str, data: bytes, *,
+                     create_only: bool = False) -> ManuscriptFile:
     await get(session, manuscript_id)
     if paths.is_text(paths.validate_path(path)):
         raise InvalidInput("unsupported_file_type")
     row = await _file(session, manuscript_id, path, lock=True)
+    if create_only and row is not None:  # decided under the row lock, so a racing add can't slip an overwrite in
+        raise Conflict("file_exists")
     await _check_caps(session, manuscript_id, len(data), paths.MAX_BINARY, row)
     return await _store(session, manuscript_id, path, row, text=None, data=data)
 
