@@ -145,6 +145,7 @@ describe('verdictView', () => {
     expect(reason('done', 'not_ready')).toBe('This paper is still being read.')
     expect(reason('failed', 'no_model')).toBe(NO_MODEL)
     expect(reason('failed', 'queue_unavailable')).toBe("Checks couldn't start. Try again.")
+    expect(reason('failed', 'remote_model_needs_confirm')).toBe('The default model is now a cloud model. Ask again to confirm sending your text.')
     expect(reason('failed', 'paper_gone')).toBeNull()
     expect(reason('done', 'Only in mice.')).toBe('Only in mice.') // the model's own words
   })

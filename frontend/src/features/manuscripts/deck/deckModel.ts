@@ -107,6 +107,7 @@ const REASON: Record<string, string> = {
   not_ready: 'This paper is still being read.',
   no_model: NO_MODEL,
   queue_unavailable: "Checks couldn't start. Try again.",
+  remote_model_needs_confirm: 'The default model is now a cloud model. Ask again to confirm sending your text.',
 }
 
 export function verdictView(row: EvidenceRow | undefined, unavailable: boolean): VerdictView {
