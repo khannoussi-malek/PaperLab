@@ -17,7 +17,7 @@ from app.providers.llm import build_llm
 
 logger = logging.getLogger(__name__)
 
-SECTION_REVIEW_JOB_TIMEOUT = 25 * 60
+SECTION_REVIEW_JOB_TIMEOUT = 18 * 60  # under LIVE, so a run that still looks live really is
 PREVIEW_WORDS = 8
 
 
