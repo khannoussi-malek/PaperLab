@@ -60,7 +60,9 @@ async def seed_papers(session, embedder):
     return papers, chunks, unembedded, distance
 
 
-async def test_returns_the_true_nearest_k_in_order(session, embedder):
+async def test_returns_the_true_nearest_k_in_order(session, embedder, monkeypatch):
+    # The whole library on the shared database: real chunks about attention would join a keyword ranking.
+    monkeypatch.setattr(retrieval.settings, "hybrid_search", False)
     _, chunks, _, distance = await seed_papers(session, embedder)
 
     found = await retrieve(session, QUERY, k=5, embedder=embedder)
@@ -299,3 +301,123 @@ async def test_chunk_ids_combine_with_paper_ids_and_the_per_paper_cap(session, e
 
     assert Counter(r.paper_id for r in found) == {paper_a.id: 3, paper_b.id: 2}
     assert {r.id for r in found} <= set(listed)
+
+
+RARE = "zorblaxine"  # a made-up drug name: no real chunk in the shared database holds it
+
+
+async def add_texts(session, query: list[float], title: str, texts_and_spreads: list[tuple[str, float]]) -> list[Chunk]:
+    """A ready paper with one chunk per (text, spread from the query)."""
+    paper = Paper(title=title, file_path=f"/{title}.pdf", status="ready")
+    session.add(paper)
+    await session.flush()
+    chunks = [
+        Chunk(
+            paper_id=paper.id, ordinal=i, page=i + 1, bbox=[[1, 2, 3, 4]], text=text,
+            embedding=at_spread(query, spread), embed_model="test", strategy_ver=1,
+        )
+        for i, (text, spread) in enumerate(texts_and_spreads)
+    ]
+    session.add_all(chunks)
+    await session.commit()
+    return chunks
+
+
+def hybrid(monkeypatch, on: bool) -> None:
+    monkeypatch.setattr(retrieval.settings, "hybrid_search", on)
+
+
+async def test_hybrid_search_finds_an_exact_rare_term_the_vectors_rank_last(session, embedder, monkeypatch):
+    # The MI test's miss: "itraconazole" was in both labels, and no chunk of the top 8 held it.
+    question = f"Which dose with {RARE}?"
+    query = unit_vector(uuid.uuid4().hex)
+    embedder.vectors[f"search_query: {question}"] = query
+    near_ones = [(f"Background chunk {i}", 0.1 * (i + 1)) for i in range(6)]  # none shares a word with the question
+    chunks = await add_texts(session, query, "Label", [*near_ones, (f"Avoid strong inhibitors such as {RARE}.", 3.0)])
+    paper_ids = [chunks[0].paper_id]
+
+    hybrid(monkeypatch, False)
+    vector_only = await retrieve(session, question, paper_ids=paper_ids, k=3, embedder=embedder)
+    hybrid(monkeypatch, True)
+    fused = await retrieve(session, question, paper_ids=paper_ids, k=3, embedder=embedder)
+
+    assert chunks[-1].id not in {r.id for r in vector_only}
+    rare = next(r for r in fused if r.id == chunks[-1].id)  # lexical rank 1 + vector rank 7
+    assert rare.distance == pytest.approx(1 - 1 / np.sqrt(1 + 3.0**2), abs=1e-5)  # still its cosine distance
+
+
+async def test_hybrid_search_weights_a_rare_term_above_a_common_one(session, embedder, monkeypatch):
+    hybrid(monkeypatch, True)
+    question = f"dose of {RARE}"
+    query = unit_vector(uuid.uuid4().hex)
+    embedder.vectors[f"search_query: {question}"] = query
+    common = [(f"The dose in group {i}", 0.1 * (i + 1)) for i in range(6)]
+    chunks = await add_texts(
+        session, query, "Weights", [*common, ("Another dose table", 3.0), (f"Nothing on {RARE} here", 3.1)]
+    )
+
+    found = await retrieve(session, question, paper_ids=[chunks[0].paper_id], k=8, embedder=embedder)
+    order = [r.id for r in found]
+
+    # Both far chunks match one word each; "dose" is in 7 of 8 chunks, the drug name in one.
+    assert order.index(chunks[-1].id) < order.index(chunks[-2].id)
+
+
+async def test_hybrid_search_without_a_matching_word_keeps_the_vector_order(session, embedder, monkeypatch):
+    hybrid(monkeypatch, True)
+    query = fresh_query(embedder)
+    paper = await add_paper(session, query, "Plain", [0.1 * (i + 1) for i in range(6)])
+
+    found = await retrieve(session, QUERY, paper_ids=[paper.id], k=6, embedder=embedder)
+
+    assert [r.text for r in found] == [f"Plain chunk {i}" for i in range(6)]
+
+
+async def test_hybrid_search_keeps_the_per_paper_cap(session, embedder, monkeypatch):
+    hybrid(monkeypatch, True)
+    question = f"{RARE} interactions"
+    query = unit_vector(uuid.uuid4().hex)
+    embedder.vectors[f"search_query: {question}"] = query
+    dominant = await add_texts(session, query, "Dominant", [(f"{RARE} note {i}", 0.05 + 0.01 * i) for i in range(8)])
+    other = await add_texts(session, query, "Other", [(f"Other chunk {i}", 0.5 + 0.1 * i) for i in range(6)])
+
+    found = await retrieve(
+        session, question, paper_ids=[dominant[0].paper_id, other[0].paper_id], k=6, embedder=embedder
+    )
+
+    assert Counter(r.paper_id for r in found) == {dominant[0].paper_id: 3, other[0].paper_id: 3}
+
+
+async def test_hybrid_search_stays_inside_the_chunk_scope(session, embedder, monkeypatch):
+    hybrid(monkeypatch, True)
+    question = f"{RARE} interactions"
+    query = unit_vector(uuid.uuid4().hex)
+    embedder.vectors[f"search_query: {question}"] = query
+    chunks = await add_texts(session, query, "Scoped", [("Listed chunk", 0.1), (f"Unlisted {RARE} chunk", 3.0)])
+
+    found = await retrieve(session, question, chunk_ids=[chunks[0].id], k=5, embedder=embedder)
+
+    assert [r.id for r in found] == [chunks[0].id]
+
+
+def test_hybrid_search_is_off_by_default_and_can_be_switched_on(monkeypatch):
+    from app.config import Settings  # noqa: PLC0415
+
+    monkeypatch.delenv("HYBRID_SEARCH", raising=False)
+
+    assert Settings().hybrid_search is False
+    assert Settings(hybrid_search=True).hybrid_search is True
+
+
+async def test_hybrid_search_keeps_the_vector_order_among_tied_keyword_matches(session, embedder, monkeypatch):
+    hybrid(monkeypatch, True)
+    question = f"{RARE} interactions"
+    query = unit_vector(uuid.uuid4().hex)
+    embedder.vectors[f"search_query: {question}"] = query
+    texts = [f"Chunk {i} mentions {RARE}" if i in (1, 2, 4) else f"Chunk {i} is plain" for i in range(6)]
+    chunks = await add_texts(session, query, "Ties", [(t, 0.1 * (i + 1)) for i, t in enumerate(texts)])
+
+    found = await retrieve(session, question, paper_ids=[chunks[0].paper_id], k=6, embedder=embedder)
+
+    # The three matches tie on the keyword score: they rise together, nearest first, ahead of the plain ones.
+    assert [r.text for r in found] == [texts[i] for i in (1, 2, 4, 0, 3, 5)]
