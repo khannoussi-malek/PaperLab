@@ -2,7 +2,7 @@ import { expect, test } from './fixtures'
 
 // Read-only: the page reads the folder Compose was started in (shown for Windows), and the server check only reads the
 // library.
-const TOOLS_LINE = 'The server answers with all 34 of its tools.'
+const TOOLS_LINE = /^The server answers with all \d+ of its tools\.$/ // the count grows with each new tool
 
 test('the library header opens Connect Claude, and Copy puts a config with no folder or username on the clipboard', async ({
   page,
