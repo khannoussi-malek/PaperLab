@@ -160,3 +160,9 @@ def test_the_warm_files_own_picture_passes_the_guard():
 def test_plurals_and_non_ascii_labels_match_the_description():
     pic = "\\begin{tikzpicture}\\node {Processes}; \\node {Boxes}; \\node {Ölmodell};\\end{tikzpicture}"
     assert dt.labels_not_in_description(pic, "a process, a box and the Ölmodell") == []
+
+
+def test_a_line_break_before_a_word_in_a_label_is_not_a_command():  # re-review 1 F1
+    pic = "\\begin{tikzpicture}\\node {Token\\\\Input}; \\node {Raw\\\\Image};\\end{tikzpicture}"
+    assert dt.check([], pic) == []
+    assert dt.check([], pic.replace("Raw\\\\Image", "Raw\\\\ \\input{x}"))
