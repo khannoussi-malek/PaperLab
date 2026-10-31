@@ -29,6 +29,7 @@ async def test_a_picture_the_guard_rejects_is_never_compiled(monkeypatch):
     monkeypatch.setattr(lc, "compile_dir", boom)
     res = await dc.preview([], PIC.replace("{A}", "{\\input{x}}"))
     assert not res.ok and res.friendly == "diagram_invalid" and res.pdf is None
+    assert res.errors and all(e["line"] is None and "input" in e["message"] for e in res.errors)  # review 5 minor 4
 
 
 async def test_a_huge_pdf_is_refused(monkeypatch):
@@ -38,6 +39,19 @@ async def test_a_huge_pdf_is_refused(monkeypatch):
     monkeypatch.setattr(lc, "compile_dir", fake)
     res = await dc.preview([], PIC)
     assert not res.ok and res.pdf is None and res.friendly == "diagram_too_large"
+
+
+async def test_only_main_tex_lines_inside_the_picture_are_mapped(monkeypatch):  # review 5 minor 3
+    async def fake(workdir, main, *, timeout):
+        errs = [
+            {"file": "tikz.code.tex", "line": 9, "message": "in a package", "kind": "error"},
+            {"file": "main.tex", "line": 40, "message": "past the picture", "kind": "error"},
+        ]
+        return lc.CompileResult(False, None, "", errs, None)
+
+    monkeypatch.setattr(lc, "compile_dir", fake)
+    res = await dc.preview([], PIC)
+    assert [e["line"] for e in res.errors] == [None, None]
 
 
 async def test_error_lines_point_into_the_picture(monkeypatch):
@@ -74,6 +88,6 @@ async def test_every_allowlisted_library_compiles_from_the_cache(real, library):
 
 @needs_bin
 async def test_a_library_outside_the_allowlist_does_not_compile(real, tmp_path):
-    (tmp_path / "main.tex").write_text(dt.standalone_document(["external"], PIC))
+    (tmp_path / "main.tex").write_text(dt.preview_document(["external"], PIC))
     res = await lc.compile_dir(tmp_path, "main.tex", timeout=30)
     assert not res.ok and any("did not find the tikz library 'external'" in e["message"] for e in res.errors)

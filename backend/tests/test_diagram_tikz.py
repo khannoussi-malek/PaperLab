@@ -108,8 +108,55 @@ def test_the_allowlist_equals_the_warm_file_and_the_dockerfile_uses_it():
     assert "/templates/warm-diagram.tex" in (ROOT / "Dockerfile").read_text()
 
 
-def test_standalone_document_wraps_the_picture():
-    doc = dt.standalone_document(["fit", "calc"], PIC)
+def test_preview_document_wraps_the_picture():
+    doc = dt.preview_document(["fit", "calc"], PIC)
     assert doc.startswith(dt.PREAMBLE + "\\usetikzlibrary{fit,calc}\n")
     assert dt.PREAMBLE in (ROOT / "backend/app/manuscript_templates/warm-diagram.tex").read_text()
     assert PIC in doc
+
+
+@pytest.mark.parametrize(
+    "picture",
+    [
+        "% \\begin{tikzpicture}\nInjected prose. \\tikz \\node{A};\n% \\end{tikzpicture}",  # review 5 C1
+        "% \\begin{tikzpicture}\nInjected prose.\n\\begin{tikz%\npicture}\\node {A};\\end{tikzpicture}",
+        PIC + "\nprose %\n",
+    ],
+)
+def test_comments_are_stripped_the_way_tex_does_before_the_structure_is_judged(picture):
+    assert dt.check([], picture)
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "\\makeatletter\\@@input{../secret}",  # review 5 I1
+        "\\ExplSyntaxOn\\file_get:nnN{x}{}\\l_tmpa_tl",
+        "\\ExplSyntaxOn\\iow_open:Nn \\g_tmpa_iow {/tmp/x}",
+        "\\filedump{x}",
+        "\\pgfimage{x}",
+        "\\XeTeXpdffile x",
+        "\\UseName{input}{x}",
+        "\\inp%\nut{x}",  # a comment joins the name back together
+        "\\usetikzlibrary[external]",  # minor 1: the allowlist is the only door
+        "\\usepgflibrary{x}",
+        "\\RequirePackage{x}",
+        "\\gdef\\thepage{HACKED}",  # minor 2: no global side effects
+        "\\global\\let\\x\\relax",
+        "\\AtEndDocument{x}",
+        "\\AddToHook{x}{y}",
+    ],
+)
+def test_aliases_of_denied_commands_are_rejected(body):
+    assert dt.check([], PIC.replace("\\node {A};", body + " \\node {A};"))
+
+
+def test_the_warm_files_own_picture_passes_the_guard():
+    warm = (ROOT / "backend/app/manuscript_templates/warm-diagram.tex").read_text()
+    picture = warm[warm.index("\\begin{tikzpicture}") : warm.index("\\end{document}")].strip()
+    assert dt.check(list(dt.ALLOWED_LIBRARIES), picture) == []
+
+
+def test_plurals_and_non_ascii_labels_match_the_description():
+    pic = "\\begin{tikzpicture}\\node {Processes}; \\node {Boxes}; \\node {Ölmodell};\\end{tikzpicture}"
+    assert dt.labels_not_in_description(pic, "a process, a box and the Ölmodell") == []
