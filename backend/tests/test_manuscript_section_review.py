@@ -18,7 +18,7 @@ from app.models import Note, note_anchors, note_papers
 from app.providers.base import LLMError, LLMUnavailable
 from app.workers import manuscript_section_review as worker
 
-pytestmark = pytest.mark.anyio
+pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("manuscript_rows")]  # flips the default model
 FUTURE = datetime.now(UTC) + timedelta(days=1)
 GOOD = (
     "Missing: no sample size is named\n"
@@ -59,7 +59,8 @@ def wiring(session, arq, monkeypatch, local_default_model):
 
 async def doc(session, text=SAMPLE, *titles):
     _, papers, m = await setup(session, *(titles or ("Alpha",)), name=f"W {uuid.uuid4().hex[:8]}")
-    key = (await manuscript_papers.list_papers(session, m.id))[0]["key"]
+    listed = await manuscript_papers.list_papers(session, m.id)  # unordered: pick the first paper made
+    key = next(p["key"] for p in listed if p["paper_id"] == papers[0].id)
     await manuscripts.upsert_text(session, m.id, "main.tex", text.replace("KEY", key))
     return papers, m
 

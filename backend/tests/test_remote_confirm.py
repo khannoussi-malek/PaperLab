@@ -11,7 +11,7 @@ from app.core import manuscript_section_review as msr
 from app.core.errors import Conflict
 from app.models import LLMConnection, LLMModel
 
-pytestmark = pytest.mark.anyio
+pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("manuscript_rows")]  # flips the default model
 FUTURE = datetime.now(UTC) + timedelta(days=1)
 
 

@@ -2008,6 +2008,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/manuscripts/{manuscript_id}/diagrams": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Diagram */
+        post: operations["create_diagram_api_manuscripts__manuscript_id__diagrams_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/diagrams/{diagram_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Diagram */
+        get: operations["get_diagram_api_manuscripts__manuscript_id__diagrams__diagram_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Diagram */
+        delete: operations["delete_diagram_api_manuscripts__manuscript_id__diagrams__diagram_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/diagrams/{diagram_id}/code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set Diagram Code */
+        put: operations["set_diagram_code_api_manuscripts__manuscript_id__diagrams__diagram_id__code_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/diagrams/{diagram_id}/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Diagram Pdf */
+        get: operations["diagram_pdf_api_manuscripts__manuscript_id__diagrams__diagram_id__pdf_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manuscripts/{manuscript_id}/diagrams/{diagram_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Diagram */
+        post: operations["cancel_diagram_api_manuscripts__manuscript_id__diagrams__diagram_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/papers/{paper_id}/tables/preview": {
         parameters: {
             query?: never;
@@ -3687,6 +3773,76 @@ export interface components {
              * Format: uuid
              */
             model_id: string;
+        };
+        /** DiagramCodeIn */
+        DiagramCodeIn: {
+            /** Code */
+            code: string;
+        };
+        /** DiagramErrorOut */
+        DiagramErrorOut: {
+            /**
+             * Line
+             * @description counted from the first line of the picture
+             */
+            line: number | null;
+            /** Message */
+            message: string;
+        };
+        /** DiagramIn */
+        DiagramIn: {
+            /** Description */
+            description: string;
+            /**
+             * Confirm Remote
+             * @default false
+             */
+            confirm_remote: boolean;
+        };
+        /** DiagramOut */
+        DiagramOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Description */
+            description: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "done" | "failed" | "interrupted";
+            /** Code */
+            code: string | null;
+            /** Libraries */
+            libraries: string[];
+            /** Compiled */
+            compiled: boolean | null;
+            /** Errors */
+            errors: components["schemas"]["DiagramErrorOut"][];
+            /** Labels Not In Description */
+            labels_not_in_description: string[];
+            /** Reason */
+            reason: string | null;
+            /** Model */
+            model: string | null;
+            /**
+             * Ai
+             * @default true
+             * @constant
+             */
+            ai: true;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
         /** DoneEvent */
         DoneEvent: {
@@ -11015,6 +11171,203 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SectionReviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_diagram_api_manuscripts__manuscript_id__diagrams_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiagramIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiagramOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_diagram_api_manuscripts__manuscript_id__diagrams__diagram_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+                diagram_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiagramOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_diagram_api_manuscripts__manuscript_id__diagrams__diagram_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+                diagram_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_diagram_code_api_manuscripts__manuscript_id__diagrams__diagram_id__code_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+                diagram_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiagramCodeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiagramOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    diagram_pdf_api_manuscripts__manuscript_id__diagrams__diagram_id__pdf_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+                diagram_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_diagram_api_manuscripts__manuscript_id__diagrams__diagram_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manuscript_id: string;
+                diagram_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiagramOut"];
                 };
             };
             /** @description Validation Error */
