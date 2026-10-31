@@ -72,7 +72,8 @@ _END = re.compile(r"\\end\s*\{tikzpicture\}")
 # `pin=` options. `node distance`, `every node/.style` and `nodes=` are keys, not text.
 _NODE = re.compile(r"\\node(?![A-Za-z])|(?<![\w\\])node(?=\s*(?:[\[({]|at\b))")
 _LABEL_KEY = re.compile(r"(?<![A-Za-z])(?:label|pin)\s*=\s*")
-_POSITION = re.compile(r"^\s*(?:\[[^\]]*\])?\s*(?:[A-Za-z ]+|-?\d+(?:\.\d+)?):(?!:)")
+_WHERE = r"(?:above|below|left|right|north|south|east|west|center|base)(?:\s+(?:left|right|east|west))?"
+_POSITION = re.compile(r"^\s*(?:\[[^\]]*\])?\s*(?:" + _WHERE + r"|-?\d+(?:\.\d+)?)\s*:(?!:)")  # a TikZ position only
 
 
 def split_code(raw: str) -> tuple[list[str], str]:
