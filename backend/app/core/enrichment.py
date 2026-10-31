@@ -7,6 +7,7 @@
 - A field the user corrected (papers.manual_fields) is never overwritten by the PDF or by OpenAlex.
 """
 
+import html
 import logging
 import re
 import unicodedata
@@ -329,10 +330,13 @@ async def refresh_authors(session: AsyncSession, http: httpx.AsyncClient, openal
     await session.commit()
 
 
-async def _write(session: AsyncSession, paper: Paper, fields: dict[str, Any], source: str) -> list[Collision]:
-    """Writes `fields` past the guards below, stamping `source` on the groups actually written (R22)."""
+async def _write(
+    session: AsyncSession, paper: Paper, fields: dict[str, Any], source: str, *, keep_manual_stamps: bool = False
+) -> list[Collision]:
+    """Writes `fields` past the guards below, stamping `source` on the groups actually written (R22); with
+    `keep_manual_stamps`, a group the owner edited keeps its "manual" stamp."""
     # The OpenAlex lookup can take seconds; re-read the lock right before writing, in case a PATCH landed meanwhile.
-    await session.refresh(paper, ["manual_fields"])
+    await session.refresh(paper, ["manual_fields", "field_sources"])
     values = {k: v for k, v in fields.items() if k not in paper.manual_fields and not _regresses(v, getattr(paper, k))}
     if "source_type" in paper.manual_fields:  # peer_reviewed was derived from a type the owner replaced
         values.pop("peer_reviewed", None)
@@ -346,7 +350,8 @@ async def _write(session: AsyncSession, paper: Paper, fields: dict[str, Any], so
             values = {k: v for k, v in values.items() if k != key}
             collisions.append(Collision(key, value, holder_id))
     if values:
-        await session.execute(update(Paper).where(Paper.id == paper.id).values(**stamp(values, source)))
+        manual = {g for g, s in (paper.field_sources or {}).items() if s == "manual"} if keep_manual_stamps else set()
+        await session.execute(update(Paper).where(Paper.id == paper.id).values(**stamp(values, source, skip=manual)))
     return collisions
 
 
@@ -405,6 +410,50 @@ def crossref_biblio(work: dict[str, Any]) -> dict[str, Any]:
     return {**fields, "editors": [e for e in editors if e] or None}
 
 
+def _crossref_year(work: dict[str, Any]) -> int | None:
+    for key in ("published-print", "issued"):  # the issue's date, else the earliest
+        [year, *_] = ((work.get(key) or {}).get("date-parts") or [[None]])[0] or [None]
+        if year:
+            return int(year)
+    return None
+
+
+ALIGN_TYPES = frozenset({"journal-article", "proceedings-article"})  # where container-title is the venue
+_PAGE_RANGE = re.compile(r"(\d+)\s*[-\u2013]\s*(\d+)")
+
+
+def _alignable(paper: Paper) -> bool:
+    """Not a preprint copy (it keeps its own year), and a DOI known to be the paper's own: matched by OpenAlex, set
+    by the owner, given with a paper saved without a PDF, or not read off page 1 (which can carry a cited paper's)."""
+    trusted = (
+        paper.openalex_id is not None
+        or "doi" in paper.manual_fields
+        or paper.file_path is None
+        or (paper.field_sources or {}).get("identifiers") != "pdf"
+    )
+    return trusted and not is_preprint_copy(paper)
+
+
+def align_with_crossref(paper: Paper, work: dict[str, Any]) -> dict[str, Any]:
+    """Corrections from the Crossref work for the paper's own DOI (`_alignable`). For a journal or proceedings article,
+    the issue year (published-print, else issued) over an online-first or preprint year, and the journal's name at the
+    time (a single container-title) over its current one. For any type, a plain "a-b" page range over its lone first
+    page. Never title, authors or DOI, and never a manual field."""
+    if not _alignable(paper):
+        return {}
+    titles = work.get("container-title") or []
+    article = work.get("type") in ALIGN_TYPES
+    venue = (html.unescape(titles[0] or "").strip() or None) if article and len(titles) == 1 else None
+    page = _PAGE_RANGE.fullmatch((work.get("page") or "").strip())
+    lone_first = page and (paper.pages or "").strip() == page[1] != page[2]
+    found = {
+        "year": _crossref_year(work) if article else None,
+        "venue": venue,
+        "pages": f"{page[1]}-{page[2]}" if lone_first else None,
+    }
+    return {k: v for k, v in found.items() if v and v != getattr(paper, k) and k not in paper.manual_fields}
+
+
 async def fill_biblio(
     session: AsyncSession,
     paper_id: uuid.UUID,
@@ -413,27 +462,33 @@ async def fill_biblio(
     *,
     openalex_work: dict[str, Any] | None = None,
     crossref_works: dict[str, dict | None] | None = None,
+    align: bool = True,
 ) -> bool:
     """Fills volume, issue, pages, editors, pmid and pmcid that are still NULL, never past manual_fields and never over
-    a value already held. Crossref wins over OpenAlex. `openalex_work` is a work already fetched; `crossref_works` is
-    the per-enrichment cache shared with `fill_source_type`. Source errors are logged, never raised. True when a
-    request went out."""
+    a value already held. Crossref wins over OpenAlex. With `align`, Crossref's year, venue and page range also correct
+    the stored ones (`align_with_crossref`, only on a DOI it trusts), each change logged. `openalex_work` is a work
+    already fetched; `crossref_works` is the per-enrichment cache shared with `fill_source_type`. Source errors are
+    logged, never raised. True when a request went out."""
     paper = await get_paper(session, paper_id)
     await session.refresh(paper)
     doi = normalize_doi(paper.doi or "")
     cache = {} if crossref_works is None else crossref_works
     found: dict[str, Any] = {}
+    corrections: dict[str, Any] = {}
     asked = False
     crossref_fields = ("volume", "issue", "pages", "editors")
+    align = align and _alignable(paper)
     if (
         doi
         and crossref_http
         and not doi.startswith(ARXIV_DOI_PREFIX)
-        and any(getattr(paper, f) is None for f in crossref_fields)
+        and (align or any(getattr(paper, f) is None for f in crossref_fields))
     ):
         asked = doi not in cache
         try:
-            found |= crossref_biblio(await _crossref_work(crossref_http, doi, cache) or {})
+            work = await _crossref_work(crossref_http, doi, cache) or {}
+            found |= crossref_biblio(work)
+            corrections = align_with_crossref(paper, work) if align and work else {}
         except (httpx.HTTPError, KeyError, TypeError, AttributeError) as exc:
             logger.warning("Crossref biblio lookup failed for paper %s: %r", paper_id, exc)
     wanted = ("volume", "issue", "pages", "pmid", "pmcid")
@@ -452,6 +507,11 @@ async def fill_biblio(
         for source in ("openalex", "crossref"):  # OpenAlex first, so a group both filled reads Crossref, the winner
             if part := {k: v for k, v in fields.items() if (k in from_crossref) == (source == "crossref")}:
                 await _write(session, paper, part, source)
+    if corrections:  # a lone first page is never NULL, so these never overlap the fills above
+        for field, value in corrections.items():
+            logger.info("Crossref aligns %s of paper %s: %r -> %r", field, paper_id, getattr(paper, field), value)
+        await _write(session, paper, corrections, "crossref", keep_manual_stamps=True)
+    if fields or corrections:
         await session.commit()
     return asked
 
@@ -522,7 +582,9 @@ async def enrich_paper(
                 collisions = await _write(session, paper, fallback, "pdf")  # never replaces what an earlier match found
         await session.commit()
         await fill_source_type(session, paper_id, None, crossref_http, crossref_works)
-        await fill_biblio(session, paper_id, crossref_http, crossref_works=crossref_works)
+        # OpenAlex vouched for nothing here, and _alignable can't tell a DOI ingest saw on page 1 when it bears no
+        # "pdf" stamp (an older copy's). Only _fill_from_crossref's checked fill may set year and venue.
+        await fill_biblio(session, paper_id, crossref_http, crossref_works=crossref_works, align=False)
         await _fill_from_crossref(session, paper_id, hints, crossref_http, crossref_works)
         return collisions
 

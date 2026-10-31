@@ -40,10 +40,10 @@ def sources_of(values: dict[str, Any], source: str) -> dict[str, str]:
     return dict.fromkeys(sorted(groups_of(filled)), _checked(source))
 
 
-def stamp(values: dict[str, Any], source: str) -> dict[str, Any]:
-    """`values` for an UPDATE of papers, plus field_sources merged with their groups. A jsonb `||` in the UPDATE, so
-    writers stamping other groups at the same time don't clobber each other."""
-    sources = sources_of(values, source)
+def stamp(values: dict[str, Any], source: str, skip: Iterable[str] = ()) -> dict[str, Any]:
+    """`values` for an UPDATE of papers, plus field_sources merged with their groups (but those in `skip`). A jsonb
+    `||` in the UPDATE, so writers stamping other groups at the same time don't clobber each other."""
+    sources = {g: s for g, s in sources_of(values, source).items() if g not in skip}
     return {**values, "field_sources": Paper.field_sources.op("||")(literal(sources, JSONB))} if sources else values
 
 
