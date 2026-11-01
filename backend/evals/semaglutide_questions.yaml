@@ -1,0 +1,133 @@
+# Workspace retrieval eval, second drug: 20 Medical Information questions on semaglutide (Ozempic, Wegovy), searched
+# across the whole workspace. Run with `python -m evals.workspace_run --questions evals/semaglutide_questions.yaml`.
+#
+# Same scoring as workspace_questions.yaml: a question counts at k when every need is met in the top k, and a need is
+# met by any one of its passages. The questions were written before any document text was read. The key was written
+# from the documents' text by plain text search, before either search method ran on this workspace, so every
+# question is unseen.
+#
+# A question about "semaglutide" in general is answered by either brand's label. A question naming Ozempic or Wegovy
+# is answered by that brand's labels. Questions that ask for both labels list the EU and the US label as separate needs.
+# The library's "SUSTAIN-6" record holds the PIONEER 6 abstract (an OpenAlex metadata error), so it counts for q19.
+workspace: "MI test – semaglutide"
+questions:
+  - id: q01
+    question: What is the starting dose of Ozempic and how is it increased?
+    needs:
+      - - {paper: "Ozempic, INN-semaglutide", contains: "the starting dose is 0.25 mg semaglutide once weekly. after 4 weeks the dose should be increased to 0.5 mg"}
+        - {paper: "Ozempic, INN-semaglutide", contains: "the starting dose is 0.25 mg once a week for four weeks"}
+        - {paper: "Ozempic PI", contains: "with a dosage of 0.25 mg injected subcutaneously once weekly for 4 weeks"}
+  - id: q02
+    question: What is the highest dose of Ozempic for type 2 diabetes?
+    needs:
+      - - {paper: "Ozempic, INN-semaglutide", contains: "the dose can be increased to 2 mg once weekly to further improve glycaemic control"}
+        - {paper: "Ozempic PI", contains: "the maximum recommended dosage is 2 mg once weekly"}
+        - {paper: "Ozempic PI", contains: "increase the dosage to 2 mg once weekly after at least 4 weeks on the 1 mg dosage"}
+  - id: q03
+    question: A patient forgot their weekly Ozempic injection 3 days ago. What do the EU and US labels say?
+    needs:
+      - - {paper: "Ozempic, INN-semaglutide", contains: "if a dose is missed, it should be administered as soon as possible and within 5 days"}
+        - {paper: "Ozempic, INN-semaglutide", contains: "it is more than 5 days since you should have used ozempic, skip the missed dose"}
+      - - {paper: "Ozempic PI", contains: "as soon as possible within 5 days after the missed dose"}
+        - {paper: "Ozempic PI", contains: "if a dose is missed, administer within 5 days of missed dose"}
+  - id: q04
+    question: Can semaglutide be used in a patient with a family history of medullary thyroid carcinoma?
+    needs:
+      - - {paper: "Ozempic PI", contains: "personal or family history of mtc"}
+        - {paper: "Wegovy PI", contains: "personal or family history of mtc"}
+  - id: q05
+    question: Can Ozempic be used in pregnancy, and how long before a planned pregnancy should it be stopped?
+    needs:
+      - - {paper: "Ozempic, INN-semaglutide", contains: "at least 2 months before a planned pregnancy"}
+        - {paper: "Ozempic PI", contains: "at least 2 months before a planned pregnancy"}
+  - id: q06
+    question: Does Ozempic need a dose change in renal impairment or for patients on dialysis?
+    needs:
+      - - {paper: "Ozempic, INN-semaglutide", contains: "no dose adjustment is required for patients with mild, moderate or severe renal impairment"}
+        - {paper: "Ozempic PI", contains: "8.6 renal impairment no dose adjustment of ozempic"}
+  - id: q07
+    question: Can semaglutide be combined with insulin or a sulfonylurea, and what about hypoglycaemia?
+    needs:
+      - - {paper: "Ozempic, INN-semaglutide", contains: "a reduction in the dose of sulfonylurea or insulin should be considered"}
+        - {paper: "Ozempic, INN-semaglutide", contains: "in combination with a sulfonylurea or insulin may have an increased risk of hypoglycaemia"}
+        - {paper: "Ozempic PI", contains: "concomitant use with an insulin secretagogue or insulin may increase the risk of hypoglycemia"}
+        - {paper: "Wegovy, INN-semaglutide", contains: "the risk of hypoglycaemia can be lowered by reducing the dose of sulfonylurea or insulin"}
+        - {paper: "Wegovy, INN-semaglutide", contains: "in combination with a sulfonylurea or insulin may have an increased risk of hypoglycaemia"}
+  - id: q08
+    question: Does semaglutide increase the risk of diabetic retinopathy complications?
+    needs:
+      - - {paper: "Ozempic, INN-semaglutide", contains: "in patients with diabetic retinopathy treated with insulin and semaglutide, an increased"}
+        - {paper: "Ozempic, INN-semaglutide", contains: "diabetic retinopathy complications a 2-year clinical trial investigated"}
+        - {paper: "Ozempic PI", contains: "5.3 diabetic retinopathy complications in a 2-year trial"}
+        - {paper: "Wegovy, INN-semaglutide", contains: "in patients with diabetic retinopathy treated with semag"}
+  - id: q09
+    question: In SUSTAIN-6, how did semaglutide affect major cardiovascular events?
+    needs:
+      - - {paper: "Ozempic, INN-semaglutide", contains: "treatment with semaglutide resulted in a 26% risk reduction in the primary composite outcome"}
+        - {paper: "Ozempic PI", contains: "hr: 0.74 95% ci [0.58 - 0.95]"}
+  - id: q10
+    question: In SELECT, what was the effect of semaglutide on cardiovascular events in people with obesity but no diabetes?
+    needs:
+      - - {paper: "Semaglutide and Cardiovascular Outcomes in Obesity", contains: "569 of the 8803 patients (6.5%) in the semaglutide group"}
+        - {paper: "Semaglutide and Cardiovascular Outcomes in Obesity", contains: "nonfatal myocardial infarction, or nonfatal stroke by 20% (hazard ratio, 0.80"}
+  - id: q11
+    question: How much weight did participants lose with semaglutide 2.4 mg in STEP 1?
+    needs:
+      - - {paper: "Once-Weekly Semaglutide in Adults", contains: "mean change in body weight from baseline to week 68 was"}
+        - {paper: "Once-Weekly Semaglutide in Adults", contains: "estimated mean weight change at week 68 was"}
+        - {paper: "Once-Weekly Semaglutide in Adults", contains: "mean weight loss of 14.9% from baseline"}
+  - id: q12
+    question: What is the maintenance dose of Wegovy for adults and how is it reached?
+    needs:
+      - - {paper: "Wegovy, INN-semaglutide", contains: "the maintenance dose of semaglutide 2.4 mg once-weekly is reached by starting with a dose of 0.25 mg"}
+        - {paper: "Wegovy PI", contains: "the usual recommended maintenance dosage of wegovy"}
+  - id: q13
+    question: Can Wegovy be used in adolescents?
+    needs:
+      - - {paper: "Wegovy, INN-semaglutide", contains: "no dose adjustment is required for adolescents aged 12 years and above"}
+        - {paper: "Wegovy, INN-semaglutide", contains: "adolescents (≥ 12 years of age) wegovy is indicated"}
+        - {paper: "Wegovy, INN-semaglutide", contains: "weight management in adolescents aged 12 years and above"}
+        - {paper: "Wegovy PI", contains: "adults and pediatric patients aged 12 years and older with obesity"}
+  - id: q14
+    question: Does semaglutide change the absorption of oral medicines such as warfarin or oral contraceptives?
+    needs:
+      - - {paper: "Ozempic, INN-semaglutide", contains: "semaglutide delays gastric emptying and has the potential to impact the rate of absorption"}
+        - {paper: "Ozempic, INN-semaglutide", contains: "warfarin and other coumarin derivatives semaglutide did not change"}
+        - {paper: "Ozempic, INN-semaglutide", contains: "oral contraceptives semaglutide is not anticipated to decrease the effect"}
+        - {paper: "Ozempic PI", contains: "causes a delay of gastric emptying, and thereby has the potential"}
+        - {paper: "Wegovy, INN-semaglutide", contains: "semaglutide delays gastric emptying"}
+        - {paper: "Wegovy, INN-semaglutide", contains: "warfarin and other coumarin derivatives semaglutide did not change"}
+        - {paper: "Wegovy PI", contains: "delays gastric emptying. may impact absorption of concomitantly administered oral medications"}
+  - id: q15
+    question: What should be done if a patient on semaglutide develops signs of acute pancreatitis?
+    needs:
+      - - {paper: "Ozempic, INN-semaglutide", contains: "if pancreatitis is suspected, semaglutide should be discontinued"}
+        - {paper: "Ozempic PI", contains: "if pancreatitis is suspected"}
+        - {paper: "Wegovy, INN-semaglutide", contains: "if pancreatitis is suspected, semaglutide should be discontinued"}
+        - {paper: "Wegovy PI", contains: "if pancreatitis is suspected"}
+  - id: q16
+    question: Is semaglutide a concern before surgery or procedures under general anaesthesia?
+    needs:
+      - - {paper: "Ozempic, INN-semaglutide", contains: "aspiration in association with general anaesthesia or deep sedation"}
+        - {paper: "Ozempic PI", contains: "pulmonary aspiration during general anesthesia or deep sedation"}
+        - {paper: "Wegovy, INN-semaglutide", contains: "aspiration in association with general anaesthesia or deep sedation"}
+        - {paper: "Wegovy PI", contains: "pulmonary aspiration during general anesthesia or deep sedation"}
+  - id: q17
+    question: How should Ozempic pens be stored before and after first use?
+    needs:
+      - - {paper: "Ozempic, INN-semaglutide", contains: "6.4 special precautions for storage store in a refrigerator"}
+        - {paper: "Ozempic, INN-semaglutide", contains: "special storage conditions store in a refrigerator. do not freeze. after the first us"}
+        - {paper: "Ozempic PI", contains: "prior to first use, the ozempic"}
+  - id: q18
+    question: Did semaglutide slow kidney disease progression in the FLOW trial?
+    needs:
+      - - {paper: "Effects of Semaglutide on Chronic Kidney Disease", contains: "24% lower in the semaglutide group than in the placebo group"}
+        - {paper: "Ozempic, INN-semaglutide", contains: "superior to placebo, in addition to standard-of-care, in preventing the primary composite outcome"}
+  - id: q19
+    question: Was oral semaglutide shown to be cardiovascular safe in PIONEER 6?
+    needs:
+      - - {paper: "Oral Semaglutide and Cardiovascular Outcomes", contains: "the cardiovascular risk profile of oral semaglutide was not inferior to that of placebo"}
+        - {paper: "Semaglutide and Cardiovascular Outcomes in Patients", contains: "the cardiovascular risk profile of oral semaglutide was not inferior to that of placebo"}
+  - id: q20
+    question: How much does a month of Wegovy cost in the UK?
+    needs: []
