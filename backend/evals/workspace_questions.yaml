@@ -7,6 +7,9 @@
 #
 # The answer key was written from the documents' text before either search method was run on these questions,
 # except q02, q05, q06 and q09, whose retrieval results had already been seen (marked `seen: true`).
+# Key revision 1 (2026-11-01, from the chat side's review): q04, q12 and q16 accept more passages that carry the
+# answer, found in the passages the models answered from on 31 Oct. Those runs were vector only, so this revision can
+# only favour vector search. Results before and after it are reported apart.
 # Questions with `needs: []` have no source in these papers: the right answer says so. They test the model, not
 # retrieval, and are not scored.
 workspace: "MI test – apixaban"
@@ -31,6 +34,7 @@ questions:
     question: Under the EU label, which dose for an atrial fibrillation patient with a creatinine clearance of 20 mL/min?
     needs:
       - - {paper: "Eliquis, INN-apixaban", contains: "severe renal impairment (creatinine clearance 15-29 ml/min) the following recommendations apply"}
+        - {paper: "2021 European Heart Rhythm Association", contains: "or single criterion: if crcl 15-29 ml/min"}
   - id: q05
     seen: true
     question: Can apixaban be used in an atrial fibrillation patient on haemodialysis? Compare the EU and US labels and the trial evidence.
@@ -79,6 +83,7 @@ questions:
       - - {paper: "Eliquis, INN-apixaban", contains: "tablets may be crushed and suspended in water"}
         - {paper: "ELIQUIS", contains: "tablets may be crushed and suspended in water"}
         - {paper: "ELIQUIS", contains: "crushed and suspended in 60 ml of water or d5w"}
+        - {paper: "2021 European Heart Rhythm Association", contains: "administration in crushed form, e.g., via a nasogastric tube"}
   - id: q13
     question: How can apixaban's effect be reversed in life-threatening bleeding?
     needs:
@@ -96,6 +101,8 @@ questions:
     question: For a patient with atrial fibrillation after PCI on a P2Y12 inhibitor, what did AUGUSTUS show?
     needs:
       - - {paper: "Antithrombotic Therapy after Acute Coronary Syndrome", contains: "resulted in less bleeding and fewer hospitalizations"}
+        - {paper: "Antithrombotic Therapy after Acute Coronary Syndrome", contains: "10.5% of the patients receiving apixaban"}
+        - {paper: "Eliquis, INN-apixaban", contains: "occurred in 241 (10.5%), and 332 (14.7%) patients in the apixaban arm"}
   - id: q17
     question: Does grapefruit juice interact with apixaban, and should patients avoid it?
     needs: []
