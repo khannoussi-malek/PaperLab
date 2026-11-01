@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 from conftest import unit_vector
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import bindparam, insert, text
+from sqlalchemy import bindparam, insert, select, text
 
 from app.core import retrieval
 from app.core.errors import Conflict
@@ -327,6 +327,9 @@ def hybrid(monkeypatch, on: bool) -> None:
     monkeypatch.setattr(retrieval.settings, "hybrid_search", on)
 
 
+# Inside one paper, retrieval stays vector only (see retrieval.py), so these tests scope hybrid search to their chunks.
+
+
 async def test_hybrid_search_finds_an_exact_rare_term_the_vectors_rank_last(session, embedder, monkeypatch):
     # The MI test's miss: "itraconazole" was in both labels, and no chunk of the top 8 held it.
     question = f"Which dose with {RARE}?"
@@ -334,15 +337,18 @@ async def test_hybrid_search_finds_an_exact_rare_term_the_vectors_rank_last(sess
     embedder.vectors[f"search_query: {question}"] = query
     near_ones = [(f"Background chunk {i}", 0.1 * (i + 1)) for i in range(6)]  # none shares a word with the question
     chunks = await add_texts(session, query, "Label", [*near_ones, (f"Avoid strong inhibitors such as {RARE}.", 3.0)])
-    paper_ids = [chunks[0].paper_id]
+    scope = [c.id for c in chunks]
 
     hybrid(monkeypatch, False)
-    vector_only = await retrieve(session, question, paper_ids=paper_ids, k=3, embedder=embedder)
+    vector_only = await retrieve(session, question, chunk_ids=scope, k=3, embedder=embedder)
     hybrid(monkeypatch, True)
-    fused = await retrieve(session, question, paper_ids=paper_ids, k=3, embedder=embedder)
+    fused = await retrieve(session, question, chunk_ids=scope, k=3, embedder=embedder)
+    one_paper = await retrieve(session, question, paper_ids=[chunks[0].paper_id], k=3, embedder=embedder)
 
     assert chunks[-1].id not in {r.id for r in vector_only}
     rare = next(r for r in fused if r.id == chunks[-1].id)  # lexical rank 1 + vector rank 7
+    # Inside one paper its own topic words are everywhere: the retrieval eval lost recall there, so it stays vectors.
+    assert [r.id for r in one_paper] == [r.id for r in vector_only]
     assert rare.distance == pytest.approx(1 - 1 / np.sqrt(1 + 3.0**2), abs=1e-5)  # still its cosine distance
 
 
@@ -356,7 +362,7 @@ async def test_hybrid_search_weights_a_rare_term_above_a_common_one(session, emb
         session, query, "Weights", [*common, ("Another dose table", 3.0), (f"Nothing on {RARE} here", 3.1)]
     )
 
-    found = await retrieve(session, question, paper_ids=[chunks[0].paper_id], k=8, embedder=embedder)
+    found = await retrieve(session, question, chunk_ids=[c.id for c in chunks], k=8, embedder=embedder)
     order = [r.id for r in found]
 
     # Both far chunks match one word each; "dose" is in 7 of 8 chunks, the drug name in one.
@@ -367,8 +373,9 @@ async def test_hybrid_search_without_a_matching_word_keeps_the_vector_order(sess
     hybrid(monkeypatch, True)
     query = fresh_query(embedder)
     paper = await add_paper(session, query, "Plain", [0.1 * (i + 1) for i in range(6)])
+    scope = list(await session.scalars(select(Chunk.id).where(Chunk.paper_id == paper.id)))
 
-    found = await retrieve(session, QUERY, paper_ids=[paper.id], k=6, embedder=embedder)
+    found = await retrieve(session, QUERY, chunk_ids=scope, k=6, embedder=embedder)
 
     assert [r.text for r in found] == [f"Plain chunk {i}" for i in range(6)]
 
@@ -417,7 +424,7 @@ async def test_hybrid_search_keeps_the_vector_order_among_tied_keyword_matches(s
     texts = [f"Chunk {i} mentions {RARE}" if i in (1, 2, 4) else f"Chunk {i} is plain" for i in range(6)]
     chunks = await add_texts(session, query, "Ties", [(t, 0.1 * (i + 1)) for i, t in enumerate(texts)])
 
-    found = await retrieve(session, question, paper_ids=[chunks[0].paper_id], k=6, embedder=embedder)
+    found = await retrieve(session, question, chunk_ids=[c.id for c in chunks], k=6, embedder=embedder)
 
     # The three matches tie on the keyword score: they rise together, nearest first, ahead of the plain ones.
     assert [r.text for r in found] == [texts[i] for i in (1, 2, 4, 0, 3, 5)]
@@ -444,6 +451,6 @@ async def test_hybrid_search_keeps_the_nearest_of_more_tied_matches_than_it_take
     )
     await session.commit()
 
-    found = await retrieve(session, question, paper_ids=[paper.id], k=8, embedder=embedder)
+    found = await retrieve(session, question, chunk_ids=ids, k=8, embedder=embedder)
 
     assert [r.text for r in found] == [f"Tied {RARE} chunk {i}" for i in range(8)]

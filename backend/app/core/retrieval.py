@@ -199,9 +199,9 @@ async def retrieve(
     per_paper: int | None = None,
     chunk_ids: list[uuid.UUID] | None = None,
 ) -> list[RetrievedChunk]:
-    """The k chunks nearest to the query, closest first (with HYBRID_SEARCH, best fused rank first). embedder=None
-    embeds the question with the active search source (query_embedder); a source that fails raises Conflict with
-    QUESTION_FAILED's sentence (D155).
+    """The k chunks nearest to the query, closest first (with HYBRID_SEARCH and a scope wider than one paper, best
+    fused rank first). embedder=None embeds the question with the active search source (query_embedder); a source
+    that fails raises Conflict with QUESTION_FAILED's sentence (D155).
 
     Scope: paper_ids, workspace_id, or neither (the whole library). A scope that resolves to 2+ papers (a
     workspace with several members, or 2+ paper_ids) keeps at most per_paper (default MAX_PER_PAPER) chunks
@@ -228,8 +228,11 @@ async def retrieve(
         raise Conflict(QUESTION_FAILED.format(reason=str(exc).rstrip("."))) from exc
     params = {"q": question, "k": k, "candidates": max(CANDIDATES, k)}
     params["per_paper"] = k if per_paper is None else per_paper
-    statement = _nearest(paper_ids is not None, chunk_ids is not None, settings.hybrid_search)
-    if settings.hybrid_search:
+    # Hybrid only across papers: inside one paper its own topic words are in most chunks, and the single-paper eval
+    # lost recall (@4 0.95 -> 0.90, @8 1.00 -> 0.95); the workspace eval gained (@8 10/17 -> 13/17), 2026-11-01.
+    hybrid = settings.hybrid_search and (paper_ids is None or len(paper_ids) > 1)
+    statement = _nearest(paper_ids is not None, chunk_ids is not None, hybrid)
+    if hybrid:
         params |= {"question": query, "rrf_k": RRF_K}
     if paper_ids is not None:
         params["paper_ids"] = list(paper_ids)
