@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { api, type Paper } from '@/api/client'
+import { useTriageSummary } from '@/api/queries'
 import { Button } from '@/components/ui/button'
 import { prefetchPaperSections } from '@/features/lenses/queries'
 import { browserStorage } from '@/features/notes/highlightColors'
@@ -8,6 +9,8 @@ import { paperLabel } from '@/features/library/paperMeta'
 import { useReducedMotion } from '@/features/manuscripts/deck/useReducedMotion'
 import * as say from './announce'
 import { DeskStage } from './DeskStage'
+import { FiveCs } from './FiveCs'
+import { OptionalReasons } from './OptionalReasons'
 import { PdfSheet } from './PdfSheet'
 import { PdfTabs } from './PdfTabs'
 import { PILES, REASONS, type Pile } from './piles'
@@ -18,13 +21,14 @@ import { DeskStatus, TriageControls } from './TriageControls'
 import { TriageDone } from './TriageDone'
 import { TriageEmpty } from './TriageEmpty'
 import { deskLayout, useDeskWidth } from './layout'
-import { countsByPile, newSince, ORDERS, progress, type Order } from './queue'
+import { countsByPile, isReady, newSince, ORDERS, progress, type Order } from './queue'
 import { retainOnly, prefetchPdf } from './pdfCache'
 import { closeSession } from './sessionId'
 import { TriagePdf } from './TriagePdf'
 import { useCardClock } from './useCardClock'
 import { useDeskPdf } from './useDeskPdf'
 import { useDeskKeys } from './useDeskKeys'
+import { useFiveCs } from './useFiveCs'
 import { useKeepDeskFocus } from './useKeepDeskFocus'
 import { useTriageSession } from './useTriageSession'
 
@@ -71,7 +75,7 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
   const session = useTriageSession({
     scope, queueFrom: papers, library, libraryReady, filterKey, order: storedOrder(scope), includeDecided: false,
   })
-  const { state, top, notReady, failed } = session
+  const { state, top, notReady, failed, offer } = session
   // Take focus only from nowhere or from the view switch that opened the desk, never from a field the reader is typing in.
   useEffect(() => {
     const a = document.activeElement
@@ -80,6 +84,7 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
   useKeepDeskFocus(root)
   useEffect(() => () => retainOnly([]), []) // leaving triage lets every kept document go
   const topId = top?.id
+  const fiveCs = useFiveCs(topId, session.announce)
   const pdf = useDeskPdf(layout, top)
   const { hasPdf, column: showPdf, tabsOn, pdfTab, sheetShown } = pdf
   const clock = useCardClock(topId, { pdfShown: pdf.shown })
@@ -124,13 +129,14 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
     setReasons(false)
     setHeld(null) // the stamp belongs to the card the key acted on, not the next one
     setDeparting({ pile, paper: top })
-    session.decide(pile, { reason, note, clock: clock.read() })
+    session.decide(pile, { reason, note, fivecs: fiveCs.mask, clock: clock.read() })
     focusRoot()
   }
   // Not relevant always asks why first: nothing is sent until a chip commits.
   const choose = (pile: Pile) => {
     if (!top) return
     if (pile !== 'not_relevant') return go(pile)
+    session.closeOffer()
     setReasons(true)
     focusRoot()
   }
@@ -140,8 +146,18 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
     session.undo()
     focusRoot()
   }
+  const toggleFiveCs = () => {
+    if (pdfTab) pdf.setTab('paper') // the checklist is on the card: never open it out of sight
+    fiveCs.toggle()
+    focusRoot()
+  }
+  const last = state.done.at(-1)
   useDeskKeys(root, {
     reasonsShowing: reasons,
+    lateShowing: offer !== null,
+    fiveCsOpen: fiveCs.open,
+    toggleFiveCs,
+    onTick: fiveCs.tick,
     helpOpen,
     onPile: choose,
     onHold: setHeld,
@@ -157,14 +173,20 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
 
   // A done-screen button unmounts with its action: the keys must keep working, so focus goes to the desk.
   const keepFocus = (f: () => void) => () => { f(); focusRoot() }
-  const startOver = () => { setReasons(false); setDeparting(null); session.startOver() }
+  const startOver = () => { setReasons(false); setDeparting(null); fiveCs.reset(); session.startOver() }
+  const reviewSkipped = () => { fiveCs.reset(); session.reviewSkipped() }
 
-  const last = state.done.at(-1)
   const lastPaper = last && library.find((p) => p.id === last.id)
   const undoInfo = last ? { label: lastPaper ? `${PILES[last.pile].label} '${paperLabel(lastPaper)}'` : PILES[last.pile].label, count: state.done.length } : null
-  const finished = state.unseen.length === 0 && (state.total > 0 || state.done.length > 0)
+  const noCards = state.total === 0 && state.done.length === 0
+  // A reload empties the stack but keeps the session id: the server still knows what a finished session did. That only
+  // counts when nothing is left undecided in the whole scope; a filter hiding the rest is an empty view, not a finished stack.
+  const nothingLeft = noCards && !library.some((p) => p.triage === null && isReady(p))
+  const past = useTriageSummary(session.sessionId, nothingLeft)
+  const reloadedDone = nothingLeft && past.data !== undefined && past.data.decided + past.data.skipped > 0
+  const finished = reloadedDone || (state.unseen.length === 0 && !noCards)
   const searchEmpty = searching && papers.length === 0
-  const empty = state.total === 0 && state.done.length === 0
+  const empty = noCards && !reloadedDone && !(nothingLeft && past.isPending)
   return (
     <section
       ref={root}
@@ -186,7 +208,7 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
         onOrder={changeOrder}
         onIncludeDecided={toggleInclude}
         onExit={exit}
-        onStartOver={empty || finished ? undefined : keepFocus(startOver)}
+        onStartOver={noCards || finished ? undefined : keepFocus(startOver)}
         canStartOver={session.canStartOver}
       />
       <ShortcutHelp open={helpOpen} onOpenChange={setHelpOpen} returnFocus={focusRoot} />
@@ -207,7 +229,7 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
           newSince={newSince(state, papers, { includeDecided })}
           undo={undoInfo}
           onUndo={undo}
-          onReviewSkipped={keepFocus(session.reviewSkipped)}
+          onReviewSkipped={keepFocus(reviewSkipped)}
           onShowKept={keepFocus(onShowKept)}
           onAddNew={keepFocus(session.addNew)}
           onStartOver={keepFocus(startOver)}
@@ -252,6 +274,7 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
                 onHover={() => {}}
                 reduced={reduced}
                 onShowInPdf={hasPdf ? pdf.showAt : undefined}
+                checklist={<FiveCs open={fiveCs.open} mask={fiveCs.mask} onToggle={toggleFiveCs} onTick={fiveCs.tick} single={layout === 'single'} />}
               />
             </div>
             <div
@@ -267,11 +290,21 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
           {layout === 'single' && hasPdf && (
             <PdfSheet open={sheetShown} onOpenChange={(o) => { pdf.setSheetOpen(o); if (!o) focusRoot() }} paperId={top.id} target={target} initialPage={pdf.pageOf(top.id)} onPage={(p) => pdf.remember(top.id, p)} onInteract={clock.interact} returnFocus={focusRoot} />
           )}
-          {reasons && <ReasonChips reasons={REASONS.not_relevant} noteFor="other" onPick={(r, note) => go('not_relevant', r, note)} onCancel={cancelReason} />}
+          {reasons && <ReasonChips tall={layout === 'single'} reasons={REASONS.not_relevant} noteFor="other" onPick={(r, note) => go('not_relevant', r, note)} onCancel={cancelReason} />}
           <TriageControls layout={layout} undo={undoInfo} onUndo={undo} onDecide={choose} progress={progress(state)} />
         </>
       ) : (
         <p className="text-muted-foreground">Getting the next paper ready…</p>
+      )}
+      {/* Below the controls, so nothing moves under the mouse; outside the card branch, so the last card's chips survive the done screen. */}
+      {offer && (
+        <OptionalReasons
+          key={offer.clientId}
+          pile={offer.pile}
+          tall={layout === 'single'}
+          onExpire={session.closeOffer}
+          onPick={(reason) => { session.addReason(offer.clientId, reason); focusRoot() }}
+        />
       )}
     </section>
   )

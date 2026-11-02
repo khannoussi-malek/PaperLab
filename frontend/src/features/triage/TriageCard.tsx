@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { Paper } from '@/api/client'
 import { useTriageEvents } from '@/api/queries'
 import { Button } from '@/components/ui/button'
@@ -40,7 +41,7 @@ function DecidedLine({ paper }: { paper: Paper }) {
 }
 
 /** One paper to decide on: the abstract in full and the conclusion, never the title alone. */
-export function TriageCard({ paper, onShowInPdf }: { paper: Paper; onShowInPdf?: (page: number) => void }) {
+export function TriageCard({ paper, onShowInPdf, children }: { paper: Paper; onShowInPdf?: (page: number) => void; children?: ReactNode }) {
   const decided = Boolean(paper.triage) || (paper.reading_pass ?? 0) > 0
   const meta = [byline(paper), pageCountLabel(paper.page_count)].filter(Boolean).join(' · ')
   return (
@@ -69,6 +70,7 @@ export function TriageCard({ paper, onShowInPdf }: { paper: Paper; onShowInPdf?:
         </div>
       )}
       <Conclusion paper={paper} onShowInPdf={onShowInPdf} />
+      {children}
     </article>
   )
 }

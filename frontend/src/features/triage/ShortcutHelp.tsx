@@ -5,12 +5,14 @@ const ARROW: Record<string, string> = { ArrowRight: '→', ArrowDown: '↓', Arr
 
 const ROWS: [string, string][] = [
   ...PILE_ORDER.map((p): [string, string] => [`${ARROW[PILES[p].arrow]} or ${PILES[p].key}`, PILES[p].label]),
+  ['7, 8, 9', 'Add the optional reason while its chips show; 1 to 5 still decide the next paper'],
+  ['C', 'Open or close the five Cs; while open, 1 to 5 tick them'],
   ['U or Ctrl/⌘ Z', 'Undo the last decision'],
   ['P', 'Show or hide the PDF'],
   ['A', 'Focus the abstract'],
   ['F6 / Shift F6', 'Move between the card, the PDF and the controls'],
   ['?', 'This list'],
-  ['Esc', 'Cancel a reason, close this list, then leave the desk'],
+  ['Esc', 'Cancel a reason, close this list, close the five Cs, then leave the desk'],
 ]
 
 /** Only the keys that exist. */

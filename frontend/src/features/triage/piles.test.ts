@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { PILES, PILE_ORDER, REASONS, buildDecision, nextState, pileForDrag, pileForKey, type Pile } from './piles'
+import { LATE_CHIP_KEYS, PILES, PILE_ORDER, REASONS, buildDecision, nextState, offersReason, pileForDrag, pileForKey, type Pile } from './piles'
 
 const clock = { card_ms: 1234, pdf_ms: 0, pdf_opened: false }
 const ids = { sessionId: 's1', clientId: 'c1', clock }
@@ -75,5 +75,22 @@ describe('REASONS', () => {
     for (const m of block.matchAll(/"(\w+)": \(([^)]*)\)/g)) backend[m[1]] = [...m[2].matchAll(/"(\w+)"/g)].map((x) => x[1])
     const mine = Object.fromEntries(PILE_ORDER.map((p) => [p, REASONS[p].map((r) => r.key)]))
     expect(mine).toEqual(backend)
+  })
+})
+
+describe('fivecs on the decision body', () => {
+  it('is left out when never opened, and sent when opened, 0 included', () => {
+    expect(buildDecision({ pile: 'skim', ...ids })).not.toHaveProperty('fivecs')
+    expect(buildDecision({ pile: 'skim', fivecs: null, ...ids })).not.toHaveProperty('fivecs')
+    expect(buildDecision({ pile: 'skim', fivecs: 0, ...ids }).fivecs).toBe(0)
+    expect(buildDecision({ pile: 'skip', fivecs: 31, ...ids }).fivecs).toBe(31)
+  })
+})
+
+describe('offersReason', () => {
+  it('is the three piles with optional chips', () => {
+    expect(PILE_ORDER.filter(offersReason)).toEqual(['read_closely', 'skim', 'later'])
+    expect(LATE_CHIP_KEYS).toEqual(['7', '8', '9'])
+    for (const p of PILE_ORDER.filter(offersReason)) expect(REASONS[p].length).toBe(LATE_CHIP_KEYS.length)
   })
 })

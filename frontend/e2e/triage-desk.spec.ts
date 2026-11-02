@@ -293,3 +293,46 @@ test('pile keys sleep inside the PDF column; P hides it, focus returns to the de
   await expect.poll(async () => (await eventsOf(request, id)).map((e) => `${e.source}:${e.pile}`)).toEqual(['desk:read_closely'])
   expect(await topId(page)).not.toBe(id)
 })
+
+test('the five Cs: two ticks reach the event as a bitmask, an untouched card sends none, and the next card starts clear', async ({ page, request, paperId, secondPaperId }) => {
+  await page.setViewportSize(wide)
+  const unique = await retitle(request, [paperId, secondPaperId])
+  await openDesk(page, unique, 2)
+  const list = page.locator('[data-triage-card]').getByRole('checkbox')
+  await expect(list).toHaveCount(0)
+  await page.keyboard.press('c')
+  await expect(list).toHaveCount(5)
+  await page.keyboard.press('1')
+  await page.keyboard.press('3')
+  await expect(page.getByRole('checkbox', { name: /Category/ })).toBeChecked()
+  await expect(page.getByRole('checkbox', { name: /Correctness/ })).toBeChecked()
+  const ticked = await decideByKey(page, 'ArrowDown') // arrows decide while it is open; digits tick
+  await expect.poll(async () => (await eventsOf(request, ticked)).map((e) => [e.pile, e.fivecs])).toEqual([['skim', 5]])
+  await expect(list).toHaveCount(0)
+  const untouched = await decideByKey(page, '3')
+  await expect.poll(async () => (await eventsOf(request, untouched)).map((e) => [e.pile, e.fivecs])).toEqual([['later', null]])
+})
+
+test('a chip after Skim adds its reason to the event; a fast next decision without one records none', async ({ page, request, paperId, secondPaperId, tablePaperId }) => {
+  await page.setViewportSize(wide)
+  const unique = await retitle(request, [paperId, secondPaperId, tablePaperId])
+  await openDesk(page, unique, 3)
+  const row = page.getByRole('group', { name: 'Why Skim? Optional' })
+
+  const reasoned = await decideByKey(page, '2')
+  expect(await topId(page)).not.toBe(reasoned) // the card moved on without waiting for the chip
+  await expect(row).toBeVisible()
+  await page.keyboard.press('8')
+  await expect(row).toHaveCount(0)
+  await expect.poll(async () => (await eventsOf(request, reasoned)).map((e) => [e.pile, e.reason])).toEqual([['skim', 'related_work']])
+  await expect(desk(page)).toBeFocused()
+
+  const fast = await decideByKey(page, '2')
+  await expect(row).toBeVisible()
+  const next = await decideByKey(page, '1') // within the 4 s: a pile key decides the next paper and tags nothing
+  expect(next).not.toBe(fast)
+  await expect(page.getByRole('heading', { name: 'That is the whole stack.' })).toBeVisible()
+  await expect.poll(async () => (await eventsOf(request, next)).map((e) => e.pile)).toEqual(['read_closely'])
+  expect((await eventsOf(request, fast)).map((e) => [e.pile, e.reason])).toEqual([['skim', null]])
+  expect((await eventsOf(request, next)).map((e) => e.reason)).toEqual([null])
+})
