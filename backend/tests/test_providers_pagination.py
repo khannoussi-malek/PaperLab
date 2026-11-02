@@ -104,7 +104,7 @@ async def test_arxiv_search_page_matches_every_word_first_then_any_word_best_fir
     assert (seen[0]["sortBy"], seen[0]["sortOrder"]) == ("relevance", "descending")
     assert seen[1]["search_query"] == "all:mode AND all:collapse"  # no parentheses or operators reach arXiv
     assert seen[2]["search_query"] == "all:mode OR all:collapse OR all:rlhf OR all:diversity"
-    assert seen[2]["start"] == "0"  # the wider stage's own first page
+    assert seen[2]["start"] == 0  # the wider stage's own first page
 
 
 async def test_arxiv_pages_past_200(monkeypatch):
