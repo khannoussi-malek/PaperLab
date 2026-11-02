@@ -11,7 +11,7 @@ from app.core.errors import InvalidInput
 from app.providers.base import LLMError, LLMUnavailable
 from app.schemas.chat import PromoteRequest
 from app.schemas.note_suggestions import NoteSuggestionOut, NoteSuggestionsOut
-from app.schemas.notes import NoteCreate, NoteOut, NotePapersIn, NoteUpdate
+from app.schemas.notes import FigureNoteCreate, NoteCreate, NoteOut, NotePapersIn, NoteUpdate
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["notes"])
@@ -83,6 +83,13 @@ async def create_note(payload: NoteCreate, session: SessionDep) -> NoteOut:
         )
     anchor = notes.Anchor(**payload.anchor.model_dump())
     return await notes.create_human_note(session, payload.body, anchor, payload.color, kind=payload.kind)
+
+
+@router.post("/api/notes/figure", status_code=201)
+async def create_figure_note(payload: FigureNoteCreate, session: SessionDep) -> NoteOut:
+    return await notes.create_figure_note(
+        session, payload.paper_id, payload.page, payload.region, payload.body, payload.color
+    )
 
 
 @router.post("/api/notes/promote", status_code=201)

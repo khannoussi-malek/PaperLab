@@ -141,3 +141,17 @@ async def test_patching_a_kind_sets_it_and_null_clears_it(client, session, tmp_p
     )
     assert (await client.patch(url, json={"kind": "bogus"})).status_code == 422
     assert (await client.patch(url, json={})).status_code == 422
+
+
+async def test_a_figure_note_over_http(client, session, figure_pdf):
+    paper = await make_paper(session, str(figure_pdf), page_count=1)
+    body = {"paper_id": str(paper.id), "page": 1, "region": [60, 150, 420, 310], "body": "x"}
+
+    created = await client.post("/api/notes/figure", json=body)
+    assert created.status_code == 201
+    assert created.json()["kind"] == "figure"
+    assert created.json()["anchors"][0]["quoted_text"] == "Figure 1: A test figure."
+
+    assert (await client.post("/api/notes/figure", json={**body, "paper_id": str(uuid.uuid4())})).status_code == 404
+    assert (await client.post("/api/notes/figure", json={**body, "page": 0})).status_code == 422
+    assert (await client.post("/api/notes/figure", json={**body, "region": [9, 9, 1, 1]})).status_code == 422

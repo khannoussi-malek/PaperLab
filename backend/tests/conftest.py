@@ -537,3 +537,11 @@ def table_pdf(tmp_path) -> Path:
 def blank_pdf(tmp_path) -> Path:
     """Stands in for a scanned PDF: a page with no text layer."""
     return _write_pdf(tmp_path / "blank.pdf", [[]])
+
+
+@pytest.fixture
+def figure_pdf(tmp_path) -> Path:
+    """Page 1: a caption at y = 320; the figure itself would sit above it."""
+    return _write_pdf(
+        tmp_path / "figure.pdf", [[("text", (72, 320), "Figure 1: A test figure. More words.", 11, False)]]
+    )
