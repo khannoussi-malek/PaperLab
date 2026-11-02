@@ -414,11 +414,14 @@ async def resolve_model(session: AsyncSession, name: str, *, local_only: bool) -
     remote one in code: the eval has no one to ask (D190)."""
     query = select(LLMConnection, LLMModel).join(LLMModel, LLMModel.connection_id == LLMConnection.id)
     rows = [tuple(r) for r in await session.execute(query.where(LLMModel.name == name))]
-    rows.sort(key=lambda r: (not llm_connections.is_local(r[0].kind, r[0].base_url, r[0].cloud_proxy, r[1].name), r[0].label))
+    def local(r) -> bool:
+        return llm_connections.is_local(r[0].kind, r[0].base_url, r[0].cloud_proxy, r[1].name)
+
+    rows.sort(key=lambda r: (not local(r), r[0].label))
     if not rows:
         raise EvalError(f"unknown model {name!r}")
     if local_only:
-        rows = [r for r in rows if llm_connections.is_local(r[0].kind, r[0].base_url, r[0].cloud_proxy, r[1].name)]
+        rows = [r for r in rows if local(r)]
         if not rows:
             raise EvalError(f"{name} is not a local model; check cases never send a note to a remote one")
     return rows[0]
