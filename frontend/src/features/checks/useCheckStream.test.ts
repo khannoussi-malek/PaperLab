@@ -20,7 +20,7 @@ const missing = { verdict: 'missing', text: 'the dataset [C1]' }
 
 function start(response: Response | Promise<Response>) {
   const spy = vi.spyOn(api, 'checkNote').mockImplementation(() => Promise.resolve(response))
-  return { spy, hook: renderHook(() => useCheckStream('n1', 'p1')) }
+  return { spy, hook: renderHook(() => useCheckStream('n1', 'p1', 'summary')) }
 }
 
 beforeEach(() => {
@@ -65,6 +65,22 @@ describe('useCheckStream', () => {
     expect(hook.result.current.stream.status).toBe('done')
   })
 
+  it('resends the model the refusal was for, even if the pick changed while the dialog was open', async () => {
+    const { spy, hook } = start(Response.json({ detail: 'remote_model_needs_confirm', host: 'h' }, { status: 409 }))
+    await act(() => hook.result.current.run())
+    localStorage.setItem(CHAT_MODEL_KEY, 'm2')
+    spy.mockResolvedValue(sse(['done', { output_id: 'o' }]))
+    await act(() => hook.result.current.run(true))
+    expect(spy.mock.calls.map(([, model, confirm]) => [model, confirm])).toEqual([['m1', false], ['m1', true]])
+  })
+
+  it('words a lens_empty refusal for the kind it was given', async () => {
+    vi.spyOn(api, 'checkNote').mockResolvedValue(Response.json({ detail: 'lens_empty' }, { status: 409 }))
+    const hook = renderHook(() => useCheckStream('n1', 'p1', 'reconstruction'))
+    await act(() => hook.result.current.run())
+    expect(hook.result.current.stream.problem?.message).toContain('How they did it')
+  })
+
   it('sends nothing when the confirmation is cancelled', async () => {
     const { spy, hook } = start(Response.json({ detail: 'remote_model_needs_confirm', host: 'h' }, { status: 409 }))
     await act(() => hook.result.current.run())
@@ -106,7 +122,7 @@ describe('useCheckStream', () => {
 
   it("says the API can't be reached when the request fails", async () => {
     vi.spyOn(api, 'checkNote').mockRejectedValue(new TypeError('Failed to fetch'))
-    const hook = renderHook(() => useCheckStream('n1', 'p1'))
+    const hook = renderHook(() => useCheckStream('n1', 'p1', 'summary'))
     await act(() => hook.result.current.run())
     expect(hook.result.current.stream).toMatchObject({ status: 'error', problem: { message: "Can't reach the PaperLab API." } })
   })

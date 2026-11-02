@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button'
 import { useNotes } from '@/api/queries'
 import type { Pass } from '@/features/reading/passes'
-import { exitTestLine, exitTestNote, exitTestStatus } from './exitTest'
+import { exitTestLabel, exitTestLine, exitTestNote, exitTestStatus } from './exitTest'
 import { usePaperChecks } from './queries'
 
 type Props = { paperId: string; pass: Pass; onWrite: (kind: Pass['noteKind']) => void; onOpen: (noteId: string) => void }
@@ -12,6 +12,9 @@ export function ExitTestRow({ paperId, pass, onWrite, onOpen }: Props) {
   const checks = usePaperChecks(paperId)
   const note = exitTestNote(notes.data ?? [], pass.noteKind)
   const status = exitTestStatus(note, note && checks.data?.find((check) => check.note_id === note.id))
+  // Until both lists are in, "not written yet" or "not checked yet" could be wrong.
+  if (!notes.isSuccess || (note && !checks.isSuccess))
+    return <p className="mt-1.5 text-sm text-muted-foreground">Your {exitTestLabel(pass.noteKind)}: {notes.isError || checks.isError ? "couldn't load" : 'loading…'}</p>
   const { text, action } = exitTestLine(pass.noteKind, status)
   return (
     <div className="mt-1.5 flex items-center justify-between gap-2 text-sm">

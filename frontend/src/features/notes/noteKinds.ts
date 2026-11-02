@@ -27,8 +27,9 @@ export const KIND_HINT: Record<NoteKind, string> = {
   figure: FIGURE_QUESTIONS,
 }
 
-export const EXIT_TEST_KINDS: readonly NoteKind[] = ['five_cs', 'summary', 'reconstruction']
-export const isExitTest = (kind: NoteKind | null | undefined) => kind != null && EXIT_TEST_KINDS.includes(kind)
+export type ExitKind = Extract<NoteKind, 'five_cs' | 'summary' | 'reconstruction'>
+export const EXIT_TEST_KINDS: readonly ExitKind[] = ['five_cs', 'summary', 'reconstruction']
+export const isExitTest = (kind: NoteKind | null | undefined): kind is ExitKind => kind != null && (EXIT_TEST_KINDS as readonly NoteKind[]).includes(kind)
 
 export const TEMPLATE: Partial<Record<NoteKind, string>> = {
   five_cs: (PASSES[0].fiveCs ?? []).map((line) => line.slice(0, line.indexOf(':') + 1)).join('\n'),
