@@ -146,6 +146,12 @@ export function ScreeningAssist({ workspaceId }: { workspaceId: string }) {
           Auto pre-screen scored {data.capped} new results, best first; {data.capped_left} wait for Suggest.
         </p>
       )}
+      {(data.judged ?? 0) + (data.not_judged ?? 0) > 0 && (
+        <p className="text-xs text-muted-foreground">
+          The model judged {data.judged ?? 0}; {data.not_judged ?? 0} got no rating because there was no usable abstract or
+          the model failed.
+        </p>
+      )}
       {running && (
         <div className="flex flex-col gap-1.5">
           <Progress aria-label="Suggesting" value={percent} />
