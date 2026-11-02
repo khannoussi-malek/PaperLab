@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     # default 40 missed ~4% of a 146-paper workspace's true top 8; 100 brought it to ≥ 0.99 for ~13 ms at p95
     # (M8 step 2). A single paper never uses the index: it sorts that paper's chunks exactly.
     hnsw_ef_search: int = Field(100, ge=1, le=1000)
+    # Forces hybrid search on, whatever the Settings → Search switch says: for the evals that compare both modes.
+    # Vectors miss exact names and numbers: the MI test's "itraconazole" was in both labels and in none of the top 8.
+    # Across papers the workspace eval's recall@8 went 13/17 -> 16/17 with single-paper search unchanged (2026-11-01).
+    hybrid_search: bool = False
     # `fake` swaps every provider call made through a model connection for a scripted one (the E2E stack).
     # With LLM_MODEL, OLLAMA_URL and ANTHROPIC_API_KEY it also seeds the first connection while there are none;
     # after that the database decides which model answers.

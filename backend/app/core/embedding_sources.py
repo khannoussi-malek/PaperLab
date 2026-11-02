@@ -174,6 +174,11 @@ async def _upsert(session: AsyncSession, values: dict) -> None:
     await session.commit()
 
 
+async def set_hybrid(session: AsyncSession, enabled: bool) -> None:
+    """The Settings switch: fuse a keyword ranking with the vectors across papers (retrieval.hybrid_on)."""
+    await _upsert(session, {"hybrid_search": enabled})
+
+
 async def save(session: AsyncSession, source: Source) -> None:
     """Makes `source` the search source and starts a rebuild toward its name (D156), clearing the last error. A
     re-index saves the active source again, which only restarts the rebuild."""

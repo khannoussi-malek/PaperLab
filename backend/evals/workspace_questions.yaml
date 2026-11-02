@@ -1,0 +1,118 @@
+# Workspace retrieval eval: the 20 questions of the Medical Information test on apixaban (2026-10-31), searched across
+# the whole workspace, as workspace chat does. Run with `python -m evals.workspace_run`.
+#
+# A question is answered at k when every one of its needs is met in the top k chunks. A need is met by any one of
+# its passages: a chunk of that paper whose text holds the phrase (case and whitespace ignored). Pages aren't checked:
+# the EU label repeats the same passage once per tablet strength.
+#
+# The answer key was written from the documents' text before either search method was run on these questions,
+# except q02, q05, q06 and q09, whose retrieval results had already been seen (marked `seen: true`).
+# Key revision 1 (2026-11-01, from the chat side's review): q04, q12 and q16 accept more passages that carry the
+# answer, found in the passages the models answered from on 31 Oct. Those runs were vector only, so this revision can
+# only favour vector search. Results before and after it are reported apart.
+# Questions with `needs: []` have no source in these papers: the right answer says so. They test the model, not
+# retrieval, and are not scored.
+workspace: "MI test – apixaban"
+questions:
+  - id: q01
+    question: What is the recommended apixaban dose for stroke prevention in non-valvular atrial fibrillation, and when should it be reduced?
+    needs:
+      - - {paper: "Eliquis, INN-apixaban", contains: "2.5 mg taken orally twice daily in patients with nvaf and at least two of the following characteristics"}
+        - {paper: "ELIQUIS", contains: "2.5 mg twice daily in patients with at least two of the following characteristics"}
+  - id: q02
+    seen: true
+    question: An 82-year-old patient with atrial fibrillation weighs 58 kg and has a serum creatinine of 1.1 mg/dL. Which apixaban dose?
+    needs:
+      - - {paper: "Eliquis, INN-apixaban", contains: "2.5 mg taken orally twice daily in patients with nvaf and at least two of the following characteristics"}
+        - {paper: "ELIQUIS", contains: "2.5 mg twice daily in patients with at least two of the following characteristics"}
+  - id: q03
+    question: An 82-year-old patient with atrial fibrillation weighs 75 kg, has a serum creatinine of 1.2 mg/dL and a creatinine clearance of 40 mL/min. Should the dose be reduced?
+    needs:
+      - - {paper: "Eliquis, INN-apixaban", contains: "2.5 mg taken orally twice daily in patients with nvaf and at least two of the following characteristics"}
+        - {paper: "ELIQUIS", contains: "2.5 mg twice daily in patients with at least two of the following characteristics"}
+  - id: q04
+    question: Under the EU label, which dose for an atrial fibrillation patient with a creatinine clearance of 20 mL/min?
+    needs:
+      - - {paper: "Eliquis, INN-apixaban", contains: "severe renal impairment (creatinine clearance 15-29 ml/min) the following recommendations apply"}
+        - {paper: "2021 European Heart Rhythm Association", contains: "or single criterion: if crcl 15-29 ml/min"}
+  - id: q05
+    seen: true
+    question: Can apixaban be used in an atrial fibrillation patient on haemodialysis? Compare the EU and US labels and the trial evidence.
+    needs:
+      - - {paper: "Eliquis, INN-apixaban", contains: "or in patients undergoing dialysis, there is no clinical experience"}
+      - - {paper: "ELIQUIS", contains: "in patients with esrd maintained on intermittent hemodialysis"}
+      - - {paper: "Apixaban for Patients With Atrial Fibrillation on Hemodialysis", contains: "154 patients were randomly assigned to apixaban"}
+        - {paper: "A Randomized Controlled Trial Comparing Apixaban", contains: "in this randomized trial comparing apixaban and vka in patients with af on hemodialysis"}
+  - id: q06
+    seen: true
+    question: A patient on apixaban 5 mg twice daily needs itraconazole. What do the EU and US labels say?
+    needs:
+      - - {paper: "Eliquis, INN-apixaban", contains: "azole-antimycotics (e.g., ketoconazole, itraconazole"}
+      - - {paper: "ELIQUIS", contains: "(e.g., ketoconazole, itraconazole, ritonavir)"}
+  - id: q07
+    question: Does apixaban need a dose change with clarithromycin?
+    needs:
+      - - {paper: "Eliquis, INN-apixaban", contains: "clarithromycin, diltiazem, fluconazole"}
+        - {paper: "ELIQUIS", contains: "although clarithromycin is a combined p-gp and strong cyp3a4 inhibitor"}
+  - id: q08
+    question: Can apixaban be given with rifampicin?
+    needs:
+      - - {paper: "Eliquis, INN-apixaban", contains: "p-gp inducers (e.g., rifampicin"}
+        - {paper: "Eliquis, INN-apixaban", contains: "coadministration of apixaban with rifampicin"}
+        - {paper: "ELIQUIS", contains: "(e.g., rifampin, carbamazepine"}
+  - id: q09
+    seen: true
+    question: Is apixaban safe in pregnancy?
+    needs:
+      - - {paper: "Eliquis, INN-apixaban", contains: "there are no data from the use of apixaban in pregnant women"}
+        - {paper: "ELIQUIS", contains: "the limited available data on eliquis use in pregnant women"}
+        - {paper: "Pregnancy outcome in patients exposed", contains: "the risk of doac embryopathy is unknown"}
+  - id: q10
+    question: A patient forgot the morning dose and noticed at noon. What should they do?
+    needs:
+      - - {paper: "Eliquis, INN-apixaban", contains: "a missed morning dose should be taken immediately when"}
+        - {paper: "ELIQUIS", contains: "if a dose of eliquis is not taken at the scheduled time"}
+  - id: q11
+    question: How long before elective surgery should apixaban be stopped?
+    needs:
+      - - {paper: "Eliquis, INN-apixaban", contains: "discontinued at least 48 hours prior to elective surgery"}
+        - {paper: "ELIQUIS", contains: "discontinued at least 48 hours prior to elective surgery"}
+  - id: q12
+    question: Can apixaban tablets be crushed or given through a nasogastric tube?
+    needs:
+      - - {paper: "Eliquis, INN-apixaban", contains: "tablets may be crushed and suspended in water"}
+        - {paper: "ELIQUIS", contains: "tablets may be crushed and suspended in water"}
+        - {paper: "ELIQUIS", contains: "crushed and suspended in 60 ml of water or d5w"}
+        - {paper: "2021 European Heart Rhythm Association", contains: "administration in crushed form, e.g., via a nasogastric tube"}
+  - id: q13
+    question: How can apixaban's effect be reversed in life-threatening bleeding?
+    needs:
+      - - {paper: "Eliquis, INN-apixaban", contains: "reversal agent (andexanet alfa)"}
+        - {paper: "ELIQUIS", contains: "reversal agent (andexanet alfa)"}
+  - id: q14
+    question: In ARISTOTLE, how did apixaban compare with warfarin for stroke, bleeding and death?
+    needs:
+      - - {paper: "Apixaban versus Warfarin in Patients with Atrial Fibrillation", contains: "the rate of the primary outcome was 1.27% per year in the apixaban group"}
+  - id: q15
+    question: In ARISTOTLE, did apixaban's bleeding benefit change with kidney function?
+    needs:
+      - - {paper: "Efficacy of apixaban when compared with warfarin in relation to renal", contains: "impaired renal function seemed to have the greatest reduction in major bleeding"}
+  - id: q16
+    question: For a patient with atrial fibrillation after PCI on a P2Y12 inhibitor, what did AUGUSTUS show?
+    needs:
+      - - {paper: "Antithrombotic Therapy after Acute Coronary Syndrome", contains: "resulted in less bleeding and fewer hospitalizations"}
+        - {paper: "Antithrombotic Therapy after Acute Coronary Syndrome", contains: "10.5% of the patients receiving apixaban"}
+        - {paper: "Eliquis, INN-apixaban", contains: "occurred in 241 (10.5%), and 332 (14.7%) patients in the apixaban arm"}
+  - id: q17
+    question: Does grapefruit juice interact with apixaban, and should patients avoid it?
+    needs: []
+  - id: q18
+    question: What apixaban dose should be used for a left ventricular thrombus after a heart attack?
+    needs:
+      - - {paper: "2021 European Heart Rhythm Association", contains: "uncertain whether a noac is effective in the treatment of left ventricular thrombi"}
+  - id: q19
+    question: "Based on head-to-head randomised trials, which causes fewer major bleeds: apixaban or rivaroxaban?"
+    needs: []
+  - id: q20
+    question: How much does a month of apixaban cost in Germany?
+    needs: []

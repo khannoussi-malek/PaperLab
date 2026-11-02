@@ -237,3 +237,17 @@ async def test_a_stored_key_appears_in_no_embedding_answer_and_no_log_record(
     assert [body for body in bodies if KEY in body] == []
     assert KEY not in caplog.text
     assert "OpenAI returned 400: Incorrect API key provided: ••••" in caplog.text  # logged, masked
+
+
+async def test_the_hybrid_switch_is_off_until_it_is_turned_on_and_stays_after_a_source_change(client, session):
+    from app.core import embedding_sources
+
+    assert (await client.get("/api/embedding")).json()["hybrid_search"] is False
+    on = await client.put("/api/embedding/hybrid", json={"enabled": True})
+    assert on.status_code == 200 and on.json() == {"hybrid_search": True}
+    assert (await client.get("/api/embedding")).json()["hybrid_search"] is True
+    await embedding_sources.save(session, await embedding_sources.active(session))  # a source save keeps it
+    assert (await client.get("/api/embedding")).json()["hybrid_search"] is True
+    off = await client.put("/api/embedding/hybrid", json={"enabled": False})
+    assert off.json() == {"hybrid_search": False}
+    assert (await client.put("/api/embedding/hybrid", json={})).status_code == 422

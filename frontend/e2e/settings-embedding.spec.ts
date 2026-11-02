@@ -4,6 +4,7 @@ import { expect, test } from './fixtures'
 // re-indexing the owner's library is never run for real.
 const STATUS = {
   model: 'nomic-ai/nomic-embed-text-v1.5@int8',
+  hybrid_search: false,
   chunks: 1327,
   indexed_with: [{ model: 'nomic-ai/nomic-embed-text-v1.5@int8', chunks: 1327 }],
   model_present: true,
@@ -61,4 +62,24 @@ test('a failed re-index shows the server error and leaves the dialog open to ret
 
   await confirm.getByRole('button', { name: 'Cancel' }).click()
   await expect(confirm).toBeHidden()
+})
+
+// The real route, on the E2E stack's own database.
+test('the exact-words switch is off by default, stays on after a reload, and turns off again', async ({ page, request }) => {
+  const box = page.getByRole('checkbox', { name: 'Also match exact words when searching across papers' })
+  const saved = async () => ((await (await request.get('/api/embedding')).json()) as { hybrid_search: boolean }).hybrid_search
+  await page.goto('/#/settings/search')
+  await expect(box).not.toBeChecked()
+  try {
+    await box.click()
+    await expect(box).toBeChecked()
+    expect(await saved()).toBe(true)
+    await page.reload()
+    await expect(box).toBeChecked()
+    await box.click()
+    await expect(box).not.toBeChecked()
+    expect(await saved()).toBe(false)
+  } finally {
+    await request.put('/api/embedding/hybrid', { data: { enabled: false } })
+  }
 })
