@@ -318,6 +318,7 @@ export const api = {
   },
   triageEvents: async (id: string) => (await request<{ events: TriageEvent[] }>(`/api/papers/${id}/triage-events`)).events,
   decideTriage: (paperId: string, body: TriageDecisionIn) => request<TriageDecision>(`/api/papers/${paperId}/triage-decisions`, sendJson('POST', body)),
+  addTriageReason: (eventId: string, reason: string) => request<TriageEvent>(`/api/triage-events/${eventId}`, sendJson('PATCH', { reason })),
   undoTriage: (eventId: string) => request<TriageDecision>(`/api/triage-events/${eventId}/undo`, { method: 'POST' }),
   triageSummary: (sessionId: string) => request<TriageSummary>(`/api/triage-summary?session_id=${encodeURIComponent(sessionId)}`),
   deletePaper: (id: string) => request<void>(`/api/papers/${id}`, { method: 'DELETE' }),

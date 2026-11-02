@@ -11,7 +11,7 @@ type Opts = {
 }
 
 // Text selection, button clicks and the abstract's scrolling keep their own gestures.
-const NO_DRAG = 'button,a,input,select,textarea,[aria-label="Abstract"]'
+const NO_DRAG = 'button,a,input,label,select,textarea,[aria-label="Abstract"]'
 
 /** Pointer drag on the card: past `min` px a release decides the pile, less snaps back. Esc cancels. */
 export function useCardDrag(ref: RefObject<HTMLElement | null>, opts: Opts) {
