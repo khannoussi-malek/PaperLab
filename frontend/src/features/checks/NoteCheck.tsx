@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { ListChecks } from 'lucide-react'
 import type { ChatSource, Note } from '@/api/client'
 import { Button } from '@/components/ui/button'
@@ -19,6 +20,12 @@ export function NoteCheck({ note, paperId, onCite }: Props) {
   const kind = isExitTest(note.kind) ? note.kind : null
   const { stream, run, cancelConfirm } = useCheckStream(note.id, paperId, kind ?? undefined)
   const check = usePaperChecks(paperId).data?.find((c) => c.note_id === note.id)
+  const finished = stream.status === 'done'
+  // A finished stream describes the text as it was; once the note changes, the saved check (now out of date) takes over.
+  useEffect(() => {
+    if (finished) cancelConfirm()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only a changed body should reset it
+  }, [note.body])
   if (!kind) return null
 
   const label = exitTestLabel(kind)
