@@ -68,3 +68,14 @@ test('the whole-paper composer has Cancel only with onCancel, and no Save for an
   rerender(<PlainNoteComposer onSave={vi.fn()} onCancel={vi.fn()} />)
   expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument()
 })
+
+test('a figure draft is kind Figure with its questions, and has no Add as number', async () => {
+  const onSave = vi.fn().mockResolvedValue(true)
+  const draft = { page: 2, rects: [[1, 2, 30, 40]] as [number, number, number, number][], quotedText: 'Figure on p. 2', figure: true as const }
+  render(<NoteComposer draft={draft} color="#facc15" onColorChange={vi.fn()} onSave={onSave} onCancel={vi.fn()} onAddNumber={vi.fn()} />)
+  expect(screen.getByRole('textbox', { name: 'Note' })).toHaveValue(TEMPLATE.figure)
+  expect(screen.getByRole('combobox', { name: 'Kind' })).toHaveTextContent('Figure')
+  expect(screen.queryByRole('button', { name: 'Add as number' })).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Save note' }))
+  await waitFor(() => expect(onSave).toHaveBeenCalledWith(TEMPLATE.figure, 'figure'))
+})

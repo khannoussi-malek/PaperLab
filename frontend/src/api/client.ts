@@ -39,6 +39,7 @@ export type EvidenceChange = components['schemas']['EditIn']['changes'][number]
 export type Chunk = components['schemas']['ChunkOut']
 export type Note = components['schemas']['NoteOut']
 export type NoteKind = NonNullable<Note['kind']>
+export type FigureNoteCreate = components['schemas']['FigureNoteCreate']
 export type NoteCreate = components['schemas']['NoteCreate']
 export type NoteUpdate = components['schemas']['NoteUpdate']
 export type ChatSource = components['schemas']['ChatSource']
@@ -360,6 +361,7 @@ export const api = {
     }),
   listNotes: (paperId: string) => request<Note[]>(`/api/papers/${paperId}/notes`),
   createNote: (note: NoteCreate) => request<Note>('/api/notes', sendJson('POST', note)),
+  createFigureNote: (note: FigureNoteCreate) => request<Note>('/api/notes/figure', sendJson('POST', note)),
   updateNote: (id: string, patch: NoteUpdate) => request<Note>(`/api/notes/${id}`, sendJson('PATCH', patch)),
   deleteNote: (id: string) => request<void>(`/api/notes/${id}`, { method: 'DELETE' }),
   /** Every note, newest first: all of them (`null`), a paper's (its id), or those on no paper (`'none'`). */

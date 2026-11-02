@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { pressable } from '@/components/motion'
 import { notesHref } from '@/lib/route'
-import type { SelectionAnchor } from '../reader/selection'
+import type { NoteDraft } from '../reader/selection'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { KIND_LABEL, matchesKind } from './noteKinds'
 import { NoteCard } from './NoteCard'
@@ -25,7 +25,7 @@ type Props = {
   /** Saves a note with no quote. */
   onSavePaperNote: (body: string, kind: NoteKind | null) => Promise<boolean>
   notes: Note[]
-  draft: SelectionAnchor | null
+  draft: NoteDraft | null
   draftColor: string
   activeNoteId: string | null
   onDraftColorChange: (hex: string) => void
@@ -43,7 +43,7 @@ type Props = {
 
 // A new selection must reset the composer's text, so the draft's position and words are its identity: an abstract
 // selection has no position.
-const draftKey = (draft: SelectionAnchor) => `${draft.page}:${draft.rects.flat().join(',')}:${draft.quotedText}`
+const draftKey = (draft: NoteDraft) => `${draft.page}:${draft.rects.flat().join(',')}:${draft.quotedText}`
 
 const isHuman = (note: Note) => note.provenance === 'human'
 

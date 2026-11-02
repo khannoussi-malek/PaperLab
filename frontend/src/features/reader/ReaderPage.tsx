@@ -51,7 +51,7 @@ import { PublishedVersionBanner } from './PublishedVersionBanner'
 import { RetractionBanner } from './RetractionBanner'
 import { EvidencePanel } from '../evidence/EvidencePanel'
 import { RightPanel } from './RightPanel'
-import { readAbstractSelection, readSelection, type SelectionAnchor } from './selection'
+import { readAbstractSelection, readSelection, type NoteDraft, type SelectionAnchor } from './selection'
 import { useCitations } from './useCitations'
 import { useHoverCard } from './useHoverCard'
 import { useJumpBack } from './useJumpBack'
@@ -59,9 +59,17 @@ import { usePdfDocument } from './usePdfDocument'
 import { DEFAULT_ZOOM_INDEX, ZOOM_STEPS } from './zoom'
 
 /** One drawn rect. `color` is its note's colour, or null for the pending selection (drawn with the draft token). */
-type PageHighlight = { key: string; noteId: string | null; color: string | null; provenance?: Note['provenance']; rect: PdfRect }
+type PageHighlight = {
+  key: string
+  noteId: string | null
+  color: string | null
+  provenance?: Note['provenance']
+  rect: PdfRect
+  /** A figure note's rect: an outline in the note's colour, not a fill. */
+  figure?: boolean
+}
 
-function groupHighlights(notes: Note[], draft: SelectionAnchor | null, paperId: string) {
+function groupHighlights(notes: Note[], draft: NoteDraft | null, paperId: string) {
   const byPage = new Map<number, PageHighlight[]>()
   const add = (page: number, highlight: PageHighlight) =>
     byPage.set(page, [...(byPage.get(page) ?? []), highlight])
@@ -70,7 +78,7 @@ function groupHighlights(notes: Note[], draft: SelectionAnchor | null, paperId: 
     note.anchors.forEach((anchor, a) => {
       if (anchor.paper_id !== paperId) return
       anchor.bbox.forEach((rect, r) =>
-        add(anchor.page, { key: `${note.id}-${a}-${r}`, noteId: note.id, color: note.color, provenance: note.provenance, rect }),
+        add(anchor.page, { key: `${note.id}-${a}-${r}`, noteId: note.id, color: note.color, provenance: note.provenance, rect, figure: note.kind === 'figure' }),
       )
     })
   }
@@ -133,7 +141,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
   const mutations = useNoteMutations()
   const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX)
   const scale = ZOOM_STEPS[zoomIndex]
-  const [draft, setDraft] = useState<SelectionAnchor | null>(null)
+  const [draft, setDraft] = useState<NoteDraft | null>(null)
   const [wholePaperDraft, setWholePaperDraft] = useState<{ kind: NoteKind | null } | null>(null)
   const [numberDraft, setNumberDraft] = useState<SelectionAnchor | null>(null)
   const [draftColor, setDraftColor] = useState(() => loadLastColor(browserStorage()))
@@ -168,7 +176,11 @@ export function ReaderPage({ paperId, tab, target }: Props) {
   const numbersDatasetId = datasets.data?.find((d) => d.kind === 'numbers')?.id ?? null
   const numbersDataset = useDataset(numbersDatasetId)
   const numberMarksByPage = useMemo(() => numberMarks(numbersDataset.data), [numbersDataset.data])
-  const captureDrag = useCaptureDrag(scale)
+  const captureDrag = useCaptureDrag(scale, (page, region) => {
+    setWholePaperDraft(null)
+    setDraft({ page, rects: [region], quotedText: `Figure on p. ${page}`, figure: true })
+    showTab('notes')
+  })
   const { capturing, capture } = captureDrag
 
   useEffect(() => savePanelWidth(READER_PANEL, browserStorage(), panelWidth), [panelWidth])
@@ -272,6 +284,15 @@ export function ReaderPage({ paperId, tab, target }: Props) {
 
   async function saveDraft(body: string, kind: NoteKind | null = null, color: string = draftColor): Promise<boolean> {
     if (!draft) return false
+    if (draft.figure) {
+      const figure = { paper_id: paperId, page: draft.page, region: draft.rects[0], body, color }
+      const done = await attempt(() => mutations.createFigure.mutateAsync(figure))
+      if (done) {
+        saveLastColor(browserStorage(), color)
+        setDraft(null)
+      }
+      return done
+    }
     const kindField = kind ? { kind } : {}
     // A paper without a PDF has no page to anchor on: the note goes on the paper, its body led by the abstract's words.
     const note = noPdf
@@ -457,6 +478,8 @@ export function ReaderPage({ paperId, tab, target }: Props) {
           onZoomChange={setZoomIndex}
           capturing={capturing}
           onCaptureChange={captureDrag.setCapturing}
+          drawingFigure={captureDrag.drawingFigure}
+          onDrawingFigureChange={captureDrag.setDrawingFigure}
           onOpenReferences={() => showTab('references')}
           tags={paper.data && <PaperTagChips paperId={paper.data.id} />}
           lensControl={<LensPicker reader={lensReader} />}
@@ -515,12 +538,16 @@ export function ReaderPage({ paperId, tab, target }: Props) {
                   key={h.key}
                   data-note-id={h.noteId ?? undefined}
                   className={cn(
-                    'highlight absolute rounded-xs mix-blend-multiply',
+                    'highlight absolute rounded-xs',
+                    h.figure ? 'figure bg-transparent outline-2' : 'mix-blend-multiply',
                     h.noteId === null && 'draft bg-highlight-draft',
                     // An outline, not a colour swap: any colour can be the note's own.
                     h.noteId !== null && h.noteId === activeNoteId && 'active outline-2 outline-offset-1 outline-primary',
                   )}
-                  style={{ ...pdfRectToCss(h.rect, scale), backgroundColor: h.color ? highlightFill(h.color, h.provenance) : undefined }}
+                  style={{
+                    ...pdfRectToCss(h.rect, scale),
+                    ...(h.figure ? { outlineColor: h.color ?? undefined } : { backgroundColor: h.color ? highlightFill(h.color, h.provenance) : undefined }),
+                  }}
                 />
               ))}
               {(tableMarksByPage.get(pageNumber) ?? []).map((mark) => (
@@ -533,7 +560,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
                 </Fragment>
               ))}
               <NumberMarks marks={numberMarksByPage.get(pageNumber) ?? []} scale={scale} />
-              {draft?.page === pageNumber && draft.rects.length > 0 && (
+              {draft?.page === pageNumber && draft.rects.length > 0 && !draft.figure && (
                 <SelectionCopyButton
                   style={{
                     left: draft.rects[draft.rects.length - 1][0] * scale,

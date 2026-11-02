@@ -21,22 +21,26 @@ const pageElement = (page: number) => document.querySelector<HTMLElement>(`.pdf-
  * The reader's capture mode: while on, a drag on a page draws a box, and releasing it on a table-sized region
  * turns the mode off and hands back `{ page, region }` for the capture dialog. Escape leaves the mode.
  */
-export function useCaptureDrag(scale: number) {
-  const [capturing, setCapturingState] = useState(false)
+export function useCaptureDrag(scale: number, onFigure: (page: number, region: PdfRect) => void) {
+  const [mode, setMode] = useState<'table' | 'figure' | null>(null)
+  const capturing = mode !== null
   const [drag, setDrag] = useState<Drag | null>(null)
   // Every way out of the mode (Escape, the toggle, a finished drag) goes through here, so no box outlives it.
-  const setCapturing = useCallback((on: boolean) => {
-    setCapturingState(on)
-    if (!on) setDrag(null)
+  // One mode, so a figure box and a table box can't both be on.
+  const setModeTo = useCallback((next: 'table' | 'figure' | null) => {
+    setMode(next)
+    if (!next) setDrag(null)
   }, [])
+  const setCapturing = useCallback((on: boolean) => setModeTo(on ? 'table' : null), [setModeTo])
+  const setDrawingFigure = useCallback((on: boolean) => setModeTo(on ? 'figure' : null), [setModeTo])
   const [capture, setCapture] = useState<{ page: number; region: PdfRect } | null>(null)
 
   useEffect(() => {
     if (!capturing) return
-    const leave = (event: KeyboardEvent) => event.key === 'Escape' && setCapturing(false)
+    const leave = (event: KeyboardEvent) => event.key === 'Escape' && setModeTo(null)
     window.addEventListener('keydown', leave)
     return () => window.removeEventListener('keydown', leave)
-  }, [capturing, setCapturing])
+  }, [capturing, setModeTo])
 
   function startDrag(event: MouseEvent) {
     const page = capturing && event.button === 0 ? (event.target as Element).closest<HTMLElement>('.pdf-page') : null
@@ -61,8 +65,9 @@ export function useCaptureDrag(scale: number) {
     const { point, size } = pointKeptOnPage(event, page, scale)
     const region = dragRegion(drag.start, point, size)
     if (!region) return
-    setCapture({ page: drag.page, region })
-    setCapturing(false)
+    if (mode === 'figure') onFigure(drag.page, region)
+    else setCapture({ page: drag.page, region })
+    setModeTo(null)
   }
 
   const box = drag && {
@@ -75,5 +80,5 @@ export function useCaptureDrag(scale: number) {
     ] as PdfRect,
   }
 
-  return { capturing, setCapturing, box, capture, closeCapture: () => setCapture(null), startDrag, moveDrag, endDrag }
+  return { capturing, setCapturing, drawingFigure: mode === 'figure', setDrawingFigure, box, capture, closeCapture: () => setCapture(null), startDrag, moveDrag, endDrag }
 }
