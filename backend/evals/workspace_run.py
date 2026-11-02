@@ -21,6 +21,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.config import settings
+from app.core import retrieval
 from app.core.retrieval import RetrievedChunk, retrieve
 from app.models import Chunk, Paper, Workspace, workspace_papers
 from app.providers import embedding
@@ -154,13 +155,14 @@ async def main(argv: list[str] | None = None) -> int:
         try:
             async with AsyncSession(engine) as session:
                 results = await evaluate(session, key, embedder)
+                hybrid = await retrieval.hybrid_on(session)  # the env var or the Settings switch
         finally:
             await engine.dispose()
     except EvalError as exc:
         print(f"eval error: {exc}", file=sys.stderr)
         return 2
 
-    print(f"search: {'hybrid' if settings.hybrid_search else 'vector only'}")
+    print(f"search: {'hybrid' if hybrid else 'vector only'}")
     for r in results:
         cells = "  ".join(f"@{k} {r.met[k]}/{len(r.question.needs)}" for k in KS)
         print(f"  {r.question.id}{' (seen)' if r.question.seen else '       '}  {cells}  {r.question.question[:70]}")
