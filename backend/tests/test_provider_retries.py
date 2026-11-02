@@ -18,4 +18,5 @@ def test_a_real_transport_retries_a_failed_connection_and_a_test_one_is_kept():
 def test_every_metadata_client_retries_a_failed_connection(provider):
     # Docker's DNS in the live worker fails a lookup now and then: one blip must not leave a paper without metadata.
     client = provider.new_client()
-    assert client._transport._pool._retries == 2
+    transport = getattr(client._transport, "inner", client._transport)  # arXiv and Crossref sit behind their budget
+    assert transport._pool._retries == 2

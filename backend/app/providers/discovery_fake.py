@@ -512,7 +512,12 @@ def _crossref_handle(request: httpx.Request) -> httpx.Response:
     return httpx.Response(200, json={"message": {"items": [_crossref_item(*paper) for paper in PAPERS]}})
 
 
+_EMPTY_ARXIV_FEED = '<feed xmlns="http://www.w3.org/2005/Atom"></feed>'
+
+
 def _arxiv_handle(request: httpx.Request) -> httpx.Response:
+    if " OR " in request.url.params.get("search_query", ""):  # the fixture list is all there is: nothing wider
+        return httpx.Response(200, text=_EMPTY_ARXIV_FEED, headers={"content-type": "application/atom+xml"})
     if "start" in request.url.params:
         return httpx.Response(
             200, text=_arxiv_search_page_feed(request.url.params), headers={"content-type": "application/atom+xml"}

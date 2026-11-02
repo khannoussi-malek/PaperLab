@@ -1,11 +1,20 @@
 """Transport wrappers shared across providers: retry-on-429 (today only Semantic Scholar's unauthenticated pool
-needs it) and a minimum-interval pacer, either private to one client or shared across several (two different
-providers hitting one externally rate-limited host, e.g. NCBI's eutils, shared by PubMed and PMC)."""
+needs it) and a minimum-interval pacer: private to one client, shared across a process's clients (two providers
+hitting one externally rate-limited host, e.g. NCBI's eutils, shared by PubMed and PMC), or shared across every run
+and process through Redis (SharedPacer)."""
 
 import asyncio
+import logging
 import time
+from typing import Any
 
 import httpx
+from redis.asyncio import Redis
+from redis.exceptions import RedisError
+
+from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class RetryOn429(httpx.AsyncBaseTransport):
@@ -88,7 +97,8 @@ class RateLimited(httpx.AsyncBaseTransport):
     host."""
 
     def __init__(
-        self, inner: httpx.AsyncBaseTransport, min_interval_seconds: float = 0.0, *, pacer: _Pacer | None = None
+        self, inner: httpx.AsyncBaseTransport, min_interval_seconds: float = 0.0, *,
+        pacer: "_Pacer | SharedPacer | None" = None,
     ):
         self.inner = inner
         self._pacer = pacer if pacer is not None else _Pacer(min_interval_seconds)
@@ -99,6 +109,71 @@ class RateLimited(httpx.AsyncBaseTransport):
 
     async def aclose(self) -> None:
         await self.inner.aclose()
+
+
+class SharedPacer:
+    """A rate budget shared by every run, worker and process, kept in Redis. Time is cut into slots one interval long.
+    A caller claims the next free slot with SET NX, then sleeps until it starts, so two requests are never closer than
+    one interval however many runs are asking. Redis trouble falls back to `local`, one process's pacer: a busy Redis
+    must not stop a search, and the worst case is the old behaviour.
+
+    ponytail: slots come from the caller's clock, so this assumes one machine's containers; fleets need Redis TIME.
+    """
+
+    MAX_SLOTS_AHEAD = 1000  # far past any real queue: a run asks one page at a time
+
+    def __init__(self, group: str, min_interval_seconds: float, redis: Any = None):
+        self.group = group
+        self.interval = min_interval_seconds
+        self._redis = redis
+        self._local = _Pacer(min_interval_seconds)
+
+    def _client(self) -> Any:
+        if self._redis is not None:
+            return self._redis
+        return _redis_for_this_loop()
+
+    async def wait_turn(self) -> None:
+        try:
+            client = self._client()
+            interval_ms = int(self.interval * 1000)
+            now_ms = int(time.time() * 1000)
+            first = now_ms // interval_ms + 1
+            for slot in range(first, first + self.MAX_SLOTS_AHEAD):
+                starts_in_ms = slot * interval_ms - now_ms
+                # The key lasts past its slot's start, so nobody can claim a slot still waiting to run.
+                claimed = await client.set(
+                    f"paperlab:pace:{self.group}:{slot}", 1, nx=True, px=starts_in_ms + interval_ms * 2
+                )
+                if claimed:
+                    await asyncio.sleep(max(slot * interval_ms / 1000 - time.time(), 0))
+                    return
+        except (RedisError, OSError) as exc:
+            logger.warning("rate limit for %s fell back to this process: %s", self.group, exc)
+        await self._local.wait_turn()
+
+
+_redis_clients: dict[asyncio.AbstractEventLoop, Any] = {}
+
+
+def _redis_for_this_loop() -> Any:
+    """A connection belongs to one event loop; a process normally has one."""
+    loop = asyncio.get_running_loop()
+    if loop not in _redis_clients:
+        _redis_clients.clear()  # a finished loop's connections are no use to anyone
+        _redis_clients[loop] = Redis.from_url(settings.redis_url, socket_connect_timeout=1, socket_timeout=2)
+    return _redis_clients[loop]
+
+
+# What each host asks for, per request. Crossref's budget covers ACM too, which is served from Crossref.
+SOURCE_INTERVAL_SECONDS = {"arxiv": 3.0, "crossref": 1.0, "semantic_scholar": 1.0}
+_shared_source_pacers: dict[str, SharedPacer] = {}
+
+
+def paced(group: str, inner: httpx.AsyncBaseTransport) -> httpx.AsyncBaseTransport:
+    """`inner` behind `group`'s budget across every run and process (SOURCE_INTERVAL_SECONDS)."""
+    pacer = _shared_source_pacers.setdefault(group, SharedPacer(group, SOURCE_INTERVAL_SECONDS[group]))
+    return RateLimited(inner, pacer=pacer)
 
 
 CONNECT_RETRIES = 2
