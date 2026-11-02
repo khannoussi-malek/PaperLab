@@ -9,6 +9,7 @@ import uuid
 from collections.abc import Collection, Iterable
 from dataclasses import dataclass, field
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import lenses, prompts, sections
@@ -19,7 +20,7 @@ from app.core.finding_lines import Kind, bare, clean_line, grams, reads_as_wordi
 from app.core.notes import _get_note, papers_of
 from app.core.papers import get_paper
 from app.core.retrieval import RetrievedChunk, retrieve, searchable
-from app.models import Chunk, PaperStatus, Provenance
+from app.models import Chunk, LLMOutput, Note, PaperStatus, Provenance
 
 OUTPUT_KIND = "check"  # the llm_outputs.kind of a check
 CHECK_PROMPT_VERSION = 1
@@ -280,3 +281,65 @@ async def prepare_check(session: AsyncSession, note_id: uuid.UUID, embedder=None
         sources=sources, system=SYSTEM_PROMPT, prompt=prompt, whole_paper=whole, prompt_version=CHECK_PROMPT_VERSION
     )
     return PreparedCheck(prepared, note.id, paper.id, note.body, guard_for(note.body, (c.text for c in sources)))
+
+
+async def save_check(
+    session: AsyncSession, check: PreparedCheck, content: str, model: str, connection_name: str
+) -> uuid.UUID:
+    """Stores the raw reply, citing only the passages the kept lines cite. Touches no note and no paper.
+    Raises NotFound when the note was deleted while the model wrote."""
+    await _get_note(session, check.note_id)
+    source_ids = [s.id for s in check.prepared.sources]
+    reply = parse_check(content, len(source_ids), check.guard)
+    cited = dict.fromkeys(n for line in reply.lines for n in line.cited)
+    output = LLMOutput(
+        paper_id=check.paper_id,
+        kind=OUTPUT_KIND,
+        question=check.question,
+        content=content,
+        source_chunks=source_ids,
+        cited_chunks=[source_ids[n - 1] for n in cited],
+        source_notes=[check.note_id],
+        whole_paper=check.prepared.whole_paper,
+        model=model,
+        connection_name=connection_name,
+        prompt_version=check.prepared.prompt_version,
+    )
+    session.add(output)
+    await session.commit()
+    return output.id
+
+
+@dataclass(frozen=True)
+class CheckView:
+    output: LLMOutput
+    note_id: uuid.UUID
+    lines: list[CheckLine]
+    dropped: int
+    sources: list[RetrievedChunk | None]  # None: a re-ingest replaced that chunk
+    stale: bool
+
+
+async def list_checks(session: AsyncSession, paper_id: uuid.UUID) -> list[CheckView]:
+    """The newest check per note, with its sources resolved and whether the note's body has changed since. A check
+    whose note is gone is skipped. Raises NotFound."""
+    await get_paper(session, paper_id)
+    query = select(LLMOutput).where(LLMOutput.paper_id == paper_id, LLMOutput.kind == OUTPUT_KIND)
+    newest: dict[uuid.UUID, LLMOutput] = {}
+    for output in await session.scalars(query.order_by(LLMOutput.created_at.desc(), LLMOutput.id.desc())):
+        if output.source_notes:
+            newest.setdefault(output.source_notes[0], output)
+    wanted = {i for output in newest.values() for i in output.source_chunks}
+    chunks = {c.id: c for c in await chunk_sources(session, Chunk.id.in_(wanted))}
+    found = []
+    for note_id, output in newest.items():
+        note = await session.get(Note, note_id)
+        if note is None:
+            continue
+        sources = [chunks.get(i) for i in output.source_chunks]
+        # ponytail: after a re-ingest replaces chunks the copy guard sees fewer passages; what slips through is one
+        # line of at most 25 words.
+        guard = guard_for(output.question or "", (s.text for s in sources if s))
+        reply = parse_check(output.content, len(sources), guard)
+        found.append(CheckView(output, note_id, reply.lines, reply.dropped, sources, note.body != output.question))
+    return found

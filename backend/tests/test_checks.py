@@ -276,3 +276,150 @@ async def test_the_outline_is_cut_at_a_thousand_characters(session, embedder):
 
     outline = prompt.split("Sections of the method, in order:")[1].split("The reader's")[0]
     assert 900 < len("Sections of the method, in order:" + outline.rstrip()) <= checks.OUTLINE_CHARS
+
+
+# --- storing a check, staleness, deleting (Task 10) ---
+
+from datetime import datetime, timedelta, timezone  # noqa: E402
+
+from sqlalchemy import select, update  # noqa: E402
+
+from app.core import chat, notes  # noqa: E402
+from app.core.chunking import ChunkDraft  # noqa: E402
+from app.models import LLMOutput  # noqa: E402
+
+CONTENT = "Missing: the memory cut [C1]\nSupported: it holds on every task [C2]\nUnsupported: the speed claim"
+
+
+async def prepared_for(session, note):
+    return await checks.prepare_check(session, note.id)
+
+
+async def check_on(session, note, content=CONTENT, minutes_ago=0):
+    output_id = await checks.save_check(session, await prepared_for(session, note), content, "fake", "Fake")
+    written = datetime.now(timezone.utc) - timedelta(minutes=minutes_ago)
+    await session.execute(update(LLMOutput).where(LLMOutput.id == output_id).values(created_at=written))
+    await session.commit()
+    return output_id
+
+
+async def test_save_check_writes_every_column_and_cites_kept_lines_only(session):
+    paper, chunks = await paper_with_headings(session, HEADINGS)
+    note = await note_on(session, paper)
+    prepared = await prepared_for(session, note)
+
+    content = CONTENT + "\nSupported: it scored 97 [C3]"
+    output_id = await checks.save_check(session, prepared, content, "qwen3:8b", "Ollama")
+
+    output = await session.get(LLMOutput, output_id)
+    ids = [c.id for c in prepared.prepared.sources]
+    assert (output.kind, output.paper_id, output.question, output.content) == ("check", paper.id, note.body, content)
+    assert output.source_chunks == ids
+    assert output.cited_chunks == [ids[0], ids[1]]  # the dropped line's [C3] is not cited
+    assert output.source_notes == [note.id]
+    assert (output.whole_paper, output.model, output.connection_name, output.prompt_version) == (
+        prepared.prepared.whole_paper, "qwen3:8b", "Ollama", checks.CHECK_PROMPT_VERSION
+    )
+
+
+async def test_a_check_leaves_the_note_and_reading_pass_alone(session):
+    paper, _ = await paper_with_headings(session, HEADINGS)
+    note = await note_on(session, paper)
+    before = (note.body, note.provenance, note.updated_at, paper.reading_pass)
+
+    await check_on(session, note)
+    await session.refresh(note)
+    await session.refresh(paper)
+
+    assert (note.body, note.provenance, note.updated_at, paper.reading_pass) == before
+
+
+async def test_saving_after_the_note_was_deleted_raises(session):
+    paper, _ = await paper_with_headings(session, HEADINGS)
+    note = await note_on(session, paper)
+    prepared = await prepared_for(session, note)
+    await notes.delete_note(session, note.id)
+
+    with pytest.raises(NotFound):
+        await checks.save_check(session, prepared, CONTENT, "fake", "Fake")
+
+
+async def test_list_checks_gives_the_newest_per_note(session):
+    paper, _ = await paper_with_headings(session, HEADINGS)
+    first, second = await note_on(session, paper), await note_on(session, paper, body="Another summary of it all.")
+    await check_on(session, first, minutes_ago=5)
+    newest = await check_on(session, first)
+    other = await check_on(session, second, minutes_ago=2)
+
+    found = await checks.list_checks(session, paper.id)
+
+    assert {v.output.id for v in found} == {newest, other}
+    with pytest.raises(NotFound):
+        await checks.list_checks(session, uuid.uuid4())
+
+
+async def test_stale_flips_on_a_body_edit_and_not_on_colour_kind_or_links(session):
+    paper, _ = await paper_with_headings(session, HEADINGS)
+    note = await note_on(session, paper)
+    await check_on(session, note)
+
+    await notes.update_note(session, note.id, color="#ff0000", kind="reconstruction")
+    await notes.set_papers(session, note.id, [paper.id])
+    [fresh] = await checks.list_checks(session, paper.id)
+    await notes.update_note(session, note.id, body=SUMMARY + " More.")
+    [old] = await checks.list_checks(session, paper.id)
+
+    assert (fresh.stale, old.stale) == (False, True)
+    assert fresh.note_id == note.id
+
+
+async def test_a_body_edited_during_the_check_is_stale_at_once(session):
+    paper, _ = await paper_with_headings(session, HEADINGS)
+    note = await note_on(session, paper)
+    prepared = await prepared_for(session, note)
+    await notes.update_note(session, note.id, body="Rewritten while the model was thinking.")
+
+    await checks.save_check(session, prepared, CONTENT, "fake", "Fake")
+
+    [view] = await checks.list_checks(session, paper.id)
+    assert view.stale is True
+
+
+async def test_a_replaced_chunk_resolves_to_none(session):
+    from app.core import papers
+
+    paper, chunks = await paper_with_headings(session, HEADINGS)
+    note = await note_on(session, paper)
+    await check_on(session, note)
+    drafts = [ChunkDraft(c.ordinal, c.page, c.bbox, c.section_title, c.text) for c in chunks]
+
+    await papers.replace_chunks(session, paper.id, drafts)
+
+    [view] = await checks.list_checks(session, paper.id)
+    assert view.sources and all(s is None for s in view.sources)
+
+
+async def test_deleting_a_note_deletes_its_checks(session):
+    paper, _ = await paper_with_headings(session, HEADINGS)
+    note, kept = await note_on(session, paper), await note_on(session, paper, body="Keep my check please.")
+    gone, stays = await check_on(session, note), await check_on(session, kept)
+
+    await notes.delete_note(session, note.id)
+
+    left = set(await session.scalars(select(LLMOutput.id).where(LLMOutput.kind == "check")))
+    assert gone not in left and stays in left
+
+
+async def test_chat_history_lists_no_checks(session):
+    paper, _ = await paper_with_headings(session, HEADINGS)
+    await check_on(session, await note_on(session, paper))
+
+    assert await chat.list_answers(session, paper.id) == []
+
+
+async def test_saving_a_suggestion_from_a_check_is_not_found(session):
+    paper, _ = await paper_with_headings(session, HEADINGS)
+    output_id = await check_on(session, await note_on(session, paper))
+
+    with pytest.raises(NotFound):
+        await notes.save_suggestion(session, output_id, 0)
