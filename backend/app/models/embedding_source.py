@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Text, text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -23,4 +23,5 @@ class EmbeddingSource(Base):
     # D155: the last embedding failure as shown to the owner (masked, never a key).
     error: Mapped[str | None] = mapped_column(Text)
     error_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    hybrid_search: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))  # Settings → Search
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()"))

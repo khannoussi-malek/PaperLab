@@ -1176,6 +1176,14 @@ export function useUpdatePdfRecheck() {
   })
 }
 
+export function useSetHybridSearch() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (enabled: boolean) => api.setHybridSearch(enabled),
+    onSuccess: () => client.invalidateQueries({ queryKey: keys.embedding }),
+  })
+}
+
 /** Queues a re-embed of every paper; the status line refetches once it's queued. */
 export function useReindexLibrary() {
   const client = useQueryClient()
