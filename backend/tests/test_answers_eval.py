@@ -10,7 +10,7 @@ from sqlalchemy.pool import NullPool
 
 from app.core import chat, prompts
 from app.core.retrieval import RetrievedChunk
-from app.models import Chunk, Note, Paper, Workspace
+from app.models import Chunk, LLMConnection, LLMModel, Note, Paper, Workspace
 from app.providers import llm as llm_provider
 from evals import answers
 from evals.run import Expected
@@ -431,3 +431,127 @@ async def test_the_workspace_config_asks_across_the_eval_papers_skips_follow_ups
     }  # fmt: skip
     left = select(func.count()).select_from(Workspace).where(Workspace.name.like("answers eval %"))
     assert await session.scalar(left) == 0  # the scratch workspaces were rolled back
+
+
+# --- the check kind (M22) ---
+NOTE = "The Transformer reaches 32.4 BLEU on WMT after 3.5 days."
+CHECK = {"id": "c", "kind": "check", "paper": "p", "question": NOTE}
+PASSAGE = chunk(1, "We report new state-of-the-art results on eleven tasks.")
+REPLY = "Missing: the benchmark results are not mentioned [C1]\nUnsupported: the 32.4 BLEU figure has no support\n"
+
+
+def check_case(**fields) -> answers.Case:
+    return answers.Case(**{**CHECK, **fields})
+
+
+def test_a_check_case_needs_points_unsupported_or_no_missing():
+    with pytest.raises(ValueError, match="c: check needs points, unsupported or no_missing"):
+        check_case()
+    for ok in ({"points": [["result"]]}, {"unsupported": [["bleu"]]}, {"no_missing": True}):
+        assert check_case(**ok).check_kind == "summary"
+
+
+def test_check_is_asked_only_in_retrieval():
+    case = check_case(no_missing=True)
+    assert [c for c in answers.CONFIGS if answers.asked_in(c, case)] == ["retrieval"]
+
+
+def test_check_score_hits_a_missing_point_and_an_unsupported_one():
+    case = check_case(points=[["result", "results"]], unsupported=[["32.4", "bleu"]])
+    row = answers.check_score(REPLY, case, [PASSAGE.text], 1, sources=[PASSAGE])
+    assert (row["correct"], row["points"], row["kept"], row["dropped"]) == (True, 2, 2, 0)
+    only_missing = answers.check_score("Missing: the benchmark results [C1]", case, [], 1)
+    assert only_missing["correct"] is False  # the unsupported point is hit by no Unsupported line
+    wrong_side = answers.check_score("Unsupported: the results are weak", check_case(points=[["results"]]), [], 1)
+    assert wrong_side["correct"] is False and wrong_side["points"] == 0  # a Missing point needs a Missing line
+
+
+def test_no_missing_passes_without_missing_lines_and_fails_with_one():
+    case = check_case(no_missing=True)
+    assert answers.check_score("Supported: the claims hold [C1]", case, [], 1)["correct"] is True
+    assert answers.check_score("Missing: the benchmark results [C1]", case, [], 1)["correct"] is False
+
+
+def test_check_score_counts_dropped_lines_and_the_longest_line():
+    long_line = "Missing: " + " ".join(["word"] * 10) + " [C1]"
+    reply = f"{long_line}\nrambling with no label\nMissing: the benchmark results [C9]\nUnsupported: 99.9 is odd\n"
+    row = answers.check_score(reply, check_case(no_missing=True), [], 1)
+    assert (row["kept"], row["dropped"]) == (1, 3)  # no label; [C9] cites no source; 99.9 is the model's number
+    assert row["words_max"] == 10  # the kept line's words, its label and citation aside
+    assert answers.check_score("", check_case(no_missing=True), [], 1)["words_max"] == 0
+
+
+def test_grounded_follows_only_the_sources_the_missing_lines_cite():
+    other = chunk(2, "Unrelated page.")
+    case = check_case(points=[["results"]], evidence=[Expected(page=1, contains="state-of-the-art results")])
+    cited = "Missing: the benchmark results [C1]"
+    assert answers.check_score(cited, case, [PASSAGE.text, other.text], 2, sources=[PASSAGE, other])["grounded"] is True
+    elsewhere = "Missing: the benchmark results [C2]\nUnsupported: a thing [C1]"
+    row = answers.check_score(elsewhere, case, [PASSAGE.text, other.text], 2, sources=[PASSAGE, other])
+    assert row["grounded"] is False  # Unsupported's citation doesn't count
+    assert answers.check_score(cited, check_case(no_missing=True), [], 1)["grounded"] is None
+
+
+def test_format_ok_and_usable_lines_in_summary():
+    def check_row(kept, dropped):
+        return row("retrieval", f"k{kept}{dropped}", True, kind="check", kept=kept, dropped=dropped)
+
+    stats = answers.summary([check_row(2, 0), check_row(4, 1), check_row(0, 1), row("retrieval", "f", True)])
+    check = next(s for s in stats if s["kind"] == "check")
+    assert check["format_ok"] == 0.33  # one of three rows dropped nothing
+    assert check["usable_lines"] == 0.75  # 6 kept, 2 dropped: the figure to judge by
+    fact = next(s for s in stats if s["kind"] == "fact")
+    assert fact["format_ok"] is None and fact["usable_lines"] is None
+    assert "| no dropped lines | usable lines |" in answers.format_summary(stats)
+
+
+def test_rescore_handles_check_rows(tmp_path):
+    cases = write_cases(tmp_path, CASES + f"""
+  - id: chk
+    kind: check
+    paper: answers fixture
+    question: "{NOTE}"
+    unsupported: [["bleu"]]
+""")
+    stale = row("retrieval", "chk", False, kind="check", content=REPLY, points=0, of=0, need=0, kept=0,
+                dropped=9, sources=2)
+    out = tmp_path / "old.jsonl"
+    out.write_text(json.dumps(stale) + "\n")
+
+    assert answers.rescore(out, cases) == 1
+
+    (rescored,) = answers.read_rows(out)
+    assert (rescored["correct"], rescored["kept"], rescored["dropped"], rescored["grounded"]) == (True, 2, 0, False)
+
+
+def test_the_file_loads_with_its_five_check_cases():
+    checks = [c for c in answers.load_cases(answers.CASES) if c.kind == "check"]
+    assert [c.id for c in checks] == [
+        "check-bert-missing-result", "check-att-wrong-bleu", "check-agents-complete", "check-att-five-cs",
+        "check-bert-reconstruction",
+    ]
+    assert [c.check_kind for c in checks] == ["summary", "summary", "summary", "five_cs", "reconstruction"]
+    assert checks[2].no_missing and checks[1].unsupported == [["32.4", "bleu"]]
+
+
+async def run_main(tmp_path, *argv) -> int:
+    path = tmp_path / "answers.yaml"
+    path.write_text("cases:\n  - {id: c, kind: check, paper: p, question: q, no_missing: true}\n")
+    return await answers.main(["--cases", str(path), "--out", str(tmp_path / "o.jsonl"), "--database-url",
+                               TEST_DATABASE_URL, *argv])
+
+
+async def test_check_cases_need_a_local_model(session, tmp_path, capsys):
+    assert await run_main(tmp_path) == 2  # no --model
+    assert "--model" in capsys.readouterr().err
+    assert await run_main(tmp_path, "--model", "no-such-model-xyz") == 2
+    assert "no-such-model-xyz" in capsys.readouterr().err
+    connection = LLMConnection(kind="anthropic", label=f"R {uuid.uuid4().hex[:6]}", api_key="k" * 20)
+    session.add(connection)
+    await session.flush()
+    session.add(LLMModel(connection_id=connection.id, name="remote-m"))
+    await session.flush()
+    with pytest.raises(answers.EvalError, match="remote-m is not a local model"):
+        await answers.resolve_model(session, "remote-m", local_only=True)
+    with pytest.raises(answers.EvalError, match="unknown model"):
+        await answers.resolve_model(session, "nope", local_only=True)
