@@ -92,3 +92,13 @@ test('a remote host asks first: Send runs it with confirm, Cancel does not', () 
   fireEvent.click(screen.getByRole('button', { name: 'Send' }))
   expect(run).toHaveBeenCalledWith(true)
 })
+
+test('editing the note after a finished check drops the finished stream, so the saved check shows as out of date', () => {
+  stream = { ...idle, status: 'done', sources: [], lines: [{ verdict: 'missing', text: 'Gap.' }] }
+  const { rerender } = render(<NoteCheck {...props} note={note({ body: 'first' })} />)
+  cancelConfirm.mockClear() // mounting runs the effect once
+  rerender(<NoteCheck {...props} note={note({ body: 'first' })} />)
+  expect(cancelConfirm).not.toHaveBeenCalled()
+  rerender(<NoteCheck {...props} note={note({ body: 'second' })} />)
+  expect(cancelConfirm).toHaveBeenCalledTimes(1)
+})
