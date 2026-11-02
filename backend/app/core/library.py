@@ -4,21 +4,26 @@ Each function returns plain dataclasses; the MCP server returns them as they are
 """
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import embedding_index, workspaces
 from app.core import tags as tag_store
-from app.core.errors import InvalidInput
+from app.core.candidates import normal_title
+from app.core.enrichment import normalize_doi
+from app.core.errors import InvalidInput, NotFound
 from app.core.notes import list_notes_for_paper
 from app.core.papers import ABSTRACT_PAGE, get_paper
 from app.core.retrieval import MAX_PER_PAPER, retrieve, searchable
 from app.models import Chunk, Paper, Workspace, workspace_papers
 
 SEARCH_K = 8
+MAX_LIMIT = 50
+COPY_OVERFETCH = 4  # a few more than asked for, so collapsing copies doesn't leave the answer short
+SAME_PASSAGE = 0.8  # share of words in common at which two copies' chunks count as one passage
 
 
 @dataclass(frozen=True)
@@ -38,6 +43,7 @@ class Passage:
     published_venue: str | None  # where a preprint was published, when known
     evidence_access: str  # full_text | abstract | metadata
     from_abstract: bool  # a paper saved without a PDF: its abstract, with no page to cite
+    also_in: list[uuid.UUID] = field(default_factory=list)  # other copies of this paper with the same passage
 
 
 @dataclass(frozen=True)
@@ -79,16 +85,69 @@ class PaperCard:
     notes: list[NoteBrief]  # notes on the whole paper first, newest first; then in reading order
 
 
+def _same_work(one: Paper, other: Paper) -> bool:
+    """One's a published version the other names, or they carry one title."""
+    a, b = (one.doi or "").lower(), (other.doi or "").lower()
+    if (a and a == (other.published_doi or "").lower()) or (b and b == (one.published_doi or "").lower()):
+        return True
+    return normal_title(one.title) == normal_title(other.title)
+
+
+def _same_passage(one: str, other: str) -> bool:
+    a, b = set(one.lower().split()), set(other.lower().split())
+    return bool(a and b) and len(a & b) / len(a | b) >= SAME_PASSAGE
+
+
+def _collapse_copies(found: list, papers: dict[uuid.UUID, Paper]) -> tuple[list, dict[uuid.UUID, list[uuid.UUID]]]:
+    """A preprint and its published copy answer with one passage twice: the better match stays, naming the other."""
+    kept: list = []
+    also: dict[uuid.UUID, list[uuid.UUID]] = {}
+    for chunk in found:
+        twin = next(
+            (
+                k for k in kept
+                if k.paper_id != chunk.paper_id and _same_work(papers[k.paper_id], papers[chunk.paper_id])
+                and _same_passage(k.text, chunk.text)
+            ),
+            None,
+        )
+        if twin is None:
+            kept.append(chunk)
+        else:
+            also.setdefault(twin.id, []).append(chunk.paper_id)
+    return kept, also
+
+
+async def _one_paper(session: AsyncSession, paper_id: uuid.UUID | None, doi: str | None) -> uuid.UUID | None:
+    """The single paper a search is scoped to, or None. Raises for both given, or one the library doesn't hold."""
+    if paper_id is not None and doi:
+        raise InvalidInput("paper_or_doi", detail="Give a paper_id or a doi, not both.")
+    if paper_id is not None:
+        found = (await session.get(Paper, paper_id)) is not None
+    elif doi:
+        wanted = normalize_doi(doi) or doi.strip().lower()
+        paper_id = await session.scalar(select(Paper.id).where(func.lower(Paper.doi) == wanted))
+        found = paper_id is not None
+    else:
+        return None
+    if not found:
+        raise NotFound("paper_not_in_library", detail=f"{doi or paper_id} is not in the library.")
+    return paper_id
+
+
 async def search(
-    session: AsyncSession, query: str, workspace: str | None = None, *, k: int = SEARCH_K, embedder=None,
+    session: AsyncSession, query: str, workspace: str | None = None, *, limit: int = SEARCH_K, embedder=None,
     tags: list[str] | None = None, match: Literal["any", "all"] = "any",
+    paper_id: uuid.UUID | None = None, doi: str | None = None,
 ) -> list[Passage]:
-    """The k passages that best match the query, best first, at most MAX_PER_PAPER from one paper, in the whole library
-    or one workspace (by name). The name is checked before anything is embedded, so a wrong one never loads the model.
+    """The `limit` passages that best match the query, best first, at most MAX_PER_PAPER from one paper, in the whole
+    library or one workspace (by name). `paper_id` or `doi` keeps the search on that one paper, with no per-paper limit.
+    A passage a preprint and its published copy both hold comes once, its `also_in` naming the other. The name is
+    checked before anything is embedded, so a wrong one never loads the model.
 
     `tags` (a workspace's tag names) keeps only papers carrying any/all of them. Raises
-    InvalidInput("empty_query" | "tags_need_a_workspace" | "unknown_tag" | "invalid_match"),
-    NotFound("unknown_workspace", available=[...]),
+    InvalidInput("empty_query" | "tags_need_a_workspace" | "unknown_tag" | "invalid_match" | "paper_or_doi" |
+    "invalid_limit"), NotFound("unknown_workspace", available=[...]), NotFound("paper_not_in_library"),
     Conflict("search_not_set_up" | "search_rebuilding", detail=<sentence>, …), Conflict("embedding_model_changed"), or
     Conflict(<the question can't be embedded>).
     """
@@ -96,6 +155,9 @@ async def search(
         raise InvalidInput("empty_query")
     if tags and workspace is None:
         raise InvalidInput("tags_need_a_workspace")
+    if not 1 <= limit <= MAX_LIMIT:
+        raise InvalidInput("invalid_limit", detail=f"limit must be 1 to {MAX_LIMIT}.")
+    one_paper = await _one_paper(session, paper_id, doi)
     wanted = None
     if workspace is None:
         workspace_id, scope = None, await embedding_index.indexed_papers(session)
@@ -105,17 +167,23 @@ async def search(
         scope = [paper.id for paper in await workspaces.papers(session, workspace_id)]
         if wanted is not None:  # retrieve takes paper_ids or workspace_id, never both
             scope, workspace_id = [p for p in scope if p in wanted], None
+    if one_paper is not None:  # within the workspace or tags, when given too
+        scope, workspace_id, wanted = [p for p in scope if p == one_paper] or (
+            [one_paper] if workspace is None else []
+        ), None, {one_paper}
     if wanted is not None and not scope:
         return []
     embedder = await searchable(session, scope, embedder)  # not set up, then rebuilding, then stale vectors (D156)
     found = await retrieve(
         session, query, workspace_id=workspace_id, paper_ids=scope if wanted is not None else None,
-        k=k, embedder=embedder, per_paper=MAX_PER_PAPER,
+        k=limit if one_paper is not None else limit + COPY_OVERFETCH, embedder=embedder,
+        per_paper=limit if one_paper is not None else MAX_PER_PAPER,
     )
     rows = await session.scalars(
         select(Paper).where(Paper.id.in_({chunk.paper_id for chunk in found})).execution_options(populate_existing=True)
     )
     papers = {paper.id: paper for paper in rows}
+    found, also = _collapse_copies(found, papers)
     return [
         Passage(
             chunk_id=chunk.id,
@@ -131,8 +199,9 @@ async def search(
             published_venue=papers[chunk.paper_id].published_venue,
             evidence_access=papers[chunk.paper_id].evidence_access,
             from_abstract=chunk.from_abstract,
+            also_in=also.get(chunk.id, []),
         )
-        for chunk in found
+        for chunk in found[:limit]
     ]
 
 

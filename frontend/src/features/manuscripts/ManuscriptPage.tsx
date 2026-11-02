@@ -123,7 +123,7 @@ export function ManuscriptPage({ manuscriptId, file, line = null }: { manuscript
   }, [fileTexts, data, path, cursor])
   const items = useMemo(() => (data ? outline(fileTexts, data.main_file) : []), [data?.main_file, fileTexts])
   const errorsByFile = useMemo(
-    () => parseCompileErrors(data?.compile_errors).reduce<Record<string, number>>((n, e) => ({ ...n, [e.file]: (n[e.file] ?? 0) + 1 }), {}),
+    () => parseCompileErrors(data?.compile_errors).reduce<Record<string, number>>((n, e) => (e.file ? { ...n, [e.file]: (n[e.file] ?? 0) + 1 } : n), {}),
     [data?.compile_errors],
   )
   const errors = useMemo(() => (path && data ? errorsFor(data.compile_errors, path) : []), [data?.compile_errors, path])

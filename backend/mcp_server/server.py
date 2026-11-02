@@ -105,11 +105,14 @@ def recoverable(tool):
 @mcp.tool(annotations=READ_ONLY)
 @recoverable
 async def search_library(
-    query: str, workspace: str | None = None, tags: list[str] | None = None, match: Literal["any", "all"] = "any"
+    query: str, workspace: str | None = None, tags: list[str] | None = None, match: Literal["any", "all"] = "any",
+    paper_id: uuid.UUID | None = None, doi: str | None = None, limit: int = library.SEARCH_K,
 ) -> list[library.Passage]:
     """Passages from the owner's papers that best match `query`, best first (at most 3 from one paper). Leave out
     `workspace` to search the whole library, or give a workspace's exact name; an unknown name answers with the
-    names that exist. Give `tags` (needs a workspace) to search only papers carrying any of them (`match` "any") or
+    names that exist. Give `paper_id` or `doi` to search one paper only, with no per-paper limit, and `limit` (1 to 50,
+    default 8) for how many passages. A passage a preprint and its published copy both hold comes once, with `also_in`
+    naming the other copy. Give `tags` (needs a workspace) to search only papers carrying any of them (`match` "any") or
     all of them ("all"); this keeps the answer small. Until the owner downloads the search model, it answers
     search_not_set_up with a sentence to pass on. While search is being rebuilt with a new source, it answers
     search_rebuilding with how far it got (done of total papers): try again when it finishes. Each passage says what
@@ -118,7 +121,9 @@ async def search_library(
     metadata): weigh the evidence by them. A passage with `from_abstract` true is the paper's abstract (the paper
     has no PDF yet): cite it as the abstract, never by a page."""
     async with sessions() as session:
-        return await library.search(session, query, workspace, tags=tags, match=match)
+        return await library.search(
+            session, query, workspace, tags=tags, match=match, paper_id=paper_id, doi=doi, limit=limit
+        )
 
 
 @mcp.tool(annotations=READ_ONLY)
@@ -663,6 +668,8 @@ async def verify_claim(
     from the paper; evidence_level tells how much text was available (full_text, abstract_only or metadata_only),
     and cannot_verify means there was no text to check, never a guess. confidence=low means the quote couldn't be
     found in the paper (or none was given): tell the owner the verdict is unconfirmed and show no quote as evidence.
+    A model that is briefly busy is retried with backoff before this answers model_unavailable. `model` is the one
+    configured; `answered_by` is the one that answered, when a router names it (else the same).
     If quote_page_start is set, the quote begins on that page: cite pages quote_page_start-quote_page.
     save=true keeps the check as an AI note on
     the paper. A remote default model is refused unless the owner agreed and you pass allow_remote=true."""
@@ -874,7 +881,9 @@ async def get_compile_result(
     manuscript_id: uuid.UUID, include_log: bool = False
 ) -> manuscript_agent_compile.CompileView:
     """Use to read a manuscript's latest compile: status (never, running, ok, failed), finished, errors with file and
-    line, and the PDF's page count. Poll after compile_manuscript until finished; include_log adds the log's tail."""
+    line, and the PDF's page count. Poll after compile_manuscript until finished; include_log adds the log's tail.
+    undefined_citations and undefined_references list the keys and labels nothing defines. A failed compile always has
+    an entry in errors: kind `engine` is the PDF engine's own message."""
     async with sessions() as session:
         return await manuscript_agent_compile.get_compile_result(session, manuscript_id, include_log)
 
