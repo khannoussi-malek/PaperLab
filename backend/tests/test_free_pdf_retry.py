@@ -277,3 +277,52 @@ async def test_tried_says_why_unpaywall_was_skipped():
     _, entry = await discovery._unpaywall_lookup(Providers(None), Candidate(title="t"))
     assert entry == []  # no DOI: nothing to look up
 
+
+
+async def test_a_paper_that_has_its_pdf_is_left_out_of_the_retry_and_the_note(session, arq):
+    paper = await saved_paper(session)
+    paper.file_path = "held.pdf"
+    await session.flush()
+    tried = [{"url": "https://x.org/a.pdf", "outcome": "http_429"}]
+    result = pipeline.AddPaperResult(status="already_in_library", paper_id=paper.id, tried=tried)
+    assert await pipeline._note_temporary_failures(session, result) == result
+    assert arq.jobs == []
+
+
+async def test_a_retry_already_queued_still_counts_as_scheduled(session, arq):
+    await session.execute(delete(PaperSources))
+    paper_id = uuid.uuid4()
+    assert await pdf_recheck.schedule_retry(session, paper_id) is True
+    assert await pdf_recheck.schedule_retry(session, paper_id) is True
+    assert len(arq.jobs) == 1
+
+
+async def test_a_queue_outage_does_not_fail_an_add_that_already_saved_the_paper(session, monkeypatch):
+    await session.execute(delete(PaperSources))
+    paper = await saved_paper(session)
+
+    async def down(*_args, **_kwargs):
+        raise ConnectionError("redis is down")
+
+    monkeypatch.setattr(queue, "enqueue", down)
+    tried = [{"url": "https://x.org/a.pdf", "outcome": "busy"}]
+    result = pipeline.AddPaperResult(status="saved_without_pdf", paper_id=paper.id, tried=tried)
+    finished = await pipeline._note_temporary_failures(session, result)
+    assert finished.retry_scheduled is False and finished.note == pipeline.NO_RETRY_NOTE
+
+
+async def test_a_retry_look_updates_when_the_paper_was_last_checked(session, arq, monkeypatch):
+    from datetime import datetime, timezone
+
+    paper = await saved_paper(session)
+    before = datetime(2020, 1, 1, tzinfo=timezone.utc)
+    paper.pdf_checked_at = before
+    await session.flush()
+
+    async def find_pdf(*_args):
+        return None, [{"url": "a", "outcome": "busy"}], []
+
+    monkeypatch.setattr(discovery, "find_pdf", find_pdf)
+    await pdf_recheck.recheck(session, object(), paper.id)
+    await session.refresh(paper)
+    assert paper.pdf_checked_at > before

@@ -402,7 +402,14 @@ async def _note_temporary_failures(session: AsyncSession, result: AddPaperResult
         return result
     if result.status == "no_free_pdf" or result.paper_id is None:
         return replace(result, temporary_failures=failures, note=NOT_SAVED_NOTE)
-    scheduled = await pdf_recheck.schedule_retry(session, result.paper_id)
+    paper = await session.get(Paper, result.paper_id)
+    if paper is not None and paper.has_pdf:  # a held arXiv copy answered: no PDF is missing
+        return result
+    try:
+        scheduled = await pdf_recheck.schedule_retry(session, result.paper_id)
+    except Exception:  # the paper is saved already: the weekly look still finds it
+        logger.exception("couldn't queue a retry for paper %s", result.paper_id)
+        scheduled = False
     return replace(
         result, temporary_failures=failures, retry_scheduled=scheduled, note=RETRY_NOTE if scheduled else NO_RETRY_NOTE
     )
