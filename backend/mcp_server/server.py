@@ -106,7 +106,7 @@ def recoverable(tool):
 async def search_library(
     query: str, workspace: str | None = None, tags: list[str] | None = None, match: Literal["any", "all"] = "any"
 ) -> list[library.Passage]:
-    """Passages from the owner's papers closest to `query`, closest first (at most 3 from one paper). Leave out
+    """Passages from the owner's papers that best match `query`, best first (at most 3 from one paper). Leave out
     `workspace` to search the whole library, or give a workspace's exact name; an unknown name answers with the
     names that exist. Give `tags` (needs a workspace) to search only papers carrying any of them (`match` "any") or
     all of them ("all"); this keeps the answer small. Until the owner downloads the search model, it answers
