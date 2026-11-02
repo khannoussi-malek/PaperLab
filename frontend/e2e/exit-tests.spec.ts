@@ -1,6 +1,17 @@
 import { fileURLToPath } from 'node:url'
 import type { Page } from '@playwright/test'
-import { dragBox, expect, openReader, removePaperAndNotes, test, uploadAndWaitUntilReady } from './fixtures'
+import {
+  addLlmConnection,
+  ask,
+  dragBox,
+  expect,
+  openReader,
+  pickChatModel,
+  removePaperAndNotes,
+  selectAllOf,
+  test,
+  uploadAndWaitUntilReady,
+} from './fixtures'
 
 // citation-paper.pdf (fixtures/make_citation_paper.py): page 2 has "Figure 1: A figure caption." at (316, 400).
 const CITATION_FILE = fileURLToPath(new URL('./fixtures/citation-paper.pdf', import.meta.url))
@@ -90,4 +101,124 @@ test('a figure note survives a reload as an unfilled outline, with the caption a
   } finally {
     await removePaperAndNotes(request, id)
   }
+})
+
+// Part B: the check. The fake model's reply parses to 3 kept lines and 1 dropped one (the dropped line is a rewrite).
+const REWRITE = 'Here is a better summary you could use.'
+
+/** A model that counts as local (no confirmation), picked in chat. `llmName` cleans it up after the test. */
+async function useLocalModel(page: Page, request: Parameters<typeof addLlmConnection>[0], llmName: string) {
+  const local = await addLlmConnection(request, `${llmName} local`, 'e2e-local', { base_url: 'http://localhost:11434/v1' })
+  await pickChatModel(page, local.modelId)
+}
+
+/** Saves a note of this kind with this body on the paper and returns its card. */
+async function writeNote(page: Page, kindLabel: string, body: string) {
+  await startPaperNote(page, kindLabel)
+  await page.getByRole('textbox', { name: 'New note' }).fill(body)
+  await page.getByRole('button', { name: 'Save note' }).click()
+  const card = page.locator('article.note', { hasText: body })
+  await expect(card).toBeVisible()
+  return card
+}
+
+test('write and check a summary: lines cite the paper, and the model writes nothing to keep', async ({ page, request, paperId, llmName }) => {
+  await useLocalModel(page, request, llmName)
+  await openReader(page, paperId)
+  const card = await writeNote(page, 'Summary', 'It anchors every note on a passage.')
+  await expect(card.locator('.note-kind')).toHaveText('Summary')
+  await expect(card).toContainText('You')
+
+  await card.getByRole('button', { name: 'Check against the paper' }).click()
+  const result = card.locator('.check-result')
+  await expect(result.locator('.check-line[data-verdict="missing"]').first()).toBeVisible()
+  await expect(result.locator('.check-line[data-verdict="unsupported"]').first()).toBeVisible()
+  await expect(result.locator('.check-dropped')).toContainText("1 line of the reply didn't follow")
+  await expect(page.getByText(REWRITE)).toHaveCount(0)
+
+  await result.locator('.check-line[data-verdict="missing"] .check-cite').first().click()
+  await expect(page.locator('.pdf-page .chunk-flash').first()).toBeInViewport()
+  await expect(card).toContainText('You')
+
+  await selectAllOf(result)
+  await expect(page.getByRole('button', { name: 'Save as note' })).toHaveCount(0)
+  await expect(page.getByText(REWRITE)).toHaveCount(0)
+})
+
+test('editing a checked summary marks the check out of date, and checking again clears it', async ({ page, request, paperId, llmName }) => {
+  await useLocalModel(page, request, llmName)
+  await openReader(page, paperId)
+  const written = await writeNote(page, 'Summary', 'A first version of the summary.')
+  const card = page.locator(`article.note[data-note-id="${await written.getAttribute('data-note-id')}"]`) // its text changes below
+  await card.getByRole('button', { name: 'Check against the paper' }).click()
+  await expect(card.locator('.check-line').first()).toBeVisible()
+  await expect(card.locator('.check-stale')).toHaveCount(0)
+
+  await card.getByRole('button', { name: 'Edit', exact: true }).click()
+  await card.getByRole('textbox', { name: 'Edit note' }).fill('A second version of the summary.')
+  await card.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(card.locator('.check-stale')).toContainText('Out of date')
+
+  await card.getByRole('button', { name: 'Check again' }).click()
+  await expect(card.locator('.check-stale')).toHaveCount(0)
+  await expect(card.locator('.check-line').first()).toBeVisible()
+})
+
+test('an AI note cannot be checked, even after it is given a checkable kind', async ({ page, request, paperId, llmName }) => {
+  await useLocalModel(page, request, llmName)
+  await page.goto(`/#/papers/${paperId}?tab=chat`)
+  const answer = await ask(page, 'Create notes to help me understand this paper')
+  await answer.locator('.suggested-note').first().getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(answer.locator('.suggested-note').first()).toContainText('Saved')
+
+  await page.goto(`/#/papers/${paperId}?tab=notes`)
+  const card = page.locator('article.note', { hasText: 'The method anchors every note on a passage' })
+  await card.getByRole('button', { name: 'Edit', exact: true }).click()
+  await card.getByRole('combobox', { name: 'Kind' }).click()
+  await page.getByRole('option', { name: 'Five Cs', exact: true }).click()
+  await card.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(card.locator('.note-kind')).toHaveText('Five Cs')
+
+  await expect(card.getByRole('button', { name: 'Check against the paper' })).toBeDisabled()
+  await card.locator('span[tabindex="0"]').focus()
+  await expect(page.getByRole('tooltip').first()).toContainText('Only text you wrote can be checked. This note came from AI.')
+})
+
+test('the Reading control shows pass 1’s test, opens the composer, and reports the check', async ({ page, request, paperId, llmName }) => {
+  await useLocalModel(page, request, llmName)
+  await openReader(page, paperId)
+  await page.getByRole('button', { name: 'Reading' }).click()
+  await expect(page.getByText('Your five Cs: not written yet')).toBeVisible()
+  await page.getByRole('button', { name: 'Write it' }).click()
+
+  const body = page.getByRole('textbox', { name: 'New note' })
+  const headings = (await body.inputValue()).split('\n')
+  expect(headings).toHaveLength(5)
+  await body.fill(headings.map((heading) => `${heading} something I wrote`).join('\n'))
+  await page.getByRole('button', { name: 'Save note' }).click()
+  const card = page.locator('article.note', { hasText: 'something I wrote' })
+  await expect(card.locator('.note-kind')).toHaveText('Five Cs')
+  await card.getByRole('button', { name: 'Check against the paper' }).click()
+  await expect(card.locator('.check-line').first()).toBeVisible()
+  await expect(card.getByRole('button', { name: 'Check again' })).toBeEnabled()
+
+  await page.getByRole('button', { name: 'Reading' }).click()
+  await expect(page.getByText(/Your five Cs: checked .*: 1 missing, 1 unsupported/)).toBeVisible()
+})
+
+test('a cloud model asks first: the dialog names the host, Cancel sends nothing, Send shows the lines', async ({ page, paperId, llmConnection }) => {
+  await pickChatModel(page, llmConnection.modelId) // fake-provider.test is not local
+  await openReader(page, paperId)
+  const card = await writeNote(page, 'Summary', 'A summary for a cloud model.')
+  await card.getByRole('button', { name: 'Check against the paper' }).click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toContainText('fake-provider.test')
+  await dialog.getByRole('button', { name: 'Cancel' }).click()
+  await expect(dialog).toHaveCount(0)
+  await expect(card.locator('.check-line')).toHaveCount(0)
+  expect(await (await page.request.get(`/api/papers/${paperId}/checks`)).json()).toEqual([])
+
+  await card.getByRole('button', { name: 'Check against the paper' }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Send' }).click()
+  await expect(card.locator('.check-line').first()).toBeVisible()
 })
