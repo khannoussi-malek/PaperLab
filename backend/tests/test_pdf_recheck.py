@@ -181,10 +181,10 @@ async def test_a_failing_mark_is_logged_and_the_run_goes_on(session, discovery_f
     first_id, second_id = first.id, second.id
     real = pdf_recheck._mark
 
-    async def mark(session_, paper_id, outcome):
+    async def mark(session_, paper_id, outcome, claimed):
         if paper_id == first_id:
             raise RuntimeError("db down")
-        await real(session_, paper_id, outcome)
+        await real(session_, paper_id, outcome, claimed)
 
     monkeypatch.setattr(pdf_recheck, "_mark", mark)
     counts = await pdf_recheck.run(session, discovery_fakes.providers, NOW)
