@@ -652,7 +652,7 @@ cases:
       English Wikipedia by masked language modelling: 15% of the tokens are chosen, and the model predicts them from
       both sides. It is then fine-tuned end to end on each task with one added output layer. Its strength is one
       architecture for many tasks. Its weakness is that [MASK] appears in pre-training but never in fine-tuning.
-    points: [["next sentence", "nsp"]]
+    points: [["next sentence", "nsp", "sentence relationship", "sentence relationships"]]
 
 paper_notes:
   - paper: Attention Is All You Need
