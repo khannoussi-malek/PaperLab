@@ -242,9 +242,9 @@ async def test_a_quote_not_in_the_abstract_is_422_quote_not_found(client, sessio
     assert (answer.status_code, answer.json()["detail"]) == (422, "quote_not_found")
 
 
-async def test_a_paper_note_without_an_anchor_on_a_paper_with_a_pdf_is_422_anchor_required(client, session):
+async def test_a_quote_on_a_paper_with_a_pdf_is_422_anchor_required(client, session):
     paper = await _chunked_paper(session, "/x.pdf")
-    answer = await client.post("/api/notes", json={"paper_id": str(paper.id), "body": "x"})
+    answer = await client.post("/api/notes", json={"paper_id": str(paper.id), "quote": "x", "body": "x"})
     assert (answer.status_code, answer.json()["detail"]) == (422, "anchor_required")
 
 

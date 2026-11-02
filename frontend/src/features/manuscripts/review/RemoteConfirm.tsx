@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
-type Props = { what: 'section' | 'text'; host: string; onSend: () => void; onCancel: () => void }
+type Props = { what: 'section' | 'text' | 'note'; host: string; onSend: () => void; onCancel: () => void }
 
 const remoteQuestion = (what: Props['what'], host: string) => `Your ${what} will be sent to ${host} and may cost money. Send it?`
 

@@ -16,7 +16,7 @@ from app.core.workspace_search import _hit_out_dict
 from app.models.references import ExternalRef
 from app.models.workspace import Workspace
 from app.models.workspace_search import WorkspaceSearchHit, WorkspaceSearchRun
-from app.providers.llm import ANTHROPIC_HOST, host_of
+from app.providers.llm import ANTHROPIC_HOST
 
 RANKED_LIMIT_MAX = 500
 # D265: auto pre-screen after a scheduled run scores this many of the run's new hits, best (ranked) first; the rest
@@ -93,8 +93,10 @@ async def _default_model(session: AsyncSession) -> tuple[str, bool, str] | None:
         return None
     return (
         f"{connection.label} · {model.name}",
-        llm_connections.is_local(connection.kind, connection.base_url, connection.cloud_proxy),
-        host_of(connection.base_url) if connection.base_url else ANTHROPIC_HOST,
+        llm_connections.is_local(connection.kind, connection.base_url, connection.cloud_proxy, model.name),
+        llm_connections.remote_host(connection.kind, connection.base_url, model.name)
+        if connection.base_url
+        else ANTHROPIC_HOST,
     )
 
 

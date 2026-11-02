@@ -40,11 +40,21 @@ from sqlalchemy import insert, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 
 from app.config import settings
-from app.core import chat, llm_connections, prompts
+from app.core import chat, checks, llm_connections, prompts, retrieval
 from app.core.errors import DomainError
-from app.core.notes import _CITATION, normalize_quote, note_blocks
+from app.core.notes import _CITATION, create_paper_note, normalize_quote, note_blocks
 from app.core.retrieval import RetrievedChunk
-from app.models import Chunk, Note, Provenance, Workspace, note_anchors, note_papers, workspace_papers
+from app.models import (
+    Chunk,
+    LLMConnection,
+    LLMModel,
+    Note,
+    Provenance,
+    Workspace,
+    note_anchors,
+    note_papers,
+    workspace_papers,
+)
 from app.providers import embedding
 from app.providers import llm as llm_provider
 from app.providers.base import LLM, LLMError, LLMUnavailable
@@ -54,7 +64,7 @@ from evals.run import EvalError, Expected, is_hit, normalize, resolve_papers
 CASES = Path(__file__).with_name("answers.yaml")
 RESULTS = Path(__file__).with_name("results")
 CONFIGS = ("none", "retrieval", "whole", "workspace")
-KINDS = ("fact", "overview", "followup", "notes", "refusal", "write_notes")
+KINDS = ("fact", "overview", "followup", "notes", "refusal", "write_notes", "check")
 # Only these can be known without reading: a follow-up or a note's answer isn't in anything the model was trained on.
 MEMORY_CHECKED = {"fact", "overview"}
 PREVIOUS_PROMPTS = {"chat": 3, "chat_workspace": 2}  # before note suggestions (M20)
@@ -94,7 +104,7 @@ class PaperNotes(BaseModel):
 
 class Case(BaseModel):
     id: str = Field(min_length=1)
-    kind: Literal["fact", "overview", "followup", "notes", "refusal", "write_notes"]
+    kind: Literal["fact", "overview", "followup", "notes", "refusal", "write_notes", "check"]
     scope: Literal["paper", "workspace"] = "paper"  # workspace: asked only in the workspace config
     paper: str = Field(min_length=1)  # a title prefix, as in questions.yaml
     question: str = Field(min_length=1)
@@ -103,9 +113,18 @@ class Case(BaseModel):
     evidence: list[Expected] = []  # a passage the answer cites must hold one of these
     before: str | None = None  # followup: the question this one follows
     note: NoteFixture | None = None  # notes: saved before asking, always rolled back
+    # check: `question` is the planted note. Each of `points` must be named by a Missing line, each of `unsupported`
+    # by an Unsupported line; `no_missing` wants no Missing line at all (the note is complete).
+    check_kind: Literal["five_cs", "summary", "reconstruction"] = "summary"
+    unsupported: list[Annotated[list[str], Field(min_length=1)]] = []
+    no_missing: bool = False
 
     @model_validator(mode="after")
     def fits_kind(self):
+        if self.kind == "check":
+            if not (self.points or self.unsupported or self.no_missing):
+                raise ValueError(f"{self.id}: check needs points, unsupported or no_missing")
+            return self
         if not self.points and self.kind == "refusal":
             self.points = [REFUSALS]
         field = "points" if not self.points else REQUIRED_FIELD.get(self.kind)
@@ -178,6 +197,8 @@ def blocks_right(content: str, kind: str, sources: int) -> bool:
 def asked_in(config: str, case: Case) -> bool:
     """none: only what can be known without reading; workspace: everything but follow-ups (workspace chat has none,
     D62); the other configs: every case about one paper."""
+    if case.kind == "check":
+        return config == "retrieval"
     if config == "workspace":
         return case.kind != "followup"
     return case.scope == "paper" and (config != "none" or case.kind in MEMORY_CHECKED)
@@ -285,6 +306,9 @@ async def prepare_case(
     session: AsyncSession, case: Case, config: str, paper_id: uuid.UUID, embedder, notes: Iterable[NoteFixture] = (),
     library: Iterable[uuid.UUID] = (),
 ) -> chat.Prepared:
+    if case.kind == "check":
+        note = await create_paper_note(session, paper_id, case.question, kind=case.check_kind)
+        return (await checks.prepare_check(session, note.id, embedder)).prepared
     if config == "none":
         prompt = f"Paper: {case.paper}\n\nQuestion: {case.question}"
         return chat.Prepared(sources=[], system=NO_PASSAGES_SYSTEM, prompt=prompt, whole_paper=False)
@@ -321,11 +345,53 @@ async def stream(llm: LLM, system: str, prompt: str) -> Streamed:
     return Streamed("".join(parts), ttft, time.perf_counter() - start)
 
 
+def check_matches(case: Case, lines: list[tuple[str, str]]) -> dict:
+    """`correct`, `points`, `need` and `of` from the kept lines, as (verdict, text) pairs."""
+    said = lambda verdict: [text for v, text in lines if v == verdict]  # noqa: E731
+    named = lambda texts, point: any(mentions(t, phrasing) for t in texts for phrasing in point)  # noqa: E731
+    missing, unsupported = said("missing"), said("unsupported")
+    hits = sum(named(missing, p) for p in case.points) + sum(named(unsupported, p) for p in case.unsupported)
+    total = len(case.points) + len(case.unsupported)
+    return {
+        "correct": hits == total and not (case.no_missing and missing), "points": hits, "need": total, "of": total,
+    }
+
+
+def check_score(
+    content: str, case: Case, passages: list[str], n_sources: int, sources: Iterable[RetrievedChunk] = ()
+) -> dict:
+    """A check reply by string matching, through the same rules the reader's lines pass. `passages` feed the copy
+    guard; `sources`, in [C…] order, let `grounded` look at the cited pages. `lines` keeps what survived, so a rescore
+    can match again without re-running the guard (it can't: the passages aren't stored)."""
+    reply = checks.parse_check(content, n_sources, checks.guard_for(case.question, passages))
+    cited = [n for line in reply.lines if line.verdict == "missing" for n in line.cited]
+    return {
+        **check_matches(case, [(line.verdict, line.text) for line in reply.lines]),
+        "grounded": (
+            is_hit([s for n, s in enumerate(sources, 1) if n in cited], case.evidence) if case.evidence else None
+        ),
+        "kept": len(reply.lines), "dropped": reply.dropped,
+        "words_max": max((len(checks.bare(line.text, checks._REF).split()) for line in reply.lines), default=0),
+        "lines": [[line.verdict, line.text] for line in reply.lines],
+    }
+
+
 def score(
     label: str, config: str, case: Case, repeat: int, prepared: chat.Prepared, answer: Streamed, model: str,
     first_on_paper: bool,
 ) -> dict:
     ok = answer.error is None
+    if case.kind == "check":
+        scored = check_score(
+            answer.content, case, [s.text for s in prepared.sources], len(prepared.sources), prepared.sources
+        ) if ok else {"correct": None, "points": 0, "need": 0, "of": 0, "grounded": None}
+        return {
+            "label": label, "config": config, "case": case.id, "kind": case.kind, "paper": case.paper,
+            "repeat": repeat, "model": model, "citations_valid": None, "blocks": None, "blocks_right": None,
+            "ttft": answer.ttft, "total": answer.total, "prompt_chars": len(prepared.system) + len(prepared.prompt),
+            "sources": len(prepared.sources), "whole_paper": prepared.whole_paper, "notes": 0,
+            "first_on_paper": first_on_paper, "error": answer.error, "content": answer.content, **scored,
+        }
     return {
         "label": label, "config": config, "case": case.id, "kind": case.kind, "paper": case.paper,
         "repeat": repeat, "model": model,
@@ -343,6 +409,24 @@ def score(
     }
 
 
+async def resolve_model(session: AsyncSession, name: str, *, local_only: bool) -> tuple[LLMConnection, LLMModel]:
+    """The connection and model called `name`. A check sends the reader's note to it, so `local_only` refuses a
+    remote one in code: the eval has no one to ask (D190)."""
+    query = select(LLMConnection, LLMModel).join(LLMModel, LLMModel.connection_id == LLMConnection.id)
+    rows = [tuple(r) for r in await session.execute(query.where(LLMModel.name == name))]
+    def local(r) -> bool:
+        return llm_connections.is_local(r[0].kind, r[0].base_url, r[0].cloud_proxy, r[1].name)
+
+    rows.sort(key=lambda r: (not local(r), r[0].label))
+    if not rows:
+        raise EvalError(f"unknown model {name!r}")
+    if local_only:
+        rows = [r for r in rows if local(r)]
+        if not rows:
+            raise EvalError(f"{name} is not a local model; check cases never send a note to a remote one")
+    return rows[0]
+
+
 def read_rows(path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
 
@@ -357,6 +441,16 @@ def rescore(path: Path, cases: list[Case]) -> int:
         if case is None or row["error"] is not None:
             continue
         before = (row["correct"], row["points"])
+        if case.kind == "check":
+            # The live run's guard saw the passages; a rescore can't, so kept, dropped and words_max stay as they
+            # were, and the new phrasings are matched against the lines that survived. A row without them keeps its
+            # `correct`.
+            matched = check_matches(case, [tuple(line) for line in row["lines"]]) if "lines" in row else {
+                "need": len(case.points) + len(case.unsupported), "of": len(case.points) + len(case.unsupported)
+            }
+            row.update(matched)
+            changed += before != (row["correct"], row["points"])
+            continue
         row.update(points=points_hit(row["content"], case.points), need=case.required, of=len(case.points))
         row["correct"] = row["points"] >= case.required
         changed += before != (row["correct"], row["points"])
@@ -419,6 +513,11 @@ def _median(values: Iterable[float | None]) -> float | None:
     return round(statistics.median(known), 1) if known else None
 
 
+def _usable(rows: list[dict]) -> float | None:
+    kept, dropped = sum(r["kept"] for r in rows), sum(r["dropped"] for r in rows)
+    return round(kept / (kept + dropped), 2) if kept + dropped else None
+
+
 def summary(rows: list[dict]) -> list[dict]:
     """Per label, config and kind, over answers that didn't fail. `correct_unseen` leaves out every case the `none`
     config answered correctly: passages can't be credited for what the model already knew. `coverage` is the share of
@@ -434,7 +533,11 @@ def summary(rows: list[dict]) -> list[dict]:
             "label": label, "config": config, "kind": kind, "answers": len(ok), "errors": len(group) - len(ok),
             "correct": _mean(r["correct"] for r in ok),
             "correct_unseen": _mean(r["correct"] for r in ok if r["case"] not in known),
-            "coverage": _mean(r["points"] / r["of"] for r in ok),
+            "coverage": _mean(r["points"] / r["of"] for r in ok if r["of"]),
+            # check rows only. `usable_lines` (kept / kept + dropped) is the figure to judge by: dropped lines are
+            # expected under the guards. `format_ok` is the share of rows with none dropped.
+            "format_ok": _mean(r["dropped"] == 0 for r in ok) if kind == "check" else None,
+            "usable_lines": _usable(ok) if kind == "check" else None,
             "grounded": _mean(r["grounded"] for r in ok),
             "citations_valid": _mean(r["citations_valid"] for r in ok),
             "blocks_right": _mean(r.get("blocks_right") for r in ok),  # older result files have no such column
@@ -453,11 +556,14 @@ COLUMNS = {
     "label": "label", "config": "config", "kind": "kind", "answers": "answers", "errors": "errors",
     "correct": "correct", "correct_unseen": "correct, not known before", "coverage": "key points hit",
     "grounded": "cites the evidence", "citations_valid": "citations valid", "blocks_right": "blocks right",
+    "format_ok": "no dropped lines", "usable_lines": "usable lines",
     "median_ttft": "s to first word",
     "median_ttft_first": "s to first word, paper's first question", "median_total": "s total",
     "median_prompt_chars": "prompt chars",
 }
-RATES = {"correct", "correct_unseen", "coverage", "grounded", "citations_valid", "blocks_right"}
+RATES = {
+    "correct", "correct_unseen", "coverage", "grounded", "citations_valid", "blocks_right", "format_ok", "usable_lines",
+}
 
 
 def format_summary(stats: list[dict]) -> str:
@@ -478,6 +584,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--repeats", type=int, default=3, help="answers per case and config; `none` asks once")
     parser.add_argument("--only", help="comma-separated case ids")
     parser.add_argument("--kinds", help=f"comma-separated, from {', '.join(KINDS)}")
+    parser.add_argument("--model", help="ask this model by name; `check` cases need one, and it must be local")
+    parser.add_argument(
+        "--search", choices=("builtin", "active"), default="builtin",
+        help="active: embed questions, and a check's planted note, with the active search source (Settings), so they "
+        "go to that source, instead of the built-in model",
+    )
     parser.add_argument("--with-paper-notes", action="store_true", help="save the file's paper_notes first")
     parser.add_argument(
         "--prompts", choices=("current", "previous"), default="current",
@@ -498,7 +610,11 @@ def select_cases(cases: list[Case], only: str | None, kinds: str | None) -> list
         raise EvalError(f"unknown case ids: {', '.join(unknown)}")
     if wanted_kinds and (unknown := sorted(set(wanted_kinds) - set(KINDS))):
         raise EvalError(f"unknown kinds: {', '.join(unknown)}")
-    return [case for case in cases if (not ids or case.id in ids) and (not wanted_kinds or case.kind in wanted_kinds)]
+    picked = [case for case in cases if (not ids or case.id in ids) and (not wanted_kinds or case.kind in wanted_kinds)]
+    if not ids and not wanted_kinds and any(case.kind == "check" for case in picked):
+        print("skipping check cases: they need --model NAME (a local model); ask for them with --kinds check")
+        picked = [case for case in picked if case.kind != "check"]
+    return picked
 
 
 async def main(argv: list[str] | None = None) -> int:
@@ -521,17 +637,24 @@ async def main(argv: list[str] | None = None) -> int:
         loaded = load(args.cases)
         cases = select_cases(loaded.cases, args.only, args.kinds)
         paper_notes = loaded.paper_notes if args.with_paper_notes else []
+        has_check = any(case.kind == "check" for case in cases)
+        if has_check and not args.model:
+            raise EvalError("check cases need --model NAME, a local model")
         async with scratch() as session:
+            if args.model:
+                connection, model = await resolve_model(session, args.model, local_only=has_check)
+            else:
+                connection, model = await llm_connections.resolve(session, None)
+            embedder = await retrieval.query_embedder(session) if args.search == "active" else embedding.load()
             paper_ids = await resolve_papers(session, [*cases, *paper_notes])
             problems = await check_ground_truth(session, cases, paper_ids, paper_notes)
-            connection, model = await llm_connections.resolve(session, None)
             llm = llm_provider.build_llm(connection, model.name)
         if problems:
             raise EvalError("ground truth isn't in the papers:\n  " + "\n  ".join(problems))
         with prompt_set(args.prompts):
             await evaluate(
                 cases, paper_ids=paper_ids, configs=configs, repeats=args.repeats, label=args.label, out=out,
-                scratch=scratch, llm=llm, embedder=embedding.load(), paper_notes=paper_notes,
+                scratch=scratch, llm=llm, embedder=embedder, paper_notes=paper_notes,
             )
     except EvalError as exc:
         print(f"eval error: {exc}", file=sys.stderr)

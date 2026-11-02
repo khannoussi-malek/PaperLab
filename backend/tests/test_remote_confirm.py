@@ -9,7 +9,7 @@ from test_manuscript_papers import setup
 from app.core import llm_connections, manuscripts, queue
 from app.core import manuscript_review as mr
 from app.core import manuscript_section_review as msr
-from app.core.errors import Conflict
+from app.core.errors import Conflict, NotFound
 from app.models import LLMConnection, LLMModel, ManuscriptClaimCheck
 from app.workers import manuscript_review as review_worker
 
@@ -36,6 +36,21 @@ async def _remote(session):
     await session.flush()
     session.add(LLMModel(connection_id=c.id, name="big", is_default=True))
     await session.flush()
+
+
+async def test_model_id_picks_the_model_and_omitted_means_the_default(session, local_default_model):
+    await _remote(session)  # the remote model is now the default
+    with pytest.raises(Conflict, match="remote_model_needs_confirm"):
+        await llm_connections.refuse_unconfirmed_remote(session, False)
+    await llm_connections.refuse_unconfirmed_remote(session, False, local_default_model.id)  # a local pick: no ask
+    remote = await session.scalar(select(LLMModel).where(LLMModel.name == "big"))
+    await session.execute(update(LLMModel).values(is_default=False))
+    await session.execute(update(LLMModel).where(LLMModel.id == local_default_model.id).values(is_default=True))
+    await llm_connections.refuse_unconfirmed_remote(session, False)  # omitted: the local default
+    with pytest.raises(Conflict, match="remote_model_needs_confirm"):
+        await llm_connections.refuse_unconfirmed_remote(session, False, remote.id)
+    with pytest.raises(NotFound, match="model_not_found"):
+        await llm_connections.refuse_unconfirmed_remote(session, False, uuid.uuid4())
 
 
 async def test_remote_default_refuses_until_confirmed(session):

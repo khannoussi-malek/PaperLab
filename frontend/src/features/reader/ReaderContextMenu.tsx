@@ -11,7 +11,7 @@ import {
 import { cn } from '@/lib/utils'
 import { PRESET_COLORS } from '../notes/highlightColors'
 
-export type ContextTarget = { kind: 'note'; note: Note; quote: string } | { kind: 'draft'; quote: string }
+export type ContextTarget = { kind: 'note'; note: Note; quote: string } | { kind: 'draft'; quote: string; figure?: true }
 
 export type ContextMenuState = { x: number; y: number; target: ContextTarget }
 
@@ -83,14 +83,18 @@ export function ReaderContextMenu({ menu, onClose, ...actions }: Props) {
               <NotebookPen aria-hidden />
               Add note…
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={actions.onAddNumber}>
-              <Hash aria-hidden />
-              Add as number…
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => actions.onCopy(target.quote)}>
-              <Copy aria-hidden />
-              Copy text
-            </DropdownMenuItem>
+            {!target.figure && ( // a figure box has no text: its quote is only "Figure on p. N"
+              <>
+                <DropdownMenuItem onSelect={actions.onAddNumber}>
+                  <Hash aria-hidden />
+                  Add as number…
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => actions.onCopy(target.quote)}>
+                  <Copy aria-hidden />
+                  Copy text
+                </DropdownMenuItem>
+              </>
+            )}
             <DropdownMenuItem onSelect={actions.onCancelDraft}>
               <X aria-hidden />
               Cancel

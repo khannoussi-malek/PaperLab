@@ -9,7 +9,7 @@ export const TRIAGES = [
 ] as const
 export const UNDECIDED_LABEL = 'Not decided'
 
-/** One row of PASSES. M22 adds `noteKind` (its exit-test note kind) to this type. */
+/** One row of PASSES. `noteKind` is the kind of note that is this pass's exit test. */
 export type Pass = {
   pass: 1 | 2 | 3
   heading: string
@@ -17,6 +17,7 @@ export type Pass = {
   doneWhen: string
   fiveCs?: string[] // pass 1 only: the five questions under "Done when"
   then?: string // pass 1 only: the decision line
+  noteKind: 'five_cs' | 'summary' | 'reconstruction'
   references: boolean // shows Open References
 }
 
@@ -39,6 +40,7 @@ export const PASSES: readonly Pass[] = [
       'Clarity: is it well written?',
     ],
     then: 'Then decide: Keep, Later or Drop.',
+    noteKind: 'five_cs',
     references: true,
   },
   {
@@ -51,6 +53,7 @@ export const PASSES: readonly Pass[] = [
       'Mark the references you haven’t read To read.',
     ],
     doneWhen: 'Done when you can summarise its main thrust, with the evidence for it, to someone else.',
+    noteKind: 'summary',
     references: true,
   },
   {
@@ -62,6 +65,7 @@ export const PASSES: readonly Pass[] = [
       'Note ideas for future work.',
     ],
     doneWhen: 'Done when you can rebuild its structure from memory and name its strong and weak points, its implicit assumptions and its missing citations.',
+    noteKind: 'reconstruction',
     references: false,
   },
 ]

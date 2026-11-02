@@ -473,6 +473,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/notes/{note_id}/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check Note
+         * @description Chat's events, but a token is one kept line and `cited` comes from kept lines alone. Checked before streaming,
+         *     in order: 404 model_not_found / 409 no_model / 409 remote_model_needs_confirm (the model the body names), 404 note,
+         *     409 not_your_text, 422 not_checkable, 422 nothing_written, 422 note_too_long, 409 note_not_on_one_paper, 409
+         *     needs_full_text, 409 paper_not_ready, 409 lens_empty, 409 search_not_set_up, 409 search_rebuilding, 409
+         *     paper_not_indexed, 409 embedding_model_changed.
+         */
+        post: operations["check_note_api_notes__note_id__check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/papers/{paper_id}/checks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Checks
+         * @description The newest check per note, each saying whether its note changed since. 404 (410 merged) for the paper.
+         */
+        get: operations["list_checks_api_papers__paper_id__checks_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/papers/{paper_id}/reading-context": {
         parameters: {
             query?: never;
@@ -543,7 +587,7 @@ export interface paths {
         put?: never;
         /**
          * Create Note
-         * @description 422 anchor_required: a paper_id note on a paper with a PDF; 422 quote_not_found: a quote not in its abstract.
+         * @description 422 anchor_required: a quote on a paper with a PDF; 422 quote_not_found: a quote not in its abstract.
          */
         post: operations["create_note_api_notes_post"];
         delete?: never;
@@ -609,6 +653,23 @@ export interface paths {
          *     1 MB, not .md, not UTF-8, or empty.
          */
         post: operations["import_notes_api_notes_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notes/figure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Figure Note */
+        post: operations["create_figure_note_api_notes_figure_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3508,6 +3569,60 @@ export interface components {
              */
             ai: true;
         };
+        /** CheckLineOut */
+        CheckLineOut: {
+            /**
+             * Verdict
+             * @enum {string}
+             */
+            verdict: "missing" | "unsupported" | "supported";
+            /** Text */
+            text: string;
+        };
+        /** CheckOut */
+        CheckOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Note Id
+             * Format: uuid
+             */
+            note_id: string;
+            /** Lines */
+            lines: components["schemas"]["CheckLineOut"][];
+            /** Dropped */
+            dropped: number;
+            /** Sources */
+            sources: (components["schemas"]["ChatSource"] | null)[];
+            /** Whole Paper */
+            whole_paper: boolean;
+            /** Model */
+            model: string;
+            /** Connection Name */
+            connection_name: string | null;
+            /** Prompt Version */
+            prompt_version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Stale */
+            stale: boolean;
+        };
+        /** CheckRequest */
+        CheckRequest: {
+            /** Model Id */
+            model_id?: string | null;
+            /**
+             * Confirm Remote
+             * @default false
+             */
+            confirm_remote: boolean;
+        };
         /** ChunkOut */
         ChunkOut: {
             /**
@@ -4057,6 +4172,33 @@ export interface components {
             title: string;
             /** Reason */
             reason: string;
+        };
+        /** FigureNoteCreate */
+        FigureNoteCreate: {
+            /**
+             * Paper Id
+             * Format: uuid
+             */
+            paper_id: string;
+            /** Page */
+            page: number;
+            /** Region */
+            region: [
+                number,
+                number,
+                number,
+                number
+            ];
+            /**
+             * Body
+             * @default
+             */
+            body: string;
+            /**
+             * Color
+             * @default #facc15
+             */
+            color: string;
         };
         /** FileOut */
         FileOut: {
@@ -4892,7 +5034,13 @@ export interface components {
             paper_id?: string | null;
             /** Quote */
             quote?: string | null;
+            kind?: components["schemas"]["NoteKind"] | null;
         };
+        /**
+         * NoteKind
+         * @enum {string}
+         */
+        NoteKind: "five_cs" | "summary" | "reconstruction" | "assumption" | "future_work" | "figure";
         /** NoteOut */
         NoteOut: {
             /**
@@ -4909,6 +5057,7 @@ export interface components {
             provenance: "human" | "llm" | "llm_edited";
             /** Color */
             color: string;
+            kind: components["schemas"]["NoteKind"] | null;
             /** Source Id */
             source_id: string | null;
             /**
@@ -4992,6 +5141,7 @@ export interface components {
             body?: string | null;
             /** Color */
             color?: string | null;
+            kind?: components["schemas"]["NoteKind"] | null;
         };
         /** NumberAddedOut */
         NumberAddedOut: {
@@ -7663,6 +7813,72 @@ export interface operations {
             };
         };
     };
+    check_note_api_notes__note_id__check_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                note_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": components["schemas"]["SourcesEvent"] | components["schemas"]["TokenEvent"] | components["schemas"]["DoneEvent"] | components["schemas"]["ErrorEvent"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_checks_api_papers__paper_id__checks_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                paper_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_reading_context_api_papers__paper_id__reading_context_get: {
         parameters: {
             query?: never;
@@ -7912,6 +8128,39 @@ export interface operations {
                     "application/json": {
                         [key: string]: number;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_figure_note_api_notes_figure_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FigureNoteCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteOut"];
                 };
             };
             /** @description Validation Error */

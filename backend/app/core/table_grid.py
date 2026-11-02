@@ -11,6 +11,7 @@ the same grid.
 import re
 import statistics
 from dataclasses import dataclass
+from typing import Literal
 
 from app.core.numbers import parse_number
 
@@ -27,7 +28,7 @@ SPANNING_ROWS = 2
 # A caption this close (points) above or below the box names the dataset.
 CAPTION_GAP = 36.0
 CAPTION_NAME_CHARS = 120
-_CAPTION = re.compile(r"Table\s+\d+\s*[:.]")
+_CAPTIONS = {"table": re.compile(r"Table\s+\d+\s*[:.]"), "figure": re.compile(r"(?:Figure|Fig\.)\s*\d+\s*[:.]")}
 
 
 @dataclass(frozen=True)
@@ -130,21 +131,24 @@ def words_to_grid(words: list[Word]) -> list[list[GridCell]]:
     return grid
 
 
-def caption_name(blocks: list[tuple[Rect, str]], region: Rect) -> str | None:
-    """The nearest "Table N: …" caption above, below or inside the box, cut after its first sentence."""
+def caption_name(
+    blocks: list[tuple[Rect, str]], region: Rect, label: Literal["table", "figure"] = "table"
+) -> str | None:
+    """The nearest "Table N: …" (or "Figure N: …") caption above, below or inside the box, cut at its first sentence."""
+    caption = _CAPTIONS[label]
     best: tuple[float, str] | None = None
     for (x0, y0, x1, y1), text in blocks:
         line = " ".join(text.split())
         overlaps = min(x1, region[2]) > max(x0, region[0])
         distance = max(region[1] - y1, y0 - region[3])
-        if not (_CAPTION.match(line) and overlaps and distance <= CAPTION_GAP):
+        if not (caption.match(line) and overlaps and distance <= CAPTION_GAP):
             continue
         if best is None or distance < best[0]:
             best = (distance, line)
     if best is None:
         return None
     line = best[1]
-    head = _CAPTION.match(line)
+    head = caption.match(line)
     assert head is not None
     end = line.find(". ", head.end())
     name = line if end == -1 else line[: end + 1]

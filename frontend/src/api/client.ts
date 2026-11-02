@@ -38,6 +38,8 @@ export type EvidenceCardRow = components['schemas']['CardRowOut']
 export type EvidenceChange = components['schemas']['EditIn']['changes'][number]
 export type Chunk = components['schemas']['ChunkOut']
 export type Note = components['schemas']['NoteOut']
+export type NoteKind = NonNullable<Note['kind']>
+export type FigureNoteCreate = components['schemas']['FigureNoteCreate']
 export type NoteCreate = components['schemas']['NoteCreate']
 export type NoteUpdate = components['schemas']['NoteUpdate']
 export type ChatSource = components['schemas']['ChatSource']
@@ -123,6 +125,7 @@ export type LensId = Lens['id']
 export type Role = Section['role']
 export type SectionRoleIn = components['schemas']['SectionRoleIn']
 export type Brief = components['schemas']['BriefOut']
+export type Check = components['schemas']['CheckOut']
 // The three continue fields are intersected in by hand until gen:api sees them.
 export type SearchRun = components['schemas']['SearchRunOut'] & {
   can_continue?: boolean
@@ -357,8 +360,17 @@ export const api = {
       method: 'POST',
       signal,
     }),
+  listChecks: (paperId: string) => request<Check[]>(`/api/papers/${paperId}/checks`),
+  /** The raw response: on success its body is the check's SSE stream, whose tokens are each one kept line. A remote
+   *  model needs `confirmRemote`; null `modelId` asks the default. */
+  checkNote: (noteId: string, modelId: string | null, confirmRemote: boolean, signal?: AbortSignal) =>
+    fetch(`/api/notes/${noteId}/check`, {
+      ...sendJson('POST', { model_id: modelId, confirm_remote: confirmRemote }),
+      signal,
+    }),
   listNotes: (paperId: string) => request<Note[]>(`/api/papers/${paperId}/notes`),
   createNote: (note: NoteCreate) => request<Note>('/api/notes', sendJson('POST', note)),
+  createFigureNote: (note: FigureNoteCreate) => request<Note>('/api/notes/figure', sendJson('POST', note)),
   updateNote: (id: string, patch: NoteUpdate) => request<Note>(`/api/notes/${id}`, sendJson('PATCH', patch)),
   deleteNote: (id: string) => request<void>(`/api/notes/${id}`, { method: 'DELETE' }),
   /** Every note, newest first: all of them (`null`), a paper's (its id), or those on no paper (`'none'`). */

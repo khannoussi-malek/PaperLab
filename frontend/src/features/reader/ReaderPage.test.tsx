@@ -7,8 +7,11 @@ import { ReaderPage } from './ReaderPage'
 
 type NotesProps = {
   draft: { quotedText: string } | null
-  onSaveDraft: (body: string) => Promise<boolean>
-  onSavePaperNote: (body: string) => Promise<boolean>
+  onSaveDraft: (body: string, kind?: string | null) => Promise<boolean>
+  onSavePaperNote: (body: string, kind?: string | null) => Promise<boolean>
+  wholePaperDraft: { kind: string | null } | null
+  onNewPaperNote: () => void
+  onPaperNoteDirty?: (dirty: boolean) => void
 }
 const state = vi.hoisted(() => ({
   paper: undefined as Paper | undefined,
@@ -16,6 +19,7 @@ const state = vi.hoisted(() => ({
   onCite: null as null | ((s: ChatSource) => void),
   notes: null as null | NotesProps,
   create: vi.fn(),
+  reading: null as null | { onWriteNote?: (kind: string) => void; onOpenNote?: (id: string) => void },
 }))
 const getDocument = vi.hoisted(() => vi.fn(() => ({ promise: new Promise(() => {}), destroy: vi.fn() })))
 vi.mock('./pdfjs', () => ({ getDocument, pdfWorker: null }))
@@ -56,7 +60,12 @@ vi.mock('../evidence/EvidencePanel', () => ({ EvidencePanel: () => null }))
 vi.mock('../library/GetPdfActions', () => ({ GetPdfActions: () => null }))
 vi.mock('./PaperTagChips', () => ({ PaperTagChips: () => null }))
 vi.mock('./ReadingContextBanner', () => ({ ReadingContextBanner: () => null }))
-vi.mock('../reading/ReadingControl', () => ({ ReadingControl: () => null }))
+vi.mock('../reading/ReadingControl', () => ({
+  ReadingControl: (props: NonNullable<typeof state.reading>) => {
+    state.reading = props
+    return null
+  },
+}))
 vi.mock('./PaperDetailsDialog', () => ({ PaperDetailsDialog: () => null }))
 vi.mock('@/components/mode-toggle', () => ({ ModeToggle: () => null }))
 vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
@@ -138,7 +147,7 @@ test('text selected in the abstract becomes the draft, and saving it sends the p
 test('a plain note on a paper without a PDF is saved linked to it, with no anchor', async () => {
   state.paper = paper({})
   render(<ReaderPage paperId={ID} tab="notes" target={null} />)
-  await act(() => state.notes!.onSavePaperNote('Read later.'))
+  await act(() => state.notes!.onSavePaperNote('Read later.', null))
   expect(state.create).toHaveBeenCalledWith({ body: 'Read later.', color: expect.any(String), paper_id: ID })
 })
 
@@ -167,4 +176,71 @@ test('a merged paper keeps the tab and the target: its chunks and notes are the 
   window.location.hash = `#/papers/${ID}?${query}`
   render(<ReaderPage paperId={ID} tab="chat" target={{ kind: 'chunk', id: '6f1c2a40-2222-4a8e-9c4e-000000000002', page: 3 }} />)
   expect(window.location.hash).toBe(`#/papers/${KEPT}?${query}`)
+})
+
+function selectAbstract() {
+  const abstract = screen.getByText('Sleep helps memory consolidation.')
+  const range = document.createRange()
+  range.setStart(abstract.firstChild!, 0)
+  range.setEnd(abstract.firstChild!, 'Sleep helps memory'.length)
+  window.getSelection()!.removeAllRanges()
+  window.getSelection()!.addRange(range)
+  fireEvent.mouseUp(abstract)
+}
+
+test('a new selection replaces the whole-paper composer', async () => {
+  state.paper = paper({})
+  render(<ReaderPage paperId={ID} tab="notes" target={null} />)
+  act(() => state.notes!.onNewPaperNote())
+  expect(state.notes!.wholePaperDraft).toEqual({ kind: null })
+  selectAbstract()
+  await waitFor(() => expect(state.notes!.draft?.quotedText).toBe('Sleep helps memory'))
+  expect(state.notes!.wholePaperDraft).toBeNull()
+})
+
+test('a selection leaves a composer with typed text alone, and says to save or cancel first', async () => {
+  state.paper = paper({})
+  render(<ReaderPage paperId={ID} tab="notes" target={null} />)
+  act(() => state.notes!.onNewPaperNote())
+  act(() => state.notes!.onPaperNoteDirty!(true))
+  selectAbstract()
+  expect(await screen.findByText('Save or cancel the note you are writing first.')).toBeInTheDocument()
+  expect(state.notes!.draft).toBeNull()
+  expect(state.notes!.wholePaperDraft).toEqual({ kind: null })
+  act(() => state.notes!.onPaperNoteDirty!(false)) // saved or cancelled: the line goes, and a selection works again
+  expect(screen.queryByText('Save or cancel the note you are writing first.')).toBeNull()
+  selectAbstract()
+  await waitFor(() => expect(state.notes!.draft?.quotedText).toBe('Sleep helps memory'))
+})
+
+test('New note replaces a selection draft, and a kind is posted when picked', async () => {
+  state.paper = paper({})
+  render(<ReaderPage paperId={ID} tab="notes" target={null} />)
+  selectAbstract()
+  await waitFor(() => expect(state.notes!.draft).not.toBeNull())
+  act(() => state.notes!.onNewPaperNote())
+  expect(state.notes!.draft).toBeNull()
+  expect(state.notes!.wholePaperDraft).toEqual({ kind: null })
+  await act(() => state.notes!.onSavePaperNote('Mine.', 'summary'))
+  expect(state.create).toHaveBeenCalledWith({ body: 'Mine.', color: expect.any(String), paper_id: ID, kind: 'summary' })
+})
+
+test('Write it opens the Notes tab composer with that kind', () => {
+  state.paper = paper({ has_pdf: true })
+  render(<ReaderPage paperId={ID} tab="chat" target={null} />)
+  act(() => state.reading!.onWriteNote!('summary'))
+  expect(state.notes!.wholePaperDraft).toEqual({ kind: 'summary' })
+  expect(window.location.hash).toBe(`#/papers/${ID}`)
+})
+
+test('a note saved from a Write it composer closes it, with or without a PDF', async () => {
+  for (const has_pdf of [true, false]) {
+    state.paper = paper({ has_pdf })
+    const { unmount } = render(<ReaderPage paperId={ID} tab="notes" target={null} />)
+    act(() => state.reading!.onWriteNote!('summary'))
+    expect(state.notes!.wholePaperDraft).toEqual({ kind: 'summary' })
+    await act(() => state.notes!.onSavePaperNote('Mine.', 'summary'))
+    expect(state.notes!.wholePaperDraft).toBeNull()
+    unmount()
+  }
 })

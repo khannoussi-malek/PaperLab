@@ -2,6 +2,13 @@ import { describe, expect, it } from 'vitest'
 import type { Paper } from '@/api/client'
 import { emptyListText, matchesReading, nextPass, PASSES, readingChip, type Triage } from './passes'
 
+describe('PASSES exit-test kinds', () => {
+  it('gives passes 1 to 3 their note kind and leaves the five Cs as they were', () => {
+    expect(PASSES.map((pass) => pass.noteKind)).toEqual(['five_cs', 'summary', 'reconstruction'])
+    expect(PASSES[0].fiveCs?.map((c) => c.split(':')[0])).toEqual(['Category', 'Context', 'Correctness', 'Contributions', 'Clarity'])
+  })
+})
+
 describe('PASSES', () => {
   it('has three passes, with Keshav 2007’s headings', () => {
     expect(PASSES.map((pass) => pass.heading)).toEqual(['Pass 1 · 5–10 minutes', 'Pass 2 · about an hour', 'Pass 3 · 1–5 hours'])

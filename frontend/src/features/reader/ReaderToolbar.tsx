@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
-import { Table2, ZoomIn, ZoomOut } from 'lucide-react'
+import type { NoteKind } from '@/api/client'
+import { Frame, Table2, ZoomIn, ZoomOut } from 'lucide-react'
 import type { Paper } from '@/api/client'
 import { glass } from '@/components/glass'
 import { ModeToggle } from '@/components/mode-toggle'
@@ -18,14 +19,19 @@ type Props = {
   /** Whether dragging on the pages draws a box to capture a table. */
   capturing: boolean
   onCaptureChange: (on: boolean) => void
+  /** Whether dragging on the pages draws a box on a figure to note. */
+  drawingFigure?: boolean
+  onDrawingFigureChange?: (on: boolean) => void
   onOpenReferences: () => void
+  onWriteNote?: (kind: NoteKind) => void
+  onOpenNote?: (noteId: string) => void
   /** The paper's tag chips; the page supplies them so the toolbar stays free of data hooks. */
   tags?: React.ReactNode
   /** The reading lens picker and its steps (M16), after Reading and before Capture table; shown only with a PDF. */
   lensControl?: ReactNode
 }
 
-export function ReaderToolbar({ paper, zoomIndex, onZoomChange, capturing, onCaptureChange, onOpenReferences, tags, lensControl }: Props) {
+export function ReaderToolbar({ paper, zoomIndex, onZoomChange, capturing, onCaptureChange, drawingFigure = false, onDrawingFigureChange, onOpenReferences, onWriteNote, onOpenNote, tags, lensControl }: Props) {
   const title = paper?.title
   // A paper saved without its PDF has no pages to zoom or capture from; while it loads, the controls show as usual.
   const pages = paper?.has_pdf !== false
@@ -43,7 +49,7 @@ export function ReaderToolbar({ paper, zoomIndex, onZoomChange, capturing, onCap
           <SourceBadges paper={paper} />
         </div>
       )}
-      {paper && <ReadingControl paper={paper} onOpenReferences={onOpenReferences} />}
+      {paper && <ReadingControl paper={paper} onOpenReferences={onOpenReferences} onWriteNote={onWriteNote} onOpenNote={onOpenNote} />}
       {pages && lensControl}
       {pages && (
         <Button
@@ -55,6 +61,18 @@ export function ReaderToolbar({ paper, zoomIndex, onZoomChange, capturing, onCap
         >
           <Table2 aria-hidden />
           Capture table
+        </Button>
+      )}
+      {pages && onDrawingFigureChange && (
+        <Button
+          variant="outline"
+          size="sm"
+          aria-pressed={drawingFigure}
+          className="aria-pressed:border-primary aria-pressed:bg-primary/10 aria-pressed:text-primary"
+          onClick={() => onDrawingFigureChange(!drawingFigure)}
+        >
+          <Frame aria-hidden />
+          Note on figure
         </Button>
       )}
       {paper && <PaperDetailsDialog paper={paper} />}
