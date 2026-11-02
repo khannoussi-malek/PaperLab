@@ -32,11 +32,6 @@ SUGGEST = re.compile(
 )
 COPY_WORDS = 6  # a point sharing this many consecutive words with a sentence of the section is copying it
 
-Kind = Literal["missing", "unsupported", "supported"]
-
-
-COPY_WORDS = 6  # a point sharing this many consecutive words with a sentence of the section is copying it
-
 
 def clean_line(raw: str) -> str:
     """The line without list numbering, bullets and markdown emphasis."""

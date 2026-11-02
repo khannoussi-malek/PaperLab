@@ -34,11 +34,15 @@ MIN_QUERY_WORDS = 4
 OUTLINE_CHARS = 1_000
 
 _REF = re.compile(r"\[C(\d+)\]")
-_NUMBER = re.compile(r"\d+(?:,\d{3})*(?:\.\d+)?")
+_NUMBER = re.compile(r"\.?\d+(?:,\d{3})*(?:[.,]\d+)?")
+_THOUSANDS = re.compile(r"\d+(?:,\d{3})+")
+# A correction in words hands over the right answer as surely as a number does.
+_CORRECTS = re.compile(r",\s*not\b|\brather than\b|\bactually\b|\bin fact\b|\bnot\s+\S+\s+but\b", re.IGNORECASE)
 _FIVE_C_LABEL = re.compile(
     r"^\s*(?:\*\*)?(?:category|context|correctness|contributions|clarity)(?:\*\*)?\s*:(?:\*\*)?", re.IGNORECASE
 )
 _SENTENCES = re.compile(r"(?<=[.!?])\s+|\n")
+_C_HEADING = re.compile(r"^(?:category|context|correctness|contributions|clarity)\s*:\s*", re.IGNORECASE)
 _ORDER = {"missing": 0, "unsupported": 1, "supported": 2}
 
 
@@ -95,7 +99,7 @@ class CheckGuard:
 
 
 def _numbers(text: str) -> set[str]:
-    return {run.replace(",", "") for run in _NUMBER.findall(text)}
+    return {run.replace(",", "") if _THOUSANDS.fullmatch(run) else run for run in _NUMBER.findall(text)}
 
 
 def guard_for(note_body: str, passages: Iterable[str]) -> CheckGuard:
@@ -141,7 +145,10 @@ class LineFilter:
             return None
         verdict, text = labelled
         plain = bare(text, _REF)
-        if not 1 <= len(plain.split()) <= MAX_WORDS or reads_as_wording(text, _REF, self.guard.copied):
+        if not 1 <= len(plain.split()) <= MAX_WORDS:
+            return None
+        # the five Cs name a category: one leading heading doesn't count as introducing wording
+        if reads_as_wording(_C_HEADING.sub("", text, count=1), _REF, self.guard.copied) or _CORRECTS.search(plain):
             return None
         if _numbers(plain) - self.guard.numbers:  # the line would hand over the paper's number
             return None
