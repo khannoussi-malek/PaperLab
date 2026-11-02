@@ -8,7 +8,6 @@ from app.core.retrieval import RetrievedChunk
 
 GUARD = guard_for("the 32.4 BLEU score", ["pushing the GLUE score to new highs"])
 DROPPED = "dropped"
-ONE_KEPT_NONE_DROPPED = "one"
 WORDS25 = " ".join(["word"] * 25)
 
 # (raw, kept verdict + cited, or DROPPED)
@@ -29,6 +28,14 @@ CASES = [
     ("Missing: the GLUE score of 80.5% [C1]", DROPPED),
     ("Unsupported: the score is 28.4, not 32.4 [C2]", DROPPED),
     ("Missing: pushing the GLUE score to new highs [C1]", DROPPED),
+    ("Unsupported: the model is a CNN, not an LSTM [C2]", DROPPED),
+    ("Unsupported: it is a CNN rather than an LSTM [C2]", DROPPED),
+    ("Unsupported: the paper actually used a CNN [C2]", DROPPED),
+    ("Unsupported: the paper in fact used a CNN [C2]", DROPPED),
+    ("Unsupported: not supervised but unsupervised [C1]", DROPPED),
+    ("Unsupported: the paper does not name the sample [C2]", ("unsupported", [2])),
+    ("Unsupported: this is not supported by the passage [C2]", ("unsupported", [2])),
+    ("Unsupported: Category: a survey of translation models [C1]", ("unsupported", [1])),
 ]
 
 
@@ -145,3 +152,15 @@ def test_line_filter_counts():
     assert f.feed("nonsense") is None and f.feed("") is None
     assert f.feed("Missing: the result [C1]") is not None
     assert (len(f.lines), f.dropped) == (1, 1)
+
+
+def test_a_leading_heading_keeps_its_text():
+    line = parse_check("Unsupported: Category: a survey of translation models [C1]", 3, GUARD).lines[0]
+    assert line.text == "Category: a survey of translation models [C1]"
+
+
+def test_numbers_are_read_strictly():
+    g = guard_for("85 then 5 and 80", [])
+    for bad in ("an accuracy of .85", "a share of 80,5 percent"):
+        assert parse_check(f"Missing: {bad} [C1]", 3, g).dropped == 1
+    assert parse_check("Missing: 85 and 5 and 80 [C1]", 3, g).dropped == 0
