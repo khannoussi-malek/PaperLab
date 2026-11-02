@@ -13,6 +13,7 @@ don't need to write any application code. `backend/evals/questions.yaml` holds q
 answer must retrieve; `backend/evals/answers.yaml` holds questions we score answers against. Add one from your own
 field — a question your papers *should* be able to answer — and we find out where retrieval breaks outside the
 fields already covered. Open a pull request with just that entry.
+Stuck for a question? Keshav's five Cs help: Category, Context and Contributions usually have a passage that answers them (an `overview` case in `answers.yaml`); Correctness and Clarity are judgements with no passage, so leave them out.
 
 **2. Add a paper source.** PaperLab searches arXiv, Crossref, CORE, Unpaywall, Semantic Scholar and OpenAlex.
 If your field lives somewhere else — PubMed, HAL, bioRxiv, DBLP, SSRN — that source is a self-contained adapter in
@@ -125,6 +126,7 @@ code is:
 - **Nothing that gets past a paywall.** PaperLab links to a paper you can't access; it does not fetch it for you.
 - **Nothing that blurs what you wrote and what a model wrote.** AI text is stored separately, keeps the model and
   prompt version that produced it, and is always badged in the interface.
+- **Nothing that lets a model take a reading test for you.** A pass's test accepts only your own text, and the model's check names gaps without filling them.
 - **No accounts, no telemetry, no analytics.**
 
 ## Licence

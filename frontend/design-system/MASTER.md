@@ -1242,6 +1242,15 @@ The Review menu's second item, **Review this section**, reviews the top-level `\
 - **The diagram dialog** ("Draw a diagram") takes a description, then **Generate**. It shows the `AI` chip with "From your description: …", a spinner line while drawing, then a **Preview** tab (the compiled PDF) and a **LaTeX** tab (editable; "Update preview" recompiles, and Insert waits until it has). Labels not in the description are an amber warning; check or compile errors show in red, one per line, and disable **Insert**. Insert puts in one `figure` with the AI comment line, an empty `\caption{}` and a unique `fig:diagram-…` label, and adds `\usepackage{tikz}` and the `\usetikzlibrary` lines to the preamble once. Cancel or Esc drops the draft.
 - **The rule.** The section reviewer never returns text to insert: chips only select or open. The only model-made markup that ever reaches the source is a diagram, on an explicit Insert click, marked by its AI comment, with the prose and caption left to the researcher.
 
+## Exit tests
+
+A reading pass ends with a test only the reader can take: a note of kind Five Cs, Summary or Reconstruction, which the model checks against the paper.
+
+- **Kind.** A note shows a `.note-kind` badge (outline) beside its You / AI badge; the Notes tab's Kind filter and the composer's Kind select use the same words. Choosing Five Cs in an empty composer fills in its five headings; a figure note opens as an unfilled outline of three questions, anchored by `.highlight.figure` (outline only, no fill).
+- **Check block.** `.check-result` sits on the AI provenance surface, with the sparkle mark and a tooltip naming model, prompt version and what was read. Each `.check-line[data-verdict]` is a word badge (Missing, Unsupported, Supported) with an icon, never colour alone, then the line with `.check-cite` chips that open the passage. `.check-dropped` says how many lines were left out; `.check-stale` says "Out of date: you changed this note after the check." and turns **Check again** primary.
+- **Names.** "Kind", "New note on this paper", "Check against the paper", "Check again", "Note on figure", "Write it" and "Open".
+- **The rule.** A check names gaps only: nothing in it can be saved, copied or inserted, and an AI note's button is disabled with "Only text you wrote can be checked. This note came from AI." A remote model asks first, with focus on Cancel.
+
 ## Pre-delivery check (from ui-ux-pro-max Quick Reference §1–§3)
 
 Run through this before finishing any UI task, in **both** themes:
