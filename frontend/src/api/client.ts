@@ -461,9 +461,9 @@ export const api = {
   embeddingStatus: () => request<EmbeddingStatus>('/api/embedding'),
   /** The raw response: on success its body is the download's SSE stream (progress…, then done or error). */
   downloadSearchModel: () => fetch('/api/embedding/model', { method: 'POST' }),
-  /** `missingOnly`: Settings' Try again, which embeds only the papers not yet on the active source. */
   setHybridSearch: (enabled: boolean) =>
     request<{ hybrid_search: boolean }>('/api/embedding/hybrid', sendJson('PUT', { enabled })),
+  /** `missingOnly`: Settings' Try again, which embeds only the papers not yet on the active source. */
   reindexLibrary: (missingOnly: boolean) =>
     request<{ papers: number }>('/api/embedding/reindex', sendJson('POST', { confirm: true, missing_only: missingOnly })),
   /** Probes the source, then saves it and queues the papers not yet on it: 202 {papers}, 200 for the source in use. */

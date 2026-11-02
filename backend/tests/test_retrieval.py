@@ -30,7 +30,7 @@ def near(query: list[float], spread: float, seed: str) -> list[float]:
 
 async def seed_papers(session, embedder):
     """Papers A and B, six embedded chunks each at interleaved distances, plus one unembedded chunk in A."""
-    query = unit_vector("query")
+    query = unit_vector(uuid.uuid4().hex)  # a fixed one piles up dead HNSW entries: see fresh_query
     embedder.vectors[f"search_query: {QUERY}"] = query
     papers = [Paper(title=name, file_path=f"/{name}.pdf", status="ready") for name in ("A", "B")]
     session.add_all(papers)
@@ -485,3 +485,74 @@ async def test_hybrid_search_keeps_the_nearest_of_more_tied_matches_than_it_take
     found = await retrieve(session, question, chunk_ids=ids, k=8, embedder=embedder)
 
     assert [r.text for r in found] == [f"Tied {RARE} chunk {i}" for i in range(8)]
+
+
+async def two_paper_scope(session, embedder, question, rare_text):
+    query = unit_vector(uuid.uuid4().hex)
+    embedder.vectors[f"search_query: {question.replace(chr(0), '')}"] = query
+    embedder.vectors[f"search_query: {question}"] = query
+    near = await add_texts(session, query, "Near", [(f"Background chunk {i}", 0.1 * (i + 1)) for i in range(6)])
+    far = await add_texts(session, query, "Far", [(rare_text, 3.0)])
+    return near, far
+
+
+async def test_hybrid_search_covers_a_paper_list_and_a_workspace(session, embedder, monkeypatch):
+    hybrid(monkeypatch, True)
+    question = f"Which dose with {RARE}?"
+    near, far = await two_paper_scope(session, embedder, question, f"Avoid {RARE}.")
+    papers = [near[0].paper_id, far[0].paper_id]
+    workspace = Workspace(name=f"W {uuid.uuid4().hex[:6]}")
+    session.add(workspace)
+    await session.flush()
+    await session.execute(insert(workspace_papers), [{"workspace_id": workspace.id, "paper_id": p} for p in papers])
+    await session.commit()
+
+    listed = await retrieve(session, question, paper_ids=papers, k=3, embedder=embedder)
+    in_workspace = await retrieve(session, question, workspace_id=workspace.id, k=3, embedder=embedder)
+
+    assert far[0].id in {r.id for r in listed} and far[0].id in {r.id for r in in_workspace}
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        f"see https://example.org/{RARE}?a=1&b='2' : (x) | !y",  # URL, quotes and tsquery operators
+        "the of and",  # stop words only: no lexeme at all
+        "???",
+        f"a NUL\x00 byte and {RARE}",  # Postgres refuses 0x00 in text
+    ],
+)
+async def test_hybrid_search_takes_any_question_without_an_error(session, embedder, monkeypatch, question):
+    hybrid(monkeypatch, True)
+    near, far = await two_paper_scope(session, embedder, question, f"Avoid {RARE}.")
+    found = await retrieve(session, question, paper_ids=[near[0].paper_id, far[0].paper_id], k=3, embedder=embedder)
+    assert found
+
+
+async def test_a_long_text_is_searched_by_vectors_alone(session, embedder, monkeypatch):
+    # The paper deck sends a whole section: a keyword ranking of 20 000 characters is slow and means nothing.
+    hybrid(monkeypatch, True)
+    question = f"{RARE} " + "word " * 400
+    assert len(question) > retrieval.MAX_HYBRID_CHARS
+    near, far = await two_paper_scope(session, embedder, question, f"Avoid {RARE}.")
+    found = await retrieve(session, question, paper_ids=[near[0].paper_id, far[0].paper_id], k=3, embedder=embedder)
+    assert far[0].id not in {r.id for r in found}
+
+
+async def test_only_the_rarest_words_of_a_question_are_scored(session, embedder, monkeypatch):
+    hybrid(monkeypatch, True)
+    common = [f"common{i}x" for i in range(10)]
+    question = " ".join([RARE, *common])
+    query = unit_vector(uuid.uuid4().hex)
+    embedder.vectors[f"search_query: {question}"] = query
+    shared = " ".join(common)
+    near = await add_texts(session, query, "Near", [(f"{shared} chunk {i}", 0.1 * (i + 1)) for i in range(6)])
+    far = await add_texts(session, query, "Far", [(f"Avoid {RARE}.", 3.0)])
+    papers = [near[0].paper_id, far[0].paper_id]
+
+    monkeypatch.setattr(retrieval, "MAX_TERMS", 50)  # all eleven words: ten shared ones outweigh the rare one
+    every_word = await retrieve(session, question, paper_ids=papers, k=3, embedder=embedder)
+    monkeypatch.setattr(retrieval, "MAX_TERMS", 1)  # only the rarest
+    rarest = await retrieve(session, question, paper_ids=papers, k=3, embedder=embedder)
+
+    assert far[0].id not in {r.id for r in every_word} and rarest[0].id == far[0].id

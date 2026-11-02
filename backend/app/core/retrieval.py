@@ -50,6 +50,10 @@ LIMIT :k
 # The vector ranks count from the far end: relaxed_order (below) can return `nearest` slightly out of order, and a
 # window ORDER BY distance would take that order as already sorted. Postgres can't take it as sorted DESC.
 RRF_K = 60
+# Longer than this is a passage, not a question (the paper deck sends a whole section): vectors alone. A keyword ranking
+# of its hundreds of words would be slow, with each word counted over the scope, and would mean nothing.
+MAX_HYBRID_CHARS = 1_000
+MAX_TERMS = 32  # the rarest words of a question, which are the ones that tell chunks apart
 _HYBRID = """
 WITH vector AS (
   SELECT id, count(*) OVER () + 1 - row_number() OVER (ORDER BY distance DESC) AS rank
@@ -71,8 +75,11 @@ weights AS MATERIALIZED (
   FROM (
     SELECT term, (SELECT count(*) FROM chunks WHERE embedding IS NOT NULL {scope} AND tsv @@ term) AS df
     FROM terms
+    OFFSET 0  -- keeps the planner from counting each term once per use of df below
   ) AS counted
   WHERE df > 0 AND df < (SELECT n FROM total)  -- a word in every chunk tells them apart by nothing
+  ORDER BY df
+  LIMIT :max_terms
 ),
 lexical AS (
   SELECT id, rank() OVER (ORDER BY score DESC) AS rank  -- ties share a rank, so they leave the vector order alone
@@ -234,11 +241,14 @@ async def retrieve(
     params = {"q": question, "k": k, "candidates": max(CANDIDATES, k)}
     params["per_paper"] = k if per_paper is None else per_paper
     # Hybrid only across papers: inside one paper its own topic words are in most chunks, and the single-paper eval
-    # lost recall (@4 0.95 -> 0.90, @8 1.00 -> 0.95); the workspace eval gained (@8 10/17 -> 13/17), 2026-11-01.
-    hybrid = (paper_ids is None or len(paper_ids) > 1) and await hybrid_on(session)
+    # lost recall (@4 0.95 -> 0.90, @8 1.00 -> 0.95); the workspace eval gained (@8 13/17 -> 16/17), 2026-11-01.
+    # ponytail: a whole-library search in a one-paper library still runs hybrid; a count on every search isn't worth it.
+    across_papers = paper_ids is None or len(paper_ids) > 1
+    hybrid = across_papers and len(query) <= MAX_HYBRID_CHARS and await hybrid_on(session)
     statement = _nearest(paper_ids is not None, chunk_ids is not None, hybrid)
     if hybrid:
-        params |= {"question": query, "rrf_k": RRF_K}
+        # Postgres refuses a NUL in text, and the vector path never sends the words to it.
+        params |= {"question": query.replace("\x00", ""), "rrf_k": RRF_K, "max_terms": MAX_TERMS}
     if paper_ids is not None:
         params["paper_ids"] = list(paper_ids)
     if chunk_ids is not None:

@@ -83,7 +83,7 @@ async def search(
     session: AsyncSession, query: str, workspace: str | None = None, *, k: int = SEARCH_K, embedder=None,
     tags: list[str] | None = None, match: Literal["any", "all"] = "any",
 ) -> list[Passage]:
-    """The k passages nearest to the query, closest first, at most MAX_PER_PAPER from one paper, in the whole library
+    """The k passages that best match the query, best first, at most MAX_PER_PAPER from one paper, in the whole library
     or one workspace (by name). The name is checked before anything is embedded, so a wrong one never loads the model.
 
     `tags` (a workspace's tag names) keeps only papers carrying any/all of them. Raises
