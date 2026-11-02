@@ -10,10 +10,10 @@ vi.mock('@/components/mode-toggle', () => ({ ModeToggle: () => null }))
 
 const paper = (extra: Partial<Paper> = {}) =>
   ({ title: 'T', source_type: 'preprint', peer_reviewed: 'false', evidence_access: 'full_text', ...extra }) as Paper
-const renderToolbar = (p: Paper, drawingFigure: boolean, onDrawingFigureChange = vi.fn()) =>
+const renderToolbar = (p: Paper, drawingFigure: boolean, onDrawingFigureChange: ((on: boolean) => void) | null = vi.fn()) =>
   render(
     <ReaderToolbar paper={p} zoomIndex={0} onZoomChange={vi.fn()} capturing={false} onCaptureChange={vi.fn()}
-      drawingFigure={drawingFigure} onDrawingFigureChange={onDrawingFigureChange} onOpenReferences={vi.fn()} />,
+      drawingFigure={drawingFigure} onDrawingFigureChange={onDrawingFigureChange ?? undefined} onOpenReferences={vi.fn()} />,
   )
 
 it('shows Note on figure with its pressed state and calls back with the opposite', () => {
@@ -32,5 +32,10 @@ it('shows it pressed while drawing', () => {
 
 it('hides it for a paper without a PDF', () => {
   renderToolbar(paper({ has_pdf: false }), false)
+  expect(screen.queryByRole('button', { name: 'Note on figure' })).toBeNull()
+})
+
+it('hides it when nobody listens for it', () => {
+  renderToolbar(paper(), false, null)
   expect(screen.queryByRole('button', { name: 'Note on figure' })).toBeNull()
 })

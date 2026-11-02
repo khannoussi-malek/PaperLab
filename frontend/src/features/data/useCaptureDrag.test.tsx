@@ -65,3 +65,15 @@ test('a table drag still sets capture', () => {
   expect(onFigure).not.toHaveBeenCalled()
   expect(result.current.capturing).toBe(false)
 })
+
+test('tableMode is only the table mode, and each toggle switches to the other mode', () => {
+  const { result } = renderHook(() => useCaptureDrag(1, vi.fn()))
+  act(() => result.current.setDrawingFigure(true))
+  expect(result.current.tableMode).toBe(false)
+  act(() => result.current.setCapturing(true))
+  expect(result.current.tableMode).toBe(true)
+  expect(result.current.drawingFigure).toBe(false)
+  act(() => result.current.setDrawingFigure(true))
+  expect(result.current.tableMode).toBe(false)
+  expect(result.current.drawingFigure).toBe(true)
+})

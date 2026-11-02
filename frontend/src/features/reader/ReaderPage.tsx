@@ -69,7 +69,7 @@ type PageHighlight = {
   figure?: boolean
 }
 
-function groupHighlights(notes: Note[], draft: NoteDraft | null, paperId: string) {
+export function groupHighlights(notes: Note[], draft: NoteDraft | null, paperId: string) {
   const byPage = new Map<number, PageHighlight[]>()
   const add = (page: number, highlight: PageHighlight) =>
     byPage.set(page, [...(byPage.get(page) ?? []), highlight])
@@ -476,7 +476,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
           paper={paper.data}
           zoomIndex={zoomIndex}
           onZoomChange={setZoomIndex}
-          capturing={capturing}
+          capturing={captureDrag.tableMode}
           onCaptureChange={captureDrag.setCapturing}
           drawingFigure={captureDrag.drawingFigure}
           onDrawingFigureChange={captureDrag.setDrawingFigure}

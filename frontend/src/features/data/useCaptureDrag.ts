@@ -80,5 +80,5 @@ export function useCaptureDrag(scale: number, onFigure: (page: number, region: P
     ] as PdfRect,
   }
 
-  return { capturing, setCapturing, drawingFigure: mode === 'figure', setDrawingFigure, box, capture, closeCapture: () => setCapture(null), startDrag, moveDrag, endDrag }
+  return { capturing, tableMode: mode === 'table', setCapturing, drawingFigure: mode === 'figure', setDrawingFigure, box, capture, closeCapture: () => setCapture(null), startDrag, moveDrag, endDrag }
 }
