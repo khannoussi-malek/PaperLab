@@ -186,7 +186,7 @@ async def test_a_failing_case_is_recorded_and_the_rest_still_run(session, tmp_pa
         async def stream(self, system, prompt):
             Flaky.calls += 1
             if Flaky.calls == 2:
-                raise LLMError("boom")
+                raise LLMError("test returned 400: a failure a retry can't clear")
             async for part in super().stream(system, prompt):
                 yield part
 

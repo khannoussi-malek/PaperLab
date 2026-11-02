@@ -155,7 +155,7 @@ async def test_one_failing_check_does_not_lose_the_others(session):
         async def stream(self, system, prompt):
             Flaky.calls += 1
             if Flaky.calls == 2:
-                raise LLMError("boom")
+                raise LLMError("test returned 400: a failure a retry can't clear")
             async for part in super().stream(system, prompt):
                 yield part
 

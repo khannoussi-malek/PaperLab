@@ -23,6 +23,12 @@ _ABSOLUTE = "accessing absolute path"
 _WRITE = re.compile(r"^note: Writing `(?P<path>[^`]+)`", re.M)
 # Only a .sty or .cls: a missing .tex is the project's own file, not a package PaperLab lacks.
 _MISSING = re.compile(r"File `(?P<name>[^`'/]+)\.(?:sty|cls)' not found")
+# xdvipdfmx's own words when a font isn't in the images' cache: TeX was happy, so it leaves no `error:` with a file.
+_FONT = re.compile(r'Could not locate a virtual/physical font for TFM "[^"]+"')
+_CAUSED_BY = re.compile(r"^caused by: (?P<message>.+)$", re.M)
+_ANY_ERROR = re.compile(r"^error: (?P<message>.+)$", re.M)
+_GENERIC = ("something bad happened", "the xdvipdfmx engine had an unrecoverable error")
+NO_ENGINE_ERROR = "The compile failed and the engine gave no error. The log may say more."
 
 
 @dataclass(frozen=True)
@@ -75,6 +81,16 @@ def friendly_message(log: str) -> str | None:
     return None
 
 
+def _engine_error(stderr: str, main_log: str) -> dict:
+    """Why a compile failed when no line named a file: the engine's own last words, so `errors` is never empty."""
+    text = stderr + "\n" + main_log
+    font = _FONT.search(text)
+    caused = _CAUSED_BY.findall(text)
+    said = [m for m in _ANY_ERROR.findall(text) if not m.startswith(_GENERIC)]
+    message = font.group(0) if font else caused[-1] if caused else said[-1] if said else NO_ENGINE_ERROR
+    return {"file": None, "line": None, "message": message, "kind": "engine"}
+
+
 def _clean_log(stderr: str, main_log: str) -> str:
     kept = [ln for ln in stderr.splitlines() if not ln.startswith("Fontconfig error")]
     return ("\n".join(kept) + "\n" + main_log)[:MAX_LOG]
@@ -91,6 +107,10 @@ def finish(
     if friendly == "package_missing":  # the name, for "PaperLab doesn't include yet: <name>"
         name = _MISSING.search(stderr).group("name")
         errors.insert(0, {"file": main_file, "line": None, "message": name, "kind": "package_missing"})
+    if not ok and friendly is None and _FONT.search(stderr + "\n" + main_log):
+        friendly = "font_missing"
+    if not ok and friendly in (None, "font_missing") and not any(e["kind"] == "error" for e in errors):
+        errors.insert(0, _engine_error(stderr, main_log))
     return CompileResult(
         ok=ok,
         pdf=pdf if ok else None,

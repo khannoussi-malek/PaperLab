@@ -26,6 +26,8 @@ const MESSAGES: Record<string, (d: Details) => string> = {
   main_file: () => "The main file can't be deleted. Make another file the main one first.",
   unknown_file: () => 'That file is no longer in this manuscript.',
   unknown_workspace: () => 'That workspace no longer exists.',
+  font_missing: (d) =>
+    `PaperLab doesn't have a font this compile needs, so the PDF couldn't be made${typeof d.name === 'string' && d.name ? `: ${d.name}` : ''}.`,
   biber_unsupported: () =>
     "This project uses biblatex with Biber, which PaperLab can't run yet. Switch to `backend=bibtex` or natbib.",
   compile_timeout: () => 'Compiling took longer than a minute and was stopped.',
