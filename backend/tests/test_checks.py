@@ -7,7 +7,7 @@ from conftest import unit_vector
 from test_note_papers import paper_only_note
 from test_sections import paper_with_headings
 
-from app.core import checks, embedding_index, sections
+from app.core import checks, embedding_index, lenses, sections
 from app.core.chat import SMALL_PAPER_CHARS
 from app.core.errors import Conflict, InvalidInput, NotFound
 from app.models import Chunk, Note, Provenance
@@ -423,3 +423,16 @@ async def test_saving_a_suggestion_from_a_check_is_not_found(session):
 
     with pytest.raises(NotFound):
         await notes.save_suggestion(session, output_id, 0)
+
+
+async def test_retrieval_never_searches_the_chunks_already_kept_as_key_ideas(session, embedder, monkeypatch):
+    # no abstract, intro, conclusion or discussion: Key ideas falls back to position, and overlaps Critical check
+    heads = ["3 Method", "3.1 Setup", "4 Results", "4.1 Ablation", "Limitations", "References"]
+    paper, _ = await long_paper(session, heads, size=8_000)
+    spy = Spy(monkeypatch)
+
+    await checks.prepare_check(session, (await note_on(session, paper)).id, embedder)
+
+    kept = set((await lenses.lens_chunks(session, paper.id, "key_ideas")).chunk_ids)
+    assert kept
+    assert all(not kept & set(c["chunk_ids"]) for c in spy.calls)
