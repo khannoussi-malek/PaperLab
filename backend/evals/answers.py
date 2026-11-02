@@ -345,26 +345,34 @@ async def stream(llm: LLM, system: str, prompt: str) -> Streamed:
     return Streamed("".join(parts), ttft, time.perf_counter() - start)
 
 
+def check_matches(case: Case, lines: list[tuple[str, str]]) -> dict:
+    """`correct`, `points`, `need` and `of` from the kept lines, as (verdict, text) pairs."""
+    said = lambda verdict: [text for v, text in lines if v == verdict]  # noqa: E731
+    named = lambda texts, point: any(mentions(t, phrasing) for t in texts for phrasing in point)  # noqa: E731
+    missing, unsupported = said("missing"), said("unsupported")
+    hits = sum(named(missing, p) for p in case.points) + sum(named(unsupported, p) for p in case.unsupported)
+    total = len(case.points) + len(case.unsupported)
+    return {
+        "correct": hits == total and not (case.no_missing and missing), "points": hits, "need": total, "of": total,
+    }
+
+
 def check_score(
     content: str, case: Case, passages: list[str], n_sources: int, sources: Iterable[RetrievedChunk] = ()
 ) -> dict:
     """A check reply by string matching, through the same rules the reader's lines pass. `passages` feed the copy
-    guard (none: only the number rule holds); `sources`, in [C…] order, let `grounded` look at the cited pages."""
+    guard; `sources`, in [C…] order, let `grounded` look at the cited pages. `lines` keeps what survived, so a rescore
+    can match again without re-running the guard (it can't: the passages aren't stored)."""
     reply = checks.parse_check(content, n_sources, checks.guard_for(case.question, passages))
-    said = lambda verdict: [line for line in reply.lines if line.verdict == verdict]  # noqa: E731
-    named = lambda lines, point: any(mentions(line.text, phrasing) for line in lines for phrasing in point)  # noqa: E731
-    missing, unsupported = said("missing"), said("unsupported")
-    hits = sum(named(missing, p) for p in case.points) + sum(named(unsupported, p) for p in case.unsupported)
-    total = len(case.points) + len(case.unsupported)
-    cited = [n for line in missing for n in line.cited]
+    cited = [n for line in reply.lines if line.verdict == "missing" for n in line.cited]
     return {
-        "correct": hits == total and not (case.no_missing and missing),
-        "points": hits, "need": total, "of": total,
+        **check_matches(case, [(line.verdict, line.text) for line in reply.lines]),
         "grounded": (
             is_hit([s for n, s in enumerate(sources, 1) if n in cited], case.evidence) if case.evidence else None
         ),
         "kept": len(reply.lines), "dropped": reply.dropped,
         "words_max": max((len(checks.bare(line.text, checks._REF).split()) for line in reply.lines), default=0),
+        "lines": [[line.verdict, line.text] for line in reply.lines],
     }
 
 
@@ -406,6 +414,7 @@ async def resolve_model(session: AsyncSession, name: str, *, local_only: bool) -
     remote one in code: the eval has no one to ask (D190)."""
     query = select(LLMConnection, LLMModel).join(LLMModel, LLMModel.connection_id == LLMConnection.id)
     rows = [tuple(r) for r in await session.execute(query.where(LLMModel.name == name))]
+    rows.sort(key=lambda r: (not llm_connections.is_local(r[0].kind, r[0].base_url, r[0].cloud_proxy), r[0].label))
     if not rows:
         raise EvalError(f"unknown model {name!r}")
     if local_only:
@@ -429,9 +438,14 @@ def rescore(path: Path, cases: list[Case]) -> int:
         if case is None or row["error"] is not None:
             continue
         before = (row["correct"], row["points"])
-        if case.kind == "check":  # no passages stored: the copy guard is off, `grounded` stays as it was
-            scored = check_score(row["content"], case, [], row["sources"])
-            row.update({k: v for k, v in scored.items() if k != "grounded"})
+        if case.kind == "check":
+            # The live run's guard saw the passages; a rescore can't, so kept, dropped and words_max stay as they
+            # were, and the new phrasings are matched against the lines that survived. A row without them keeps its
+            # `correct`.
+            matched = check_matches(case, [tuple(line) for line in row["lines"]]) if "lines" in row else {
+                "need": len(case.points) + len(case.unsupported), "of": len(case.points) + len(case.unsupported)
+            }
+            row.update(matched)
             changed += before != (row["correct"], row["points"])
             continue
         row.update(points=points_hit(row["content"], case.points), need=case.required, of=len(case.points))
@@ -570,7 +584,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--model", help="ask this model by name; `check` cases need one, and it must be local")
     parser.add_argument(
         "--search", choices=("builtin", "active"), default="builtin",
-        help="active: embed questions with the active search source (Settings) instead of the built-in model",
+        help="active: embed questions, and a check's planted note, with the active search source (Settings), so they "
+        "go to that source, instead of the built-in model",
     )
     parser.add_argument("--with-paper-notes", action="store_true", help="save the file's paper_notes first")
     parser.add_argument(
@@ -592,7 +607,11 @@ def select_cases(cases: list[Case], only: str | None, kinds: str | None) -> list
         raise EvalError(f"unknown case ids: {', '.join(unknown)}")
     if wanted_kinds and (unknown := sorted(set(wanted_kinds) - set(KINDS))):
         raise EvalError(f"unknown kinds: {', '.join(unknown)}")
-    return [case for case in cases if (not ids or case.id in ids) and (not wanted_kinds or case.kind in wanted_kinds)]
+    picked = [case for case in cases if (not ids or case.id in ids) and (not wanted_kinds or case.kind in wanted_kinds)]
+    if not ids and not wanted_kinds and any(case.kind == "check" for case in picked):
+        print("skipping check cases: they need --model NAME (a local model); ask for them with --kinds check")
+        picked = [case for case in picked if case.kind != "check"]
+    return picked
 
 
 async def main(argv: list[str] | None = None) -> int:

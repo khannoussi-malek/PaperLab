@@ -140,6 +140,15 @@ def test_select_cases_by_id_or_kind(tmp_path):
         answers.select_cases(cases, only=None, kinds="essay")
 
 
+def test_check_cases_are_left_out_unless_asked_for(tmp_path, capsys):
+    cases = write_cases(tmp_path, CASES + "  - {id: chk, kind: check, paper: p, question: q, no_missing: true}\n")
+    assert [c.id for c in answers.select_cases(cases, only=None, kinds=None)] == ["layers", "tool"]
+    assert "skipping check cases" in capsys.readouterr().out
+    assert [c.id for c in answers.select_cases(cases, only=None, kinds="check")] == ["chk"]
+    assert [c.id for c in answers.select_cases(cases, only="chk", kinds=None)] == ["chk"]
+    assert capsys.readouterr().out == ""
+
+
 def test_paper_notes_load_with_human_provenance_unless_marked_ai(tmp_path):
     path = tmp_path / "answers.yaml"
     path.write_text(CASES + PAPER_NOTES)
@@ -513,15 +522,26 @@ def test_rescore_handles_check_rows(tmp_path):
     question: "{NOTE}"
     unsupported: [["bleu"]]
 """)
-    stale = row("retrieval", "chk", False, kind="check", content=REPLY, points=0, of=0, need=0, kept=0,
-                dropped=9, sources=2)
+    lines = [["unsupported", "the 32.4 BLEU figure has no support"]]
+    stale = row("retrieval", "chk", False, kind="check", content=REPLY, points=0, of=0, need=0, kept=1, dropped=3,
+                words_max=7, lines=lines, sources=2)
+    # The live run dropped the copied "Missing" line; the content alone would keep it.
+    no_lines = row("retrieval", "chk2", False, kind="check", content=REPLY, kept=1, dropped=3, words_max=7, sources=2)
     out = tmp_path / "old.jsonl"
     out.write_text(json.dumps(stale) + "\n")
 
     assert answers.rescore(out, cases) == 1
 
     (rescored,) = answers.read_rows(out)
-    assert (rescored["correct"], rescored["kept"], rescored["dropped"], rescored["grounded"]) == (True, 2, 0, False)
+    assert (rescored["correct"], rescored["points"], rescored["need"], rescored["of"]) == (True, 1, 1, 1)
+    assert (rescored["kept"], rescored["dropped"], rescored["words_max"]) == (1, 3, 7)  # never re-derived
+
+    # a row from before `lines`: correct stays as stored
+    cases2 = [cases[-1].model_copy(update={"id": "chk2"})]
+    out.write_text(json.dumps(no_lines) + "\n")
+    assert answers.rescore(out, cases2) == 0
+    (kept,) = answers.read_rows(out)
+    assert (kept["correct"], kept["kept"], kept["dropped"], kept["need"]) == (False, 1, 3, 1)
 
 
 def test_the_file_loads_with_its_five_check_cases():
@@ -542,9 +562,9 @@ async def run_main(tmp_path, *argv) -> int:
 
 
 async def test_check_cases_need_a_local_model(session, tmp_path, capsys):
-    assert await run_main(tmp_path) == 2  # no --model
+    assert await run_main(tmp_path, "--kinds", "check") == 2  # no --model
     assert "--model" in capsys.readouterr().err
-    assert await run_main(tmp_path, "--model", "no-such-model-xyz") == 2
+    assert await run_main(tmp_path, "--kinds", "check", "--model", "no-such-model-xyz") == 2
     assert "no-such-model-xyz" in capsys.readouterr().err
     connection = LLMConnection(kind="anthropic", label=f"R {uuid.uuid4().hex[:6]}", api_key="k" * 20)
     session.add(connection)
