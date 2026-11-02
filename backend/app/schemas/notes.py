@@ -5,6 +5,7 @@ from typing import Annotated, Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.core.notes import DEFAULT_COLOR
+from app.models import NoteKind
 from app.schemas.papers import Rect
 
 # #rrggbb in either case; the notes service stores it lowercased.
@@ -43,6 +44,7 @@ class NoteCreate(BaseModel):
     anchor: AnchorIn | None = None
     paper_id: uuid.UUID | None = None
     quote: str | None = Field(default=None, min_length=1, max_length=20_000)
+    kind: NoteKind | None = None
 
     @model_validator(mode="after")
     def anchor_or_paper(self) -> Self:
@@ -56,11 +58,12 @@ class NoteCreate(BaseModel):
 class NoteUpdate(BaseModel):
     body: str | None = Field(default=None, max_length=50_000)
     color: HexColor | None = None
+    kind: NoteKind | None = None  # null clears it
 
     @model_validator(mode="after")
     def has_a_change(self) -> Self:
-        if self.body is None and self.color is None:
-            raise ValueError("send a body, a color, or both")
+        if self.body is None and self.color is None and "kind" not in self.model_fields_set:
+            raise ValueError("send a body, a color, a kind, or any of them")
         return self
 
 
@@ -76,6 +79,7 @@ class NoteOut(BaseModel):
     body: str
     provenance: Literal["human", "llm", "llm_edited"]
     color: str
+    kind: NoteKind | None
     source_id: uuid.UUID | None
     created_at: datetime
     updated_at: datetime

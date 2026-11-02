@@ -10,6 +10,9 @@
 - Notes created through MCP get provenance='llm' and source_id = an llm_outputs row of kind 'mcp'.  (here)
 - Showing a chart in a note never changes its provenance, and a note made from a chart is the owner's
   ('human'): a chart holds no generated text, only the owner's choice of data.  (here)
+- A kind never changes provenance.                                           (here)
+- A check (`llm_outputs` kind 'check') is never a note: promote refuses it, and a suggestion can only come from a
+  chat answer.
 """
 
 import asyncio
@@ -19,6 +22,7 @@ import uuid
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import delete, func, insert, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -75,6 +79,7 @@ class NoteView:
     anchors: list[Anchor]
     paper_ids: list[uuid.UUID]  # its papers by title, then id (D95); a passage is only ever on one of them
     charts: list[ChartRef] = field(default_factory=list)
+    kind: str | None = None
 
 
 def edited_provenance(current: str) -> str:
@@ -188,12 +193,15 @@ async def _with_anchors(session: AsyncSession, notes: list[Note]) -> list[NoteVi
             anchors=anchors.get(n.id, []),
             paper_ids=linked.get(n.id, []),
             charts=charts.get(n.id, []),
+            kind=n.kind,
         )
         for n in notes
     ]
 
 
-async def create_human_note(session: AsyncSession, body: str, anchor: Anchor, color: str = DEFAULT_COLOR) -> NoteView:
+async def create_human_note(
+    session: AsyncSession, body: str, anchor: Anchor, color: str = DEFAULT_COLOR, *, kind: str | None = None
+) -> NoteView:
     paper = await get_paper(session, anchor.paper_id)
     if paper.page_count is not None and not 1 <= anchor.page <= paper.page_count:
         raise InvalidInput(f"page {anchor.page} is outside 1..{paper.page_count}")
@@ -203,7 +211,7 @@ async def create_human_note(session: AsyncSession, body: str, anchor: Anchor, co
     if not quote:
         raise InvalidInput("an anchor needs the quoted text")
 
-    note = Note(body=body.strip(), provenance=Provenance.HUMAN, color=normalize_color(color))
+    note = Note(body=body.strip(), provenance=Provenance.HUMAN, color=normalize_color(color), kind=kind)
     session.add(note)
     await session.flush()
     await _link(session, note.id, [anchor.paper_id])
@@ -238,21 +246,27 @@ def _quoted(quote: str, body: str) -> str:
 
 
 async def create_paper_note(
-    session: AsyncSession, paper_id: uuid.UUID, body: str, quote: str | None = None, color: str = DEFAULT_COLOR
+    session: AsyncSession,
+    paper_id: uuid.UUID,
+    body: str,
+    quote: str | None = None,
+    color: str = DEFAULT_COLOR,
+    *,
+    kind: str | None = None,
 ) -> NoteView:
-    """A person's note on a paper saved without a PDF: linked to it, with no anchor, since there is no page to place it
-    on. With `quote`, text from its abstract, the body starts with that quote. A paper with a PDF takes an anchored
-    note (create_human_note). Raises NotFound, InvalidInput("anchor_required" | "empty_body" | "empty_quote" |
+    """A person's note on the whole of a paper: linked to it, with no anchor. With `quote`, text from its abstract (a
+    paper saved without a PDF), the body starts with that quote; a quote on a paper with a PDF needs an anchored note
+    (create_human_note). Raises NotFound, InvalidInput("anchor_required" | "empty_body" | "empty_quote" |
     "quote_not_found")."""
     paper = await get_paper(session, paper_id)
-    if paper.has_pdf:
+    if paper.has_pdf and quote is not None:
         raise InvalidInput("anchor_required")
     text = body.strip()
     if quote is not None:
         text = _quoted(_abstract_quote(paper, quote), text)
     if not text:
         raise InvalidInput("empty_body")
-    note = Note(body=text, provenance=Provenance.HUMAN, color=normalize_color(color))
+    note = Note(body=text, provenance=Provenance.HUMAN, color=normalize_color(color), kind=kind)
     session.add(note)
     await session.flush()
     await _link(session, note.id, [paper_id])
@@ -307,15 +321,20 @@ async def set_papers(session: AsyncSession, note_id: uuid.UUID, paper_ids: list[
     return await _view(session, note)
 
 
+UNSET: Any = object()  # update_note's kind: left out, as against None, which clears it
+
+
 async def update_note(
-    session: AsyncSession, note_id: uuid.UUID, *, body: str | None = None, color: str | None = None
+    session: AsyncSession, note_id: uuid.UUID, *, body: str | None = None, color: str | None = None, kind=UNSET
 ) -> NoteView:
     note = await _get_note(session, note_id)
-    changes: dict[str, str] = {}
+    changes: dict[str, str | None] = {}
     if body is not None and body.strip() != note.body:
         changes.update(body=body.strip(), provenance=edited_provenance(note.provenance))
     if color is not None and normalize_color(color) != note.color:
         changes["color"] = normalize_color(color)
+    if kind is not UNSET and kind != note.kind:
+        changes["kind"] = None if kind is None else str(kind)
     if changes:
         await session.execute(update(Note).where(Note.id == note_id).values(**changes, updated_at=func.now()))
         await session.commit()
