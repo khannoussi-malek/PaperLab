@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 
 import httpx
 import pytest
+from conftest import no_lookups
 from mcp_fixtures import *  # noqa: F403
 from mcp_fixtures import call, result
 from pdf_papers import chunked_paper
@@ -112,14 +113,16 @@ async def test_no_free_pdf_returns_the_landing_page_and_stores_nothing(session, 
     monkeypatch.setattr(discovery, "search", search)
     added = result(await call("add_paper", identifier=doi))
 
-    assert added == {
+    assert {**added, "tried": no_lookups(added["tried"])} == {
         "status": "no_free_pdf",
         "paper_id": None,
         "title": added["title"],
         "landing_url": f"https://doi.org/{discovery_fake.DOI_PREFIX}{suffix}",
-        "tried": [{"url": url, "outcome": "not_a_pdf"} for url in page] + [NO_ARXIV_MATCH],
+        "tried": [*({"url": url, "outcome": "not_a_pdf"} for url in page), NO_ARXIV_MATCH],
         "free_copies": [],
         "note": None,
+        "temporary_failures": [],
+        "retry_scheduled": False,
     }
     assert jobs.jobs == []
 
@@ -143,7 +146,7 @@ async def test_mcp_add_paper_needs_the_explicit_argument(session, jobs, monkeypa
 
     assert refused["status"] == "no_free_pdf" and refused["paper_id"] is None
     assert saved["status"] == "saved_without_pdf" and saved["paper_id"]
-    assert saved["tried"] == [NO_ARXIV_MATCH] and saved["free_copies"] == []
+    assert no_lookups(saved["tried"]) == [NO_ARXIV_MATCH] and saved["free_copies"] == []
     paper = await session.get(Paper, uuid.UUID(saved["paper_id"]))
     assert (paper.has_pdf, paper.details_source, paper.status) == (False, "openalex", PaperStatus.EMBEDDING)
     assert jobs.jobs == [("fill_paper_biblio", saved["paper_id"]), ("index_abstract", saved["paper_id"])]
@@ -242,7 +245,7 @@ async def test_no_free_pdf_names_the_repository_copies_over_mcp(jobs, monkeypatc
     added = result(await call("add_paper", identifier=doi))
 
     pmc_bucket = {"url": "https://pmc-oa-opendata.s3.amazonaws.com/?list-type=2&prefix=PMC1.", "outcome": "http_404"}
-    assert added["status"] == "no_free_pdf" and added["tried"] == [NO_ARXIV_MATCH, pmc_bucket]  # M76: its PMC link
+    assert added["status"] == "no_free_pdf" and no_lookups(added["tried"])[-2:] == [NO_ARXIV_MATCH, pmc_bucket]  # M76: its PMC link
     assert added["free_copies"] == ["https://www.ncbi.nlm.nih.gov/pmc/articles/PMC1/"]
 
 
@@ -548,7 +551,7 @@ async def test_a_blocked_publisher_link_falls_back_to_the_dois_free_copy(jobs, m
     added = result(await call("add_paper", identifier=TACL_LINK))
 
     assert added["status"] == "queued" and jobs.jobs == [("ingest_paper", added["paper_id"])]
-    assert added["tried"] == [
+    assert no_lookups(added["tried"]) == [
         {"url": TACL_LINK, "outcome": "bot_check"},
         {"url": ARXIV_PDF, "outcome": "pdf"},
     ]
@@ -610,7 +613,7 @@ async def test_a_safe_link_whose_page_declares_a_private_pdf_falls_back_to_the_d
     added = result(await call("add_paper", identifier=TACL_LINK))
 
     assert added["status"] == "queued" and jobs.jobs == [("ingest_paper", added["paper_id"])]
-    assert [t["outcome"] for t in added["tried"]][:3] == ["not_a_pdf → followed citation_pdf_url", "unsafe_url", "pdf"]
+    assert [t["outcome"] for t in no_lookups(added["tried"])][:3] == ["not_a_pdf → followed citation_pdf_url", "unsafe_url", "pdf"]
 
 
 # --- M66: a publisher DOI whose arXiv copy the library already holds ---

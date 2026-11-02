@@ -4,7 +4,12 @@ import { provenanceLines } from './detailsSource'
 
 const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { dateStyle: 'medium' })
 
-const CHECK_RESULT = { none: 'none found', found: 'found', error: 'the check failed' } as const
+const CHECK_RESULT = {
+  none: 'none found',
+  found: 'found',
+  temporary: 'a source was busy, so it will be tried again',
+  error: 'the check failed',
+} as const
 /** How a PDF came in, from the backend's own words (retrieved_hits.ARRIVALS). */
 const HOW: Record<string, string> = { manual: 'uploaded', imported: 'found' }
 

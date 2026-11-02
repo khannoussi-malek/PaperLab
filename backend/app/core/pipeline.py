@@ -33,6 +33,7 @@ from app.core import (
     paper_sources,
     papers,
     pdf_links,
+    pdf_recheck,
     prisma_export,
     queue,
     saved_searches,
@@ -140,9 +141,24 @@ class AddPaperResult:
     tried: list[dict[str, str]] = field(default_factory=list)
     free_copies: list[str] = field(default_factory=list)
     note: str | None = None  # something Claude should know about what happened, in words
+    # The entries of `tried` that say a source couldn't answer now, not that it has no copy.
+    temporary_failures: list[dict[str, str]] = field(default_factory=list)
+    retry_scheduled: bool = False  # a saved paper is looked at again soon, with no need to add it again
 
 
 NO_COPY_NOTE = "The paper is saved without a PDF; no free copy was found."
+RETRY_NOTE = (
+    "A source was busy or unreachable, which says nothing about whether a free copy exists. The paper is saved without "
+    "a PDF and will be tried again automatically; no need to add it again."
+)
+NO_RETRY_NOTE = (
+    "A source was busy or unreachable, which says nothing about whether a free copy exists. Automatic retries are off "
+    "or used up; recheck_free_copies looks again."
+)
+NOT_SAVED_NOTE = (
+    "A source was busy or unreachable, which says nothing about whether a free copy exists. Nothing was saved: add it "
+    "again later, or pass save_without_pdf=True to have it retried automatically."
+)
 MAX_UPLOAD_PDF_BYTES = 30 * 1024 * 1024  # decoded, as the app's upload allows
 MAX_UPLOAD_BASE64_CHARS = 4 * math.ceil(MAX_UPLOAD_PDF_BYTES / 3) + 4  # refused before decoding allocates anything
 
@@ -378,10 +394,26 @@ async def _add_link(session, providers, link, workspace_uuid, save_without_pdf=F
 logger = logging.getLogger(__name__)
 
 
+async def _note_temporary_failures(session: AsyncSession, result: AddPaperResult) -> AddPaperResult:
+    """Separates "a source was busy" from "no free copy" on an answer without a PDF, and queues the next look at a paper
+    the library now holds."""
+    failures = discovery.temporary_failures(result.tried)
+    if not failures or result.status in ("queued", "ingested"):
+        return result
+    if result.status == "no_free_pdf" or result.paper_id is None:
+        return replace(result, temporary_failures=failures, note=NOT_SAVED_NOTE)
+    scheduled = await pdf_recheck.schedule_retry(session, result.paper_id)
+    return replace(
+        result, temporary_failures=failures, retry_scheduled=scheduled, note=RETRY_NOTE if scheduled else NO_RETRY_NOTE
+    )
+
+
 async def _add(session, providers, kind, value, workspace_uuid, save_without_pdf=False) -> AddPaperResult:
     if kind == "link":
-        return await _add_link(session, providers, value, workspace_uuid, save_without_pdf)
-    return await _add_found(session, providers, kind, value, workspace_uuid, save_without_pdf=save_without_pdf)
+        result = await _add_link(session, providers, value, workspace_uuid, save_without_pdf)
+    else:
+        result = await _add_found(session, providers, kind, value, workspace_uuid, save_without_pdf=save_without_pdf)
+    return await _note_temporary_failures(session, result)
 
 
 async def add_paper(
@@ -408,6 +440,8 @@ class AddPapersItem:
     tried: list[dict] = field(default_factory=list)
     free_copies: list[str] = field(default_factory=list)
     note: str | None = None
+    temporary_failures: list[dict] = field(default_factory=list)
+    retry_scheduled: bool = False
 
 
 def _distinct(identifiers: list[str]) -> list[tuple[str, tuple[str, str] | None, str | None]]:
@@ -446,6 +480,8 @@ async def add_papers(
                             tried=added.tried or [],
                             free_copies=added.free_copies or [],
                             note=added.note,
+                            temporary_failures=added.temporary_failures,
+                            retry_scheduled=added.retry_scheduled,
                         )
                     )
                     continue
@@ -608,6 +644,36 @@ async def run_prescreen(
     else:
         await queue.enqueue("suggest_screening", str(ws), [str(r) for r in run_ids])
     return ScreeningStateOut.model_validate(state)
+
+
+@dataclass(frozen=True)
+class RecheckQueued:
+    queued: int
+    already_running: bool = False
+    left: int = 0  # past the cap: call again once this batch has run
+
+
+MAX_RECHECK_PAPERS = 200  # about 20 minutes at a look every few seconds
+
+
+async def recheck_free_copies(
+    session: AsyncSession, workspace: str, tags_: list[str] | None = None, match: Literal["any", "all"] = "any"
+) -> RecheckQueued:
+    """Queues a fresh look for a free copy of a workspace's papers with no PDF (optionally those with these tags). The
+    job runs in the background; each paper's pdf_check_result then says what it found."""
+    ws = await workspace_id(session, workspace)
+    wanted = await tags.paper_ids(session, ws, tags_, match)
+    missing = [
+        str(row.id) for row in await workspaces.papers(session, ws)
+        if not row.has_pdf and (wanted is None or row.id in wanted)
+    ]
+    if not missing:
+        return RecheckQueued(0)
+    batch = missing[:MAX_RECHECK_PAPERS]
+    started = await queue.enqueue("recheck_papers", batch, job_id=f"recheck_papers:{ws}")  # one per workspace at a time
+    if not started:
+        return RecheckQueued(0, already_running=True, left=len(missing))
+    return RecheckQueued(len(batch), left=len(missing) - len(batch))
 
 
 @dataclass(frozen=True)

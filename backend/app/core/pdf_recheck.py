@@ -1,4 +1,5 @@
-"""R20: the weekly look for a free copy of papers saved without a PDF, with the sources Add uses."""
+"""R20: the weekly look for a free copy of papers saved without a PDF, with the sources Add uses. A look that met a busy
+or unreachable source says nothing about whether a copy exists, so it is tried again soon (RETRY_DELAYS) instead."""
 
 import asyncio
 import logging
@@ -18,9 +19,11 @@ logger = logging.getLogger(__name__)
 RECHECK_CAP = 25  # papers per run, one run a day (05:00, never at startup): a big backlog drains over days
 RECHECK_EVERY = timedelta(days=7)
 PAUSE = 3.0  # seconds between papers, on top of each source's own pacing
+# Seconds before each retry after a temporary failure; after the last the paper waits for the weekly look.
+RETRY_DELAYS = (600, 3600, 6 * 3600)
 sleep = asyncio.sleep  # tests replace it
 
-Outcome = Literal["found", "none", "error", "skipped"]
+Outcome = Literal["found", "none", "temporary", "error", "skipped"]
 
 
 async def due(session: AsyncSession, now: datetime) -> list[uuid.UUID]:
@@ -63,7 +66,7 @@ async def recheck(session: AsyncSession, providers: discovery.Providers, paper_i
         else:
             data, tried, _ = await discovery.find_pdf(session, providers, discovery.candidate_of(paper))
             if data is None:
-                outcome = "none"
+                outcome = "temporary" if discovery.temporary_failures(tried) else "none"
             else:
                 await papers.attach_pdf(session, paper_id, data, how="imported")
                 outcome = "found"  # kept even if the queueing or the event fails: the PDF is attached
@@ -86,13 +89,44 @@ async def recheck(session: AsyncSession, providers: discovery.Providers, paper_i
     return outcome
 
 
+async def schedule_retry(session: AsyncSession, paper_id: uuid.UUID, attempt: int = 0) -> bool:
+    """Queues look number `attempt` after its delay. False once the retries are spent, or with the re-check off in
+    Settings: the switch covers every look nobody asked for."""
+    if attempt >= len(RETRY_DELAYS) or not (await paper_sources.get(session)).pdf_recheck_enabled:
+        return False
+    return await queue.enqueue(
+        "retry_free_pdf", str(paper_id), attempt, job_id=f"retry_free_pdf:{paper_id}:{attempt}",
+        defer_seconds=RETRY_DELAYS[attempt],
+    )
+
+
 async def run(session: AsyncSession, providers: discovery.Providers, now: datetime) -> dict[str, int]:
     """Re-checks every due paper, PAUSE apart, until Settings turns the re-check off. Counts by outcome."""
-    counts = {"found": 0, "none": 0, "error": 0, "skipped": 0}
+    counts = _no_counts()
     for index, paper_id in enumerate(await due(session, now)):
         if index:
             await sleep(PAUSE)
         if not (await paper_sources.get(session)).pdf_recheck_enabled:  # switched off mid-run: the rest wait
             break
-        counts[await recheck(session, providers, paper_id)] += 1
+        outcome = await recheck(session, providers, paper_id)
+        counts[outcome] += 1
+        if outcome == "temporary":
+            await schedule_retry(session, paper_id)
     return counts
+
+
+async def run_for(session: AsyncSession, providers: discovery.Providers, paper_ids: list[uuid.UUID]) -> dict[str, int]:
+    """Re-checks the papers someone asked about, whatever Settings says about the weekly look. Counts by outcome."""
+    counts = _no_counts()
+    for index, paper_id in enumerate(paper_ids):
+        if index:
+            await sleep(PAUSE)
+        outcome = await recheck(session, providers, paper_id)
+        counts[outcome] += 1
+        if outcome == "temporary":
+            await schedule_retry(session, paper_id)
+    return counts
+
+
+def _no_counts() -> dict[str, int]:
+    return {"found": 0, "none": 0, "temporary": 0, "error": 0, "skipped": 0}

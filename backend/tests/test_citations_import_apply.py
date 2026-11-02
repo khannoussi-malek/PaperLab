@@ -25,6 +25,7 @@ from app.models import Note, Paper, Provenance, note_papers
 from app.workers import citations_import as worker
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("references")]
+UNPAYWALL_OFF = {"url": "api.unpaywall.org (DOI lookup)", "outcome": "skipped: off or no contact email"}
 
 RUN = uuid.uuid4().hex[:10]
 PDF = b"%PDF-1.7 imported"
@@ -243,7 +244,7 @@ async def test_fetch_on_without_a_free_copy_lists_the_entry(session, pdf_dir, jo
         "doi": doi("c"), "arxiv_id": None, "pmid": None, "pmcid": None, "issn": None, "abstract": None,
         "volume": None, "issue": None, "pages": None, "editors": [], "source_type": "other", "tags": [],
         "collection": None, "notes": [],
-        "tried": [{"url": "https://pdf.example/closed", "outcome": "http_404"}], "free_copies": [],
+        "tried": [UNPAYWALL_OFF, {"url": "https://pdf.example/closed", "outcome": "http_404"}], "free_copies": [],
     }]  # fmt: skip  (the whole entry, so it can later be saved as a metadata-only paper)
     assert jobs.jobs == []
 
@@ -675,6 +676,7 @@ async def test_fetch_lists_both_attempts_when_neither_has_a_copy(session, pdf_di
     result = await cia.apply(session, [entry("none", doi=doi("none"), arxiv_id=arxiv_id)])
 
     assert result.needs_pdf[0]["tried"] == [
+        UNPAYWALL_OFF,
         {"url": "https://pdf.example/shut", "outcome": "http_404"},
         {"url": f"https://arxiv.org/abs/{arxiv_id}", "outcome": "no_match"},
     ]
