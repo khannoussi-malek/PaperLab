@@ -1,7 +1,7 @@
-export type CompileError = { file: string; line: number | null; message: string; kind: string }
+export type CompileError = { file: string | null; line: number | null; message: string; kind: string }
 
 const isCompileError = (e: unknown): e is CompileError =>
-  typeof e === 'object' && e !== null && typeof (e as CompileError).file === 'string' && typeof (e as CompileError).message === 'string'
+  typeof e === 'object' && e !== null && (typeof (e as CompileError).file === 'string' || (e as CompileError).file === null) && typeof (e as CompileError).message === 'string'
 
 export const parseCompileErrors = (errors: readonly unknown[] | null | undefined): CompileError[] =>
   (errors ?? []).filter(isCompileError)

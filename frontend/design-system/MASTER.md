@@ -293,6 +293,20 @@ while it runs. Autosave fires 1 s after the last keystroke; Ctrl/Cmd+S saves, th
   `--accent`, `--ring`), so it follows light and dark with the rest of the window; no bundled theme package.
 - **History** (toolbar) lists snapshots; restoring asks inside the dialog, never with a browser prompt.
 
+## Notifications
+
+Passing notices use [Sileo](https://github.com/hiaaryan/sileo) (`sileo` on npm), the one toast library here. Don't add
+another or write a custom toast. It isn't installed yet: add it with the first feature that needs a passing notice.
+
+- **Use it for:** something finished or happened that the reader doesn't have to act on, and can miss without harm: a
+  file saved, something copied, a background job done, away from the place it happened.
+- **Keep an `Alert` or a `role="status"` line for:** a critical fact, an error, anything the reader must act on or may
+  need to read again, and a notice that belongs beside the thing it is about. A toast disappears, so it is never the only
+  record of a failure.
+- **When adding it:** pin the exact version, mount one `Toaster` at the app root, match the tokens in light and dark,
+  respect `prefers-reduced-motion`, make sure screen readers hear it, and test it. Existing inline notices move only when
+  a change already touches them.
+
 ## Motion
 
 From ui-ux-pro-max (Quick Reference §7): 150–300 ms, ease-out on entry, opacity and transform only, no layout shift,
@@ -418,7 +432,7 @@ Patterns from ui-ux-pro-max (`--domain ux`): *Empty States* ("filter select list
   save stays in the dialog as a destructive `Alert`. Not on the hover card: the panel and the Notes page have it.
 - **Moved to Notes:** when a Papers save takes a note off the paper open in the reader, its card leaves the panel and a
   `role="status"` line (`.moved-notice`, `rounded-lg bg-muted px-3 py-2 text-sm`) at the top of the panel says "Moved
-  to Notes", Notes linking to `#/notes`. No toast library.
+  to Notes", Notes linking to `#/notes`. It stays where the change happened, so it is not a toast.
 
 ## Data and charts
 

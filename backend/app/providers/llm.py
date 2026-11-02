@@ -120,6 +120,7 @@ class OpenAICompatibleLLM:
         self.host = host_of(base_url)
         self._api_key = api_key
         self._transport = transport  # tests pass httpx.MockTransport
+        self.last_model: str | None = None  # the model the last answer's chunks named: a router may pick one
 
     async def stream(self, system: str, prompt: str) -> AsyncIterator[str]:
         body = {
@@ -147,6 +148,7 @@ class OpenAICompatibleLLM:
                     # A failure after the 200 (OpenRouter sends one when the upstream model fails mid-answer).
                     if "error" in chunk:
                         raise LLMError(f"{self.connection_name}: {provider_message(data, self._api_key)}")
+                    self.last_model = chunk.get("model") or self.last_model
                     for choice in chunk.get("choices") or []:
                         # Only answer text: reasoning models also stream `reasoning_content` deltas.
                         if content := (choice.get("delta") or {}).get("content"):

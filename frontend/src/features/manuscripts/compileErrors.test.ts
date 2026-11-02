@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { errorsFor } from './compileErrors'
+import { errorsFor, parseCompileErrors } from './compileErrors'
 
 const errors = [
   { file: 'main.tex', line: 4, message: 'Undefined control sequence', kind: 'error' },
@@ -15,4 +15,10 @@ test('filters by file', () => {
   ])
   expect(errorsFor(errors, 'sec/a.tex')).toEqual([{ line: 2, message: 'Missing $' }])
   expect(errorsFor(null, 'main.tex')).toEqual([])
+})
+
+test('an engine error with no file is kept, and points at no line', () => {
+  const engine = { file: null, line: null, message: 'Could not locate a font', kind: 'engine' }
+  expect(parseCompileErrors([engine])).toEqual([engine])
+  expect(errorsFor([engine], 'main.tex')).toEqual([])
 })

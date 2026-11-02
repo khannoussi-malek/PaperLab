@@ -9,6 +9,7 @@ from app.core import claims, notes, quotes, retrieval
 from app.core.errors import InvalidInput, NotFound
 from app.core.retrieval import RetrievedChunk
 from app.models import Chunk, LLMOutput, Paper, PaperStatus
+from app.providers.base import LLMError, LLMUnavailable, ModelNotPulled
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("references")]
 
@@ -384,3 +385,69 @@ async def test_a_dangling_chunk_just_before_wins_over_the_previous_page(session,
 def test_the_v2_prompt_explains_the_page_break_marker():
     assert claims.CLAIM_PROMPT_VERSION == 2
     assert "continues a sentence that began" in claims.SYSTEM_PROMPT
+
+
+class _Flaky:
+    """Fails `failures` times, then answers; `last_model` as an OpenAI-compatible router reports it."""
+
+    model = "auto/chat"
+    connection_name = "router"
+
+    def __init__(self, failures, error, reply='{"verdict":"not_supported","reason":"r","quote":""}'):
+        self.failures, self.error, self.reply, self.calls = failures, error, reply, 0
+        self.last_model = None
+
+    async def stream(self, system, prompt):
+        self.calls += 1
+        if self.calls <= self.failures:
+            raise self.error
+        self.last_model = "provider/real-model-7"
+        yield self.reply
+
+
+@pytest.fixture
+def waits(monkeypatch):
+    seen = []
+
+    async def record(seconds):
+        seen.append(seconds)
+
+    monkeypatch.setattr(claims, "sleep", record)
+    return seen
+
+
+@pytest.mark.parametrize(
+    "error",
+    [LLMError("router returned 503: busy"), LLMError("router returned 429: slow down"),
+     LLMError("router request failed: read timeout"), LLMUnavailable("Can't reach router")],
+)
+async def test_a_passing_model_failure_is_retried_with_backoff(error, waits):
+    llm = _Flaky(2, error)
+    reply = await claims._ask_with_retry(llm, "s", "p", claims._Reply)
+    assert reply.verdict == "not_supported" and llm.calls == 3
+    assert waits == list(claims.RETRY_WAITS[:2])
+
+
+@pytest.mark.parametrize(
+    "error", [LLMUnavailable("Key rejected by router"), LLMUnavailable("Model x isn't available on router"),
+              LLMError("router returned 400: bad request"), ModelNotPulled("not pulled")],
+)
+async def test_a_failure_a_retry_cannot_fix_is_raised_at_once(error, waits):
+    llm = _Flaky(9, error)
+    with pytest.raises(type(error)):
+        await claims._ask_with_retry(llm, "s", "p", claims._Reply)
+    assert llm.calls == 1 and waits == []
+
+
+async def test_a_failure_that_never_clears_raises_after_the_last_wait(waits):
+    llm = _Flaky(99, LLMError("router returned 503: busy"))
+    with pytest.raises(LLMError):
+        await claims._ask_with_retry(llm, "s", "p", claims._Reply)
+    assert llm.calls == len(claims.RETRY_WAITS) + 1 and waits == list(claims.RETRY_WAITS)
+
+
+def test_the_model_that_answered_is_what_the_router_named():
+    llm = _Flaky(0, None)
+    assert claims._answered_by(llm) == "auto/chat"
+    llm.last_model = "provider/real-model-7"
+    assert claims._answered_by(llm) == "provider/real-model-7"

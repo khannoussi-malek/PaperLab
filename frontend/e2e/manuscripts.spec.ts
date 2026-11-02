@@ -46,6 +46,9 @@ test('Write a manuscript, compile it, resolve a conflict and download the Overle
     expect((await pdf.body()).subarray(0, 4).toString()).toBe('%PDF')
 
     // Another tab saves first: this tab's save is stale and shows the conflict banner.
+    // This tab's polls are held back: left alone, the editor takes the other tab's text while it has no changes of its own.
+    const mainFile = '**/api/manuscripts/*/files/main.tex'
+    await page.route(mainFile, (route) => (route.request().method() === 'GET' ? route.abort() : route.continue()))
     const other = await context.newPage()
     await other.goto(page.url())
     const otherEditor = other.getByRole('textbox', { name: 'LaTeX source' })
@@ -59,13 +62,15 @@ test('Write a manuscript, compile it, resolve a conflict and download the Overle
     await page.keyboard.type('% from this tab')
     await page.keyboard.press('ControlOrMeta+s')
     await expect(page.getByRole('button', { name: 'Keep my version' })).toBeVisible()
+    await page.unroute(mainFile)
     await page.getByRole('button', { name: 'Load theirs' }).click()
     await expect(page.getByRole('button', { name: 'Keep my version' })).toBeHidden()
     await other.close()
 
     // The zip holds the project, the generated bib and the latexmkrc (names sit uncompressed in the zip).
     const download = page.waitForEvent('download')
-    await page.getByRole('link', { name: 'Download zip' }).click()
+    await page.getByRole('button', { name: 'Download' }).click()
+    await page.getByRole('menuitem', { name: 'LaTeX source (.zip)' }).click()
     const zip = await readFile((await (await download).path())!)
     for (const name of ['main.tex', 'paperlab.bib', 'latexmkrc']) expect(zip.includes(Buffer.from(name)), name).toBe(true)
   } finally {
@@ -149,7 +154,8 @@ test('Write a sectioned manuscript, reorder it and edit a sentence from the PDF'
 
     // The zip holds the new section's file.
     const download = page.waitForEvent('download')
-    await page.getByRole('link', { name: 'Download zip' }).click()
+    await page.getByRole('button', { name: 'Download' }).click()
+    await page.getByRole('menuitem', { name: 'LaTeX source (.zip)' }).click()
     const zip = await readFile((await (await download).path())!)
     expect(zip.includes(Buffer.from('sections/threats.tex'))).toBe(true)
   } finally {
