@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
-import type { SelectionAnchor } from '../reader/selection'
+import type { NoteDraft } from '../reader/selection'
 import { HighlightColorPicker } from './HighlightColorPicker'
 import { KindSelect } from './KindSelect'
 import { KIND_HINT, swapTemplate } from './noteKinds'
@@ -32,7 +32,7 @@ function KindRow({ kind, onChange }: { kind: NoteKind | null; onChange: (k: Note
 }
 
 type Props = {
-  draft: SelectionAnchor
+  draft: NoteDraft
   color: string
   onColorChange: (hex: string) => void
   onSave: (body: string, kind: NoteKind | null) => Promise<boolean>
@@ -41,7 +41,7 @@ type Props = {
 }
 
 export function NoteComposer({ draft, color, onColorChange, onSave, onCancel, onAddNumber }: Props) {
-  const { kind, body, setBody, pickKind } = useKindBody(null)
+  const { kind, body, setBody, pickKind } = useKindBody(draft.figure ? 'figure' : null)
   const [saving, setSaving] = useState(false)
 
   async function save() {
@@ -83,7 +83,7 @@ export function NoteComposer({ draft, color, onColorChange, onSave, onCancel, on
         </CardContent>
         <CardFooter className="justify-end gap-2">
           {/* A number is placed on a page; a quote from the abstract (no rects) has none. */}
-          {draft.rects.length > 0 && (
+          {draft.rects.length > 0 && !draft.figure && (
             <Button type="button" variant="ghost" size="sm" onClick={onAddNumber}>
               <Hash aria-hidden />
               Add as number

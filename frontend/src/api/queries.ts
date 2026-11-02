@@ -31,6 +31,7 @@ import {
   type HitListOut,
   type HitReviewUpdate,
   type LLMConnectionUpdate,
+  type FigureNoteCreate,
   type NoteCreate,
   type NumberCreate,
   type NoteUpdate,
@@ -961,6 +962,7 @@ export function useNoteMutations() {
   const onSuccess = () => refreshNotes(client)
   return {
     create: useMutation({ mutationFn: (note: NoteCreate) => api.createNote(note), onSuccess }),
+    createFigure: useMutation({ mutationFn: (note: FigureNoteCreate) => api.createFigureNote(note), onSuccess }),
     update: useMutation({
       mutationFn: ({ id, ...patch }: { id: string } & NoteUpdate) => api.updateNote(id, patch),
       onSuccess,
