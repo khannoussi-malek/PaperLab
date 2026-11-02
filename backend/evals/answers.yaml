@@ -9,6 +9,9 @@
 #   | write_notes (the reader asks for notes: scored on the :::note blocks, see answers.blocks_right).
 # scope: workspace asks a case only in the workspace config (a question about several papers); paper is then only
 #   its order.
+# kind: check (M22, run with --kinds check --model NAME; the config is retrieval only): `question` is a planted note
+#   of `check_kind` (summary | five_cs | reconstruction), checked by a local model. `points` must each be named by a
+#   Missing line, `unsupported` by an Unsupported line, `no_missing` wants no Missing line. Scored by string matching.
 # paper_notes: a reader's notes, saved on their paper before every question when run with --with-paper-notes.
 # Attention and BERT predate the model, so the `none` config shows which of their answers it already knows.
 cases:
@@ -603,6 +606,54 @@ cases:
       body: "Our own agents show the same misalignment pattern week after week."
 
 # A reader's notes as a real library holds them: remarks, questions to self, and a note saved from an AI answer.
+
+  # Exit-test checks (spec 2026-09-18 §4.6): a planted note, and the gap a check should name.
+  - id: check-bert-missing-result
+    kind: check
+    paper: BERT
+    question: >-
+      BERT pre-trains a deep bidirectional Transformer encoder on unlabelled text with two tasks: predicting masked
+      words from both sides, and predicting whether one sentence follows another. The pre-trained model is then
+      fine-tuned with one extra output layer for each downstream task, so the same architecture serves many tasks.
+    points: [["result", "results", "state-of-the-art", "state of the art", "glue", "benchmark", "benchmarks", "eleven", "11 tasks", "performance"]]
+    evidence: [{page: 1, contains: "new state-of-the-art results on eleven natural language processing tasks"}]
+  - id: check-att-wrong-bleu
+    kind: check
+    paper: Attention Is All You Need
+    question: >-
+      The Transformer drops recurrence and convolution and relies only on attention, which makes training far more
+      parallel. On WMT 2014 English-to-German it reaches 32.4 BLEU, above the best earlier results including
+      ensembles, after 3.5 days of training on eight GPUs.
+    unsupported: [["32.4", "bleu"]]
+  - id: check-agents-complete
+    kind: check
+    paper: How Coding Agents Fail
+    question: >-
+      Earlier analyses of coding-agent failures use benchmark trajectories, which miss how developers actually
+      experience them. This observational study of 20,574 coding-agent sessions from 1,639 repositories, in IDE and CLI
+      workflows, treats misalignment as a breakdown the developer pushes back on, and annotates each episode by form,
+      cause, cost and resolution. It finds seven recurring forms. 90.50% of episodes cost effort and trust rather than
+      irreversible damage, yet 91.49% of visible resolutions still need the developer to correct the agent. Patterns
+      differ between IDE and CLI, persist across adjacent sessions and shift over time.
+    no_missing: true
+  - id: check-att-five-cs
+    kind: check
+    check_kind: five_cs
+    paper: Attention Is All You Need
+    question: "Category: a survey of translation models.\nContext: it builds on encoder-decoder models with attention, and drops their recurrent and convolutional layers.\nCorrectness: the assumption that attention alone can relate distant words looks valid.\nContributions: the Transformer, an encoder-decoder built only on attention, which translates better than earlier models and trains in far less time.\nClarity: clearly written, with a figure of the whole architecture."
+    unsupported: [["survey", "category"]]
+  - id: check-bert-reconstruction
+    kind: check
+    check_kind: reconstruction
+    paper: BERT
+    question: >-
+      BERT is a multi-layer bidirectional Transformer encoder. Its input is WordPiece tokens with segment and position
+      embeddings, a [CLS] token first and [SEP] between the two sentences. It is pre-trained on BooksCorpus and
+      English Wikipedia by masked language modelling: 15% of the tokens are chosen, and the model predicts them from
+      both sides. It is then fine-tuned end to end on each task with one added output layer. Its strength is one
+      architecture for many tasks. Its weakness is that [MASK] appears in pre-training but never in fine-tuning.
+    points: [["next sentence", "nsp"]]
+
 paper_notes:
   - paper: Attention Is All You Need
     notes:
