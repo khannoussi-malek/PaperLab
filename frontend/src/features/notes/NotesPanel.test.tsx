@@ -81,13 +81,13 @@ beforeAll(() => {
 test('the kind filter narrows the list and says when nothing matches', async () => {
   const notes = [note('a', 'alpha body', 'summary'), note('b', 'beta body', null)]
   render(withClient(<NotesPanel {...props} notes={notes} />))
-  await pick(screen.getByRole('combobox', { name: 'Kind' }), 'Summary')
+  await pick(screen.getByRole('combobox', { name: 'Filter by kind' }), 'Summary')
   expect(screen.getByText('alpha body')).toBeInTheDocument()
   expect(screen.queryByText('beta body')).toBeNull()
-  await pick(screen.getByRole('combobox', { name: 'Kind' }), 'Plain notes')
+  await pick(screen.getByRole('combobox', { name: 'Filter by kind' }), 'Plain notes')
   expect(screen.getByText('beta body')).toBeInTheDocument()
   expect(screen.queryByText('alpha body')).toBeNull()
-  await pick(screen.getByRole('combobox', { name: 'Kind' }), 'Figure')
+  await pick(screen.getByRole('combobox', { name: 'Filter by kind' }), 'Figure')
   expect(screen.getByText('No notes match these filters.')).toBeInTheDocument()
 })
 

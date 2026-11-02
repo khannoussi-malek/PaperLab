@@ -96,3 +96,12 @@ test('Escape cancels an empty or template-only whole-paper composer but never ty
   fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
   expect(onCancel).toHaveBeenCalledTimes(2)
 })
+
+test('an untouched template cannot be saved, and the box takes focus when it has Cancel', () => {
+  const onSave = vi.fn()
+  render(<PlainNoteComposer initialKind="five_cs" onSave={onSave} onCancel={vi.fn()} />)
+  expect(screen.getByRole('button', { name: 'Save note' })).toBeDisabled()
+  expect(screen.getByRole('textbox')).toHaveFocus()
+  fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter', ctrlKey: true })
+  expect(onSave).not.toHaveBeenCalled()
+})

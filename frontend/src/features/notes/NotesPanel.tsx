@@ -89,7 +89,7 @@ export function NotesPanel(props: Props) {
           onToggle={() => setShow({ ...show, ai: !show.ai })}
         />
         <Select value={kind} onValueChange={(next) => setKind(next as typeof kind)}>
-          <SelectTrigger size="sm" aria-label="Kind">
+          <SelectTrigger size="sm" aria-label="Filter by kind">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

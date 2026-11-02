@@ -129,7 +129,7 @@ export function PlainNoteComposer({
   }, [dirty])
 
   async function save() {
-    if (!body.trim()) return
+    if (!dirty) return
     setSaving(true)
     if (await onSave(body, kind)) setBody(swapTemplate('', null, kind))
     setSaving(false)
@@ -145,6 +145,7 @@ export function PlainNoteComposer({
     >
       <Textarea
         aria-label="New note"
+        autoFocus={Boolean(onCancel)} // the button that opened this composer is gone, so focus would fall to the page
         placeholder="Write a note. Ctrl/⌘+Enter saves."
         value={body}
         onChange={(e) => setBody(e.target.value)}
@@ -163,7 +164,7 @@ export function PlainNoteComposer({
             Cancel
           </Button>
         )}
-        <Button type="submit" size="sm" disabled={saving || !body.trim()}>
+        <Button type="submit" size="sm" disabled={saving || !dirty}>
           Save note
         </Button>
       </div>

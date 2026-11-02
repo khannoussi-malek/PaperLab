@@ -465,7 +465,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
       setMenu({ x: event.clientX, y: event.clientY, target: { kind: 'note', note, quote } })
     } else if (pending) {
       setDraft(pending)
-      setMenu({ x: event.clientX, y: event.clientY, target: { kind: 'draft', quote: pending.quotedText } })
+      setMenu({ x: event.clientX, y: event.clientY, target: { kind: 'draft', quote: pending.quotedText, ...('figure' in pending && pending.figure ? { figure: true as const } : {}) } })
     }
   }
 
@@ -561,7 +561,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
                   )}
                   style={{
                     ...pdfRectToCss(h.rect, scale),
-                    ...(h.figure ? { outlineColor: h.color ?? undefined } : { backgroundColor: h.color ? highlightFill(h.color, h.provenance) : undefined }),
+                    ...(h.figure ? { outlineColor: h.noteId === activeNoteId ? undefined : (h.color ?? undefined) } : { backgroundColor: h.color ? highlightFill(h.color, h.provenance) : undefined }),
                   }}
                 />
               ))}
