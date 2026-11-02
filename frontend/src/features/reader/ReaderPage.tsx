@@ -311,7 +311,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
     const saved = await attempt(() =>
       mutations.create.mutateAsync({ body, color: draftColor, paper_id: paperId, ...(kind ? { kind } : {}) }),
     )
-    if (saved && !noPdf) setWholePaperDraft(null) // without a PDF the composer is permanent
+    if (saved) setWholePaperDraft(null) // closes one Write it or New note opened; a no-PDF paper's own composer is not a draft
     return saved
   }
 
@@ -481,6 +481,12 @@ export function ReaderPage({ paperId, tab, target }: Props) {
           drawingFigure={captureDrag.drawingFigure}
           onDrawingFigureChange={captureDrag.setDrawingFigure}
           onOpenReferences={() => showTab('references')}
+          onWriteNote={(kind) => {
+            setDraft(null)
+            setWholePaperDraft({ kind })
+            showTab('notes')
+          }}
+          onOpenNote={(id) => focusNote({ id })}
           tags={paper.data && <PaperTagChips paperId={paper.data.id} />}
           lensControl={<LensPicker reader={lensReader} />}
         />

@@ -9,20 +9,25 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { ExitTestRow } from '@/features/checks/ExitTestRow'
 import { ErrorAlert } from '@/features/library/ErrorAlert'
 import { cn } from '@/lib/utils'
 import { ReadingHistory } from './ReadingHistory'
-import { LEVELS, nextPass, readingChip, TRIAGES, UNDECIDED_LABEL, type Triage } from './passes'
+import { LEVELS, nextPass, PASSES, readingChip, TRIAGES, UNDECIDED_LABEL, type Pass, type Triage } from './passes'
 
 type Props = {
   paper: Paper
   /** Closes the popover and shows the References tab (D78 fetches on open). */
   onOpenReferences: () => void
+  /** Closes the popover and opens the Notes tab's composer on this kind of note. */
+  onWriteNote?: (kind: Pass['noteKind']) => void
+  /** Closes the popover and shows this note. */
+  onOpenNote?: (noteId: string) => void
 }
 
 /** The reader's own record of a paper (D118, D167): a toolbar popover with the passes finished, the decision, and
  * the next pass's guide. Only the reader's own clicks set either field. */
-export function ReadingControl({ paper, onOpenReferences }: Props) {
+export function ReadingControl({ paper, onOpenReferences, onWriteNote, onOpenNote }: Props) {
   // Controlled so "Open References" can close the popover itself (Radix doesn't close a Popover on an ordinary
   // button click inside its content) before switching tabs, matching this component's own contract above.
   const [open, setOpen] = useState(false)
@@ -35,6 +40,16 @@ export function ReadingControl({ paper, onOpenReferences }: Props) {
   const triage = pending && 'triage' in pending ? pending.triage : paper.triage
   const chip = readingChip(paper.reading_pass, paper.triage)
   const guide = nextPass(level)
+  const examPass = guide ?? PASSES[2]
+
+  function writeNote(kind: Pass['noteKind']) {
+    setOpen(false)
+    onWriteNote?.(kind)
+  }
+  function openNote(noteId: string) {
+    setOpen(false)
+    onOpenNote?.(noteId)
+  }
 
   function set(changes: { reading_pass: number } | { triage: Triage | null }) {
     setReading.mutate({ paperId: paper.id, changes })
@@ -135,6 +150,7 @@ export function ReadingControl({ paper, onOpenReferences }: Props) {
                 <p className="mt-1.5 text-sm">{guide.then}</p>
               </>
             )}
+            <ExitTestRow paperId={paper.id} pass={guide} onWrite={writeNote} onOpen={openNote} />
             {guide.references && (
               <Button
                 variant="ghost"
@@ -151,7 +167,10 @@ export function ReadingControl({ paper, onOpenReferences }: Props) {
             )}
           </section>
         ) : (
-          <p className="text-sm">You’ve finished all three passes.</p>
+          <>
+            <p className="text-sm">You’ve finished all three passes.</p>
+            <ExitTestRow paperId={paper.id} pass={examPass} onWrite={writeNote} onOpen={openNote} />
+          </>
         )}
         <ReadingHistory paperId={paper.id} enabled={open} />
         <p className="mt-3 text-xs text-muted-foreground">Only you set this. PaperLab never marks a pass for you.</p>
