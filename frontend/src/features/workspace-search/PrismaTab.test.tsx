@@ -6,7 +6,7 @@ import * as queries from '@/api/queries'
 import type { PrismaExportOut } from '@/api/client'
 
 const combinedData: PrismaExportOut = {
-  identified: 120,
+  identified: 120, sources_searched: [], sources_not_searched: [],
   duplicates_removed: 20,
   stage1_screened: 100,
   stage1_excluded: 42,

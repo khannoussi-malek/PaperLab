@@ -817,3 +817,66 @@ async def test_a_continue_landing_before_the_end_of_pass_write_keeps_the_new_pas
     reloaded = await session.get(WorkspaceSearchRun, run.id, populate_existing=True)
     assert reloaded.status == "running" and reloaded.stats_json["passes"] == 2
     assert reloaded.stopped_at is None and "cut_short" not in reloaded.stats_json
+
+
+async def test_passes_spent_waiting_out_a_cooldown_do_not_use_up_the_run(session, worker, monkeypatch):
+    """Six real runs ended at 200 passes of about 3 s with arXiv mid-retry: a source cooling down must still get its
+    retry, however many idle passes that takes."""
+    monkeypatch.setattr(worker_module, "MAX_BATCH_ITERATIONS", 3)
+    run = await _new_run(session, "running", ["arxiv"])
+    session.add(WorkspaceSearchCursor(run_id=run.id, source="arxiv", cursor_json={"value": 0}))
+    await session.flush()
+    calls = {"batches": 0}
+    real_batch = worker_module.search_batch
+
+    async def batch(session_, providers, run_):
+        calls["batches"] += 1
+        if calls["batches"] < 10:  # nine passes with the only source cooling down
+            return worker_module_result(asked=False)
+        return await real_batch(session_, providers, run_)
+
+    monkeypatch.setattr(worker_module, "search_batch", batch)
+    await worker_module.run_workspace_search(worker, str(run.id))
+    await session.refresh(run)
+    assert calls["batches"] >= 10
+    assert run.stats_json.get("cut_short") is None and run.status == "exhausted"
+
+
+def worker_module_result(asked: bool):
+    from app.core.workspace_search import BatchResult
+
+    return BatchResult(new_hits=0, asked=asked)
+
+
+async def test_a_source_that_fails_then_recovers_finishes_complete(session, worker):
+    """A5: a connection failure mid-run only delays a source; the next try after its cooldown carries on."""
+    from app.core import search_run_results
+
+    failures = {"left": 1}
+    fake = discovery_fake.transport()
+
+    class Flaky(httpx.AsyncBaseTransport):
+        async def handle_async_request(self, request):
+            if request.url.host == "export.arxiv.org" and failures["left"]:
+                failures["left"] -= 1
+                raise httpx.ConnectError("[Errno -5] No address associated with hostname")
+            return await fake.handle_async_request(request)
+
+    run = await _new_run(session, "running", ["arxiv"])
+    session.add(WorkspaceSearchCursor(run_id=run.id, source="arxiv", cursor_json={"value": 0}))
+    await session.flush()
+    import app.core.workspace_search as core
+
+    original = core._ERROR_BACKOFF_SECONDS
+    core._ERROR_BACKOFF_SECONDS = (0, 0, 0, 0, 0)
+    try:
+        await worker_module.run_workspace_search({"transport": Flaky()}, str(run.id))
+    finally:
+        core._ERROR_BACKOFF_SECONDS = original
+    await session.refresh(run)
+    query = select(WorkspaceSearchCursor).where(WorkspaceSearchCursor.run_id == run.id)
+    [cursor] = (await session.scalars(query)).all()
+    results = search_run_results.source_results(run, [cursor])
+    assert results[0].state == "complete" and results[0].raw_count > 0 and results[0].last_error is None
+    assert run.stats_json["per_source_error"]["arxiv"].startswith("[Errno -5]")  # the history stays
+    assert search_run_results.outcome(run.status, results) == "complete"

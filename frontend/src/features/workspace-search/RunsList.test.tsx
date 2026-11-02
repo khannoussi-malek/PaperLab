@@ -117,3 +117,9 @@ test('the Runs toggle has an explained term beside it, not inside it', () => {
   expect(toggle.querySelector('button')).toBeNull()
   expect(screen.getByRole('button', { name: 'What is a run?' })).toBeInTheDocument()
 })
+
+test('a run that did not reach every source says partial in the list', () => {
+  setup([{ ...run('r1', 'solo query'), outcome: 'partial' }])
+  fireEvent.click(screen.getByRole('button', { name: /^Runs/ }))
+  expect(screen.getByText(/Partial search/)).toBeInTheDocument()
+})

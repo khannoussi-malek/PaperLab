@@ -333,7 +333,8 @@ async def start_search_run(
 ) -> pipeline.SearchRunOut:
     """Use to search the paper sources for a topic and collect every result into the workspace's hits for screening.
     Runs in the background; poll get_search_run. `sources` defaults to the ones turned on in Settings. Give
-    year_from/year_to to keep only papers published in that range (undated ones stay)."""
+    year_from/year_to to keep only papers published in that range (undated ones stay). `warnings` names sources that
+    will return nothing as they are set up (off, or needing an API key), before you wait for the run."""
     async with sessions() as session:
         return await pipeline.start_search_run(session, workspace, query, sources, year_from, year_to)
 
@@ -341,10 +342,11 @@ async def start_search_run(
 @mcp.tool(annotations=READ_ONLY)
 @recoverable
 async def get_search_run(run_id: uuid.UUID) -> pipeline.SearchRunOut:
-    """Use to check a search run's progress: status (running, exhausted, stopped) and per-source counts in stats.
-    stats_json.failed_sources lists sources that stopped answering (their hits are missing); per_source_error holds
-    the last error seen per source, even for one that later recovered.
-    status exhausted with can_continue=true means a pass ended at the per-source limit, not that the sources ran dry."""
+    """Use to check a search run. `outcome` says whether the search reached its sources: complete (all ran dry) or
+    partial; report a run's coverage from this, not from `status`, where exhausted only means the job ended.
+    source_results gives each source's state (complete, paused, cooling_down, gave_up, disabled, fetching), raw_count,
+    new_hits, last_error and a reason; failed_sources names those that stopped answering, and prescreen counts how many
+    hits a model judged. stats_json.per_source_error holds the last error seen per source, even for one that recovered."""
     async with sessions() as session:
         return await pipeline.get_search_run(session, run_id)
 
@@ -354,8 +356,8 @@ async def get_search_run(run_id: uuid.UUID) -> pipeline.SearchRunOut:
 async def list_search_runs(workspace: str, limit: int = 20) -> list[pipeline.SearchRunSummary]:
     """Use to see a workspace's search runs, newest first: status, query, sources, per-source result counts and
     how many hits each run added. Pass a run's id to get_search_run for full stats or to list_hits/run_prescreen
-    to scope them.
-    status exhausted with can_continue=true means a pass ended at the per-source limit, not that the sources ran dry."""
+    to scope them. Each run has the same outcome, source_results, failed_sources, hit_count and prescreen as
+    get_search_run; status exhausted only means the job ended, so report coverage from outcome."""
     async with sessions() as session:
         return await pipeline.list_search_runs(session, workspace, limit)
 

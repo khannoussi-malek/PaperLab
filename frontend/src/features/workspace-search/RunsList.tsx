@@ -52,6 +52,7 @@ export function RunsList({
             >
               <span className="min-w-0 flex-1 truncate font-medium">{r.query_text}</span>
               <span className="text-xs text-muted-foreground">
+                {r.outcome === 'partial' && 'Partial search · '}
                 {pausedText(r) ?? r.status} · {relative(r.started_at)} · {plural(r.hit_count, 'new result')}
               </span>
             </button>
