@@ -22,10 +22,10 @@ function useKindBody(initialKind: NoteKind | null) {
   return { kind, body, setBody, pickKind }
 }
 
-function KindRow({ kind, onChange }: { kind: NoteKind | null; onChange: (k: NoteKind | null) => void }) {
+function KindRow({ kind, onChange, fixed }: { kind: NoteKind | null; onChange: (k: NoteKind | null) => void; fixed?: boolean }) {
   return (
     <>
-      <KindSelect value={kind} onChange={onChange} />
+      {fixed ? <p className="text-sm font-medium">Figure</p> : <KindSelect value={kind} onChange={onChange} />}
       {kind && <p className="text-xs whitespace-pre-line text-muted-foreground">{KIND_HINT[kind]}</p>}
     </>
   )
@@ -78,7 +78,7 @@ export function NoteComposer({ draft, color, onColorChange, onSave, onCancel, on
               if (e.key === 'Escape') onCancel()
             }}
           />
-          <KindRow kind={kind} onChange={pickKind} />
+          <KindRow kind={kind} onChange={pickKind} fixed={draft.figure} />
           <HighlightColorPicker value={color} onChange={onColorChange} />
         </CardContent>
         <CardFooter className="justify-end gap-2">

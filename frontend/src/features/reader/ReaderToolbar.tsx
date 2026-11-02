@@ -60,13 +60,13 @@ export function ReaderToolbar({ paper, zoomIndex, onZoomChange, capturing, onCap
           Capture table
         </Button>
       )}
-      {pages && (
+      {pages && onDrawingFigureChange && (
         <Button
           variant="outline"
           size="sm"
           aria-pressed={drawingFigure}
           className="aria-pressed:border-primary aria-pressed:bg-primary/10 aria-pressed:text-primary"
-          onClick={() => onDrawingFigureChange?.(!drawingFigure)}
+          onClick={() => onDrawingFigureChange(!drawingFigure)}
         >
           <Frame aria-hidden />
           Note on figure
