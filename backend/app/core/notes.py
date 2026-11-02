@@ -369,6 +369,8 @@ async def update_note(
 
 async def delete_note(session: AsyncSession, note_id: uuid.UUID) -> None:
     await _get_note(session, note_id)
+    # a check lives beside its note (no FK on the array): it goes with it, in the same transaction
+    await session.execute(delete(LLMOutput).where(LLMOutput.kind == "check", LLMOutput.source_notes.any(note_id)))
     await session.execute(delete(Note).where(Note.id == note_id))
     await session.commit()
 
@@ -409,6 +411,8 @@ async def promote_llm_fragment(
     output = await session.get(LLMOutput, output_id)
     if output is None:
         raise NotFound(f"answer {output_id} not found")
+    if output.kind == "check":
+        raise InvalidInput("check_not_promotable")
     text = body.strip()
     if not text:
         raise InvalidInput("a promoted note needs the selected text")

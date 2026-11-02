@@ -141,3 +141,12 @@ async def test_promote_http_errors(client, session):
     assert (await promote(chunk_ids=[uuid.uuid4()])).status_code == 422
     assert (await promote(chunk_ids=[chunks[2].id])).status_code == 422
     assert (await promote(chunk_ids=[])).status_code == 422
+
+
+async def test_a_check_can_never_be_promoted(session):
+    output, chunks = await make_answer(session)
+    output.kind = "check"
+    await session.commit()
+
+    with pytest.raises(InvalidInput, match="^check_not_promotable$"):
+        await notes.promote_llm_fragment(session, output.id, "relates every", [chunks[0].id])
