@@ -80,3 +80,19 @@ test('a figure draft is kind Figure with its questions, and has no Add as number
   fireEvent.click(screen.getByRole('button', { name: 'Save note' }))
   await waitFor(() => expect(onSave).toHaveBeenCalledWith(TEMPLATE.figure, 'figure'))
 })
+
+test('Escape cancels an empty or template-only whole-paper composer but never typed text; Cancel always does', () => {
+  const onCancel = vi.fn()
+  const onDirtyChange = vi.fn()
+  render(<PlainNoteComposer initialKind="five_cs" onSave={vi.fn()} onCancel={onCancel} onDirtyChange={onDirtyChange} />)
+  const box = screen.getByRole('textbox')
+  fireEvent.keyDown(box, { key: 'Escape' })
+  expect(onCancel).toHaveBeenCalledTimes(1) // still just the template
+  expect(onDirtyChange).toHaveBeenLastCalledWith(false)
+  fireEvent.change(box, { target: { value: `${TEMPLATE.five_cs} my answer` } })
+  expect(onDirtyChange).toHaveBeenLastCalledWith(true)
+  fireEvent.keyDown(box, { key: 'Escape' })
+  expect(onCancel).toHaveBeenCalledTimes(1)
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+  expect(onCancel).toHaveBeenCalledTimes(2)
+})

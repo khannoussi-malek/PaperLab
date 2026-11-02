@@ -23,6 +23,8 @@ type Props = {
   wholePaperDraft: { kind: NoteKind | null } | null
   onNewPaperNote: () => void
   onCancelPaperNote: () => void
+  /** The whole-paper composer holds typed text, or no longer does. */
+  onPaperNoteDirty?: (dirty: boolean) => void
   /** Saves a note with no quote. */
   onSavePaperNote: (body: string, kind: NoteKind | null) => Promise<boolean>
   notes: Note[]
@@ -124,6 +126,7 @@ export function NotesPanel(props: Props) {
             initialKind={props.wholePaperDraft?.kind ?? null}
             onSave={props.onSavePaperNote}
             onCancel={props.wholePaperDraft ? props.onCancelPaperNote : undefined}
+            onDirtyChange={props.onPaperNoteDirty}
           />
         </>
       ) : draft ? (

@@ -111,13 +111,22 @@ export function PlainNoteComposer({
   initialKind = null,
   onSave,
   onCancel,
+  onDirtyChange,
 }: {
   initialKind?: NoteKind | null
   onSave: (body: string, kind: NoteKind | null) => Promise<boolean>
   onCancel?: () => void
+  /** Whether the body holds text the reader typed (not empty, not just the template). */
+  onDirtyChange?: (dirty: boolean) => void
 }) {
   const { kind, body, setBody, pickKind } = useKindBody(initialKind)
   const [saving, setSaving] = useState(false)
+  const dirty = body.trim() !== '' && body !== swapTemplate('', null, kind)
+  useEffect(() => {
+    onDirtyChange?.(dirty)
+    return () => onDirtyChange?.(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- report changes of `dirty` only
+  }, [dirty])
 
   async function save() {
     if (!body.trim()) return
@@ -144,7 +153,7 @@ export function PlainNoteComposer({
             e.preventDefault()
             void save()
           }
-          if (e.key === 'Escape') onCancel?.()
+          if (e.key === 'Escape' && !dirty) onCancel?.() // typed text goes only on an explicit Cancel
         }}
       />
       <KindRow kind={kind} onChange={pickKind} />
