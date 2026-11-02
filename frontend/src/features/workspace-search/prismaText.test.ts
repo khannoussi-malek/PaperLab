@@ -3,7 +3,7 @@ import type { PrismaExportOut } from '@/api/client'
 import { prismaCsv, prismaText } from './prismaText'
 
 const data: PrismaExportOut = {
-  identified: 120, duplicates_removed: 20, stage1_screened: 100, stage1_excluded: 42,
+  identified: 120, sources_searched: [], sources_not_searched: [], duplicates_removed: 20, stage1_screened: 100, stage1_excluded: 42,
   stage1_excluded_by_reason: { wrong_topic: 40, unspecified: 2 },
   sought: 58, not_retrieved: 6, stage2_assessed: 52, stage2_excluded: 14,
   stage2_excluded_by_reason: { 'wrong population': 14 },

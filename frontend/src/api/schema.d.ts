@@ -5340,6 +5340,8 @@ export interface components {
             has_key: boolean | null;
             /** Key Hint */
             key_hint: string | null;
+            /** Notice */
+            notice?: string | null;
         };
         /** PaperSourcesOut */
         PaperSourcesOut: {
@@ -5428,8 +5430,36 @@ export interface components {
             /** Key */
             key: string;
         };
+        /** PrescreenCounts */
+        PrescreenCounts: {
+            /**
+             * Judged
+             * @default 0
+             */
+            judged: number;
+            /**
+             * Not Judged
+             * @default 0
+             */
+            not_judged: number;
+            /**
+             * Not Asked
+             * @default 0
+             */
+            not_asked: number;
+        };
         /** PrismaExportOut */
         PrismaExportOut: {
+            /**
+             * Sources Searched
+             * @default []
+             */
+            sources_searched: string[];
+            /**
+             * Sources Not Searched
+             * @default []
+             */
+            sources_not_searched: string[];
             /** Identified */
             identified: number;
             /** Duplicates Removed */
@@ -6082,6 +6112,16 @@ export interface components {
             suggest_total: number;
             /** Suggest Error */
             suggest_error: string | null;
+            /**
+             * Judged
+             * @default 0
+             */
+            judged: number;
+            /**
+             * Not Judged
+             * @default 0
+             */
+            not_judged: number;
             /** Capped */
             capped?: string | null;
             /** Capped Left */
@@ -6126,6 +6166,46 @@ export interface components {
         };
         /** SearchRunOut */
         SearchRunOut: {
+            /**
+             * Hit Count
+             * @default 0
+             */
+            hit_count: number;
+            /**
+             * Per Source Raw Count
+             * @default {}
+             */
+            per_source_raw_count: {
+                [key: string]: number;
+            };
+            /**
+             * Failed Sources
+             * @default []
+             */
+            failed_sources: string[];
+            /**
+             * Source Results
+             * @default []
+             */
+            source_results: components["schemas"]["SourceResult"][];
+            /**
+             * Outcome
+             * @default running
+             */
+            outcome: string;
+            /**
+             * Warnings
+             * @default []
+             */
+            warnings: components["schemas"]["SourceWarning"][];
+            /**
+             * @default {
+             *       "judged": 0,
+             *       "not_judged": 0,
+             *       "not_asked": 0
+             *     }
+             */
+            prescreen: components["schemas"]["PrescreenCounts"];
             /**
              * Id
              * Format: uuid
@@ -6183,6 +6263,46 @@ export interface components {
          */
         SearchRunSummary: {
             /**
+             * Hit Count
+             * @default 0
+             */
+            hit_count: number;
+            /**
+             * Per Source Raw Count
+             * @default {}
+             */
+            per_source_raw_count: {
+                [key: string]: number;
+            };
+            /**
+             * Failed Sources
+             * @default []
+             */
+            failed_sources: string[];
+            /**
+             * Source Results
+             * @default []
+             */
+            source_results: components["schemas"]["SourceResult"][];
+            /**
+             * Outcome
+             * @default running
+             */
+            outcome: string;
+            /**
+             * Warnings
+             * @default []
+             */
+            warnings: components["schemas"]["SourceWarning"][];
+            /**
+             * @default {
+             *       "judged": 0,
+             *       "not_judged": 0,
+             *       "not_asked": 0
+             *     }
+             */
+            prescreen: components["schemas"]["PrescreenCounts"];
+            /**
              * Id
              * Format: uuid
              */
@@ -6200,14 +6320,6 @@ export interface components {
             stopped_at: string | null;
             /** Sources Json */
             sources_json: string[];
-            /** Per Source Raw Count */
-            per_source_raw_count: {
-                [key: string]: number;
-            };
-            /** Failed Sources */
-            failed_sources: string[];
-            /** Hit Count */
-            hit_count: number;
             /**
              * Can Continue
              * @default false
@@ -6589,6 +6701,31 @@ export interface components {
             /** Zenodo */
             zenodo?: string | null;
         };
+        /**
+         * SourceResult
+         * @description What one source did. `state`: complete (ran dry), paused (Continue fetches more), cooling_down (failing and
+         *     retrying, or was when the run ended), gave_up, disabled, or fetching while the run runs.
+         */
+        SourceResult: {
+            /** Source */
+            source: string;
+            /** State */
+            state: string;
+            /**
+             * Raw Count
+             * @default 0
+             */
+            raw_count: number;
+            /**
+             * New Hits
+             * @default 0
+             */
+            new_hits: number;
+            /** Last Error */
+            last_error?: string | null;
+            /** Reason */
+            reason?: string | null;
+        };
         /** SourceSwitches */
         SourceSwitches: {
             /** Openalex */
@@ -6629,6 +6766,13 @@ export interface components {
             medrxiv?: boolean;
             /** Dblp */
             dblp?: boolean;
+        };
+        /** SourceWarning */
+        SourceWarning: {
+            /** Source */
+            source: string;
+            /** Message */
+            message: string;
         };
         /** SourcesEvent */
         SourcesEvent: {

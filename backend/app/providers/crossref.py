@@ -8,7 +8,7 @@ from urllib.parse import quote
 
 import httpx
 
-from app.providers.http import retrying
+from app.providers.http import paced, retrying
 from app.providers.openalex import json_body
 
 BASE_URL = "https://api.crossref.org"
@@ -21,7 +21,9 @@ def new_client(
     *, email: str | None = None, api_key: str | None = None, transport: httpx.AsyncBaseTransport | None = None
 ) -> httpx.AsyncClient:
     params = {"mailto": email} if email else {}
-    return httpx.AsyncClient(base_url=BASE_URL, params=params, timeout=TIMEOUT, transport=retrying(transport))
+    # One budget for Crossref and ACM DL (served from Crossref) across every run.
+    limited = transport or paced("crossref", retrying(None))
+    return httpx.AsyncClient(base_url=BASE_URL, params=params, timeout=TIMEOUT, transport=limited)
 
 
 # ponytail: no retry on 429, as in openalex.py. The contact email moves requests to the faster polite pool.

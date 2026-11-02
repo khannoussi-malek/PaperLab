@@ -10,11 +10,14 @@ import xml.etree.ElementTree as ET
 
 import httpx
 
-from app.providers.http import retrying
+from app.providers.http import paced, retrying
 
 BASE_URL = "https://export.arxiv.org"
 TIMEOUT = httpx.Timeout(10.0)
 MAX_TITLE_WORDS = 12
+WIDEN_BELOW = 25  # an every-word result under this also takes the top of the any-word list
+WIDEN_RESULTS = 40
+WIDER_CURSOR = 1_000_000  # a `start` no real search reaches, so a stored cursor says which stage it is in
 NS = {"atom": "http://www.w3.org/2005/Atom", "arxiv": "http://arxiv.org/schemas/atom"}
 # arXiv's title index leaves these out, so `ti:of` matches nothing and empties the whole AND query (probed
 # 2026-09-17, each against `ti:learning`). CORE's parser reads and/or/not, in any case, as operators and answers 500.
@@ -29,11 +32,13 @@ _ABS_ID = re.compile(r"arxiv\.org/abs/(.+?)(?:v\d+)?$")
 def new_client(
     *, email: str | None = None, api_key: str | None = None, transport: httpx.AsyncBaseTransport | None = None
 ) -> httpx.AsyncClient:
-    return httpx.AsyncClient(base_url=BASE_URL, timeout=TIMEOUT, transport=retrying(transport))
+    # arXiv asks for one request every 3 seconds; parallel search runs reached 429s without a budget they all share.
+    return httpx.AsyncClient(
+        base_url=BASE_URL, timeout=TIMEOUT, transport=transport or paced("arxiv", retrying(None))
+    )
 
 
-# ponytail: no retry on 429, as in openalex.py, and nothing spaces requests 3 seconds apart: a reader searching faster
-# than that gets arXiv's busy notice. Add a per-host throttle if that notice shows up in normal use.
+# ponytail: no retry on 429, as in openalex.py.
 
 
 def title_words(title: str) -> list[str]:
@@ -71,24 +76,36 @@ async def get_many(http: httpx.AsyncClient, ids: list[str]) -> list[dict]:
 async def search_page(
     http: httpx.AsyncClient, topic: str, page_size: int, cursor: int
 ) -> tuple[list[dict], int | None]:
-    """One page of a search run's arXiv results: any word of `topic` in any field, best first. `cursor` is `start`;
-    returns (entries, next_start_or_None).
+    """One page of a search run's arXiv results, best first: every word of `topic` in any field, then, when that finds
+    fewer than WIDEN_BELOW, the best WIDEN_RESULTS with any of the words. `cursor` is `start`, offset by WIDER_CURSOR in
+    the wider stage; returns (entries, next_cursor_or_None).
 
-    Not search's every-word-in-the-title form: for "mode collapse RLHF diversity" that gave 0, and every word in any
-    field gave 5 and missed the two papers a reader wants, which this form ranks in its top 8 (probed 2026-10-15)."""
+    Why (D288, measured 2026-11-02 on six real topics, results of 50 naming both the topic and its field): any-word
+    gave 3-17 at 279,000+ matches, every-word 45-50 where it finds enough. Every-word alone finds 1 for "software design
+    creativity fixation" and misses the two papers a reader wants for "mode collapse RLHF diversity", which any-word
+    ranks in its top 8, so a thin result takes only the top of the wider list, whose quality falls off fast."""
     words = title_words(topic)
     if not words:
         return [], None
-    query = " OR ".join(f"all:{word}" for word in words)
+    if cursor >= WIDER_CURSOR:
+        start = cursor - WIDER_CURSOR
+        entries = await _topic_page(http, " OR ".join(f"all:{word}" for word in words), start, page_size)
+        more = len(entries) == page_size and start + page_size < WIDEN_RESULTS
+        return entries, cursor + page_size if more else None
+    entries = await _topic_page(http, " AND ".join(f"all:{word}" for word in words), cursor, page_size)
+    if len(entries) == page_size:
+        return entries, cursor + page_size
+    thin = cursor + len(entries) < WIDEN_BELOW and len(words) > 1  # one word: the wider list is this list
+    return entries, WIDER_CURSOR if thin else None
+
+
+async def _topic_page(http: httpx.AsyncClient, query: str, start: int, page_size: int) -> list[dict]:
     params = {
-        "search_query": query, "start": cursor, "max_results": page_size,
+        "search_query": query, "start": start, "max_results": page_size,
         "sortBy": "relevance", "sortOrder": "descending",
     }  # fmt: skip
     response = await http.get("/api/query", params=params)
-    entries = _entries(response.raise_for_status())
-    more = len(entries) == page_size  # an OR query never runs dry: the run's per-pass limit pauses it
-    next_cursor = cursor + page_size if more else None
-    return entries, next_cursor
+    return _entries(response.raise_for_status())
 
 
 def _entries(response: httpx.Response) -> list[dict]:

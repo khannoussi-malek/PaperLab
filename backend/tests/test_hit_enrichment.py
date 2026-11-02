@@ -9,13 +9,15 @@ import httpx
 import pytest
 from mcp_fixtures import *  # noqa: F403
 from mcp_fixtures import call, result
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from app.core import hit_enrichment
+from app.models import PaperSources
 from app.models.references import ExternalRef
 from app.models.workspace import Workspace
 from app.models.workspace_search import WorkspaceSearchHit, WorkspaceSearchRun
 from app.providers import arxiv, semantic_scholar
+from app.workers import hit_enrichment as enrich_worker
 from app.workers.hit_enrichment import enrich_hits as worker_enrich_hits
 from app.workers.settings import WorkerSettings
 
@@ -422,38 +424,6 @@ async def test_arxiv_429_then_success_and_four_429s_stop(session, monkeypatch, w
     assert outcome.rate_limited and outcome.filled == 0 and refs[2].abstract is None
 
 
-async def test_job_skips_arxiv_after_an_s2_rate_limit(session, monkeypatch):
-    from app.workers import hit_enrichment as worker
-
-    @asynccontextmanager
-    async def test_session():
-        yield session
-
-    async def no_sleep(seconds):
-        pass
-
-    monkeypatch.setattr(worker, "SessionLocal", test_session)
-    monkeypatch.setattr(hit_enrichment, "sleep", no_sleep)
-    one = ref("one", external_ids={"arxiv": "2301.00001"})
-    ws, _ = await pool(session, [one])
-    arxiv_calls = []
-
-    def arxiv_handler(request):
-        arxiv_calls.append(request)
-        return httpx.Response(200, text=atom(id_list(request)))
-
-    ctx = {"transport": httpx.MockTransport(lambda request: httpx.Response(429)),
-           "arxiv_transport": httpx.MockTransport(arxiv_handler)}
-    await worker.enrich_hits(ctx, str(ws.id))
-    assert arxiv_calls == [] and one.abstract is None
-
-    # S2 answers but has no abstract: the job falls back to arXiv
-    ctx["transport"] = httpx.MockTransport(lambda request: httpx.Response(200, json=[{**JOURNAL, "abstract": None}]))
-    await hit_enrichment_reset(session, one)
-    await worker.enrich_hits(ctx, str(ws.id))
-    assert len(arxiv_calls) == 1 and one.abstract == "Abstract of 2301.00001."
-
-
 async def hit_enrichment_reset(session, r):
     r.triage_checked_at = None
     await session.flush()
@@ -529,3 +499,110 @@ async def test_refs_for_arxiv_keeps_only_well_formed_arxiv_ids(session):
     junk = ref("junk", external_ids={"arxiv": "not an id"})
     ws, _ = await pool(session, [good, junk])
     assert [r.title for r in await hit_enrichment.refs_for_arxiv(session, ws.id, None)] == ["good"]
+
+
+CITATION = (
+    "Yining Lu, Dixuan Wang, Tianjian Li. Proceedings of the 2025 Conference of the Nations of the Americas Chapter of "
+    "the Association for Computational Linguistics: Human Language Technologies (Volume 1: Long Papers). 2025."
+)
+
+
+async def test_a_stored_citation_is_replaced_by_a_real_abstract_and_a_real_one_never_is(session, waits):
+    citation = ref("cited", external_ids={"arxiv": "2407.09007"}, abstract=CITATION)
+    real = ref("real", external_ids={"arxiv": "2407.09008"}, abstract="We study creativity.")
+    ws, _ = await pool(session, [citation, real])
+
+    assert await hit_enrichment.refs_for_arxiv(session, ws.id, None) == [citation]
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, text=atom(id_list(request))))
+    async with arxiv.new_client(transport=transport) as http:
+        outcome = await hit_enrichment.arxiv_abstracts(session, http, [citation, real])
+    assert outcome.filled == 1
+    assert citation.abstract != CITATION and real.abstract == "We study creativity."
+
+
+async def test_s2_replaces_a_citation_too_but_no_other_abstract():
+    citation = ExternalRef(title="a", abstract=CITATION, external_ids={})
+    real = ExternalRef(title="b", abstract="We study creativity.", external_ids={})
+    assert hit_enrichment.apply_s2(citation, {"abstract": "From S2."}) and citation.abstract == "From S2."
+    hit_enrichment.apply_s2(real, {"abstract": "From S2."})
+    assert real.abstract == "We study creativity."
+
+
+async def test_a_verdict_reached_on_a_citation_is_cleared_and_decided_hits_are_not(session):
+    cited, decided, fine = (ref(name, abstract=text) for name, text in (
+        ("c", CITATION), ("d", CITATION), ("f", "We study creativity."),
+    ))
+    ws, _ = await pool(session, [cited, decided, fine])
+    hits = {
+        h.external_ref_id: h
+        for h in await session.scalars(select(WorkspaceSearchHit).where(WorkspaceSearchHit.workspace_id == ws.id))
+    }
+    for hit in hits.values():
+        hit.suggestion, hit.suggestion_reason, hit.suggestion_flags = "exclude", "wrong_topic", []
+    hits[decided.id].stage1_status = "relevant"
+    await session.flush()
+
+    assert await hit_enrichment.clear_stale_no_abstract(session, ws.id) == 1
+    for hit in hits.values():
+        await session.refresh(hit)
+    assert hits[cited.id].suggestion is None
+    assert hits[decided.id].suggestion == "exclude" and hits[fine.id].suggestion == "exclude"
+
+
+async def test_arxiv_is_still_asked_when_semantic_scholar_is_busy(session, monkeypatch, waits):
+    @asynccontextmanager
+    async def test_session():
+        yield session
+
+    monkeypatch.setattr(enrich_worker, "SessionLocal", test_session)
+    await session.execute(delete(PaperSources))
+    stamped = [ref(f"b{n}", external_ids={"arxiv": f"2301.{n:05d}"}) for n in range(2)]
+    ws, _ = await pool(session, stamped)
+    busy = httpx.MockTransport(lambda request: httpx.Response(429))
+    fine = httpx.MockTransport(lambda request: httpx.Response(200, text=atom(id_list(request))))
+    await worker_enrich_hits({"transport": busy, "arxiv_transport": fine}, str(ws.id))
+    assert all(r.abstract for r in stamped)
+
+
+async def test_a_source_turned_off_in_settings_is_not_asked(session, monkeypatch, waits):
+    @asynccontextmanager
+    async def test_session():
+        yield session
+
+    monkeypatch.setattr(enrich_worker, "SessionLocal", test_session)
+    await session.execute(delete(PaperSources))
+    session.add(PaperSources(id=True, semantic_scholar_enabled=False, arxiv_enabled=False))
+    await session.flush()
+    ws, _ = await pool(session, [ref("off", external_ids={"arxiv": "2301.77777"})])
+    asked = []
+
+    def record(request):
+        asked.append(request.url.host)
+        return httpx.Response(429)
+
+    spy = httpx.MockTransport(record)
+    await worker_enrich_hits({"transport": spy, "arxiv_transport": spy}, str(ws.id))
+    assert asked == []
+
+
+async def test_a_verdict_on_a_citation_is_reopened_when_the_backfill_replaces_the_citation(session, monkeypatch, waits):
+    """The verdict must go even though the abstract is real by the time the job ends: the naacl-long.141 case."""
+    @asynccontextmanager
+    async def test_session():
+        yield session
+
+    monkeypatch.setattr(enrich_worker, "SessionLocal", test_session)
+    await session.execute(delete(PaperSources))
+    cited = ref("cited", external_ids={"arxiv": "2407.09007"}, abstract=CITATION)
+    ws, _ = await pool(session, [cited])
+    hit = await session.scalar(select(WorkspaceSearchHit).where(WorkspaceSearchHit.workspace_id == ws.id))
+    hit.suggestion, hit.suggestion_reason, hit.suggestion_flags = "exclude", "wrong_topic", []
+    await session.flush()
+
+    s2 = httpx.MockTransport(lambda request: httpx.Response(500))
+    fine = httpx.MockTransport(lambda request: httpx.Response(200, text=atom(id_list(request))))
+    await worker_enrich_hits({"transport": s2, "arxiv_transport": fine}, str(ws.id))
+
+    await session.refresh(hit)
+    await session.refresh(cited)
+    assert cited.abstract != CITATION and hit.suggestion is None

@@ -6,12 +6,13 @@ from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import llm_connections
 from app.core.errors import Conflict, NotFound
 from app.core.screening_rank import Doc, rank, stop_hint
+from app.core.search_run_results import NOT_JUDGED
 from app.core.workspace_search import _hit_out_dict
 from app.models.references import ExternalRef
 from app.models.workspace import Workspace
@@ -110,7 +111,16 @@ async def get_state(session: AsyncSession, workspace_id: uuid.UUID) -> dict:
             WorkspaceSearchRun.workspace_id == workspace_id, WorkspaceSearchRun.stats_json.has_key("prescreen_capped")
         ).order_by(WorkspaceSearchRun.started_at.desc()).limit(1)
     )
+    hit = WorkspaceSearchHit
+    judged_counts = (await session.execute(
+        select(
+            func.count().filter(hit.suggestion.is_not(None), ~NOT_JUDGED),
+            func.count().filter(hit.suggestion.is_not(None), NOT_JUDGED),
+        ).where(hit.workspace_id == workspace_id)
+    )).one()
     return {
+        "judged": judged_counts[0],
+        "not_judged": judged_counts[1],
         "capped": f"{capped_stats['queued']} of {capped_stats['total']}" if capped_stats else None,
         "capped_left": capped_stats["total"] - capped_stats["queued"] if capped_stats else None,
         "criteria": workspace.inclusion_criteria,

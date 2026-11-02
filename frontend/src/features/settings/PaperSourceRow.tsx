@@ -62,6 +62,12 @@ export function PaperSourceRow({ source, hasEmail }: Props) {
       <div className="flex flex-col gap-1.5 pl-6.5">
         <p className="text-sm text-muted-foreground">{DESCRIPTIONS[source.id]}</p>
         {PRICE_WARNINGS[source.id] && <p className="text-xs text-muted-foreground">{PRICE_WARNINGS[source.id]}</p>}
+        {source.notice && (
+          <p role="status" className="flex items-center gap-1.5 text-xs text-foreground">
+            <Info aria-hidden className="size-3.5 shrink-0" />
+            {source.notice}
+          </p>
+        )}
         {prerequisiteHint && (
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Info aria-hidden className="size-3.5 shrink-0" />

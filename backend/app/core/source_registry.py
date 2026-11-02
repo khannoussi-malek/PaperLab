@@ -159,6 +159,7 @@ class SourceSpec:
     mapper: Mapper | None = None
     page_size: int = 20
     starting_cursor: int | str = 0
+    fails_without_key: bool = False  # with no key it answers searches with errors: Settings and new runs say so
     key_source: str | None = None  # None: use this source's own id for the key lookup. Set when a source
     # rides a different source's client/key entirely (e.g. SSRN reuses OpenAlex's own metered client and
     # key) -- `build_providers` looks the key up under `key_source` instead of `id` when this is set.
@@ -179,6 +180,7 @@ REGISTRY: tuple[SourceSpec, ...] = (
         id="semantic_scholar", name="Semantic Scholar", keyed=True, enabled_by_default=True,
         is_discovery_source=True, new_client=semantic_scholar.new_client, ask=_semantic_scholar,
         ask_kinds=("arxiv",), page=semantic_scholar.search_page, mapper=from_s2, page_size=75,
+        fails_without_key=True,  # its shared pool answered 429 to one request and to all six runs (2026-11-02)
     ),
     SourceSpec(
         id="arxiv", name="arXiv", keyed=False, enabled_by_default=True, is_discovery_source=True,
@@ -262,6 +264,7 @@ BY_ID: dict[str, SourceSpec] = {spec.id: spec for spec in REGISTRY}
 SOURCE_IDS: tuple[str, ...] = tuple(spec.id for spec in REGISTRY)
 DISCOVERY_SOURCE_IDS: tuple[str, ...] = tuple(spec.id for spec in REGISTRY if spec.is_discovery_source)
 NAMES: dict[str, str] = {spec.id: spec.name for spec in REGISTRY}
+FAILS_WITHOUT_KEY_IDS: frozenset[str] = frozenset(spec.id for spec in REGISTRY if spec.fails_without_key)
 KEYED_IDS: tuple[str, ...] = tuple(spec.id for spec in REGISTRY if spec.keyed)
 ENABLED_BY_DEFAULT: dict[str, bool] = {spec.id: spec.enabled_by_default for spec in REGISTRY}
 ASKS: dict[str, dict[str, Ask]] = {
