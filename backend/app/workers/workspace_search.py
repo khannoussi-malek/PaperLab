@@ -129,9 +129,14 @@ async def run_workspace_search(ctx: dict, run_id: str) -> None:
                 # Computed once, before the first iteration, so a slow first batch still counts against it — an
                 # iteration count alone doesn't bound wall-clock time (Important 1).
                 deadline = _now() + SEARCH_RUN_JOB_TIMEOUT - SEARCH_RUN_SAFETY_MARGIN
-                for iteration in range(MAX_BATCH_ITERATIONS):
-                    if iteration > 0:
+                # Only a pass that asked a source counts: while every source waits out a cooldown a pass fetches
+                # nothing, and counting those ended six runs at 200 passes of 3 s, with arXiv mid-retry (2026-11-02).
+                iterations = 0
+                first_pass = True
+                while iterations < MAX_BATCH_ITERATIONS:
+                    if not first_pass:
                         await asyncio.sleep(BATCH_PACING_SECONDS)
+                    first_pass = False
                     await session.refresh(run)
                     if run.status != "running" or run.stats_json.get("passes", 1) != my_pass:
                         return  # stopped, or a Continue started a newer pass that a newer job owns
@@ -142,12 +147,16 @@ async def run_workspace_search(ctx: dict, run_id: str) -> None:
                         return
 
                     result = await search_batch(session, providers, run)
+                    iterations += result.asked
                     per_source_raw = dict(run.stats_json.get("per_source_raw_count", {}))
                     for source, count in result.raw_counts.items():
                         per_source_raw[source] = per_source_raw.get(source, 0) + count
                     per_source_out = dict(run.stats_json.get("per_source_out_of_range", {}))
                     for source, count in result.out_of_range.items():
                         per_source_out[source] = per_source_out.get(source, 0) + count
+                    per_source_new = dict(run.stats_json.get("per_source_new_hits", {}))
+                    for source, count in result.new_by_source.items():
+                        per_source_new[source] = per_source_new.get(source, 0) + count
                     per_source_error = dict(run.stats_json.get("per_source_error", {}))
                     for source, error in result.errors.items():
                         per_source_error[source] = redact(error)[:_ERROR_MAX_CHARS]
@@ -166,6 +175,7 @@ async def run_workspace_search(ctx: dict, run_id: str) -> None:
                         "last_batch_new_hits": result.new_hits,
                         "per_source_raw_count": per_source_raw,
                         "per_source_out_of_range": per_source_out,
+                        "per_source_new_hits": per_source_new,
                     }
 
                     cursors = (

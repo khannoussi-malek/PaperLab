@@ -2,7 +2,6 @@ import { useRef, useState } from 'react'
 import { useContinueSearchRun, useSearchRun, useSearchRuns, useStartSearchRun, useStopSearchRun } from '@/api/queries'
 import { Scene3D } from '@/features/scene3d/Scene3D'
 import type { SearchRunStatus } from '@/features/scene3d/poses'
-import { SOURCE_NAMES } from '@/features/discovery/candidateMeta'
 import { SearchControls } from './SearchControls'
 import { HitTable } from './HitTable'
 import { SavedSearches } from './SavedSearches'
@@ -11,18 +10,7 @@ import { RunSummary } from './RunSummary'
 import { Button } from '@/components/ui/button'
 import { continueLabel, continueRefusal, pausedText } from './continueText'
 import { ScreeningAssist } from './ScreeningAssist'
-
-/** The sources that failed on a run, each with its error text when the server gave a string; tolerant of bad shapes. */
-function failedSources(stats: Record<string, unknown> | null | undefined): { id: string; error?: string }[] {
-  const failed = stats?.failed_sources
-  const errors = stats?.per_source_error
-  const table = errors && typeof errors === 'object' && !Array.isArray(errors) ? (errors as Record<string, unknown>) : {}
-  return (Array.isArray(failed) ? failed.filter((x): x is string => typeof x === 'string') : []).map((id) => {
-    const error = Object.hasOwn(table, id) ? table[id] : undefined
-    const name = Object.hasOwn(SOURCE_NAMES, id) ? SOURCE_NAMES[id as keyof typeof SOURCE_NAMES] : id
-    return { id: name, error: typeof error === 'string' ? error : undefined }
-  })
-}
+import { SourceResults } from './SourceResults'
 
 // Module level, so the scene never restarts on a re-render.
 const loadSearchRunScene = () => import('@/features/scene3d/directors/searchRun')
@@ -100,11 +88,7 @@ export function SearchTab({
             {continueRefusal(continueRun.error.message)}
           </div>
         )}
-        {failedSources(run.data.stats_json).map(({ id, error }) => (
-          <div key={id} className="border-b px-3 py-1 text-sm text-muted-foreground">
-            {id} didn't answer{error ? `: ${error}` : ''}
-          </div>
-        ))}
+        <SourceResults run={run.data} />
         </>
       )}
       <RunSummary run={run.data ?? null} resultCount={runCount} hasRuns={(runsQuery.data?.length ?? 0) > 0} onChangeRun={changeRun} />

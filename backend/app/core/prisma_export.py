@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import search_run_results
 from app.core.errors import NotFound
 from app.core.source_registry import NAMES
 from app.core.workspace_search import PER_SOURCE_PASS_LIMIT, get_run
@@ -54,6 +55,8 @@ class PrismaExport:
     runs: list[dict]  # per-run metadata for the methods section — [] for a per-run export (the caller already
     # knows which run), populated for the combined export.
     automation: list[str] = field(default_factory=list)
+    sources_searched: list[str] = field(default_factory=list)
+    sources_not_searched: list[str] = field(default_factory=list)  # failed or off in every run, and returned nothing
     notes: list[str] = field(default_factory=list)  # D266: caveats on the counts (e.g. a partial "identified")
     screening_criteria: str | None = None
 
@@ -162,7 +165,17 @@ async def prisma_export(session: AsyncSession, workspace_id: uuid.UUID, run_id: 
         paused = sorted({src for r in paused_runs for src in r.stats_json["paused_sources"]})
         notes.append(PAUSED_NOTE.format(
             count=len(paused_runs), limit=PER_SOURCE_PASS_LIMIT, sources=", ".join(paused)))
-    failed = sorted({src for r in counted_runs for src in r.stats_json.get("failed_sources", [])})
+    cursors = await search_run_results.cursors_by_run(session, [r.id for r in counted_runs])
+    results = {r.id: search_run_results.source_results(r, cursors.get(r.id, [])) for r in counted_runs}
+    run_searched = {run_id: search_run_results.searched(found) for run_id, found in results.items()}
+    sources_searched = sorted({s for reached, _ in run_searched.values() for s in reached})
+    sources_not_searched = sorted({s for _, missed in run_searched.values() for s in missed} - set(sources_searched))
+    for meta in runs_meta:
+        reached, missed = run_searched[uuid.UUID(meta["id"])]
+        meta.update(sources_searched=reached, sources_not_searched=missed)
+    failed = sorted({
+        src for r in counted_runs for src in search_run_results.failed_sources(r, results[r.id])
+    })
     if failed:
         notes.append(FAILED_NOTE.format(
             sources=", ".join(NAMES.get(s, s) for s in failed), them="them" if len(failed) > 1 else "it"))
@@ -174,4 +187,5 @@ async def prisma_export(session: AsyncSession, workspace_id: uuid.UUID, run_id: 
         stage2_excluded=stage2_excluded, stage2_excluded_by_reason=stage2_excluded_by_reason,
         included=included, runs=runs_meta,
         automation=automation, notes=notes, screening_criteria=workspace.screening_criteria,
+        sources_searched=sources_searched, sources_not_searched=sources_not_searched,
     )

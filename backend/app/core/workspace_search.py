@@ -10,6 +10,7 @@ import base64
 import binascii
 import json
 import uuid
+from collections import Counter
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
@@ -20,7 +21,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.core import ai_sort, discovery, retrieved_hits, tags, year_range
+from app.core import ai_sort, discovery, paper_sources, retrieved_hits, search_run_results, tags, year_range
 from app.core.candidates import Candidate, from_s2, merge, normal_title
 from app.core.discovery import Providers, _add_unpaywall_links, download_pdf
 from app.core.references import _same_reference
@@ -37,7 +38,7 @@ from app.models.workspace_search import (
     WorkspaceSearchRun,
 )
 from app.providers import semantic_scholar
-from app.schemas.workspace_search import SearchRunOut, SearchRunSummary
+from app.schemas.workspace_search import SearchRunOut, SearchRunSummary, SourceWarning
 
 if TYPE_CHECKING:
     from app.schemas.workspace_search import HitReviewUpdate
@@ -53,7 +54,7 @@ if TYPE_CHECKING:
 # request seconds later — gets abandoned for the rest of the run before the blip could ever clear. Growing
 # cooldowns give a real chance for that, while a source that's persistently broken (an unauthenticated S2/CORE
 # 429, expected by default per spec §16) still gives up for good once every backoff step is spent.
-SOURCE_ERROR_CAP = 6
+SOURCE_ERROR_CAP = search_run_results.SOURCE_ERROR_CAP
 # Raw results one source may fetch in a single pass before it pauses (overshoot is at most one page). A paused
 # source is not exhausted: continue_run resumes it from its next page.
 PER_SOURCE_PASS_LIMIT = 200
@@ -72,6 +73,8 @@ class BatchResult:
     # accumulates these into run.stats_json across iterations; search_batch itself stays stateless.
     raw_counts: dict[str, int] = field(default_factory=dict)
     out_of_range: dict[str, int] = field(default_factory=dict)  # M39 F2: dropped by the run's year range (D221)
+    new_by_source: dict[str, int] = field(default_factory=dict)  # a paper two sources found counts for both
+    asked: bool = False  # False: every source was cooling down, paused or done, so this pass fetched nothing
 
 
 async def _find_or_create_external_ref(session: AsyncSession, candidate: Candidate) -> ExternalRef:
@@ -187,6 +190,7 @@ async def search_batch(session: AsyncSession, providers: Providers, run: Workspa
     out_of_range: dict[str, int] = {}
 
     now = _now()
+    asked = False
     for source in run.sources_json:
         cursor = cursors.get(source)
         if cursor is None or cursor.exhausted or cursor.cursor_json.get("paused"):
@@ -201,8 +205,10 @@ async def search_batch(session: AsyncSession, providers: Providers, run: Workspa
             # still become true once every other source has genuinely exhausted (M30a Task 17 E2E bug).
             cursor.last_error = None
             cursor.exhausted = True
+            cursor.cursor_json = {**cursor.cursor_json, "disabled": True}
             exhausted.append(source)
             continue
+        asked = True
         # P11: a per-source override (query_overrides_json) takes over that source's query; otherwise the run's
         # own query_text, same as before. Recorded on the run so a later PRISMA export reflects what was actually
         # searched (I6), not just what the caller intended.
@@ -249,15 +255,17 @@ async def search_batch(session: AsyncSession, providers: Providers, run: Workspa
             # succeeds clears whatever error streak came before it.
             cursor.cursor_json = {"value": next_cursor}
 
-    new_hits = await _store_candidates_as_hits(session, run, "database_search", found)
+    new_by_source: Counter[str] = Counter()
+    new_hits = await _store_candidates_as_hits(session, run, "database_search", found, new_by_source=new_by_source)
 
     return BatchResult(new_hits=new_hits, sources_exhausted=exhausted, errors=errors, raw_counts=raw_counts,
-                       out_of_range=out_of_range)
+                       out_of_range=out_of_range, new_by_source=dict(new_by_source), asked=asked)
 
 
 async def _store_candidates_as_hits(
     session: AsyncSession, run: WorkspaceSearchRun, source_method: str, found: dict[str, list[Candidate]],
     seed_paper_id: uuid.UUID | None = None, snowball_round: int | None = None,
+    new_by_source: Counter[str] | None = None,
 ) -> int:
     """Merges candidates from every source, dedups against the existing pool by (workspace_id, external_ref_id),
     and stores new ones as hits. Shared by search_batch (source_method="database_search") and snowball
@@ -289,6 +297,8 @@ async def _store_candidates_as_hits(
             seed_paper_id=seed_paper_id, snowball_round=snowball_round,
         ):
             new_hits += 1
+            if new_by_source is not None:
+                new_by_source.update(candidate.sources)
     return new_hits
 
 
@@ -319,7 +329,7 @@ async def _insert_hit(
     return inserted_id is not None
 
 
-from app.core import paper_sources, papers, workspaces
+from app.core import papers, workspaces
 from app.core.errors import Conflict, InvalidInput, NotFound
 from app.models import Paper, workspace_papers
 
@@ -339,11 +349,12 @@ async def start_run(
     # ordered, fed straight into merge()'s ranking — relies on; storing sources in whatever order the caller sent
     # them silently let the caller's field order become the trust order instead.
     ordered_sources = [source for source in paper_sources.SOURCES if source in sources]
+    warnings = paper_sources.search_warnings(await paper_sources.get(session), ordered_sources)
 
     run = WorkspaceSearchRun(
         workspace_id=workspace_id, query_text=query_text, filters_json=filters,
         query_overrides_json=query_overrides or {}, sources_json=ordered_sources, status="running",
-        started_at=datetime.now(timezone.utc), stats_json={},
+        started_at=datetime.now(timezone.utc), stats_json={"warnings": warnings} if warnings else {},
     )
     session.add(run)
     await session.flush()
@@ -402,16 +413,41 @@ async def sources_left(session: AsyncSession, run_ids: list[uuid.UUID]) -> dict[
     return left
 
 
+async def _reports(session: AsyncSession, runs: list[tuple[WorkspaceSearchRun, int]]) -> dict[uuid.UUID, dict]:
+    """The fields get_search_run and list_search_runs both return, per run."""
+    run_ids = [run.id for run, _ in runs]
+    cursors = await search_run_results.cursors_by_run(session, run_ids)
+    prescreen = await search_run_results.prescreen_counts(session, run_ids)
+    reports = {}
+    for run, hit_count in runs:
+        results = search_run_results.source_results(run, cursors.get(run.id, []), PER_SOURCE_PASS_LIMIT)
+        reports[run.id] = {
+            "hit_count": hit_count,
+            "per_source_raw_count": (run.stats_json or {}).get("per_source_raw_count", {}),
+            "failed_sources": search_run_results.failed_sources(run, results),
+            "source_results": results,
+            "outcome": search_run_results.outcome(run.status, results),
+            "warnings": [SourceWarning(**w) for w in (run.stats_json or {}).get("warnings", [])],
+            **({"prescreen": prescreen[run.id]} if run.id in prescreen else {}),
+        }
+    return reports
+
+
 async def run_out(session: AsyncSession, run: WorkspaceSearchRun) -> SearchRunOut:
+    hit_count = await session.scalar(
+        select(func.count()).select_from(WorkspaceSearchHit).where(WorkspaceSearchHit.run_id == run.id)
+    )
     left = await sources_left(session, [run.id])
-    return SearchRunOut.model_validate(run).with_continuation(left.get(run.id, []))
+    report = (await _reports(session, [(run, hit_count or 0)]))[run.id]
+    return SearchRunOut.model_validate(run).with_report(left.get(run.id, []), report)
 
 
 async def run_summaries(
     session: AsyncSession, rows: list[tuple[WorkspaceSearchRun, int]]
 ) -> list[SearchRunSummary]:
     left = await sources_left(session, [run.id for run, _ in rows])
-    return [SearchRunSummary.from_run(run, count, left.get(run.id, [])) for run, count in rows]
+    reports = await _reports(session, rows)
+    return [SearchRunSummary.from_run(run, left.get(run.id, []), reports[run.id]) for run, _ in rows]
 
 
 async def stop_run(session: AsyncSession, run_id, workspace_id=None) -> WorkspaceSearchRun:

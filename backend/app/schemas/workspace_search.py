@@ -36,7 +36,43 @@ def _continuation(status: str, stats: dict, left: list[str]) -> dict:
     }
 
 
-class SearchRunOut(BaseModel):
+class SourceResult(BaseModel):
+    """What one source did. `state`: complete (ran dry), paused (Continue fetches more), cooling_down (failing and
+    retrying, or was when the run ended), gave_up, disabled, or fetching while the run runs."""
+
+    source: str
+    state: str
+    raw_count: int = 0
+    new_hits: int = 0  # new to the workspace; a paper two sources found counts for both
+    last_error: str | None = None
+    reason: str | None = None
+
+
+class SourceWarning(BaseModel):
+    source: str
+    message: str
+
+
+class PrescreenCounts(BaseModel):
+    judged: int = 0  # a model read the title and abstract
+    not_judged: int = 0  # no usable abstract, or the model failed: `unsure`, whatever the abstract would have said
+    not_asked: int = 0
+
+
+class RunReport(BaseModel):
+    """The same fields on get_search_run and list_search_runs. `outcome`: running, complete (every source ran dry) or
+    partial (see `source_results`). `status` stays as it was: `exhausted` only means the job ended."""
+
+    hit_count: int = 0
+    per_source_raw_count: dict[str, int] = {}
+    failed_sources: list[str] = []
+    source_results: list[SourceResult] = []
+    outcome: str = "running"
+    warnings: list[SourceWarning] = []
+    prescreen: PrescreenCounts = PrescreenCounts()
+
+
+class SearchRunOut(RunReport):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
@@ -54,11 +90,11 @@ class SearchRunOut(BaseModel):
     sources_left: list[str] = []
     paused_sources: list[str] = []  # sources that hit the per-pass limit in the latest pass
 
-    def with_continuation(self, left: list[str]) -> "SearchRunOut":
-        return self.model_copy(update=_continuation(self.status, self.stats_json, left))
+    def with_report(self, left: list[str], report: dict) -> "SearchRunOut":
+        return self.model_copy(update={**_continuation(self.status, self.stats_json, left), **report})
 
 
-class SearchRunSummary(BaseModel):
+class SearchRunSummary(RunReport):
     """A run without its full stats_json, so a list of them stays small."""
 
     id: uuid.UUID
@@ -67,22 +103,16 @@ class SearchRunSummary(BaseModel):
     started_at: datetime
     stopped_at: datetime | None
     sources_json: list[str]
-    per_source_raw_count: dict[str, int]
-    failed_sources: list[str]
-    hit_count: int
     can_continue: bool = False
     sources_left: list[str] = []
     paused_sources: list[str] = []
 
     @classmethod
-    def from_run(cls, run, hit_count: int, left: list[str] | None = None) -> "SearchRunSummary":
-        stats = run.stats_json or {}
+    def from_run(cls, run, left: list[str], report: dict) -> "SearchRunSummary":
         return cls(
-            **_continuation(run.status, stats, left or []),
+            **_continuation(run.status, run.stats_json or {}, left), **report,
             id=run.id, query_text=run.query_text, status=run.status, started_at=run.started_at,
             stopped_at=run.stopped_at, sources_json=run.sources_json,
-            per_source_raw_count=stats.get("per_source_raw_count", {}),
-            failed_sources=stats.get("failed_sources", []), hit_count=hit_count,
         )
 
 
@@ -162,9 +192,11 @@ class ScreeningStateOut(BaseModel):
     suggest_run_id: uuid.UUID | None = None
     ranked_used: bool
     suggest_status: Literal["idle", "running", "stopping"]
-    suggest_done: int
+    suggest_done: int  # judged and not judged together: read `judged` for what a model actually rated
     suggest_total: int
     suggest_error: str | None
+    judged: int = 0  # the workspace's hits a model rated
+    not_judged: int = 0  # `unsure` with no rating: no usable abstract, or the model failed
     capped: str | None = None  # D265: "200 of 8226" when the last auto pre-screen left hits for a manual Suggest
     capped_left: int | None = None
     model_label: str | None
@@ -283,6 +315,8 @@ class EligibilityOut(BaseModel):
 
 
 class PrismaExportOut(BaseModel):
+    sources_searched: list[str] = []
+    sources_not_searched: list[str] = []  # failed or off, and returned nothing
     identified: int
     duplicates_removed: int
     stage1_screened: int

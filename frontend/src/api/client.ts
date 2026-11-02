@@ -146,6 +146,7 @@ export type SearchRunSummary = {
   can_continue: boolean
   sources_left: string[]
   paused_sources: string[]
+  outcome?: string
 }
 export type SavedSearch = components['schemas']['SavedSearchOut']
 export type SavedSearchCreate = components['schemas']['SavedSearchCreate']
