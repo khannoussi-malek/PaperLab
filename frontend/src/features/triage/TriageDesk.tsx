@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { api, type Paper } from '@/api/client'
 import { useTriageSummary } from '@/api/queries'
@@ -13,7 +13,7 @@ import { FiveCs } from './FiveCs'
 import { OptionalReasons } from './OptionalReasons'
 import { PdfSheet } from './PdfSheet'
 import { PdfTabs } from './PdfTabs'
-import { offersReason, PILES, REASONS, type Pile } from './piles'
+import { PILES, REASONS, type Pile } from './piles'
 import { ReasonChips } from './ReasonChips'
 import { ShortcutHelp } from './ShortcutHelp'
 import { TriageBar } from './TriageBar'
@@ -21,7 +21,7 @@ import { DeskStatus, TriageControls } from './TriageControls'
 import { TriageDone } from './TriageDone'
 import { TriageEmpty } from './TriageEmpty'
 import { deskLayout, useDeskWidth } from './layout'
-import { countsByPile, newSince, ORDERS, progress, type Order } from './queue'
+import { countsByPile, isReady, newSince, ORDERS, progress, type Order } from './queue'
 import { retainOnly, prefetchPdf } from './pdfCache'
 import { closeSession } from './sessionId'
 import { TriagePdf } from './TriagePdf'
@@ -69,16 +69,13 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
   const [includeDecided, setInclude] = useState(false)
   // The chips belong to the card they opened on: another top card (an undo, a failed save) closes them.
   const [reasonsFor, setReasonsFor] = useState<string | null>(null)
-  // The decision the optional chips belong to; they show only while it is still the latest (a next decision, an undo or a failed save ends them).
-  const [offerFor, setOfferFor] = useState<string | null>(null)
-  const closeOffer = useCallback(() => setOfferFor(null), [])
   const [held, setHeld] = useState<Pile | null>(null)
   const [helpOpen, setHelpOpen] = useState(false)
   const [departing, setDeparting] = useState<{ pile: Pile; paper: Paper } | null>(null)
   const session = useTriageSession({
     scope, queueFrom: papers, library, libraryReady, filterKey, order: storedOrder(scope), includeDecided: false,
   })
-  const { state, top, notReady, failed } = session
+  const { state, top, notReady, failed, offer } = session
   // Take focus only from nowhere or from the view switch that opened the desk, never from a field the reader is typing in.
   useEffect(() => {
     const a = document.activeElement
@@ -132,15 +129,14 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
     setReasons(false)
     setHeld(null) // the stamp belongs to the card the key acted on, not the next one
     setDeparting({ pile, paper: top })
-    const clientId = session.decide(pile, { reason, note, fivecs: fiveCs.mask, clock: clock.read() })
-    setOfferFor(clientId && offersReason(pile) ? clientId : null)
+    session.decide(pile, { reason, note, fivecs: fiveCs.mask, clock: clock.read() })
     focusRoot()
   }
   // Not relevant always asks why first: nothing is sent until a chip commits.
   const choose = (pile: Pile) => {
     if (!top) return
     if (pile !== 'not_relevant') return go(pile)
-    setOfferFor(null)
+    session.closeOffer()
     setReasons(true)
     focusRoot()
   }
@@ -156,7 +152,6 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
     focusRoot()
   }
   const last = state.done.at(-1)
-  const offer = last && last.clientId === offerFor ? last : null
   useDeskKeys(root, {
     reasonsShowing: reasons,
     lateShowing: offer !== null,
@@ -184,12 +179,14 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
   const lastPaper = last && library.find((p) => p.id === last.id)
   const undoInfo = last ? { label: lastPaper ? `${PILES[last.pile].label} '${paperLabel(lastPaper)}'` : PILES[last.pile].label, count: state.done.length } : null
   const noCards = state.total === 0 && state.done.length === 0
-  // A reload empties the stack but keeps the session id: the server still knows what a finished session did.
-  const { data: past } = useTriageSummary(session.sessionId, noCards)
-  const reloadedDone = noCards && past !== undefined && past.decided + past.skipped > 0
+  // A reload empties the stack but keeps the session id: the server still knows what a finished session did. That only
+  // counts when nothing is left undecided in the whole scope; a filter hiding the rest is an empty view, not a finished stack.
+  const nothingLeft = noCards && !library.some((p) => p.triage === null && isReady(p))
+  const past = useTriageSummary(session.sessionId, nothingLeft)
+  const reloadedDone = nothingLeft && past.data !== undefined && past.data.decided + past.data.skipped > 0
   const finished = reloadedDone || (state.unseen.length === 0 && !noCards)
   const searchEmpty = searching && papers.length === 0
-  const empty = noCards && !reloadedDone
+  const empty = noCards && !reloadedDone && !(nothingLeft && past.isPending)
   return (
     <section
       ref={root}
@@ -211,7 +208,7 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
         onOrder={changeOrder}
         onIncludeDecided={toggleInclude}
         onExit={exit}
-        onStartOver={empty || finished ? undefined : keepFocus(startOver)}
+        onStartOver={noCards || finished ? undefined : keepFocus(startOver)}
         canStartOver={session.canStartOver}
       />
       <ShortcutHelp open={helpOpen} onOpenChange={setHelpOpen} returnFocus={focusRoot} />
@@ -305,8 +302,8 @@ export function TriageDesk({ papers, library, libraryReady = true, scope, source
           key={offer.clientId}
           pile={offer.pile}
           tall={layout === 'single'}
-          onExpire={closeOffer}
-          onPick={(reason) => { session.addReason(offer.clientId, reason); closeOffer(); focusRoot() }}
+          onExpire={session.closeOffer}
+          onPick={(reason) => { session.addReason(offer.clientId, reason); focusRoot() }}
         />
       )}
     </section>

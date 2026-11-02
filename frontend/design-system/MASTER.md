@@ -1154,11 +1154,12 @@ being read in").
   Review the skipped and Start over clear them. The decision sends `fivecs` as a bitmask in the order of the list; a card
   whose group was never opened sends none, so "never looked" differs from "looked, ticked none" (0).
 - **Optional reasons:** after Read closely, Skim or Later the card moves on at once and a chip row ("Why Skim? Optional") sits
-  below the controls, so nothing moves under the mouse. It lasts 4 s (held while a pointer or focus is on it) or until the
+  below the controls, so nothing moves under the mouse. It lasts 4 s (paused while a pointer or focus is on it) or until the
   next decision, an undo or a failed save, and it stays over the done screen for the last card. A click or 7, 8, 9 adds the
   reason to that decision's event; the write queues behind the decision. **1 to 5 always decide the next paper while this row
-  is up**, so reading fast can never tag the last paper by mistake. A failed add is a plain alert with no Retry; the decision
-  stands.
+  is up**, so reading fast can never tag the last paper by mistake. "Reason added" is said only once the write has landed. A failed add is a plain alert with no
+  Retry and the decision stands. A chip pressed on a decision whose save then fails is held: the alert says it wasn't saved, and
+  Retry sends it after the decision. An undo or a failed save ends the row for good; it never comes back.
 - **Keymap and focus:** one native `keydown` listener on the desk root. Pile keys and A fire only outside buttons,
   fields, the abstract and the PDF column; there only Esc, P, F6, ? and U are the desk's (the PDF column keeps its own
   keys: arrows scroll, `[` `]` turn pages, + - 0 zoom). P toggles the PDF (column, tab or sheet); U or Ctrl/Cmd Z undoes;
@@ -1175,8 +1176,8 @@ being read in").
 - **Live region and alert:** an always-mounted polite `role=status` says each outcome ("Title. Skim. 3 of 10 done.",
   "Decision undone", "Pick a reason, 1 to 6"); a failed save shows a `role=alert` strip with Retry and the card comes
   back. Saves are ordered; an undo sent before its decision's event id exists waits for it.
-- **Done, Start over, Review the skipped:** an emptied stack, or a reload of a finished session (read back from
-  `GET /api/triage-summary`), shows what the session did (per pile, time, PDF opened for N of M) and "Review the skipped (N)", "Show kept papers in the list", "Add N new papers", "Start over", Back and Undo.
+- **Done, Start over, Review the skipped:** an emptied stack, or a reload of a finished session (nothing undecided left in the
+  whole scope, read back from `GET /api/triage-summary`; a filter hiding the rest is the empty state), shows what the session did (per pile, time, PDF opened for N of M) and "Review the skipped (N)", "Show kept papers in the list", "Add N new papers", "Start over", Back and Undo.
   A skipped card goes to a skipped list, not back on the stack. Review the skipped and Start over are disabled with "Saving…
   try again in a moment" until every pending save has landed. The session id lives in `sessionStorage` and ends on
   Start over, on Exit and on leaving the Triage view.

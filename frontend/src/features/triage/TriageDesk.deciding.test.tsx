@@ -318,3 +318,39 @@ it('a new session over decided papers is the empty state, not a summary of nothi
   await waitFor(() => expect(api.triageSummary).toHaveBeenCalled())
   expect(screen.queryByText('That is the whole stack.')).toBeNull()
 })
+
+it('a reload with a filter hiding the papers still undecided is not the whole-stack screen, and asks no summary', async () => {
+  sessionStorage.setItem('paperlab-triage-session:library', 'session-1')
+  const library = [decidedPapers[0], base[1]] // the second is undecided, and the filter hides it
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <TriageDesk papers={[decidedPapers[0]]} library={library} scope="library" sourceLabel="your library" filterKey="keep" onExit={vi.fn()} onShowKept={vi.fn()} />
+    </QueryClientProvider>,
+  )
+  expect(await screen.findByText(/Nothing to triage/)).toBeInTheDocument()
+  await new Promise((r) => setTimeout(r, 20))
+  expect(screen.queryByText('That is the whole stack.')).toBeNull()
+  expect(api.triageSummary).not.toHaveBeenCalled()
+})
+
+it('while the summary loads neither the empty state nor the done screen shows', async () => {
+  let release!: (v: unknown) => void
+  vi.mocked(api.triageSummary).mockImplementation((() => new Promise((r) => { release = r })) as never)
+  sessionStorage.setItem('paperlab-triage-session:library', 'session-1')
+  setupAllDecided()
+  await waitFor(() => expect(api.triageSummary).toHaveBeenCalled())
+  expect(screen.queryByText(/Nothing to triage/)).toBeNull()
+  expect(screen.queryByText('That is the whole stack.')).toBeNull()
+  release({ per_pile: { skim: 2 }, skipped: 0, card_ms: 0, pdf_opened: 0, decided: 2 })
+  expect(await screen.findByText('That is the whole stack.')).toBeInTheDocument()
+})
+
+it('a summary that cannot load falls back to the empty state', async () => {
+  vi.mocked(api.triageSummary).mockRejectedValue(new Error('offline'))
+  render(
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <TriageDesk papers={decidedPapers} library={decidedPapers} scope="library" sourceLabel="your library" filterKey="" onExit={vi.fn()} onShowKept={vi.fn()} />
+    </QueryClientProvider>,
+  )
+  expect(await screen.findByText(/Nothing to triage/)).toBeInTheDocument()
+})
