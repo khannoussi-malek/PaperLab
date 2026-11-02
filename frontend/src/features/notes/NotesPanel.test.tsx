@@ -12,6 +12,7 @@ const props = {
   paperId: 'p1', notes: [], draft: null, draftColor: '#facc15', activeNoteId: null, onDraftColorChange: vi.fn(),
   onSaveDraft: vi.fn(), onCancelDraft: vi.fn(), onAddNumber: vi.fn(), onSelectNote: vi.fn(), onUpdateNote: vi.fn(),
   onColorNote: vi.fn(), onDeleteNote: vi.fn(), movedToNotes: false, onPapersSaved: vi.fn(),
+  wholePaperDraft: null, onNewPaperNote: vi.fn(), onCancelPaperNote: vi.fn(), onSavePaperNote: vi.fn(),
 }
 
 test('a paper without a PDF has a plain composer that saves a note and empties itself', async () => {
@@ -22,7 +23,7 @@ test('a paper without a PDF has a plain composer that saves a note and empties i
   const box = screen.getByRole('textbox', { name: 'New note' })
   fireEvent.change(box, { target: { value: 'Read later.' } })
   fireEvent.click(screen.getByRole('button', { name: 'Save note' }))
-  await waitFor(() => expect(onSavePaperNote).toHaveBeenCalledWith('Read later.'))
+  await waitFor(() => expect(onSavePaperNote).toHaveBeenCalledWith('Read later.', null))
   await waitFor(() => expect(box).toHaveValue(''))
 })
 
@@ -35,7 +36,7 @@ test('a draft from the abstract shows its quote, with no Add as number', () => {
 
 test('a paper with a PDF keeps its prompt and has no plain composer', () => {
   render(<NotesPanel {...props} />)
-  expect(screen.getByText('Select text in the paper to add a note.')).toBeInTheDocument()
+  expect(screen.getByText('Select text in the paper to add a note, or')).toBeInTheDocument()
   expect(screen.queryByRole('textbox', { name: 'New note' })).toBeNull()
 })
 
@@ -142,4 +143,25 @@ test('changing the kind in edit mode swaps an untouched template and keeps typed
   fireEvent.change(box, { target: { value: 'my own words' } })
   await pick(screen.getByRole('combobox', { name: 'Kind' }), 'Summary')
   expect(box).toHaveValue('my own words')
+})
+
+test('the New note button is where the spec says in each composer state: none open', () => {
+  const onNewPaperNote = vi.fn()
+  render(<NotesPanel {...props} onNewPaperNote={onNewPaperNote} />)
+  expect(screen.getByText(/Select text in the paper to add a note, or/)).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'New note on this paper' }))
+  expect(onNewPaperNote).toHaveBeenCalled()
+})
+
+test('the New note button is where the spec says in each composer state: selection open', () => {
+  render(<NotesPanel {...props} draft={{ page: 1, rects: [[0, 0, 1, 1]], quotedText: 'quoted' }} />)
+  expect(screen.getByRole('button', { name: 'New note on this paper' })).toBeInTheDocument()
+  expect(screen.queryByText(/Select text in the paper/)).toBeNull()
+})
+
+test('the New note button is where the spec says in each composer state: whole-paper open', () => {
+  render(<NotesPanel {...props} wholePaperDraft={{ kind: 'summary' }} />)
+  expect(screen.queryByRole('button', { name: 'New note on this paper' })).toBeNull()
+  expect(screen.getByRole('textbox', { name: 'New note' })).toBeInTheDocument()
+  expect(screen.getByText(/the main thrust/i)).toBeInTheDocument()
 })

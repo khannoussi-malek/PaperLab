@@ -7,8 +7,10 @@ import { ReaderPage } from './ReaderPage'
 
 type NotesProps = {
   draft: { quotedText: string } | null
-  onSaveDraft: (body: string) => Promise<boolean>
-  onSavePaperNote: (body: string) => Promise<boolean>
+  onSaveDraft: (body: string, kind?: string | null) => Promise<boolean>
+  onSavePaperNote: (body: string, kind?: string | null) => Promise<boolean>
+  wholePaperDraft: { kind: string | null } | null
+  onNewPaperNote: () => void
 }
 const state = vi.hoisted(() => ({
   paper: undefined as Paper | undefined,
@@ -138,7 +140,7 @@ test('text selected in the abstract becomes the draft, and saving it sends the p
 test('a plain note on a paper without a PDF is saved linked to it, with no anchor', async () => {
   state.paper = paper({})
   render(<ReaderPage paperId={ID} tab="notes" target={null} />)
-  await act(() => state.notes!.onSavePaperNote('Read later.'))
+  await act(() => state.notes!.onSavePaperNote('Read later.', null))
   expect(state.create).toHaveBeenCalledWith({ body: 'Read later.', color: expect.any(String), paper_id: ID })
 })
 
@@ -167,4 +169,36 @@ test('a merged paper keeps the tab and the target: its chunks and notes are the 
   window.location.hash = `#/papers/${ID}?${query}`
   render(<ReaderPage paperId={ID} tab="chat" target={{ kind: 'chunk', id: '6f1c2a40-2222-4a8e-9c4e-000000000002', page: 3 }} />)
   expect(window.location.hash).toBe(`#/papers/${KEPT}?${query}`)
+})
+
+function selectAbstract() {
+  const abstract = screen.getByText('Sleep helps memory consolidation.')
+  const range = document.createRange()
+  range.setStart(abstract.firstChild!, 0)
+  range.setEnd(abstract.firstChild!, 'Sleep helps memory'.length)
+  window.getSelection()!.removeAllRanges()
+  window.getSelection()!.addRange(range)
+  fireEvent.mouseUp(abstract)
+}
+
+test('a new selection replaces the whole-paper composer', async () => {
+  state.paper = paper({})
+  render(<ReaderPage paperId={ID} tab="notes" target={null} />)
+  act(() => state.notes!.onNewPaperNote())
+  expect(state.notes!.wholePaperDraft).toEqual({ kind: null })
+  selectAbstract()
+  await waitFor(() => expect(state.notes!.draft?.quotedText).toBe('Sleep helps memory'))
+  expect(state.notes!.wholePaperDraft).toBeNull()
+})
+
+test('New note replaces a selection draft, and a kind is posted when picked', async () => {
+  state.paper = paper({})
+  render(<ReaderPage paperId={ID} tab="notes" target={null} />)
+  selectAbstract()
+  await waitFor(() => expect(state.notes!.draft).not.toBeNull())
+  act(() => state.notes!.onNewPaperNote())
+  expect(state.notes!.draft).toBeNull()
+  expect(state.notes!.wholePaperDraft).toEqual({ kind: null })
+  await act(() => state.notes!.onSavePaperNote('Mine.', 'summary'))
+  expect(state.create).toHaveBeenCalledWith({ body: 'Mine.', color: expect.any(String), paper_id: ID, kind: 'summary' })
 })

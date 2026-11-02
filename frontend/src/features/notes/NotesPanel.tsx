@@ -1,6 +1,7 @@
-import { Check, Sparkles, UserRound } from 'lucide-react'
+import { Check, FilePen, Sparkles, UserRound } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import type { Note, NoteKind } from '@/api/client'
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { pressable } from '@/components/motion'
 import { notesHref } from '@/lib/route'
@@ -17,14 +18,18 @@ type Props = {
   hasPdf?: boolean
   /** Whether that paper has an abstract to select from. */
   hasAbstract?: boolean
-  /** Saves a note with no quote; a paper without a PDF only. */
-  onSavePaperNote?: (body: string) => Promise<boolean>
+  /** The whole-paper composer is open (with this kind preset), or not. */
+  wholePaperDraft: { kind: NoteKind | null } | null
+  onNewPaperNote: () => void
+  onCancelPaperNote: () => void
+  /** Saves a note with no quote. */
+  onSavePaperNote: (body: string, kind: NoteKind | null) => Promise<boolean>
   notes: Note[]
   draft: SelectionAnchor | null
   draftColor: string
   activeNoteId: string | null
   onDraftColorChange: (hex: string) => void
-  onSaveDraft: (body: string) => Promise<boolean>
+  onSaveDraft: (body: string, kind: NoteKind | null) => Promise<boolean>
   onCancelDraft: () => void
   onAddNumber: () => void
   onSelectNote: (note: Note) => void
@@ -93,7 +98,25 @@ export function NotesPanel(props: Props) {
           </SelectContent>
         </Select>
       </div>
-      {draft ? (
+      {props.hasPdf !== false && !props.wholePaperDraft && (
+        <div className="flex flex-col gap-1">
+          {!draft && (
+            <p className="text-sm text-muted-foreground">Select text in the paper to add a note, or</p>
+          )}
+          <Button type="button" variant="ghost" size="sm" className="self-start" onClick={props.onNewPaperNote}>
+            <FilePen aria-hidden />
+            New note on this paper
+          </Button>
+        </div>
+      )}
+      {props.wholePaperDraft ? (
+        <PlainNoteComposer
+          key={props.wholePaperDraft.kind ?? 'none'}
+          initialKind={props.wholePaperDraft.kind}
+          onSave={props.onSavePaperNote}
+          onCancel={props.onCancelPaperNote}
+        />
+      ) : draft ? (
         <NoteComposer
           key={draftKey(draft)}
           draft={draft}
@@ -108,11 +131,9 @@ export function NotesPanel(props: Props) {
           <p className="text-sm text-muted-foreground">
             {props.hasAbstract ? 'Select text in the abstract, or write a note.' : 'Write a note.'}
           </p>
-          {props.onSavePaperNote && <PlainNoteComposer onSave={props.onSavePaperNote} />}
+          <PlainNoteComposer onSave={props.onSavePaperNote} />
         </>
-      ) : (
-        <p className="text-sm text-muted-foreground">Select text in the paper to add a note.</p>
-      )}
+      ) : null}
       <SuggestedNotes paperId={paperId} hasPdf={props.hasPdf} />
       {notes.length > 0 && shown.length === 0 && (
         <p className="text-sm text-muted-foreground">No notes match these filters.</p>
