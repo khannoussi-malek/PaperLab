@@ -233,4 +233,13 @@ describe('api.setReading and api.triageEvents', () => {
     expect(await api.triageEvents('p1')).toEqual([{ id: 'e1' }])
     expect(m.mock.calls[0][0]).toBe('/api/papers/p1/triage-events')
   })
+
+  it('adds a late reason with a PATCH on the event', async () => {
+    const m = stub()
+    await api.addTriageReason('e1', 'related_work')
+    expect(m.mock.calls[0][0]).toBe('/api/triage-events/e1')
+    const init = m.mock.calls[0][1] as RequestInit
+    expect(init.method).toBe('PATCH')
+    expect(JSON.parse(init.body as string)).toEqual({ reason: 'related_work' })
+  })
 })

@@ -49,3 +49,13 @@ it('Esc in the note cancels', () => {
   expect(onCancel).toHaveBeenCalledTimes(1)
   expect(onPick).not.toHaveBeenCalled()
 })
+
+it('takes another name and first key, needs no note, and is tall on a phone', () => {
+  const onPick = vi.fn()
+  render(<ReasonChips label="Why Skim? Optional" firstKey={7} tall reasons={REASONS.skim} onPick={onPick} />)
+  const group = screen.getByRole('group', { name: 'Why Skim? Optional' })
+  expect([...group.querySelectorAll('[data-reason-chip]')].map((b) => b.textContent)).toEqual(['7 background only', '8 related work', '9 partly relevant'])
+  fireEvent.click(screen.getByRole('button', { name: '8 related work' }))
+  expect(onPick).toHaveBeenCalledWith('related_work', undefined)
+  expect(screen.getByRole('button', { name: '8 related work' })).toHaveClass('min-h-11')
+})

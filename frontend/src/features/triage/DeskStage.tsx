@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Paper } from '@/api/client'
 import { cn } from '@/lib/utils'
 import type { DeskLayout } from './layout'
@@ -33,6 +33,8 @@ type Props = {
   reduced: boolean
   /** The conclusion's Show in PDF: passed only when the paper has a PDF. */
   onShowInPdf?: (page: number) => void
+  /** The five Cs, at the foot of the card. */
+  checklist?: ReactNode
 }
 
 const PAPER = 'paper-surface border-[#e6dfcc]'
@@ -66,7 +68,7 @@ function Clone({ item, onDone }: { item: Departing & { id: number }; onDone: (id
 }
 
 /** The desk: a dotted surface, the card on top of its stack, four glass targets and the drag that picks one. */
-export function DeskStage({ top, behind, counts, layout, hot, hovering, departing, onCommit, onHover, reduced, onShowInPdf }: Props) {
+export function DeskStage({ top, behind, counts, layout, hot, hovering, departing, onCommit, onHover, reduced, onShowInPdf, checklist }: Props) {
   const cardRef = useRef<HTMLDivElement>(null)
   const [dragPile, setDragPile] = useState<Pile | null>(null)
   const [clones, setClones] = useState<(Departing & { id: number })[]>([])
@@ -121,7 +123,7 @@ export function DeskStage({ top, behind, counts, layout, hot, hovering, departin
             hovering === 'not_relevant' && !reduced && '-translate-x-6 -rotate-3 motion-safe:transition-transform',
           )}
         >
-          <TriageCard paper={top} onShowInPdf={onShowInPdf} />
+          <TriageCard paper={top} onShowInPdf={onShowInPdf}>{checklist}</TriageCard>
           {stamped && (
             <span
               data-triage-stamp

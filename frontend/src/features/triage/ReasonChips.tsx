@@ -1,34 +1,41 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { cn } from '@/lib/utils'
 
 type Props = {
   reasons: readonly { key: string; label: string }[]
   onPick: (reason: string, note?: string) => void
-  onCancel: () => void
+  onCancel?: () => void
   /** The reason that asks for a one-line note first. */
-  noteFor: string
+  noteFor?: string
+  label?: string
+  /** The number shown on the first chip. */
+  firstKey?: number
+  /** The single column's taller targets. */
+  tall?: boolean
 }
 
 /** Why a paper is not relevant: numbered chips; `noteFor` opens a one-line note (Enter commits, Esc cancels). */
-export function ReasonChips({ reasons, onPick, onCancel, noteFor }: Props) {
+export function ReasonChips({ reasons, onPick, onCancel, noteFor, label = 'Reason', firstKey = 1, tall = false }: Props) {
   const [noting, setNoting] = useState(false)
   const [note, setNote] = useState('')
   return (
-    <div role="group" aria-label="Reason" className="flex flex-wrap items-center gap-2">
+    <div role="group" aria-label={label} className="flex flex-wrap items-center gap-2">
       {reasons.map((r, i) => (
         <Button
           key={r.key}
           type="button"
           variant="outline"
           size="sm"
+          className={cn(tall && 'min-h-11')}
           data-reason-chip={r.key}
           onClick={() => (r.key === noteFor ? setNoting(true) : onPick(r.key, undefined))}
         >
-          {i + 1} {r.label}{r.key === noteFor ? '…' : ''}
+          {i + firstKey} {r.label}{r.key === noteFor ? '…' : ''}
         </Button>
       ))}
-      {noting && (
+      {noting && noteFor && (
         <Input
           autoFocus
           aria-label="Note"
@@ -39,7 +46,7 @@ export function ReasonChips({ reasons, onPick, onCancel, noteFor }: Props) {
           onChange={(e) => setNote(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') onPick(noteFor, note.trim() || undefined)
-            else if (e.key === 'Escape') onCancel()
+            else if (e.key === 'Escape') onCancel?.()
           }}
         />
       )}

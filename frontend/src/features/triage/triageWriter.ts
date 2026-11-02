@@ -11,6 +11,7 @@ type Entry = { id: string; clientId: string }
 export function createWriter<E extends Entry>(api: {
   post: (entry: E) => Promise<{ eventId: string }>
   undo: (eventId: string) => Promise<unknown>
+  reason: (eventId: string, reason: string) => Promise<unknown>
 }) {
   let tail: Promise<unknown> = Promise.resolve()
   const eventIds = new Map<string, string>() // clientId -> event id, read when an undo's turn comes
@@ -25,6 +26,18 @@ export function createWriter<E extends Entry>(api: {
         try {
           const { eventId } = await api.post(entry)
           eventIds.set(entry.clientId, eventId)
+          return { status: 'saved', eventId }
+        } catch (error) {
+          return { status: 'failed', error }
+        }
+      }),
+    /** A late reason on the event that entry wrote: in the same line, so it waits for the id and the next write waits for it. */
+    reason: (entry: E, reason: string): Promise<Settled> =>
+      chain(async (): Promise<Settled> => {
+        const eventId = eventIds.get(entry.clientId)
+        if (!eventId) return { status: 'noop' } // the decide never saved
+        try {
+          await api.reason(eventId, reason)
           return { status: 'saved', eventId }
         } catch (error) {
           return { status: 'failed', error }

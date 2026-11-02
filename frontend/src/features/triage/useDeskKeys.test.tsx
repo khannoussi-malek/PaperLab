@@ -7,8 +7,9 @@ import { useDeskKeys, type DeskKeyHandlers } from './useDeskKeys'
 afterEach(cleanup)
 
 const spies = (over: Partial<DeskKeyHandlers> = {}) => ({
-  reasonsShowing: false, helpOpen: false,
+  reasonsShowing: false, lateShowing: false, fiveCsOpen: false, helpOpen: false,
   onPile: vi.fn(), onReason: vi.fn(), cancelReason: vi.fn(), closeHelp: vi.fn(), exit: vi.fn(),
+  toggleFiveCs: vi.fn(), onTick: vi.fn(),
   undo: vi.fn(), togglePdf: vi.fn(), openHelp: vi.fn(), focusAbstract: vi.fn(),
   ...over,
 }) satisfies DeskKeyHandlers
@@ -47,6 +48,7 @@ const ALWAYS: [string, Init, keyof DeskKeyHandlers][] = [
   ['Cmd+Z', { key: 'z', metaKey: true }, 'undo'], ['Ctrl+Z', { key: 'z', ctrlKey: true }, 'undo'],
 ]
 const fire = (id: string, init: Init) => fireEvent.keyDown(screen.getByTestId(id), init)
+const firstArgs = (f: unknown) => (f as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0])
 const called = (h: DeskKeyHandlers) => Object.entries(h).filter(([, v]) => typeof v === 'function' && (v as ReturnType<typeof vi.fn>).mock.calls.length).map(([k]) => k)
 
 describe('key table', () => {
@@ -157,4 +159,109 @@ it('a handled key is prevented, and one keydown is handled once', () => {
   screen.getByTestId('root').dispatchEvent(ev)
   expect(ev.defaultPrevented).toBe(true)
   expect(h.onPile).toHaveBeenCalledTimes(1)
+})
+
+describe('the five Cs', () => {
+  it('C toggles them from the desk and the card, not from a button, the abstract or the PDF', () => {
+    for (const id of FREE) {
+      const h = spies(); const { unmount } = render(<Desk h={h} />)
+      fire(id, { key: 'c' })
+      fire(id, { key: 'C' })
+      expect(h.toggleFiveCs).toHaveBeenCalledTimes(2)
+      unmount()
+    }
+    for (const id of OWN) {
+      const h = spies(); const { unmount } = render(<Desk h={h} />)
+      fire(id, { key: 'c' })
+      expect(called(h)).toEqual([])
+      unmount()
+    }
+  })
+
+  it('Cmd+C stays the browser\'s copy', () => {
+    const h = spies(); render(<Desk h={h} />)
+    const ev = new KeyboardEvent('keydown', { key: 'c', metaKey: true, bubbles: true, cancelable: true })
+    screen.getByTestId('root').dispatchEvent(ev)
+    expect(ev.defaultPrevented).toBe(false)
+    expect(called(h)).toEqual([])
+  })
+
+  it('open: 1 to 5 tick and arrows and Space still decide; 6 is nothing', () => {
+    const h = spies({ fiveCsOpen: true }); render(<Desk h={h} />)
+    for (const k of ['1', '2', '3', '4', '5', '6']) fire('root', { key: k })
+    expect(firstArgs(h.onTick)).toEqual([1, 2, 3, 4, 5])
+    expect(h.onPile).not.toHaveBeenCalled()
+    fire('root', { key: 'ArrowRight' })
+    fire('root', { key: ' ' })
+    expect(firstArgs(h.onPile)).toEqual(['read_closely', 'skip'])
+  })
+
+  it('closed: 1 to 5 are piles, and a held digit does not tick twice', () => {
+    const h = spies(); render(<Desk h={h} />)
+    fire('root', { key: '1' })
+    expect(h.onTick).not.toHaveBeenCalled()
+    expect(h.onPile).toHaveBeenCalledWith('read_closely')
+    const open = spies({ fiveCsOpen: true }); cleanup(); render(<Desk h={open} />)
+    fire('root', { key: '1', repeat: true })
+    expect(open.onTick).not.toHaveBeenCalled()
+  })
+
+  it('open: a tick shows no held-key stamp', () => {
+    const onHold = vi.fn(); const h = spies({ fiveCsOpen: true, onHold }); render(<Desk h={h} />)
+    fire('root', { key: '1' })
+    expect(onHold).not.toHaveBeenCalled()
+  })
+
+  it('the required chips outrank them: digits are reasons and C sleeps', () => {
+    const h = spies({ fiveCsOpen: true, reasonsShowing: true }); render(<Desk h={h} />)
+    fire('root', { key: '2' })
+    fire('root', { key: 'c' })
+    expect(h.onReason).toHaveBeenCalledWith(2)
+    expect(h.onTick).not.toHaveBeenCalled()
+    expect(h.toggleFiveCs).not.toHaveBeenCalled()
+  })
+
+  it('Esc order: reason, help, out of a scroller, then the checklist, then leave', () => {
+    const cases: [Partial<DeskKeyHandlers>, string, string[]][] = [
+      [{ fiveCsOpen: true, reasonsShowing: true }, 'root', ['cancelReason']],
+      [{ fiveCsOpen: true, helpOpen: true }, 'root', ['closeHelp']],
+      [{ fiveCsOpen: true }, 'abstract', []],
+      [{ fiveCsOpen: true }, 'root', ['toggleFiveCs']],
+      [{ fiveCsOpen: true }, 'button', ['toggleFiveCs']],
+      [{}, 'root', ['exit']],
+    ]
+    for (const [over, id, want] of cases) {
+      const h = spies(over); const { unmount } = render(<Desk h={h} />)
+      fire(id, { key: 'Escape' })
+      expect(called(h)).toEqual(want)
+      unmount()
+    }
+  })
+})
+
+describe('the optional chips', () => {
+  it('while the row shows, 7 to 9 pick chips 1 to 3 and 1 to 5 stay pile keys', () => {
+    const h = spies({ lateShowing: true }); render(<Desk h={h} />)
+    for (const k of ['7', '8', '9']) fire('root', { key: k })
+    expect(firstArgs(h.onReason)).toEqual([1, 2, 3])
+    fire('root', { key: '1' })
+    fire('root', { key: 'ArrowDown' })
+    expect(firstArgs(h.onPile)).toEqual(['read_closely', 'skim'])
+    expect(h.onReason).toHaveBeenCalledTimes(3)
+  })
+
+  it('without the row 7 to 9 do nothing and are left to the browser', () => {
+    const h = spies(); render(<Desk h={h} />)
+    const ev = new KeyboardEvent('keydown', { key: '7', bubbles: true, cancelable: true })
+    screen.getByTestId('root').dispatchEvent(ev)
+    expect(ev.defaultPrevented).toBe(false)
+    expect(called(h)).toEqual([])
+  })
+
+  it('7 to 9 belong to a focused button like every other pile key, and a held one acts once', () => {
+    const h = spies({ lateShowing: true }); render(<Desk h={h} />)
+    fire('button', { key: '7' })
+    fire('root', { key: '7', repeat: true })
+    expect(h.onReason).not.toHaveBeenCalled()
+  })
 })

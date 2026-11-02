@@ -63,6 +63,7 @@ export function useTriageSession({ scope, queueFrom, library, libraryReady, filt
       return { eventId: (await api.decideTriage(entry.id, body)).event.id }
     },
     undo: (eventId) => api.undoTriage(eventId),
+    reason: (eventId, reason) => api.addTriageReason(eventId, reason),
   })
 
   const paperOf = (id: string) => live.current.library.find((p) => p.id === id)
@@ -108,17 +109,18 @@ export function useTriageSession({ scope, queueFrom, library, libraryReady, filt
   const top = topOf(state, library)
   const topId = top?.id ?? null
 
-  const decide = useCallback((pile: Pile, o: { reason?: string; note?: string; clock?: Clock } = {}) => {
+  /** Returns the decision's client id, or undefined if nothing was decided. */
+  const decide = useCallback((pile: Pile, o: { reason?: string; note?: string; fivecs?: number | null; clock?: Clock } = {}): string | undefined => {
     const paper = topOf(live.current.state, live.current.library)
-    if (!paper) return
+    if (!paper) return undefined
     setAlert(null) // a stale failure alert must not outlive a new decision
     const clientId = crypto.randomUUID()
     let body: TriageDecisionIn
     try {
-      body = buildDecision({ pile, sessionId, clientId, reason: o.reason, note: o.note, clock: o.clock ?? NO_CLOCK })
+      body = buildDecision({ pile, sessionId, clientId, reason: o.reason, note: o.note, fivecs: o.fivecs, clock: o.clock ?? NO_CLOCK })
     } catch {
       setAlert({ message: NEEDS_REASON })
-      return
+      return undefined
     }
     bodies.current.set(clientId, body)
     const entry: DoneEntry = { id: paper.id, clientId, pile, before: { triage: paper.triage, pass: paper.reading_pass }, eventId: null, status: 'pending' }
@@ -128,7 +130,22 @@ export function useTriageSession({ scope, queueFrom, library, libraryReady, filt
     note.current = { text, exclusive: false }
     setAnnouncement(text)
     write(entry)
+    return clientId
   }, [sessionId, write])
+
+  /** The optional chip: adds the reason to that decision's event. A failure is only a message; the decision stands. */
+  const addReason = useCallback((clientId: string, reason: string) => {
+    const entry = live.current.state.done.find((d) => d.clientId === clientId)
+    if (!entry) return
+    setAnnouncement(say.reasonAdded(entry.pile, reason))
+    bump(1)
+    void writer.current!.reason(entry, reason).then((res) => {
+      bump(-1)
+      if (res.status === 'saved') void invalidate(entry.id)
+      else if (res.status === 'failed') setAlert({ message: `Couldn't add the reason: ${reasonOf(res.error)}. The decision is saved.` })
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const undo = useCallback(() => {
     const entry = live.current.state.done.at(-1)
@@ -228,6 +245,6 @@ export function useTriageSession({ scope, queueFrom, library, libraryReady, filt
 
   return {
     state, top, sessionId, notReady, failed, alert, announcement, pending, canReviewSkipped: pending === 0, canStartOver: pending === 0,
-    decide, undo, skip, setOrder, setIncludeDecided, reviewSkipped, addNew, startOver, dismissAlert: () => setAlert(null),
+    decide, addReason, announce: setAnnouncement, undo, skip, setOrder, setIncludeDecided, reviewSkipped, addNew, startOver, dismissAlert: () => setAlert(null),
   }
 }
