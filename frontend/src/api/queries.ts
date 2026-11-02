@@ -154,10 +154,10 @@ export const keys = {
   readingQueue: (workspaceId: string, runId: string) => [...keys.readingQueueRoot(workspaceId), runId] as const,
 }
 
-/** Every list that shows notes: the Notes page's, a paper's, every workspace query (its Notes tab and count), and
+/** Every list that shows notes: the Notes page's, a paper's, a paper's checks (they go stale with a note), every workspace query (its Notes tab and count), and
  * paper chat's history (a saved suggestion's card lives there too). */
 export const isNotesList = (queryKey: readonly unknown[]) =>
-  queryKey[0] === 'notes' || queryKey[0] === 'noteCounts' || queryKey[2] === 'notes' || queryKey[2] === 'chat' || queryKey[0] === 'workspaces'
+  queryKey[0] === 'notes' || queryKey[0] === 'noteCounts' || queryKey[2] === 'notes' || queryKey[2] === 'chat' || queryKey[2] === 'checks' || queryKey[0] === 'workspaces'
 
 /** Refetches every list that shows notes: after a note is saved, edited, moved between papers or deleted, or a chart
  * it shows changes. */
