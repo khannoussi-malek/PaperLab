@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { expect, test, vi } from 'vitest'
+import { beforeAll, expect, test, vi } from 'vitest'
+import { NoteCard } from './NoteCard'
+import { TEMPLATE } from './noteKinds'
 import { NotesPanel } from './NotesPanel'
 
 vi.mock('./SuggestedNotes', () => ({ SuggestedNotes: () => null }))
@@ -65,11 +67,13 @@ async function pick(trigger: HTMLElement, option: string) {
   fireEvent.click(await screen.findByRole('option', { name: option }))
 }
 
-Object.assign(Element.prototype, {
-  hasPointerCapture: () => false,
-  setPointerCapture: () => {},
-  releasePointerCapture: () => {},
-  scrollIntoView: () => {},
+beforeAll(() => {
+  Object.assign(Element.prototype, {
+    hasPointerCapture: () => false,
+    setPointerCapture: () => {},
+    releasePointerCapture: () => {},
+    scrollIntoView: () => {},
+  })
 })
 
 test('the kind filter narrows the list and says when nothing matches', async () => {
@@ -100,4 +104,42 @@ test('editing a card can set and clear its kind', async () => {
   await pick(kind(), 'Summary')
   fireEvent.click(screen.getByRole('button', { name: 'Save' }))
   await waitFor(() => expect(onUpdateNote).toHaveBeenLastCalledWith(expect.anything(), 'alpha', 'summary'))
+})
+
+test('editing a card can clear its kind: null is sent, not dropped', async () => {
+  const onUpdateNote = vi.fn().mockResolvedValue(true)
+  render(withClient(<NotesPanel {...props} onUpdateNote={onUpdateNote} notes={[note('a', 'alpha', 'summary')]} />))
+  fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+  await pick(screen.getAllByRole('combobox', { name: 'Kind' }).at(-1)!, 'Note')
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(onUpdateNote).toHaveBeenLastCalledWith(expect.anything(), 'alpha', null))
+})
+
+const card = (extra: object, onUpdate = vi.fn().mockResolvedValue(true)) =>
+  render(
+    withClient(
+      <NoteCard note={note('a', '', null)} startEditing onUpdate={onUpdate} onColorChange={vi.fn()} onDelete={vi.fn()} {...extra} />,
+    ),
+  )
+
+test('without editKind a card has no Kind picker and onUpdate gets the body only', async () => {
+  const onUpdate = vi.fn().mockResolvedValue(true)
+  card({}, onUpdate)
+  expect(screen.queryByRole('combobox', { name: 'Kind' })).toBeNull()
+  fireEvent.change(screen.getByRole('textbox', { name: 'Edit note' }), { target: { value: 'x' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(onUpdate).toHaveBeenCalledWith('x'))
+  expect(onUpdate.mock.calls[0]).toHaveLength(1)
+})
+
+test('changing the kind in edit mode swaps an untouched template and keeps typed text', async () => {
+  card({ editKind: true })
+  const box = screen.getByRole('textbox', { name: 'Edit note' })
+  await pick(screen.getByRole('combobox', { name: 'Kind' }), 'Five Cs')
+  expect(box).toHaveValue(TEMPLATE.five_cs)
+  await pick(screen.getByRole('combobox', { name: 'Kind' }), 'Figure')
+  expect(box).toHaveValue(TEMPLATE.figure)
+  fireEvent.change(box, { target: { value: 'my own words' } })
+  await pick(screen.getByRole('combobox', { name: 'Kind' }), 'Summary')
+  expect(box).toHaveValue('my own words')
 })
