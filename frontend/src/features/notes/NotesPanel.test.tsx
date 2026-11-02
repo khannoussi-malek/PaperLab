@@ -168,7 +168,7 @@ test('the New note button is where the spec says in each composer state: whole-p
 })
 
 test('each card gets the note check in its check slot', () => {
-  const note = { id: 'n1', kind: 'summary', provenance: 'human', body: 'x', anchors: [], paper_ids: ['p1'], created_at: '2026-11-01T00:00:00Z', updated_at: '2026-11-01T00:00:00Z' }
+  const note = { id: 'n1', kind: 'summary', provenance: 'human', body: 'x', anchors: [], color: '#facc15', paper_ids: ['p1'], created_at: '2026-11-01T00:00:00Z', updated_at: '2026-11-01T00:00:00Z' }
   render(
     <QueryClientProvider client={new QueryClient()}>
       <NotesPanel {...props} notes={[note as never]} />
