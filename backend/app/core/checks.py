@@ -38,7 +38,9 @@ _REF = re.compile(r"\[C(\d+)\]")
 _NUMBER = re.compile(r"\.?\d+(?:,\d{3})*(?:[.,]\d+)?")
 _THOUSANDS = re.compile(r"\d+(?:,\d{3})+")
 # A correction in words hands over the right answer as surely as a number does.
-_CORRECTS = re.compile(r",\s*not\b|\brather than\b|\bactually\b|\bin fact\b|\bnot\s+\S+\s+but\b", re.IGNORECASE)
+_CORRECTS = re.compile(
+    r",\s*not\b|\brather than\b|\bactually\b|\bin fact\b|\bnot\s+(?:\S+\s+){1,4}but\b", re.IGNORECASE
+)
 _FIVE_C_LABEL = re.compile(
     r"^\s*(?:\*\*)?(?:category|context|correctness|contributions|clarity)(?:\*\*)?\s*:(?:\*\*)?", re.IGNORECASE
 )
