@@ -575,3 +575,10 @@ async def test_check_cases_need_a_local_model(session, tmp_path, capsys):
         await answers.resolve_model(session, "remote-m", local_only=True)
     with pytest.raises(answers.EvalError, match="unknown model"):
         await answers.resolve_model(session, "nope", local_only=True)
+    local = LLMConnection(kind="ollama", label=f"L {uuid.uuid4().hex[:6]}", base_url="http://localhost:11434")
+    session.add(local)
+    await session.flush()
+    session.add(LLMModel(connection_id=local.id, name="eval-x:cloud"))
+    await session.flush()
+    with pytest.raises(answers.EvalError, match="not a local model"):
+        await answers.resolve_model(session, "eval-x:cloud", local_only=True)
