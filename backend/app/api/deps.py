@@ -11,6 +11,7 @@ from app.db import get_session
 from app.providers.base import LLM
 from app.providers.llm import build_llm
 from app.schemas.chat import ChatRequest
+from app.schemas.checks import CheckRequest
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
@@ -43,6 +44,16 @@ async def resolve_llm_by_model_id(
 
 
 LLMByModelIdDep = Annotated[LLM, Depends(resolve_llm_by_model_id)]
+
+
+async def resolve_check_llm(payload: CheckRequest, session: SessionDep, transport: TransportDep) -> LLM:
+    """The check's model, asking about a cloud one first. Declared before the prepare dependency, so the model the
+    request names is looked at before any note is read."""
+    await llm_connections.refuse_unconfirmed_remote(session, payload.confirm_remote, payload.model_id)
+    return await resolve_llm_by_model_id(session, transport, payload.model_id)
+
+
+CheckLLMDep = Annotated[LLM, Depends(resolve_check_llm)]
 
 
 async def get_discovery(session: SessionDep) -> AsyncIterator[discovery.Providers]:
