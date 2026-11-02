@@ -1,10 +1,12 @@
 import { Check, Sparkles, UserRound } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
-import type { Note } from '@/api/client'
+import type { Note, NoteKind } from '@/api/client'
 import { cn } from '@/lib/utils'
 import { pressable } from '@/components/motion'
 import { notesHref } from '@/lib/route'
 import type { SelectionAnchor } from '../reader/selection'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { KIND_LABEL, matchesKind } from './noteKinds'
 import { NoteCard } from './NoteCard'
 import { NoteComposer, PlainNoteComposer } from './NoteComposer'
 import { SuggestedNotes } from './SuggestedNotes'
@@ -26,7 +28,7 @@ type Props = {
   onCancelDraft: () => void
   onAddNumber: () => void
   onSelectNote: (note: Note) => void
-  onUpdateNote: (note: Note, body: string) => Promise<boolean>
+  onUpdateNote: (note: Note, body: string, kind?: NoteKind | null) => Promise<boolean>
   onColorNote: (note: Note, hex: string) => Promise<boolean>
   onDeleteNote: (note: Note) => Promise<void>
   /** A Papers save just took a note off this paper: say where it went. */
@@ -43,9 +45,10 @@ const isHuman = (note: Note) => note.provenance === 'human'
 export function NotesPanel(props: Props) {
   const { paperId, notes, draft, activeNoteId } = props
   const [show, setShow] = useState({ human: true, ai: true })
+  const [kind, setKind] = useState<'all' | 'plain' | NoteKind>('all')
   const humanCount = notes.filter(isHuman).length
   // An edited AI note is still AI: its badge says "AI · edited".
-  const shown = notes.filter((note) => (isHuman(note) ? show.human : show.ai))
+  const shown = notes.filter((note) => (isHuman(note) ? show.human : show.ai) && matchesKind(note, kind))
   return (
     // RightPanel draws the glass and the border; blur inside blur looks muddy.
     <aside className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-4" aria-label="Notes">
@@ -75,6 +78,20 @@ export function NotesPanel(props: Props) {
           pressedClass="bg-provenance-llm-surface text-provenance-llm ring-provenance-llm/40"
           onToggle={() => setShow({ ...show, ai: !show.ai })}
         />
+        <Select value={kind} onValueChange={(next) => setKind(next as typeof kind)}>
+          <SelectTrigger size="sm" aria-label="Kind">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All kinds</SelectItem>
+            {Object.entries(KIND_LABEL).map(([k, label]) => (
+              <SelectItem key={k} value={k}>
+                {label}
+              </SelectItem>
+            ))}
+            <SelectItem value="plain">Plain notes</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
       {draft ? (
         <NoteComposer
@@ -107,7 +124,8 @@ export function NotesPanel(props: Props) {
           paperId={paperId}
           active={note.id === activeNoteId}
           onSelect={() => props.onSelectNote(note)}
-          onUpdate={(body) => props.onUpdateNote(note, body)}
+          onUpdate={(body, k) => props.onUpdateNote(note, body, k)}
+          editKind
           onColorChange={(hex) => props.onColorNote(note, hex)}
           onDelete={() => props.onDeleteNote(note)}
           onPapersSaved={props.onPapersSaved}

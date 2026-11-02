@@ -38,6 +38,7 @@ export type EvidenceCardRow = components['schemas']['CardRowOut']
 export type EvidenceChange = components['schemas']['EditIn']['changes'][number]
 export type Chunk = components['schemas']['ChunkOut']
 export type Note = components['schemas']['NoteOut']
+export type NoteKind = NonNullable<Note['kind']>
 export type NoteCreate = components['schemas']['NoteCreate']
 export type NoteUpdate = components['schemas']['NoteUpdate']
 export type ChatSource = components['schemas']['ChatSource']
