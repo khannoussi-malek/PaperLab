@@ -18,6 +18,7 @@ class PaperSourceOut(BaseModel):
     enabled: bool
     has_key: bool | None
     key_hint: str | None
+    notice: str | None = None  # why this source won't return anything as it is set up
 
 
 class PaperSourcesOut(BaseModel):

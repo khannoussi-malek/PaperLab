@@ -1,5 +1,6 @@
 """M59 enrich_hits: fills source_type, published_doi, published_venue and a missing abstract on the refs of a
-workspace's search hits from Semantic Scholar's batch endpoint. Only on an explicit call; never overwrites a value."""
+workspace's search hits from Semantic Scholar's batch endpoint. On an explicit call and before pre-screening; never
+overwrites a value, except a stored citation in the abstract field (abstracts.is_citation_only)."""
 
 import logging
 import re
@@ -12,6 +13,7 @@ import httpx
 from sqlalchemy import func, null, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.abstracts import is_citation_only, usable_abstract
 from app.core.candidates import ARXIV_ID, ARXIV_VERSION, s2_triage
 from app.core.source_types import ARXIV_DOI_PREFIX
 from app.models.references import ExternalRef
@@ -28,6 +30,7 @@ ARXIV_CHUNK = 100  # arXiv's id_list limit
 ARXIV_PAUSE = 3.0  # arXiv asks for one request every 3 seconds
 ARXIV_BUSY = (429, 503)
 _ARXIV_FULL = re.compile(ARXIV_ID)
+_MAYBE_NO_ABSTRACT = func.length(func.btrim(func.coalesce(ExternalRef.abstract, ""))) < 400  # is_citation_only's limit
 
 
 @dataclass(frozen=True)
@@ -56,11 +59,13 @@ async def refs_for_arxiv(session: AsyncSession, ws: uuid.UUID, run_id: uuid.UUID
         .where(
             ExternalRef.id.in_(_hit_refs(ws, run_id)),
             ExternalRef.external_ids["arxiv"].astext.is_not(None),
-            func.btrim(func.coalesce(ExternalRef.abstract, "")) == "",
+            _MAYBE_NO_ABSTRACT,
         )
         .order_by(ExternalRef.id)
     )
-    return [r for r in (await session.execute(query)).scalars() if _arxiv_id(r)]  # the count and the pass agree
+    return [
+        r for r in (await session.execute(query)).scalars() if _arxiv_id(r) and not usable_abstract(r.abstract)
+    ]  # the count and the pass agree
 
 
 async def refs_to_enrich(session: AsyncSession, ws: uuid.UUID, run_id: uuid.UUID | None) -> list[ExternalRef]:
@@ -68,13 +73,15 @@ async def refs_to_enrich(session: AsyncSession, ws: uuid.UUID, run_id: uuid.UUID
     abstract, that Semantic Scholar was not asked about yet."""
     hits = _hit_refs(ws, run_id)
     wanted = ExternalRef.doi.is_not(None) | ExternalRef.external_ids["arxiv"].astext.is_not(None)
-    missing = ExternalRef.source_type.is_(None) | (func.btrim(func.coalesce(ExternalRef.abstract, "")) == "")
+    missing = ExternalRef.source_type.is_(None) | _MAYBE_NO_ABSTRACT
     query = (
         select(ExternalRef)
         .where(ExternalRef.id.in_(hits), wanted, missing, ExternalRef.triage_checked_at.is_(None))
         .order_by(ExternalRef.id)
     )
-    return list((await session.execute(query)).scalars())
+    return [
+        r for r in (await session.execute(query)).scalars() if r.source_type is None or not usable_abstract(r.abstract)
+    ]
 
 
 def s2_id(ref: ExternalRef) -> str | None:
@@ -97,7 +104,8 @@ def apply_s2(ref: ExternalRef, paper: dict) -> bool:
     }
     changed = False
     for field, value in found.items():
-        if value and not (getattr(ref, field) or "").strip():
+        current = getattr(ref, field)
+        if value and (not (current or "").strip() or (field == "abstract" and is_citation_only(current))):
             setattr(ref, field, value)
             changed = True
     arxiv_id = (paper.get("externalIds") or {}).get("ArXiv")
@@ -216,7 +224,7 @@ async def arxiv_abstracts(
 ) -> ArxivResult:
     """Fills the empty abstracts of refs that have an arXiv id, ARXIV_CHUNK ids per request, ARXIV_PAUSE seconds
     apart, committing per chunk. A chunk that fails is logged and skipped; four 429/503s in a row stop it."""
-    wanted = [(r, key) for r in refs if not (r.abstract or "").strip() and (key := _arxiv_id(r))]
+    wanted = [(r, key) for r in refs if not usable_abstract(r.abstract) and (key := _arxiv_id(r))]
     asked = filled = 0
     for start in range(0, len(wanted), ARXIV_CHUNK):
         if start:
@@ -252,19 +260,30 @@ SUGGESTION_COLUMNS = (
 
 
 async def clear_stale_no_abstract(session: AsyncSession, ws: uuid.UUID) -> int:
-    """Clears the 'no abstract' suggestion of undecided hits whose ref has an abstract by now, so pre-screening takes
-    them up again. Decided hits and real verdicts are left alone. Returns the number of hits cleared."""
-    has_abstract = select(ExternalRef.id).where(func.btrim(func.coalesce(ExternalRef.abstract, "")) != "")
-    cleared = await session.execute(
-        update(WorkspaceSearchHit)
+    """Clears two kinds of suggestion on undecided hits, so pre-screening takes them up again: a 'no abstract' one whose
+    ref has a real abstract by now, and a verdict a model reached on a stored citation. Decided hits and other verdicts
+    are left alone. Returns the number of hits cleared."""
+    rows = await session.execute(
+        select(WorkspaceSearchHit, ExternalRef.abstract)
+        .join(ExternalRef, WorkspaceSearchHit.external_ref_id == ExternalRef.id)
         .where(
             WorkspaceSearchHit.workspace_id == ws,
             WorkspaceSearchHit.stage1_status.is_(None),
-            WorkspaceSearchHit.suggestion_flags.contains(["no_abstract"]),
-            WorkspaceSearchHit.external_ref_id.in_(has_abstract),
+            WorkspaceSearchHit.suggestion.is_not(None),
+            WorkspaceSearchHit.suggestion_flags.contains(["no_abstract"]) | _MAYBE_NO_ABSTRACT,
         )
-        .values({column: null() for column in SUGGESTION_COLUMNS})  # null(): JSON null would not be SQL NULL
-        .execution_options(synchronize_session=False)
     )
+    stale = []
+    for hit, abstract in rows.all():
+        no_abstract = "no_abstract" in (hit.suggestion_flags or [])
+        if (no_abstract and usable_abstract(abstract)) or (not no_abstract and is_citation_only(abstract)):
+            stale.append(hit.id)
+    if stale:
+        await session.execute(
+            update(WorkspaceSearchHit)
+            .where(WorkspaceSearchHit.id.in_(stale))
+            .values({column: null() for column in SUGGESTION_COLUMNS})  # null(): JSON null would not be SQL NULL
+            .execution_options(synchronize_session=False)
+        )
     await session.commit()
-    return cleared.rowcount
+    return len(stale)

@@ -175,3 +175,60 @@ async def test_get_many_raises_on_an_error_status(arxiv_api):
     arxiv_api.reply("/api/query", 429, text="busy")
     with pytest.raises(httpx.HTTPStatusError):
         await arxiv.get_many(arxiv_api.client, ["2301.00001"])
+
+
+def _feed(count: int, first: int = 0) -> str:
+    entries = "".join(
+        f"<entry><id>http://arxiv.org/abs/2601.{first + i:05d}v1</id><title>Paper {first + i}</title>"
+        "<published>2026-01-01T00:00:00Z</published></entry>"
+        for i in range(count)
+    )
+    return f'<feed xmlns="http://www.w3.org/2005/Atom">{entries}</feed>'
+
+
+def _paged(every_word: int, any_word: int):
+    """arXiv with `every_word` AND matches and `any_word` OR matches; records each request."""
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        query, start = request.url.params["search_query"], int(request.url.params["start"])
+        size = int(request.url.params["max_results"])
+        total = any_word if " OR " in query else every_word
+        seen.append(("or" if " OR " in query else "and", start))
+        return httpx.Response(200, text=_feed(max(0, min(size, total - start)), start))
+
+    return httpx.MockTransport(handler), seen
+
+
+async def _all_pages(transport, topic: str) -> list[dict]:
+    found, cursor = [], 0
+    async with arxiv.new_client(transport=transport) as http:
+        while cursor is not None:
+            page, cursor = await arxiv.search_page(http, topic, 20, cursor)
+            found += page
+    return found
+
+
+async def test_a_topic_with_enough_every_word_matches_never_asks_for_any_word_ones():
+    transport, seen = _paged(every_word=214, any_word=291294)
+    found = await _all_pages(transport, "creativity in software engineering")
+    assert len(found) == 214 and {stage for stage, _ in seen} == {"and"}
+
+
+async def test_a_thin_result_widens_to_the_top_of_the_any_word_list_only():
+    transport, seen = _paged(every_word=1, any_word=367057)
+    found = await _all_pages(transport, "software design creativity fixation")
+    assert len(found) == 1 + arxiv.WIDEN_RESULTS
+    assert seen == [("and", 0), ("or", 0), ("or", 20)]
+
+
+async def test_a_single_word_topic_has_nothing_wider_to_ask():
+    transport, seen = _paged(every_word=3, any_word=3)
+    await _all_pages(transport, "creativity")
+    assert seen == [("and", 0)]
+
+
+async def test_a_short_any_word_list_ends_the_search():
+    transport, seen = _paged(every_word=0, any_word=5)
+    assert len(await _all_pages(transport, "mode collapse")) == 5
+    assert seen == [("and", 0), ("or", 0)]

@@ -144,3 +144,28 @@ async def test_an_api_key_travels_only_in_the_bearer_header_never_in_a_url():
     assert [r.headers["authorization"] for r in fake.requests] == [f"Bearer {key}"] * 2
     assert not any(key in str(r.url) for r in fake.requests)
     assert key not in str(caught.value)
+
+
+async def test_search_page_matches_a_topic_in_the_title_or_abstract():
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.url.params["filter"])
+        return httpx.Response(200, json={"results": [], "meta": {"count": 0}})
+
+    async with openalex.new_client(transport=httpx.MockTransport(handler)) as http:
+        await openalex.search_page(http, "software design, creativity|fixation", 100, 1)
+    # A comma or "|" would be read as OpenAlex filter syntax, as in search_works.
+    assert seen == ["title_and_abstract.search:software design  creativity fixation"]
+
+
+async def test_a_title_lookup_stays_a_title_lookup():
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.url.params["filter"])
+        return httpx.Response(200, json={"results": []})
+
+    async with openalex.new_client(transport=httpx.MockTransport(handler)) as http:
+        await openalex.search_works(http, "BERT pre-training")
+    assert seen == ["title.search:BERT pre-training"]

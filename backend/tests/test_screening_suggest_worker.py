@@ -9,7 +9,7 @@ from sqlalchemy import case, delete, select, text, update
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from app.core import discovery, pdf_links, queue, workspace_search
+from app.core import discovery, pdf_links, queue, screening, workspace_search
 from app.core.paper_sources import SourceSettings
 from app.core.screening_suggest import SYSTEM_PROMPT_V2
 from app.core.source_registry import SOURCE_IDS
@@ -84,6 +84,11 @@ def worker(session, monkeypatch):
 
     monkeypatch.setattr(worker_module, "SessionLocal", shared_session)
     monkeypatch.setattr(worker_module, "engine", SimpleNamespace(connect=shared_connection))
+
+    async def no_backfill(*_args):
+        return None
+
+    monkeypatch.setattr(worker_module, "enrich_hits", no_backfill)  # its own test below; no network here
 
     def use(llm):
         monkeypatch.setattr(worker_module, "build_llm", lambda connection, name, transport=None: llm)
@@ -533,3 +538,57 @@ async def test_a_normal_finish_leaves_no_error(session, worker):
     await worker_module.suggest_screening({}, str(workspace.id))
     await session.refresh(workspace)
     assert workspace.suggest_error is None
+
+
+CITATION = (
+    "Yining Lu, Dixuan Wang, Tianjian Li. Proceedings of the 2025 Conference of the Nations of the Americas Chapter of "
+    "the Association for Computational Linguistics: Human Language Technologies (Volume 1: Long Papers). 2025."
+)
+
+
+async def test_a_paper_whose_abstract_is_its_citation_is_not_judged():
+    from app.core.screening_suggest import suggest
+
+    llm = FakeLLM([J("exclude", "wrong_topic", relevance=1)])
+    verdict = await suggest(llm, "LLM creativity?", "about creativity", None, "Creative code generation", CITATION)
+    assert (verdict.verdict, verdict.reason, verdict.flags) == ("unsure", None, ["no_abstract"])
+
+
+async def test_pre_screening_backfills_each_run_first_and_a_failed_backfill_does_not_stop_it(monkeypatch):
+    calls = []
+
+    async def enrich(ctx, workspace_id, run_id):
+        calls.append(run_id)
+        raise RuntimeError("Semantic Scholar is down")
+
+    monkeypatch.setattr(worker_module, "enrich_hits", enrich)
+    workspace = SimpleNamespace(id="w", suggest_run_id="only")
+    await worker_module._backfill_abstracts({}, workspace, None)
+    await worker_module._backfill_abstracts({}, workspace, ["a", "b"])
+    await worker_module._backfill_abstracts({}, SimpleNamespace(id="w", suggest_run_id=None), None)
+    assert calls == ["only", "a", "b", None]
+
+
+async def test_the_model_reads_the_abstract_the_backfill_found_and_a_citation_gets_no_rating(
+    session, worker, monkeypatch
+):
+    workspace, hits = await _running(session, [(CITATION, None), (CITATION, None)])
+    workspace.suggest_total = 2
+    await session.flush()
+    filled = await session.get(ExternalRef, hits[0].external_ref_id)
+    filled_id = filled.id
+
+    async def backfill(_ctx, _workspace_id, _run_id):
+        await session.execute(update(ExternalRef).where(ExternalRef.id == filled_id).values(abstract=POSITIVE))
+
+    monkeypatch.setattr(worker_module, "enrich_hits", backfill)
+    llm = worker(ScriptedLLM([J("include")]))
+    await worker_module.suggest_screening({}, str(workspace.id))
+
+    assert len(llm.calls) == 1 and POSITIVE in llm.calls[0][1]  # the citation never reached the model
+    for hit in hits:
+        await session.refresh(hit)
+    assert hits[0].suggestion == "include"
+    assert (hits[1].suggestion, hits[1].suggestion_flags, hits[1].suggestion_model) == ("unsure", ["no_abstract"], None)
+    state = await screening.get_state(session, workspace.id)
+    assert (state["judged"], state["not_judged"], state["suggest_done"]) == (1, 1, 2)

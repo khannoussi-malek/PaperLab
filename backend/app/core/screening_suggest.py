@@ -7,6 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, model_validator
 
 from app.core import llm_json, prompts, quotes
+from app.core.abstracts import usable_abstract
 
 SCREENING_PROMPT_VERSION = 2
 SCREENING_PROMPT_VERSION_V1 = 1
@@ -84,7 +85,7 @@ async def suggest(llm, question, inclusion, exclusion, title, abstract) -> Sugge
     """One hit's suggestion. No abstract -> unsure + no_abstract without a model call. Quotes are kept only when they
     are in the abstract (notes.fold) and are at least 3 words and at most 300 characters; any drop, or an
     include/exclude with no kept quote, makes it low confidence."""
-    if not (abstract or "").strip():
+    if usable_abstract(abstract) is None:  # a stored citation isn't one: a model would rate it, and wrongly
         return SuggestionV2("unsure", None, None, flags=["no_abstract"])
     reply = await llm_json.ask_json(
         llm, SYSTEM_PROMPT_V2, build_prompt_v2(question, inclusion, exclusion, title, abstract), _Reply

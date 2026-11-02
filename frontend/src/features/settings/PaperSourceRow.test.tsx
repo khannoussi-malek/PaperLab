@@ -41,3 +41,11 @@ test('Unpaywall with a contact email shows no hint', () => {
   renderRow(source({ id: 'unpaywall', name: 'Unpaywall' }), true)
   expect(screen.queryByText(/Add a contact email/)).not.toBeInTheDocument()
 })
+
+test('a source that will return nothing as it is set up says so under its name', () => {
+  renderRow(
+    source({ id: 'semantic_scholar', name: 'Semantic Scholar', has_key: false, notice: 'Semantic Scholar refuses most searches without an API key.' }),
+    true,
+  )
+  expect(screen.getByRole('status')).toHaveTextContent('without an API key')
+})

@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import InvalidInput
 from app.core.llm_connections import key_hint
-from app.core.source_registry import ENABLED_BY_DEFAULT, NAMES
+from app.core.source_registry import ENABLED_BY_DEFAULT, FAILS_WITHOUT_KEY_IDS, NAMES
 from app.core.source_registry import KEYED_IDS as KEYED
 from app.core.source_registry import SOURCE_IDS as SOURCES
 from app.models import PaperSources
@@ -55,6 +55,7 @@ class SourceView:
     enabled: bool
     has_key: bool | None  # None: the source takes no key
     key_hint: str | None
+    notice: str | None = None  # why this source won't return anything as it is set up
 
 
 @dataclass(frozen=True)
@@ -80,6 +81,28 @@ async def get(session: AsyncSession) -> SourceSettings:
     return _settings(await session.get(PaperSources, True, populate_existing=True))
 
 
+def key_notice(source: str, sources: SourceSettings) -> str | None:
+    """The warning for a source that is on, known to fail without a key, and has none. Settings shows it and every new
+    run returns it, so nobody has to wait out a run to learn the source gave nothing."""
+    if source not in FAILS_WITHOUT_KEY_IDS or not sources.enabled[source] or sources.api_keys.get(source):
+        return None
+    return (
+        f"{NAMES[source]} refuses most searches without an API key, so expect no results from it. "
+        "A free key fixes this: Settings → Paper sources."
+    )
+
+
+def search_warnings(sources: SourceSettings, requested: list[str]) -> list[dict[str, str]]:
+    """What a caller should know before waiting for a run over `requested`."""
+    warnings = []
+    for source in requested:
+        if not sources.enabled[source]:
+            warnings.append({"source": source, "message": f"{NAMES[source]} is off in Settings, so it won't be asked."})
+        elif notice := key_notice(source, sources):
+            warnings.append({"source": source, "message": notice})
+    return warnings
+
+
 def view(sources: SourceSettings) -> SourcesView:
     return SourcesView(
         contact_email=sources.contact_email,
@@ -91,6 +114,7 @@ def view(sources: SourceSettings) -> SourcesView:
                 enabled=sources.enabled[source],
                 has_key=sources.api_keys[source] is not None if source in KEYED else None,
                 key_hint=key_hint(sources.api_keys.get(source)),
+                notice=key_notice(source, sources),
             )
             for source in SOURCES
         ],
