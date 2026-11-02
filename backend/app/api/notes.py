@@ -76,11 +76,13 @@ async def import_notes(files: list[UploadFile], session: SessionDep) -> dict[str
 
 @router.post("/api/notes", status_code=201)
 async def create_note(payload: NoteCreate, session: SessionDep) -> NoteOut:
-    """422 anchor_required: a paper_id note on a paper with a PDF; 422 quote_not_found: a quote not in its abstract."""
+    """422 anchor_required: a quote on a paper with a PDF; 422 quote_not_found: a quote not in its abstract."""
     if payload.paper_id is not None:
-        return await notes.create_paper_note(session, payload.paper_id, payload.body, payload.quote, payload.color)
+        return await notes.create_paper_note(
+            session, payload.paper_id, payload.body, payload.quote, payload.color, kind=payload.kind
+        )
     anchor = notes.Anchor(**payload.anchor.model_dump())
-    return await notes.create_human_note(session, payload.body, anchor, payload.color)
+    return await notes.create_human_note(session, payload.body, anchor, payload.color, kind=payload.kind)
 
 
 @router.post("/api/notes/promote", status_code=201)
@@ -90,7 +92,13 @@ async def promote_note(payload: PromoteRequest, session: SessionDep) -> NoteOut:
 
 @router.patch("/api/notes/{note_id}")
 async def update_note(note_id: uuid.UUID, payload: NoteUpdate, session: SessionDep) -> NoteOut:
-    return await notes.update_note(session, note_id, body=payload.body, color=payload.color)
+    return await notes.update_note(
+        session,
+        note_id,
+        body=payload.body,
+        color=payload.color,
+        kind=payload.kind if "kind" in payload.model_fields_set else notes.UNSET,
+    )
 
 
 @router.delete("/api/notes/{note_id}", status_code=204)

@@ -102,3 +102,42 @@ async def test_putting_a_notes_papers_replaces_them(client, session):
     assert unknown_note.status_code == 404
     assert (unknown_paper.status_code, unknown_paper.json()) == (404, {"detail": "unknown_paper"})
     assert too_many.status_code == 422
+
+
+ANCHOR = {"page": 1, "bbox": [[1, 2, 3, 4]], "quoted_text": "a passage"}
+
+
+async def test_a_kind_is_stored_on_an_anchored_note_and_on_a_whole_paper_note(client, session, tmp_path):
+    paper = await make_paper(session, str(tmp_path / "p.pdf"))
+    anchored = await client.post(
+        "/api/notes", json={"body": "b", "kind": "summary", "anchor": {**ANCHOR, "paper_id": str(paper.id)}}
+    )
+    whole = await client.post("/api/notes", json={"body": "w", "kind": "five_cs", "paper_id": str(paper.id)})
+    assert (anchored.status_code, anchored.json()["kind"]) == (201, "summary")
+    assert (whole.status_code, whole.json()["kind"], whole.json()["anchors"]) == (201, "five_cs", [])
+    assert (await client.get(f"/api/papers/{paper.id}/notes")).json()[0]["id"] == whole.json()["id"]
+
+
+async def test_create_refusals(client, session, tmp_path):
+    paper = await make_paper(session, str(tmp_path / "p.pdf"))
+    anchor = {**ANCHOR, "paper_id": str(paper.id)}
+    both = await client.post("/api/notes", json={"body": "b", "anchor": anchor, "paper_id": str(paper.id)})
+    neither = await client.post("/api/notes", json={"body": "b"})
+    bogus = await client.post("/api/notes", json={"body": "b", "kind": "bogus", "paper_id": str(paper.id)})
+    missing = await client.post("/api/notes", json={"body": "b", "paper_id": str(uuid.uuid4())})
+    empty = await client.post("/api/notes", json={"body": " ", "paper_id": str(paper.id)})
+    assert [r.status_code for r in (both, neither, bogus, missing, empty)] == [422, 422, 422, 404, 422]
+    assert empty.json()["detail"] == "empty_body"
+
+
+async def test_patching_a_kind_sets_it_and_null_clears_it(client, session, tmp_path):
+    paper = await make_paper(session, str(tmp_path / "p.pdf"))
+    note = (await client.post("/api/notes", json={"body": "b", "paper_id": str(paper.id)})).json()
+    url = f"/api/notes/{note['id']}"
+    set_ = await client.patch(url, json={"kind": "assumption"})
+    cleared = await client.patch(url, json={"kind": None})
+    assert (set_.status_code, set_.json()["kind"], cleared.status_code, cleared.json()["kind"]) == (
+        200, "assumption", 200, None
+    )
+    assert (await client.patch(url, json={"kind": "bogus"})).status_code == 422
+    assert (await client.patch(url, json={})).status_code == 422

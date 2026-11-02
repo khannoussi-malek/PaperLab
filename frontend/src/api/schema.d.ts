@@ -543,7 +543,7 @@ export interface paths {
         put?: never;
         /**
          * Create Note
-         * @description 422 anchor_required: a paper_id note on a paper with a PDF; 422 quote_not_found: a quote not in its abstract.
+         * @description 422 anchor_required: a quote on a paper with a PDF; 422 quote_not_found: a quote not in its abstract.
          */
         post: operations["create_note_api_notes_post"];
         delete?: never;
@@ -4892,7 +4892,13 @@ export interface components {
             paper_id?: string | null;
             /** Quote */
             quote?: string | null;
+            kind?: components["schemas"]["NoteKind"] | null;
         };
+        /**
+         * NoteKind
+         * @enum {string}
+         */
+        NoteKind: "five_cs" | "summary" | "reconstruction" | "assumption" | "future_work" | "figure";
         /** NoteOut */
         NoteOut: {
             /**
@@ -4909,6 +4915,7 @@ export interface components {
             provenance: "human" | "llm" | "llm_edited";
             /** Color */
             color: string;
+            kind: components["schemas"]["NoteKind"] | null;
             /** Source Id */
             source_id: string | null;
             /**
@@ -4992,6 +4999,7 @@ export interface components {
             body?: string | null;
             /** Color */
             color?: string | null;
+            kind?: components["schemas"]["NoteKind"] | null;
         };
         /** NumberAddedOut */
         NumberAddedOut: {

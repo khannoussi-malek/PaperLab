@@ -15,6 +15,15 @@ class Provenance(StrEnum):
     LLM_EDITED = "llm_edited"
 
 
+class NoteKind(StrEnum):
+    FIVE_CS = "five_cs"
+    SUMMARY = "summary"
+    RECONSTRUCTION = "reconstruction"
+    ASSUMPTION = "assumption"
+    FUTURE_WORK = "future_work"
+    FIGURE = "figure"
+
+
 class Note(Base):
     __tablename__ = "notes"
 
@@ -26,6 +35,8 @@ class Note(Base):
     source_id: Mapped[uuid.UUID | None]
     # A saved chat suggestion: which :::note block of the answer (source_id) it came from (D96). NULL otherwise.
     source_block: Mapped[int | None] = mapped_column(SmallInteger)
+    # What the note is for (M22); NULL for an ordinary note. The database holds the six allowed values (0065).
+    kind: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
     updated_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
 
