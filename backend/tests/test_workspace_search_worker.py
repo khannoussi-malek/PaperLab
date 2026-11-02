@@ -880,3 +880,23 @@ async def test_a_source_that_fails_then_recovers_finishes_complete(session, work
     assert results[0].state == "complete" and results[0].raw_count > 0 and results[0].last_error is None
     assert run.stats_json["per_source_error"]["arxiv"].startswith("[Errno -5]")  # the history stays
     assert search_run_results.outcome(run.status, results) == "complete"
+
+
+async def test_an_error_with_no_message_still_names_itself(session, worker):
+    """A read timeout's text is empty: one real run recorded `arxiv: ""`."""
+
+    class TimingOut(httpx.AsyncBaseTransport):
+        async def handle_async_request(self, request):
+            raise httpx.ReadTimeout("")
+
+    run = await _new_run(session, "running", ["arxiv"])
+    session.add(WorkspaceSearchCursor(run_id=run.id, source="arxiv", cursor_json={"value": 0}))
+    await session.flush()
+    await session.refresh(run)
+    from app.core import discovery, paper_sources
+    from app.core.workspace_search import search_batch
+
+    providers = discovery.build_providers(await paper_sources.get(session), TimingOut())
+    result = await search_batch(session, providers, run)
+    await providers.aclose()
+    assert result.errors == {"arxiv": "ReadTimeout"}

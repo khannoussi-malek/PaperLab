@@ -218,8 +218,9 @@ async def search_batch(session: AsyncSession, providers: Providers, run: Workspa
                 client, query_for_source, PAGE_SIZE_BY_SOURCE[source], cursor.cursor_json.get("value", 0)
             )
         except httpx.HTTPError as exc:
-            cursor.last_error = str(exc)
-            errors[source] = str(exc)
+            message = str(exc) or type(exc).__name__  # a timeout's own text is empty
+            cursor.last_error = message
+            errors[source] = message
             # Bounded retry (C2 part 1): a source stuck on httpx errors (e.g. an unauthenticated S2 429 — the
             # default case per spec §16's spike, not an edge case) must eventually stop retrying instead of
             # spinning until the worker's job_timeout kills it mid-commit. Spaced out (see SOURCE_ERROR_CAP's

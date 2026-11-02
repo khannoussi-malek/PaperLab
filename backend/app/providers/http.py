@@ -166,7 +166,7 @@ def _redis_for_this_loop() -> Any:
 
 
 # What each host asks for, per request. Crossref's budget covers ACM too, which is served from Crossref.
-SOURCE_INTERVAL_SECONDS = {"arxiv": 3.0, "crossref": 1.0, "semantic_scholar": 1.0}
+SOURCE_INTERVAL_SECONDS = {"arxiv": 3.0, "crossref": 1.0}
 _shared_source_pacers: dict[str, SharedPacer] = {}
 
 

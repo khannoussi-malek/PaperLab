@@ -82,6 +82,7 @@ def test_a_short_error_leaves_out_the_url_and_the_contact_email_in_it():
     assert search_run_results.short_error(ACM_429) == "HTTP 429 from api.crossref.org"
     assert search_run_results.short_error("[Errno -5] No address") == "[Errno -5] No address"
     assert search_run_results.short_error(None) is None
+    assert "sk-test" not in search_run_results.short_error("Redirect to https://x.org/?api_key=sk-test-1234567890abcdef")
 
 
 def test_a_source_that_failed_with_nothing_is_not_searched_but_one_that_returned_results_is():
@@ -89,6 +90,18 @@ def test_a_source_that_failed_with_nothing_is_not_searched_but_one_that_returned
     reached, missed = search_run_results.searched(results)
     assert missed == ["semantic_scholar"]
     assert "arxiv" in reached  # failing at the end, but it returned 100
+
+
+def test_a_source_the_run_stopped_before_asking_is_not_searched():
+    run = run_of("stopped", {"per_source_raw_count": {}})
+    results = search_run_results.source_results(run, [cursor("arxiv", {"value": 0})])
+    assert results[0].state == "paused" and search_run_results.searched(results) == ([], ["arxiv"])
+
+
+def test_a_source_that_ran_dry_with_nothing_was_searched():
+    run = run_of("exhausted", {"per_source_raw_count": {}})
+    results = search_run_results.source_results(run, [cursor("arxiv", {"value": 0}, True)])
+    assert search_run_results.searched(results) == (["arxiv"], [])
 
 
 @pytest.fixture
@@ -118,6 +131,13 @@ def hit(run, number, **fields):
         workspace_id=run.workspace_id, run_id=run.id, source_method="database_search",
         normalized_title=f"paper {number}", first_seen_at=datetime.now(timezone.utc), **fields,
     )
+
+
+async def test_a_suggestion_from_before_flags_existed_counts_as_judged(session, stored_run):
+    session.add(hit(stored_run, 9, suggestion="include", suggestion_model="m", suggestion_flags=None))
+    await session.flush()
+    counts = (await search_run_results.prescreen_counts(session, [stored_run.id]))[stored_run.id]
+    assert (counts.judged, counts.not_judged) == (1, 0)
 
 
 async def test_both_tools_return_the_same_report(session, stored_run):

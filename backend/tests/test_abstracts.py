@@ -29,6 +29,8 @@ def test_a_citation_is_not_an_abstract(text):
         # A real abstract that names a venue and a year is long, or reads as prose.
         "Results from the 2019 workshop show that fixation affects designers across the conference's 2021 replication.",
         "x" * 500 + " Proceedings of a Conference 2020.",
+        # Opens like an author list, then says something.
+        "Creative Coding, Pair Programming, Design Fixation. This journal article shows how they relate.",
     ],
 )
 def test_an_abstract_stays_an_abstract(text):

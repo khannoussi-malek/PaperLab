@@ -583,3 +583,26 @@ async def test_a_source_turned_off_in_settings_is_not_asked(session, monkeypatch
     spy = httpx.MockTransport(record)
     await worker_enrich_hits({"transport": spy, "arxiv_transport": spy}, str(ws.id))
     assert asked == []
+
+
+async def test_a_verdict_on_a_citation_is_reopened_when_the_backfill_replaces_the_citation(session, monkeypatch, waits):
+    """The verdict must go even though the abstract is real by the time the job ends: the naacl-long.141 case."""
+    @asynccontextmanager
+    async def test_session():
+        yield session
+
+    monkeypatch.setattr(enrich_worker, "SessionLocal", test_session)
+    await session.execute(delete(PaperSources))
+    cited = ref("cited", external_ids={"arxiv": "2407.09007"}, abstract=CITATION)
+    ws, _ = await pool(session, [cited])
+    hit = await session.scalar(select(WorkspaceSearchHit).where(WorkspaceSearchHit.workspace_id == ws.id))
+    hit.suggestion, hit.suggestion_reason, hit.suggestion_flags = "exclude", "wrong_topic", []
+    await session.flush()
+
+    s2 = httpx.MockTransport(lambda request: httpx.Response(500))
+    fine = httpx.MockTransport(lambda request: httpx.Response(200, text=atom(id_list(request))))
+    await worker_enrich_hits({"transport": s2, "arxiv_transport": fine}, str(ws.id))
+
+    await session.refresh(hit)
+    await session.refresh(cited)
+    assert cited.abstract != CITATION and hit.suggestion is None
