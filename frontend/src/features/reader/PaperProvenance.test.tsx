@@ -63,7 +63,7 @@ it('hides History when there are no events', async () => {
   expect(screen.queryByText('History')).toBeNull()
 })
 
-test('a check that met a busy source says it will be tried again', () => {
+it('a check that met a busy source says it will be tried again', () => {
   show({ pdf_checked_at: '2026-10-14T12:00:00Z', pdf_check_result: 'temporary' })
   expect(screen.getByText(/a source was busy, so it will be tried again/)).toBeInTheDocument()
 })
