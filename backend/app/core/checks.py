@@ -2,6 +2,10 @@
 
 A check names gaps only. A model line that hands over the answer (wording, a copied run, a number the reader didn't
 write) is dropped and counted, and never reaches the browser.
+
+Accepted limit: a shape rule cannot catch every line that hands over paper content in plain words. A check is
+display-only (never inserted into a note), and each line is capped at MAX_WORDS words, so what slips through is a
+short gist, not pasteable prose.
 """
 
 import re
@@ -23,7 +27,7 @@ from app.core.retrieval import RetrievedChunk, retrieve, searchable
 from app.models import Chunk, LLMOutput, Note, PaperStatus, Provenance
 
 OUTPUT_KIND = "check"  # the llm_outputs.kind of a check
-CHECK_PROMPT_VERSION = 1
+CHECK_PROMPT_VERSION = 2
 EXIT_TESTS = ("five_cs", "summary", "reconstruction")
 LABELS = {"five_cs": "five Cs", "summary": "summary", "reconstruction": "reconstruction"}
 CHECK_NOTE_CHARS = 8_000
