@@ -10,6 +10,17 @@ from dataclasses import dataclass
 from typing import Literal
 
 from app.core import prompts
+from app.core.finding_lines import (
+    INTRODUCES,
+    LABEL_START,
+    SUGGEST,
+    Kind,
+    bare,
+    clean_line,
+    grams,
+    reads_as_wording,
+    split_label,
+)
 from app.core.section_rubrics import rubric_for
 
 PROMPT_VERSION = 2
@@ -22,33 +33,7 @@ RETRY = (
     "20 words, and cites [S#] or [N#] where it points at something."
 )
 
-_LINE = re.compile(r"^(Missing|Unsupported|Supported)\s*:\s*(.+)$", re.IGNORECASE)
-_LABEL_START = re.compile(r"^(Missing|Unsupported|Supported)\b", re.IGNORECASE)
-_PREFIX = re.compile(r"^[\s>\-\u2022]*(\d+[.)]\s*)?")
-_MARKUP = re.compile(r"[*_]+")  # backticks stay: they quote wording
 _REF = re.compile(r"\[([SN])(\d+)\]")
-# A point is judged by its shape (D118): no quote mark, no colon/semicolon/dash/bracket introducing 3+ words, no
-# suggestion phrase, no run copied from the section. Deliberately conservative: honest points that trip a rule
-# are dropped and counted.
-# Every quote-like code point except the apostrophe forms (' and \u2019), which count only when they open a word.
-_QUOTE = re.compile(
-    '["`\u00ab\u00bb\u02ba\u02ee\u2018\u201a-\u201f\u2032-\u2037\u2039\u203a\u275b-\u2760'
-    "\u300c-\u300f\u301d-\u301f\uff02\uff07]|(?<!\\w)['\u2019](?=\\w)"
-)
-_INTRODUCES = re.compile(r"(:\s+|;\s*|\s?[\u2014\u2013]\s?|\s-\s|[(\[{]\s*)[^\s)\]}]+(\s+[^\s)\]}]+){2,}")
-_SUGGEST = re.compile(
-    r"\b(phrase|phrasing|reword|rephrase|rewrite|re-write|suggest(ed|ion)?|replace|instead of|such as|"
-    r"for example|for instance|how about|word(ed|ing)?\s+(it\s+)?as|(say|saying|said)\s+as|"
-    r"(line|sentence|phrase)\s+like|change\s+(it|this)\s+to|consider\s+(writing|adding|saying)|"
-    r"should\s+(read|say)|you\s+(could|can|might|may)\s+(say|write|use)|try(ing)?\s+(saying|writing|adding|using)|"
-    r"try:|says|saying|said|fram(e|ed|ing)\s+(it\s+)?as|along\s+the\s+lines\s+of|"
-    r"(open|opens|opening|begin|begins|beginning|start|starts|starting|lead|leads|leading)\s+with|"
-    r"the\s+sentence|a\s+statement|would\s+(be\s+clearer|read\s+better))\b|\be\.g\.",
-    re.I,
-)
-COPY_WORDS = 6  # a point sharing this many consecutive words with a sentence of the section is copying it
-
-Kind = Literal["missing", "unsupported", "supported"]
 
 
 @dataclass(frozen=True)
@@ -82,39 +67,19 @@ def build_prompt(role: str, sentences: list[str], notes: list[str]) -> str:
     return PROMPT_TEMPLATE.format(role=role, checklist=checklist, sentences=numbered, notes=noted)
 
 
-def _clean(line: str) -> str:
-    """The line without list numbering, bullets and markdown emphasis."""
-    return " ".join(_MARKUP.sub("", _PREFIX.sub("", line, count=1)).split())
-
-
-def _words(text: str) -> list[str]:
-    return re.findall(r"\w+", text.lower())
-
-
-def _grams(words: list[str]) -> set[tuple[str, ...]]:
-    return {tuple(words[i : i + COPY_WORDS]) for i in range(len(words) - COPY_WORDS + 1)}
-
-
-def _wording(point: str, copied: set[tuple[str, ...]]) -> bool:
-    bare = _REF.sub(" ", point)
-    return bool(
-        _QUOTE.search(point) or _INTRODUCES.search(bare) or _SUGGEST.search(point) or _grams(_words(bare)) & copied
-    )
-
-
 def _finding(line: str, n_sentences: int, n_notes: int, copied: set[tuple[str, ...]]) -> Finding | None:
-    match = _LINE.match(line)
-    if not match:
+    labelled = split_label(line)
+    if not labelled:
         return None
-    kind, point = match.group(1).lower(), match.group(2).strip()
-    if len(_REF.sub(" ", point).split()) > MAX_WORDS or _wording(point, copied):
+    kind, point = labelled
+    if len(bare(point, _REF).split()) > MAX_WORDS or reads_as_wording(point, _REF, copied):
         return None
     refs = tuple(Ref(k, int(n)) for k, n in _REF.findall(point))
     if any(r.n < 1 or r.n > (n_sentences if r.kind == "S" else n_notes) for r in refs):
         return None
     if kind != "missing" and not refs:
         return None
-    return Finding(kind, point, refs)  # type: ignore[arg-type]
+    return Finding(kind, point, refs)
 
 
 def parse_findings(reply: str, sentences: list[str], n_notes: int) -> tuple[list[Finding], int]:
@@ -124,13 +89,13 @@ def parse_findings(reply: str, sentences: list[str], n_notes: int) -> tuple[list
     colon/dash/semicolon/bracket introducing wording); plain chatter is ignored.
     An exact repeat of an earlier line is skipped silently.
     """
-    copied = set().union(*(_grams(_words(t)) for t in sentences)) if sentences else set()
+    copied = grams(sentences)
     kept: list[Finding] = []
     seen: set[str] = set()
     dropped = 0
     for raw in reply.splitlines():
-        line = _clean(raw)
-        candidate = _LABEL_START.match(line) or _SUGGEST.search(line) or _INTRODUCES.search(_REF.sub(" ", line))
+        line = clean_line(raw)
+        candidate = LABEL_START.match(line) or SUGGEST.search(line) or INTRODUCES.search(bare(line, _REF))
         if not candidate or line.lower() in seen:
             continue
         seen.add(line.lower())

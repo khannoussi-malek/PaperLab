@@ -226,6 +226,7 @@ describe('isNotesList', () => {
   it('is true for a paper’s notes, its chat history, and for every workspace query, whose Notes tabs and counts list notes', () => {
     expect(isNotesList(['papers', 'p1', 'notes'])).toBe(true)
     expect(isNotesList(['papers', 'p1', 'chat'])).toBe(true)
+    expect(isNotesList(['papers', 'p1', 'checks'])).toBe(true)
     expect(isNotesList(['workspaces'])).toBe(true)
     expect(isNotesList(['workspaces', 'w1', 'notes'])).toBe(true)
     expect(isNotesList(['noteCounts', ['p1']])).toBe(true)

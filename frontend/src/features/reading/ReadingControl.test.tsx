@@ -40,3 +40,43 @@ it('refetches the history after a decision, and the new row appears', async () =
   await waitFor(() => expect(put).toHaveBeenCalledWith('p1', { triage: 'later' }, undefined))
   expect(await screen.findByText(/Undecided → Later · from the reader/)).toBeInTheDocument()
 })
+
+const setupExit = (over: Partial<Paper> = {}, props: Record<string, unknown> = {}) =>
+  render(
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <ReadingControl paper={{ ...paper, ...over } as Paper} onOpenReferences={() => {}} {...props} />
+    </QueryClientProvider>
+  )
+
+it('pass 0 shows the five Cs exit test under Done when', async () => {
+  vi.spyOn(api, 'triageEvents').mockResolvedValue([])
+  vi.spyOn(api, 'listNotes').mockResolvedValue([])
+  vi.spyOn(api, 'listChecks').mockResolvedValue([])
+  setupExit()
+  fireEvent.click(screen.getByRole('button', { name: /Reading/ }))
+  expect(await screen.findByText('Your five Cs: not written yet')).toBeInTheDocument()
+})
+
+it('at level 3 the reconstruction test sits under the finished line', async () => {
+  vi.spyOn(api, 'triageEvents').mockResolvedValue([])
+  vi.spyOn(api, 'listNotes').mockResolvedValue([])
+  vi.spyOn(api, 'listChecks').mockResolvedValue([])
+  setupExit({ reading_pass: 3 })
+  fireEvent.click(screen.getByRole('button', { name: /Reading/ }))
+  expect(screen.getByText(/finished all three passes/)).toBeInTheDocument()
+  expect(await screen.findByText('Your reconstruction: not written yet')).toBeInTheDocument()
+})
+
+it('Write it closes the popover and passes the kind, and changes no level', async () => {
+  vi.spyOn(api, 'triageEvents').mockResolvedValue([])
+  vi.spyOn(api, 'listNotes').mockResolvedValue([])
+  vi.spyOn(api, 'listChecks').mockResolvedValue([])
+  const put = vi.spyOn(api, 'setReading')
+  const onWriteNote = vi.fn()
+  setupExit({}, { onWriteNote })
+  fireEvent.click(screen.getByRole('button', { name: /Reading/ }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Write it' }))
+  expect(onWriteNote).toHaveBeenCalledWith('five_cs')
+  await waitFor(() => expect(screen.queryByText('Your five Cs: not written yet')).toBeNull())
+  expect(put).not.toHaveBeenCalled()
+})

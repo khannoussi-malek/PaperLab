@@ -2,6 +2,9 @@ import { clientRectsToPdfRects, type PdfRect } from './coords'
 
 export type SelectionAnchor = { page: number; rects: PdfRect[]; quotedText: string }
 
+/** A draft is a selection, or (figure) a box drawn on a figure. */
+export type NoteDraft = SelectionAnchor & { figure?: true }
+
 export type SelectionResult =
   | { kind: 'none' }
   | { kind: 'invalid'; reason: string }

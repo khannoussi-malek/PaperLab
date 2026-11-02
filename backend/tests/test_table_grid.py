@@ -140,3 +140,16 @@ def test_a_single_row_is_data_not_a_header():
     grid = words_to_grid([word(72, 100, "System"), word(200, 100, "Dev")])
 
     assert split_header(grid) == (["", ""], grid)
+
+
+def test_a_figure_caption_names_a_figure_and_a_table_caption_does_not():
+    fig = ((72, 210, 400, 222), "Figure 2: x")
+    short = ((72, 210, 400, 222), "Fig. 2. x")
+    table = ((72, 210, 400, 222), "Table 2: y")
+
+    assert caption_name([fig], REGION, label="figure") == "Figure 2: x"
+    assert caption_name([short], REGION, label="figure") == "Fig. 2. x"
+    assert caption_name([table], REGION, label="figure") is None
+    assert caption_name([fig], REGION) is None
+    assert caption_name([fig], REGION, label="table") is None
+    assert caption_name([table], REGION) == "Table 2: y"

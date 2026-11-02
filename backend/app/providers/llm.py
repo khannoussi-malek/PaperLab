@@ -238,6 +238,15 @@ FAKE_NOTE_SUGGESTIONS_TOKENS = [
     "passage ",
     "note.",
 ]
+# The check's reply (spec §3.7) without the "99%" (the number rule would drop it): three kept lines and one dropped,
+# the [C / 1] marker split across tokens.
+FAKE_CHECK_TOKENS = [
+    "Missing: the main result ",
+    "on the second page [C",
+    "1].\n- Unsupported: the claimed accuracy [C",
+    "1].\nSupported: the method described here [C1].\n",
+    "Here is a better summary you could use.",
+]
 # The screening suggestion on the fake stack (M31b): an exclude with a reason, as the E2E spec expects.
 FAKE_SCREENING_TOKENS = ["EXCLUDE ", "wrong_study_type\n", "A review, ", "not a primary study."]
 
@@ -375,6 +384,7 @@ class FakeLLM:
         # Imported here: core.chat → retrieval → embedding → http_embedders → this module. Providers never import core
         # at module level.
         from app.core.chat import WORKSPACE_SYSTEM_PROMPT
+        from app.core.checks import SYSTEM_PROMPT as CHECK_SYSTEM_PROMPT
 
         # Same reason: note_suggestions → core.chat → retrieval → embedding → http_embedders → this module.
         from app.core.claim_detect import SYSTEM_PROMPT as CLAIM_DETECT_SYSTEM_PROMPT
@@ -387,7 +397,9 @@ class FakeLLM:
         from app.core.section_review import SYSTEM_PROMPT as SECTION_REVIEW_SYSTEM_PROMPT
 
         self.calls.append((system, prompt))
-        if asks_for_notes(prompt):
+        if system == CHECK_SYSTEM_PROMPT:  # first: a reader's note in the prompt may say "notes"
+            tokens = FAKE_CHECK_TOKENS
+        elif asks_for_notes(prompt):
             tokens = FAKE_NOTES_TOKENS
         elif system == WORKSPACE_SYSTEM_PROMPT:
             tokens = FAKE_WORKSPACE_TOKENS

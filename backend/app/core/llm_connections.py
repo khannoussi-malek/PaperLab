@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 KEY_HINT_CHARS = 4
 KEY_HINT_MIN_LENGTH = 8
 LOCAL_HOSTS = {"localhost", "host.docker.internal"}
+OLLAMA_CLOUD_HOST = "ollama.com"
 SEED_LABELS = {"ollama": "Ollama", "anthropic": "Anthropic"}
 
 # D151: embedding_source's foreign key would refuse the delete anyway, as a 500; this says why and where to go.
@@ -66,13 +67,25 @@ def key_hint(api_key: str | None) -> str | None:
     return api_key[-KEY_HINT_CHARS:] if api_key and len(api_key) >= KEY_HINT_MIN_LENGTH else None
 
 
-def is_local(kind: str, base_url: str | None, cloud_proxy: bool = False) -> bool:
+def _ollama_cloud(kind: str, model: str | None) -> bool:
+    return kind == "ollama" and bool(model) and model.endswith((":cloud", "-cloud"))
+
+
+def remote_host(kind: str, base_url: str | None, model: str | None) -> str:
+    """Where the text really goes, for the question asked before sending it."""
+    return OLLAMA_CLOUD_HOST if _ollama_cloud(kind, model) else host_of(base_url)
+
+
+def is_local(kind: str, base_url: str | None, cloud_proxy: bool = False, model: str | None = None) -> bool:
     """True for localhost, host.docker.internal, or a loopback or private IP. Anthropic is never local, and neither is
-    a server that answered as a cloud router (`cloud_proxy`, set when its model list is read).
+    a server that answered as a cloud router (`cloud_proxy`, set when its model list is read), nor an Ollama `:cloud`
+    or `-cloud` model: its daemon forwards those to ollama.com. Without a `model` the connection-level answer holds.
 
     ponytail: by host string only, no DNS, so `mybox.local` or a Tailscale 100.x address counts as cloud.
     """
     if kind == "anthropic" or base_url is None or cloud_proxy:
+        return False
+    if _ollama_cloud(kind, model):
         return False
     host = urlsplit(base_url).hostname or ""
     if host in LOCAL_HOSTS:
@@ -235,7 +248,7 @@ async def list_chat_models(session: AsyncSession) -> list[ChatModelView]:
         .order_by(LLMConnection.label, LLMModel.name)
     )
     return [
-        ChatModelView(m.id, m.name, c.label, is_local(c.kind, c.base_url, c.cloud_proxy), m.is_default)
+        ChatModelView(m.id, m.name, c.label, is_local(c.kind, c.base_url, c.cloud_proxy, m.name), m.is_default)
         for m, c in rows
     ]
 
@@ -298,14 +311,20 @@ async def resolve(session: AsyncSession, model_id: uuid.UUID | None) -> tuple[LL
     return row[0], row[1]
 
 
-async def refuse_unconfirmed_remote(session: AsyncSession, confirmed: bool) -> None:
-    """The default model must exist (Conflict no_model), and a remote one runs only when the caller confirmed: the
-    researcher's text goes to its host and may cost money (D190/D233)."""
-    connection, model = await resolve(session, None)
-    if not confirmed and not is_local(connection.kind, connection.base_url, connection.cloud_proxy):
+async def refuse_unconfirmed_remote(
+    session: AsyncSession, confirmed: bool, model_id: uuid.UUID | None = None
+) -> tuple[LLMConnection, LLMModel]:
+    """The model a request names (the default when `model_id` is None) must exist (NotFound model_not_found, Conflict
+    no_model), and a remote one runs only when the caller confirmed: the researcher's text goes to its host and may
+    cost money (D190/D233). Returns the connection and model it checked, so a caller runs exactly those."""
+    connection, model = await resolve(session, model_id)
+    if not confirmed and not is_local(connection.kind, connection.base_url, connection.cloud_proxy, model.name):
         raise Conflict(
-            "remote_model_needs_confirm", model=f"{connection.label} · {model.name}", host=host_of(connection.base_url)
+            "remote_model_needs_confirm",
+            model=f"{connection.label} · {model.name}",
+            host=remote_host(connection.kind, connection.base_url, model.name),
         )
+    return connection, model
 
 
 async def seed_from_env(

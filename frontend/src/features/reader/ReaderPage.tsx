@@ -1,6 +1,6 @@
 import { Table2, Undo2 } from 'lucide-react'
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
-import { api, PaperMergedError, type Note } from '@/api/client'
+import { api, PaperMergedError, type Note, type NoteKind } from '@/api/client'
 import {
   useChunksOnPage,
   useDataset,
@@ -51,7 +51,7 @@ import { PublishedVersionBanner } from './PublishedVersionBanner'
 import { RetractionBanner } from './RetractionBanner'
 import { EvidencePanel } from '../evidence/EvidencePanel'
 import { RightPanel } from './RightPanel'
-import { readAbstractSelection, readSelection, type SelectionAnchor } from './selection'
+import { readAbstractSelection, readSelection, type NoteDraft, type SelectionAnchor } from './selection'
 import { useCitations } from './useCitations'
 import { useHoverCard } from './useHoverCard'
 import { useJumpBack } from './useJumpBack'
@@ -59,9 +59,17 @@ import { usePdfDocument } from './usePdfDocument'
 import { DEFAULT_ZOOM_INDEX, ZOOM_STEPS } from './zoom'
 
 /** One drawn rect. `color` is its note's colour, or null for the pending selection (drawn with the draft token). */
-type PageHighlight = { key: string; noteId: string | null; color: string | null; provenance?: Note['provenance']; rect: PdfRect }
+type PageHighlight = {
+  key: string
+  noteId: string | null
+  color: string | null
+  provenance?: Note['provenance']
+  rect: PdfRect
+  /** A figure note's rect: an outline in the note's colour, not a fill. */
+  figure?: boolean
+}
 
-function groupHighlights(notes: Note[], draft: SelectionAnchor | null, paperId: string) {
+export function groupHighlights(notes: Note[], draft: NoteDraft | null, paperId: string) {
   const byPage = new Map<number, PageHighlight[]>()
   const add = (page: number, highlight: PageHighlight) =>
     byPage.set(page, [...(byPage.get(page) ?? []), highlight])
@@ -70,7 +78,7 @@ function groupHighlights(notes: Note[], draft: SelectionAnchor | null, paperId: 
     note.anchors.forEach((anchor, a) => {
       if (anchor.paper_id !== paperId) return
       anchor.bbox.forEach((rect, r) =>
-        add(anchor.page, { key: `${note.id}-${a}-${r}`, noteId: note.id, color: note.color, provenance: note.provenance, rect }),
+        add(anchor.page, { key: `${note.id}-${a}-${r}`, noteId: note.id, color: note.color, provenance: note.provenance, rect, figure: note.kind === 'figure' }),
       )
     })
   }
@@ -80,6 +88,7 @@ function groupHighlights(notes: Note[], draft: SelectionAnchor | null, paperId: 
 
 const HOVER_CARD_GAP_PT = 4
 const FLASH_MS = 1500
+const SAVE_FIRST = 'Save or cancel the note you are writing first.'
 
 /** A cited chunk being shown; `id` restarts the flash when the same citation is clicked again. */
 type Flash = { id: number; page: number; rects: PdfRect[] }
@@ -133,7 +142,8 @@ export function ReaderPage({ paperId, tab, target }: Props) {
   const mutations = useNoteMutations()
   const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX)
   const scale = ZOOM_STEPS[zoomIndex]
-  const [draft, setDraft] = useState<SelectionAnchor | null>(null)
+  const [draft, setDraft] = useState<NoteDraft | null>(null)
+  const [wholePaperDraft, setWholePaperDraft] = useState<{ kind: NoteKind | null } | null>(null)
   const [numberDraft, setNumberDraft] = useState<SelectionAnchor | null>(null)
   const [draftColor, setDraftColor] = useState(() => loadLastColor(browserStorage()))
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null)
@@ -167,7 +177,18 @@ export function ReaderPage({ paperId, tab, target }: Props) {
   const numbersDatasetId = datasets.data?.find((d) => d.kind === 'numbers')?.id ?? null
   const numbersDataset = useDataset(numbersDatasetId)
   const numberMarksByPage = useMemo(() => numberMarks(numbersDataset.data), [numbersDataset.data])
-  const captureDrag = useCaptureDrag(scale)
+  const typedPaperNote = useRef(false) // the whole-paper composer holds text the reader typed
+  // A selection or figure box never discards it; one that would is told to wait (an empty or template-only composer is replaced).
+  const blockedByTypedNote = () => {
+    if (typedPaperNote.current) setError(SAVE_FIRST)
+    return typedPaperNote.current
+  }
+  const captureDrag = useCaptureDrag(scale, (page, region) => {
+    if (blockedByTypedNote()) return
+    setWholePaperDraft(null)
+    setDraft({ page, rects: [region], quotedText: `Figure on p. ${page}`, figure: true })
+    showTab('notes')
+  })
   const { capturing, capture } = captureDrag
 
   useEffect(() => savePanelWidth(READER_PANEL, browserStorage(), panelWidth), [panelWidth])
@@ -262,18 +283,30 @@ export function ReaderPage({ paperId, tab, target }: Props) {
     if (result.kind === 'invalid') setError(result.reason)
     const anchor = result.kind === 'anchor' ? result.anchor : noPdf ? readAbstractSelection() : null
     if (anchor) {
+      if (blockedByTypedNote()) return
       setError(null)
       setDraft(anchor)
+      setWholePaperDraft(null)
       if (tab !== 'notes') showTab('notes') // the composer lives on the Notes tab
     }
   }
 
-  async function saveDraft(body: string, color: string = draftColor): Promise<boolean> {
+  async function saveDraft(body: string, kind: NoteKind | null = null, color: string = draftColor): Promise<boolean> {
     if (!draft) return false
+    if (draft.figure) {
+      const figure = { paper_id: paperId, page: draft.page, region: draft.rects[0], body, color }
+      const done = await attempt(() => mutations.createFigure.mutateAsync(figure))
+      if (done) {
+        saveLastColor(browserStorage(), color)
+        setDraft(null)
+      }
+      return done
+    }
+    const kindField = kind ? { kind } : {}
     // A paper without a PDF has no page to anchor on: the note goes on the paper, its body led by the abstract's words.
     const note = noPdf
-      ? { body, color, paper_id: paperId, quote: draft.quotedText }
-      : { body, color, anchor: { paper_id: paperId, page: draft.page, bbox: draft.rects, quoted_text: draft.quotedText } }
+      ? { body, color, paper_id: paperId, quote: draft.quotedText, ...kindField }
+      : { body, color, anchor: { paper_id: paperId, page: draft.page, bbox: draft.rects, quoted_text: draft.quotedText }, ...kindField }
     const saved = await attempt(() => mutations.create.mutateAsync(note))
     if (saved) {
       saveLastColor(browserStorage(), color)
@@ -283,16 +316,26 @@ export function ReaderPage({ paperId, tab, target }: Props) {
     return saved
   }
 
-  const savePaperNote = (body: string) =>
-    attempt(() => mutations.create.mutateAsync({ body, color: draftColor, paper_id: paperId }))
+  async function savePaperNote(body: string, kind: NoteKind | null): Promise<boolean> {
+    const saved = await attempt(() =>
+      mutations.create.mutateAsync({ body, color: draftColor, paper_id: paperId, ...(kind ? { kind } : {}) }),
+    )
+    if (saved) setWholePaperDraft(null) // closes one Write it or New note opened; a no-PDF paper's own composer is not a draft
+    return saved
+  }
+
+  function newPaperNote() {
+    setDraft(null)
+    setWholePaperDraft({ kind: null })
+  }
 
   async function highlightDraft(color: string) {
     setDraftColor(color)
-    await saveDraft('', color)
+    await saveDraft('', null, color)
   }
 
-  const updateNoteBody = (note: Note, body: string) =>
-    attempt(() => mutations.update.mutateAsync({ id: note.id, body }))
+  const updateNoteBody = (note: Note, body: string, kind?: NoteKind | null) =>
+    attempt(() => mutations.update.mutateAsync({ id: note.id, body, ...(kind === undefined ? {} : { kind }) }))
 
   const recolorNote = (note: Note, color: string) =>
     attempt(() => mutations.update.mutateAsync({ id: note.id, color }))
@@ -422,7 +465,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
       setMenu({ x: event.clientX, y: event.clientY, target: { kind: 'note', note, quote } })
     } else if (pending) {
       setDraft(pending)
-      setMenu({ x: event.clientX, y: event.clientY, target: { kind: 'draft', quote: pending.quotedText } })
+      setMenu({ x: event.clientX, y: event.clientY, target: { kind: 'draft', quote: pending.quotedText, ...('figure' in pending && pending.figure ? { figure: true as const } : {}) } })
     }
   }
 
@@ -442,9 +485,17 @@ export function ReaderPage({ paperId, tab, target }: Props) {
           paper={paper.data}
           zoomIndex={zoomIndex}
           onZoomChange={setZoomIndex}
-          capturing={capturing}
+          capturing={captureDrag.tableMode}
           onCaptureChange={captureDrag.setCapturing}
+          drawingFigure={captureDrag.drawingFigure}
+          onDrawingFigureChange={captureDrag.setDrawingFigure}
           onOpenReferences={() => showTab('references')}
+          onWriteNote={(kind) => {
+            setDraft(null)
+            setWholePaperDraft({ kind })
+            showTab('notes')
+          }}
+          onOpenNote={(id) => focusNote({ id })}
           tags={paper.data && <PaperTagChips paperId={paper.data.id} />}
           lensControl={<LensPicker reader={lensReader} />}
         />
@@ -502,12 +553,16 @@ export function ReaderPage({ paperId, tab, target }: Props) {
                   key={h.key}
                   data-note-id={h.noteId ?? undefined}
                   className={cn(
-                    'highlight absolute rounded-xs mix-blend-multiply',
+                    'highlight absolute rounded-xs',
+                    h.figure ? 'figure bg-transparent outline-2' : 'mix-blend-multiply',
                     h.noteId === null && 'draft bg-highlight-draft',
                     // An outline, not a colour swap: any colour can be the note's own.
                     h.noteId !== null && h.noteId === activeNoteId && 'active outline-2 outline-offset-1 outline-primary',
                   )}
-                  style={{ ...pdfRectToCss(h.rect, scale), backgroundColor: h.color ? highlightFill(h.color, h.provenance) : undefined }}
+                  style={{
+                    ...pdfRectToCss(h.rect, scale),
+                    ...(h.figure ? { outlineColor: h.noteId === activeNoteId ? undefined : (h.color ?? undefined) } : { backgroundColor: h.color ? highlightFill(h.color, h.provenance) : undefined }),
+                  }}
                 />
               ))}
               {(tableMarksByPage.get(pageNumber) ?? []).map((mark) => (
@@ -520,7 +575,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
                 </Fragment>
               ))}
               <NumberMarks marks={numberMarksByPage.get(pageNumber) ?? []} scale={scale} />
-              {draft?.page === pageNumber && draft.rects.length > 0 && (
+              {draft?.page === pageNumber && draft.rects.length > 0 && !draft.figure && (
                 <SelectionCopyButton
                   style={{
                     left: draft.rects[draft.rects.length - 1][0] * scale,
@@ -601,7 +656,15 @@ export function ReaderPage({ paperId, tab, target }: Props) {
           <NotesPanel
             paperId={paperId}
             hasPdf={!noPdf}
+            onCite={(source) => flashChunk(source.page, source.bbox)}
             hasAbstract={Boolean(paper.data?.abstract)}
+            wholePaperDraft={wholePaperDraft}
+            onNewPaperNote={newPaperNote}
+            onCancelPaperNote={() => setWholePaperDraft(null)}
+            onPaperNoteDirty={(dirty) => {
+              typedPaperNote.current = dirty && wholePaperDraft !== null // a no-PDF paper's own composer is no draft
+              if (!dirty) setError((e) => (e === SAVE_FIRST ? null : e))
+            }}
             onSavePaperNote={savePaperNote}
             notes={notes}
             draft={draft}

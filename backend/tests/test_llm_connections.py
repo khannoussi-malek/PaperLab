@@ -323,3 +323,43 @@ async def test_seed_from_env_seeds_nothing_for_fake_or_for_anthropic_without_a_k
         assert await connections.seed_from_env(session, "anthropic", "claude-sonnet-5", "http://x", None) is False
     assert await session.scalar(select(func.count()).select_from(LLMConnection)) == 0
     assert "ANTHROPIC_API_KEY" in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("kind", "model", "local"),
+    [("ollama", "x:cloud", False), ("ollama", "gpt-oss-cloud", False), ("ollama", "llama3:8b", True),
+     ("openai_compatible", "x:cloud", True)],
+)
+def test_an_ollama_cloud_model_on_a_local_server_is_not_local(kind, model, local):
+    assert connections.is_local(kind, "http://localhost:11434", model=model) is local
+    assert connections.is_local(kind, "http://localhost:11434") is True  # no model: the connection's answer
+
+
+async def test_the_gate_and_the_picker_treat_a_cloud_tag_as_remote(session):
+    from app.core.errors import Conflict
+
+    await session.execute(update(LLMModel).values(is_default=False))
+    c = LLMConnection(kind="ollama", label=f"Loc {uuid.uuid4().hex[:6]}", base_url="http://localhost:11434")
+    session.add(c)
+    await session.flush()
+    model = LLMModel(connection_id=c.id, name="x:cloud")
+    session.add(model)
+    await session.flush()
+    with pytest.raises(Conflict, match="remote_model_needs_confirm"):
+        await connections.refuse_unconfirmed_remote(session, False, model.id)
+    shown = [m for m in await connections.list_chat_models(session) if m.id == model.id]
+    assert [m.is_local for m in shown] == [False]
+
+
+async def test_the_question_for_a_cloud_tag_names_ollama_not_localhost(session):
+    from app.core.errors import Conflict
+
+    c = LLMConnection(kind="ollama", label=f"Loc {uuid.uuid4().hex[:6]}", base_url="http://localhost:11434")
+    session.add(c)
+    await session.flush()
+    model = LLMModel(connection_id=c.id, name="x:cloud")
+    session.add(model)
+    await session.flush()
+    with pytest.raises(Conflict) as refused:
+        await connections.refuse_unconfirmed_remote(session, False, model.id)
+    assert refused.value.details["host"] == "ollama.com"

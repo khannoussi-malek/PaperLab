@@ -18,6 +18,7 @@ from app.api import (
     briefs,
     charts,
     chat,
+    checks,
     datasets,
     discovery,
     embedding,
@@ -111,6 +112,7 @@ def create_app() -> FastAPI:
     app.include_router(triage.router)
     app.include_router(lenses.router)
     app.include_router(briefs.router)
+    app.include_router(checks.router)
     app.include_router(reading_bridge_api.router)
     app.include_router(reading_bridge_api.workspace_router)
     app.include_router(notes.router)
