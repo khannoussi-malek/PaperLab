@@ -19,6 +19,7 @@ from app.models.workspace import Workspace
 from app.models.workspace_search import WorkspaceSearchHit
 from app.providers.base import LLMError, LLMUnavailable
 from app.providers.llm import build_llm
+from app.workers.hit_enrichment import enrich_hits
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +69,18 @@ async def _auto_import(session, workspace: Workspace, run_ids: Collection[uuid.U
         await queue.enqueue("ingest_paper", str(paper_id))
 
 
+async def _backfill_abstracts(ctx: dict, workspace: Workspace, run_ids: list[str] | None) -> None:
+    """Fills missing abstracts from the free sources before judging: 905 of 1,338 real hits had none, so no rating
+    (2026-11-02). Never stops pre-screening, and a source still failing leaves its hits reported as not judged."""
+    scopes = run_ids or [str(workspace.suggest_run_id) if workspace.suggest_run_id else None]
+    backfill_ctx = {"transport": ctx.get("backfill_transport"), "arxiv_transport": ctx.get("arxiv_transport")}
+    for scope in scopes:
+        try:
+            await enrich_hits(backfill_ctx, str(workspace.id), scope)
+        except Exception:
+            logger.exception("abstract backfill before pre-screening %s failed; judging what is there", workspace.id)
+
+
 async def suggest_screening(ctx: dict, workspace_id: str, run_ids: list[str] | None = None) -> None:
     wid = uuid.UUID(workspace_id)
     # The advisory lock is session-level: Postgres ties it to one physical connection, not to our ORM `session`
@@ -96,16 +109,25 @@ async def suggest_screening(ctx: dict, workspace_id: str, run_ids: list[str] | N
                 connection, model = await llm_connections.resolve(session, None)
                 llm = build_llm(connection, model.name, transport=ctx.get("transport"))
                 label = f"{connection.label} · {model.name}"
-                pool = await load_pool(session, wid)
-                rows = {hit.id: (hit, ref) for hit, ref in pool.rows}
                 # A multi-run job names its runs; otherwise the single run (or none) the start recorded.
                 scope = (
                     {uuid.UUID(r) for r in run_ids} if run_ids is not None
                     else None if workspace.suggest_run_id is None else {workspace.suggest_run_id}
                 )
+                queued_before = len(suggestion_queue(await load_pool(session, wid), run_ids=scope))
+                await _backfill_abstracts(ctx, workspace, run_ids)
+                session.expire_all()  # the backfill wrote through its own session: read its abstracts, not ours
+                await session.refresh(workspace)
+                pool = await load_pool(session, wid)
+                rows = {hit.id: (hit, ref) for hit, ref in pool.rows}
                 deadline = time.monotonic() + SUGGEST_JOB_TIMEOUT - SAFETY_MARGIN
                 hit_deadline = False
-                queue_ids = suggestion_queue(pool, run_ids=scope)[: workspace.suggest_total or None]  # D265: the cap
+                queue_ids = suggestion_queue(pool, run_ids=scope)
+                # The backfill can reopen hits: count them too, unless a cap set the total lower (D265).
+                if workspace.suggest_total >= queued_before and len(queue_ids) != workspace.suggest_total:
+                    workspace.suggest_total = len(queue_ids)
+                    await session.commit()
+                queue_ids = queue_ids[: workspace.suggest_total or None]
                 for hit_id in queue_ids:
                     await session.refresh(workspace)
                     if workspace.suggest_status != "running":
