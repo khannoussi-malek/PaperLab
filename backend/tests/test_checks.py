@@ -10,7 +10,7 @@ from test_sections import paper_with_headings
 from app.core import checks, embedding_index, sections
 from app.core.chat import SMALL_PAPER_CHARS
 from app.core.errors import Conflict, InvalidInput, NotFound
-from app.models import Note, Provenance
+from app.models import Chunk, Note, Provenance
 from app.providers import embedding
 
 pytestmark = pytest.mark.anyio
@@ -236,3 +236,43 @@ async def test_the_prompt_holds_the_task_the_label_and_the_note_with_its_braces(
 
     assert checks.TASKS["summary"] in prompt and "The reader's summary, between the markers:\n<<<\n" in prompt
     assert f"<<<\n{body}\n>>>" in prompt
+
+
+async def test_a_five_cs_prompt_holds_the_note_as_written_with_its_headings(session, embedder):
+    paper, _ = await paper_with_headings(session, HEADINGS)
+    body = "Category: a survey\nContext:\nCorrectness: fine\nContributions: one\nClarity: ok"
+    note = await note_on(session, paper, body, kind="five_cs")
+
+    prompt = (await checks.prepare_check(session, note.id, embedder)).prepared.prompt
+
+    assert f"<<<\n{body}\n>>>" in prompt
+    assert "Category:" in prompt and "\nContext:\n" in prompt
+
+
+async def test_refusals_come_in_the_documented_order(session):
+    paper, _ = await paper_with_headings(session, HEADINGS, has_pdf=False, status="extracting")
+    llm = await note_on(session, paper, kind=None, provenance=Provenance.LLM, linked=False)
+    plain = await note_on(session, paper, kind=None, linked=False)
+    unlinked = await note_on(session, paper, linked=False)
+    unready = await note_on(session, paper)
+    for note, code in ((llm, "not_your_text"), (plain, "not_checkable"), (unlinked, "note_not_on_one_paper"),
+                       (unready, "needs_full_text")):
+        with pytest.raises((Conflict, InvalidInput), match=f"^{code}$"):
+            await checks.prepare_check(session, note.id)
+    await session.execute(Chunk.__table__.update().where(Chunk.paper_id == paper.id).values(page=1))
+    await session.execute(type(paper).__table__.update().where(type(paper).id == paper.id).values(file_path="/x.pdf"))
+    await session.commit()
+    await session.refresh(paper)
+    with pytest.raises(Conflict, match="^paper_not_ready$"):
+        await checks.prepare_check(session, unready.id)
+
+
+async def test_the_outline_is_cut_at_a_thousand_characters(session, embedder):
+    heads = [f"3.{i} Method step number {i} of the procedure" for i in range(100)]
+    paper, _ = await paper_with_headings(session, heads)
+    note = await note_on(session, paper, "I rebuilt the method step by step.", kind="reconstruction")
+
+    prompt = (await checks.prepare_check(session, note.id, embedder)).prepared.prompt
+
+    outline = prompt.split("Sections of the method, in order:")[1].split("The reader's")[0]
+    assert 900 < len("Sections of the method, in order:" + outline.rstrip()) <= checks.OUTLINE_CHARS

@@ -222,7 +222,7 @@ async def _retrieved(session, paper_id, kind, body, anchor, evidence, embedder) 
         raise Conflict("paper_not_indexed")
     kept = cut_to_budget(await chunk_sources(session, Chunk.id.in_(anchor))) if anchor else []
     hits = []
-    if evidence:  # retrieve() treats an empty chunk_ids as no limit
+    if evidence:  # retrieve() returns [] for an empty chunk_ids: skip the pointless queries
         for query in queries(kind, body):
             hits.append(
                 await retrieve(session, query, paper_ids=[paper_id], chunk_ids=evidence, k=CHECK_K, embedder=embedder)
@@ -267,7 +267,7 @@ async def prepare_check(session: AsyncSession, note_id: uuid.UUID, embedder=None
     if not sources:
         raise Conflict("lens_empty")
     prompt = PROMPT_TEMPLATE.format(
-        task=TASKS[kind], context=format_context(paper, sources), outline=outline, label=LABELS[kind], note=written
+        task=TASKS[kind], context=format_context(paper, sources), outline=outline, label=LABELS[kind], note=note.body
     )
     prepared = Prepared(
         sources=sources, system=SYSTEM_PROMPT, prompt=prompt, whole_paper=whole, prompt_version=CHECK_PROMPT_VERSION
