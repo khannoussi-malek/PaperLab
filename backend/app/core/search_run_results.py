@@ -9,12 +9,20 @@ from collections.abc import Iterable
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.redact import redact
 from app.models.workspace_search import WorkspaceSearchCursor, WorkspaceSearchHit, WorkspaceSearchRun
 from app.schemas.workspace_search import PrescreenCounts, SourceResult
 
 # A source stuck on httpx errors retries this many times before its cursor is exhausted (workspace_search.py).
 SOURCE_ERROR_CAP = 6
 FAILED_STATES = ("gave_up", "cooling_down")
+
+# A suggestion with no rating. coalesce: flags are NULL on suggestions older than them, and those were judged.
+NOT_JUDGED = func.coalesce(
+    WorkspaceSearchHit.suggestion_flags.contains(["no_abstract"])
+    | WorkspaceSearchHit.suggestion_flags.contains(["model_error"]),
+    False,
+)
 
 _HTTP_ERROR = re.compile(r"(?:Client|Server) error '(\d+)[^']*' for url 'https?://([^/']+)")
 
@@ -24,7 +32,7 @@ def short_error(text: str | None) -> str | None:
     if not text:
         return None
     match = _HTTP_ERROR.search(text)
-    return f"HTTP {match.group(1)} from {match.group(2)}" if match else text[:200]
+    return f"HTTP {match.group(1)} from {match.group(2)}" if match else redact(text)[:200]
 
 
 def _state(cursor: WorkspaceSearchCursor, running: bool) -> str:
@@ -86,8 +94,8 @@ def failed_sources(run: WorkspaceSearchRun, results: list[SourceResult]) -> list
 
 
 def searched(results: list[SourceResult]) -> tuple[list[str], list[str]]:
-    """(searched, not searched) for PRISMA: a source that failed or was off and returned nothing was not searched."""
-    missed = [r.source for r in results if r.raw_count == 0 and r.state in ("gave_up", "cooling_down", "disabled")]
+    """(searched, not searched) for PRISMA: a source that returned nothing without running dry was not searched."""
+    missed = [r.source for r in results if r.raw_count == 0 and r.state != "complete"]
     return [r.source for r in results if r.source not in missed], missed
 
 
@@ -105,13 +113,12 @@ async def prescreen_counts(session: AsyncSession, run_ids: list[uuid.UUID]) -> d
     """Per run: hits a model judged, hits with a suggestion but no judgement (no usable abstract, or the model failed),
     and hits not reached yet. `suggest_done` counts the first two together."""
     hit = WorkspaceSearchHit
-    not_judged = hit.suggestion_flags.contains(["no_abstract"]) | hit.suggestion_flags.contains(["model_error"])
     has_suggestion = hit.suggestion.is_not(None)
     rows = await session.execute(
         select(
             hit.run_id,
-            func.count().filter(has_suggestion, ~not_judged),
-            func.count().filter(has_suggestion, not_judged),
+            func.count().filter(has_suggestion, ~NOT_JUDGED),
+            func.count().filter(has_suggestion, NOT_JUDGED),
             func.count().filter(~has_suggestion),
         ).where(hit.run_id.in_(run_ids)).group_by(hit.run_id)
     )

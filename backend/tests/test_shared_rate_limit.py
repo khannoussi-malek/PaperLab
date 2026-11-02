@@ -110,8 +110,7 @@ async def test_a_real_client_uses_its_sources_shared_budget(provider, group):
         assert http._transport._pacer.group == group
 
 
-async def test_semantic_scholars_retries_stay_inside_its_budget():
-    async with semantic_scholar.new_client() as http:
-        assert http._transport.inner._pacer.group == "semantic_scholar"
+async def test_semantic_scholar_has_no_budget_to_wait_for():
+    """Its failures come from having no key, not pace, and snowballing makes several calls per seed in a request."""
     async with semantic_scholar.new_client(retry_429=False) as http:
-        assert http._transport._pacer.group == "semantic_scholar"
+        assert not hasattr(http._transport, "_pacer")

@@ -109,6 +109,7 @@ async def suggest_screening(ctx: dict, workspace_id: str, run_ids: list[str] | N
                 connection, model = await llm_connections.resolve(session, None)
                 llm = build_llm(connection, model.name, transport=ctx.get("transport"))
                 label = f"{connection.label} · {model.name}"
+                deadline = time.monotonic() + SUGGEST_JOB_TIMEOUT - SAFETY_MARGIN  # the backfill counts against it
                 # A multi-run job names its runs; otherwise the single run (or none) the start recorded.
                 scope = (
                     {uuid.UUID(r) for r in run_ids} if run_ids is not None
@@ -120,7 +121,6 @@ async def suggest_screening(ctx: dict, workspace_id: str, run_ids: list[str] | N
                 await session.refresh(workspace)
                 pool = await load_pool(session, wid)
                 rows = {hit.id: (hit, ref) for hit, ref in pool.rows}
-                deadline = time.monotonic() + SUGGEST_JOB_TIMEOUT - SAFETY_MARGIN
                 hit_deadline = False
                 queue_ids = suggestion_queue(pool, run_ids=scope)
                 # The backfill can reopen hits: count them too, unless a cap set the total lower (D265).

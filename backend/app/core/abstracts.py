@@ -17,14 +17,14 @@ _PROSE = re.compile(
 
 
 def is_citation_only(text: str | None) -> bool:
-    """Authors and venue with no sentence about the work. Tried on 4,379 short abstracts in a real library: 92 matched,
+    """Authors and venue with no sentence about the work. Tried on 4,379 short abstracts in a real library: 89 matched,
     and a sample of them were all citations or publisher boilerplate.
 
     ponytail: English markers; a citation in another language still counts as an abstract."""
     stripped = (text or "").strip()
-    if not stripped or len(stripped) > _MAX_CITATION_CHARS or not _VENUE.search(stripped):
+    if not stripped or len(stripped) > _MAX_CITATION_CHARS or not _VENUE.search(stripped) or _PROSE.search(stripped):
         return False
-    return bool(_AUTHOR_LIST.search(stripped)) or (bool(_ENDS_IN_YEAR.search(stripped)) and not _PROSE.search(stripped))
+    return bool(_AUTHOR_LIST.search(stripped) or _ENDS_IN_YEAR.search(stripped))
 
 
 def usable_abstract(text: str | None) -> str | None:

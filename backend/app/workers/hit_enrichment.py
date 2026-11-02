@@ -31,6 +31,8 @@ async def enrich_hits(ctx: dict, workspace_id: str, run_id: str | None = None) -
         if transport is None and settings.discovery_provider == "fake":
             transport = discovery_fake.transport()
         ws, run = uuid.UUID(workspace_id), uuid.UUID(run_id) if run_id else None
+        # Before filling too: once a citation is replaced, nothing shows a verdict was reached on it.
+        cleared = await hit_enrichment.clear_stale_no_abstract(session, ws)
         outcome = hit_enrichment.EnrichResult()
         if sources.enabled["semantic_scholar"]:
             # No RetryOn429: hit_enrichment waits on Retry-After itself.
@@ -46,5 +48,6 @@ async def enrich_hits(ctx: dict, workspace_id: str, run_id: str | None = None) -
             refs = await hit_enrichment.refs_for_arxiv(session, ws, run)
             result = await _arxiv_fallback(session, refs, ctx.get("arxiv_transport"))
             outcome = replace(outcome, arxiv_filled=result.filled, arxiv_rate_limited=result.rate_limited)
-        outcome = replace(outcome, suggestions_cleared=await hit_enrichment.clear_stale_no_abstract(session, ws))
+        cleared += await hit_enrichment.clear_stale_no_abstract(session, ws)
+        outcome = replace(outcome, suggestions_cleared=cleared)
     logger.info("enrich_hits for %s: %s", workspace_id, outcome)

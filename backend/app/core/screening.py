@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import llm_connections
 from app.core.errors import Conflict, NotFound
 from app.core.screening_rank import Doc, rank, stop_hint
+from app.core.search_run_results import NOT_JUDGED
 from app.core.workspace_search import _hit_out_dict
 from app.models.references import ExternalRef
 from app.models.workspace import Workspace
@@ -111,11 +112,10 @@ async def get_state(session: AsyncSession, workspace_id: uuid.UUID) -> dict:
         ).order_by(WorkspaceSearchRun.started_at.desc()).limit(1)
     )
     hit = WorkspaceSearchHit
-    not_judged = hit.suggestion_flags.contains(["no_abstract"]) | hit.suggestion_flags.contains(["model_error"])
     judged_counts = (await session.execute(
         select(
-            func.count().filter(hit.suggestion.is_not(None), ~not_judged),
-            func.count().filter(hit.suggestion.is_not(None), not_judged),
+            func.count().filter(hit.suggestion.is_not(None), ~NOT_JUDGED),
+            func.count().filter(hit.suggestion.is_not(None), NOT_JUDGED),
         ).where(hit.workspace_id == workspace_id)
     )).one()
     return {
