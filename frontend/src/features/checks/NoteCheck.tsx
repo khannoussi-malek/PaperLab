@@ -6,7 +6,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { ProblemAlert } from '@/features/chat/ProblemAlert'
 import { RemoteConfirmDialog } from '@/features/manuscripts/review/RemoteConfirm'
 import { CheckResult } from './CheckResult'
-import { exitTestLabel, isExitTest } from './exitTest'
+import { isExitTest } from '@/features/notes/noteKinds'
+import { exitTestLabel } from './exitTest'
 import { usePaperChecks } from './queries'
 import { useCheckStream } from './useCheckStream'
 
@@ -18,12 +19,13 @@ type Props = { note: Note; paperId: string; onCite: (source: ChatSource) => void
 /** A note card's check (§3.8): the button, the check being read, and the latest saved check. Only exit-test kinds. */
 export function NoteCheck({ note, paperId, onCite }: Props) {
   const kind = isExitTest(note.kind) ? note.kind : null
-  const { stream, run, cancelConfirm } = useCheckStream(note.id, paperId, kind ?? undefined)
+  const { stream, run, cancelConfirm } = useCheckStream(note.id, paperId, kind ?? 'summary')
   const check = usePaperChecks(paperId).data?.find((c) => c.note_id === note.id)
-  const finished = stream.status === 'done'
-  // A finished stream describes the text as it was; once the note changes, the saved check (now out of date) takes over.
+  const settled = stream.status === 'done' || stream.status === 'error'
+  // A finished or refused stream describes the text as it was; once the note changes, the saved check (now out of
+  // date) takes over and a refusal clears.
   useEffect(() => {
-    if (finished) cancelConfirm()
+    if (settled) cancelConfirm()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only a changed body should reset it
   }, [note.body])
   if (!kind) return null
@@ -31,7 +33,8 @@ export function NoteCheck({ note, paperId, onCite }: Props) {
   const label = exitTestLabel(kind)
   const busy = BUSY.has(stream.status)
   const live = busy || stream.status === 'error'
-  const saved = check && !live && (stream.status === 'idle' || !check.stale) ? check : undefined
+  const saved = check && !busy && (stream.status === 'idle' || stream.status === 'error' || !check.stale) ? check : undefined
+  const streamed = (live || (stream.status === 'done' && !saved)) && stream.lines.length > 0
   const again = () => void run()
 
   const button = (
@@ -42,7 +45,7 @@ export function NoteCheck({ note, paperId, onCite }: Props) {
   )
   return (
     <div className="flex flex-col gap-2 px-4 pb-3">
-      {!check && !live && stream.status !== 'done' && (
+      {!check && !busy && !stream.problem?.retryable && stream.status !== 'done' && (
         note.provenance === 'human' ? (
           button
         ) : (
@@ -77,7 +80,7 @@ export function NoteCheck({ note, paperId, onCite }: Props) {
           onCite={onCite}
         />
       )}
-      {(live || (stream.status === 'done' && !saved)) && stream.lines.length > 0 && (
+      {streamed && (
         <CheckResult
           label={label}
           lines={stream.lines}
@@ -90,7 +93,10 @@ export function NoteCheck({ note, paperId, onCite }: Props) {
           onCite={onCite}
         />
       )}
-      {stream.problem && <ProblemAlert scope={{ kind: 'paper', id: paperId }} problem={stream.problem} onRetry={again} />}
+      {stream.problem && (
+        // one way to check again: a result on screen has Check again, so the alert doesn't add Retry beside it
+        <ProblemAlert scope={{ kind: 'paper', id: paperId }} problem={saved || streamed ? { ...stream.problem, retryable: false } : stream.problem} onRetry={again} />
+      )}
       <RemoteConfirmDialog what="note" host={stream.status === 'confirm' ? stream.host : null} onSend={() => void run(true)} onCancel={cancelConfirm} />
     </div>
   )

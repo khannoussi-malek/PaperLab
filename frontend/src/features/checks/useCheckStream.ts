@@ -25,12 +25,13 @@ const STOPPED: ChatProblem = { message: 'The check stopped before it finished.',
  * Checks one note with the remembered chat model and follows its SSE stream. A token is one line the server kept, so
  * no model text is parsed here beyond `streamedLine`. A remote model first asks (`confirm`); `run(true)` sends.
  */
-export function useCheckStream(noteId: string, paperId: string, kind: NoteKind = 'summary') {
+export function useCheckStream(noteId: string, paperId: string, kind: NoteKind) {
   const [stream, setStream] = useState<CheckStream>(IDLE)
   const invalidateChecks = useInvalidateChecks(paperId)
   const models = useChatModels().data ?? []
   const controller = useRef<AbortController | null>(null)
   const mounted = useRef(false)
+  const asked = useRef<string | null | undefined>(undefined) // the model a 409 was for; run(true) resends exactly it
 
   useEffect(() => {
     mounted.current = true
@@ -47,7 +48,8 @@ export function useCheckStream(noteId: string, paperId: string, kind: NoteKind =
     const fail = (problem: ChatProblem) => set((s) => ({ ...s, status: 'error', problem }))
 
     set(() => ({ ...IDLE, status: 'sources' }))
-    const modelId = loadChatModel(browserStorage(), models)
+    const modelId = confirmRemote && asked.current !== undefined ? asked.current : loadChatModel(browserStorage(), models)
+    asked.current = modelId
     const response = await api.checkNote(noteId, modelId, confirmRemote, current.signal).catch(() => null)
     if (!response) return fail(UNREACHABLE)
     if (!response.ok || !response.body) {

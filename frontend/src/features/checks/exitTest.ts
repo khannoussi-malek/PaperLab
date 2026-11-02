@@ -1,13 +1,12 @@
 import type { Check, Note, NoteKind } from '@/api/client'
 import { refusal, type ChatProblem } from '@/features/chat/refusals'
+import type { ExitKind } from '@/features/notes/noteKinds'
 
-type ExitKind = Extract<NoteKind, 'five_cs' | 'summary' | 'reconstruction'>
 export type CheckLine = Check['lines'][number]
 export type ExitTestStatus = 'not_written' | 'not_checked' | 'stale' | { missing: number; unsupported: number; at: string }
 
 const LABEL: Record<ExitKind, string> = { five_cs: 'five Cs', summary: 'summary', reconstruction: 'reconstruction' }
 
-export const isExitTest = (kind: NoteKind | null): kind is ExitKind => kind !== null && kind in LABEL
 export const exitTestLabel = (kind: ExitKind) => LABEL[kind]
 
 /** The newest note of `kind` the reader wrote. An AI note of that kind doesn't count (D118). */
