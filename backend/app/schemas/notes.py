@@ -55,6 +55,14 @@ class NoteCreate(BaseModel):
         return self
 
 
+class FigureNoteCreate(BaseModel):
+    paper_id: uuid.UUID
+    page: int = Field(ge=1)
+    region: Rect
+    body: str = Field(default="", max_length=50_000)
+    color: HexColor = DEFAULT_COLOR
+
+
 class NoteUpdate(BaseModel):
     body: str | None = Field(default=None, max_length=50_000)
     color: HexColor | None = None

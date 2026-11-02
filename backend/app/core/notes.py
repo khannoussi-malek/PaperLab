@@ -32,8 +32,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.chunking import join_lines
 from app.core.errors import Conflict, InvalidInput, NotFound
 from app.core.papers import ABSTRACT_PAGE, get_paper, get_paper_file, list_chunks
+from app.core.table_grid import caption_name
 from app.models import Chart, Chunk, LLMOutput, Note, Paper, Provenance, note_anchors, note_charts, note_papers
-from app.providers.extraction import quote_rects
+from app.providers.extraction import quote_rects, read_region
 
 Rect = tuple[float, float, float, float]
 
@@ -227,6 +228,30 @@ async def create_human_note(
     await session.commit()
     await session.refresh(note)
     return (await _with_anchors(session, [note]))[0]
+
+
+async def create_figure_note(
+    session: AsyncSession, paper_id: uuid.UUID, page: int, region: Rect, body: str, color: str = DEFAULT_COLOR
+) -> NoteView:
+    """A note on a box drawn round a figure, quoting the figure's caption. Raises InvalidInput("no_pdf") for a paper
+    saved without a PDF."""
+    paper = await get_paper(session, paper_id)
+    if paper.file_path is None:
+        raise InvalidInput("no_pdf")
+    if page < 1 or (paper.page_count is not None and page > paper.page_count):
+        raise InvalidInput(f"page {page} is outside 1..{paper.page_count}")
+    if not (region[0] < region[2] and region[1] < region[3]):
+        raise InvalidInput("a region needs x0 < x1 and y0 < y1")
+    quote = None
+    try:
+        path = await get_paper_file(session, paper_id)
+        text = await asyncio.to_thread(read_region, path, page, region)
+        quote = caption_name(text.blocks, region, label="figure")
+    except NotFound:
+        pass  # the file is not on this machine: the box alone anchors the note
+    # ponytail: the fallback quote is PaperLab's words, and shows only with no caption within CAPTION_GAP.
+    anchor = Anchor(paper_id, page, [region], quote or f"Figure on p. {page}")
+    return await create_human_note(session, body, anchor, color, kind="figure")
 
 
 def _abstract_quote(paper: Paper, quoted_text: str) -> str:
