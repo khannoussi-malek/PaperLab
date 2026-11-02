@@ -7,6 +7,9 @@ export type ExitTestStatus = 'not_written' | 'not_checked' | 'stale' | { missing
 
 const LABEL: Record<ExitKind, string> = { five_cs: 'five Cs', summary: 'summary', reconstruction: 'reconstruction' }
 
+export const isExitTest = (kind: NoteKind | null): kind is ExitKind => kind !== null && kind in LABEL
+export const exitTestLabel = (kind: ExitKind) => LABEL[kind]
+
 /** The newest note of `kind` the reader wrote. An AI note of that kind doesn't count (D118). */
 export const exitTestNote = (notes: Note[], kind: NoteKind): Note | undefined =>
   notes

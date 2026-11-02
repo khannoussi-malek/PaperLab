@@ -7,11 +7,12 @@ import { TEMPLATE } from './noteKinds'
 import { NotesPanel } from './NotesPanel'
 
 vi.mock('./SuggestedNotes', () => ({ SuggestedNotes: () => null }))
+vi.mock('../checks/NoteCheck', () => ({ NoteCheck: ({ note }: { note: { id: string } }) => <div>check-slot-{note.id}</div> }))
 
 const props = {
   paperId: 'p1', notes: [], draft: null, draftColor: '#facc15', activeNoteId: null, onDraftColorChange: vi.fn(),
   onSaveDraft: vi.fn(), onCancelDraft: vi.fn(), onAddNumber: vi.fn(), onSelectNote: vi.fn(), onUpdateNote: vi.fn(),
-  onColorNote: vi.fn(), onDeleteNote: vi.fn(), movedToNotes: false, onPapersSaved: vi.fn(),
+  onColorNote: vi.fn(), onDeleteNote: vi.fn(), movedToNotes: false, onPapersSaved: vi.fn(), onCite: vi.fn(),
   wholePaperDraft: null, onNewPaperNote: vi.fn(), onCancelPaperNote: vi.fn(), onSavePaperNote: vi.fn(),
 }
 
@@ -164,4 +165,14 @@ test('the New note button is where the spec says in each composer state: whole-p
   expect(screen.queryByRole('button', { name: 'New note on this paper' })).toBeNull()
   expect(screen.getByRole('textbox', { name: 'New note' })).toBeInTheDocument()
   expect(screen.getByText(/the main thrust/i)).toBeInTheDocument()
+})
+
+test('each card gets the note check in its check slot', () => {
+  const note = { id: 'n1', kind: 'summary', provenance: 'human', body: 'x', anchors: [], paper_ids: ['p1'], created_at: '2026-11-01T00:00:00Z', updated_at: '2026-11-01T00:00:00Z' }
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <NotesPanel {...props} notes={[note as never]} />
+    </QueryClientProvider>,
+  )
+  expect(screen.getByText('check-slot-n1')).toBeInTheDocument()
 })
