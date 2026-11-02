@@ -141,6 +141,7 @@ on the Notes page to choose its papers; untick one and the note's highlight ther
 - The **Notes** page lists every note, and filters them by paper or by "No paper".
 - Each note shows who wrote it: **You**, **AI**, or **AI · edited**.
 - Filter the notes list to show only your notes, only AI notes, or both.
+- Test yourself after each reading pass: write the five Cs, a summary or a reconstruction, and the model points out what's missing or unsupported, with links to the passages. It never writes the answer for you.
 
 **Ask a paper questions**
 
@@ -225,6 +226,7 @@ arXiv and Unpaywall resolution still applies.
 API keys stay in your local database and are never sent back to the browser. Adding a paper downloads its PDF from the
 free link found. Importing from Zotero fetches free copies exactly like adding a paper by DOI; it's on by default and
 you can turn it off for an import. None of them send a paper's text.
+Checking an exit test sends that note and the passages it reads to the model you picked; a Cloud model asks first.
 An MCP client you connect, such as Claude Desktop, receives what its tools return: passages from your papers, paper
 details (with your reading pass and decision) and workspace names, and every note on a paper marked as yours or AI. If it works on a manuscript, it also receives the text of the files it reads and the compile output.
 Claude Desktop and Claude Code send what the tools return to Anthropic.
@@ -234,6 +236,7 @@ is out and offers a download link when there is one. It is the only request the 
 **Settings → Desktop app**.
 - **An upgrade keeps a way back.** Before a new version first starts, the desktop app saves a copy of your library's
 database in its data folder, keeping only the latest.
+- **The model checks your understanding; it never stands in for it.** Reading-pass tests take only text you wrote. The model's side is a list of what's missing or unsupported, each line citing the paper, with nothing to paste.
 - **AI is always labelled.** AI text is stored separately from yours, keeps the model and prompt version that
 produced it, and shows an AI badge. Editing an AI note marks it "AI · edited", never "You".
 - **Answers show their sources.** Chat answers cite passages you can click, so you can check every claim against the paper.
