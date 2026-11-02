@@ -134,8 +134,15 @@ async def citing_works(http: httpx.AsyncClient, work_id: str, limit: int) -> lis
 async def search_page(
     http: httpx.AsyncClient, title: str, page_size: int, cursor: int
 ) -> tuple[list[dict], int | None]:
-    """One page of OpenAlex results."""
-    params = {"filter": f"title.search:{title}", "per-page": page_size, "page": cursor, "select": WORK_FIELDS}
+    """One page of a search run's results: every word of the topic in the title or abstract. A run's query is a topic,
+    so `title.search` found nothing for 3 of 6 real topics (2026-11-02); `search=` matches any word (10,000+ results).
+
+    A page costs 10 credits (`meta.cost_usd` 0.001), so with no key the free day is 100 pages and a run's two or three
+    pages per pass cost 30. Past the budget OpenAlex answers 429, and the run reports the source as having given up."""
+    query = re.sub(r"[,|]", " ", title)  # filter syntax, as in search_works
+    params = {
+        "filter": f"title_and_abstract.search:{query}", "per-page": page_size, "page": cursor, "select": WORK_FIELDS,
+    }  # fmt: skip
     response = await http.get("/works", params=params)
     body = json_body(response.raise_for_status())
     results = body["results"]
