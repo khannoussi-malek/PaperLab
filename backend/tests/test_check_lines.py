@@ -33,6 +33,8 @@ CASES = [
     ("Unsupported: the paper actually used a CNN [C2]", DROPPED),
     ("Unsupported: the paper in fact used a CNN [C2]", DROPPED),
     ("Unsupported: not supervised but unsupervised [C1]", DROPPED),
+    ("Unsupported: the method is not merely supervised but unsupervised [C1]", DROPPED),
+    ("Unsupported: it uses not only CNNs but LSTMs [C1]", DROPPED),
     ("Unsupported: the paper does not name the sample [C2]", ("unsupported", [2])),
     ("Unsupported: this is not supported by the passage [C2]", ("unsupported", [2])),
     ("Unsupported: Category: a survey of translation models [C1]", ("unsupported", [1])),
