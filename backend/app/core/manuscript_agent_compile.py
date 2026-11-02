@@ -2,8 +2,9 @@
 the one current result; `status` is `running` from the request until the worker stores it."""
 
 import asyncio
+import re
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 import pymupdf
@@ -53,6 +54,8 @@ class CompileView:
     friendly: str | None
     log_tail: str | None
     pdf: PdfInfo
+    undefined_citations: list[str] = field(default_factory=list)  # keys \cite names and no .bib entry has
+    undefined_references: list[str] = field(default_factory=list)  # labels \ref names and nothing defines
 
 
 @dataclass(frozen=True)
@@ -96,12 +99,26 @@ async def _pdf_info(mid: uuid.UUID, status: str) -> PdfInfo:
     return PdfInfo(True, count, status == "ok")
 
 
+_UNDEFINED = re.compile(r"(?P<kind>Citation|[Rr]eference) `(?P<key>[^']+)' on page \d+ undefined")
+
+
+def undefined_keys(log: str) -> tuple[list[str], list[str]]:
+    """(undefined citation keys, undefined reference labels) in the log, once each. TeX wraps a log line at 79
+    characters, even inside a key, so this reads the log with its line breaks taken out."""
+    citations: dict[str, None] = {}
+    references: dict[str, None] = {}
+    for match in _UNDEFINED.finditer(log.replace("\n", "")):
+        (citations if match["kind"] == "Citation" else references)[match["key"]] = None
+    return list(citations), list(references)
+
+
 def _view(manuscript: Manuscript, status, friendly, again, pdf: PdfInfo, include_log: bool) -> CompileView:
     errors = [
         CompileError(e.get("file"), e.get("line"), e.get("message", ""), e.get("kind", "error"))
         for e in manuscript.compile_errors[:MAX_ERRORS]
     ]
     log = manuscript.compile_log or ""
+    undefined_citations, undefined_references = undefined_keys(log)
     return CompileView(
         manuscript.id,
         status,
@@ -114,6 +131,8 @@ def _view(manuscript: Manuscript, status, friendly, again, pdf: PdfInfo, include
         friendly,
         log[-LOG_TAIL:] if status == "failed" or include_log else None,
         pdf,
+        undefined_citations,
+        undefined_references,
     )
 
 

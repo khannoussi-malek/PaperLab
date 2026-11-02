@@ -1,7 +1,9 @@
 """Claim verification (M39 F4): is a claim supported by a library paper? One model call over the paper's best
 passages, a verbatim quote that is checked against them, and an llm_outputs row for provenance."""
 
+import asyncio
 import json
+import logging
 import re
 import uuid
 from dataclasses import asdict, dataclass, field, replace
@@ -32,6 +34,9 @@ VERDICT_WORDS = {
 CHECKED = ("supported", "partially_supported")  # verdicts that must rest on a kept quote
 
 
+logger = logging.getLogger(__name__)
+
+
 class _Reply(BaseModel):
     verdict: Literal["supported", "partially_supported", "not_supported", "not_addressed"]
     passage: int | None = None
@@ -54,6 +59,7 @@ class ClaimCheck:
     passages: list[dict] = field(default_factory=list)  # {chunk_id, page, section}; chunk_id None for an abstract
     confidence: str | None = None  # high | low
     model: str | None = None
+    answered_by: str | None = None  # the model that answered, when a router names it; else `model`
     prompt_version: int = CLAIM_PROMPT_VERSION
     output_id: uuid.UUID | None = None
     note_id: uuid.UUID | None = None
@@ -205,6 +211,35 @@ async def _llm(session: AsyncSession, llm):
     return build_llm(connection, model.name)
 
 
+RETRY_WAITS = (2.0, 5.0, 15.0)  # seconds; 4 of 30 real checks failed on a busy router, and most clear within this
+sleep = asyncio.sleep  # tests replace it
+_STATUS = re.compile(r"returned (\d{3})\b")
+
+
+def _may_clear(exc: Exception) -> bool:
+    """Whether a retry can help: a busy or unreachable model, not a rejected key, a missing model or a bad request."""
+    if isinstance(exc, LLMUnavailable):
+        return str(exc).startswith("Can't reach")
+    status = _STATUS.search(str(exc))
+    return status is None or int(status[1]) >= 500 or int(status[1]) in (408, 429)
+
+
+async def _ask_with_retry(llm, system: str, prompt: str, model: type[BaseModel]) -> BaseModel | None:
+    for wait in (*RETRY_WAITS, None):
+        try:
+            return await llm_json.ask_json(llm, system, prompt, model)
+        except (LLMError, LLMUnavailable) as exc:
+            if wait is None or not _may_clear(exc):
+                raise
+            logger.info("the model failed (%s); trying again in %s s", exc, wait)
+            await sleep(wait)
+    return None  # never reached: the last pass returns or raises
+
+
+def _answered_by(llm) -> str:
+    return getattr(llm, "last_model", None) or getattr(llm, "model", "unknown")
+
+
 async def verify_claim(
     session: AsyncSession,
     claim: str,
@@ -235,7 +270,7 @@ async def verify_claim(
     llm = await _llm(session, llm)
     model = getattr(llm, "model", "unknown")
     connection_name = getattr(llm, "connection_name", None)
-    reply = await llm_json.ask_json(llm, SYSTEM_PROMPT, _prompt(claim, quoted_text, texts, passages, leads), _Reply)
+    reply = await _ask_with_retry(llm, SYSTEM_PROMPT, _prompt(claim, quoted_text, texts, passages, leads), _Reply)
     if reply is None:
         content = {"verdict": "cannot_verify", "reason": "model_error"}
         output_id = await _write_output(session, paper, claim, content, passages, model, connection_name)
@@ -258,6 +293,7 @@ async def verify_claim(
         passages=passages,
         confidence="low" if low else "high",
         model=model,
+        answered_by=_answered_by(llm),
     )
     content = {k: str(v) if isinstance(v, uuid.UUID) else v for k, v in asdict(check).items() if k != "passages"}
     output_id = await _write_output(session, paper, claim, content, passages, model, connection_name)

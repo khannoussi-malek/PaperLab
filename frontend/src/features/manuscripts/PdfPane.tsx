@@ -37,8 +37,9 @@ export function PdfPane({ manuscript: m, width, target, stillStamp, onSourceAt, 
   const { doc, error } = usePdfDocument(stamp ? api.manuscriptPdfUrl(m.id, stamp) : null)
   const friendly = m.compile_status === 'failed' ? m.compile_friendly : null
   const parsed = parseCompileErrors(m.compile_errors)
-  const errors = parsed.filter((e) => e.kind === 'error')
-  const missing = parsed.find((e) => e.kind === 'package_missing')?.message // the package the compile named
+  const errors = parsed.filter((e) => e.kind === 'error' || e.kind === 'engine')
+  // the package or font the compile named
+  const missing = parsed.find((e) => e.kind === 'package_missing' || e.kind === 'engine')?.message
   const scale = Math.max(0.4, (width - GUTTERS_PX) / PAGE_WIDTH_PT)
 
   const scroller = useRef<HTMLDivElement>(null)
@@ -116,7 +117,7 @@ export function PdfPane({ manuscript: m, width, target, stillStamp, onSourceAt, 
             ) : errors.length > 0 ? (
               <ul className="flex flex-col gap-1">
                 {errors.map((e, i) => (
-                  <li key={i}>{e.file}{e.line ? `:${e.line}` : ''} {e.message}</li>
+                  <li key={i}>{e.file ?? ''}{e.line ? `:${e.line}` : ''} {e.message}</li>
                 ))}
               </ul>
             ) : (
