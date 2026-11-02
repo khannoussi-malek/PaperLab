@@ -125,6 +125,7 @@ export type LensId = Lens['id']
 export type Role = Section['role']
 export type SectionRoleIn = components['schemas']['SectionRoleIn']
 export type Brief = components['schemas']['BriefOut']
+export type Check = components['schemas']['CheckOut']
 // The three continue fields are intersected in by hand until gen:api sees them.
 export type SearchRun = components['schemas']['SearchRunOut'] & {
   can_continue?: boolean
@@ -357,6 +358,14 @@ export const api = {
   generateBrief: (paperId: string, lens: LensId, modelId: string | null, signal?: AbortSignal) =>
     fetch(`/api/papers/${paperId}/briefs/${lens}${modelId ? `?model_id=${encodeURIComponent(modelId)}` : ''}`, {
       method: 'POST',
+      signal,
+    }),
+  listChecks: (paperId: string) => request<Check[]>(`/api/papers/${paperId}/checks`),
+  /** The raw response: on success its body is the check's SSE stream, whose tokens are each one kept line. A remote
+   *  model needs `confirmRemote`; null `modelId` asks the default. */
+  checkNote: (noteId: string, modelId: string | null, confirmRemote: boolean, signal?: AbortSignal) =>
+    fetch(`/api/notes/${noteId}/check`, {
+      ...sendJson('POST', { model_id: modelId, confirm_remote: confirmRemote }),
       signal,
     }),
   listNotes: (paperId: string) => request<Note[]>(`/api/papers/${paperId}/notes`),
