@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from app.api import chat as chat_api
-from app.api.deps import get_transport, resolve_llm, resolve_llm_by_model_id
+from app.api.deps import get_transport, resolve_check_llm, resolve_llm, resolve_llm_by_model_id
 from app.config import settings
 from app.core import discovery, queue
 from app.db import get_session
@@ -331,6 +331,7 @@ def fake_llm(app, answers_in_test_transaction):
     fake = FakeLLM()
     app.dependency_overrides[resolve_llm] = lambda: fake
     app.dependency_overrides[resolve_llm_by_model_id] = lambda: fake
+    app.dependency_overrides[resolve_check_llm] = lambda: fake
     return fake
 
 

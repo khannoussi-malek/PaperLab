@@ -298,10 +298,13 @@ async def resolve(session: AsyncSession, model_id: uuid.UUID | None) -> tuple[LL
     return row[0], row[1]
 
 
-async def refuse_unconfirmed_remote(session: AsyncSession, confirmed: bool) -> None:
-    """The default model must exist (Conflict no_model), and a remote one runs only when the caller confirmed: the
-    researcher's text goes to its host and may cost money (D190/D233)."""
-    connection, model = await resolve(session, None)
+async def refuse_unconfirmed_remote(
+    session: AsyncSession, confirmed: bool, model_id: uuid.UUID | None = None
+) -> None:
+    """The model a request names (the default when `model_id` is None) must exist (NotFound model_not_found, Conflict
+    no_model), and a remote one runs only when the caller confirmed: the researcher's text goes to its host and may
+    cost money (D190/D233)."""
+    connection, model = await resolve(session, model_id)
     if not confirmed and not is_local(connection.kind, connection.base_url, connection.cloud_proxy):
         raise Conflict(
             "remote_model_needs_confirm", model=f"{connection.label} · {model.name}", host=host_of(connection.base_url)
