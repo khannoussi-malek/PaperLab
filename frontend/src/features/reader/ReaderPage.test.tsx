@@ -11,6 +11,7 @@ type NotesProps = {
   onSavePaperNote: (body: string, kind?: string | null) => Promise<boolean>
   wholePaperDraft: { kind: string | null } | null
   onNewPaperNote: () => void
+  onPaperNoteDirty?: (dirty: boolean) => void
 }
 const state = vi.hoisted(() => ({
   paper: undefined as Paper | undefined,
@@ -195,6 +196,21 @@ test('a new selection replaces the whole-paper composer', async () => {
   selectAbstract()
   await waitFor(() => expect(state.notes!.draft?.quotedText).toBe('Sleep helps memory'))
   expect(state.notes!.wholePaperDraft).toBeNull()
+})
+
+test('a selection leaves a composer with typed text alone, and says to save or cancel first', async () => {
+  state.paper = paper({})
+  render(<ReaderPage paperId={ID} tab="notes" target={null} />)
+  act(() => state.notes!.onNewPaperNote())
+  act(() => state.notes!.onPaperNoteDirty!(true))
+  selectAbstract()
+  expect(await screen.findByText('Save or cancel the note you are writing first.')).toBeInTheDocument()
+  expect(state.notes!.draft).toBeNull()
+  expect(state.notes!.wholePaperDraft).toEqual({ kind: null })
+  act(() => state.notes!.onPaperNoteDirty!(false)) // saved or cancelled: the line goes, and a selection works again
+  expect(screen.queryByText('Save or cancel the note you are writing first.')).toBeNull()
+  selectAbstract()
+  await waitFor(() => expect(state.notes!.draft?.quotedText).toBe('Sleep helps memory'))
 })
 
 test('New note replaces a selection draft, and a kind is posted when picked', async () => {

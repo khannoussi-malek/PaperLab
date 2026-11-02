@@ -88,6 +88,7 @@ export function groupHighlights(notes: Note[], draft: NoteDraft | null, paperId:
 
 const HOVER_CARD_GAP_PT = 4
 const FLASH_MS = 1500
+const SAVE_FIRST = 'Save or cancel the note you are writing first.'
 
 /** A cited chunk being shown; `id` restarts the flash when the same citation is clicked again. */
 type Flash = { id: number; page: number; rects: PdfRect[] }
@@ -176,7 +177,14 @@ export function ReaderPage({ paperId, tab, target }: Props) {
   const numbersDatasetId = datasets.data?.find((d) => d.kind === 'numbers')?.id ?? null
   const numbersDataset = useDataset(numbersDatasetId)
   const numberMarksByPage = useMemo(() => numberMarks(numbersDataset.data), [numbersDataset.data])
+  const typedPaperNote = useRef(false) // the whole-paper composer holds text the reader typed
+  // A selection or figure box never discards it; one that would is told to wait (an empty or template-only composer is replaced).
+  const blockedByTypedNote = () => {
+    if (typedPaperNote.current) setError(SAVE_FIRST)
+    return typedPaperNote.current
+  }
   const captureDrag = useCaptureDrag(scale, (page, region) => {
+    if (blockedByTypedNote()) return
     setWholePaperDraft(null)
     setDraft({ page, rects: [region], quotedText: `Figure on p. ${page}`, figure: true })
     showTab('notes')
@@ -275,6 +283,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
     if (result.kind === 'invalid') setError(result.reason)
     const anchor = result.kind === 'anchor' ? result.anchor : noPdf ? readAbstractSelection() : null
     if (anchor) {
+      if (blockedByTypedNote()) return
       setError(null)
       setDraft(anchor)
       setWholePaperDraft(null)
@@ -652,6 +661,10 @@ export function ReaderPage({ paperId, tab, target }: Props) {
             wholePaperDraft={wholePaperDraft}
             onNewPaperNote={newPaperNote}
             onCancelPaperNote={() => setWholePaperDraft(null)}
+            onPaperNoteDirty={(dirty) => {
+              typedPaperNote.current = dirty && wholePaperDraft !== null // a no-PDF paper's own composer is no draft
+              if (!dirty) setError((e) => (e === SAVE_FIRST ? null : e))
+            }}
             onSavePaperNote={savePaperNote}
             notes={notes}
             draft={draft}

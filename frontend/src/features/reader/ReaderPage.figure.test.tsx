@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, render } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import type { ChatSource, Paper } from '@/api/client'
 import { ReaderPage, groupHighlights } from './ReaderPage'
@@ -10,6 +10,7 @@ type NotesProps = {
   onSavePaperNote: (body: string, kind?: string | null) => Promise<boolean>
   wholePaperDraft: { kind: string | null } | null
   onNewPaperNote: () => void
+  onPaperNoteDirty?: (dirty: boolean) => void
 }
 const state = vi.hoisted(() => ({
   paper: undefined as Paper | undefined,
@@ -101,6 +102,19 @@ test('a drawn figure box becomes a figure draft, and saving it calls createFigur
   await act(async () => void (await state.notes!.onSaveDraft('looks fine')))
   expect(state.createFigure).toHaveBeenCalledWith(expect.objectContaining({ paper_id: ID2, page: 4, region: [1, 2, 30, 40], body: 'looks fine' }))
   expect(state.create).not.toHaveBeenCalled()
+})
+
+test('a figure box leaves a composer with typed text alone', () => {
+  render(<ReaderPage paperId={ID2} tab="notes" target={null} />)
+  act(() => state.notes!.onNewPaperNote())
+  act(() => state.notes!.onPaperNoteDirty!(true))
+  act(() => state.onFigure!(4, [1, 2, 30, 40]))
+  expect(state.notes!.draft).toBeNull()
+  expect(state.notes!.wholePaperDraft).toEqual({ kind: null })
+  expect(screen.getByText('Save or cancel the note you are writing first.')).toBeInTheDocument()
+  act(() => state.notes!.onPaperNoteDirty!(false))
+  act(() => state.onFigure!(4, [1, 2, 30, 40])) // untouched: replaced as before
+  expect(state.notes!.draft).toMatchObject({ figure: true })
 })
 
 test('groupHighlights marks a figure note rect and leaves others unmarked', () => {
