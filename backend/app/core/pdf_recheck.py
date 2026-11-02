@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Literal
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import discovery, paper_events, paper_sources, papers, queue
@@ -47,15 +47,18 @@ async def due(session: AsyncSession, now: datetime) -> list[uuid.UUID]:
     return ids
 
 
-async def _mark(session: AsyncSession, paper_id: uuid.UUID, outcome: Outcome) -> None:
-    """The result, except for a skip (a paper that got a PDF meanwhile keeps its last real result). The time was set
-    when `due` claimed it."""
+async def _mark(session: AsyncSession, paper_id: uuid.UUID, outcome: Outcome, claimed: bool) -> None:
+    """The result, except for a skip (a paper that got a PDF meanwhile keeps its last real result). The time was set if
+    `due` claimed it; a look outside the weekly run sets it here."""
     if outcome != "skipped":
-        await session.execute(update(Paper).where(Paper.id == paper_id).values(pdf_check_result=outcome))
+        times = {} if claimed else {"pdf_checked_at": func.now()}
+        await session.execute(update(Paper).where(Paper.id == paper_id).values(pdf_check_result=outcome, **times))
     await session.commit()
 
 
-async def recheck(session: AsyncSession, providers: discovery.Providers, paper_id: uuid.UUID) -> Outcome:
+async def recheck(
+    session: AsyncSession, providers: discovery.Providers, paper_id: uuid.UUID, claimed: bool = False
+) -> Outcome:
     """One paper: finds a free copy and upgrades it in place (ingest queued, then a pdf_found event). One paper's
     failure is logged and recorded as "error"; it never raises."""
     outcome: Outcome = "error"
@@ -82,7 +85,7 @@ async def recheck(session: AsyncSession, providers: discovery.Providers, paper_i
         logger.exception("the free-copy re-check of paper %s failed", paper_id)
         await session.rollback()
     try:
-        await _mark(session, paper_id, outcome)
+        await _mark(session, paper_id, outcome, claimed)
     except Exception:  # the paper keeps its last result; the others still get their turn
         logger.exception("recording the re-check of paper %s failed", paper_id)
         await session.rollback()
@@ -94,10 +97,11 @@ async def schedule_retry(session: AsyncSession, paper_id: uuid.UUID, attempt: in
     Settings: the switch covers every look nobody asked for."""
     if attempt >= len(RETRY_DELAYS) or not (await paper_sources.get(session)).pdf_recheck_enabled:
         return False
-    return await queue.enqueue(
+    await queue.enqueue(  # refused when this look is already queued: scheduled either way
         "retry_free_pdf", str(paper_id), attempt, job_id=f"retry_free_pdf:{paper_id}:{attempt}",
         defer_seconds=RETRY_DELAYS[attempt],
     )
+    return True
 
 
 async def run(session: AsyncSession, providers: discovery.Providers, now: datetime) -> dict[str, int]:
@@ -108,7 +112,7 @@ async def run(session: AsyncSession, providers: discovery.Providers, now: dateti
             await sleep(PAUSE)
         if not (await paper_sources.get(session)).pdf_recheck_enabled:  # switched off mid-run: the rest wait
             break
-        outcome = await recheck(session, providers, paper_id)
+        outcome = await recheck(session, providers, paper_id, claimed=True)
         counts[outcome] += 1
         if outcome == "temporary":
             await schedule_retry(session, paper_id)
