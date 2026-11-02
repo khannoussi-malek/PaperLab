@@ -11,7 +11,7 @@ short gist, not pasteable prose.
 import re
 import uuid
 from collections.abc import Collection, Iterable
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -303,6 +303,7 @@ async def save_check(
         kind=OUTPUT_KIND,
         question=check.question,
         content=content,
+        check_result={"lines": [asdict(line) for line in reply.lines], "dropped": reply.dropped},
         source_chunks=source_ids,
         cited_chunks=[source_ids[n - 1] for n in cited],
         source_notes=[check.note_id],
@@ -343,9 +344,7 @@ async def list_checks(session: AsyncSession, paper_id: uuid.UUID) -> list[CheckV
         if note is None:
             continue
         sources = [chunks.get(i) for i in output.source_chunks]
-        # ponytail: after a re-ingest replaces chunks the copy guard sees fewer passages; what slips through is one
-        # line of at most 25 words.
-        guard = guard_for(output.question or "", (s.text for s in sources if s))
-        reply = parse_check(output.content, len(sources), guard)
-        found.append(CheckView(output, note_id, reply.lines, reply.dropped, sources, note.body != output.question))
+        result = output.check_result or {"lines": [], "dropped": 0}  # judged once, at save: a re-ingest can't change it
+        lines = [CheckLine(**line) for line in result["lines"]]
+        found.append(CheckView(output, note_id, lines, result["dropped"], sources, note.body != output.question))
     return found
