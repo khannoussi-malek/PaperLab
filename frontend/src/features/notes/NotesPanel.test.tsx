@@ -176,3 +176,24 @@ test('each card gets the note check in its check slot', () => {
   )
   expect(screen.getByText('check-slot-n1')).toBeInTheDocument()
 })
+
+test('Write it with another kind keeps what the reader typed', () => {
+  const { rerender } = render(<NotesPanel {...props} wholePaperDraft={{ kind: 'summary' }} />)
+  fireEvent.change(screen.getByRole('textbox', { name: 'New note' }), { target: { value: 'My own words' } })
+  rerender(<NotesPanel {...props} wholePaperDraft={{ kind: 'reconstruction' }} />)
+  expect(screen.getByRole('textbox', { name: 'New note' })).toHaveValue('My own words')
+})
+
+test('Write it with another kind swaps an untouched template', () => {
+  const { rerender } = render(<NotesPanel {...props} wholePaperDraft={{ kind: 'five_cs' }} />)
+  expect(screen.getByRole('textbox', { name: 'New note' })).toHaveValue(TEMPLATE.five_cs)
+  rerender(<NotesPanel {...props} wholePaperDraft={{ kind: 'summary' }} />)
+  expect(screen.getByRole('textbox', { name: 'New note' })).toHaveValue('')
+})
+
+test('on a paper without a PDF, Write it keeps text typed in the always-on composer', () => {
+  const { rerender } = render(<NotesPanel {...props} hasPdf={false} />)
+  fireEvent.change(screen.getByRole('textbox', { name: 'New note' }), { target: { value: 'Typed first' } })
+  rerender(<NotesPanel {...props} hasPdf={false} wholePaperDraft={{ kind: 'summary' }} />)
+  expect(screen.getByRole('textbox', { name: 'New note' })).toHaveValue('Typed first')
+})

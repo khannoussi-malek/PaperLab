@@ -112,13 +112,20 @@ export function NotesPanel(props: Props) {
           </Button>
         </div>
       )}
-      {props.wholePaperDraft ? (
-        <PlainNoteComposer
-          key={props.wholePaperDraft.kind ?? 'none'}
-          initialKind={props.wholePaperDraft.kind}
-          onSave={props.onSavePaperNote}
-          onCancel={props.onCancelPaperNote}
-        />
+      {props.wholePaperDraft || (!draft && props.hasPdf === false) ? (
+        <>
+          {!props.wholePaperDraft && (
+            <p className="text-sm text-muted-foreground">
+              {props.hasAbstract ? 'Select text in the abstract, or write a note.' : 'Write a note.'}
+            </p>
+          )}
+          {/* One element in both states, so Write it never remounts a composer and drops what was typed. */}
+          <PlainNoteComposer
+            initialKind={props.wholePaperDraft?.kind ?? null}
+            onSave={props.onSavePaperNote}
+            onCancel={props.wholePaperDraft ? props.onCancelPaperNote : undefined}
+          />
+        </>
       ) : draft ? (
         <NoteComposer
           key={draftKey(draft)}
@@ -129,13 +136,6 @@ export function NotesPanel(props: Props) {
           onCancel={props.onCancelDraft}
           onAddNumber={props.onAddNumber}
         />
-      ) : props.hasPdf === false ? (
-        <>
-          <p className="text-sm text-muted-foreground">
-            {props.hasAbstract ? 'Select text in the abstract, or write a note.' : 'Write a note.'}
-          </p>
-          <PlainNoteComposer onSave={props.onSavePaperNote} />
-        </>
       ) : null}
       <SuggestedNotes paperId={paperId} hasPdf={props.hasPdf} />
       {notes.length > 0 && shown.length === 0 && (

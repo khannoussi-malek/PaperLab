@@ -1,5 +1,5 @@
 import { Hash } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { NoteKind } from '@/api/client'
 import { popIn } from '@/components/motion'
 import { Button } from '@/components/ui/button'
@@ -19,6 +19,11 @@ function useKindBody(initialKind: NoteKind | null) {
     setBody((b) => swapTemplate(b, kind, next))
     setKind(next)
   }
+  // Write it can hand an open composer another kind: typed text stays, an untouched template swaps.
+  useEffect(() => {
+    pickKind(initialKind)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialKind])
   return { kind, body, setBody, pickKind }
 }
 

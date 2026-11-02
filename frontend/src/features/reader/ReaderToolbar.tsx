@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import type { NoteKind } from '@/api/client'
 import { Frame, Table2, ZoomIn, ZoomOut } from 'lucide-react'
 import type { Paper } from '@/api/client'
 import { glass } from '@/components/glass'
@@ -22,13 +23,15 @@ type Props = {
   drawingFigure?: boolean
   onDrawingFigureChange?: (on: boolean) => void
   onOpenReferences: () => void
+  onWriteNote?: (kind: NoteKind) => void
+  onOpenNote?: (noteId: string) => void
   /** The paper's tag chips; the page supplies them so the toolbar stays free of data hooks. */
   tags?: React.ReactNode
   /** The reading lens picker and its steps (M16), after Reading and before Capture table; shown only with a PDF. */
   lensControl?: ReactNode
 }
 
-export function ReaderToolbar({ paper, zoomIndex, onZoomChange, capturing, onCaptureChange, drawingFigure = false, onDrawingFigureChange, onOpenReferences, tags, lensControl }: Props) {
+export function ReaderToolbar({ paper, zoomIndex, onZoomChange, capturing, onCaptureChange, drawingFigure = false, onDrawingFigureChange, onOpenReferences, onWriteNote, onOpenNote, tags, lensControl }: Props) {
   const title = paper?.title
   // A paper saved without its PDF has no pages to zoom or capture from; while it loads, the controls show as usual.
   const pages = paper?.has_pdf !== false
@@ -46,7 +49,7 @@ export function ReaderToolbar({ paper, zoomIndex, onZoomChange, capturing, onCap
           <SourceBadges paper={paper} />
         </div>
       )}
-      {paper && <ReadingControl paper={paper} onOpenReferences={onOpenReferences} />}
+      {paper && <ReadingControl paper={paper} onOpenReferences={onOpenReferences} onWriteNote={onWriteNote} onOpenNote={onOpenNote} />}
       {pages && lensControl}
       {pages && (
         <Button
