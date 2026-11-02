@@ -30,7 +30,7 @@ from app.workers.manuscript_section_review import SECTION_REVIEW_JOB_TIMEOUT, re
 from app.workers.manuscripts import COMPILE_JOB_TIMEOUT, compile_manuscript
 from app.workers.paper_biblio import fill_paper_biblio
 from app.workers.paper_enrichment import ENRICH_PAPERS_TIMEOUT, enrich_papers
-from app.workers.pdf_recheck import RECHECK_JOB_TIMEOUT, recheck_free_pdfs
+from app.workers.pdf_recheck import RECHECK_JOB_TIMEOUT, recheck_free_pdfs, recheck_papers, retry_free_pdf
 from app.workers.references import fetch_references
 from app.workers.saved_searches import schedule_saved_searches
 from app.workers.screening_suggest import SUGGEST_JOB_TIMEOUT, suggest_screening
@@ -67,6 +67,8 @@ class WorkerSettings:
         func(enrich_hits, timeout=ENRICH_JOB_TIMEOUT, keep_result=0),
         func(enrich_papers, timeout=ENRICH_PAPERS_TIMEOUT, keep_result=0),
         func(fill_paper_biblio, timeout=60, max_tries=1, keep_result=0),
+        func(retry_free_pdf, timeout=600, keep_result=0),
+        func(recheck_papers, timeout=RECHECK_JOB_TIMEOUT, keep_result=0),
         func(suggest_screening, timeout=SUGGEST_JOB_TIMEOUT),
         func(generate_evidence_cards, timeout=EVIDENCE_CARDS_JOB_TIMEOUT, max_tries=EVIDENCE_CARDS_MAX_TRIES),
         func(verify_manuscript_evidence, timeout=EVIDENCE_JOB_TIMEOUT, max_tries=1),

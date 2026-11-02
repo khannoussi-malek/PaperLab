@@ -2,6 +2,7 @@ from dataclasses import replace
 
 import httpx
 import pytest
+from conftest import no_lookups
 from sqlalchemy import select
 
 from app.core import discovery, enrichment, pdf_links
@@ -204,10 +205,10 @@ async def test_no_free_pdf_carries_what_was_tried_and_the_repository_copies(sess
             pdf_dir,
         )
 
-    assert caught.value.details == {
-        "tried": [{"url": f"{HOST}/closed?key=***", "outcome": "bot_check"}],
-        "free_copies": ["https://repo.example/handle/1?api_key=***", f"{HOST}/closed"],
-    }
+    details = caught.value.details
+    assert details["tried"][0]["url"] == discovery.UNPAYWALL_LOOKUP  # what it said is listed too
+    assert no_lookups(details["tried"]) == [{"url": f"{HOST}/closed?key=***", "outcome": "bot_check"}]
+    assert details["free_copies"] == ["https://repo.example/handle/1?api_key=***", f"{HOST}/closed"]
 
 
 async def test_add_asks_unpaywall_once_and_tries_a_bot_checked_publisher_after_the_repository_copy(
@@ -251,7 +252,7 @@ async def test_the_followed_pdf_that_is_refused_is_recorded(discovery_fakes):
 
     data, tried = await discovery.download_pdf(discovery_fakes.providers.pdf, [f"{HOST}/article"])
 
-    assert data is None and [t["outcome"] for t in tried] == ["not_a_pdf → followed citation_pdf_url", "http_503"]
+    assert data is None and [t["outcome"] for t in no_lookups(tried)] == ["not_a_pdf → followed citation_pdf_url", "http_503"]
 
 
 async def test_a_page_without_the_tag_makes_no_second_request(discovery_fakes):
@@ -269,7 +270,7 @@ async def test_a_followed_page_is_never_followed_again(discovery_fakes):
 
     data, tried = await discovery.download_pdf(discovery_fakes.providers.pdf, [f"{HOST}/a"])
 
-    assert data is None and [t["outcome"] for t in tried] == ["not_a_pdf → followed citation_pdf_url", "not_a_pdf"]
+    assert data is None and [t["outcome"] for t in no_lookups(tried)] == ["not_a_pdf → followed citation_pdf_url", "not_a_pdf"]
     assert [r.url.path for r in discovery_fakes.pdf_host.requests] == ["/a", "/b"]
 
 
@@ -284,7 +285,7 @@ async def test_a_followed_url_the_guard_refuses_is_unsafe(discovery_fakes, monke
 
     data, tried = await discovery.download_pdf(http, [f"{HOST}/article"])
 
-    assert data is None and [t["outcome"] for t in tried] == ["not_a_pdf → followed citation_pdf_url", "unsafe_url"]
+    assert data is None and [t["outcome"] for t in no_lookups(tried)] == ["not_a_pdf → followed citation_pdf_url", "unsafe_url"]
     assert [r.url.path for r in discovery_fakes.pdf_host.requests] == ["/article"]
 
 
@@ -298,7 +299,7 @@ async def test_a_declared_private_pdf_is_unsafe_on_a_client_without_the_guard(di
 
     data, tried = await discovery.download_pdf(discovery_fakes.providers.pdf, [f"{HOST}/article"])
 
-    assert data is None and [t["outcome"] for t in tried] == ["not_a_pdf → followed citation_pdf_url", "unsafe_url"]
+    assert data is None and [t["outcome"] for t in no_lookups(tried)] == ["not_a_pdf → followed citation_pdf_url", "unsafe_url"]
     assert [r.url.path for r in discovery_fakes.pdf_host.requests] == ["/article"]
 
 
@@ -375,8 +376,8 @@ async def test_tacl_like_paper_found_on_arxiv_by_exact_title(session, discovery_
     assert (pdf_dir / f"{paper.id}.pdf").read_bytes() == PDF
     assert len(discovery_fakes.arxiv.requests) == 1
     assert discovery_fakes.arxiv.requests[0].url.params["max_results"] == "5"
-    assert [t["outcome"] for t in tried] == ["bot_check", "arxiv_title_match", "pdf"]
-    assert "2406.07735" in tried[1]["url"]
+    assert [t["outcome"] for t in no_lookups(tried)] == ["bot_check", "arxiv_title_match", "pdf"]
+    assert "2406.07735" in no_lookups(tried)[1]["url"]
 
 
 async def test_a_near_miss_title_is_not_accepted(session, discovery_fakes, pdf_dir):
@@ -387,7 +388,7 @@ async def test_a_near_miss_title_is_not_accepted(session, discovery_fakes, pdf_d
         await discovery.add(session, providers, tacl_like(), pdf_dir)
 
     assert [r.url.path for r in discovery_fakes.pdf_host.requests] == ["/closed"]
-    assert caught.value.details["tried"][-1]["outcome"] == "no_match"
+    assert no_lookups(caught.value.details["tried"])[-1]["outcome"] == "no_match"
 
 
 async def test_an_author_mismatch_is_not_accepted(session, discovery_fakes, pdf_dir):
@@ -396,7 +397,7 @@ async def test_an_author_mismatch_is_not_accepted(session, discovery_fakes, pdf_
     with pytest.raises(Conflict) as caught:
         await discovery.add(session, providers, tacl_like(), pdf_dir)
 
-    assert caught.value.details["tried"][-1]["outcome"] == "no_match"
+    assert no_lookups(caught.value.details["tried"])[-1]["outcome"] == "no_match"
     assert [r.url.path for r in discovery_fakes.pdf_host.requests] == ["/closed"]
 
 
@@ -404,13 +405,13 @@ async def test_no_authors_on_either_side_needs_the_year_within_one(session, disc
     providers = arxiv_world(discovery_fakes, arxiv_entry(authors=[], year=2020))
     with pytest.raises(Conflict) as caught:
         await discovery.add(session, providers, tacl_like(authors=[]), pdf_dir)
-    assert caught.value.details["tried"][-1]["outcome"] == "no_match"
+    assert no_lookups(caught.value.details["tried"])[-1]["outcome"] == "no_match"
 
     discovery_fakes.arxiv.reply("/api/query", 200, text=atom(arxiv_entry(authors=[], year=2024)))
     discovery_fakes.pdf_host.reply("/pdf/2406.07735", 200, content=PDF)
     tried = []
     await discovery.add(session, providers, tacl_like(authors=[]), pdf_dir, tried)
-    assert [t["outcome"] for t in tried] == ["bot_check", "arxiv_title_match", "pdf"]
+    assert [t["outcome"] for t in no_lookups(tried)] == ["bot_check", "arxiv_title_match", "pdf"]
 
 
 async def test_no_arxiv_search_when_a_candidate_already_has_an_arxiv_id(session, discovery_fakes, pdf_dir):
@@ -438,7 +439,7 @@ async def test_no_match_is_recorded_in_tried(session, discovery_fakes, pdf_dir):
     with pytest.raises(Conflict) as caught:
         await discovery.add(session, providers, tacl_like(), pdf_dir)
 
-    assert [t["outcome"] for t in caught.value.details["tried"]] == ["bot_check", "no_match"]
+    assert [t["outcome"] for t in no_lookups(caught.value.details["tried"])] == ["bot_check", "no_match"]
 
 
 async def test_a_disabled_arxiv_source_is_not_searched_and_records_nothing(session, discovery_fakes, pdf_dir):
@@ -447,7 +448,7 @@ async def test_a_disabled_arxiv_source_is_not_searched_and_records_nothing(sessi
     with pytest.raises(Conflict) as caught:
         await discovery.add(session, discovery_fakes.providers, tacl_like(), pdf_dir)
 
-    assert [t["outcome"] for t in caught.value.details["tried"]] == ["http_403"]
+    assert [t["outcome"] for t in no_lookups(caught.value.details["tried"])] == ["http_403"]
     assert discovery_fakes.arxiv.requests == []
 
 
@@ -521,7 +522,7 @@ async def test_urn_kb_se_resolving_elsewhere_does_nothing(session, discovery_fak
         await discovery.add(session, providers, found, pdf_dir)
 
     assert [r.url.path for r in discovery_fakes.pdf_host.requests] == ["/closed", "/resolve"]
-    assert [t["outcome"] for t in caught.value.details["tried"]] == ["bot_check"]
+    assert [t["outcome"] for t in no_lookups(caught.value.details["tried"])] == ["bot_check"]
     assert caught.value.details["free_copies"] == [urn]
 
 
@@ -534,7 +535,7 @@ async def test_a_diva_pdf_found_ends_the_search_with_pdf(session, discovery_fake
 
     await discovery.add(session, providers, candidate(doi="10.5555/many", pdf_urls=[f"{HOST}/closed"]), pdf_dir, tried)
 
-    assert [t["outcome"] for t in tried] == ["bot_check", "http_404", "pdf"]
+    assert [t["outcome"] for t in no_lookups(tried)] == ["bot_check", "http_404", "pdf"]
 
 
 async def test_at_most_three_diva_pdfs_are_tried(session, discovery_fakes, pdf_dir):
@@ -546,7 +547,7 @@ async def test_at_most_three_diva_pdfs_are_tried(session, discovery_fakes, pdf_d
     with pytest.raises(Conflict) as caught:
         await discovery.add(session, providers, candidate(doi="10.5555/cap", pdf_urls=[f"{HOST}/closed"]), pdf_dir)
 
-    assert len(caught.value.details["tried"]) == 4  # the closed publisher and three DiVA PDFs
+    assert len(no_lookups(caught.value.details["tried"])) == 4  # the closed publisher and three DiVA PDFs
 
 
 # --- M63b review: busy arXiv, spacing, stricter authors ---
@@ -575,7 +576,7 @@ async def test_an_arxiv_error_is_recorded_in_tried(session, discovery_fakes, pdf
     with pytest.raises(Conflict) as caught:
         await discovery.add(session, discovery_fakes.turned_on("arxiv"), tacl_like(), pdf_dir)
 
-    assert caught.value.details["tried"][-1] == {"url": "arxiv.org (title search)", "outcome": outcome}
+    assert no_lookups(caught.value.details["tried"])[-1] == {"url": "arxiv.org (title search)", "outcome": outcome}
 
 
 async def test_an_arxiv_connection_error_is_recorded_in_tried(session, discovery_fakes, pdf_dir):
@@ -585,7 +586,7 @@ async def test_an_arxiv_connection_error_is_recorded_in_tried(session, discovery
     with pytest.raises(Conflict) as caught:
         await discovery.add(session, discovery_fakes.turned_on("arxiv"), tacl_like(), pdf_dir)
 
-    assert caught.value.details["tried"][-1]["outcome"] == "error: ConnectError"
+    assert no_lookups(caught.value.details["tried"])[-1]["outcome"] == "error: ConnectError"
 
 
 async def test_arxiv_title_searches_on_one_providers_are_spaced_three_seconds(
@@ -648,7 +649,7 @@ async def test_a_title_with_an_extra_suffix_is_a_near_miss(session, discovery_fa
     with pytest.raises(Conflict) as caught:
         await discovery.add(session, providers, tacl_like(title="REAL Sampling 2"), pdf_dir)
 
-    assert caught.value.details["tried"][-1]["outcome"] == "no_match"
+    assert no_lookups(caught.value.details["tried"])[-1]["outcome"] == "no_match"
 
 
 async def test_at_most_three_urn_kb_se_links_are_resolved(session, discovery_fakes, pdf_dir):
@@ -715,7 +716,7 @@ async def test_the_in_library_entry_names_the_publisher_doi_and_no_arxiv_pdf_is_
     with pytest.raises(Conflict) as raised:
         await discovery.add(session, arxiv_world(discovery_fakes, arxiv_entry()), tacl_like(), pdf_dir)
 
-    assert raised.value.details["tried"][-1] == {"url": "https://doi.org/10.1162/tacl_a_00757", "outcome": "in_library"}
+    assert no_lookups(raised.value.details["tried"])[-1] == {"url": "https://doi.org/10.1162/tacl_a_00757", "outcome": "in_library"}
     assert [r.url.path for r in discovery_fakes.pdf_host.requests] == ["/closed"]
 
 
@@ -740,7 +741,7 @@ async def test_a_renamed_paper_reuses_the_held_arxiv_copy_as_its_published_versi
         await discovery.add(session, arxiv_world(discovery_fakes, arxiv_entry()), renamed(), pdf_dir)
 
     assert raised.value.details["paper_id"] == copy.id
-    outcomes = [t["outcome"] for t in raised.value.details["tried"]]
+    outcomes = [t["outcome"] for t in no_lookups(raised.value.details["tried"])]
     assert outcomes == ["bot_check", "no_match", "arxiv_title_prefix_match", "in_library"]
     await session.refresh(copy)
     assert copy.published_doi == "10.1162/tacl_a_00757"
@@ -756,8 +757,8 @@ async def test_a_renamed_paper_downloads_its_arxiv_copy(session, discovery_fakes
     paper = await discovery.add(session, arxiv_world(discovery_fakes, arxiv_entry()), renamed(), pdf_dir, tried)
 
     assert (pdf_dir / f"{paper.id}.pdf").read_bytes() == PDF
-    assert [t["outcome"] for t in tried] == ["bot_check", "no_match", "arxiv_title_prefix_match", "pdf"]
-    assert "2406.07735" in tried[2]["url"]
+    assert [t["outcome"] for t in no_lookups(tried)] == ["bot_check", "no_match", "arxiv_title_prefix_match", "pdf"]
+    assert "2406.07735" in no_lookups(tried)[2]["url"]
 
 
 @pytest.mark.parametrize(
@@ -784,7 +785,7 @@ async def test_the_prefix_rule_rejects(session, discovery_fakes, pdf_dir, fake_c
     with pytest.raises(Conflict) as raised:
         await discovery.add(session, providers, renamed(**ours), pdf_dir)
 
-    assert raised.value.details["tried"][-1]["outcome"] == "no_match"
+    assert no_lookups(raised.value.details["tried"])[-1]["outcome"] == "no_match"
     assert len(discovery_fakes.arxiv.requests) == searches
     assert [r.url.path for r in discovery_fakes.pdf_host.requests] == ["/closed"]
 
@@ -814,7 +815,7 @@ async def test_an_error_on_the_prefix_search_is_recorded_after_the_first_no_matc
     with pytest.raises(Conflict) as raised:
         await discovery.add(session, providers, renamed(), pdf_dir)
 
-    assert [t["outcome"] for t in raised.value.details["tried"]] == ["bot_check", "no_match", "busy"]
+    assert [t["outcome"] for t in no_lookups(raised.value.details["tried"])] == ["bot_check", "no_match", "busy"]
 
 
 # --- M69: adding the arXiv copy of a paper the library holds as its published version reuses that paper ---
@@ -852,7 +853,7 @@ async def test_an_arxiv_copy_reuses_the_held_published_version(session, discover
         await discovery.add(session, discovery_fakes.providers, arxiv_copy(), pdf_dir)
 
     assert str(raised.value) == discovery.ALREADY_IN_LIBRARY and raised.value.details["paper_id"] == held.id
-    assert raised.value.details["tried"] == [{"url": "https://arxiv.org/abs/2406.07735", "outcome": "in_library"}]
+    assert no_lookups(raised.value.details["tried"]) == [{"url": "https://arxiv.org/abs/2406.07735", "outcome": "in_library"}]
     assert discovery_fakes.pdf_host.requests == []  # nothing downloaded
     await session.refresh(held)
     assert (held.doi, held.venue, held.source_type) == (

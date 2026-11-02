@@ -70,7 +70,7 @@ async def test_no_copy_records_none_and_a_failure_records_error_and_the_run_goes
 
     for paper in (lost, broken, found):
         await session.refresh(paper)
-    assert counts == {"found": 1, "none": 1, "error": 1, "skipped": 0}
+    assert counts == {"found": 1, "none": 1, "temporary": 0, "error": 1, "skipped": 0}
     assert [p.pdf_check_result for p in (lost, broken, found)] == ["none", "error", "found"]
     assert all(p.pdf_checked_at == NOW for p in (lost, broken, found))
     assert arq.jobs == [("ingest_paper", str(found_id))]
@@ -181,10 +181,10 @@ async def test_a_failing_mark_is_logged_and_the_run_goes_on(session, discovery_f
     first_id, second_id = first.id, second.id
     real = pdf_recheck._mark
 
-    async def mark(session_, paper_id, outcome):
+    async def mark(session_, paper_id, outcome, claimed):
         if paper_id == first_id:
             raise RuntimeError("db down")
-        await real(session_, paper_id, outcome)
+        await real(session_, paper_id, outcome, claimed)
 
     monkeypatch.setattr(pdf_recheck, "_mark", mark)
     counts = await pdf_recheck.run(session, discovery_fakes.providers, NOW)

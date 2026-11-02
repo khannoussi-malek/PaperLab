@@ -5279,7 +5279,7 @@ export interface components {
             /** Pdf Checked At */
             pdf_checked_at: string | null;
             /** Pdf Check Result */
-            pdf_check_result: ("found" | "none" | "error") | null;
+            pdf_check_result: ("found" | "none" | "temporary" | "error") | null;
             /** Is Retracted */
             is_retracted: boolean;
             /** Oa Status */

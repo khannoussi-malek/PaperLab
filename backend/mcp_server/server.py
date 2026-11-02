@@ -56,6 +56,7 @@ mcp = MCPServer(
         "accepts some. Claims: verify_claim and verify_claims check a claim against the papers it cites, with a "
         "quote as evidence. Evidence cards: generate_evidence_card starts one (about a minute per paper), "
         "get_evidence_card reads it, list_evidence_cards shows a workspace's cards. "
+        "recheck_free_copies looks again for free PDFs of a workspace's papers saved without one. "
         "Older hits: enrich_hits fills their peer-review and published-version data and missing abstracts, "
         "in the background; enrich_papers does the same for library papers that are the arXiv copy of a published "
         "paper (venue, DOI, peer review). "
@@ -255,7 +256,9 @@ async def add_paper(
     """Use to bring one paper into the library by DOI, arXiv ID or a direct PDF link (free copies only). Returns
     `queued` (ingesting now), `ingested` (already in the library and ready) or `no_free_pdf` with its landing page,
     `tried` (each PDF URL tried and why it failed; a `queued` link that fell back to its DOI carries it too) and
-    `free_copies` (repository pages that may hold a free copy).
+    `free_copies` (repository pages that may hold a free copy). `tried` also lists the Unpaywall lookup. `busy`,
+    `error: …` and HTTP 408/425/429/5xx mean a source couldn't answer now, not that no copy exists: those entries are
+    repeated in `temporary_failures`, and a saved paper is then tried again by itself (`retry_scheduled`).
     Give `workspace` to file it there too. Nothing is saved without a PDF unless you pass save_without_pdf=True:
     then a DOI or arXiv ID with no free copy is saved by its details (title, authors, abstract) and answers
     `saved_without_pdf` with its paper_id (plus `tried` and `free_copies`); its abstract is searchable, its full
@@ -290,6 +293,18 @@ async def add_papers(
     free copy by its details instead (status `saved_without_pdf`), as add_paper does; the default saves nothing."""
     async with sessions() as session:
         return await pipeline.add_papers(session, identifiers, workspace, save_without_pdf)
+
+
+@mcp.tool()
+@recoverable
+async def recheck_free_copies(
+    workspace: str, tags: list[str] | None = None, match: Literal["any", "all"] = "any"
+) -> pipeline.RecheckQueued:
+    """Use to look again for free copies of a workspace's papers saved without a PDF, optionally only those with these
+    tags. Runs in the background, up to 200 papers a call (`left` says how many wait for the next). A found copy is
+    attached and ingested; list_papers then shows has_pdf and pdf_check_result (found, none, temporary, error)."""
+    async with sessions() as session:
+        return await pipeline.recheck_free_copies(session, workspace, tags, match)
 
 
 @mcp.tool()
@@ -346,7 +361,7 @@ async def get_search_run(run_id: uuid.UUID) -> pipeline.SearchRunOut:
     partial; report a run's coverage from this, not from `status`, where exhausted only means the job ended.
     source_results gives each source's state (complete, paused, cooling_down, gave_up, disabled, fetching), raw_count,
     new_hits, last_error and a reason; failed_sources names those that stopped answering, and prescreen counts how many
-    hits a model judged. stats_json.per_source_error holds the last error seen per source, even for one that recovered."""
+    hits a model judged. stats_json.per_source_error holds each source's last error, even for one that recovered."""
     async with sessions() as session:
         return await pipeline.get_search_run(session, run_id)
 

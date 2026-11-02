@@ -2,7 +2,7 @@ import uuid
 from contextlib import aclosing
 
 import pytest
-from conftest import recorded_discovery
+from conftest import no_lookups, recorded_discovery
 from sqlalchemy import delete, select
 
 from app.api.deps import get_discovery
@@ -140,7 +140,7 @@ async def test_add_without_a_free_pdf_is_409_and_enqueues_nothing(client, discov
 
     assert response.status_code == 409
     assert response.json()["detail"].startswith("No free PDF was found")
-    assert response.json()["tried"] == [{"url": "https://pdf.example/landing", "outcome": "not_a_pdf"}]
+    assert no_lookups(response.json()["tried"]) == [{"url": "https://pdf.example/landing", "outcome": "not_a_pdf"}]
     assert response.json()["free_copies"] == []
     assert arq.jobs == []
 
