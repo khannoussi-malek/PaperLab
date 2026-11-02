@@ -547,6 +547,41 @@ async def _space_arxiv_searches(providers: Providers) -> None:
     providers.last_search[:] = [_now()]
 
 
+UNPAYWALL_LOOKUP = "api.unpaywall.org (DOI lookup)"
+_TEMPORARY_HTTP = frozenset({408, 425, 429, 500, 502, 503, 504})
+
+
+def is_temporary(outcome: str) -> bool:
+    """Whether a `tried` outcome says the source couldn't answer now (rate limited, down, unreachable), not that it has
+    no copy: `busy`, `error: <exception>` and these HTTP statuses."""
+    if outcome == "busy" or outcome.startswith("error: "):
+        return True
+    return outcome.startswith("http_") and outcome[5:].isdigit() and int(outcome[5:]) in _TEMPORARY_HTTP
+
+
+def temporary_failures(tried: list[dict[str, str]]) -> list[dict[str, str]]:
+    return [entry for entry in tried if is_temporary(entry["outcome"])]
+
+
+async def _unpaywall_lookup(providers: Providers, candidate: Candidate) -> tuple[Candidate, list[dict[str, str]]]:
+    """Unpaywall's links merged into the candidate, and what the lookup said for `tried`: a download list alone hid
+    that it had run, and a busy Unpaywall looked just like a paper with no free copy. Nothing without a DOI."""
+    if not candidate.doi:
+        return candidate, []
+    http = providers.client("unpaywall")
+    if http is None:
+        return candidate, [{"url": UNPAYWALL_LOOKUP, "outcome": "skipped: off or no contact email"}]
+    try:
+        urls = await unpaywall.pdf_urls(http, candidate.doi)
+    except httpx.HTTPError as exc:
+        logger.info("no Unpaywall links for %s: %s", candidate.doi, redact(str(exc)))
+        return candidate, [{"url": UNPAYWALL_LOOKUP, "outcome": _search_outcome(exc)}]
+    merged = ordered_pdf_urls(candidate.external_ids.get("arxiv"), *candidate.pdf_urls, *urls)
+    return replace(candidate, pdf_urls=merged), [
+        {"url": UNPAYWALL_LOOKUP, "outcome": "links_found" if urls else "no_copy"}
+    ]
+
+
 def _search_outcome(exc: httpx.HTTPError) -> str:
     if isinstance(exc, httpx.HTTPStatusError):
         code = exc.response.status_code
@@ -772,11 +807,13 @@ async def pmc_copy(
 
 
 async def _download_free_copy(
-    session: AsyncSession, providers: Providers, candidate: Candidate
+    session: AsyncSession, providers: Providers, candidate: Candidate, lookups: list[dict[str, str]] | None = None
 ) -> tuple[bytes | None, list[dict[str, str]], list[str]]:
     """The download waterfall add() and find_pdf() share: the candidate's PDF URLs, the arXiv title copy, DiVA among
-    the repository copies, then PMC. (the PDF or None, what each URL tried said, the repository copies)."""
-    data, tried = await download_pdf(providers.pdf, candidate.pdf_urls)
+    the repository copies, then PMC. (the PDF or None, the lookups and what each URL tried said, the repository
+    copies)."""
+    data, downloads = await download_pdf(providers.pdf, candidate.pdf_urls)
+    tried = [*(lookups or []), *downloads]
     copies: list[str] = []
     if data is None:
         data, tried = await _arxiv_title_copy(session, providers, candidate, tried)
@@ -798,10 +835,10 @@ async def find_pdf(
     title search, raises Conflict(ALREADY_IN_LIBRARY, paper_id, tried): a duplicate rather than a second file, and
     nothing is recorded on it. Ends the transaction first, so no connection idles through the downloads."""
     await session.commit()
-    [candidate] = await _add_unpaywall_links(providers.client("unpaywall"), [candidate], merge=True)
+    candidate, lookups = await _unpaywall_lookup(providers, candidate)
     # An arXiv paper it names that the library holds is the same duplicate as the title search's: no second copy.
     await _reuse_arxiv_copy(session, candidate, _arxiv_ids(candidate), [], exclude=candidate.paper_id)
-    return await _download_free_copy(session, providers, candidate)
+    return await _download_free_copy(session, providers, candidate, lookups)
 
 
 def candidate_of(paper: Paper) -> Candidate:
@@ -843,10 +880,10 @@ async def add(
     # Release the connection (and its transaction) before a download that can take up to several 30s reads.
     await session.commit()
     await _reuse_published_copy(session, candidate)  # the reverse: its published version is held
-    if candidate.doi and candidate.pdf_urls:  # one extra request: a repository copy beside a bot-checked publisher
-        [candidate] = await _add_unpaywall_links(providers.client("unpaywall"), [candidate], merge=True)
+    # One request of its own: a repository copy beside a bot-checked publisher, and a recorded answer in `tried`.
+    candidate, lookups = await _unpaywall_lookup(providers, candidate)
     await _reuse_arxiv_copy(session, candidate, _arxiv_ids(candidate), [])  # before any download
-    data, tried, copies = await _download_free_copy(session, providers, candidate)
+    data, tried, copies = await _download_free_copy(session, providers, candidate, lookups)
     if tried_out is not None:
         tried_out.extend(tried)
     if copies_out is not None:

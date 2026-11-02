@@ -23,9 +23,11 @@ async def pool() -> ArqRedis:
     return _pool
 
 
-async def enqueue(job: str, *args, job_id: str | None = None) -> bool:
-    """Queues a job; False when `job_id` is already queued or running (arq refuses the duplicate)."""
+async def enqueue(job: str, *args, job_id: str | None = None, defer_seconds: float | None = None) -> bool:
+    """Queues a job, to start after `defer_seconds` if given; False when `job_id` is already queued or running (arq
+    refuses the duplicate)."""
+    options = {**({"_job_id": job_id} if job_id else {}), **({"_defer_by": defer_seconds} if defer_seconds else {})}
     queued = await (await pool()).enqueue_job(
-        job, *args, _queue_name=INGEST_QUEUE if job in INGEST_JOBS else None, **({"_job_id": job_id} if job_id else {})
+        job, *args, _queue_name=INGEST_QUEUE if job in INGEST_JOBS else None, **options
     )
     return queued is not None
