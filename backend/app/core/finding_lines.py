@@ -46,7 +46,7 @@ def split_label(cleaned: str) -> tuple[Kind, str] | None:
 
 
 def _words(text: str) -> list[str]:
-    return re.findall(r"\w+", text.lower())
+    return re.findall(r"\w+(?:-\w+)*", text.lower())
 
 
 def grams(texts: Iterable[str]) -> set[tuple[str, ...]]:

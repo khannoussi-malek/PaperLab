@@ -166,3 +166,17 @@ def test_numbers_are_read_strictly():
     for bad in ("an accuracy of .85", "a share of 80,5 percent"):
         assert parse_check(f"Missing: {bad} [C1]", 3, g).dropped == 1
     assert parse_check("Missing: 85 and 5 and 80 [C1]", 3, g).dropped == 0
+
+
+HYPHEN_GUARD = guard_for("my note", ["new state-of-the-art results on eleven natural language processing tasks"])
+
+
+@pytest.mark.parametrize(
+    "raw,kept",
+    [
+        ("Missing: State-of-the-art results on eleven NLP tasks [C1]", True),
+        ("Missing: results on eleven natural language processing [C1]", False),
+    ],
+)
+def test_a_hyphenated_compound_is_one_word_to_the_copy_guard(raw, kept):
+    assert len(parse_check(raw, 1, HYPHEN_GUARD).lines) == int(kept)
