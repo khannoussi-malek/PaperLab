@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'r
 import { api, type Paper, type TriageDecisionIn } from '@/api/client'
 import { keys } from '@/api/queries'
 import * as say from './announce'
-import { buildDecision, type Pile } from './piles'
+import { buildDecision, offersReason, type Pile } from './piles'
 import { buildQueue, emptyQueue, progress, queueReducer, type DoneEntry, type Order } from './queue'
 import { closeSession, openSession } from './sessionId'
 import { createWriter } from './triageWriter'
@@ -25,6 +25,7 @@ type Opts = {
 
 const ELSEWHERE = 'This paper was changed elsewhere since. Open it to change it.'
 const NEEDS_REASON = 'Pick a reason before marking a paper not relevant.'
+const REASON_WAITS = "The reason you picked wasn't saved; Retry sends it too."
 const NO_CLOCK: Clock = { card_ms: 0, pdf_ms: 0, pdf_opened: false }
 const reasonOf = (e: unknown) => (e instanceof Error ? e.message : 'something went wrong')
 
@@ -47,6 +48,9 @@ export function useTriageSession({ scope, queueFrom, library, libraryReady, filt
   const [alert, setAlert] = useState<Alert | null>(null)
   const [announcement, setAnnouncement] = useState('')
   const [pending, setPending] = useState(0)
+  // The decision the optional chips belong to. A next decision replaces it; an undo, a failed save or a chip ends it for good.
+  const [offerFor, setOfferFor] = useState<string | null>(null)
+  const closeOffer = useCallback(() => setOfferFor(null), [])
 
   // Latest values for callbacks that run after a write settles.
   const live = useRef({ state, queueFrom, library, order, includeDecided })
@@ -55,6 +59,8 @@ export function useTriageSession({ scope, queueFrom, library, libraryReady, filt
   // Text that leads the next new-card announcement; `exclusive` replaces it (an undo, a failure).
   const note = useRef<{ text: string; exclusive: boolean } | null>(null)
   const bodies = useRef(new Map<string, TriageDecisionIn>())
+  // A chip pressed on a decision whose save failed: it goes out if a Retry of that same decision saves.
+  const waitingReasons = useRef(new Map<string, string>())
   const writer = useRef<ReturnType<typeof createWriter<DoneEntry>> | null>(null)
   writer.current ??= createWriter<DoneEntry>({
     post: async (entry) => {
@@ -77,6 +83,24 @@ export function useTriageSession({ scope, queueFrom, library, libraryReady, filt
       client.invalidateQueries({ queryKey: ['triage-summary', sessionRef.current] }),
     ])
 
+  /** A failure is only a message; the decision stands. */
+  const sendReason = (entry: DoneEntry, reason: string) => {
+    bump(1)
+    void writer.current!.reason(entry, reason).then((res) => {
+      bump(-1)
+      if (res.status === 'saved') {
+        setAnnouncement(say.reasonAdded(entry.pile, reason))
+        void invalidate(entry.id)
+      } else if (res.status === 'failed') {
+        setAlert({ message: `Couldn't add the reason: ${reasonOf(res.error)}. The decision is saved.` })
+      } else {
+        waitingReasons.current.set(entry.clientId, reason)
+        // The decision's own alert is already up: only a live one with a Retry can keep this promise (an undone one has none).
+        setAlert((a) => (a?.retry ? { ...a, message: `${a.message} ${REASON_WAITS}` } : a))
+      }
+    })
+  }
+
   const write = useCallback((entry: DoneEntry) => {
     bump(1)
     void writer.current!.decide(entry).then((res) => {
@@ -84,10 +108,16 @@ export function useTriageSession({ scope, queueFrom, library, libraryReady, filt
       if (res.status === 'saved') {
         dispatch({ type: 'settle', clientId: entry.clientId, eventId: res.eventId })
         void invalidate(entry.id)
+        const waiting = waitingReasons.current.get(entry.clientId)
+        if (waiting) {
+          waitingReasons.current.delete(entry.clientId)
+          sendReason(entry, waiting)
+        }
       } else if (res.status === 'failed') {
+        setOfferFor((o) => (o === entry.clientId ? null : o))
         // Only the live decision matters: one the reader already undid or made again is dropped silently.
         if (!live.current.state.done.some((d) => d.clientId === entry.clientId)) return
-        const message = `Couldn't save: ${reasonOf(res.error)}`
+        const message = `Couldn't save: ${reasonOf(res.error)}${waitingReasons.current.has(entry.clientId) ? ` ${REASON_WAITS}` : ''}`
         note.current = { text: say.failed(reasonOf(res.error)), exclusive: true }
         dispatch({ type: 'fail', clientId: entry.clientId })
         setAlert({
@@ -109,10 +139,9 @@ export function useTriageSession({ scope, queueFrom, library, libraryReady, filt
   const top = topOf(state, library)
   const topId = top?.id ?? null
 
-  /** Returns the decision's client id, or undefined if nothing was decided. */
-  const decide = useCallback((pile: Pile, o: { reason?: string; note?: string; fivecs?: number | null; clock?: Clock } = {}): string | undefined => {
+  const decide = useCallback((pile: Pile, o: { reason?: string; note?: string; fivecs?: number | null; clock?: Clock } = {}) => {
     const paper = topOf(live.current.state, live.current.library)
-    if (!paper) return undefined
+    if (!paper) return
     setAlert(null) // a stale failure alert must not outlive a new decision
     const clientId = crypto.randomUUID()
     let body: TriageDecisionIn
@@ -120,7 +149,7 @@ export function useTriageSession({ scope, queueFrom, library, libraryReady, filt
       body = buildDecision({ pile, sessionId, clientId, reason: o.reason, note: o.note, fivecs: o.fivecs, clock: o.clock ?? NO_CLOCK })
     } catch {
       setAlert({ message: NEEDS_REASON })
-      return undefined
+      return
     }
     bodies.current.set(clientId, body)
     const entry: DoneEntry = { id: paper.id, clientId, pile, before: { triage: paper.triage, pass: paper.reading_pass }, eventId: null, status: 'pending' }
@@ -129,27 +158,22 @@ export function useTriageSession({ scope, queueFrom, library, libraryReady, filt
     const text = say.decided(paper, pile, o.reason, progress(s).decided + (pile === 'skip' ? 0 : 1), s.total)
     note.current = { text, exclusive: false }
     setAnnouncement(text)
+    setOfferFor(offersReason(pile) ? clientId : null)
     write(entry)
-    return clientId
   }, [sessionId, write])
 
-  /** The optional chip: adds the reason to that decision's event. A failure is only a message; the decision stands. */
+  /** The optional chip: adds the reason to the event of the decision on offer. */
   const addReason = useCallback((clientId: string, reason: string) => {
     const entry = live.current.state.done.find((d) => d.clientId === clientId)
-    if (!entry) return
-    setAnnouncement(say.reasonAdded(entry.pile, reason))
-    bump(1)
-    void writer.current!.reason(entry, reason).then((res) => {
-      bump(-1)
-      if (res.status === 'saved') void invalidate(entry.id)
-      else if (res.status === 'failed') setAlert({ message: `Couldn't add the reason: ${reasonOf(res.error)}. The decision is saved.` })
-    })
+    setOfferFor(null)
+    if (entry) sendReason(entry, reason)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const undo = useCallback(() => {
     const entry = live.current.state.done.at(-1)
     if (!entry) return
+    setOfferFor(null)
     const paper = paperOf(entry.id)
     if (paper) {
       note.current = { text: say.undone(paper), exclusive: true }
@@ -244,6 +268,7 @@ export function useTriageSession({ scope, queueFrom, library, libraryReady, filt
   const { notReady, failed } = useMemo(() => buildQueue(queueFrom, { order, seed: seed.current, includeDecided, exclude: new Set() }), [queueFrom, order, includeDecided])
 
   return {
+    offer: state.done.find((d) => d.clientId === offerFor) ?? null, closeOffer,
     state, top, sessionId, notReady, failed, alert, announcement, pending, canReviewSkipped: pending === 0, canStartOver: pending === 0,
     decide, addReason, announce: setAnnouncement, undo, skip, setOrder, setIncludeDecided, reviewSkipped, addNew, startOver, dismissAlert: () => setAlert(null),
   }

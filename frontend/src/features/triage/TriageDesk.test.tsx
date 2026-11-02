@@ -2,7 +2,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeAll, expect, it, vi } from 'vitest'
-import type { Paper } from '@/api/client'
+import { api, type Paper } from '@/api/client'
 vi.mock('./pdfCache', () => ({ useCachedPdf: () => ({ doc: null, error: null }), retainOnly: vi.fn(), prefetchPdf: vi.fn() }))
 vi.mock('../reader/PdfPage', () => ({ PdfPage: () => null }))
 import { TriageDesk } from './TriageDesk'
@@ -68,17 +68,19 @@ it('opens with its saved order', () => {
   expect(screen.getByRole('heading', { name: 'New one' })).toBeInTheDocument()
 })
 
-it('says so when everything is already decided, with two ways forward', () => {
+it('says so when everything is already decided, with two ways forward', async () => {
+  vi.spyOn(api, 'triageSummary').mockResolvedValue({ per_pile: {}, skipped: 0, card_ms: 0, pdf_opened: 0, decided: 0 } as never)
   const onExit = setup([mk('1', 'Done', { triage: 'keep' })])
-  expect(screen.getByText('Nothing to triage here. Every paper in this view already has a decision.')).toBeInTheDocument()
+  expect(await screen.findByText('Nothing to triage here. Every paper in this view already has a decision.')).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: 'Include decided papers' }))
   expect(screen.getByRole('heading', { name: 'Done' })).toBeInTheDocument()
   expect(onExit).not.toHaveBeenCalled()
 })
 
-it('Back to the list leaves', () => {
+it('Back to the list leaves', async () => {
+  vi.spyOn(api, 'triageSummary').mockResolvedValue({ per_pile: {}, skipped: 0, card_ms: 0, pdf_opened: 0, decided: 0 } as never)
   const onExit = setup([mk('1', 'Done', { triage: 'keep' })])
-  fireEvent.click(screen.getByRole('button', { name: 'Back to the list' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Back to the list' }))
   expect(onExit).toHaveBeenCalledTimes(1)
 })
 

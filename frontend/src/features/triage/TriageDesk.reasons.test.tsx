@@ -2,7 +2,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest'
-import { api, type Paper } from '@/api/client'
+import { api, ApiError, type Paper } from '@/api/client'
 vi.mock('./pdfCache', () => ({ useCachedPdf: () => ({ doc: null, error: null }), retainOnly: vi.fn(), prefetchPdf: vi.fn() }))
 vi.mock('../reader/PdfPage', () => ({ PdfPage: () => null }))
 import { TriageDesk } from './TriageDesk'
@@ -14,11 +14,12 @@ beforeAll(() => {
 })
 let decide: ReturnType<typeof vi.spyOn>
 let patch: ReturnType<typeof vi.spyOn>
+let undo: ReturnType<typeof vi.spyOn>
 beforeEach(() => {
   let n = 0
   decide = vi.spyOn(api, 'decideTriage').mockImplementation((async () => ({ event: { id: `e${++n}` } })) as never)
   patch = vi.spyOn(api, 'addTriageReason').mockResolvedValue({} as never)
-  vi.spyOn(api, 'undoTriage').mockResolvedValue({} as never)
+  undo = vi.spyOn(api, 'undoTriage').mockResolvedValue({} as never)
   vi.spyOn(api, 'triageSummary').mockResolvedValue({ per_pile: {}, skipped: 0, card_ms: 0, pdf_opened: 0, decided: 0 } as never)
   vi.spyOn(api, 'paperSections').mockReturnValue(new Promise(() => {}) as never)
 })
@@ -66,7 +67,7 @@ it('8 adds the reason to the event just written and closes the row, keeping focu
   expect(row()).toBeNull()
   await waitFor(() => expect(patch).toHaveBeenCalledWith('e1', 'related_work'))
   expect(root).toHaveFocus()
-  expect(live()).toBe('Reason added: related work.')
+  await waitFor(() => expect(live()).toBe('Reason added: related work.'))
   expect(decide).toHaveBeenCalledTimes(1)
 })
 
@@ -197,6 +198,7 @@ it('a failed PATCH says so plainly and never blocks: the decision stands and the
   const alert = await screen.findByRole('alert')
   expect(alert).toHaveTextContent("Couldn't add the reason: too late. The decision is saved.")
   expect(within(alert).queryByRole('button')).toBeNull()
+  expect(live()).not.toContain('Reason added')
   expect(title()).toBe('Middle')
   expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '1')
   key(root, '1')
@@ -236,4 +238,149 @@ it('at phone width the chips are tall enough to press', () => {
   key(root, '2')
   expect(screen.getByRole('button', { name: '7 background only' })).toHaveClass('min-h-11')
   window.innerWidth = 1024
+})
+
+const REASON_WAITS = "The reason you picked wasn't saved; Retry sends it too."
+
+it('says Reason added only once the PATCH has succeeded', async () => {
+  let release!: (v: unknown) => void
+  patch.mockImplementationOnce((() => new Promise((r) => { release = r })) as never)
+  const root = setup()
+  key(root, '2')
+  key(root, '8')
+  await waitFor(() => expect(patch).toHaveBeenCalled())
+  await flush()
+  expect(live()).not.toContain('Reason added')
+  release({})
+  await waitFor(() => expect(live()).toBe('Reason added: related work.'))
+})
+
+it('a chip on a decision whose POST fails says the reason was not saved, and Retry sends it after the decision', async () => {
+  decide.mockRejectedValueOnce(new Error('boom'))
+  const root = setup()
+  key(root, '2')
+  key(root, '8')
+  await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(`Couldn't save: boom ${REASON_WAITS}`))
+  expect(live()).not.toContain('Reason added')
+  expect(patch).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+  await waitFor(() => expect(patch).toHaveBeenCalledWith('e1', 'related_work'))
+  expect(patch).toHaveBeenCalledTimes(1)
+  await waitFor(() => expect(live()).toBe('Reason added: related work.'))
+})
+
+it('a Retry that fails again still says the reason was not saved, and one that then works sends it once', async () => {
+  decide.mockRejectedValueOnce(new Error('boom')).mockRejectedValueOnce(new Error('again'))
+  const root = setup()
+  key(root, '2')
+  key(root, '8')
+  await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(REASON_WAITS))
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+  await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(`Couldn't save: again ${REASON_WAITS}`))
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+  await waitFor(() => expect(patch).toHaveBeenCalledTimes(1))
+})
+
+it('a fresh decision on the returned card does not inherit the reason', async () => {
+  decide.mockRejectedValueOnce(new Error('boom'))
+  const root = setup()
+  key(root, '2')
+  key(root, '8')
+  await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(REASON_WAITS))
+  key(root, '1')
+  await waitFor(() => expect(decide).toHaveBeenCalledTimes(2))
+  await flush()
+  expect(patch).not.toHaveBeenCalled()
+})
+
+it('a chip on a decision already undone stays quiet when its POST fails', async () => {
+  decide.mockRejectedValueOnce(new Error('boom'))
+  const root = setup()
+  key(root, '2')
+  key(root, '8')
+  key(root, 'u')
+  await waitFor(() => expect(decide).toHaveBeenCalled())
+  await flush()
+  expect(screen.queryByRole('alert')).toBeNull()
+  expect(patch).not.toHaveBeenCalled()
+})
+
+it('a failed decision keeps its row closed after Retry: no stale row with a fresh timer', async () => {
+  decide.mockRejectedValueOnce(new Error('boom'))
+  const root = setup()
+  key(root, '2')
+  await screen.findByRole('alert')
+  expect(row()).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+  expect(title()).toBe('Middle')
+  expect(row()).toBeNull()
+  await waitFor(() => expect(decide).toHaveBeenCalledTimes(2))
+  await flush()
+  expect(row()).toBeNull()
+})
+
+it('an older decision failing leaves the newer decision\'s row alone', async () => {
+  decide.mockRejectedValueOnce(new Error('boom'))
+  const root = setup()
+  key(root, '2')
+  key(root, '1')
+  await screen.findByRole('alert')
+  expect(row()).toHaveAccessibleName('Why Read closely? Optional')
+})
+
+it('an undo that fails puts the decision back without its row', async () => {
+  undo.mockRejectedValueOnce(new Error('boom'))
+  const root = setup()
+  key(root, '2')
+  await waitFor(() => expect(decide).toHaveBeenCalled())
+  await flush()
+  key(root, 'u')
+  await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent("Couldn't undo: boom"))
+  expect(title()).toBe('Middle')
+  expect(row()).toBeNull()
+})
+
+it('an undo refused as changed elsewhere brings no row back either', async () => {
+  undo.mockRejectedValueOnce(new ApiError('changed', 409, { detail: 'changed_since' }))
+  const root = setup()
+  key(root, '2')
+  await waitFor(() => expect(decide).toHaveBeenCalled())
+  await flush()
+  key(root, 'u')
+  await screen.findByRole('alert')
+  expect(row()).toBeNull()
+})
+
+const chipOf = () => screen.getByRole('button', { name: '7 background only' })
+
+it('focus on a chip holds the row; losing it gives a fresh 4 s', () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  const root = setup()
+  key(root, '2')
+  act(() => { chipOf().focus() })
+  act(() => { vi.advanceTimersByTime(20_000) })
+  expect(row()).not.toBeNull()
+  act(() => { chipOf().blur() })
+  act(() => { vi.advanceTimersByTime(3900) })
+  expect(row()).not.toBeNull()
+  act(() => { vi.advanceTimersByTime(200) })
+  expect(row()).toBeNull()
+})
+
+it('the pointer leaving does not restart the timer under a focused chip, nor blur under a hovering pointer', () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  const root = setup()
+  key(root, '2')
+  act(() => { chipOf().focus() })
+  fireEvent.pointerEnter(row()!)
+  fireEvent.pointerLeave(row()!)
+  act(() => { vi.advanceTimersByTime(20_000) })
+  expect(row()).not.toBeNull()
+  fireEvent.pointerEnter(row()!)
+  act(() => { chipOf().blur() })
+  act(() => { vi.advanceTimersByTime(20_000) })
+  expect(row()).not.toBeNull()
+  fireEvent.pointerLeave(row()!)
+  act(() => { vi.advanceTimersByTime(4100) })
+  expect(row()).toBeNull()
 })
