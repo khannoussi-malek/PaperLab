@@ -349,3 +349,17 @@ async def test_the_gate_and_the_picker_treat_a_cloud_tag_as_remote(session):
         await connections.refuse_unconfirmed_remote(session, False, model.id)
     shown = [m for m in await connections.list_chat_models(session) if m.id == model.id]
     assert [m.is_local for m in shown] == [False]
+
+
+async def test_the_question_for_a_cloud_tag_names_ollama_not_localhost(session):
+    from app.core.errors import Conflict
+
+    c = LLMConnection(kind="ollama", label=f"Loc {uuid.uuid4().hex[:6]}", base_url="http://localhost:11434")
+    session.add(c)
+    await session.flush()
+    model = LLMModel(connection_id=c.id, name="x:cloud")
+    session.add(model)
+    await session.flush()
+    with pytest.raises(Conflict) as refused:
+        await connections.refuse_unconfirmed_remote(session, False, model.id)
+    assert refused.value.details["host"] == "ollama.com"

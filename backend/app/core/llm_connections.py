@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 KEY_HINT_CHARS = 4
 KEY_HINT_MIN_LENGTH = 8
 LOCAL_HOSTS = {"localhost", "host.docker.internal"}
+OLLAMA_CLOUD_HOST = "ollama.com"
 SEED_LABELS = {"ollama": "Ollama", "anthropic": "Anthropic"}
 
 # D151: embedding_source's foreign key would refuse the delete anyway, as a 500; this says why and where to go.
@@ -66,6 +67,15 @@ def key_hint(api_key: str | None) -> str | None:
     return api_key[-KEY_HINT_CHARS:] if api_key and len(api_key) >= KEY_HINT_MIN_LENGTH else None
 
 
+def _ollama_cloud(kind: str, model: str | None) -> bool:
+    return kind == "ollama" and bool(model) and model.endswith((":cloud", "-cloud"))
+
+
+def remote_host(kind: str, base_url: str | None, model: str | None) -> str:
+    """Where the text really goes, for the question asked before sending it."""
+    return OLLAMA_CLOUD_HOST if _ollama_cloud(kind, model) else host_of(base_url)
+
+
 def is_local(kind: str, base_url: str | None, cloud_proxy: bool = False, model: str | None = None) -> bool:
     """True for localhost, host.docker.internal, or a loopback or private IP. Anthropic is never local, and neither is
     a server that answered as a cloud router (`cloud_proxy`, set when its model list is read), nor an Ollama `:cloud`
@@ -75,7 +85,7 @@ def is_local(kind: str, base_url: str | None, cloud_proxy: bool = False, model: 
     """
     if kind == "anthropic" or base_url is None or cloud_proxy:
         return False
-    if kind == "ollama" and model and model.endswith((":cloud", "-cloud")):
+    if _ollama_cloud(kind, model):
         return False
     host = urlsplit(base_url).hostname or ""
     if host in LOCAL_HOSTS:
@@ -310,7 +320,9 @@ async def refuse_unconfirmed_remote(
     connection, model = await resolve(session, model_id)
     if not confirmed and not is_local(connection.kind, connection.base_url, connection.cloud_proxy, model.name):
         raise Conflict(
-            "remote_model_needs_confirm", model=f"{connection.label} · {model.name}", host=host_of(connection.base_url)
+            "remote_model_needs_confirm",
+            model=f"{connection.label} · {model.name}",
+            host=remote_host(connection.kind, connection.base_url, model.name),
         )
     return connection, model
 
