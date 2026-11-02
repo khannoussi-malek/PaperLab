@@ -134,6 +134,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
   const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX)
   const scale = ZOOM_STEPS[zoomIndex]
   const [draft, setDraft] = useState<SelectionAnchor | null>(null)
+  const [wholePaperDraft, setWholePaperDraft] = useState<{ kind: NoteKind | null } | null>(null)
   const [numberDraft, setNumberDraft] = useState<SelectionAnchor | null>(null)
   const [draftColor, setDraftColor] = useState(() => loadLastColor(browserStorage()))
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null)
@@ -264,16 +265,18 @@ export function ReaderPage({ paperId, tab, target }: Props) {
     if (anchor) {
       setError(null)
       setDraft(anchor)
+      setWholePaperDraft(null)
       if (tab !== 'notes') showTab('notes') // the composer lives on the Notes tab
     }
   }
 
-  async function saveDraft(body: string, color: string = draftColor): Promise<boolean> {
+  async function saveDraft(body: string, kind: NoteKind | null = null, color: string = draftColor): Promise<boolean> {
     if (!draft) return false
+    const kindField = kind ? { kind } : {}
     // A paper without a PDF has no page to anchor on: the note goes on the paper, its body led by the abstract's words.
     const note = noPdf
-      ? { body, color, paper_id: paperId, quote: draft.quotedText }
-      : { body, color, anchor: { paper_id: paperId, page: draft.page, bbox: draft.rects, quoted_text: draft.quotedText } }
+      ? { body, color, paper_id: paperId, quote: draft.quotedText, ...kindField }
+      : { body, color, anchor: { paper_id: paperId, page: draft.page, bbox: draft.rects, quoted_text: draft.quotedText }, ...kindField }
     const saved = await attempt(() => mutations.create.mutateAsync(note))
     if (saved) {
       saveLastColor(browserStorage(), color)
@@ -283,12 +286,22 @@ export function ReaderPage({ paperId, tab, target }: Props) {
     return saved
   }
 
-  const savePaperNote = (body: string) =>
-    attempt(() => mutations.create.mutateAsync({ body, color: draftColor, paper_id: paperId }))
+  async function savePaperNote(body: string, kind: NoteKind | null): Promise<boolean> {
+    const saved = await attempt(() =>
+      mutations.create.mutateAsync({ body, color: draftColor, paper_id: paperId, ...(kind ? { kind } : {}) }),
+    )
+    if (saved && !noPdf) setWholePaperDraft(null) // without a PDF the composer is permanent
+    return saved
+  }
+
+  function newPaperNote() {
+    setDraft(null)
+    setWholePaperDraft({ kind: null })
+  }
 
   async function highlightDraft(color: string) {
     setDraftColor(color)
-    await saveDraft('', color)
+    await saveDraft('', null, color)
   }
 
   const updateNoteBody = (note: Note, body: string, kind?: NoteKind | null) =>
@@ -602,6 +615,9 @@ export function ReaderPage({ paperId, tab, target }: Props) {
             paperId={paperId}
             hasPdf={!noPdf}
             hasAbstract={Boolean(paper.data?.abstract)}
+            wholePaperDraft={wholePaperDraft}
+            onNewPaperNote={newPaperNote}
+            onCancelPaperNote={() => setWholePaperDraft(null)}
             onSavePaperNote={savePaperNote}
             notes={notes}
             draft={draft}
