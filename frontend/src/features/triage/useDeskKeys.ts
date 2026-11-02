@@ -1,9 +1,15 @@
 import { useEffect, useRef, type RefObject } from 'react'
-import { pileForKey, type Pile } from './piles'
+import { LATE_CHIP_KEYS, pileForKey, type Pile } from './piles'
 
 export type DeskKeyHandlers = {
   /** The reason chips are showing: 1-6 are reasons and the other pile keys sleep. */
   reasonsShowing: boolean
+  /** The optional chips are showing: 7, 8, 9 pick them and 1-5 stay pile keys, so nobody tags a paper by reading fast. */
+  lateShowing: boolean
+  /** The five Cs are open: 1-5 tick them; arrows and Space still decide. */
+  fiveCsOpen: boolean
+  toggleFiveCs: () => void
+  onTick: (n: number) => void
   helpOpen: boolean
   onPile: (pile: Pile) => void
   onReason: (n: number) => void
@@ -38,6 +44,7 @@ function cycleRegions(root: HTMLElement, back: boolean) {
  * The desk's ONE keydown listener, on the desk root (a native one, so portalled popups never reach it).
  * Pile keys (arrows, 1-5, Space) and A fire only outside buttons, fields, the abstract and the PDF column;
  * there only Esc, P, F6, ? and U are the desk's; in a text field only Esc is. Other chords are ignored.
+ * What digits mean, first match wins: required chips (1-6); optional chips (7-9, the rest fall through); open five Cs (1-5); piles.
  */
 export function useDeskKeys(rootRef: RefObject<HTMLElement | null>, handlers: DeskKeyHandlers) {
   const latest = useRef(handlers)
@@ -61,6 +68,7 @@ export function useDeskKeys(rootRef: RefObject<HTMLElement | null>, handlers: De
         if (h.reasonsShowing) h.cancelReason()
         else if (h.helpOpen) h.closeHelp()
         else if (target.closest(SCROLLERS)) root.focus() // out of the PDF or abstract, back to the desk, not out of it
+        else if (h.fiveCsOpen) h.toggleFiveCs()
         else h.exit()
         return
       }
@@ -83,6 +91,10 @@ export function useDeskKeys(rootRef: RefObject<HTMLElement | null>, handlers: De
         if (/^[1-6]$/.test(k)) { done(); h.onReason(Number(k)) }
         return
       }
+      const chip = h.lateShowing ? (LATE_CHIP_KEYS as readonly string[]).indexOf(k) : -1
+      if (chip !== -1) { done(); h.onReason(chip + 1); return }
+      if (lower === 'c') { done(); h.toggleFiveCs(); return }
+      if (h.fiveCsOpen && /^[1-5]$/.test(k)) { done(); h.onTick(Number(k)); return }
       if (lower === 'a') { done(); h.focusAbstract(); return }
       const pile = pileForKey(k)
       if (pile) { done(); h.onHold?.(pile); h.onPile(pile) }

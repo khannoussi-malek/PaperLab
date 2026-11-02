@@ -55,7 +55,7 @@ it('says each outcome in its exact words and the progress follows', () => {
   const { root } = setup()
   expect(decided()).toBe('0')
   key(root, '1')
-  expect(live()).toBe('Old one. Read closely. 1 of 3 done. Middle. Paper 2 of 3. Undecided. Abstract below.')
+  expect(live()).toBe('Old one. Read closely. 1 of 3 done. Reason optional: 7, 8 or 9. Middle. Paper 2 of 3. Undecided. Abstract below.')
   expect(decided()).toBe('1')
   key(root, 'u')
   expect(live()).toBe('Old one. Decision undone. Undecided.')
@@ -291,4 +291,30 @@ it('Start over waits for pending saves: disabled with a reason, enabled once the
   expect(screen.getByRole('button', { name: 'Start over' })).toBeDisabled()
   release({ event: { id: 'late' } })
   await waitFor(() => expect(screen.getByRole('button', { name: 'Start over' })).toBeEnabled())
+})
+
+const decidedPapers = base.map((p) => ({ ...p, triage: 'keep' })) as Paper[]
+function setupAllDecided() {
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <TriageDesk papers={decidedPapers} library={decidedPapers} scope="library" sourceLabel="your library" filterKey="" onExit={vi.fn()} onShowKept={vi.fn()} />
+    </QueryClientProvider>,
+  )
+}
+
+it('a reload of a finished session still shows its summary, read from the server', async () => {
+  sessionStorage.setItem('paperlab-triage-session:library', 'session-1')
+  setupAllDecided()
+  expect(await screen.findByText('That is the whole stack.')).toBeInTheDocument()
+  expect(await screen.findByText('PDF opened for 0 of 2')).toBeInTheDocument()
+  expect(api.triageSummary).toHaveBeenCalledWith('session-1')
+  expect(screen.queryByText(/Nothing to triage/)).toBeNull()
+})
+
+it('a new session over decided papers is the empty state, not a summary of nothing', async () => {
+  vi.mocked(api.triageSummary).mockResolvedValue({ per_pile: {}, skipped: 0, card_ms: 0, pdf_opened: 0, decided: 0 } as never)
+  setupAllDecided()
+  expect(await screen.findByText(/Nothing to triage/)).toBeInTheDocument()
+  await waitFor(() => expect(api.triageSummary).toHaveBeenCalled())
+  expect(screen.queryByText('That is the whole stack.')).toBeNull()
 })

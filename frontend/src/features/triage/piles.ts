@@ -1,4 +1,5 @@
 import type { TriageDecisionIn } from '@/api/client'
+import { PASSES } from '@/features/reading/passes'
 
 export type Pile = 'read_closely' | 'skim' | 'later' | 'not_relevant' | 'skip'
 type Triage = 'keep' | 'later' | 'drop' | null
@@ -25,6 +26,14 @@ export const REASONS: Record<Pile, readonly { key: string; label: string }[]> = 
   not_relevant: [r('off_topic', 'off-topic'), r('wrong_method', 'wrong method'), r('low_quality', 'low quality'), r('duplicate'), r('already_known', 'already known'), r('other')],
   skip: [],
 }
+
+/** The piles whose chips are optional and come after the decision. Not relevant asks before it; Skip has none. */
+export const offersReason = (pile: Pile) => pile !== 'not_relevant' && REASONS[pile].length > 0
+/** Above the pile keys on purpose: 1-5 always decide the next paper, so reading fast can never tag the last one by mistake. */
+export const LATE_CHIP_KEYS = ['7', '8', '9'] as const
+
+/** In bit order: `fivecs` bit i is FIVE_CS[i]. */
+export const FIVE_CS: readonly string[] = PASSES[0].fiveCs ?? []
 
 export function pileForKey(key: string): Pile | null {
   return PILE_ORDER.find((p) => key === PILES[p].arrow || key === String(PILES[p].key)) ?? null
@@ -54,6 +63,7 @@ export function buildDecision(a: {
   clientId: string
   reason?: string
   note?: string
+  fivecs?: number | null
   clock: { card_ms: number; pdf_ms: number; pdf_opened: boolean }
 }): TriageDecisionIn {
   if (a.pile === 'not_relevant' && !a.reason) throw new Error('A not-relevant decision needs a reason')
@@ -63,6 +73,7 @@ export function buildDecision(a: {
     client_id: a.clientId,
     ...(a.reason ? { reason: a.reason } : {}),
     ...(a.note ? { note: a.note } : {}),
+    ...(a.fivecs === null || a.fivecs === undefined ? {} : { fivecs: a.fivecs }),
     pdf_opened: a.clock.pdf_opened,
     pdf_ms: Math.round(a.clock.pdf_ms),
     card_ms: Math.round(a.clock.card_ms),

@@ -8,7 +8,7 @@ export const switchTo = (page: Page, name: 'List' | 'Deck' | 'Triage') =>
 export const rowOf = (page: Page, id: string) => page.locator(`li.paper-row[data-paper-id="${id}"]`)
 export const pdfColumn = (page: Page) => page.locator('section[aria-label="PDF"]')
 
-export type TriageEvent = { pile: string | null; reason: string | null; source: string; pdf_opened: boolean; pdf_ms: number | null; card_ms: number | null }
+export type TriageEvent = { pile: string | null; reason: string | null; fivecs: number | null; source: string; pdf_opened: boolean; pdf_ms: number | null; card_ms: number | null }
 
 /** The id of the paper on top of the stack, from the card's own title id. */
 export async function topId(page: Page): Promise<string> {

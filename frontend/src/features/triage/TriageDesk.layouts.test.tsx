@@ -180,3 +180,12 @@ it('F6 skips the hidden PDF panel: card, then controls', async () => {
   fireEvent.keyDown(root, { key: 'F6' })
   expect(regions().at(-1)).toHaveFocus() // the controls, not the PDF section inside the hidden panel
 })
+
+it('C on the PDF tab comes back to the paper, so the checklist is never opened out of sight', () => {
+  const root = setup(900)
+  fireEvent.click(pdfTab())
+  expect(pdfTab()).toHaveAttribute('aria-selected', 'true')
+  fireEvent.keyDown(root, { key: 'c' })
+  expect(screen.getByRole('tab', { name: 'Paper' })).toHaveAttribute('aria-selected', 'true')
+  expect(screen.getAllByRole('checkbox')).toHaveLength(5)
+})

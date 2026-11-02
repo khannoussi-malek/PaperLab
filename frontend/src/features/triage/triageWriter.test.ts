@@ -14,11 +14,13 @@ const e = (id: string) => ({ id, clientId: `c-${id}` })
 function setup() {
   const posts: { id: string; d: ReturnType<typeof deferred<{ eventId: string }>> }[] = []
   const undos: { eventId: string; d: ReturnType<typeof deferred<unknown>> }[] = []
+  const reasons: { eventId: string; reason: string; d: ReturnType<typeof deferred<unknown>> }[] = []
   const w = createWriter({
     post: (entry: ReturnType<typeof e>) => { const d = deferred<{ eventId: string }>(); posts.push({ id: entry.id, d }); return d.promise },
     undo: (eventId: string) => { const d = deferred<unknown>(); undos.push({ eventId, d }); return d.promise },
+    reason: (eventId: string, reason: string) => { const d = deferred<unknown>(); reasons.push({ eventId, reason, d }); return d.promise },
   })
-  return { w, posts, undos }
+  return { w, posts, undos, reasons }
 }
 
 describe('createWriter', () => {
@@ -106,5 +108,53 @@ describe('createWriter', () => {
     await flush()
     undos[1].d.reject(new ApiError('done', 409, { detail: 'already_undone' }))
     expect(await u2).toEqual({ status: 'saved', eventId: 'ea' })
+  })
+
+  it('a reason waits for its decision\'s event id, and the next write waits for the reason', async () => {
+    const { w, posts, reasons } = setup()
+    const d = w.decide(e('a'))
+    const r = w.reason(e('a'), 'related_work')
+    const next = w.decide(e('b'))
+    await flush()
+    expect(reasons).toHaveLength(0)
+    posts[0].d.resolve({ eventId: 'ea' })
+    await d
+    await flush()
+    expect(reasons.map((x) => [x.eventId, x.reason])).toEqual([['ea', 'related_work']])
+    expect(posts).toHaveLength(1)
+    reasons[0].d.resolve({})
+    expect(await r).toEqual({ status: 'saved', eventId: 'ea' })
+    await flush()
+    expect(posts).toHaveLength(2)
+    posts[1].d.resolve({ eventId: 'eb' })
+    await next
+  })
+
+  it('a reason on a decision that failed is a noop and sends nothing', async () => {
+    const { w, posts, reasons } = setup()
+    const d = w.decide(e('a'))
+    const r = w.reason(e('a'), 'related_work')
+    await flush()
+    posts[0].d.reject(new Error('offline'))
+    await d
+    expect(await r).toEqual({ status: 'noop' })
+    expect(reasons).toHaveLength(0)
+  })
+
+  it('a reason that fails reports it and later writes still go', async () => {
+    const { w, posts, reasons } = setup()
+    const d = w.decide(e('a'))
+    await flush()
+    posts[0].d.resolve({ eventId: 'ea' })
+    await d
+    const r = w.reason(e('a'), 'related_work')
+    const next = w.decide(e('b'))
+    await flush()
+    const boom = new Error('late')
+    reasons[0].d.reject(boom)
+    expect(await r).toEqual({ status: 'failed', error: boom })
+    await flush()
+    posts[1].d.resolve({ eventId: 'eb' })
+    expect((await next).status).toBe('saved')
   })
 })

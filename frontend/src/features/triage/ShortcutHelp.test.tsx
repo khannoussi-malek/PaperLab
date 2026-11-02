@@ -17,3 +17,12 @@ it('calls returnFocus when the help closes', async () => {
   fireEvent.keyDown(await screen.findByRole('dialog'), { key: 'Escape' })
   await waitFor(() => expect(back).toHaveBeenCalledTimes(1))
 })
+
+it('explains C and the optional chip keys, and that 1 to 5 still decide while those chips show', async () => {
+  render(<ShortcutHelp open onOpenChange={vi.fn()} />)
+  const text = (await screen.findByRole('dialog')).textContent ?? ''
+  expect(text).toContain('Open or close the five Cs; while open, 1 to 5 tick them')
+  expect(text).toContain('7, 8, 9')
+  expect(text).toContain('1 to 5 still decide the next paper')
+  expect(text).toContain('close the five Cs')
+})
