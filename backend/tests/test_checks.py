@@ -399,6 +399,26 @@ async def test_a_replaced_chunk_resolves_to_none(session):
     assert view.sources and all(s is None for s in view.sources)
 
 
+async def test_a_line_dropped_live_stays_dropped_after_the_chunks_are_replaced(session):
+    from app.core import papers
+
+    paper, chunks = await paper_with_headings(session, HEADINGS)
+    note = await note_on(session, paper)
+    copied = " ".join(chunks[0].text.split()[:8])
+    content = f"Missing: {copied} [C1]\nSupported: it holds on every task [C2]"
+    await check_on(session, note, content)
+    [before] = await checks.list_checks(session, paper.id)
+    assert ([line.verdict for line in before.lines], before.dropped) == (["supported"], 1)
+
+    drafts = [ChunkDraft(c.ordinal, c.page, c.bbox, c.section_title, c.text) for c in chunks]
+    await papers.replace_chunks(session, paper.id, drafts)
+
+    [after] = await checks.list_checks(session, paper.id)
+    assert ([line.verdict for line in after.lines], after.dropped) == (["supported"], 1)
+    stored = (await session.get(LLMOutput, before.output.id)).check_result
+    assert stored["dropped"] == 1 and stored["lines"][0]["verdict"] == "supported"
+
+
 async def test_deleting_a_note_deletes_its_checks(session):
     paper, _ = await paper_with_headings(session, HEADINGS)
     note, kept = await note_on(session, paper), await note_on(session, paper, body="Keep my check please.")
