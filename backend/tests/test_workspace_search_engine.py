@@ -1120,7 +1120,7 @@ async def test_prisma_combined_counts_the_full_funnel(session):
     assert result.runs == [
         {
             "id": str(run.id), "query_text": run.query_text, "filters_json": run.filters_json,
-            "started_at": run.started_at.isoformat(), "sources_searched": [], "sources_not_searched": [],
+            "started_at": run.started_at.isoformat(), "sources_searched": ["arxiv"], "sources_not_searched": [],
         }
     ]
 
