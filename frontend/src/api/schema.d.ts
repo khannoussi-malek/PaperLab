@@ -2534,6 +2534,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/embedding/hybrid": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set Hybrid Search */
+        put: operations["set_hybrid_search_api_embedding_hybrid_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/embedding/source": {
         parameters: {
             query?: never;
@@ -3922,6 +3939,8 @@ export interface components {
         EmbeddingStatusOut: {
             /** Model */
             model: string;
+            /** Hybrid Search */
+            hybrid_search: boolean;
             /** Chunks */
             chunks: number;
             /** Indexed With */
@@ -4342,6 +4361,16 @@ export interface components {
             priority?: number | null;
             /** Topic Fit */
             topic_fit?: ("same_topic" | "related_topic" | "different_topic" | "out_of_scope") | null;
+        };
+        /** HybridIn */
+        HybridIn: {
+            /** Enabled */
+            enabled: boolean;
+        };
+        /** HybridOut */
+        HybridOut: {
+            /** Hybrid Search */
+            hybrid_search: boolean;
         };
         /**
          * ImportCountsOut
@@ -12421,6 +12450,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EmbeddingStatusOut"];
+                };
+            };
+        };
+    };
+    set_hybrid_search_api_embedding_hybrid_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HybridIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HybridOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

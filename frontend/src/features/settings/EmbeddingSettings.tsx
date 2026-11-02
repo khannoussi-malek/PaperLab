@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import { indexedLine, staleChunks } from './embeddingStatus'
+import { HybridSearchSwitch } from './HybridSearchSwitch'
 import { SearchRebuild, SourceError } from './SearchRebuild'
 import { CloudTag, SearchSourcePicker } from './SearchSourcePicker'
 import { reindexDialog, sourceLine } from './searchSources'
@@ -63,6 +64,7 @@ export function EmbeddingSettings() {
           <SearchSourcePicker key={`${data.source.kind}:${data.source.connection_id}:${data.source.model}`} status={data} />
           <SearchRebuild />
           <SourceError />
+          <HybridSearchSwitch enabled={data.hybrid_search} />
 
           {indexedLine(data) && <p className="embedding-indexed text-xs tabular-nums text-muted-foreground">{indexedLine(data)}</p>}
           {staleChunks(data) > 0 && data.rebuild === null && (

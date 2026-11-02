@@ -1,5 +1,5 @@
-"""Top-k over chunks, by vector or fused with a keyword ranking (HYBRID_SEARCH), scoped to papers or a workspace, with a
-per-paper diversity cap."""
+"""Top-k over chunks, by vector or fused with a keyword ranking (the Settings → Search switch), scoped to papers or a
+workspace, with a per-paper diversity cap."""
 
 import asyncio
 import uuid
@@ -13,7 +13,7 @@ from app.config import settings
 from app.core import embedding_index, embedding_sources
 from app.core.errors import Conflict
 from app.core.papers import ABSTRACT_PAGE
-from app.models import workspace_papers
+from app.models import EmbeddingSource, workspace_papers
 from app.providers import embedding
 from app.providers.base import LLMError, LLMUnavailable, TextEmbedder
 
@@ -100,6 +100,11 @@ WHERE nth <= :per_paper
 ORDER BY score DESC, distance
 LIMIT :k
 """
+
+
+async def hybrid_on(session: AsyncSession) -> bool:
+    """The Settings → Search switch. HYBRID_SEARCH forces it on, for the evals that compare both modes."""
+    return settings.hybrid_search or bool(await session.scalar(select(EmbeddingSource.hybrid_search)))
 
 
 def _nearest(in_papers: bool, in_chunks: bool, hybrid: bool = False):
@@ -199,7 +204,7 @@ async def retrieve(
     per_paper: int | None = None,
     chunk_ids: list[uuid.UUID] | None = None,
 ) -> list[RetrievedChunk]:
-    """The k chunks nearest to the query, closest first (with HYBRID_SEARCH and a scope wider than one paper, best
+    """The k chunks nearest to the query, closest first (with hybrid search on and a scope wider than one paper, best
     fused rank first). embedder=None embeds the question with the active search source (query_embedder); a source
     that fails raises Conflict with QUESTION_FAILED's sentence (D155).
 
@@ -230,7 +235,7 @@ async def retrieve(
     params["per_paper"] = k if per_paper is None else per_paper
     # Hybrid only across papers: inside one paper its own topic words are in most chunks, and the single-paper eval
     # lost recall (@4 0.95 -> 0.90, @8 1.00 -> 0.95); the workspace eval gained (@8 10/17 -> 13/17), 2026-11-01.
-    hybrid = settings.hybrid_search and (paper_ids is None or len(paper_ids) > 1)
+    hybrid = (paper_ids is None or len(paper_ids) > 1) and await hybrid_on(session)
     statement = _nearest(paper_ids is not None, chunk_ids is not None, hybrid)
     if hybrid:
         params |= {"question": query, "rrf_k": RRF_K}

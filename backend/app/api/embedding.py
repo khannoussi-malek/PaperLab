@@ -14,7 +14,7 @@ from pydantic import BaseModel, ConfigDict
 
 from app.api.deps import SessionDep, TransportDep
 from app.config import settings
-from app.core import chat, embedding_index, embedding_sources
+from app.core import chat, embedding_index, embedding_sources, retrieval
 from app.core.errors import Conflict, InvalidInput
 from app.core.queue import INGEST_QUEUE
 from app.db import SessionLocal
@@ -61,6 +61,7 @@ class RebuildOut(BaseModel):
 
 class EmbeddingStatusOut(BaseModel):
     model: str
+    hybrid_search: bool  # Settings → Search: also match exact words across papers
     chunks: int
     indexed_with: list[IndexedModelOut]
     model_present: bool  # the built-in search model is downloaded
@@ -122,6 +123,7 @@ async def embedding_status(session: SessionDep) -> EmbeddingStatusOut:
     size = await embedding_index.library_size(session)
     return EmbeddingStatusOut(
         **asdict(await embedding_index.status(session, source.name)),
+        hybrid_search=await retrieval.hybrid_on(session),
         model_present=search_model.present(settings.models_dir, search_model.SHIPPED),
         download_bytes=search_model.download_bytes(settings.models_dir, search_model.SHIPPED),
         unembedded_papers=len(await embedding_index.unembedded_papers(session)),
@@ -133,6 +135,22 @@ async def embedding_status(session: SessionDep) -> EmbeddingStatusOut:
         library_notes=size.notes,
         library_chars=size.chars,
     )
+
+
+class HybridIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool
+
+
+class HybridOut(BaseModel):
+    hybrid_search: bool
+
+
+@router.put("/hybrid")
+async def set_hybrid_search(payload: HybridIn, session: SessionDep) -> HybridOut:
+    await embedding_sources.set_hybrid(session, payload.enabled)
+    return HybridOut(hybrid_search=await retrieval.hybrid_on(session))
 
 
 async def _probe(candidate: embedding_sources.Source, transport) -> None:

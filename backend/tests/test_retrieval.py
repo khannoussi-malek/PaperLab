@@ -416,6 +416,37 @@ def test_hybrid_search_is_off_by_default_and_can_be_switched_on(monkeypatch):
     assert Settings(hybrid_search=True).hybrid_search is True
 
 
+async def test_the_stored_switch_changes_what_a_search_across_papers_finds(session, embedder, monkeypatch):
+    from app.core import embedding_sources  # noqa: PLC0415
+
+    hybrid(monkeypatch, False)  # the env var off: only the stored switch decides
+    question = f"Which dose with {RARE}?"
+    query = unit_vector(uuid.uuid4().hex)
+    embedder.vectors[f"search_query: {question}"] = query
+    near_ones = [(f"Background chunk {i}", 0.1 * (i + 1)) for i in range(6)]
+    chunks = await add_texts(session, query, "Label", [*near_ones, (f"Avoid strong inhibitors such as {RARE}.", 3.0)])
+    scope = [c.id for c in chunks]
+
+    before = await retrieve(session, question, chunk_ids=scope, k=3, embedder=embedder)
+    await embedding_sources.set_hybrid(session, True)
+    after = await retrieve(session, question, chunk_ids=scope, k=3, embedder=embedder)
+
+    assert chunks[-1].id not in {r.id for r in before} and chunks[-1].id in {r.id for r in after}
+
+
+async def test_the_settings_switch_turns_hybrid_search_on_and_the_env_var_still_forces_it(session, monkeypatch):
+    from app.core import embedding_sources  # noqa: PLC0415
+
+    monkeypatch.setattr(retrieval.settings, "hybrid_search", False)
+    assert await retrieval.hybrid_on(session) is False
+    await embedding_sources.set_hybrid(session, True)
+    assert await retrieval.hybrid_on(session) is True
+    await embedding_sources.set_hybrid(session, False)
+    assert await retrieval.hybrid_on(session) is False
+    monkeypatch.setattr(retrieval.settings, "hybrid_search", True)  # HYBRID_SEARCH: the evals compare both modes
+    assert await retrieval.hybrid_on(session) is True
+
+
 async def test_hybrid_search_keeps_the_vector_order_among_tied_keyword_matches(session, embedder, monkeypatch):
     hybrid(monkeypatch, True)
     question = f"{RARE} interactions"
