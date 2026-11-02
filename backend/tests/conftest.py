@@ -123,6 +123,11 @@ async def local_default_model(session) -> LLMModel:
     return model
 
 
+def no_lookups(tried: list[dict]) -> list[dict]:
+    """`tried` without the Unpaywall lookup every DOI records, for a test about what was downloaded."""
+    return [entry for entry in tried if entry["url"] != "api.unpaywall.org (DOI lookup)"]
+
+
 class FakeArq:
     """Records enqueued jobs instead of talking to Redis (ASGITransport skips the lifespan). Every enqueue in every test
     also checks its queue: a paper's ingest or re-embed queued anywhere but the ingest queue would run ten at once."""
@@ -130,8 +135,12 @@ class FakeArq:
     def __init__(self):
         self.jobs: list[tuple] = []
         self.job_ids: set[str] = set()
+        self.deferred: list[float | None] = []  # each job's _defer_by, in order
 
-    async def enqueue_job(self, name: str, *args, _queue_name: str | None = None, _job_id: str | None = None):
+    async def enqueue_job(
+        self, name: str, *args, _queue_name: str | None = None, _job_id: str | None = None,
+        _defer_by: float | None = None,
+    ):
         expected = queue.INGEST_QUEUE if name in queue.INGEST_JOBS else None
         assert _queue_name == expected, f"{name} was queued on {_queue_name}, not {expected}"
         if _job_id is not None:  # arq refuses a job id that is queued or running, and answers None
@@ -139,6 +148,7 @@ class FakeArq:
                 return None
             self.job_ids.add(_job_id)
         self.jobs.append((name, *args))
+        self.deferred.append(_defer_by)
         return object()
 
 

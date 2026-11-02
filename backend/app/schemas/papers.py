@@ -35,7 +35,7 @@ class PaperOut(BaseModel):
     field_sources: dict[str, ProvenanceSource]  # {group: source}, app.core.provenance.FIELD_GROUPS (R22)
     manual_fields: list[str]
     pdf_checked_at: datetime | None
-    pdf_check_result: Literal["found", "none", "error"] | None
+    pdf_check_result: Literal["found", "none", "temporary", "error"] | None
     is_retracted: bool
     oa_status: str | None
     oa_url: str | None
