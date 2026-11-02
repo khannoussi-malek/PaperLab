@@ -1,6 +1,6 @@
 import { Check, FilePen, Sparkles, UserRound } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
-import type { Note, NoteKind } from '@/api/client'
+import type { ChatSource, Note, NoteKind } from '@/api/client'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { pressable } from '@/components/motion'
@@ -8,6 +8,7 @@ import { notesHref } from '@/lib/route'
 import type { NoteDraft } from '../reader/selection'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { KIND_LABEL, matchesKind } from './noteKinds'
+import { NoteCheck } from '../checks/NoteCheck'
 import { NoteCard } from './NoteCard'
 import { NoteComposer, PlainNoteComposer } from './NoteComposer'
 import { SuggestedNotes } from './SuggestedNotes'
@@ -39,6 +40,8 @@ type Props = {
   /** A Papers save just took a note off this paper: say where it went. */
   movedToNotes: boolean
   onPapersSaved: (note: Note) => void
+  /** Shows a passage a check cites. */
+  onCite: (source: ChatSource) => void
 }
 
 // A new selection must reset the composer's text, so the draft's position and words are its identity: an abstract
@@ -150,6 +153,7 @@ export function NotesPanel(props: Props) {
           onColorChange={(hex) => props.onColorNote(note, hex)}
           onDelete={() => props.onDeleteNote(note)}
           onPapersSaved={props.onPapersSaved}
+          check={<NoteCheck note={note} paperId={paperId} onCite={props.onCite} />}
         />
       ))}
     </aside>

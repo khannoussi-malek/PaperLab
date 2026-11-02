@@ -641,6 +641,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
           <NotesPanel
             paperId={paperId}
             hasPdf={!noPdf}
+            onCite={(source) => flashChunk(source.page, source.bbox)}
             hasAbstract={Boolean(paper.data?.abstract)}
             wholePaperDraft={wholePaperDraft}
             onNewPaperNote={newPaperNote}
