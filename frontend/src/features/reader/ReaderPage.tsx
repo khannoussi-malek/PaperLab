@@ -1,6 +1,6 @@
 import { Table2, Undo2 } from 'lucide-react'
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
-import { api, PaperMergedError, type Note } from '@/api/client'
+import { api, PaperMergedError, type Note, type NoteKind } from '@/api/client'
 import {
   useChunksOnPage,
   useDataset,
@@ -291,8 +291,8 @@ export function ReaderPage({ paperId, tab, target }: Props) {
     await saveDraft('', color)
   }
 
-  const updateNoteBody = (note: Note, body: string) =>
-    attempt(() => mutations.update.mutateAsync({ id: note.id, body }))
+  const updateNoteBody = (note: Note, body: string, kind?: NoteKind | null) =>
+    attempt(() => mutations.update.mutateAsync({ id: note.id, body, ...(kind === undefined ? {} : { kind }) }))
 
   const recolorNote = (note: Note, color: string) =>
     attempt(() => mutations.update.mutateAsync({ id: note.id, color }))

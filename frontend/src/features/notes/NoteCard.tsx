@@ -1,8 +1,9 @@
 import { Check, ChartColumn, Copy, Files } from 'lucide-react'
-import { useEffect, useState } from 'react'
-import type { Note } from '@/api/client'
+import { useEffect, useState, type ReactNode } from 'react'
+import type { Note, NoteKind } from '@/api/client'
 import { usePapers } from '@/api/queries'
 import { isFresh, slideUpIn } from '@/components/motion'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { copyText } from '@/lib/clipboard'
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
@@ -12,6 +13,8 @@ import { cn } from '@/lib/utils'
 import { AttachChartDialog } from './AttachChartDialog'
 import { EditPapersDialog } from './EditPapersDialog'
 import { HighlightColorPicker } from './HighlightColorPicker'
+import { KindSelect } from './KindSelect'
+import { KIND_LABEL, swapTemplate } from './noteKinds'
 import { NoteCharts } from './NoteCharts'
 import { ProvenanceBadge } from './ProvenanceBadge'
 
@@ -25,7 +28,11 @@ type Props = {
   compact?: boolean
   startEditing?: boolean
   onSelect?: () => void
-  onUpdate: (body: string) => Promise<boolean>
+  onUpdate: (body: string, kind?: NoteKind | null) => Promise<boolean>
+  /** Edit mode also changes the note's kind (the reader's panel). */
+  editKind?: boolean
+  /** Rendered after the footer, inside the card. */
+  check?: ReactNode
   onColorChange: (hex: string) => Promise<boolean>
   onDelete: () => Promise<void>
   /** Told the note's id and whether it's editing, whenever editing starts or stops, and "stopped" on unmount. */
@@ -43,6 +50,8 @@ export function NoteCard({
   startEditing = false,
   onSelect,
   onUpdate,
+  editKind = false,
+  check,
   onColorChange,
   onDelete,
   onEditingChange,
@@ -51,6 +60,7 @@ export function NoteCard({
 }: Props) {
   const [editing, setEditing] = useState(startEditing)
   const [body, setBody] = useState(note.body)
+  const [kind, setKind] = useState<NoteKind | null>(note.kind ?? null)
   const [attachingChart, setAttachingChart] = useState(false)
   const [editingPapers, setEditingPapers] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -80,11 +90,12 @@ export function NoteCard({
   }
 
   async function save() {
-    if (await onUpdate(body)) setEditing(false)
+    if (await (editKind ? onUpdate(body, kind) : onUpdate(body))) setEditing(false)
   }
 
   function cancel() {
     setBody(note.body)
+    setKind(note.kind ?? null)
     setEditing(false)
   }
 
@@ -102,7 +113,14 @@ export function NoteCard({
         )}
       >
         <CardHeader className="flex items-center justify-between">
-          <ProvenanceBadge provenance={note.provenance} />
+          <div className="flex items-center gap-1.5">
+            <ProvenanceBadge provenance={note.provenance} />
+            {note.kind && (
+              <Badge variant="outline" className="note-kind">
+                {KIND_LABEL[note.kind]}
+              </Badge>
+            )}
+          </div>
           {!compact && anchor && (
             <Button variant="link" size="xs" onClick={onSelect}>
               p. {anchor.page}
@@ -121,6 +139,15 @@ export function NoteCard({
             >
               {anchor.quoted_text}
             </blockquote>
+          )}
+          {editing && editKind && (
+            <KindSelect
+              value={kind}
+              onChange={(next) => {
+                setBody(swapTemplate(body, kind, next))
+                setKind(next)
+              }}
+            />
           )}
           {editing ? (
             <Textarea
@@ -195,6 +222,7 @@ export function NoteCard({
             </>
           )}
         </CardFooter>
+        {check}
       </Card>
       {!compact && <AttachChartDialog note={note} open={attachingChart} onOpenChange={setAttachingChart} />}
       {editingPapers && (
