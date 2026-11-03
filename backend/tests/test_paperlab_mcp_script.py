@@ -19,6 +19,7 @@ printf '%s|%s\\n' "$(pwd)" "$*" >> "$FAKE_LOG"
 case "$1 $2" in
   "compose ps") printf '%s' "$FAKE_PS"; printf '%s' "$FAKE_PS_ERR" >&2; exit "${FAKE_PS_STATUS:-0}" ;;
   "compose exec") echo "the server's own output" ;;
+  "ps --filter") printf '%s' "$FAKE_OTHERS" ;;
 esac
 """
 
@@ -48,7 +49,7 @@ def test_with_api_running_it_execs_the_server_in_the_api_container_from_the_repo
 def test_with_api_not_running_it_says_how_to_start_paperlab(tmp_path):
     result, calls = run_script(tmp_path, FAKE_PS="db\nredis\nworker\n")
 
-    assert len(calls) == 1
+    assert len(calls) == 2  # its own stack, then whether another PaperLab is running
     assert (result.returncode, result.stdout) == (1, "")
     assert result.stderr == (
         f'paperlab-mcp: PaperLab isn\'t running. Open the PaperLab app, or run "docker compose up -d" in {ROOT}.\n'
@@ -105,7 +106,7 @@ def test_from_the_apps_data_folder_it_runs_compose_there(tmp_path):
 
     result, calls = run_script(tmp_path, script=script, FAKE_PS="db\nredis\n")
 
-    assert calls == [f"{folder}|compose ps --status running --services"]
+    assert calls[0] == f"{folder}|compose ps --status running --services"
     assert result.stderr == (
         f'paperlab-mcp: PaperLab isn\'t running. Open the PaperLab app, or run "docker compose up -d" in {folder}.\n'
     )
@@ -168,3 +169,48 @@ def test_install_writes_a_launcher_in_local_bin_that_runs_this_folders_script(tm
         f"{folder}|compose exec -T api python -m mcp_server",
     ]
     assert (result.returncode, result.stdout) == (0, "the server's own output\n")
+
+
+LIVE = "paperlab|/Users/me/paperlab-live\n"
+
+
+def test_with_this_stack_stopped_it_names_another_paperlab_that_is_running_and_never_uses_it_by_itself(tmp_path):
+    """The desktop app's script ran while the library ran from another folder: the client only said CONNECTION_CLOSED.
+    Moving to the other stack unasked could write into the wrong library, so it says what to set."""
+    result, calls = run_script(tmp_path, FAKE_PS="", FAKE_OTHERS=LIVE)
+
+    assert result.returncode == 1
+    assert '"/Users/me/paperlab-live"' in result.stderr and "PAPERLAB_DIR" in result.stderr
+    assert not any("exec" in call for call in calls)
+
+
+@pytest.mark.parametrize(
+    "others",
+    [
+        "paperlab-e2e|/Users/me/repo\n",  # the test stack holds fake data
+        "ci-hub|/Users/me/ci-hub\n",  # some other project's api
+        f"paperlab|{ROOT}\n",  # the folder it already looked at
+    ],
+)
+def test_it_never_suggests_a_test_stack_another_project_or_itself(tmp_path, others):
+    result, _ = run_script(tmp_path, FAKE_PS="", FAKE_OTHERS=others)
+    assert result.returncode == 1 and "PAPERLAB_DIR" not in result.stderr
+
+
+def test_paperlab_dir_chooses_the_folder_to_run_from(tmp_path):
+    folder = tmp_path / "paperlab live"
+    folder.mkdir()
+    result, calls = run_script(tmp_path, FAKE_PS="api\n", PAPERLAB_DIR=str(folder))
+
+    assert calls == [
+        f"{folder}|compose ps --status running --services",
+        f"{folder}|compose exec -T api python -m mcp_server",
+    ]
+    assert (result.returncode, result.stdout) == (0, "the server's own output\n")
+
+
+def test_a_paperlab_dir_that_is_not_a_folder_says_so(tmp_path):
+    result, calls = run_script(tmp_path, FAKE_PS="api\n", PAPERLAB_DIR=str(tmp_path / "gone"))
+
+    assert calls == [] and result.returncode == 1
+    assert result.stderr == f"paperlab-mcp: PAPERLAB_DIR isn't a folder: {tmp_path / 'gone'}.\n"
