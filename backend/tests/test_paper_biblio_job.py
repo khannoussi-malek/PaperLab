@@ -6,6 +6,7 @@ import pytest
 
 from app.core import paper_sources, papers, queue
 from app.models import Paper
+from app.providers import crossref
 from app.workers import paper_biblio as worker
 
 pytestmark = [pytest.mark.anyio, pytest.mark.xdist_group("references")]
@@ -20,6 +21,10 @@ def wiring(session, monkeypatch):
         yield session
 
     monkeypatch.setattr(worker, "SessionLocal", shared_session)
+
+
+def crossref_client(transport):
+    return crossref.new_client(transport=transport)
 
 
 def crossref_says(work):
@@ -93,3 +98,36 @@ async def test_queue_biblio_fill_asks_only_for_a_paper_with_a_doi(session, monke
     await papers.queue_biblio_fill(without)
     assert pool.jobs == [("fill_paper_biblio", str(with_doi.id))]
     assert isinstance(with_doi, Paper)
+
+
+async def test_a_paper_saved_without_its_pdf_learns_its_type_and_peer_review_status(session):
+    paper = await saved(session, venue="Proceedings of the 36th International Conference on Software Engineering")
+    assert paper.peer_reviewed == "unknown"
+    transport, _ = crossref_says({**WORK, "type": "proceedings-article"})
+    await worker.fill_paper_biblio({"transport": transport}, str(paper.id))
+    await session.refresh(paper)
+    assert (paper.source_type, paper.peer_reviewed) == ("proceedings", "true")
+
+
+async def test_a_type_the_owner_set_by_hand_is_kept(session):
+    paper = await saved(session)
+    paper.source_type, paper.manual_fields = "book", ["source_type"]
+    await session.flush()
+    transport, _ = crossref_says({**WORK, "type": "journal-article"})
+    await worker.fill_paper_biblio({"transport": transport}, str(paper.id))
+    await session.refresh(paper)
+    assert paper.source_type == "book"
+
+
+async def test_the_backfill_fills_source_types_only_when_asked_and_reports_them(session, tmp_path):
+    from app.scripts import backfill_biblio
+
+    paper = await saved(session)
+    transport, _ = crossref_says({**WORK, "type": "journal-article"})
+    report = tmp_path / "types.csv"
+    async with crossref_client(transport) as http:
+        summary = await backfill_biblio.run_source_types(session, http, delay=0, only=[paper.id], report=report)
+    await session.refresh(paper)
+    assert summary == {"checked": 1, "updated": 1}
+    assert (paper.source_type, paper.peer_reviewed) == ("journal_article", "true")
+    assert "source_type,,journal_article" in report.read_text()

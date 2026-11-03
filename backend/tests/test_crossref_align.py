@@ -224,4 +224,4 @@ def test_the_cli_passes_align_and_report(monkeypatch):
 
     monkeypatch.setattr(backfill_biblio, "main", main)
     backfill_biblio.cli(["--align", "--dry-run", "--report", "out.csv"])
-    assert seen == {"dry_run": True, "align": True, "report": "out.csv"}
+    assert seen == {"dry_run": True, "align": True, "report": "out.csv", "source_types": False}

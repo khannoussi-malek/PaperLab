@@ -37,7 +37,7 @@ def paper(**kw):
     ],
 )
 def test_source_type_maps_to_csl_type(source_type, csl):
-    assert csl_item(paper(source_type=source_type))["type"] == csl
+    assert csl_item(paper(source_type=source_type, venue="arXiv"))["type"] == csl
 
 
 @pytest.mark.parametrize(
@@ -285,3 +285,85 @@ def test_a_doi_link_stands_in_for_a_missing_doi(oa_url, doi):
     item = csl_item(paper(doi=None, oa_url=oa_url))
     assert item.get("DOI") == doi
     assert item.get("URL") == (None if doi else oa_url)  # the link isn't repeated once it is the DOI
+
+
+ARXIV = "10.48550/arXiv.2502.03280"
+
+
+def published_copy(**kw):
+    return paper(
+        source_type="preprint", doi=ARXIV, venue="IEEE Software", published_doi="10.1109/ms.2025.3535161",
+        published_venue="IEEE Software", title="Leveraging creativity", authors=["Ann Groeneveld"], **kw,
+    )
+
+
+def test_a_published_paper_with_an_arxiv_doi_exports_as_the_published_record():
+    item = csl_item(published_copy())
+    assert item["type"] == "article-journal" and item["container-title"] == "IEEE Software"
+    assert item["DOI"] == "10.1109/ms.2025.3535161"
+    assert "publisher" not in item and "genre" not in item
+    text = render([item], "bibtex")
+    assert text.startswith("@article{") and "journal = {IEEE Software}" in text
+    assert "publisher" not in text
+    assert "eprint = {2502.03280}" in text  # where the free copy is
+
+
+def test_a_published_venue_that_is_a_meeting_exports_as_inproceedings():
+    item = csl_item(paper(
+        source_type="preprint", doi=ARXIV, venue=None, published_doi=None, published_venue="Proceedings of ICSE 2025",
+    ))
+    assert item["type"] == "paper-conference" and item["container-title"] == "Proceedings of ICSE 2025"
+    assert item["DOI"] == ARXIV  # the only DOI known
+
+
+def test_a_venue_on_a_preprint_with_nothing_else_known_still_counts_as_where_it_was_published():
+    item = csl_item(paper(source_type="preprint", doi=ARXIV, venue="ICSE 2025 Workshop on Creativity"))
+    assert item["type"] == "paper-conference" and "publisher" not in item
+
+
+@pytest.mark.parametrize("venue", ["arXiv", "bioRxiv", "SSRN Electronic Journal", None])
+def test_a_true_preprint_stays_a_preprint(venue):
+    item = csl_item(paper(source_type="preprint", doi=ARXIV, venue=venue))
+    assert item["genre"] == "Preprint" and item["type"] == "article"
+    assert render([item], "bibtex").startswith("@misc{")
+
+
+def test_a_published_doi_with_no_venue_is_still_the_published_record():
+    item = csl_item(paper(source_type="preprint", doi=ARXIV, venue=None, published_doi="10.1/pub"))
+    assert item["DOI"] == "10.1/pub" and "genre" not in item and item["type"] == "article-journal"
+
+
+@pytest.mark.parametrize(
+    ("doi", "venue"),
+    [
+        ("10.1007/978-981-10-5281-1_47", "Lecture notes in electrical engineering"),
+        ("10.1007/978-981-10-5281-1_47", "Some Book Title"),
+        (None, "Lecture Notes in Electrical Engineering"),
+        (None, "The Handbook of Creativity"),
+    ],
+)
+def test_a_book_chapter_of_unknown_type_exports_as_incollection(doi, venue):
+    item = csl_item(paper(source_type=None, doi=doi, venue=venue, title="A snapshot", authors=["Aamir Amin"]))
+    assert item["type"] == "chapter"
+    text = render([item], "bibtex")
+    assert text.startswith("@incollection{") and f"booktitle = {{{venue}}}" in text
+
+
+def test_a_conference_in_a_book_series_stays_a_conference():
+    item = csl_item(paper(source_type=None, doi="10.1007/978-3-642-02388-0_9", venue="Proceedings of ICCC 2009"))
+    assert item["type"] == "paper-conference"
+
+
+@pytest.mark.parametrize(
+    ("name", "key"),
+    [
+        ("Ayşe Sınav", "sinav2026genai"),
+        ("İpek Yılmaz", "yilmaz2026genai"),
+        ("Guðrún Þór", "thor2026genai"),
+        ("Jón Sigurðsson", "sigurdsson2026genai"),
+        ("Łukasz Wrześniewski", "wrzesniewski2026genai"),
+    ],
+)
+def test_citation_keys_transliterate_letters_that_do_not_decompose(name, key):
+    item = csl_item(paper(authors=[name], year=2026, title="GenAI assisted"))
+    assert bibtex_keys([item])[item["id"]] == key

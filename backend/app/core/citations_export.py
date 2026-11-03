@@ -19,6 +19,7 @@ from app.core import workspaces
 from app.core.candidates import arxiv_from_doi
 from app.core.citations_keywords import workspace_keywords
 from app.core.errors import InvalidInput, NotFound
+from app.core.source_types import PREPRINT_SERVERS
 from app.models import Paper
 
 CSL_TYPES = {
@@ -49,6 +50,8 @@ MEETING = re.compile(
     r"\bCHI\s*'?\d{2,4}\b",  # "CHI '24", "CHI 2024": the conference by its short name and year
     re.IGNORECASE,
 )
+BOOK = re.compile(r"\b(lecture notes|handbook|encyclopa?edia|book series)\b", re.IGNORECASE)
+ISBN_DOI = re.compile(r"/97[89][-.\d]")
 ORG_WORDS = {
     "organization", "organisation", "university", "institute", "association", "group", "consortium", "committee",
     "society", "agency", "ministry", "team", "collaboration", "council", "center", "centre", "foundation",
@@ -57,7 +60,11 @@ ORG_WORDS = {
 PARTICLES = {"van", "von", "de", "der", "den", "del", "della", "di", "da", "la", "le", "du", "bin", "al", "ter", "ten"}
 SUFFIX = re.compile(r"[,\s]+(Jr\.?|Sr\.?|II|III|IV)$", re.IGNORECASE)
 INITIALS = re.compile(r"[A-Z]{1,2}|(?:[A-Z]\.){1,3}")
-TRANSLITERATE = str.maketrans({"ø": "o", "ß": "ss", "æ": "ae", "œ": "oe", "ł": "l", "đ": "d", "þ": "th"})
+# The letters NFKD leaves alone, which would otherwise vanish from a citation key (Sınav became "snav").
+TRANSLITERATE = str.maketrans({
+    "ø": "o", "ß": "ss", "æ": "ae", "œ": "oe", "ł": "l", "đ": "d", "þ": "th", "ı": "i", "ð": "d", "ħ": "h", "ŋ": "n",
+    "ŧ": "t", "ſ": "s",
+})  # fmt: skip
 ARTICLES = ("a ", "an ", "the ")
 STOP_WORDS = {"a", "an", "the", "on", "of", "in", "for", "and", "to", "with", "from", "by", "at", "as", "is", "are"}
 ACCESS_NOTE = {
@@ -94,10 +101,25 @@ def _person(name: str) -> dict:
     return {**person, "suffix": suffix} if suffix else person
 
 
-def _kind_from_venue(venue: str | None) -> str | None:
-    if not venue:
+def _kind_from_venue(venue: str | None, doi: str | None = None) -> str | None:
+    """A paper of unknown type, by its venue; a chapter by its book's words or a DOI that holds the book's ISBN."""
+    if venue and MEETING.search(venue) and not JOURNAL.search(venue.strip()):
+        return "proceedings"
+    if (venue and BOOK.search(venue)) or (doi and ISBN_DOI.search(doi)):
+        return "chapter"
+    return "journal_article" if venue else None
+
+
+def _published_venue_and_doi(paper) -> tuple[str | None, str | None] | None:
+    """Where a preprint was published, as (venue, DOI), or None for a true preprint. A citation wants the published
+    record: an arXiv DOI on a paper with a real venue exported as @misc with the venue in `publisher`."""
+    if paper.source_type != "preprint":
         return None
-    return "proceedings" if MEETING.search(venue) and not JOURNAL.search(venue.strip()) else "journal_article"
+    doi = getattr(paper, "published_doi", None)
+    venue = getattr(paper, "published_venue", None) or paper.venue
+    if venue and PREPRINT_SERVERS.search(venue):
+        venue = None
+    return (venue, doi) if venue or doi else None
 
 
 def _note(paper) -> str | None:
@@ -137,18 +159,21 @@ def _keywords(paper, extra: list[str]) -> list[str]:
 def csl_item(paper, keywords: list[str] | None = None, notes: list[str] | None = None) -> dict:
     """The CSL-JSON item for a paper-like object (no DB). `keywords` come first (a workspace's tags and screening
     decision); the source type and "peer-reviewed" follow. Optional biblio fields are read when present."""
-    item: dict = {
-        "id": str(paper.id),
-        "type": CSL_TYPES.get(paper.source_type or _kind_from_venue(paper.venue), "document"),
-        "title": paper.title,
-    }
+    published = _published_venue_and_doi(paper)
+    kind = paper.source_type or _kind_from_venue(paper.venue, paper.doi)
+    if published:
+        kind = _kind_from_venue(published[0]) or "journal_article"
+    item: dict = {"id": str(paper.id), "type": CSL_TYPES.get(kind, "document"), "title": paper.title}
     if paper.authors:
         item["author"] = [_person(name) for name in paper.authors]
     if editors := getattr(paper, "editors", None):
         item["editor"] = [_person(name) for name in editors]
     if paper.year:
         item["issued"] = {"date-parts": [[paper.year]]}
-    if paper.source_type == "preprint":
+    if published:
+        if published[0]:
+            item["container-title"] = published[0]
+    elif paper.source_type == "preprint":
         item["genre"] = "Preprint"
         arxiv = (paper.doi or "").lower().startswith(ARXIV_DOI_PREFIX)
         if publisher := paper.venue or ("arXiv" if arxiv else None):
@@ -163,6 +188,9 @@ def csl_item(paper, keywords: list[str] | None = None, notes: list[str] | None =
             item[key] = value
     # A paper saved from a doi.org link can hold its DOI only there: a reference list wants it as the DOI.
     doi = paper.doi or ((m := DOI_LINK.match(paper.oa_url or "")) and m.group(1))
+    if published and published[1]:
+        item["_arxiv"] = arxiv_from_doi((doi or "").lower())  # the free copy, beside the published DOI
+        doi = published[1]
     if doi:
         item["DOI"] = doi
     if paper.oa_url and not (doi and not paper.doi):
@@ -315,7 +343,7 @@ def _bibtex_fields(item: dict, publish: bool = False) -> dict[str, str]:
         fields = {k: v for k, v in fields.items() if k not in LIBRARY_ONLY} | {"note": item.get("genre")}
     escaped = {k: v if k in ("author", "editor") else _tex(v) for k, v in fields.items()}
     # DOIs, URLs and the arXiv id are verbatim in BibTeX; escaping their underscores or percents would break the link.
-    arxiv = arxiv_from_doi((item.get("DOI") or "").lower())
+    arxiv = arxiv_from_doi((item.get("DOI") or "").lower()) or item.get("_arxiv")
     extra = {"eprint": arxiv, "archivePrefix": "arXiv" if arxiv else None}
     url = None if publish and item.get("DOI") else item.get("URL")  # a reference list links the DOI, not a PDF copy
     return {**escaped, "doi": item.get("DOI"), "url": url, **extra}
