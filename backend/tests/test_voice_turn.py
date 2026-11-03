@@ -5,7 +5,7 @@ import pytest
 from sqlalchemy import delete, func, select
 from test_chat import make_paper
 
-from app.core import chat
+from app.core import chat, voice_turn
 from app.core.voice_turn import TurnResult, finish_whole, run_turn, save_heard
 from app.models import LLMOutput, Paper
 from app.models.voice_turn import VoiceTurn
@@ -45,6 +45,23 @@ class GatedSpeech(FakeSpeech):
         if self.spoken:
             await self.gate.wait()
         return await super().speak(text)
+
+
+class FailingSpeech(FakeSpeech):
+    """Speaks the first sentence, then the voice program goes away."""
+
+    async def speak(self, text: str):
+        if self.spoken:
+            raise SpeechUnavailable("The voice program isn't running. Start it with scripts/voice.sh.")
+        return await super().speak(text)
+
+
+class StallingLLM(ScriptedLLM):
+    """One token, then it waits for ever."""
+
+    async def stream(self, system: str, prompt: str):
+        yield self.tokens[0]
+        await asyncio.Event().wait()
 
 
 class DownSpeech(FakeSpeech):
@@ -151,6 +168,8 @@ async def test_a_chunk_of_only_markers_is_not_spoken(make_turn, send, sent):
     assert result.answer == "[C1]\nNext sentence is spoken."
     assert "[C1]\n" in [m["text"] for m in sent if isinstance(m, dict) and m["type"] == "token"]
     assert types(sent).count("audio") == 1
+    sentence = next(m for m in sent if isinstance(m, dict) and m["type"] == "sentence")
+    assert sentence["text"] == result.chunks[0][0] == "[C1] Next sentence is spoken."
 
 
 async def test_empty_transcript_sends_done_without_calling_the_model_or_saving(make_turn, session, send, sent):
@@ -327,3 +346,109 @@ async def test_a_deleted_paper_keeps_its_timing_rows(make_turn, session, send):
 
     [row] = await rows(session, VoiceTurn)
     assert row.paper_id is None and uuid.UUID(str(row.id)) == result.row_id
+
+
+async def test_a_trailing_marker_only_chunk_stays_with_the_last_spoken_chunk(make_turn, send):
+    _, result = await make_turn()
+    speech = FakeSpeech()
+
+    await run_turn(result, b"", ScriptedLLM(["First sentence is here.\n", "[C2]"]), speech, send)
+
+    assert speech.spoken == ["First sentence is here."]
+    assert [text for text, _ in result.chunks] == ["First sentence is here. [C2]"]
+    assert result.answer == "First sentence is here.\n[C2]"
+
+
+async def test_finish_whole_after_an_empty_transcript_returns_none(make_turn, session, send):
+    _, result = await make_turn()
+    llm = FakeLLM()
+
+    await run_turn(result, b"", llm, FakeSpeech(transcript=" "), send)
+
+    assert await finish_whole(result, llm) is None
+    assert await save_heard(result, 1.0, llm, stop_ms=None) is None
+    assert await rows(session, LLMOutput) == [] and await rows(session, VoiceTurn) == []
+
+
+async def test_a_second_save_returns_the_first_id_and_writes_nothing(make_turn, session, send):
+    llm = FakeLLM()
+    _, whole = await make_turn()
+    _, cut = await make_turn()
+    await run_turn(whole, b"", llm, FakeSpeech(), send)
+    await run_turn(cut, b"", llm, FakeSpeech(), send)
+
+    first = await finish_whole(whole, llm)
+    assert await finish_whole(whole, llm) == first
+    assert await save_heard(whole, 0.005, llm, stop_ms=None) == first
+    heard = await save_heard(cut, cut.chunks[0][1], llm, stop_ms=80)
+    assert await save_heard(cut, cut.chunks[0][1], llm, stop_ms=80) == heard
+    assert await finish_whole(cut, llm) == heard
+
+    assert heard is not None and heard != first
+    assert await session.scalar(select(func.count()).select_from(LLMOutput)) == 2
+    assert await session.scalar(select(func.count()).select_from(VoiceTurn)) == 2
+
+
+async def test_save_heard_after_a_failed_turn_writes_nothing_more(make_turn, session, send):
+    _, result = await make_turn()
+    llm = FakeLLM(fail_after=2)
+
+    await run_turn(result, b"", llm, FakeSpeech(), send)
+
+    assert await save_heard(result, 1.0, llm, stop_ms=50) is None
+    assert await finish_whole(result, llm) is None
+    assert await rows(session, LLMOutput) == []
+    [row] = await rows(session, VoiceTurn)
+    assert row.interrupted is False and row.id == result.row_id
+
+
+async def test_a_timing_row_failure_still_returns_the_saved_answer(make_turn, session, send, monkeypatch):
+    llm = FakeLLM()
+    _, whole = await make_turn()
+    _, cut = await make_turn()
+    await run_turn(whole, b"", llm, FakeSpeech(), send)
+    await run_turn(cut, b"", llm, FakeSpeech(), send)
+
+    async def broken(*args, **kwargs):
+        raise RuntimeError("the timing row could not be written")
+
+    monkeypatch.setattr(voice_turn, "_record", broken)
+
+    whole_id = await finish_whole(whole, llm)
+    cut_id = await save_heard(cut, cut.chunks[0][1], llm, stop_ms=None)
+
+    assert (await session.get(LLMOutput, whole_id)).content == whole.answer
+    assert (await session.get(LLMOutput, cut_id)).content.endswith("…")
+
+
+async def test_speech_failing_mid_answer_sends_error_and_saves_nothing_yet(make_turn, session, send, sent):
+    _, result = await make_turn()
+
+    await run_turn(result, b"", ScriptedLLM(SENTENCES), FailingSpeech(), send)
+
+    assert sent[-1] == {
+        "type": "error",
+        "message": "The voice program isn't running. Start it with scripts/voice.sh.",
+        "retryable": True,
+    }
+    assert "done" not in types(sent) and types(sent).count("audio") == 1
+    assert await rows(session, LLMOutput) == []
+
+
+async def test_cancelling_during_the_token_stream_stops_cleanly(make_turn, session, send, sent):
+    _, result = await make_turn()
+    llm = StallingLLM(["First "])
+    before = asyncio.all_tasks()
+
+    task = asyncio.create_task(run_turn(result, b"", llm, FakeSpeech(), send))
+    while not result.answer:
+        await asyncio.sleep(0)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert asyncio.all_tasks() == before  # neither the model task nor the speaking task is left running
+    assert "done" not in types(sent) and "error" not in types(sent)
+    assert result.answer == "First "
+    assert await save_heard(result, 1.0, llm, stop_ms=None) is None
+    assert await rows(session, LLMOutput) == []

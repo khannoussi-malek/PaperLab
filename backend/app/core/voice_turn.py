@@ -66,6 +66,8 @@ class TurnResult:
     prepared: chat.Prepared | None = None
     timing: dict[str, int] = field(default_factory=dict)  # VoiceTurn columns measured here
     row_id: uuid.UUID | None = None
+    output_id: uuid.UUID | None = None  # the saved answer, once finish_whole or save_heard has run
+    ended: bool = False  # the turn failed or was saved: nothing more is written for it
 
 
 def _ms(began: float, now: float | None = None) -> int:
@@ -192,10 +194,13 @@ async def _speak_chunks(
         audio, rate = await speech.speak(said)
         result.timing.setdefault("tts_first_ms", _ms(began))
         async with lock:
-            await send({"type": "sentence", "seq": len(result.chunks), "text": chunk, "rate": rate})
+            await send({"type": "sentence", "seq": len(result.chunks), "text": text, "rate": rate})
             await send(audio)
         result.timing.setdefault("first_audio_sent_ms", _ms(started))
         result.chunks.append((text, len(audio) / 4 / rate))  # float32 samples; only once sent
+    if carry and result.chunks:  # markers at the very end stay with the last thing said
+        last, seconds = result.chunks[-1]
+        result.chunks[-1] = (f"{last} {carry}", seconds)
 
 
 def _explain(exc: BaseException, llm: LLM) -> tuple[str, bool]:
@@ -214,6 +219,7 @@ def _explain(exc: BaseException, llm: LLM) -> tuple[str, bool]:
 
 
 async def _fail(result: TurnResult, llm: LLM, send: Send, exc: BaseException) -> None:
+    result.ended = True
     message, retryable = _explain(exc, llm)
     try:
         async with SessionLocal() as session:
@@ -246,32 +252,45 @@ async def _record(
 
 
 async def _save(session: AsyncSession, result: TurnResult, llm: LLM, content: str) -> uuid.UUID:
-    assert result.prepared is not None  # nothing to save before run_turn prepared the question
+    prepared = result.prepared
+    assert prepared is not None  # callers check: nothing to save before run_turn prepared the question
     return await chat.save_answer(
-        session,
-        result.scope,
-        result.question,
-        result.prepared,
-        content,
-        llm.model,
-        llm.connection_name,
-        result.parent_id,
+        session, result.scope, result.question, prepared, content, llm.model, llm.connection_name, result.parent_id
     )
 
 
-async def finish_whole(result: TurnResult, llm: LLM) -> uuid.UUID:
-    """All of the answer was played: save it whole, and the timing row."""
+def _nothing_to_save(result: TurnResult) -> bool:
+    return result.ended or not result.question or result.prepared is None
+
+
+async def _end(
+    result: TurnResult, llm: LLM, content: str | None, *, interrupted: bool, stop_ms: int | None
+) -> uuid.UUID | None:
+    """Saves `content` (when there is any) and the timing row, once. A later call gets the first one's answer."""
+    if _nothing_to_save(result):
+        return result.output_id
+    result.ended = True
     async with SessionLocal() as session:
-        output_id = await _save(session, result, llm, result.answer)
-        await _record(session, result, llm, interrupted=False, stop_ms=None)
-    return output_id
+        if content is not None:
+            try:
+                result.output_id = await _save(session, result, llm, content)
+            except BaseException:
+                result.ended = False  # nothing was saved: the caller may try again
+                raise
+        try:  # the answer is saved: a timing row that can't be written must not fail it
+            await _record(session, result, llm, interrupted=interrupted, stop_ms=stop_ms)
+        except Exception:
+            logger.exception("saving the timing of a voice turn failed")
+    return result.output_id
+
+
+async def finish_whole(result: TurnResult, llm: LLM) -> uuid.UUID | None:
+    """All of the answer was played: save it whole, and the timing row. None when there was nothing to save."""
+    return await _end(result, llm, result.answer, interrupted=False, stop_ms=None)
 
 
 async def save_heard(result: TurnResult, played_seconds: float, llm: LLM, stop_ms: int | None) -> uuid.UUID | None:
     """The reader cut in after `played_seconds`: save the part they heard, marked as cut off, and the timing row.
     Nothing heard saves no answer (the timing row is still written)."""
     heard = heard_text(result.chunks, played_seconds)
-    async with SessionLocal() as session:
-        output_id = await _save(session, result, llm, heard + CUT_OFF) if heard else None
-        await _record(session, result, llm, interrupted=True, stop_ms=stop_ms)
-    return output_id
+    return await _end(result, llm, heard + CUT_OFF if heard else None, interrupted=True, stop_ms=stop_ms)
