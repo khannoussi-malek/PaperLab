@@ -8,7 +8,7 @@ import { createInterruptDetector } from './interruptDetector'
 import { startMicrophone, type Microphone } from './microphone'
 import { createPlayback, type Playback } from './playback'
 
-export type VoiceState = 'off' | 'listening' | 'thinking' | 'speaking'
+export type VoiceState = 'off' | 'starting' | 'listening' | 'thinking' | 'speaking'
 
 const HEADPHONES = 'Use headphones to talk over answers. Without echo cancelling, the app would hear itself.'
 const DROPPED = 'The voice connection dropped. Press the microphone to try again.'
@@ -66,6 +66,15 @@ function openSocket(): Promise<WebSocket> {
   })
 }
 
+/**
+ * From the first audio until the answer is done and heard: the pauses between chunks, while speech is still being
+ * made, count. ponytail: an interrupt or error ends it at once (`accepting`), whatever the server still sends.
+ */
+const answerPlaying = (s: Session) => s.accepting && s.audioQueued && !s.finished
+
+/** Not every browser has `outputLatency`; a NaN here would go out as null. */
+const outputLatency = (s: Session) => s.ctx.outputLatency ?? 0
+
 const send = (s: Session, message: object) => s.socket.send(JSON.stringify(message))
 
 /** A live stream cut short keeps what it showed, as a stopped answer; one that showed nothing goes away. */
@@ -111,7 +120,7 @@ export function useVoiceTurn(scope: ChatScope, modelId: string | null) {
   function stop() {
     generation.current++
     const s = session.current
-    if (s?.playback.active()) {
+    if (s && answerPlaying(s)) {
       send(s, { type: 'interrupt', played_seconds: s.playback.playedSeconds(), stop_ms: null })
       setTimeout(() => void latest.current.invalidateHistory(), SAVE_REFRESH_MS)
     }
@@ -139,14 +148,14 @@ export function useVoiceTurn(scope: ChatScope, modelId: string | null) {
   }
 
   function reportFirstHeard(s: Session, playedAt: number) {
-    const outputMs = Math.round(s.ctx.outputLatency * 1000)
+    const outputMs = Math.round(outputLatency(s) * 1000)
     const totalMs = Math.max(0, Math.round(playedAt + outputMs - s.speechEnd))
     send(s, { type: 'metrics', turn: s.turn, wait_ms: SILENCE_MS, output_ms: outputMs, total_ms: totalMs })
   }
 
   function interrupt(s: Session, startedAt: number) {
     const playedSeconds = s.playback.playedSeconds()
-    const stopMs = Math.round(performance.now() - startedAt + s.ctx.outputLatency * 1000)
+    const stopMs = Math.round(performance.now() - startedAt + outputLatency(s) * 1000)
     s.playback.stop()
     s.accepting = false
     s.barged = true
@@ -157,7 +166,7 @@ export function useVoiceTurn(scope: ChatScope, modelId: string | null) {
 
   function sendUtterance(s: Session, audio: Float32Array) {
     // Speech that began over the answer and never interrupted it was the app's own voice.
-    if (s.playback.active() || (s.speechOverAnswer && !s.barged)) return
+    if (answerPlaying(s) || (s.speechOverAnswer && !s.barged)) return
     if (audio.byteLength > MAX_UTTERANCE_BYTES) return setProblem(TOO_LONG)
     s.speechEnd = performance.now() - SILENCE_MS
     s.socket.send(audio.slice().buffer)
@@ -280,6 +289,7 @@ export function useVoiceTurn(scope: ChatScope, modelId: string | null) {
     const token = generation.current
     const stale = () => generation.current !== token
     setProblem(null)
+    setState('starting')
     const ctx = new AudioContext()
     void ctx.resume()
     let socket: WebSocket | undefined
@@ -297,9 +307,9 @@ export function useVoiceTurn(scope: ChatScope, modelId: string | null) {
       const s = open(ctx, socket)
       session.current = s
       const mic = await startMicrophone({
-        onFrame: (probability) => s.detector.frame(probability, s.talkOver && s.playback.active(), performance.now()),
+        onFrame: (probability) => s.detector.frame(probability, s.talkOver && answerPlaying(s), performance.now()),
         onSpeechStart: () => {
-          s.speechOverAnswer = s.playback.active()
+          s.speechOverAnswer = answerPlaying(s)
           s.barged = false
         },
         onSpeechEnd: (audio) => sendUtterance(s, audio),

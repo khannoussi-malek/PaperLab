@@ -68,7 +68,6 @@ it('lets the reader type again after the microphone is turned off in the middle 
   await waitFor(() => expect(question).toBeEnabled())
   fireEvent.click(screen.getByRole('button', { name: 'Ask out loud' }))
   fireEvent.click(await screen.findByRole('button', { name: 'Listening, press to turn off' }))
-  // (turned off again at once; now the real case: a spoken question under way)
   fireEvent.click(await screen.findByRole('button', { name: 'Ask out loud' }))
   await screen.findByRole('button', { name: 'Listening, press to turn off' })
   const handlers = mocks.startMicrophone.mock.calls.at(-1)![0]

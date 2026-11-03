@@ -32,6 +32,16 @@ it.each([
   expect(v.stop).toHaveBeenCalled()
 })
 
+it('says the microphone is starting, is pressed, and turns off when pressed', () => {
+  const v = voice({ on: true, state: 'starting' })
+  render(<VoiceButton voice={v} />)
+  const button = screen.getByRole('button', { name: 'Starting the microphone' })
+  expect(button).toHaveAttribute('aria-pressed', 'true')
+  fireEvent.click(button)
+  expect(v.stop).toHaveBeenCalled()
+  expect(v.start).not.toHaveBeenCalled()
+})
+
 it('cannot be started while typed chat is busy, but can always be turned off', () => {
   const { rerender } = render(<VoiceButton voice={voice()} disabled />)
   expect(screen.getByRole('button', { name: 'Ask out loud' })).toBeDisabled()

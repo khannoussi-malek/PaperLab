@@ -52,9 +52,11 @@ test('the table shows each stage with its count and median, and what lacks turns
   expect(within(row).getAllByText('needs 20 turns').length).toBe(1)
   expect(screen.getByText('Stop talking to first audio')).toBeInTheDocument()
   expect(screen.getByText('12 interruptions, 1 probably false')).toBeInTheDocument()
-  expect(
-    screen.getByText("Times are from this computer. Each stage is its own median, so they won't add up to the total."),
-  ).toBeInTheDocument()
+  expect(screen.getByText('Waiting for silence (a setting)')).toBeInTheDocument()
+  const note = screen.getByText(/^Times are from this computer\./)
+  expect(note).toHaveTextContent("Each stage is its own median, so they won't add up to the total.")
+  expect(note).toHaveTextContent("Stopping when interrupted includes the 250 ms it waits to be sure you're speaking.")
+  expect(note).toHaveTextContent('From your latest 500 voice questions.')
 })
 
 test('needs-10-turns shows for a stage with too few turns', async () => {
@@ -62,4 +64,16 @@ test('needs-10-turns shows for a stage with too few turns', async () => {
   show(ready, latency([{ model: 'qwen', warm, cold: empty, interrupts: 0, false_interrupts: 0 }]))
   const row = (await screen.findByText('Speech to text')).closest('tr')!
   expect(within(row).getByText('needs 10 turns')).toBeInTheDocument()
+})
+
+test('one interruption is singular', async () => {
+  show(ready, latency([{ model: 'qwen', warm: { ...empty, stt_ms: stage(3, 400) }, cold: empty, interrupts: 1, false_interrupts: 0 }]))
+  expect(await screen.findByText('1 interruption, 0 probably false')).toBeInTheDocument()
+})
+
+test('the first question after turning the microphone on has its own table', async () => {
+  const cold = { ...empty, stt_ms: stage(2, 900) }
+  show(ready, latency([{ model: 'qwen', warm: empty, cold, interrupts: 0, false_interrupts: 0 }]))
+  expect(await screen.findByText('First question after turning the microphone on')).toBeInTheDocument()
+  expect(screen.queryByText(/after the voice program started/)).not.toBeInTheDocument()
 })

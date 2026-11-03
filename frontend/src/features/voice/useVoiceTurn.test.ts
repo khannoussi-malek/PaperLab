@@ -200,6 +200,84 @@ it('stops playback and reports what was heard when the reader talks over the ans
   expect(result.current.state).toBe('listening')
 })
 
+it('still reports the first sound heard when the browser has no output latency to give', async () => {
+  const { socket } = await started()
+  ;(FakeContext.last as { outputLatency?: number }).outputLatency = undefined
+  ask(socket)
+  sentence(socket)
+  const metrics = socket.json.find((m) => m.type === 'metrics')
+  expect(metrics).toEqual({ type: 'metrics', turn: 1, wait_ms: 800, output_ms: 0, total_ms: 10900 - 9200 })
+})
+
+it('stops on speech in a pause between chunks, and tells the server what was heard', async () => {
+  const { result, socket } = await started()
+  ask(socket)
+  sentence(socket)
+  mocks.playback.active.mockReturnValue(false) // sentence 1 has ended, sentence 2 is not made yet
+  mocks.playback.playedSeconds.mockReturnValue(1.5)
+  act(() => {
+    for (let i = 0; i < 8; i++, now += 32) handlers.onFrame(0.9)
+  })
+  expect(socket.json.find((m) => m.type === 'interrupt')).toEqual({ type: 'interrupt', played_seconds: 1.5, stop_ms: 224 + 20 })
+  expect(result.current.state).toBe('listening')
+})
+
+it('does not send speech that began in a pause between chunks and never interrupted the answer', async () => {
+  const { socket } = await started()
+  ask(socket)
+  sentence(socket)
+  act(() => handlers.onSpeechStart()) // playback is idle: only the gap
+  act(() => handlers.onSpeechEnd(new Float32Array(16000)))
+  expect(socket.utterances).toHaveLength(1)
+})
+
+it('sends what was heard when the microphone is turned off in a pause between chunks', async () => {
+  const { result, socket } = await started()
+  ask(socket)
+  sentence(socket)
+  mocks.playback.playedSeconds.mockReturnValue(1.5)
+  await act(async () => result.current.stop())
+  expect(socket.json.filter((m) => m.type === 'interrupt')).toEqual([{ type: 'interrupt', played_seconds: 1.5, stop_ms: null }])
+})
+
+it('goes from off to starting to listening, and a press while starting releases everything', async () => {
+  let opened!: () => void
+  mocks.startMicrophone.mockImplementationOnce(
+    (h: MicrophoneHandlers) =>
+      new Promise((resolve) => {
+        handlers = h
+        opened = () => resolve({ stop: mocks.micStop, echoCancelled: true })
+      }),
+  )
+  const hook = renderHook(() => useVoiceTurn(scope, null), { wrapper })
+  expect(hook.result.current.state).toBe('off')
+  act(() => void hook.result.current.start())
+  await vi.waitFor(() => expect(mocks.startMicrophone).toHaveBeenCalled())
+  expect(hook.result.current.state).toBe('starting')
+  expect(hook.result.current.on).toBe(true)
+  act(() => hook.result.current.stop())
+  expect(hook.result.current.state).toBe('off')
+  await act(async () => opened())
+  expect(mocks.micStop).toHaveBeenCalledTimes(1)
+  expect(FakeSocket.last.closed).toBe(true)
+  expect(hook.result.current.state).toBe('off')
+
+  await act(async () => {
+    await hook.result.current.start()
+  })
+  expect(hook.result.current.state).toBe('listening')
+})
+
+it('is starting from the click, before the voice program has answered', async () => {
+  let ready!: () => void
+  vi.spyOn(api, 'voiceStatus').mockImplementation(() => new Promise((resolve) => (ready = () => resolve({ ready: true, detail: null }))))
+  const hook = renderHook(() => useVoiceTurn(scope, null), { wrapper })
+  act(() => void hook.result.current.start())
+  expect(hook.result.current.state).toBe('starting')
+  await act(async () => ready())
+  expect(hook.result.current.state).toBe('listening')
+})
+
 it('does not send speech that began over the answer and never interrupted it', async () => {
   const { socket } = await started()
   ask(socket)
@@ -380,6 +458,8 @@ it('moves a streaming answer to a stopped state when it is interrupted before do
   const { result, socket } = await started()
   ask(socket)
   socket.say({ type: 'token', text: 'It is' })
+  socket.say({ type: 'sentence', seq: 0, text: 'It is', rate: 24000 })
+  socket.audio() // the first of the answer is playing
   mocks.playback.active.mockReturnValue(true)
   mocks.playback.playedSeconds.mockReturnValue(0.5)
   act(() => {

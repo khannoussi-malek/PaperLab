@@ -6,6 +6,7 @@ import type { useVoiceTurn, VoiceState } from './useVoiceTurn'
 
 const LABEL: Record<VoiceState, string> = {
   off: 'Ask out loud',
+  starting: 'Starting the microphone',
   listening: 'Listening, press to turn off',
   thinking: 'Thinking, press to turn off',
   speaking: 'Speaking, press to turn off',
@@ -24,7 +25,7 @@ export function VoiceButton({ voice, disabled }: Props) {
       {voice.on && (
         <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <span aria-hidden className="size-1.5 animate-pulse rounded-full bg-destructive" />
-          Listening
+          {voice.state === 'starting' ? 'Starting' : 'Listening'}
         </span>
       )}
       <Button

@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import uuid
 from collections.abc import Awaitable
@@ -148,6 +149,13 @@ class Finished(BaseModel):
 _parse_message = TypeAdapter(Annotated[Start | Interrupt | Metrics | Finished, Field(discriminator="type")])
 
 
+def _is_metrics(raw: str) -> bool:
+    try:
+        return json.loads(raw).get("type") == "metrics"
+    except (ValueError, AttributeError):
+        return False
+
+
 async def load_llm(model_id: uuid.UUID | None, transport) -> LLM:
     """The adapter for this question's model, or the default's, from a short session closed before the answer runs
     (a socket can't hold a request-scoped one): a model removed mid-session is an error message, not a dropped one."""
@@ -209,6 +217,9 @@ class _Connection:
         try:
             message = _parse_message.validate_json(raw)
         except ValidationError:
+            if _is_metrics(raw):  # timing is a nicety: a bad one must not cost the reader their answer
+                logger.debug("ignored a voice metrics message that was not valid: %.200s", raw)
+                return
             return await self.error(BAD_MESSAGE)
         match message:
             case Interrupt():
@@ -286,8 +297,9 @@ class _Connection:
         await self._saved(output_id)
 
     async def _keep_on_failure(self, saving: Awaitable[uuid.UUID | None]) -> uuid.UUID | None | object:
-        """The save's result; or _FAILED, after telling the page, when the database failed. The turn stays current, so
-        the page's next `finished` or `interrupt` tries again."""
+        """The save's result; or _FAILED, after telling the page, when the database failed. The turn stays current, but
+        the page doesn't send `finished` again, so a failed save of a fully heard answer is lost and the reader is told.
+        ponytail: no retry; a later `interrupt` would still save what it had heard."""
         try:
             return await saving
         except Exception:

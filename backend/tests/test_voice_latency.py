@@ -85,3 +85,16 @@ async def test_route_counts_interruptions_and_the_false_ones(client, session):
 
 async def test_route_with_no_turns_has_no_groups(client):
     assert await groups(client) == {}
+
+
+async def test_route_looks_at_only_the_latest_500_turns(client, session):
+    from datetime import datetime, timedelta, timezone
+
+    start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    session.add_all([turn(stt_ms=i, created_at=start + timedelta(seconds=i)) for i in range(505)])
+    await session.flush()
+
+    group = (await groups(client))["m"]
+
+    assert group["warm"]["stt_ms"]["n"] == 500
+    assert group["warm"]["stt_ms"]["median"] == 254.5  # turns 5..504: the five oldest are left out

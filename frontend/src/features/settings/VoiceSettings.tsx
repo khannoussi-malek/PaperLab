@@ -1,10 +1,11 @@
 import { useVoiceLatency, useVoiceStatus } from '@/api/queries'
 import type { VoiceLatencyGroup, VoicePercentiles } from '@/api/client'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { INTERRUPT_SUSTAIN_MS } from '../voice/constants'
 
 // The stages in the order a question goes through them, by the field each comes from.
 const STAGES: [keyof VoiceLatencyGroup['warm'], string][] = [
-  ['wait_ms', 'Waiting for silence'],
+  ['wait_ms', 'Waiting for silence (a setting)'],
   ['stt_ms', 'Speech to text'],
   ['retrieval_ms', 'Finding passages'],
   ['embed_ms', 'Of that, embedding the question'],
@@ -61,7 +62,8 @@ function StageTable({ title, stages }: { title: string; stages: VoiceLatencyGrou
 const hasTurns = (stages: VoiceLatencyGroup['warm']) => STAGES.some(([field]) => stages[field].n > 0)
 
 function interruptLine(group: VoiceLatencyGroup) {
-  return `${group.interrupts} interruptions, ${group.false_interrupts} probably false`
+  const noun = group.interrupts === 1 ? 'interruption' : 'interruptions'
+  return `${group.interrupts} ${noun}, ${group.false_interrupts} probably false`
 }
 
 /** The "Voice" section: whether the voice program is ready, and how long each stage of a spoken question has taken. */
@@ -96,13 +98,15 @@ export function VoiceSettings() {
         <div key={group.model} className="flex flex-col gap-3">
           <h3 className="text-sm font-medium">{group.model}</h3>
           {hasTurns(group.warm) && <StageTable title="After the first question" stages={group.warm} />}
-          {hasTurns(group.cold) && <StageTable title="First question after the voice program started" stages={group.cold} />}
+          {hasTurns(group.cold) && <StageTable title="First question after turning the microphone on" stages={group.cold} />}
           <p className="text-xs text-muted-foreground">{interruptLine(group)}</p>
         </div>
       ))}
       {groups && groups.length > 0 && (
         <p className="text-xs text-muted-foreground">
-          Times are from this computer. Each stage is its own median, so they won't add up to the total.
+          Times are from this computer. Each stage is its own median, so they won't add up to the total. Stopping when
+          interrupted includes the {INTERRUPT_SUSTAIN_MS} ms it waits to be sure you're speaking. From your latest 500
+          voice questions.
         </p>
       )}
     </section>

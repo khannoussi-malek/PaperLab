@@ -18,7 +18,7 @@ class VoiceTurn(Base):
     workspace_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("workspaces.id", ondelete="SET NULL"))
     model: Mapped[str] = mapped_column(Text)
     connection_name: Mapped[str | None] = mapped_column(Text)
-    cold: Mapped[bool]  # the first turn after the voice program started
+    cold: Mapped[bool]  # the first question after the microphone was turned on (the program warms itself at start)
     whole_paper: Mapped[bool]
     interrupted: Mapped[bool] = mapped_column(server_default=text("false"))
     false_interrupt: Mapped[bool] = mapped_column(server_default=text("false"))

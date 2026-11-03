@@ -310,6 +310,17 @@ def test_metrics_land_on_the_current_turn_and_ones_for_an_unknown_turn_are_ignor
     assert rig.saved[0].result.timing == {"wait_ms": 400, "output_ms": 5000, "total_ms": 5400}
 
 
+def test_a_metrics_message_that_is_not_valid_is_ignored_without_an_error(rig):
+    """The page's timing is a nicety: a null output delay must not cost the reader their answer."""
+    with connect(rig) as ws:
+        started(ws)
+        ask(ws)
+        ws.send_json({"type": "metrics", "turn": 1, "wait_ms": 800, "output_ms": None, "total_ms": 5400})
+        ws.send_json({"type": "finished"})
+        assert ws.receive_json()["type"] == "saved"  # the next thing is the save, not an error
+    assert rig.saved[0].result.timing == {}
+
+
 def test_a_bad_message_after_start_sends_error_and_keeps_the_connection(rig):
     with connect(rig) as ws:
         started(ws)
