@@ -29,6 +29,9 @@ def test_the_image_builds_the_frontend_from_the_committed_api_types_and_serves_i
 
     assert "RUN npx tsc -b && npx vite build" in dockerfile
     assert dockerfile.index("RUN node scripts/copy-voice-assets.mjs") < dockerfile.index("RUN npx tsc -b && npx vite build")
+    # the script warns and exits 0 on a missing asset (for dev), so the release image must fail here instead
+    assert "RUN test -f public/voice/silero_vad_v5.onnx" in dockerfile
+    assert dockerfile.index("RUN test -f public/voice/silero_vad_v5.onnx") > dockerfile.index("RUN node scripts/copy-voice-assets.mjs")
     assert "npm run build" not in dockerfile  # its prebuild regenerates the types from a running API
     assert "FRONTEND_DIST=/app/web" in dockerfile
     assert dockerfile.index("COPY --from=deps /venv /venv") < dockerfile.index("COPY backend/ ./")  # venv, then code

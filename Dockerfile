@@ -9,6 +9,7 @@ COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
 RUN node scripts/copy-voice-assets.mjs
+RUN test -f public/voice/silero_vad_v5.onnx
 RUN npx tsc -b && npx vite build
 
 # Stage 2: the Python environment, as backend/Dockerfile builds it. Rebuilt only when pyproject.toml or uv.lock change.
