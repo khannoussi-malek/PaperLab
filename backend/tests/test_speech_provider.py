@@ -82,7 +82,37 @@ async def test_status_says_how_to_start_the_program_when_it_is_down(app, client)
     assert (await client.get("/api/voice/status")).json() == {"ready": False, "detail": NOT_RUNNING}
 
 
+async def test_status_is_not_ready_when_health_says_so(app, client):
+    app.dependency_overrides[get_transport] = lambda: httpx.MockTransport(
+        lambda r: httpx.Response(200, json={"ready": False})
+    )
+    body = (await client.get("/api/voice/status")).json()
+    assert body["ready"] is False and body["detail"]
+
+
+@pytest.mark.parametrize("reply", [{"nope": 1}, "not an object"])
+async def test_a_malformed_transcribe_reply_is_unavailable(reply):
+    with pytest.raises(SpeechUnavailable):
+        await speech_with(lambda r: httpx.Response(200, json=reply)).transcribe(b"")
+    with pytest.raises(SpeechUnavailable):
+        await speech_with(lambda r: httpx.Response(200, content=b"<html>")).transcribe(b"")
+
+
+@pytest.mark.parametrize("headers", [{}, {"X-Sample-Rate": "fast"}])
+async def test_a_malformed_speak_reply_is_unavailable(headers):
+    with pytest.raises(SpeechUnavailable):
+        await speech_with(lambda r: httpx.Response(200, content=b"\x00", headers=headers)).speak("Hi.")
+
+
+@pytest.mark.parametrize("content", [b"<html>", b"[1]"])
+async def test_a_malformed_health_reply_is_not_ready(content):
+    with pytest.raises(SpeechUnavailable):
+        await speech_with(lambda r: httpx.Response(200, content=content)).health()
+
+
 def test_fake_speech_needs_a_test_stack(monkeypatch):
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("DISCOVERY_PROVIDER", raising=False)
     monkeypatch.setenv("SPEECH_PROVIDER", "fake")
     monkeypatch.setenv("PAPERLAB_STACK", "paperlab")
     with pytest.raises(ValidationError, match="scripts/e2e-stack.sh"):

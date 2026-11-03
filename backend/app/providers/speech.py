@@ -10,6 +10,7 @@ from app.config import settings
 from app.providers.base import Speech, SpeechUnavailable
 
 NOT_RUNNING = "The voice program isn't running. Start it with scripts/voice.sh."
+BAD_REPLY = "The voice program gave an answer PaperLab could not read. Restart it with scripts/voice.sh."
 WORK_TIMEOUT = 60.0
 HEALTH_TIMEOUT = 2.0
 
@@ -30,17 +31,31 @@ class SidecarSpeech:
             raise SpeechUnavailable(NOT_RUNNING) from e
         return reply
 
+    @staticmethod
+    def _field(reply: httpx.Response, key: str):
+        """One field of the reply's JSON object, or SpeechUnavailable: a 200 from something that isn't the program."""
+        try:
+            return reply.json()[key]
+        except (ValueError, KeyError, TypeError) as e:
+            raise SpeechUnavailable(BAD_REPLY) from e
+
     async def health(self) -> bool:
         reply = await self._call("GET", "/health", HEALTH_TIMEOUT)
-        return bool(reply.json().get("ready"))
+        return bool(self._field(reply, "ready"))
 
     async def transcribe(self, samples: bytes) -> str:
         reply = await self._call("POST", "/transcribe", WORK_TIMEOUT, content=samples)
-        return reply.json()["text"]
+        text = self._field(reply, "text")
+        if not isinstance(text, str):
+            raise SpeechUnavailable(BAD_REPLY)
+        return text
 
     async def speak(self, text: str) -> tuple[bytes, int]:
         reply = await self._call("POST", "/speak", WORK_TIMEOUT, json={"text": text})
-        return reply.content, int(reply.headers["X-Sample-Rate"])
+        try:
+            return reply.content, int(reply.headers["X-Sample-Rate"])
+        except (KeyError, ValueError) as e:
+            raise SpeechUnavailable(BAD_REPLY) from e
 
 
 class FakeSpeech:

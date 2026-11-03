@@ -58,9 +58,6 @@ from app.db import SessionLocal
 
 STATUS_BY_ERROR = {NotFound: 404, InvalidInput: 422, Conflict: 409, Gone: 410}
 
-# The only Host names the release image answers (spec §3): a web page in the user's browser can rebind its own name to
-# 127.0.0.1, but it still sends that name, so it can't read the library as same-origin.
-
 # Methods a cross-site form or fetch can send with no preflight, so Origin is the only defence against them.
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
@@ -84,6 +81,8 @@ def serve_frontend(app: FastAPI, folder: str) -> None:
     only the mount below is behind the isdir check. No folder at all: nothing changes."""
     if not folder:
         return
+    # The only Host names the release image answers (spec §3): a web page in the user's browser can rebind its own name
+    # to 127.0.0.1, but it still sends that name, so it can't read the library as same-origin. (LOCAL_HOSTS: config.py)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=LOCAL_HOSTS)
 
     @app.middleware("http")
