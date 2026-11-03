@@ -10,9 +10,12 @@ FIRST_CHUNK_MIN_WORDS = 6
 # ponytail: an "et al." that truly ends a sentence joins the next one. Fixing that needs a
 # sentence model; this list covers the abbreviations research answers actually use.
 PROTECTED = frozenset({"al.", "fig.", "eq.", "sec.", "vs.", "i.e.", "e.g.", "cf.", "pp.", "dr."})
-_COMPLETE_WORD = re.compile(r"(\S+)\s")
-_LAST_WORD = re.compile(r"(\S+)$")
+_COMPLETE_WORD = re.compile(r"(\S+)(\s+)(?=\S)")
+_LAST_WORD = re.compile(r"(\S+)(\s*)\Z")
+_LIST_MARKER = re.compile(r"\d+\.")
+_OPENERS = "([\"'"
 _MARKER = re.compile(r"\s*\[[CN]\d+\]")
+_LIST_DASH = re.compile(r"^\s*- ", re.MULTILINE)
 _MARKDOWN = re.compile(r"[*`#_]")
 _SPOKEN = (
     (re.compile(r"\bet al\."), "et al"),
@@ -23,11 +26,15 @@ _SPOKEN = (
 )
 
 
-def _ends_chunk(word: str, words_so_far: int, is_first: bool) -> bool:
-    w = word.lower()
+def _ends_chunk(word: str, gap: str, words_so_far: int, is_first: bool) -> bool:
+    if words_so_far == 1 and _LIST_MARKER.fullmatch(word):
+        return False
+    w = word.lower().lstrip(_OPENERS)
     if w in PROTECTED:
         return False
     if w.endswith((".", "!", "?")):
+        return True
+    if "\n" in gap:
         return True
     return is_first and words_so_far >= FIRST_CHUNK_MIN_WORDS and w.endswith((",", ";", ":"))
 
@@ -37,7 +44,8 @@ class SentenceSplitter:
 
     def __init__(self) -> None:
         self._pending = ""
-        self._words: list[str] = []
+        self._chunk = ""
+        self._word_count = 0
         self._emitted = 0
 
     def feed(self, token: str) -> list[str]:
@@ -46,7 +54,7 @@ class SentenceSplitter:
 
     def flush(self) -> list[str]:
         out = self._take_words(final=True)
-        if self._words:
+        if self._word_count:
             out.append(self._close())
         return out
 
@@ -57,14 +65,17 @@ class SentenceSplitter:
             match = _COMPLETE_WORD.match(head) or (_LAST_WORD.match(head) if final else None)
             if match is None:
                 return out
+            word, gap = match.group(1), match.group(2)
             self._pending = head[match.end():]
-            self._words.append(match.group(1))
-            if _ends_chunk(match.group(1), len(self._words), self._emitted == 0):
+            self._chunk += word + gap
+            self._word_count += 1
+            if _ends_chunk(word, gap, self._word_count, self._emitted == 0):
                 out.append(self._close())
 
     def _close(self) -> str:
-        chunk = " ".join(self._words)
-        self._words = []
+        chunk = self._chunk.strip()
+        self._chunk = ""
+        self._word_count = 0
         self._emitted += 1
         return chunk
 
@@ -72,6 +83,7 @@ class SentenceSplitter:
 def speakable(text: str) -> str:
     """Drop citation markers and markdown, and spell out symbols the voice would mangle."""
     text = _MARKER.sub("", text)
+    text = _LIST_DASH.sub("", text)
     text = _MARKDOWN.sub("", text)
     for pattern, replacement in _SPOKEN:
         text = pattern.sub(replacement, text)

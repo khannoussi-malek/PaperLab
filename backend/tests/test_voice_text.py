@@ -62,3 +62,32 @@ def test_heard_text_keeps_whole_chunks_then_a_share_of_the_cut_one():
     assert heard_text(chunks, 1.0) == "One two."
     assert heard_text(chunks, 2.0) == "One two. Three four"
     assert heard_text(chunks, 99) == "One two. Three four five six."
+
+
+def test_numbered_list_marker_does_not_end_a_chunk():
+    assert chunks_of(["1. First point here. 2. Second point."]) == ["1. First point here.", "2. Second point."]
+
+
+def test_a_year_later_in_a_sentence_still_ends_it():
+    assert chunks_of(["It came out in 2017. Next one."]) == ["It came out in 2017.", "Next one."]
+
+
+def test_chunks_keep_internal_whitespace():
+    assert chunks_of(["A  double space. Next one."]) == ["A  double space.", "Next one."]
+
+
+def test_newline_ends_a_chunk_unless_it_is_a_list_marker():
+    assert chunks_of(["## Results\nIt works. Bullet one\n- Bullet two\n"]) == [
+        "## Results",
+        "It works.",
+        "Bullet one",
+        "- Bullet two",
+    ]
+
+
+def test_bracketed_abbreviation_does_not_end_a_sentence():
+    assert chunks_of(["See (Fig. 3) for it."]) == ["See (Fig. 3) for it."]
+
+
+def test_speakable_drops_a_list_dash():
+    assert speakable("- Bullet two") == "Bullet two"
