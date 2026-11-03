@@ -8,7 +8,8 @@ WORKDIR /web
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
-RUN node scripts/copy-voice-assets.mjs && npx tsc -b && npx vite build
+RUN node scripts/copy-voice-assets.mjs
+RUN npx tsc -b && npx vite build
 
 # Stage 2: the Python environment, as backend/Dockerfile builds it. Rebuilt only when pyproject.toml or uv.lock change.
 FROM python:3.12-slim AS deps

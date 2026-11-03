@@ -27,6 +27,7 @@ def test_the_image_builds_the_frontend_from_the_committed_api_types_and_serves_i
     dockerfile = (ROOT / "Dockerfile").read_text()
 
     assert "RUN npx tsc -b && npx vite build" in dockerfile
+    assert dockerfile.index("RUN node scripts/copy-voice-assets.mjs") < dockerfile.index("RUN npx tsc -b && npx vite build")
     assert "npm run build" not in dockerfile  # its prebuild regenerates the types from a running API
     assert "FRONTEND_DIST=/app/web" in dockerfile
     assert dockerfile.index("COPY --from=deps /venv /venv") < dockerfile.index("COPY backend/ ./")  # venv, then code
