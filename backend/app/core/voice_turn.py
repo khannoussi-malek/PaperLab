@@ -29,8 +29,9 @@ Send = Callable[[dict | bytes], Awaitable[None]]
 
 CUT_OFF = "…"
 SPOKEN_ANSWER_PROMPT = (
-    "This answer will be read aloud. Answer in short plain sentences, with no tables, lists or headings. "
-    "Keep citing with the same markers."
+    "The reader is talking to you out loud. Their speech is turned into text for you, and your reply is read aloud to them, "
+    "so you can hear them and they can hear you. If they ask whether you can hear them, say yes briefly. "
+    "Answer in short plain sentences, with no tables, lists or headings. Keep citing with the same markers."
 )
 UNEXPECTED = "The answer stopped because of an unexpected error"
 CANNOT_ANSWER = "This question can't be answered right now."
