@@ -3,6 +3,7 @@
 Docker on a Mac has no GPU or Neural Engine, so the API calls this over HTTP (like Ollama).
 """
 import hashlib
+import shutil
 import time
 import urllib.request
 from pathlib import Path
@@ -10,6 +11,7 @@ from pathlib import Path
 import numpy as np
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
@@ -19,6 +21,7 @@ MAX_UTTERANCE_BYTES = 16000 * 4 * 60  # one minute of 16 kHz float32
 VOICE = "af_heart"
 RELEASE = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/"
 # name -> (SHA-256, megabytes)
+MIN_FREE_BYTES = 3 * 1024**3
 MODEL_FILES = {
     "kokoro-v1.0.int8.onnx": ("6e742170d309016e5891a994e1ce1559c702a2ccd0075e67ef7157974f6406cb", 88),
     "voices-v1.0.bin": ("bca610b8308e8d99f32e6fe4197e7ec01679264efed0cac9140fe9c29f1fbf7d", 27),
@@ -59,9 +62,9 @@ async def transcribe_route(request: Request) -> dict:
     body = await request.body()
     if len(body) > MAX_UTTERANCE_BYTES:
         raise HTTPException(413, "Audio is longer than a minute.")
-    if len(body) % 4:
+    if not body or len(body) % 4:
         raise HTTPException(422, "Audio must be 16 kHz float32 samples.")
-    return {"text": transcribe(np.frombuffer(body, dtype="<f4"))}
+    return {"text": await run_in_threadpool(transcribe, np.frombuffer(body, dtype="<f4"))}
 
 
 class Speak(BaseModel):
@@ -69,15 +72,19 @@ class Speak(BaseModel):
 
 
 @app.post("/speak")
-def speak_route(body: Speak) -> Response:
+async def speak_route(body: Speak) -> Response:
     if not body.text.strip():
         raise HTTPException(422, "Nothing to say.")
-    samples, rate = synthesize(body.text)
+    samples, rate = await run_in_threadpool(synthesize, body.text)
     return Response(samples.astype("<f4").tobytes(), media_type="application/octet-stream", headers={"X-Sample-Rate": str(rate)})
 
 
 def ensure_model_files() -> None:
     (HERE / "models").mkdir(exist_ok=True)
+    missing = [n for n in MODEL_FILES if not (HERE / "models" / n).exists()]
+    free = shutil.disk_usage(HERE).free
+    if missing and free < MIN_FREE_BYTES:
+        raise SystemExit(f"Not enough disk space to download the voice models: {free / 1024**3:.1f} GB free, 3 GB needed.")
     for name, (sha, megabytes) in MODEL_FILES.items():
         path = HERE / "models" / name
         if not path.exists():

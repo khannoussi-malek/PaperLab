@@ -41,3 +41,48 @@ def test_speak_refuses_empty_text_with_422(client):
 
 def test_any_request_with_an_origin_header_is_refused_with_403(client):
     assert client.get("/health", headers={"Origin": "http://evil.example"}).status_code == 403
+
+
+def test_transcribe_refuses_an_empty_body_with_422(client):
+    assert client.post("/transcribe", content=b"").status_code == 422
+
+
+def test_a_missing_model_with_too_little_disk_refuses_before_downloading(monkeypatch, tmp_path):
+    downloads = []
+    monkeypatch.setattr(server, "HERE", tmp_path)
+    monkeypatch.setattr(server.shutil, "disk_usage", lambda _: type("U", (), {"free": 1 * 1024**3})())
+    monkeypatch.setattr(server.urllib.request, "urlretrieve", lambda *a: downloads.append(a))
+    with pytest.raises(SystemExit) as stop:
+        server.ensure_model_files()
+    assert "1.0 GB free" in str(stop.value) and "3 GB" in str(stop.value)
+    assert downloads == []
+
+
+def test_health_answers_while_a_transcription_is_running(monkeypatch):
+    import threading
+
+    started, release = threading.Event(), threading.Event()
+
+    def slow(audio):
+        started.set()
+        return "done" if release.wait(5) else "blocked"
+
+    monkeypatch.setattr(server, "transcribe", slow)
+    results = {}
+
+    async def run():
+        import asyncio
+
+        import httpx
+
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=server.app), base_url="http://t") as c:
+            task = asyncio.create_task(c.post("/transcribe", content=bytes(8)))
+            await asyncio.to_thread(started.wait, 5)
+            results["health"] = await asyncio.wait_for(c.get("/health"), 2)
+            release.set()
+            results["text"] = (await task).json()
+
+    import asyncio
+
+    asyncio.run(run())
+    assert results["health"].status_code == 200 and results["text"] == {"text": "done"}
