@@ -117,3 +117,8 @@ def test_fake_speech_needs_a_test_stack(monkeypatch):
     monkeypatch.setenv("PAPERLAB_STACK", "paperlab")
     with pytest.raises(ValidationError, match="scripts/e2e-stack.sh"):
         Settings()
+
+
+async def test_an_empty_speak_reply_is_no_audio_not_a_failure():
+    speech = speech_with(lambda r: httpx.Response(200, content=b"", headers={"X-Sample-Rate": "24000"}))
+    assert await speech.speak("Hi.") == (b"", 24000)

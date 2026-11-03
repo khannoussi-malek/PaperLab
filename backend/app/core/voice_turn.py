@@ -28,6 +28,10 @@ logger = logging.getLogger(__name__)
 Send = Callable[[dict | bytes], Awaitable[None]]
 
 CUT_OFF = "…"
+SPOKEN_ANSWER_PROMPT = (
+    "This answer will be read aloud. Answer in short plain sentences, with no tables, lists or headings. "
+    "Keep citing with the same markers."
+)
 UNEXPECTED = "The answer stopped because of an unexpected error"
 CANNOT_ANSWER = "This question can't be answered right now."
 # (message, retryable): the words typed chat's panel gives each refusal (frontend/src/features/chat/refusals.ts).
@@ -166,7 +170,7 @@ async def _read_model(
                 result.timing.setdefault("first_chunk_ms", _ms(first_token_at))
             queue.put_nowait(chunk)
 
-    async for token in llm.stream(prepared.system, prepared.prompt):
+    async for token in llm.stream(f"{prepared.system}\n\n{SPOKEN_ANSWER_PROMPT}", prepared.prompt):
         if first_token_at is None:
             first_token_at = perf_counter()
             result.timing["ttft_ms"] = _ms(began, first_token_at)
@@ -195,6 +199,9 @@ async def _speak_chunks(
         text, carry = f"{carry} {chunk}".strip(), ""
         began = perf_counter()
         audio, rate = await speech.speak(said)
+        if not audio:  # the voice program had nothing to say: like a chunk of only markers
+            carry = text
+            continue
         result.timing.setdefault("tts_first_ms", _ms(began))
         async with lock:
             await send({"type": "sentence", "seq": len(result.chunks), "text": text, "rate": rate})

@@ -64,6 +64,16 @@ class StallingLLM(ScriptedLLM):
         await asyncio.Event().wait()
 
 
+class MuteSpeech(FakeSpeech):
+    """The voice program has nothing to say for text containing 'MUTE': empty audio."""
+
+    async def speak(self, text: str):
+        if "MUTE" in text:
+            self.spoken.append(text)
+            return b"", self.rate
+        return await super().speak(text)
+
+
 class DownSpeech(FakeSpeech):
     async def transcribe(self, samples: bytes) -> str:
         raise SpeechUnavailable("The voice program isn't running. Start it with scripts/voice.sh.")
@@ -466,3 +476,27 @@ async def test_mark_false_interrupt_flags_only_that_row(make_turn, session, send
 
     flags = {row.id: row.false_interrupt for row in await rows(session, VoiceTurn)}
     assert flags == {first.row_id: True, other.row_id: False}
+
+
+async def test_a_chunk_the_voice_program_cant_say_is_skipped_and_the_answer_continues(make_turn, send, sent):
+    _, result = await make_turn()
+    speech = MuteSpeech()
+    tokens = ["MUTE here.\n", "Next sentence is spoken."]
+
+    await run_turn(result, b"", ScriptedLLM(tokens), speech, send)
+
+    assert types(sent).count("sentence") == 1 and types(sent).count("audio") == 1
+    assert types(sent)[-1] == "done"
+    assert [text for text, _ in result.chunks] == ["MUTE here. Next sentence is spoken."]
+
+
+async def test_the_model_is_told_the_answer_will_be_read_aloud_but_typed_chat_is_not(make_turn, send):
+    _, result = await make_turn()
+    llm = ScriptedLLM(["One sentence here."])
+
+    await run_turn(result, b"", llm, FakeSpeech(), send)
+
+    system = llm.calls[0][0]
+    assert system.endswith(voice_turn.SPOKEN_ANSWER_PROMPT)
+    assert system == result.prepared.system + "\n\n" + voice_turn.SPOKEN_ANSWER_PROMPT
+    assert voice_turn.SPOKEN_ANSWER_PROMPT not in result.prepared.system

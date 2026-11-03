@@ -86,3 +86,20 @@ def test_health_answers_while_a_transcription_is_running(monkeypatch):
 
     asyncio.run(run())
     assert results["health"].status_code == 200 and results["text"] == {"text": "done"}
+
+
+def test_speak_of_text_kokoro_cant_phonemize_is_empty_audio_not_a_500(client, monkeypatch):
+    def nothing(text):
+        raise ValueError("Nothing to synthesize ... produced no phonemes")
+
+    monkeypatch.setattr(server, "synthesize", nothing)
+    r = client.post("/speak", json={"text": "|---|"})
+    assert r.status_code == 200 and r.content == b"" and r.headers["x-sample-rate"] == str(server.SAMPLE_RATE)
+
+
+def test_any_other_speak_failure_stays_a_500(monkeypatch):
+    def broken(text):
+        raise ValueError("something else")
+
+    monkeypatch.setattr(server, "synthesize", broken)
+    assert TestClient(server.app, raise_server_exceptions=False).post("/speak", json={"text": "Hi."}).status_code == 500

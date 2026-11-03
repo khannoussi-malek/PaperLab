@@ -16,6 +16,10 @@ _LIST_MARKER = re.compile(r"\d+\.")
 _OPENERS = "([\"'"
 _MARKER = re.compile(r"\s*\[[CN]\d+\]")
 _LIST_DASH = re.compile(r"^\s*- ", re.MULTILINE)
+_TABLE_DIVIDER = re.compile(r"^[ \t]*[|:\- \t]+$", re.MULTILINE)
+_TABLE_ROW = re.compile(r"^[ \t]*\|(.*?)\|?[ \t]*$", re.MULTILINE)
+_CELL_GAP = re.compile(r"\s*\|\s*")
+_SAYABLE = re.compile(r"[^\W_]")  # a letter or digit
 _MARKDOWN = re.compile(r"[*`#_]")
 _SPOKEN = (
     (re.compile(r"\bet al\."), "et al"),
@@ -83,11 +87,14 @@ class SentenceSplitter:
 def speakable(text: str) -> str:
     """Drop citation markers and markdown, and spell out symbols the voice would mangle."""
     text = _MARKER.sub("", text)
+    text = _TABLE_DIVIDER.sub("", text)
+    text = _TABLE_ROW.sub(lambda m: _CELL_GAP.sub(", ", m.group(1).strip()), text)
     text = _LIST_DASH.sub("", text)
     text = _MARKDOWN.sub("", text)
     for pattern, replacement in _SPOKEN:
         text = pattern.sub(replacement, text)
-    return " ".join(text.split())
+    text = " ".join(text.split())
+    return text if _SAYABLE.search(text) else ""
 
 
 def heard_text(chunks: list[tuple[str, float]], played_seconds: float) -> str:

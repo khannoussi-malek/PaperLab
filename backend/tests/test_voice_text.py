@@ -91,3 +91,12 @@ def test_bracketed_abbreviation_does_not_end_a_sentence():
 
 def test_speakable_drops_a_list_dash():
     assert speakable("- Bullet two") == "Bullet two"
+
+
+@pytest.mark.parametrize("text", ["|------|------|------------------------|", "| :--- | ---: |", "---", "...", " * "])
+def test_speakable_of_a_table_divider_or_any_text_with_nothing_to_say_is_empty(text):
+    assert speakable(text) == ""
+
+
+def test_speakable_turns_a_table_rows_pipes_into_commas():
+    assert speakable("| Turns 5-9 | 86% |") == "Turns 5-9, 86 percent"

@@ -19,6 +19,8 @@ HERE = Path(__file__).parent
 PORT = 8791
 MAX_UTTERANCE_BYTES = 16000 * 4 * 60  # one minute of 16 kHz float32
 VOICE = "af_heart"
+SAMPLE_RATE = 24000  # Kokoro's
+NO_PHONEMES = "no phonemes"
 RELEASE = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/"
 # name -> (SHA-256, megabytes)
 MIN_FREE_BYTES = 3 * 1024**3
@@ -75,7 +77,12 @@ class Speak(BaseModel):
 async def speak_route(body: Speak) -> Response:
     if not body.text.strip():
         raise HTTPException(422, "Nothing to say.")
-    samples, rate = await run_in_threadpool(synthesize, body.text)
+    try:
+        samples, rate = await run_in_threadpool(synthesize, body.text)
+    except ValueError as e:
+        if NO_PHONEMES not in str(e):
+            raise
+        samples, rate = np.zeros(0, dtype=np.float32), SAMPLE_RATE  # nothing sayable: empty audio, not an error
     return Response(samples.astype("<f4").tobytes(), media_type="application/octet-stream", headers={"X-Sample-Rate": str(rate)})
 
 
