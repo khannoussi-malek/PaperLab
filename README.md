@@ -394,6 +394,10 @@ Without the Connect Claude page:
   `"args": ["--cd", "~", "-e", ".local/bin/paperlab-mcp"]`. For Claude Code:
   `claude mcp add -s user paperlab -- "$HOME/.local/bin/paperlab-mcp"`.
   Don't use `mcp install`: the entry it writes runs the server outside the container.
+  The script serves the library in its own folder. If you run PaperLab from another folder too, say which one with
+  `PAPERLAB_DIR`: `claude mcp add -s user -e PAPERLAB_DIR="$HOME/my-paperlab" paperlab -- "$HOME/.local/bin/paperlab-mcp"`,
+  or `"env"` in Claude Desktop's config. A project's own `.mcp.json` also works, and takes over from the user entry
+  once approved. If Claude only says the connection closed, run `~/.local/bin/paperlab-mcp` in a terminal to see why.
   The script finds docker even where Claude Desktop can't see your shell's `PATH`; if yours is installed somewhere
   else, set `PAPERLAB_DOCKER` to its full path.
 - **Windows:** with the full path of your PaperLab folder (the desktop app's data folder above, or the folder you
