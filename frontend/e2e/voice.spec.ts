@@ -14,7 +14,7 @@ test.beforeEach(async ({ page, llmConnection }) => {
 })
 
 /**
- * Replaces the microphone with the recorded question (4 s of speech, then 7 s of silence), so the app's own code runs
+ * Replaces the microphone with the recorded question (about 3 s of speech, then silence to 11 s), so the app's own code runs
  * unchanged. `loop` repeats it: the question then comes again while the answer is still playing.
  */
 async function fakeMicrophone(page: Page, loop: boolean) {
@@ -56,7 +56,7 @@ test('asking out loud shows the question and the cited answer, and saves it', as
   await expect(page.getByText('Listening', { exact: true })).toBeVisible()
 
   const answer = savedAnswer(page)
-  await expect(answer).toContainText(FAKE_ANSWER.replace(' [C1]', ''), { timeout: 45_000 })
+  await expect(answer).toContainText(FAKE_ANSWER, { timeout: 45_000 })
   await expect(answer.locator('.chat-answer-footer')).toContainText('AI · ', { timeout: 45_000 })
   await expect(answer).not.toContainText('…') // all of it was heard, so all of it is saved
 })
@@ -81,7 +81,11 @@ test("Settings shows the turn's numbers", async ({ page, paperId }) => {
 
   await page.goto('/#/settings/voice')
   await expect(page.getByText('The voice program is ready.')).toBeVisible()
-  await expect(page.getByText(/\d+ interruptions, \d+ probably false/)).toBeVisible()
+  // The turn is in the cold or the warm table: some "Stop talking to first audio" row counts at least one turn.
+  const rows = page.getByRole('row').filter({ has: page.getByRole('rowheader', { name: 'Stop talking to first audio' }) })
+  await expect
+    .poll(async () => Math.max(0, ...(await rows.locator('td:nth-child(2)').allTextContents()).map(Number)))
+    .toBeGreaterThanOrEqual(1)
 })
 
 test('with the voice program down the button says what to run, and typed chat still works', async ({ page, paperId }) => {

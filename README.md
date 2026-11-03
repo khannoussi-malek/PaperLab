@@ -200,7 +200,7 @@ the newest answer until you press ×.
 - Ask for notes ("create notes to help me understand the method") and each note the answer suggests shows as a card
 with **Save**. A saved note is marked AI, keeps the answer's exact words, and belongs to the papers it cites.
 - Press the microphone to **ask out loud** and hear the answer. Speak over it and it stops, and only the part you heard
-is saved. Run `scripts/voice.sh` once to start the voice program: on first start it downloads its two speech models
+is saved. Start the voice program with `scripts/voice.sh` and keep it running while you use voice: on first start it downloads its two speech models
 (keep 3 GB of disk free). Your speech is turned into text on your computer and never leaves it. The answer
 still comes from the model you picked in the chat panel. **Settings → Voice** shows how fast each step has been. Wear
 headphones if your speakers feed back into the microphone. It's new, so tell us what feels slow or wrong.
