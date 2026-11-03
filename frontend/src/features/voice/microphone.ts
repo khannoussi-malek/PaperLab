@@ -68,7 +68,9 @@ export async function startMicrophone(handlers: MicrophoneHandlers): Promise<Mic
       model: VAD_MODEL,
       startOnLoad: true,
       baseAssetPath: VOICE_ASSETS,
-      onnxWASMBasePath: VOICE_ASSETS,
+      // Absolute on purpose: the runtime imports its wasm loader from here, and Vite's dev server turns a root-relative
+      // dynamic import into "?import" and then refuses it as a public file.
+      onnxWASMBasePath: `${location.origin}${VOICE_ASSETS}`,
       positiveSpeechThreshold: SPEECH_THRESHOLD,
       negativeSpeechThreshold: NEGATIVE_THRESHOLD,
       redemptionMs: SILENCE_MS,

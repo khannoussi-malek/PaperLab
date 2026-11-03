@@ -39,7 +39,8 @@ it('asks for echo cancelling and loads the detector with the tuned options from 
     model: 'v5',
     startOnLoad: true,
     baseAssetPath: '/voice/',
-    onnxWASMBasePath: '/voice/',
+    // Absolute: Vite's dev server rewrites a root-relative dynamic import to "?import" and then refuses a public file.
+    onnxWASMBasePath: `${location.origin}/voice/`,
     positiveSpeechThreshold: 0.5,
     negativeSpeechThreshold: 0.35,
     redemptionMs: 800,
