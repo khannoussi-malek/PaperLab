@@ -59,6 +59,7 @@ class TurnResult:
 
     scope: chat.Scope
     cold: bool = False
+    number: int = 0  # the nth turn on its connection: what the page's metrics message names
     parent_id: uuid.UUID | None = None
     turn_id: uuid.UUID = field(default_factory=uuid.uuid4)
     question: str = ""
@@ -83,9 +84,10 @@ def _first(exc: BaseException) -> BaseException:
 
 
 async def run_turn(result: TurnResult, samples: bytes, llm: LLM, speech: Speech, send: Send) -> None:
-    """Sends turn, transcript, sources, then token and sentence+audio messages, then done; or error instead of done."""
+    """Sends turn (id, number), transcript, sources, then token and sentence+audio messages, then done; or error
+    instead of done."""
     started = perf_counter()
-    await send({"type": "turn", "id": str(result.turn_id)})
+    await send({"type": "turn", "id": str(result.turn_id), "n": result.number})
     try:
         result.question = (await speech.transcribe(samples)).strip()
         result.timing["stt_ms"] = _ms(started)

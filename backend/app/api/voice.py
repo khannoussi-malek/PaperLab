@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import uuid
+from collections.abc import Awaitable
 from dataclasses import dataclass
 from typing import Annotated, Literal
 from urllib.parse import urlparse
@@ -31,6 +32,7 @@ router = APIRouter(prefix="/api/voice", tags=["voice"])
 
 MAX_UTTERANCE_BYTES = 16000 * 4 * 60  # a minute of 16 kHz float32
 BAD_UTTERANCE = "That recording couldn't be used. Try asking again."
+SAVE_FAILED = "That answer couldn't be saved."
 BAD_MESSAGE = "PaperLab didn't understand that message from the page. Reload the page and try again."
 # Words for the model refusals, the same as typed chat's panel (frontend/src/features/chat/refusals.ts).
 MODEL_REFUSALS = {
@@ -89,6 +91,9 @@ async def load_llm(model_id: uuid.UUID | None, transport) -> LLM:
     async with SessionLocal() as session:
         connection, model = await llm_connections.resolve(session, model_id)
     return build_llm(connection, model.name, transport=transport)
+
+
+_FAILED = object()  # what _keep_on_failure returns when a save raised
 
 
 @dataclass
@@ -158,7 +163,7 @@ class _Connection:
         await self.stop()  # a new question while an answer plays: the old turn saves nothing
         self.turns += 1
         parent = self.last_output_id if self.scope.paper_id is not None else None  # D62: workspaces have no follow-ups
-        result = TurnResult(scope=self.scope, cold=self.turns == 1, parent_id=parent)
+        result = TurnResult(scope=self.scope, cold=self.turns == 1, number=self.turns, parent_id=parent)
         turn = _Turn(self.turns, result)
         turn.task = asyncio.create_task(self._run(turn, samples))
         self.current = turn
@@ -172,7 +177,9 @@ class _Connection:
             await run_turn(turn.result, samples, turn.llm, self.speech, self.send)
             turn.streamed = not turn.result.ended
             await self._judge_last_interrupt(turn.result)
-        except Exception:  # the page went away mid-send, or something unforeseen: it is told if it can be
+        except WebSocketDisconnect:
+            logger.debug("the page left during voice turn %s", turn.number)  # an ordinary end, not a failure
+        except Exception:  # something unforeseen: the page is told if it can be
             logger.exception("voice turn %s stopped unexpectedly", turn.number)
             try:
                 await self.error(UNEXPECTED, retryable=True)
@@ -188,26 +195,42 @@ class _Connection:
         if not result.question:
             await mark_false_interrupt(row)
 
-    def _heard_turn(self) -> _Turn | None:
-        turn = self.current
-        return turn if turn is not None and turn.llm is not None else None
-
     async def interrupt(self, message: Interrupt) -> None:
-        turn = self._heard_turn()
+        turn = self.current
         if turn is None:
             return
-        await self.stop()
+        await self.stop()  # also while the model is still resolving: the turn ends before it starts
+        if turn.llm is None or turn.result.ended:  # nothing was streamed, or the turn already failed
+            self.current = None
+            return
+        output_id = await self._keep_on_failure(
+            save_heard(turn.result, message.played_seconds, turn.llm, message.stop_ms)
+        )
+        if output_id is _FAILED:
+            return
         self.current = None
-        output_id = await save_heard(turn.result, message.played_seconds, turn.llm, message.stop_ms)
         self.interrupted_row = turn.result.row_id
         await self._saved(output_id)
 
     async def finished(self) -> None:
-        turn = self._heard_turn()
-        if turn is None or not turn.streamed:
+        turn = self.current
+        if turn is None or turn.llm is None or not turn.streamed:
+            return
+        output_id = await self._keep_on_failure(finish_whole(turn.result, turn.llm))
+        if output_id is _FAILED:
             return
         self.current = None
-        await self._saved(await finish_whole(turn.result, turn.llm))
+        await self._saved(output_id)
+
+    async def _keep_on_failure(self, saving: Awaitable[uuid.UUID | None]) -> uuid.UUID | None | object:
+        """The save's result; or _FAILED, after telling the page, when the database failed. The turn stays current, so
+        the page's next `finished` or `interrupt` tries again."""
+        try:
+            return await saving
+        except Exception:
+            logger.exception("saving a voice answer failed")
+            await self.error(SAVE_FAILED, retryable=True)
+            return _FAILED
 
     def metrics(self, message: Metrics) -> None:
         turn = self.current

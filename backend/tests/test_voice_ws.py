@@ -17,7 +17,7 @@ from app.main import create_app
 from app.providers.llm import FakeLLM
 from app.providers.speech import FakeSpeech
 
-TALK, SLOW, MUTE = b"talk", b"slow", b"mute"  # 4 bytes each: one float32 sample
+TALK, SLOW, MUTE, FAIL, DROP = b"talk", b"slow", b"mute", b"fail", b"drop"  # 4 bytes each: one float32 sample
 START = {"type": "start", "scope": "paper", "id": str(uuid.uuid4()), "model_id": None}
 LOCAL = {"origin": "http://localhost:5173"}
 
@@ -25,11 +25,18 @@ LOCAL = {"origin": "http://localhost:5173"}
 @pytest.fixture
 def rig(monkeypatch):
     seen, saved, cancelled, false_marks = [], [], [], []
+    flags = SimpleNamespace(failing_saves=0)  # the next saves raise, like a database that went away
     speech = FakeSpeech()
 
     async def run_turn(result, samples, llm, speech, send):
         seen.append(SimpleNamespace(result=result, llm=llm, speech=speech, parent=result.parent_id, cold=result.cold))
-        await send({"type": "turn", "id": str(result.turn_id)})
+        await send({"type": "turn", "id": str(result.turn_id), "n": result.number})
+        if samples == DROP:  # the page went away while this was being sent
+            raise WebSocketDisconnect(1006)
+        if samples == FAIL:  # like run_turn's own failure path: error message, turn ended
+            result.question, result.answer, result.ended, result.row_id = "What?", "Part.", True, uuid.uuid4()
+            await send({"type": "error", "message": "boom", "retryable": True})
+            return
         if samples == MUTE:  # noise: no transcript, no row
             await send({"type": "done"})
             return
@@ -44,7 +51,13 @@ def rig(monkeypatch):
                 raise
         await send({"type": "done"})
 
+    def maybe_fail():
+        if flags.failing_saves:
+            flags.failing_saves -= 1
+            raise RuntimeError("database went away")
+
     async def finish_whole(result, llm):
+        maybe_fail()
         result.row_id = uuid.uuid4()
         result.output_id = uuid.uuid4()
         saved.append(SimpleNamespace(kind="whole", result=result, llm=llm))
@@ -52,6 +65,7 @@ def rig(monkeypatch):
 
     async def save_heard(result, played_seconds, llm, stop_ms):
         assert result.turn_id in cancelled or result.answer  # a running turn is stopped first
+        maybe_fail()
         result.row_id = uuid.uuid4()
         result.output_id = uuid.uuid4() if played_seconds > 0 else None  # nothing heard: no answer
         saved.append(SimpleNamespace(kind="heard", result=result, llm=llm, played=played_seconds, stop_ms=stop_ms))
@@ -71,7 +85,13 @@ def rig(monkeypatch):
     app = create_app()
     app.dependency_overrides[resolve_speech] = lambda: speech
     return SimpleNamespace(
-        client=TestClient(app), seen=seen, saved=saved, cancelled=cancelled, false_marks=false_marks, speech=speech
+        client=TestClient(app),
+        seen=seen,
+        saved=saved,
+        cancelled=cancelled,
+        false_marks=false_marks,
+        speech=speech,
+        flags=flags,
     )
 
 
@@ -314,3 +334,81 @@ def test_the_turn_gets_the_speech_provider_the_route_resolved(rig):
         started(ws)
         ask(ws)
     assert rig.seen[0].speech is rig.speech
+
+
+def test_a_failed_save_on_finished_sends_error_keeps_the_socket_and_can_retry(rig):
+    rig.flags.failing_saves = 1
+    with connect(rig) as ws:
+        started(ws)
+        ask(ws)
+        ws.send_json({"type": "finished"})
+        assert ws.receive_json() == {"type": "error", "message": "That answer couldn't be saved.", "retryable": True}
+        ws.send_json({"type": "finished"})  # the turn is still there to save
+        message = ws.receive_json()
+        assert ask(ws)[0]["type"] == "turn"  # and the socket still works
+    [only] = rig.saved
+    assert message == {"type": "saved", "output_id": str(only.result.output_id)}
+
+
+def test_a_failed_save_on_interrupt_sends_error_and_keeps_the_socket(rig):
+    rig.flags.failing_saves = 1
+    with connect(rig) as ws:
+        started(ws)
+        ask(ws)
+        ws.send_json({"type": "interrupt", "played_seconds": 1.0, "stop_ms": 50})
+        assert ws.receive_json() == {"type": "error", "message": "That answer couldn't be saved.", "retryable": True}
+        assert ask(ws)[0]["type"] == "turn"
+    assert rig.saved == [] and rig.false_marks == []
+
+
+def test_the_turn_message_carries_the_number_metrics_use(rig):
+    with connect(rig) as ws:
+        started(ws)
+        first = ask(ws)[0]
+        second = ask(ws)[0]
+        ws.send_json({"type": "metrics", "turn": second["n"], "wait_ms": 4, "output_ms": 5, "total_ms": 9})
+        ws.send_json({"type": "finished"})
+        ws.receive_json()
+    assert (first["n"], second["n"]) == (1, 2)
+    assert rig.saved[0].result.timing == {"wait_ms": 4, "output_ms": 5, "total_ms": 9}
+
+
+def test_an_interrupt_before_the_model_resolves_cancels_the_turn(rig, monkeypatch):
+    stopped = []
+
+    async def slow_load(model_id, transport):
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            stopped.append("cancelled")
+            raise
+
+    monkeypatch.setattr(voice, "load_llm", slow_load)
+    with connect(rig) as ws:
+        started(ws)
+        ws.send_bytes(TALK)
+        ws.send_json({"type": "interrupt", "played_seconds": 0, "stop_ms": None})
+        ws.send_text("not json")  # answered after the interrupt was handled
+        assert ws.receive_json()["type"] == "error"
+        assert stopped == ["cancelled"]
+    assert rig.seen == [] and rig.saved == []
+
+
+def test_an_interrupt_on_a_failed_turn_is_never_marked_false(rig):
+    with connect(rig) as ws:
+        started(ws)
+        ws.send_bytes(FAIL)
+        until(ws, "error")
+        ws.send_json({"type": "interrupt", "played_seconds": 1.0, "stop_ms": None})
+        ask(ws, MUTE)
+    assert rig.false_marks == [] and rig.saved == []
+
+
+def test_a_page_going_away_mid_send_ends_the_turn_quietly(rig, caplog):
+    with caplog.at_level("INFO", logger="app.api.voice"):
+        with connect(rig) as ws:
+            started(ws)
+            ws.send_bytes(DROP)
+            assert ws.receive_json()["type"] == "turn"
+            assert ask(ws)[0]["type"] == "turn"
+    assert [r for r in caplog.records if r.levelname in ("ERROR", "WARNING") or r.exc_info] == []

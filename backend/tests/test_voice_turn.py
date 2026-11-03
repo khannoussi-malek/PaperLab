@@ -102,7 +102,7 @@ async def rows(session, model):
 async def test_a_turn_sends_transcript_sources_tokens_then_audio_then_done_and_saves_nothing_yet(
     make_turn, session, send, sent
 ):
-    paper, result = await make_turn()
+    paper, result = await make_turn(number=3)
     llm = FakeLLM()
 
     await run_turn(result, b"\0" * 64, llm, FakeSpeech(), send)
@@ -113,7 +113,7 @@ async def test_a_turn_sends_transcript_sources_tokens_then_audio_then_done_and_s
     middle = order[3:-1]
     assert set(middle) == {"token", "sentence", "audio"}
     assert all(order[i + 1] == "audio" for i, kind in enumerate(order) if kind == "sentence")
-    assert sent[0] == {"type": "turn", "id": str(result.turn_id)}
+    assert sent[0] == {"type": "turn", "id": str(result.turn_id), "n": 3}
     assert sent[1] == {"type": "transcript", "text": "What does this paper say?"}
     assert sent[2]["whole_paper"] is True and sent[2]["sources"][0]["label"] == "C1"
     sentence = next(m for m in sent if isinstance(m, dict) and m["type"] == "sentence")
