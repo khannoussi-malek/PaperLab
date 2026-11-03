@@ -452,3 +452,17 @@ async def test_cancelling_during_the_token_stream_stops_cleanly(make_turn, sessi
     assert result.answer == "First "
     assert await save_heard(result, 1.0, llm, stop_ms=None) is None
     assert await rows(session, LLMOutput) == []
+
+
+async def test_mark_false_interrupt_flags_only_that_row(make_turn, session, send):
+    _, first = await make_turn()
+    await run_turn(first, b"", ScriptedLLM(SENTENCES), FakeSpeech(), send)
+    await save_heard(first, 0.1, ScriptedLLM(SENTENCES), stop_ms=50)
+    _, other = await make_turn()
+    await run_turn(other, b"", ScriptedLLM(SENTENCES), FakeSpeech(), send)
+    await finish_whole(other, ScriptedLLM(SENTENCES))
+
+    await voice_turn.mark_false_interrupt(first.row_id)
+
+    flags = {row.id: row.false_interrupt for row in await rows(session, VoiceTurn)}
+    assert flags == {first.row_id: True, other.row_id: False}

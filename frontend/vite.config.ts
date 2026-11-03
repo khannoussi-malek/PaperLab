@@ -12,7 +12,8 @@ export default defineConfig({
   optimizeDeps: { exclude: ['@mediapipe/tasks-vision'] },
   server: {
     // API_URL is http://api:8000 inside compose; the host default is for `npm run dev` on the host.
-    proxy: { '/api': process.env.API_URL ?? 'http://localhost:8000' },
+    // ws: the voice panel's WebSocket (/api/voice/ws) goes through the same proxy.
+    proxy: { '/api': { target: process.env.API_URL ?? 'http://localhost:8000', ws: true } },
   },
   test: {
     include: ['src/**/*.test.{ts,tsx}', 'e2e/**/*.vitest.ts'],

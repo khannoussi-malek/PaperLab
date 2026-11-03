@@ -11,6 +11,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from time import perf_counter
 
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import chat
@@ -294,3 +295,10 @@ async def save_heard(result: TurnResult, played_seconds: float, llm: LLM, stop_m
     Nothing heard saves no answer (the timing row is still written)."""
     heard = heard_text(result.chunks, played_seconds)
     return await _end(result, llm, heard + CUT_OFF if heard else None, interrupted=True, stop_ms=stop_ms)
+
+
+async def mark_false_interrupt(row_id: uuid.UUID) -> None:
+    """The reader's cut-in on this turn was probably noise or echo: the next thing heard was no words."""
+    async with SessionLocal() as session:
+        await session.execute(update(VoiceTurn).where(VoiceTurn.id == row_id).values(false_interrupt=True))
+        await session.commit()
