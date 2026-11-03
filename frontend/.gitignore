@@ -25,3 +25,6 @@ dist-ssr
 
 test-results
 playwright-report
+
+# Copied from node_modules by scripts/copy-voice-assets.mjs
+public/voice

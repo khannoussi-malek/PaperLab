@@ -2,13 +2,13 @@
 # Build context: the repository root (see .dockerignore). Development keeps backend/Dockerfile and frontend/Dockerfile.
 
 # Stage 1: the frontend, from the committed src/api/schema.d.ts. Not npm's own build script: its prebuild regenerates
-# the types from a running API, which a build doesn't have.
+# the types from a running API, which a build doesn't have. It copies the speech detector's assets itself.
 FROM node:24-alpine AS web
 WORKDIR /web
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
-RUN npx tsc -b && npx vite build
+RUN node scripts/copy-voice-assets.mjs && npx tsc -b && npx vite build
 
 # Stage 2: the Python environment, as backend/Dockerfile builds it. Rebuilt only when pyproject.toml or uv.lock change.
 FROM python:3.12-slim AS deps

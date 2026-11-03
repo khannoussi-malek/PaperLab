@@ -35,7 +35,8 @@ export type ChatStream = {
   problem: ChatProblem | null
 }
 
-const IDLE: ChatStream = {
+/** A stream with nothing asked; the voice panel starts its answers from it too. */
+export const IDLE: ChatStream = {
   status: 'idle',
   question: '',
   parentId: null,
