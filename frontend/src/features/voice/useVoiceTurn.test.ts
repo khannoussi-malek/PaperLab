@@ -274,6 +274,22 @@ it('stop during the microphone start stays starting until the mic is released, t
   expect(hook.result.current.problem).toBeNull()
 })
 
+it('a dropped connection during the microphone start says so, and goes off only once the mic is released', async () => {
+  const gate = slowStart()
+  const hook = renderHook(() => useVoiceTurn(scope, null), { wrapper })
+  act(() => void hook.result.current.start())
+  await vi.waitFor(() => expect(mocks.startMicrophone).toHaveBeenCalled())
+  act(() => FakeSocket.last.onclose?.())
+  expect(hook.result.current.state).toBe('starting') // the stream is not released yet
+  expect(hook.result.current.problem).toBe(DROPPED)
+  await act(async () => gate.opened())
+  await vi.waitFor(() => expect(mocks.micStop).toHaveBeenCalledTimes(1))
+  expect(hook.result.current.state).toBe('starting') // stopping the stream has not finished
+  await act(async () => gate.mic())
+  expect(hook.result.current.state).toBe('off')
+  expect(hook.result.current.problem).toBe(DROPPED)
+})
+
 it('a press after that release starts again', async () => {
   const gate = slowStart()
   const hook = renderHook(() => useVoiceTurn(scope, null), { wrapper })

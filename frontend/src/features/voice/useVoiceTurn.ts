@@ -241,7 +241,9 @@ export function useVoiceTurn(scope: ChatScope, modelId: string | null) {
     release(s)
     setStream(cutShort)
     setProblem(DROPPED)
-    setState('off')
+    // Mid-start, the start has the last word, as in stop(): it releases the microphone it is opening, then goes off.
+    generation.current++
+    if (!starting.current) setState('off')
   }
 
   function open(ctx: AudioContext, socket: WebSocket): Session {
@@ -346,7 +348,7 @@ export function useVoiceTurn(scope: ChatScope, modelId: string | null) {
       setState('off')
     } finally {
       starting.current = false
-      if (stale()) setState('off') // whatever was opened is released by now
+      if (stale() && mounted.current) setState('off') // whatever was opened is released by now
     }
   }
 
