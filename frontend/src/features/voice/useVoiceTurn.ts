@@ -13,6 +13,10 @@ export type VoiceState = 'off' | 'listening' | 'thinking' | 'speaking'
 const HEADPHONES = 'Use headphones to talk over answers. Without echo cancelling, the app would hear itself.'
 const DROPPED = 'The voice connection dropped. Press the microphone to try again.'
 const TOO_LONG = 'That was too long to send. Try a shorter question.'
+const ENDED = 'The microphone stopped. Press the microphone to try again.'
+const MUTED = "The microphone isn't sending any sound. Check your system settings."
+// Turning off mid-answer closes the socket before the server has saved what was heard; look again after it has.
+const SAVE_REFRESH_MS = 1000
 
 /** What the server sends (backend/app/api/voice.py); audio arrives as binary frames between them. */
 type ServerMessage =
@@ -92,27 +96,39 @@ export function useVoiceTurn(scope: ChatScope, modelId: string | null) {
     latest.current = { scope, modelId, invalidateHistory }
   })
 
+  /** Lets go of the microphone, playback and socket; safe to repeat. */
   function release(s: Session) {
+    if (s.closing) return
     s.closing = true
     s.playback.stop()
     s.mic?.stop().catch((error: unknown) => console.warn('the microphone did not stop cleanly', error))
     s.socket.close()
-    void s.ctx.close()
+    s.ctx.close().catch(() => {}) // already closed is the only way this fails
     if (session.current === s) session.current = null
   }
 
+  /** Turning off: what was heard of an answer still playing is saved, then everything is released. */
   function stop() {
-    if (session.current) release(session.current)
+    const s = session.current
+    if (s?.playback.active()) {
+      send(s, { type: 'interrupt', played_seconds: s.playback.playedSeconds(), stop_ms: null })
+      setTimeout(() => void latest.current.invalidateHistory(), SAVE_REFRESH_MS)
+    }
+    if (s) release(s)
     setState('off')
     setProblem(null)
+    setStream(IDLE)
   }
+
+  // Also when the chat moves to another paper or workspace: the session is bound to the one it started for.
   useEffect(() => {
     mounted.current = true
     return () => {
       mounted.current = false
-      if (session.current) release(session.current)
+      stop()
     }
-  }, [])
+    // stop only reads refs and calls state setters
+  }, [scope.kind, scope.id])
 
   function finishIfIdle(s: Session) {
     if (!s.done || s.finished || s.playback.active()) return
@@ -135,7 +151,7 @@ export function useVoiceTurn(scope: ChatScope, modelId: string | null) {
     s.barged = true
     send(s, { type: 'interrupt', played_seconds: playedSeconds, stop_ms: stopMs })
     setState('listening')
-    if (playedSeconds === 0) setStream(IDLE) // nothing was heard, so nothing is saved
+    setStream(playedSeconds === 0 ? IDLE : cutShort) // nothing heard, nothing saved; else what showed stays, stopped
   }
 
   function sendUtterance(s: Session, audio: Float32Array) {
@@ -271,16 +287,25 @@ export function useVoiceTurn(scope: ChatScope, modelId: string | null) {
       socket = await openSocket({ type: 'start', scope: target.kind, id: target.id, model_id: model })
       const s = open(ctx, socket)
       session.current = s
-      s.mic = await startMicrophone({
+      const mic = await startMicrophone({
         onFrame: (probability) => s.detector.frame(probability, s.talkOver && s.playback.active(), performance.now()),
         onSpeechStart: () => {
           s.speechOverAnswer = s.playback.active()
           s.barged = false
         },
         onSpeechEnd: (audio) => sendUtterance(s, audio),
+        onEnded: () => {
+          if (session.current !== s) return
+          stop()
+          setProblem(ENDED)
+        },
+        onMuted: () => setProblem(MUTED),
+        onUnmuted: () => setProblem(s.notice),
       })
-      if (!mounted.current || session.current !== s) return release(s) // closed while the microphone was starting
-      if (!s.mic.echoCancelled) {
+      s.mic = mic
+      if (s.closing) return void mic.stop().catch(() => {}) // closed while the microphone was starting
+      if (!mounted.current) return release(s)
+      if (!mic.echoCancelled) {
         s.talkOver = false
         s.notice = HEADPHONES
         setProblem(HEADPHONES)
@@ -290,7 +315,7 @@ export function useVoiceTurn(scope: ChatScope, modelId: string | null) {
       if (session.current) release(session.current)
       else {
         socket?.close()
-        void ctx.close()
+        ctx.close().catch(() => {})
       }
       setProblem(error instanceof Error ? error.message : DROPPED)
       setState('off')

@@ -14,6 +14,11 @@ export type MicrophoneHandlers = {
   onSpeechStart: () => void
   /** The finished utterance: 16 kHz mono float32. */
   onSpeechEnd: (audio: Float32Array) => void
+  /** The track died (unplugged, revoked): nothing more will be heard. */
+  onEnded: () => void
+  /** The track is open but sending silence, and when sound returns. */
+  onMuted: () => void
+  onUnmuted: () => void
 }
 
 export type Microphone = {
@@ -50,6 +55,13 @@ export async function startMicrophone(handlers: MicrophoneHandlers): Promise<Mic
   }
   const track = stream.getAudioTracks()[0]
   const release = () => stream.getTracks().forEach((t) => t.stop())
+  const watched = [
+    ['ended', handlers.onEnded],
+    ['mute', handlers.onMuted],
+    ['unmute', handlers.onUnmuted],
+  ] as const
+  for (const [event, listener] of watched) track.addEventListener(event, listener)
+  const unwatch = () => watched.forEach(([event, listener]) => track.removeEventListener(event, listener))
   try {
     const { MicVAD } = await import('@ricky0123/vad-web')
     const vad = await MicVAD.new({
@@ -70,12 +82,17 @@ export async function startMicrophone(handlers: MicrophoneHandlers): Promise<Mic
     return {
       echoCancelled: track.getSettings().echoCancellation !== false,
       stop: async () => {
-        await vad.destroy()
-        release()
+        unwatch()
+        try {
+          await vad.destroy()
+        } finally {
+          release()
+        }
       },
     }
   } catch (error) {
     console.warn('the speech detector did not start', error)
+    unwatch()
     release()
     throw new MicrophoneError(describe(null))
   }

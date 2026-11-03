@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook } from '@testing-library/react'
 import { createElement, type ReactNode } from 'react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { api } from '@/api/client'
+import { api, type ChatScope } from '@/api/client'
 import type { MicrophoneHandlers } from './microphone'
 
 const mocks = vi.hoisted(() => ({
@@ -49,6 +49,7 @@ class FakeSocket {
     queueMicrotask(() => this.onopen?.())
   }
   send(data: string | ArrayBufferLike) {
+    if (this.closed) throw new Error('sent after close')
     this.sent.push(data)
   }
   close() {
@@ -69,6 +70,10 @@ class FakeSocket {
 }
 
 class FakeContext {
+  static last: FakeContext
+  constructor() {
+    FakeContext.last = this
+  }
   currentTime = 0
   outputLatency = 0.02
   destination = {}
@@ -354,4 +359,121 @@ it('does not send an utterance over the API limit, and keeps listening', async (
   expect(socket.utterances).toHaveLength(0)
   expect(result.current.problem).toBe('That was too long to send. Try a shorter question.')
   expect(result.current.state).toBe('listening')
+})
+
+const ENDED = 'The microphone stopped. Press the microphone to try again.'
+const MUTED = "The microphone isn't sending any sound. Check your system settings."
+const busy = (status: string) => status === 'sources' || status === 'streaming'
+
+it('clears a half-asked or half-streamed answer when the microphone is turned off', async () => {
+  const { result, socket } = await started()
+  ask(socket)
+  socket.say({ type: 'token', text: 'It is' })
+  expect(busy(result.current.stream.status)).toBe(true)
+  await act(async () => result.current.stop())
+  expect(result.current.stream.status).toBe('idle')
+})
+
+it('moves a streaming answer to a stopped state when it is interrupted before done', async () => {
+  const { result, socket } = await started()
+  ask(socket)
+  socket.say({ type: 'token', text: 'It is' })
+  mocks.playback.active.mockReturnValue(true)
+  mocks.playback.playedSeconds.mockReturnValue(0.5)
+  act(() => {
+    for (let i = 0; i < 8; i++, now += 32) handlers.onFrame(0.9)
+  })
+  expect(busy(result.current.stream.status)).toBe(false)
+  expect(result.current.stream.segments).toEqual([{ kind: 'text', text: 'It is' }]) // what was shown stays
+})
+
+it('sends what was heard before closing when the microphone is turned off during playback', async () => {
+  const { result, socket } = await started()
+  ask(socket)
+  sentence(socket)
+  mocks.playback.active.mockReturnValue(true)
+  mocks.playback.playedSeconds.mockReturnValue(2.5)
+  await act(async () => result.current.stop())
+  expect(socket.json.filter((m) => m.type === 'interrupt')).toEqual([{ type: 'interrupt', played_seconds: 2.5, stop_ms: null }])
+  expect(mocks.playback.stop).toHaveBeenCalled()
+  expect(mocks.micStop).toHaveBeenCalled()
+  expect(socket.closed).toBe(true)
+})
+
+it('sends no interrupt when the microphone is turned off while nothing plays', async () => {
+  const { result, socket } = await started()
+  await act(async () => result.current.stop())
+  expect(socket.json.some((m) => m.type === 'interrupt')).toBe(false)
+})
+
+it('refreshes the history a moment after turning off mid-answer, since the socket is gone before the save', async () => {
+  const { result, socket } = await started()
+  ask(socket)
+  sentence(socket)
+  mocks.playback.active.mockReturnValue(true)
+  vi.useFakeTimers({ toFake: ['setTimeout'] })
+  try {
+    await act(async () => result.current.stop())
+    expect(queryClient.invalidateQueries).not.toHaveBeenCalled()
+    act(() => vi.advanceTimersByTime(1000))
+    expect(queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['papers', 'p1', 'chat'] })
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+it('stops voice and says so when the microphone track ends', async () => {
+  const { result } = await started()
+  act(() => handlers.onEnded())
+  expect(result.current.problem).toBe(ENDED)
+  expect(result.current.state).toBe('off')
+  expect(mocks.micStop).toHaveBeenCalled()
+  expect(FakeSocket.last.closed).toBe(true)
+})
+
+it('shows a muted microphone as a problem and clears it when sound returns', async () => {
+  const { result } = await started()
+  act(() => handlers.onMuted())
+  expect(result.current.problem).toBe(MUTED)
+  expect(result.current.state).toBe('listening')
+  act(() => handlers.onUnmuted())
+  expect(result.current.problem).toBeNull()
+})
+
+it('lets go of everything once when it is closed while the microphone is still starting', async () => {
+  let opened!: () => void
+  mocks.startMicrophone.mockImplementationOnce(
+    (h: MicrophoneHandlers) =>
+      new Promise((resolve) => {
+        handlers = h
+        opened = () => resolve({ stop: mocks.micStop, echoCancelled: true })
+      }),
+  )
+  const hook = renderHook(() => useVoiceTurn(scope, null), { wrapper })
+  act(() => void hook.result.current.start())
+  await vi.waitFor(() => expect(mocks.startMicrophone).toHaveBeenCalled())
+  const ctx = FakeContext.last
+  ctx.close.mockRejectedValue(new Error('already closed'))
+  hook.unmount()
+  opened()
+  await vi.waitFor(() => expect(mocks.micStop).toHaveBeenCalled())
+  expect(mocks.micStop).toHaveBeenCalledTimes(1)
+  expect(ctx.close).toHaveBeenCalledTimes(1)
+})
+
+it('stops voice when the chat moves to another scope', async () => {
+  const hook = renderHook(({ target }) => useVoiceTurn(target, null), {
+    wrapper,
+    initialProps: { target: { kind: 'paper', id: 'a' } as ChatScope },
+  })
+  await act(async () => {
+    await hook.result.current.start()
+  })
+  const socket = FakeSocket.last
+  expect(hook.result.current.on).toBe(true)
+  hook.rerender({ target: { kind: 'paper', id: 'b' } })
+  expect(mocks.micStop).toHaveBeenCalled()
+  expect(socket.closed).toBe(true)
+  expect(hook.result.current.on).toBe(false)
+  expect(hook.result.current.stream.status).toBe('idle')
 })

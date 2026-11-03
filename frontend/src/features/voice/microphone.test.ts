@@ -12,8 +12,16 @@ vi.mock('@ricky0123/vad-web', () => ({ MicVAD: { new: mocks.create } }))
 
 import { startMicrophone } from './microphone'
 
-const stream = { getAudioTracks: () => [{ stop: mocks.stopTrack, getSettings: () => mocks.settings }], getTracks: () => [{ stop: mocks.stopTrack }] }
-const handlers = () => ({ onFrame: vi.fn(), onSpeechStart: vi.fn(), onSpeechEnd: vi.fn() })
+const track = Object.assign(new EventTarget(), { stop: mocks.stopTrack, getSettings: () => mocks.settings })
+const stream = { getAudioTracks: () => [track], getTracks: () => [track] }
+const handlers = () => ({
+  onFrame: vi.fn(),
+  onSpeechStart: vi.fn(),
+  onSpeechEnd: vi.fn(),
+  onEnded: vi.fn(),
+  onMuted: vi.fn(),
+  onUnmuted: vi.fn(),
+})
 const start = (h = handlers()) => startMicrophone(h)
 
 beforeEach(() => {
@@ -79,4 +87,25 @@ it('stop destroys the detector and stops the track', async () => {
   await mic.stop()
   expect(mocks.destroy).toHaveBeenCalled()
   expect(mocks.stopTrack).toHaveBeenCalled()
+})
+
+it('stop releases the track even when the detector will not destroy', async () => {
+  mocks.destroy.mockRejectedValueOnce(new Error('worklet gone'))
+  const mic = await start()
+  await expect(mic.stop()).rejects.toThrow('worklet gone')
+  expect(mocks.stopTrack).toHaveBeenCalled()
+})
+
+it('tells the page when the track ends, mutes or unmutes, until stopped', async () => {
+  const h = handlers()
+  const mic = await startMicrophone(h)
+  track.dispatchEvent(new Event('mute'))
+  track.dispatchEvent(new Event('unmute'))
+  track.dispatchEvent(new Event('ended'))
+  expect(h.onMuted).toHaveBeenCalledOnce()
+  expect(h.onUnmuted).toHaveBeenCalledOnce()
+  expect(h.onEnded).toHaveBeenCalledOnce()
+  await mic.stop()
+  track.dispatchEvent(new Event('mute'))
+  expect(h.onMuted).toHaveBeenCalledOnce() // listeners are gone
 })
