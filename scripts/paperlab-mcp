@@ -19,7 +19,12 @@ if [ "${1:-}" = --install ]; then
   exit 0
 fi
 
-cd "$(dirname "$0")/.." || exit 1
+# PAPERLAB_DIR chooses the folder when more than one PaperLab exists; otherwise the one this script lives in.
+if [ -n "${PAPERLAB_DIR:-}" ]; then
+  cd "$PAPERLAB_DIR" 2>/dev/null || { say "PAPERLAB_DIR isn't a folder: $PAPERLAB_DIR."; exit 1; }
+else
+  cd "$(dirname "$0")/.." || exit 1
+fi
 
 # The desktop app copies this script to <its data folder>/scripts/, beside docker-compose.yml; the release tarball has the same layout. The per-user places come first: they exist only when this user installed that Docker.
 # Apps like Claude Desktop don't get a terminal's PATH on macOS, hence the fixed places after `command -v`. The last
@@ -53,6 +58,14 @@ case $services in
 esac
 if ! printf '%s\n' "$services" | grep -qx api; then
   say "PaperLab isn't running. Open the PaperLab app, or run \"docker compose up -d\" in $(pwd)."
+  # Another PaperLab may be running from another folder. Named, never used by itself: it may be another library. The
+  # test stack (fake data) and other projects' api services are not offered.
+  other=$("$docker" ps --filter label=com.docker.compose.service=api \
+    --format '{{.Label "com.docker.compose.project"}}|{{.Label "com.docker.compose.project.working_dir"}}' 2>/dev/null \
+    | awk -F'|' -v here="$(pwd)" '$1 ~ /^paperlab/ && $1 != "paperlab-e2e" && $2 != here { print $2; exit }')
+  if [ -n "$other" ]; then
+    say "Another PaperLab is running in \"$other\". To use that library, set PAPERLAB_DIR to that folder in this MCP server's settings."
+  fi
   exit 1
 fi
 
