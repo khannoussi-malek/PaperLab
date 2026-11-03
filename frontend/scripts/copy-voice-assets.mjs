@@ -1,6 +1,6 @@
 // Copies the speech detector's model, worklet and wasm out of node_modules into public/voice/ (git-ignored), where
 // the page loads them from. Runs before `npm run dev` and `npm run build`.
-import { copyFileSync, mkdirSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 const modules = fileURLToPath(new URL('../node_modules/', import.meta.url))
@@ -13,6 +13,13 @@ const files = [
   [`${ort}ort-wasm-simd-threaded.wasm`, 'ort-wasm-simd-threaded.wasm'],
   [`${ort}ort-wasm-simd-threaded.mjs`, 'ort-wasm-simd-threaded.mjs'],
 ]
+
+// A checkout whose dependencies predate voice must still start for people who never use it: warn, don't crash.
+const missing = files.filter(([from]) => !existsSync(from))
+if (missing.length > 0) {
+  console.warn('voice assets not copied (run npm install); asking out loud will not work until then')
+  process.exit(0)
+}
 
 mkdirSync(out, { recursive: true })
 for (const [from, name] of files) copyFileSync(from, `${out}${name}`)
