@@ -119,13 +119,15 @@ export function useVoiceTurn(scope: ChatScope, modelId: string | null) {
   /** Turning off: what was heard of an answer still playing is saved, then everything is released. */
   function stop() {
     generation.current++
+    // A start still under way has the last word: it releases the microphone it is opening, then sets 'off'.
+    const pending = starting.current
     const s = session.current
     if (s && answerPlaying(s)) {
       send(s, { type: 'interrupt', played_seconds: s.playback.playedSeconds(), stop_ms: null })
       setTimeout(() => void latest.current.invalidateHistory(), SAVE_REFRESH_MS)
     }
     if (s) release(s)
-    setState('off')
+    if (!pending) setState('off')
     setProblem(null)
     setStream(IDLE)
   }
@@ -323,7 +325,7 @@ export function useVoiceTurn(scope: ChatScope, modelId: string | null) {
       })
       if (stale() || s.closing) {
         release(s) // turned off or moved on while the microphone was starting
-        return void mic.stop().catch(() => {})
+        return await mic.stop().catch(() => {})
       }
       s.mic = mic
       if (!mounted.current) return release(s)
@@ -344,6 +346,7 @@ export function useVoiceTurn(scope: ChatScope, modelId: string | null) {
       setState('off')
     } finally {
       starting.current = false
+      if (stale()) setState('off') // whatever was opened is released by now
     }
   }
 

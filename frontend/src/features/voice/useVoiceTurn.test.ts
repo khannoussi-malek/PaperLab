@@ -240,31 +240,53 @@ it('sends what was heard when the microphone is turned off in a pause between ch
   expect(socket.json.filter((m) => m.type === 'interrupt')).toEqual([{ type: 'interrupt', played_seconds: 1.5, stop_ms: null }])
 })
 
-it('goes from off to starting to listening, and a press while starting releases everything', async () => {
-  let opened!: () => void
+/** A start whose microphone is still being opened; `opened()` lets it finish. */
+function slowStart() {
+  const gate: { opened: () => void; mic: () => void } = { opened: () => {}, mic: () => {} }
+  let micDone = Promise.resolve()
+  mocks.micStop.mockImplementationOnce(() => micDone)
   mocks.startMicrophone.mockImplementationOnce(
     (h: MicrophoneHandlers) =>
       new Promise((resolve) => {
         handlers = h
-        opened = () => resolve({ stop: mocks.micStop, echoCancelled: true })
+        gate.opened = () => resolve({ stop: mocks.micStop, echoCancelled: true })
       }),
   )
+  micDone = new Promise<void>((resolve) => (gate.mic = resolve))
+  return gate
+}
+
+it('stop during the microphone start stays starting until the mic is released, then goes off', async () => {
+  const gate = slowStart()
   const hook = renderHook(() => useVoiceTurn(scope, null), { wrapper })
-  expect(hook.result.current.state).toBe('off')
   act(() => void hook.result.current.start())
   await vi.waitFor(() => expect(mocks.startMicrophone).toHaveBeenCalled())
   expect(hook.result.current.state).toBe('starting')
-  expect(hook.result.current.on).toBe(true)
   act(() => hook.result.current.stop())
+  expect(hook.result.current.state).toBe('starting') // the stream is not released yet
+  expect(mocks.micStop).not.toHaveBeenCalled()
+  await act(async () => gate.opened())
+  await vi.waitFor(() => expect(mocks.micStop).toHaveBeenCalledTimes(1))
+  expect(hook.result.current.state).toBe('starting') // stopping the stream has not finished
+  await act(async () => gate.mic())
   expect(hook.result.current.state).toBe('off')
-  await act(async () => opened())
-  expect(mocks.micStop).toHaveBeenCalledTimes(1)
   expect(FakeSocket.last.closed).toBe(true)
-  expect(hook.result.current.state).toBe('off')
+  expect(hook.result.current.problem).toBeNull()
+})
 
+it('a press after that release starts again', async () => {
+  const gate = slowStart()
+  const hook = renderHook(() => useVoiceTurn(scope, null), { wrapper })
+  act(() => void hook.result.current.start())
+  await vi.waitFor(() => expect(mocks.startMicrophone).toHaveBeenCalled())
+  act(() => hook.result.current.stop())
+  await act(async () => gate.opened())
+  await act(async () => gate.mic())
+  expect(hook.result.current.state).toBe('off')
   await act(async () => {
     await hook.result.current.start()
   })
+  expect(FakeSocket.count).toBe(2)
   expect(hook.result.current.state).toBe('listening')
 })
 

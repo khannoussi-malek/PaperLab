@@ -18,7 +18,7 @@ def test_the_build_context_leaves_out_every_env_file_and_every_local_folder():
     frontend/.env* and frontend/node_modules into the image (spec §3)."""
     patterns = set((ROOT / ".dockerignore").read_text().split())
     required = {"**/.env", "**/.env.*", "**/node_modules", "**/.venv", ".git", "docs", "desktop", "website"}
-    required |= {"frontend/dist", "voice/models", "voice/.venv"}  # the voice program's ~115 MB stays out of the context
+    required |= {"frontend/dist", "voice/models"}  # voice/.venv is covered by **/.venv; the models are ~115 MB
 
     assert required <= patterns
     assert {".env", "node_modules", ".venv"} & patterns == set()
