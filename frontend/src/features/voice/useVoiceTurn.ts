@@ -56,14 +56,12 @@ type Session = {
 
 const voiceUrl = () => `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/voice/ws`
 
-function openSocket(first: object): Promise<WebSocket> {
+/** Resolves once connected; the caller sends `start`, after checking it is still wanted. */
+function openSocket(): Promise<WebSocket> {
   return new Promise((resolve, reject) => {
     const socket = new WebSocket(voiceUrl())
     socket.binaryType = 'arraybuffer'
-    socket.onopen = () => {
-      socket.send(JSON.stringify(first))
-      resolve(socket)
-    }
+    socket.onopen = () => resolve(socket)
     socket.onerror = () => reject(new Error(DROPPED))
   })
 }
@@ -91,6 +89,8 @@ export function useVoiceTurn(scope: ChatScope, modelId: string | null) {
   const latest = useRef({ scope, modelId, invalidateHistory })
   const session = useRef<Session | null>(null)
   const starting = useRef(false)
+  // Bumped whenever voice is turned off or the scope changes: a start() that began before then is stale.
+  const generation = useRef(0)
   const mounted = useRef(false)
   useEffect(() => {
     latest.current = { scope, modelId, invalidateHistory }
@@ -109,6 +109,7 @@ export function useVoiceTurn(scope: ChatScope, modelId: string | null) {
 
   /** Turning off: what was heard of an answer still playing is saved, then everything is released. */
   function stop() {
+    generation.current++
     const s = session.current
     if (s?.playback.active()) {
       send(s, { type: 'interrupt', played_seconds: s.playback.playedSeconds(), stop_ms: null })
@@ -276,15 +277,23 @@ export function useVoiceTurn(scope: ChatScope, modelId: string | null) {
   async function start() {
     if (session.current || starting.current) return
     starting.current = true
+    const token = generation.current
+    const stale = () => generation.current !== token
     setProblem(null)
     const ctx = new AudioContext()
     void ctx.resume()
     let socket: WebSocket | undefined
     try {
       const status = await api.voiceStatus()
+      if (stale()) return void ctx.close().catch(() => {})
       if (!status.ready) throw new Error(status.detail ?? 'The voice program is not ready.')
+      socket = await openSocket()
+      if (stale()) {
+        socket.close()
+        return void ctx.close().catch(() => {})
+      }
       const { scope: target, modelId: model } = latest.current
-      socket = await openSocket({ type: 'start', scope: target.kind, id: target.id, model_id: model })
+      socket.send(JSON.stringify({ type: 'start', scope: target.kind, id: target.id, model_id: model }))
       const s = open(ctx, socket)
       session.current = s
       const mic = await startMicrophone({
@@ -302,8 +311,11 @@ export function useVoiceTurn(scope: ChatScope, modelId: string | null) {
         onMuted: () => setProblem(MUTED),
         onUnmuted: () => setProblem(s.notice),
       })
+      if (stale() || s.closing) {
+        release(s) // turned off or moved on while the microphone was starting
+        return void mic.stop().catch(() => {})
+      }
       s.mic = mic
-      if (s.closing) return void mic.stop().catch(() => {}) // closed while the microphone was starting
       if (!mounted.current) return release(s)
       if (!mic.echoCancelled) {
         s.talkOver = false
@@ -317,6 +329,7 @@ export function useVoiceTurn(scope: ChatScope, modelId: string | null) {
         socket?.close()
         ctx.close().catch(() => {})
       }
+      if (stale()) return // the reader has moved on: say nothing about a start they no longer want
       setProblem(error instanceof Error ? error.message : DROPPED)
       setState('off')
     } finally {

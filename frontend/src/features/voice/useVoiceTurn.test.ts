@@ -34,6 +34,7 @@ const DROPPED = 'The voice connection dropped. Press the microphone to try again
 class FakeSocket {
   static last: FakeSocket
   static count = 0
+  static hold = false // true: the socket stays connecting until the test calls onopen
   sent: (string | ArrayBufferLike)[] = []
   closed = false
   onopen: (() => void) | null = null
@@ -46,7 +47,7 @@ class FakeSocket {
     this.url = url
     FakeSocket.last = this
     FakeSocket.count++
-    queueMicrotask(() => this.onopen?.())
+    if (!FakeSocket.hold) queueMicrotask(() => this.onopen?.())
   }
   send(data: string | ArrayBufferLike) {
     if (this.closed) throw new Error('sent after close')
@@ -91,6 +92,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   now = 10000
   FakeSocket.count = 0
+  FakeSocket.hold = false
   mocks.playback.active.mockReturnValue(false)
   mocks.playback.playedSeconds.mockReturnValue(0)
   mocks.playback.play.mockImplementation((_s, _r, onFirst?: (at: number) => void) => onFirst?.(10900))
@@ -476,4 +478,59 @@ it('stops voice when the chat moves to another scope', async () => {
   expect(socket.closed).toBe(true)
   expect(hook.result.current.on).toBe(false)
   expect(hook.result.current.stream.status).toBe('idle')
+})
+
+const moveTo = (hook: { rerender: (props: { target: ChatScope }) => void }) =>
+  hook.rerender({ target: { kind: 'paper', id: 'b' } })
+const onPaperA = () =>
+  renderHook(({ target }) => useVoiceTurn(target, null), {
+    wrapper,
+    initialProps: { target: { kind: 'paper', id: 'a' } as ChatScope },
+  })
+
+it('changing scope while the voice status is being checked opens nothing', async () => {
+  let ready!: () => void
+  vi.spyOn(api, 'voiceStatus').mockImplementation(() => new Promise((resolve) => (ready = () => resolve({ ready: true, detail: null }))))
+  const hook = onPaperA()
+  act(() => void hook.result.current.start())
+  moveTo(hook)
+  await act(async () => ready())
+  expect(FakeSocket.count).toBe(0)
+  expect(mocks.startMicrophone).not.toHaveBeenCalled()
+  expect(FakeContext.last.close).toHaveBeenCalledTimes(1)
+  expect(hook.result.current.on).toBe(false)
+  expect(hook.result.current.problem).toBeNull()
+})
+
+it('changing scope while the socket is opening never opens a session on the old paper', async () => {
+  FakeSocket.hold = true
+  const hook = onPaperA()
+  act(() => void hook.result.current.start())
+  await vi.waitFor(() => expect(FakeSocket.count).toBe(1))
+  const socket = FakeSocket.last
+  moveTo(hook)
+  await act(async () => socket.onopen?.())
+  expect(socket.json).toEqual([]) // no start message for paper a
+  expect(socket.closed).toBe(true)
+  expect(mocks.startMicrophone).not.toHaveBeenCalled()
+  expect(FakeContext.last.close).toHaveBeenCalledTimes(1)
+  expect(hook.result.current.on).toBe(false)
+  expect(hook.result.current.problem).toBeNull()
+})
+
+it('changing scope while the microphone is starting releases the mic', async () => {
+  let opened!: () => void
+  mocks.startMicrophone.mockImplementationOnce(
+    () => new Promise((resolve) => (opened = () => resolve({ stop: mocks.micStop, echoCancelled: true }))),
+  )
+  const hook = onPaperA()
+  act(() => void hook.result.current.start())
+  await vi.waitFor(() => expect(mocks.startMicrophone).toHaveBeenCalled())
+  const socket = FakeSocket.last
+  moveTo(hook)
+  await act(async () => opened())
+  expect(mocks.micStop).toHaveBeenCalledTimes(1)
+  expect(socket.closed).toBe(true)
+  expect(hook.result.current.on).toBe(false)
+  expect(hook.result.current.problem).toBeNull()
 })
