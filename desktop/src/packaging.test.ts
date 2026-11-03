@@ -29,12 +29,14 @@ describe('packaging', () => {
     expect(build.linux.maintainer).toBeTruthy() // a .deb needs one; it keeps an email out of the package
   })
 
-  it('tells macOS why it may ask for the camera (Hands mode), or the system would refuse it', () => {
+  it('tells macOS why it may ask for the camera (Hands mode) and the microphone (voice questions), or the system would refuse it', () => {
     const { build } = config()
 
     expect(build.mac.extendInfo).toEqual({
       NSCameraUsageDescription:
         'PaperLab uses the camera only while Hands mode is on, to follow your hands. The picture stays on this computer.',
+      NSMicrophoneUsageDescription:
+        'PaperLab uses the microphone only while voice questions are on. Your speech is turned into text on this computer.',
     })
   })
 

@@ -2,7 +2,6 @@
 carrying an Origin header, so none is sent. SPEECH_PROVIDER=fake makes build_speech return FakeSpeech (E2E stack)."""
 
 import asyncio
-import struct
 
 import httpx
 
@@ -61,10 +60,13 @@ class SidecarSpeech:
 class FakeSpeech:
     """Deterministic, offline. `spoken` records what it was asked to say."""
 
-    def __init__(self, transcript: str = "What does this paper say?", rate: int = 24000, delay: float = 0.0):
+    def __init__(
+        self, transcript: str = "What does this paper say?", rate: int = 24000, delay: float = 0.0, samples: int = 240
+    ):
         self.transcript = transcript
         self.rate = rate
         self.delay = delay
+        self.samples = samples
         self.spoken: list[str] = []
 
     async def health(self) -> bool:
@@ -77,13 +79,14 @@ class FakeSpeech:
         self.spoken.append(text)
         if self.delay:
             await asyncio.sleep(self.delay)
-        return struct.pack("<240f", *([0.0] * 240)), self.rate
+        return bytes(4 * self.samples), self.rate  # silence: float32 zeros
 
 
 FAKE_SPEECH_DELAY = 0.05
+FAKE_SPEECH_SECONDS = 8  # long enough that a looping question (voice.spec.ts) restarts while the answer plays
 
 
 def build_speech(transport: httpx.AsyncBaseTransport | None = None) -> Speech:
     if settings.speech_provider == "fake":
-        return FakeSpeech(delay=FAKE_SPEECH_DELAY)
+        return FakeSpeech(delay=FAKE_SPEECH_DELAY, samples=24000 * FAKE_SPEECH_SECONDS)
     return SidecarSpeech(settings.speech_url, transport)
