@@ -31,6 +31,7 @@ from app.models.saved_search import SavedSearch
 from app.models.setup import Setup
 from app.models.tag import WorkspaceTag, hit_tags, paper_tags
 from app.models.triage_event import TriageEvent
+from app.models.voice_turn import VoiceTurn
 from app.models.workspace import Workspace, workspace_papers
 
 __all__ = [
@@ -72,6 +73,7 @@ __all__ = [
     "SavedSearch",
     "Setup",
     "TriageEvent",
+    "VoiceTurn",
     "Workspace",
     "WorkspaceBranchState",
     "WorkspaceHitLink",

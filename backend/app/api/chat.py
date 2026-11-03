@@ -11,21 +11,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import LLMDep, SessionDep
 from app.core import chat, hit_chat, notes
 from app.core.errors import Conflict
-from app.core.retrieval import RetrievedChunk
 from app.db import SessionLocal
 from app.providers.base import LLM, LLMError, LLMUnavailable
 from app.schemas.chat import (
     ChatAnswer,
     ChatRequest,
-    ChatSource,
     DoneEvent,
     ErrorEvent,
     HitMetaEvent,
-    NoteSource,
     SavedNoteOut,
     SaveSuggestion,
     SourcesEvent,
     TokenEvent,
+    to_notes,
+    to_sources,
 )
 from app.schemas.notes import NoteOut
 
@@ -57,32 +56,6 @@ async def prepare_workspace_answer(workspace_id: uuid.UUID, payload: ChatRequest
 
 PreparedDep = Annotated[chat.Prepared, Depends(prepare_answer)]
 WorkspacePreparedDep = Annotated[chat.Prepared, Depends(prepare_workspace_answer)]
-
-
-def to_sources(chunks: list[RetrievedChunk | None]) -> list[ChatSource | None]:
-    return [
-        None
-        if c is None
-        else ChatSource(
-            label=f"C{i}",
-            chunk_id=c.id,
-            paper_id=c.paper_id,
-            page=c.page,
-            section=c.section,
-            bbox=c.bbox,
-            from_abstract=c.from_abstract,
-        )
-        for i, c in enumerate(chunks, start=1)
-    ]
-
-
-def to_notes(notes: list[chat.NoteSource | None]) -> list[NoteSource | None]:
-    return [
-        None
-        if n is None
-        else NoteSource(label=f"N{i}", note_id=n.id, paper_id=n.paper_id, page=n.page, provenance=n.provenance)
-        for i, n in enumerate(notes, start=1)
-    ]
 
 
 def error_event(message: str) -> ServerSentEvent:

@@ -55,6 +55,7 @@ PAPER_ID_COLUMNS = [
     ("manuscript_cite_keys", "paper_id"),
     ("manuscript_evidence", "paper_id"),
     ("manuscript_claim_checks", "paper_id"),
+    ("voice_turns", "paper_id"),
 ]
 
 
@@ -144,6 +145,7 @@ async def seed_both(session):
         "INSERT INTO triage_events (paper_id, source, before_pass, after_pass, undone_event_id) "
         "SELECT paper_id, 'undo', 1, 0, id FROM e",
         "INSERT INTO triage_events (paper_id, source, before_pass, after_pass) VALUES (:m, 'reader', 0, 1)",
+        "INSERT INTO voice_turns (paper_id, model, cold, whole_paper) VALUES (:m, 'fake', false, true)",
         "INSERT INTO section_role_overrides (paper_id, section_title, role) VALUES (:m, '2 Method', 'conclusion')",
         "INSERT INTO section_role_overrides (paper_id, section_title, role) VALUES (:k, '1 Introduction', 'intro')",
         "INSERT INTO section_role_overrides (paper_id, section_title, role) VALUES (:m, '1 Introduction', 'abstract')",
@@ -220,6 +222,7 @@ MOVED = {
     "evidence_cards": 1,
     "paper_events": 1,
     "triage_events": 3,
+    "voice_turns": 1,
     "manuscript_cite_keys": 1,
     "manuscript_evidence": 1,  # M's b; its a duplicated K's
     "manuscript_claim_checks": 1,  # likewise
@@ -252,6 +255,7 @@ AFTER = {  # K's rows after the merge: its own plus M's moved or unioned ones
     "manuscript_evidence.paper_id": 2,
     "manuscript_claim_checks.paper_id": 2,
     "triage_events.paper_id": 3,
+    "voice_turns.paper_id": 1,
     "paper_events.paper_id": 2,  # M's moved one, and the merge's own pdf_attached for K (R21)
 }
 
