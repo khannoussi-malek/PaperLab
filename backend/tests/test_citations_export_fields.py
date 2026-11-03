@@ -49,7 +49,7 @@ def test_extra_lines_name_arxiv_pubmed_and_the_published_version():
     lines = item["note"].split("\n")
     assert "arXiv: 2401.00001" in lines and "PMID: 123456" in lines and "PMCID: PMC789" in lines
     assert "Published version: Nature https://doi.org/10.1/x" in lines
-    assert item["type"] == "article" and item["DOI"] == "10.48550/arXiv.2401.00001"
+    assert item["type"] == "article-journal" and item["DOI"] == "10.1/x"  # the published record, for a citation
     assert not any(line.startswith("arXiv") for line in csl_item(paper())["note"].split("\n"))
 
 
