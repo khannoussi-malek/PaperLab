@@ -1,5 +1,6 @@
 """ARQ job: a paper saved without its PDF gets the citation fields ingest would have given it (volume, issue, pages,
-editors, PubMed ids), from Crossref by DOI and OpenAlex, as `enrichment.fill_biblio` does for an ingested PDF. Only
+editors, PubMed ids, source type and so peer review), from Crossref by DOI and OpenAlex, as `enrichment.fill_biblio`
+and `fill_source_type` do for an ingested PDF. Only
 empty fields are filled and never a hand edit. Sources off in Settings → Paper sources are not asked. Never raises:
 the paper is already usable without these fields. `ctx["transport"]` is a test hook."""
 
@@ -36,7 +37,9 @@ async def fill_paper_biblio(ctx: dict, paper_id: str) -> None:
                         )
                     )
                 if cr or oa:
-                    await enrichment.fill_biblio(session, pid, cr, oa)
+                    works: dict = {}  # one Crossref request between the two
+                    await enrichment.fill_biblio(session, pid, cr, oa, crossref_works=works)
+                    await enrichment.fill_source_type(session, pid, None, cr, works)
         except Exception:
             logger.exception("filling the citation fields of %s failed; the paper stays usable", pid)
             await session.rollback()
