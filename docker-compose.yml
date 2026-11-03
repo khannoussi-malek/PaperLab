@@ -55,6 +55,7 @@ services:
     # Shell > .env > default. E2E runs on its own stack: scripts/e2e-stack.sh (README).
     environment:
       LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      SPEECH_PROVIDER: ${SPEECH_PROVIDER:-sidecar}
       DISCOVERY_PROVIDER: ${DISCOVERY_PROVIDER:-live}
       # The compose project (`paperlab`, or `paperlab-e2e` from scripts/e2e-stack.sh). Fake providers refuse to start
       # unless it ends in -e2e (D273).

@@ -48,3 +48,21 @@ class TextEmbedder(Protocol):
     async def encode(self, texts: list[str]) -> list[list[float]]:
         """One vector per text, in order. The texts already carry their prefix."""
         ...
+
+
+class SpeechUnavailable(Exception):
+    """The voice program can't be reached or failed. The message is shown to the reader."""
+
+
+class Speech(Protocol):
+    async def health(self) -> bool:
+        """Whether the voice program has its models loaded. Raises SpeechUnavailable when unreachable."""
+        ...
+
+    async def transcribe(self, samples: bytes) -> str:
+        """Raw little-endian float32, 16 kHz mono, to text."""
+        ...
+
+    async def speak(self, text: str) -> tuple[bytes, int]:
+        """Raw float32 samples and their sample rate."""
+        ...

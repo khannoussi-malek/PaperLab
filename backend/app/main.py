@@ -31,6 +31,7 @@ from app.api import (
     novelty,
     papers,
     triage,
+    voice,
     workspaces,
 )
 from app.api import citations as citations_api
@@ -50,7 +51,7 @@ from app.api import reporting_guidelines as reporting_guidelines_api
 from app.api import saved_searches as saved_searches_api
 from app.api import setup as setup_api
 from app.api import workspace_search as workspace_search_api
-from app.config import settings
+from app.config import LOCAL_HOSTS, settings
 from app.core import llm_connections, paper_sources
 from app.core.errors import Conflict, DomainError, Gone, InvalidInput, NotFound
 from app.db import SessionLocal
@@ -59,7 +60,6 @@ STATUS_BY_ERROR = {NotFound: 404, InvalidInput: 422, Conflict: 409, Gone: 410}
 
 # The only Host names the release image answers (spec §3): a web page in the user's browser can rebind its own name to
 # 127.0.0.1, but it still sends that name, so it can't read the library as same-origin.
-LOCAL_HOSTS = ["127.0.0.1", "localhost"]
 
 # Methods a cross-site form or fetch can send with no preflight, so Origin is the only defence against them.
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
@@ -147,6 +147,7 @@ def create_app() -> FastAPI:
     app.include_router(links.router)
     app.include_router(mcp_api.router)
     app.include_router(setup_api.router)
+    app.include_router(voice.router)
 
     @app.exception_handler(DomainError)
     async def domain_error(_: Request, exc: DomainError) -> JSONResponse:

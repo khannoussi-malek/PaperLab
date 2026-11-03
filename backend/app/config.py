@@ -11,6 +11,9 @@ from app.providers.search_model import SHIPPED
 # A compose project whose name ends in this is a test stack (scripts/e2e-stack.sh): the only place fakes run (D273).
 TEST_STACK_SUFFIX = "-e2e"
 
+# The Host headers the API answers to; also what an Origin must be for a state-changing request.
+LOCAL_HOSTS = ["127.0.0.1", "localhost"]
+
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +51,9 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     # Streaming, so a generous cap costs nothing when unused and never truncates a long answer.
     anthropic_max_tokens: int = 64_000
+    # The voice program on the host (voice/server.py). `fake` swaps it for a scripted one (the E2E stack).
+    speech_provider: Literal["sidecar", "fake"] = "sidecar"
+    speech_url: str = "http://host.docker.internal:8791"
     # Sent as `mailto` on every OpenAlex request. Empty turns OpenAlex off: enrichment then uses only the PDF.
     openalex_mailto: str = ""
     # Sent as `x-api-key` to Semantic Scholar (Similar papers, arXiv lookups, free PDF links). Empty uses its shared,
@@ -86,13 +92,13 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _fake_only_on_a_test_stack(self):
-        fake = "fake" in (self.llm_provider, self.discovery_provider)
+        fake = "fake" in (self.llm_provider, self.discovery_provider, self.speech_provider)
         if fake and not self.paperlab_stack.endswith(TEST_STACK_SUFFIX):
             raise ValueError(
                 "Fake providers run only on a test stack, and this is "
                 f"{self.paperlab_stack or 'not a compose stack'!r}. "
                 "Start the test stack with scripts/e2e-stack.sh up. If your shell or .env sets "
-                "LLM_PROVIDER or DISCOVERY_PROVIDER to fake, unset it."
+                "LLM_PROVIDER, DISCOVERY_PROVIDER or SPEECH_PROVIDER to fake, unset it."
             )
         return self
 
