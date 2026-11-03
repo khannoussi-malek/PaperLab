@@ -29,7 +29,7 @@ up() {
   else
     echo "No $LIVE_MODELS volume: the test stack starts without the search model." >&2
   fi
-  docker compose -p "$PROJECT" up -d
+  docker compose -p "$PROJECT" up -d --build --renew-anon-volumes
   i=0
   until curl -sf -o /dev/null "http://localhost:$FRONTEND_PORT/api/llm/models"; do
     i=$((i + 1)); [ "$i" -lt 60 ] || { echo "E2E stack did not answer on :$FRONTEND_PORT" >&2; exit 1; }
