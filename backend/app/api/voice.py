@@ -8,11 +8,13 @@ from urllib.parse import urlparse
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field, TypeAdapter, ValidationError
+from sqlalchemy import or_, select
 
-from app.api.deps import SpeechDep, TransportDep
+from app.api.deps import SessionDep, SpeechDep, TransportDep
 from app.config import LOCAL_HOSTS
 from app.core import chat, llm_connections
 from app.core.errors import DomainError, error_code
+from app.core.voice_latency import Percentiles, percentiles
 from app.core.voice_turn import (
     CANNOT_ANSWER,
     UNEXPECTED,
@@ -23,6 +25,7 @@ from app.core.voice_turn import (
     save_heard,
 )
 from app.db import SessionLocal
+from app.models.voice_turn import VoiceTurn
 from app.providers.base import LLM, Speech, SpeechUnavailable
 from app.providers.llm import build_llm
 
@@ -31,6 +34,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/voice", tags=["voice"])
 
 MAX_UTTERANCE_BYTES = 16000 * 4 * 60  # a minute of 16 kHz float32
+OUTLIER_MS = 60000  # a turn this long was a sleeping Mac, not a slow answer
+LATEST_TURNS = 500
 BAD_UTTERANCE = "That recording couldn't be used. Try asking again."
 SAVE_FAILED = "That answer couldn't be saved."
 BAD_MESSAGE = "PaperLab didn't understand that message from the page. Reload the page and try again."
@@ -55,6 +60,64 @@ async def status(speech: SpeechDep) -> VoiceStatus:
     except SpeechUnavailable as e:
         return VoiceStatus(ready=False, detail=str(e))
     return VoiceStatus(ready=ready, detail=None if ready else "The voice program is still loading its models.")
+
+
+# The stages Settings shows, in order, by the column each comes from.
+STAGES = (
+    "wait_ms",
+    "stt_ms",
+    "retrieval_ms",
+    "embed_ms",
+    "ttft_ms",
+    "first_chunk_ms",
+    "tts_first_ms",
+    "output_ms",
+    "total_ms",
+    "interrupt_stop_ms",
+)
+
+
+class LatencyGroup(BaseModel):
+    model: str
+    warm: dict[str, Percentiles]
+    cold: dict[str, Percentiles]
+    interrupts: int
+    false_interrupts: int
+
+
+class Latency(BaseModel):
+    groups: list[LatencyGroup]
+
+
+def _by_stage(rows: list[VoiceTurn]) -> dict[str, Percentiles]:
+    """Each stage over the turns that have it: a failed turn has no total, so it is not counted there."""
+    return {s: percentiles([v for r in rows if (v := getattr(r, s)) is not None]) for s in STAGES}
+
+
+@router.get("/latency")
+async def latency(session: SessionDep) -> Latency:
+    rows = (
+        await session.scalars(
+            select(VoiceTurn)
+            .where(or_(VoiceTurn.total_ms.is_(None), VoiceTurn.total_ms < OUTLIER_MS))
+            .order_by(VoiceTurn.created_at.desc())
+            .limit(LATEST_TURNS)
+        )
+    ).all()
+    models = sorted({r.model for r in rows})
+    groups = []
+    for model in models:
+        mine = [r for r in rows if r.model == model]
+        groups.append(
+            LatencyGroup(
+                model=model,
+                warm=_by_stage([r for r in mine if not r.cold]),
+                cold=_by_stage([r for r in mine if r.cold]),
+                interrupts=sum(r.interrupted for r in mine),
+                false_interrupts=sum(r.false_interrupt for r in mine),
+            )
+        )
+    return Latency(groups=groups)
 
 
 class Start(BaseModel):

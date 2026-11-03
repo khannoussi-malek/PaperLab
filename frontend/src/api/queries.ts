@@ -135,6 +135,8 @@ export const keys = {
   connections: ['llm', 'connections'] as const,
   available: (connectionId: string) => ['llm', 'connections', connectionId, 'available'] as const,
   embedding: ['embedding'] as const,
+  voiceStatus: ['voice', 'status'] as const,
+  voiceLatency: ['voice', 'latency'] as const,
   paperSources: ['paper-sources'] as const,
   paperEvents: (id: string) => ['papers', id, 'events'] as const,
   foundPdfs: ['papers', 'found-pdfs'] as const,
@@ -1188,6 +1190,10 @@ export const useEmbeddingStatus = () =>
     queryFn: api.embeddingStatus,
     refetchInterval: (query) => embeddingPollInterval(query.state.data),
   })
+
+/** Read when the Voice section opens, not on a timer: whether the voice program is ready, and the measured times. */
+export const useVoiceStatus = () => useQuery({ queryKey: keys.voiceStatus, queryFn: api.voiceStatus, refetchOnMount: 'always' })
+export const useVoiceLatency = () => useQuery({ queryKey: keys.voiceLatency, queryFn: api.voiceLatency, refetchOnMount: 'always' })
 
 /** For a stream that isn't a mutation (the search model's download): read the embedding status again. */
 export function useInvalidateEmbedding() {

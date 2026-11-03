@@ -4,7 +4,7 @@ import { withViewTransition } from '@/components/motion'
 export type ReaderTab = 'notes' | 'chat' | 'data' | 'similar' | 'references' | 'evidence' | 'lens'
 export type WorkspaceTab = 'papers' | 'notes' | 'chat' | 'search' | 'tree' | 'acquisition' | 'screening' | 'prisma' | 'reading' | 'evidence' | 'write'
 /** Settings is one page per section, so a section can be linked to, reloaded and kept in the window's history. */
-export type SettingsSection = 'models' | 'sources' | 'search' | 'glass' | 'desktop' | 'claude'
+export type SettingsSection = 'models' | 'sources' | 'search' | 'glass' | 'voice' | 'desktop' | 'claude'
 export type Rect = [number, number, number, number]
 /** A grid cell to scroll to and focus once, when a chart point of data typed in is opened. */
 export type CellFocus = { rowId: string; columnId: string }
@@ -41,7 +41,7 @@ const CHARTS_HASH = /^#\/charts(?:\/(new|[0-9a-f-]{36})(\/edit)?)?(?:\?(.*))?$/i
 const DATASET_HASH = /^#\/datasets\/([0-9a-f-]{36})(?:\?(.*))?$/i
 const SETTINGS_HASH = '#/settings'
 const SETTINGS_SECTION_HASH = /^#\/settings\/([a-z]+)$/
-const SETTINGS_SECTIONS: readonly SettingsSection[] = ['models', 'sources', 'search', 'glass', 'desktop', 'claude']
+const SETTINGS_SECTIONS: readonly SettingsSection[] = ['models', 'sources', 'search', 'glass', 'voice', 'desktop', 'claude']
 const CONNECT_CLAUDE_HASH = '#/connect-claude'
 const GRAPH_HASH = '#/graph'
 const NOTES_HASH = /^#\/notes(?:\?(.*))?$/i

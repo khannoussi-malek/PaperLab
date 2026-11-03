@@ -207,6 +207,7 @@ describe('parseRoute', () => {
     expect(parseRoute(settingsHref)).toEqual({ name: 'settings', section: 'models' })
     expect(parseRoute('#/settings/sources')).toEqual({ name: 'settings', section: 'sources' })
     expect(parseRoute(settingsSectionHref('desktop'))).toEqual({ name: 'settings', section: 'desktop' })
+    expect(parseRoute('#/settings/voice')).toEqual({ name: 'settings', section: 'voice' })
     // An unknown or misspelt section still opens Settings, on its first section.
     expect(parseRoute('#/settings/nonsense')).toEqual({ name: 'settings', section: 'models' })
     expect(parseRoute('#/settings/models/extra')).toEqual({ name: 'library' })
