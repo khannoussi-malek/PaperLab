@@ -66,18 +66,62 @@ async def run(
             if asked:
                 await asyncio.sleep(delay)  # pacing only after a request
     finally:  # an interrupted run still records what it changed
-        if report:
-            with open(report, "w", newline="") as out:
-                writer = csv.writer(out)
-                writer.writerow(("paper_id", "doi", "field", "old", "new"))
-                writer.writerows((*row[:3], *("" if v is None else v for v in row[3:])) for row in changes)
+        _write_report(report, changes)
     return summary
 
 
-async def main(dry_run: bool = False, align: bool = False, report: str | None = None) -> None:
+def _no_source_type(only: list[uuid.UUID] | None = None):
+    """Papers with a DOI and no source type: Crossref's type gives it, and peer review follows."""
+    query = select(Paper.id, Paper.doi, Paper.source_type, Paper.peer_reviewed).where(
+        Paper.doi.is_not(None), Paper.source_type.is_(None)
+    )
+    if only is not None:
+        query = query.where(Paper.id.in_(only))
+    return query.order_by(Paper.created_at)
+
+
+async def run_source_types(
+    session: AsyncSession,
+    crossref_http: httpx.AsyncClient | None,
+    *,
+    delay: float = DELAY,
+    only: list[uuid.UUID] | None = None,
+    report: Path | str | None = None,
+) -> dict[str, int]:
+    """Fills source_type and peer_reviewed where a paper has neither, never past the owner's lock."""
+    rows = (await session.execute(_no_source_type(only))).all()
+    summary = {"checked": len(rows), "updated": 0}
+    changes: list[tuple] = []
+    names = ("source_type", "peer_reviewed")
+    try:
+        for paper_id, doi, *before in rows:
+            asked = await enrichment.fill_source_type(session, paper_id, None, crossref_http)
+            now = select(Paper.source_type, Paper.peer_reviewed).where(Paper.id == paper_id)
+            after = (await session.execute(now)).one()
+            summary["updated"] += list(after) != before
+            changes += [(paper_id, doi, n, old, new) for n, old, new in zip(names, before, after) if old != new]
+            if asked:
+                await asyncio.sleep(delay)
+    finally:
+        _write_report(report, changes)
+    return summary
+
+
+def _write_report(report: Path | str | None, changes: list[tuple]) -> None:
+    if report:
+        with open(report, "w", newline="") as out:
+            writer = csv.writer(out)
+            writer.writerow(("paper_id", "doi", "field", "old", "new"))
+            writer.writerows((*row[:3], *("" if v is None else v for v in row[3:])) for row in changes)
+
+
+async def main(
+    dry_run: bool = False, align: bool = False, report: str | None = None, source_types: bool = False
+) -> None:
     async with SessionLocal() as session:
         if dry_run:
-            count = len((await session.execute(_selection([Paper.id], align=align))).all())
+            query = _no_source_type() if source_types else _selection([Paper.id], align=align)
+            count = len((await session.execute(query)).all())
             print(f"Dry run: would check {count} papers. Nothing was asked and nothing was changed.")
             return
         sources = await paper_sources.get(session)
@@ -86,7 +130,10 @@ async def main(dry_run: bool = False, align: bool = False, report: str | None = 
         key = sources.api_keys["openalex"]
         oa = openalex.new_client(email=email, api_key=key) if sources.enabled["openalex"] else None
         try:
-            summary = await run(session, cr, oa, align=align, report=report)
+            if source_types:
+                summary = await run_source_types(session, cr, report=report)
+            else:
+                summary = await run(session, cr, oa, align=align, report=report)
         finally:
             for client in (cr, oa):
                 if client:
@@ -105,10 +152,14 @@ def cli(argv: list[str] | None = None) -> None:
         help="check every paper with a DOI and correct its year, venue and pages from Crossref",
     )
     parser.add_argument(
+        "--source-types", action="store_true",
+        help="instead, fill source_type and peer_reviewed for papers with a DOI and no source type",
+    )
+    parser.add_argument(
         "--report", metavar="PATH", help="write every change made as CSV (paper_id, doi, field, old, new)"
     )
     args = parser.parse_args(argv)
-    asyncio.run(main(dry_run=args.dry_run, align=args.align, report=args.report))
+    asyncio.run(main(dry_run=args.dry_run, align=args.align, report=args.report, source_types=args.source_types))
 
 
 if __name__ == "__main__":
