@@ -147,3 +147,24 @@ test("the no-match card's Clear search empties the box and puts the cursor back 
   await expect(search).toBeFocused()
   await expect(paperRow(page, paperId)).toBeVisible()
 })
+
+test('a paper still embedding shows how far it has got', async ({ page, paperId }) => {
+  await page.route('**/api/papers', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    const response = await route.fetch()
+    const papers = (await response.json()) as { id: string; status: string }[]
+    await route.fulfill({
+      response,
+      json: papers.map((paper) => (paper.id === paperId ? { ...paper, status: 'embedding' } : paper)),
+    })
+  })
+  await page.route(`**/api/papers/${paperId}/embedding-progress`, (route) =>
+    route.fulfill({ json: { done: 64, total: 150 } }),
+  )
+
+  await page.goto('/')
+
+  const row = paperRow(page, paperId)
+  await expect(row.getByText('Preparing search: 64 of 150 passages')).toBeVisible()
+  await expect(row.getByRole('progressbar', { name: 'Preparing search' })).toHaveAttribute('aria-valuenow', '43')
+})

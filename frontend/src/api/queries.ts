@@ -89,6 +89,7 @@ export const keys = {
   paper: (id: string) => ['papers', id] as const,
   notes: (paperId: string) => ['papers', paperId, 'notes'] as const,
   chunks: (paperId: string, page: number) => ['papers', paperId, 'chunks', page] as const,
+  embeddingProgress: (paperId: string) => ['papers', paperId, 'embedding-progress'] as const,
   chat: (scope: ChatScope) => [scope.kind === 'paper' ? 'papers' : 'workspaces', scope.id, 'chat'] as const,
   // Every workspace query starts with this, so one invalidation refreshes the list, its counts and each home's tabs.
   workspaces: ['workspaces'] as const,

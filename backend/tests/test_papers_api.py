@@ -3,6 +3,7 @@ import uuid
 from pathlib import Path
 
 import pytest
+from conftest import unit_vector
 from sqlalchemy import text, update
 from starlette.datastructures import UploadFile
 
@@ -243,3 +244,21 @@ async def test_a_stream_that_is_no_pdf_writes_nothing(session, pdf_dir):
         await papers.create_paper_from_stream(session, "notes.txt", io.BytesIO(b"hello"), pdf_dir)
 
     assert list(pdf_dir.glob("*")) == []
+
+
+async def test_embedding_progress_counts_the_chunks_with_a_vector(client, session):
+    paper = Paper(title="long", file_path="/long.pdf", status=PaperStatus.EMBEDDING)
+    session.add(paper)
+    await session.commit()
+    drafts = [ChunkDraft(i, 1, [[0, 0, 1, 1]], None, f"text {i}") for i in range(5)]
+    await papers.replace_chunks(session, paper.id, drafts)
+    first_two = [c.id for c in await papers.list_chunks(session, paper.id)][:2]
+    await papers.set_embeddings(session, first_two, [unit_vector("a"), unit_vector("b")], "test")
+
+    response = await client.get(f"/api/papers/{paper.id}/embedding-progress")
+
+    assert (response.status_code, response.json()) == (200, {"done": 2, "total": 5})
+
+
+async def test_embedding_progress_of_an_unknown_paper_is_404(client):
+    assert (await client.get(f"/api/papers/{uuid.uuid4()}/embedding-progress")).status_code == 404

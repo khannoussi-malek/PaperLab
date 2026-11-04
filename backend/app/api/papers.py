@@ -15,6 +15,7 @@ from app.models import PaperStatus
 from app.schemas.discovery import CandidateOut
 from app.schemas.papers import (
     ChunkOut,
+    EmbeddingProgressOut,
     FoundPdfOut,
     FoundPdfsSeen,
     NoteCountsIn,
@@ -132,6 +133,13 @@ async def list_paper_events(paper_id: uuid.UUID, session: SessionDep) -> list[Pa
     """What happened to the paper, newest first. 404 unknown paper."""
     await papers.get_paper(session, paper_id)
     return await paper_events.history(session, paper_id)
+
+
+@router.get("/{paper_id}/embedding-progress")
+async def embedding_progress(paper_id: uuid.UUID, session: SessionDep) -> EmbeddingProgressOut:
+    """What the library's progress bar polls while a paper is embedding. 404 unknown paper."""
+    done, total = await papers.embedding_progress(session, paper_id)
+    return EmbeddingProgressOut(done=done, total=total)
 
 
 @router.get("/{paper_id}/chunks")
