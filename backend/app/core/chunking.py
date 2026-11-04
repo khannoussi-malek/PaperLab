@@ -9,8 +9,12 @@ import re
 from collections import Counter
 from dataclasses import dataclass, replace
 
-STRATEGY_VERSION = 2  # v2: a block over MAX_CHARS is split
+STRATEGY_VERSION = 2  # v2: a block over BLOCK_CAP is split
 MAX_CHARS = 1500
+# A block longer than this is split. Embedding memory grows with a text's length squared: the longest real chunks
+# (8,181 characters) peak at 1.55 GB, and 30,000 characters ran out of a 2.5 GB cap (measured 2026-11-04). Below it a
+# block stays whole, however far past MAX_CHARS: splitting there lost answers further down the results.
+BLOCK_CAP = 8000
 # Drops figure labels, footnotes, and page furniture; keeps table text (~9pt vs ~11pt body).
 MIN_SIZE_RATIO = 0.75
 HEADING_MAX_CHARS = 90
@@ -85,15 +89,15 @@ def _draft(ordinal: int, blocks: list[Block], section: str | None) -> ChunkDraft
     )
 
 
-def _pieces(block: Block, max_chars: int) -> list[Block]:
+def _pieces(block: Block) -> list[Block]:
     """The block itself when it fits (heading ids depend on it), else cut at the last sentence end, else the last space,
-    else hard. Attention memory grows with a text's length squared: one long block can take an ingest to ~5 GB.
+    else hard.
     ponytail: every piece keeps the whole block's rect, so a citation highlights the block; per-line rects are the
     upgrade."""
     pieces, rest = [], block.text
-    while len(rest) > max_chars:
-        window = rest[:max_chars]
-        cut = window.rfind(". ") + 1 or window.rfind(" ") + 1 or max_chars
+    while len(rest) > BLOCK_CAP:
+        window = rest[:BLOCK_CAP]
+        cut = window.rfind(". ") + 1 or window.rfind(" ") + 1 or BLOCK_CAP
         pieces.append(replace(block, text=rest[:cut].strip()))
         rest = rest[cut:].strip()
     return [*pieces, replace(block, text=rest)] if pieces else [block]
@@ -104,7 +108,7 @@ def chunk_blocks(blocks: list[Block], max_chars: int = MAX_CHARS) -> list[ChunkD
     sized = [b for b in blocks if b.size >= body_size * MIN_SIZE_RATIO]
     headings = {id(b) for b in sized if is_heading(b, body_size)}
     kept = [b for b in sized if id(b) in headings or len(b.text.split()) >= MIN_WORDS]
-    content = [piece for block in kept for piece in _pieces(block, max_chars)]
+    content = [piece for block in kept for piece in _pieces(block)]
     use_overlap = not headings
 
     drafts: list[ChunkDraft] = []

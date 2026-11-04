@@ -1,4 +1,4 @@
-from app.core.chunking import Block, chunk_blocks, join_lines
+from app.core.chunking import BLOCK_CAP, Block, chunk_blocks, join_lines
 
 BODY = 10.0
 
@@ -53,20 +53,29 @@ def test_join_lines_rejoins_hyphenated_words():
     assert join_lines(["effective trans-", "fer from", " ", "BERT-", "Large"]) == "effective transfer from BERT- Large"
 
 
-def test_an_oversized_block_is_split_at_word_boundaries():
+def test_a_block_too_long_to_embed_is_split_at_word_boundaries():
     sentence = "The dose was reduced in patients with renal impairment. "
-    text = (sentence * 150).strip()
-    chunks = chunk_blocks([heading(1, 40, "1 Dosing"), para(1, 100, text)], max_chars=1500)
+    text = (sentence * 600).strip()  # 33,000 characters
+    chunks = chunk_blocks([heading(1, 40, "1 Dosing"), para(1, 100, text)])
 
     assert len(chunks) > 1
-    assert all(len(c.text) <= 1500 for c in chunks)
+    assert all(len(c.text) <= BLOCK_CAP for c in chunks)
     assert all((c.page, c.section_title, c.bbox) == (1, "1 Dosing", [[72, 100, 290, 140]]) for c in chunks)
     assert " ".join(c.text for c in chunks).split() == text.split()
     assert all(c.text.endswith(".") for c in chunks)  # at sentence ends, while there are any
 
 
 def test_a_block_with_no_spaces_still_splits():
-    chunks = chunk_blocks([heading(1, 40, "1 Data"), para(1, 100, "x" * 8000 + " end of it")], max_chars=1500)
+    chunks = chunk_blocks([heading(1, 40, "1 Data"), para(1, 100, "x" * 30_000 + " end of it")])
 
-    assert all(len(c.text) <= 1500 for c in chunks)
-    assert "".join(c.text.replace(" end of it", "") for c in chunks) == "x" * 8000
+    assert all(len(c.text) <= BLOCK_CAP for c in chunks)
+    assert "".join(c.text.replace(" end of it", "") for c in chunks) == "x" * 30_000
+
+
+def test_a_long_paragraph_that_can_be_embedded_stays_whole():
+    """Splitting at MAX_CHARS lost answers further down the results (top 12: 28 to 26 of 33, measured 2026-11-04)."""
+    text = prose("a", 6000)
+
+    [chunk] = chunk_blocks([heading(1, 40, "1 Long"), para(1, 100, text)])
+
+    assert chunk.text == text
