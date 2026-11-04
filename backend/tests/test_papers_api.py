@@ -4,14 +4,14 @@ from pathlib import Path
 
 import pytest
 from conftest import unit_vector
-from sqlalchemy import text, update
+from sqlalchemy import select, text, update
 from starlette.datastructures import UploadFile
 
 from app.config import settings
 from app.core import papers
 from app.core.chunking import ChunkDraft
 from app.core.errors import InvalidInput
-from app.models import Paper, PaperStatus
+from app.models import Chunk, Paper, PaperStatus
 
 pytestmark = pytest.mark.anyio
 
@@ -262,3 +262,34 @@ async def test_embedding_progress_counts_the_chunks_with_a_vector(client, sessio
 
 async def test_embedding_progress_of_an_unknown_paper_is_404(client):
     assert (await client.get(f"/api/papers/{uuid.uuid4()}/embedding-progress")).status_code == 404
+
+
+async def test_reingesting_a_half_embedded_paper_clears_its_vectors(client, arq, session):
+    """Re-ingest takes it out of `embedding`, which is what hides it from search: half a paper must not answer."""
+    paper = Paper(title="long", file_path="/long.pdf", status=PaperStatus.EMBEDDING)
+    session.add(paper)
+    await session.commit()
+    await papers.replace_chunks(session, paper.id, [ChunkDraft(i, 1, [[0, 0, 1, 1]], None, f"t{i}") for i in range(3)])
+    first = [c.id for c in await papers.list_chunks(session, paper.id)][:1]
+    await papers.set_embeddings(session, first, [unit_vector("a")], "test")
+
+    assert (await client.post(f"/api/papers/{paper.id}/reingest")).status_code == 202
+
+    query = select(Chunk).where(Chunk.paper_id == paper.id).execution_options(populate_existing=True)
+    chunks = await session.scalars(query)
+    assert all(c.embedding is None for c in chunks)
+
+
+async def test_reingesting_a_ready_paper_keeps_it_searchable_meanwhile(client, arq, session):
+    paper = Paper(title="done", file_path="/done.pdf", status=PaperStatus.READY)
+    session.add(paper)
+    await session.commit()
+    await papers.replace_chunks(session, paper.id, [ChunkDraft(0, 1, [[0, 0, 1, 1]], None, "t")])
+    ids = [c.id for c in await papers.list_chunks(session, paper.id)]
+    await papers.set_embeddings(session, ids, [unit_vector("a")], "test")
+
+    assert (await client.post(f"/api/papers/{paper.id}/reingest")).status_code == 202
+
+    query = select(Chunk).where(Chunk.paper_id == paper.id).execution_options(populate_existing=True)
+    chunks = await session.scalars(query)
+    assert all(c.embedding is not None for c in chunks)
