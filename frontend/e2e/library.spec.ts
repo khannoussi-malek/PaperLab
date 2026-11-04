@@ -168,3 +168,15 @@ test('a paper still embedding shows how far it has got', async ({ page, paperId 
   await expect(row.getByText('Preparing search: 64 of 150 passages')).toBeVisible()
   await expect(row.getByRole('progressbar', { name: 'Preparing search' })).toHaveAttribute('aria-valuenow', '43')
 })
+
+test('a paper still embedding says its answers use keyword matches', async ({ page, paperId }) => {
+  await page.route(`**/api/papers/${paperId}`, async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    const response = await route.fetch()
+    await route.fulfill({ response, json: { ...(await response.json()), status: 'embedding' } })
+  })
+
+  await page.goto(`/#/papers/${paperId}?tab=chat`)
+
+  await expect(page.getByText('Still preparing full search.')).toBeVisible()
+})

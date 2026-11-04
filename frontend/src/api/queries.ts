@@ -187,7 +187,13 @@ export const usePapers = () =>
     refetchInterval: (query) => papersPollInterval(query.state.data),
   })
 
-export const usePaper = (id: string) => useQuery({ queryKey: keys.paper(id), queryFn: () => api.getPaper(id) })
+export const usePaper = (id: string) =>
+  useQuery({
+    queryKey: keys.paper(id),
+    queryFn: () => api.getPaper(id),
+    // While it's ingesting, so the reader sees the moment it's ready.
+    refetchInterval: (query) => (query.state.data ? papersPollInterval([query.state.data]) : false),
+  })
 
 export const useNotes = (paperId: string) =>
   useQuery({ queryKey: keys.notes(paperId), queryFn: () => api.listNotes(paperId) })
