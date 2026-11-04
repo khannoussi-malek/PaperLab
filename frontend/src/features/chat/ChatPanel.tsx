@@ -47,6 +47,8 @@ type Props = {
   scope: ChatScope
   /** Why nothing can be asked yet (an empty workspace): shown under the disabled question box. */
   unavailable?: string
+  /** Something worth knowing about the answers right now, shown above the question box. */
+  notice?: string
   /** Names a source's paper in pills and citations. Given on a workspace, whose answers cite several papers. */
   paperLabel?: (paperId: string) => string
   onCite: (source: ChatSource | NoteSource) => void
@@ -56,7 +58,7 @@ type Props = {
 
 type Promote = { outputId: string; draft: PromoteDraft; style: CSSProperties }
 
-export function ChatPanel({ scope, unavailable, paperLabel, onCite, onPromoted }: Props) {
+export function ChatPanel({ scope, unavailable, notice, paperLabel, onCite, onPromoted }: Props) {
   const history = useChatHistory(scope)
   const chatModels = useChatModels()
   const [pick, setPick] = useState<string | null>(null)
@@ -279,6 +281,7 @@ export function ChatPanel({ scope, unavailable, paperLabel, onCite, onPromoted }
           submit()
         }}
       >
+        {notice && <p className="px-1 text-xs text-muted-foreground">{notice}</p>}
         {followingQuestion !== null && (
           <p className="chat-following flex min-w-0 items-center gap-1.5 px-1 text-xs text-muted-foreground">
             <CornerDownRight aria-hidden className="size-3.5 shrink-0" />

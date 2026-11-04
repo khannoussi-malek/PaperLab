@@ -372,7 +372,7 @@ async def test_prepare_answers_a_long_paper_still_embedding_from_its_words(sessi
     paper = Paper(title="long", file_path="/long.pdf", status=PaperStatus.EMBEDDING)
     session.add(paper)
     await session.commit()
-    texts = ["itraconazole raises apixaban exposure. " * 300, "renal dosing tables. " * 600, "study design notes. " * 600]
+    texts = ["itraconazole raises apixaban. " * 400, "renal dosing tables. " * 600, "study design notes. " * 600]
     drafts = [ChunkDraft(i, i + 1, [[0, 0, 1, 1]], None, text) for i, text in enumerate(texts)]  # too long to go whole
     await papers.replace_chunks(session, paper.id, drafts)
 
