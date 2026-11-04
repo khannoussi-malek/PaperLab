@@ -51,3 +51,22 @@ def test_overlap_only_without_headings():
 
 def test_join_lines_rejoins_hyphenated_words():
     assert join_lines(["effective trans-", "fer from", " ", "BERT-", "Large"]) == "effective transfer from BERT- Large"
+
+
+def test_an_oversized_block_is_split_at_word_boundaries():
+    sentence = "The dose was reduced in patients with renal impairment. "
+    text = (sentence * 150).strip()
+    chunks = chunk_blocks([heading(1, 40, "1 Dosing"), para(1, 100, text)], max_chars=1500)
+
+    assert len(chunks) > 1
+    assert all(len(c.text) <= 1500 for c in chunks)
+    assert all((c.page, c.section_title, c.bbox) == (1, "1 Dosing", [[72, 100, 290, 140]]) for c in chunks)
+    assert " ".join(c.text for c in chunks).split() == text.split()
+    assert all(c.text.endswith(".") for c in chunks)  # at sentence ends, while there are any
+
+
+def test_a_block_with_no_spaces_still_splits():
+    chunks = chunk_blocks([heading(1, 40, "1 Data"), para(1, 100, "x" * 8000 + " end of it")], max_chars=1500)
+
+    assert all(len(c.text) <= 1500 for c in chunks)
+    assert "".join(c.text.replace(" end of it", "") for c in chunks) == "x" * 8000

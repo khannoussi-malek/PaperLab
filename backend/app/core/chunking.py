@@ -7,9 +7,9 @@ when a chunk spans two columns.
 
 import re
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
-STRATEGY_VERSION = 1
+STRATEGY_VERSION = 2  # v2: a block over MAX_CHARS is split
 MAX_CHARS = 1500
 # Drops figure labels, footnotes, and page furniture; keeps table text (~9pt vs ~11pt body).
 MIN_SIZE_RATIO = 0.75
@@ -85,11 +85,26 @@ def _draft(ordinal: int, blocks: list[Block], section: str | None) -> ChunkDraft
     )
 
 
+def _pieces(block: Block, max_chars: int) -> list[Block]:
+    """The block itself when it fits (heading ids depend on it), else cut at the last sentence end, else the last space,
+    else hard. Attention memory grows with a text's length squared: one long block can take an ingest to ~5 GB.
+    ponytail: every piece keeps the whole block's rect, so a citation highlights the block; per-line rects are the
+    upgrade."""
+    pieces, rest = [], block.text
+    while len(rest) > max_chars:
+        window = rest[:max_chars]
+        cut = window.rfind(". ") + 1 or window.rfind(" ") + 1 or max_chars
+        pieces.append(replace(block, text=rest[:cut].strip()))
+        rest = rest[cut:].strip()
+    return [*pieces, replace(block, text=rest)] if pieces else [block]
+
+
 def chunk_blocks(blocks: list[Block], max_chars: int = MAX_CHARS) -> list[ChunkDraft]:
     body_size = body_font_size(blocks)
     sized = [b for b in blocks if b.size >= body_size * MIN_SIZE_RATIO]
     headings = {id(b) for b in sized if is_heading(b, body_size)}
-    content = [b for b in sized if id(b) in headings or len(b.text.split()) >= MIN_WORDS]
+    kept = [b for b in sized if id(b) in headings or len(b.text.split()) >= MIN_WORDS]
+    content = [piece for block in kept for piece in _pieces(block, max_chars)]
     use_overlap = not headings
 
     drafts: list[ChunkDraft] = []
