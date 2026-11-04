@@ -13,7 +13,7 @@ from app.config import settings
 from app.core import embedding_index, embedding_sources
 from app.core.errors import Conflict
 from app.core.papers import ABSTRACT_PAGE
-from app.models import EmbeddingSource, Paper, PaperStatus, workspace_papers
+from app.models import Chunk, EmbeddingSource, Paper, PaperStatus, workspace_papers
 from app.providers import embedding
 from app.providers.base import LLMError, LLMUnavailable, TextEmbedder
 
@@ -54,6 +54,10 @@ RRF_K = 60
 # of its hundreds of words would be slow, with each word counted over the scope, and would mean nothing.
 MAX_HYBRID_CHARS = 1_000
 MAX_TERMS = 32  # the rarest words of a question, which are the ones that tell chunks apart
+# From this many chunks a paper searched alone uses its words too, whatever the switch says. On fixed-answer questions
+# over a 10,000-chunk file hybrid answered 28 of 33 and vectors 26 (measured 2026-11-04); inside short papers its own
+# topic words are everywhere and hybrid lost recall (below).
+LONG_PAPER_CHUNKS = 1_000
 _HYBRID = """
 WITH vector AS (
   SELECT id, count(*) OVER () + 1 - row_number() OVER (ORDER BY distance DESC) AS rank
@@ -213,6 +217,13 @@ def _to_chunk(row, distance: float | None = None) -> RetrievedChunk:
     )
 
 
+async def _is_long(session: AsyncSession, paper_ids: list[uuid.UUID] | None, query: str) -> bool:
+    if paper_ids is None or len(paper_ids) != 1 or len(query) > MAX_HYBRID_CHARS:
+        return False
+    many = select(Chunk.id).where(Chunk.paper_id == paper_ids[0]).offset(LONG_PAPER_CHUNKS - 1).limit(1)
+    return await session.scalar(many) is not None
+
+
 async def retrieve(
     session: AsyncSession,
     query: str,
@@ -263,8 +274,8 @@ async def retrieve(
     # fixed-answer eval keywords alone matched vectors (26 of 33 each at top 8, measured 2026-11-04).
     # ponytail: a wider search waits for the vectors; let it use words too if people ask across a paper mid-embedding.
     busy = list(await session.scalars(select(Paper.id).where(Paper.status == PaperStatus.EMBEDDING)))
-    alone = paper_ids is not None and len(paper_ids) == 1 and paper_ids[0] in busy
-    hybrid = hybrid or alone
+    alone = paper_ids is not None and len(paper_ids) == 1 and paper_ids[0] in busy and len(query) <= MAX_HYBRID_CHARS
+    hybrid = hybrid or alone or await _is_long(session, paper_ids, query)
     statement = _nearest(paper_ids is not None, chunk_ids is not None, hybrid, bool(busy) and not alone, alone)
     if busy and not alone:
         params["busy"] = busy

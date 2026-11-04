@@ -17,8 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import lenses, prompts, sections
-from app.core.briefs import cut_to_budget
-from app.core.chat import SMALL_PAPER_CHARS, Prepared, _size, chunk_sources, format_context
+from app.core.chat import SMALL_PAPER_CHARS, Prepared, _size, chunk_sources, cut_to_budget, format_context
 from app.core.errors import Conflict, InvalidInput
 from app.core.finding_lines import Kind, bare, clean_line, grams, reads_as_wording, split_label
 from app.core.notes import _get_note, papers_of
