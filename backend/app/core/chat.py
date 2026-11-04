@@ -319,7 +319,7 @@ async def prepare(
         return await _prepare_workspace(session, scope.workspace_id, question, embedder)
     paper_id = scope.paper_id
     paper = await get_paper(session, paper_id)
-    if paper.status != PaperStatus.READY:
+    if paper.status not in (PaperStatus.READY, PaperStatus.EMBEDDING):  # embedding: retrieve answers from its words
         raise Conflict("paper_not_ready")
     chars, embedded = await _size(session, paper_id)
     if chars == 0 and not paper.has_pdf:  # saved without a PDF or an abstract: nothing to answer from, no LLM call
@@ -328,7 +328,7 @@ async def prepare(
     if not whole_paper:
         # D156's gate before the index: not set up, then rebuilding, then vectors from another model.
         embedder = await searchable(session, [paper_id], embedder)
-        if embedded == 0:  # ingested before M4, or before the model arrived: the UI offers Re-index
+        if embedded == 0 and paper.status == PaperStatus.READY:  # before M4 or the model: the UI offers Re-index
             raise Conflict("paper_not_indexed")
     if whole_paper:
         sources = await chunk_sources(session, Chunk.paper_id == paper_id)

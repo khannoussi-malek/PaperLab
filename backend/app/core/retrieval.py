@@ -69,11 +69,11 @@ terms AS MATERIALIZED (
   SELECT DISTINCT quote_literal(lexeme)::tsquery AS term
   FROM unnest(tsvector_to_array(to_tsvector('english', :question))) AS lexeme
 ),
-total AS (SELECT count(*)::float AS n FROM chunks WHERE embedding IS NOT NULL {scope}),
+total AS (SELECT count(*)::float AS n FROM chunks WHERE {words} {scope}),
 weights AS MATERIALIZED (
   SELECT term, ln((SELECT n FROM total) / df) AS weight
   FROM (
-    SELECT term, (SELECT count(*) FROM chunks WHERE embedding IS NOT NULL {scope} AND tsv @@ term) AS df
+    SELECT term, (SELECT count(*) FROM chunks WHERE {words} {scope} AND tsv @@ term) AS df
     FROM terms
     OFFSET 0  -- keeps the planner from counting each term once per use of df below
   ) AS counted
@@ -86,7 +86,7 @@ lexical AS (
   FROM (
     SELECT id, (SELECT sum(weight) FROM weights WHERE tsv @@ weights.term) AS score
     FROM chunks
-    WHERE embedding IS NOT NULL {scope} AND tsv @@ (SELECT string_agg(term::text, ' | ')::tsquery FROM weights)
+    WHERE {words} {scope} AND tsv @@ (SELECT string_agg(term::text, ' | ')::tsquery FROM weights)
     ORDER BY score DESC, embedding <=> :q, id  -- more ties than candidates: keep the nearest
     LIMIT :candidates
   ) AS matched
@@ -97,7 +97,8 @@ fused AS (
   GROUP BY id
 ),
 ranked AS (
-  SELECT c.id, c.paper_id, c.page, c.section_title, c.bbox, c.text, c.embedding <=> :q AS distance, f.score,
+  SELECT c.id, c.paper_id, c.page, c.section_title, c.bbox, c.text, coalesce(c.embedding <=> :q, 2) AS distance,
+    f.score,
     row_number() OVER (PARTITION BY c.paper_id ORDER BY f.score DESC, c.embedding <=> :q) AS nth
   FROM fused AS f JOIN chunks AS c ON c.id = f.id
 )
@@ -114,8 +115,11 @@ async def hybrid_on(session: AsyncSession) -> bool:
     return settings.hybrid_search or bool(await session.scalar(select(EmbeddingSource.hybrid_search)))
 
 
-def _nearest(in_papers: bool, in_chunks: bool, hybrid: bool = False, skip_busy: bool = False):
-    """The candidate query with its scope: papers, given chunks (M16, D49), both or neither, minus papers embedding."""
+def _nearest(
+    in_papers: bool, in_chunks: bool, hybrid: bool = False, skip_busy: bool = False, unembedded_words: bool = False
+):
+    """The candidate query with its scope: papers, given chunks (M16, D49), both or neither, minus papers embedding.
+    `unembedded_words`: the keyword half of hybrid also reads chunks with no vector yet."""
     scope = " ".join(
         clause
         for clause, wanted in (
@@ -126,7 +130,8 @@ def _nearest(in_papers: bool, in_chunks: bool, hybrid: bool = False, skip_busy: 
         if wanted
     )
     query = _HYBRID if hybrid else _NEAREST
-    return text(query.format(scope=scope)).bindparams(bindparam("q", type_=Vector(768)))
+    words = "TRUE" if unembedded_words else "embedding IS NOT NULL"
+    return text(query.replace("{words}", words).format(scope=scope)).bindparams(bindparam("q", type_=Vector(768)))
 
 
 # With a filter, HNSW otherwise post-filters within ef_search (40) candidates and can silently return nothing.
@@ -253,10 +258,15 @@ async def retrieve(
     # ponytail: a whole-library search in a one-paper library still runs hybrid; a count on every search isn't worth it.
     across_papers = paper_ids is None or len(paper_ids) > 1
     hybrid = across_papers and len(query) <= MAX_HYBRID_CHARS and await hybrid_on(session)
-    # A long paper embeds across many jobs, so half of it can sit here for hours; it must not answer for the whole.
+    # A long paper embeds across many jobs, so half of it can sit here for hours. Its vectors so far must not answer for
+    # the whole in a wider search. Asked by itself, its words can: they're all there minutes after upload, and on the
+    # fixed-answer eval keywords alone matched vectors (27 and 26 of 33, measured 2026-11-04).
+    # ponytail: a wider search waits for the vectors; let it use words too if people ask across a paper mid-embedding.
     busy = list(await session.scalars(select(Paper.id).where(Paper.status == PaperStatus.EMBEDDING)))
-    statement = _nearest(paper_ids is not None, chunk_ids is not None, hybrid, bool(busy))
-    if busy:
+    alone = paper_ids is not None and len(paper_ids) == 1 and paper_ids[0] in busy
+    hybrid = hybrid or alone
+    statement = _nearest(paper_ids is not None, chunk_ids is not None, hybrid, bool(busy) and not alone, alone)
+    if busy and not alone:
         params["busy"] = busy
     if hybrid:
         # Postgres refuses a NUL in text, and the vector path never sends the words to it.
