@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, BinaryIO
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -231,6 +231,14 @@ async def list_chunks(session: AsyncSession, paper_id: uuid.UUID, page: int | No
     if page is not None:
         query = query.where(Chunk.page == page)
     return list(await session.scalars(query))
+
+
+async def embedding_progress(session: AsyncSession, paper_id: uuid.UUID) -> tuple[int, int]:
+    """(chunks with a vector, all chunks). Raises NotFound."""
+    await get_paper(session, paper_id)
+    query = select(func.count(Chunk.embedding), func.count()).where(Chunk.paper_id == paper_id)
+    done, total = (await session.execute(query)).one()
+    return done, total
 
 
 async def set_status(

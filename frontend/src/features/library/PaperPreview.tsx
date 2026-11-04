@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button'
 import { readerHref } from '@/lib/route'
 import { cn } from '@/lib/utils'
 import { detailsSourceLine } from '../reader/detailsSource'
+import { isEmbedding } from './EmbeddingFlight'
+import { EmbeddingProgress } from './EmbeddingProgress'
 import { NoPdfBadge } from '../reader/SourceBadges'
 import { GetPdfActions } from './GetPdfActions'
 import { FirstPage } from './FirstPage'
@@ -37,10 +39,11 @@ function PagePlaceholder({ paper }: { paper: Paper }) {
           {paper.status_error ?? 'This paper could not be processed.'}
         </p>
       ) : (
-        <p className="flex flex-col items-center gap-2 text-muted-foreground">
+        <div className="flex w-full flex-col items-center gap-2 text-muted-foreground">
           <LoaderCircle aria-hidden className="motion-safe:animate-spin" />
-          Processing ({paper.status})…
-        </p>
+          <p>Processing ({paper.status})…</p>
+          {isEmbedding(paper) && <EmbeddingProgress paperId={paper.id} className="mt-2 w-full" />}
+        </div>
       )}
     </div>
   )
