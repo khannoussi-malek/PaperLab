@@ -42,7 +42,7 @@ function PagePlaceholder({ paper }: { paper: Paper }) {
         <div className="flex w-full flex-col items-center gap-2 text-muted-foreground">
           <LoaderCircle aria-hidden className="motion-safe:animate-spin" />
           <p>Processing ({paper.status})…</p>
-          {isEmbedding(paper) && <EmbeddingProgress paperId={paper.id} className="mt-2 w-full" />}
+          {isEmbedding(paper) && <EmbeddingProgress key={paper.id} paperId={paper.id} className="mt-2 w-full" />}
         </div>
       )}
     </div>

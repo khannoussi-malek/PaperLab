@@ -28,6 +28,11 @@ const REFUSALS: Record<string, ChatProblem> = {
     retryable: true,
     reindex: false,
   },
+  nothing_found_yet: {
+    message: 'Nothing matched those words yet. Search is still being prepared, so try other words or ask again later.',
+    retryable: true,
+    reindex: false,
+  },
   paper_not_indexed: {
     message: 'This paper was added before chat existed, so it has no search index yet.',
     retryable: false,

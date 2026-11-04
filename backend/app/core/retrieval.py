@@ -274,14 +274,16 @@ async def retrieve(
     # fixed-answer eval keywords alone matched vectors (26 of 33 each at top 8, measured 2026-11-04).
     # ponytail: a wider search waits for the vectors; let it use words too if people ask across a paper mid-embedding.
     busy = list(await session.scalars(select(Paper.id).where(Paper.status == PaperStatus.EMBEDDING)))
-    alone = paper_ids is not None and len(paper_ids) == 1 and paper_ids[0] in busy and len(query) <= MAX_HYBRID_CHARS
+    alone = paper_ids is not None and len(paper_ids) == 1 and paper_ids[0] in busy
     hybrid = hybrid or alone or await _is_long(session, paper_ids, query)
     statement = _nearest(paper_ids is not None, chunk_ids is not None, hybrid, bool(busy) and not alone, alone)
     if busy and not alone:
         params["busy"] = busy
     if hybrid:
         # Postgres refuses a NUL in text, and the vector path never sends the words to it.
-        params |= {"question": query.replace("\x00", ""), "rrf_k": RRF_K, "max_terms": MAX_TERMS}
+        # Cut only when a paper still embedding is asked by itself: past the limit nothing else gets here.
+        question_words = query.replace("\x00", "")[:MAX_HYBRID_CHARS]
+        params |= {"question": question_words, "rrf_k": RRF_K, "max_terms": MAX_TERMS}
     if paper_ids is not None:
         params["paper_ids"] = list(paper_ids)
     if chunk_ids is not None:

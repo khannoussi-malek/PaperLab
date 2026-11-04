@@ -406,3 +406,16 @@ async def test_prepare_sends_a_long_paper_as_many_passages_as_fit_the_budget(ses
 
     assert len(prepared.sources) > chat.RETRIEVE_K
     assert sum(len(c.text) for c in prepared.sources) <= chat.SMALL_PAPER_CHARS
+
+
+async def test_prepare_refuses_rather_than_ask_the_model_about_nothing(session, embedder):
+    """No vectors yet and no matching word: the model would answer from no passages at all."""
+    paper = Paper(title="long", file_path="/long.pdf", status=PaperStatus.EMBEDDING)
+    session.add(paper)
+    await session.commit()
+    texts = ["renal dosing tables. " * 600, "study design notes. " * 600]
+    drafts = [ChunkDraft(i, 1, [[0, 0, 1, 1]], None, text) for i, text in enumerate(texts)]
+    await papers.replace_chunks(session, paper.id, drafts)
+
+    with pytest.raises(Conflict, match="^nothing_found_yet$"):
+        await chat.prepare(session, paper.id, "what about zebras?", embedder=embedder)
