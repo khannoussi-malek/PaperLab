@@ -607,3 +607,23 @@ async def test_a_ready_paper_with_a_chunk_lacking_a_vector_stays_vector_only(ses
     found = await retrieve(session, QUERY, paper_ids=[a.id], embedder=embedder)
 
     assert unembedded.id not in {c.id for c in found}
+
+
+@pytest.mark.parametrize(("threshold", "found"), [(3, True), (1000, False)])
+async def test_a_long_paper_alone_also_searches_its_words(session, embedder, monkeypatch, threshold, found):
+    """Inside a long file hybrid answered 28 of 33 fixed questions to vectors' 26; inside a short one it lost recall."""
+    monkeypatch.setattr(retrieval, "LONG_PAPER_CHUNKS", threshold)
+    hybrid(monkeypatch, False)
+    (a, _), *_ = await seed_papers(session, embedder)
+    question = "itraconazole dose"
+    embedder.vectors[f"search_query: {question}"] = embedder.vectors[f"search_query: {QUERY}"]
+    rare = Chunk(
+        paper_id=a.id, ordinal=8, page=9, bbox=[[1, 2, 3, 4]], text="itraconazole raises exposure",
+        embedding=unit_vector("far from the question"), embed_model="test", strategy_ver=1,
+    )
+    session.add(rare)
+    await session.commit()
+
+    top = await retrieve(session, question, paper_ids=[a.id], k=2, embedder=embedder)
+
+    assert (rare.id in {c.id for c in top}) is found

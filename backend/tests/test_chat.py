@@ -91,7 +91,7 @@ async def test_small_paper_skips_retrieval_and_sends_every_chunk_in_reading_orde
     assert prepared.prompt.rstrip().endswith("Question: What is the method?")
 
 
-async def test_large_paper_sends_the_8_nearest_chunks(session, embedder):
+async def test_large_paper_sends_the_nearest_chunks_that_fit_the_budget(session, embedder):
     texts = [f"chunk {i} " + "x" * 2_100 for i in range(12)]  # 12 x ~2,108 chars > SMALL_PAPER_CHARS
     paper = await make_paper(session, texts)
     embedder.vectors["search_query: Which chunk?"] = unit_vector(texts[5])
@@ -99,10 +99,10 @@ async def test_large_paper_sends_the_8_nearest_chunks(session, embedder):
     prepared = await chat.prepare(session, paper.id, "Which chunk?", embedder)
 
     assert prepared.whole_paper is False
-    assert len(prepared.sources) == 8
+    assert len(prepared.sources) == 11  # 11 x ~2,108 fits SMALL_PAPER_CHARS, 12 doesn't
     assert prepared.sources[0].text == texts[5]
     assert embedder.calls[0][0] == ["search_query: Which chunk?"]
-    assert "[C8]" in prepared.prompt and "[C9]" not in prepared.prompt
+    assert "[C11]" in prepared.prompt and "[C12]" not in prepared.prompt
 
 
 def test_context_names_author_year_page_and_section():
@@ -390,3 +390,19 @@ async def test_prepare_still_refuses_a_ready_paper_with_no_vectors(session, embe
 
     with pytest.raises(Conflict, match="^paper_not_indexed$"):
         await chat.prepare(session, paper.id, "anything?", embedder=embedder)
+
+
+async def test_prepare_sends_a_long_paper_as_many_passages_as_fit_the_budget(session, embedder):
+    """Top 8 answered 26 of 33 fixed questions; the budget of a whole small paper fits about 12, and answered 28."""
+    paper = Paper(title="long", file_path="/long.pdf", status=PaperStatus.READY)
+    session.add(paper)
+    await session.commit()
+    drafts = [ChunkDraft(i, i + 1, [[0, 0, 1, 1]], None, f"passage {i} " + "words " * 250) for i in range(30)]
+    await papers.replace_chunks(session, paper.id, drafts)
+    rows = await papers.list_chunks(session, paper.id)
+    await papers.set_embeddings(session, [c.id for c in rows], [unit_vector(c.text) for c in rows], "test")
+
+    prepared = await chat.prepare(session, paper.id, "what do the passages say?", embedder=embedder)
+
+    assert len(prepared.sources) > chat.RETRIEVE_K
+    assert sum(len(c.text) for c in prepared.sources) <= chat.SMALL_PAPER_CHARS

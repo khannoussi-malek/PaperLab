@@ -95,7 +95,8 @@ async def test_a_second_follow_up_carries_the_passages_the_first_follow_up_found
     # Three groups of 8 passages; each question's query vector sits between one group's vectors, so it retrieves
     # exactly that group. The paper is over SMALL_PAPER_CHARS, so follow-ups mix earlier and fresh passages.
     run = uuid.uuid4().hex  # unique vectors: dead HNSW entries from earlier runs never crowd these queries
-    texts = [f"{run} group {g} part {i} " + "x" * 1_200 for g in range(3) for i in range(8)]
+    # 8 of these fit the budget, 9 don't, so a first answer sends exactly its group.
+    texts = [f"{run} group {g} part {i} " + "x" * 2_900 for g in range(3) for i in range(8)]
     paper = await make_paper(session, texts)
     chunks = await chunks_of(session, paper.id)
     groups = [{chunk.id for chunk in chunks[8 * g : 8 * g + 8]} for g in range(3)]
