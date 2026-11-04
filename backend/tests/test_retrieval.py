@@ -556,3 +556,23 @@ async def test_only_the_rarest_words_of_a_question_are_scored(session, embedder,
     rarest = await retrieve(session, question, paper_ids=papers, k=3, embedder=embedder)
 
     assert far[0].id not in {r.id for r in every_word} and rarest[0].id == far[0].id
+
+
+@pytest.mark.parametrize("hybrid_on", [False, True])
+@pytest.mark.parametrize("scope", ["one paper", "both papers", "whole library"])
+async def test_search_skips_a_paper_still_embedding(session, embedder, monkeypatch, scope, hybrid_on):
+    """A long paper embeds across many jobs, so its first slices sit in the table for hours: they mustn't answer."""
+    hybrid(monkeypatch, hybrid_on)
+    (a, b), *_ = await seed_papers(session, embedder)
+    paper_ids = {"one paper": [a.id], "both papers": [a.id, b.id], "whole library": None}[scope]
+    a.status = "embedding"
+    await session.commit()
+
+    while_embedding = await retrieve(session, QUERY, paper_ids=paper_ids, embedder=embedder)
+
+    assert a.id not in {c.paper_id for c in while_embedding}
+    assert scope == "one paper" or b.id in {c.paper_id for c in while_embedding}
+
+    a.status = "ready"
+    await session.commit()
+    assert a.id in {c.paper_id for c in await retrieve(session, QUERY, paper_ids=paper_ids, embedder=embedder)}

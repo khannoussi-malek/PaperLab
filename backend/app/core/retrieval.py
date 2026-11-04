@@ -13,7 +13,7 @@ from app.config import settings
 from app.core import embedding_index, embedding_sources
 from app.core.errors import Conflict
 from app.core.papers import ABSTRACT_PAGE
-from app.models import EmbeddingSource, workspace_papers
+from app.models import EmbeddingSource, Paper, PaperStatus, workspace_papers
 from app.providers import embedding
 from app.providers.base import LLMError, LLMUnavailable, TextEmbedder
 
@@ -114,9 +114,17 @@ async def hybrid_on(session: AsyncSession) -> bool:
     return settings.hybrid_search or bool(await session.scalar(select(EmbeddingSource.hybrid_search)))
 
 
-def _nearest(in_papers: bool, in_chunks: bool, hybrid: bool = False):
-    """The candidate query with its scope: papers, given chunks (M16, D49), both or neither."""
-    scope = ("AND paper_id = ANY(:paper_ids) " if in_papers else "") + ("AND id = ANY(:chunk_ids)" if in_chunks else "")
+def _nearest(in_papers: bool, in_chunks: bool, hybrid: bool = False, skip_busy: bool = False):
+    """The candidate query with its scope: papers, given chunks (M16, D49), both or neither, minus papers embedding."""
+    scope = " ".join(
+        clause
+        for clause, wanted in (
+            ("AND paper_id = ANY(:paper_ids)", in_papers),
+            ("AND id = ANY(:chunk_ids)", in_chunks),
+            ("AND paper_id <> ALL(:busy)", skip_busy),
+        )
+        if wanted
+    )
     query = _HYBRID if hybrid else _NEAREST
     return text(query.format(scope=scope)).bindparams(bindparam("q", type_=Vector(768)))
 
@@ -245,7 +253,11 @@ async def retrieve(
     # ponytail: a whole-library search in a one-paper library still runs hybrid; a count on every search isn't worth it.
     across_papers = paper_ids is None or len(paper_ids) > 1
     hybrid = across_papers and len(query) <= MAX_HYBRID_CHARS and await hybrid_on(session)
-    statement = _nearest(paper_ids is not None, chunk_ids is not None, hybrid)
+    # A long paper embeds across many jobs, so half of it can sit here for hours; it must not answer for the whole.
+    busy = list(await session.scalars(select(Paper.id).where(Paper.status == PaperStatus.EMBEDDING)))
+    statement = _nearest(paper_ids is not None, chunk_ids is not None, hybrid, bool(busy))
+    if busy:
+        params["busy"] = busy
     if hybrid:
         # Postgres refuses a NUL in text, and the vector path never sends the words to it.
         params |= {"question": query.replace("\x00", ""), "rrf_k": RRF_K, "max_terms": MAX_TERMS}
