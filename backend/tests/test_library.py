@@ -11,6 +11,7 @@ from sqlalchemy import delete
 from test_note_papers import paper_only_note
 
 from app.core import library, notes, papers, workspaces
+from app.core.chunking import ChunkDraft
 from app.core.errors import Conflict, InvalidInput, NotFound
 from app.models import Chunk, Paper, Provenance
 
@@ -172,3 +173,65 @@ async def test_the_card_shows_reading_pass_and_triage(session, tmp_path):
     card = await library.paper_card(session, paper.id)
 
     assert (card.reading_pass, card.triage) == (1, "keep")
+
+
+async def long_paper(session, pages: int = 12) -> Paper:
+    paper = Paper(title="long", file_path="/long.pdf", status="ready", page_count=pages)
+    session.add(paper)
+    await session.commit()
+    drafts = [
+        ChunkDraft(i, i + 1, [[0, 0, 1, 1]], "4.2 Posology" if i < 3 else "4.3 Other", f"page {i + 1} " + "w " * 500)
+        for i in range(pages)
+    ]
+    await papers.replace_chunks(session, paper.id, drafts)
+    return paper
+
+
+async def test_read_pages_gives_a_page_range_in_reading_order(session):
+    paper = await long_paper(session)
+
+    read = await library.read_pages(session, paper.id, page=2, pages=3)
+
+    assert [p.page for p in read.passages] == [2, 3, 4]
+    assert [p.section for p in read.passages] == ["4.2 Posology", "4.2 Posology", "4.3 Other"]
+    assert read.passages[0].text.startswith("page 2 ")
+    assert read.next_page == 5
+
+
+async def test_read_pages_says_when_it_reached_the_end(session):
+    paper = await long_paper(session)
+
+    assert (await library.read_pages(session, paper.id, page=11, pages=5)).next_page is None
+
+
+async def test_read_pages_stops_at_its_character_cap_and_says_where_to_go_on(session, monkeypatch):
+    monkeypatch.setattr(library, "MAX_READ_CHARS", 2500)
+    paper = await long_paper(session)
+
+    read = await library.read_pages(session, paper.id, page=1, pages=10)
+
+    assert [p.page for p in read.passages] == [1, 2]
+    assert read.next_page == 3
+
+
+@pytest.mark.parametrize(("page", "pages"), [(0, 1), (1, 0), (1, library.MAX_READ_PAGES + 1)])
+async def test_read_pages_refuses_a_bad_range(session, page, pages):
+    paper = await long_paper(session)
+
+    with pytest.raises(InvalidInput, match="^invalid_pages$"):
+        await library.read_pages(session, paper.id, page=page, pages=pages)
+
+
+async def test_read_pages_of_an_unknown_paper_is_not_found(session):
+    with pytest.raises(NotFound):
+        await library.read_pages(session, uuid.uuid4(), page=1)
+
+
+async def test_a_paper_card_caps_a_huge_outline_and_says_so(session, monkeypatch):
+    monkeypatch.setattr(library, "MAX_OUTLINE_SECTIONS", 1)
+    paper = await long_paper(session)
+
+    card = await library.paper_card(session, paper.id)
+
+    assert [s.title for s in card.sections] == ["4.2 Posology"]
+    assert card.sections_total == 2
