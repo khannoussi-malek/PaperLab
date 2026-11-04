@@ -25,7 +25,7 @@ MAX_TRIES = 5
 EMBED_WRITE_BATCH = 64  # chunks per encode and per write
 # How long one job embeds before queueing `embed_rest` for what's left: a long paper takes turns with the papers behind
 # it, and a killed worker loses a slice at most. A short paper never leaves its first job.
-EMBED_SLICE_SECONDS = 5 * 60
+EMBED_SLICE_SECONDS = 2 * 60
 # Enforced inside the job, not by arq: arq's cancel is a CancelledError, which `except Exception` doesn't catch, so
 # the paper would sit at "embedding" forever. A job stops by itself after a slice, so reaching this deadline means
 # something hung. It ends the paper failed, with the copy below and no partial vectors (`embed_rest` tries again
