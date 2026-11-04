@@ -1,9 +1,11 @@
 import asyncio
+import io
 import logging
+import shutil
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, BinaryIO
 
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,17 +30,30 @@ READING_PASSES = range(4)
 TRIAGES = ("keep", "later", "drop")
 
 
+def _copy_to(stream: BinaryIO, path: Path) -> None:
+    with path.open("wb") as target:
+        shutil.copyfileobj(stream, target)
+
+
 async def create_paper(
     session: AsyncSession, filename: str, data: bytes, pdf_dir: Path, *, prefill: dict[str, Any] | None = None
 ) -> Paper:
-    """`prefill`: columns already known, e.g. a found paper's title and IDs. They win over the placeholder title."""
-    if not data.startswith(PDF_MAGIC):
+    return await create_paper_from_stream(session, filename, io.BytesIO(data), pdf_dir, prefill=prefill)
+
+
+async def create_paper_from_stream(
+    session: AsyncSession, filename: str, stream: BinaryIO, pdf_dir: Path, *, prefill: dict[str, Any] | None = None
+) -> Paper:
+    """Copies `stream` to disk in pieces, so a PDF of any size stays out of memory. `prefill`: columns already known,
+    e.g. a found paper's title and IDs. They win over the placeholder title."""
+    if stream.read(len(PDF_MAGIC)) != PDF_MAGIC:
         raise InvalidInput(f"{filename!r} is not a PDF")
+    stream.seek(0)
 
     paper_id = uuid.uuid4()
     path = pdf_dir / f"{paper_id}.pdf"
     pdf_dir.mkdir(parents=True, exist_ok=True)
-    await asyncio.to_thread(path.write_bytes, data)
+    await asyncio.to_thread(_copy_to, stream, path)
     # Title is a placeholder until extraction (and later enrichment) finds a real one.
     paper = Paper(id=paper_id, file_path=str(path), **{"title": Path(filename).stem or "untitled", **(prefill or {})})
     session.add(paper)
