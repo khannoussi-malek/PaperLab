@@ -260,7 +260,7 @@ async def retrieve(
     hybrid = across_papers and len(query) <= MAX_HYBRID_CHARS and await hybrid_on(session)
     # A long paper embeds across many jobs, so half of it can sit here for hours. Its vectors so far must not answer for
     # the whole in a wider search. Asked by itself, its words can: they're all there minutes after upload, and on the
-    # fixed-answer eval keywords alone matched vectors (27 and 26 of 33, measured 2026-11-04).
+    # fixed-answer eval keywords alone matched vectors (26 of 33 each at top 8, measured 2026-11-04).
     # ponytail: a wider search waits for the vectors; let it use words too if people ask across a paper mid-embedding.
     busy = list(await session.scalars(select(Paper.id).where(Paper.status == PaperStatus.EMBEDDING)))
     alone = paper_ids is not None and len(paper_ids) == 1 and paper_ids[0] in busy
