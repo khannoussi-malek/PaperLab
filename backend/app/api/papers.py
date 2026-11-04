@@ -152,9 +152,7 @@ async def reingest_paper(paper_id: uuid.UUID, request: Request, session: Session
     paper = await papers.get_paper(session, paper_id)
     if paper.file_path is None:
         raise Conflict("no_pdf", detail="This paper has no PDF yet.")
-    # Flips the status before enqueueing, so a chat request racing the worker sees `uploaded`
-    # (paper_not_ready) instead of a `ready` paper whose chunks are mid-replacement.
-    await papers.set_status(session, paper.id, PaperStatus.UPLOADED)
+    await papers.queue_for_reingest(session, paper)
     await session.refresh(paper)
     await _enqueue_ingest(request, paper.id)
     return paper

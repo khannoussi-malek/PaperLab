@@ -233,6 +233,16 @@ async def list_chunks(session: AsyncSession, paper_id: uuid.UUID, page: int | No
     return list(await session.scalars(query))
 
 
+async def queue_for_reingest(session: AsyncSession, paper: Paper) -> None:
+    """Flips the status before enqueueing, so a chat request racing the worker sees `uploaded` (paper_not_ready) instead
+    of a `ready` paper whose chunks are mid-replacement. Leaving `embedding` also takes a half-embedded paper out of
+    what search hides, so its vectors go first: half a paper must not answer.
+    ponytail: a slice mid-write can still land a batch until the ingest replaces the chunks; a seconds-long window."""
+    if paper.status == PaperStatus.EMBEDDING:
+        await session.execute(update(Chunk).where(Chunk.paper_id == paper.id).values(embedding=None))
+    await set_status(session, paper.id, PaperStatus.UPLOADED)
+
+
 async def embedding_progress(session: AsyncSession, paper_id: uuid.UUID) -> tuple[int, int]:
     """(chunks with a vector, all chunks). Raises NotFound."""
     await get_paper(session, paper_id)
