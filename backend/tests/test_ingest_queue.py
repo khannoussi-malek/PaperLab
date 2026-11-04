@@ -78,3 +78,32 @@ async def test_a_try_before_the_last_still_ingests(worker_session, sample_pdf, c
     await worker_session.refresh(paper)
 
     assert paper.status == "ready"
+
+
+class FakeRedis:
+    def __init__(self, queued: list[bytes]):
+        self.queued, self.deleted = queued, []
+
+    async def zrange(self, name, start, end):
+        assert (name, start, end) == (queue.INGEST_QUEUE, 0, -1)
+        return self.queued
+
+    async def delete(self, *keys):
+        self.deleted += keys
+
+
+async def test_a_starting_ingest_worker_frees_the_jobs_a_dead_one_left_locked():
+    """The only ingest worker is starting, so nothing is really running them: otherwise each waits out arq's lock."""
+    redis = FakeRedis([b"abc", b"def"])
+
+    await IngestWorkerSettings.on_startup({"redis": redis})
+
+    assert redis.deleted == ["arq:in-progress:abc", "arq:in-progress:def"]
+
+
+async def test_a_starting_ingest_worker_with_an_empty_queue_frees_nothing():
+    redis = FakeRedis([])
+
+    await IngestWorkerSettings.on_startup({"redis": redis})
+
+    assert redis.deleted == []
