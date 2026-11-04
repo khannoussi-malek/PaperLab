@@ -1,13 +1,15 @@
 import asyncio
+import uuid
 
 import numpy as np
 import pytest
-from conftest import FakeEmbedder, unit_vector
+from arq.worker import Retry
+from conftest import FakeArq, FakeEmbedder, unit_vector
 from sqlalchemy import select
 
-from app.core import embedding_sources, papers
+from app.core import embedding_sources, papers, queue
 from app.core.chunking import ChunkDraft
-from app.models import Chunk, Paper
+from app.models import Chunk, Paper, PaperStatus
 from app.workers import ingest
 from app.workers.settings import IngestWorkerSettings
 
@@ -191,3 +193,149 @@ async def test_a_reembed_timeout_that_is_not_the_deadline_propagates(worker_sess
 
 def test_arq_backstop_is_longer_than_the_code_deadline():
     assert IngestWorkerSettings.job_timeout == ingest.INGEST_JOB_TIMEOUT + 60
+
+
+@pytest.fixture
+def pool(monkeypatch) -> FakeArq:
+    fake = FakeArq()
+    monkeypatch.setattr(queue, "_pool", fake)
+    return fake
+
+
+@pytest.fixture
+def one_chunk_a_slice(monkeypatch) -> None:
+    monkeypatch.setattr(ingest, "EMBED_WRITE_BATCH", 1)
+    monkeypatch.setattr(ingest, "EMBED_SLICE_SECONDS", 0)
+
+
+async def embedding_paper(session, sample_pdf, count: int) -> Paper:
+    paper = await paper_with_chunks(session, count)
+    paper.file_path, paper.status = str(sample_pdf), PaperStatus.EMBEDDING
+    await session.commit()
+    return paper
+
+
+async def run_queued(pool: FakeArq, job_ctx: dict) -> list[str]:
+    """Runs the queued jobs first in, first out, as arq does, including what they queue. The papers, in run order."""
+    ran = []
+    while pool.jobs:
+        name, *args = pool.jobs.pop(0)
+        await getattr(ingest, name)(job_ctx, *args)
+        ran.append(args[0])
+    return ran
+
+
+@pytest.mark.usefixtures("one_chunk_a_slice")
+async def test_a_long_paper_stops_after_a_slice_and_queues_the_rest(worker_session, sample_pdf, embedder, pool):
+    paper = Paper(file_path=str(sample_pdf), title="placeholder")
+    worker_session.add(paper)
+    await worker_session.commit()
+
+    await ingest.ingest_paper({"embedder": embedder}, str(paper.id))
+    await worker_session.refresh(paper)
+
+    assert paper.status == PaperStatus.EMBEDDING
+    chunks = await vectors_of(worker_session, paper.id)
+    assert sum(c.embedding is not None for c in chunks) == 1 < len(chunks)
+    assert pool.jobs == [("embed_rest", str(paper.id))]
+
+
+@pytest.mark.usefixtures("one_chunk_a_slice")
+async def test_embed_rest_finishes_the_paper_without_embedding_a_chunk_twice(
+    worker_session, sample_pdf, embedder, pool
+):
+    paper = Paper(file_path=str(sample_pdf), title="placeholder")
+    worker_session.add(paper)
+    await worker_session.commit()
+    await ingest.ingest_paper({"embedder": embedder}, str(paper.id))
+
+    await run_queued(pool, {"embedder": embedder})
+    await worker_session.refresh(paper)
+
+    chunks = await vectors_of(worker_session, paper.id)
+    assert (paper.status, paper.status_error) == (PaperStatus.READY, None)
+    assert all(c.embedding is not None for c in chunks)
+    assert sum(len(texts) for texts, _ in embedder.calls) == len(chunks)
+
+
+@pytest.mark.usefixtures("one_chunk_a_slice")
+async def test_a_short_paper_finishes_between_a_long_papers_slices(worker_session, sample_pdf, embedder, pool):
+    long = await embedding_paper(worker_session, sample_pdf, 3)
+    short = await embedding_paper(worker_session, sample_pdf, 1)
+    pool.jobs.extend([("embed_rest", str(long.id)), ("embed_rest", str(short.id))])
+
+    ran = await run_queued(pool, {"embedder": embedder})
+
+    assert ran == [str(long.id), str(short.id), str(long.id), str(long.id)]
+
+
+@pytest.mark.usefixtures("one_chunk_a_slice")
+async def test_a_killed_worker_resumes_without_repeating_finished_chunks(worker_session, sample_pdf, embedder, pool):
+    paper = await embedding_paper(worker_session, sample_pdf, 3)
+    await ingest.embed_rest({"embedder": embedder}, str(paper.id))  # one chunk written; then the worker dies
+    pool.jobs.clear()
+    embedder.calls.clear()
+
+    await ingest.embed_rest({"embedder": embedder, "job_try": 2}, str(paper.id))  # arq runs the job again
+
+    assert sum(len(texts) for texts, _ in embedder.calls) == 1  # the next chunk, not the first again
+
+
+async def test_embed_rest_stops_quietly_when_the_paper_is_gone_or_not_embedding(
+    worker_session, sample_pdf, embedder, pool
+):
+    paper = await embedding_paper(worker_session, sample_pdf, 2)
+    paper.status = PaperStatus.UPLOADED  # a Re-ingest took it back
+    await worker_session.commit()
+
+    await ingest.embed_rest({"embedder": embedder}, str(paper.id))
+    await ingest.embed_rest({"embedder": embedder}, str(uuid.uuid4()))
+
+    assert embedder.calls == [] and pool.jobs == []
+
+
+@pytest.mark.usefixtures("one_chunk_a_slice")
+async def test_a_failing_source_ends_the_run_without_requeuing(worker_session, sample_pdf, pool):
+    paper = await embedding_paper(worker_session, sample_pdf, 2)
+
+    await ingest.embed_rest({"embedder": FakeEmbedder(refuse="Key rejected")}, str(paper.id))
+    await worker_session.refresh(paper)
+
+    assert pool.jobs == []
+    assert paper.status == PaperStatus.READY  # as ingest does today: ready, with Try again in Settings (D155)
+    assert (await embedding_sources.active(worker_session)).error == "Key rejected"
+
+
+async def test_embed_rest_past_its_deadline_retries_then_fails_cleanly(
+    worker_session, sample_pdf, monkeypatch, pool
+):
+    monkeypatch.setattr(ingest, "EMBED_WRITE_BATCH", 1)
+    short_deadline(monkeypatch)
+    paper = await embedding_paper(worker_session, sample_pdf, 2)
+
+    with pytest.raises(Retry):
+        await ingest.embed_rest({"embedder": HangingEmbedder()}, str(paper.id))
+    await worker_session.refresh(paper)
+    assert paper.status == PaperStatus.EMBEDDING
+    assert sum(c.embedding is not None for c in await vectors_of(worker_session, paper.id)) == 1  # kept for the retry
+
+    await ingest.embed_rest({"embedder": FakeEmbedder(), "job_try": ingest.MAX_TRIES}, str(paper.id))
+    await worker_session.refresh(paper)
+    assert paper.status == PaperStatus.FAILED
+    assert paper.status_error == ingest.INTERRUPTED.format(times=ingest.MAX_TRIES - 1)
+    assert all(c.embedding is None for c in await vectors_of(worker_session, paper.id))  # half a paper never answers
+
+
+async def test_an_unexpected_error_in_embed_rest_fails_the_paper_instead_of_leaving_it_embedding(
+    worker_session, sample_pdf, pool
+):
+    class Broken(FakeEmbedder):
+        async def encode(self, texts):
+            raise ValueError("boom")
+
+    paper = await embedding_paper(worker_session, sample_pdf, 2)
+
+    await ingest.embed_rest({"embedder": Broken()}, str(paper.id))  # arq wouldn't retry this; the paper must not hang
+    await worker_session.refresh(paper)
+
+    assert (paper.status, paper.status_error) == (PaperStatus.FAILED, "ValueError: boom")

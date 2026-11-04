@@ -18,7 +18,7 @@ from app.workers.harvest import (
     harvest_medrxiv,
 )
 from app.workers.hit_enrichment import ENRICH_JOB_TIMEOUT, enrich_hits
-from app.workers.ingest import INGEST_JOB_TIMEOUT, MAX_TRIES, index_abstract, ingest_paper, reembed_paper
+from app.workers.ingest import INGEST_JOB_TIMEOUT, MAX_TRIES, embed_rest, index_abstract, ingest_paper, reembed_paper
 from app.workers.manuscript_diagrams import (
     DIAGRAM_JOB_TIMEOUT,
     compile_manuscript_diagram,
@@ -128,5 +128,5 @@ class IngestWorkerSettings:
     max_jobs = 1
     max_tries = MAX_TRIES
     job_timeout = INGEST_JOB_TIMEOUT + 60  # a backstop: the deadline inside the job fires first
-    functions = [ingest_paper, reembed_paper, index_abstract]
+    functions = [ingest_paper, embed_rest, reembed_paper, index_abstract]
     redis_settings = RedisSettings.from_dsn(settings.redis_url)
