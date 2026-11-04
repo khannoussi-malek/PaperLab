@@ -1,11 +1,15 @@
+import io
 import uuid
+from pathlib import Path
 
 import pytest
 from sqlalchemy import text, update
+from starlette.datastructures import UploadFile
 
 from app.config import settings
 from app.core import papers
 from app.core.chunking import ChunkDraft
+from app.core.errors import InvalidInput
 from app.models import Paper, PaperStatus
 
 pytestmark = pytest.mark.anyio
@@ -200,3 +204,42 @@ async def test_patch_refuses_the_reading_state_even_beside_a_real_correction(cli
 
     paper = await session.get(Paper, uuid.UUID(created["id"]), populate_existing=True)
     assert (paper.reading_pass, paper.triage, paper.manual_fields) == (1, None, [])
+
+
+class Recording(io.BytesIO):
+    """A stream that remembers how much each read asked for."""
+
+    def __init__(self, data: bytes):
+        super().__init__(data)
+        self.sizes: list[int] = []
+
+    def read(self, size: int = -1) -> bytes:
+        self.sizes.append(size)
+        return super().read(size)
+
+
+async def test_an_upload_is_copied_in_pieces(session, pdf_dir):
+    data = b"%PDF-1.7\n" + b"x" * 3_000_000
+    stream = Recording(data)
+
+    paper = await papers.create_paper_from_stream(session, "long.pdf", stream, pdf_dir)
+
+    assert Path(paper.file_path).read_bytes() == data
+    assert min(stream.sizes) > 0  # never a read of the whole file
+    assert max(stream.sizes) < len(data)
+
+
+async def test_the_upload_route_doesnt_read_the_file_into_memory(client, arq, pdf_dir, monkeypatch):
+    async def refuse(self, size: int = -1):
+        raise AssertionError("the route read the upload into memory")
+
+    monkeypatch.setattr(UploadFile, "read", refuse)
+
+    assert (await upload(client)).status_code == 201
+
+
+async def test_a_stream_that_is_no_pdf_writes_nothing(session, pdf_dir):
+    with pytest.raises(InvalidInput):
+        await papers.create_paper_from_stream(session, "notes.txt", io.BytesIO(b"hello"), pdf_dir)
+
+    assert list(pdf_dir.glob("*")) == []
