@@ -559,20 +559,51 @@ async def test_only_the_rarest_words_of_a_question_are_scored(session, embedder,
 
 
 @pytest.mark.parametrize("hybrid_on", [False, True])
-@pytest.mark.parametrize("scope", ["one paper", "both papers", "whole library"])
-async def test_search_skips_a_paper_still_embedding(session, embedder, monkeypatch, scope, hybrid_on):
+@pytest.mark.parametrize("scope", ["both papers", "whole library"])
+async def test_a_wider_search_skips_a_paper_still_embedding(session, embedder, monkeypatch, scope, hybrid_on):
     """A long paper embeds across many jobs, so its first slices sit in the table for hours: they mustn't answer."""
     hybrid(monkeypatch, hybrid_on)
     (a, b), *_ = await seed_papers(session, embedder)
-    paper_ids = {"one paper": [a.id], "both papers": [a.id, b.id], "whole library": None}[scope]
+    paper_ids = {"both papers": [a.id, b.id], "whole library": None}[scope]
     a.status = "embedding"
     await session.commit()
 
     while_embedding = await retrieve(session, QUERY, paper_ids=paper_ids, embedder=embedder)
 
     assert a.id not in {c.paper_id for c in while_embedding}
-    assert scope == "one paper" or b.id in {c.paper_id for c in while_embedding}
+    assert b.id in {c.paper_id for c in while_embedding}
 
     a.status = "ready"
     await session.commit()
     assert a.id in {c.paper_id for c in await retrieve(session, QUERY, paper_ids=paper_ids, embedder=embedder)}
+
+
+async def test_a_paper_still_embedding_answers_alone_from_keywords_and_its_vectors_so_far(session, embedder):
+    """Keywords need no vector, so asked by itself it answers minutes after upload instead of hours."""
+    (a, b), chunks, *_ = await seed_papers(session, embedder)
+    a.status = "embedding"
+    waiting = Chunk(
+        paper_id=a.id, ordinal=7, page=8, bbox=[[1, 2, 3, 4]], text="attention works through queries and keys",
+        embed_model="test", strategy_ver=1,
+    )
+    other = Chunk(
+        paper_id=b.id, ordinal=7, page=8, bbox=[[1, 2, 3, 4]], text="attention in another paper",
+        embed_model="test", strategy_ver=1,
+    )
+    session.add_all([waiting, other])
+    await session.commit()
+
+    found = await retrieve(session, QUERY, paper_ids=[a.id], embedder=embedder)
+
+    assert {c.paper_id for c in found} == {a.id}
+    assert waiting.id in {c.id for c in found}  # no vector, found by its words
+    assert {c.id for c in chunks if c.paper_id == a.id} & {c.id for c in found}  # the vectors so far count too
+    assert all(c.distance is not None for c in found)  # what the MCP tool rounds
+
+
+async def test_a_ready_paper_with_a_chunk_lacking_a_vector_stays_vector_only(session, embedder):
+    (a, _), _, unembedded, _ = await seed_papers(session, embedder)
+
+    found = await retrieve(session, QUERY, paper_ids=[a.id], embedder=embedder)
+
+    assert unembedded.id not in {c.id for c in found}
