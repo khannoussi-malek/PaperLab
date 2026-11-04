@@ -321,7 +321,8 @@ async def prepare(
     A follow-up (`thread`) adds the earlier questions, and a large paper's earlier passages ahead of the fresh ones.
 
     Raises NotFound, or Conflict("paper_not_ready" | "search_not_set_up" | "search_rebuilding" |
-    "embedding_model_changed" | "paper_not_indexed" | "no_text"). A small paper needs no search model.
+    "embedding_model_changed" | "paper_not_indexed" | "no_text" | "nothing_found_yet"). A small paper needs no search
+    model.
     """
     scope = _scope(paper_id)
     if scope.workspace_id is not None:
@@ -348,6 +349,8 @@ async def prepare(
         found = await retrieve(session, question, paper_ids=[paper_id], k=RETRIEVE_POOL, embedder=embedder)
         if thread is None:
             sources = cut_to_budget(found)
+            if not sources:  # no vectors yet and no matching word: the model would answer from nothing
+                raise Conflict("nothing_found_yet")
         else:  # the fresh ones are kept whole, so more of them would push out the conversation's earlier passages
             sources = follow_up_sources(await _earlier_sources(session, thread, paper_id), found[:RETRIEVE_K])
     every_note = await list_notes_for_paper(session, paper_id)

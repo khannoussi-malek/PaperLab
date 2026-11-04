@@ -627,3 +627,21 @@ async def test_a_long_paper_alone_also_searches_its_words(session, embedder, mon
     top = await retrieve(session, question, paper_ids=[a.id], k=2, embedder=embedder)
 
     assert (rare.id in {c.id for c in top}) is found
+
+
+async def test_a_long_question_on_a_paper_still_embedding_searches_its_first_words(session, embedder):
+    """The API allows 2,000 characters; past the hybrid limit it must not end up hiding the paper it's about."""
+    (a, _), *_ = await seed_papers(session, embedder)
+    a.status = "embedding"
+    waiting = Chunk(
+        paper_id=a.id, ordinal=7, page=8, bbox=[[1, 2, 3, 4]], text="itraconazole raises exposure",
+        embed_model="test", strategy_ver=1,
+    )
+    session.add(waiting)
+    await session.commit()
+    question = "itraconazole " + "and more words besides " * 80
+    embedder.vectors[f"search_query: {question}"] = embedder.vectors[f"search_query: {QUERY}"]
+
+    found = await retrieve(session, question, paper_ids=[a.id], embedder=embedder)
+
+    assert waiting.id in {c.id for c in found}

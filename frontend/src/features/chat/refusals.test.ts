@@ -22,6 +22,14 @@ describe('refusal', () => {
     expect(refusal(409, 'paper_not_indexed')).toMatchObject({ retryable: false, reindex: true })
   })
 
+  it('says a paper still preparing search found nothing yet, and that asking again can help', () => {
+    expect(refusal(409, 'nothing_found_yet')).toEqual({
+      message: 'Nothing matched those words yet. Search is still being prepared, so try other words or ask again later.',
+      retryable: true,
+      reindex: false,
+    })
+  })
+
   it('words a paper with no PDF and no abstract, with no Retry or Re-index', () => {
     expect(refusal(409, 'no_text')).toEqual({
       message: 'This paper has no PDF and no abstract to chat with.',
