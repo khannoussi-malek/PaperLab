@@ -32,7 +32,8 @@ class Settings(BaseSettings):
     embed_threads: int = DEFAULT_EMBED_THREADS
     # How many candidates the HNSW index considers for a workspace or library search (HNSW_EF_SEARCH). pgvector's
     # default 40 missed ~4% of a 146-paper workspace's true top 8; 100 brought it to ≥ 0.99 for ~13 ms at p95
-    # (M8 step 2). A single paper never uses the index: it sorts that paper's chunks exactly.
+    # (M8 step 2). A small paper sorts its chunks exactly; the planner moves a large one to the index (past ~2,000
+    # chunks in an 89,000-row table, measured 2026-11-04).
     hnsw_ef_search: int = Field(100, ge=1, le=1000)
     # Forces hybrid search on, whatever the Settings → Search switch says: for the evals that compare both modes.
     # Vectors miss exact names and numbers: the MI test's "itraconazole" was in both labels and in none of the top 8.
