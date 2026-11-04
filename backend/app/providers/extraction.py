@@ -76,13 +76,22 @@ def _metadata(doc: pymupdf.Document) -> dict[str, str]:
     return {key: value.strip() for key, value in (doc.metadata or {}).items() if isinstance(value, str)}
 
 
-def extract_title(path: str | Path) -> tuple[str | None, dict[str, str]]:
-    """extract's title and the PDF's metadata, reading page 1 only (the title comes from there): what a merge checks
-    the paper it would join against (R15c)."""
+def extract_head(path: str | Path) -> ExtractedDoc:
+    """What `extract` says about the PDF, reading page 1 only: no blocks. All that enrichment and a merge's check need,
+    so the end of a long ingest doesn't read every page again."""
     with pymupdf.open(path) as doc:
         metadata = _metadata(doc)
-        blocks = _page_blocks(doc[0]) if doc.page_count else []
-    return metadata.get("title") or _title_from_blocks(blocks), metadata
+        page_count = doc.page_count
+        blocks = _page_blocks(doc[0]) if page_count else []
+        first_page_text = doc[0].get_text() if page_count else ""
+    title = metadata.get("title") or _title_from_blocks(blocks)
+    return ExtractedDoc(page_count, title, [], first_page_text, metadata)
+
+
+def extract_title(path: str | Path) -> tuple[str | None, dict[str, str]]:
+    """extract's title and the PDF's metadata: what a merge checks the paper it would join against (R15c)."""
+    head = extract_head(path)
+    return head.title, head.metadata
 
 
 def extract(path: str | Path) -> ExtractedDoc:
