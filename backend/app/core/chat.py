@@ -15,7 +15,7 @@ from app.core import prompts, workspaces
 from app.core.errors import Conflict, NotFound
 from app.core.notes import _CITATION, Anchor, NoteView, _with_anchors, list_notes_for_paper, papers_of, parse_citations
 from app.core.papers import get_paper
-from app.core.retrieval import RetrievedChunk, _to_chunk, retrieve, searchable
+from app.core.retrieval import RetrievedChunk, _to_chunk, likely_papers, retrieve, searchable
 from app.models import Chunk, LLMOutput, Note, Paper, PaperStatus, Provenance
 
 # v6: the note-block rule leads with its condition and names "never" explicitly, to stop it firing on an unasked
@@ -296,7 +296,11 @@ async def _prepare_workspace(session: AsyncSession, workspace_id: uuid.UUID, que
     embedder = await searchable(session, ready, embedder)
     if not await session.scalar(select(func.count(Chunk.embedding)).where(Chunk.paper_id.in_(ready))):
         raise Conflict("workspace_not_indexed")
-    sources = await retrieve(session, question, paper_ids=ready, k=RETRIEVE_K, embedder=embedder)
+    # ponytail: the question is embedded twice, once per search; pass the vector along if it ever shows in the timings.
+    scope = await likely_papers(session, question, ready, embedder)
+    sources = cut_to_budget(
+        await retrieve(session, question, paper_ids=scope, k=RETRIEVE_POOL, embedder=embedder, words=True)
+    )
     every_note = await workspaces.notes(session, workspace_id)
     block, used = format_notes_block(every_note, members)
     prompt = WORKSPACE_PROMPT_TEMPLATE.format(

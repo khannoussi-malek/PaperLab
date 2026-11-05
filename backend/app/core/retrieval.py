@@ -127,6 +127,30 @@ LIMIT :k
 """
 
 
+# Many papers: search the likeliest few with keywords and vectors, not all of them. Across 562 real papers it answered
+# 41 of 59 sealed questions against 24 for 8 nearest chunks, in 0.15 s against 1.4 s for keywords over all (2026-11-05).
+LIKELY_PAPERS = 10
+PAPER_POOL = 300  # the nearest chunks the papers are ranked by
+PAPER_BEST = 3  # a paper scores by its best few chunks, so one lucky chunk doesn't carry it
+
+
+async def likely_papers(
+    session: AsyncSession, query: str, paper_ids: list[uuid.UUID], embedder=None
+) -> list[uuid.UUID]:
+    """The LIKELY_PAPERS papers whose nearest chunks rank highest, best first; all of them, unsearched, when that's no
+    more. A paper scores the reciprocal ranks of its PAPER_BEST nearest chunks among the scope's PAPER_POOL nearest."""
+    if len(paper_ids) <= LIKELY_PAPERS:
+        return list(paper_ids)
+    found = await retrieve(
+        session, query, paper_ids=paper_ids, k=PAPER_POOL, per_paper=PAPER_POOL, embedder=embedder, words=False
+    )
+    ranks: dict[uuid.UUID, list[float]] = {}
+    for rank, chunk in enumerate(found):
+        ranks.setdefault(chunk.paper_id, []).append(1 / (RRF_K + rank))
+    score = {paper: sum(best[:PAPER_BEST]) for paper, best in ranks.items()}
+    return sorted(score, key=score.__getitem__, reverse=True)[:LIKELY_PAPERS]
+
+
 async def hybrid_on(session: AsyncSession) -> bool:
     """The Settings → Search switch. HYBRID_SEARCH forces it on, for the evals that compare both modes."""
     return settings.hybrid_search or bool(await session.scalar(select(EmbeddingSource.hybrid_search)))
@@ -247,6 +271,7 @@ async def retrieve(
     embedder=None,
     per_paper: int | None = None,
     chunk_ids: list[uuid.UUID] | None = None,
+    words: bool | None = None,
 ) -> list[RetrievedChunk]:
     """The k chunks nearest to the query, closest first (best fused rank first when hybrid runs: a scope wider than
     one paper with the switch on, or one paper of LONG_PAPER_CHUNKS or more). embedder=None embeds the question with
@@ -257,6 +282,7 @@ async def retrieve(
     workspace with several members, or 2+ paper_ids) keeps at most per_paper (default MAX_PER_PAPER) chunks
     from each paper; a workspace with exactly one paper is uncapped, same as passing that one paper's id.
     chunk_ids narrows the scope to those chunks (M16); an empty list returns [] without embedding the query.
+    words=True or False mixes the keyword ranking in or leaves it out whatever the rules above and the switch say.
     """
     if paper_ids is not None and workspace_id is not None:
         raise ValueError("retrieve takes paper_ids or workspace_id, not both")
@@ -290,6 +316,8 @@ async def retrieve(
     busy = list(await session.scalars(select(Paper.id).where(Paper.status == PaperStatus.EMBEDDING)))
     alone = paper_ids is not None and len(paper_ids) == 1 and paper_ids[0] in busy
     hybrid = hybrid or alone or await _is_long(session, paper_ids, query)
+    if words is not None:
+        hybrid = words and len(query) <= MAX_HYBRID_CHARS
     statement = _nearest(paper_ids is not None, chunk_ids is not None, hybrid, bool(busy) and not alone, alone)
     if busy and not alone:
         params["busy"] = busy
