@@ -10,7 +10,10 @@ import numpy as np
 
 # One text per model run. Batches pad every text to the longest, and on real chunks that made embedding half as fast and
 # took four times the memory (9.5 vs 21 chunks/s, 3.7 vs 0.9 GB, measured 2026-11-04), with the same vectors.
-MAX_TOKENS = 8192  # sentence_bert_config.json's max_seq_length, [CLS] and [SEP] included
+# The model allows 8,192, but a long chunk costs far more memory: 5.5 GB on the longest texts, against 1.3 GB at 1,024.
+# 1.3% of chunks on 10,226 real pages run longer, and no answer changed on 58 sealed questions (measured 2026-11-05).
+# Their words stay searchable and are sent whole; only the vector stops at the limit.
+MAX_TOKENS = 1024  # [CLS] and [SEP] included
 OUTPUT = "last_hidden_state"  # the export's token embeddings, (batch, tokens, 768)
 
 

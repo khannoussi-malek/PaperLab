@@ -48,7 +48,7 @@ def test_a_long_text_is_cut_at_the_maximum_length_keeping_its_end_marker():
     Embedder(session, tiny_tokenizer()).encode(["word " * 10_000])
 
     [(_, feed)] = session.runs
-    assert feed["input_ids"].shape == (1, onnx_embedding.MAX_TOKENS) == (1, 8192)
+    assert feed["input_ids"].shape == (1, onnx_embedding.MAX_TOKENS) == (1, 1024)
     assert feed["input_ids"][0, 0] == ids("[CLS]")[0] and feed["input_ids"][0, -1] == ids("[SEP]")[0]
 
 
