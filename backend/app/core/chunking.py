@@ -9,7 +9,7 @@ import re
 from collections import Counter
 from dataclasses import dataclass, replace
 
-STRATEGY_VERSION = 2  # v2: a block over BLOCK_CAP is split
+STRATEGY_VERSION = 2  # v2: a block over BLOCK_CAP is split, and a table stays together
 MAX_CHARS = 1500
 # A block longer than this is split. Embedding memory grows with a text's length squared: the longest real chunks
 # (8,181 characters) peak at 1.55 GB, and 30,000 characters ran out of a 2.5 GB cap (measured 2026-11-04). Below it a
@@ -36,6 +36,7 @@ class Block:
     text: str
     size: float  # dominant font size, weighted by characters
     bold: bool
+    table: int | None = None  # which table of the document it sits in
 
 
 @dataclass(frozen=True)
@@ -105,9 +106,10 @@ def _pieces(block: Block) -> list[Block]:
 
 def chunk_blocks(blocks: list[Block], max_chars: int = MAX_CHARS) -> list[ChunkDraft]:
     body_size = body_font_size(blocks)
-    sized = [b for b in blocks if b.size >= body_size * MIN_SIZE_RATIO]
-    headings = {id(b) for b in sized if is_heading(b, body_size)}
-    kept = [b for b in sized if id(b) in headings or len(b.text.split()) >= MIN_WORDS]
+    # A table's cells are kept whatever their size or length, and its bold ones are not section titles.
+    sized = [b for b in blocks if b.table is not None or b.size >= body_size * MIN_SIZE_RATIO]
+    headings = {id(b) for b in sized if b.table is None and is_heading(b, body_size)}
+    kept = [b for b in sized if b.table is not None or id(b) in headings or len(b.text.split()) >= MIN_WORDS]
     content = [piece for block in kept for piece in _pieces(block)]
     use_overlap = not headings
 
@@ -123,10 +125,15 @@ def chunk_blocks(blocks: list[Block], max_chars: int = MAX_CHARS) -> list[ChunkD
             continue
 
         size = sum(len(b.text) for b in current)
-        if current and (block.page != current[-1].page or size + len(block.text) > max_chars):
+        # A table stays in one chunk up to BLOCK_CAP: split at max_chars, 52% of its numbers lost their column header.
+        same_table = bool(current) and block.table is not None and block.table == current[-1].table
+        changes_table = bool(current) and block.table != current[-1].table
+        too_long = size + len(block.text) > (BLOCK_CAP if same_table else max_chars)
+        if current and (block.page != current[-1].page or too_long or changes_table):
             drafts.append(_draft(len(drafts), current, section))
             last = current[-1]
-            carry = use_overlap and last.page == block.page and len(last.text) <= OVERLAP_MAX_CHARS
+            carry = use_overlap and not changes_table and last.page == block.page
+            carry = carry and len(last.text) <= OVERLAP_MAX_CHARS
             current = [last] if carry else []
         current = [*current, block]
 
