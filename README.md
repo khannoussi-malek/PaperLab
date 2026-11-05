@@ -413,6 +413,7 @@ Library:
 - `get_paper`: a paper's details, those same three fields (and the published version of a preprint, `published_doi`),
   your reading pass and decision (`reading_pass`, `triage`), section outline, workspaces and every note with who
   wrote it;
+- `read_pages`: the text of up to ten pages of a paper, around a search hit or through a section;
 - `related_papers`: library papers connected to one, up to three links away;
 - `list_workspaces`: your workspaces, with their names;
 - `create_workspace`: a new workspace;
