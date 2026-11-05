@@ -79,3 +79,47 @@ def test_a_long_paragraph_that_can_be_embedded_stays_whole():
     [chunk] = chunk_blocks([heading(1, 40, "1 Long"), para(1, 100, text)])
 
     assert chunk.text == text
+
+
+def cell(page: int, y: float, text: str, table: int | None = 1, bold: bool = False) -> Block:
+    return Block(page=page, bbox=(72, y, 290, y + 12), text=text, size=BODY, bold=bold, table=table)
+
+
+def test_a_table_stays_in_one_chunk_with_its_header_past_the_chunk_size():
+    """A chunk with "2.5" but not its column reads as a different dose (41% kept both, measured 2026-11-05)."""
+    header = cell(1, 100, "Patient group dose mg", bold=True)
+    rows = [cell(1, 120 + i, f"Row {i} with renal impairment {i}.5 mg " + "x" * 300) for i in range(8)]
+
+    chunks = chunk_blocks([para(1, 40, prose("a", 400)), header, *rows, para(1, 300, prose("b", 400))], max_chars=1500)
+
+    assert len(chunks) == 3  # the prose before, the table, the prose after
+    assert chunks[1].text.startswith("Patient group dose mg")
+    assert all(row.text in chunks[1].text for row in rows)
+    assert len(chunks[1].text) > 1500
+
+
+def test_a_tables_bold_cells_are_not_section_titles():
+    table = [cell(1, 100, "Total", bold=True), cell(1, 120, "2.5 mg")]
+    blocks = [heading(1, 40, "4.2 Posology"), para(1, 60, prose("a", 400)), *table]
+
+    chunks = chunk_blocks(blocks)
+
+    assert [c.section_title for c in chunks] == ["4.2 Posology", "4.2 Posology"]
+
+
+def test_a_tables_short_and_small_cells_are_kept():
+    blocks = [para(1, 40, prose("a", 400)), Block(1, (72, 100, 200, 110), "2.5 mg", 6.0, False, table=1)]
+
+    assert "2.5 mg" in chunk_blocks(blocks)[-1].text
+
+
+def test_a_table_past_the_block_cap_still_splits():
+    rows = [cell(1, 100 + i, f"Row {i} " + "x" * 3000) for i in range(5)]
+
+    assert all(len(c.text) <= BLOCK_CAP for c in chunk_blocks([para(1, 40, prose("a", 400)), *rows]))
+
+
+def test_two_tables_are_two_chunks():
+    chunks = chunk_blocks([cell(1, 100, "First table cell here"), cell(1, 200, "Second table cell here", table=2)])
+
+    assert [c.text for c in chunks] == ["First table cell here", "Second table cell here"]

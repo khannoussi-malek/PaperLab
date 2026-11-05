@@ -1,9 +1,12 @@
+
+import pymupdf
 import pytest
 from conftest import BERT_TITLE_LINES, TABLE_ROWS
 
 from app.core.chunking import Block
 from app.core.errors import InvalidInput
 from app.core.table_grid import caption_name, words_to_grid
+from app.providers import extraction
 from app.providers.extraction import _title_from_blocks, extract, read_region
 
 
@@ -80,3 +83,36 @@ def test_a_region_gives_the_words_inside_it_and_the_caption_blocks_around_it(tab
     assert [[cell.text for cell in row] for row in words_to_grid(text.words)] == [list(row) for row in TABLE_ROWS]
     assert all(region[1] <= w.y0 and w.y1 <= region[3] for w in text.words)  # the paragraph below is not read
     assert caption_name(text.blocks, region) == "Table 1: Results on the dev set."
+
+
+def ruled_table_pdf(path) -> str:
+    doc = pymupdf.open()
+    page = doc.new_page()
+    page.insert_text((72, 60), "Prose before the table, long enough to be an ordinary paragraph of the paper.")
+    for row, cells in enumerate([("Group", "Dose"), ("Adults", "5 mg"), ("Renal", "2.5 mg")]):
+        for column, text in enumerate(cells):
+            x, y = 72 + column * 150, 100 + row * 30
+            page.draw_rect((x, y, x + 150, y + 30))
+            page.insert_text((x + 5, y + 20), text)
+    doc.save(path)
+    return str(path)
+
+
+def test_a_tables_blocks_know_their_table(tmp_path, monkeypatch):
+    monkeypatch.setattr(extraction, "MIN_SHORT_BLOCKS", 0)
+
+    blocks = extract(ruled_table_pdf(tmp_path / "table.pdf")).blocks
+
+    inside = {block.text for block in blocks if block.table is not None}
+    assert "2.5 mg" in " ".join(inside) and "Dose" in " ".join(inside)
+    assert any(block.table is None and block.text.startswith("Prose before") for block in blocks)
+
+
+def test_a_page_without_short_blocks_is_not_searched_for_tables(sample_pdf, monkeypatch):
+    def fail(self, *args, **kwargs):
+        raise AssertionError("searched a page of prose for tables")
+
+    monkeypatch.setattr(extraction, "MIN_SHORT_BLOCKS", 10_000)
+    monkeypatch.setattr(pymupdf.Page, "find_tables", fail)
+
+    assert all(block.table is None for block in extract(sample_pdf).blocks)

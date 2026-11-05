@@ -1,5 +1,5 @@
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from itertools import takewhile
 from pathlib import Path
 
@@ -16,6 +16,9 @@ BOLD_FLAG = 16
 HORIZONTAL = (1.0, 0.0)
 # ponytail: a scanned PDF often still has a few stray chars (stamps, page numbers).
 MIN_CHARS_PER_PAGE = 50
+SHORT_WORDS = 4  # a block under this many words looks like a table cell
+MIN_SHORT_BLOCKS = 5  # a page with fewer isn't searched for tables: below this, 86% of numbers kept their headers
+TABLES_A_PAGE = 1000  # keeps table ids unique across the document
 
 
 @dataclass(frozen=True)
@@ -67,9 +70,26 @@ def _title_from_blocks(blocks: list[Block]) -> str | None:
     return join_lines([b.text for b in continued])
 
 
+def _in_tables(page: pymupdf.Page, blocks: list[Block]) -> list[Block]:
+    """The page's blocks, each knowing which table holds it. Looks only on pages with several short blocks, as tables
+    have: find_tables is the slow part of extraction (20 ms a page in Docker on real papers, against 3 without it).
+    ponytail: a table split across a page break is two tables, so its later page loses the header; carrying the header
+    over is the upgrade."""
+    if sum(len(b.text.split()) < SHORT_WORDS for b in blocks) < MIN_SHORT_BLOCKS:
+        return blocks
+    rects = [pymupdf.Rect(table.bbox) for table in page.find_tables().tables]
+
+    def holder(block: Block) -> int | None:
+        x0, y0, x1, y1 = block.bbox
+        centre = pymupdf.Point((x0 + x1) / 2, (y0 + y1) / 2)
+        return next((page.number * TABLES_A_PAGE + i for i, rect in enumerate(rects) if centre in rect), None)
+
+    return [replace(block, table=holder(block)) for block in blocks]
+
+
 def _page_blocks(page: pymupdf.Page) -> list[Block]:
     raws = page.get_text("dict", flags=TEXT_FLAGS)["blocks"]
-    return [block for raw in raws if raw["type"] == 0 and (block := _block(page.number + 1, raw))]
+    return _in_tables(page, [block for raw in raws if raw["type"] == 0 and (block := _block(page.number + 1, raw))])
 
 
 def _metadata(doc: pymupdf.Document) -> dict[str, str]:
