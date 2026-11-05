@@ -18,7 +18,7 @@ export function HybridSearchSwitch({ enabled }: { enabled: boolean }) {
         <Label htmlFor="hybrid-search">Also match exact words when searching across papers</Label>
       </div>
       <p id="hybrid-search-help" className="pl-6.5 text-xs text-muted-foreground">
-        Finds rare names and numbers, like a drug name, that search by meaning can miss. Search inside a single paper stays as it is, and so does a search with a long passage. A broad question can take a couple of seconds longer.
+        Finds rare names and numbers, like a drug name, that search by meaning can miss. Chat about a workspace or a long paper always does this; the switch adds it to library search and manuscript checks. A search with a long passage stays as it is. A broad question can take a couple of seconds longer.
       </p>
       {update.error && (
         <Alert variant="destructive" className="border-glass-border">

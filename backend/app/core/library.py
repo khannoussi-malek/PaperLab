@@ -5,6 +5,7 @@ Each function returns plain dataclasses; the MCP server returns them as they are
 
 import uuid
 from dataclasses import dataclass, field
+from itertools import accumulate
 from typing import Literal
 
 from sqlalchemy import func, select
@@ -21,6 +22,11 @@ from app.core.retrieval import MAX_PER_PAPER, retrieve, searchable
 from app.models import Chunk, Paper, Workspace, workspace_papers
 
 SEARCH_K = 8
+# read_pages: a page range an agent can hold at once. A section is read by going on from `next_page`.
+MAX_READ_PAGES = 10
+MAX_READ_CHARS = 20_000
+# A paper card's outline. Past this a long file's outline floods the client: 10,559 titles were 664,000 characters.
+MAX_OUTLINE_SECTIONS = 300
 MAX_LIMIT = 50
 COPY_OVERFETCH = 4  # a few more than asked for, so collapsing copies doesn't leave the answer short
 SAME_PASSAGE = 0.8  # share of words in common at which two copies' chunks count as one passage
@@ -81,7 +87,8 @@ class PaperCard:
     reading_pass: int
     triage: str | None
     workspaces: list[str]  # names, alphabetical
-    sections: list[Section]  # in reading order
+    sections: list[Section]  # in reading order, at most MAX_OUTLINE_SECTIONS
+    sections_total: int
     notes: list[NoteBrief]  # notes on the whole paper first, newest first; then in reading order
 
 
@@ -205,6 +212,40 @@ async def search(
     ]
 
 
+@dataclass(frozen=True)
+class PagePassage:
+    chunk_id: uuid.UUID
+    page: int
+    section: str | None
+    text: str
+
+
+@dataclass(frozen=True)
+class PagesRead:
+    passages: list[PagePassage]
+    next_page: int | None  # where to go on from; None at the end of the paper
+
+
+async def read_pages(session: AsyncSession, paper_id: uuid.UUID, page: int, pages: int = 1) -> PagesRead:
+    """The paper's passages on `page` and the `pages` - 1 after it, in reading order, up to MAX_READ_CHARS: the "read"
+    half of locate-then-read. Passages are never split, and the first is always given. Raises NotFound,
+    InvalidInput("invalid_pages")."""
+    await get_paper(session, paper_id)
+    if page < 1 or not 1 <= pages <= MAX_READ_PAGES:
+        raise InvalidInput("invalid_pages", detail=f"page starts at 1, and pages must be 1 to {MAX_READ_PAGES}.")
+    in_paper = select(Chunk.id, Chunk.page, Chunk.section_title, Chunk.text).where(Chunk.paper_id == paper_id)
+    in_range = in_paper.where(Chunk.page >= page, Chunk.page < page + pages).order_by(Chunk.ordinal)
+    rows = (await session.execute(in_range)).all()
+    totals = accumulate(len(row.text) for row in rows)
+    kept = [row for row, total in zip(rows, totals) if total <= MAX_READ_CHARS] or rows[:1]
+    if len(kept) < len(rows):
+        next_page = rows[len(kept)].page
+    else:
+        after = select(func.min(Chunk.page)).where(Chunk.paper_id == paper_id, Chunk.page >= page + pages)
+        next_page = await session.scalar(after)
+    return PagesRead([PagePassage(r.id, r.page, r.section_title, r.text) for r in kept], next_page)
+
+
 async def paper_card(session: AsyncSession, paper_id: uuid.UUID) -> PaperCard:
     """A paper's metadata, its section outline, its workspaces and every note on it with its provenance. No chunk text:
     search gives passages. Raises NotFound."""
@@ -245,6 +286,7 @@ async def paper_card(session: AsyncSession, paper_id: uuid.UUID) -> PaperCard:
         reading_pass=paper.reading_pass,
         triage=paper.triage,
         workspaces=sorted(await session.scalars(names)),
-        sections=list(sections.values()),
+        sections=list(sections.values())[:MAX_OUTLINE_SECTIONS],
+        sections_total=len(sections),
         notes=notes,
     )

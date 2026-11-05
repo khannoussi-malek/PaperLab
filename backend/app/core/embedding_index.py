@@ -100,6 +100,13 @@ async def papers_to_embed(
     return list(await session.scalars(query))
 
 
+async def chunks_to_embed(session: AsyncSession, paper_id: uuid.UUID, name: str) -> list:
+    """The paper's chunks without a vector from `name`, in reading order: only their ids and text, so a long paper's
+    next slice doesn't load every vector it already has."""
+    query = select(Chunk.id, Chunk.text).where(Chunk.paper_id == paper_id, _lacking(name)).order_by(Chunk.ordinal)
+    return list((await session.execute(query)).all())
+
+
 async def rebuild(session: AsyncSession, source) -> Rebuild | None:
     """How far a rebuild toward the search source has got (D156), or None when there is none to show:
     - rebuild_model isn't the source's name (a release renamed the built-in model: Settings shows its Re-index prompt,

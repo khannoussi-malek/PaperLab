@@ -200,6 +200,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/papers/{paper_id}/embedding-progress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Embedding Progress
+         * @description What the library's progress bar polls while a paper is embedding. 404 unknown paper.
+         */
+        get: operations["embedding_progress_api_papers__paper_id__embedding_progress_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/papers/{paper_id}/chunks": {
         parameters: {
             query?: never;
@@ -4050,6 +4070,13 @@ export interface components {
             /** Exclude Reason */
             exclude_reason?: string | null;
         };
+        /** EmbeddingProgressOut */
+        EmbeddingProgressOut: {
+            /** Done */
+            done: number;
+            /** Total */
+            total: number;
+        };
         /** EmbeddingStatusOut */
         EmbeddingStatusOut: {
             /** Model */
@@ -7489,6 +7516,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PaperEventOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    embedding_progress_api_papers__paper_id__embedding_progress_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                paper_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmbeddingProgressOut"];
                 };
             };
             /** @description Validation Error */

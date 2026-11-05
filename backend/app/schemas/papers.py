@@ -123,6 +123,11 @@ class ChunkOut(BaseModel):
         return self.page == ABSTRACT_PAGE
 
 
+class EmbeddingProgressOut(BaseModel):
+    done: int  # chunks with a vector
+    total: int
+
+
 class PaperEventOut(BaseModel):
     """One thing that happened to a paper (R21). `detail` is {"how"} for pdf_attached, {"url", "how"} for pdf_found."""
 

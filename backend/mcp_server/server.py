@@ -36,7 +36,8 @@ mcp = MCPServer(
     "paperlab",
     instructions=(
         "PaperLab is the owner's research library. Learn workspace names with list_workspaces. "
-        "Library: search_library, get_paper, related_papers, list_papers; create_workspace makes a new one; add papers "
+        "Library: search_library, get_paper, read_pages, related_papers, list_papers; "
+        "create_workspace makes a new one; add papers "
         "by DOI, arXiv ID or PDF link with add_paper (free copies only; add_papers takes up to 50 at once), "
         "or upload_paper for a PDF you already hold, "
         "file them with add_paper_to_workspace and "
@@ -137,6 +138,16 @@ async def get_paper(paper_id: uuid.UUID) -> library.PaperCard:
     `published_doi` and `published_venue` are a preprint's published version, when known."""
     async with sessions() as session:
         return await library.paper_card(session, paper_id)
+
+
+@mcp.tool(annotations=READ_ONLY)
+@recoverable
+async def read_pages(paper_id: uuid.UUID, page: int, pages: int = 1) -> library.PagesRead:
+    """Use this to read around a search_library hit, or a whole section from its start page in get_paper's outline.
+    Gives a paper's passages on `page` and the `pages` - 1 after it (1 to 10), in reading order, with their sections.
+    Long results stop early: go on from `next_page`, which is null at the end of the paper."""
+    async with sessions() as session:
+        return await library.read_pages(session, paper_id, page, pages)
 
 
 @mcp.tool(annotations=READ_ONLY)

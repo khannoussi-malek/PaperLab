@@ -37,6 +37,7 @@ export type EvidenceCard = components['schemas']['CardOut']
 export type EvidenceCardRow = components['schemas']['CardRowOut']
 export type EvidenceChange = components['schemas']['EditIn']['changes'][number]
 export type Chunk = components['schemas']['ChunkOut']
+export type EmbeddingProgress = components['schemas']['EmbeddingProgressOut']
 export type Note = components['schemas']['NoteOut']
 export type NoteKind = NonNullable<Note['kind']>
 export type FigureNoteCreate = components['schemas']['FigureNoteCreate']
@@ -345,6 +346,7 @@ export const api = {
       '/api/discovery/add',
       sendJson('POST', { candidate, workspace_id: workspaceId ?? null, save_without_pdf: saveWithoutPdf }),
     ),
+  embeddingProgress: (paperId: string) => request<EmbeddingProgress>(`/api/papers/${paperId}/embedding-progress`),
   listChunks: (paperId: string, page: number) => request<Chunk[]>(`/api/papers/${paperId}/chunks?page=${page}`),
   /** Every chunk of a paper, in reading order: the lens fades and jumps need their rects. */
   listAllChunks: (paperId: string) => request<Chunk[]>(`/api/papers/${paperId}/chunks`),

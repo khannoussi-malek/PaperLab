@@ -1,6 +1,7 @@
 import asyncio
 import re
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 import httpx
 import numpy as np
@@ -77,8 +78,10 @@ async def test_the_worker_loads_the_model_on_its_first_job_and_keeps_it(
 
     assert loads == ["load"]
     assert len(embedder.calls) == 2
-    for worker in (WorkerSettings, IngestWorkerSettings):
-        assert getattr(worker, "on_startup", None) is None  # nothing loads at start (D136)
+    # Nothing loads at start (D136): the main worker has no startup step, and the ingest worker's only frees locks.
+    assert getattr(WorkerSettings, "on_startup", None) is None
+    await IngestWorkerSettings.on_startup({"redis": AsyncMock(zrange=AsyncMock(return_value=[]))})
+    assert loads == ["load"]
 
 
 async def test_with_no_search_model_a_paper_is_ready_without_vectors(worker_session, sample_pdf, monkeypatch):

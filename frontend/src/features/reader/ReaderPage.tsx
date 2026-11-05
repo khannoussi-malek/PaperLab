@@ -93,6 +93,8 @@ const SAVE_FIRST = 'Save or cancel the note you are writing first.'
 /** A cited chunk being shown; `id` restarts the flash when the same citation is clicked again. */
 type Flash = { id: number; page: number; rects: PdfRect[] }
 
+const STILL_EMBEDDING = 'Still preparing full search. Until it finishes, long papers answer from keyword matches.'
+
 /** The reader's one scroll path: notes, hovered highlights and cited chunks are all brought into view with it. */
 function scrollToElement(selector: string, block: ScrollLogicalPosition) {
   document.querySelector(selector)?.scrollIntoView({ behavior: 'smooth', block })
@@ -685,6 +687,7 @@ export function ReaderPage({ paperId, tab, target }: Props) {
         chat={
           <ChatPanel
             scope={{ kind: 'paper', id: paperId }}
+            notice={paper.data?.status === 'embedding' ? STILL_EMBEDDING : undefined}
             // A cited passage flashes on its page, a cited abstract scrolls into view; a cited note is focused as if
             // picked in the Notes tab.
             onCite={(source) =>
