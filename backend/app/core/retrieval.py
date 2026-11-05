@@ -58,10 +58,10 @@ MAX_TERMS = 32  # the rarest words of a question, which are the ones that tell c
 # Measured on the fixed questions, they tied the usual 1.5 and 0.75 alone and got more at top 8 (27 to 26).
 BM25_K1 = 0.9
 BM25_B = 0.4
-# From this many chunks a paper searched alone uses its words too, whatever the switch says. On fixed-answer questions
-# over a 10,000-chunk file hybrid answered 28 of 33 and vectors 26 (measured 2026-11-04); inside short papers its own
-# topic words are everywhere and hybrid lost recall (below).
-LONG_PAPER_CHUNKS = 1_000
+# From this many chunks a paper searched alone uses its words too, whatever the switch says. On 50 questions over
+# documents of 175 to 837 chunks hybrid answered 40 and vectors 34 (measured 2026-11-05); inside short papers (49 and 69
+# chunks) its own topic words are everywhere: no loss at 24,000 characters, 3 of 20 lost at 6,000 (below).
+LONG_PAPER_CHUNKS = 150
 _HYBRID = """
 WITH vector AS (
   SELECT id, count(*) OVER () + 1 - row_number() OVER (ORDER BY distance DESC) AS rank
