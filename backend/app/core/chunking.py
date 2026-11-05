@@ -9,7 +9,7 @@ import re
 from collections import Counter
 from dataclasses import dataclass, replace
 
-STRATEGY_VERSION = 2  # v2: a block over BLOCK_CAP is split, and a table stays together
+STRATEGY_VERSION = 2  # v2: a block over BLOCK_CAP is split, and a table stays together with its caption
 MAX_CHARS = 1500
 # A block longer than this is split. Embedding memory grows with a text's length squared: the longest real chunks
 # (8,181 characters) peak at 1.55 GB, and 30,000 characters ran out of a 2.5 GB cap (measured 2026-11-04). Below it a
@@ -23,8 +23,13 @@ HEADING_MAX_CHARS = 90
 MIN_WORDS = 4
 # Overlap is only used when no headings are found; big blocks aren't worth repeating.
 OVERLAP_MAX_CHARS = MAX_CHARS // 3
+# Text this short right above a table is its caption and column heads, which find_tables often leaves out. Real ones
+# run to 320 characters (FDA review, 2026-11-05).
+LEAD_IN_MAX_CHARS = 350
+ROW_DIGITS = 0.25  # a row's share of digits; prose with its numbers stays well under
 
 _HAS_LETTER = re.compile(r"[A-Za-z]")
+_NUMBER = re.compile(r"\d+(?:\.\d+)?")
 
 Rect = tuple[float, float, float, float]
 
@@ -104,6 +109,23 @@ def _pieces(block: Block) -> list[Block]:
     return [*pieces, replace(block, text=rest)] if pieces else [block]
 
 
+def _is_row(block: Block) -> bool:
+    """A table's row, when find_tables didn't see the table: at least three numbers, and many digits for its length."""
+    digits = sum(c.isdigit() for c in block.text)
+    return len(_NUMBER.findall(block.text)) >= 3 and digits >= ROW_DIGITS * len(block.text)
+
+
+def _lead_in(blocks: list[Block]) -> int:
+    """How many blocks at the end of `blocks` fit LEAD_IN_MAX_CHARS, none of them from an earlier page or a table."""
+    count, size = 0, 0
+    for block in reversed(blocks):
+        size += len(block.text)
+        if block.table is not None or block.page != blocks[-1].page or size > LEAD_IN_MAX_CHARS:
+            break
+        count += 1
+    return count
+
+
 def chunk_blocks(blocks: list[Block], max_chars: int = MAX_CHARS) -> list[ChunkDraft]:
     body_size = body_font_size(blocks)
     # A table's cells are kept whatever their size or length, and its bold ones are not section titles.
@@ -130,11 +152,18 @@ def chunk_blocks(blocks: list[Block], max_chars: int = MAX_CHARS) -> list[ChunkD
         changes_table = bool(current) and block.table != current[-1].table
         too_long = size + len(block.text) > (BLOCK_CAP if same_table else max_chars)
         if current and (block.page != current[-1].page or too_long or changes_table):
-            drafts.append(_draft(len(drafts), current, section))
             last = current[-1]
+            starts_table = (block.table is not None and changes_table or too_long and _is_row(block)) and (
+                last.page == block.page
+            )
+            # Without them the numbers sit alone, and no question about the table's subject can find them.
+            lead = _lead_in(current) if starts_table else 0
+            before = current[: len(current) - lead]
+            if before:
+                drafts.append(_draft(len(drafts), before, section))
             carry = use_overlap and not changes_table and last.page == block.page
             carry = carry and len(last.text) <= OVERLAP_MAX_CHARS
-            current = [last] if carry else []
+            current = current[len(current) - lead :] if lead else [last] if carry else []
         current = [*current, block]
 
     if current:
