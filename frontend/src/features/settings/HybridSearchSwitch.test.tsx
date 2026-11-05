@@ -16,7 +16,7 @@ test('shows its state and says what it does and what it costs', () => {
   show(false)
   expect(box()).not.toBeChecked()
   expect(box()).toHaveAccessibleDescription(/rare names and numbers/)
-  expect(box()).toHaveAccessibleDescription(/single paper/)
+  expect(box()).toHaveAccessibleDescription(/Chat about a workspace or a long paper always does this/)
   expect(box()).toHaveAccessibleDescription(/long passage/)
   expect(box()).toHaveAccessibleDescription(/seconds/)
 })
