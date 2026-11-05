@@ -645,3 +645,36 @@ async def test_a_long_question_on_a_paper_still_embedding_searches_its_first_wor
     found = await retrieve(session, question, paper_ids=[a.id], embedder=embedder)
 
     assert waiting.id in {c.id for c in found}
+
+
+NEARER = [(f"Background passage number {i}", 0.1 * (i + 1)) for i in range(4)]  # share no word with the question
+
+
+async def test_hybrid_ranks_a_word_said_often_above_a_word_said_once(session, embedder, monkeypatch):
+    """BM25: on the fixed questions it beat summing each word's weight once, 46 to 45 of 60 unseen ones."""
+    hybrid(monkeypatch, True)
+    question = f"What about {RARE}?"
+    query = unit_vector(uuid.uuid4().hex)
+    embedder.vectors[f"search_query: {question}"] = query
+    once = f"{RARE} is mentioned here in passing, among many other unrelated drug interactions and warnings."
+    often = f"{RARE} raises exposure, so {RARE} needs care, and {RARE} should be avoided in this group of patients."
+    # Nearer by vector: `once`. Keyword ties would leave it first.
+    chunks = await add_texts(session, query, "Label", [*NEARER, (once, 3.0), (often, 3.1)])
+
+    found = await retrieve(session, question, chunk_ids=[c.id for c in chunks], k=2, embedder=embedder)
+
+    assert [c.text for c in found] == [often, once]
+
+
+async def test_hybrid_prefers_a_short_chunk_when_both_say_the_word_as_often(session, embedder, monkeypatch):
+    hybrid(monkeypatch, True)
+    question = f"What about {RARE}?"
+    query = unit_vector(uuid.uuid4().hex)
+    embedder.vectors[f"search_query: {question}"] = query
+    filler = " ".join(f"unrelated{i} words{i}" for i in range(120))
+    short, long = f"{RARE} raises exposure.", f"{RARE} raises exposure. {filler}"
+    chunks = await add_texts(session, query, "Label", [*NEARER, (long, 3.0), (short, 3.1)])
+
+    found = await retrieve(session, question, chunk_ids=[c.id for c in chunks], k=2, embedder=embedder)
+
+    assert [c.text for c in found] == [short, long]

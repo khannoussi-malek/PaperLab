@@ -43,9 +43,9 @@ LIMIT :k
 
 
 # Hybrid search: the vector candidates and up to as many keyword candidates, fused by reciprocal rank (each list adds
-# 1 / (RRF_K + rank)), then the same per-paper cap. The keyword score sums each question word's IDF over the scope,
-# not ts_rank: ts_rank has no IDF, so "patient" counts as much as "itraconazole", and websearch_to_tsquery ANDs every
-# word, which a whole question never matches. Matches go through the GIN index on tsv first, then only they are scored.
+# 1 / (RRF_K + rank)), then the same per-paper cap. The keyword score is BM25 over the scope, not ts_rank: ts_rank has
+# no IDF, so "patient" counts as much as "itraconazole", and websearch_to_tsquery ANDs every word, which a whole
+# question never matches. Matches go through the GIN index on tsv first, then only they are scored.
 # ponytail: 'english' stemming won't join "haemodialysis" to "dialysis"; the vector half has to carry those.
 # The vector ranks count from the far end: relaxed_order (below) can return `nearest` slightly out of order, and a
 # window ORDER BY distance would take that order as already sorted. Postgres can't take it as sorted DESC.
@@ -54,6 +54,10 @@ RRF_K = 60
 # of its hundreds of words would be slow, with each word counted over the scope, and would mean nothing.
 MAX_HYBRID_CHARS = 1_000
 MAX_TERMS = 32  # the rarest words of a question, which are the ones that tell chunks apart
+# BM25's settings: how soon repeating a word stops helping, and how much a long chunk pays for its length.
+# Measured on the fixed questions, they tied the usual 1.5 and 0.75 alone and got more at top 8 (27 to 26).
+BM25_K1 = 0.9
+BM25_B = 0.4
 # From this many chunks a paper searched alone uses its words too, whatever the switch says. On fixed-answer questions
 # over a 10,000-chunk file hybrid answered 28 of 33 and vectors 26 (measured 2026-11-04); inside short papers its own
 # topic words are everywhere and hybrid lost recall (below).
@@ -70,14 +74,14 @@ WITH vector AS (
   ) AS nearest
 ),
 terms AS MATERIALIZED (
-  SELECT DISTINCT quote_literal(lexeme)::tsquery AS term
+  SELECT DISTINCT lexeme, quote_literal(lexeme)::tsquery AS term
   FROM unnest(tsvector_to_array(to_tsvector('english', :question))) AS lexeme
 ),
-total AS (SELECT count(*)::float AS n FROM chunks WHERE {words} {scope}),
+total AS (SELECT count(*)::float AS n, avg(length(tsv)) AS mean_length FROM chunks WHERE {words} {scope}),
 weights AS MATERIALIZED (
-  SELECT term, ln((SELECT n FROM total) / df) AS weight
+  SELECT lexeme, term, ln(1 + ((SELECT n FROM total) - df + 0.5) / (df + 0.5)) AS weight
   FROM (
-    SELECT term, (SELECT count(*) FROM chunks WHERE {words} {scope} AND tsv @@ term) AS df
+    SELECT lexeme, term, (SELECT count(*) FROM chunks WHERE {words} {scope} AND tsv @@ term) AS df
     FROM terms
     OFFSET 0  -- keeps the planner from counting each term once per use of df below
   ) AS counted
@@ -88,7 +92,16 @@ weights AS MATERIALIZED (
 lexical AS (
   SELECT id, rank() OVER (ORDER BY score DESC) AS rank  -- ties share a rank, so they leave the vector order alone
   FROM (
-    SELECT id, (SELECT sum(weight) FROM weights WHERE tsv @@ weights.term) AS score
+    SELECT id, (
+      SELECT sum(
+        w.weight * array_length(t.positions, 1) * (k1 + 1) / (array_length(t.positions, 1)
+          + k1 * (1 - b + b * length(chunks.tsv) / (SELECT mean_length FROM total)))
+      )
+      FROM unnest(chunks.tsv) AS t
+      JOIN weights AS w ON w.lexeme = t.lexeme
+      -- The casts matter: next to an integer the driver takes these for integers and quietly rounds them to 0.
+      CROSS JOIN (SELECT CAST(:bm25_k1 AS float) AS k1, CAST(:bm25_b AS float) AS b) AS settings
+    ) AS score
     FROM chunks
     WHERE {words} {scope} AND tsv @@ (SELECT string_agg(term::text, ' | ')::tsquery FROM weights)
     ORDER BY score DESC, embedding <=> :q, id  -- more ties than candidates: keep the nearest
@@ -283,7 +296,9 @@ async def retrieve(
         # Postgres refuses a NUL in text, and the vector path never sends the words to it.
         # Cut only when a paper still embedding is asked by itself: past the limit nothing else gets here.
         question_words = query.replace("\x00", "")[:MAX_HYBRID_CHARS]
-        params |= {"question": question_words, "rrf_k": RRF_K, "max_terms": MAX_TERMS}
+        params |= {
+            "question": question_words, "rrf_k": RRF_K, "max_terms": MAX_TERMS, "bm25_k1": BM25_K1, "bm25_b": BM25_B,
+        }
     if paper_ids is not None:
         params["paper_ids"] = list(paper_ids)
     if chunk_ids is not None:
