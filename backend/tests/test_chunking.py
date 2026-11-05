@@ -123,3 +123,56 @@ def test_two_tables_are_two_chunks():
     chunks = chunk_blocks([cell(1, 100, "First table cell here"), cell(1, 200, "Second table cell here", table=2)])
 
     assert [c.text for c in chunks] == ["First table cell here", "Second table cell here"]
+
+
+RUNNING_TEXT = "A long paragraph of ordinary running text about the study design and how it was run. " * 8
+
+
+def test_a_tables_caption_and_column_heads_join_its_numbers():
+    # Real case: the dyspnea-by-age table's numbers were alone in a chunk, so nothing about age or dyspnea found them.
+    chunks = chunk_blocks([
+        para(1, 40, RUNNING_TEXT),
+        para(1, 100, "Table 12 Dyspnea by age group, safety analysis set"),
+        para(1, 120, "Treatment under 65 years, 65 to 75 years, over 75 years"),
+        cell(1, 140, "Ticagrelor 653 (12.43%) 439 (16.89%) 253 (18.29%)"),
+        cell(1, 160, "Clopidogrel 377 (7.15%) 246 (10.05%) 180 (12.30%)"),
+    ])
+
+    assert len(chunks) == 2
+    assert chunks[0].text == RUNNING_TEXT
+    assert chunks[1].text.startswith("Table 12 Dyspnea by age group")
+    assert "Treatment under 65" in chunks[1].text and "253 (18.29%)" in chunks[1].text
+
+
+def test_a_long_paragraph_before_a_table_stays_where_it_was():
+    chunks = chunk_blocks([para(1, 40, RUNNING_TEXT), cell(1, 100, "Ticagrelor 653 (12.43%) 439 (16.89%)")])
+
+    assert [c.text for c in chunks] == [RUNNING_TEXT, "Ticagrelor 653 (12.43%) 439 (16.89%)"]
+
+
+def test_text_on_the_page_before_never_joins_a_table():
+    caption = para(1, 40, "Table 12 Dyspnea by age group, safety set")
+    chunks = chunk_blocks([caption, cell(2, 40, "Ticagrelor 653 (12.43%)")])
+
+    assert [c.page for c in chunks] == [1, 2]
+
+
+def test_a_split_before_a_row_of_numbers_takes_the_caption_along_when_no_table_was_detected():
+    # Real case: find_tables missed this table and the size limit fell between its column heads and its numbers.
+    chunks = chunk_blocks([
+        para(1, 40, prose("a", 1300)),
+        para(1, 100, "Table 22: Patients with dyspnea AE by treatment"),
+        para(1, 120, "Treatment under 65 years old, 65 to 75 years old, over 75 years old N=5252 N=2599"),
+        para(1, 140, "Ticagrelor 653 (12.43%) 439 (16.89%) 253 (18.29%)"),
+    ], max_chars=1450)
+
+    assert chunks[-1].text.startswith("Table 22")
+    assert "253 (18.29%)" in chunks[-1].text
+
+
+def test_a_split_before_ordinary_prose_leaves_short_text_where_it_was():
+    short = "A short closing remark about the study."
+    blocks = [para(1, 40, prose("a", 1300)), para(1, 100, short), para(1, 120, prose("b", 400))]
+    chunks = chunk_blocks(blocks, max_chars=1400)
+
+    assert chunks[0].text.endswith(short)
