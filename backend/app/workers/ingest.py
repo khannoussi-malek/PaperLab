@@ -4,16 +4,17 @@ import time
 import uuid
 from contextlib import AsyncExitStack
 
+from arq.worker import Retry
 from sqlalchemy import update
 
-from app.core import embedding_index, embedding_sources, enrichment, merges, paper_sources, papers, provenance
+from app.core import embedding_index, embedding_sources, enrichment, merges, paper_sources, papers, provenance, queue
 from app.core.candidates import Candidate
 from app.core.chunking import chunk_blocks
 from app.db import SessionLocal
 from app.models import Chunk, Paper, PaperStatus
 from app.providers import crossref, embedding, openalex
 from app.providers.base import LLMError, LLMUnavailable
-from app.providers.extraction import ExtractedDoc, extract
+from app.providers.extraction import ExtractedDoc, extract, extract_head
 
 logger = logging.getLogger(__name__)
 
@@ -22,11 +23,16 @@ logger = logging.getLogger(__name__)
 # mid-ingest forever, as 67 did when ten ingests at once ran the worker out of memory (2026-10-13).
 MAX_TRIES = 5
 EMBED_WRITE_BATCH = 64  # chunks per encode and per write
+# How long one job embeds before queueing `embed_rest` for what's left: a long paper takes turns with the papers behind
+# it, and a killed worker loses a slice at most. A short paper never leaves its first job.
+EMBED_SLICE_SECONDS = 2 * 60
 # Enforced inside the job, not by arq: arq's cancel is a CancelledError, which `except Exception` doesn't catch, so
-# the paper would sit at "embedding" forever. This deadline ends it failed, with the copy below and no partial
-# vectors. Neither can stop a thread already running (extract, an encode), so arq only gets a longer backstop
+# the paper would sit at "embedding" forever. A job stops by itself after a slice, so reaching this deadline means
+# something hung. It ends the paper failed, with the copy below and no partial vectors (`embed_rest` tries again
+# first). Neither can stop a thread already running (extract, an encode), so arq only gets a longer backstop
 # (settings.py).
 INGEST_JOB_TIMEOUT = 20 * 60
+RETRY_AFTER_HANG_SECONDS = 60
 INTERRUPTED = (
     "Ingesting stopped before it finished {times} times (the worker restarted or ran out of memory). "
     "Re-ingest to try again."
@@ -98,12 +104,19 @@ async def search_embedder(ctx: dict, session):
     return await asyncio.to_thread(embedding.build, source, ctx.get("transport"))
 
 
-async def _embed(session, pid: uuid.UUID, embedder) -> bool:
+async def _embed(
+    session, pid: uuid.UUID, embedder, *, missing_only: bool = False, until: float | None = None
+) -> bool:
     """Embeds the paper's chunks in slices of EMBED_WRITE_BATCH, writing each as it is done and only while `embedder`
     is still the search source. A slice is the most a thread left running after a deadline can still do, and the
     progress anyone can see; the vectors written so far stay. A failing source never fails a paper: the old vectors
-    stay and the error is kept for Settings' Try again (D155). True when all were written."""
-    chunks = await papers.list_chunks(session, pid)
+    stay and the error is kept for Settings' Try again (D155). `missing_only` skips chunks already on this source.
+    `until` (time.monotonic) stops it after the slice that passes it; at least one slice runs, so a job always gets
+    further than the last. True unless the source failed or changed."""
+    if missing_only:
+        chunks = await embedding_index.chunks_to_embed(session, pid, embedder.name)
+    else:
+        chunks = await papers.list_chunks(session, pid)
     for start in range(0, len(chunks), EMBED_WRITE_BATCH):
         batch = chunks[start : start + EMBED_WRITE_BATCH]
         try:
@@ -118,11 +131,42 @@ async def _embed(session, pid: uuid.UUID, embedder) -> bool:
             logger.info("the search source changed while embedding %s; the newer job embeds it", pid)
             return False
         await papers.set_embeddings(session, [c.id for c in batch], vectors, embedder.name)
+        if until is not None and time.monotonic() >= until:
+            return True
     return True
 
 
+async def _embed_a_slice(session, pid: uuid.UUID, embedder, *, missing_only: bool = False) -> bool:
+    """One slice of `_embed`, and `embed_rest` queued if chunks are left. True when it queued: the paper stays at
+    `embedding`. No job id: arq refuses an id that is running or whose result it still keeps."""
+    until = time.monotonic() + EMBED_SLICE_SECONDS
+    if not await _embed(session, pid, embedder, missing_only=missing_only, until=until):
+        return False
+    if not await embedding_index.papers_to_embed(session, embedder.name, [pid]):
+        return False
+    await queue.enqueue("embed_rest", str(pid))
+    return True
+
+
+async def _finish(session, transport, pid: uuid.UUID, doc: ExtractedDoc) -> list[enrichment.Collision]:
+    """enriching -> ready. Returns the identifiers other papers hold, for the merge that comes after."""
+    await papers.set_status(session, pid, PaperStatus.ENRICHING)
+    found = await _enrich(session, transport, pid, doc)
+    # Don't read paper's ORM attributes past this point: _enrich's rollback (on the failure path) expires
+    # them, and an async lazy load outside an awaited call raises MissingGreenlet, not a clean re-fetch.
+    await papers.set_status(session, pid, PaperStatus.READY)
+    return found
+
+
+async def _fail_clean(session, pid: uuid.UUID, error: str) -> None:
+    """failed, with no vectors: search doesn't look at a failed paper's status, and half a paper must not answer."""
+    await session.execute(update(Chunk).where(Chunk.paper_id == pid).values(embedding=None))
+    await papers.set_status(session, pid, PaperStatus.FAILED, error=error)
+
+
 async def ingest_paper(ctx: dict, paper_id: str) -> None:
-    """uploaded -> extracting -> chunking -> embedding -> enriching -> ready, or failed with status_error.
+    """uploaded -> extracting -> chunking -> embedding -> enriching -> ready, or failed with status_error. A paper too
+    long to embed in one slice stays at embedding, and `embed_rest` takes it from there.
 
     Idempotent: chunks, vectors, authorships and topics are replaced wholesale, so re-run it freely. With no search
     model the embedding stage is skipped: the paper is ready to read and note, and a finished download embeds it (D137).
@@ -171,33 +215,64 @@ async def ingest_paper(ctx: dict, paper_id: str) -> None:
                 else:
                     marks.append(("embedding", time.monotonic()))
                     await papers.set_status(session, pid, PaperStatus.EMBEDDING)
-                    await _embed(session, pid, embedder)
+                    if await _embed_a_slice(session, pid, embedder):
+                        logger.info("%s: %d chunks, the rest of the embedding is queued", pid, len(drafts))
+                        return
 
                 marks.append(("enriching", time.monotonic()))
-                await papers.set_status(session, pid, PaperStatus.ENRICHING)
-                found = await _enrich(session, ctx.get("transport"), pid, doc)
-                # Don't read paper's ORM attributes past this point: _enrich's rollback (on the failure path) expires
-                # them, and an async lazy load outside an awaited call raises MissingGreenlet, not a clean re-fetch.
-
-                await papers.set_status(session, pid, PaperStatus.READY)
-                collisions = found
+                collisions = await _finish(session, ctx.get("transport"), pid, doc)
                 logger.info("ingested %s: %d pages, %d chunks", pid, doc.page_count, len(drafts))
         except Exception as exc:
             await session.rollback()
             # Only the deadline's own timeout, not another one (a database command's, say).
             if isinstance(exc, TimeoutError) and deadline.expired():
                 logger.warning("ingest of %s ran past %d s and was stopped", pid, INGEST_JOB_TIMEOUT)
-                # Search doesn't look at status, so on a deadline the slices already written are cleared: they must not
-                # answer for half a paper. (An embed error mid-ingest and a re-embed timeout leave earlier slices.)
-                await session.execute(update(Chunk).where(Chunk.paper_id == pid).values(embedding=None))
-                error = timed_out(INGEST_JOB_TIMEOUT)
+                # (An embed error mid-ingest and a re-embed timeout leave earlier slices.)
+                await _fail_clean(session, pid, timed_out(INGEST_JOB_TIMEOUT))
             else:
                 logger.exception("ingest failed for %s", pid)
-                error = f"{type(exc).__name__}: {exc}"
-            await papers.set_status(session, pid, PaperStatus.FAILED, error=error)
+                await papers.set_status(session, pid, PaperStatus.FAILED, error=f"{type(exc).__name__}: {exc}")
         finally:  # the success, timeout and failure paths all say where the time went
             logger.info(_timings(pid, marks, started, chunks, pages))
     # The very last step: ingest queues no job for the paper, so nothing of ingest's finds M gone after a merge.
+    if collisions:
+        await _merge_after_ingest(pid, collisions, evidence)
+
+
+async def embed_rest(ctx: dict, paper_id: str) -> None:
+    """embedding -> enriching -> ready for a paper `ingest_paper` didn't finish in one slice: embeds the next slice of
+    the chunks still lacking a vector, then queues itself again, or finishes the paper. A worker killed mid-slice runs
+    it again and repeats nothing written. A paper deleted, or taken back by a Re-ingest, is left alone."""
+    pid = uuid.UUID(paper_id)
+    collisions: list[enrichment.Collision] = []
+    evidence = Candidate("")
+    async with SessionLocal() as session:
+        paper = await session.get(Paper, pid)
+        if paper is None or paper.status != PaperStatus.EMBEDDING:
+            logger.info("embedding the rest of %s skipped: the paper is gone or no longer embedding", pid)
+            return
+        if ctx.get("job_try", 1) >= MAX_TRIES:
+            await _fail_clean(session, pid, INTERRUPTED.format(times=MAX_TRIES - 1))
+            logger.warning("embedding the rest of %s stopped %d times; marked failed", pid, MAX_TRIES - 1)
+            return
+        file_path = paper.file_path
+        deadline = asyncio.timeout(INGEST_JOB_TIMEOUT)
+        try:
+            async with deadline:
+                embedder = await search_embedder(ctx, session)
+                if embedder is not None and await _embed_a_slice(session, pid, embedder, missing_only=True):
+                    return
+                doc = await asyncio.to_thread(extract_head, file_path)
+                evidence = merges.pdf_evidence(doc.title, doc.metadata)
+                collisions = await _finish(session, ctx.get("transport"), pid, doc)
+                logger.info("ingested %s: %d pages", pid, doc.page_count)
+        except Exception as exc:  # arq retries only Retry: anything else would leave the paper at embedding forever
+            await session.rollback()
+            if isinstance(exc, TimeoutError) and deadline.expired():
+                logger.warning("embedding the rest of %s ran past %d s; trying again", pid, INGEST_JOB_TIMEOUT)
+                raise Retry(defer=RETRY_AFTER_HANG_SECONDS) from exc
+            logger.exception("embedding the rest of %s failed", pid)
+            await _fail_clean(session, pid, f"{type(exc).__name__}: {exc}")
     if collisions:
         await _merge_after_ingest(pid, collisions, evidence)
 
@@ -246,7 +321,7 @@ async def reembed_paper(ctx: dict, paper_id: str, missing_only: bool = False) ->
         deadline = asyncio.timeout(INGEST_JOB_TIMEOUT)
         try:
             async with deadline:
-                embedded = await _embed(session, pid, embedder)
+                embedded = await _embed(session, pid, embedder, missing_only=missing_only)
         except TimeoutError:
             if not deadline.expired():  # another timeout (a database command's): arq must see a real failure
                 raise

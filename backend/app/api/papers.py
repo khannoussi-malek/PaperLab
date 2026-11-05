@@ -15,6 +15,7 @@ from app.models import PaperStatus
 from app.schemas.discovery import CandidateOut
 from app.schemas.papers import (
     ChunkOut,
+    EmbeddingProgressOut,
     FoundPdfOut,
     FoundPdfsSeen,
     NoteCountsIn,
@@ -43,7 +44,7 @@ async def upload_paper(
     """workspace_id: also add the new paper to this workspace (404 before anything is stored if it's unknown)."""
     if workspace_id is not None:
         await workspaces.get(session, workspace_id)
-    paper = await papers.create_paper(session, file.filename or "untitled.pdf", await file.read(), settings.pdf_dir)
+    paper = await papers.create_paper_from_stream(session, file.filename or "untitled.pdf", file.file, settings.pdf_dir)
     if workspace_id is not None:
         await workspaces.add_paper(session, workspace_id, paper.id)
     await _enqueue_ingest(request, paper.id)
@@ -134,6 +135,13 @@ async def list_paper_events(paper_id: uuid.UUID, session: SessionDep) -> list[Pa
     return await paper_events.history(session, paper_id)
 
 
+@router.get("/{paper_id}/embedding-progress")
+async def embedding_progress(paper_id: uuid.UUID, session: SessionDep) -> EmbeddingProgressOut:
+    """What the library's progress bar polls while a paper is embedding. 404 unknown paper."""
+    done, total = await papers.embedding_progress(session, paper_id)
+    return EmbeddingProgressOut(done=done, total=total)
+
+
 @router.get("/{paper_id}/chunks")
 async def list_chunks(paper_id: uuid.UUID, session: SessionDep, page: int | None = None) -> list[ChunkOut]:
     return await papers.list_chunks(session, paper_id, page)
@@ -144,9 +152,7 @@ async def reingest_paper(paper_id: uuid.UUID, request: Request, session: Session
     paper = await papers.get_paper(session, paper_id)
     if paper.file_path is None:
         raise Conflict("no_pdf", detail="This paper has no PDF yet.")
-    # Flips the status before enqueueing, so a chat request racing the worker sees `uploaded`
-    # (paper_not_ready) instead of a `ready` paper whose chunks are mid-replacement.
-    await papers.set_status(session, paper.id, PaperStatus.UPLOADED)
+    await papers.queue_for_reingest(session, paper)
     await session.refresh(paper)
     await _enqueue_ingest(request, paper.id)
     return paper

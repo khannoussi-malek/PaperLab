@@ -2,6 +2,7 @@ import logging
 
 from arq import func
 from arq.connections import RedisSettings
+from arq.constants import in_progress_key_prefix
 from arq.cron import cron
 
 from app.config import settings
@@ -18,7 +19,7 @@ from app.workers.harvest import (
     harvest_medrxiv,
 )
 from app.workers.hit_enrichment import ENRICH_JOB_TIMEOUT, enrich_hits
-from app.workers.ingest import INGEST_JOB_TIMEOUT, MAX_TRIES, index_abstract, ingest_paper, reembed_paper
+from app.workers.ingest import INGEST_JOB_TIMEOUT, MAX_TRIES, embed_rest, index_abstract, ingest_paper, reembed_paper
 from app.workers.manuscript_diagrams import (
     DIAGRAM_JOB_TIMEOUT,
     compile_manuscript_diagram,
@@ -120,13 +121,24 @@ class WorkerSettings:
     redis_settings = RedisSettings.from_dsn(settings.redis_url)
 
 
+async def _free_dead_ingest_jobs(ctx: dict) -> None:
+    """Compose runs one ingest worker and it is only now starting, so a job on its queue marked in progress belongs to a
+    worker that died. Left alone, its paper sits frozen for arq's lock: the job timeout + 10 s (21 minutes, measured
+    2026-11-04). Only this queue's jobs: the main worker shares this Redis and may really be running its own.
+    ponytail: assumes one ingest worker; a second would need a lock of its own before doing this."""
+    job_ids = await ctx["redis"].zrange(INGEST_QUEUE, 0, -1)
+    if job_ids:
+        await ctx["redis"].delete(*(in_progress_key_prefix + job_id.decode() for job_id in job_ids))
+
+
 class IngestWorkerSettings:
     """A paper's extraction, chunking and embedding, one paper at a time: ten at once ran the worker out of memory
     (2026-10-13). The next queued paper starts as soon as one finishes, while search runs keep the other worker."""
 
+    on_startup = _free_dead_ingest_jobs
     queue_name = INGEST_QUEUE
     max_jobs = 1
     max_tries = MAX_TRIES
     job_timeout = INGEST_JOB_TIMEOUT + 60  # a backstop: the deadline inside the job fires first
-    functions = [ingest_paper, reembed_paper, index_abstract]
+    functions = [ingest_paper, embed_rest, reembed_paper, index_abstract]
     redis_settings = RedisSettings.from_dsn(settings.redis_url)

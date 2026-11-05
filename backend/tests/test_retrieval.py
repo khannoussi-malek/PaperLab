@@ -556,3 +556,160 @@ async def test_only_the_rarest_words_of_a_question_are_scored(session, embedder,
     rarest = await retrieve(session, question, paper_ids=papers, k=3, embedder=embedder)
 
     assert far[0].id not in {r.id for r in every_word} and rarest[0].id == far[0].id
+
+
+@pytest.mark.parametrize("hybrid_on", [False, True])
+@pytest.mark.parametrize("scope", ["both papers", "whole library"])
+async def test_a_wider_search_skips_a_paper_still_embedding(session, embedder, monkeypatch, scope, hybrid_on):
+    """A long paper embeds across many jobs, so its first slices sit in the table for hours: they mustn't answer."""
+    hybrid(monkeypatch, hybrid_on)
+    (a, b), *_ = await seed_papers(session, embedder)
+    paper_ids = {"both papers": [a.id, b.id], "whole library": None}[scope]
+    a.status = "embedding"
+    await session.commit()
+
+    while_embedding = await retrieve(session, QUERY, paper_ids=paper_ids, embedder=embedder)
+
+    assert a.id not in {c.paper_id for c in while_embedding}
+    assert b.id in {c.paper_id for c in while_embedding}
+
+    a.status = "ready"
+    await session.commit()
+    assert a.id in {c.paper_id for c in await retrieve(session, QUERY, paper_ids=paper_ids, embedder=embedder)}
+
+
+async def test_a_paper_still_embedding_answers_alone_from_keywords_and_its_vectors_so_far(session, embedder):
+    """Keywords need no vector, so asked by itself it answers minutes after upload instead of hours."""
+    (a, b), chunks, *_ = await seed_papers(session, embedder)
+    a.status = "embedding"
+    waiting = Chunk(
+        paper_id=a.id, ordinal=7, page=8, bbox=[[1, 2, 3, 4]], text="attention works through queries and keys",
+        embed_model="test", strategy_ver=1,
+    )
+    other = Chunk(
+        paper_id=b.id, ordinal=7, page=8, bbox=[[1, 2, 3, 4]], text="attention in another paper",
+        embed_model="test", strategy_ver=1,
+    )
+    session.add_all([waiting, other])
+    await session.commit()
+
+    found = await retrieve(session, QUERY, paper_ids=[a.id], embedder=embedder)
+
+    assert {c.paper_id for c in found} == {a.id}
+    assert waiting.id in {c.id for c in found}  # no vector, found by its words
+    assert {c.id for c in chunks if c.paper_id == a.id} & {c.id for c in found}  # the vectors so far count too
+    assert all(c.distance is not None for c in found)  # what the MCP tool rounds
+
+
+async def test_a_ready_paper_with_a_chunk_lacking_a_vector_stays_vector_only(session, embedder):
+    (a, _), _, unembedded, _ = await seed_papers(session, embedder)
+
+    found = await retrieve(session, QUERY, paper_ids=[a.id], embedder=embedder)
+
+    assert unembedded.id not in {c.id for c in found}
+
+
+@pytest.mark.parametrize(("threshold", "found"), [(3, True), (1000, False)])
+async def test_a_long_paper_alone_also_searches_its_words(session, embedder, monkeypatch, threshold, found):
+    """Inside a long file hybrid answered 28 of 33 fixed questions to vectors' 26; inside a short one it lost recall."""
+    monkeypatch.setattr(retrieval, "LONG_PAPER_CHUNKS", threshold)
+    hybrid(monkeypatch, False)
+    (a, _), *_ = await seed_papers(session, embedder)
+    question = "itraconazole dose"
+    embedder.vectors[f"search_query: {question}"] = embedder.vectors[f"search_query: {QUERY}"]
+    rare = Chunk(
+        paper_id=a.id, ordinal=8, page=9, bbox=[[1, 2, 3, 4]], text="itraconazole raises exposure",
+        embedding=unit_vector("far from the question"), embed_model="test", strategy_ver=1,
+    )
+    session.add(rare)
+    await session.commit()
+
+    top = await retrieve(session, question, paper_ids=[a.id], k=2, embedder=embedder)
+
+    assert (rare.id in {c.id for c in top}) is found
+
+
+async def test_a_long_question_on_a_paper_still_embedding_searches_its_first_words(session, embedder):
+    """The API allows 2,000 characters; past the hybrid limit it must not end up hiding the paper it's about."""
+    (a, _), *_ = await seed_papers(session, embedder)
+    a.status = "embedding"
+    waiting = Chunk(
+        paper_id=a.id, ordinal=7, page=8, bbox=[[1, 2, 3, 4]], text="itraconazole raises exposure",
+        embed_model="test", strategy_ver=1,
+    )
+    session.add(waiting)
+    await session.commit()
+    question = "itraconazole " + "and more words besides " * 80
+    embedder.vectors[f"search_query: {question}"] = embedder.vectors[f"search_query: {QUERY}"]
+
+    found = await retrieve(session, question, paper_ids=[a.id], embedder=embedder)
+
+    assert waiting.id in {c.id for c in found}
+
+
+NEARER = [(f"Background passage number {i}", 0.1 * (i + 1)) for i in range(4)]  # share no word with the question
+
+
+async def test_hybrid_ranks_a_word_said_often_above_a_word_said_once(session, embedder, monkeypatch):
+    """BM25: on the fixed questions it beat summing each word's weight once, 46 to 45 of 60 unseen ones."""
+    hybrid(monkeypatch, True)
+    question = f"What about {RARE}?"
+    query = unit_vector(uuid.uuid4().hex)
+    embedder.vectors[f"search_query: {question}"] = query
+    once = f"{RARE} is mentioned here in passing, among many other unrelated drug interactions and warnings."
+    often = f"{RARE} raises exposure, so {RARE} needs care, and {RARE} should be avoided in this group of patients."
+    # Nearer by vector: `once`. Keyword ties would leave it first.
+    chunks = await add_texts(session, query, "Label", [*NEARER, (once, 3.0), (often, 3.1)])
+
+    found = await retrieve(session, question, chunk_ids=[c.id for c in chunks], k=2, embedder=embedder)
+
+    assert [c.text for c in found] == [often, once]
+
+
+async def test_hybrid_prefers_a_short_chunk_when_both_say_the_word_as_often(session, embedder, monkeypatch):
+    hybrid(monkeypatch, True)
+    question = f"What about {RARE}?"
+    query = unit_vector(uuid.uuid4().hex)
+    embedder.vectors[f"search_query: {question}"] = query
+    filler = " ".join(f"unrelated{i} words{i}" for i in range(120))
+    short, long = f"{RARE} raises exposure.", f"{RARE} raises exposure. {filler}"
+    chunks = await add_texts(session, query, "Label", [*NEARER, (long, 3.0), (short, 3.1)])
+
+    found = await retrieve(session, question, chunk_ids=[c.id for c in chunks], k=2, embedder=embedder)
+
+    assert [c.text for c in found] == [short, long]
+
+
+async def test_words_overrides_the_switch_either_way(session, embedder, monkeypatch):
+    question = f"Which dose with {RARE}?"
+    query = unit_vector(uuid.uuid4().hex)
+    embedder.vectors[f"search_query: {question}"] = query
+    near_ones = [(f"Background chunk {i}", 0.1 * (i + 1)) for i in range(6)]
+    chunks = await add_texts(session, query, "Label", [*near_ones, (f"Avoid strong inhibitors such as {RARE}.", 3.0)])
+    scope = [c.id for c in chunks]
+
+    hybrid(monkeypatch, False)
+    forced = await retrieve(session, question, chunk_ids=scope, k=3, embedder=embedder, words=True)
+    hybrid(monkeypatch, True)
+    held = await retrieve(session, question, chunk_ids=scope, k=3, embedder=embedder, words=False)
+
+    assert chunks[-1].id in {c.id for c in forced}
+    assert chunks[-1].id not in {c.id for c in held}
+
+
+async def test_likely_papers_are_the_ones_with_the_nearest_chunks(session, embedder, monkeypatch):
+    monkeypatch.setattr(retrieval, "LIKELY_PAPERS", 2)
+    question = "Which paper says it?"
+    query = unit_vector(uuid.uuid4().hex)
+    embedder.vectors[f"search_query: {question}"] = query
+    papers = [
+        (await add_texts(session, query, f"P{i}", [(f"Paper {i} passage {j}", i + 0.1 * (j + 1)) for j in range(3)]))[0]
+        for i in range(4)
+    ]
+    ids = [c.paper_id for c in papers]
+
+    likely = await retrieval.likely_papers(session, question, list(reversed(ids)), embedder=embedder)
+    few = await retrieval.likely_papers(session, question, ids[2:], embedder=embedder)
+
+    assert likely == ids[:2]
+    assert few == ids[2:]  # no more than LIKELY_PAPERS: all of them, unsearched

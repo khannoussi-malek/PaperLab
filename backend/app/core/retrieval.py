@@ -13,7 +13,7 @@ from app.config import settings
 from app.core import embedding_index, embedding_sources
 from app.core.errors import Conflict
 from app.core.papers import ABSTRACT_PAGE
-from app.models import EmbeddingSource, workspace_papers
+from app.models import Chunk, EmbeddingSource, Paper, PaperStatus, workspace_papers
 from app.providers import embedding
 from app.providers.base import LLMError, LLMUnavailable, TextEmbedder
 
@@ -43,9 +43,9 @@ LIMIT :k
 
 
 # Hybrid search: the vector candidates and up to as many keyword candidates, fused by reciprocal rank (each list adds
-# 1 / (RRF_K + rank)), then the same per-paper cap. The keyword score sums each question word's IDF over the scope,
-# not ts_rank: ts_rank has no IDF, so "patient" counts as much as "itraconazole", and websearch_to_tsquery ANDs every
-# word, which a whole question never matches. Matches go through the GIN index on tsv first, then only they are scored.
+# 1 / (RRF_K + rank)), then the same per-paper cap. The keyword score is BM25 over the scope, not ts_rank: ts_rank has
+# no IDF, so "patient" counts as much as "itraconazole", and websearch_to_tsquery ANDs every word, which a whole
+# question never matches. Matches go through the GIN index on tsv first, then only they are scored.
 # ponytail: 'english' stemming won't join "haemodialysis" to "dialysis"; the vector half has to carry those.
 # The vector ranks count from the far end: relaxed_order (below) can return `nearest` slightly out of order, and a
 # window ORDER BY distance would take that order as already sorted. Postgres can't take it as sorted DESC.
@@ -54,6 +54,14 @@ RRF_K = 60
 # of its hundreds of words would be slow, with each word counted over the scope, and would mean nothing.
 MAX_HYBRID_CHARS = 1_000
 MAX_TERMS = 32  # the rarest words of a question, which are the ones that tell chunks apart
+# BM25's settings: how soon repeating a word stops helping, and how much a long chunk pays for its length.
+# Measured on the fixed questions, they tied the usual 1.5 and 0.75 alone and got more at top 8 (27 to 26).
+BM25_K1 = 0.9
+BM25_B = 0.4
+# From this many chunks a paper searched alone uses its words too, whatever the switch says. On 50 questions over
+# documents of 175 to 837 chunks hybrid answered 40 and vectors 34 (measured 2026-11-05); inside short papers (49 and 69
+# chunks) its own topic words are everywhere: no loss at 24,000 characters, 3 of 20 lost at 6,000 (below).
+LONG_PAPER_CHUNKS = 150
 _HYBRID = """
 WITH vector AS (
   SELECT id, count(*) OVER () + 1 - row_number() OVER (ORDER BY distance DESC) AS rank
@@ -66,14 +74,14 @@ WITH vector AS (
   ) AS nearest
 ),
 terms AS MATERIALIZED (
-  SELECT DISTINCT quote_literal(lexeme)::tsquery AS term
+  SELECT DISTINCT lexeme, quote_literal(lexeme)::tsquery AS term
   FROM unnest(tsvector_to_array(to_tsvector('english', :question))) AS lexeme
 ),
-total AS (SELECT count(*)::float AS n FROM chunks WHERE embedding IS NOT NULL {scope}),
+total AS (SELECT count(*)::float AS n, avg(length(tsv)) AS mean_length FROM chunks WHERE {words} {scope}),
 weights AS MATERIALIZED (
-  SELECT term, ln((SELECT n FROM total) / df) AS weight
+  SELECT lexeme, term, ln(1 + ((SELECT n FROM total) - df + 0.5) / (df + 0.5)) AS weight
   FROM (
-    SELECT term, (SELECT count(*) FROM chunks WHERE embedding IS NOT NULL {scope} AND tsv @@ term) AS df
+    SELECT lexeme, term, (SELECT count(*) FROM chunks WHERE {words} {scope} AND tsv @@ term) AS df
     FROM terms
     OFFSET 0  -- keeps the planner from counting each term once per use of df below
   ) AS counted
@@ -84,9 +92,18 @@ weights AS MATERIALIZED (
 lexical AS (
   SELECT id, rank() OVER (ORDER BY score DESC) AS rank  -- ties share a rank, so they leave the vector order alone
   FROM (
-    SELECT id, (SELECT sum(weight) FROM weights WHERE tsv @@ weights.term) AS score
+    SELECT id, (
+      SELECT sum(
+        w.weight * array_length(t.positions, 1) * (k1 + 1) / (array_length(t.positions, 1)
+          + k1 * (1 - b + b * length(chunks.tsv) / (SELECT mean_length FROM total)))
+      )
+      FROM unnest(chunks.tsv) AS t
+      JOIN weights AS w ON w.lexeme = t.lexeme
+      -- The casts matter: next to an integer the driver takes these for integers and quietly rounds them to 0.
+      CROSS JOIN (SELECT CAST(:bm25_k1 AS float) AS k1, CAST(:bm25_b AS float) AS b) AS settings
+    ) AS score
     FROM chunks
-    WHERE embedding IS NOT NULL {scope} AND tsv @@ (SELECT string_agg(term::text, ' | ')::tsquery FROM weights)
+    WHERE {words} {scope} AND tsv @@ (SELECT string_agg(term::text, ' | ')::tsquery FROM weights)
     ORDER BY score DESC, embedding <=> :q, id  -- more ties than candidates: keep the nearest
     LIMIT :candidates
   ) AS matched
@@ -97,7 +114,8 @@ fused AS (
   GROUP BY id
 ),
 ranked AS (
-  SELECT c.id, c.paper_id, c.page, c.section_title, c.bbox, c.text, c.embedding <=> :q AS distance, f.score,
+  SELECT c.id, c.paper_id, c.page, c.section_title, c.bbox, c.text, coalesce(c.embedding <=> :q, 2) AS distance,
+    f.score,
     row_number() OVER (PARTITION BY c.paper_id ORDER BY f.score DESC, c.embedding <=> :q) AS nth
   FROM fused AS f JOIN chunks AS c ON c.id = f.id
 )
@@ -109,16 +127,52 @@ LIMIT :k
 """
 
 
+# Many papers: search the likeliest few with keywords and vectors, not all of them. Across 562 real papers it answered
+# 41 of 59 sealed questions against 24 for 8 nearest chunks, in 0.15 s against 1.4 s for keywords over all (2026-11-05).
+LIKELY_PAPERS = 10
+PAPER_POOL = 300  # the nearest chunks the papers are ranked by
+PAPER_BEST = 3  # a paper scores by its best few chunks, so one lucky chunk doesn't carry it
+
+
+async def likely_papers(
+    session: AsyncSession, query: str, paper_ids: list[uuid.UUID], embedder=None
+) -> list[uuid.UUID]:
+    """The LIKELY_PAPERS papers whose nearest chunks rank highest, best first; all of them, unsearched, when that's no
+    more. A paper scores the reciprocal ranks of its PAPER_BEST nearest chunks among the scope's PAPER_POOL nearest."""
+    if len(paper_ids) <= LIKELY_PAPERS:
+        return list(paper_ids)
+    found = await retrieve(
+        session, query, paper_ids=paper_ids, k=PAPER_POOL, per_paper=PAPER_POOL, embedder=embedder, words=False
+    )
+    ranks: dict[uuid.UUID, list[float]] = {}
+    for rank, chunk in enumerate(found):
+        ranks.setdefault(chunk.paper_id, []).append(1 / (RRF_K + rank))
+    score = {paper: sum(best[:PAPER_BEST]) for paper, best in ranks.items()}
+    return sorted(score, key=score.__getitem__, reverse=True)[:LIKELY_PAPERS]
+
+
 async def hybrid_on(session: AsyncSession) -> bool:
     """The Settings → Search switch. HYBRID_SEARCH forces it on, for the evals that compare both modes."""
     return settings.hybrid_search or bool(await session.scalar(select(EmbeddingSource.hybrid_search)))
 
 
-def _nearest(in_papers: bool, in_chunks: bool, hybrid: bool = False):
-    """The candidate query with its scope: papers, given chunks (M16, D49), both or neither."""
-    scope = ("AND paper_id = ANY(:paper_ids) " if in_papers else "") + ("AND id = ANY(:chunk_ids)" if in_chunks else "")
+def _nearest(
+    in_papers: bool, in_chunks: bool, hybrid: bool = False, skip_busy: bool = False, unembedded_words: bool = False
+):
+    """The candidate query with its scope: papers, given chunks (M16, D49), both or neither, minus papers embedding.
+    `unembedded_words`: the keyword half of hybrid also reads chunks with no vector yet."""
+    scope = " ".join(
+        clause
+        for clause, wanted in (
+            ("AND paper_id = ANY(:paper_ids)", in_papers),
+            ("AND id = ANY(:chunk_ids)", in_chunks),
+            ("AND paper_id <> ALL(:busy)", skip_busy),
+        )
+        if wanted
+    )
     query = _HYBRID if hybrid else _NEAREST
-    return text(query.format(scope=scope)).bindparams(bindparam("q", type_=Vector(768)))
+    words = "TRUE" if unembedded_words else "embedding IS NOT NULL"
+    return text(query.replace("{words}", words).format(scope=scope)).bindparams(bindparam("q", type_=Vector(768)))
 
 
 # With a filter, HNSW otherwise post-filters within ef_search (40) candidates and can silently return nothing.
@@ -200,6 +254,13 @@ def _to_chunk(row, distance: float | None = None) -> RetrievedChunk:
     )
 
 
+async def _is_long(session: AsyncSession, paper_ids: list[uuid.UUID] | None, query: str) -> bool:
+    if paper_ids is None or len(paper_ids) != 1 or len(query) > MAX_HYBRID_CHARS:
+        return False
+    many = select(Chunk.id).where(Chunk.paper_id == paper_ids[0]).offset(LONG_PAPER_CHUNKS - 1).limit(1)
+    return await session.scalar(many) is not None
+
+
 async def retrieve(
     session: AsyncSession,
     query: str,
@@ -210,15 +271,18 @@ async def retrieve(
     embedder=None,
     per_paper: int | None = None,
     chunk_ids: list[uuid.UUID] | None = None,
+    words: bool | None = None,
 ) -> list[RetrievedChunk]:
-    """The k chunks nearest to the query, closest first (with hybrid search on and a scope wider than one paper, best
-    fused rank first). embedder=None embeds the question with the active search source (query_embedder); a source
-    that fails raises Conflict with QUESTION_FAILED's sentence (D155).
+    """The k chunks nearest to the query, closest first (best fused rank first when hybrid runs: a scope wider than
+    one paper with the switch on, or one paper of LONG_PAPER_CHUNKS or more). embedder=None embeds the question with
+    the active search source (query_embedder); a source that fails raises Conflict with QUESTION_FAILED's sentence
+    (D155).
 
     Scope: paper_ids, workspace_id, or neither (the whole library). A scope that resolves to 2+ papers (a
     workspace with several members, or 2+ paper_ids) keeps at most per_paper (default MAX_PER_PAPER) chunks
     from each paper; a workspace with exactly one paper is uncapped, same as passing that one paper's id.
     chunk_ids narrows the scope to those chunks (M16); an empty list returns [] without embedding the query.
+    words=True or False mixes the keyword ranking in or leaves it out whatever the rules above and the switch say.
     """
     if paper_ids is not None and workspace_id is not None:
         raise ValueError("retrieve takes paper_ids or workspace_id, not both")
@@ -245,10 +309,25 @@ async def retrieve(
     # ponytail: a whole-library search in a one-paper library still runs hybrid; a count on every search isn't worth it.
     across_papers = paper_ids is None or len(paper_ids) > 1
     hybrid = across_papers and len(query) <= MAX_HYBRID_CHARS and await hybrid_on(session)
-    statement = _nearest(paper_ids is not None, chunk_ids is not None, hybrid)
+    # A long paper embeds across many jobs, so half of it can sit here for hours. Its vectors so far must not answer for
+    # the whole in a wider search. Asked by itself, its words can: they're all there minutes after upload, and on the
+    # fixed-answer eval keywords alone matched vectors (26 of 33 each at top 8, measured 2026-11-04).
+    # ponytail: a wider search waits for the vectors; let it use words too if people ask across a paper mid-embedding.
+    busy = list(await session.scalars(select(Paper.id).where(Paper.status == PaperStatus.EMBEDDING)))
+    alone = paper_ids is not None and len(paper_ids) == 1 and paper_ids[0] in busy
+    hybrid = hybrid or alone or await _is_long(session, paper_ids, query)
+    if words is not None:
+        hybrid = words and len(query) <= MAX_HYBRID_CHARS
+    statement = _nearest(paper_ids is not None, chunk_ids is not None, hybrid, bool(busy) and not alone, alone)
+    if busy and not alone:
+        params["busy"] = busy
     if hybrid:
         # Postgres refuses a NUL in text, and the vector path never sends the words to it.
-        params |= {"question": query.replace("\x00", ""), "rrf_k": RRF_K, "max_terms": MAX_TERMS}
+        # Cut only when a paper still embedding is asked by itself: past the limit nothing else gets here.
+        question_words = query.replace("\x00", "")[:MAX_HYBRID_CHARS]
+        params |= {
+            "question": question_words, "rrf_k": RRF_K, "max_terms": MAX_TERMS, "bm25_k1": BM25_K1, "bm25_b": BM25_B,
+        }
     if paper_ids is not None:
         params["paper_ids"] = list(paper_ids)
     if chunk_ids is not None:

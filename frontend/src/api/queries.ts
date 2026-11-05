@@ -89,6 +89,7 @@ export const keys = {
   paper: (id: string) => ['papers', id] as const,
   notes: (paperId: string) => ['papers', paperId, 'notes'] as const,
   chunks: (paperId: string, page: number) => ['papers', paperId, 'chunks', page] as const,
+  embeddingProgress: (paperId: string) => ['papers', paperId, 'embedding-progress'] as const,
   chat: (scope: ChatScope) => [scope.kind === 'paper' ? 'papers' : 'workspaces', scope.id, 'chat'] as const,
   // Every workspace query starts with this, so one invalidation refreshes the list, its counts and each home's tabs.
   workspaces: ['workspaces'] as const,
@@ -186,7 +187,13 @@ export const usePapers = () =>
     refetchInterval: (query) => papersPollInterval(query.state.data),
   })
 
-export const usePaper = (id: string) => useQuery({ queryKey: keys.paper(id), queryFn: () => api.getPaper(id) })
+export const usePaper = (id: string) =>
+  useQuery({
+    queryKey: keys.paper(id),
+    queryFn: () => api.getPaper(id),
+    // While it's ingesting, so the reader sees the moment it's ready.
+    refetchInterval: (query) => (query.state.data ? papersPollInterval([query.state.data]) : false),
+  })
 
 export const useNotes = (paperId: string) =>
   useQuery({ queryKey: keys.notes(paperId), queryFn: () => api.listNotes(paperId) })

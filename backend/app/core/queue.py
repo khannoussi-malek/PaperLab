@@ -9,7 +9,7 @@ from app.config import settings
 # (workers.settings.IngestWorkerSettings): ten at once ran the worker out of memory (2026-10-13). Every enqueue of these
 # jobs passes _queue_name=INGEST_QUEUE.
 INGEST_QUEUE = "arq:ingest"
-INGEST_JOBS = frozenset({"ingest_paper", "reembed_paper", "index_abstract"})
+INGEST_JOBS = frozenset({"ingest_paper", "embed_rest", "reembed_paper", "index_abstract"})
 
 _pool: ArqRedis | None = None  # tests replace it with conftest.FakeArq
 

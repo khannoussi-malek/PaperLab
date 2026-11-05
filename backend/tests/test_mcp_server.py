@@ -38,7 +38,7 @@ async def call(tool: str, **arguments):
 
 
 EXPECTED_TOOLS = {
-    "search_library": True, "get_paper": True, "related_papers": True, "create_note": None,
+    "search_library": True, "get_paper": True, "read_pages": True, "related_papers": True, "create_note": None,
     "list_workspaces": True, "create_workspace": None, "list_papers": True, "add_paper": None, "add_papers": None,
     "upload_paper": None,
     "add_paper_to_workspace": None, "remove_paper_from_workspace": None,
@@ -291,3 +291,22 @@ async def test_get_paper_and_search_carry_source_type_peer_review_and_evidence_a
     async with Client(server.mcp) as client:
         docs = {tool.name: tool.description for tool in (await client.list_tools()).tools}
     assert "source_type" in docs["get_paper"] and "evidence_access" in docs["search_library"]
+
+
+async def test_read_pages_reads_on_from_a_search_hit(session, tmp_path):
+    paper, chunks, _ = await chunked_paper(session, tmp_path, title="Read paper")
+
+    result = await call("read_pages", paper_id=str(paper.id), page=chunks[0].page)
+
+    assert not result.is_error, result.content
+    read = result.structured_content
+    assert read["passages"][0]["chunk_id"] == str(chunks[0].id)
+    assert read["passages"][0]["text"] == chunks[0].text
+
+
+async def test_read_pages_answers_a_bad_range_in_words(session, tmp_path):
+    paper, *_ = await chunked_paper(session, tmp_path, title="Read paper")
+
+    result = await call("read_pages", paper_id=str(paper.id), page=0)
+
+    assert "invalid_pages" in str(result.structured_content or result.content)

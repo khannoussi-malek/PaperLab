@@ -6,6 +6,7 @@ click by the reader.
 
 import uuid
 from dataclasses import dataclass, field
+from itertools import accumulate
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,7 +15,7 @@ from app.core import prompts, workspaces
 from app.core.errors import Conflict, NotFound
 from app.core.notes import _CITATION, Anchor, NoteView, _with_anchors, list_notes_for_paper, papers_of, parse_citations
 from app.core.papers import get_paper
-from app.core.retrieval import RetrievedChunk, _to_chunk, retrieve, searchable
+from app.core.retrieval import RetrievedChunk, _to_chunk, likely_papers, retrieve, searchable
 from app.models import Chunk, LLMOutput, Note, Paper, PaperStatus, Provenance
 
 # v6: the note-block rule leads with its condition and names "never" explicitly, to stop it firing on an unasked
@@ -31,12 +32,16 @@ WORKSPACE_SYSTEM_PROMPT, WORKSPACE_PROMPT_TEMPLATE = prompts.load("chat_workspac
 # ponytail: characters stand in for tokens. Revisit with the eval numbers or a model's real context size.
 SMALL_PAPER_CHARS = 24_000
 RETRIEVE_K = 8
+# What a long paper's retrieval hands to cut_to_budget: as many passages as fit what a whole small paper may send. About
+# 12 on real chunks, and on fixed-answer questions 29 of 33 with hybrid against 28 at top 8 (measured 2026-11-04).
+# ponytail: the same budget for every model; 60,000 characters answered 31 of 33, but a cloud model pays per question.
+RETRIEVE_POOL = 40
 # A follow-up's earlier passages plus fresh ones: ~4.5k tokens, so with notes it still fits OLLAMA_NUM_CTX.
 FOLLOW_UP_SOURCES = 12
 # A follow-up carries its parent answer's question and passages, and those of at most four answers before it.
 MAX_THREAD_ANSWERS = 5
-# Notes, in both chats. With OLLAMA_NUM_CTX = 16_384: ~0.5k tokens of instructions, ~3k for 8 passages, ~4k for
-# notes, about 7.5k of the 16k context, leaving ~9k for the answer. A whole small paper (~6k) still leaves ~5.5k.
+# Notes, in both chats. With OLLAMA_NUM_CTX = 16_384: ~0.5k tokens of instructions, up to ~6k for passages (a whole
+# small paper, or SMALL_PAPER_CHARS of a long paper's or a workspace's), ~4k for notes: about 10.5k, leaving ~5.5k.
 NOTE_QUOTE_CHARS = 160
 NOTE_BODY_CHARS = 400
 # ponytail: newest-first is a guess at relevance; rank by similarity to the question if users hit the budget.
@@ -138,6 +143,13 @@ async def papers_needing_search(session: AsyncSession) -> int:
         .having(func.sum(func.length(Chunk.text)) > SMALL_PAPER_CHARS)
     )
     return await session.scalar(select(func.count()).select_from(long.subquery()))
+
+
+def cut_to_budget(sources: list[RetrievedChunk], budget: int = SMALL_PAPER_CHARS) -> list[RetrievedChunk]:
+    """The longest start of `sources`, in their order, whose text fits `budget` characters. A chunk is never split,
+    and the first one is always kept, so a brief never reads nothing."""
+    totals = accumulate(len(source.text) for source in sources)
+    return [source for source, total in zip(sources, totals) if total <= budget] or sources[:1]
 
 
 def follow_up_sources(
@@ -284,7 +296,11 @@ async def _prepare_workspace(session: AsyncSession, workspace_id: uuid.UUID, que
     embedder = await searchable(session, ready, embedder)
     if not await session.scalar(select(func.count(Chunk.embedding)).where(Chunk.paper_id.in_(ready))):
         raise Conflict("workspace_not_indexed")
-    sources = await retrieve(session, question, paper_ids=ready, k=RETRIEVE_K, embedder=embedder)
+    # ponytail: the question is embedded twice, once per search; pass the vector along if it ever shows in the timings.
+    scope = await likely_papers(session, question, ready, embedder)
+    sources = cut_to_budget(
+        await retrieve(session, question, paper_ids=scope, k=RETRIEVE_POOL, embedder=embedder, words=True)
+    )
     every_note = await workspaces.notes(session, workspace_id)
     block, used = format_notes_block(every_note, members)
     prompt = WORKSPACE_PROMPT_TEMPLATE.format(
@@ -304,12 +320,13 @@ async def _prepare_workspace(session: AsyncSession, workspace_id: uuid.UUID, que
 async def prepare(
     session: AsyncSession, paper_id: uuid.UUID | Scope, question: str, embedder=None, thread: Thread | None = None
 ) -> Prepared:
-    """A workspace scope goes to _prepare_workspace. For a paper: small papers go whole, in reading order;
-    larger ones send the RETRIEVE_K nearest chunks. The paper's notes follow, newest first, as in workspace chat.
+    """A workspace scope goes to _prepare_workspace. For a paper: small papers go whole, in reading order; larger ones
+    send the nearest chunks that fit SMALL_PAPER_CHARS. The paper's notes follow, newest first, as in workspace chat.
     A follow-up (`thread`) adds the earlier questions, and a large paper's earlier passages ahead of the fresh ones.
 
     Raises NotFound, or Conflict("paper_not_ready" | "search_not_set_up" | "search_rebuilding" |
-    "embedding_model_changed" | "paper_not_indexed" | "no_text"). A small paper needs no search model.
+    "embedding_model_changed" | "paper_not_indexed" | "no_text" | "nothing_found_yet"). A small paper needs no search
+    model.
     """
     scope = _scope(paper_id)
     if scope.workspace_id is not None:
@@ -319,7 +336,7 @@ async def prepare(
         return await _prepare_workspace(session, scope.workspace_id, question, embedder)
     paper_id = scope.paper_id
     paper = await get_paper(session, paper_id)
-    if paper.status != PaperStatus.READY:
+    if paper.status not in (PaperStatus.READY, PaperStatus.EMBEDDING):  # embedding: retrieve answers from its words
         raise Conflict("paper_not_ready")
     chars, embedded = await _size(session, paper_id)
     if chars == 0 and not paper.has_pdf:  # saved without a PDF or an abstract: nothing to answer from, no LLM call
@@ -328,14 +345,18 @@ async def prepare(
     if not whole_paper:
         # D156's gate before the index: not set up, then rebuilding, then vectors from another model.
         embedder = await searchable(session, [paper_id], embedder)
-        if embedded == 0:  # ingested before M4, or before the model arrived: the UI offers Re-index
+        if embedded == 0 and paper.status == PaperStatus.READY:  # before M4 or the model: the UI offers Re-index
             raise Conflict("paper_not_indexed")
     if whole_paper:
         sources = await chunk_sources(session, Chunk.paper_id == paper_id)
     else:
-        sources = await retrieve(session, question, paper_ids=[paper_id], k=RETRIEVE_K, embedder=embedder)
-        if thread is not None:
-            sources = follow_up_sources(await _earlier_sources(session, thread, paper_id), sources)
+        found = await retrieve(session, question, paper_ids=[paper_id], k=RETRIEVE_POOL, embedder=embedder)
+        if thread is None:
+            sources = cut_to_budget(found)
+            if not sources:  # no vectors yet and no matching word: the model would answer from nothing
+                raise Conflict("nothing_found_yet")
+        else:  # the fresh ones are kept whole, so more of them would push out the conversation's earlier passages
+            sources = follow_up_sources(await _earlier_sources(session, thread, paper_id), found[:RETRIEVE_K])
     every_note = await list_notes_for_paper(session, paper_id)
     block, used = format_notes_block(every_note, {paper_id: paper})
     context = format_context(paper, sources)

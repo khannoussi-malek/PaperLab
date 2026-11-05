@@ -8,13 +8,12 @@ comparison covers a role fix and a re-ingest, with nothing to keep in sync. Brie
 import re
 import uuid
 from dataclasses import dataclass
-from itertools import accumulate
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import lenses, prompts
-from app.core.chat import SMALL_PAPER_CHARS, Prepared, chunk_sources, format_context, parse_citations
+from app.core.chat import Prepared, chunk_sources, cut_to_budget, format_context, parse_citations
 from app.core.errors import Conflict, InvalidInput
 from app.core.papers import get_paper
 from app.core.retrieval import RetrievedChunk
@@ -43,13 +42,6 @@ class Brief:
     output: LLMOutput
     sources: list[RetrievedChunk | None]  # None: a re-ingest replaced that chunk
     stale: bool
-
-
-def cut_to_budget(sources: list[RetrievedChunk], budget: int = SMALL_PAPER_CHARS) -> list[RetrievedChunk]:
-    """The longest start of `sources`, in their order, whose text fits `budget` characters. A chunk is never split,
-    and the first one is always kept, so a brief never reads nothing."""
-    totals = accumulate(len(source.text) for source in sources)
-    return [source for source, total in zip(sources, totals) if total <= budget] or sources[:1]
 
 
 async def _lens_sources(session: AsyncSession, paper_id: uuid.UUID, lens: str) -> list[RetrievedChunk]:

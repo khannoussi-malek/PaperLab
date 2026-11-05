@@ -15,6 +15,7 @@ import { matchesReading, READING_FILTERS, readingChip, type ReadingFilter } from
 import { readerHref } from '@/lib/route'
 import { cn } from '@/lib/utils'
 import { EmbeddingFlight, isEmbedding } from './EmbeddingFlight'
+import { EmbeddingProgress } from './EmbeddingProgress'
 import { PaperContextMenu, PaperMenu } from './PaperMenu'
 import { NoMatches, PaperSearch } from './PaperSearch'
 import { PaperPreview } from './PaperPreview'
@@ -107,6 +108,7 @@ function PaperRow({ paper, previewed, enterDelayMs, workspaceId, tags, activeTag
               </button>
             ))}
           </div>
+          {isEmbedding(paper) && <EmbeddingProgress paperId={paper.id} className="mt-1" />}
           {paper.status_error && <p className="mt-0.5 text-xs text-destructive">{paper.status_error}</p>}
         </div>
         {readingChip(paper.reading_pass, paper.triage) && (

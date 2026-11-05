@@ -6,7 +6,7 @@ from conftest import unit_vector
 from sqlalchemy import delete, insert
 from test_note_papers import paper_only_note
 
-from app.core import chat
+from app.core import chat, retrieval
 from app.core.errors import Conflict, NotFound
 from app.core.notes import Anchor, NoteView
 from app.models import Chunk, LLMOutput, Note, Paper, Workspace, note_anchors, note_papers, workspace_papers
@@ -317,3 +317,27 @@ async def test_listed_answers_name_a_whole_paper_note_by_its_paper_and_drop_one_
 
     assert "[N1] (You · DPR) — On the whole of DPR.\n[N2] (You · DPR) — Moved away." in prepared.prompt
     assert answer.notes == [chat.NoteSource(id=kept.id, paper_id=dpr.id, page=None, provenance="human"), None]
+
+
+async def test_workspace_prepare_searches_only_the_likeliest_papers(session, embedder, monkeypatch):
+    monkeypatch.setattr(retrieval, "LIKELY_PAPERS", 2)
+    run = uuid.uuid4().hex
+    papers = [await make_paper(session, f"Paper {i}", [f"{run} p{i} {j}" for j in range(4)]) for i in range(3)]
+    workspace = await make_workspace(session, papers)
+    embedder.vectors["search_query: Which one?"] = unit_vector(f"{run} p2 1")
+
+    prepared = await chat.prepare(session, chat.Scope(workspace_id=workspace.id), "Which one?", embedder)
+
+    assert prepared.sources[0].text == f"{run} p2 1"
+    assert len({s.paper_id for s in prepared.sources}) == 2
+
+
+async def test_workspace_prepare_sends_what_fits_the_budget_not_eight(session, embedder):
+    run = uuid.uuid4().hex
+    papers = [await make_paper(session, f"Paper {i}", [f"{run} p{i} {j}" for j in range(4)]) for i in range(4)]
+    workspace = await make_workspace(session, papers)
+    embedder.vectors["search_query: All of them?"] = unit_vector(f"{run} p0 0")
+
+    prepared = await chat.prepare(session, chat.Scope(workspace_id=workspace.id), "All of them?", embedder)
+
+    assert len(prepared.sources) == 12  # 3 from each paper, the per-paper cap
