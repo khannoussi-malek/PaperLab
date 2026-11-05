@@ -40,8 +40,8 @@ RETRIEVE_POOL = 40
 FOLLOW_UP_SOURCES = 12
 # A follow-up carries its parent answer's question and passages, and those of at most four answers before it.
 MAX_THREAD_ANSWERS = 5
-# Notes, in both chats. With OLLAMA_NUM_CTX = 16_384: ~0.5k tokens of instructions, ~3k for 8 passages, ~4k for
-# notes, about 7.5k of the 16k context, leaving ~9k for the answer. A whole small paper (~6k) still leaves ~5.5k.
+# Notes, in both chats. With OLLAMA_NUM_CTX = 16_384: ~0.5k tokens of instructions, up to ~6k for passages (a whole
+# small paper, or SMALL_PAPER_CHARS of a long paper's or a workspace's), ~4k for notes: about 10.5k, leaving ~5.5k.
 NOTE_QUOTE_CHARS = 160
 NOTE_BODY_CHARS = 400
 # ponytail: newest-first is a guess at relevance; rank by similarity to the question if users hit the budget.
