@@ -678,3 +678,38 @@ async def test_hybrid_prefers_a_short_chunk_when_both_say_the_word_as_often(sess
     found = await retrieve(session, question, chunk_ids=[c.id for c in chunks], k=2, embedder=embedder)
 
     assert [c.text for c in found] == [short, long]
+
+
+async def test_words_overrides_the_switch_either_way(session, embedder, monkeypatch):
+    question = f"Which dose with {RARE}?"
+    query = unit_vector(uuid.uuid4().hex)
+    embedder.vectors[f"search_query: {question}"] = query
+    near_ones = [(f"Background chunk {i}", 0.1 * (i + 1)) for i in range(6)]
+    chunks = await add_texts(session, query, "Label", [*near_ones, (f"Avoid strong inhibitors such as {RARE}.", 3.0)])
+    scope = [c.id for c in chunks]
+
+    hybrid(monkeypatch, False)
+    forced = await retrieve(session, question, chunk_ids=scope, k=3, embedder=embedder, words=True)
+    hybrid(monkeypatch, True)
+    held = await retrieve(session, question, chunk_ids=scope, k=3, embedder=embedder, words=False)
+
+    assert chunks[-1].id in {c.id for c in forced}
+    assert chunks[-1].id not in {c.id for c in held}
+
+
+async def test_likely_papers_are_the_ones_with_the_nearest_chunks(session, embedder, monkeypatch):
+    monkeypatch.setattr(retrieval, "LIKELY_PAPERS", 2)
+    question = "Which paper says it?"
+    query = unit_vector(uuid.uuid4().hex)
+    embedder.vectors[f"search_query: {question}"] = query
+    papers = [
+        (await add_texts(session, query, f"P{i}", [(f"Paper {i} passage {j}", i + 0.1 * (j + 1)) for j in range(3)]))[0]
+        for i in range(4)
+    ]
+    ids = [c.paper_id for c in papers]
+
+    likely = await retrieval.likely_papers(session, question, list(reversed(ids)), embedder=embedder)
+    few = await retrieval.likely_papers(session, question, ids[2:], embedder=embedder)
+
+    assert likely == ids[:2]
+    assert few == ids[2:]  # no more than LIKELY_PAPERS: all of them, unsearched
