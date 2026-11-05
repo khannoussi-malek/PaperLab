@@ -53,6 +53,7 @@ TOOLS = [
     "list_workspaces",
     "read_manuscript_file",
     "read_manuscript_pdf_text",
+    "read_pages",
     "recheck_free_copies",
     "related_papers",
     "remove_paper_from_workspace",
