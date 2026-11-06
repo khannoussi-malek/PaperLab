@@ -8,7 +8,7 @@ Everything needed to check or rerun the benchmark behind `../long-documents.md` 
 |---|---|
 | `documents.csv` | The 174 FDA and EMA documents: file name, source URL, download date, pages, share of pages with a text layer, and where each sits in the joined file |
 | `questions/` | Question sets with their keys (exact strings from the source page) |
-| `prompts/` | The question-writer prompts, word for word |
+| `prompts/` | The question-writer prompts, word for word. The answer prompt is PaperLab's own, `backend/prompts/chat.v7.md` (built by `prepare` in `backend/app/core/chat.py`) at commit 0d699e0; the HyDE and term-expansion prompts are in `scripts/rewrites.py` |
 | `scripts/` | The harness: download, build, ingest, score, answer, audit |
 | `results/` | Per-question outcomes of every sealed run, the answers, and the per-key audit |
 | `RULES.md` | The rules log: every pass rule and analysis rule, written before the run it governs, with the results that followed |
@@ -59,6 +59,10 @@ The scripts read and write the working-folder names of the original run. To reru
 | `questions/pharma_long_sealed2_a.yaml`, `_b.yaml` | `$S/q2/1/questions.yaml`, `$S/q2/2/questions.yaml` (joined as `$S/q/sealed2.yaml` for scoring) |
 | `questions/se_creativity_*.yaml` | `$S/secr/q/dev.yaml`, `$S/secr/q/sealed.yaml` |
 | `results/key_audit_llama.jsonl`, `key_audit_gpt4o_partial.jsonl` | `$S/out/audit_llama.jsonl`, `$S/out/audit_gpt4o.jsonl` |
+| `results/answers_pinned_sealed2.jsonl` | `$S/out/r2_cloud.jsonl` (score with `QSET=sealed2 local_score.py r2_cloud.jsonl`) |
+| `results/library_sealed2_rank8.json`, `se_library_sealed_rank8.json` | `$S/out/r8_lib_sealed2.json`, `$S/secr/out/r8_se_lib_sealed.json` (written by `r2_rank.sh`) |
+
+`r2_local.sh` runs the local answers on sealed set 2. Its run was paused at 181 of 400 answers and is not yet released; it resumes where it stopped.
 
 `bench5.py` runs `$S/scripts/bench5_extra.py` if it exists. That hook was never used: no such file was written, so no published number depends on it.
 
@@ -67,6 +71,20 @@ The SE and creativity runs (`se_*.py`) also need `$S/secr/papers.tsv` and the au
 `m8.py` rescores the library counting sibling documents of the same active substance as hits; `memcap.py` measures peak embedding memory at each token limit.
 
 `scale_copy.py` copies the library five times for the speed test; it is for speed only, never for scoring.
+
+## Settings of the methods without a detectable benefit
+
+| Method | Setting |
+|---|---|
+| Cross-encoder | `BAAI/bge-reranker-base` over the top 40 and the top 100; `ms-marco-MiniLM-L-12-v2` (FlashRank) over the top 40 |
+| ColBERT | `answerai-colbert-small-v1` reranking the top 50 |
+| SPLADE | SPLADE-v3 |
+| Convex fusion | weight chosen on the other drug's questions, 0.1 to 0.9 |
+| MMR | λ 0.8 and 0.9 over the top 40 |
+| Page propagation | weight 0.5 |
+| RM3 | 5 feedback passages, 10 terms, original query kept at 0.7 |
+| Rocchio | question kept at 0.7, top 3 passages |
+| HyDE, term expansion | GPT-4o, prompts in `scripts/rewrites.py` |
 
 ## Key checks
 

@@ -6,7 +6,7 @@ assert "55434/passrule" in os.environ["DATABASE_URL"]
 from app.core import chat, retrieval
 from app.db import SessionLocal
 from app.providers.embedding import get_model
-S=os.environ["S"]; MODELS=sys.argv[1].split(","); CFGS=sys.argv[2]; OUT=f"{S}/out/{sys.argv[3]}"; SET=sys.argv[4] if len(sys.argv)>4 else "sealed"
+S=os.environ["S"]; MODELS=sys.argv[1].split(","); CFGS=sys.argv[2].split(",") if "," in sys.argv[2] else list(sys.argv[2]); OUT=f"{S}/out/{sys.argv[3]}"; SET=sys.argv[4] if len(sys.argv)>4 else "sealed"
 PID=uuid.UUID(open(f"{S}/pass/pid").read().strip()); F=json.load(open(f"{S}/pass/fixture.json")); SPAN={r["file"]:(r["start"],r["end"]) for r in F["rows"]}
 Q=yaml.safe_load(open(f"{S}/q/{SET}.yaml")); norm=lambda s:" ".join(str(s).lower().split())
 done={(r["cfg"],r["id"]) for r in map(json.loads,open(OUT))} if os.path.exists(OUT) else set(); resting={}
@@ -36,6 +36,9 @@ async def one(cfg,q,m,model):
     async with SessionLocal() as s:
         if cfg=="A":
             with patch.object(chat,"RETRIEVE_POOL",8),patch.object(retrieval,"LONG_PAPER_CHUNKS",10**9): p=await chat.prepare(s,PID,q["question"],embedder=m)
+        elif cfg=="K8":  # BM25 alone, top 8 (review round 2, N8)
+            h=retrieval._HYBRID.replace("SELECT id, rank FROM vector UNION ALL SELECT id, rank FROM lexical","SELECT id, rank FROM lexical"); assert h!=retrieval._HYBRID
+            with patch.object(chat,"RETRIEVE_POOL",8),patch.object(retrieval,"_HYBRID",h): p=await chat.prepare(s,PID,q["question"],embedder=m)
         elif cfg=="M":
             orig=chat.cut_to_budget
             with patch.object(chat,"cut_to_budget",lambda found: orig(found,12000)): p=await chat.prepare(s,PID,q["question"],embedder=m)

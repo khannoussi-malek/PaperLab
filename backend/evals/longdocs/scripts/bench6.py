@@ -49,7 +49,7 @@ async def run(cfg,q,ids,model):
     finally:
         for c in ctx: c.stop()
     dt=time.perf_counter()-t; ef.stop(); b=cfg.get("budget",24000); sent=cut_to_budget(found,b) if b else found
-    return [(c.paper_id,norm(c.text)) for c in sent],dt,sum(len(c.text) for c in sent),len({c.paper_id for c in sent}),scope
+    return [(c.paper_id,norm(c.text)) for c in sent],dt,sum(len(c.text) for c in sent),len({c.paper_id for c in sent}),scope,[(c.paper_id,norm(c.text)) for c in found[:8]]
 async def main():
     model=get_model()
     async with SessionLocal() as s:
@@ -72,16 +72,17 @@ async def main():
         if fine: good.append(q); where[q["id"]]=pp
         else: dropped[q["kind"]]+=1
     print(SET,"papers",len(ids),"chunks",len(allc),"questions",len(good),"of",len(Q),"dropped",dict(dropped),flush=True)
-    res={}; TM={}
+    res={}; TM={}; R8={}
     for name in WANT:
-        cfg=M[name]; got={}; took=[]; ch=[]; np=[]; inscope=0
+        cfg=M[name]; got={}; r8={}; took=[]; ch=[]; np=[]; inscope=0
         for q in good:
-            sent,dt,c,n,scope=await run(cfg,q["question"],ids,model); took.append(dt); ch.append(c); np.append(n)
+            sent,dt,c,n,scope,top8=await run(cfg,q["question"],ids,model); took.append(dt); ch.append(c); np.append(n)
             inscope+=where[q["id"]][0] in set(scope)
-            got[q["id"]]=all(met(nd,sent,p) for nd,p in zip(q["needs"],where[q["id"]]))
-        TM[name]=took; res[name]=got; kinds=collections.Counter(q["kind"] for q in good if got[q["id"]]); ref=res.get("HB"); diff=""
+            got[q["id"]]=all(met(nd,sent,p) for nd,p in zip(q["needs"],where[q["id"]])); r8[q["id"]]=all(met(nd,top8,p) for nd,p in zip(q["needs"],where[q["id"]]))
+        TM[name]=took; res[name]=got; R8[name]=r8; kinds=collections.Counter(q["kind"] for q in good if got[q["id"]]); ref=res.get("HB"); diff=""
         if ref and name!="HB": diff=f" vs HB +{sum(got[i] and not ref[i] for i in got)} -{sum(ref[i] and not got[i] for i in got)}"
-        print(f"{name:8} {sum(got.values()):3} of {len(good)} {dict(sorted(kinds.items()))} seconds median {st.median(took):.2f} max {max(took):.2f} chars {int(st.median(ch))} papers {st.median(np):.0f}{diff}"+(f" target paper in scope {inscope}/{len(good)}" if cfg.get("doc") else ""),flush=True)
+        print(f"{name:8} {sum(got.values()):3} of {len(good)} {dict(sorted(kinds.items()))} seconds median {st.median(took):.2f} max {max(took):.2f} chars {int(st.median(ch))} papers {st.median(np):.0f}{diff}"+f" recall@8 {sum(r8.values())}"+(f" target paper in scope {inscope}/{len(good)}" if cfg.get("doc") else ""),flush=True)
     json.dump(res,open(f"{S}/out/bench6_{SET}_{'_'.join(WANT)[:50]}.json","w"))
+    if os.environ.get("R8OUT"): json.dump(R8,open(os.environ["R8OUT"],"w"))
     if os.environ.get("TIMES"): json.dump(TM,open(os.environ["TIMES"],"w"))
 asyncio.run(main())
