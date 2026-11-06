@@ -1,0 +1,843 @@
+- id: N001
+  doc: ema_imbruvica_label.pdf
+  kind: table
+  source_page: 4583
+  question: In the TRIANGLE trial of ibrutinib in previously untreated mantle cell lymphoma, how many deaths, and what percentage, occurred in the IMBRUVICA arm in the overall survival analysis?
+  needs:
+  - - all_of:
+      - Number of deaths (%)
+      - 33 (12.3%)
+- id: N002
+  doc: fda_vorapaxar_StatR.pdf
+  kind: table
+  source_page: 7948
+  question: In the vorapaxar TRA-2P subject disposition, how many subjects on vorapaxar discontinued study drug prematurely, and what percentage?
+  needs:
+  - - all_of:
+      - Discontinued Study Drug Prematurely
+      - 3,145 (23.8)
+- id: N003
+  doc: fda_dabigatran_MedR.pdf
+  kind: table
+  source_page: 9057
+  question: In the FDA clinical review of Pradaxa, what was the hazard ratio for ischemic stroke with dabigatran 150 mg versus warfarin in patients who had never used aspirin?
+  needs:
+  - - all_of:
+      - Never Used*
+      - 0.44 (0.29, 0.67)
+- id: N004
+  doc: fda_ticagrelor_MedR.pdf
+  kind: table
+  source_page: 3605
+  question: In the FDA Cox regression of non-CABG-related major or worse bleeding for ticagrelor, what was the hazard ratio for the ticagrelor treatment term?
+  needs:
+  - - all_of:
+      - Cox Regression for Non-CABG-Related Major or Worse Bleeding
+      - '1.247935'
+- id: N005
+  doc: fda_ticagrelor_MedR.pdf
+  kind: table
+  source_page: 3624
+  question: In the ticagrelor full-model Cox regression for MACE through study end, what hazard ratio was estimated for aspirin dose of 300 mg or more?
+  needs:
+  - - all_of:
+      - 1.asafge300
+      - '3.029988'
+- id: N006
+  doc: ema_xarelto_label.pdf
+  kind: table
+  source_page: 239
+  question: In the ATLAS ACS 2 TIMI 51 results for patients undergoing PCI, how many patients on Xarelto 2.5 mg twice daily had stent thrombosis, and what percentage?
+  needs:
+  - - all_of:
+      - Stent thrombosis
+      - 47 (1.5%)
+- id: N007
+  doc: ema_xarelto_label.pdf
+  kind: table
+  source_page: 244
+  question: In the VOYAGER PAD trial, how many patients on rivaroxaban 2.5 mg bid plus aspirin had acute limb ischaemia, and what was the cumulative risk?
+  needs:
+  - - all_of:
+      - Acute limb ischaemia f)
+      - 155 (4.7%)
+- id: N008
+  doc: ema_keytruda_label.pdf
+  kind: table
+  source_page: 8155
+  question: In KEYNOTE-006, what was the overall survival rate at 24 months with pembrolizumab 10 mg/kg every 2 weeks?
+  needs:
+  - - all_of:
+      - Pembrolizumab 10 mg/kg every 2 weeks 55.1%
+      - OS rate at 24 months
+- id: N009
+  doc: ema_invokana_assess.pdf
+  kind: table
+  source_page: 1212
+  question: In the canagliflozin integrated phase III safety data, what was the incidence of volume depletion adverse events with CANA 300 mg among patients using ACE inhibitors or ARBs?
+  needs:
+  - - all_of:
+      - Use of ACE/ARB
+      - 4.3%(90/2116)
+- id: N010
+  doc: ema_opdivo_label.pdf
+  kind: table
+  source_page: 5113
+  question: In the Opdivo cisplatin-gemcitabine combination study, how many patients (and what percentage) responded in the nivolumab plus chemotherapy arm?
+  needs:
+  - - all_of:
+      - Objective Response Rate
+      - 175 (57.6)
+- id: N011
+  doc: fda_dabigatran_StatR.pdf
+  kind: table
+  source_page: 5779
+  question: In the baseline demographics of the dabigatran RE-LY analysis, how many patients in the DE 110 mg arm had a pacemaker?
+  needs:
+  - - all_of:
+      - Pacemaker
+      - 613 (10.2)
+- id: N012
+  doc: ema_venclyxto_assess.pdf
+  kind: table
+  source_page: 7129
+  question: In relapsed/refractory CLL on venetoclax monotherapy, how many patients on 400 mg (all patients) had squamous cell carcinoma of skin as a second primary malignancy?
+  needs:
+  - - all_of:
+      - Squamous cell carcinoma of skin
+      - 17 (5.7)
+- id: N013
+  doc: fda_ticagrelor_MedR.pdf
+  kind: table
+  source_page: 4178
+  question: In the PLATO common adverse events table, how many patients on ticagrelor 90 mg bd had epistaxis, and what percentage?
+  needs:
+  - - all_of:
+      - Epistaxis
+      - 574 (6.22%)
+- id: N014
+  doc: ema_rybelsus_assess.pdf
+  kind: table
+  source_page: 1686
+  question: In the oral semaglutide serious adverse event table for PIONEER 6, how many subjects on oral semaglutide had SAEs, and what percentage?
+  needs:
+  - - all_of:
+      - PIONEER 6
+      - 301 (18.9)
+- id: N015
+  doc: ema_opdivo_label.pdf
+  kind: table
+  source_page: 5091
+  question: In the Opdivo study CA209057, how many nivolumab-treated patients had a confirmed objective response, and what percentage?
+  needs:
+  - - all_of:
+      - Confirmed objective response
+      - 56 (19.2%)
+- id: N016
+  doc: ema_steglatro_assess.pdf
+  kind: table
+  source_page: 8881
+  question: In the ertugliflozin (Steglatro) 5 mg versus placebo comparison, what was the 95% CI for the difference in LS means of change from baseline in fasting plasma glucose?
+  needs:
+  - - all_of:
+      - Change from Baseline in FPG (mg/dL)
+      - (-32.76, -17.54)
+- id: N017
+  doc: fda_dapagliflozin_StatR.pdf
+  kind: table
+  source_page: 3567
+  question: In the dapagliflozin statistics filing checklist, how many patients were randomised to dapagliflozin 10 mg in study MB102030?
+  needs:
+  - - all_of:
+      - MB102030
+      - Dapa 10mg 141
+- id: N018
+  doc: ema_xtandi_assess.pdf
+  kind: table
+  source_page: 5895
+  question: In the Xtandi (enzalutamide) AFFIRM time to PSA progression analysis, what was the stratified hazard ratio?
+  needs:
+  - - all_of:
+      - 'Stratified Hazard Ratio: 0.248'
+      - Time to PSA progression
+- id: N019
+  doc: fda_semaglutide_StatR.pdf
+  kind: table
+  source_page: 5432
+  question: In the semaglutide mouse carcinogenicity study of male mice, how many vehicle-control animals had bronchioloalveolar adenoma?
+  needs:
+  - - all_of:
+      - Bronchioloalveolar Adenoma
+      - 21/60 (45)
+- id: N020
+  doc: ema_keytruda_label.pdf
+  kind: table
+  source_page: 8396
+  question: In KEYNOTE-426, what was the PFS hazard ratio for pembrolizumab plus axitinib versus sunitinib?
+  needs:
+  - - all_of:
+      - PFS rate at 12 months
+      - 0.68 (0.58, 0.80)
+- id: N021
+  doc: ema_repatha_assess.pdf
+  kind: table
+  source_page: 8076
+  question: In the Repatha phase 3 homozygous FH population, what was the mean calculated LDL-C in the 420 mg monthly evolocumab group?
+  needs:
+  - - all_of:
+      - Calculated LDL-C, Mean (SD)
+      - 9.2 (3.5)
+- id: N022
+  doc: ema_trulicity_label.pdf
+  kind: table
+  source_page: 2291
+  question: In the 104-week Trulicity study, what percentage of patients on dulaglutide 1.5 mg once weekly reached HbA1c below 7.0% at 26 weeks?
+  needs:
+  - - all_of:
+      - Dulaglutide 1.5 mg
+      - 60.9**,##
+- id: N023
+  doc: ema_xtandi_assess.pdf
+  kind: fact
+  source_page: 5879
+  question: What maximum tolerated daily dose was determined for enzalutamide (MDV3100) in the dose-escalation study S-3100-1-01?
+  needs:
+  - - all_of:
+      - maximum tolerated dose was determined to be 240 mg/day
+- id: N024
+  doc: ema_keytruda_label.pdf
+  kind: fact
+  source_page: 8144
+  question: How many patients with advanced RCC or endometrial cancer were included in the safety evaluation of pembrolizumab with axitinib or lenvatinib?
+  needs:
+  - - all_of:
+      - evaluated in a total of 1 456 patients with
+- id: N025
+  doc: ema_entresto_label.pdf
+  kind: fact
+  source_page: 4446
+  question: What target maintenance dose of sacubitril/valsartan was used twice daily in children aged 1 to under 18 years in the paediatric heart failure study?
+  needs:
+  - - all_of:
+      - 3.1 mg/kg twice daily in patients aged 1 to <18 years
+- id: N026
+  doc: fda_dapagliflozin_MedR.pdf
+  kind: fact
+  source_page: 2956
+  question: In the dapagliflozin HbA1c analysis by baseline albuminuria status, roughly what proportion of subjects were microalbuminuric?
+  needs:
+  - - all_of:
+      - Approximately 20% of subjects were microalbuminuric
+- id: N027
+  doc: ema_lynparza_label.pdf
+  kind: fact
+  source_page: 646
+  question: In the olaparib pancreatic cancer trial, what share of patients had received FOLFIRINOX as their first-line chemotherapy?
+  needs:
+  - - all_of:
+      - 75% of patients received FOLFIRINOX
+- id: N028
+  doc: fda_semaglutide_StatR.pdf
+  kind: fact
+  source_page: 5500
+  question: For semaglutide, was the HbA1c treatment effect difference between Hispanic and non-Hispanic subjects significant in Trial 3623?
+  needs:
+  - - all_of:
+      - In Trial 3623, the difference in treatment effect
+- id: N029
+  doc: fda_canagliflozin_PharmR.pdf
+  kind: fact
+  source_page: 10149
+  question: In the canagliflozin rat toxicity study with standard and fructose diets, how many animals were sacrificed in the 100 mg/kg fructose-diet group?
+  needs:
+  - - all_of:
+      - There were 4 animals sacrificed in the group administered
+- id: N030
+  doc: ema_imbruvica_label.pdf
+  kind: fact
+  source_page: 4539
+  question: What was the median follow-up time on study for the TRIANGLE efficacy results of IMBRUVICA in mantle cell lymphoma?
+  needs:
+  - - all_of:
+      - With a median follow-up time on study of 54.9 months
+- id: N031
+  doc: fda_semaglutide_oral_PharmR.pdf
+  kind: fact
+  source_page: 4387
+  question: In the one-year SNAC toxicity study, by how much did high-dose males eat less than controls between day 231 and day 364?
+  needs:
+  - - all_of:
+      - -6.5%, with weekly values ranging from -1.4% to -11.5%
+- id: N032
+  doc: ema_verzenios_label.pdf
+  kind: fact
+  source_page: 8947
+  question: In MONARCH 3, what were the median PFS values for abemaciclib-treated patients with visceral disease versus the comparator?
+  needs:
+  - - all_of:
+      - 21.6 months versus 14.0 months
+- id: N033
+  doc: ema_mounjaro_assess.pdf
+  kind: fact
+  source_page: 6231
+  question: In the placebo-controlled tirzepatide dataset, what percentage of tirzepatide versus placebo subjects had amylase rise from normal to between 1 and 3 times the upper limit?
+  needs:
+  - - all_of:
+      - (15.9% vs 5.1% for TZP vs
+- id: N034
+  doc: ema_zytiga_assess.pdf
+  kind: fact
+  source_page: 1519
+  question: What sample size was planned for the abiraterone acetate phase 3 study in the Zytiga assessment report?
+  needs:
+  - - all_of:
+      - planned sample size of approximately 1,158 patients
+- id: N035
+  doc: ema_comirnaty_assess.pdf
+  kind: fact
+  source_page: 6922
+  question: At how many accrued evaluable COVID-19 cases were interim analyses pre-specified in the BNT162b2 (Comirnaty) phase 2/3 protocol?
+  needs:
+  - - all_of:
+      - at least 62, 92, and 120 evaluable COVID-19 cases
+- id: N036
+  doc: ema_praluent_assess.pdf
+  kind: fact
+  source_page: 1987
+  question: How many phase 3 studies evaluated alirocumab as add-on to statin or as monotherapy in the Praluent assessment?
+  needs:
+  - - all_of:
+      - In the 10 phase 3 clinical studies, alirocumab was evaluated
+- id: N037
+  doc: ema_keytruda_label.pdf
+  kind: fact
+  source_page: 8337
+  question: In KEYNOTE-091, what hazard ratio for disease-free survival was seen in the overall population at the interim analysis?
+  needs:
+  - - all_of:
+      - 'HR = 0.76 [95% CI: 0.63, 0.91; p = 0.0014]'
+- id: N038
+  doc: fda_semaglutide_StatR.pdf
+  kind: fact
+  source_page: 5463
+  question: In the semaglutide cardiovascular outcomes trial, how many subjects had diabetic retinopathy complications, and how many were on semaglutide?
+  needs:
+  - - all_of:
+      - A total of 79 subjects were
+      - 50 subjects with semaglutide
+- id: N039
+  doc: fda_dabigatran_MedR.pdf
+  kind: fact
+  source_page: 9005
+  question: What dabigatran dose did the FDA reviewers recommend approving rather than allowing dose adjustment by bleeding risk?
+  needs:
+  - - all_of:
+      - recommend that only the 150 mg dose be approved
+- id: N040
+  doc: fda_dabigatran_MedR.pdf
+  kind: fact
+  source_page: 9149
+  question: In the RE-LY event adjudication, what minimum proportion of negative cases from each Tier 1 reviewer was over-read?
+  needs:
+  - - all_of:
+      - minimum of 10% of negative cases from each Tier 1 reviewer
+- id: N041
+  doc: ema_comirnaty_assess.pdf
+  kind: fact
+  source_page: 6972
+  question: What additional risk minimisation measures were proposed for Comirnaty?
+  needs:
+  - - all_of:
+      - Summary of additional risk minimisation measures
+      - None proposed.
+- id: N042
+  doc: ema_keytruda_label.pdf
+  kind: fact
+  source_page: 8164
+  question: How many patients were randomised in the KEYNOTE-054 adjuvant melanoma study to pembrolizumab versus placebo?
+  needs:
+  - - all_of:
+      - (n=514) or placebo (n=505)
+- id: N043
+  doc: ema_spikevax_label.pdf
+  kind: fact
+  source_page: 1405
+  question: How many micrograms of SARS-CoV-2 JN.1 mRNA are in a 0.5 mL dose of Spikevax?
+  needs:
+  - - all_of:
+      - One dose (0.5 mL) contains 50 micrograms of SARS-CoV-2
+- id: N044
+  doc: ema_xarelto_label.pdf
+  kind: fact
+  source_page: 500
+  question: How much rivaroxaban does the bottle of Xarelto granules for children under 4 kg contain?
+  needs:
+  - - all_of:
+      - 51.7 mg of rivaroxaban, for 50 mL of water to be added
+- id: N045
+  doc: ema_praluent_label.pdf
+  kind: fact
+  source_page: 6008
+  question: For which children is pinching the skin required when injecting with the Praluent pen?
+  needs:
+  - - all_of:
+      - This is required for children less than 12 years of age
+- id: N046
+  doc: ema_imbruvica_label.pdf
+  kind: fact
+  source_page: 4601
+  question: What was the median investigator-assessed PFS with ibrutinib at the 65-month final analysis of study PCYC-1112-CA?
+  needs:
+  - - all_of:
+      - 44.1 months [95% CI (38.47, 56.18)]
+- id: N047
+  doc: fda_ticagrelor_MedR.pdf
+  kind: fact
+  source_page: 4127
+  question: In PLATO, how many deaths in total were known in the ticagrelor 90 mg bd arm, and what percentage?
+  needs:
+  - - all_of:
+      - Total known deaths
+      - 443 (4.75)
+- id: N048
+  doc: fda_apixaban_MedR.pdf
+  kind: fact
+  source_page: 6313
+  question: In the FDA review of apixaban's ARISTOTLE study, how was the number of imputed dispensing errors calculated?
+  needs:
+  - - all_of:
+      - the number of dispensations minus the number of obtained
+- id: N049
+  doc: fda_apixaban_MedR.pdf
+  kind: fact
+  source_page: 6346
+  question: What true bottle error rate did BMS believe applied in ARISTOTLE for apixaban?
+  needs:
+  - - all_of:
+      - perhaps 0.1-0.2%
+- id: N050
+  doc: fda_apixaban_MedR.pdf
+  kind: fact
+  source_page: 6396
+  question: What was the hazard ratio for all-cause death with apixaban versus warfarin in ARISTOTLE?
+  needs:
+  - - all_of:
+      - the HR was 0.89, with a 95% CI of 0.80 to 1.00 (p=0.0465)
+- id: N051
+  doc: fda_ticagrelor_MedR.pdf
+  kind: fact
+  source_page: 3785
+  question: How many patients received ticagrelor in PLATO, with how much patient-year exposure?
+  needs:
+  - - all_of:
+      - 9235 patients received ticagrelor
+- id: N052
+  doc: fda_ticagrelor_MedR.pdf
+  kind: fact
+  source_page: 3990
+  question: How many patients were enrolled with informed consent in the PLATO study of ticagrelor?
+  needs:
+  - - all_of:
+      - A total of 18,758 patients enrolled
+- id: N053
+  doc: fda_ticagrelor_MedR.pdf
+  kind: fact
+  source_page: 3963
+  question: What enrolment was planned for PLATO at the End of Phase 2 meeting for ticagrelor?
+  needs:
+  - - all_of:
+      - planned enrollment was 16,000
+- id: N054
+  doc: ema_xtandi_assess.pdf
+  kind: fact
+  source_page: 5913
+  question: In the AFFIRM trial, how many patients on enzalutamide 160 mg experienced a seizure?
+  needs:
+  - - all_of:
+      - six patients (0.8%)
+- id: N055
+  doc: ema_keytruda_label.pdf
+  kind: fact
+  source_page: 8348
+  question: How many patients were randomised in KEYNOTE-407 of pembrolizumab in squamous NSCLC?
+  needs:
+  - - all_of:
+      - A total of 559 patients were randomised.
+- id: N056
+  doc: ema_keytruda_label.pdf
+  kind: fact
+  source_page: 8432
+  question: How many patients were enrolled in KEYNOTE-826 of pembrolizumab in cervical cancer?
+  needs:
+  - - all_of:
+      - enrolled 617 patients with persistent,
+- id: N057
+  doc: ema_forxiga_assess.pdf
+  kind: fact
+  source_page: 7506
+  question: How many evaluable subjects per group were needed to detect a 0.5% HbA1c difference for dapagliflozin in study MB102014?
+  needs:
+  - - all_of:
+      - 153 evaluable subjects were needed in each treatment group
+- id: N058
+  doc: ema_repatha_assess.pdf
+  kind: reworded
+  source_page: 8029
+  question: After an injection under the skin in monkeys, what fraction of the evolocumab dose reaches the bloodstream?
+  needs:
+  - - all_of:
+      - The absolute bioavailability was approximately 82%.
+- id: N059
+  doc: ema_mounjaro_assess.pdf
+  kind: reworded
+  source_page: 6068
+  question: In obese mice, was tirzepatide's effect on muscle glucose uptake weaker or stronger than semaglutide's?
+  needs:
+  - - all_of:
+      - The effect of tirzepatide appeared stronger than that of semaglutide
+- id: N060
+  doc: fda_dapagliflozin_PharmR.pdf
+  kind: reworded
+  source_page: 5706
+  question: In the dapagliflozin rat reproduction study, how much lower was drug exposure in males than in females on day 83 of life?
+  needs:
+  - - all_of:
+      - approximately 28-35% lower in the males than in the females
+- id: N061
+  doc: ema_venclyxto_assess.pdf
+  kind: reworded
+  source_page: 7081
+  question: Was a dose-limiting ceiling ever found for venetoclax in dose-response studies, and how high did doses go?
+  needs:
+  - - all_of:
+      - a MTD was not defined (doses up to 1200 mg)
+- id: N062
+  doc: ema_spikevax_label.pdf
+  kind: reworded
+  source_page: 1469
+  question: How soon after the Spikevax COVID-19 vaccine does inflammation of the heart muscle usually appear, and who is affected more often?
+  needs:
+  - - all_of:
+      - They have been observed more often in younger males
+- id: N063
+  doc: fda_ticagrelor_MedR.pdf
+  kind: reworded
+  source_page: 3894
+  question: In the corrected FDA wording on ticagrelor bleeding, roughly what share of major bleeds were bypass-surgery related?
+  needs:
+  - - all_of:
+      - Most major bleeds were CABG-related (~ 67%)
+- id: N064
+  doc: ema_xtandi_assess.pdf
+  kind: reworded
+  source_page: 5876
+  question: By what proportion did enzalutamide reduce exposure to midazolam in prostate cancer patients?
+  needs:
+  - - all_of:
+      - an 86% decrease in the AUC of
+- id: N065
+  doc: ema_lixiana_label.pdf
+  kind: reworded
+  source_page: 537
+  question: At what body weight should the edoxaban dose be lowered to 30 mg once daily?
+  needs:
+  - - all_of:
+      - Low body weight ≤ 60 kg
+- id: N066
+  doc: fda_semaglutide_oral_ClinPharmR.pdf
+  kind: reworded
+  source_page: 24
+  question: Did oral semaglutide at doses up to 1.5 mg lengthen the heart's QT interval in the thorough QT study?
+  needs:
+  - - all_of:
+      - no significant QTc prolongation effect of semaglutide
+- id: N067
+  doc: ema_zytiga_assess.pdf
+  kind: reworded
+  source_page: 1502
+  question: Did abiraterone acetate cause genetic mutations in laboratory or animal test systems?
+  needs:
+  - - all_of:
+      - abiraterone acetate and abiraterone were not mutagenic
+- id: N068
+  doc: ema_wegovy_label.pdf
+  kind: reworded
+  source_page: 890
+  question: How many injections can be given from one multi-use Wegovy FlexTouch pen?
+  needs:
+  - - all_of:
+      - It contains 4 doses.
+- id: N069
+  doc: ema_xarelto_label.pdf
+  kind: reworded
+  source_page: 338
+  question: How long can pulverised rivaroxaban tablets be kept in water or fruit puree before being given?
+  needs:
+  - - all_of:
+      - stable in water and in apple puree for up to 4 hours
+- id: N070
+  doc: fda_dapagliflozin_MedR.pdf
+  kind: reworded
+  source_page: 2888
+  question: Why did FDA reviewers consider dapagliflozin doses above 10 mg unnecessary in the 12-week dose-ranging study?
+  needs:
+  - - all_of:
+      - doses higher than 10 mg (20 and 50 mg) led
+- id: N071
+  doc: ema_tagrisso_label.pdf
+  kind: reworded
+  source_page: 7879
+  question: How soon after putting osimertinib tablets in water must the dispersion be given through a stomach tube?
+  needs:
+  - - all_of:
+      - administered within 30 minutes of
+- id: N072
+  doc: ema_wegovy_label.pdf
+  kind: reworded
+  source_page: 1032
+  question: How long before trying for a baby should someone stop taking Wegovy, per the package leaflet?
+  needs:
+  - - all_of:
+      - medicine at least 2 months in advance
+- id: N073
+  doc: ema_wegovy_label.pdf
+  kind: reworded
+  source_page: 1023
+  question: For how many days may Wegovy be kept out of the refrigerator?
+  needs:
+  - - all_of:
+      - stored unrefrigerated for up to 28 days
+- id: N074
+  doc: ema_brilique_assess.pdf
+  kind: reworded
+  source_page: 6820
+  question: How widely does ticagrelor distribute into body tissues, as shown by its steady-state volume of distribution?
+  needs:
+  - - all_of:
+      - steady-state volume of distribution of approximately 87.5 L
+- id: N075
+  doc: fda_semaglutide_oral_PharmR.pdf
+  kind: reworded
+  source_page: 4405
+  question: Did oral SNAC cause chromosomal damage in the rodent micronucleus assay?
+  needs:
+  - - all_of:
+      - did not have a statistically significant increase in MPCEs
+- id: N076
+  doc: fda_apixaban_PharmR.pdf
+  kind: reworded
+  source_page: 2594
+  question: How much apixaban reached rabbit fetuses compared with the mothers?
+  needs:
+  - - all_of:
+      - fetal cord plasma was 1.0% of the
+- id: N077
+  doc: ema_entresto_label.pdf
+  kind: reworded
+  source_page: 4512
+  question: How much sacubitril is in each Entresto 49 mg/51 mg tablet?
+  needs:
+  - - all_of:
+      - contains 48.6 mg sacubitril and 51.4 mg valsartan
+- id: N078
+  doc: ema_imbruvica_label.pdf
+  kind: reworded
+  source_page: 4655
+  question: Which uncommon side effects of ibrutinib affect the eyes, according to the patient leaflet?
+  needs:
+  - - all_of:
+      - blurred vision
+      - bleeding in the eye
+- id: N079
+  doc: ema_lynparza_label.pdf
+  kind: reworded
+  source_page: 626
+  question: What was the median overall survival with olaparib versus placebo in the SOLO2 ovarian cancer trial?
+  needs:
+  - - all_of:
+      - 51.7 (41.5, 59.1)
+      - 38.8 (31.4, 48.6)
+- id: N080
+  doc: fda_apixaban_MedR.pdf
+  kind: reworded
+  source_page: 6367
+  question: What share of subjects did the applicant estimate received a wrong study drug at some time in ARISTOTLE for apixaban?
+  needs:
+  - - all_of:
+      - time during the study was 0.65 %
+- id: N081
+  doc: fda_ticagrelor_MedR.pdf
+  kind: reworded
+  source_page: 3966
+  question: How much ticagrelor leaves the body unchanged in the urine?
+  needs:
+  - - all_of:
+      - Less than 1% of ticagrelor is excreted unchanged in the urine
+- id: N082
+  doc: ema_forxiga_assess.pdf
+  kind: reworded
+  source_page: 7522
+  question: How did body weight change with glipizide in patients with BMI 27 or above in the dapagliflozin metformin comparator study?
+  needs:
+  - - all_of:
+      - a mean increase of 1.41 kg was observed in the glipizide group
+- id: N083
+  doc: ema_ozempic_assess.pdf
+  kind: reworded
+  source_page: 6667
+  question: How long is semaglutide's terminal half-life in the monkey and in humans?
+  needs:
+  - - all_of:
+      - 51 h in the monkey and 148 h in human
+- id: N084
+  doc: ema_ozempic_assess.pdf
+  kind: reworded
+  source_page: 6790
+  question: How common were injection site reactions with semaglutide compared with extended-release exenatide?
+  needs:
+  - - all_of:
+      - comparison to exenatide ER (22.0%)
+- id: N085
+  doc: ema_opdivo_label.pdf
+  kind: reworded
+  source_page: 5002
+  question: How many adults with previously treated advanced oesophageal squamous cell carcinoma were randomised in the nivolumab versus taxane trial?
+  needs:
+  - - all_of:
+      - A total of 419 patients were randomised 1:1
+- id: N086
+  doc: ema_rybelsus_assess.pdf
+  kind: reworded
+  source_page: 1669
+  question: How many Japanese patients with type 2 diabetes were planned for the oral semaglutide versus weekly dulaglutide trial?
+  needs:
+  - - all_of:
+      - A total of 455 Japanese adults with
+- id: N087
+  doc: fda_dabigatran_ClinPharmR.pdf
+  kind: reworded
+  source_page: 2128
+  question: How much does the risk of a life-threatening bleed rise when dabigatran goes from 150 mg to 300 mg?
+  needs:
+  - - all_of:
+      - predicted to increase by 76%
+- id: N088
+  doc: fda_ticagrelor_MedR.pdf
+  kind: reworded
+  source_page: 3599
+  question: In PLATO, what proportion of surviving patients lacked a final visit with vital signs on ticagrelor versus clopidogrel?
+  needs:
+  - - all_of:
+      - (19.7% ticagrelor vs. 18.1% clopidogrel.)
+- id: N089
+  doc: fda_ticagrelor_ChemR.pdf
+  kind: reworded
+  source_page: 5352
+  question: What main assay technique did the applicant adopt for identification and quantity testing of the ticagrelor tablets?
+  needs:
+  - - all_of:
+      - specification is updated to use HPLC as the primary method for
+- id: N090
+  doc: fda_dapagliflozin_OtherR.pdf
+  kind: reworded
+  source_page: 7322
+  question: In the dapagliflozin fracture review, how many fracture events were seen across the dapagliflozin groups?
+  needs:
+  - - all_of:
+      - there were 50 events in the dapagliflozin groups
+- id: N091
+  doc: ema_xarelto_label.pdf
+  kind: reworded
+  source_page: 464
+  question: What colour and shape are the 2.5 mg Xarelto film-coated tablets?
+  needs:
+  - - all_of:
+      - light yellow, round, biconvex
+- id: N092
+  doc: fda_ticagrelor_MedR.pdf
+  kind: reworded
+  source_page: 3706
+  question: In the FDA ticagrelor aspirin-dose analysis, which index event group was slightly more likely to get the higher aspirin dose?
+  needs:
+  - - all_of:
+      - STEMI patients were slightly more likely to get ASA
+- id: N093
+  doc: fda_apixaban_MedR.pdf
+  kind: multi
+  source_page: 6313
+  question: Per the FDA's review of apixaban, how were imputed dispensing errors counted, and what share of subjects did the applicant estimate got a wrong study drug?
+  needs:
+  - - all_of:
+      - the number of dispensations minus the number of obtained
+  - - all_of:
+      - time during the study was 0.65 %
+- id: N094
+  doc: fda_apixaban_MedR.pdf
+  kind: multi
+  source_page: 6346
+  question: For apixaban's ARISTOTLE, what true bottle error rate did BMS believe applied, and what hazard ratio for all-cause death was found?
+  needs:
+  - - all_of:
+      - perhaps 0.1-0.2%
+  - - all_of:
+      - the HR was 0.89, with a 95% CI of 0.80 to 1.00 (p=0.0465)
+- id: N095
+  doc: fda_ticagrelor_MedR.pdf
+  kind: multi
+  source_page: 3785
+  question: For ticagrelor in PLATO, how many patients received ticagrelor in the safety exposure, and how many patients were enrolled with informed consent?
+  needs:
+  - - all_of:
+      - 9235 patients received ticagrelor
+  - - all_of:
+      - A total of 18,758 patients enrolled
+- id: N096
+  doc: fda_ticagrelor_MedR.pdf
+  kind: multi
+  source_page: 3963
+  question: What enrolment was planned for ticagrelor's PLATO, and what is ticagrelor's median Tmax after oral dosing?
+  needs:
+  - - all_of:
+      - planned enrollment was 16,000
+  - - all_of:
+      - Ticagrelor is rapidly absorbed with median Tmax of 1.5 hours
+- id: N097
+  doc: ema_xtandi_assess.pdf
+  kind: multi
+  source_page: 5879
+  question: For enzalutamide, what maximum tolerated daily dose was determined in the dose-escalation study, and how many AFFIRM patients on 160 mg had a seizure?
+  needs:
+  - - all_of:
+      - maximum tolerated dose was determined to be 240 mg/day
+  - - all_of:
+      - six patients (0.8%)
+- id: N098
+  doc: ema_keytruda_label.pdf
+  kind: multi
+  source_page: 8348
+  question: How many patients were randomised in pembrolizumab's KEYNOTE-407 squamous NSCLC study, and how many were enrolled in KEYNOTE-826 for cervical cancer?
+  needs:
+  - - all_of:
+      - A total of 559 patients were randomised.
+  - - all_of:
+      - enrolled 617 patients with persistent,
+- id: N099
+  doc: ema_forxiga_assess.pdf
+  kind: multi
+  source_page: 7506
+  question: For dapagliflozin, how many evaluable subjects per group were needed in study MB102014, and what weight change did glipizide patients with BMI 27 or above have?
+  needs:
+  - - all_of:
+      - 153 evaluable subjects were needed in each treatment group
+  - - all_of:
+      - a mean increase of 1.41 kg was observed in the glipizide group
+- id: N100
+  doc: ema_ozempic_assess.pdf
+  kind: multi
+  source_page: 6667
+  question: What is semaglutide's terminal half-life in monkey and human, and how common were injection site reactions compared with exenatide ER?
+  needs:
+  - - all_of:
+      - 51 h in the monkey and 148 h in human
+  - - all_of:
+      - comparison to exenatide ER (22.0%)

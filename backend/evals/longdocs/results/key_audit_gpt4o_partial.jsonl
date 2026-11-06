@@ -1,0 +1,78 @@
+{"id": "L001", "model": null, "verdict": "ok", "reason": "The key text is on the page shown and answers the question clearly."}
+{"id": "L003", "model": null, "verdict": "ok", "reason": "The key text is on the page shown and directly answers the question."}
+{"id": "L006", "model": null, "verdict": "ok", "reason": "The key text is on the page shown and answers the question clearly."}
+{"id": "L007", "model": null, "verdict": "ok", "reason": "The key text is on the page and directly answers the question with a clear and specific answer."}
+{"id": "L008", "model": null, "verdict": "ok", "reason": "The key text is on the page shown and answers the question with a clear and specific confidence interval for the treatment difference in SUSTAIN 2."}
+{"id": "L011", "model": null, "verdict": "ok", "reason": "The key text is on the page and answers the question clearly."}
+{"id": "L012", "model": null, "verdict": "ok", "reason": "The key text is on the page shown and directly answers the question about the minimum gap allowed between two doses."}
+{"id": "L013", "model": null, "verdict": "ok", "reason": "The key text is on the page and directly answers the question with specific IC50 values for MDV3100 and M2."}
+{"id": "L014", "model": null, "verdict": "ok", "reason": "The key text is on the page shown and answers the question clearly."}
+{"id": "L018", "model": null, "verdict": "ok", "reason": "The key text is on the page and answers the question with a clear and specific answer."}
+{"id": "L021", "model": null, "verdict": "ok", "reason": "The key text is on the page shown and directly answers the question."}
+{"id": "L022", "model": null, "verdict": "ok", "reason": "The key text is on the page and answers the question clearly."}
+{"id": "L025", "model": null, "verdict": "ok", "reason": "The key text is on the page shown and answers the question clearly."}
+{"id": "L027", "model": null, "verdict": "ok", "reason": "The key text is on the page shown and directly answers the question."}
+{"id": "L028", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page shown and answers the question clearly."}
+{"id": "L031", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page and answers the question clearly and uniquely."}
+{"id": "L034", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page shown and answers the question clearly."}
+{"id": "L035", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page and directly answers the question."}
+{"id": "L036", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page and directly answers the question."}
+{"id": "L038", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page shown and directly answers the question."}
+{"id": "L039", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page and directly answers the question."}
+{"id": "L041", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page shown and directly answers the question."}
+{"id": "L044", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page and directly answers the question."}
+{"id": "L046", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "L047", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "L048", "model": "gpt-4o-2024-11-20", "verdict": "does_not_answer", "reason": "The key text 'Health Insurance Portability and Accountability' is on the page but does not answer the question about why the patient was censored at randomization."}
+{"id": "L049", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page and directly answers the question."}
+{"id": "L050", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page shown and answers the question with a clear and specific answer."}
+{"id": "L052", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page and directly answers the question."}
+{"id": "L053", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page shown and directly answers the question."}
+{"id": "L055", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page shown and answers the question clearly."}
+{"id": "L056", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page shown and answers the question clearly."}
+{"id": "L057", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page and directly answers the question."}
+{"id": "L059", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page shown and directly answers the question."}
+{"id": "L061", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page shown and answers the question clearly."}
+{"id": "L062", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page shown and directly answers the question."}
+{"id": "L063", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "L064", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page shown and answers the question clearly."}
+{"id": "L066", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page and answers the question clearly."}
+{"id": "L067", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page shown and directly answers the question."}
+{"id": "L068", "model": "gpt-4o-2024-11-20", "verdict": "several_documents", "reason": "The key text is found in multiple documents, and the question does not specify which document it refers to."}
+{"id": "L069", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page and answers the question with a clear and specific answer."}
+{"id": "L070", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page and directly answers the question about the limitation in identifying postmenopausal women."}
+{"id": "L071", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page and directly answers the question."}
+{"id": "L072", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page and directly answers the question."}
+{"id": "L077", "model": "gpt-4o-2024-11-20", "verdict": "several_documents", "reason": "The key text is found in multiple documents, and the question does not specify which document it refers to."}
+{"id": "L080", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page and directly answers the question."}
+{"id": "L081", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page and answers the question clearly."}
+{"id": "L089", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page and directly answers the question about fracture rates in patients with normal kidney function after a year of dapagliflozin treatment."}
+{"id": "L090", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page and directly answers the question about the difference in the poly(A) tail pattern between early and later batches."}
+{"id": "L091", "model": "gpt-4o-2024-11-20", "verdict": "several_documents", "reason": "The key text for fact 1 is found in multiple documents, and the question does not specify which document it refers to."}
+{"id": "L092", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key strings are on the page shown and directly answer the question with clear and specific information."}
+{"id": "L094", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text '(0.99, 2.26)' is on the page and answers the question clearly."}
+{"id": "L095", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page and directly answers the question."}
+{"id": "L096", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page shown and answers the question clearly."}
+{"id": "L097", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page and answers the question clearly."}
+{"id": "L098", "model": "gpt-4o-2024-11-20", "verdict": "several_documents", "reason": "The key text is found in multiple documents, and the question does not specify which document it refers to."}
+{"id": "L099", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key texts are on the page shown and answer the question clearly."}
+{"id": "L100", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page shown and answers the question clearly."}
+{"id": "M001", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page shown and answers the question clearly."}
+{"id": "M002", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "M003", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "M004", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page shown and answers the question clearly."}
+{"id": "M005", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page shown and answers the question clearly."}
+{"id": "M006", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "M007", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page shown and directly answers the question about PSA response rates in the PREVAIL trial."}
+{"id": "M008", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page and directly answers the question."}
+{"id": "M009", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page shown and answers the question clearly."}
+{"id": "M010", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page and answers the question clearly."}
+{"id": "M011", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page and answers the question clearly."}
+{"id": "M012", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page shown and directly answers the question with the adjusted rate ratio for male diabetes patients versus male non-diabetes patients."}
+{"id": "M013", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page shown and answers the question clearly."}
+{"id": "M014", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page and answers the question about frequencies of volume depletion in patients aged 75 years and older."}
+{"id": "M015", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page shown and directly answers the question."}
+{"id": "M016", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page and answers the question clearly."}
+{"id": "M017", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page shown and answers the question clearly."}
+{"id": "M018", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page shown and answers the question clearly."}
+{"id": "M019", "model": "gpt-4o-2024-11-20", "verdict": "ok", "reason": "The key text is on the page shown and directly answers the question."}

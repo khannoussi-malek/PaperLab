@@ -1,0 +1,573 @@
+- id: L035
+  doc: ema_spikevax_label.pdf
+  kind: fact
+  source_page: 1348
+  question: How many micrograms of mRNA does one Spikevax JN.1 pre-filled syringe
+    contain?
+  needs:
+  - - all_of:
+      - (50 micrograms of SARS-CoV-2 JN.1 mRNA)
+- id: L095
+  doc: ema_xtandi_label.pdf
+  kind: fact
+  source_page: 1290
+  question: Which manufacturer is responsible for batch release of Xtandi?
+  needs:
+  - - all_of:
+      - Delpharm Meppel B.V.
+- id: L038
+  doc: fda_canagliflozin_PharmR.pdf
+  kind: fact
+  source_page: 10104
+  question: In the 2-year CD-1 mouse carcinogenicity study of canagliflozin, how did
+    exposure at 100 mg/kg compare with the AUC at the 300 mg clinical dose?
+  needs:
+  - - all_of:
+      - and female mice was 7 and 14x the AUC of 300 mg clinical dose
+- id: L064
+  doc: ema_mounjaro_assess.pdf
+  kind: fact
+  source_page: 6081
+  question: In the 26-week cynomolgus monkey study of tirzepatide, on which day and
+    in how many males was dehydration noted at 0.5 mg/kg?
+  needs:
+  - - all_of:
+      - Dehydration was noted by technical staff on Day 12 in five males
+- id: L096
+  doc: fda_vorapaxar_OtherR.pdf
+  kind: fact
+  source_page: 9923
+  question: What was the final inspection classification of the Merck Research Laboratory
+    in Summit, NJ for the vorapaxar bioequivalence study?
+  needs:
+  - - all_of:
+      - Merck Research Laboratory, Summit, NJ- VAI
+- id: L077
+  doc: ema_pradaxa_assess.pdf
+  kind: fact
+  source_page: 7609
+  question: Who was the CHMP rapporteur for the Pradaxa marketing authorisation application?
+  needs:
+  - - all_of:
+      - 'Rapporteur: Steffen Thirstrup'
+- id: L025
+  doc: fda_tirzepatide_OtherR.pdf
+  kind: fact
+  source_page: 4757
+  question: In the tirzepatide immunogenicity review, how many ADA-positive samples
+    were used in the clearance comparison of ADA-positive versus ADA-negative samples?
+  needs:
+  - - all_of:
+      - total of 3380 ADA+ sample data
+- id: L098
+  doc: ema_steglatro_label.pdf
+  kind: fact
+  source_page: 7025
+  question: What is the street address of the marketing authorisation holder of Steglatro?
+  needs:
+  - - all_of:
+      - Waarderweg 39
+- id: L063
+  doc: ema_rybelsus_assess.pdf
+  kind: fact
+  source_page: 1593
+  question: What half-life of calcitonin in rats did the EMA assessors cite to explain
+    the lack of clear calcitonin rise after 6 weeks of semaglutide?
+  needs:
+  - - all_of:
+      - in rats of 4 minutes, or a delayed effect
+- id: L070
+  doc: fda_dapagliflozin_OtherR.pdf
+  kind: fact
+  source_page: 7323
+  question: In the dapagliflozin fracture listing for women, what limitation was noted
+    about identifying postmenopausal women?
+  needs:
+  - - all_of:
+      - menopausal status was not captured in the dataset
+- id: L003
+  doc: fda_apixaban_MedR.pdf
+  kind: fact
+  source_page: 6429
+  question: In the FDA clinical review of apixaban, what was the actual medication
+    error rate according to the clinical database?
+  needs:
+  - - all_of:
+      - actual error rate was about 8% based on the clinical database
+- id: L072
+  doc: fda_semaglutide_PharmR.pdf
+  kind: fact
+  source_page: 8618
+  question: Which clinical signs were seen in all treated male and female rats in
+    the semaglutide 2-year carcinogenicity study?
+  needs:
+  - - all_of:
+      - thin appearance and hunched posture
+- id: L071
+  doc: fda_dabigatran_StatR.pdf
+  kind: fact
+  source_page: 5808
+  question: In the dabigatran rat carcinogenicity survival analysis, why is the Wilcoxon
+    test more sensitive than the log rank test to early mortality separation?
+  needs:
+  - - all_of:
+      - the Wilcoxon test weights events more
+- id: L031
+  doc: fda_semaglutide_oral_StatR.pdf
+  kind: fact
+  source_page: 7784
+  question: In the SNAC rat carcinogenicity study, how many high-dose males died,
+    per the sponsor's analysis, and what percentage was that?
+  needs:
+  - - all_of:
+      - 44 (61.1%) and 38 (52.8%) in vehicle control
+- id: L013
+  doc: ema_xtandi_assess.pdf
+  kind: fact
+  source_page: 5872
+  question: What IC50 values did MDV3100 (enzalutamide) and its metabolite M2 show
+    for inhibiting Pgp-mediated digoxin efflux?
+  needs:
+  - - all_of:
+      - inhibited digoxin efflux with an IC50 of 1.7 and 1.1
+- id: L055
+  doc: fda_canagliflozin_PharmR.pdf
+  kind: fact
+  source_page: 10015
+  question: In the canagliflozin plus metformin rat embryofetal development study,
+    which canagliflozin/metformin dose combinations in mg/kg were given?
+  needs:
+  - - all_of:
+      - JNJ/metformin dosages of 0/0, 10/300, 30/300, 60/300, 60/0, 0/300
+- id: L007
+  doc: fda_dapagliflozin_MedR.pdf
+  kind: fact
+  source_page: 2766
+  question: What hazard ratio point estimate did the first-cycle meta-analysis of
+    dapagliflozin give for the MACE-plus composite?
+  needs:
+  - - all_of:
+      - HR point estimate of this analysis was 0.67
+- id: L046
+  doc: fda_vorapaxar_StatR.pdf
+  kind: fact
+  source_page: 7941
+  question: How many subjects were randomized in the TRA 2P-TIMI 50 trial of vorapaxar?
+  needs:
+  - - all_of:
+      - 26,449 subjects (13,224 subjects receiving placebo
+- id: L080
+  doc: fda_ticagrelor_MedR.pdf
+  kind: fact
+  source_page: 3729
+  question: Why did the ticagrelor clinical reviewer not consider the mismatch between
+    initial persistent ST elevation and final STEMI a threat to the efficacy results?
+  needs:
+  - - all_of:
+      - close agreement in outcomes between the initial STE population
+- id: L097
+  doc: ema_lixiana_label.pdf
+  kind: fact
+  source_page: 576
+  question: Who holds the EU marketing authorisation for Lixiana?
+  needs:
+  - - all_of:
+      - Daiichi Sankyo Europe GmbH
+- id: L047
+  doc: fda_apixaban_MedR.pdf
+  kind: fact
+  source_page: 6488
+  question: In the AVERROES trial of apixaban, what p-value was reported for the trend
+    favoring apixaban on all-cause death?
+  needs:
+  - - all_of:
+      - apixaban for all-cause death (p=0.07)
+- id: L091
+  doc: fda_tirzepatide_OtherR.pdf
+  kind: multi
+  source_page: 4714
+  question: For tirzepatide, what fractions of the dose did the six fecal metabolites
+    account for, and why did the IRT consider a dedicated thorough QT study unnecessary
+    for peptides?
+  needs:
+  - - all_of:
+      - 6.8%, 3.3%, 2.9%, 1.0%, 0.6%, and 0.5% of the dose
+  - - all_of:
+      - comprised of naturally occurring amino acids have a low likelihood
+- id: L100
+  doc: fda_semaglutide_oral_StatR.pdf
+  kind: multi
+  source_page: 7761
+  question: In the oral semaglutide hypoglycemia event rate table for trial 4222,
+    what were the events per treatment-years for alert hypoglycemia and for clinically
+    significant hypoglycemia in the S14 arm?
+  needs:
+  - - all_of:
+      - (468/609)
+      - Table 21. Hypoglycemia Event Rate While on Randomized Treatment
+  - - all_of:
+      - (78/609)
+      - Clin Signif
+- id: L092
+  doc: ema_comirnaty_assess.pdf
+  kind: multi
+  source_page: 6882
+  question: For Comirnaty, what do the truncated mRNA fragment species predominantly
+    lack, and under which specific obligation should poly(A) tail length be added
+    to release testing?
+  needs:
+  - - all_of:
+      - but lack the poly(A) tail, supporting the hypothesis
+  - - all_of:
+      - in the frame of a specific obligation (SO2)
+- id: L099
+  doc: fda_dapagliflozin_OtherR.pdf
+  kind: multi
+  source_page: 7220
+  question: In the FDA's dapagliflozin and canagliflozin cancer review, what was the
+    data refresh date for the VigiBase search and for the FAERS generic search on
+    canagliflozin?
+  needs:
+  - - all_of:
+      - May 31, 2013
+      - VigiBase Data Mining Search Strategy
+  - - all_of:
+      - September 23, 2013
+      - Table 2.3. FAERS Data Mining Search Strategy
+- id: L078
+  doc: ema_forxiga_assess.pdf
+  kind: multi
+  source_page: 7573
+  question: For Forxiga (dapagliflozin), above what age did the EMA not recommend
+    starting therapy, and how often should renal function be monitored in patients
+    approaching an eGFR of 60?
+  needs:
+  - - all_of:
+      - therapy is not recommended in patients > 75 years of age
+  - - all_of:
+      - 2-4 times per year in patients approaching the limit of 60
+- id: L057
+  doc: ema_mounjaro_assess.pdf
+  kind: reworded
+  source_page: 6232
+  question: By how many beats per minute did resting pulse rate rise with the highest
+    tirzepatide dose in the phase 3 studies?
+  needs:
+  - - all_of:
+      - 'bpm and 15 mg: 5.7 bpm'
+- id: L053
+  doc: ema_wegovy_label.pdf
+  kind: reworded
+  source_page: 1003
+  question: If a patient on Wegovy misses an injection, up to how many days later
+    can they still take it?
+  needs:
+  - - all_of:
+      - it is 5 days or less since you should have used Wegovy
+- id: L068
+  doc: ema_wegovy_label.pdf
+  kind: reworded
+  source_page: 902
+  question: How closely does the amino acid sequence of semaglutide match human GLP-1?
+  needs:
+  - - all_of:
+      - 94% sequence homology to human GLP-1
+- id: L052
+  doc: fda_semaglutide_StatR.pdf
+  kind: reworded
+  source_page: 5452
+  question: How many adjudicated major cardiovascular events were needed before the
+    semaglutide cardiovascular outcomes trial SUSTAIN 6 could be stopped?
+  needs:
+  - - all_of:
+      - adjudicated primary composite outcome MACE were at least 122
+- id: L049
+  doc: fda_dapagliflozin_PharmR.pdf
+  kind: reworded
+  source_page: 5571
+  question: Why is dapagliflozin expected to lower blood sugar less well in people
+    with poor kidney function?
+  needs:
+  - - all_of:
+      - Because efficacy with dapagliflozin is tied to GFR
+- id: L048
+  doc: fda_dabigatran_MedR.pdf
+  kind: reworded
+  source_page: 9188
+  question: Why was one warfarin-treated patient who died in the dabigatran trial
+    counted as censored at randomization in the original submission?
+  needs:
+  - - all_of:
+      - Health Insurance Portability and Accountability
+- id: L067
+  doc: ema_praluent_label.pdf
+  kind: reworded
+  source_page: 6030
+  question: How long should a pre-filled alirocumab (Praluent) syringe sit at room
+    temperature before injecting?
+  needs:
+  - - all_of:
+      - warm up at room temperature for 30 to 40 minutes
+- id: L041
+  doc: fda_apixaban_PharmR.pdf
+  kind: reworded
+  source_page: 2488
+  question: In dogs given apixaban, how much was drug exposure over 24 hours reduced
+    by the largest dose of activated charcoal?
+  needs:
+  - - all_of:
+      - greatest reduction of apixaban AUC(0-24) was 45.7%
+- id: L012
+  doc: ema_wegovy_label.pdf
+  kind: reworded
+  source_page: 857
+  question: A patient on Wegovy wants to move their weekly injection to a different
+    day; what is the minimum gap allowed between two doses?
+  needs:
+  - - all_of:
+      - least 3 days (> 72 hours)
+- id: L090
+  doc: ema_comirnaty_assess.pdf
+  kind: reworded
+  source_page: 6868
+  question: How did the early-generation manufacturing batches of the Pfizer mRNA
+    vaccine active substance differ from the later process batches regarding the mRNA
+    tail?
+  needs:
+  - - all_of:
+      - somewhat different poly(A) tail pattern
+- id: L001
+  doc: ema_opdivo_label.pdf
+  kind: reworded
+  source_page: 4894
+  question: If a patient on nivolumab plus ipilimumab develops a severe blistering
+    skin and mucosal reaction such as Stevens-Johnson syndrome, what should be done
+    with the patient?
+  needs:
+  - - all_of:
+      - referred to a specialised unit
+- id: L034
+  doc: fda_semaglutide_ClinPharmR.pdf
+  kind: reworded
+  source_page: 730
+  question: In type 2 diabetics given 1 mg of subcutaneous semaglutide, over what
+    range does the steady-state apparent distribution volume fall?
+  needs:
+  - - all_of:
+      - range of 11.2-13.9 L
+- id: L044
+  doc: ema_imbruvica_label.pdf
+  kind: reworded
+  source_page: 4607
+  question: How much higher was ibrutinib exposure in people with severely impaired
+    liver function compared with those with normal liver function?
+  needs:
+  - - all_of:
+      - 9.8-fold increase in ibrutinib exposure (AUClast)
+- id: L089
+  doc: fda_dapagliflozin_OtherR.pdf
+  kind: reworded
+  source_page: 7327
+  question: In patients with normal kidney function, how much did fracture rates rise
+    with dapagliflozin after a year of treatment compared with placebo?
+  needs:
+  - - all_of:
+      - a 2-fold increase was seen (1.0% compared to placebo 0.4%)
+- id: L028
+  doc: fda_tirzepatide_OtherR.pdf
+  kind: reworded
+  source_page: 4738
+  question: For tirzepatide, how does the sponsor decide that a patient who had no
+    antibodies at baseline has developed antibodies on treatment?
+  needs:
+  - - all_of:
+      - at least one post-baseline status of ADA present
+- id: L061
+  doc: ema_xtandi_label.pdf
+  kind: reworded
+  source_page: 1235
+  question: For how long after the last dose must a man on Xtandi use a condom when
+    having sex with a pregnant partner?
+  needs:
+  - - all_of:
+      - during and for 3 months after treatment with enzalutamide
+- id: L027
+  doc: ema_invokana_label.pdf
+  kind: reworded
+  source_page: 8753
+  question: In the renal outcomes trial in diabetic kidney disease, how often did
+    lower limb amputation occur per 100 patient-years with canagliflozin 100 mg versus
+    placebo?
+  needs:
+  - - all_of:
+      - 1.2 vs 1.1 events per 100 patient-years
+- id: L011
+  doc: ema_brilique_label.pdf
+  kind: reworded
+  source_page: 9373
+  question: How can ticagrelor (Brilique) be given to a patient who cannot swallow
+    the tablets intact?
+  needs:
+  - - all_of:
+      - crushed to a fine powder
+- id: L059
+  doc: ema_spikevax_label.pdf
+  kind: reworded
+  source_page: 1453
+  question: How far apart should the two doses of Spikevax JN.1 be given to a previously
+    unvaccinated 2-year-old child?
+  needs:
+  - - all_of:
+      - Administer the second dose 28 days after
+- id: L021
+  doc: ema_rybelsus_assess.pdf
+  kind: reworded
+  source_page: 1609
+  question: When thyroid hormone replacement is taken together with Rybelsus tablets,
+    how much more of the thyroid drug is absorbed?
+  needs:
+  - - all_of:
+      - A 33% increase of levothyroxine exposure
+- id: L006
+  doc: fda_dapagliflozin_StatR.pdf
+  kind: reworded
+  source_page: 3283
+  question: In the Japanese phase 3 trial of dapagliflozin run at 30 centers, how
+    many patients received the SGLT2 inhibitor versus placebo?
+  needs:
+  - - all_of:
+      - randomized 174 subjects to dapagliflozin and 87 subjects to placebo
+- id: L036
+  doc: ema_lynparza_label.pdf
+  kind: table
+  source_page: 641
+  question: In the Lynparza metastatic breast cancer trial baseline table, how many
+    olaparib-arm patients (and what percent) had prior anthracycline and taxane treatment?
+  needs:
+  - - all_of:
+      - 204 (99.5)
+      - Previous anthracycline and taxane
+- id: L039
+  doc: ema_keytruda_label.pdf
+  kind: table
+  source_page: 8325
+  question: In KEYNOTE-001, what was the objective response rate in patients naive
+    to ipilimumab given pembrolizumab 2 mg/kg every 3 weeks?
+  needs:
+  - - all_of:
+      - 35% (22, 50)
+      - ORR % (95% CI)
+- id: L018
+  doc: fda_dabigatran_MedR.pdf
+  kind: table
+  source_page: 9041
+  question: How many patients, and what percentage, in the dabigatran 150 mg arm had
+    a history of stroke, TIA or systemic embolism at baseline?
+  needs:
+  - - all_of:
+      - 1358(22.4)
+      - History of stroke/TIA/SEE
+- id: L069
+  doc: fda_vorapaxar_StatR.pdf
+  kind: table
+  source_page: 7993
+  question: In the male mouse tumor table for vorapaxar, how many thymus metastatic
+    lymphomas were counted in each dose group, control to high dose?
+  needs:
+  - - all_of:
+      - THYMUS LYMPHOMA [M], metastatic
+      - 11 7 2 0 0.9994
+- id: L008
+  doc: fda_semaglutide_StatR.pdf
+  kind: table
+  source_page: 5505
+  question: In the in-trial MMRM analysis of HbA1c change, what was the 95% confidence
+    interval for the treatment difference between semaglutide 1.0 mg and sitagliptin
+    in SUSTAIN 2?
+  needs:
+  - - all_of:
+      - '[-0.92; -0.65]'
+      - 3626-SUSTAIN 2
+- id: L056
+  doc: fda_dapagliflozin_StatR.pdf
+  kind: table
+  source_page: 3301
+  question: In the random effects analysis of dapagliflozin versus comparators, what
+    was the incidence rate ratio for MACE in subjects with a history of cardiovascular
+    disease?
+  needs:
+  - - all_of:
+      - 0.35 (0.16, 0.77)
+      - Subjects with a history of CV disease
+- id: L022
+  doc: fda_semaglutide_StatR.pdf
+  kind: table
+  source_page: 5458
+  question: In SUSTAIN 6, what was the mean duration of diabetes in years for the
+    semaglutide arm?
+  needs:
+  - - all_of:
+      - 14.2 ± 8.2
+      - Duration of Diabetes, Mean ± SD, yrs
+- id: L050
+  doc: fda_ticagrelor_MedR.pdf
+  kind: table
+  source_page: 3589
+  question: In the reviewer's Cox regression for cardiovascular mortality through
+    day 30, what hazard ratio was estimated for ticagrelor?
+  needs:
+  - - all_of:
+      - 1.ticagrelor | 1.085404
+      - 'Table 4: Cox Regression for CV Mortality through Day 30'
+- id: L014
+  doc: ema_jardiance_assess.pdf
+  kind: table
+  source_page: 133
+  question: In the empagliflozin study that included a sitagliptin arm, what was the
+    adjusted mean difference to placebo in body weight after 24 weeks for empagliflozin
+    10 mg?
+  needs:
+  - - all_of:
+      - -1.93 (0.24)
+      - Adj. mean difference to
+- id: L066
+  doc: ema_stelara_label.pdf
+  kind: table
+  source_page: 1779
+  question: In psoriasis study 1 (PHOENIX 1), how many patients (and what percent)
+    on ustekinumab 45 mg achieved PASI 75 at week 12?
+  needs:
+  - - all_of:
+      - 171 (67%)a
+      - Summary of clinical response in psoriasis study 1 (PHOENIX 1)
+- id: L081
+  doc: ema_mounjaro_assess.pdf
+  kind: table
+  source_page: 6176
+  question: What was the 95% confidence interval of the placebo-adjusted percent change
+    in total cholesterol at 40 weeks for tirzepatide 5 mg?
+  needs:
+  - - all_of:
+      - (-12.28, -4.42)
+      - Total cholesterol
+- id: L094
+  doc: ema_mounjaro_assess.pdf
+  kind: table
+  source_page: 6165
+  question: In the Mounjaro versus insulin glargine study, what was the 95% CI of
+    the change difference from insulin glargine in the total DTSQc score at week 52
+    for tirzepatide 5 mg?
+  needs:
+  - - all_of:
+      - (0.99, 2.26)
+      - DTSQs and DTSQca
+- id: L062
+  doc: ema_keytruda_label.pdf
+  kind: table
+  source_page: 8411
+  question: In KEYNOTE-590, what was the objective response rate with pembrolizumab
+    plus chemotherapy in patients with PD-L1 CPS of 10 or more?
+  needs:
+  - - all_of:
+      - 51.1 (43.7, 58.5)
+      - Efficacy results for pembrolizumab plus chemotherapy in KEYNOTE-590

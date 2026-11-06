@@ -1,0 +1,385 @@
+- id: L084
+  doc: fda_vorapaxar_RiskR.pdf
+  kind: fact
+  source_page: 698
+  question: What incidence of moderate to severe bleeding with vorapaxar was cited
+    as supporting a favorable risk-benefit profile in the labeled population?
+  needs:
+  - - all_of:
+      - moderate to severe bleeding (3.2%) results in a favorable risk-benefit
+- id: L073
+  doc: fda_dabigatran_MedR.pdf
+  kind: fact
+  source_page: 9172
+  question: For the readjudication of 98 events in the dabigatran review, how many
+    events were not re-read as described?
+  needs:
+  - - all_of:
+      - 3 of the 98 events were re-read as described above
+- id: L019
+  doc: ema_steglatro_label.pdf
+  kind: fact
+  source_page: 6993
+  question: Below what blood glucose level has diabetic ketoacidosis presented atypically
+    in patients treated with ertugliflozin?
+  needs:
+  - - all_of:
+      - below 14 mmol/L (250 mg/dL)
+- id: L051
+  doc: fda_dabigatran_MedR.pdf
+  kind: fact
+  source_page: 9163
+  question: In the RE-LY protocol, what was to happen to dabigatran if a patient's
+    creatinine clearance fell below 30 mL/min?
+  needs:
+  - - all_of:
+      - dabigatran was to be held if CrCl fell to <30 mL/min
+- id: L010
+  doc: fda_semaglutide_oral_PharmR.pdf
+  kind: fact
+  source_page: 4325
+  question: What apparent Ki range was found for SNAC as a competitive inhibitor of
+    CYP3A4/5 in human liver microsomes?
+  needs:
+  - - all_of:
+      - with apparent Ki of 500-1000
+- id: L075
+  doc: ema_mounjaro_assess.pdf
+  kind: fact
+  source_page: 6121
+  question: In the placebo-controlled tirzepatide study with 5, 10 and 15 mg doses,
+    when were the maximal HbA1c reductions reached and how long were they maintained?
+  needs:
+  - - all_of:
+      - reached at around 24 weeks and were maintained through 40 weeks
+- id: L085
+  doc: fda_tirzepatide_OtherR.pdf
+  kind: fact
+  source_page: 4721
+  question: In the tirzepatide QT assessment, how many patients in the all-tirzepatide
+    group of the dose-comparison analysis exceeded the QTcF abnormality threshold?
+  needs:
+  - - all_of:
+      - 97 patients (2.08%) out of 4665 patients in the tirzepatide
+- id: L004
+  doc: ema_keytruda_assess.pdf
+  kind: fact
+  source_page: 5320
+  question: In the pembrolizumab melanoma studies PN001 and PN002, in how many hypophysitis
+    subjects were corticosteroids used?
+  needs:
+  - - all_of:
+      - manage hypophysitis in 9 out of 10 subjects
+- id: L060
+  doc: fda_dapagliflozin_StatR.pdf
+  kind: fact
+  source_page: 3467
+  question: In dapagliflozin study 2013, how did body weight change at week 24 compare
+    with placebo?
+  needs:
+  - - all_of:
+      - none of the DAPA arms were significantly different from
+- id: L030
+  doc: fda_apixaban_PharmR.pdf
+  kind: fact
+  source_page: 2564
+  question: In the apixaban mouse carcinogenicity study DN05068, how close were the
+    mean achieved doses to the intended doses?
+  needs:
+  - - all_of:
+      - achieved doses for the entire study were 104% to 106% of
+- id: L002
+  doc: fda_semaglutide_PharmR.pdf
+  kind: fact
+  source_page: 8588
+  question: In the 13-week SD rat study comparing semaglutide made by two manufacturing
+    processes, which pancreatic change was seen?
+  needs:
+  - - all_of:
+      - pancreas (acinar atrophy)
+- id: L083
+  doc: ema_venclyxto_label.pdf
+  kind: fact
+  source_page: 2422
+  question: In the non-randomised phase 1/2 study M14-358 in newly diagnosed AML,
+    how many patients received venetoclax with azacitidine and how many with decitabine?
+  needs:
+  - - all_of:
+      - azacitidine (n=84) or decitabine (n=31)
+- id: L058
+  doc: ema_ozempic_assess.pdf
+  kind: fact
+  source_page: 6777
+  question: What proportion of subjects tested positive for anti-semaglutide antibodies
+    in the cardiovascular outcomes trial?
+  needs:
+  - - all_of:
+      - anti-semaglutide antibodies was 1.9% in CVOT
+- id: L043
+  doc: fda_dapagliflozin_PharmR.pdf
+  kind: fact
+  source_page: 5606
+  question: What share of total radioactivity AUC in human plasma does dapagliflozin
+    3-O-glucuronide account for?
+  needs:
+  - - all_of:
+      - accounting for 42% of total radioactivity AUC
+- id: L024
+  doc: ema_opdivo_label.pdf
+  kind: multi
+  source_page: 4950
+  question: For Opdivo, what was the median event-free survival in patients with tumour
+    PD-L1 of 1% or more on nivolumab plus chemotherapy, and what was the median duration
+    of treatment with nivolumab plus ipilimumab in the advanced renal cell carcinoma
+    study?
+  needs:
+  - - all_of:
+      - median and 95% CI:46.55
+  - - all_of:
+      - The median duration of treatment was 7.9 months
+- id: L042
+  doc: ema_pradaxa_assess.pdf
+  kind: multi
+  source_page: 7629
+  question: For Pradaxa (dabigatran), what was the primary endpoint incidence in the
+    150 mg group of the supportive VTE-prevention study 1160.24, and what overall
+    mean percentage of INR measurements were below 2 in the warfarin arm in the FDA
+    clinical review?
+  needs:
+  - - all_of:
+      - 33.7% (30.1, 37.4) and in the enoxaparin group 25.3%
+  - - all_of:
+      - was ~22-23% and ~5%
+- id: L082
+  doc: ema_bydureon_assess.pdf
+  kind: multi
+  source_page: 9329
+  question: For Bydureon (exenatide once weekly), what proportion of exenatide QW
+    subjects completed the 26-week insulin glargine comparison, and what range of
+    subjects developed treatment-emergent antibodies?
+  needs:
+  - - all_of:
+      - A total of 89% of exenatide QW subjects
+  - - all_of:
+      - treated subjects (range 49% to 64%)
+- id: L032
+  doc: fda_semaglutide_oral_StatR.pdf
+  kind: reworded
+  source_page: 7785
+  question: What minimum number of affected treated animals was needed before a tumour
+    type received a full statistical analysis in the SNAC rat carcinogenicity study?
+  needs:
+  - - all_of:
+      - where at least two tumor bearing animals were
+- id: L033
+  doc: ema_trulicity_label.pdf
+  kind: reworded
+  source_page: 2284
+  question: When Trulicity is taken together with warfarin, by how long is the peak
+    INR response delayed?
+  needs:
+  - - all_of:
+      - (tINRmax) was delayed by
+- id: L040
+  doc: fda_semaglutide_PharmR.pdf
+  kind: reworded
+  source_page: 8699
+  question: Which body parts were malformed in rat embryos exposed to semaglutide,
+    according to the mechanistic investigation of the embryotoxicity?
+  needs:
+  - - all_of:
+      - (tail, digits and major blood vessels)
+- id: L093
+  doc: ema_venclyxto_label.pdf
+  kind: reworded
+  source_page: 2464
+  question: How late can a Venclyxto dose be taken before the missed dose should be
+    skipped for the day?
+  needs:
+  - - all_of:
+      - more than 8 hours since the time you usually take your dose
+- id: L005
+  doc: ema_imbruvica_label.pdf
+  kind: reworded
+  source_page: 4597
+  question: In previously untreated CLL patients given the ibrutinib plus venetoclax
+    combination, what was the hazard ratio for progression-free survival at about
+    five years of follow-up?
+  needs:
+  - - all_of:
+      - PFS hazard ratio was 0.267
+- id: L037
+  doc: ema_rybelsus_label.pdf
+  kind: reworded
+  source_page: 7688
+  question: When was the semaglutide tablet for diabetes (Rybelsus) first authorised
+    in the EU?
+  needs:
+  - - all_of:
+      - 'Date of first authorisation: 03 April 2020'
+- id: L065
+  doc: ema_steglatro_label.pdf
+  kind: reworded
+  source_page: 7032
+  question: In the Steglatro patient leaflet, which side effect is listed as very
+    common?
+  needs:
+  - - all_of:
+      - vaginal yeast infection (thrush)
+- id: L054
+  doc: ema_mounjaro_assess.pdf
+  kind: reworded
+  source_page: 6203
+  question: What range of tirzepatide patients in the phase 3 diabetes studies reached
+    an HbA1c below 7.0% at the primary endpoint?
+  needs:
+  - - all_of:
+      - Between 75.1% and 89.6% of patients taking tirzepatide
+- id: L074
+  doc: ema_imbruvica_label.pdf
+  kind: reworded
+  source_page: 4568
+  question: What do the 280 mg Imbruvica tablets look like in terms of colour, shape
+    and size?
+  needs:
+  - - all_of:
+      - Purple oblong tablets (15 mm in length and 7 mm in width)
+- id: L076
+  doc: fda_canagliflozin_OtherR.pdf
+  kind: reworded
+  source_page: 9602
+  question: In diabetic patients with moderate kidney impairment, which canagliflozin
+    dose did the FDA advisers think might be safer for the kidneys given the eGFR
+    drops seen?
+  needs:
+  - - all_of:
+      - it is reasonable to think that the 100 mg dose might be safer
+- id: L020
+  doc: ema_mounjaro_assess.pdf
+  kind: reworded
+  source_page: 6113
+  question: What was the lowest BMI at screening allowed in the two tirzepatide phase
+    3 diabetes studies that enrolled Japanese patients?
+  needs:
+  - - all_of:
+      - allowed BMI as low as 23 kg/m2
+- id: L087
+  doc: fda_ticagrelor_MedR.pdf
+  kind: reworded
+  source_page: 4104
+  question: In the ticagrelor NDA clinical filing checklist, how was the requirement
+    for a pediatric assessment handled?
+  needs:
+  - - all_of:
+      - Waiver submitted
+- id: L023
+  doc: ema_spikevax_label.pdf
+  kind: reworded
+  source_page: 1363
+  question: Among 12 to 17 year olds given the Moderna mRNA vaccine versus saline,
+    how many symptomatic COVID-19 cases occurred in the vaccinated group?
+  needs:
+  - - all_of:
+      - zero symptomatic COVID-19 cases in the Spikevax
+- id: L016
+  doc: fda_apixaban_PharmR.pdf
+  kind: reworded
+  source_page: 2510
+  question: What proportion of high-dose juvenile male rats given apixaban showed
+    damage to the sperm-producing tubules of the testes at the end of dosing?
+  needs:
+  - - all_of:
+      - incidence of testicular degeneration was 33%
+- id: L088
+  doc: fda_apixaban_MedR.pdf
+  kind: table
+  source_page: 6531
+  question: In apixaban study CV185067, how many warfarin-arm patients (and what percent)
+    had any bleeding event?
+  needs:
+  - - all_of:
+      - 13 (17.3)
+      - Table 60 Safety and Efficacy Summary of Study CV185067
+- id: L009
+  doc: fda_dapagliflozin_MedR.pdf
+  kind: table
+  source_page: 2841
+  question: In the pooled phase 2b/3 analysis of male subjects on dapagliflozin, what
+    was the incidence rate ratio for bladder cancer versus control, with its confidence
+    interval?
+  needs:
+  - - all_of:
+      - 5.38 (0.71, 242.52)
+      - incidence rate ratio vs control
+- id: L026
+  doc: fda_ticagrelor_MedR.pdf
+  kind: table
+  source_page: 3606
+  question: In the reviewer's Cox regression of non-CABG-related major or worse bleeding
+    through day 30, what was the hazard ratio for ticagrelor?
+  needs:
+  - - all_of:
+      - 1.ticagrelor | 1.1497
+      - 'Table 18: Cox Regression for Non-CABG-Related Major or Worse Bleeding'
+- id: L086
+  doc: fda_ticagrelor_StatR.pdf
+  kind: table
+  source_page: 3210
+  question: In the ticagrelor statistical review's analysis of components by region,
+    what was the hazard ratio for the composite of CV death, MI and stroke in the
+    US?
+  needs:
+  - - all_of:
+      - 1.27 (0.92,1.75)
+      - Table 1 Analyses on components by region
+- id: L079
+  doc: fda_vorapaxar_StatR.pdf
+  kind: table
+  source_page: 7971
+  question: In the TRACER study, what hazard ratio (with 95% CI) was found for the
+    primary efficacy endpoint with vorapaxar versus placebo?
+  needs:
+  - - all_of:
+      - 0.92 (0.85-1.01)
+      - Results for Primary and Key Secondary Endpoints for the Overall ITT
+- id: L045
+  doc: fda_dapagliflozin_StatR.pdf
+  kind: table
+  source_page: 3542
+  question: In the dapagliflozin add-on therapy trials, what was the stratified hazard
+    ratio (with 95% CI) for the primary composite cardiovascular endpoint?
+  needs:
+  - - all_of:
+      - (0.36, 1.15)
+      - 'Table 9: Meta-Analysis Results of the Primary Composite Endpoint'
+- id: L029
+  doc: ema_venclyxto_assess.pdf
+  kind: table
+  source_page: 7144
+  question: In the Venclyxto adverse drug reaction table for relapsed or refractory
+    CLL, how many patients (and what percentage) on venetoclax at any dose had an
+    upper respiratory tract infection?
+  needs:
+  - - all_of:
+      - 94 (27.2)
+      - Upper respiratory tract
+- id: L017
+  doc: fda_ticagrelor_MedR.pdf
+  kind: table
+  source_page: 3847
+  question: In the sponsor's PLATO adverse event table, how many patients on ticagrelor
+    90 mg twice daily reported dyspnea, and what percentage was that?
+  needs:
+  - - all_of:
+      - 1104 (12.0%)
+      - 'Table 35: Sponsor analysis: PLATO: Common AEs'
+- id: L015
+  doc: ema_lixiana_label.pdf
+  kind: table
+  source_page: 553
+  question: In ENGAGE AF-TIMI 48, what were the annual event rates of intracranial
+    haemorrhage on edoxaban 60 mg versus warfarin?
+  needs:
+  - - all_of:
+      - ICH (0.39%, and 0.85% per year
+      - 'Table 6: Bleeding events in ENGAGE AF-TIMI 48 study'

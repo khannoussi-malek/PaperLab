@@ -1,0 +1,25 @@
+round 1
+cap 8192 seconds 73.8 peak GB 6.58
+round 1
+cap 2048 seconds 52.6 peak GB 2.65
+round 1
+cap 1024 seconds 39.5 peak GB 1.36
+round 1
+cap 512 seconds 23.2 peak GB 1.04
+round 2
+cap 8192 seconds 71.8 peak GB 6.42
+round 2
+cap 2048 seconds 53.2 peak GB 2.65
+round 2
+cap 1024 seconds 39.8 peak GB 1.36
+round 2
+cap 512 seconds 23.8 peak GB 1.04
+round 3
+cap 8192 seconds 72.5 peak GB 6.32
+round 3
+cap 2048 seconds 52.5 peak GB 2.65
+round 3
+cap 1024 seconds 39.1 peak GB 1.36
+round 3
+cap 512 seconds 23.3 peak GB 1.06
+S10_DONE

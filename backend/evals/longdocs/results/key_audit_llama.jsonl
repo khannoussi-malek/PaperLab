@@ -1,0 +1,260 @@
+{"id": "L001", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about Stevens-Johnson syndrome."}
+{"id": "L003", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "L006", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "L007", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "L008", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is on the page and answers the question."}
+{"id": "L011", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "L012", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is on the page and answers the question."}
+{"id": "L013", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about IC50 values for MDV3100 and M2."}
+{"id": "L014", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is on the page and answers the question."}
+{"id": "L018", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "L021", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is found on the page and answers the question."}
+{"id": "L022", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "L025", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "L027", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is found on the page and answers the question."}
+{"id": "L028", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is on the page and clearly explains how the sponsor decides a patient has developed antibodies on treatment."}
+{"id": "L031", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "does_not_answer", "reason": "The key string does not match the question about high-dose males."}
+{"id": "L034", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "L035", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "L036", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "L038", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about exposure at 100 mg/kg compared to the AUC at the 300 mg clinical dose."}
+{"id": "L039", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is found on the page and answers the question."}
+{"id": "L041", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "L044", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "L046", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "L047", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is on the page and answers the question."}
+{"id": "L048", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "L049", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and explains why dapagliflozin is expected to lower blood sugar less well in people with poor kidney function."}
+{"id": "L050", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about the hazard ratio for ticagrelor."}
+{"id": "L052", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is found on the page and answers the question."}
+{"id": "L053", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "L055", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "L056", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "L057", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question about the increase in resting pulse rate with the highest tirzepatide dose."}
+{"id": "L059", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question for a 2-year-old child."}
+{"id": "L061", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "L062", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "L063", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "L064", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "L066", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "L067", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "L068", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "several_documents", "reason": "The key string is also found in other documents."}
+{"id": "L069", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about thymus metastatic lymphomas in each dose group."}
+{"id": "L070", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question about the limitation in identifying postmenopausal women."}
+{"id": "L071", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "L072", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is on the page and answers the question."}
+{"id": "L077", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "several_documents", "reason": "The key string is also found in other documents ema_efient_assess.pdf and ema_victoza_assess.pdf."}
+{"id": "L078", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key strings are found on the page shown and answer the question."}
+{"id": "L080", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about the clinical reviewer's consideration of the mismatch between initial persistent ST elevation and final STEMI."}
+{"id": "L081", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is on the page and answers the question."}
+{"id": "L089", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "L090", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about the difference in mRNA tail pattern between early and later process batches."}
+{"id": "L091", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key strings are found on the page shown and answer the question."}
+{"id": "L092", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "L094", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is on the page and answers the question."}
+{"id": "L095", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "L096", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "L097", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "L098", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "several_documents", "reason": "Key string is also found in other documents"}
+{"id": "L099", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "L100", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "M001", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "M002", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "M003", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "M004", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "M005", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key strings are found on the page and answer the question about the number of vaccine groups and total participants in phase 1."}
+{"id": "M006", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "M007", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "M008", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "M009", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "M010", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "M011", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "M012", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is on the page and answers the question."}
+{"id": "M013", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about the Wegovy 7.2 mg pre-filled pen contents."}
+{"id": "M014", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question about volume depletion frequencies in patients aged 75 years and older on placebo and empagliflozin 25 mg."}
+{"id": "M015", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "M016", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "M017", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "M018", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "M019", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "M020", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "M021", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "M022", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "M023", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about the number of adults planned for randomisation and the number randomised to oral semaglutide 14 mg."}
+{"id": "M024", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question about the number of full scaled batches supporting the stability data for ticagrelor."}
+{"id": "M025", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is on the page and answers the question."}
+{"id": "M026", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "M027", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "M028", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "M029", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "M030", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "M031", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "M032", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "M033", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about pack sizes for the Wegovy 2.4 mg FlexTouch pre-filled pen."}
+{"id": "M034", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "M035", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question about the number of subjects in each treatment arm."}
+{"id": "M036", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "M037", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "M038", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is found on the page and answers the question."}
+{"id": "M039", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is found on the page and answers the question."}
+{"id": "M040", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "M041", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "M042", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "M043", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "M044", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "M045", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "M046", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "M047", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "M048", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "M049", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about dabigatran etexilate absorption."}
+{"id": "M050", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "M051", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "M052", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "M053", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "M054", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about the percentage of obese participants in the safety population."}
+{"id": "M055", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question about a serious Tagrisso side effect involving bone marrow failure and its warning signs."}
+{"id": "M056", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about stereocentres and commercial crystal form."}
+{"id": "M057", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about body weight fall at week 26 with the 7 mg and 14 mg doses of oral semaglutide."}
+{"id": "M058", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about male patients using a condom after the last dose of Lynparza."}
+{"id": "M059", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "M060", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is on the page and answers the question."}
+{"id": "M061", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "M062", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "M063", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "M064", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "M065", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "M066", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is on the page and answers the question."}
+{"id": "M067", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "several_documents", "reason": "The key string 'Contains lactose' is found in multiple documents."}
+{"id": "M068", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "M069", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "M070", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is found on the page and answers the question."}
+{"id": "M071", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is found on the page and answers the question."}
+{"id": "M072", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "M073", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is on the page and answers the question."}
+{"id": "M074", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "M075", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is on the page and answers the question."}
+{"id": "M076", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is on the page and answers the question."}
+{"id": "M077", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is on the page and answers the question."}
+{"id": "M078", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "M079", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "M080", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "M081", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "M082", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "M083", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "M084", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is on the page and answers the question."}
+{"id": "M085", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is found on the page and answers the question."}
+{"id": "M086", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is on the page and answers the question."}
+{"id": "M087", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is found on the page and answers the question."}
+{"id": "M088", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about median overall survival with pembrolizumab monotherapy in KEYNOTE-048 with CPS 20 or higher."}
+{"id": "M089", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about ticagrelor patients discontinuing for dyspnea."}
+{"id": "M090", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is on the page and answers the question."}
+{"id": "M091", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about the 12-month PFS estimate in patients who failed ibrutinib."}
+{"id": "M092", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about trend and high-dose p-values for testicular Leydig cell adenoma."}
+{"id": "M093", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key strings are found on the respective pages and answer the question."}
+{"id": "M094", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key strings are found on the respective pages and answer the question."}
+{"id": "M095", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "Menorrhagia is reported as very common in women < 55 years, and epistaxis and gastrointestinal tract haemorrhage are the most commonly reported bleedings overall."}
+{"id": "M096", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key strings are found on the respective pages and answer the question."}
+{"id": "M097", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "M098", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key strings are found on the page and answer the question about venous thromboembolism risk and coumadin exposure embryopathy."}
+{"id": "M099", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "M100", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "N001", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "N002", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is on the page and answers the question."}
+{"id": "N003", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "N004", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "N005", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "N006", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "N007", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "N008", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "N009", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "N010", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is on the page and answers the question."}
+{"id": "N011", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "N012", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "N013", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "N014", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "N015", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is on the page and answers the question."}
+{"id": "N016", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is on the page and answers the question."}
+{"id": "N017", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text 'Dapa 10mg 141' is on the page and answers the question about the number of patients randomized to dapagliflozin 10 mg in study MB102030."}
+{"id": "N018", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "N019", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "N020", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about the PFS hazard ratio for pembrolizumab plus axitinib versus sunitinib in KEYNOTE-426."}
+{"id": "N021", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "N022", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "N023", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "wrong_page", "reason": "The key string is not found on the page shown."}
+{"id": "N024", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "N025", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "N026", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "N027", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "N028", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about the HbA1c treatment effect difference between Hispanic and non-Hispanic subjects in Trial 3623."}
+{"id": "N029", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "N030", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "N031", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "N032", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "N033", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is found on the page and answers the question."}
+{"id": "N034", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "N035", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "N036", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "N037", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "N038", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "N039", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "N040", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "N041", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "N042", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about patient randomisation in the KEYNOTE-054 study."}
+{"id": "N043", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "N044", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about the rivaroxaban content in the Xarelto granules bottle for children under 4 kg."}
+{"id": "N045", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "N046", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "N047", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about total known deaths in the ticagrelor 90 mg bd arm."}
+{"id": "N048", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "N049", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "N050", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about the hazard ratio for all-cause death with apixaban versus warfarin in ARISTOTLE."}
+{"id": "N051", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "N052", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "N053", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "N054", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "N055", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "N056", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about the number of patients enrolled in KEYNOTE-826."}
+{"id": "N057", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about the number of evaluable subjects per group needed for the study."}
+{"id": "N058", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "N059", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about tirzepatide's effect on muscle glucose uptake compared to semaglutide's."}
+{"id": "N060", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is on the page and answers the question."}
+{"id": "N061", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is on the page and answers the question about the dose-limiting ceiling for venetoclax."}
+{"id": "N062", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about who is affected more often by inflammation of the heart muscle after the Spikevax COVID-19 vaccine."}
+{"id": "N063", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "does_not_answer", "reason": "The key text is on the page but the percentage in the key string does not match the page."}
+{"id": "N064", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "several_documents", "reason": "Key text is also found in other documents, such as ema_xtandi_label.pdf."}
+{"id": "N065", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "N066", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "wrong_page", "reason": "The key string is not found on the page shown."}
+{"id": "N067", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "N068", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "N069", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is found on the page and directly answers the question."}
+{"id": "N070", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "N071", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "wrong_page", "reason": "The key string is not on the page shown."}
+{"id": "N072", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "N073", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is on the page shown and answers the question."}
+{"id": "N074", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "N075", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and indicates SNAC did not cause chromosomal damage."}
+{"id": "N076", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about apixaban reaching rabbit fetuses."}
+{"id": "N077", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "N078", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key strings 'blurred vision' and 'bleeding in the eye' are found on the page and answer the question about uncommon side effects of ibrutinib affecting the eyes."}
+{"id": "N079", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key strings are on the page and answer the question about median overall survival with olaparib versus placebo in the SOLO2 trial."}
+{"id": "N080", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "N081", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is found on the page and answers the question."}
+{"id": "N082", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about body weight change with glipizide in patients with BMI 27 or above."}
+{"id": "N083", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "N084", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about injection site reactions with semaglutide compared to exenatide ER."}
+{"id": "N085", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "N086", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "N087", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "N088", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "N089", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "N090", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "N091", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "N092", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "N093", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "N094", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key strings are found on the pages shown and answer the question."}
+{"id": "N095", "model": null, "verdict": "no_verdict", "reason": "failed twice"}
+{"id": "N096", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "N097", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key strings are found on the respective pages and answer the question."}
+{"id": "N098", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key strings are found on the respective pages and answer the question."}
+{"id": "N099", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "N100", "model": null, "verdict": "no_verdict", "reason": "failed twice"}

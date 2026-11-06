@@ -1,0 +1,399 @@
+- id: S070
+  doc: 7d28d1f7-3452-4a3a-8d04-438ddcacf62f.pdf
+  kind: fact
+  source_page: 33
+  question: In the systematic mapping of creativity in software engineering, which
+    techniques were found to be the most widely adopted for inducing creativity?
+  needs:
+  - - all_of:
+      - Brainstorming, Collaborative thinking and knowledge sharing were
+- id: S027
+  doc: 635562aa-2e09-4676-90b4-04f29fa9424e.pdf
+  kind: fact
+  source_page: 9
+  question: In the Musical Metaverse study, how many participants doubted that it
+    could realistically substitute for physical performance?
+  needs:
+  - - all_of:
+      - Six participants (P3, P7, P8, P12,
+- id: S028
+  doc: 3aad9c61-05ac-4e03-9bb6-aff873a127f4.pdf
+  kind: fact
+  source_page: 44
+  question: In the registered-report meta-analysis of team diversity, what F-test
+    result showed that average correlation differed between diversity domains?
+  needs:
+  - - all_of:
+      - differed significantly between diversity domains, F(2, 2635) = 5.84
+- id: S035
+  doc: f7f9141a-1059-4f66-bdf8-80c98a98821b.pdf
+  kind: fact
+  source_page: 16
+  question: In the study of AI-induced frustration with heart rate variability, how
+    many females and males made up the sample?
+  needs:
+  - - all_of:
+      - 51 females and only 7 males
+- id: S092
+  doc: da09d844-3a67-4d2e-9b6d-64f1602c0bda.pdf
+  kind: fact
+  source_page: 15
+  question: In the Human Creativity Benchmark survey of creative professionals, how
+    many of the 50 respondents gave a mixed sentiment on AI's role in the future of
+    creative work?
+  needs:
+  - - all_of:
+      - most common at 14 responses, closely followed by Positive (13).
+- id: S057
+  doc: 61f0358a-3d67-41f6-9c33-e9d4618e4399.pdf
+  kind: fact
+  source_page: 2
+  question: In the group-aware reinforcement learning paper on output diversity, which
+    model prefers Germany when asked to select one item from a list, and with what
+    frequency?
+  needs:
+  - - all_of:
+      - prefers “Germany” (82%)
+- id: S086
+  doc: fd9c9243-1c5f-4f76-9f4e-7e0de32275b5.pdf
+  kind: fact
+  source_page: 19
+  question: In the review of programming creativity in computer science students,
+    how does it explain why only a small minority excel?
+  needs:
+  - - all_of:
+      - The concentration of programming creativity among a small minority
+- id: S096
+  doc: a2eb54fd-ac8d-4257-ac7e-6163e2cef3ea.pdf
+  kind: fact
+  source_page: 2
+  question: In the related work of the human-AI collaborative story generation paper,
+    what did Osone and colleagues find about novice versus expert Japanese novelists
+    using AI?
+  needs:
+  - - all_of:
+      - novice writers benefited from model suggestions,
+- id: S007
+  doc: 5ed62969-fb2d-4939-a023-d4025f9b4081.pdf
+  kind: fact
+  source_page: 30
+  question: In the study on measuring originality in divergent thinking with text-mining
+    systems, what corpus was Word2Vec trained on?
+  needs:
+  - - all_of:
+      - was trained on a corpus of 100 billion words scraped from the news-
+- id: S003
+  doc: 156ec77c-bf81-4b3f-b7b1-3c8466783a79.pdf
+  kind: fact
+  source_page: 1
+  question: In the ex ante evaluation of AI-induced idea diversity collapse, what
+    does a human-relative diversity ratio of at least one mean?
+  needs:
+  - - all_of:
+      - is the no-excess-crowding parity condition and connect
+- id: S049
+  doc: 30e7345e-b9ad-440e-9d41-044f7bb2a333.pdf
+  kind: fact
+  source_page: 2
+  question: In the framework for modeling interaction in human-AI co-creative systems,
+    how many co-creative systems were coded to evaluate it?
+  needs:
+  - - all_of:
+      - a dataset of 92 co-creative systems
+- id: S062
+  doc: 0f1c9a23-8321-4d10-8eed-4d73276b2b94.pdf
+  kind: fact
+  source_page: 17
+  question: In the SciMON scientific inspiration paper, which encoder does the BERTscore
+    automatic evaluation use?
+  needs:
+  - - all_of:
+      - BERT denotes BERTscore with SciBERT
+- id: S078
+  doc: 42c6f312-5bbb-4c45-9cff-7ea76afa1ad4.pdf
+  kind: fact
+  source_page: 3
+  question: In the study showing LLMs are homogeneously creative, how many human participants
+    and how many LLMs were compared?
+  needs:
+  - - all_of:
+      - pants and 22 LLMs to three standard creativity tasks
+- id: S099
+  doc: c9c56fbc-25ea-4b37-b70f-4cd0bea95d51.pdf
+  kind: fact
+  source_page: 7
+  question: In the min-p sampling paper, how many grade school math word problems
+    does the GSM8K CoT dataset comprise?
+  needs:
+  - - all_of:
+      - The GSM8K CoT dataset comprises 8,500 grade school math word problems
+- id: S054
+  doc: 16edeaab-9889-4c07-a083-738c37c969f2.pdf
+  kind: multi
+  source_page: 16
+  question: In the study of human diversity versus LLMs in collective creativity with
+    metaphors, how many writers were recruited via Prolific, and how many metaphors
+    did each evaluator rate?
+  needs:
+  - - all_of:
+      - ultimately recruited 644 writers via Prolific between
+  - - all_of:
+      - 'Each evaluator rated 24 metaphors: six per scenario'
+- id: S065
+  doc: d66a5e85-2b68-4189-8817-da738d63d2a0.pdf
+  kind: multi
+  source_page: 4
+  question: In the work on language of thought and output diversity, which languages
+    sit closer to English in the model's thinking space, and at what temperature does
+    plain English sampling match mixed-language sampling at temperature 1.0?
+  needs:
+  - - all_of:
+      - Some languages (e.g., zh, fr, es, de) con-
+  - - all_of:
+      - English sampling at temperature 2.0.
+- id: S077
+  doc: 48236bd6-6a8b-4162-8bf6-1ec39842df62.pdf
+  kind: multi
+  source_page: 4
+  question: In the meta-analysis of five decades of creativity training studies, what
+    kind of evidence did the authors find about publication bias, and how many studies
+    and effect-size estimates were in the final sample?
+  needs:
+  - - all_of:
+      - converging evidence consistent with publication bias
+  - - all_of:
+      - 169 studies and 844 effect size estimates
+- id: S022
+  doc: 3aad9c61-05ac-4e03-9bb6-aff873a127f4.pdf
+  kind: multi
+  source_page: 55
+  question: In the registered-report meta-analysis of team diversity and performance,
+    which diversity index was the most used across effect sizes, and what is the hypothesis
+    about authority differentiation?
+  needs:
+  - - all_of:
+      - most used measure was the Blau index
+  - - all_of:
+      - Diversity has a more positive link to performance when the team is low
+- id: S032
+  doc: 9c57f7d7-5e62-49e4-acc9-b5a9ac84d979.pdf
+  kind: reworded
+  source_page: 55
+  question: In the survey of LLMs for scientific idea generation, which approach is
+    named as an alternative that predicts several tokens jointly to reduce the myopia
+    of autoregressive decoding?
+  needs:
+  - - all_of:
+      - Roll the Dice and Look Before You Leap
+- id: S045
+  doc: 268f0b72-2d34-420d-aa8d-4b3f0936f233.pdf
+  kind: reworded
+  source_page: 20
+  question: Which study in the overview table compared models with a very large human
+    sample and found models stronger on semantic distance but people stronger on storytelling
+    integration?
+  needs:
+  - - all_of:
+      - GPT-4 outperformed humans
+      - on DAT, but humans had higher
+- id: S013
+  doc: 156ec77c-bf81-4b3f-b7b1-3c8466783a79.pdf
+  kind: reworded
+  source_page: 1
+  question: Which creative tasks were used to test whether frontier LLMs fall below
+    parity in the population-level crowding framework?
+  needs:
+  - - all_of:
+      - Across short stories, marketing slogans,
+- id: S066
+  doc: b3bd98aa-525c-4e05-9dd9-1dace3ebe1c5.pdf
+  kind: reworded
+  source_page: 48
+  question: What share of effects were statistically significant in the meta-analysis
+    of creativity enhancement for adults, and why does the author argue it suggests
+    limited publication bias?
+  needs:
+  - - all_of:
+      - Only 64 out of 146 effects reached statistical
+      - significance at p < .05 (44%)
+- id: S041
+  doc: d3dd9b6b-459d-4450-bd00-6e6fa893783d.pdf
+  kind: reworded
+  source_page: 18
+  question: In the benchmark of creativity in foundation models, why did a creativity-boosting
+    instruction cause a reasoning model to fail a convergent coding problem?
+  needs:
+  - - all_of:
+      - The creative instruction biases QwQ-32B towards non-
+- id: S004
+  doc: ae655c90-00e5-4258-8ed8-0064921d8030.pdf
+  kind: reworded
+  source_page: 3
+  question: Why can studies that treat culture as a set of external variables not
+    establish that culture causes creativity?
+  needs:
+  - - all_of:
+      - This type of research is typically correlational because
+- id: S046
+  doc: 03c379ab-d0e0-4cf6-be80-8a5d0313dddc.pdf
+  kind: reworded
+  source_page: 5
+  question: In that ideation study, how much creative responsibility did participants
+    assign to themselves when working with the chatbot, as a percentage?
+  needs:
+  - - all_of:
+      - the tool) for ideas generated while using ChatGPT (M =48.17%, SD
+- id: S005
+  doc: 5f057dac-6a31-474c-b543-f3c0f6f19122.pdf
+  kind: reworded
+  source_page: 3
+  question: In the paper integrating design thinking and creativity techniques into
+    software requirements elicitation, into which three phases are design projects
+    divided?
+  needs:
+  - - all_of:
+      - Inspiração, Ideação e Implementação
+- id: S098
+  doc: ddad2788-d050-430e-8188-05d869274f37.pdf
+  kind: reworded
+  source_page: 11
+  question: In the chapter on machine learning as a creative musical tool, which application
+    is cited as an example of tuning a general model with one user's data to cope
+    with small datasets?
+  needs:
+  - - all_of:
+      - in their work building personalisable audio equalisers
+- id: S012
+  doc: eee51ef3-7020-44df-bbea-f1ca4b9c81f7.pdf
+  kind: reworded
+  source_page: 22
+  question: In the survey of knowledge workers on generative AI and critical thinking,
+    which things were coded as motivation barriers that discourage critical thinking?
+  needs:
+  - - all_of:
+      - '- lack of time'
+      - '- not part of their job responsibilities'
+- id: S009
+  doc: bb5c8be5-7146-421a-a2ee-fd21f7ed52b9.pdf
+  kind: reworded
+  source_page: 21
+  question: In the empirical creativity criteria applied to a concept blending system,
+    how was typicality of an artefact computed automatically?
+  needs:
+  - - all_of:
+      - Typicality is measured by closeness to I (i.e. the KB
+      - using an edit-distance.
+- id: S010
+  doc: 8388866f-0ca6-40ac-ba9a-ccc28681d604.pdf
+  kind: reworded
+  source_page: 5
+  question: In the review of deep learning for music composition, how does the combination
+    of instruments differ from the assignment of melodies and accompaniment to them?
+  needs:
+  - - all_of:
+      - Instrumentation is related to the combination of musical instruments
+      - Orchestration refers to the assignment of melodies and accompaniment
+- id: S023
+  doc: 147f1f21-6f44-4f37-bcc4-963f78bca5c9.pdf
+  kind: reworded
+  source_page: 10
+  question: Which researcher's comparative historical case studies, cited in the guided-variation
+    argument, showed that individual creativity develops gradually through loosely
+    linked knowledge, purpose and affect?
+  needs:
+  - - all_of:
+      - loose coupling of the evolving sub-systems of knowledge, purpose,
+- id: S079
+  doc: 5ed62969-fb2d-4939-a023-d4025f9b4081.pdf
+  kind: reworded
+  source_page: 30
+  question: How much text was behind the Global Vectors model used for scoring alternate-uses
+    originality in that study?
+  needs:
+  - - all_of:
+      - trained on a corpus of 840 billion words
+- id: S076
+  doc: 08ebf09d-dd0c-4363-9b1d-c39a8056b25e.pdf
+  kind: table
+  source_page: 27
+  question: In the analysis of brainteaser solution steps for the hardest Braingle
+    math puzzles (n=250, ranked by OpenAI o3), what are the mean and SD of solution
+    steps for DeepSeek V1 solutions?
+  needs:
+  - - all_of:
+      - DeepSeek V1 Solution
+      - 11.2 ± 4.6
+- id: S031
+  doc: da09d844-3a67-4d2e-9b6d-64f1602c0bda.pdf
+  kind: table
+  source_page: 15
+  question: In the survey of creative professionals behind the Human Creativity Benchmark,
+    how many respondents said between 1 and 25% of their creative process is AI-supported?
+  needs:
+  - - all_of:
+      - range is 1 to 25%, reported by 27 respondents
+- id: S050
+  doc: fd9c9243-1c5f-4f76-9f4e-7e0de32275b5.pdf
+  kind: table
+  source_page: 19
+  question: In the systematic review of programming creativity among computer science
+    students, how is pair programming rated on implementation complexity in the table
+    of teaching approaches?
+  needs:
+  - - all_of:
+      - Pair Programming
+      - Low-Moderate
+- id: S074
+  doc: 42c6f312-5bbb-4c45-9cff-7ea76afa1ad4.pdf
+  kind: table
+  source_page: 3
+  question: In the study showing LLMs respond homogeneously on creativity tasks, what
+    test statistic compared LLM and human originality on the Divergent Association
+    Task?
+  needs:
+  - - all_of:
+      - Statistical analysis of human vs. LLM performance on creativity tasks
+      - t(159) = −5.12
+- id: S073
+  doc: 742204e8-6827-4d72-b6d4-3597050c6fba.pdf
+  kind: table
+  source_page: 5
+  question: In the study of whether chatbots reached human-level originality, for
+    the 'Fork' prompt, what were the human mean, human SD, chatbot mean and chatbot
+    SD of originality?
+  needs:
+  - - all_of:
+      - Descriptive and inferential statistics for originality
+      - 2.37 0.51 1.78 0.47
+- id: S084
+  doc: be3b3813-6a8c-40cc-8aa5-69044f556882.pdf
+  kind: table
+  source_page: 4
+  question: In the Verbalized Sampling paper, how many correctness-matched response
+    pairs were used to fit the logistic model for typicality bias?
+  needs:
+  - - all_of:
+      - From 6,874 correctness-
+      - matched response pairs, we fit the logistic model in Eq. 1,
+- id: S069
+  doc: 268f0b72-2d34-420d-aa8d-4b3f0936f233.pdf
+  kind: table
+  source_page: 20
+  question: In the overview table of studies measuring LLM creativity, what share
+    of humans did GPT-4 exceed in verbal divergent production according to Cropley
+    (2023)?
+  needs:
+  - - all_of:
+      - Cropley (2023)
+      - capability than most (85% of)
+- id: S060
+  doc: aa1624fa-36b2-4a39-9723-d6d79a61e09a.pdf
+  kind: table
+  source_page: 26
+  question: In the study showing that generative AI raises individual creativity but
+    narrows collective diversity, what is the coefficient on evaluators' 'Twist' rating
+    for stories written by humans given 5 GenAI ideas?
+  needs:
+  - - all_of:
+      - Human with 5 GenAI ideas
+      - 0.468***

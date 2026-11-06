@@ -1,0 +1,50 @@
+{"id": "S001", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "S002", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about why two entropy-based truncation samplers were dropped."}
+{"id": "S005", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "S006", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and clearly states that the quality and diversity rewards are combined by multiplication."}
+{"id": "S011", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about the originality component score when its normalization step is removed."}
+{"id": "S013", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about creative tasks used to test frontier LLMs."}
+{"id": "S014", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "S024", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about the pretrained reward model used in the diversity-aware reinforcement learning method."}
+{"id": "S025", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "S026", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "S029", "model": null, "verdict": "no_verdict", "reason": "failed twice"}
+{"id": "S032", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is on the page and answers the question about an alternative approach to reduce the myopia of autoregressive decoding."}
+{"id": "S033", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is found on the page and answers the question about the number of puzzles in the BRAINTEASER benchmark."}
+{"id": "S034", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "S036", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "S039", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is on the page and answers the question about the correlation between mean image captioning quality and Dist-2 diversity."}
+{"id": "S042", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "S043", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is on the page and answers the question about how access to physical materials shapes creative output and reproductive success."}
+{"id": "S046", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "S048", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "S050", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is on the page and answers the question about pair programming's implementation complexity."}
+{"id": "S051", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about the caveat noted by the authors."}
+{"id": "S052", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "S053", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "S055", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about the average quality of the most diverse decoding method."}
+{"id": "S056", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "S057", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "S058", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about the user cluster with the highest average score and most variation."}
+{"id": "S059", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and defines the Top10% bias-correction method."}
+{"id": "S060", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "S063", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is on the page and answers the question about Angluin's result."}
+{"id": "S064", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about the number of candidate ideas generated and their mix after the first generation."}
+{"id": "S067", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "S068", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is on the page and answers the question."}
+{"id": "S071", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "S073", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is on the page and answers the question."}
+{"id": "S079", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about the Global Vectors model."}
+{"id": "S084", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "S086", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and explains why only a small minority excel in programming creativity."}
+{"id": "S087", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about GPT3.5-turbo's Acc@1 on Codeforces."}
+{"id": "S089", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about the sampling method that scales the temperature down by a factor depending on the model's entropy."}
+{"id": "S090", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about Collabdraw's interaction design."}
+{"id": "S091", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question about the mean semantic divergence from the average idea embedding for ChatGPT-assisted ideas at the group level."}
+{"id": "S092", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "S093", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "S094", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "S095", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key string is on the page and answers the question about physiological indicators."}
+{"id": "S097", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
+{"id": "S099", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page shown and answers the question."}
+{"id": "S100", "model": "Meta-Llama-3_3-70B-Instruct", "verdict": "ok", "reason": "The key text is on the page and answers the question."}
