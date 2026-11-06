@@ -404,3 +404,22 @@ Result: peak GB over three runs: 8,192 6.32–6.58 (first measurement 5.51); 2,0
 - Agreement with GPT-4o on its 64 model-confirmed verdicts (ok vs flagged): 61/64, kappa 0.64.
 - Without flagged keys (scripts/audit_sens.py, out/audit_sens.json): every sealed contrast keeps its direction. Confirmatory long V->B 34/2 p<.001 (n180); confirmatory library HB->D10 9/2 p=.065 (was .039), same fragility as the sibling scoring (M8). Set1 HB->D10 5/0 p=.063.
 - SE keys: 49 ok, 1 no verdict (S029). Author hand check still 6/50, so the author-vs-Llama comparison waits.
+
+## Review round 2 rules (written 2026-11-06 07:40, before any of these runs)
+
+R2-1 Rank measure on the library (M4). Rerun bench6 on sealed set 2 (T, H8, HB, D10) and on the SE sealed library (T, H8, HB, D10) with one measure added: recall@8, every needed string from the right paper among the first eight chunks of the ranking the method sends from, before the budget cut. Methods unchanged. If any recall-at-budget count differs from the published one, both are reported with the cause.
+
+R2-2 Answers on sealed set 2 (N2a, N8). All 200 questions; the 14 whose keys are missing from the text count as misses for every method, as on set 1. Same prompt, scoring and settings as on set 1: grounded (a cited passage holds the needed strings) is primary, answer text secondary.
+- qwen2.5:14b, A (top 8, before) vs B (fused, budget), temperature 0, seed 1. Confirmatory: grounded A->B, alpha .05.
+- qwen3:8b A, B and K8 (BM25 alone, top 8, no budget), temperature 0, seed 1. Exploratory: grounded A->B and B->K8.
+- Pinned Gemini 3.1 Flash Lite, temperature 0, A vs B, if the router serves it. Exploratory: grounded A->B. If its quota ends, the run stops and what finished is reported as partial.
+- Holm across the exploratory grounded contrasts; answer-text contrasts reported beside them, not corrected.
+These results replace sealed set 1 as RQ3's headline; set 1 stays in the paper, marked exploratory.
+
+### Result R2-1 (2026-11-06 07:42)
+Every recall-at-budget count reproduced (library sealed 2: 68, 93, 97, 105 of 189; SE library sealed: 30, 29, 29, 28 of 57). Recall@8, library sealed 2: T 68, H8 93, HB 93, D10 96. SE library: 30, 29, 29, 28. SE file (saved earlier): A 32, V 32, B 35, K 36 of 54. Files: out/r8_lib_sealed2.json, secr/out/r8_se_lib_sealed.json.
+
+- 2026-11-06 10:15: local R2-2 run paused by the author (laptop needed) at 181 of 400 qwen2.5:14b answers; nothing scored yet. The script skips saved answers on restart; temperature 0, seed 1, so a resumed run is the same run.
+
+### Result R2-2, cloud part (2026-11-06 10:55)
+Pinned Gemini 3.1 Flash Lite answered all 400 (router reported that model for every one). Grounded A 83, B 132 of 200: +49 -0, exact McNemar p 3.6e-15, paired bootstrap 95% CI +18 to +30 points. Answer text A 78, B 101: +29 -6, p 1.2e-4, CI +6 to +17. B grounded by kind: fact 52/70, reworded 53/70, table 20/44, two-fact 7/16 (A: 36, 35, 8, 4). B ungrounded 68: passage not sent 61, sent but another cited 7. Median prompt tokens 3,218 vs 6,624. Questions not naming the drug (67): 37 vs 53. Holm across the exploratory contrasts waits for the qwen3:8b run (paused); the cloud p is so small that no Holm factor up to 3 changes it. The confirmatory qwen2.5:14b contrast is unscored until its run finishes. File: out/r2_cloud.jsonl.

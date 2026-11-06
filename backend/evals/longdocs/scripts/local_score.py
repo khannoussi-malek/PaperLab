@@ -1,6 +1,6 @@
 """Score local temperature-0 runs: citation (grounded) and the answer-text rule from analysis1, A vs B, run-to-run agreement, per kind. argv: jsonl files."""
 import json, math, re, collections, sys, os, yaml
-B=os.path.expanduser("~/.cache/paperlab-bench"); Q={q["id"]:q for q in yaml.safe_load(open(B+"/q/sealed.yaml"))}
+B=os.path.expanduser("~/.cache/paperlab-bench"); Q={q["id"]:q for q in yaml.safe_load(open(B+"/q/"+os.environ.get("QSET","sealed")+".yaml"))}
 src=open(B+"/scripts/analysis1.py").read(); ns={"re":re,"collections":collections,"math":math}
 exec(src[src.index("STOP=set("):src.index('print("=== answer-text')],ns)
 for name in ("mcn",):
