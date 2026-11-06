@@ -423,3 +423,5 @@ Every recall-at-budget count reproduced (library sealed 2: 68, 93, 97, 105 of 18
 
 ### Result R2-2, cloud part (2026-11-06 10:55)
 Pinned Gemini 3.1 Flash Lite answered all 400 (router reported that model for every one). Grounded A 83, B 132 of 200: +49 -0, exact McNemar p 3.6e-15, paired bootstrap 95% CI +18 to +30 points. Answer text A 78, B 101: +29 -6, p 1.2e-4, CI +6 to +17. B grounded by kind: fact 52/70, reworded 53/70, table 20/44, two-fact 7/16 (A: 36, 35, 8, 4). B ungrounded 68: passage not sent 61, sent but another cited 7. Median prompt tokens 3,218 vs 6,624. Questions not naming the drug (67): 37 vs 53. Holm across the exploratory contrasts waits for the qwen3:8b run (paused); the cloud p is so small that no Holm factor up to 3 changes it. The confirmatory qwen2.5:14b contrast is unscored until its run finishes. File: out/r2_cloud.jsonl.
+
+- 2026-11-06 11:35 (review round 3): the qwen2.5:14b A->B grounded contrast on sealed set 2 stays confirmatory and, when its run resumes, is reported in the paper whatever its result. The pinned cloud A->B contrast stays exploratory, as declared in R2-2.
