@@ -1,0 +1,589 @@
+- id: S039
+  doc: 0f7f26a3-8fb6-4bf6-aaa8-0389498242d5.pdf
+  kind: fact
+  source_page: 7
+  question: In the comparison of diverse decoding methods, how strongly is mean image
+    captioning quality anti-correlated with Dist-2 diversity?
+  needs:
+  - - all_of:
+      - measure and -0.84 with Dist-2.
+- id: S038
+  doc: f2b59441-e4c1-4ff5-85fc-5905b29d5dea.pdf
+  kind: fact
+  source_page: 8
+  question: In the fMRI study of narrative encoding and story ending originality,
+    which region's representational similarity predicts originality?
+  needs:
+  - - all_of:
+      - representational similarity of rBA25 can predict story originality
+- id: S091
+  doc: 03c379ab-d0e0-4cf6-be80-8a5d0313dddc.pdf
+  kind: fact
+  source_page: 5
+  question: In the study of homogenization effects of LLMs on human ideation, what
+    mean semantic divergence from the average idea embedding did ChatGPT-assisted
+    ideas have at the group level?
+  needs:
+  - - all_of:
+      - embedding of all ideas generated for that task, (M = .24, SD = .07),
+- id: S059
+  doc: 48236bd6-6a8b-4162-8bf6-1ec39842df62.pdf
+  kind: fact
+  source_page: 29
+  question: In the meta-analysis of creativity training, how is the Top10% bias-correction
+    method defined?
+  needs:
+  - - all_of:
+      - estimates the overall effect size based on the
+      - top 10% of most precise studies in terms of standard error
+- id: S044
+  doc: ab738d3f-24ab-4098-bf95-4c669e1ac314.pdf
+  kind: fact
+  source_page: 17
+  question: In the REAL sampling paper's hallucination detection appendix, what classifier
+    combines the unsupervised entropy features?
+  needs:
+  - - all_of:
+      - We train a random forest classifier to combine
+- id: S036
+  doc: ab1fc486-2359-4dc1-88db-7e1d6d9ba48e.pdf
+  kind: fact
+  source_page: 17
+  question: In the study testing adversarial examples against automated scoring of
+    divergent thinking, what random forest hyperparameters were used and what RMSE
+    resulted?
+  needs:
+  - - all_of:
+      - hyperparameter tuning (mtry = 250, minimum node size = 5).
+      - results in an RMSE of 0.181.
+- id: S088
+  doc: 08ebf09d-dd0c-4363-9b1d-c39a8056b25e.pdf
+  kind: fact
+  source_page: 27
+  question: In the brainteaser analysis of creative versus rudimentary solution steps,
+    how do DeepSeek V1 solutions compare with Llama 70B in step count?
+  needs:
+  - - all_of:
+      - DeepSeek V1 solutions have more steps than Llama 70B solutions
+- id: S085
+  doc: 147f1f21-6f44-4f37-bcc4-963f78bca5c9.pdf
+  kind: fact
+  source_page: 6
+  question: In the paper revisiting Darwinian blind hypothesis formation, under what
+    condition is creative hypothesis formation blind in the sense of undirected change?
+  needs:
+  - - all_of:
+      - creative hypothesis formation is blind, in the sense of an undirected
+- id: S001
+  doc: 6bd88688-1778-4148-8b2f-146c0bb42980.pdf
+  kind: fact
+  source_page: 10
+  question: In the study of human-AI strategies for software test case development,
+    how many participants were randomly selected for the ChatGPT treatment group?
+  needs:
+  - - all_of:
+      - Eight participants were randomly selected to
+- id: S068
+  doc: 742204e8-6827-4d72-b6d4-3597050c6fba.pdf
+  kind: fact
+  source_page: 5
+  question: In the study of generative AI chatbots and human-level creativity, was
+    any chatbot more original than the other four across all five prompts?
+  needs:
+  - - all_of:
+      - None of the GAI chatbots emerged as more original than the
+- id: S100
+  doc: 75b93cd3-1082-4bf7-a25c-626cab75528b.pdf
+  kind: fact
+  source_page: 62
+  question: In the quality-diversity through AI feedback experiments on story genres,
+    which statistical test showed that uniform bins beat custom non-uniform bins?
+  needs:
+  - - all_of:
+      - (p-values < 0.05, Mann-Whitney U test)
+- id: S040
+  doc: f7d5f666-d37a-4867-8cad-f10f376e1680.pdf
+  kind: fact
+  source_page: 11
+  question: In the interview study of GenAI adoption in agile teams, what review rule
+    does the GMT AI guideline impose before AI-generated content may be used?
+  needs:
+  - - all_of:
+      - may only be used after two independent, authorized
+- id: S025
+  doc: b0b6454e-b4e1-4682-b5c4-682f7fa81df7.pdf
+  kind: fact
+  source_page: 36
+  question: In the emergent analogical reasoning evaluation, what does GPT-3 say the
+    rays in the radiation problem are most analogous to in the source story?
+  needs:
+  - - all_of:
+      - The rays in the target problem are most analogous to the army
+- id: S006
+  doc: 8d037d11-43e0-4f25-a471-10b7729156a7.pdf
+  kind: fact
+  source_page: 4
+  question: In the DARLING method for jointly reinforcing quality and diversity, how
+    are the quality and diversity rewards combined?
+  needs:
+  - - all_of:
+      - We choose to multiply the two reward scores instead of adding them.
+- id: S067
+  doc: a978d802-95b0-4bda-beee-784c6df35fdd.pdf
+  kind: fact
+  source_page: 98
+  question: In the paper on trade-offs between hallucination and mode collapse in
+    language generation, what kind of language collection is used in the example that
+    has an infinite Littlestone tree yet is identifiable with positive examples?
+  needs:
+  - - all_of:
+      - it is a countable collection of finite languages
+- id: S056
+  doc: 731d0787-cf29-4df2-be51-69844c0577f0.pdf
+  kind: fact
+  source_page: 3
+  question: In the Two Word Test study of large language models, how many subsets
+    were the phrases randomly assigned to?
+  needs:
+  - - all_of:
+      - the phrases were randomly assigned to 8 subsets
+- id: S080
+  doc: a66c3d57-4529-41ae-883c-1b3ca0d858fb.pdf
+  kind: fact
+  source_page: 4
+  question: In the paper on reframing creativity support tools for sustainable design
+    decisions, what time span did the systematic mapping of creativity support tools
+    cover?
+  needs:
+  - - all_of:
+      - 1999 and 2018 [27]. The studies highlight the diversity
+- id: S033
+  doc: af45da65-0143-4782-aa71-c3a4cacf0fbc.pdf
+  kind: fact
+  source_page: 9
+  question: How many puzzles does the BRAINTEASER lateral thinking benchmark for LLMs
+    contain?
+  needs:
+  - - all_of:
+      - BRAINTEASER, a 1.1K lateral thinking benchmark
+- id: S097
+  doc: f5e415b7-f66a-4186-a71e-feadc6545a7a.pdf
+  kind: fact
+  source_page: 7
+  question: In the analogical prompting paper, how many exemplars does the model self-generate
+    for GSM8K and for MATH?
+  needs:
+  - - all_of:
+      - self-generate K =5 exemplars for GSM8K and K =3 exemplars for MATH
+- id: S047
+  doc: 8ac29e1a-3b22-47f4-80f8-a29f3f98e442.pdf
+  kind: fact
+  source_page: 2
+  question: In the bias-diversity decomposition of MBR decoding, what does the diversity
+    term reflect?
+  needs:
+  - - all_of:
+      - human evaluations. The diversity term reflects the
+      - variance in the estimated quality across different
+- id: S082
+  doc: 5d2f8443-f021-4bbc-a866-922c0b0f3f41.pdf
+  kind: fact
+  source_page: 16
+  question: In the post-training paper for diverse creative writing, how was the reddit
+    reward model trained, in terms of base model and LoRA setting?
+  needs:
+  - - all_of:
+      - google/gemma-2-2b.
+      - we used LoRA with a rank of 16 and an
+- id: S064
+  doc: 92de917a-b25d-4707-ad87-8dc6156696c8.pdf
+  kind: multi
+  source_page: 4
+  question: In the commentary on an evolutionary-predictive foundation for creativity,
+    how many candidate ideas are generated at the start of the Darwinian selection
+    example, and what is the mix after the first generation?
+  needs:
+  - - all_of:
+      - 'You generate 30 candidate ideas: 10 each of type A, B, and C.'
+  - - all_of:
+      - there are 15 ideas of type A, 5 of type B, and 10 of type C.
+- id: S015
+  doc: 759f2b3c-1490-4484-8562-1eea98c04d5d.pdf
+  kind: multi
+  source_page: 5
+  question: In the persona-vector merging method for creative generation, which two
+    Torrance dimensions were used for evaluation, and which multi-agent baseline uses
+    three phases?
+  needs:
+  - - all_of:
+      - proceed using only originality and elaboration.
+  - - all_of:
+      - phase process—initiation, discussion, and conver-
+- id: S014
+  doc: 1a2dde23-683c-4b83-ac60-655e51ca9a1b.pdf
+  kind: multi
+  source_page: 54
+  question: In the thesis on semantics and organisation of creativity within IT enterprises,
+    how many insults of mankind does Vollmer count in total, and what did Fuller tell
+    Brand about seeing the whole earth?
+  needs:
+  - - all_of:
+      - count to a total of ten insults, beginning with the child
+  - - all_of:
+      - can never see more than half the earth from any particular point
+- id: S029
+  doc: 9db50a06-8bed-41b4-b1b8-a8a76c46d366.pdf
+  kind: multi
+  source_page: 11
+  question: In the comparison of supervised learning approaches for automated scoring
+    of divergent thinking tasks, which feature was most important for random forest
+    and XGBoost, and which algorithm reached the lowest RMSE with the combined feature
+    set?
+  needs:
+  - - all_of:
+      - the stimulus similarity was the most important feature
+  - - all_of:
+      - reached by XGBoost using the combined feature set
+- id: S093
+  doc: d97716dd-33c8-4ee4-a667-e5b3a964d222.pdf
+  kind: multi
+  source_page: 9
+  question: In the multilingual creativity scoring work that fine-tunes small open-weight
+    models on stories, how many training responses did Luchini and colleagues need,
+    and what number of epochs and learning rate were used for the English-only model?
+  needs:
+  - - all_of:
+      - after training on only 2,000 responses
+  - - all_of:
+      - included 25 epochs and a learning rate of 5e-5.
+- id: S094
+  doc: cff8dbcd-8e95-4178-83e9-dbf381680df9.pdf
+  kind: multi
+  source_page: 11
+  question: In the divergent semantic integration paper, how did the standardized
+    effect of DSI compare with word count, and how strongly did DSI correlate with
+    human creativity ratings across prompts in Study 2?
+  needs:
+  - - all_of:
+      - (b* = .63) was nearly double that of word count (b* = .32),
+  - - all_of:
+      - human creativity ratings was very strong at r = .85,
+- id: S019
+  doc: af7eb676-b7a3-4438-a81c-593332018caf.pdf
+  kind: reworded
+  source_page: 6
+  question: In the survey of progress in creative AI, how can the output of a discriminator
+    in an adversarial art-generation network be turned into a novelty score?
+  needs:
+  - - all_of:
+      - (more specifically, 1-score) can be used to measure the
+- id: S008
+  doc: f78395c8-e0b7-4b0d-b6a6-214c45dc160b.pdf
+  kind: reworded
+  source_page: 7
+  question: Across which range of relative layer depth were analogy-making sensitive
+    regions spread for the Llama and Mistral models?
+  needs:
+  - - all_of:
+      - (the 20th percentile to the 70th percentile among layer depth)
+- id: S016
+  doc: af45da65-0143-4782-aa71-c3a4cacf0fbc.pdf
+  kind: reworded
+  source_page: 9
+  question: Where did the strongest model land between guessing and people on the
+    sentence- and word-level lateral thinking puzzle benchmark?
+  needs:
+  - - all_of:
+      - on this task is halfway between
+- id: S011
+  doc: 688f3c1e-ad5b-4ac1-bd2d-15db018a2fd6.pdf
+  kind: reworded
+  source_page: 15
+  question: What happens to the originality component of the context-based score when
+    its normalisation step is removed?
+  needs:
+  - - all_of:
+      - tion can even double the originality score, while
+- id: S095
+  doc: f7f9141a-1059-4f66-bdf8-80c98a98821b.pdf
+  kind: reworded
+  source_page: 16
+  question: In that study, how did the physiological indicators of the group using
+    the code generator change in the middle of the task?
+  needs:
+  - - all_of:
+      - increased LF/HF ratios during the mid-task phase
+- id: S021
+  doc: 54bd9b67-32d7-4ae3-9413-006c6cd6ebc2.pdf
+  kind: reworded
+  source_page: 6
+  question: In the overview of gender and creativity, which six aspects make up the
+    theoretical approaches to investigating creativity?
+  needs:
+  - - all_of:
+      - process, product, person, place, persuasion and potential
+- id: S051
+  doc: 635562aa-2e09-4676-90b4-04f29fa9424e.pdf
+  kind: reworded
+  source_page: 23
+  question: In the interview study with composers and musicians about a virtual-world
+    music platform, what caveat did the authors note about the 'if by magic' prompt?
+  needs:
+  - - all_of:
+      - to envision capabilities beyond what is technically feasible
+- id: S090
+  doc: 30e7345e-b9ad-440e-9d41-044f7bb2a333.pdf
+  kind: reworded
+  source_page: 2
+  question: Which co-creative drawing environment is criticised for offering only
+    a single submit button as its interaction design?
+  needs:
+  - - all_of:
+      - Collabdraw [54] is a co-creative sketching environment
+- id: S024
+  doc: 8d037d11-43e0-4f25-a471-10b7729156a7.pdf
+  kind: reworded
+  source_page: 4
+  question: Which pretrained reward model scores response quality when training the
+    diversity-aware reinforcement learning method on non-verifiable instruction following?
+  needs:
+  - - all_of:
+      - Nexusflow/Athene-RM-8B (Frick et al., 2024) as the reward function
+- id: S052
+  doc: 268f0b72-2d34-420d-aa8d-4b3f0936f233.pdf
+  kind: reworded
+  source_page: 3
+  question: In the paper asking whether LLM creativity has peaked, what is asked of
+    participants in the semantic-distance association task?
+  needs:
+  - - all_of:
+      - generate ten words that are as semantically different
+- id: S043
+  doc: cebec970-963e-4967-aefb-c3f93d7fd31f.pdf
+  kind: reworded
+  source_page: 5
+  question: Which species is the key example of how access to physical materials shapes
+    creative output and reproductive success when human creativity models are applied
+    to animals?
+  needs:
+  - - all_of:
+      - bowerbird (Ptilonorhynchus violaceus)
+- id: S089
+  doc: b79487a5-0aae-4fd9-be40-d872ffa97cd8.pdf
+  kind: reworded
+  source_page: 18
+  question: In the selective sampling paper, which sampling method scales the temperature
+    down by a factor depending on the model's entropy?
+  needs:
+  - - all_of:
+      - Entropy-based Dynamic Temperature sampling method dynamically ad-
+- id: S063
+  doc: a978d802-95b0-4bda-beee-784c6df35fdd.pdf
+  kind: reworded
+  source_page: 13
+  question: In the theory of language generation in the limit, what probability bound
+    does Angluin's result in the statistical setting give for learners failing to
+    converge to the target language?
+  needs:
+  - - all_of:
+      - probability at least 1/3, does not converge to outputting a (stable)
+- id: S002
+  doc: c9c56fbc-25ea-4b37-b70f-4cd0bea95d51.pdf
+  kind: reworded
+  source_page: 7
+  question: Why were two entropy-based truncation samplers dropped from the high-temperature
+    comparison on grade school math?
+  needs:
+  - - all_of:
+      - exponential runtime increases with temperature and failed completely
+- id: S037
+  doc: 48236bd6-6a8b-4162-8bf6-1ec39842df62.pdf
+  kind: reworded
+  source_page: 29
+  question: In the creativity training meta-analysis, which two moderators were put
+    on a logarithmic scale to reduce skew?
+  needs:
+  - - all_of:
+      - Training Duration were log-transformed
+- id: S075
+  doc: 731d0787-cf29-4df2-be51-69844c0577f0.pdf
+  kind: reworded
+  source_page: 3
+  question: In that two-word phrase meaningfulness study, when is a language model's
+    rating counted as a failure?
+  needs:
+  - - all_of:
+      - has less than a 5% probability of coming from the human distribution
+- id: S061
+  doc: 8ac29e1a-3b22-47f4-80f8-a29f3f98e442.pdf
+  kind: reworded
+  source_page: 2
+  question: Which three kinds of generation tasks were used to empirically check the
+    theory that diversity explains inference scaling in minimum Bayes risk decoding?
+  needs:
+  - - all_of:
+      - Our empirical analysis on machine translation,
+      - text summarization, and image captioning using
+- id: S030
+  doc: be3b3813-6a8c-40cc-8aa5-69044f556882.pdf
+  kind: reworded
+  source_page: 4
+  question: What is the training-free approach that restores diversity by asking the
+    model for representative samples from a distribution rather than a single answer?
+  needs:
+  - - all_of:
+      - propose Verbalized Sampling (VS), a training-free prompt-
+- id: S058
+  doc: 8f0c1fe0-7c0b-4a85-a961-5de2da6ae723.pdf
+  kind: reworded
+  source_page: 4
+  question: In the AI and critical thinking survey, which user cluster from the segmentation
+    achieved the highest average score but varied the most?
+  needs:
+  - - all_of:
+      - mixed-strategy users, who achieved the
+- id: S071
+  doc: 52aaff8e-333e-4f07-9f80-85a094d54963.pdf
+  kind: reworded
+  source_page: 16
+  question: In the study on preference collapse in aligned language models, how does
+    the spread of instance-level divergence under the conditional preference-matching
+    method compare with the standard KL approach?
+  needs:
+  - - all_of:
+      - is consistently closer to zero compared to those aligned with
+- id: S053
+  doc: 4909ddff-724c-4f4a-9be6-bdf0b0aee6b0.pdf
+  kind: reworded
+  source_page: 18
+  question: In the CHI study on whether language models help people reframe problems,
+    what was the model told to do to obtain further framings after the first set had
+    been produced?
+  needs:
+  - - all_of:
+      - generate different ways of approaching the problem.
+- id: S017
+  doc: 75b93cd3-1082-4bf7-a25c-626cab75528b.pdf
+  kind: table
+  source_page: 89
+  question: In the quality-diversity through AI feedback evaluation set of genre stories
+    (LMX-Replace, seeded init), which row got low scores from both AI and human feedback,
+    and what explains it?
+  needs:
+  - - all_of:
+      - except for the first-row story (receiving low scores from both
+      - likely due to missing (desired) spy and politician characters.
+- id: S072
+  doc: 3aad9c61-05ac-4e03-9bb6-aff873a127f4.pdf
+  kind: table
+  source_page: 44
+  question: In the main-effects table of the team diversity meta-analysis, what pooled
+    correlation with its 95% CI is reported for job-related diversity and team performance,
+    and across how many effect sizes?
+  needs:
+  - - all_of:
+      - Job-related
+      - 786 .042 [.025, .058] ***
+- id: S018
+  doc: 8f0c1fe0-7c0b-4a85-a961-5de2da6ae723.pdf
+  kind: table
+  source_page: 4
+  question: In the small survey of critical thinking and AI use among students, what
+    was the average number of correct answers out of seven questions?
+  needs:
+  - - all_of:
+      - Average correct answers
+      - 4.78 / 7
+- id: S034
+  doc: ab738d3f-24ab-4098-bf95-4c669e1ac314.pdf
+  kind: table
+  source_page: 17
+  question: In the hallucination detection experiment of the entropy-based sampling
+    paper, how many estimators does the random forest classifier use?
+  needs:
+  - - all_of:
+      - Hallucination Detection for Open-ended Text Generation
+      - train a random forest classifier with 100 estimators.
+- id: S087
+  doc: f5e415b7-f66a-4186-a71e-feadc6545a7a.pdf
+  kind: table
+  source_page: 7
+  question: In the analogical prompting paper, what Acc@1 does GPT3.5-turbo reach
+    on Codeforces when it self-generates both knowledge and exemplars?
+  needs:
+  - - all_of:
+      - 'Ours: Self-generated Knowledge + Exemplars'
+      - competitive performance with GPT4, with a 15% Acc@1 compared to
+- id: S020
+  doc: 5d9b9829-60a3-445b-adee-564f15907232.pdf
+  kind: table
+  source_page: 24
+  question: In the comparison of human and machine-generated creativity with image-generation
+    scores, by what percentage is the machine group's FID higher than the human group's
+    when compared against additive groups?
+  needs:
+  - - all_of:
+      - is significantly higher than the human group
+      - by 26% in comparison
+- id: S026
+  doc: 52aaff8e-333e-4f07-9f80-85a094d54963.pdf
+  kind: table
+  source_page: 16
+  question: When aligning Llama-2-7B with conditional preference-matching RLHF versus
+    standard RLHF, to what value does perplexity fall at the smaller reward-model
+    setting when moving from the lowest alpha to standard RLHF?
+  needs:
+  - - all_of:
+      - the perplexity decreases from 6.17 to 5.48 as we transition
+- id: S042
+  doc: 688f3c1e-ad5b-4ac1-bd2d-15db018a2fd6.pdf
+  kind: table
+  source_page: 15
+  question: In the table on removing the max-probability normalisation in the context-based
+    value and originality score, what originality does poetry generation with Llama3-8B
+    get without normalisation?
+  needs:
+  - - all_of:
+      - Poetry generation - Llama3-8B
+      - 1.65±0.32
+- id: S081
+  doc: 3aad9c61-05ac-4e03-9bb6-aff873a127f4.pdf
+  kind: table
+  source_page: 12
+  question: In the table summarising earlier meta-analyses of team diversity, what
+    link with performance did Triana and colleagues find for deep-level diversity?
+  needs:
+  - - all_of:
+      - Triana et al.
+      - No link with performance (ρ = -.01),
+- id: S048
+  doc: 0f7f26a3-8fb6-4bf6-aaa8-0389498242d5.pdf
+  kind: table
+  source_page: 7
+  question: In the comparison of diverse decoding methods for conditional language
+    models, what correlation was found between Dist-2 and human quality scores for
+    dialog?
+  needs:
+  - - all_of:
+      - Dist-2 vs. Human Scores (corr = -0.41)
+- id: S083
+  doc: f7e8304b-eca9-48cc-a16a-744e9a108dcc.pdf
+  kind: table
+  source_page: 25
+  question: In the study of whether writing with language models reduces content diversity,
+    which writing setup shows higher repetition of common 4-grams and 5-grams in its
+    top-50 n-gram distributions?
+  needs:
+  - - all_of:
+      - InstructGPT exhibit higher repetition of common 4-ngrams and 5-grams.
+- id: S055
+  doc: f78395c8-e0b7-4b0d-b6a6-214c45dc160b.pdf
+  kind: table
+  source_page: 7
+  question: In the study of diversity in LLM analogy making on Phi-4-mini-instruct,
+    what average quality does the most diverse decoding method reach, compared with
+    4.28 for base prompting?
+  needs:
+  - - all_of:
+      - the most diverse method
+      - of 3.80, indicating a compromise in the diversity enhancing

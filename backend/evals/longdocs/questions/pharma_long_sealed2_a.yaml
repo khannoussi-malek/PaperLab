@@ -1,0 +1,875 @@
+- id: M001
+  doc: fda_dapagliflozin_PharmR.pdf
+  kind: fact
+  source_page: 5663
+  question: In the dapagliflozin rat fertility and early embryonic development study, what was the NOAEL for embryonic development, and what finding set it?
+  needs:
+  - - all_of:
+      - The NOAEL for embryonic development was 3 mg/kg
+      - due to increased embryo-lethality (resorptions) at 15 and 75 mg/kg.
+- id: M002
+  doc: fda_semaglutide_oral_PharmR.pdf
+  kind: fact
+  source_page: 4294
+  question: In the cardiovascular and respiratory safety study of SNAC, the absorption enhancer in oral semaglutide, for how long was mean respiration rate increased after treatment?
+  needs:
+  - - all_of:
+      - Mean respiration rate was increased for 2 to 3 hours after treatment
+- id: M003
+  doc: fda_apixaban_MedR.pdf
+  kind: fact
+  source_page: 6482
+  question: How many subjects were in the ITT population of apixaban's AVERROES trial, and how were they split between the apixaban and aspirin arms?
+  needs:
+  - - all_of:
+      - Demographic and risk factor data for the ITT population (N=5598)
+      - subjects in the apixaban and aspirin arms, respectively
+- id: M004
+  doc: ema_ozempic_assess.pdf
+  kind: fact
+  source_page: 6737
+  question: In the Ozempic assessment report, which patient characteristic was the only one found to affect semaglutide exposure in the population PK analysis?
+  needs:
+  - - all_of:
+      - Semaglutide exposure was only affected
+      - by body weight showing higher semaglutide exposure
+- id: M005
+  doc: ema_comirnaty_assess.pdf
+  kind: fact
+  source_page: 6908
+  question: In the early Comirnaty (BNT162b) clinical program, how many vaccine groups were studied in phase 1 and how many participants did that cover in total?
+  needs:
+  - - all_of:
+      - placebo) per group; 13 vaccine groups
+      - of 195 participants
+- id: M006
+  doc: fda_rivaroxaban_ChemR.pdf
+  kind: fact
+  source_page: 7859
+  question: What are the molecular formula and molecular weight of rivaroxaban according to the FDA chemistry review of Xarelto?
+  needs:
+  - - all_of:
+      - 'Molecular Formula: C19H18ClN3O5S'
+      - 'M.W.: 435.89'
+- id: M007
+  doc: ema_xtandi_label.pdf
+  kind: fact
+  source_page: 1268
+  question: In the PREVAIL trial of enzalutamide (Xtandi) in chemotherapy-naive patients, what were the PSA response rates with enzalutamide versus placebo?
+  needs:
+  - - all_of:
+      - 78.0% versus 3.5%
+- id: M008
+  doc: ema_zytiga_assess.pdf
+  kind: fact
+  source_page: 1487
+  question: In the CHMP assessment of Zytiga, what share of circulating testosterone in men is produced by the testes?
+  needs:
+  - - all_of:
+      - approximately 90 % to 95 % of circulating testosterone is
+- id: M009
+  doc: fda_dapagliflozin_PharmR.pdf
+  kind: fact
+  source_page: 5587
+  question: What daily dose of dapagliflozin did the sponsor propose, and what lower starting dose was proposed for patients with volume depletion?
+  needs:
+  - - all_of:
+      - recommended dose is 10 mg taken once daily
+      - recommended for patients with volume depletion
+- id: M010
+  doc: fda_dapagliflozin_OtherR.pdf
+  kind: fact
+  source_page: 7361
+  question: In the FDA hepatic safety review for dapagliflozin, what was the apparent diagnosis in the 70-year-old man with prior cholecystectomy whose CT showed a tumor at the head of the pancreas?
+  needs:
+  - - all_of:
+      - Apparent diagnosis is pancreatic cancer and not drug-induced
+      - CT demonstrated tumor at head of pancreas
+- id: M011
+  doc: fda_canagliflozin_PharmR.pdf
+  kind: fact
+  source_page: 10121
+  question: What safety margin over the maximum recommended human dose did the FDA pharmacology reviewer give for renal tumors in rats given canagliflozin?
+  needs:
+  - - all_of:
+      - renal tumors were increased at 12 to 22x the clinical dose
+      - tumor was 5 to 7x the MRHD.
+- id: M012
+  doc: fda_dapagliflozin_OtherR.pdf
+  kind: fact
+  source_page: 7410
+  question: In the GPRD-based study reviewed for dapagliflozin, what was the adjusted rate ratio for vaginitis or balanitis in male diabetes patients versus male non-diabetes patients?
+  needs:
+  - - all_of:
+      - among male non-diabetes patients (adjusted RR=2.85, 95% CI
+- id: M013
+  doc: ema_wegovy_label.pdf
+  kind: fact
+  source_page: 992
+  question: How much semaglutide, in what volume and concentration, does the Wegovy 7.2 mg pre-filled pen contain?
+  needs:
+  - - all_of:
+      - Wegovy 7.2 mg solution for injection in pre-filled pen
+      - semaglutide in 0.75 mL (9.6 mg/mL)
+- id: M014
+  doc: ema_jardiance_assess.pdf
+  kind: fact
+  source_page: 186
+  question: In the empagliflozin (Jardiance) assessment, what were the frequencies of volume depletion in patients aged 75 years and older on placebo and on empagliflozin 25 mg?
+  needs:
+  - - all_of:
+      - 'empagliflozin 25 mg: 12 patients'
+      - 'patients, 2.1%; empagliflozin 10 mg: 5 patients; 2.3%'
+- id: M015
+  doc: ema_zytiga_label.pdf
+  kind: fact
+  source_page: 1079
+  question: In the Zytiga label, what was the median time to PSA progression with Zytiga versus placebo?
+  needs:
+  - - all_of:
+      - The median time to PSA progression was 10.2 months
+- id: M016
+  doc: fda_apixaban_PharmR.pdf
+  kind: fact
+  source_page: 2574
+  question: In the apixaban rat carcinogenicity bioassay, which common tumor was increased in high dose males and females, and what were the trend p-values?
+  needs:
+  - - all_of:
+      - The incidence of malignant lymphoma, a common tumor
+      - dose males (pt = 0.037) and females (pt = 0.032)
+- id: M017
+  doc: fda_ticagrelor_MedR.pdf
+  kind: fact
+  source_page: 3908
+  question: In the ticagrelor clinical review's proposed wording on hepatic impairment, by how much were Cmax and AUC higher in mild hepatic impairment than in matched healthy subjects?
+  needs:
+  - - all_of:
+      - Cmax and AUC of ticagrelor for patients with
+      - than matched healthy subjects, respectively
+- id: M018
+  doc: ema_xarelto_label.pdf
+  kind: fact
+  source_page: 524
+  question: When preparing the Xarelto oral suspension, where must the upper ring of the black plunger be lined up on the water syringe?
+  needs:
+  - - all_of:
+      - The upper ring of the black plunger must be precisely in line
+      - with the 100 mL mark
+- id: M019
+  doc: ema_entresto_label.pdf
+  kind: fact
+  source_page: 4508
+  question: How long after the last dose of an ACE inhibitor should a patient wait before starting Entresto?
+  needs:
+  - - all_of:
+      - wait 36 hours after taking the last dose of the ACE
+- id: M020
+  doc: fda_semaglutide_oral_PharmR.pdf
+  kind: fact
+  source_page: 4385
+  question: In the 12-month rat gavage toxicity study of SNAC, at what dose were there possible treatment-related deaths?
+  needs:
+  - - all_of:
+      - There were possible treatment-related deaths at 900 mg/kg/d SNAC.
+- id: M021
+  doc: fda_dapagliflozin_StatR.pdf
+  kind: fact
+  source_page: 3295
+  question: In the FDA statistical review of the dapagliflozin cardiovascular meta-analysis, how many primary composite events occurred in each arm and what was the estimated hazard ratio?
+  needs:
+  - - all_of:
+      - Eighty one (81) events were observed among 3403 subjects
+      - based on this model was 0.81 with 95% confidence interval
+- id: M022
+  doc: ema_imbruvica_assess.pdf
+  kind: fact
+  source_page: 2171
+  question: In the ibrutinib (Imbruvica) environmental risk assessment, what was the bioaccumulation factor in rainbow trout at the high dose?
+  needs:
+  - - all_of:
+      - BCFhigh dose = 68.0
+      - Log Pow = 4.0 at pH 7
+- id: M023
+  doc: ema_rybelsus_assess.pdf
+  kind: fact
+  source_page: 1649
+  question: In the PIONEER 2 trial of oral semaglutide versus empagliflozin, how many adults were planned for randomisation and how many were randomised to oral semaglutide 14 mg?
+  needs:
+  - - all_of:
+      - of 816 adults with type 2 diabetes treated with metformin
+      - 412 subjects randomised
+- id: M024
+  doc: ema_brilique_assess.pdf
+  kind: fact
+  source_page: 6806
+  question: For the ticagrelor (Brilique) active substance, how many full scaled batches supported the stability data?
+  needs:
+  - - all_of:
+      - been provided for three full scaled batches stored at
+- id: M025
+  doc: fda_dabigatran_StatR.pdf
+  kind: fact
+  source_page: 5788
+  question: In the FDA statistical review of dabigatran (RE-LY), which dabigatran dose had a hazard ratio above 1 versus warfarin in patients younger than 65?
+  needs:
+  - - all_of:
+      - only DE 110 had a hazard ratio greater than 1 over
+- id: M026
+  doc: ema_invokana_assess.pdf
+  kind: fact
+  source_page: 1217
+  question: In non-clinical studies of canagliflozin (Invokana), in which organs of rats were malignant neoplasms observed?
+  needs:
+  - - all_of:
+      - malignant neoplasms (in the kidney and adrenal gland of rats)
+- id: M027
+  doc: fda_canagliflozin_OtherR.pdf
+  kind: fact
+  source_page: 9591
+  question: In the FDA review of canagliflozin, what were the overall clinical fracture rates with canagliflozin 100 mg, 300 mg and control in the pooled phase 3 analysis?
+  needs:
+  - - all_of:
+      - 2.5%, 2.3% and 1.7% for Cana 100 mg, Cana 300 mg and control
+- id: M028
+  doc: fda_dabigatran_ClinPharmR.pdf
+  kind: fact
+  source_page: 2096
+  question: In the dabigatran clinical pharmacology review, how much higher was dose-normalized C2hr in RE-LY patients carrying the ABCB1 3435 T allele?
+  needs:
+  - - all_of:
+      - ABCB1 3435 T allele carriers (C/T 8% higher, T/T 15% higher)
+- id: M029
+  doc: fda_ticagrelor_StatR.pdf
+  kind: fact
+  source_page: 3234
+  question: In the FDA statistical review of ticagrelor (PLATO), what critical p-value was used for the final analysis of the primary composite endpoint?
+  needs:
+  - - all_of:
+      - The critical p-value at the final analysis was 0.0497.
+- id: M030
+  doc: fda_rivaroxaban_OtherR.pdf
+  kind: fact
+  source_page: 9675
+  question: In the rivaroxaban rat carcinogenicity study, what necropsy findings accompanied the pallor seen in high dose Female 544?
+  needs:
+  - - all_of:
+      - she had pale liver and red nodules in her uterus
+- id: M031
+  doc: ema_spikevax_label.pdf
+  kind: fact
+  source_page: 1468
+  question: From what age can Spikevax XFG be given, and in what lipid nanoparticles is its mRNA embedded?
+  needs:
+  - - all_of:
+      - and children aged 6 months and older
+      - The mRNA is embedded in SM-102 lipid nanoparticles.
+- id: M032
+  doc: ema_xarelto_label.pdf
+  kind: fact
+  source_page: 372
+  question: What does the Xarelto SmPC say about excretion of rivaroxaban into breast milk in animals?
+  needs:
+  - - all_of:
+      - indicate that rivaroxaban is secreted into milk
+- id: M033
+  doc: ema_wegovy_label.pdf
+  kind: fact
+  source_page: 889
+  question: What pack sizes are listed for the Wegovy 2.4 mg FlexTouch pre-filled pen?
+  needs:
+  - - all_of:
+      - 3 pre-filled pens and 12 disposable NovoFine Plus needles.
+- id: M034
+  doc: fda_semaglutide_PharmR.pdf
+  kind: fact
+  source_page: 8620
+  question: In the 2-year rat carcinogenicity study of semaglutide, at what doses did cholesterol and triglycerides decrease?
+  needs:
+  - - all_of:
+      - Decrease in cholesterol and triglycerides in males and females
+- id: M035
+  doc: ema_steglatro_assess.pdf
+  kind: fact
+  source_page: 8879
+  question: In the ertugliflozin phase III trial P006/1015 on metformin and sitagliptin, how many subjects were in each treatment arm?
+  needs:
+  - - all_of:
+      - up to 52 weeks; 153 subjects
+      - 156 subjects
+- id: M036
+  doc: ema_opdivo_label.pdf
+  kind: reworded
+  source_page: 4900
+  question: For a patient on a low-salt diet, how much sodium does one 4 mL vial of Opdivo contain?
+  needs:
+  - - all_of:
+      - contains 0.1 mmol (or 2.5 mg) sodium
+      - contains 10 mg sodium per 4 mL vial
+- id: M037
+  doc: ema_keytruda_label.pdf
+  kind: reworded
+  source_page: 8204
+  question: In the Keytruda study combining pembrolizumab with enfortumab vedotin for bladder cancer, how many patients got the combination and how long were they followed?
+  needs:
+  - - all_of:
+      - The median follow-up time for 442 patients treated with pembrolizumab
+- id: M038
+  doc: fda_rivaroxaban_OtherR.pdf
+  kind: reworded
+  source_page: 9685
+  question: In the Xarelto rat carcinogenicity study, how much of the common lesions did the second-look pathology panel re-examine?
+  needs:
+  - - all_of:
+      - approximately 25% of frequent lesions and all slides of
+- id: M039
+  doc: fda_rivaroxaban_OtherR.pdf
+  kind: reworded
+  source_page: 9705
+  question: Among ROCKET AF patients given rivaroxaban, how many met criteria for possible severe drug-induced liver injury, and what proportion of those exposed?
+  needs:
+  - - all_of:
+      - (39 of 7131 exposed; 0.55% or 1/183)
+- id: M040
+  doc: ema_stelara_label.pdf
+  kind: reworded
+  source_page: 1843
+  question: For how long can a Stelara pre-filled pen be kept out of the fridge?
+  needs:
+  - - all_of:
+      - for a single period up to 30 days
+      - Keep the pre-filled pen in the outer carton
+- id: M041
+  doc: ema_stelara_label.pdf
+  kind: reworded
+  source_page: 1879
+  question: How common are life-threatening allergic reactions in people taking Stelara?
+  needs:
+  - - all_of:
+      - are rare in people taking Stelara
+      - '1,000 people). Signs include:'
+- id: M042
+  doc: ema_trulicity_label.pdf
+  kind: reworded
+  source_page: 2358
+  question: How often should the place where Trulicity is injected be changed, and which body areas can be used?
+  needs:
+  - - all_of:
+      - Change (rotate) your injection site each
+      - stomach (abdomen) or thigh.
+- id: M043
+  doc: fda_rivaroxaban_OtherR.pdf
+  kind: reworded
+  source_page: 9832
+  question: What did FDA inspectors recommend about efficacy data from the site that randomized Xarelto RECORD 4 patients after surgery?
+  needs:
+  - - all_of:
+      - efficacy data from this site not be used in support of the NDA
+- id: M044
+  doc: ema_rybelsus_label.pdf
+  kind: reworded
+  source_page: 7660
+  question: In the heart-safety trial of the 14 mg semaglutide tablet, how many first major cardiovascular events occurred in total and on placebo?
+  needs:
+  - - all_of:
+      - 'The total number of first MACE was 137: 61 (3.8%) with semaglutide'
+      - and 76 (4.8%) with placebo
+- id: M045
+  doc: ema_keytruda_label.pdf
+  kind: reworded
+  source_page: 8478
+  question: With Keytruda alone, how frequent is autoimmune diabetes presenting with ketoacidosis?
+  needs:
+  - - all_of:
+      - type 1 diabetes, including diabetic ketoacidosis
+      - Uncommon (may affect up to 1 in 100 people)
+- id: M046
+  doc: fda_rivaroxaban_OtherR.pdf
+  kind: reworded
+  source_page: 9894
+  question: In FDA's labeling comments for Xarelto, what did reviewers recommend for the statement on liver enzyme elevations if it has no clinical significance for dosing?
+  needs:
+  - - all_of:
+      - LFTs >3x ULN have any clinical implication with Xarelto
+      - do these findings have clinical significance to Xarelto
+- id: M047
+  doc: ema_repatha_assess.pdf
+  kind: reworded
+  source_page: 8122
+  question: How many patients in the evolocumab safety database were treated for at least a year, and how many for two years or more?
+  needs:
+  - - all_of:
+      - 2458 for at least 12 months, and 1124 evolocumab
+- id: M048
+  doc: ema_opdivo_label.pdf
+  kind: reworded
+  source_page: 5135
+  question: What volume should be drawn up for a 900 mg dose of subcutaneous Opdivo?
+  needs:
+  - - all_of:
+      - 5 mL (600 mg), 7.5 mL (900 mg), or 10 mL (1200 mg)
+- id: M049
+  doc: ema_pradaxa_assess.pdf
+  kind: reworded
+  source_page: 7639
+  question: What fraction of an oral dabigatran etexilate dose is absorbed according to the CHMP?
+  needs:
+  - - all_of:
+      - low bioavailability (6.5%)
+- id: M050
+  doc: ema_rybelsus_label.pdf
+  kind: reworded
+  source_page: 7699
+  question: How long should a patient fast before taking a Rybelsus tablet, and how much water may be used?
+  needs:
+  - - all_of:
+      - after a recommended fasting of at least 8 hours
+      - with a sip of water (up to 120 mL)
+- id: M051
+  doc: ema_xarelto_label.pdf
+  kind: reworded
+  source_page: 470
+  question: How long do patients usually take Xarelto tablets after a major knee replacement?
+  needs:
+  - - all_of:
+      - major knee operation you will usually take the tablets for 2 weeks
+- id: M052
+  doc: fda_dapagliflozin_OtherR.pdf
+  kind: reworded
+  source_page: 7230
+  question: In the FDA dapagliflozin review's table of cancer cases from the canagliflozin trials, how large was the kidney tumor in the 62-year-old man, and which vertebra had a metastasis?
+  needs:
+  - - all_of:
+      - 100x82x60 mm; location was mid pole and nucleolar
+      - revealed a solitary bony metastasis involving L3,
+- id: M053
+  doc: ema_opdivo_label.pdf
+  kind: reworded
+  source_page: 5045
+  question: Which eye condition is listed as rare with Opdivo plus ipilimumab?
+  needs:
+  - - all_of:
+      - Vogt-Koyanagi-Harada
+      - Eye disorders
+- id: M054
+  doc: ema_comirnaty_assess.pdf
+  kind: reworded
+  source_page: 6943
+  question: What share of participants in the pivotal Pfizer-BioNTech COVID-19 vaccine trial were obese?
+  needs:
+  - - all_of:
+      - participants made up 35.1% of the safety population
+- id: M055
+  doc: ema_tagrisso_label.pdf
+  kind: reworded
+  source_page: 7930
+  question: Which serious Tagrisso side effect involves bone marrow failure, and what are its warning signs?
+  needs:
+  - - all_of:
+      - A blood disorder called aplastic anaemia, when bone marrow stops
+      - signs suggestive of this blood disorder may include persistent fever
+- id: M056
+  doc: ema_invokana_assess.pdf
+  kind: reworded
+  source_page: 1127
+  question: How many stereocentres does canagliflozin have, and which crystal form is made commercially?
+  needs:
+  - - all_of:
+      - stereoisomerism due to the presence of five chiral centres
+      - the manufactured form I is a hemihydrate
+- id: M057
+  doc: ema_rybelsus_assess.pdf
+  kind: reworded
+  source_page: 1703
+  question: By how much did body weight fall at week 26 with the 7 mg and 14 mg doses of oral semaglutide in the key trials?
+  needs:
+  - - all_of:
+      - 2.2 to 2.4 kg with 7 mg and 3.1 to 4.4 kg with 14 mg
+- id: M058
+  doc: ema_lynparza_label.pdf
+  kind: reworded
+  source_page: 612
+  question: For how long after the last dose of Lynparza must male patients use a condom?
+  needs:
+  - - all_of:
+      - condom during therapy and for 3 months after receiving the last dose
+- id: M059
+  doc: ema_brilique_assess.pdf
+  kind: reworded
+  source_page: 6826
+  question: What background aspirin dose did all patients receive in the PLATO ticagrelor trial?
+  needs:
+  - - all_of:
+      - treated with concomitant ASA 75 to 100 mg daily
+- id: M060
+  doc: ema_keytruda_label.pdf
+  kind: reworded
+  source_page: 8464
+  question: After preparation, how many days can the Keytruda infusion solution be kept in the fridge?
+  needs:
+  - - all_of:
+      - The diluted solution may be stored for up to 7 days in a refrigerator
+- id: M061
+  doc: fda_dabigatran_ClinPharmR.pdf
+  kind: reworded
+  source_page: 2083
+  question: Can a patient take Pradaxa pellets without the capsule shell, and what doses were proposed?
+  needs:
+  - - all_of:
+      - The capsules should not be opened
+      - Pradaxa capsules 110 mg and 150 mg will be administered
+- id: M062
+  doc: ema_keytruda_assess.pdf
+  kind: reworded
+  source_page: 5256
+  question: In the pembrolizumab melanoma trial, how recently could patients have had chemotherapy or biologic cancer treatment before the first dose?
+  needs:
+  - - all_of:
+      - radioactive, or biological cancer therapy within four weeks
+- id: M063
+  doc: ema_imbruvica_assess.pdf
+  kind: reworded
+  source_page: 2168
+  question: Which heart and great-vessel malformations were seen in rat fetuses at the highest ibrutinib dose?
+  needs:
+  - - all_of:
+      - dextrocardia, retroesophageal aortic arch, persistent
+      - truncus arteriosus, and a right-sided aortic arch
+- id: M064
+  doc: fda_semaglutide_ClinPharmR.pdf
+  kind: reworded
+  source_page: 738
+  question: How long does semaglutide stay in the body, in terms of terminal half-life in days, after subcutaneous dosing in patients and healthy subjects?
+  needs:
+  - - all_of:
+      - '(range: 6.0 to 6.9 days) following SC dosing of semaglutide'
+- id: M065
+  doc: ema_opdivo_label.pdf
+  kind: reworded
+  source_page: 5084
+  question: In the perioperative nivolumab lung cancer trial, how long was median event-free survival in the placebo plus chemotherapy arm?
+  needs:
+  - - all_of:
+      - '18.43 months (95% CI: 13.63, 28.06)'
+- id: M066
+  doc: ema_ozempic_assess.pdf
+  kind: reworded
+  source_page: 6761
+  question: Does a rise in pancreatic enzymes on Ozempic predict that pancreatitis will follow?
+  needs:
+  - - all_of:
+      - does not predict a later development of pancreatitis
+- id: M067
+  doc: ema_imbruvica_label.pdf
+  kind: reworded
+  source_page: 4620
+  question: What excipient warning appears on the Imbruvica 140 mg tablet carton?
+  needs:
+  - - all_of:
+      - Contains lactose.
+      - IMBRUVICA 140 mg film-coated tablets
+- id: M068
+  doc: ema_entresto_label.pdf
+  kind: reworded
+  source_page: 4490
+  question: Which marketing authorisation number goes with the 196-tablet pack of Entresto 49 mg/51 mg?
+  needs:
+  - - all_of:
+      - EU/1/15/1058/013
+      - 196 film-coated tablets (7 packs of 28)
+- id: M069
+  doc: ema_praluent_label.pdf
+  kind: reworded
+  source_page: 5944
+  question: When was Praluent first authorised in the EU and when was that authorisation last renewed?
+  needs:
+  - - all_of:
+      - 'Date of first authorisation: 23 September 2015'
+      - 'Date of latest renewal: 2 June 2020'
+- id: M070
+  doc: fda_semaglutide_oral_StatR.pdf
+  kind: reworded
+  source_page: 7774
+  question: Did the FDA statistical reviewer of oral semaglutide find any unresolved analytic concerns?
+  needs:
+  - - all_of:
+      - no outstanding statistical issues associated with this submission
+- id: M071
+  doc: ema_mounjaro_assess.pdf
+  kind: table
+  source_page: 6209
+  question: In the tirzepatide GI TEAE severity table for analysis set AS1, how many placebo patients, and what percentage, had at least one gastrointestinal TEAE?
+  needs:
+  - - all_of:
+      - 48 (20.4)
+      - Summary of TEAEs by maximum severity in the GI SOC
+- id: M072
+  doc: fda_semaglutide_StatR.pdf
+  kind: table
+  source_page: 5427
+  question: In the FDA statistical review of semaglutide's rat carcinogenicity study, what was the tumor rate of pituitary pars distalis adenoma in vehicle-control female rats?
+  needs:
+  - - all_of:
+      - 48/70 (66)
+      - Adenoma, Pars Distalis
+- id: M073
+  doc: fda_semaglutide_StatR.pdf
+  kind: table
+  source_page: 5426
+  question: In female rats given semaglutide 0.01 mg (mid dose), what was the tumor rate for mammary adenocarcinoma?
+  needs:
+  - - all_of:
+      - 27/70 (56)
+      - Mammary Adenocarcinoma
+- id: M074
+  doc: ema_opdivo_label.pdf
+  kind: table
+  source_page: 5104
+  question: In the Opdivo label's CA209025 kidney cancer trial, what were the objective response counts with nivolumab versus everolimus?
+  needs:
+  - - all_of:
+      - 103 (25.1%)
+      - 22 (5.4%)
+      - Objective response
+- id: M075
+  doc: ema_repatha_assess.pdf
+  kind: table
+  source_page: 8083
+  question: In the Repatha (evolocumab) integrated analysis, what was the treatment difference in LDL-C percent change versus placebo at week 12 with reflexive LDL-C in the combination therapy study on Q2W dosing?
+  needs:
+  - - all_of:
+      - Reflexive LDL-Ca -71
+      - Evolocumab vs Placebo
+- id: M076
+  doc: ema_invokana_label.pdf
+  kind: table
+  source_page: 8760
+  question: In the Invokana label's 26-week triple therapy trial with metformin and sulphonylurea, what was the HbA1c difference from placebo with canagliflozin 300 mg?
+  needs:
+  - - all_of:
+      - (-1.11; -0.73)
+      - Triple therapy with metformin and sulphonylurea
+- id: M077
+  doc: fda_semaglutide_StatR.pdf
+  kind: table
+  source_page: 5436
+  question: In the semaglutide female mouse carcinogenicity table, what was the tumor rate of thyroid C-cell adenoma at the high 1 mg dose?
+  needs:
+  - - all_of:
+      - 24/60 (47)
+      - C-Cell Adenoma
+- id: M078
+  doc: ema_forxiga_assess.pdf
+  kind: table
+  source_page: 7564
+  question: In the Forxiga phase IIb and III tumour table (12 May 2011 cut-off), how many dapagliflozin-treated women had breast tumours and what percentage?
+  needs:
+  - - all_of:
+      - Breast (Females only)
+      - 9 (0.40)
+- id: M079
+  doc: ema_praluent_assess.pdf
+  kind: table
+  source_page: 2047
+  question: In the Praluent placebo-controlled pool, how many alirocumab patients stopped treatment because of any TEAE, and what percentage?
+  needs:
+  - - all_of:
+      - 131 (5.3%)
+      - Any class
+      - Placebo-controlled pool
+- id: M080
+  doc: fda_ticagrelor_MedR.pdf
+  kind: table
+  source_page: 3850
+  question: In PLATO, how many ticagrelor 90 mg patients, and what percentage, had dyspnea on exertion?
+  needs:
+  - - all_of:
+      - 224 (2.43%)
+      - Dyspnea on Exertion
+- id: M081
+  doc: ema_keytruda_label.pdf
+  kind: table
+  source_page: 8353
+  question: In KEYNOTE-010, what was median overall survival with pembrolizumab 2 mg/kg in the TPS 50% or higher group?
+  needs:
+  - - all_of:
+      - 15.8 (10.8, 22.5)
+      - Median in months (95% CI)
+- id: M082
+  doc: fda_semaglutide_StatR.pdf
+  kind: table
+  source_page: 5475
+  question: In the semaglutide retinopathy analysis by baseline retinopathy, how many semaglutide patients with baseline retinopathy had diabetic retinopathy complications?
+  needs:
+  - - all_of:
+      - 42/510 (8.2%)
+      - Retinopathy at Baseline
+- id: M083
+  doc: fda_semaglutide_StatR.pdf
+  kind: table
+  source_page: 5474
+  question: In the semaglutide diabetic retinopathy analysis by country, how many US semaglutide patients had retinopathy complications?
+  needs:
+  - - all_of:
+      - 13/570 (2.3%)
+      - Country of Randomization
+- id: M084
+  doc: ema_steglatro_assess.pdf
+  kind: table
+  source_page: 8884
+  question: In the ertugliflozin plus sitagliptin trial, how many patients on ertugliflozin 5 mg plus sitagliptin, 15 mg plus sitagliptin and placebo reached A1C below 7.0%, with percentages?
+  needs:
+  - - all_of:
+      - (8.3) (35.7) (31.3)
+      - A1C < 7.0% (logistic regression with multiple imputation based on
+- id: M085
+  doc: ema_mounjaro_assess.pdf
+  kind: table
+  source_page: 6108
+  question: In tirzepatide phase 2 study GPGB at week 26, how many patients on TZP 10 mg reached HbA1c below 7.0%, and what percentage?
+  needs:
+  - - all_of:
+      - 40 (93.0)
+      - <7.0%, n (%)
+- id: M086
+  doc: ema_mounjaro_assess.pdf
+  kind: table
+  source_page: 6131
+  question: For tirzepatide 15 mg versus semaglutide 1 mg at week 40 (treatment-regimen estimand), what was the HbA1c difference and its 95% CI?
+  needs:
+  - - all_of:
+      - -0.45***
+      - (-0.57, -0.32)
+- id: M087
+  doc: fda_vorapaxar_StatR.pdf
+  kind: table
+  source_page: 7968
+  question: In the FDA statistical review of vorapaxar's TRA-2P subgroup analysis, what was the hazard ratio (95% CI) for patients under 60 kg?
+  needs:
+  - - all_of:
+      - 1.28 (0.95-1.73)
+      - 75/921 (8.1%)
+- id: M088
+  doc: ema_keytruda_label.pdf
+  kind: table
+  source_page: 8223
+  question: In KEYNOTE-048 (CPS 20 or higher), what was median overall survival with pembrolizumab monotherapy?
+  needs:
+  - - all_of:
+      - 14.8 (11.5, 20.6)
+      - Median in months (95%
+- id: M089
+  doc: fda_ticagrelor_MedR.pdf
+  kind: table
+  source_page: 3639
+  question: In the PLATO clinical review's discontinuation table, how many ticagrelor patients discontinued for dyspnea per the sponsor, and what percentage?
+  needs:
+  - - all_of:
+      - 77 (0.8)
+      - Discontinued for dyspnea (from sponsor)
+- id: M090
+  doc: fda_dabigatran_MedR.pdf
+  kind: table
+  source_page: 9195
+  question: In the dabigatran clinical review, what was the ischemic stroke hazard ratio for 110 mg versus warfarin in patients who never used a proton pump inhibitor?
+  needs:
+  - - all_of:
+      - 1.37 (1.04, 1.80)
+      - Table 41. Proton pump Inhibitor use and the risk of ischemic stroke
+- id: M091
+  doc: ema_venclyxto_label.pdf
+  kind: table
+  source_page: 2417
+  question: In venetoclax study M14-032, what was the 12-month PFS estimate in patients who failed ibrutinib?
+  needs:
+  - - all_of:
+      - 75 (64.7, 83.2)
+      - (ibrutinib failures)
+- id: M092
+  doc: fda_dabigatran_StatR.pdf
+  kind: table
+  source_page: 5826
+  question: In the FDA statistical review of dabigatran's male rat study, what were the trend and high-dose p-values for testicular Leydig cell adenoma?
+  needs:
+  - - all_of:
+      - B-INTERSTITIAL (LEYDIG)CELL ADENOMA
+      - 0.0573 0.0827
+- id: M093
+  doc: fda_ticagrelor_MedR.pdf
+  kind: multi
+  source_page: 3722
+  question: In the FDA clinical review of ticagrelor (PLATO), how many patients lacked known vital status at the end of the trial by the reviewer's count, and how many serious pulmonary embolism events occurred with ticagrelor?
+  needs:
+  - - all_of:
+      - 54 ticagrelor and 52 clopidogrel patients as not having vital
+  - - all_of:
+      - pulmonary embolism in the ticagrelor treatment group [31 (0.34%)
+- id: M094
+  doc: fda_dapagliflozin_MedR.pdf
+  kind: multi
+  source_page: 3115
+  question: In the FDA clinical review of dapagliflozin, what percentage of 10 mg patients with a history of recurrent genital infection had a genital infection event, and what was the adjusted SIR for breast cancer?
+  needs:
+  - - all_of:
+      - to have an event of genital tract infection (25.0% of patients
+  - - all_of:
+      - dapagliflozin clinical program was 1.27
+- id: M095
+  doc: ema_xarelto_label.pdf
+  kind: multi
+  source_page: 262
+  question: In the Xarelto SmPC, in which patients is menorrhagia reported as very common, and which bleeding was most commonly reported overall?
+  needs:
+  - - all_of:
+      - observed in treatment of DVT, PE and prevention of recurrence
+  - - all_of:
+      - epistaxis (4.5 %) and gastrointestinal tract haemorrhage
+- id: M096
+  doc: fda_semaglutide_oral_PharmR.pdf
+  kind: multi
+  source_page: 4217
+  question: For oral semaglutide with SNAC in rats, how much lower was semaglutide in milk than in maternal plasma, and in which order did hepatocytes of the three species clear SNAC?
+  needs:
+  - - all_of:
+      - semaglutide was detected in milk at levels 3-12 fold lower
+  - - all_of:
+      - 'from highest to lowest was: rat > monkey > human.'
+- id: M097
+  doc: ema_ozempic_assess.pdf
+  kind: multi
+  source_page: 6686
+  question: In the Ozempic assessment report, by how much did semaglutide reduce paracetamol AUC in the first hour after a meal in subjects with obesity, and how did fat loss compare with lean mass loss?
+  needs:
+  - - all_of:
+      - of paracetamol reduced by 27%)
+  - - all_of:
+      - fat mass being 3-fold larger than loss of
+- id: M098
+  doc: fda_rivaroxaban_OtherR.pdf
+  kind: multi
+  source_page: 9729
+  question: In FDA's discussion of anticoagulation in pregnancy for Xarelto, how much higher is the venous thromboembolism risk in pregnancy, and what share of first-trimester coumadin exposures causes embryopathy?
+  needs:
+  - - all_of:
+      - Pregnant women have a fivefold increased risk of venous
+  - - all_of:
+      - about 5% of fetuses exposed during the first trimester
+- id: M099
+  doc: ema_imbruvica_assess.pdf
+  kind: multi
+  source_page: 2179
+  question: For ibrutinib (Imbruvica), what is the apparent volume of distribution and what is the in vitro plasma protein binding?
+  needs:
+  - - all_of:
+      - distribution (Vd/F) of approximately 10 000 L
+  - - all_of:
+      - high plasma protein binding in vitro (97.3%)
+- id: M100
+  doc: ema_invokana_assess.pdf
+  kind: multi
+  source_page: 1147
+  question: In the Invokana (canagliflozin) assessment, by how much did rifampin lower canagliflozin AUC and by how much did cyclosporine raise it?
+  needs:
+  - - all_of:
+      - AUC by 52%, respectively
+  - - all_of:
+      - cyclosporine, a potent inhibitor of P-gp increased AUC values by 23%

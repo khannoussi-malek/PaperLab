@@ -1,0 +1,216 @@
+{
+ "flagged": [
+  "L031",
+  "L068",
+  "L077",
+  "L098",
+  "M067",
+  "N023",
+  "N063",
+  "N064",
+  "N066",
+  "N071"
+ ],
+ "rows": [
+  {
+   "name": "set1 long A->B",
+   "keys": "all",
+   "n": 58,
+   "before": 31,
+   "after": 48,
+   "gain": 17,
+   "loss": 0,
+   "p": 0.0
+  },
+  {
+   "name": "set1 long A->B",
+   "keys": "noflag",
+   "n": 54,
+   "before": 31,
+   "after": 45,
+   "gain": 14,
+   "loss": 0,
+   "p": 0.0001
+  },
+  {
+   "name": "set1 long V->B",
+   "keys": "all",
+   "n": 58,
+   "before": 41,
+   "after": 48,
+   "gain": 7,
+   "loss": 0,
+   "p": 0.0156
+  },
+  {
+   "name": "set1 long V->B",
+   "keys": "noflag",
+   "n": 54,
+   "before": 39,
+   "after": 45,
+   "gain": 6,
+   "loss": 0,
+   "p": 0.0312
+  },
+  {
+   "name": "set1 many T->D10",
+   "keys": "all",
+   "n": 59,
+   "before": 24,
+   "after": 41,
+   "gain": 17,
+   "loss": 0,
+   "p": 0.0
+  },
+  {
+   "name": "set1 many T->D10",
+   "keys": "noflag",
+   "n": 55,
+   "before": 24,
+   "after": 39,
+   "gain": 15,
+   "loss": 0,
+   "p": 0.0001
+  },
+  {
+   "name": "set1 many HB->D10",
+   "keys": "all",
+   "n": 59,
+   "before": 35,
+   "after": 41,
+   "gain": 6,
+   "loss": 0,
+   "p": 0.0312
+  },
+  {
+   "name": "set1 many HB->D10",
+   "keys": "noflag",
+   "n": 55,
+   "before": 34,
+   "after": 39,
+   "gain": 5,
+   "loss": 0,
+   "p": 0.0625
+  },
+  {
+   "name": "set2 long A->B",
+   "keys": "all",
+   "n": 186,
+   "before": 86,
+   "after": 139,
+   "gain": 53,
+   "loss": 0,
+   "p": 0.0
+  },
+  {
+   "name": "set2 long A->B",
+   "keys": "noflag",
+   "n": 180,
+   "before": 84,
+   "after": 135,
+   "gain": 51,
+   "loss": 0,
+   "p": 0.0
+  },
+  {
+   "name": "set2 long V->B [conf]",
+   "keys": "all",
+   "n": 186,
+   "before": 107,
+   "after": 139,
+   "gain": 35,
+   "loss": 3,
+   "p": 0.0
+  },
+  {
+   "name": "set2 long V->B [conf]",
+   "keys": "noflag",
+   "n": 180,
+   "before": 103,
+   "after": 135,
+   "gain": 34,
+   "loss": 2,
+   "p": 0.0
+  },
+  {
+   "name": "set2 long B->K",
+   "keys": "all",
+   "n": 186,
+   "before": 139,
+   "after": 144,
+   "gain": 17,
+   "loss": 12,
+   "p": 0.4583
+  },
+  {
+   "name": "set2 long B->K",
+   "keys": "noflag",
+   "n": 180,
+   "before": 135,
+   "after": 140,
+   "gain": 17,
+   "loss": 12,
+   "p": 0.4583
+  },
+  {
+   "name": "set2 many T->D10",
+   "keys": "all",
+   "n": 189,
+   "before": 68,
+   "after": 105,
+   "gain": 40,
+   "loss": 3,
+   "p": 0.0
+  },
+  {
+   "name": "set2 many T->D10",
+   "keys": "noflag",
+   "n": 183,
+   "before": 66,
+   "after": 100,
+   "gain": 37,
+   "loss": 3,
+   "p": 0.0
+  },
+  {
+   "name": "set2 many HB->D10 [conf]",
+   "keys": "all",
+   "n": 189,
+   "before": 97,
+   "after": 105,
+   "gain": 10,
+   "loss": 2,
+   "p": 0.0386
+  },
+  {
+   "name": "set2 many HB->D10 [conf]",
+   "keys": "noflag",
+   "n": 183,
+   "before": 93,
+   "after": 100,
+   "gain": 9,
+   "loss": 2,
+   "p": 0.0654
+  },
+  {
+   "name": "set2 many T->H8",
+   "keys": "all",
+   "n": 189,
+   "before": 68,
+   "after": 93,
+   "gain": 27,
+   "loss": 2,
+   "p": 0.0
+  },
+  {
+   "name": "set2 many T->H8",
+   "keys": "noflag",
+   "n": 183,
+   "before": 66,
+   "after": 90,
+   "gain": 26,
+   "loss": 2,
+   "p": 0.0
+  }
+ ]
+}
