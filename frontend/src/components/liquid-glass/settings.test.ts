@@ -10,12 +10,12 @@ describe('sanitizeGlass', () => {
   it('starts from the owner\'s chosen look, tuned in the Settings preview', () => {
     expect(DEFAULT_GLASS).toMatchObject({
       enabled: true,
-      displacementScale: 151,
-      blurAmount: 0.55,
+      displacementScale: 80,
+      blurAmount: 0.0375,
       saturation: 105,
-      aberrationIntensity: 1.3,
-      edgeWidth: 8,
-      opacity: 0.15,
+      aberrationIntensity: 0,
+      edgeWidth: 14,
+      opacity: 0.35,
     })
   })
 

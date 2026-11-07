@@ -137,9 +137,10 @@ The app chrome is frosted glass over a faint blue/violet glow on the page backgr
         formulas (blur = 4 + 32 × amount px; green and blue bend 5% and 10% more per aberration step). Values from
         its demo, liquid-glass.maxrovensky.com, carry over 1:1; Settings links it. Edge width and Opacity are
         PaperLab's.
-      - Defaults are the owner's own look, tuned in the preview (2026-11-07): Displacement scale 151, Blur amount
-        0.55 (21.6 px), Saturation 105%, Chromatic aberration 1.3, Edge width 8 px, Opacity 15%. The heavy frost is
-        what keeps text readable through so clear a tint. The library's own defaults were 70, 0.0625, 140 and 2.
+      - Defaults are the owner's own look, tuned in the preview (2026-11-07, second pass, replacing 151 / 0.55 /
+        105 / 1.3 / 8 / 15%): Displacement scale 80, Blur amount 0.0375 (5.2 px), Saturation 105%, Chromatic
+        aberration 0 (no colour split), Edge width 14 px, Opacity 35%. Light frost with more tint: the tint, not
+        the blur, keeps text readable. The library's own defaults were 70, 0.0625, 140 and 2.
       - The demo's Corner radius (each component keeps its own), Elasticity (a mouse-following stretch) and Over
         light (a dark tint, which would put dark text on dark glass in light theme) are left out.
     - **Live preview** (owner, 2026-11-07: "a demo in the settings so the user can see and test", then "on the right

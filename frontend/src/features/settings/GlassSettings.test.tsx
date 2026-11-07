@@ -24,12 +24,12 @@ afterEach(() => {
 describe('Settings → Glass', () => {
   it('has the demo\'s four sliders, under the demo\'s names, plus edge width and opacity, at the owner\'s defaults', () => {
     renderSection()
-    expect(screen.getByRole('slider', { name: 'Displacement scale' })).toHaveValue('151')
-    expect(screen.getByRole('slider', { name: 'Blur amount' })).toHaveValue('0.55')
+    expect(screen.getByRole('slider', { name: 'Displacement scale' })).toHaveValue('80')
+    expect(screen.getByRole('slider', { name: 'Blur amount' })).toHaveValue('0.0375')
     expect(screen.getByRole('slider', { name: 'Saturation' })).toHaveValue('105')
-    expect(screen.getByRole('slider', { name: 'Chromatic aberration' })).toHaveValue('1.3')
-    expect(screen.getByRole('slider', { name: 'Edge width' })).toHaveValue('8')
-    expect(screen.getByRole('slider', { name: 'Opacity' })).toHaveValue('0.15')
+    expect(screen.getByRole('slider', { name: 'Chromatic aberration' })).toHaveValue('0')
+    expect(screen.getByRole('slider', { name: 'Edge width' })).toHaveValue('14')
+    expect(screen.getByRole('slider', { name: 'Opacity' })).toHaveValue('0.35')
   })
 
   it('points to the demo, so values can be tried there first', () => {
@@ -62,7 +62,7 @@ describe('Settings → Glass', () => {
     renderSection()
     fireEvent.change(screen.getByRole('slider', { name: 'Opacity' }), { target: { value: '0.2' } })
     fireEvent.click(screen.getByRole('button', { name: 'Reset to defaults' }))
-    expect(screen.getByRole('slider', { name: 'Opacity' })).toHaveValue('0.15')
+    expect(screen.getByRole('slider', { name: 'Opacity' })).toHaveValue('0.35')
   })
 
   it('says when this browser can only frost', () => {
