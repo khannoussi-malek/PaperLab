@@ -70,6 +70,15 @@ The app chrome is frosted glass over a faint blue/violet glow on the page backgr
   look of Apple's Liquid Glass, kept quiet where people read.
   - **Lit edge on every glass surface:** `glass` carries an inset 1 px top highlight (`--glass-rim`, white 70% light /
     9% dark), the light catching the top edge. It composes with any `shadow-*` on the same surface.
+  - **Buttons are glass** (`components/ui/button.tsx`, asked for 2026-11-07):
+    - primary is tinted glass: solid `primary` (for contrast), a 15% white sheen that fades out above the label, a lit
+      top edge (`--button-rim`) and a soft primary glow;
+    - outline is clear glass (`bg-glass`) and secondary is strong glass, both with a `glass-border` hairline and the
+      lit edge;
+    - ghost stays bare and turns to strong glass on hover; destructive keeps its tint and gets the lit edge;
+    - a press scales the button to 97% instead of nudging it 1 px, and only when motion is allowed;
+    - no `backdrop-filter` on buttons: there are hundreds per page, and they sit on flat panels where a blur shows
+      nothing.
   - **Light bending (refraction), on passing notices only:** the page behind is pushed outwards near the glass's edge,
     in red, green and blue at slightly different strengths for a colour fringe. The filter is `#pl-liquid` in
     `Notifications.tsx`, with its map from `liquidGlass.ts`: squared, so the bend is gentle at first and steep at the
