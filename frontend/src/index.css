@@ -84,6 +84,7 @@
     --glass-rim: rgb(255 255 255 / 0.7);
     --toast-glass: #ffffff;
     --toast-rim: rgb(255 255 255 / 0.85);
+    --button-rim: rgb(255 255 255 / 0.4);
     /* Not redefined under .dark: controls sitting on the always-white PDF page (citation buttons) need a ring that
        still contrasts 3:1 there, which dark theme's --primary (#60a5fa) does not. */
     --on-page-ring: #2563eb;
@@ -127,6 +128,7 @@
     --glass-rim: rgb(255 255 255 / 0.09);
     --toast-glass: #1e293b;
     --toast-rim: rgb(255 255 255 / 0.28);
+    --button-rim: rgb(255 255 255 / 0.45);
 }
 
 /* "Reduce transparency" in the OS: glass becomes solid; blur over an opaque fill shows nothing. */
