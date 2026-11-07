@@ -25,9 +25,9 @@ function GlassFilters() {
     <svg aria-hidden width="0" height="0" className="absolute">
       <filter id={LIQUID_FILTER_ID} primitiveUnits="objectBoundingBox" x="0" y="0" width="1" height="1" colorInterpolationFilters="sRGB">
         {map && <feImage href={map} x="0" y="0" width="1" height="1" preserveAspectRatio="none" result="map" />}
-        <Channel name="red" scale={0.1} matrix="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" />
-        <Channel name="green" scale={0.09} matrix="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0" />
-        <Channel name="blue" scale={0.08} matrix="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0" />
+        <Channel name="red" scale={0.14} matrix="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" />
+        <Channel name="green" scale={0.12} matrix="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0" />
+        <Channel name="blue" scale={0.1} matrix="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0" />
         <feBlend in="red" in2="green" mode="screen" result="red-green" />
         <feBlend in="red-green" in2="blue" mode="screen" />
       </filter>
@@ -37,29 +37,39 @@ function GlassFilters() {
 
 /**
  * `#pl-glass-surface`, applied to Sileo's blob: what makes it read as a piece of glass rather than a tinted shape.
- * - the body turns 80% opaque, so the frosted, bent page shows through it while text keeps ≥ 5.2:1 on any page;
- * - a bump map from the blob's own outline catches a light from the top left (`feSpecularLighting`): the flat middle
- *   stays clear and only the rounded edge facing the light shines;
- * - a 1 px rim (`--toast-rim`) traces the edge, the bright line real glass has where it turns away from you.
+ * - the body is clear, a 25% tint, so the frosted, bent page shows through (legibility comes from the backdrop's
+ *   brightness, `--toast-backdrop`, as in Apple's glass, not from paint);
+ * - the blob's outline, blurred, is a bevel: a key light from the top left and a weaker bounce from the bottom right
+ *   (`feSpecularLighting`) make its rounded edge shine while the flat middle stays clear;
+ * - a soft inner glow and a hairline rim (`--toast-rim`) give the edge its thickness.
  */
 function GlassSurface() {
   return (
     <svg aria-hidden width="0" height="0" className="absolute">
       <filter id={SURFACE_FILTER_ID} x="-5%" y="-5%" width="110%" height="110%" colorInterpolationFilters="sRGB">
         <feComponentTransfer in="SourceGraphic" result="body">
-          <feFuncA type="linear" slope="0.8" />
+          <feFuncA type="linear" slope="0.25" />
         </feComponentTransfer>
-        <feGaussianBlur in="SourceAlpha" stdDeviation="3" result="bump" />
-        <feSpecularLighting in="bump" surfaceScale="4" specularConstant="0.9" specularExponent="40" lightingColor="#ffffff" result="light">
-          <feDistantLight azimuth="225" elevation="40" />
+        <feGaussianBlur in="SourceAlpha" stdDeviation="4" result="bevel" />
+        <feSpecularLighting in="bevel" surfaceScale="6" specularConstant="1.2" specularExponent="28" lightingColor="#ffffff" result="key">
+          <feDistantLight azimuth="225" elevation="32" />
         </feSpecularLighting>
-        <feComposite in="light" in2="SourceAlpha" operator="in" result="shine" />
+        <feSpecularLighting in="bevel" surfaceScale="6" specularConstant="0.5" specularExponent="28" lightingColor="#ffffff" result="bounce">
+          <feDistantLight azimuth="45" elevation="32" />
+        </feSpecularLighting>
+        <feComposite in="key" in2="bounce" operator="arithmetic" k2="1" k3="1" result="lights" />
+        <feComposite in="lights" in2="SourceAlpha" operator="in" result="shine" />
+        <feMorphology in="SourceAlpha" operator="erode" radius="3" result="core" />
+        <feGaussianBlur in="core" stdDeviation="3" result="soft-core" />
+        <feComposite in="SourceAlpha" in2="soft-core" operator="out" result="thickness" />
+        <feColorMatrix in="thickness" type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.22 0" result="glow" />
         <feMorphology in="SourceAlpha" operator="erode" radius="1" result="inside" />
         <feComposite in="SourceAlpha" in2="inside" operator="out" result="edge" />
         <feFlood style={{ floodColor: 'var(--toast-rim)' }} />
         <feComposite in2="edge" operator="in" result="rim" />
         <feMerge>
           <feMergeNode in="body" />
+          <feMergeNode in="glow" />
           <feMergeNode in="shine" />
           <feMergeNode in="rim" />
         </feMerge>
