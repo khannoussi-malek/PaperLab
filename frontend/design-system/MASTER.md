@@ -79,17 +79,9 @@ The app chrome is frosted glass over a faint blue/violet glow on the page backgr
     - a press scales the button to 97% instead of nudging it 1 px, and only when motion is allowed;
     - no `backdrop-filter` on buttons: there are hundreds per page, and they sit on flat panels where a blur shows
       nothing.
-  - **Light bending (refraction), on passing notices only:** each toast's own lens (see "Notifications") bends the
-    page behind along the toast's outline, in red, green and blue at different strengths for a colour split. It is
-    liquid-glass-react's technique. That library's component isn't used: it forces white 20 px system text and
-    centres itself on a point.
-  - **Chromium only:** an SVG filter inside `backdrop-filter` works in Chrome, Edge, Arc and the Electron desktop app.
-    `Notifications` sets `html.liquid` only there (`bendsLight`); Safari and Firefox keep plain frosted glass.
-  - **Not on chrome or reading surfaces:** bending what sits behind text the reader is reading costs legibility, and
-    each lens is a filter of its own. Add it to another compact, floating surface only with its own screenshots in
-    both themes.
-  - **Ruled out:** a `::before` or child layer with its own `backdrop-filter` inside a Sileo toast. The toast acts as
-    a backdrop root, so that layer only sees the toast itself; the blur has to sit on the toast element.
+  - **No light bending (refraction):** it was built for the toasts and dropped with them (see "Notifications").
+    `liquid-glass-react` was tried and not kept: its component forces white 20 px system text and centres itself on a
+    point.
 
 ## Stack
 
@@ -332,37 +324,16 @@ toolbar; call `sileo.success({ title, description })` (or `.info`, `.error`, `.p
 - **Writing one:** a sentence-case title of two or three words saying what happened ("DOI copied"), and an optional
   description with the thing itself (the DOI). Sileo shows it for 4 s in a `polite` live region, so focus never moves.
   Existing inline notices move only when a change already touches them.
-- **It is liquid glass** (see "Glass"), styled around Sileo, whose toast is one SVG blob (a pill that grows a body)
-  that needs a solid fill to morph (`index.css`, the `[data-sileo-*]` rules):
-  - **Each toast has its own lens** (third pass, 2026-11-07; the owner: "a lot of white, and the colour doesn't bend
-    like real glass"). `toastLens.ts` measures the toast's actual outline: a signed distance to pill and body, joined
-    smoothly like Sileo's goo. `Notifications.tsx` turns that into one SVG filter per toast, rebuilt whenever Sileo
-    resizes it, and points the toast's `backdrop-filter` at it (`--pl-lens`). The page behind is pulled from just
-    inside the edge, so it stretches round the rim like a thick lens. Red, green and blue bend by 52, 42 and 32 px, so
-    colours split and curve along the real outline, including the pill's own edges. Only the outer 6 px stay crisp;
-    the middle, behind the text, is frosted (7 px). Bending outwards is ruled out: it samples past the toast's box,
-    where the backdrop is empty, and draws bright lines on the edges.
-  - **The blob is thin glass, not paint:** `#pl-glass-surface` tints it only 12% (`--toast-glass`). It shows a narrow
-    specular highlight where the rounded edge faces a top-left light, a soft shade inside the opposite edge
-    (`--toast-shade`), and a hairline rim (`--toast-rim`: slate in light, white in dark). There is no white glow and,
-    in light, no halo.
-  - **Legibility comes from toning the backdrop** (`--toast-tone`): light only adds colour (saturate 170%); dark also
-    darkens to 45%. Safari and Firefox get `--toast-backdrop`, plain frost (blur 12 px plus the same tone).
-  - **The blur is masked to the blob:** pill, body, a square bridge where they meet, and a 14 px concave fillet each
-    side of the pill. Without the bridge and fillets the mask cut a notch where Sileo's goo (blur 8 at roundness 16)
-    curves the pill into the body; the owner spotted it. The mask reads Sileo's size variables (`--_px`, `--_pw`,
-    `--_h`), follows the morph at Sileo's spring, and assumes a top-* position (the body grows downwards), so keep the
-    Toaster at the top.
-  - **Text is full `foreground`**, with a soft dark halo in dark mode (`--toast-halo`, Apple's vibrancy). Worst real
-    case, a dark toast over a white PDF page (the Library preview sits under the toasts): about 5.0:1, ignoring the halo. `muted-
-    foreground` or 85% fell under 4.5:1 there. Sileo's state colours stay on the badge. Known limit: a light-theme
-    toast over something dark or strongly coloured (a near-black picture, the blue primary button) loses contrast,
-    because the light glass no longer brightens what's behind. The toasts sit under the toolbar, over page content,
-    so this is rare; if it turns up in real use, add `brightness(1.1)` back to the light `--toast-tone`.
-  - **Focus and motion:** a focused toast drops its mask so the focus ring shows; with reduced motion the morph and the
-    mask jump instead of springing.
-  - **Reduce transparency** turns it solid: `card` fill, no blur, no lighting. Sileo already honours reduced motion.
-  - **Sileo upgrades** need fresh screenshots in both themes, since these rules lean on its `data-sileo-*` markup.
+- **Sileo's own colours, unstyled** (owner, 2026-11-07, after three passes at glass toasts: "we failed with the glass
+  effect on the toast, keep the toasts with their default colours"). PaperLab adds no CSS, filter or `fill` to the
+  Toaster, no `[data-sileo-*]` rules. It does pass the app's theme (`theme` from `useTheme`), so Sileo picks its own
+  matching colours: a dark pill on light pages, a light one on dark pages. Without it, dark mode drew the app's light
+  text on Sileo's default white pill. Don't try glass on the toasts again without the owner asking. What was tried, so it isn't repeated: frosting and bending the page behind Sileo's blob through a
+  mask on the toast (a blur layer inside the toast can't work, since the toast is a backdrop root). Even with a lens
+  shaped from each toast's outline, the result looked like white or dark plastic, not glass.
+- **Known gap:** Sileo colours the title by state (green, blue...), and on its light pill (dark mode) some of these
+  fall under 4.5:1. The owner chose the default look; if contrast becomes a problem, change the title colour only,
+  not the toast.
 
 ## Motion
 
