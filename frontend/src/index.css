@@ -84,10 +84,13 @@
     --glass-rim: rgb(255 255 255 / 0.7);
     --toast-glass: #ffffff;
     /* On a light page a white rim vanishes; a faint slate hairline gives the glass its edge, as refraction does. */
-    --toast-rim: rgb(100 116 139 / 0.35);
-    /* Clear glass stays legible the way Apple's does: by brightening (light) or darkening (dark) what's behind. */
-    --toast-backdrop: blur(10px) saturate(190%) brightness(1.05);
-    --toast-halo: rgb(255 255 255 / 0.7);
+    --toast-rim: rgb(100 116 139 / 0.3);
+    --toast-shade: rgb(15 23 42 / 0.12);
+    /* Thin glass stays legible the way Apple's does, by toning what's behind (light: just more colour; dark: darker),
+       not by painting over it. --toast-backdrop is the frost-only fallback where the lens can't run. */
+    --toast-tone: saturate(170%);
+    --toast-backdrop: blur(12px) saturate(170%);
+    --toast-halo: transparent;
     --button-rim: rgb(255 255 255 / 0.4);
     /* Not redefined under .dark: controls sitting on the always-white PDF page (citation buttons) need a ring that
        still contrasts 3:1 there, which dark theme's --primary (#60a5fa) does not. */
@@ -131,8 +134,10 @@
     --ambient-2: rgb(139 92 246 / 0.16);
     --glass-rim: rgb(255 255 255 / 0.09);
     --toast-glass: #1e293b;
-    --toast-rim: rgb(255 255 255 / 0.35);
-    --toast-backdrop: blur(10px) saturate(160%) brightness(0.5);
+    --toast-rim: rgb(255 255 255 / 0.3);
+    --toast-shade: rgb(0 0 0 / 0.35);
+    --toast-tone: saturate(150%) brightness(0.45);
+    --toast-backdrop: blur(12px) saturate(150%) brightness(0.45);
     --toast-halo: rgb(2 6 23 / 0.6);
     --button-rim: rgb(255 255 255 / 0.45);
 }
@@ -191,9 +196,10 @@
         mask-size var(--sileo-duration) var(--sileo-spring-easing),
         mask-position var(--sileo-duration) var(--sileo-spring-easing);
 }
-/* Bends the page at the glass's edges with a colour fringe; Chromium only (the `liquid` class, see liquidGlass.ts). */
+/* Chromium only (the `liquid` class): the toast's own lens bends the page round its rim, colours split, and frosts
+   only the middle (Notifications.tsx sets --pl-lens). Until the lens exists, plain frost. */
 :root.liquid [data-sileo-toast] {
-    backdrop-filter: url(#pl-liquid) var(--toast-backdrop);
+    backdrop-filter: var(--pl-lens, blur(5px)) var(--toast-tone);
 }
 :root [data-sileo-svg] {
     filter: url(#pl-glass-surface);
