@@ -80,6 +80,9 @@
     --glass-border: rgb(148 163 184 / 0.35);
     --ambient-1: rgb(37 99 235 / 0.12);
     --ambient-2: rgb(124 58 237 / 0.1);
+    /* Liquid glass: the light catching the top edge of every glass surface, and of tinted (primary) buttons. */
+    --glass-rim: rgb(255 255 255 / 0.7);
+    --button-rim: rgb(255 255 255 / 0.4);
     /* Not redefined under .dark: controls sitting on the always-white PDF page (citation buttons) need a ring that
        still contrasts 3:1 there, which dark theme's --primary (#60a5fa) does not. */
     --on-page-ring: #2563eb;
@@ -120,6 +123,8 @@
     --glass-border: rgb(255 255 255 / 0.1);
     --ambient-1: rgb(59 130 246 / 0.18);
     --ambient-2: rgb(139 92 246 / 0.16);
+    --glass-rim: rgb(255 255 255 / 0.09);
+    --button-rim: rgb(255 255 255 / 0.45);
 }
 
 /* "Reduce transparency" in the OS: glass becomes solid; blur over an opaque fill shows nothing. */
@@ -129,6 +134,85 @@
         --glass: var(--card);
         --glass-strong: var(--card);
     }
+}
+
+/* Liquid glass (Settings → Glass; components/liquid-glass; "Glass" in design-system/MASTER.md). Only in Chromium
+   with the switch on (`html.liquid`): every glass surface of a switched-on area carries `data-lg` and a lens of its
+   own size (--lg-lens). Its backdrop is frosted and saturated first, then bent by the lens, in liquid-glass-react's
+   order, and its fill turns see-through (--lg-opacity), or the bending would hide behind paint. The settings set
+   --lg-blur, --lg-saturate and --lg-opacity on <html>. */
+:root.liquid [data-lg] {
+    backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate)) var(--lg-lens);
+}
+/* A pressed or selected toggle keeps its own fill, so its state still shows. */
+:root.liquid [data-lg]:not([aria-pressed="true"], [data-state="on"]) {
+    background-color: color-mix(in srgb, var(--card) calc(var(--lg-opacity) * 100%), transparent);
+}
+:root.liquid [data-lg][data-slot="button"]:not([aria-pressed="true"], [data-state="on"]):is(:hover, [aria-expanded="true"]) {
+    background-color: color-mix(in srgb, var(--card) calc(var(--lg-opacity) * 100% + 20%), transparent);
+}
+/* Reduce transparency: solid, unblurred, in every state (the selectors match the ones above, so they win). */
+@media (prefers-reduced-transparency: reduce) {
+    :root.liquid [data-lg],
+    :root.liquid [data-lg]:not([aria-pressed="true"], [data-state="on"]),
+    :root.liquid [data-lg][data-slot="button"]:not([aria-pressed="true"], [data-state="on"]):is(:hover, [aria-expanded="true"]) {
+        background-color: var(--card);
+        backdrop-filter: none;
+    }
+}
+
+/* Workspace tab pill as a lens (WorkspaceTabBar, `data-lens`, only where light bends): over the labels, nearly clear
+   and unfrosted, so the active label stays sharp while the pill's edges bend the labels it slides across. */
+:root.liquid [data-tab-thumb][data-lens] {
+    z-index: 10;
+    background-color: rgb(255 255 255 / 0.1);
+    backdrop-filter: url(#lg-tab-thumb) saturate(var(--lg-saturate));
+}
+.dark [data-tab-thumb][data-lens] {
+    background-color: rgb(255 255 255 / 0.06);
+}
+/* Below md the tab bar fades its ends with a mask, which makes it a backdrop root, so a lens there would only see the
+   bar; reduce transparency asks for solid. Either way: the plain pill behind the labels. */
+@media (prefers-reduced-transparency: reduce), (width < 48rem) {
+    :root.liquid [data-tab-thumb][data-lens],
+    .dark [data-tab-thumb][data-lens] {
+        z-index: auto;
+        background-color: var(--glass-strong);
+        backdrop-filter: none;
+    }
+}
+
+/* Settings → Glass preview stage (GlassPreview.tsx): busy colour, stripes and words, for the glass to bend. */
+.glass-stage {
+    background:
+        radial-gradient(circle at 18% 70%, #f472b6 0 14%, transparent 14.5%),
+        radial-gradient(circle at 62% 38%, #38bdf8 0 17%, transparent 17.5%),
+        radial-gradient(circle at 88% 82%, #facc15 0 12%, transparent 12.5%),
+        radial-gradient(circle at 40% 95%, #a78bfa 0 10%, transparent 10.5%),
+        repeating-linear-gradient(45deg, rgb(15 23 42 / 0.07) 0 8px, transparent 8px 16px),
+        linear-gradient(135deg, #e0e7ff, #fdf2f8 60%, #ecfeff);
+}
+.dark .glass-stage {
+    background:
+        radial-gradient(circle at 18% 70%, #db2777 0 14%, transparent 14.5%),
+        radial-gradient(circle at 62% 38%, #0284c7 0 17%, transparent 17.5%),
+        radial-gradient(circle at 88% 82%, #ca8a04 0 12%, transparent 12.5%),
+        radial-gradient(circle at 40% 95%, #7c3aed 0 10%, transparent 10.5%),
+        repeating-linear-gradient(45deg, rgb(255 255 255 / 0.06) 0 8px, transparent 8px 16px),
+        linear-gradient(135deg, #1e1b4b, #0f172a 60%, #083344);
+}
+
+/* The persistent sidebar (PersistentRail) during a page change. Navigation cross-fades the page in a view transition,
+   a still picture of the old page fading into the new one; the sidebar was in that picture, so its pill showed twice,
+   frozen on the old item and gliding from it. Named on its own, the sidebar shows only live, and only its pill moves. */
+.app-rail {
+    view-transition-name: app-rail;
+}
+::view-transition-old(app-rail) {
+    display: none;
+}
+::view-transition-new(app-rail) {
+    animation: none;
 }
 
 /* Pages drifting behind a Library row while its paper embeds (EmbeddingFlight.tsx). Decorative only: base opacity

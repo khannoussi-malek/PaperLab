@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { HitTable } from './HitTable'
 import { api, type Hit } from '@/api/client'
 import { GLOSSARY } from '@/features/workspaces/glossary'
+import { sileo } from 'sileo'
 
 /** The row list only — excludes the preview panel, which also renders the current hit's title/byline. Always
  * present (even before data loads), so this can be synchronous. */
@@ -344,6 +345,19 @@ test('the preview panel offers a way to get the PDF for a hit that needs one: se
   expect(panel.getByRole('link', { name: 'Open page' })).toHaveAttribute('href', 'https://doi.org/10.1234/attention')
   expect(panel.getByRole('button', { name: 'Copy DOI' })).toBeInTheDocument()
   expect(panel.getByLabelText('Upload PDF for a paper about llms')).toBeInTheDocument()
+})
+
+test('Copy DOI in the preview confirms with a passing notice, since the button itself never changes', async () => {
+  const hit: Hit = { ...baseHit, doi: '10.1234/attention', acquisition_status: 'failed' }
+  vi.spyOn(api, 'listSearchHits').mockResolvedValue({ items: [hit], next_cursor: null })
+  Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } })
+  const notice = vi.spyOn(sileo, 'success').mockReturnValue('t1')
+
+  renderWithClient(<HitTable workspaceId="ws-1" />)
+  const panel = await preview()
+  fireEvent.click(await panel.findByRole('button', { name: 'Copy DOI' }))
+
+  await waitFor(() => expect(notice).toHaveBeenCalledWith({ title: 'DOI copied', description: '10.1234/attention' }))
 })
 
 test('clicking "Add PDF" in the preview panel imports only that one hit, not the whole filter, and never re-fetches the pool', async () => {

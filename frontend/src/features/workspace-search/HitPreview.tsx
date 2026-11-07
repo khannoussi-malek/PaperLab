@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { sileo } from 'sileo'
 import type { Hit, HitReviewUpdate } from '@/api/client'
 import { glass } from '@/components/glass'
 import { Button } from '@/components/ui/button'
@@ -50,6 +51,7 @@ export function HitPreview({ hit, onReview, onAddPdf, addPdfPending, onUpload, u
     try {
       await copyText(doi)
       setCopyError(null)
+      sileo.success({ title: 'DOI copied', description: doi })
     } catch (error) {
       setCopyError(error instanceof Error ? error.message : 'Could not copy.')
     }

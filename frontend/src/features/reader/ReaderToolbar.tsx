@@ -37,7 +37,7 @@ export function ReaderToolbar({ paper, zoomIndex, onZoomChange, capturing, onCap
   const pages = paper?.has_pdf !== false
   return (
     <>
-    <header className={cn('col-span-full flex h-11 items-center gap-1 border-b border-glass-border px-2', glass)}>
+    <header data-glass-area="reader" className={cn('col-span-full flex h-11 items-center gap-1 border-b border-glass-border px-2', glass)}>
       <Button variant="ghost" size="sm" asChild className="shrink-0 text-muted-foreground">
         <a href="#/">← Library</a>
       </Button>

@@ -54,6 +54,32 @@ changing work areas. Don't replace the whole shell for every feature."*
   (there is nothing to navigate to yet). The reader's toolbar is the same `h-11` glass bar with the same quiet
   buttons, so the chrome still reads as one app.
 
+- **The sidebar's current item: a gliding glass pill** (owner, 2026-11-07). `NavRail` draws one glass pill on the
+  `aria-current` link, top views and workspaces alike. Those rows paint no fill of their own (`railItem(active, true)`),
+  keeping only the heavier weight. Settings' own section list keeps the plain `railItem` look.
+  - **One sidebar for the whole app** (owner: "the nav bar re-renders, so the animation glitches and feels like it
+    restarts"). Every view draws its own `AppShell`, which used to destroy and redraw the sidebar on each navigation.
+    Now `App` renders one `PersistentRail` into a node that lives all session, and each shell's `RailSlot` moves that
+    node into place. Moving a node doesn't remount the React component, so the sidebar, its pill and its scroll survive
+    navigation. It is mounted after the routed page, so the new slot holds the node before the pill measures. The
+    mobile drawer still draws its own sidebar.
+  - **The glide is a Web Animation, transform only, 650 ms with the tabs' spring.** On a navigation the pill goes
+    to its new item at once and animates from where it is drawn that instant, a running glide included, so a second
+    click mid-glide carries on instead of snapping.
+  - **Navigation is a view transition** (`withViewTransition`):
+    - It holds a still picture of the old page until the new one has rendered, which takes about 600 ms on Charts
+      and Notes. The glide is therefore created paused and played on the transition's `ready`
+      (`currentViewTransition`); otherwise it ran behind the still and showed up nearly finished.
+    - The sidebar has its own transition name (`.app-rail`, old picture hidden, new one not faded). Otherwise the
+      cross-fade showed two pills, a frozen one on the old item and the gliding one.
+  - Checked by recording the navigation as video and reading it frame by frame. Screenshots taken by a script wait
+    for the busy page, so they show only the end state.
+  - The pill follows the workspace list's scroll, fades out while its row is scrolled out of view, and jumps under
+    reduced motion.
+- **Smoothness of the gliding pieces:** the sidebar pill, the tab pill and the menu highlight are each their own
+  compositor layer (`will-change: transform`), and their movement is a transform. The tab pill's width change still
+  runs on the main thread; that is the one part a busy page can stutter.
+
 ## Glass
 
 The app chrome is frosted glass over a faint blue/violet glow on the page background. The paper is not.
@@ -66,7 +92,76 @@ The app chrome is frosted glass over a faint blue/violet glow on the page backgr
   (`bg-provenance-llm-surface` wins, including under chat answers).
 - OS "Reduce transparency" swaps both glass tokens for `card`, so every surface turns solid.
 - Measured contrast on glass (screenshots, both themes): body text 10.8–17.7:1, muted text 5.8–7.5:1.
-
+- **Liquid glass (added 2026-11-07, owner: "as close as possible to Apple glass, as realistic as possible"):** the
+  look of Apple's Liquid Glass, kept quiet where people read.
+  - **Lit edge on every glass surface:** `glass` carries an inset 1 px top highlight (`--glass-rim`, white 70% light /
+    9% dark), the light catching the top edge. It composes with any `shadow-*` on the same surface.
+  - **Buttons are glass** (`components/ui/button.tsx`, asked for 2026-11-07):
+    - primary is tinted glass: solid `primary` (for contrast), a 15% white sheen that fades out above the label, a lit
+      top edge (`--button-rim`) and a soft primary glow;
+    - outline is clear glass (`bg-glass`) and secondary is strong glass, both with a `glass-border` hairline and the
+      lit edge;
+    - ghost stays bare and turns to strong glass on hover; destructive keeps its tint and gets the lit edge;
+    - a press scales the button to 97% instead of nudging it 1 px, and only when motion is allowed;
+    - no `backdrop-filter` on buttons: there are hundreds per page, and they sit on flat panels where a blur shows
+      nothing.
+  - **Menus, context menus, their submenus and selects: a gliding glass highlight** (owner, 2026-11-07, after the
+    workspace tabs). `MenuGlide` (`components/ui/menu-glide.tsx`) sits first inside each menu surface (inside the
+    viewport, for a select) and follows whichever item Radix marks `data-highlighted`, by pointer or keyboard.
+    - It is `bg-accent` with a glass hairline, the lit top edge and a small shadow. Items paint no highlight of their
+      own; destructive items keep their red tint, and an open submenu's trigger keeps its fill.
+    - It glides in 220 ms with a slight spring, quicker than the tabs' 650 ms because menus are walked item by item
+      and a slow highlight trails the pointer. It fades out when nothing is highlighted, and comes back in place
+      rather than sliding from where it was. Under reduced motion it jumps.
+    - No lens of its own: the menu surface is already a lens and a backdrop root, so a lens inside would only see the
+      menu.
+  - **Light bending, tunable in Settings → Glass** (owner, 2026-11-07: glass on floating surfaces, toolbar and rail,
+    buttons and reader panels, with live settings). `components/liquid-glass/` holds it:
+    - `LiquidGlassProvider` (in `main.tsx`) finds every glass surface of a switched-on area. Each one gets `data-lg`
+      and a lens of its own size and corner radius (`--lg-lens`); same-size surfaces share one SVG filter.
+    - `index.css` ("Liquid glass") frosts and saturates the backdrop, then bends it through the lens, in
+      liquid-glass-react's order. It also turns the surface's fill see-through (`--lg-opacity`), or paint would hide
+      the bending.
+    - The lens (`lens.ts`) pulls the page in from the edge, red, green and blue by different amounts. It is built
+      from the surface's real outline, because a map stretched to another shape bends the wrong places. It never
+      bends outwards, which samples past the surface where the backdrop is empty.
+    - **Areas:**
+      - floating: Radix menus, popovers, selects and dialogs by `data-slot`, plus `.citation-card` and
+        `.reading-popover`;
+      - chrome: `data-glass-area="chrome"` on the shell toolbar and `NavRail`;
+      - buttons: outline and secondary only (primary is solid);
+      - reader: `data-glass-area="reader"` on the reader toolbar and right panel.
+      A new glass surface joins an area by one of these markers.
+    - **Settings** (`settings.ts`, saved per browser under `paperlab-glass`):
+      - Displacement scale, Blur amount, Saturation and Chromatic aberration are liquid-glass-react's own, with its
+        formulas (blur = 4 + 32 × amount px; green and blue bend 5% and 10% more per aberration step). Values from
+        its demo, liquid-glass.maxrovensky.com, carry over 1:1; Settings links it. Edge width and Opacity are
+        PaperLab's.
+      - Defaults are the owner's own look, tuned in the preview (2026-11-07, second pass, replacing 151 / 0.55 /
+        105 / 1.3 / 8 / 15%): Displacement scale 80, Blur amount 0.0375 (5.2 px), Saturation 105%, Chromatic
+        aberration 0 (no colour split), Edge width 14 px, Opacity 35%. Light frost with more tint: the tint, not
+        the blur, keeps text readable. The library's own defaults were 70, 0.0625, 140 and 2.
+      - The demo's Corner radius (each component keeps its own), Elasticity (a mouse-following stretch) and Over
+        light (a dark tint, which would put dark text on dark glass in light theme) are left out.
+    - **Live preview** (owner, 2026-11-07: "a demo in the settings so the user can see and test", then "on the right
+      side"). `GlassPreview` sits right of the sliders from `lg` (a 30rem column) and above them below that, pinned
+      (`sticky`) either way while you scroll them. Glass is the one Settings section wider than the reading width
+      (`max-w-6xl`), to make room for it. Its stage
+      (`.glass-stage`) is busy on purpose (colour blobs, stripes, a title and a paragraph), because glass over a plain
+      background shows nothing. On it:
+      - a glass card to drag, or move with the arrow keys (Shift for bigger steps); it is lensed whatever the areas
+        say (`data-glass-demo`);
+      - the workspace tab bar's gliding lens pill (`TabPill`/`useTabPill`, shared with `WorkspaceTabBar`);
+      - a menu surface with the gliding highlight, decorative and hidden from screen readers;
+      - the primary, outline and secondary buttons.
+      The pieces sit on the stage, never inside the card: glass inside glass sees only the outer glass.
+    - **Chromium only** (`bendsLight`): Safari and Firefox keep plain frost, and Settings says so. Reduce
+      transparency turns every lensed surface solid.
+    - **Limit:** glass only shows what is behind it. The toolbar, rail and reader panels sit beside the content, not
+      over it, so there they bend only the background glow and barely show. Making them show needs the content to
+      scroll under them, a layout change not made yet.
+    - `liquid-glass-react` itself isn't installed: its component forces white 20 px system text and centres itself on
+      a point. Toasts stay Sileo's own (see "Notifications").
 ## Stack
 
 - Components: shadcn/ui, style `radix-nova`, in `src/components/ui/`. Add one with
@@ -295,17 +390,29 @@ while it runs. Autosave fires 1 s after the last keystroke; Ctrl/Cmd+S saves, th
 
 ## Notifications
 
-Passing notices use [Sileo](https://github.com/hiaaryan/sileo) (`sileo` on npm), the one toast library here. Don't add
-another or write a custom toast. It isn't installed yet: add it with the first feature that needs a passing notice.
+Passing notices use [Sileo](https://github.com/hiaaryan/sileo) (`sileo` on npm, pinned 0.1.6), the one toast library
+here. Don't add another or write a custom toast. `<Notifications />` (in `main.tsx`) mounts it once, top right under the
+toolbar; call `sileo.success({ title, description })` (or `.info`, `.error`, `.promise`) from anywhere. The first use is
+"DOI copied" from Copy DOI (result preview and manual acquisition), which had no confirmation before.
 
 - **Use it for:** something finished or happened that the reader doesn't have to act on, and can miss without harm: a
   file saved, something copied, a background job done, away from the place it happened.
 - **Keep an `Alert` or a `role="status"` line for:** a critical fact, an error, anything the reader must act on or may
   need to read again, and a notice that belongs beside the thing it is about. A toast disappears, so it is never the only
   record of a failure.
-- **When adding it:** pin the exact version, mount one `Toaster` at the app root, match the tokens in light and dark,
-  respect `prefers-reduced-motion`, make sure screen readers hear it, and test it. Existing inline notices move only when
-  a change already touches them.
+- **Writing one:** a sentence-case title of two or three words saying what happened ("DOI copied"), and an optional
+  description with the thing itself (the DOI). Sileo shows it for 4 s in a `polite` live region, so focus never moves.
+  Existing inline notices move only when a change already touches them.
+- **Sileo's own colours, unstyled** (owner, 2026-11-07, after three passes at glass toasts: "we failed with the glass
+  effect on the toast, keep the toasts with their default colours"). PaperLab adds no CSS, filter or `fill` to the
+  Toaster, no `[data-sileo-*]` rules. It does pass the app's theme (`theme` from `useTheme`), so Sileo picks its own
+  matching colours: a dark pill on light pages, a light one on dark pages. Without it, dark mode drew the app's light
+  text on Sileo's default white pill. Don't try glass on the toasts again without the owner asking. What was tried, so it isn't repeated: frosting and bending the page behind Sileo's blob through a
+  mask on the toast (a blur layer inside the toast can't work, since the toast is a backdrop root). Even with a lens
+  shaped from each toast's outline, the result looked like white or dark plastic, not glass.
+- **Known gap:** Sileo colours the title by state (green, blue...), and on its light pill (dark mode) some of these
+  fall under 4.5:1. The owner chose the default look; if contrast becomes a problem, change the title colour only,
+  not the toast.
 
 ## Motion
 
@@ -395,6 +502,18 @@ Input with a custom dropdown; Dialog for modal content, High).
   the view's primary button, "Upload PDFs" is outline.
 - **Add papers:** a `Dialog` on strong glass with a `Command` checklist of library papers not yet in the workspace.
   The item's check mark is `data-checked`; the footer's primary button counts the choice ("Add 2 papers").
+- **Tab bar as liquid glass** (owner, 2026-11-07: "a glass effect and an animation between tabs; slow it down and show
+  the glass"). `WorkspaceTabBar` draws the bar as tinted glass with a lit edge. It has no blur of its own: a blurring
+  bar would be a backdrop root and blind the pill.
+  - One glass capsule (`data-tab-thumb`) marks the active tab, whose own fill and shadow are off. It glides to a new
+    tab in 650 ms with a slight springy overshoot (`cubic-bezier(0.34, 1.3, 0.64, 1)`). That is slower than the
+    usual 400 ms ceiling on purpose. It is placed before the first paint, so it never slides in on load, and it
+    jumps under reduced motion.
+  - Where light bends (Chromium, glass on, the Buttons area on), the capsule is a clear lens over the labels
+    (`#lg-tab-thumb`): no frost, so the active label stays sharp, and a 6 px rim that bends and colour-splits the
+    labels it slides across. Its strength follows Settings → Glass. The filter is sized relative to the pill, so it
+    fits while the pill stretches mid-slide.
+  - Below `md`, under reduce transparency, and in Safari and Firefox, it is the plain glass pill behind the labels.
 - **Notes tab:** papers in title order, each an `h2` over a two-column grid of read-only note cards. A card is one link
   (`a.workspace-note`) to the reader focused on it: provenance badge and page, the quote (2 lines, full text in `title`,
   as "Quotes stay short"), the body (6 lines). AI notes keep `bg-provenance-llm-surface`. No filter chips: the reader's
@@ -537,7 +656,8 @@ section is visually indicated, and a long page keeps its navigation in view).
   `sm:` up, sticky at `top-6` so it stays in view down a long section, and stacks above the content below `sm:`.
 - **Desktop app** is listed only inside the desktop app (`useDesktop()`), and its address falls back to the first
   section in a browser.
-- The content column keeps the reading width (`max-w-3xl`) it had as one long page.
+- The content column keeps the reading width (`max-w-3xl`) it had as one long page; only Glass is wider (`max-w-6xl`),
+  for its sliders and live preview side by side.
 
 ## Model connections
 
