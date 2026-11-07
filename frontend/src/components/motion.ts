@@ -36,8 +36,23 @@ export function withViewTransition(update: () => void) {
     update()
     return
   }
-  document.startViewTransition(() => flushSync(update))
+  const transition = document.startViewTransition(() => flushSync(update))
+  // A browser always returns the transition; a test's stand-in may not.
+  if (!transition) return
+  running = transition
+  void transition.finished.finally(() => {
+    if (running === transition) running = null
+  })
 }
+
+let running: ViewTransition | null = null
+
+/**
+ * The page change in progress, if any. While it runs, the browser shows a still picture of the old page until the new
+ * one has rendered, so an animation started during the render would be half over before it is seen: wait for its
+ * `ready` (the sidebar pill does, `useRailPill`).
+ */
+export const currentViewTransition = (): Pick<ViewTransition, 'ready'> | null => running
 
 // ponytail: "new" = created in the last few seconds, judged by the browser clock. Fine for a local-first app on one
 // machine; track seen ids instead if the API ever runs somewhere with a different clock.
