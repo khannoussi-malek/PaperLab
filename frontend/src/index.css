@@ -161,6 +161,27 @@
     }
 }
 
+/* Workspace tab pill as a lens (WorkspaceTabBar, `data-lens`, only where light bends): over the labels, nearly clear
+   and unfrosted, so the active label stays sharp while the pill's edges bend the labels it slides across. */
+:root.liquid [data-tab-thumb][data-lens] {
+    z-index: 10;
+    background-color: rgb(255 255 255 / 0.1);
+    backdrop-filter: url(#lg-tab-thumb) saturate(var(--lg-saturate));
+}
+.dark [data-tab-thumb][data-lens] {
+    background-color: rgb(255 255 255 / 0.06);
+}
+/* Below md the tab bar fades its ends with a mask, which makes it a backdrop root, so a lens there would only see the
+   bar; reduce transparency asks for solid. Either way: the plain pill behind the labels. */
+@media (prefers-reduced-transparency: reduce), (width < 48rem) {
+    :root.liquid [data-tab-thumb][data-lens],
+    .dark [data-tab-thumb][data-lens] {
+        z-index: auto;
+        background-color: var(--glass-strong);
+        backdrop-filter: none;
+    }
+}
+
 /* Pages drifting behind a Library row while its paper embeds (EmbeddingFlight.tsx). Decorative only: base opacity
    is 0, so only `motion-safe:animate-embedding-fly` (skipped under prefers-reduced-motion) ever makes them move. */
 @keyframes embedding-fly {

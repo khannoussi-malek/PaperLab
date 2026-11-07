@@ -34,7 +34,7 @@ const LIQUID_CLASS = 'liquid'
 type Lens = { key: string; shape: LensShape; map: string }
 
 /** One colour channel bent by `scale`: three of these at different strengths make the colour split. */
-function Channel({ name, scale, matrix }: { name: string; scale: number; matrix: string }) {
+export function Channel({ name, scale, matrix }: { name: string; scale: number; matrix: string }) {
   return (
     <>
       <feDisplacementMap in="SourceGraphic" in2="map" scale={scale} xChannelSelector="R" yChannelSelector="B" result={`${name}-moved`} />

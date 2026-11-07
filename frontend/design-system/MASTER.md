@@ -450,6 +450,18 @@ Input with a custom dropdown; Dialog for modal content, High).
   the view's primary button, "Upload PDFs" is outline.
 - **Add papers:** a `Dialog` on strong glass with a `Command` checklist of library papers not yet in the workspace.
   The item's check mark is `data-checked`; the footer's primary button counts the choice ("Add 2 papers").
+- **Tab bar as liquid glass** (owner, 2026-11-07: "a glass effect and an animation between tabs; slow it down and show
+  the glass"). `WorkspaceTabBar` draws the bar as tinted glass with a lit edge. It has no blur of its own: a blurring
+  bar would be a backdrop root and blind the pill.
+  - One glass capsule (`data-tab-thumb`) marks the active tab, whose own fill and shadow are off. It glides to a new
+    tab in 650 ms with a slight springy overshoot (`cubic-bezier(0.34, 1.3, 0.64, 1)`). That is slower than the
+    usual 400 ms ceiling on purpose. It is placed before the first paint, so it never slides in on load, and it
+    jumps under reduced motion.
+  - Where light bends (Chromium, glass on, the Buttons area on), the capsule is a clear lens over the labels
+    (`#lg-tab-thumb`): no frost, so the active label stays sharp, and a 6 px rim that bends and colour-splits the
+    labels it slides across. Its strength follows Settings → Glass. The filter is sized relative to the pill, so it
+    fits while the pill stretches mid-slide.
+  - Below `md`, under reduce transparency, and in Safari and Firefox, it is the plain glass pill behind the labels.
 - **Notes tab:** papers in title order, each an `h2` over a two-column grid of read-only note cards. A card is one link
   (`a.workspace-note`) to the reader focused on it: provenance badge and page, the quote (2 lines, full text in `title`,
   as "Quotes stay short"), the body (6 lines). AI notes keep `bg-provenance-llm-surface`. No filter chips: the reader's

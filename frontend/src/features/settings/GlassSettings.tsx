@@ -23,7 +23,7 @@ const SLIDERS: { key: SliderKey; label: string; help: string; show: (settings: S
 const AREA_LABELS: Record<GlassArea, string> = {
   floating: 'Menus, popovers and dialogs',
   chrome: 'Toolbar and side rail',
-  buttons: 'Outline and secondary buttons',
+  buttons: 'Buttons and the workspace tab pill',
   reader: 'Reader toolbar and side panel',
 }
 
