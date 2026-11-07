@@ -39,7 +39,7 @@ export function MenuGlide() {
       aria-hidden="true"
       data-menu-glide
       data-hidden=""
-      className="pointer-events-none absolute top-0 left-0 rounded-md bg-accent shadow-xs ring-1 ring-glass-border inset-shadow-[0_1px_0_var(--glass-rim)] data-hidden:opacity-0 motion-safe:transition-opacity motion-safe:duration-150 motion-safe:data-ready:transition-[transform,width,height,opacity] motion-safe:data-ready:duration-220 motion-safe:data-ready:ease-[cubic-bezier(0.34,1.3,0.64,1)]"
+      className="pointer-events-none absolute top-0 left-0 rounded-md will-change-transform bg-accent shadow-xs ring-1 ring-glass-border inset-shadow-[0_1px_0_var(--glass-rim)] data-hidden:opacity-0 motion-safe:transition-opacity motion-safe:duration-150 motion-safe:data-ready:transition-[transform,width,height,opacity] motion-safe:data-ready:duration-220 motion-safe:data-ready:ease-[cubic-bezier(0.34,1.3,0.64,1)]"
     />
   )
 }

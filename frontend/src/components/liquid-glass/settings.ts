@@ -2,7 +2,7 @@
  * Liquid glass settings (Settings → Glass; "Glass" in design-system/MASTER.md).
  *
  * The first four knobs are liquid-glass-react's own (its demo, liquid-glass.maxrovensky.com, has the same sliders),
- * with its defaults and its formulas, so values found on the demo carry over one to one. Edge width and opacity are
+ * with its formulas, so values found on the demo carry over one to one. The defaults are the owner's own. Edge width and opacity are
  * PaperLab's: how deep from the edge the light bends, and how much paint the glass carries.
  */
 
@@ -39,14 +39,16 @@ export const GLASS_RANGES: Record<NumericKey, { min: number; max: number; step: 
   opacity: { min: 0, max: 1, step: 0.05 },
 }
 
+/** The owner's chosen look (2026-11-07), tuned in the Settings → Glass preview. liquid-glass-react's own defaults,
+ * for comparison with its demo, are Displacement scale 70, Blur amount 0.0625, Saturation 140, Chromatic aberration 2. */
 export const DEFAULT_GLASS: GlassSettings = {
   enabled: true,
-  displacementScale: 70,
-  blurAmount: 0.0625,
-  saturation: 140,
-  aberrationIntensity: 2,
-  edgeWidth: 16,
-  opacity: 0.65,
+  displacementScale: 151,
+  blurAmount: 0.55,
+  saturation: 105,
+  aberrationIntensity: 1.3,
+  edgeWidth: 8,
+  opacity: 0.15,
   areas: { floating: true, chrome: true, buttons: true, reader: true },
 }
 

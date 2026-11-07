@@ -185,7 +185,7 @@ export function WorkspaceSidebar({ activeId }: { activeId: string | null }) {
                   href={workspaceHref(workspace.id)}
                   title={workspace.name}
                   aria-current={workspace.id === activeId ? 'page' : undefined}
-                  className={railItem(workspace.id === activeId)}
+                  className={railItem(workspace.id === activeId, true)}
                 >
                   <span className="truncate">{workspace.name}</span>
                 </a>

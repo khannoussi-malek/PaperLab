@@ -54,6 +54,20 @@ changing work areas. Don't replace the whole shell for every feature."*
   (there is nothing to navigate to yet). The reader's toolbar is the same `h-11` glass bar with the same quiet
   buttons, so the chrome still reads as one app.
 
+- **The sidebar's current item: a gliding glass pill** (owner, 2026-11-07). `NavRail` draws one glass pill on the
+  `aria-current` link, top views and workspaces alike. Those rows paint no fill of their own (`railItem(active, true)`),
+  keeping only the heavier weight. Settings' own section list keeps the plain `railItem` look.
+  - Every page draws its own sidebar, so `useRailPill` remembers where the pill last stood. On the new page it puts
+    the pill on its item at once, then plays one Web Animation from the old spot: transform only, 650 ms, the tabs'
+    spring.
+  - A CSS transition was ruled out: the sidebar's ResizeObserver fired before the delayed switch and the pill jumped.
+    A heavy page (Notes) also blocks the main thread for about a second, which stalls a main-thread animation.
+  - The pill follows the workspace list's scroll and fades out while its row is scrolled out of view. Under reduced
+    motion it jumps.
+- **Smoothness of the gliding pieces:** the sidebar pill, the tab pill and the menu highlight are each their own
+  compositor layer (`will-change: transform`), and their movement is a transform. The tab pill's width change still
+  runs on the main thread; that is the one part a busy page can stutter.
+
 ## Glass
 
 The app chrome is frosted glass over a faint blue/violet glow on the page background. The paper is not.
@@ -108,9 +122,12 @@ The app chrome is frosted glass over a faint blue/violet glow on the page backgr
       A new glass surface joins an area by one of these markers.
     - **Settings** (`settings.ts`, saved per browser under `paperlab-glass`):
       - Displacement scale, Blur amount, Saturation and Chromatic aberration are liquid-glass-react's own, with its
-        defaults (70, 0.0625, 140, 2) and formulas (blur = 4 + 32 × amount px; green and blue bend 5% and 10% more
-        per aberration step). Values from its demo, liquid-glass.maxrovensky.com, carry over 1:1; Settings links it.
-      - Edge width (16 px) and Opacity (65%) are PaperLab's.
+        formulas (blur = 4 + 32 × amount px; green and blue bend 5% and 10% more per aberration step). Values from
+        its demo, liquid-glass.maxrovensky.com, carry over 1:1; Settings links it. Edge width and Opacity are
+        PaperLab's.
+      - Defaults are the owner's own look, tuned in the preview (2026-11-07): Displacement scale 151, Blur amount
+        0.55 (21.6 px), Saturation 105%, Chromatic aberration 1.3, Edge width 8 px, Opacity 15%. The heavy frost is
+        what keeps text readable through so clear a tint. The library's own defaults were 70, 0.0625, 140 and 2.
       - The demo's Corner radius (each component keeps its own), Elasticity (a mouse-following stretch) and Over
         light (a dark tint, which would put dark text on dark glass in light theme) are left out.
     - **Live preview** (owner, 2026-11-07: "a demo in the settings so the user can see and test", then "on the right
