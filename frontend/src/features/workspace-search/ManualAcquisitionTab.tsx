@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { sileo } from 'sileo'
 import { codeInWords } from '@/lib/errorWords'
 import { useSearchHits, useUploadHitPdf } from '@/api/queries'
 import { Button } from '@/components/ui/button'
@@ -39,6 +40,7 @@ export function ManualAcquisitionTab({ workspaceId }: { workspaceId: string }) {
     try {
       await copyText(doi)
       setCopyError(null)
+      sileo.success({ title: 'DOI copied', description: doi })
     } catch (error) {
       setCopyError(error instanceof Error ? error.message : 'Could not copy.')
     }

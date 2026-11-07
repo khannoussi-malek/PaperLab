@@ -66,6 +66,22 @@ The app chrome is frosted glass over a faint blue/violet glow on the page backgr
   (`bg-provenance-llm-surface` wins, including under chat answers).
 - OS "Reduce transparency" swaps both glass tokens for `card`, so every surface turns solid.
 - Measured contrast on glass (screenshots, both themes): body text 10.8–17.7:1, muted text 5.8–7.5:1.
+- **Liquid glass (added 2026-11-07, owner: "as close as possible to Apple glass, as realistic as possible"):** the
+  look of Apple's Liquid Glass, kept quiet where people read.
+  - **Lit edge on every glass surface:** `glass` carries an inset 1 px top highlight (`--glass-rim`, white 70% light /
+    9% dark), the light catching the top edge. It composes with any `shadow-*` on the same surface.
+  - **Light bending (refraction), on passing notices only:** the page behind is pushed outwards near the glass's edge,
+    in red, green and blue at slightly different strengths for a colour fringe. The filter is `#pl-liquid` in
+    `Notifications.tsx`, with its map from `liquidGlass.ts`: squared, so the bend is gentle at first and steep at the
+    very edge, like a lens rim, and the centre stays undistorted. It is liquid-glass-react's technique; that
+    library's component isn't used, because it forces white 20 px system text and centres itself on a point.
+  - **Chromium only:** an SVG filter inside `backdrop-filter` works in Chrome, Edge, Arc and the Electron desktop app.
+    `Notifications` sets `html.liquid` only there (`bendsLight`); Safari and Firefox keep plain frosted glass.
+  - **Not on chrome or reading surfaces:** the filter's sizes are fractions of the surface, so on a full-width toolbar
+    it would bend hundreds of pixels; and bending what sits behind text the reader is reading costs legibility.
+    Add it to another compact, floating surface only with its own screenshots in both themes.
+  - **Ruled out:** a `::before` or child layer with its own `backdrop-filter` inside a Sileo toast. The toast acts as
+    a backdrop root, so that layer only sees the toast itself; the blur has to sit on the toast element.
 
 ## Stack
 
@@ -295,17 +311,34 @@ while it runs. Autosave fires 1 s after the last keystroke; Ctrl/Cmd+S saves, th
 
 ## Notifications
 
-Passing notices use [Sileo](https://github.com/hiaaryan/sileo) (`sileo` on npm), the one toast library here. Don't add
-another or write a custom toast. It isn't installed yet: add it with the first feature that needs a passing notice.
+Passing notices use [Sileo](https://github.com/hiaaryan/sileo) (`sileo` on npm, pinned 0.1.6), the one toast library
+here. Don't add another or write a custom toast. `<Notifications />` (in `main.tsx`) mounts it once, top right under the
+toolbar; call `sileo.success({ title, description })` (or `.info`, `.error`, `.promise`) from anywhere. The first use is
+"DOI copied" from Copy DOI (result preview and manual acquisition), which had no confirmation before.
 
 - **Use it for:** something finished or happened that the reader doesn't have to act on, and can miss without harm: a
   file saved, something copied, a background job done, away from the place it happened.
 - **Keep an `Alert` or a `role="status"` line for:** a critical fact, an error, anything the reader must act on or may
   need to read again, and a notice that belongs beside the thing it is about. A toast disappears, so it is never the only
   record of a failure.
-- **When adding it:** pin the exact version, mount one `Toaster` at the app root, match the tokens in light and dark,
-  respect `prefers-reduced-motion`, make sure screen readers hear it, and test it. Existing inline notices move only when
-  a change already touches them.
+- **Writing one:** a sentence-case title of two or three words saying what happened ("DOI copied"), and an optional
+  description with the thing itself (the DOI). Sileo shows it for 4 s in a `polite` live region, so focus never moves.
+  Existing inline notices move only when a change already touches them.
+- **It is liquid glass** (see "Glass"), styled around Sileo, whose toast is one SVG blob (a pill that grows a body)
+  that needs a solid fill to morph (`index.css`, the `[data-sileo-*]` rules):
+  - **The blob is see-through and lit:** `#pl-glass-surface` makes its body 80% opaque (`--toast-glass`: white /
+    slate-800), adds a specular highlight from a top-left light (`feSpecularLighting` on the blob's own outline), and
+    traces a 1 px rim (`--toast-rim`).
+  - **The page behind is frosted, and bent in Chromium:** `backdrop-filter` on the toast, cut to the pill and body by a
+    mask that reads Sileo's size variables (`--_px`, `--_pw`, `--_h`) and follows the morph at Sileo's spring. It
+    assumes a top-* position (the body grows downwards), so keep the Toaster at the top.
+  - **Text uses our tokens:** the title is `foreground` and the description 85% `foreground`. Worst case (a dark toast
+    over a white PDF page, ignoring the blur): title 7.0:1, description 5.2:1. `muted-foreground` would fall to 3:1
+    there, and Sileo's state colours (green, blue) are under 3:1 on light glass, so colour stays on the badge.
+  - **Focus and motion:** a focused toast drops its mask so the focus ring shows; with reduced motion the morph and the
+    mask jump instead of springing.
+  - **Reduce transparency** turns it solid: `card` fill, no blur, no lighting. Sileo already honours reduced motion.
+  - **Sileo upgrades** need fresh screenshots in both themes, since these rules lean on its `data-sileo-*` markup.
 
 ## Motion
 

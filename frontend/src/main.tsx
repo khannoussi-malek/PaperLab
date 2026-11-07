@@ -3,6 +3,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { queryClient } from './api/queries'
 import App from './App.tsx'
+import { Notifications } from './components/Notifications'
 import { ThemeProvider } from './components/theme-provider'
 import { warmPlotlyAtChartLink } from './features/charts/loadPlotly'
 import './index.css'
@@ -16,6 +17,7 @@ createRoot(document.getElementById('root')!).render(
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <App />
+        <Notifications />
       </ThemeProvider>
     </QueryClientProvider>
   </StrictMode>,

@@ -80,6 +80,10 @@
     --glass-border: rgb(148 163 184 / 0.35);
     --ambient-1: rgb(37 99 235 / 0.12);
     --ambient-2: rgb(124 58 237 / 0.1);
+    /* Liquid glass: the light catching the top edge of every glass surface, and the toasts' tint. */
+    --glass-rim: rgb(255 255 255 / 0.7);
+    --toast-glass: #ffffff;
+    --toast-rim: rgb(255 255 255 / 0.85);
     /* Not redefined under .dark: controls sitting on the always-white PDF page (citation buttons) need a ring that
        still contrasts 3:1 there, which dark theme's --primary (#60a5fa) does not. */
     --on-page-ring: #2563eb;
@@ -120,6 +124,9 @@
     --glass-border: rgb(255 255 255 / 0.1);
     --ambient-1: rgb(59 130 246 / 0.18);
     --ambient-2: rgb(139 92 246 / 0.16);
+    --glass-rim: rgb(255 255 255 / 0.09);
+    --toast-glass: #1e293b;
+    --toast-rim: rgb(255 255 255 / 0.28);
 }
 
 /* "Reduce transparency" in the OS: glass becomes solid; blur over an opaque fill shows nothing. */
@@ -128,6 +135,72 @@
     .dark {
         --glass: var(--card);
         --glass-strong: var(--card);
+        --toast-glass: var(--card);
+    }
+}
+
+/* Notifications: Sileo's toasts as liquid glass (Notifications.tsx; "Notifications" in design-system/MASTER.md).
+   Sileo draws each toast as one SVG blob, a pill that grows a body, and the blob needs a solid fill to morph, so the
+   glass is built around it: the blob's own layer turns translucent, and the toast frosts (and, in Chromium, bends)
+   the page behind it through a mask cut to the pill and the body. The mask reads Sileo's own size variables (--_px,
+   --_pw, --_h on the toast) and assumes a top-* position, where the body grows downwards, and Sileo's default
+   roundness (16, the rx below). */
+:root [data-sileo-toast] {
+    --pl-toast-shape: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='100%25' height='100%25' rx='16'/%3E%3C/svg%3E");
+    color: var(--foreground);
+    backdrop-filter: blur(12px) saturate(180%);
+    mask-image: var(--pl-toast-shape), var(--pl-toast-shape);
+    mask-repeat: no-repeat;
+    mask-position: var(--_px) 0, 0 var(--sileo-height);
+    mask-size: var(--_pw) var(--sileo-height), 100% calc(var(--_h) - var(--sileo-height));
+}
+/* The mask follows the blob at Sileo's own pace; without these it would snap while the blob is still moving. */
+:root [data-sileo-toast][data-ready="true"] {
+    transition:
+        transform calc(var(--sileo-duration) * 0.66) var(--sileo-spring-easing),
+        opacity calc(var(--sileo-duration) * 0.66) var(--sileo-spring-easing),
+        margin-bottom calc(var(--sileo-duration) * 0.66) var(--sileo-spring-easing),
+        margin-top calc(var(--sileo-duration) * 0.66) var(--sileo-spring-easing),
+        height var(--sileo-duration) var(--sileo-spring-easing),
+        mask-size var(--sileo-duration) var(--sileo-spring-easing),
+        mask-position var(--sileo-duration) var(--sileo-spring-easing);
+}
+/* Bends the page at the glass's edges with a colour fringe; Chromium only (the `liquid` class, see liquidGlass.ts). */
+:root.liquid [data-sileo-toast] {
+    backdrop-filter: url(#pl-liquid) blur(8px) saturate(180%);
+}
+:root [data-sileo-svg] {
+    filter: url(#pl-glass-surface);
+}
+:root [data-sileo-svg] rect {
+    fill: var(--toast-glass);
+}
+/* Sileo colours the title by state, which is under 3:1 on light glass: the badge keeps the colour, the text reads. */
+:root [data-sileo-title] {
+    color: var(--foreground);
+    text-transform: none;
+}
+/* Not muted-foreground: under a dark toast over a white PDF page that falls to 3:1. This stays ≥ 5.2:1 at worst. */
+:root [data-sileo-description] {
+    color: color-mix(in srgb, var(--foreground) 85%, var(--toast-glass));
+}
+/* The mask would clip a keyboard focus ring drawn outside the glass; while focused, show the whole toast box. */
+:root [data-sileo-toast]:focus-visible {
+    mask-image: none;
+}
+/* The transition above outranks Sileo's own reduced-motion rule, so restate it. */
+@media (prefers-reduced-motion: reduce) {
+    :root [data-sileo-toast][data-ready="true"] {
+        transition-duration: 0s;
+    }
+}
+@media (prefers-reduced-transparency: reduce) {
+    :root [data-sileo-toast],
+    :root.liquid [data-sileo-toast] {
+        backdrop-filter: none;
+    }
+    :root [data-sileo-svg] {
+        filter: none;
     }
 }
 
