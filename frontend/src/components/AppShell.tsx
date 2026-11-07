@@ -44,7 +44,7 @@ export function AppShell({ title, back, actions, status, fills = false, children
   const [navOpen, setNavOpen] = useState(false)
   return (
     <div className="grid h-dvh grid-cols-1 md:grid-cols-[14rem_minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden">
-      <header className={cn('col-span-full flex h-11 items-center gap-1 border-b border-glass-border px-2', glass)}>
+      <header data-glass-area="chrome" className={cn('col-span-full flex h-11 items-center gap-1 border-b border-glass-border px-2', glass)}>
         <Button variant="ghost" size="icon" aria-label="Open navigation" className="min-h-11 shrink-0 md:hidden" onClick={() => setNavOpen(true)}>
           <Menu aria-hidden />
         </Button>

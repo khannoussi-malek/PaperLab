@@ -136,6 +136,26 @@
     }
 }
 
+/* Liquid glass (Settings → Glass; components/liquid-glass; "Glass" in design-system/MASTER.md). Only in Chromium
+   with the switch on (`html.liquid`): every glass surface of a switched-on area carries `data-lg` and a lens of its
+   own size (--lg-lens). Its backdrop is frosted and saturated first, then bent by the lens, in liquid-glass-react's
+   order, and its fill turns see-through (--lg-opacity), or the bending would hide behind paint. The settings set
+   --lg-blur, --lg-saturate and --lg-opacity on <html>. */
+:root.liquid [data-lg] {
+    background-color: color-mix(in srgb, var(--card) calc(var(--lg-opacity) * 100%), transparent);
+    backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate)) var(--lg-lens);
+}
+:root.liquid [data-lg][data-slot="button"]:hover,
+:root.liquid [data-lg][data-slot="button"][aria-expanded="true"] {
+    background-color: color-mix(in srgb, var(--card) calc(var(--lg-opacity) * 100% + 20%), transparent);
+}
+@media (prefers-reduced-transparency: reduce) {
+    :root.liquid [data-lg] {
+        background-color: var(--card);
+        backdrop-filter: none;
+    }
+}
+
 /* Pages drifting behind a Library row while its paper embeds (EmbeddingFlight.tsx). Decorative only: base opacity
    is 0, so only `motion-safe:animate-embedding-fly` (skipped under prefers-reduced-motion) ever makes them move. */
 @keyframes embedding-fly {

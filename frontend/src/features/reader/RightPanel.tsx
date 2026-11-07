@@ -39,6 +39,7 @@ export function RightPanel({ tab, onTabChange, width, onWidthChange, notes, chat
   }, [tab])
   return (
     <Tabs
+      data-glass-area="reader"
       value={tab}
       onValueChange={(value) => onTabChange(value as ReaderTab)}
       className={cn('reader-panel relative min-h-0 gap-0 border-l border-glass-border', glass)}
