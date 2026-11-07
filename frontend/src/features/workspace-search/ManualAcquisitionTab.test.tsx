@@ -7,6 +7,7 @@ import * as queries from '@/api/queries'
 import { api } from '@/api/client'
 import { copyText } from '@/lib/clipboard'
 import { workspaceHref } from '@/lib/route'
+import { sileo } from 'sileo'
 
 vi.mock('@/lib/clipboard', () => ({ copyText: vi.fn() }))
 
@@ -85,6 +86,7 @@ test('a hit with an empty-string title (falsy but not null) still falls back to 
 })
 
 test('a hit with a linked ExternalRef shows the real title, byline, an Open page link and a Copy DOI button (I7)', async () => {
+  const notice = vi.spyOn(sileo, 'success').mockReturnValue('t1')
   mockHits([richHit])
   renderWithClient(<ManualAcquisitionTab workspaceId="ws-1" />)
 
@@ -97,6 +99,8 @@ test('a hit with a linked ExternalRef shows the real title, byline, an Open page
 
   fireEvent.click(screen.getByRole('button', { name: 'Copy DOI' }))
   await waitFor(() => expect(copyText).toHaveBeenCalledWith('10.1234/real'))
+  // The button doesn't change, so a passing notice is the only sign the copy worked.
+  await waitFor(() => expect(notice).toHaveBeenCalledWith({ title: 'DOI copied', description: '10.1234/real' }))
 })
 
 test('uploading a file calls the upload endpoint for that hit', async () => {
