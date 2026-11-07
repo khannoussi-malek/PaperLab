@@ -79,6 +79,16 @@ The app chrome is frosted glass over a faint blue/violet glow on the page backgr
     - a press scales the button to 97% instead of nudging it 1 px, and only when motion is allowed;
     - no `backdrop-filter` on buttons: there are hundreds per page, and they sit on flat panels where a blur shows
       nothing.
+  - **Menus, context menus, their submenus and selects: a gliding glass highlight** (owner, 2026-11-07, after the
+    workspace tabs). `MenuGlide` (`components/ui/menu-glide.tsx`) sits first inside each menu surface (inside the
+    viewport, for a select) and follows whichever item Radix marks `data-highlighted`, by pointer or keyboard.
+    - It is `bg-accent` with a glass hairline, the lit top edge and a small shadow. Items paint no highlight of their
+      own; destructive items keep their red tint, and an open submenu's trigger keeps its fill.
+    - It glides in 220 ms with a slight spring, quicker than the tabs' 650 ms because menus are walked item by item
+      and a slow highlight trails the pointer. It fades out when nothing is highlighted, and comes back in place
+      rather than sliding from where it was. Under reduced motion it jumps.
+    - No lens of its own: the menu surface is already a lens and a backdrop root, so a lens inside would only see the
+      menu.
   - **Light bending, tunable in Settings → Glass** (owner, 2026-11-07: glass on floating surfaces, toolbar and rail,
     buttons and reader panels, with live settings). `components/liquid-glass/` holds it:
     - `LiquidGlassProvider` (in `main.tsx`) finds every glass surface of a switched-on area. Each one gets `data-lg`
