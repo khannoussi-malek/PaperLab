@@ -202,6 +202,19 @@
         linear-gradient(135deg, #1e1b4b, #0f172a 60%, #083344);
 }
 
+/* The persistent sidebar (PersistentRail) during a page change. Navigation cross-fades the page in a view transition,
+   a still picture of the old page fading into the new one; the sidebar was in that picture, so its pill showed twice,
+   frozen on the old item and gliding from it. Named on its own, the sidebar shows only live, and only its pill moves. */
+.app-rail {
+    view-transition-name: app-rail;
+}
+::view-transition-old(app-rail) {
+    display: none;
+}
+::view-transition-new(app-rail) {
+    animation: none;
+}
+
 /* Pages drifting behind a Library row while its paper embeds (EmbeddingFlight.tsx). Decorative only: base opacity
    is 0, so only `motion-safe:animate-embedding-fly` (skipped under prefers-reduced-motion) ever makes them move. */
 @keyframes embedding-fly {

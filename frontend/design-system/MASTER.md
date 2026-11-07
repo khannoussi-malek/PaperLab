@@ -57,13 +57,25 @@ changing work areas. Don't replace the whole shell for every feature."*
 - **The sidebar's current item: a gliding glass pill** (owner, 2026-11-07). `NavRail` draws one glass pill on the
   `aria-current` link, top views and workspaces alike. Those rows paint no fill of their own (`railItem(active, true)`),
   keeping only the heavier weight. Settings' own section list keeps the plain `railItem` look.
-  - Every page draws its own sidebar, so `useRailPill` remembers where the pill last stood. On the new page it puts
-    the pill on its item at once, then plays one Web Animation from the old spot: transform only, 650 ms, the tabs'
-    spring.
-  - A CSS transition was ruled out: the sidebar's ResizeObserver fired before the delayed switch and the pill jumped.
-    A heavy page (Notes) also blocks the main thread for about a second, which stalls a main-thread animation.
-  - The pill follows the workspace list's scroll and fades out while its row is scrolled out of view. Under reduced
-    motion it jumps.
+  - **One sidebar for the whole app** (owner: "the nav bar re-renders, so the animation glitches and feels like it
+    restarts"). Every view draws its own `AppShell`, which used to destroy and redraw the sidebar on each navigation.
+    Now `App` renders one `PersistentRail` into a node that lives all session, and each shell's `RailSlot` moves that
+    node into place. Moving a node doesn't remount the React component, so the sidebar, its pill and its scroll survive
+    navigation. It is mounted after the routed page, so the new slot holds the node before the pill measures. The
+    mobile drawer still draws its own sidebar.
+  - **The glide is a Web Animation, transform only, 650 ms with the tabs' spring.** On a navigation the pill goes
+    to its new item at once and animates from where it is drawn that instant, a running glide included, so a second
+    click mid-glide carries on instead of snapping.
+  - **Navigation is a view transition** (`withViewTransition`):
+    - It holds a still picture of the old page until the new one has rendered, which takes about 600 ms on Charts
+      and Notes. The glide is therefore created paused and played on the transition's `ready`
+      (`currentViewTransition`); otherwise it ran behind the still and showed up nearly finished.
+    - The sidebar has its own transition name (`.app-rail`, old picture hidden, new one not faded). Otherwise the
+      cross-fade showed two pills, a frozen one on the old item and the gliding one.
+  - Checked by recording the navigation as video and reading it frame by frame. Screenshots taken by a script wait
+    for the busy page, so they show only the end state.
+  - The pill follows the workspace list's scroll, fades out while its row is scrolled out of view, and jumps under
+    reduced motion.
 - **Smoothness of the gliding pieces:** the sidebar pill, the tab pill and the menu highlight are each their own
   compositor layer (`will-change: transform`), and their movement is a transform. The tab pill's width change still
   runs on the main thread; that is the one part a busy page can stutter.
