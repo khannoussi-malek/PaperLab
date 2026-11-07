@@ -59,18 +59,18 @@ export function GlassPreview() {
   }
 
   return (
-    <section aria-label="Glass preview" className="sticky top-0 z-10 -mx-1 flex flex-col gap-2 bg-background/80 px-1 pb-2 backdrop-blur-sm">
-      <div ref={stage} className="glass-stage relative h-80 overflow-hidden rounded-xl ring-1 ring-glass-border">
+    <section aria-label="Glass preview" className="flex flex-col gap-2">
+      <div ref={stage} className="glass-stage relative h-[30rem] overflow-hidden rounded-xl ring-1 ring-glass-border">
         {/* The stage's words and shapes are there to be bent; they say nothing. */}
         <div aria-hidden className="pointer-events-none absolute inset-0 select-none">
-          <p className="absolute top-6 left-6 font-heading text-4xl font-semibold text-slate-900/80 dark:text-white/85">Attention Is All You Need</p>
-          <p className="absolute top-20 left-10 max-w-md font-serif text-lg leading-snug text-slate-800/80 dark:text-white/75">
+          <p className="absolute top-40 left-6 font-heading text-3xl font-semibold text-slate-900/80 dark:text-white/85">Attention Is All You Need</p>
+          <p className="absolute top-52 left-6 max-w-xs font-serif text-lg leading-snug text-slate-800/80 dark:text-white/75">
             The dominant sequence transduction models are based on complex recurrent or convolutional neural networks.
           </p>
-          <p className="absolute right-6 bottom-6 font-heading text-5xl font-bold text-pink-600/80 dark:text-pink-300/80">PaperLab</p>
+          <p className="absolute right-6 bottom-5 font-heading text-4xl font-bold text-pink-600/80 dark:text-pink-300/80">PaperLab</p>
         </div>
 
-        <Tabs value={tab} onValueChange={setTab} className="absolute top-[11.5rem] left-6">
+        <Tabs value={tab} onValueChange={setTab} className="absolute top-[19.5rem] left-6">
           <TabsList ref={listRef} className={cn(PILL_LIST, 'gap-1')} aria-label="Preview tabs">
             <TabPill thumbRef={thumbRef} />
             {['Papers', 'Notes', 'Chat', 'Evidence'].map((label) => (
@@ -103,7 +103,7 @@ export function GlassPreview() {
           </div>
         </div>
 
-        <div className="absolute bottom-6 left-6 flex gap-2">
+        <div className="absolute bottom-20 left-6 flex gap-2">
           <Button type="button">Primary</Button>
           <Button type="button" variant="outline">Outline</Button>
           <Button type="button" variant="secondary">Secondary</Button>
@@ -128,7 +128,7 @@ export function GlassPreview() {
         </div>
       </div>
       <p className="text-xs text-muted-foreground">
-        Drag the glass card over the colours and words, click the tabs, hover the menu. Every slider below changes it live.
+        Drag the glass card over the colours and words, click the tabs, hover the menu. Every slider changes it live.
       </p>
     </section>
   )

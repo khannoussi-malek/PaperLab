@@ -74,6 +74,14 @@ describe('Settings → Glass', () => {
   describe('the live preview', () => {
     const preview = () => within(screen.getByRole('region', { name: 'Glass preview' }))
 
+    it('sits beside the sliders on a wide screen and above them on a narrow one, pinned while they scroll either way', () => {
+      renderSection()
+      const column = screen.getByRole('region', { name: 'Glass preview' }).parentElement!
+      expect(column.className).toMatch(/(^| )sticky( |$)/)
+      expect(column.className).toContain('max-lg:order-first')
+      expect(column.parentElement!.className).toContain('lg:grid-cols-')
+    })
+
     it('shows a glass card over a busy, colourful background, which the sliders change live', () => {
       renderSection()
       const card = preview().getByRole('group', { name: /Glass sample/ })

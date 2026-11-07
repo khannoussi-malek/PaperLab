@@ -50,8 +50,6 @@ export function GlassSettings() {
         </p>
       </div>
 
-      <GlassPreview />
-
       {!bendsLight && (
         <Alert>
           <AlertDescription>
@@ -61,6 +59,10 @@ export function GlassSettings() {
         </Alert>
       )}
 
+      {/* Sliders left, preview right and pinned while they scroll (from lg); below that, the preview comes first and
+          stays pinned at the top, over a solid backing so the sliders scroll under it cleanly. */}
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,30rem)] lg:items-start">
+      <div className="flex min-w-0 flex-col gap-6">
       <div className="flex items-center gap-2.5">
         <Switch id="glass-enabled" checked={settings.enabled} onCheckedChange={(enabled) => update({ enabled })} />
         <Label htmlFor="glass-enabled">Liquid glass</Label>
@@ -115,6 +117,11 @@ export function GlassSettings() {
         <Button variant="outline" onClick={reset}>
           Reset to defaults
         </Button>
+      </div>
+      </div>
+      <div className="sticky top-0 z-10 bg-background pb-2 max-lg:order-first lg:pb-0">
+        <GlassPreview />
+      </div>
       </div>
     </section>
   )
