@@ -41,8 +41,10 @@ export const activeWorkspaceId = (route: Route): string | null => (route.name ==
  * One row in the navigation rail. Desktop density: 28 px tall, 13 px text, the whole row is the target. The current
  * row carries a left bar as well as a tint, so it reads as current without relying on colour.
  */
-export const railItem = (active: boolean) =>
+export const railItem = (active: boolean, pill = false) =>
   cn(
-    'flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none transition-colors duration-150 hover:bg-foreground/5 focus-visible:ring-3 focus-visible:ring-ring/50',
-    active && 'bg-primary/10 font-medium shadow-[inset_3px_0_0_var(--color-primary)]',
+    'relative flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none transition-colors duration-150 hover:bg-foreground/5 focus-visible:ring-3 focus-visible:ring-ring/50',
+    // In the sidebar a gliding glass pill marks the current row (`useRailPill`), so the row paints no fill of its own;
+    // its shape and the heavier weight still say more than colour.
+    active && (pill ? 'bg-transparent font-medium' : 'bg-primary/10 font-medium shadow-[inset_3px_0_0_var(--color-primary)]'),
   )

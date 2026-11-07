@@ -7,8 +7,16 @@ const memory = () => {
 }
 
 describe('sanitizeGlass', () => {
-  it('starts from liquid-glass-react\'s own defaults, so values from its demo mean the same here', () => {
-    expect(DEFAULT_GLASS).toMatchObject({ displacementScale: 70, blurAmount: 0.0625, saturation: 140, aberrationIntensity: 2 })
+  it('starts from the owner\'s chosen look, tuned in the Settings preview', () => {
+    expect(DEFAULT_GLASS).toMatchObject({
+      enabled: true,
+      displacementScale: 151,
+      blurAmount: 0.55,
+      saturation: 105,
+      aberrationIntensity: 1.3,
+      edgeWidth: 8,
+      opacity: 0.15,
+    })
   })
 
   it('falls back to the defaults for anything missing or unreadable', () => {

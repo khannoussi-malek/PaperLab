@@ -55,7 +55,7 @@ export function TabPill({ thumbRef }: { thumbRef: RefObject<HTMLSpanElement | nu
         aria-hidden="true"
         data-tab-thumb
         data-lens={lens ? '' : undefined}
-        className="pointer-events-none absolute top-0 left-0 rounded-full bg-glass-strong shadow-sm ring-1 ring-glass-border inset-shadow-[0_1px_0_var(--glass-rim)] motion-safe:data-ready:transition-[transform,width,height] motion-safe:data-ready:duration-650 motion-safe:data-ready:ease-[cubic-bezier(0.34,1.3,0.64,1)]"
+        className="pointer-events-none absolute top-0 left-0 rounded-full will-change-transform bg-glass-strong shadow-sm ring-1 ring-glass-border inset-shadow-[0_1px_0_var(--glass-rim)] motion-safe:data-ready:transition-[transform,width,height] motion-safe:data-ready:duration-650 motion-safe:data-ready:ease-[cubic-bezier(0.34,1.3,0.64,1)]"
       />
     </>
   )

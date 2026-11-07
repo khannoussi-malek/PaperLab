@@ -41,8 +41,8 @@ describe('LiquidGlassProvider', () => {
   it('applies the frost, saturation and opacity live, as CSS variables on the page', () => {
     render(<LiquidGlassProvider><Probe /></LiquidGlassProvider>)
     const root = document.documentElement.style
-    expect(root.getPropertyValue('--lg-blur')).toBe('6px')
-    expect(root.getPropertyValue('--lg-saturate')).toBe('140%')
+    expect(root.getPropertyValue('--lg-blur')).toBe('21.6px')
+    expect(root.getPropertyValue('--lg-saturate')).toBe('105%')
     act(() => probe.glass.update({ blurAmount: 0.5, saturation: 200, opacity: 0.3 }))
     expect(root.getPropertyValue('--lg-blur')).toBe('20px')
     expect(root.getPropertyValue('--lg-saturate')).toBe('200%')
@@ -72,7 +72,7 @@ describe('LiquidGlassProvider', () => {
     expect(probe.glass.bendsLight).toBe(false)
   })
 
-  it('gives a glass surface a lens of its own size, bending red, green and blue by the demo\'s amounts', async () => {
+  it('gives a glass surface a lens of its own size, bending red, green and blue by the demo\'s formula', async () => {
     chromium()
     const { container } = render(<LiquidGlassProvider><Probe /></LiquidGlassProvider>)
     const button = screen.getByRole('button', { name: 'Find papers' })
@@ -85,14 +85,14 @@ describe('LiquidGlassProvider', () => {
       return found!
     })
     const scales = [...lens.querySelectorAll('feDisplacementMap')].map((map) => map.getAttribute('scale'))
-    expect(scales).toEqual(['70', '77', '84'])
+    expect(scales).toEqual(['151', '160.82', '170.63'])
   })
 
   it('swaps the lens in place when Edge width moves, without taking the glass off (no flicker while dragging)', async () => {
     chromium()
     render(<LiquidGlassProvider><Probe /></LiquidGlassProvider>)
     const button = screen.getByRole('button', { name: 'Find papers' })
-    await waitFor(() => expect(button.style.getPropertyValue('--lg-lens')).toContain('e16'))
+    await waitFor(() => expect(button.style.getPropertyValue('--lg-lens')).toContain('e8'))
     const seen: (string | null)[] = []
     const watch = new MutationObserver(() => seen.push(button.getAttribute('data-lg')))
     watch.observe(button, { attributes: true, attributeFilter: ['data-lg'] })
