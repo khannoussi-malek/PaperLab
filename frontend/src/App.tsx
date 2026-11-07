@@ -1,3 +1,4 @@
+import { PersistentRail } from './components/PersistentRail'
 import { ChartBuilderPage } from './features/charts/ChartBuilderPage'
 import { ChartPage } from './features/charts/ChartPage'
 import { ChartsPage } from './features/charts/ChartsPage'
@@ -31,6 +32,8 @@ export default function App() {
         {downloadAnnouncement(state)}
       </p>
       <Page />
+      {/* After the page, so a new page's sidebar slot is in place before the sidebar measures (PersistentRail). */}
+      <PersistentRail />
     </>
   )
 }

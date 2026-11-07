@@ -1,5 +1,8 @@
-import { Fragment, useEffect, useRef } from 'react'
+import { Fragment } from 'react'
+import { TabPill } from '@/components/liquid-glass/TabPill'
+import { PILL_LIST, PILL_TAB, useTabPill } from '@/components/liquid-glass/useTabPill'
 import { Badge } from '@/components/ui/badge'
+import { cn } from '@/lib/utils'
 import { TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { WorkspaceTab } from '@/lib/route'
 import { Term } from './Term'
@@ -22,17 +25,18 @@ function StepLine({ text }: { text: string }) {
 
 /** Two labelled groups of tabs, then one muted line saying what the active tab is for. Must sit inside <Tabs>. */
 export function WorkspaceTabBar({ active, counts }: { active: WorkspaceTab; counts: Counts }) {
-  const listRef = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    listRef.current?.querySelector('[data-state="active"]')?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
-  }, [active])
+  const { listRef, thumbRef } = useTabPill(active)
   const current = WORKSPACE_TABS.find((tab) => tab.value === active)
   return (
     <div className="flex flex-col gap-2">
       <TabsList
         ref={listRef}
-        className="h-auto min-w-0 max-w-full justify-start gap-1 overflow-x-auto max-md:[mask-image:linear-gradient(to_right,transparent,black_1rem,black_calc(100%-1rem),transparent)]"
+        className={cn(
+          PILL_LIST,
+          'h-auto min-w-0 max-w-full justify-start gap-1 overflow-x-auto max-md:[mask-image:linear-gradient(to_right,transparent,black_1rem,black_calc(100%-1rem),transparent)]',
+        )}
       >
+        <TabPill thumbRef={thumbRef} />
         {(['papers', 'review'] as const).map((group, index) => (
           <Fragment key={group}>
             {index > 0 && <div aria-hidden className="mx-1 w-px shrink-0 self-stretch bg-border" />}
@@ -40,7 +44,7 @@ export function WorkspaceTabBar({ active, counts }: { active: WorkspaceTab; coun
             {WORKSPACE_TABS.filter((tab) => tab.group === group).map((meta) => {
               const count = counts[meta.value]
               return (
-                <TabsTrigger key={meta.value} value={meta.value} aria-label={tabAriaLabel(meta, count)} className="min-h-11 shrink-0 md:min-h-0">
+                <TabsTrigger key={meta.value} value={meta.value} aria-label={tabAriaLabel(meta, count)} className={cn('min-h-11 shrink-0 md:min-h-0', PILL_TAB)}>
                   {meta.step ? `${meta.step} · ${meta.label}` : meta.label}
                   {count ? <Badge variant="secondary" aria-hidden>{count.toLocaleString('en')}</Badge> : null}
                 </TabsTrigger>

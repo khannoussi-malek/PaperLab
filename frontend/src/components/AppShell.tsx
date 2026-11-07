@@ -4,6 +4,7 @@ import { glass } from '@/components/glass'
 import { ModeToggle } from '@/components/mode-toggle'
 import { fadeIn } from '@/components/motion'
 import { NavRail } from '@/components/NavRail'
+import { RailSlot } from '@/components/PersistentRail'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
@@ -35,16 +36,16 @@ type Props = {
  *
  * The reader and first-run setup do not use it: both take the whole window on purpose.
  *
- * ponytail: each view renders its own `AppShell`, so React remounts the chrome on every navigation. It looks
- * seamless (the workspaces come from React Query's cache, and nothing shifts), but the rail's scroll position
- * resets. Lift the shell into `App` and have views publish title/actions/status through a context if the rail ever
- * grows long enough to scroll.
+ * ponytail: each view renders its own `AppShell`, so React remounts the toolbar on every navigation. The desktop
+ * sidebar is the exception: it lives once in `App` (PersistentRail) and moves into each shell's `RailSlot`, so its
+ * glass pill glides across pages and its scroll survives. Lift the whole shell into `App`, with views publishing
+ * title/actions/status through a context, if the toolbar ever needs the same.
  */
 export function AppShell({ title, back, actions, status, fills = false, children }: Props) {
   const [navOpen, setNavOpen] = useState(false)
   return (
     <div className="grid h-dvh grid-cols-1 md:grid-cols-[14rem_minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden">
-      <header className={cn('col-span-full flex h-11 items-center gap-1 border-b border-glass-border px-2', glass)}>
+      <header data-glass-area="chrome" className={cn('col-span-full flex h-11 items-center gap-1 border-b border-glass-border px-2', glass)}>
         <Button variant="ghost" size="icon" aria-label="Open navigation" className="min-h-11 shrink-0 md:hidden" onClick={() => setNavOpen(true)}>
           <Menu aria-hidden />
         </Button>
@@ -69,8 +70,9 @@ export function AppShell({ title, back, actions, status, fills = false, children
         <ModeToggle />
       </header>
 
-      <div className="hidden min-h-0 md:flex md:flex-col [&>nav]:flex-1">
-        <NavRail />
+      {/* The one persistent sidebar (PersistentRail, mounted in App) moves in here, so navigating doesn't redraw it. */}
+      <div className="hidden min-h-0 md:flex md:flex-col">
+        <RailSlot />
       </div>
       <Dialog open={navOpen} onOpenChange={setNavOpen}>
         <DialogContent
