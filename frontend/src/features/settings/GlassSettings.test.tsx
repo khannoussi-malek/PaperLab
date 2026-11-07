@@ -47,7 +47,7 @@ describe('Settings → Glass', () => {
 
   it('switches glass off for one area', () => {
     renderSection()
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Outline and secondary buttons' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Buttons and the workspace tab pill' }))
     expect(stored().areas.buttons).toBe(false)
   })
 

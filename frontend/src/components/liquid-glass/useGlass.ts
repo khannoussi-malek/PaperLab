@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import type { GlassSettings } from './settings'
+import { DEFAULT_GLASS, type GlassSettings } from './settings'
 
 export type GlassContextValue = {
   settings: GlassSettings
@@ -11,9 +11,10 @@ export type GlassContextValue = {
 
 export const GlassContext = createContext<GlassContextValue | null>(null)
 
-/** The liquid glass settings and their setters; inside LiquidGlassProvider only. */
+/** Outside the provider (a component rendered on its own, as in a test) there is simply no bending. */
+const NO_GLASS: GlassContextValue = { settings: DEFAULT_GLASS, update: () => {}, reset: () => {}, bendsLight: false }
+
+/** The liquid glass settings and their setters, from LiquidGlassProvider. */
 export function useGlass(): GlassContextValue {
-  const context = useContext(GlassContext)
-  if (!context) throw new Error('useGlass must be used inside LiquidGlassProvider')
-  return context
+  return useContext(GlassContext) ?? NO_GLASS
 }
