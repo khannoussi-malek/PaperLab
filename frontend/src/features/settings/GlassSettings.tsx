@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
+import { GlassPreview } from './GlassPreview'
 
 const DEMO_URL = 'https://liquid-glass.maxrovensky.com'
 
@@ -48,6 +49,8 @@ export function GlassSettings() {
           in Chrome: its first four sliders are the same as these and mean the same.
         </p>
       </div>
+
+      <GlassPreview />
 
       {!bendsLight && (
         <Alert>

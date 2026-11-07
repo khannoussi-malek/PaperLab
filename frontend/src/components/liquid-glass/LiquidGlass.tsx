@@ -184,7 +184,10 @@ export function LiquidGlassProvider({ children }: { children: ReactNode }) {
     canBend((navigator as { userAgentData?: Parameters<typeof canBend>[0] }).userAgentData, navigator.userAgent),
   )
   const active = settings.enabled && bendsLight
-  const selector = active ? GLASS_AREAS.filter((area) => settings.areas[area]).map((area) => AREA_SELECTORS[area]).join(',') : ''
+  // The Settings → Glass preview always gets its glass, whatever the areas say, so it can be tuned on its own.
+  const selector = active
+    ? [...GLASS_AREAS.filter((area) => settings.areas[area]).map((area) => AREA_SELECTORS[area]), '[data-glass-demo]'].join(',')
+    : ''
   const lenses = useLenses(selector, settings.edgeWidth)
 
   // Saved after the change lands, not inside the state updater (StrictMode runs updaters twice).

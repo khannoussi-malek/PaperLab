@@ -113,6 +113,16 @@ The app chrome is frosted glass over a faint blue/violet glow on the page backgr
       - Edge width (16 px) and Opacity (65%) are PaperLab's.
       - The demo's Corner radius (each component keeps its own), Elasticity (a mouse-following stretch) and Over
         light (a dark tint, which would put dark text on dark glass in light theme) are left out.
+    - **Live preview** (owner, 2026-11-07: "a demo in the settings so the user can see and test"). `GlassPreview` sits
+      at the top of Settings → Glass and stays pinned (`sticky`) while you scroll the sliders. Its stage
+      (`.glass-stage`) is busy on purpose (colour blobs, stripes, a title and a paragraph), because glass over a plain
+      background shows nothing. On it:
+      - a glass card to drag, or move with the arrow keys (Shift for bigger steps); it is lensed whatever the areas
+        say (`data-glass-demo`);
+      - the workspace tab bar's gliding lens pill (`TabPill`/`useTabPill`, shared with `WorkspaceTabBar`);
+      - a menu surface with the gliding highlight, decorative and hidden from screen readers;
+      - the primary, outline and secondary buttons.
+      The pieces sit on the stage, never inside the card: glass inside glass sees only the outer glass.
     - **Chromium only** (`bendsLight`): Safari and Firefox keep plain frost, and Settings says so. Reduce
       transparency turns every lensed surface solid.
     - **Limit:** glass only shows what is behind it. The toolbar, rail and reader panels sit beside the content, not

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { LiquidGlassProvider } from '@/components/liquid-glass/LiquidGlass'
 import { STORAGE_KEY } from '@/components/liquid-glass/settings'
@@ -69,5 +69,46 @@ describe('Settings → Glass', () => {
     vi.stubGlobal('navigator', { ...navigator, userAgentData: undefined, userAgent: 'Mozilla/5.0 Gecko/20100101 Firefox/140.0' })
     renderSection()
     expect(screen.getByText(/can't bend light/)).toBeInTheDocument()
+  })
+
+  describe('the live preview', () => {
+    const preview = () => within(screen.getByRole('region', { name: 'Glass preview' }))
+
+    it('shows a glass card over a busy, colourful background, which the sliders change live', () => {
+      renderSection()
+      const card = preview().getByRole('group', { name: /Glass sample/ })
+      expect(card).toHaveAttribute('data-glass-demo')
+    })
+
+    it('lets the card be moved over the background with the arrow keys (or dragged)', () => {
+      renderSection()
+      const card = preview().getByRole('group', { name: /Glass sample/ })
+      const before = card.style.transform
+      fireEvent.keyDown(card, { key: 'ArrowRight' })
+      fireEvent.keyDown(card, { key: 'ArrowDown' })
+      expect(card.style.transform).not.toBe(before)
+      expect(card.style.transform).toBe('translate(36px, 36px)')
+    })
+
+    it('has the real tab bar, with its gliding pill, to try', () => {
+      renderSection()
+      expect(preview().getByRole('tab', { name: 'Papers' })).toHaveAttribute('aria-selected', 'true')
+      fireEvent.mouseDown(preview().getByRole('tab', { name: 'Notes' }), { button: 0 })
+      expect(preview().getByRole('tab', { name: 'Notes' })).toHaveAttribute('aria-selected', 'true')
+      expect(screen.getByRole('region', { name: 'Glass preview' }).querySelector('[data-tab-thumb]')).not.toBeNull()
+    })
+
+    it('has a menu whose highlight glides to the item under the pointer', () => {
+      renderSection()
+      const item = preview().getByText('Rename')
+      fireEvent.pointerEnter(item)
+      expect(item).toHaveAttribute('data-highlighted')
+      expect(screen.getByRole('region', { name: 'Glass preview' }).querySelector('[data-menu-glide]')).not.toBeNull()
+    })
+
+    it('has the three button styles', () => {
+      renderSection()
+      for (const name of ['Primary', 'Outline', 'Secondary']) expect(preview().getByRole('button', { name })).toBeInTheDocument()
+    })
   })
 })
