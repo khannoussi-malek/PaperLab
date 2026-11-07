@@ -83,7 +83,11 @@
     /* Liquid glass: the light catching the top edge of every glass surface, and the toasts' tint. */
     --glass-rim: rgb(255 255 255 / 0.7);
     --toast-glass: #ffffff;
-    --toast-rim: rgb(255 255 255 / 0.85);
+    /* On a light page a white rim vanishes; a faint slate hairline gives the glass its edge, as refraction does. */
+    --toast-rim: rgb(100 116 139 / 0.35);
+    /* Clear glass stays legible the way Apple's does: by brightening (light) or darkening (dark) what's behind. */
+    --toast-backdrop: blur(10px) saturate(190%) brightness(1.05);
+    --toast-halo: rgb(255 255 255 / 0.7);
     --button-rim: rgb(255 255 255 / 0.4);
     /* Not redefined under .dark: controls sitting on the always-white PDF page (citation buttons) need a ring that
        still contrasts 3:1 there, which dark theme's --primary (#60a5fa) does not. */
@@ -127,7 +131,9 @@
     --ambient-2: rgb(139 92 246 / 0.16);
     --glass-rim: rgb(255 255 255 / 0.09);
     --toast-glass: #1e293b;
-    --toast-rim: rgb(255 255 255 / 0.28);
+    --toast-rim: rgb(255 255 255 / 0.35);
+    --toast-backdrop: blur(10px) saturate(160%) brightness(0.5);
+    --toast-halo: rgb(2 6 23 / 0.6);
     --button-rim: rgb(255 255 255 / 0.45);
 }
 
@@ -149,12 +155,30 @@
    roundness (16, the rx below). */
 :root [data-sileo-toast] {
     --pl-toast-shape: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='100%25' height='100%25' rx='16'/%3E%3C/svg%3E");
+    --pl-toast-fill: linear-gradient(#000, #000);
     color: var(--foreground);
-    backdrop-filter: blur(12px) saturate(180%);
-    mask-image: var(--pl-toast-shape), var(--pl-toast-shape);
+    backdrop-filter: var(--toast-backdrop);
+    /* Pill, body, a square bridge where they meet, and a concave fillet on each side of the pill: the blob merges
+       pill and body with a smooth curve (Sileo's goo, blur 8 for roundness 16, about a 14 px curve), and rounded rects
+       alone would cut it. The bridge and fillets only exist once the body does (--pl-joint is 0 while collapsed). */
+    --pl-joint: clamp(0px, calc(var(--_h) - var(--sileo-height)), 14px);
+    --pl-fillet-left: radial-gradient(circle at 0 0, transparent 14px, #000 14.5px);
+    --pl-fillet-right: radial-gradient(circle at 100% 0, transparent 14px, #000 14.5px);
+    mask-image:
+        var(--pl-toast-shape), var(--pl-toast-shape), var(--pl-toast-fill), var(--pl-fillet-left), var(--pl-fillet-right);
     mask-repeat: no-repeat;
-    mask-position: var(--_px) 0, 0 var(--sileo-height);
-    mask-size: var(--_pw) var(--sileo-height), 100% calc(var(--_h) - var(--sileo-height));
+    mask-position:
+        var(--_px) 0,
+        0 var(--sileo-height),
+        var(--_px) calc(var(--sileo-height) / 2),
+        calc(var(--_px) - 14px) calc(var(--sileo-height) - var(--pl-joint)),
+        calc(var(--_px) + var(--_pw)) calc(var(--sileo-height) - var(--pl-joint));
+    mask-size:
+        var(--_pw) var(--sileo-height),
+        100% calc(var(--_h) - var(--sileo-height)),
+        var(--_pw) clamp(0px, calc(var(--_h) - var(--sileo-height)), var(--sileo-height)),
+        14px var(--pl-joint),
+        14px var(--pl-joint);
 }
 /* The mask follows the blob at Sileo's own pace; without these it would snap while the blob is still moving. */
 :root [data-sileo-toast][data-ready="true"] {
@@ -169,7 +193,7 @@
 }
 /* Bends the page at the glass's edges with a colour fringe; Chromium only (the `liquid` class, see liquidGlass.ts). */
 :root.liquid [data-sileo-toast] {
-    backdrop-filter: url(#pl-liquid) blur(8px) saturate(180%);
+    backdrop-filter: url(#pl-liquid) var(--toast-backdrop);
 }
 :root [data-sileo-svg] {
     filter: url(#pl-glass-surface);
@@ -182,9 +206,13 @@
     color: var(--foreground);
     text-transform: none;
 }
-/* Not muted-foreground: under a dark toast over a white PDF page that falls to 3:1. This stays ≥ 5.2:1 at worst. */
+/* Vibrancy: a soft halo keeps the letters clear of whatever shows through the glass. */
+:root :is([data-sileo-title], [data-sileo-description]) {
+    text-shadow: 0 0 6px var(--toast-halo);
+}
+/* Full foreground, not muted: on clear glass over a white PDF page (dark theme) anything lighter falls under 4.5:1. */
 :root [data-sileo-description] {
-    color: color-mix(in srgb, var(--foreground) 85%, var(--toast-glass));
+    color: var(--foreground);
 }
 /* The mask would clip a keyboard focus ring drawn outside the glass; while focused, show the whole toast box. */
 :root [data-sileo-toast]:focus-visible {

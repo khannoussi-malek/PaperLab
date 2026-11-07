@@ -335,15 +335,22 @@ toolbar; call `sileo.success({ title, description })` (or `.info`, `.error`, `.p
   Existing inline notices move only when a change already touches them.
 - **It is liquid glass** (see "Glass"), styled around Sileo, whose toast is one SVG blob (a pill that grows a body)
   that needs a solid fill to morph (`index.css`, the `[data-sileo-*]` rules):
-  - **The blob is see-through and lit:** `#pl-glass-surface` makes its body 80% opaque (`--toast-glass`: white /
-    slate-800), adds a specular highlight from a top-left light (`feSpecularLighting` on the blob's own outline), and
-    traces a 1 px rim (`--toast-rim`).
-  - **The page behind is frosted, and bent in Chromium:** `backdrop-filter` on the toast, cut to the pill and body by a
-    mask that reads Sileo's size variables (`--_px`, `--_pw`, `--_h`) and follows the morph at Sileo's spring. It
-    assumes a top-* position (the body grows downwards), so keep the Toaster at the top.
-  - **Text uses our tokens:** the title is `foreground` and the description 85% `foreground`. Worst case (a dark toast
-    over a white PDF page, ignoring the blur): title 7.0:1, description 5.2:1. `muted-foreground` would fall to 3:1
-    there, and Sileo's state colours (green, blue) are under 3:1 on light glass, so colour stays on the badge.
+  - **The blob is clear glass, lit like a bevel** (reworked 2026-11-07 after the owner found the first version "not
+    realistic at all", a dark plastic chip): `#pl-glass-surface` tints its body only 25% (`--toast-glass`: white /
+    slate-800). The blob's outline, blurred, is a bevel that catches a key light from the top left and a weaker
+    bounce from the bottom right (`feSpecularLighting`), plus a soft inner glow and a hairline rim (`--toast-rim`:
+    slate in light, where a white rim vanishes; white in dark).
+  - **Legibility comes from the backdrop, as in Apple's glass, not from paint:** `--toast-backdrop` blurs 10 px,
+    saturates, and brightens (light, 1.05) or darkens (dark, 0.5) what is behind. In Chromium, `#pl-liquid` bends it.
+  - **The blur is masked to the blob:** pill, body, a square bridge where they meet, and a 14 px concave fillet each
+    side of the pill. Without the bridge and fillets the mask cut a notch where Sileo's goo (blur 8 at roundness 16)
+    curves the pill into the body; the owner spotted it. The mask reads Sileo's size variables (`--_px`, `--_pw`,
+    `--_h`), follows the morph at Sileo's spring, and assumes a top-* position (the body grows downwards), so keep the
+    Toaster at the top.
+  - **Text is full `foreground`** with a soft halo (`--toast-halo`, Apple's vibrancy). Worst real case, a dark toast
+    over a white PDF page (the Library preview sits under the toasts): about 5.0:1, ignoring the halo. `muted-
+    foreground` or 85% fell under 4.5:1 there. Sileo's state colours stay on the badge. Known limit: a light-theme
+    toast over a near-black picture loses contrast; reconsider the tint if that turns up in real use.
   - **Focus and motion:** a focused toast drops its mask so the focus ring shows; with reduced motion the morph and the
     mask jump instead of springing.
   - **Reduce transparency** turns it solid: `card` fill, no blur, no lighting. Sileo already honours reduced motion.
