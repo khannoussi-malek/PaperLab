@@ -24,6 +24,7 @@ export function NavRail({ onNavigate }: { onNavigate?: () => void } = {}) {
   const active: NavKey = activeNav(route)
   return (
     <nav
+      data-glass-area="chrome"
       aria-label="Views"
       onClick={(event) => {
         if ((event.target as HTMLElement).closest('a')) onNavigate?.()

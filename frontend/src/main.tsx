@@ -3,6 +3,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { queryClient } from './api/queries'
 import App from './App.tsx'
+import { LiquidGlassProvider } from './components/liquid-glass/LiquidGlass'
 import { Notifications } from './components/Notifications'
 import { ThemeProvider } from './components/theme-provider'
 import { warmPlotlyAtChartLink } from './features/charts/loadPlotly'
@@ -16,7 +17,9 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        <App />
+        <LiquidGlassProvider>
+          <App />
+        </LiquidGlassProvider>
         <Notifications />
       </ThemeProvider>
     </QueryClientProvider>

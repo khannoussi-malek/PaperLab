@@ -79,10 +79,37 @@ The app chrome is frosted glass over a faint blue/violet glow on the page backgr
     - a press scales the button to 97% instead of nudging it 1 px, and only when motion is allowed;
     - no `backdrop-filter` on buttons: there are hundreds per page, and they sit on flat panels where a blur shows
       nothing.
-  - **No light bending (refraction):** it was built for the toasts and dropped with them (see "Notifications").
-    `liquid-glass-react` was tried and not kept: its component forces white 20 px system text and centres itself on a
-    point.
-
+  - **Light bending, tunable in Settings → Glass** (owner, 2026-11-07: glass on floating surfaces, toolbar and rail,
+    buttons and reader panels, with live settings). `components/liquid-glass/` holds it:
+    - `LiquidGlassProvider` (in `main.tsx`) finds every glass surface of a switched-on area. Each one gets `data-lg`
+      and a lens of its own size and corner radius (`--lg-lens`); same-size surfaces share one SVG filter.
+    - `index.css` ("Liquid glass") frosts and saturates the backdrop, then bends it through the lens, in
+      liquid-glass-react's order. It also turns the surface's fill see-through (`--lg-opacity`), or paint would hide
+      the bending.
+    - The lens (`lens.ts`) pulls the page in from the edge, red, green and blue by different amounts. It is built
+      from the surface's real outline, because a map stretched to another shape bends the wrong places. It never
+      bends outwards, which samples past the surface where the backdrop is empty.
+    - **Areas:**
+      - floating: Radix menus, popovers, selects and dialogs by `data-slot`, plus `.citation-card` and
+        `.reading-popover`;
+      - chrome: `data-glass-area="chrome"` on the shell toolbar and `NavRail`;
+      - buttons: outline and secondary only (primary is solid);
+      - reader: `data-glass-area="reader"` on the reader toolbar and right panel.
+      A new glass surface joins an area by one of these markers.
+    - **Settings** (`settings.ts`, saved per browser under `paperlab-glass`):
+      - Displacement scale, Blur amount, Saturation and Chromatic aberration are liquid-glass-react's own, with its
+        defaults (70, 0.0625, 140, 2) and formulas (blur = 4 + 32 × amount px; green and blue bend 5% and 10% more
+        per aberration step). Values from its demo, liquid-glass.maxrovensky.com, carry over 1:1; Settings links it.
+      - Edge width (16 px) and Opacity (55%) are PaperLab's.
+      - The demo's Corner radius (each component keeps its own), Elasticity (a mouse-following stretch) and Over
+        light (a dark tint, which would put dark text on dark glass in light theme) are left out.
+    - **Chromium only** (`bendsLight`): Safari and Firefox keep plain frost, and Settings says so. Reduce
+      transparency turns every lensed surface solid.
+    - **Limit:** glass only shows what is behind it. The toolbar, rail and reader panels sit beside the content, not
+      over it, so there they bend only the background glow and barely show. Making them show needs the content to
+      scroll under them, a layout change not made yet.
+    - `liquid-glass-react` itself isn't installed: its component forces white 20 px system text and centres itself on
+      a point. Toasts stay Sileo's own (see "Notifications").
 ## Stack
 
 - Components: shadcn/ui, style `radix-nova`, in `src/components/ui/`. Add one with

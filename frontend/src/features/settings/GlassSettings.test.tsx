@@ -1,0 +1,73 @@
+// @vitest-environment jsdom
+import { fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { LiquidGlassProvider } from '@/components/liquid-glass/LiquidGlass'
+import { STORAGE_KEY } from '@/components/liquid-glass/settings'
+import { GlassSettings } from './GlassSettings'
+
+globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} }
+
+const renderSection = () =>
+  render(
+    <LiquidGlassProvider>
+      <GlassSettings />
+    </LiquidGlassProvider>,
+  )
+const stored = () => JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}')
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+  localStorage.clear()
+  document.documentElement.className = ''
+})
+
+describe('Settings → Glass', () => {
+  it('has the demo\'s four sliders, under the demo\'s names, plus edge width and opacity', () => {
+    renderSection()
+    expect(screen.getByRole('slider', { name: 'Displacement scale' })).toHaveValue('70')
+    expect(screen.getByRole('slider', { name: 'Blur amount' })).toHaveValue('0.0625')
+    expect(screen.getByRole('slider', { name: 'Saturation' })).toHaveValue('140')
+    expect(screen.getByRole('slider', { name: 'Chromatic aberration' })).toHaveValue('2')
+    expect(screen.getByRole('slider', { name: 'Edge width' })).toHaveValue('16')
+    expect(screen.getByRole('slider', { name: 'Opacity' })).toHaveValue('0.55')
+  })
+
+  it('points to the demo, so values can be tried there first', () => {
+    renderSection()
+    expect(screen.getByRole('link', { name: /liquid-glass-react demo/ })).toHaveAttribute('href', 'https://liquid-glass.maxrovensky.com')
+  })
+
+  it('applies a slider at once, shows its value, and remembers it', () => {
+    renderSection()
+    fireEvent.change(screen.getByRole('slider', { name: 'Saturation' }), { target: { value: '200' } })
+    expect(screen.getByText('200%')).toBeInTheDocument()
+    expect(stored().saturation).toBe(200)
+    expect(document.documentElement.style.getPropertyValue('--lg-saturate')).toBe('200%')
+  })
+
+  it('switches glass off for one area', () => {
+    renderSection()
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Outline and secondary buttons' }))
+    expect(stored().areas.buttons).toBe(false)
+  })
+
+  it('switches it all off, which greys the sliders out', () => {
+    renderSection()
+    fireEvent.click(screen.getByRole('switch', { name: 'Liquid glass' }))
+    expect(stored().enabled).toBe(false)
+    expect(screen.getByRole('slider', { name: 'Saturation' })).toBeDisabled()
+  })
+
+  it('resets to the defaults', () => {
+    renderSection()
+    fireEvent.change(screen.getByRole('slider', { name: 'Opacity' }), { target: { value: '0.2' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Reset to defaults' }))
+    expect(screen.getByRole('slider', { name: 'Opacity' })).toHaveValue('0.55')
+  })
+
+  it('says when this browser can only frost', () => {
+    vi.stubGlobal('navigator', { ...navigator, userAgentData: undefined, userAgent: 'Mozilla/5.0 Gecko/20100101 Firefox/140.0' })
+    renderSection()
+    expect(screen.getByText(/can't bend light/)).toBeInTheDocument()
+  })
+})
