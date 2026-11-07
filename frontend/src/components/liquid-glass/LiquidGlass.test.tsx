@@ -110,6 +110,17 @@ describe('LiquidGlassProvider', () => {
     expect(save.mock.calls.filter(([key]) => key === STORAGE_KEY)).toHaveLength(1)
   })
 
+  it('always gives the Settings preview its glass while glass is on, even with every area switched off', async () => {
+    chromium()
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ areas: { floating: false, chrome: false, buttons: false, reader: false } }))
+    render(
+      <LiquidGlassProvider>
+        <div data-glass-demo>Preview card</div>
+      </LiquidGlassProvider>,
+    )
+    await waitFor(() => expect(screen.getByText('Preview card')).toHaveAttribute('data-lg'))
+  })
+
   it('takes the glass off an area that is switched off', async () => {
     chromium()
     render(<LiquidGlassProvider><Probe /></LiquidGlassProvider>)
