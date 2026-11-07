@@ -29,7 +29,7 @@ describe('Settings → Glass', () => {
     expect(screen.getByRole('slider', { name: 'Saturation' })).toHaveValue('140')
     expect(screen.getByRole('slider', { name: 'Chromatic aberration' })).toHaveValue('2')
     expect(screen.getByRole('slider', { name: 'Edge width' })).toHaveValue('16')
-    expect(screen.getByRole('slider', { name: 'Opacity' })).toHaveValue('0.55')
+    expect(screen.getByRole('slider', { name: 'Opacity' })).toHaveValue('0.65')
   })
 
   it('points to the demo, so values can be tried there first', () => {
@@ -62,7 +62,7 @@ describe('Settings → Glass', () => {
     renderSection()
     fireEvent.change(screen.getByRole('slider', { name: 'Opacity' }), { target: { value: '0.2' } })
     fireEvent.click(screen.getByRole('button', { name: 'Reset to defaults' }))
-    expect(screen.getByRole('slider', { name: 'Opacity' })).toHaveValue('0.55')
+    expect(screen.getByRole('slider', { name: 'Opacity' })).toHaveValue('0.65')
   })
 
   it('says when this browser can only frost', () => {

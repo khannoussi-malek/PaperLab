@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { GlassContext, type GlassContextValue } from './useGlass'
 import { bendsLight as canBend, lensKey, lensUrl, type LensShape } from './lens'
 import {
@@ -57,67 +57,120 @@ function LensFilter({ lens, scales }: { lens: Lens; scales: ReturnType<typeof ch
   )
 }
 
+/** How long a resize must settle before its lens is rebuilt; while dragging, the previous lens stays on. */
+const RESIZE_SETTLE_MS = 150
+
+/** A surface's corner radius in px; a percentage radius (a circle, a pill) is a share of its shorter side. */
+function radiusOf(element: HTMLElement, width: number, height: number) {
+  const raw = getComputedStyle(element).borderTopLeftRadius
+  const value = Number.parseFloat(raw) || 0
+  return raw.endsWith('%') ? (value / 100) * Math.min(width, height) : value
+}
+
 /**
  * Finds every glass surface of the switched-on areas, keeps it marked (`data-lg`) and pointed at a lens of its own
- * size and corner radius (`--lg-lens`), and returns the lenses to draw. New surfaces (a menu opening) are found by a
- * MutationObserver, resized ones by a ResizeObserver; only those are measured again.
+ * size and corner radius (`--lg-lens`), and returns the lenses to draw. A full search runs only when a matching
+ * surface is added or removed (a menu opening); sizes come from a ResizeObserver, which also notices a surface that
+ * starts hidden and appears later. A new Edge width swaps the lenses in place, so dragging it never flickers.
  */
 function useLenses(selector: string, edge: number): Lens[] {
   const [lenses, setLenses] = useState<Lens[]>([])
+  const edgeRef = useRef(edge)
+  const resyncRef = useRef<(() => void) | null>(null)
+
+  useEffect(() => {
+    edgeRef.current = edge
+    resyncRef.current?.()
+  }, [edge])
+
   useEffect(() => {
     if (!selector) return
+    const watched = new Set<HTMLElement>()
     const shapes = new Map<HTMLElement, LensShape>()
     const dirty = new Set<Element>()
+    const maps = new Map<string, string>()
     let frame = 0
+    let settle = 0
+    let sweep = true
     const schedule = () => {
       if (!frame) frame = requestAnimationFrame(sync)
     }
     const resize = new ResizeObserver((entries) => {
       for (const entry of entries) dirty.add(entry.target)
-      schedule()
+      clearTimeout(settle)
+      settle = window.setTimeout(schedule, RESIZE_SETTLE_MS)
     })
     const unmark = (element: HTMLElement) => {
       delete element.dataset.lg
       element.style.removeProperty('--lg-lens')
-      resize.unobserve(element)
       shapes.delete(element)
+    }
+    const unwatch = (element: HTMLElement) => {
+      unmark(element)
+      resize.unobserve(element)
+      watched.delete(element)
     }
     function sync() {
       frame = 0
-      const found = new Set(document.querySelectorAll<HTMLElement>(selector))
-      for (const element of [...shapes.keys()]) if (!found.has(element)) unmark(element)
-      for (const element of found) {
-        if (shapes.has(element) && !dirty.has(element)) continue
-        const shape = {
-          width: element.offsetWidth,
-          height: element.offsetHeight,
-          radius: Number.parseFloat(getComputedStyle(element).borderTopLeftRadius) || 0,
+      const currentEdge = edgeRef.current
+      if (sweep) {
+        sweep = false
+        const found = new Set(document.querySelectorAll<HTMLElement>(selector))
+        for (const element of [...watched]) if (!found.has(element)) unwatch(element)
+        for (const element of found) {
+          if (watched.has(element)) continue
+          watched.add(element)
+          resize.observe(element)
+          dirty.add(element)
         }
-        if (shape.width < 1 || shape.height < 1) {
-          if (shapes.has(element)) unmark(element)
-          continue
-        }
-        if (!shapes.has(element)) resize.observe(element)
-        shapes.set(element, shape)
-        element.dataset.lg = ''
-        element.style.setProperty('--lg-lens', `url(#lg-${lensKey(shape, edge)})`)
+      }
+      for (const element of dirty) {
+        if (!(element instanceof HTMLElement) || !watched.has(element)) continue
+        const width = element.offsetWidth
+        const height = element.offsetHeight
+        if (width < 1 || height < 1) unmark(element)
+        else shapes.set(element, { width, height, radius: radiusOf(element, width, height) })
       }
       dirty.clear()
-      const byKey = new Map([...shapes.values()].map((shape) => [lensKey(shape, edge), shape]))
+      const next = new Map<string, LensShape>()
+      for (const [element, shape] of shapes) {
+        const key = lensKey(shape, currentEdge)
+        next.set(key, shape)
+        const lens = `url(#lg-${key})`
+        if (element.style.getPropertyValue('--lg-lens') !== lens) element.style.setProperty('--lg-lens', lens)
+        element.dataset.lg = ''
+      }
+      for (const key of [...maps.keys()]) if (!next.has(key)) maps.delete(key)
+      for (const [key, shape] of next) if (!maps.has(key)) maps.set(key, lensUrl(shape, currentEdge))
       setLenses((current) =>
-        [...byKey].map(([key, shape]) => current.find((lens) => lens.key === key) ?? { key, shape, map: lensUrl(shape, edge) }),
+        current.length === next.size && current.every((lens) => next.has(lens.key))
+          ? current
+          : [...next].map(([key, shape]) => ({ key, shape, map: maps.get(key) ?? '' })),
       )
     }
-    const mutations = new MutationObserver(schedule)
-    mutations.observe(document.body, { childList: true, subtree: true })
+    const mutations = new MutationObserver((records) => {
+      for (const record of records) {
+        if (record.type === 'attributes') sweep = true
+        for (const node of record.addedNodes) {
+          if (node instanceof Element && (node.matches(selector) || node.querySelector(selector))) sweep = true
+        }
+        if (record.removedNodes.length > 0 && [...watched].some((element) => !element.isConnected)) sweep = true
+      }
+      if (sweep) schedule()
+    })
+    // data-variant: a button that turns outline (or stops being one) joins or leaves the glass.
+    mutations.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-variant'] })
+    resyncRef.current = schedule
     schedule()
     return () => {
+      resyncRef.current = null
       mutations.disconnect()
       cancelAnimationFrame(frame)
-      for (const element of [...shapes.keys()]) unmark(element)
+      clearTimeout(settle)
+      for (const element of [...watched]) unwatch(element)
       resize.disconnect()
     }
-  }, [selector, edge])
+  }, [selector])
   return selector ? lenses : []
 }
 
@@ -134,6 +187,14 @@ export function LiquidGlassProvider({ children }: { children: ReactNode }) {
   const selector = active ? GLASS_AREAS.filter((area) => settings.areas[area]).map((area) => AREA_SELECTORS[area]).join(',') : ''
   const lenses = useLenses(selector, settings.edgeWidth)
 
+  // Saved after the change lands, not inside the state updater (StrictMode runs updaters twice).
+  const saved = useRef(settings)
+  useEffect(() => {
+    if (saved.current === settings) return
+    saved.current = settings
+    saveGlass(settings, localStorage)
+  }, [settings])
+
   useEffect(() => {
     const root = document.documentElement
     root.style.setProperty('--lg-blur', `${blurPx(settings)}px`)
@@ -147,16 +208,8 @@ export function LiquidGlassProvider({ children }: { children: ReactNode }) {
     () => ({
       settings,
       bendsLight,
-      update: (patch) =>
-        setSettings((current) => {
-          const next = { ...current, ...patch }
-          saveGlass(next, localStorage)
-          return next
-        }),
-      reset: () => {
-        saveGlass(DEFAULT_GLASS, localStorage)
-        setSettings(DEFAULT_GLASS)
-      },
+      update: (patch) => setSettings((current) => ({ ...current, ...patch })),
+      reset: () => setSettings(DEFAULT_GLASS),
     }),
     [settings, bendsLight],
   )

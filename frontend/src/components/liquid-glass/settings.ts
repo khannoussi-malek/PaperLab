@@ -46,7 +46,7 @@ export const DEFAULT_GLASS: GlassSettings = {
   saturation: 140,
   aberrationIntensity: 2,
   edgeWidth: 16,
-  opacity: 0.55,
+  opacity: 0.65,
   areas: { floating: true, chrome: true, buttons: true, reader: true },
 }
 

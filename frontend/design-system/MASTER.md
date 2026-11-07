@@ -100,7 +100,7 @@ The app chrome is frosted glass over a faint blue/violet glow on the page backgr
       - Displacement scale, Blur amount, Saturation and Chromatic aberration are liquid-glass-react's own, with its
         defaults (70, 0.0625, 140, 2) and formulas (blur = 4 + 32 × amount px; green and blue bend 5% and 10% more
         per aberration step). Values from its demo, liquid-glass.maxrovensky.com, carry over 1:1; Settings links it.
-      - Edge width (16 px) and Opacity (55%) are PaperLab's.
+      - Edge width (16 px) and Opacity (65%) are PaperLab's.
       - The demo's Corner radius (each component keeps its own), Elasticity (a mouse-following stretch) and Over
         light (a dark tint, which would put dark text on dark glass in light theme) are left out.
     - **Chromium only** (`bendsLight`): Safari and Firefox keep plain frost, and Settings says so. Reduce
