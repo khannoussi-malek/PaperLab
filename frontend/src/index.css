@@ -142,15 +142,20 @@
    order, and its fill turns see-through (--lg-opacity), or the bending would hide behind paint. The settings set
    --lg-blur, --lg-saturate and --lg-opacity on <html>. */
 :root.liquid [data-lg] {
-    background-color: color-mix(in srgb, var(--card) calc(var(--lg-opacity) * 100%), transparent);
     backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate)) var(--lg-lens);
 }
-:root.liquid [data-lg][data-slot="button"]:hover,
-:root.liquid [data-lg][data-slot="button"][aria-expanded="true"] {
+/* A pressed or selected toggle keeps its own fill, so its state still shows. */
+:root.liquid [data-lg]:not([aria-pressed="true"], [data-state="on"]) {
+    background-color: color-mix(in srgb, var(--card) calc(var(--lg-opacity) * 100%), transparent);
+}
+:root.liquid [data-lg][data-slot="button"]:not([aria-pressed="true"], [data-state="on"]):is(:hover, [aria-expanded="true"]) {
     background-color: color-mix(in srgb, var(--card) calc(var(--lg-opacity) * 100% + 20%), transparent);
 }
+/* Reduce transparency: solid, unblurred, in every state (the selectors match the ones above, so they win). */
 @media (prefers-reduced-transparency: reduce) {
-    :root.liquid [data-lg] {
+    :root.liquid [data-lg],
+    :root.liquid [data-lg]:not([aria-pressed="true"], [data-state="on"]),
+    :root.liquid [data-lg][data-slot="button"]:not([aria-pressed="true"], [data-state="on"]):is(:hover, [aria-expanded="true"]) {
         background-color: var(--card);
         backdrop-filter: none;
     }

@@ -88,6 +88,28 @@ describe('LiquidGlassProvider', () => {
     expect(scales).toEqual(['70', '77', '84'])
   })
 
+  it('swaps the lens in place when Edge width moves, without taking the glass off (no flicker while dragging)', async () => {
+    chromium()
+    render(<LiquidGlassProvider><Probe /></LiquidGlassProvider>)
+    const button = screen.getByRole('button', { name: 'Find papers' })
+    await waitFor(() => expect(button.style.getPropertyValue('--lg-lens')).toContain('e16'))
+    const seen: (string | null)[] = []
+    const watch = new MutationObserver(() => seen.push(button.getAttribute('data-lg')))
+    watch.observe(button, { attributes: true, attributeFilter: ['data-lg'] })
+    act(() => probe.glass.update({ edgeWidth: 24 }))
+    await waitFor(() => expect(button.style.getPropertyValue('--lg-lens')).toContain('e24'))
+    watch.disconnect()
+    expect(seen).not.toContain(null)
+  })
+
+  it('remembers changes once, outside React\'s state updaters', () => {
+    const save = vi.spyOn(Storage.prototype, 'setItem')
+    render(<LiquidGlassProvider><Probe /></LiquidGlassProvider>)
+    save.mockClear()
+    act(() => probe.glass.update({ saturation: 180 }))
+    expect(save.mock.calls.filter(([key]) => key === STORAGE_KEY)).toHaveLength(1)
+  })
+
   it('takes the glass off an area that is switched off', async () => {
     chromium()
     render(<LiquidGlassProvider><Probe /></LiquidGlassProvider>)
