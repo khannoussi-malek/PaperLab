@@ -39,16 +39,16 @@ export const GLASS_RANGES: Record<NumericKey, { min: number; max: number; step: 
   opacity: { min: 0, max: 1, step: 0.05 },
 }
 
-/** The owner's chosen look (2026-11-07), tuned in the Settings → Glass preview. liquid-glass-react's own defaults,
+/** The owner's chosen look (2026-11-07, second pass), tuned in the Settings → Glass preview. liquid-glass-react's own defaults,
  * for comparison with its demo, are Displacement scale 70, Blur amount 0.0625, Saturation 140, Chromatic aberration 2. */
 export const DEFAULT_GLASS: GlassSettings = {
   enabled: true,
-  displacementScale: 151,
-  blurAmount: 0.55,
+  displacementScale: 80,
+  blurAmount: 0.0375,
   saturation: 105,
-  aberrationIntensity: 1.3,
-  edgeWidth: 8,
-  opacity: 0.15,
+  aberrationIntensity: 0,
+  edgeWidth: 14,
+  opacity: 0.35,
   areas: { floating: true, chrome: true, buttons: true, reader: true },
 }
 
