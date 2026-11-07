@@ -113,8 +113,10 @@ The app chrome is frosted glass over a faint blue/violet glow on the page backgr
       - Edge width (16 px) and Opacity (65%) are PaperLab's.
       - The demo's Corner radius (each component keeps its own), Elasticity (a mouse-following stretch) and Over
         light (a dark tint, which would put dark text on dark glass in light theme) are left out.
-    - **Live preview** (owner, 2026-11-07: "a demo in the settings so the user can see and test"). `GlassPreview` sits
-      at the top of Settings → Glass and stays pinned (`sticky`) while you scroll the sliders. Its stage
+    - **Live preview** (owner, 2026-11-07: "a demo in the settings so the user can see and test", then "on the right
+      side"). `GlassPreview` sits right of the sliders from `lg` (a 30rem column) and above them below that, pinned
+      (`sticky`) either way while you scroll them. Glass is the one Settings section wider than the reading width
+      (`max-w-6xl`), to make room for it. Its stage
       (`.glass-stage`) is busy on purpose (colour blobs, stripes, a title and a paragraph), because glass over a plain
       background shows nothing. On it:
       - a glass card to drag, or move with the arrow keys (Shift for bigger steps); it is lensed whatever the areas
@@ -624,7 +626,8 @@ section is visually indicated, and a long page keeps its navigation in view).
   `sm:` up, sticky at `top-6` so it stays in view down a long section, and stacks above the content below `sm:`.
 - **Desktop app** is listed only inside the desktop app (`useDesktop()`), and its address falls back to the first
   section in a browser.
-- The content column keeps the reading width (`max-w-3xl`) it had as one long page.
+- The content column keeps the reading width (`max-w-3xl`) it had as one long page; only Glass is wider (`max-w-6xl`),
+  for its sliders and live preview side by side.
 
 ## Model connections
 

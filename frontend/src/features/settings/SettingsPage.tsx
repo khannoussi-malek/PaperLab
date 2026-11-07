@@ -2,6 +2,7 @@ import { Bot, BookOpen, GlassWater, MonitorCog, Plug, Search, type LucideIcon } 
 import { AppShell } from '@/components/AppShell'
 import { railItem } from '@/components/nav'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import { connectClaudeHref, settingsSectionHref, useRoute, type SettingsSection } from '@/lib/route'
 import { DesktopSettings } from './DesktopSettings'
 import { EmbeddingSettings } from './EmbeddingSettings'
@@ -93,7 +94,8 @@ export function SettingsPage() {
           </p>
         </nav>
         {/* Settings is prose and forms: a reading-width column, as macOS System Settings and Zotero's own do. */}
-        <div className="flex max-w-3xl flex-1 flex-col gap-8">
+        {/* Glass is the one exception: its sliders sit beside a live preview, which needs the room. */}
+        <div className={cn('flex flex-1 flex-col gap-8', current === 'glass' ? 'max-w-6xl' : 'max-w-3xl')}>
           {current === 'models' && <ModelsSettings />}
           {current === 'sources' && <PaperSourcesSettings />}
           {current === 'search' && <EmbeddingSettings />}
