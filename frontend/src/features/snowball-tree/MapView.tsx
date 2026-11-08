@@ -111,7 +111,11 @@ export function MapView({ data, selected, onSelect, hidden }: Props) {
       <div>
         <Button type="button" size="sm" variant="outline" aria-pressed={keys} onClick={() => setKeys((v) => !v)}>Key papers</Button>
         <Button type="button" size="sm" variant="outline" className="ml-2" onClick={fit}>Fit</Button>
-        {keys && <span className="ml-2 text-xs text-muted-foreground">The papers with the most routes in (up to 10) are ringed.</span>}
+        {keys && (
+          <span className="ml-2 text-xs text-muted-foreground">
+            {keyList.length > 0 ? 'The papers with the most routes in (up to 10) are ringed.' : 'No paper is reached by more than one route yet. Key papers appear as snowballing links them.'}
+          </span>
+        )}
         {keys && keyList.length > 0 && (
           <ul aria-label="Key papers" className="mt-2 flex flex-wrap gap-1.5">
             {keyList.map((n) => (

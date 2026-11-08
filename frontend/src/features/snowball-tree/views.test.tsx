@@ -131,3 +131,11 @@ test('Radial: a focused paper gets a focus ring', () => {
   fireEvent.blur(b)
   expect(document.querySelector('[data-ring="focus"]')).toBeNull()
 })
+
+test('Map: Key papers says so when no paper has more than one route', async () => {
+  setup({ ...data, nodes: data.nodes.map((n) => ({ ...n, paths: 1 })) }); view('Map')
+  await screen.findByRole('button', { name: 'map:A' })
+  fireEvent.click(screen.getByRole('button', { name: 'Key papers' }))
+  expect(screen.getByText('No paper is reached by more than one route yet. Key papers appear as snowballing links them.')).toBeTruthy()
+  expect(screen.queryByRole('list', { name: 'Key papers' })).toBeNull()
+})
