@@ -18,6 +18,7 @@ export const WORKSPACE_TABS: readonly TabMeta[] = [
   { value: 'evidence', group: 'papers', label: 'Evidence', stepLine: "One row per paper. AI pulls out each study's design, sample, findings and limitations, with quotes you can check." },
   { value: 'write', group: 'papers', label: 'Write', stepLine: 'Write your own paper in LaTeX, cite these papers, and compile it to PDF.' },
   { value: 'search', group: 'review', label: 'Search & screen', step: 1, stepLine: 'Step 1 of 5. Search paper sources, then mark each result relevant or not from its title and abstract.' },
+  { value: 'tree', group: 'review', label: 'Snowball tree', stepLine: 'How every paper reached this workspace: the search or paper that led to it, and whether it cites it or is cited by it.' },
   { value: 'acquisition', group: 'review', label: 'Get PDFs', step: 2, stepLine: 'Step 2 of 5. Relevant papers with no free PDF found. Get each one yourself and upload it.' },
   { value: 'screening', group: 'review', label: 'Full-text review', step: 3, stepLine: 'Step 3 of 5. Read each imported paper and decide whether it meets your criteria.' },
   { value: 'reading', group: 'review', label: 'Reading list', step: 4, stepLine: 'Step 4 of 5. The papers you included, in reading order.' },

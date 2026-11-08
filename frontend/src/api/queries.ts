@@ -111,6 +111,7 @@ export const keys = {
   screening: (workspaceId: string) => ['workspaces', workspaceId, 'search', 'screening'] as const,
   // A prefix of every usePrismaExport key (whatever `runs`) — small and cheap to invalidate wholesale, unlike
   // searchHitsRoot's multi-thousand-row pool above.
+  provenance: (workspaceId: string) => ['workspaces', workspaceId, 'search', 'provenance'] as const,
   prismaRoot: (workspaceId: string) => ['workspaces', workspaceId, 'search', 'prisma'] as const,
   prisma: (workspaceId: string, runs: string) => [...keys.prismaRoot(workspaceId), runs] as const,
   // Every dataset query starts with this; a saved grid or a captured number refreshes every list and detail.
@@ -572,6 +573,18 @@ export const useSearchRun = (workspaceId: string, runId: string | null) =>
     queryFn: () => api.getSearchRun(workspaceId, runId!),
     enabled: runId !== null,
     refetchInterval: (query) => searchRunPollInterval(query.state.data),
+  })
+
+/** How every paper reached the workspace: the snowball tree's nodes, links, roots and per-level counts. */
+export const useProvenance = (workspaceId: string) =>
+  useQuery({ queryKey: keys.provenance(workspaceId), queryFn: () => api.provenance(workspaceId) })
+
+/** Every root-to-hit path for one node; only fetched once a node is picked. */
+export const usePaths = (workspaceId: string, hitId: string | null) =>
+  useQuery({
+    queryKey: [...keys.provenance(workspaceId), 'paths', hitId],
+    queryFn: () => api.hitPaths(workspaceId, hitId!),
+    enabled: hitId !== null,
   })
 
 /** The workspace's recent runs, newest first; polls only while one is still running. */

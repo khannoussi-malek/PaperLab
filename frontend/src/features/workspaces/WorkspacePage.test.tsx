@@ -28,6 +28,7 @@ vi.mock('@/features/workspace-search/ManualAcquisitionTab', () => ({ ManualAcqui
 vi.mock('@/features/workspace-search/PrismaTab', () => ({ PrismaTab: () => null }))
 vi.mock('@/features/workspace-search/ReadingQueueTab', () => ({ ReadingQueueTab: (props: unknown) => { seen.reading = props; return null } }))
 vi.mock('@/features/workspace-search/ScreeningTab', () => ({ ScreeningTab: () => null }))
+vi.mock('@/features/snowball-tree/SnowballTreeTab', () => ({ SnowballTreeTab: () => null }))
 vi.mock('@/features/workspace-search/SearchTab', () => ({ SearchTab: () => null }))
 vi.mock('../evidence/EvidenceTab', () => ({ EvidenceTab: () => null }))
 vi.mock('../manuscripts/ManuscriptList', () => ({ ManuscriptList: () => null }))
@@ -63,7 +64,7 @@ test('the tabs read as two labelled groups in the new order', () => {
   expect(screen.getByText('Your papers')).toBeTruthy()
   expect(screen.getByText('Systematic review')).toBeTruthy()
   expect(tabNames().map((name) => name.split(',')[0])).toEqual([
-    'Papers', 'Notes', 'Chat', 'Evidence', 'Write', 'Search & screen', 'Get PDFs', 'Full-text review', 'Reading list', 'PRISMA report',
+    'Papers', 'Notes', 'Chat', 'Evidence', 'Write', 'Search & screen', 'Snowball tree', 'Get PDFs', 'Full-text review', 'Reading list', 'PRISMA report',
   ])
   expect(screen.getByRole('tab', { name: /^Search & screen, step 1 of 5/ }).textContent).toContain('1 · Search & screen')
 })

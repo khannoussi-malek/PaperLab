@@ -10,6 +10,7 @@ import { PrismaTab } from '@/features/workspace-search/PrismaTab'
 import { ReadingQueueTab } from '@/features/workspace-search/ReadingQueueTab'
 import { ScreeningTab } from '@/features/workspace-search/ScreeningTab'
 import { SearchTab } from '@/features/workspace-search/SearchTab'
+import { SnowballTreeTab } from '@/features/snowball-tree/SnowballTreeTab'
 import { EvidenceTab } from '../evidence/EvidenceTab'
 import { ManuscriptList } from '../manuscripts/ManuscriptList'
 import { workspaceHref, type TagMatch, type WorkspaceTab } from '@/lib/route'
@@ -110,6 +111,9 @@ export function WorkspacePage({ workspaceId, tab, runId, tags, match }: PageProp
               a minimum height: the virtualizer always has a real viewport. */}
           <TabsContent value="search" forceMount className={cn(panel, 'flex flex-col overflow-hidden')}>
             <SearchTab workspaceId={workspaceId} runId={runId} onRunIdChange={setRunId} />
+          </TabsContent>
+          <TabsContent value="tree" className={cn(panel, 'flex flex-col overflow-hidden')}>
+            <SnowballTreeTab workspaceId={workspaceId} />
           </TabsContent>
           <TabsContent value="acquisition" forceMount className={panel}>
             <ManualAcquisitionTab workspaceId={workspaceId} />
