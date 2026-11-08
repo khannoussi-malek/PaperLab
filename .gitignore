@@ -17,3 +17,6 @@ graphify-out/
 .obsidian/
 brag-output/
 videos/
+# Long-documents research: benchmark, questions, results and write-up stay local
+backend/evals/longdocs/
+backend/evals/long-documents.md
