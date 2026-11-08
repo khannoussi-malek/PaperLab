@@ -1,21 +1,37 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { refreshTree, useProvenance, useSearchRuns, useSnowball } from '@/api/queries'
 import { Button } from '@/components/ui/button'
 import { friendlySnowballError } from '@/features/workspace-search/snowballText'
+import { defaultFolded } from './layout'
 import { SidePanel } from './SidePanel'
 import { SnowballNext } from './SnowballNext'
 import { hiddenIds, NO_FILTERS, TreeFilters } from './TreeFilters'
+import { MapView } from './MapView'
+import { OutlineView } from './OutlineView'
+import { RadialView } from './RadialView'
 import { TreeView } from './TreeView'
+import { useStoredView, ViewSwitch } from './ViewSwitch'
 
 export function SnowballTreeTab({ workspaceId }: { workspaceId: string }) {
   const { data, isPending, error } = useProvenance(workspaceId)
+  const [view, setView] = useStoredView(workspaceId)
   const [selected, setSelected] = useState<string | null>(null)
   const runs = useSearchRuns(workspaceId).data
   const runLabels = useMemo(() => Object.fromEntries((runs ?? []).map((r) => [r.id, r.query_text])), [runs])
-  const [folded, setFolded] = useState<Set<string>>(new Set())
+  const [flipped, setFlipped] = useState<Set<string>>(new Set()) // boxes the owner folded or unfolded against their default
   const [filters, setFilters] = useState(NO_FILTERS)
   const hidden = useMemo(() => (data ? hiddenIds(data, filters) : new Set<string>()), [data, filters])
+  const filterKey = JSON.stringify(filters)
+  // The default folds are worked out once per filter state, so a search that grows past 12 papers on a refetch does not fold under the user.
+  const baseFold = useRef<{ key: string; set: Set<string> } | null>(null)
+  const folded = useMemo(() => {
+    if (data && baseFold.current?.key !== filterKey) baseFold.current = { key: filterKey, set: defaultFolded(data, hidden.size > 0) }
+    const base = baseFold.current?.set ?? new Set<string>()
+    return new Set([...base, ...flipped].filter((id) => base.has(id) !== flipped.has(id)))
+  }, [data, hidden, flipped, filterKey])
+  // Hand-folded boxes are relative to the default, which depends on whether a filter is on; a filter change starts over.
+  const changeFilters = (f: typeof NO_FILTERS) => { setFilters(f); setFlipped(new Set()) }
   const [showStopped, setShowStopped] = useState(false)
   const [opened, setOpened] = useState<Set<string>>(new Set()) // stopped boxes the owner unfolded by hand
   const [busy, setBusy] = useState<string | null>(null)
@@ -35,7 +51,7 @@ export function SnowballTreeTab({ workspaceId }: { workspaceId: string }) {
         return next
       }
       if (stopped.has(id) && !showStopped) setOpened(flip)
-      else setFolded(flip)
+      else setFlipped(flip)
     },
     [stopped, showStopped],
   )
@@ -55,9 +71,10 @@ export function SnowballTreeTab({ workspaceId }: { workspaceId: string }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <SnowballNext workspaceId={workspaceId} />
+      <ViewSwitch value={view} onChange={setView} />
       <div className="flex flex-wrap items-center gap-3">
-        <TreeFilters data={data} value={filters} onChange={setFilters} runLabels={runLabels} />
-        {stopped.size > 0 && (
+        <TreeFilters data={data} value={filters} onChange={changeFilters} runLabels={runLabels} />
+        {view === 'tree' && stopped.size > 0 && (
           <Button type="button" size="sm" variant="outline" aria-pressed={showStopped} onClick={() => setShowStopped((v) => !v)}>
             {showStopped ? 'Hide stopped' : 'Show stopped'}
           </Button>
@@ -66,7 +83,10 @@ export function SnowballTreeTab({ workspaceId }: { workspaceId: string }) {
       {snowball.isError && <p role="alert" className="text-sm text-destructive">{friendlySnowballError(snowball.error.message)}</p>}
       {data.truncated && <p className="text-xs text-muted-foreground">Showing the first part of a large tree.</p>}
       <div className="flex min-h-0 flex-1 gap-3">
-        <TreeView data={data} selected={selected} onSelect={setSelected} folded={effectiveFolded} onToggleFold={toggleFold} hidden={hidden} snowballing={busy} />
+        {view === 'tree' && <TreeView data={data} selected={selected} onSelect={setSelected} folded={effectiveFolded} onToggleFold={toggleFold} hidden={hidden} snowballing={busy} filterKey={filterKey} />}
+        {view === 'radial' && <RadialView data={data} selected={selected} onSelect={setSelected} hidden={hidden} />}
+        {view === 'map' && <MapView data={data} selected={selected} onSelect={setSelected} hidden={hidden} />}
+        {view === 'outline' && <OutlineView workspaceId={workspaceId} data={data} selected={selected} onSelect={setSelected} hidden={hidden} />}
         {selected && <SidePanel workspaceId={workspaceId} data={data} id={selected} busy={busy === selected} onFind={find} />}
       </div>
     </div>

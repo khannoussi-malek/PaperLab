@@ -6,6 +6,8 @@ import * as queries from '@/api/queries'
 import { api, type ProvenanceOut } from '@/api/client'
 import { SnowballTreeTab } from './SnowballTreeTab'
 
+vi.stubGlobal('ResizeObserver', class { cb: any; constructor(cb: any) { this.cb = cb } observe() { this.cb([{ contentRect: { width: 800, height: 600 } }]) } disconnect() {} })
+
 const data: ProvenanceOut = {
   truncated: false,
   roots: [{ id: 'root:r1', label: 'transformers', hit_count: 18308, on_tree: 12, excluded_hidden: 0 }],
@@ -155,7 +157,7 @@ test('a seed that ran cleanly and found nothing still shows 0 found, with no err
   setup(withNode({ id: 'X', title: 'Quiet seed', level: 0, decision: null, snowballed: ['cites'], paths: 1, zero_found_error: '' }))
   const box = screen.getByRole('button', { name: /^Quiet seed/ })
   expect(within(box).getByText('0 found')).toBeTruthy()
-  expect(box.querySelectorAll('span.truncate')).toHaveLength(1) // only the title
+  expect(box.querySelectorAll('span.line-clamp-1, span.line-clamp-2, span.truncate')).toHaveLength(1) // only the title
 })
 
 test('a search root says how many excluded hits the cap left off', () => {
@@ -211,4 +213,99 @@ test('the branch mark tooltip uses the direction words', () => {
   setup(branched)
   const mark = screen.getByRole('button', { name: /^Going on/ }).querySelector('[data-branch="go_further"]')
   expect(mark?.getAttribute('title')).toBe('Go further: Its references')
+})
+
+const manyPapers = (n: number, relevantIdx = -1): ProvenanceOut => ({
+  ...data,
+  nodes: Array.from({ length: n }, (_, i) => ({
+    id: `P${i}`, title: `Paper ${i}`, level: 0, decision: i === relevantIdx ? 'relevant' : null, snowballed: [], paths: 1,
+  })) as any,
+  links: Array.from({ length: n }, (_, i) => ({ parent: 'root:r1', child: `P${i}`, kind: 'cites', run_id: 'r1', created_at: `2026-01-01T00:00:${String(i).padStart(2, '0')}Z` })),
+  levels: [data.levels[0]],
+})
+
+test('a paper box shows a long title on two lines, wide enough for about 40 characters', () => {
+  const title = 'A very long paper title that goes on and on about transformers'
+  setup(withNode({ id: 'L', title, level: 0, decision: null, snowballed: [], paths: 1 }))
+  const box = screen.getByRole('button', { name: new RegExp(`^${title}`) })
+  const span = within(box).getByText(title)
+  expect(span.className).toContain('line-clamp-2')
+  expect(span.getAttribute('title')).toBe(title)
+  expect(parseInt(box.style.width, 10)).toBeGreaterThanOrEqual(240)
+  expect(box.textContent).toContain(title.slice(0, 40))
+})
+
+test('a search with 13 papers starts folded and says how many; clicking unfolds', () => {
+  setup(manyPapers(13))
+  expect(screen.queryByRole('button', { name: /^Paper 0/ })).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: /^13 papers: show/ }))
+  expect(screen.getByRole('button', { name: /^Paper 0/ })).toBeTruthy()
+  expect(screen.queryByRole('button', { name: /^13 papers: show/ })).toBeNull()
+})
+
+test('a search with 12 papers starts open', () => {
+  setup(manyPapers(12))
+  expect(screen.getByRole('button', { name: /^Paper 0/ })).toBeTruthy()
+  expect(screen.queryByText(/papers: show/)).toBeNull()
+})
+
+test('with a filter active, a search that has matches starts open', () => {
+  setup(manyPapers(13, 5))
+  fireEvent.change(screen.getByLabelText('Decision'), { target: { value: 'relevant' } })
+  expect(screen.getByRole('button', { name: /^Paper 5/ })).toBeTruthy()
+  expect(screen.queryByText(/papers: show/)).toBeNull()
+})
+
+test('changing the Level filter pans the canvas to the first visible box', () => {
+  setup()
+  const wrap = () => document.querySelector('[style*="translate"]') as HTMLElement
+  const before = wrap().style.transform
+  fireEvent.change(screen.getByLabelText('Level'), { target: { value: '1' } })
+  const after = wrap().style.transform
+  expect(after).not.toBe(before)
+  const [, x, y] = /translate\((-?[\d.]+)px, (-?[\d.]+)px\)/.exec(after)!.map(Number)
+  const first = screen.getByRole('button', { name: /^Excluded one/ })
+  expect(x + parseFloat(first.style.left)).toBeGreaterThanOrEqual(0)
+  expect(y + parseFloat(first.style.top)).toBeLessThan(600)
+  expect(y + parseFloat(first.style.top)).toBeGreaterThanOrEqual(0)
+})
+
+test('a hand-unfolded search stays open when a filter is applied', () => {
+  setup(manyPapers(13, 5))
+  fireEvent.click(screen.getByRole('button', { name: /^13 papers: show/ }))
+  fireEvent.change(screen.getByLabelText('Decision'), { target: { value: 'relevant' } })
+  expect(screen.getByRole('button', { name: /^Paper 5/ })).toBeTruthy()
+})
+
+test('a box with a 0 found line clamps its title to one line', () => {
+  setup()
+  const box = screen.getByRole('button', { name: /^Lonely seed/ })
+  expect(within(box).getByText('Lonely seed').className).toContain('line-clamp-1')
+})
+
+test('the fold control reads its visible text first, then the search', () => {
+  setup(manyPapers(13))
+  expect(screen.getByRole('button', { name: '13 papers: show, transformers' })).toBeTruthy()
+})
+
+test('a search that grows past 12 papers on a refetch does not fold under the user', () => {
+  setup(manyPapers(12))
+  expect(screen.getByRole('button', { name: /^Paper 0/ })).toBeTruthy()
+  vi.spyOn(queries, 'useProvenance').mockReturnValue({ data: manyPapers(13), isPending: false, error: null } as any)
+  fireEvent.click(screen.getByRole('button', { name: 'Radial' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Tree' }))
+  expect(screen.getByRole('button', { name: /^Paper 0/ })).toBeTruthy()
+})
+
+test('a refetch with the same filters leaves the pan where the user put it', () => {
+  setup()
+  fireEvent.change(screen.getByLabelText('Level'), { target: { value: '1' } })
+  const wrap = () => document.querySelector('[style*="translate"]') as HTMLElement
+  fireEvent.wheel(wrap().parentElement!, { deltaY: -100 }) // user zooms: the translate only follows a re-pan
+  const before = wrap().style.transform
+  const more = { ...data, nodes: [...data.nodes, { id: 'N', title: 'New seed', level: 0, decision: null, snowballed: [], paths: 1 }],
+    links: [...data.links, { parent: 'root:r1', child: 'N', kind: 'cites', run_id: 'r1', created_at: '2026-01-01T00:00:09Z' }] } as ProvenanceOut
+  vi.spyOn(queries, 'useProvenance').mockReturnValue({ data: more, isPending: false, error: null } as any)
+  fireEvent.click(screen.getByRole('button', { name: /^Excluded one/ }))
+  expect(wrap().style.transform).toBe(before)
 })

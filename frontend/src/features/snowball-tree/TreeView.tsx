@@ -3,7 +3,7 @@ import { ArrowRight } from 'lucide-react'
 import type { LevelStats, ProvenanceOut, ProvNode } from '@/api/client'
 import { friendlySnowballError } from '@/features/workspace-search/snowballText'
 import { cn } from '@/lib/utils'
-import { BOX_H, BOX_W, COL, PARENT_NOT_RECORDED, isUnknown, tidyLayout, type Box, type Layout } from './layout'
+import { BOX_H, BOX_W, COL, ROOT_W, PARENT_NOT_RECORDED, isUnknown, tidyLayout, type Box, type Layout } from './layout'
 import { decisionWord, levelHeader } from './levelText'
 
 type Props = {
@@ -15,13 +15,17 @@ type Props = {
   hidden?: Set<string>
   /** The box whose Find citing & cited papers call is running. */
   snowballing?: string | null
+  /** Changes when the filters do; the canvas pans to the first visible box then and not on a refetch. */
+  filterKey?: string
 }
 
 const titleOf = (box: Box) => (box.node ? (isUnknown(box.id) ? PARENT_NOT_RECORDED : box.node.title) : box.root!.label)
 
 const HEADER_H = 52
+const PAD_X = 16
+const PAD_Y = 8
 const EMPTY = new Set<string>()
-const TONE: Record<string, string> = {
+export const TONE: Record<string, string> = {
   relevant: 'border-included bg-included/10',
   not_relevant: 'border-destructive bg-destructive/10',
   none: 'border-border bg-muted',
@@ -34,7 +38,7 @@ const curve = (x1: number, y1: number, x2: number, y2: number) => {
 const BRANCH_WORD: Record<string, string> = { go_further: 'go further', stopped: 'stopped' }
 
 /** Open arrow = go further (directions on hover), bar = stopped (reason on hover). */
-function BranchMark({ branch }: { branch: NonNullable<ProvNode['branch']> }) {
+export function BranchMark({ branch }: { branch: NonNullable<ProvNode['branch']> }) {
   if (branch.state === 'go_further') {
     const dirs = branch.directions.map((d) => (d === 'cites' ? 'Its references' : 'Papers citing it')).join(', ')
     return <span aria-hidden data-branch="go_further" title={`Go further: ${dirs}`} className="shrink-0 text-included"><ArrowRight className="size-3" /></span>
@@ -57,7 +61,7 @@ function BoxButton({ box, selected, busy, onSelect }: { box: Box; selected: bool
       data-decision={decision}
       data-faded={box.faded}
       onClick={() => onSelect(box.id)}
-      style={{ left: box.x, top: box.y + HEADER_H, width: BOX_W, height: BOX_H }}
+      style={{ left: box.x, top: box.y + HEADER_H, width: root ? ROOT_W : BOX_W, height: BOX_H }}
       className={cn(
         'absolute flex flex-col justify-center overflow-hidden rounded-md border px-2 text-left text-xs transition-colors duration-150',
         TONE[decision] ?? 'border-border bg-card',
@@ -65,8 +69,8 @@ function BoxButton({ box, selected, busy, onSelect }: { box: Box; selected: bool
         selected && 'ring-2 ring-ring',
       )}
     >
-      <span className="flex items-center gap-1">
-        <span className="min-w-0 flex-1 truncate font-medium" title={titleOf(box)}>{titleOf(box)}</span>
+      <span className={cn('flex gap-1', root ? 'items-center' : 'items-start')}>
+        <span className={cn('min-w-0 flex-1 font-medium', root ? 'truncate' : node?.zero_found_error != null ? 'line-clamp-1 break-words' : 'line-clamp-2 break-words')} title={titleOf(box)}>{titleOf(box)}</span>
         {node?.branch && <BranchMark branch={node.branch} />}
         {busy && <span className="shrink-0 text-[10px] text-muted-foreground">Snowballing…</span>}
         {node?.suggestion && <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-provenance-llm" />}
@@ -118,7 +122,7 @@ const Canvas = memo(function Canvas({ layout, levels, parents, selected, snowbal
           return (
             <path
               key={`${e.from}>${e.to}`}
-              d={curve(a.x + BOX_W, a.y + HEADER_H + BOX_H / 2, b.x, b.y + HEADER_H + BOX_H / 2)}
+              d={curve(a.x + (a.node ? BOX_W : ROOT_W), a.y + HEADER_H + BOX_H / 2, b.x, b.y + HEADER_H + BOX_H / 2)}
               fill="none"
               className="stroke-muted-foreground"
               strokeOpacity={b.faded ? 0.3 : 0.7}
@@ -136,10 +140,21 @@ const Canvas = memo(function Canvas({ layout, levels, parents, selected, snowbal
               aria-label={`${folded.has(b.id) ? 'Unfold' : 'Fold'} ${titleOf(b)}`}
               aria-expanded={!folded.has(b.id)}
               onClick={() => onToggleFold(b.id)}
-              style={{ left: b.x + BOX_W - 2, top: b.y + HEADER_H + BOX_H / 2 - 7 }}
+              style={{ left: b.x + (b.node ? BOX_W : ROOT_W) - 2, top: b.y + HEADER_H + BOX_H / 2 - 7 }}
               className="absolute z-10 flex size-3.5 items-center justify-center rounded-full border border-border bg-background text-[9px] leading-none"
             >
               {folded.has(b.id) ? '+' : '−'}
+            </button>
+          )}
+          {b.root && folded.has(b.id) && b.foldedMatches === 0 && b.childCount > 0 && (
+            <button
+              type="button"
+              aria-label={`${b.childCount} papers: show, ${b.root.label}`}
+              onClick={() => onToggleFold(b.id)}
+              style={{ left: b.x, top: b.y + HEADER_H + BOX_H + 1 }}
+              className="absolute text-[10px] leading-none text-muted-foreground underline"
+            >
+              {b.childCount} papers: show
             </button>
           )}
         </div>
@@ -160,7 +175,7 @@ function Line({ dashed, label }: { dashed?: boolean; label: string }) {
   )
 }
 
-function Legend() {
+export function Legend() {
   return (
     <div aria-label="Legend" role="group" className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
       <Line label="it cites" />
@@ -172,7 +187,7 @@ function Legend() {
   )
 }
 
-export function TreeView({ data, selected, onSelect, folded, onToggleFold, hidden = EMPTY, snowballing = null }: Props) {
+export function TreeView({ data, selected, onSelect, folded, onToggleFold, hidden = EMPTY, snowballing = null, filterKey = '' }: Props) {
   const layout = useMemo(
     () => tidyLayout(data.nodes, data.links, data.roots, folded, hidden),
     [data, folded, hidden],
@@ -183,7 +198,31 @@ export function TreeView({ data, selected, onSelect, folded, onToggleFold, hidde
   }, [layout, selected, onSelect])
   const parents = useMemo(() => new Set(data.links.map((l) => l.parent)), [data.links])
   const [view, setView] = useState({ x: 16, y: 8, k: 1 })
+  const frame = useRef<HTMLDivElement>(null)
   const drag = useRef<{ x: number; y: number } | null>(null)
+
+  // Pan so the first box that is not faded sits near the top-left, on first render and when a filter changes.
+  const firstId = layout.boxes.find((b) => !b.faded)?.id
+  const firstRef = useRef(layout)
+  firstRef.current = layout
+  useEffect(() => {
+    const first = firstRef.current.boxes.find((b) => b.id === firstId)
+    if (first) setView((v) => ({ ...v, x: PAD_X - first.x * v.k, y: PAD_Y - first.y * v.k }))
+  }, [filterKey]) // eslint-disable-line react-hooks/exhaustive-deps -- re-pan on a filter change only, not when a refetch moves things
+  // A box picked from outside the canvas (keyboard focus, the "+N other paths" list) is panned into view.
+  useEffect(() => {
+    const box = selected ? firstRef.current.boxes.find((b) => b.id === selected) : undefined
+    const el = frame.current
+    if (!box || !el || !el.clientWidth) return
+    setView((v) => {
+      const w = (box.node ? BOX_W : ROOT_W) * v.k
+      const h = BOX_H * v.k
+      const sx = v.x + box.x * v.k
+      const sy = v.y + (box.y + HEADER_H) * v.k
+      const inside = sx >= 0 && sy >= 0 && sx + w <= el.clientWidth && sy + h <= el.clientHeight
+      return inside ? v : { ...v, x: PAD_X - box.x * v.k, y: PAD_Y - box.y * v.k }
+    })
+  }, [selected])
 
   const onPointerDown = (e: React.PointerEvent) => {
     if ((e.target as HTMLElement).closest('button')) return
@@ -199,6 +238,7 @@ export function TreeView({ data, selected, onSelect, folded, onToggleFold, hidde
     <div className="flex min-h-0 flex-1 flex-col gap-2">
       <Legend />
       <div
+        ref={frame}
         className="relative min-h-0 flex-1 cursor-grab overflow-hidden rounded-lg border border-border bg-card active:cursor-grabbing"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
