@@ -13,7 +13,10 @@ Q=yaml.safe_load(open(f"{S}/q/{SET}.yaml")); norm=lambda s:" ".join(str(s).lower
 M={"T":dict(k=8,hybrid=False,budget=None),"H8":dict(k=8,budget=None),"HB":dict(k=40),
    "C5":dict(k=40,cap=5),"C10":dict(k=40,cap=10),"C20":dict(k=40,cap=40),
    "C10_100":dict(k=40,cap=10,cand=100),"C20_100":dict(k=40,cap=40,cand=100),"C20_300":dict(k=40,cap=40,cand=300),
-   "D3":dict(k=40,doc=3),"D5":dict(k=40,doc=5),"D10":dict(k=40,doc=10),"D20":dict(k=40,doc=20),"DE10":dict(k=40,doc=10,rare=10),"DE20":dict(k=40,doc=10,rare=20),"DE40":dict(k=40,doc=10,rare=40),"D10V":dict(k=40,doc=10,hybrid=False),"D10E100":dict(k=40,doc=10,ef=100),"D10E200":dict(k=40,doc=10,ef=200),"D10E400":dict(k=40,doc=10,ef=400),"D5C":dict(k=40,doc=5,cap=5),"D10C":dict(k=40,doc=10,cap=5)}
+   "D3":dict(k=40,doc=3),"D5":dict(k=40,doc=5),"D10":dict(k=40,doc=10),"D20":dict(k=40,doc=20),"DE10":dict(k=40,doc=10,rare=10),"DE20":dict(k=40,doc=10,rare=20),"DE40":dict(k=40,doc=10,rare=40),"D10V":dict(k=40,doc=10,hybrid=False),"D10E100":dict(k=40,doc=10,ef=100),"D10E200":dict(k=40,doc=10,ef=200),"D10E400":dict(k=40,doc=10,ef=400),"D5C":dict(k=40,doc=5,cap=5),"D10C":dict(k=40,doc=10,cap=5),
+   # round R3: adaptive scope (largest score drop) and per-rank chunk caps
+   "DG":dict(k=40,doc=10,gap=True),"DQ6_2":dict(k=40,doc=10,q1=6,q2=2),"DQ6_3":dict(k=40,doc=10,q1=6,q2=3),"DQ10_2":dict(k=40,doc=10,q1=10,q2=2),"DQ10_3":dict(k=40,doc=10,q1=10,q2=3),
+   "DGQ6_2":dict(k=40,doc=10,gap=True,q1=6,q2=2),"DGQ10_2":dict(k=40,doc=10,gap=True,q1=10,q2=2)}
 def met(need,chunks,paper):
     tx=[x for p,x in chunks if p==paper]
     return any(all(any(norm(w) in x for x in tx) for w in a["all_of"]) for a in need)
@@ -34,7 +37,10 @@ async def docs_first(q,ids,cfg,model):
     per=collections.defaultdict(list)
     for r,c in enumerate(f): per[c.paper_id].append(1/(60+r))
     score={p:sum(sorted(v,reverse=True)[:3]) for p,v in per.items()}
-    return sorted(score,key=score.get,reverse=True)[:cfg["doc"]]
+    top=sorted(score,key=score.get,reverse=True)[:cfg["doc"]]
+    if cfg.get("gap") and len(top)>1:  # Adaptive-k on paper scores: cut at the largest drop
+        s=[score[p] for p in top]; cut=max(range(len(s)-1),key=lambda i:s[i]-s[i+1]); top=top[:cut+1]
+    return top
 async def run(cfg,q,ids,model):
     ef=patch.object(settings,"hnsw_ef_search",cfg.get("ef",settings.hnsw_ef_search)); ef.start()
     t=time.perf_counter(); scope=ids
@@ -44,8 +50,15 @@ async def run(cfg,q,ids,model):
     for c in ctx: c.start()
     try:
         async with SessionLocal() as s:
-            cap=cfg.get("cap",3 if len(scope)>1 else None)
-            found=await retrieval.retrieve(s,q,paper_ids=list(scope),k=cfg["k"],per_paper=cap,embedder=model); await s.rollback()
+            cap=cfg.get("cap",3 if len(scope)>1 else None); k=cfg["k"]
+            if cfg.get("q1") and len(scope)>1: cap,k=cfg["q1"],2*cfg["k"]
+            found=await retrieval.retrieve(s,q,paper_ids=list(scope),k=k,per_paper=cap,embedder=model); await s.rollback()
+            if cfg.get("q1") and len(scope)>1:  # rank-1 paper keeps q1 chunks, the others q2
+                first=scope[0]; seen=collections.Counter(); kept=[]
+                for c in found:
+                    seen[c.paper_id]+=1
+                    if seen[c.paper_id]<=(cfg["q1"] if c.paper_id==first else cfg["q2"]): kept.append(c)
+                found=kept[:cfg["k"]]
     finally:
         for c in ctx: c.stop()
     dt=time.perf_counter()-t; ef.stop(); b=cfg.get("budget",24000); sent=cut_to_budget(found,b) if b else found
