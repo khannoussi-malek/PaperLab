@@ -93,3 +93,24 @@ async def test_prisma_combines_paused_runs_into_one_note(client, session):  # M6
     assert len(notes) == 1
     assert "3 search run(s)" in notes[0] and "arxiv, crossref" in notes[0]
     assert "200 results per source per pass" in notes[0] and "Continue" in notes[0]
+
+
+async def test_prisma_counts_citation_searching_per_level(client, session):  # snowball tree
+    from app.core.hit_links import record_links
+
+    workspace, hits = await make_pool(session, [("s", None)] + [("x", None)] * 5)
+    seed, l1, l2 = hits[0], hits[1:4], hits[4:]
+    run = await session.get(WorkspaceSearchRun, seed.run_id)
+    l1[0].stage1_status = "relevant"
+    await record_links(session, run, [h.id for h in l1], "cites", seed.id, None)
+    await record_links(session, run, [h.id for h in l2], "cited_by", l1[0].id, None)
+    await session.flush()
+    assert (await _prisma(client, workspace))["citation_searching"] == [
+        {"level": 1, "identified": 3, "relevant": 1}, {"level": 2, "identified": 2, "relevant": 0}]
+    per_run = (await client.get(f"/api/workspaces/{workspace.id}/search/prisma", params={"runs": str(run.id)})).json()
+    assert per_run["citation_searching"][0] == {"level": 1, "identified": 3, "relevant": 1}
+
+
+async def test_prisma_citation_searching_is_empty_without_snowball_hits(client, session):
+    workspace, _ = await make_pool(session, [("x", None)])
+    assert (await _prisma(client, workspace))["citation_searching"] == []

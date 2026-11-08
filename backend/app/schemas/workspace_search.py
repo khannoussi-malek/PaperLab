@@ -335,6 +335,12 @@ class EligibilityOut(BaseModel):
     assessed_at: datetime | None
 
 
+class CitationSearchingLevel(BaseModel):
+    level: int
+    identified: int
+    relevant: int
+
+
 class PrismaExportOut(BaseModel):
     sources_searched: list[str] = []
     sources_not_searched: list[str] = []  # failed or off, and returned nothing
@@ -353,6 +359,7 @@ class PrismaExportOut(BaseModel):
     automation: list[str] = []
     notes: list[str] = []
     screening_criteria: str | None = None
+    citation_searching: list[CitationSearchingLevel] = []
 
 
 class BranchIn(BaseModel):

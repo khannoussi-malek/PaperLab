@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Term } from '@/features/workspaces/Term'
 import { reasonLabel } from './hitReview'
-import { PHASES, REASON_FIELD, prismaCsv, prismaText, type StageKey } from './prismaText'
+import { OTHER_METHODS, PHASES, REASON_FIELD, prismaCsv, prismaText, type StageKey } from './prismaText'
 import { EmptyState, GoToSearchAction, TabSkeleton } from '@/features/workspaces/TabStates'
 import { asPrismaRunMeta } from './prismaRunMeta'
 
@@ -86,6 +86,19 @@ export function PrismaTab({ workspaceId, runId }: { workspaceId: string; runId?:
               </dl>
             </div>
           ))}
+          {data.citation_searching.length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              <h4 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{OTHER_METHODS}</h4>
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
+                {data.citation_searching.map((c) => (
+                  <div key={c.level} className="contents">
+                    <dt className="text-muted-foreground">Citation searching, level {c.level}</dt>
+                    <dd className="tabular-nums">{c.identified} found, {c.relevant} relevant</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          )}
         </div>
       )}
       {data && !empty && <ExportActions data={data} runLabel={runLabel} workspaceId={workspaceId} runs={runs} />}

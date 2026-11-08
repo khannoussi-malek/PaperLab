@@ -53,14 +53,22 @@ export const REASON_FIELD: Partial<Record<StageKey, 'stage1_excluded_by_reason' 
   stage2_excluded: 'stage2_excluded_by_reason',
 }
 
+export const OTHER_METHODS = 'Identified via other methods'
+
+
 function boxes(data: PrismaExportOut) {
-  return PHASES.flatMap(([phase, , rows]) =>
+  const main = PHASES.flatMap(([phase, , rows]) =>
     rows.map(([key, label]) => {
       const field = REASON_FIELD[key]
       const reasons = Object.entries(field ? data[field] : {}).map(([r, n]) => `${reasonLabel(r)}: ${n}`)
-      return { phase, label, count: data[key], reasons }
+      return { phase, label, id: label, count: data[key], reasons }
     }),
   )
+  const citations = data.citation_searching.map((c) => ({
+    phase: OTHER_METHODS, label: `Citation searching, level ${c.level}`, id: `citation_searching_L${c.level}`,
+    count: c.identified, reasons: [`${c.relevant} relevant`],
+  }))
+  return [...main, ...citations]
 }
 
 /** One line per box, funnel order, labelled as on screen; reasons in parentheses. */
@@ -80,7 +88,7 @@ export function prismaCsv(data: PrismaExportOut, runLabel: string): string {
   const rows = [
     ['stage', 'box', 'count', 'reasons'],
     ['Run', runLabel, '', ''],
-    ...boxes(data).map((b) => [b.phase, b.label, b.count, b.reasons.join('; ')]),
+    ...boxes(data).map((b) => [b.phase, b.id, b.count, b.reasons.join('; ')]),
   ]
   return rows.map((r) => r.map(q).join(',')).join('\n')
 }

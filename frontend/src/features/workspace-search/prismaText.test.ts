@@ -8,6 +8,7 @@ const data: PrismaExportOut = {
   sought: 58, not_retrieved: 6, stage2_assessed: 52, stage2_excluded: 14,
   stage2_excluded_by_reason: { 'wrong population': 14 },
   included: 38, runs: [], automation: [], notes: [], screening_criteria: null,
+citation_searching: [],
 }
 
 // Tiny RFC 4180 parser: quoted fields, doubled quotes, newlines inside quotes.
@@ -60,4 +61,13 @@ test('CSV fields starting with a tab or carriage return are neutralised too', ()
   const csv = prismaCsv(data, '\tcmd')
   expect(csv).toContain(`"'\tcmd"`)
   expect(prismaCsv(data, '\rcmd')).toContain(`"'\rcmd"`)
+})
+
+test('prismaCsv and prismaText carry citation searching per level', () => {
+  const withSnowball = { ...data, citation_searching: [{ level: 1, identified: 3, relevant: 1 }, { level: 2, identified: 2, relevant: 0 }] }
+  const csv = prismaCsv(withSnowball, 'All')
+  expect(csv).toContain('"Identified via other methods","citation_searching_L1","3","1 relevant"')
+  expect(csv).toContain('"Identified via other methods","citation_searching_L2","2","0 relevant"')
+  expect(prismaText(withSnowball, 'All')).toContain('Citation searching, level 2: 2 (0 relevant)')
+  expect(prismaCsv(data, 'All')).not.toContain('citation_searching')
 })

@@ -3779,6 +3779,15 @@ export interface components {
             /** Ai Notes */
             ai_notes: number;
         };
+        /** CitationSearchingLevel */
+        CitationSearchingLevel: {
+            /** Level */
+            level: number;
+            /** Identified */
+            identified: number;
+            /** Relevant */
+            relevant: number;
+        };
         /** ClearHitsOut */
         ClearHitsOut: {
             /** Deleted */
@@ -5628,6 +5637,11 @@ export interface components {
             notes: string[];
             /** Screening Criteria */
             screening_criteria?: string | null;
+            /**
+             * Citation Searching
+             * @default []
+             */
+            citation_searching: components["schemas"]["CitationSearchingLevel"][];
         };
         /** PromoteRequest */
         PromoteRequest: {
