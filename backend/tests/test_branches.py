@@ -174,7 +174,7 @@ async def test_branch_on_a_papers_hit_is_stored_on_the_hit(session):
 # --- Snowball next (Task 8) ---
 from app.core import snowball_next  # noqa: E402
 from tests.test_snowball_links import (  # noqa: E402,F401  (fixtures)
-    _seed_hit, _workspace_and_run, edge_providers, fake_providers,
+    _s2_with, _seed_hit, _workspace_and_run, edge_providers, fake_providers,
 )
 
 
@@ -225,3 +225,32 @@ async def test_run_snowball_next_takes_a_batch_and_reports_the_rest(session, edg
     out = await snowball_next.run_snowball_next(session, edge_providers, workspace.id)
     assert out.remaining == 30 - snowball_next.SNOWBALL_NEXT_BATCH == 5
     assert len(await snowball_next.snowball_next(session, workspace.id)) == 5
+
+
+async def test_remaining_counts_a_batch_item_whose_direction_errored(session, fake_providers):
+    from dataclasses import replace
+
+    import httpx
+
+    from app.providers import discovery_fake
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/citations"):
+            return httpx.Response(429)
+        if request.url.path.endswith("/references"):
+            return httpx.Response(200, json={"offset": 0, "data": []})
+        return discovery_fake._handle(request)
+
+    client = _s2_with(handle)
+    providers = replace(fake_providers, clients={**fake_providers.clients, "semantic_scholar": client})
+    workspace, run = await _workspace_and_run(session)
+    seed = await _seed_hit(session, workspace, run, title="Rate limited")
+    await branches.set_branch(session, workspace.id, hit_id=seed.id, state="go_further", directions=BOTH, reason=None)
+
+    try:
+        out = await snowball_next.run_snowball_next(session, providers, workspace.id)
+    finally:
+        await client.aclose()
+    assert out.remaining == 1
+    (item,) = await snowball_next.snowball_next(session, workspace.id)
+    assert item.directions_left == ["cited_by"]

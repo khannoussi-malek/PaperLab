@@ -57,7 +57,7 @@ async def run_snowball_next(
     session: AsyncSession, providers: Providers, workspace_id: uuid.UUID
 ) -> SnowballNextOut:
     """One snowball() call per distinct set of directions left, over the first SNOWBALL_NEXT_BATCH items (oldest
-    decision first); results summed. `remaining` is how many items are still listed afterwards."""
+    decision first); results summed. `remaining` is re-read after the runs, so a failed direction counts."""
     pending = await snowball_next(session, workspace_id)
     groups: dict[tuple[str, ...], list[NextItem]] = {}
     for item in pending[:SNOWBALL_NEXT_BATCH]:
@@ -73,5 +73,5 @@ async def run_snowball_next(
         skipped += result.skipped_seeds
         errors.update(result.errors)
     return SnowballNextOut(
-        new_hits=new_hits, skipped_seeds=skipped, errors=errors, remaining=max(0, len(pending) - SNOWBALL_NEXT_BATCH)
+        new_hits=new_hits, skipped_seeds=skipped, errors=errors, remaining=len(await snowball_next(session, workspace_id))
     )
