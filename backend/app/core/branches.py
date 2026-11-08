@@ -59,7 +59,8 @@ async def set_branch(
     """state=None deletes the decision (undecided). The reason is kept only for "stopped"; directions only for
     "go_further"."""
     ordered = _validate(hit_id, paper_id, state, directions, reason)
-    await _check_target(session, workspace_id, hit_id, paper_id)
+    if state is not None or hit_id is not None:  # clearing a paper's row works even once the paper has left
+        await _check_target(session, workspace_id, hit_id, paper_id)
     if paper_id is not None and (parent := await seed_parent(session, workspace_id, paper_id)) is not None:
         hit_id, paper_id = parent, None  # a paper that has a hit here is that hit's branch
     if state is None:

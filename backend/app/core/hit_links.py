@@ -5,7 +5,7 @@ from collections import defaultdict, deque
 from datetime import datetime, timezone
 from typing import NamedTuple
 
-from sqlalchemy import any_, bindparam, exists, func, select
+from sqlalchemy import all_, any_, bindparam, exists, func, select
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -119,9 +119,13 @@ class _Edge(NamedTuple):
     created_at: datetime | None
 
 
+def _array(ids):
+    return bindparam(None, list(ids), type_=ARRAY(PG_UUID(as_uuid=True)))
+
+
 def _in(column, ids):
     """`column = ANY(:ids)`: one bound parameter however many ids (asyncpg caps a statement at 32,767)."""
-    return column == any_(bindparam(None, list(ids), type_=ARRAY(PG_UUID(as_uuid=True))))
+    return column == any_(_array(ids))
 
 
 def _unknown(run_id: uuid.UUID) -> str:
@@ -146,23 +150,42 @@ def _seeds(runs) -> list[tuple[dict, uuid.UUID | None]]:
     return out
 
 
-async def _default_scope(session, workspace_id, runs) -> set[uuid.UUID]:
-    """Snowball-reached, decided, branched, snowballed-from or unlinked-legacy hits; never the search-only mass."""
+async def _default_scope(session, workspace_id, runs) -> list[set[uuid.UUID]]:
+    """Snowball-reached, decided, branched, snowballed-from or unlinked-legacy hits (never the search-only mass), in
+    priority groups: seeds and snowball-reached, relevant, branched, other decided (excluded last)."""
     link, hit = WorkspaceHitLink, WorkspaceSearchHit
-    ids: set[uuid.UUID] = set()
+    reached: set[uuid.UUID] = set()
     for child, parent in await session.execute(
         select(link.child_hit_id, link.parent_hit_id).where(link.workspace_id == workspace_id, link.kind != "search")
     ):
-        ids.update(i for i in (child, parent) if i)
-    ids.update(await session.scalars(
-        select(hit.id).where(hit.workspace_id == workspace_id, hit.stage1_status.is_not(None))))
-    ids.update(await session.scalars(select(WorkspaceBranchState.hit_id).where(
-        WorkspaceBranchState.workspace_id == workspace_id, WorkspaceBranchState.hit_id.is_not(None))))
-    ids.update(h for _, h in _seeds(runs) if h)
-    ids.update(await session.scalars(select(hit.id).where(
+        reached.update(i for i in (child, parent) if i)
+    reached.update(h for _, h in _seeds(runs) if h)
+    reached.update(await session.scalars(select(hit.id).where(
         hit.workspace_id == workspace_id, hit.source_method.like("snowball%"),
         ~exists().where(link.child_hit_id == hit.id))))
-    return ids
+    decided = {i: s for i, s in await session.execute(
+        select(hit.id, hit.stage1_status).where(hit.workspace_id == workspace_id, hit.stage1_status.is_not(None)))}
+    branched = set(await session.scalars(select(WorkspaceBranchState.hit_id).where(
+        WorkspaceBranchState.workspace_id == workspace_id, WorkspaceBranchState.hit_id.is_not(None))))
+    return [
+        reached, {i for i, s in decided.items() if s == "relevant"}, branched, set(decided),
+    ]
+
+
+async def _capped(session, workspace_id, groups: list[set[uuid.UUID]], cap: int) -> tuple[set[uuid.UUID], bool]:
+    """Take the groups in order up to `cap` ids; inside a group that does not fit, the earliest-seen first."""
+    ids: set[uuid.UUID] = set()
+    dropped = False
+    for group in groups:
+        new = group - ids
+        room = cap - len(ids)
+        if len(new) > room:
+            dropped = True
+            new = set(await session.scalars(
+                select(WorkspaceSearchHit.id).where(_in(WorkspaceSearchHit.id, new))
+                .order_by(WorkspaceSearchHit.first_seen_at, WorkspaceSearchHit.id).limit(max(room, 0))))
+        ids |= new
+    return ids, dropped
 
 
 async def _with_ancestors(session, workspace_id, ids: set[uuid.UUID]):
@@ -277,14 +300,13 @@ async def provenance(
     branched, snowballed from, or with no recorded parent, plus their ancestors. `all_hits_run_id` adds that run's
     hits up to `cap`."""
     runs = await _runs(session, workspace_id)
-    ids = await _default_scope(session, workspace_id, runs)
-    truncated = False
+    ids, truncated = await _capped(session, workspace_id, await _default_scope(session, workspace_id, runs), cap)
     if all_hits_run_id is not None:
         extra = list(await session.scalars(
             select(WorkspaceSearchHit.id).where(
                 WorkspaceSearchHit.workspace_id == workspace_id, WorkspaceSearchHit.run_id == all_hits_run_id)
             .order_by(WorkspaceSearchHit.first_seen_at, WorkspaceSearchHit.id).limit(cap + 1)))
-        truncated = len(extra) > cap
+        truncated = truncated or len(extra) > cap
         ids.update(extra[:cap])
     seeds = _seeds(runs)
     bare = []  # hand-added paper seeds (no hit): zero-found ones are still nodes
@@ -307,10 +329,15 @@ async def provenance(
     branches = {(str(b.hit_id) if b.hit_id else f"paper:{b.paper_id}"): b for b in branch_rows}
     done: dict[str, set[str]] = defaultdict(set)
     zero: dict[str, str | None] = {}
+    skipped: set[str] = set()  # seeds the latest run could not find in Semantic Scholar: nothing left to run
     for seed, hit_id in seeds:
         key = str(hit_id) if hit_id else f"paper:{seed.get('id')}"
         done[key].update(seed.get("done") or [])
-        zero[key] = (seed.get("error") or seed.get("skipped")) if not sum((seed.get("found") or {}).values()) else None
+        if not sum((seed.get("found") or {}).values()):  # "" = ran cleanly and found nothing
+            zero[key] = seed.get("error") or seed.get("skipped") or ""
+        else:
+            zero[key] = None
+        (skipped.add if seed.get("skipped") else skipped.discard)(key)
     incoming: dict[str, int] = defaultdict(int)
     for e in edges:
         incoming[e.child] += 1
@@ -335,11 +362,11 @@ async def provenance(
     links = [ProvLink(parent=e.parent, child=e.child, kind=e.kind, run_id=e.run_id, created_at=e.created_at)
              for e in edges]
     return ProvenanceOut(
-        nodes=nodes, links=links, roots=await _roots(session, workspace_id, runs, node_ids, edges, level),
-        levels=_level_stats(nodes, edges, hits, level, runs, refound), truncated=truncated)
+        nodes=nodes, links=links, roots=await _roots(session, workspace_id, runs, node_ids, edges, level, hits),
+        levels=_level_stats(nodes, edges, level, runs, refound, skipped), truncated=truncated)
 
 
-async def _roots(session, workspace_id, runs, node_ids, edges, level) -> list[ProvRoot]:
+async def _roots(session, workspace_id, runs, node_ids, edges, level, hits) -> list[ProvRoot]:
     counts = dict((await session.execute(
         select(WorkspaceHitLink.run_id, func.count()).where(
             WorkspaceHitLink.workspace_id == workspace_id, WorkspaceHitLink.kind == "search")
@@ -351,6 +378,11 @@ async def _roots(session, workspace_id, runs, node_ids, edges, level) -> list[Pr
         ).group_by(WorkspaceSearchHit.run_id))
     for run_id, n in legacy:
         counts[run_id] = counts.get(run_id, 0) + n
+    hidden = dict((await session.execute(  # excluded search hits the cap left off the tree
+        select(WorkspaceSearchHit.run_id, func.count()).where(
+            WorkspaceSearchHit.workspace_id == workspace_id, WorkspaceSearchHit.stage1_status == "not_relevant",
+            WorkspaceSearchHit.source_method.not_like("snowball%"), WorkspaceSearchHit.id != all_(_array(hits)))
+        .group_by(WorkspaceSearchHit.run_id))).all())
     on_tree: dict[str, int] = defaultdict(int)
     for root in _tree_roots(node_ids, edges, level).values():
         if root:
@@ -360,14 +392,15 @@ async def _roots(session, workspace_id, runs, node_ids, edges, level) -> list[Pr
         rid = f"root:{run.id}"
         if counts.get(run.id) or on_tree[rid]:
             roots.append(ProvRoot(
-                id=rid, label=run.query_text, hit_count=counts.get(run.id, 0), on_tree=on_tree[rid]))
+                id=rid, label=run.query_text, hit_count=counts.get(run.id, 0), on_tree=on_tree[rid],
+                excluded_hidden=hidden.get(run.id, 0)))
     if on_tree[HAND]:
         papers = sum(n.startswith("paper:") for n in node_ids)
         roots.append(ProvRoot(id=HAND, label="Added by hand", hit_count=papers, on_tree=on_tree[HAND]))
     return roots
 
 
-def _level_stats(nodes: list[ProvNode], edges: list[_Edge], hits, level, runs, refound) -> list[LevelStats]:
+def _level_stats(nodes: list[ProvNode], edges: list[_Edge], level, runs, refound, skipped: set[str]) -> list[LevelStats]:
     deepest = max(level.values(), default=0)
     out = []
     for lv in range(deepest + 1):
@@ -376,19 +409,28 @@ def _level_stats(nodes: list[ProvNode], edges: list[_Edge], hits, level, runs, r
         into = [e for e in edges if level.get(e.child) == lv]
         known = sum(level.get(c) == lv for c in refound)
         go = [n for n in here if n.branch and n.branch.state == "go_further"]
+        screened = all(_screened(n) for n in here)
+        run_everywhere = all(n.id in skipped or set(n.branch.directions) <= set(n.snowballed) for n in go)
         saturated = False
         if lv == deepest:
             snow = [e for e in into if e.kind != "search" and e.run_id in runs]
             if snow:
                 last = max(runs[e.run_id].started_at for e in snow)
                 brought = {e.child for e in snow if runs[e.run_id].started_at == last}
-                saturated = not any(n.decision == "relevant" for n in here if n.id in brought)
+                kids = [n for n in here if n.id in brought]
+                saturated = bool(kids) and all(_screened(n) for n in kids) and not any(
+                    n.decision == "relevant" for n in kids)
         out.append(LevelStats(
             level=lv, found=found, already_known=known,
             included=sum(n.decision == "relevant" for n in here), go_further=len(go),
             stopped=sum(bool(n.branch and n.branch.state == "stopped") for n in here),
-            done=all(set(n.branch.directions) <= set(n.snowballed) for n in go), saturated=saturated))
+            done=screened and run_everywhere, saturated=saturated))
     return out
+
+
+def _screened(node: ProvNode) -> bool:
+    """Bare papers and synthetic parents have nothing to screen."""
+    return node.id.startswith("paper:") or node.id.endswith(":unknown") or node.decision is not None
 
 
 async def paths_to(

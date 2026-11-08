@@ -254,3 +254,24 @@ async def test_remaining_counts_a_batch_item_whose_direction_errored(session, fa
     assert out.remaining == 1
     (item,) = await snowball_next.snowball_next(session, workspace.id)
     assert item.directions_left == ["cited_by"]
+
+
+async def test_a_branch_on_a_paper_that_left_the_workspace_is_not_offered_and_can_be_cleared(session, edge_providers):
+    from app.core import workspaces
+    from app.models import Paper
+
+    workspace, _ = await _workspace_and_run(session)
+    paper = Paper(title="Hand paper")
+    session.add(paper)
+    await session.flush()
+    await workspaces.add_paper(session, workspace.id, paper.id)
+    await branches.set_branch(session, workspace.id, paper_id=paper.id, state="go_further", directions=BOTH, reason=None)
+    assert [i.paper_id for i in await snowball_next.snowball_next(session, workspace.id)] == [paper.id]
+
+    await workspaces.remove_paper(session, workspace.id, paper.id)
+    assert await snowball_next.snowball_next(session, workspace.id) == []
+    out = await snowball_next.run_snowball_next(session, edge_providers, workspace.id)
+    assert (out.new_hits, out.remaining) == (0, 0)
+
+    await branches.set_branch(session, workspace.id, paper_id=paper.id, state=None, directions=[], reason=None)
+    assert await session.scalar(select(WorkspaceBranchState).where(WorkspaceBranchState.paper_id == paper.id)) is None

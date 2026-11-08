@@ -364,6 +364,7 @@ class PrismaExportOut(BaseModel):
     notes: list[str] = []
     screening_criteria: str | None = None
     citation_searching: list[CitationSearchingLevel] = []
+    identified_databases: int = 0  # `identified` minus the snowball hits counted under citation_searching
 
 
 class BranchIn(BaseModel):
@@ -426,6 +427,7 @@ class ProvRoot(BaseModel):
     label: str
     hit_count: int
     on_tree: int
+    excluded_hidden: int = 0  # excluded hits of this search left off the tree by the cap
 
 
 class LevelStats(BaseModel):

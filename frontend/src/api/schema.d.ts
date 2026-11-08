@@ -5691,6 +5691,11 @@ export interface components {
              * @default []
              */
             citation_searching: components["schemas"]["CitationSearchingLevel"][];
+            /**
+             * Identified Databases
+             * @default 0
+             */
+            identified_databases: number;
         };
         /** PromoteRequest */
         PromoteRequest: {
@@ -5768,6 +5773,11 @@ export interface components {
             hit_count: number;
             /** On Tree */
             on_tree: number;
+            /**
+             * Excluded Hidden
+             * @default 0
+             */
+            excluded_hidden: number;
         };
         /** ProvenanceOut */
         ProvenanceOut: {

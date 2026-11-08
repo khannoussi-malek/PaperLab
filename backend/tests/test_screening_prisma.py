@@ -102,6 +102,8 @@ async def test_prisma_counts_citation_searching_per_level(client, session):  # s
     seed, l1, l2 = hits[0], hits[1:4], hits[4:]
     run = await session.get(WorkspaceSearchRun, seed.run_id)
     l1[0].stage1_status = "relevant"
+    for h in l1 + l2:
+        h.source_method = "snowball_backward"  # real snowball hits; a database_search run's own hits are all level 0
     await record_links(session, run, [h.id for h in l1], "cites", seed.id, None)
     await record_links(session, run, [h.id for h in l2], "cited_by", l1[0].id, None)
     await session.flush()
@@ -114,3 +116,27 @@ async def test_prisma_counts_citation_searching_per_level(client, session):  # s
 async def test_prisma_citation_searching_is_empty_without_snowball_hits(client, session):
     workspace, _ = await make_pool(session, [("x", None)])
     assert (await _prisma(client, workspace))["citation_searching"] == []
+
+
+async def test_prisma_database_box_excludes_snowball_hits_listed_under_citation_searching(client, session):
+    from app.core.hit_links import record_links
+
+    workspace, hits = await make_pool(session, [("s", None)] + [("x", None)] * 3)
+    seed, kids = hits[0], hits[1:]
+    run = await session.get(WorkspaceSearchRun, seed.run_id)
+    run.stats_json = {"per_source_raw_count": {"arxiv": 4}}
+    for kid in kids:
+        kid.source_method = "snowball_backward"
+    await record_links(session, run, [h.id for h in kids], "cites", seed.id, None)
+    await session.flush()
+    body = await _prisma(client, workspace)
+    assert body["identified"] == 7  # 4 raw + 3 snowball: unchanged, the duplicates arithmetic uses it
+    assert body["identified_databases"] == 4
+    assert body["identified_databases"] + sum(c["identified"] for c in body["citation_searching"]) == body["identified"]
+
+
+async def test_per_run_prisma_of_a_database_search_run_has_no_citation_rows(client, session):
+    workspace, hits = await make_pool(session, [("x", None), ("y", None)])
+    per_run = (await client.get(
+        f"/api/workspaces/{workspace.id}/search/prisma", params={"runs": str(hits[0].run_id)})).json()
+    assert per_run["citation_searching"] == []

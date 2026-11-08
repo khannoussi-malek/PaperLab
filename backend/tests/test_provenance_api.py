@@ -130,6 +130,26 @@ async def test_all_hits_run_is_capped(session):
     assert len(full.nodes) == 50 and not full.truncated
 
 
+async def test_default_scope_is_capped_with_seeds_and_snowball_first_excluded_last(session):
+    ws, run, _, a, b, c = await _chain(session)
+    for i in range(30):
+        h = await _hit(session, ws, run, f"out {i}", status="not_relevant", n=i)
+        await _link(session, ws, run, h)
+    for i in range(3):
+        h = await _hit(session, ws, run, f"rel {i}", status="relevant", n=40 + i)
+        await _link(session, ws, run, h)
+    out = await provenance(session, ws.id, cap=8)
+    ids = {n.id for n in out.nodes}
+    assert out.truncated and len(ids) == 8
+    assert {str(a.id), str(b.id), str(c.id)} <= ids  # the snowball chain survives
+    titles = {n.title for n in out.nodes}
+    assert {"rel 0", "rel 1", "rel 2"} <= titles  # relevant before excluded
+    (root,) = (r for r in out.roots if r.id == f"root:{run.id}")
+    assert root.excluded_hidden == 28  # 8 = 3 chain + 3 relevant + 2 of the 30 excluded
+    full = await provenance(session, ws.id)
+    assert not full.truncated and full.roots[0].excluded_hidden == 0
+
+
 async def test_zero_found_seed_is_a_node_with_error(session):
     ws = await _workspace(session)
     run = await _run(session, ws)
@@ -144,6 +164,20 @@ async def test_zero_found_seed_is_a_node_with_error(session):
     node = _by_id(await provenance(session, ws.id))[str(seed.id)]
     assert node.zero_found_error == "S2 down"
     assert node.snowballed == ["cited_by"]
+
+
+async def test_clean_zero_found_seed_has_an_empty_error_not_none(session):
+    ws = await _workspace(session)
+    run = await _run(session, ws)
+    seed = await _hit(session, ws, run, "Seed")
+    await _link(session, ws, run, seed)
+    stats = {"snowball": {"directions": ["backward"], "seeds": [{
+        "id": str(seed.id), "kind": "hit", "title": "Seed", "hit_id": str(seed.id),
+        "found": {"cites": 0, "cited_by": 0}, "new": {"cites": 0, "cited_by": 0}, "skipped": None,
+        "error": None, "errors": {}, "done": ["cites", "cited_by"],
+    }]}}
+    await _run(session, ws, minutes=2, stats=stats)
+    assert _by_id(await provenance(session, ws.id))[str(seed.id)].zero_found_error == ""
 
 
 async def test_legacy_unknown_parent_node(session):
@@ -188,11 +222,45 @@ async def test_level_stats(session):
     await session.flush()
     again = await _run(session, ws, minutes=9)
     await _link(session, ws, again, c, a, "cited_by", at=9)  # level 1 link whose child lives in `snow`
+    c.stage1_status = "not_relevant"
+    await session.flush()
     out = await provenance(session, ws.id)
     lv = {x.level: x for x in out.levels}
     assert (lv[0].found, lv[0].included, lv[0].go_further, lv[0].done) == (1, 1, 1, False)
     assert (lv[1].found, lv[1].already_known, lv[1].included, lv[1].stopped, lv[1].done) == (2, 1, 1, 1, True)
-    assert lv[1].saturated and not lv[0].saturated  # the last run (again) brought only c, not relevant
+    assert lv[1].saturated and not lv[0].saturated  # the last run (again) brought only c, screened and not relevant
+    assert not lv[0].done and lv[1].done
+
+
+async def test_unscreened_deepest_level_is_neither_done_nor_saturated(session):
+    ws, *_ = await _chain(session)
+    deepest = (await provenance(session, ws.id)).levels[-1]
+    assert (deepest.level, deepest.done, deepest.saturated) == (2, False, False)
+
+
+async def test_screened_deepest_level_with_nothing_included_is_saturated_and_done(session):
+    ws, _, _, a, b, c = await _chain(session)
+    b.stage1_status, c.stage1_status = "not_relevant", "not_relevant"
+    await session.flush()
+    deepest = (await provenance(session, ws.id)).levels[-1]
+    assert (deepest.level, deepest.done, deepest.saturated) == (2, True, True)
+    c.stage1_status = "relevant"
+    await session.flush()
+    deepest = (await provenance(session, ws.id)).levels[-1]
+    assert (deepest.done, deepest.saturated) == (True, False)
+
+
+async def test_a_seed_not_found_in_semantic_scholar_counts_as_done(session):
+    ws, run, snow, a, b, c = await _chain(session)
+    for h in (b, c):
+        h.stage1_status = "not_relevant"
+    session.add(WorkspaceBranchState(workspace_id=ws.id, hit_id=a.id, state="go_further", directions=["cites"]))
+    snow.stats_json = {"snowball": {"directions": ["backward"], "seeds": [{
+        "id": str(a.id), "kind": "hit", "title": "A", "hit_id": str(a.id), "found": {"cites": 0, "cited_by": 0},
+        "new": {"cites": 0, "cited_by": 0}, "skipped": "not_in_s2", "error": None, "errors": {}, "done": [],
+    }]}}
+    await session.flush()
+    assert (await provenance(session, ws.id)).levels[0].done
 
 
 async def test_paths_to_returns_every_route(session):

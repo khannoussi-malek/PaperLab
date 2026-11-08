@@ -2,14 +2,14 @@
 
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import workspace_search
 from app.core.branches import DIRECTIONS
 from app.core.discovery import Providers
 from app.core.hit_links import _runs, _seeds
-from app.models import Paper
+from app.models import Paper, workspace_papers
 from app.models.provenance import WorkspaceBranchState
 from app.models.references import ExternalRef
 from app.models.workspace_search import WorkspaceSearchHit
@@ -40,7 +40,12 @@ async def snowball_next(session: AsyncSession, workspace_id: uuid.UUID) -> list[
             skipped[key] = bool(seed.get("skipped"))
     rows = (await session.scalars(
         select(WorkspaceBranchState)
-        .where(WorkspaceBranchState.workspace_id == workspace_id, WorkspaceBranchState.state == "go_further")
+        .outerjoin(workspace_papers, and_(  # a paper-keyed row whose paper left the workspace is not offered
+            workspace_papers.c.workspace_id == workspace_id, workspace_papers.c.paper_id == WorkspaceBranchState.paper_id))
+        .where(
+            WorkspaceBranchState.workspace_id == workspace_id, WorkspaceBranchState.state == "go_further",
+            or_(WorkspaceBranchState.hit_id.is_not(None), workspace_papers.c.paper_id.is_not(None)),
+        )
         .order_by(WorkspaceBranchState.updated_at, WorkspaceBranchState.id)
     )).all()
     titles = await _titles(session, [r.hit_id for r in rows if r.hit_id], [r.paper_id for r in rows if r.paper_id])
