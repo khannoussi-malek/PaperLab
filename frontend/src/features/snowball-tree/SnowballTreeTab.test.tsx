@@ -6,6 +6,8 @@ import * as queries from '@/api/queries'
 import { api, type ProvenanceOut } from '@/api/client'
 import { SnowballTreeTab } from './SnowballTreeTab'
 
+vi.stubGlobal('ResizeObserver', class { cb: any; constructor(cb: any) { this.cb = cb } observe() { this.cb([{ contentRect: { width: 800, height: 600 } }]) } disconnect() {} })
+
 const data: ProvenanceOut = {
   truncated: false,
   roots: [{ id: 'root:r1', label: 'transformers', hit_count: 18308, on_tree: 12, excluded_hidden: 0 }],
@@ -236,9 +238,9 @@ test('a paper box shows a long title on two lines, wide enough for about 40 char
 test('a search with 13 papers starts folded and says how many; clicking unfolds', () => {
   setup(manyPapers(13))
   expect(screen.queryByRole('button', { name: /^Paper 0/ })).toBeNull()
-  fireEvent.click(screen.getByRole('button', { name: '13 papers: show' }))
+  fireEvent.click(screen.getByRole('button', { name: /^13 papers: show/ }))
   expect(screen.getByRole('button', { name: /^Paper 0/ })).toBeTruthy()
-  expect(screen.queryByRole('button', { name: '13 papers: show' })).toBeNull()
+  expect(screen.queryByRole('button', { name: /^13 papers: show/ })).toBeNull()
 })
 
 test('a search with 12 papers starts open', () => {
@@ -270,7 +272,7 @@ test('changing the Level filter pans the canvas to the first visible box', () =>
 
 test('a hand-unfolded search stays open when a filter is applied', () => {
   setup(manyPapers(13, 5))
-  fireEvent.click(screen.getByRole('button', { name: '13 papers: show' }))
+  fireEvent.click(screen.getByRole('button', { name: /^13 papers: show/ }))
   fireEvent.change(screen.getByLabelText('Decision'), { target: { value: 'relevant' } })
   expect(screen.getByRole('button', { name: /^Paper 5/ })).toBeTruthy()
 })
@@ -279,4 +281,31 @@ test('a box with a 0 found line clamps its title to one line', () => {
   setup()
   const box = screen.getByRole('button', { name: /^Lonely seed/ })
   expect(within(box).getByText('Lonely seed').className).toContain('line-clamp-1')
+})
+
+test('the fold control reads its visible text first, then the search', () => {
+  setup(manyPapers(13))
+  expect(screen.getByRole('button', { name: '13 papers: show, transformers' })).toBeTruthy()
+})
+
+test('a search that grows past 12 papers on a refetch does not fold under the user', () => {
+  setup(manyPapers(12))
+  expect(screen.getByRole('button', { name: /^Paper 0/ })).toBeTruthy()
+  vi.spyOn(queries, 'useProvenance').mockReturnValue({ data: manyPapers(13), isPending: false, error: null } as any)
+  fireEvent.click(screen.getByRole('button', { name: 'Radial' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Tree' }))
+  expect(screen.getByRole('button', { name: /^Paper 0/ })).toBeTruthy()
+})
+
+test('a refetch with the same filters leaves the pan where the user put it', () => {
+  setup()
+  fireEvent.change(screen.getByLabelText('Level'), { target: { value: '1' } })
+  const wrap = () => document.querySelector('[style*="translate"]') as HTMLElement
+  fireEvent.wheel(wrap().parentElement!, { deltaY: -100 }) // user zooms: the translate only follows a re-pan
+  const before = wrap().style.transform
+  const more = { ...data, nodes: [...data.nodes, { id: 'N', title: 'New seed', level: 0, decision: null, snowballed: [], paths: 1 }],
+    links: [...data.links, { parent: 'root:r1', child: 'N', kind: 'cites', run_id: 'r1', created_at: '2026-01-01T00:00:09Z' }] } as ProvenanceOut
+  vi.spyOn(queries, 'useProvenance').mockReturnValue({ data: more, isPending: false, error: null } as any)
+  fireEvent.click(screen.getByRole('button', { name: /^Excluded one/ }))
+  expect(wrap().style.transform).toBe(before)
 })

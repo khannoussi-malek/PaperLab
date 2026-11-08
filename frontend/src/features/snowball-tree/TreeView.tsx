@@ -15,6 +15,8 @@ type Props = {
   hidden?: Set<string>
   /** The box whose Find citing & cited papers call is running. */
   snowballing?: string | null
+  /** Changes when the filters do; the canvas pans to the first visible box then and not on a refetch. */
+  filterKey?: string
 }
 
 const titleOf = (box: Box) => (box.node ? (isUnknown(box.id) ? PARENT_NOT_RECORDED : box.node.title) : box.root!.label)
@@ -147,6 +149,7 @@ const Canvas = memo(function Canvas({ layout, levels, parents, selected, snowbal
           {b.root && folded.has(b.id) && b.foldedMatches === 0 && b.childCount > 0 && (
             <button
               type="button"
+              aria-label={`${b.childCount} papers: show, ${b.root.label}`}
               onClick={() => onToggleFold(b.id)}
               style={{ left: b.x, top: b.y + HEADER_H + BOX_H + 1 }}
               className="absolute text-[10px] leading-none text-muted-foreground underline"
@@ -184,7 +187,7 @@ export function Legend() {
   )
 }
 
-export function TreeView({ data, selected, onSelect, folded, onToggleFold, hidden = EMPTY, snowballing = null }: Props) {
+export function TreeView({ data, selected, onSelect, folded, onToggleFold, hidden = EMPTY, snowballing = null, filterKey = '' }: Props) {
   const layout = useMemo(
     () => tidyLayout(data.nodes, data.links, data.roots, folded, hidden),
     [data, folded, hidden],
@@ -205,7 +208,7 @@ export function TreeView({ data, selected, onSelect, folded, onToggleFold, hidde
   useEffect(() => {
     const first = firstRef.current.boxes.find((b) => b.id === firstId)
     if (first) setView((v) => ({ ...v, x: PAD_X - first.x * v.k, y: PAD_Y - first.y * v.k }))
-  }, [firstId, hidden.size])
+  }, [filterKey]) // eslint-disable-line react-hooks/exhaustive-deps -- re-pan on a filter change only, not when a refetch moves things
   // A box picked from outside the canvas (keyboard focus, the "+N other paths" list) is panned into view.
   useEffect(() => {
     const box = selected ? firstRef.current.boxes.find((b) => b.id === selected) : undefined

@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { refreshTree, useProvenance, useSearchRuns, useSnowball } from '@/api/queries'
 import { Button } from '@/components/ui/button'
 import { friendlySnowballError } from '@/features/workspace-search/snowballText'
@@ -22,10 +22,14 @@ export function SnowballTreeTab({ workspaceId }: { workspaceId: string }) {
   const [flipped, setFlipped] = useState<Set<string>>(new Set()) // boxes the owner folded or unfolded against their default
   const [filters, setFilters] = useState(NO_FILTERS)
   const hidden = useMemo(() => (data ? hiddenIds(data, filters) : new Set<string>()), [data, filters])
+  const filterKey = JSON.stringify(filters)
+  // The default folds are worked out once per filter state, so a search that grows past 12 papers on a refetch does not fold under the user.
+  const baseFold = useRef<{ key: string; set: Set<string> } | null>(null)
   const folded = useMemo(() => {
-    const base = data ? defaultFolded(data, hidden.size > 0) : new Set<string>()
+    if (data && baseFold.current?.key !== filterKey) baseFold.current = { key: filterKey, set: defaultFolded(data, hidden.size > 0) }
+    const base = baseFold.current?.set ?? new Set<string>()
     return new Set([...base, ...flipped].filter((id) => base.has(id) !== flipped.has(id)))
-  }, [data, hidden, flipped])
+  }, [data, hidden, flipped, filterKey])
   // Hand-folded boxes are relative to the default, which depends on whether a filter is on; a filter change starts over.
   const changeFilters = (f: typeof NO_FILTERS) => { setFilters(f); setFlipped(new Set()) }
   const [showStopped, setShowStopped] = useState(false)
@@ -79,7 +83,7 @@ export function SnowballTreeTab({ workspaceId }: { workspaceId: string }) {
       {snowball.isError && <p role="alert" className="text-sm text-destructive">{friendlySnowballError(snowball.error.message)}</p>}
       {data.truncated && <p className="text-xs text-muted-foreground">Showing the first part of a large tree.</p>}
       <div className="flex min-h-0 flex-1 gap-3">
-        {view === 'tree' && <TreeView data={data} selected={selected} onSelect={setSelected} folded={effectiveFolded} onToggleFold={toggleFold} hidden={hidden} snowballing={busy} />}
+        {view === 'tree' && <TreeView data={data} selected={selected} onSelect={setSelected} folded={effectiveFolded} onToggleFold={toggleFold} hidden={hidden} snowballing={busy} filterKey={filterKey} />}
         {view === 'radial' && <RadialView data={data} selected={selected} onSelect={setSelected} hidden={hidden} />}
         {view === 'map' && <MapView data={data} selected={selected} onSelect={setSelected} hidden={hidden} />}
         {view === 'outline' && <OutlineView workspaceId={workspaceId} data={data} selected={selected} onSelect={setSelected} hidden={hidden} />}
