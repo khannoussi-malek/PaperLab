@@ -21,10 +21,11 @@ const data: ProvenanceOut = {
   levels: [],
 }
 const mutate = vi.fn()
-function setup(hidden = new Set<string>(), onSelect = vi.fn()) {
-  vi.spyOn(queries, 'useSetBranch').mockReturnValue({ mutate } as any)
-  render(<OutlineView workspaceId="w1" data={data} selected={null} onSelect={onSelect} hidden={hidden} />)
-  return onSelect
+function setup(hidden = new Set<string>(), onSelect = vi.fn(), d = data, extra: object = {}) {
+  vi.spyOn(queries, 'useSetBranch').mockReturnValue({ mutate, ...extra } as any)
+  const ui = (dd: ProvenanceOut) => <OutlineView workspaceId="w1" data={dd} selected={null} onSelect={onSelect} hidden={hidden} />
+  const r = render(ui(d))
+  return Object.assign(onSelect, { rerender: (dd: ProvenanceOut) => r.rerender(ui(dd)) })
 }
 afterEach(() => { cleanup(); vi.restoreAllMocks(); mutate.mockClear() })
 const item = (re: RegExp) => screen.getByRole('treeitem', { name: re })
@@ -64,8 +65,9 @@ test('g, s and u set the branch of the focused row', () => {
   expect(mutate).toHaveBeenLastCalledWith({ hit_id: 'C', state: 'go_further', directions: ['cites', 'cited_by'], reason: null })
   fireEvent.keyDown(tree, { key: 's' })
   expect(mutate).toHaveBeenLastCalledWith({ hit_id: 'C', state: 'stopped', directions: [], reason: null })
+  act(() => item(/Excluded one/).focus()) // B is stopped, so u is a real change there
   fireEvent.keyDown(tree, { key: 'u' })
-  expect(mutate).toHaveBeenLastCalledWith({ hit_id: 'C', state: null, directions: [], reason: null })
+  expect(mutate).toHaveBeenLastCalledWith({ hit_id: 'B', state: null, directions: [], reason: null })
 })
 
 test('shows the keys hint', () => {
@@ -78,4 +80,44 @@ test('filtered-out papers are faded like the tree fades them', () => {
   expect(screen.queryByRole('treeitem', { name: /Excluded one/ })).toBeNull()
   expect(item(/Seed paper/).getAttribute('data-faded')).toBe('true')
   expect(item(/Child cited by/).getAttribute('data-faded')).toBe('false')
+})
+
+test('a refetch does not steal focus from outside the outline', () => {
+  const s = setup()
+  const tree = screen.getByRole('tree')
+  act(() => item(/Seed paper/).focus())
+  fireEvent.keyDown(tree, { key: 'ArrowDown' }) // moved: true
+  const outside = document.createElement('button')
+  document.body.append(outside)
+  outside.focus()
+  s.rerender({ ...data, nodes: [...data.nodes] })
+  expect(document.activeElement).toBe(outside)
+  outside.remove()
+})
+
+test('s on a stopped row and g on a row already going both ways do not save again', () => {
+  const both = { ...data, nodes: data.nodes.map((n) => (n.id === 'A' ? { ...n, branch: { state: 'go_further', directions: ['cites', 'cited_by'], reason: null } } : n)) }
+  setup(new Set(), vi.fn(), both)
+  const tree = screen.getByRole('tree')
+  act(() => item(/Excluded one/).focus())
+  fireEvent.keyDown(tree, { key: 's' })
+  act(() => item(/Seed paper/).focus())
+  fireEvent.keyDown(tree, { key: 'g' })
+  expect(mutate).not.toHaveBeenCalled()
+  fireEvent.keyDown(tree, { key: 's' }) // a real change still saves
+  expect(mutate).toHaveBeenCalledTimes(1)
+})
+
+test('a failed save shows its error', () => {
+  setup(new Set(), vi.fn(), data, { isError: true, error: new Error('Could not save') })
+  expect(screen.getByRole('alert').textContent).toBe('Could not save')
+})
+
+test('a chevron folds and unfolds a parent with the mouse, and the legend is shown', () => {
+  setup()
+  fireEvent.click(screen.getAllByTitle('Fold')[1]) // [0] is the search row
+  expect(screen.queryByRole('treeitem', { name: /Excluded one/ })).toBeNull()
+  fireEvent.click(screen.getByTitle('Unfold'))
+  expect(item(/Excluded one/)).toBeTruthy()
+  expect(screen.getByLabelText('Legend')).toBeTruthy()
 })

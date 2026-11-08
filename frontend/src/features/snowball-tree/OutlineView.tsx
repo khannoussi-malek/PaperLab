@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ProvenanceOut } from '@/api/client'
 import { useSetBranch } from '@/api/queries'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { isUnknown, PARENT_NOT_RECORDED, tidyLayout, type Box } from './layout'
 import { decisionWord } from './levelText'
+import { Legend } from './TreeView'
 import { branchTarget, decisionKey } from './viewShared'
 
 type Props = { workspaceId: string; data: ProvenanceOut; selected: string | null; onSelect: (id: string | null) => void; hidden: Set<string> }
@@ -62,13 +64,17 @@ export function OutlineView({ workspaceId, data, selected, onSelect, hidden }: P
   const current = focus && rows.some((r) => r.box.id === focus) ? focus : (rows[0]?.box.id ?? null)
   useEffect(() => {
     if (moved.current && current) refs.current.get(current)?.focus()
+    moved.current = false // only a key press moves focus; a refetch or filter change must not steal it
   }, [current, rows])
 
-  const go = (id: string) => { moved.current = true; setFocus(id) }
+  const go = (id: string) => { if (id !== current) { moved.current = true; setFocus(id) } }
   const toggle = (id: string, open: boolean) => setClosed((c) => { const n = new Set(c); if (open) n.delete(id); else n.add(id); return n })
   const setState = (box: Box, state: 'go_further' | 'stopped' | null) => {
     const target = box.node && branchTarget(box.node)
     if (!target) return
+    const now = box.node!.branch
+    // Already so: skip, which also keeps a stop reason the owner wrote.
+    if ((now?.state ?? null) === state && (state !== 'go_further' || BOTH.every((d) => now!.directions.includes(d)))) return
     setBranch.mutate({ ...target, state, directions: state === 'go_further' ? BOTH : [], reason: null })
   }
 
@@ -95,7 +101,9 @@ export function OutlineView({ workspaceId, data, selected, onSelect, hidden }: P
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
+      <Legend />
       <p className="text-xs text-muted-foreground">{HINT}</p>
+      {setBranch.isError && <p role="alert" className="text-xs text-destructive">{setBranch.error.message}</p>}
       <ul role="tree" aria-label="Snowball outline" onKeyDown={onKeyDown} className="min-h-0 flex-1 overflow-auto rounded-lg border border-border bg-card p-2 text-sm">
         {rows.map((r) => (
           <li
@@ -108,6 +116,15 @@ export function OutlineView({ workspaceId, data, selected, onSelect, hidden }: P
             onFocus={() => setFocus(r.box.id)}
             className={cn('list-none cursor-pointer rounded border-l-4 px-2 py-1', EDGE[r.box.node ? decisionKey(r.box.node) : 'none'], 'outline-none focus-visible:ring-2 focus-visible:ring-ring', r.box.faded && 'opacity-40', selected === r.box.id && 'bg-accent')}
           >
+            {r.kids > 0 && (
+              <button
+                type="button" aria-hidden tabIndex={-1} title={closed.has(r.box.id) ? 'Unfold' : 'Fold'}
+                className="mr-1 inline-flex align-middle"
+                onClick={(e) => { e.stopPropagation(); toggle(r.box.id, closed.has(r.box.id)) }}
+              >
+                {closed.has(r.box.id) ? <ChevronRight className="size-3" /> : <ChevronDown className="size-3" />}
+              </button>
+            )}
             {rowText(r)}
           </li>
         ))}
