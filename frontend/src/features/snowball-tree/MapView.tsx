@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button'
 import { endId, withAlpha } from '@/features/graph/graphModel'
 import { GraphLoadError } from '@/features/graph/GraphCanvas'
 import { useBoxSize } from '@/features/graph/useBoxSize'
-import { bandHeight, keyPaperIds, mapPositions, NO_YEAR_X, YEAR_W, yearTicks } from './mapModel'
+import { isUnknown } from './layout'
+import { bandHeight, keyPaperIds, mapPositions, NO_YEAR_X, tickX, YEAR_W, yearTicks } from './mapModel'
 import { Legend } from './TreeView'
 import { decisionKey } from './viewShared'
 
@@ -34,35 +35,42 @@ export function MapView({ data, selected, onSelect, hidden }: Props) {
     return () => { off = true }
   }, [])
 
-  const key = useMemo(() => keyPaperIds(data.nodes), [data.nodes])
+  // "Parent not recorded" boxes are not papers: no year, no place on a timeline.
+  const nodes = useMemo(() => data.nodes.filter((n) => !isUnknown(n.id)), [data.nodes])
+  const key = useMemo(() => keyPaperIds(nodes, 10, hidden), [nodes, hidden])
+  const keyList = useMemo(() => nodes.filter((n) => key.has(n.id)).sort((a, b) => b.paths - a.paths || a.id.localeCompare(b.id)), [nodes, key])
   // Make the picture as tall as the canvas allows: its width is fixed by the years, so y gets width * (h / w), less 30% margins.
-  const years = data.nodes.flatMap((n) => (n.year ? [n.year] : []))
+  // Measured once, so opening the side panel or a refetch never relays the picture out.
+  const years = nodes.flatMap((n) => (n.year ? [n.year] : []))
   const xExtent = ((years.length ? Math.max(...years) - Math.min(...years) : 0) + 3.5) * YEAR_W
-  const spread = size.width ? Math.max(200, (xExtent * size.height) / size.width * 0.7) : undefined
+  const frozen = useRef<number | undefined>(undefined)
+  if (frozen.current === undefined && size.width) frozen.current = Math.max(200, (xExtent * size.height) / size.width * 0.7)
+  const spread = frozen.current
   const graph = useMemo(() => {
-    const at = mapPositions(data.nodes, spread)
-    const nodes: MapNode[] = data.nodes.map((n) => {
+    const at = mapPositions(nodes, spread)
+    const placed: MapNode[] = nodes.map((n) => {
       const { x, y } = at.get(n.id)!
       return { id: n.id, title: n.title, level: n.level, year: n.year ?? null, paths: n.paths, decision: decisionKey(n), branch: n.branch?.state ?? null, x, y, fx: x, fy: y }
     })
-    const ids = new Set(nodes.map((n) => n.id))
+    const ids = new Set(placed.map((n) => n.id))
     const links = data.links.filter((l) => ids.has(l.parent) && ids.has(l.child)).map((l) => ({ source: l.parent, target: l.child, kind: l.kind }))
-    return { nodes, links }
-  }, [data, spread])
-  const noYear = useMemo(() => new Set(data.nodes.filter((n) => !n.year).map((n) => n.id)), [data.nodes])
-  const ticks = useMemo(() => yearTicks(data.nodes), [data.nodes])
-  const minYear = ticks[0]
-  const band = bandHeight(data.nodes, spread)
-  const levels = Array.from({ length: Math.max(0, ...data.nodes.map((n) => n.level)) + 1 }, (_, i) => i)
+    return { nodes: placed, links }
+  }, [nodes, data.links, spread])
+  const noYear = useMemo(() => new Set(nodes.filter((n) => !n.year).map((n) => n.id)), [nodes])
+  const ticks = useMemo(() => yearTicks(nodes), [nodes])
+  const band = bandHeight(nodes, spread)
+  const levels = Array.from({ length: Math.max(0, ...nodes.map((n) => n.level)) + 1 }, (_, i) => i)
   const bottom = (levels.length - 0.5) * band + 30
 
-  // Fit the picture to the canvas once the nodes sit where they are going to stay.
+  // Fit the picture to the canvas once, when it is first drawn; the Fit button does it again on demand.
   const ready = Graph !== null && size.width > 0
+  const fitted = useRef(false)
+  const fit = () => graphRef.current?.zoomToFit(0, 70)
   useEffect(() => {
-    if (!ready) return
-    const t = setTimeout(() => graphRef.current?.zoomToFit(0, 70), 60)
+    if (!ready || fitted.current) return
+    const t = setTimeout(() => { fit(); fitted.current = true }, 60)
     return () => clearTimeout(t)
-  }, [ready, graph, size.width, size.height])
+  }, [ready, graph]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (failed) return <GraphLoadError />
   const colors = { relevant: token('--included', '#15803d'), not_relevant: token('--destructive', '#dc2626'), none: token('--muted-foreground', '#64748b') }
@@ -90,8 +98,8 @@ export function MapView({ data, selected, onSelect, hidden }: Props) {
   }
   const axis = (ctx: CanvasRenderingContext2D, scale: number) => {
     ctx.save(); ctx.fillStyle = token('--muted-foreground', '#64748b'); ctx.font = `${12 / scale}px system-ui, sans-serif`; ctx.textAlign = 'center'
-    for (const y of ticks) ctx.fillText(String(y), (y - minYear) * YEAR_W, bottom)
-    if (data.nodes.some((n) => !n.year)) ctx.fillText('No year', NO_YEAR_X, bottom)
+    for (const y of ticks) ctx.fillText(String(y), tickX(nodes, y), bottom)
+    if (noYear.size > 0) ctx.fillText('No year', NO_YEAR_X, bottom)
     ctx.textAlign = 'right'
     for (const l of levels) ctx.fillText(`Level ${l}`, NO_YEAR_X - YEAR_W * 0.6, l * band)
     ctx.restore()
@@ -102,9 +110,17 @@ export function MapView({ data, selected, onSelect, hidden }: Props) {
       <Legend />
       <div>
         <Button type="button" size="sm" variant="outline" aria-pressed={keys} onClick={() => setKeys((v) => !v)}>Key papers</Button>
-        {keys && <span className="ml-2 text-xs text-muted-foreground">The 10 papers with the most routes in are ringed.</span>}
+        <Button type="button" size="sm" variant="outline" className="ml-2" onClick={fit}>Fit</Button>
+        {keys && <span className="ml-2 text-xs text-muted-foreground">The papers with the most routes in (up to 10) are ringed.</span>}
+        {keys && keyList.length > 0 && (
+          <ul aria-label="Key papers" className="mt-2 flex flex-wrap gap-1.5">
+            {keyList.map((n) => (
+              <li key={n.id}><Button type="button" size="sm" variant="ghost" className="h-6 max-w-56 truncate px-2 text-xs" onClick={() => onSelect(n.id)}>{n.title}</Button></li>
+            ))}
+          </ul>
+        )}
       </div>
-      <div ref={box} className="relative min-h-[20rem] flex-1 overflow-hidden rounded-lg border border-border bg-card">
+      <div ref={box} aria-label="Map of the snowball tree" role="group" className="relative min-h-[20rem] flex-1 overflow-hidden rounded-lg border border-border bg-card">
         {Graph === null || size.width === 0 ? (
           <div className="h-full w-full animate-pulse bg-muted" />
         ) : (
@@ -117,7 +133,8 @@ export function MapView({ data, selected, onSelect, hidden }: Props) {
             ref={graphRef as never}
             linkColor={(l: MapLink) => {
               const lit = active !== null && (endId(l.source) === active || endId(l.target) === active)
-              return withAlpha(muted, lit ? 0.9 : noYear.has(endId(l.source)) || noYear.has(endId(l.target)) ? 0.05 : 0.14)
+              const [a, b] = [endId(l.source), endId(l.target)]
+              return withAlpha(muted, lit ? 0.9 : hidden.has(a) || hidden.has(b) || noYear.has(a) || noYear.has(b) ? 0.05 : 0.14)
             }}
             linkLineDash={(l: MapLink) => (l.kind === 'cited_by' ? [4, 3] : null)}
             linkWidth={(l: MapLink) => (active !== null && (endId(l.source) === active || endId(l.target) === active) ? 1.8 : 0.8)}

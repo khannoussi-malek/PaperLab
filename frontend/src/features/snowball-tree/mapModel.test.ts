@@ -1,15 +1,35 @@
 import { expect, test } from 'vitest'
 import type { ProvNode } from '@/api/client'
-import { keyPaperIds, mapPositions, NO_YEAR_X, yearTicks } from './mapModel'
+import { keyPaperIds, mapOrigin, mapPositions, NO_YEAR_X, tickX, YEAR_W, yearTicks } from './mapModel'
 
 const n = (id: string, level: number, year: number | null, paths = 1): ProvNode => ({ id, title: id, level, year, decision: null, snowballed: [], paths })
 
-test('key papers are the 10 with the most incoming paths, ties broken by id', () => {
-  const nodes = Array.from({ length: 15 }, (_, i) => n(`P${String(i).padStart(2, '0')}`, 0, 2020, i < 3 ? 9 : 1))
+test('key papers are the 10 with the most incoming paths, ties by id, only papers with more than one route', () => {
+  const nodes = Array.from({ length: 15 }, (_, i) => n(`P${String(i).padStart(2, '0')}`, 0, 2020, i < 12 ? 2 + (i % 3) : 1))
   const keys = keyPaperIds(nodes)
   expect(keys.size).toBe(10)
-  for (const id of ['P00', 'P01', 'P02', 'P03', 'P09']) expect(keys.has(id)).toBe(true)
-  expect(keys.has('P14')).toBe(false)
+  expect(keys.has('P12')).toBe(false) // one route only
+  expect(keyPaperIds([n('a', 0, 2020, 1)]).size).toBe(0)
+})
+
+test('key papers rank visible papers only', () => {
+  const nodes = [n('a', 0, 2020, 9), n('b', 0, 2020, 3)]
+  expect([...keyPaperIds(nodes, 10, new Set(['a']))]).toEqual(['b'])
+})
+
+test('a tick sits where the papers of that year are drawn', () => {
+  const nodes = [n('a', 0, 2003), n('b', 0, 2021), n('c', 0, 2010), n('d', 0, 2015)]
+  const pos = mapPositions(nodes)
+  for (const t of yearTicks(nodes)) {
+    const same = nodes.filter((p) => p.year === t)
+    for (const p of same) expect(Math.abs(pos.get(p.id)!.x - tickX(nodes, t))).toBeLessThanOrEqual(YEAR_W * 0.35 + 1e-9)
+  }
+  expect(tickX(nodes, 2010)).toBe((2010 - mapOrigin(nodes)) * YEAR_W)
+})
+
+test('new node objects with the same ids land in the same places', () => {
+  const nodes = [n('a', 0, 2010), n('b', 1, 2020)]
+  expect(mapPositions(nodes.map((p) => ({ ...p })), 300)).toEqual(mapPositions(nodes, 300))
 })
 
 test('y is spread within a level and stable across calls', () => {

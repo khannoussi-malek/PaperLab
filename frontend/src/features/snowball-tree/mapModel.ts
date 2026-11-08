@@ -11,10 +11,17 @@ export function unit(id: string, salt = ''): number {
   return (h % 10007) / 10007
 }
 
-/** The papers with the most incoming paths (ties by id): the "key papers". */
-export function keyPaperIds(nodes: ProvNode[], n = 10): Set<string> {
-  return new Set([...nodes].sort((a, b) => b.paths - a.paths || a.id.localeCompare(b.id)).slice(0, n).map((p) => p.id))
+/** The visible papers with the most incoming paths (at least two; ties by id): the "key papers". */
+export function keyPaperIds(nodes: ProvNode[], n = 10, hidden: Set<string> = new Set()): Set<string> {
+  const pool = nodes.filter((p) => p.paths > 1 && !hidden.has(p.id))
+  return new Set(pool.sort((a, b) => b.paths - a.paths || a.id.localeCompare(b.id)).slice(0, n).map((p) => p.id))
 }
+
+/** The year drawn at x = 0: the one origin the papers and the axis ticks share. */
+export function mapOrigin(nodes: ProvNode[]): number {
+  return Math.min(...nodes.flatMap((p) => (p.year ? [p.year] : [])))
+}
+export const tickX = (nodes: ProvNode[], year: number) => (year - mapOrigin(nodes)) * YEAR_W
 
 /** One level band's height: the total height asked for split by level, else LEVEL_H each. */
 export function bandHeight(nodes: ProvNode[], height?: number): number {
@@ -24,8 +31,7 @@ export function bandHeight(nodes: ProvNode[], height?: number): number {
 
 /** Fixed places, the same for the same data: x by year, y in the paper's level band, both jittered by a hash of the id. */
 export function mapPositions(nodes: ProvNode[], height?: number): Map<string, { x: number; y: number }> {
-  const years = nodes.flatMap((p) => (p.year ? [p.year] : []))
-  const minYear = Math.min(...years)
+  const minYear = mapOrigin(nodes)
   const band = bandHeight(nodes, height)
   return new Map(
     nodes.map((p) => [
