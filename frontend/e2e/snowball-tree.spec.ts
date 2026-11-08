@@ -10,11 +10,11 @@ async function waitForRunToFinish(request: APIRequestContext, workspaceId: strin
     .toBe('exhausted')
 }
 
-// Fake titles (backend/app/providers/discovery_fake.py): the search returns the pagination fixtures; the fake
+// Fake titles (backend/app/providers/discovery_fake.py): other sources return the three PAPERS; the fake
 // Semantic Scholar gives any seed all three PAPERS as references, and the closed paper one extra citing work.
-const SEED = 'paperlab pagination fixture 2'
-const LEVEL_ONE = 'PaperLab Closed Access Fixture' // only ever a reference, so reached by "it cites"
-const LEVEL_TWO = 'PaperLab Second Hop Fixture' // cites the closed paper only, so reached by "cited by"
+const SEED = 'PaperLab Closed Access Fixture' // a search hit (level 0): the other sources' fakes return the three PAPERS
+const LEVEL_ONE = 'PaperLab Second Hop Fixture' // cites the seed: reached by "cited by"
+const LEVEL_TWO = 'PaperLab Third Hop Fixture' // cited by the level-1 paper: reached by "it cites"
 
 test('the snowball tree shows levels, runs the next hop, and explains a level-2 paper', async ({ page, request, workspaceId }) => {
   // 1. Search, mark the seed relevant in the UI, snowball it through the API (the tree is what is under test).
@@ -28,7 +28,7 @@ test('the snowball tree shows levels, runs the next hop, and explains a level-2 
   await page.reload()
   await expect(page.getByText(/[1-9]\d* results \(after filters\)/)).toBeVisible()
 
-  const row = page.locator('[data-slot="context-menu-trigger"]', { hasText: SEED })
+  const row = page.locator('[data-slot="context-menu-trigger"]', { hasText: SEED }).first()
   await row.getByRole('button', { name: 'Result actions' }).click()
   await page.getByRole('menuitem', { name: 'Relevant', exact: true }).click() // exact: "Not relevant…" shares the menu
   await expect(page.getByRole('menuitem', { name: 'Relevant', exact: true })).toHaveCount(0)
@@ -52,7 +52,7 @@ test('the snowball tree shows levels, runs the next hop, and explains a level-2 
   await levelOne.click()
   const [branchResponse] = await Promise.all([
     page.waitForResponse((r) => r.url().endsWith('/search/branch') && r.request().method() === 'PUT'),
-    page.getByRole('button', { name: 'Go further' }).click(),
+    page.getByRole('button', { name: 'Go further', exact: true }).click(),
   ])
   expect(branchResponse.ok()).toBe(true)
   await expect(page.getByRole('heading', { name: /^Snowball next \(1\)/ })).toBeVisible()
@@ -62,7 +62,7 @@ test('the snowball tree shows levels, runs the next hop, and explains a level-2 
 
   // 4. Open the level-2 paper: its trail uses both arrow kinds.
   await levelTwo.click()
-  const trail = page.getByText('Why is this here?').locator('..')
+  const trail = page.getByRole('tabpanel', { name: 'Snowball tree' }).getByText('Why is this here?').locator('..')
   await expect(trail).toContainText('(it cites)')
   await expect(trail).toContainText('(cited by)')
 })
