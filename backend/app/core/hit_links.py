@@ -12,7 +12,8 @@ from app.models.workspace_search import WorkspaceSearchHit, WorkspaceSearchRun
 MAX_DEPTH = 50
 
 # Walks up through parent hits. Cycle-safe: each path never revisits a node, and a node with a search link (a
-# root, level 0) is not expanded further; the depth cap is a last brake. A node ends the walk when it has a search link, a
+# root, level 0) is not expanded further; the depth cap is a last brake.
+# A node ends the walk when it has a search link, a
 # link to a bare paper (that paper counts as level 0, so the node is level 1), or no links at all (legacy data,
 # level 0). The level is the shallowest such node's depth plus its own level.
 _LEVEL_SQL = text(
