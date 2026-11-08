@@ -20,6 +20,11 @@ class WorkspaceHitLink(Base):
         ),
         Index("ix_workspace_hit_links_workspace_id", "workspace_id"),
         Index("ix_workspace_hit_links_parent_hit_id", "parent_hit_id"),
+        Index("ix_workspace_hit_links_parent_paper_id", "parent_paper_id"),
+        Index("ix_workspace_hit_links_run_id", "run_id"),
+        Index(
+            "ix_workspace_hit_links_workspace_id_non_search", "workspace_id", postgresql_where=text("kind <> 'search'")
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, server_default=text("gen_random_uuid()"))
@@ -29,7 +34,7 @@ class WorkspaceHitLink(Base):
         ForeignKey("workspace_search_hits.id", ondelete="CASCADE"), default=None
     )
     parent_paper_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("papers.id", ondelete="SET NULL"), default=None
+        ForeignKey("papers.id", ondelete="CASCADE"), default=None
     )
     run_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspace_search_runs.id", ondelete="CASCADE"))
     kind: Mapped[str] = mapped_column(String)
@@ -46,6 +51,8 @@ class WorkspaceBranchState(Base):
             "workspace_id", "hit_id", "paper_id",
             name="uq_workspace_branch_states_target", postgresql_nulls_not_distinct=True,
         ),
+        Index("ix_workspace_branch_states_hit_id", "hit_id"),
+        Index("ix_workspace_branch_states_paper_id", "paper_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, server_default=text("gen_random_uuid()"))
@@ -60,29 +67,3 @@ class WorkspaceBranchState(Base):
     # 'screening' rows follow the paper's screening decision; 'owner' rows are a hand choice and stay put.
     set_by: Mapped[str] = mapped_column(String, server_default=text("'owner'"))
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), server_default=text("now()"))
-
-
-# One-time backfill of links for hits found before the tables existed. Idempotent (ON CONFLICT DO NOTHING).
-# A paper seed's parent is the earliest hit carrying that paper; with no such hit the paper itself is the parent.
-# Snowball hits with no seed_paper_id (seeded from a hit, not recorded) get no link.
-BACKFILL_SQL: list[str] = [
-    """
-    INSERT INTO workspace_hit_links (workspace_id, child_hit_id, run_id, kind)
-    SELECT workspace_id, id, run_id, 'search'
-    FROM workspace_search_hits WHERE source_method = 'database_search'
-    ON CONFLICT DO NOTHING
-    """,
-    """
-    INSERT INTO workspace_hit_links (workspace_id, child_hit_id, parent_hit_id, parent_paper_id, run_id, kind)
-    SELECT h.workspace_id, h.id, p.id, CASE WHEN p.id IS NULL THEN h.seed_paper_id END, h.run_id,
-           CASE h.source_method WHEN 'snowball_backward' THEN 'cites' ELSE 'cited_by' END
-    FROM workspace_search_hits h
-    LEFT JOIN LATERAL (
-        SELECT id FROM workspace_search_hits
-        WHERE workspace_id = h.workspace_id AND paper_id = h.seed_paper_id
-        ORDER BY first_seen_at LIMIT 1
-    ) p ON true
-    WHERE h.source_method IN ('snowball_backward', 'snowball_forward') AND h.seed_paper_id IS NOT NULL
-    ON CONFLICT DO NOTHING
-    """,
-]

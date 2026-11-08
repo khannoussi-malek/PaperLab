@@ -1,4 +1,6 @@
+import importlib.util
 import uuid
+from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -6,12 +8,22 @@ from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 
 from app.models.paper import Paper
-from app.models.provenance import BACKFILL_SQL, WorkspaceBranchState, WorkspaceHitLink
+from app.models.provenance import WorkspaceBranchState, WorkspaceHitLink
 from app.models.references import ExternalRef
 from app.models.workspace import Workspace
 from app.models.workspace_search import WorkspaceSearchHit, WorkspaceSearchRun
 
 pytestmark = pytest.mark.anyio
+
+_MIGRATION = Path(__file__).parents[1] / "alembic" / "versions" / "0067_snowball_tree.py"
+
+
+def _backfill_sql() -> list[str]:
+    """The migration's own frozen copy, so the test can't drift from what ships."""
+    spec = importlib.util.spec_from_file_location("m0067", _MIGRATION)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.BACKFILL_SQL
 
 
 async def _workspace_and_run(session):
@@ -49,7 +61,7 @@ async def _paper(session):
 
 
 async def _backfill(session):
-    for statement in BACKFILL_SQL:
+    for statement in _backfill_sql():
         await session.execute(text(statement))
 
 
@@ -82,8 +94,11 @@ async def _seed_four(session):
     workspace, run = await _workspace_and_run(session)
     paper_p, paper_q = await _paper(session), await _paper(session)
     search = await _hit(session, workspace, run, "database_search")
+    # the younger duplicate of P goes in first, so only the ORDER BY can pick the older one
+    await _hit(session, workspace, run, "database_search", paper=paper_p.id, age=1)
     older = await _hit(session, workspace, run, "database_search", paper=paper_p.id, age=10)
-    await _hit(session, workspace, run, "database_search", paper=paper_p.id, age=1)  # later duplicate of P
+    other_ws, other_run = await _workspace_and_run(session)  # even older, but another workspace: never the parent
+    await _hit(session, other_ws, other_run, "database_search", paper=paper_p.id, age=100)
     back = await _hit(session, workspace, run, "snowball_backward", seed=paper_p.id)
     fwd = await _hit(session, workspace, run, "snowball_forward", seed=paper_q.id)
     orphan = await _hit(session, workspace, run, "snowball_backward")
@@ -99,6 +114,8 @@ async def test_backfill_links_old_hits(session):
     assert by_child[fwd.id].kind == "cited_by" and by_child[fwd.id].parent_paper_id == paper_q.id
     assert by_child[fwd.id].parent_hit_id is None
     assert orphan.id not in by_child
+    for hit in (search, back, fwd):  # a backfilled link is dated when its hit was first seen
+        assert by_child[hit.id].created_at == hit.first_seen_at
 
 
 async def test_backfill_is_idempotent(session):
@@ -107,3 +124,17 @@ async def test_backfill_is_idempotent(session):
     first = len(await _links(session, workspace))
     await _backfill(session)
     assert len(await _links(session, workspace)) == first
+
+
+async def test_deleting_a_seed_paper_drops_its_links(session):
+    workspace, run = await _workspace_and_run(session)
+    paper = await _paper(session)
+    child = await _hit(session, workspace, run, "snowball_backward")
+    for kind in ("cites", "cited_by"):  # two seeds' paths to the same child, both through the paper
+        session.add(WorkspaceHitLink(
+            workspace_id=workspace.id, child_hit_id=child.id, parent_paper_id=paper.id, run_id=run.id, kind=kind
+        ))
+    await session.flush()
+    await session.delete(paper)
+    await session.flush()
+    assert await _links(session, workspace) == []
