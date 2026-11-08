@@ -6,6 +6,7 @@ from fastapi import APIRouter, File, Query, Request, UploadFile
 from app.api.deps import DiscoveryDep, SessionDep
 from app.core import branches, screening, workspace_search
 from app.core.errors import InvalidInput
+from app.core.hit_links import paths_to, provenance
 from app.core.pipeline import MAX_UPLOAD_PDF_BYTES
 from app.core.prisma_export import prisma_export
 from app.core.queue import INGEST_QUEUE
@@ -25,6 +26,8 @@ from app.schemas.workspace_search import (
     ImportHitsOut,
     ImportHitsRequest,
     PrismaExportOut,
+    ProvenanceOut,
+    ProvLink,
     RankedHitsOut,
     ScreeningCriteriaUpdate,
     ScreeningStateOut,
@@ -246,3 +249,15 @@ async def prisma_export_route(workspace_id: uuid.UUID, session: SessionDep, runs
             raise InvalidInput(f"invalid runs value: {runs!r}") from exc
     export = await prisma_export(session, workspace_id, run_id)
     return export
+
+
+@router.get("/provenance")
+async def provenance_route(
+    workspace_id: uuid.UUID, session: SessionDep, all_hits_run: uuid.UUID | None = None
+) -> ProvenanceOut:
+    return await provenance(session, workspace_id, all_hits_run_id=all_hits_run)
+
+
+@router.get("/hits/{hit_id}/paths")
+async def hit_paths_route(workspace_id: uuid.UUID, hit_id: uuid.UUID, session: SessionDep) -> list[list[ProvLink]]:
+    return await paths_to(session, workspace_id, hit_id)

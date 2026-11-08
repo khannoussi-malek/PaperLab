@@ -370,3 +370,58 @@ class BranchOut(BaseModel):
     state: str | None
     directions: list[str]
     reason: str | None
+
+
+class ProvBranch(BaseModel):
+    state: str
+    directions: list[str]
+    reason: str | None
+
+
+class ProvNode(BaseModel):
+    id: str  # hit id, "paper:<id>" for a hand-added paper, or "run:<id>:unknown"
+    title: str
+    year: int | None = None
+    level: int
+    decision: str | None = None
+    suggestion: str | None = None
+    relevance: int | None = None
+    paper_id: uuid.UUID | None = None
+    branch: ProvBranch | None = None
+    snowballed: list[str] = []  # directions already run from this node
+    paths: int = 0  # incoming links
+    zero_found_error: str | None = None
+
+
+class ProvLink(BaseModel):
+    parent: str  # a node id, or "root:<run_id>" / "root:hand"
+    child: str
+    kind: str
+    run_id: uuid.UUID | None = None
+    created_at: datetime | None = None
+
+
+class ProvRoot(BaseModel):
+    id: str
+    label: str
+    hit_count: int
+    on_tree: int
+
+
+class LevelStats(BaseModel):
+    level: int
+    found: int
+    already_known: int
+    included: int
+    go_further: int
+    stopped: int
+    done: bool
+    saturated: bool
+
+
+class ProvenanceOut(BaseModel):
+    nodes: list[ProvNode]
+    links: list[ProvLink]
+    roots: list[ProvRoot]
+    levels: list[LevelStats]
+    truncated: bool = False

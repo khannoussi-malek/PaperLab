@@ -1415,6 +1415,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/workspaces/{workspace_id}/search/provenance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Provenance Route */
+        get: operations["provenance_route_api_workspaces__workspace_id__search_provenance_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/search/hits/{hit_id}/paths": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Hit Paths Route */
+        get: operations["hit_paths_route_api_workspaces__workspace_id__search_hits__hit_id__paths_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/workspaces/{workspace_id}/saved-searches": {
         parameters: {
             query?: never;
@@ -4732,6 +4766,25 @@ export interface components {
             /** Missing Roles */
             missing_roles: ("abstract" | "intro" | "related" | "method" | "results" | "discussion" | "limitations" | "conclusion" | "back" | "other")[];
         };
+        /** LevelStats */
+        LevelStats: {
+            /** Level */
+            level: number;
+            /** Found */
+            found: number;
+            /** Already Known */
+            already_known: number;
+            /** Included */
+            included: number;
+            /** Go Further */
+            go_further: number;
+            /** Stopped */
+            stopped: number;
+            /** Done */
+            done: boolean;
+            /** Saturated */
+            saturated: boolean;
+        };
         /** LinkIn */
         LinkIn: {
             /**
@@ -5587,6 +5640,87 @@ export interface components {
             body: string;
             /** Chunk Ids */
             chunk_ids: string[];
+        };
+        /** ProvBranch */
+        ProvBranch: {
+            /** State */
+            state: string;
+            /** Directions */
+            directions: string[];
+            /** Reason */
+            reason: string | null;
+        };
+        /** ProvLink */
+        ProvLink: {
+            /** Parent */
+            parent: string;
+            /** Child */
+            child: string;
+            /** Kind */
+            kind: string;
+            /** Run Id */
+            run_id?: string | null;
+            /** Created At */
+            created_at?: string | null;
+        };
+        /** ProvNode */
+        ProvNode: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Year */
+            year?: number | null;
+            /** Level */
+            level: number;
+            /** Decision */
+            decision?: string | null;
+            /** Suggestion */
+            suggestion?: string | null;
+            /** Relevance */
+            relevance?: number | null;
+            /** Paper Id */
+            paper_id?: string | null;
+            branch?: components["schemas"]["ProvBranch"] | null;
+            /**
+             * Snowballed
+             * @default []
+             */
+            snowballed: string[];
+            /**
+             * Paths
+             * @default 0
+             */
+            paths: number;
+            /** Zero Found Error */
+            zero_found_error?: string | null;
+        };
+        /** ProvRoot */
+        ProvRoot: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Hit Count */
+            hit_count: number;
+            /** On Tree */
+            on_tree: number;
+        };
+        /** ProvenanceOut */
+        ProvenanceOut: {
+            /** Nodes */
+            nodes: components["schemas"]["ProvNode"][];
+            /** Links */
+            links: components["schemas"]["ProvLink"][];
+            /** Roots */
+            roots: components["schemas"]["ProvRoot"][];
+            /** Levels */
+            levels: components["schemas"]["LevelStats"][];
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
         };
         /** PullDoneEvent */
         PullDoneEvent: {
@@ -10118,6 +10252,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PrismaExportOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    provenance_route_api_workspaces__workspace_id__search_provenance_get: {
+        parameters: {
+            query?: {
+                all_hits_run?: string | null;
+            };
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProvenanceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    hit_paths_route_api_workspaces__workspace_id__search_hits__hit_id__paths_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                hit_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProvLink"][][];
                 };
             };
             /** @description Validation Error */
