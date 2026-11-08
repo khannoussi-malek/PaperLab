@@ -10,6 +10,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import llm_connections
+from app.core.branches import default_branch_on_decision
 from app.core.errors import Conflict, NotFound
 from app.core.screening_rank import Doc, rank, stop_hint
 from app.core.search_run_results import NOT_JUDGED
@@ -292,6 +293,10 @@ async def accept_suggestions(session: AsyncSession, workspace_id: uuid.UUID, hit
             continue
         hit.stage1_decided_at = now
         accepted.add(hit.id)
+    for status in ("relevant", "not_relevant"):
+        await default_branch_on_decision(
+            session, workspace_id, [h.id for h in hits if h.id in accepted and h.stage1_status == status], status
+        )
     await session.commit()
     return AcceptResult(len(accepted), [i for i in dict.fromkeys(hit_ids) if i not in accepted])
 

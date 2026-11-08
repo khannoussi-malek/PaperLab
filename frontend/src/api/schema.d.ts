@@ -1381,6 +1381,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/workspaces/{workspace_id}/search/branch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set Branch Route */
+        put: operations["set_branch_route_api_workspaces__workspace_id__search_branch_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/workspaces/{workspace_id}/search/prisma": {
         parameters: {
             query?: never;
@@ -3157,6 +3174,35 @@ export interface components {
         Body_upload_paper_pdf_api_papers__paper_id__pdf_post: {
             /** File */
             file: string;
+        };
+        /** BranchIn */
+        BranchIn: {
+            /** Hit Id */
+            hit_id?: string | null;
+            /** Paper Id */
+            paper_id?: string | null;
+            /** State */
+            state: string | null;
+            /**
+             * Directions
+             * @default []
+             */
+            directions: string[];
+            /** Reason */
+            reason?: string | null;
+        };
+        /** BranchOut */
+        BranchOut: {
+            /** Hit Id */
+            hit_id: string | null;
+            /** Paper Id */
+            paper_id: string | null;
+            /** State */
+            state: string | null;
+            /** Directions */
+            directions: string[];
+            /** Reason */
+            reason: string | null;
         };
         /** BriefOut */
         BriefOut: {
@@ -6233,6 +6279,7 @@ export interface components {
              *     }
              */
             prescreen: components["schemas"]["PrescreenCounts"];
+            snowball?: components["schemas"]["SnowballStats"] | null;
             /**
              * Id
              * Format: uuid
@@ -6329,6 +6376,7 @@ export interface components {
              *     }
              */
             prescreen: components["schemas"]["PrescreenCounts"];
+            snowball?: components["schemas"]["SnowballStats"] | null;
             /**
              * Id
              * Format: uuid
@@ -6712,6 +6760,54 @@ export interface components {
              * @default true
              */
             forward: boolean;
+        };
+        /** SnowballSeed */
+        SnowballSeed: {
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "hit" | "paper";
+            /** Title */
+            title: string;
+            /** Found */
+            found: {
+                [key: string]: number;
+            };
+            /** New */
+            new: {
+                [key: string]: number;
+            };
+            /** Skipped */
+            skipped?: string | null;
+            /** Error */
+            error?: string | null;
+            /**
+             * Errors
+             * @default {}
+             */
+            errors: {
+                [key: string]: string | null;
+            };
+            /**
+             * Done
+             * @default []
+             */
+            done: string[];
+            /** Hit Id */
+            hit_id?: string | null;
+        };
+        /**
+         * SnowballStats
+         * @description What a snowball run did, per seed (stats_json["snowball"]).
+         */
+        SnowballStats: {
+            /** Seeds */
+            seeds: components["schemas"]["SnowballSeed"][];
+            /** Directions */
+            directions: string[];
         };
         /** SourceKeys */
         SourceKeys: {
@@ -9954,6 +10050,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SnowballOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_branch_route_api_workspaces__workspace_id__search_branch_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BranchIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BranchOut"];
                 };
             };
             /** @description Validation Error */

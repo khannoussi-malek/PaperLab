@@ -21,7 +21,17 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.core import ai_sort, discovery, paper_sources, retrieved_hits, search_run_results, tags, year_range
+from app.core import (
+    ai_sort,
+    discovery,
+    hit_links,
+    paper_sources,
+    retrieved_hits,
+    search_run_results,
+    tags,
+    year_range,
+)
+from app.core.branches import default_branch_on_decision
 from app.core.candidates import Candidate, from_s2, merge, normal_title
 from app.core.discovery import Providers, _add_unpaywall_links, download_pdf
 from app.core.references import _same_reference
@@ -257,7 +267,9 @@ async def search_batch(session: AsyncSession, providers: Providers, run: Workspa
             cursor.cursor_json = {"value": next_cursor}
 
     new_by_source: Counter[str] = Counter()
-    new_hits = await _store_candidates_as_hits(session, run, "database_search", found, new_by_source=new_by_source)
+    new_hits, _ = await _store_candidates_as_hits(
+        session, run, "database_search", found, new_by_source=new_by_source
+    )
 
     return BatchResult(new_hits=new_hits, sources_exhausted=exhausted, errors=errors, raw_counts=raw_counts,
                        out_of_range=out_of_range, new_by_source=dict(new_by_source), asked=asked)
@@ -266,17 +278,23 @@ async def search_batch(session: AsyncSession, providers: Providers, run: Workspa
 async def _store_candidates_as_hits(
     session: AsyncSession, run: WorkspaceSearchRun, source_method: str, found: dict[str, list[Candidate]],
     seed_paper_id: uuid.UUID | None = None, snowball_round: int | None = None,
-    new_by_source: Counter[str] | None = None,
-) -> int:
+    new_by_source: Counter[str] | None = None, kind: str = "search",
+    parent_hit_id: uuid.UUID | None = None, parent_paper_id: uuid.UUID | None = None,
+) -> tuple[int, list[uuid.UUID]]:
     """Merges candidates from every source, dedups against the existing pool by (workspace_id, external_ref_id),
     and stores new ones as hits. Shared by search_batch (source_method="database_search") and snowball
     (source_method="snowball_backward"/"snowball_forward") so both features use exactly one hit-creation/dedup
     path — a paper already in the pool (this run, an earlier one, or a prior snowball hop) keeps its existing
-    screening state (spec P8, §9)."""
+    screening state (spec P8, §9).
+
+    Returns (new hit count, ids of every hit these candidates resolved to, new and existing) and records one
+    workspace_hit_links row per resolved hit, so a re-found hit gains the new path (kind/parent) too."""
     all_candidates = [c for group in found.values() for c in group]
     merged = merge(found, len(all_candidates)) if all_candidates else []
 
     new_hits = 0
+    child_ids: list[uuid.UUID] = []
+    existing_ids: set[uuid.UUID] = set()
     for candidate in merged:
         ref = await _find_or_create_external_ref(session, candidate)
         existing_hit = (
@@ -292,26 +310,45 @@ async def _store_candidates_as_hits(
             .first()
         )
         if existing_hit is not None:
-            continue  # already in the pool (this run or an earlier one) — keeps its existing screening decision
-        if await _insert_hit(
+            # already in the pool (this run or an earlier one) — keeps its existing screening decision
+            child_ids.append(existing_hit.id)
+            existing_ids.add(existing_hit.id)
+            continue
+        inserted_id = await _insert_hit(
             session, run, ref, candidate, source_method=source_method,
             seed_paper_id=seed_paper_id, snowball_round=snowball_round,
-        ):
+        )
+        if inserted_id is None:  # lost a race: the winner's row is the hit
+            inserted_id = await session.scalar(
+                select(WorkspaceSearchHit.id).where(
+                    WorkspaceSearchHit.workspace_id == run.workspace_id,
+                    WorkspaceSearchHit.external_ref_id == ref.id,
+                )
+            )
+        else:
             new_hits += 1
             if new_by_source is not None:
                 new_by_source.update(candidate.sources)
-    return new_hits
+        if inserted_id is not None:
+            child_ids.append(inserted_id)
+    link_ids = child_ids
+    if kind == "search" and run.saved_search_id is not None and existing_ids:
+        # a saved search finds the same paper every time it runs: one search link is the whole story
+        linked = await hit_links.already_found_by_saved_search(session, run, list(existing_ids))
+        link_ids = [c for c in child_ids if c not in linked]
+    await hit_links.record_links(session, run, link_ids, kind, parent_hit_id, parent_paper_id)
+    return new_hits, child_ids
 
 
 async def _insert_hit(
     session: AsyncSession, run: WorkspaceSearchRun, ref: ExternalRef, candidate: Candidate,
     source_method: str = "database_search", seed_paper_id: uuid.UUID | None = None,
     snowball_round: int | None = None,
-) -> bool:
+) -> uuid.UUID | None:
     """Inserts a new pool hit for `ref`, or no-ops if the DB's own `(workspace_id, external_ref_id)` unique
     constraint already has a row for it — not just this function's own pre-check SELECT above, which two workers
     racing the same run (e.g. a stop-then-immediate-restart, since enqueue_job has no dedup job id) can both pass
-    before either commits. Returns whether a row was actually inserted (I2)."""
+    before either commits. Returns the new row's id, or None when nothing was inserted (I2)."""
     inserted_id = await session.scalar(
         pg_insert(WorkspaceSearchHit)
         .values(
@@ -327,7 +364,7 @@ async def _insert_hit(
         .on_conflict_do_nothing(index_elements=["workspace_id", "external_ref_id"])
         .returning(WorkspaceSearchHit.id)
     )
-    return inserted_id is not None
+    return inserted_id
 
 
 from app.core import papers, workspaces
@@ -430,6 +467,7 @@ async def _reports(session: AsyncSession, runs: list[tuple[WorkspaceSearchRun, i
             "outcome": search_run_results.outcome(run.status, results),
             "warnings": [SourceWarning(**w) for w in (run.stats_json or {}).get("warnings", [])],
             **({"prescreen": prescreen[run.id]} if run.id in prescreen else {}),
+            "snowball": (run.stats_json or {}).get("snowball"),
         }
     return reports
 
@@ -539,6 +577,72 @@ async def _snowball_from_s2(
     return out, errors
 
 
+NOT_IN_S2 = "not found in Semantic Scholar"
+
+
+def _found_counts(found: dict[str, list[Candidate]]) -> dict[str, int]:
+    return {_DIRECTION_KINDS[direction][1]: len(candidates) for direction, candidates in found.items()}
+
+
+def _joined(direction_errors: dict[str, str]) -> str | None:
+    return "; ".join(direction_errors.values()) or None
+
+
+_ERROR_KEY_KINDS = {"semantic_scholar_backward": "cites", "semantic_scholar_forward": "cited_by"}
+
+
+_DIRECTION_KINDS = {"backward": ("snowball_backward", "cites"), "forward": ("snowball_forward", "cited_by")}
+
+
+def _seed_entry(
+    seed_id: uuid.UUID, kind: str, title: str, found: dict[str, int] | None = None, new: dict[str, int] | None = None,
+    skipped: str | None = None, error: str | None = None, hit_id: uuid.UUID | None = None,
+    errors: dict[str, str] | None = None,
+) -> dict:
+    """One seed's line in stats_json["snowball"]["seeds"]; counts are keyed by link kind (cites / cited_by).
+    `errors` is keyed by link kind too; `done` lists the kinds that came back without error; `hit_id` is the
+    seed's hit (None for a hand-added paper that has none)."""
+    zero = {"cites": 0, "cited_by": 0}
+    by_kind = {**{k: None for k in zero}, **(errors or {})}
+    return {
+        "id": str(seed_id), "kind": kind, "title": title, "found": {**zero, **(found or {})},
+        "new": {**zero, **(new or {})}, "skipped": skipped, "error": error,
+        "errors": by_kind, "done": [k for k in (found or {}) if by_kind[k] is None],
+        "hit_id": str(hit_id) if hit_id else None,
+    }
+
+
+def _kind_errors(direction_errors: dict[str, str]) -> dict[str, str]:
+    return {_ERROR_KEY_KINDS[key]: message for key, message in direction_errors.items()}
+
+
+def _whole_seed_errors(message: str, backward: bool, forward: bool) -> dict[str, str]:
+    """A failure before any direction ran counts against every direction that was asked for."""
+    return {kind: message for flag, kind in ((backward, "cites"), (forward, "cited_by")) if flag}
+
+
+async def _store_hop(
+    session: AsyncSession, run: WorkspaceSearchRun, found: dict[str, list[Candidate]], snowball_round: int,
+    parent_hit_id: uuid.UUID | None, parent_paper_id: uuid.UUID | None, seed_paper_id: uuid.UUID | None = None,
+) -> dict[str, int]:
+    """Stores one seed's per-direction candidates as hits, each linked to the seed (a hit, or a bare paper).
+    Returns the number of newly added hits per link kind."""
+    new: dict[str, int] = {}
+    for direction, candidates in found.items():
+        source_method, kind = _DIRECTION_KINDS[direction]
+        added, _ = await _store_candidates_as_hits(
+            session, run, source_method, {"semantic_scholar": candidates}, seed_paper_id=seed_paper_id,
+            snowball_round=snowball_round, kind=kind, parent_hit_id=parent_hit_id, parent_paper_id=parent_paper_id,
+        )
+        new[kind] = added
+    return new
+
+
+def _snowball_query_text(first_title: str | None, seed_count: int) -> str:
+    more = f" and {seed_count - 1} more" if seed_count > 1 else ""
+    return f'Snowball from "{first_title or "?"}"{more}'
+
+
 async def snowball(
     session: AsyncSession, providers: Providers, workspace_id: uuid.UUID, seed_paper_ids: list[uuid.UUID],
     seed_hit_ids: list[uuid.UUID], backward: bool, forward: bool,
@@ -564,7 +668,7 @@ async def snowball(
 
     run = WorkspaceSearchRun(
         workspace_id=workspace_id,
-        query_text=f"snowball ({len(seed_paper_ids) + len(seed_hit_ids)} seed paper(s))",
+        query_text=_snowball_query_text(None, len(seed_paper_ids) + len(seed_hit_ids)),
         filters_json={}, query_overrides_json={}, sources_json=["semantic_scholar"], status="exhausted",
         started_at=datetime.now(timezone.utc), stats_json={},
     )
@@ -574,6 +678,7 @@ async def snowball(
     skipped: list[uuid.UUID] = []
     errors: dict[str, str] = {}
     new_hits = 0
+    entries: list[dict] = []
     for paper_id in seed_paper_ids:
         member = (
             await session.execute(
@@ -585,52 +690,72 @@ async def snowball(
         if member is None:
             raise NotFound(f"paper {paper_id} not in workspace {workspace_id}")
         paper = await session.get(Paper, paper_id)
+        parent_hit_id = await hit_links.seed_parent(session, workspace_id, paper_id)
         try:
             result = await _snowball_from_s2(providers, paper.doi, paper.title, backward, forward)
         except httpx.HTTPError as exc:
             # A failure before either direction's own try/except could run (e.g. the s2_key title-match lookup
             # itself 429ing) — not a per-direction error, so no direction-specific key to give it.
             errors["semantic_scholar"] = str(exc)
+            entries.append(_seed_entry(
+                paper_id, "paper", paper.title, error=str(exc), hit_id=parent_hit_id,
+                errors=_whole_seed_errors(str(exc), backward, forward),
+            ))
             continue
         if result is None:
             skipped.append(paper_id)
+            entries.append(_seed_entry(paper_id, "paper", paper.title, skipped=NOT_IN_S2, hit_id=parent_hit_id))
             continue
         found, direction_errors = result
         errors.update(direction_errors)
-        for direction, candidates in found.items():
-            source_method = "snowball_backward" if direction == "backward" else "snowball_forward"
-            new_hits += await _store_candidates_as_hits(
-                session, run, source_method, {"semantic_scholar": candidates},
-                seed_paper_id=paper_id, snowball_round=1,
-            )
+        level = await hit_links.level_of(session, parent_hit_id) if parent_hit_id else 0
+        new = await _store_hop(
+            session, run, found, level + 1, parent_hit_id, None if parent_hit_id else paper_id, seed_paper_id=paper_id
+        )
+        new_hits += sum(new.values())
+        entries.append(_seed_entry(
+            paper_id, "paper", paper.title, _found_counts(found), new, error=_joined(direction_errors),
+            hit_id=parent_hit_id, errors=_kind_errors(direction_errors),
+        ))
 
     for hit_id in seed_hit_ids:
         hit = await session.get(WorkspaceSearchHit, hit_id)
         if hit is None or hit.workspace_id != workspace_id:
             raise NotFound(f"hit {hit_id} not found in workspace {workspace_id}")
         ref = await session.get(ExternalRef, hit.external_ref_id) if hit.external_ref_id else None
+        title = ref.title if ref else hit.normalized_title
         if ref is None:
             skipped.append(hit_id)
+            entries.append(_seed_entry(hit_id, "hit", title, skipped=NOT_IN_S2, hit_id=hit_id))
             continue
         try:
             result = await _snowball_from_s2(providers, ref.doi, ref.title, backward, forward)
         except httpx.HTTPError as exc:
             errors["semantic_scholar"] = str(exc)
+            entries.append(_seed_entry(
+                hit_id, "hit", title, error=str(exc), hit_id=hit_id,
+                errors=_whole_seed_errors(str(exc), backward, forward),
+            ))
             continue
         if result is None:
             skipped.append(hit_id)
+            entries.append(_seed_entry(hit_id, "hit", title, skipped=NOT_IN_S2, hit_id=hit_id))
             continue
         found, direction_errors = result
         errors.update(direction_errors)
-        for direction, candidates in found.items():
-            source_method = "snowball_backward" if direction == "backward" else "snowball_forward"
-            # ponytail: no seed_hit_id column on WorkspaceSearchHit — seed_paper_id stays unset for a hit-seeded
-            # hop (nothing to attribute to a Paper row that doesn't exist yet). Add one if that provenance is
-            # ever needed; grep confirms nothing reads seed_paper_id downstream today.
-            new_hits += await _store_candidates_as_hits(
-                session, run, source_method, {"semantic_scholar": candidates}, snowball_round=1,
-            )
+        # ponytail: no seed_hit_id column on WorkspaceSearchHit — seed_paper_id stays unset for a hit-seeded
+        # hop; the parent is recorded in workspace_hit_links instead.
+        new = await _store_hop(session, run, found, await hit_links.level_of(session, hit_id) + 1, hit_id, None)
+        new_hits += sum(new.values())
+        entries.append(_seed_entry(
+            hit_id, "hit", title, _found_counts(found), new, error=_joined(direction_errors), hit_id=hit_id,
+            errors=_kind_errors(direction_errors),
+        ))
 
+    if entries:
+        run.query_text = _snowball_query_text(entries[0]["title"], len(entries))
+    directions = [kind for flag, kind in ((backward, "cites"), (forward, "cited_by")) if flag]
+    run.stats_json = {"snowball": {"seeds": entries, "directions": directions}}
     await session.commit()
     return SnowballResult(new_hits=new_hits, skipped_seeds=skipped, errors=errors)
 
@@ -821,6 +946,7 @@ async def review_hit(session: AsyncSession, hit_id, workspace_id, update: "HitRe
     if "stage1_status" in fields:
         # The stop hint's streak reads decisions by this time (M31 spec §3.2); an undone decision has none.
         hit.stage1_decided_at = _now() if hit.stage1_status is not None else None
+        await default_branch_on_decision(session, workspace_id, [hit.id], hit.stage1_status)
     await session.commit()
     ref = await session.get(ExternalRef, hit.external_ref_id) if hit.external_ref_id else None
     return _hit_out_dict(hit, ref)
@@ -847,6 +973,7 @@ async def bulk_review_hits(
             hit.stage1_exclude_reason = stage1_exclude_reason
         if priority is not None:
             hit.priority = priority
+    await default_branch_on_decision(session, workspace_id, [h.id for h in hits], stage1_status)
     await session.commit()
     return len(hits)
 

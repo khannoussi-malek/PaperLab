@@ -123,3 +123,19 @@ test('a run that did not reach every source says partial in the list', () => {
   fireEvent.click(screen.getByRole('button', { name: /^Runs/ }))
   expect(screen.getByText(/Partial search/)).toBeInTheDocument()
 })
+
+test('a snowball run shows its counts line and error; a search run shows neither', () => {
+  const snow = {
+    ...run('r2', 'Snowball from "Paper A"'),
+    snowball: {
+      directions: ['cites', 'cited_by'],
+      seeds: [{ id: 'p1', kind: 'paper', title: 'Paper A', found: { cites: 3, cited_by: 4 }, new: { cites: 0, cited_by: 0 }, skipped: null, error: 'HTTP 429 from s2', errors: { cites: null, cited_by: 'HTTP 429 from s2' }, done: ['cites'], hit_id: null }],
+    },
+  } as SearchRunSummary
+  setup([snow, run('r1', 'plain query')])
+  fireEvent.click(screen.getByRole('button', { name: 'Runs (2)' }))
+  expect(screen.getByText('Snowball from "Paper A"')).toBeTruthy()
+  expect(screen.getByText('4 citing · 3 cited · 0 skipped')).toBeTruthy()
+  expect(screen.getByRole('alert').textContent).toBe('Semantic Scholar refused: add a free key in Settings → Paper sources.')
+  expect(screen.getAllByText(/citing/)).toHaveLength(1)
+})

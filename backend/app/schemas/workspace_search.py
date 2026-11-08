@@ -59,6 +59,26 @@ class PrescreenCounts(BaseModel):
     not_asked: int = 0
 
 
+class SnowballSeed(BaseModel):
+    id: str
+    kind: Literal["hit", "paper"]
+    title: str
+    found: dict[str, int]
+    new: dict[str, int]
+    skipped: str | None = None
+    error: str | None = None  # both directions' messages joined, for the Runs list
+    errors: dict[str, str | None] = {"cites": None, "cited_by": None}
+    done: list[str] = []  # directions that finished without error
+    hit_id: str | None = None  # the seed's hit (a paper seed's earliest hit); None for a hand-added paper
+
+
+class SnowballStats(BaseModel):
+    """What a snowball run did, per seed (stats_json["snowball"])."""
+
+    seeds: list[SnowballSeed]
+    directions: list[str]
+
+
 class RunReport(BaseModel):
     """The same fields on get_search_run and list_search_runs. `outcome`: running, complete (every source ran dry) or
     partial (see `source_results`). `status` stays as it was: `exhausted` only means the job ended."""
@@ -70,6 +90,7 @@ class RunReport(BaseModel):
     outcome: str = "running"
     warnings: list[SourceWarning] = []
     prescreen: PrescreenCounts = PrescreenCounts()
+    snowball: SnowballStats | None = None
 
 
 class SearchRunOut(RunReport):
@@ -332,3 +353,20 @@ class PrismaExportOut(BaseModel):
     automation: list[str] = []
     notes: list[str] = []
     screening_criteria: str | None = None
+
+
+class BranchIn(BaseModel):
+    hit_id: uuid.UUID | None = None
+    paper_id: uuid.UUID | None = None
+    # required, null clears the decision; checked in core.branches so every caller gets the same InvalidInput
+    state: str | None
+    directions: list[str] = []
+    reason: str | None = None
+
+
+class BranchOut(BaseModel):
+    hit_id: uuid.UUID | None
+    paper_id: uuid.UUID | None
+    state: str | None
+    directions: list[str]
+    reason: str | None

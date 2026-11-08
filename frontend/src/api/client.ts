@@ -148,7 +148,9 @@ export type SearchRunSummary = {
   sources_left: string[]
   paused_sources: string[]
   outcome?: string
+  snowball?: SnowballStats | null
 }
+export type SnowballStats = components['schemas']['SnowballStats']
 export type SavedSearch = components['schemas']['SavedSearchOut']
 export type SavedSearchCreate = components['schemas']['SavedSearchCreate']
 export type SavedSearchUpdate = components['schemas']['SavedSearchUpdate']
