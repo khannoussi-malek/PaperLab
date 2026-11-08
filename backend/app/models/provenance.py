@@ -41,6 +41,7 @@ class WorkspaceBranchState(Base):
     __table_args__ = (
         CheckConstraint("state IN ('go_further', 'stopped')", name="ck_workspace_branch_states_state"),
         CheckConstraint("(hit_id IS NULL) <> (paper_id IS NULL)", name="ck_workspace_branch_states_one_target"),
+        CheckConstraint("set_by IN ('screening', 'owner')", name="ck_workspace_branch_states_set_by"),
         UniqueConstraint(
             "workspace_id", "hit_id", "paper_id",
             name="uq_workspace_branch_states_target", postgresql_nulls_not_distinct=True,
@@ -56,6 +57,8 @@ class WorkspaceBranchState(Base):
     state: Mapped[str] = mapped_column(String)
     directions: Mapped[list] = mapped_column(JSONB, server_default=text("'[]'::jsonb"))
     reason: Mapped[str | None] = mapped_column(Text, default=None)
+    # 'screening' rows follow the paper's screening decision; 'owner' rows are a hand choice and stay put.
+    set_by: Mapped[str] = mapped_column(String, server_default=text("'owner'"))
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), server_default=text("now()"))
 
 

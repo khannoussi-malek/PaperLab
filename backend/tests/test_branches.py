@@ -105,3 +105,35 @@ async def test_branch_route_round_trip(client, session):
     assert resp.json()["state"] is None
     bad = await client.put(url, json={"hit_id": str(hit.id), "state": "go_further"})
     assert bad.status_code == 422
+
+
+async def test_flipped_decision_updates_a_screening_default(session):
+    workspace, (hit,) = await make_pool(session, [("a", None)])
+    await workspace_search.review_hit(session, hit.id, workspace.id, HitReviewUpdate(stage1_status="relevant"))
+    await workspace_search.review_hit(
+        session, hit.id, workspace.id,
+        HitReviewUpdate(stage1_status="not_relevant", stage1_exclude_reason="wrong_topic"),
+    )
+    await session.refresh(await _row(session, hit))
+    row = await _row(session, hit)
+    assert (row.state, row.directions, row.set_by) == ("stopped", [], "screening")
+
+
+async def test_undone_decision_clears_a_screening_default(session):
+    workspace, (hit, owned) = await make_pool(session, [("a", None)] * 2)
+    for h in (hit, owned):
+        await workspace_search.review_hit(session, h.id, workspace.id, HitReviewUpdate(stage1_status="relevant"))
+    await branches.set_branch(
+        session, workspace.id, hit_id=owned.id, state="go_further", directions=["cites"], reason=None
+    )
+    for h in (hit, owned):
+        await workspace_search.review_hit(session, h.id, workspace.id, HitReviewUpdate(stage1_status=None))
+    assert await _row(session, hit) is None
+    assert (await _row(session, owned)).set_by == "owner"
+
+
+async def test_default_skips_hits_from_another_workspace(session):
+    workspace, _ = await make_pool(session, [("a", None)])
+    _, (foreign,) = await make_pool(session, [("z", None)])
+    await branches.default_branch_on_decision(session, workspace.id, [foreign.id], "relevant")
+    assert await _row(session, foreign) is None

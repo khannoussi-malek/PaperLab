@@ -67,6 +67,7 @@ async def set_branch(
         return BranchOut(hit_id=hit_id, paper_id=paper_id, state=None, directions=[], reason=None)
     values = {
         "state": state,
+        "set_by": "owner",
         "directions": ordered if state == "go_further" else [],
         "reason": reason if state == "stopped" else None,
     }
@@ -78,27 +79,34 @@ async def set_branch(
         )
     )
     await session.commit()
-    return BranchOut(hit_id=hit_id, paper_id=paper_id, **values)
+    return BranchOut(hit_id=hit_id, paper_id=paper_id, **{k: v for k, v in values.items() if k != "set_by"})
 
 
 async def default_branch_on_decision(
     session: AsyncSession, workspace_id: uuid.UUID, hit_ids: list[uuid.UUID], stage1_status: str | None
 ) -> None:
-    """Screening's default: relevant -> go further both ways, not_relevant -> stopped. Never overwrites an existing
-    row (a hand choice wins), ignores hits outside the workspace, and does not commit (the caller does)."""
-    state = {"relevant": "go_further", "not_relevant": "stopped"}.get(stage1_status)
-    if state is None or not hit_ids:
+    """Screening's default follows the decision: relevant -> go further both ways, not_relevant -> stopped, undone
+    (None) -> no row. Only rows set_by 'screening' are touched, so a hand choice is never overwritten or removed.
+    Ignores hits outside the workspace; does not commit (the caller does). Any other status ('maybe') is a no-op."""
+    if not hit_ids or stage1_status not in ("relevant", "not_relevant", None):
         return
     owned = (await session.scalars(select(WorkspaceSearchHit.id).where(
         WorkspaceSearchHit.id.in_(hit_ids), WorkspaceSearchHit.workspace_id == workspace_id
     ))).all()
     if not owned:
         return
-    directions = list(DIRECTIONS) if state == "go_further" else []
-    await session.execute(
-        pg_insert(WorkspaceBranchState)
-        .values([
-            {"workspace_id": workspace_id, "hit_id": h, "state": state, "directions": directions} for h in owned
-        ])
-        .on_conflict_do_nothing(constraint="uq_workspace_branch_states_target")
-    )
+    if stage1_status is None:
+        await session.execute(delete(WorkspaceBranchState).where(
+            WorkspaceBranchState.workspace_id == workspace_id, WorkspaceBranchState.hit_id.in_(owned),
+            WorkspaceBranchState.set_by == "screening",
+        ))
+        return
+    state = "go_further" if stage1_status == "relevant" else "stopped"
+    values = {"state": state, "directions": list(DIRECTIONS) if state == "go_further" else [], "reason": None}
+    insert = pg_insert(WorkspaceBranchState).values([
+        {"workspace_id": workspace_id, "hit_id": h, "set_by": "screening", **values} for h in owned
+    ])
+    await session.execute(insert.on_conflict_do_update(
+        constraint="uq_workspace_branch_states_target", set_={**values, "updated_at": datetime.now(timezone.utc)},
+        where=WorkspaceBranchState.set_by == "screening",
+    ))

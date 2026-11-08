@@ -91,6 +91,11 @@ _LINK_DROPPED = (
 )
 _ON_M = ":m IN (t.from_paper, t.to_paper)"
 
+_LINK_TWIN = (
+    "EXISTS (SELECT 1 FROM workspace_hit_links o WHERE o.parent_paper_id = :k AND o.child_hit_id = t.child_hit_id "
+    "AND o.kind = t.kind AND o.run_id = t.run_id AND o.parent_hit_id IS NOT DISTINCT FROM t.parent_hit_id)"
+)
+
 # Every column holding a paper id (the plan's inventory; tests/test_paper_merges.py checks it against the schema).
 STEPS = (
     # K's abstract chunk goes before M's chunks come: they reuse its ordinal 0 (UNIQUE paper_id, ordinal).
@@ -117,6 +122,13 @@ STEPS = (
     ),
     _move("workspace_search_hits"),
     _move("workspace_search_hits", "seed_paper_id", "workspace_search_hits_seeded"),
+    # a link from K already recorded the same path: M's duplicate goes, the rest move
+    _Step("workspace_hit_links_dropped", "workspace_hit_links", f"t.parent_paper_id = :m AND {_LINK_TWIN}"),
+    _Step(
+        "workspace_hit_links", "workspace_hit_links", f"t.parent_paper_id = :m AND NOT {_LINK_TWIN}",
+        "parent_paper_id = :k",
+    ),
+    _union("workspace_branch_states", ["workspace_id"]),  # K's decision in a workspace wins
     _union("search_run_eligibility", ["search_run_id"]),  # K's verdict wins
     # K's card can only be the failed needs_full_text one (no PDF); a real card would collide below and roll back.
     _Step("evidence_cards_dropped", "evidence_cards", "t.paper_id = :k AND t.status = 'failed'"),

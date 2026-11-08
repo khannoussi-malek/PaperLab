@@ -48,9 +48,11 @@ def upgrade() -> None:
         sa.Column("state", sa.String, nullable=False),
         sa.Column("directions", pg.JSONB, nullable=False, server_default=sa.text("'[]'::jsonb")),
         sa.Column("reason", sa.Text),
+        sa.Column("set_by", sa.String, nullable=False, server_default=sa.text("'owner'")),
         sa.Column("updated_at", pg.TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("now()")),
         sa.CheckConstraint("state IN ('go_further', 'stopped')", name="ck_workspace_branch_states_state"),
         sa.CheckConstraint("(hit_id IS NULL) <> (paper_id IS NULL)", name="ck_workspace_branch_states_one_target"),
+        sa.CheckConstraint("set_by IN ('screening', 'owner')", name="ck_workspace_branch_states_set_by"),
         sa.UniqueConstraint(
             "workspace_id", "hit_id", "paper_id",
             name="uq_workspace_branch_states_target", postgresql_nulls_not_distinct=True,

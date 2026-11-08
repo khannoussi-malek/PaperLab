@@ -45,6 +45,8 @@ PAPER_ID_COLUMNS = [
     ("paper_links", "to_paper"),
     ("workspace_search_hits", "paper_id"),
     ("workspace_search_hits", "seed_paper_id"),
+    ("workspace_hit_links", "parent_paper_id"),
+    ("workspace_branch_states", "paper_id"),
     ("search_run_eligibility", "paper_id"),
     ("evidence_cards", "paper_id"),
     ("paper_events", "paper_id"),
@@ -175,6 +177,19 @@ async def seed_both(session):
         SearchRunEligibility(paper_id=m.id, search_run_id=ws.run_id, stage2_status="exclude"),  # K's verdict wins
         SearchRunEligibility(paper_id=m.id, search_run_id=ws2.run_id, stage2_status="include"),
     ])  # fmt: skip
+    for kind in ("cites", "cited_by"):  # M's cites duplicates the link K already has below
+        await session.execute(text(
+            "INSERT INTO workspace_hit_links (workspace_id, child_hit_id, parent_paper_id, run_id, kind) "
+            "VALUES (:w, :h, :m, :r, :kind)"
+        ), {"w": ws2.id, "h": hit_m.id, "m": m.id, "r": hit_m.run_id, "kind": kind})
+    await session.execute(text(
+        "INSERT INTO workspace_hit_links (workspace_id, child_hit_id, parent_paper_id, run_id, kind) "
+        "VALUES (:w, :h, :k, :r, 'cites')"
+    ), {"w": ws2.id, "h": hit_m.id, "k": k.id, "r": hit_m.run_id})
+    await session.execute(text(
+        "INSERT INTO workspace_branch_states (workspace_id, paper_id, state, directions) "
+        "VALUES (:w, :m, 'go_further', '[\"cites\"]')"
+    ), {"w": ws2.id, "m": m.id})
     await session.commit()
     return k, m, {"ws": ws, "ws2": ws2, "x": x, "y": y, "note_k": note_k, "hit_k": hit_k, "hit_m": hit_m}
 
@@ -197,6 +212,9 @@ MOVED = {
     "paper_links": 1,
     "workspace_search_hits": 1,
     "workspace_search_hits_seeded": 1,
+    "workspace_hit_links_dropped": 1,  # M's link that K's already recorded
+    "workspace_hit_links": 1,
+    "workspace_branch_states": 1,
     "search_run_eligibility": 1,
     "evidence_cards_dropped": 1,  # K's needs-full-text placeholder
     "evidence_cards": 1,
@@ -226,6 +244,8 @@ AFTER = {  # K's rows after the merge: its own plus M's moved or unioned ones
     "paper_links.to_paper": 0,
     "workspace_search_hits.paper_id": 2,
     "workspace_search_hits.seed_paper_id": 1,
+    "workspace_hit_links.parent_paper_id": 2,  # K's own, and M's other kind
+    "workspace_branch_states.paper_id": 1,
     "search_run_eligibility.paper_id": 2,
     "evidence_cards.paper_id": 1,
     "manuscript_cite_keys.paper_id": 1,
