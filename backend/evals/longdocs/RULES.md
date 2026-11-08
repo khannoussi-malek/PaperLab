@@ -509,3 +509,8 @@ Shipping (P6): DGQ10_2 replaces D10 in PaperLab only if all of these hold:
 
 Designed on regulatory data, so tested out of domain here (R3): BM25 k1 0.9 and b 0.4, the 24,000-character budget, RRF k 60, the 150-chunk threshold, documents-first with 10 papers and 3 per paper, table chunking, and the 1,024-token limit.
 Every result is reported, whatever it is.
+
+### SE4 errata (2026-11-08, about 01:15; the description is corrected, the code at 1446cd02 is unchanged)
+E1, step 3 of DGQ10_2 reads: "Passages, scope of one paper: dense search inside that paper, or fused if the paper has 150 or more chunks (the production rule in retrieval.retrieve), no cap, top 40." The results will report how many SE4 questions got a one-paper scope and how many of those papers have 150 or more chunks.
+E2, step 1: paper ranking is dense-only because the test DB's embedding_source table has no row (so hybrid_on reads false) and HYBRID_SEARCH is unset. Checked on the rebuilt test DB on 2026-11-08. The scoring output will record both values before the run. This applies to D10 and DGQ10_2 alike.
+Timing: the two SE4 writers started at about 01:08, before these errata were written. They are blind to the methods, so the errata cannot affect the questions.
