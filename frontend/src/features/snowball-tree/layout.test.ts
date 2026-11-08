@@ -5,7 +5,7 @@ import { COL, primaryParent, tidyLayout } from './layout'
 const node = (id: string, level: number): ProvNode => ({ id, title: id, level, snowballed: [], paths: 1 })
 const link = (parent: string, child: string, at = '2026-01-01T00:00:00Z', kind = 'cites'): ProvLink =>
   ({ parent, child, kind, run_id: 'r1', created_at: at })
-const roots: ProvRoot[] = [{ id: 'root:r1', label: 'q', hit_count: 5, on_tree: 3 }]
+const roots: ProvRoot[] = [{ id: 'root:r1', label: 'q', hit_count: 5, on_tree: 3, excluded_hidden: 0 }]
 
 // root -> A -> B, C ; B -> D
 const nodes = [node('A', 0), node('B', 1), node('C', 1), node('D', 2)]
@@ -50,7 +50,7 @@ test('hiding everything except C keeps A and B as faded', () => {
 })
 
 test('primaryParent: earliest link wins, ties go to the first-listed root', () => {
-  const two: ProvRoot[] = [...roots, { id: 'root:r2', label: 'q2', hit_count: 1, on_tree: 1 }]
+  const two: ProvRoot[] = [...roots, { id: 'root:r2', label: 'q2', hit_count: 1, on_tree: 1, excluded_hidden: 0 }]
   const tie = [link('root:r2', 'X', '2026-01-01T00:00:00Z'), link('root:r1', 'X', '2026-01-01T00:00:00Z')]
   expect(primaryParent(tie, two).get('X')!.parent).toBe('root:r1')
   const early = [link('root:r1', 'X', '2026-03-01T00:00:00Z'), link('root:r2', 'X', '2026-02-01T00:00:00Z')]
@@ -104,4 +104,9 @@ test('a folded node with a matching descendant stays, faded, with the match coun
 test('a root with a matching descendant is not faded', () => {
   const out = tidyLayout(nodes, links, roots, new Set(), new Set(['B', 'D']))
   expect(box(out, 'root:r1').faded).toBe(false)
+})
+
+test('boxes come out parent before child (roots to leaves), so DOM and tab order read downward', () => {
+  const order = tidyLayout(nodes, links, roots, new Set(), new Set()).boxes.map((b) => b.id)
+  expect(order).toEqual(['root:r1', 'A', 'B', 'D', 'C'])
 })

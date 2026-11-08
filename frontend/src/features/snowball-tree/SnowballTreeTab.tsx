@@ -1,7 +1,8 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useMemo, useState } from 'react'
-import { refreshTree, useProvenance, useSnowball } from '@/api/queries'
+import { refreshTree, useProvenance, useSearchRuns, useSnowball } from '@/api/queries'
 import { Button } from '@/components/ui/button'
+import { friendlySnowballError } from '@/features/workspace-search/snowballText'
 import { SidePanel } from './SidePanel'
 import { SnowballNext } from './SnowballNext'
 import { hiddenIds, NO_FILTERS, TreeFilters } from './TreeFilters'
@@ -10,6 +11,8 @@ import { TreeView } from './TreeView'
 export function SnowballTreeTab({ workspaceId }: { workspaceId: string }) {
   const { data, isPending, error } = useProvenance(workspaceId)
   const [selected, setSelected] = useState<string | null>(null)
+  const runs = useSearchRuns(workspaceId).data
+  const runLabels = useMemo(() => Object.fromEntries((runs ?? []).map((r) => [r.id, r.query_text])), [runs])
   const [folded, setFolded] = useState<Set<string>>(new Set())
   const [filters, setFilters] = useState(NO_FILTERS)
   const hidden = useMemo(() => (data ? hiddenIds(data, filters) : new Set<string>()), [data, filters])
@@ -53,13 +56,14 @@ export function SnowballTreeTab({ workspaceId }: { workspaceId: string }) {
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <SnowballNext workspaceId={workspaceId} />
       <div className="flex flex-wrap items-center gap-3">
-        <TreeFilters data={data} value={filters} onChange={setFilters} />
+        <TreeFilters data={data} value={filters} onChange={setFilters} runLabels={runLabels} />
         {stopped.size > 0 && (
           <Button type="button" size="sm" variant="outline" aria-pressed={showStopped} onClick={() => setShowStopped((v) => !v)}>
             {showStopped ? 'Hide stopped' : 'Show stopped'}
           </Button>
         )}
       </div>
+      {snowball.isError && <p role="alert" className="text-sm text-destructive">{friendlySnowballError(snowball.error.message)}</p>}
       {data.truncated && <p className="text-xs text-muted-foreground">Showing the first part of a large tree.</p>}
       <div className="flex min-h-0 flex-1 gap-3">
         <TreeView data={data} selected={selected} onSelect={setSelected} folded={effectiveFolded} onToggleFold={toggleFold} hidden={hidden} snowballing={busy} />

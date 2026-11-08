@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, cleanup } from '@testing-library/react'
+import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import * as queries from '@/api/queries'
 import { WhyTrail } from './WhyTrail'
@@ -26,13 +26,25 @@ test('draws the first path with the kind on each snowball arrow, and counts the 
     [link('root:r1', 'B', 'search'), link('B', 'H', 'cited_by')],
   ])
   expect(screen.getByText('transformers → Paper A → (it cites) → Paper B → (cited by) → this paper')).toBeTruthy()
-  expect(screen.getByText('also reached by 1 other path')).toBeTruthy()
+  const more = screen.getByRole('button', { name: '+1 other path' })
+  expect(more.getAttribute('aria-expanded')).toBe('false')
+  expect(screen.queryByText('transformers → Paper B → (cited by) → this paper')).toBeNull()
+  fireEvent.click(more)
+  expect(screen.getByText('transformers → Paper B → (cited by) → this paper')).toBeTruthy()
+})
+
+test('the other-paths count comes from the node, not from the listed paths', () => {
+  vi.spyOn(queries, 'useProvenance').mockReturnValue({ data: { ...prov, nodes: [...prov.nodes, { id: 'H', title: 'H', level: 2, snowballed: [], paths: 31 }] } } as any)
+  vi.spyOn(queries, 'usePaths').mockReturnValue({ data: [[link('root:r1', 'H', 'search')], [link('root:r1', 'B', 'search'), link('B', 'H', 'cited_by')]] } as any)
+  render(<WhyTrail workspaceId="w1" hitId="H" />)
+  fireEvent.click(screen.getByRole('button', { name: '+30 other paths' }))
+  expect(screen.getByText('…and 29 more not listed')).toBeTruthy()
 })
 
 test('a single path has no "also reached" line; no path renders nothing', () => {
   setup([[link('root:r1', 'H', 'search')]])
   expect(screen.getByText('transformers → this paper')).toBeTruthy()
-  expect(screen.queryByText(/also reached/)).toBeNull()
+  expect(screen.queryByRole('button', { name: /other path/ })).toBeNull()
   cleanup()
   setup([])
   expect(screen.queryByText(/this paper/)).toBeNull()

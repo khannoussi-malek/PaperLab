@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Term } from '@/features/workspaces/Term'
 import { reasonLabel } from './hitReview'
-import { OTHER_METHODS, PHASES, REASON_FIELD, prismaCsv, prismaText, type StageKey } from './prismaText'
+import { OTHER_METHODS, PHASES, REASON_FIELD, prismaCsv, prismaText, stageCount, type StageKey } from './prismaText'
 import { EmptyState, GoToSearchAction, TabSkeleton } from '@/features/workspaces/TabStates'
 import { asPrismaRunMeta } from './prismaRunMeta'
 
@@ -78,7 +78,7 @@ export function PrismaTab({ workspaceId, runId }: { workspaceId: string; runId?:
                   <div key={key} className="contents">
                     <dt className="text-muted-foreground">{term ? <Term term={term}>{label}</Term> : label}</dt>
                     <dd className="flex flex-wrap items-center gap-1.5">
-                      <span className="tabular-nums">{data[key]}</span>
+                      <span className="tabular-nums">{stageCount(data, key)}</span>
                       <ReasonBreakdown reasons={reasonBreakdown(data, key)} />
                     </dd>
                   </div>

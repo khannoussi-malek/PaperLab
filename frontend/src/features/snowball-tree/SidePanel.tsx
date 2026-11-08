@@ -1,6 +1,7 @@
+import { useEffect, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import type { ProvenanceOut } from '@/api/client'
-import { useImportSearchHits, usePatchSearchHit, useSearchHit, useUploadHitPdf } from '@/api/queries'
+import { refreshTree, useImportSearchHits, usePatchSearchHit, useSearchHit, useUploadHitPdf } from '@/api/queries'
 import { Button } from '@/components/ui/button'
 import { HitPreview } from '@/features/workspace-search/HitPreview'
 import { BranchControl, type BranchTarget } from './BranchControl'
@@ -27,11 +28,22 @@ export function SidePanel({ workspaceId, data, id, busy, onFind }: Props) {
   const importHits = useImportSearchHits(workspaceId)
   const upload = useUploadHitPdf(workspaceId)
   // Screening changes the hit and the tree's colours and branch defaults; re-read them (the hit query hangs off the provenance key).
-  const refresh = { onSuccess: () => client.invalidateQueries({ queryKey: ['workspaces', workspaceId, 'search'] }) }
+  const refresh = { onSuccess: () => refreshTree(client, workspaceId) }
+  const panel = useRef<HTMLElement>(null)
+  const focusedId = useRef<string | null>(null)
+  // Selecting a box moves focus to the panel's heading (it is the first thing after the tree in reading order); a
+  // hit that loads a moment later brings a new heading, which takes focus only if nothing else has it.
+  useEffect(() => {
+    const heading = panel.current?.querySelector<HTMLElement>('h2, h3')
+    if (!heading) return
+    heading.tabIndex = -1
+    if (focusedId.current !== id || document.activeElement === document.body) heading.focus()
+    focusedId.current = id
+  }, [id, hit?.id])
 
   const target: BranchTarget | null = isHit ? { hit_id: id } : node?.paper_id ? { paper_id: node.paper_id } : null
   return (
-    <aside className="flex w-80 shrink-0 flex-col gap-3 overflow-auto rounded-lg border border-border bg-card p-3 text-sm">
+    <aside ref={panel} className="flex w-80 shrink-0 flex-col gap-3 overflow-auto rounded-lg border border-border bg-card p-3 text-sm">
       {target && (
         <>
           <BranchControl key={id} workspaceId={workspaceId} target={target} branch={node?.branch} />

@@ -23,8 +23,8 @@ test('lists each branch with the directions still to run', async () => {
   setup()
   expect(await screen.findByText('Alpha paper')).toBeTruthy()
   expect(screen.getByText('Beta paper')).toBeTruthy()
-  expect(screen.getByText('cites, cited by')).toBeTruthy()
-  expect(screen.getByText('cited by')).toBeTruthy()
+  expect(screen.getByText('Its references, Papers citing it')).toBeTruthy()
+  expect(screen.getByText('Papers citing it')).toBeTruthy()
 })
 
 test('Run all calls the run endpoint once, then is disabled and says Snowballing…', async () => {
@@ -48,4 +48,14 @@ test('after a batch, says how many are left', async () => {
   vi.spyOn(api, 'runSnowballNext').mockResolvedValue({ new_hits: 3, skipped_seeds: [], errors: {}, remaining: 5 })
   fireEvent.click(await screen.findByRole('button', { name: 'Run all' }))
   expect(await screen.findByText('5 more left: Run all again')).toBeTruthy()
+})
+
+test('after Run all, says how many new papers and shows a friendly error', async () => {
+  setup()
+  vi.spyOn(api, 'runSnowballNext').mockResolvedValue({
+    new_hits: 3, skipped_seeds: [], remaining: 0,
+    errors: { h1: "Client error '429 Too Many Requests' for url 'https://api.semanticscholar.org/x'" },
+  })
+  fireEvent.click(await screen.findByRole('button', { name: 'Run all' }))
+  expect(await screen.findByText('3 new papers. Semantic Scholar refused: add a free key in Settings → Paper sources.')).toBeTruthy()
 })

@@ -8,7 +8,7 @@ import { SnowballTreeTab } from './SnowballTreeTab'
 
 const data: ProvenanceOut = {
   truncated: false,
-  roots: [{ id: 'root:r1', label: 'transformers', hit_count: 18308, on_tree: 12 }],
+  roots: [{ id: 'root:r1', label: 'transformers', hit_count: 18308, on_tree: 12, excluded_hidden: 0 }],
   nodes: [
     { id: 'A', title: 'Seed paper', level: 0, decision: 'relevant', snowballed: ['cites'], paths: 1 },
     { id: 'B', title: 'Excluded one', level: 1, decision: 'not_relevant', snowballed: [], paths: 1 },
@@ -33,6 +33,9 @@ function setup(d: ProvenanceOut = data) {
   vi.spyOn(queries, 'usePaths').mockReturnValue({ data: undefined } as any)
   vi.spyOn(queries, 'useSearchHit').mockReturnValue({ data: undefined } as any)
   vi.spyOn(api, 'snowballNext').mockResolvedValue([])
+  vi.spyOn(api, 'listSearchRuns').mockResolvedValue([
+    { id: 'r1', query_text: 'transformers' }, { id: 's1', query_text: 'Snowball: Seed paper' },
+  ] as any)
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(<QueryClientProvider client={client}><SnowballTreeTab workspaceId="w1" /></QueryClientProvider>)
 }
@@ -133,4 +136,79 @@ test('Find citing & cited papers snowballs both ways at once and the box says Sn
   fireEvent.click(screen.getByRole('button', { name: 'Find citing & cited papers' }))
   await waitFor(() => expect(snowball).toHaveBeenCalledWith('w1', { seed_hit_ids: ['C'], seed_paper_ids: [], backward: true, forward: true }))
   expect(await screen.findAllByText('Snowballing…')).toHaveLength(2) // the box and the disabled button
+})
+
+const withNode = (node: object, root: object = {}): ProvenanceOut => ({
+  ...data, roots: [{ ...data.roots[0], ...root }], nodes: [...data.nodes, node as any],
+  links: [...data.links, { parent: 'root:r1', child: (node as any).id, kind: 'cites', run_id: 'r1', created_at: '2026-01-01T00:00:09Z' }],
+})
+
+test('a raw Semantic Scholar 429 on a zero-found seed shows the plan sentence', () => {
+  setup(withNode({
+    id: 'X', title: 'Refused seed', level: 0, decision: null, snowballed: [], paths: 1,
+    zero_found_error: "Client error '429 Too Many Requests' for url 'https://api.semanticscholar.org/graph/v1/paper/x/citations'",
+  }))
+  expect(screen.getAllByText('Semantic Scholar refused: add a free key in Settings → Paper sources.').length).toBe(2)
+})
+
+test('a seed that ran cleanly and found nothing still shows 0 found, with no error text', () => {
+  setup(withNode({ id: 'X', title: 'Quiet seed', level: 0, decision: null, snowballed: ['cites'], paths: 1, zero_found_error: '' }))
+  const box = screen.getByRole('button', { name: /^Quiet seed/ })
+  expect(within(box).getByText('0 found')).toBeTruthy()
+  expect(box.querySelectorAll('span.truncate')).toHaveLength(1) // only the title
+})
+
+test('a search root says how many excluded hits the cap left off', () => {
+  setup({ ...data, roots: [{ ...data.roots[0], excluded_hidden: 1200 }] })
+  expect(screen.getByText('18,308 hits · 12 on the tree · 1200 excluded hidden')).toBeTruthy()
+})
+
+test('the deepest level says saturated, and that wins over done', () => {
+  const levels = data.levels.map((l) => (l.level === 1 ? { ...l, done: true, saturated: true } : l))
+  setup({ ...data, levels })
+  expect(screen.getByText(/^Level 1 · .* · saturated$/)).toBeTruthy()
+  expect(screen.queryByText(/ · done$/)).toBeNull()
+})
+
+test('boxes are in the DOM parent before child, roots to leaves', () => {
+  setup()
+  const names = screen.getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? '').filter((n) => /level|search/.test(n))
+  const at = (prefix: string) => names.findIndex((n) => n.startsWith(prefix))
+  expect(at('transformers')).toBeLessThan(at('Seed paper'))
+  expect(at('Seed paper')).toBeLessThan(at('Excluded one'))
+  expect(at('Seed paper')).toBeLessThan(at('Included child'))
+})
+
+test('selecting a box moves focus to the side panel heading', () => {
+  setup()
+  fireEvent.click(screen.getByRole('button', { name: 'Included child, level 1, included' }))
+  const heading = within(screen.getByRole('complementary')).getByRole('heading', { name: 'Included child' })
+  expect(document.activeElement).toBe(heading)
+})
+
+test('folding away the selected box clears the selection', () => {
+  setup()
+  fireEvent.click(screen.getByRole('button', { name: 'Included child, level 1, included' }))
+  expect(screen.getByRole('complementary')).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: 'Fold Seed paper' }))
+  expect(screen.queryByRole('complementary')).toBeNull()
+})
+
+test('the Run filter lists the snowball runs too, by their query text', async () => {
+  setup()
+  await waitFor(() => expect(within(screen.getByLabelText('Run')).getAllByRole('option').map((o) => o.textContent)).toEqual(['All', 'transformers', 'Snowball: Seed paper']))
+})
+
+test('a failed Find citing & cited papers shows its error in an alert', async () => {
+  setup()
+  vi.spyOn(api, 'snowball').mockRejectedValue(new Error('Semantic Scholar is switched off'))
+  fireEvent.click(screen.getByRole('button', { name: 'Included child, level 1, included' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Find citing & cited papers' }))
+  expect((await screen.findByRole('alert')).textContent).toBe('Semantic Scholar is switched off')
+})
+
+test('the branch mark tooltip uses the direction words', () => {
+  setup(branched)
+  const mark = screen.getByRole('button', { name: /^Going on/ }).querySelector('[data-branch="go_further"]')
+  expect(mark?.getAttribute('title')).toBe('Go further: Its references')
 })

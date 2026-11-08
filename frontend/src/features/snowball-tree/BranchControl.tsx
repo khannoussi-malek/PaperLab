@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { BranchIn, ProvBranch } from '@/api/client'
 import { useSetBranch } from '@/api/queries'
 import { Button } from '@/components/ui/button'
@@ -13,16 +13,20 @@ export function BranchControl({ workspaceId, target, branch }: { workspaceId: st
   const [state, setState] = useState<string | null>(branch?.state ?? null)
   const [directions, setDirections] = useState<string[]>(branch?.state === 'go_further' ? branch.directions : BOTH)
   const [reason, setReason] = useState(branch?.reason ?? '')
-  const fromServer = () => {
+  const typing = useRef(false) // unsaved text in the reason field survives a refetch
+  const fromServer = (keepReason = false) => {
     setState(branch?.state ?? null)
     setDirections(branch?.state === 'go_further' ? branch.directions : BOTH)
-    setReason(branch?.reason ?? '')
+    if (!keepReason) setReason(branch?.reason ?? '')
   }
-  useEffect(fromServer, [branch?.state, branch?.directions, branch?.reason]) // eslint-disable-line react-hooks/exhaustive-deps
+  const serverDirections = branch?.directions.join(',')
+  useEffect(() => fromServer(typing.current), [branch?.state, serverDirections, branch?.reason]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // A failed save puts the buttons back to what the server holds.
-  const save = (body: Pick<BranchIn, 'state' | 'directions' | 'reason'>) =>
-    set.mutate({ ...target, ...body }, { onError: fromServer })
+  const save = (body: Pick<BranchIn, 'state' | 'directions' | 'reason'>) => {
+    typing.current = false
+    set.mutate({ ...target, ...body }, { onError: () => fromServer() })
+  }
   const goFurther = (next: string[]) => {
     setDirections(next)
     save({ state: 'go_further', directions: next, reason: null })
@@ -32,6 +36,7 @@ export function BranchControl({ workspaceId, target, branch }: { workspaceId: st
     if (next.length) goFurther(next)
   }
   const choose = (next: string | null) => {
+    if (next === state) return // no click on the active state saves, so a screening default stays a default
     setState(next)
     if (next === 'go_further') goFurther(directions)
     else save({ state: next, directions: [], reason: null })
@@ -65,7 +70,7 @@ export function BranchControl({ workspaceId, target, branch }: { workspaceId: st
               maxLength={200}
               value={reason}
               placeholder="e.g. too general"
-              onChange={(e) => setReason(e.target.value)}
+              onChange={(e) => { typing.current = true; setReason(e.target.value) }}
               onBlur={() => save({ state: 'stopped', directions: [], reason: reason.trim() || null })}
             />
           </label>

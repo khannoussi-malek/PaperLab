@@ -790,6 +790,7 @@ function patchMatchingHits(
   })
   client.invalidateQueries({ queryKey: keys.prismaRoot(workspaceId) })
   client.invalidateQueries({ queryKey: keys.readingQueueRoot(workspaceId) })
+  client.invalidateQueries({ queryKey: keys.snowballNext(workspaceId) }) // a decision changes the branch default
 }
 
 function patchHitFields(client: QueryClient, workspaceId: string, hitId: string, fields: Partial<Hit>) {
@@ -848,6 +849,7 @@ export function useAcceptSuggestions(workspaceId: string) {
         client.invalidateQueries({ queryKey: keys.rankedHits(workspaceId) }),
         client.invalidateQueries({ queryKey: keys.prismaRoot(workspaceId) }),
         client.invalidateQueries({ queryKey: keys.readingQueueRoot(workspaceId) }),
+        client.invalidateQueries({ queryKey: keys.snowballNext(workspaceId) }),
       ]),
   })
 }
@@ -1005,6 +1007,7 @@ export function useSnowball(workspaceId: string) {
       const work = [
         client.invalidateQueries({ queryKey: keys.prismaRoot(workspaceId) }),
         client.invalidateQueries({ queryKey: keys.readingQueueRoot(workspaceId) }),
+        client.invalidateQueries({ queryKey: keys.snowballNext(workspaceId) }),
       ]
       if (result.new_hits > 0) {
         work.push(client.resetQueries({ queryKey: keys.searchHits(workspaceId, 'all', 'all'), exact: true }))

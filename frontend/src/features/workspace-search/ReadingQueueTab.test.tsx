@@ -25,7 +25,7 @@ const row = {
 // default pick whenever no `runId` prop and no manual selection point elsewhere. The funnel counts are irrelevant
 // here (ReadingQueueTab only reads `.runs`) but PrismaExportOut requires them.
 const runsData: PrismaExportOut = {
-  identified: 0, sources_searched: [], sources_not_searched: [], citation_searching: [],
+  identified: 0, sources_searched: [], sources_not_searched: [], citation_searching: [], identified_databases: 0,
   duplicates_removed: 0,
   stage1_screened: 0,
   stage1_excluded: 0,

@@ -76,3 +76,23 @@ test('the direction labels are Its references and Papers citing it', () => {
   expect(screen.getByLabelText('Its references')).toBeTruthy()
   expect(screen.getByLabelText('Papers citing it')).toBeTruthy()
 })
+
+test('clicking the state that is already active saves nothing', () => {
+  const setBranch = setup({ state: 'go_further', directions: ['cites', 'cited_by'], reason: null })
+  fireEvent.click(screen.getByRole('button', { name: 'Go further' }))
+  expect(setBranch).not.toHaveBeenCalled()
+})
+
+test('a refetch with an equal branch (new array identity) or new server text does not wipe a reason being typed', () => {
+  vi.spyOn(api, 'setBranch').mockResolvedValue({} as any)
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const view = (branch: { state: string; directions: string[]; reason: string | null }) => (
+    <QueryClientProvider client={client}><BranchControl workspaceId="w1" target={{ hit_id: 'h1' }} branch={branch} /></QueryClientProvider>
+  )
+  const { rerender } = render(view({ state: 'stopped', directions: [], reason: 'old' }))
+  fireEvent.change(screen.getByLabelText('Reason'), { target: { value: 'half typed' } })
+  rerender(view({ state: 'stopped', directions: [], reason: 'old' }))
+  expect((screen.getByLabelText('Reason') as HTMLInputElement).value).toBe('half typed')
+  rerender(view({ state: 'stopped', directions: [], reason: 'changed elsewhere' }))
+  expect((screen.getByLabelText('Reason') as HTMLInputElement).value).toBe('half typed')
+})

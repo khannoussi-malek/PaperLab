@@ -55,13 +55,16 @@ export const REASON_FIELD: Partial<Record<StageKey, 'stage1_excluded_by_reason' 
 
 export const OTHER_METHODS = 'Identified via other methods'
 
+/** The count shown for a stage: the Identified box counts database searching only (snowball hits are listed below it). */
+export const stageCount = (data: PrismaExportOut, key: StageKey): number =>
+  key === 'identified' ? data.identified_databases : data[key]
 
 function boxes(data: PrismaExportOut) {
   const main = PHASES.flatMap(([phase, , rows]) =>
     rows.map(([key, label]) => {
       const field = REASON_FIELD[key]
       const reasons = Object.entries(field ? data[field] : {}).map(([r, n]) => `${reasonLabel(r)}: ${n}`)
-      return { phase, label, id: label, count: data[key], reasons }
+      return { phase, label, id: label, count: stageCount(data, key), reasons }
     }),
   )
   const citations = data.citation_searching.map((c) => ({

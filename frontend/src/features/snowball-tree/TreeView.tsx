@@ -1,6 +1,7 @@
-import { memo, useMemo, useRef, useState } from 'react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowRight } from 'lucide-react'
 import type { LevelStats, ProvenanceOut, ProvNode } from '@/api/client'
+import { friendlySnowballError } from '@/features/workspace-search/snowballText'
 import { cn } from '@/lib/utils'
 import { BOX_H, BOX_W, COL, PARENT_NOT_RECORDED, isUnknown, tidyLayout, type Box, type Layout } from './layout'
 import { decisionWord, levelHeader } from './levelText'
@@ -8,7 +9,7 @@ import { decisionWord, levelHeader } from './levelText'
 type Props = {
   data: ProvenanceOut
   selected: string | null
-  onSelect: (id: string) => void
+  onSelect: (id: string | null) => void
   folded: Set<string>
   onToggleFold: (id: string) => void
   hidden?: Set<string>
@@ -35,7 +36,7 @@ const BRANCH_WORD: Record<string, string> = { go_further: 'go further', stopped:
 /** Open arrow = go further (directions on hover), bar = stopped (reason on hover). */
 function BranchMark({ branch }: { branch: NonNullable<ProvNode['branch']> }) {
   if (branch.state === 'go_further') {
-    const dirs = branch.directions.map((d) => (d === 'cites' ? 'it cites' : 'cited by')).join(', ')
+    const dirs = branch.directions.map((d) => (d === 'cites' ? 'Its references' : 'Papers citing it')).join(', ')
     return <span aria-hidden data-branch="go_further" title={`Go further: ${dirs}`} className="shrink-0 text-included"><ArrowRight className="size-3" /></span>
   }
   return <span aria-hidden data-branch="stopped" title={branch.reason ? `Stopped: ${branch.reason}` : 'Stopped'} className="h-3 w-0.5 shrink-0 rounded bg-destructive" />
@@ -72,11 +73,17 @@ function BoxButton({ box, selected, busy, onSelect }: { box: Box; selected: bool
         {box.foldedMatches > 0 && <span className="shrink-0 text-[10px] text-muted-foreground">{box.foldedMatches} hidden</span>}
         {box.extraPaths > 0 && <span className="shrink-0 text-[10px] text-muted-foreground">+{box.extraPaths} other paths</span>}
       </span>
-      {root && <span className="truncate text-[10px] text-muted-foreground">{root.hit_count.toLocaleString('en')} hits · {root.on_tree} on the tree</span>}
+      {root && (
+        <span className="truncate text-[10px] text-muted-foreground">
+          {root.hit_count.toLocaleString('en')} hits · {root.on_tree} on the tree{root.excluded_hidden > 0 && ` · ${root.excluded_hidden} excluded hidden`}
+        </span>
+      )}
       {node?.zero_found_error != null && (
         <span className="flex gap-1 text-[10px] text-muted-foreground">
           <span className="shrink-0">0 found</span>
-          <span className="truncate" title={node.zero_found_error}>{node.zero_found_error}</span>
+          {node.zero_found_error !== '' && (
+            <span className="truncate" title={friendlySnowballError(node.zero_found_error)}>{friendlySnowballError(node.zero_found_error)}</span>
+          )}
         </span>
       )}
     </button>
@@ -170,6 +177,10 @@ export function TreeView({ data, selected, onSelect, folded, onToggleFold, hidde
     () => tidyLayout(data.nodes, data.links, data.roots, folded, hidden),
     [data, folded, hidden],
   )
+  // A selected box that is no longer drawn (a refetch dropped it, or a fold hides it) is deselected.
+  useEffect(() => {
+    if (selected && !layout.boxes.some((b) => b.id === selected)) onSelect(null)
+  }, [layout, selected, onSelect])
   const parents = useMemo(() => new Set(data.links.map((l) => l.parent)), [data.links])
   const [view, setView] = useState({ x: 16, y: 8, k: 1 })
   const drag = useRef<{ x: number; y: number } | null>(null)

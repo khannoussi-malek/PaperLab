@@ -101,16 +101,18 @@ export function tidyLayout(
   let leaf = 0
   const place = (id: string, col: number): number => {
     const kids = folded.has(id) ? [] : (children.get(id) ?? []).filter((c) => keep.get(c))
+    const slot = boxes.length // a box goes in before its children, so DOM and tab order run roots -> leaves
+    boxes.push(undefined as unknown as Box)
     const ys = kids.map((k) => place(k, (byId.get(k)?.level ?? col) + 1))
     const y = ys.length ? (ys[0] + ys[ys.length - 1]) / 2 : leaf++ * ROW
     const node = byId.get(id) ?? null
     const root = roots.find((r) => r.id === id) ?? null
-    boxes.push({
+    boxes[slot] = {
       id, x: col * COL, y, node, root,
       faded: node ? hidden.has(id) : hidden.size > 0 && (matches.get(id) ?? 0) === 0,
       extraPaths: node && !isUnknown(id) ? Math.max(0, (incoming.get(id) ?? 1) - 1) : 0,
       foldedMatches: folded.has(id) && hidden.size > 0 ? (matches.get(id) ?? 0) : 0,
-    })
+    }
     kids.forEach((k) => {
       const l = primary.get(k)!
       edges.push({ from: id, to: k, kind: l.kind, dashed: l.kind === 'cited_by' })

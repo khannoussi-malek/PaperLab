@@ -8,7 +8,7 @@ const data: PrismaExportOut = {
   sought: 58, not_retrieved: 6, stage2_assessed: 52, stage2_excluded: 14,
   stage2_excluded_by_reason: { 'wrong population': 14 },
   included: 38, runs: [], automation: [], notes: [], screening_criteria: null,
-citation_searching: [],
+citation_searching: [], identified_databases: 120,
 }
 
 // Tiny RFC 4180 parser: quoted fields, doubled quotes, newlines inside quotes.
@@ -70,4 +70,11 @@ test('prismaCsv and prismaText carry citation searching per level', () => {
   expect(csv).toContain('"Identified via other methods","citation_searching_L2","2","0 relevant"')
   expect(prismaText(withSnowball, 'All')).toContain('Citation searching, level 2: 2 (0 relevant)')
   expect(prismaCsv(data, 'All')).not.toContain('citation_searching')
+})
+
+test('the Identified row counts database searching only, so snowball hits are not counted twice', () => {
+  const split = { ...data, identified: 120, identified_databases: 115, citation_searching: [{ level: 1, identified: 5, relevant: 1 }] }
+  expect(prismaCsv(split, 'All')).toContain('"Identified","115"')
+  expect(prismaText(split, 'All')).toContain('Identified: 115')
+  expect(115 + split.citation_searching[0].identified).toBe(split.identified)
 })
