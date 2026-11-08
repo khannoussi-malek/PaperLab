@@ -59,6 +59,23 @@ class PrescreenCounts(BaseModel):
     not_asked: int = 0
 
 
+class SnowballSeed(BaseModel):
+    id: str
+    kind: Literal["hit", "paper"]
+    title: str
+    found: dict[str, int]
+    new: dict[str, int]
+    skipped: str | None = None
+    error: str | None = None
+
+
+class SnowballStats(BaseModel):
+    """What a snowball run did, per seed (stats_json["snowball"])."""
+
+    seeds: list[SnowballSeed]
+    directions: list[str]
+
+
 class RunReport(BaseModel):
     """The same fields on get_search_run and list_search_runs. `outcome`: running, complete (every source ran dry) or
     partial (see `source_results`). `status` stays as it was: `exhausted` only means the job ended."""
@@ -70,6 +87,7 @@ class RunReport(BaseModel):
     outcome: str = "running"
     warnings: list[SourceWarning] = []
     prescreen: PrescreenCounts = PrescreenCounts()
+    snowball: SnowballStats | None = None
 
 
 class SearchRunOut(RunReport):

@@ -6,6 +6,7 @@ import httpx
 import pytest
 from sqlalchemy import select
 
+from app.api.deps import get_discovery
 from app.core import discovery, workspaces
 from app.core.candidates import normal_title
 from app.core.hit_links import level_of
@@ -27,6 +28,12 @@ async def fake_providers():
     providers = discovery.build_providers(every_source, discovery_fake.transport())
     yield providers
     await providers.aclose()
+
+
+@pytest.fixture
+async def fake_providers_all(app, fake_providers):
+    app.dependency_overrides[get_discovery] = lambda: fake_providers
+    yield fake_providers
 
 
 @pytest.fixture
@@ -248,3 +255,125 @@ async def test_level_of_terminates_on_a_dense_cyclic_graph(session):
 
     assert await level_of(session, root.id) == 0
     assert [await level_of(session, hit.id) for hit in others] == [1] * 5
+
+
+def _s2_with(handle):
+    return semantic_scholar.new_client(api_key=None, transport=httpx.MockTransport(handle))
+
+
+async def _stats_of(session, workspace_id):
+    run = (
+        await session.execute(
+            select(WorkspaceSearchRun)
+            .where(WorkspaceSearchRun.workspace_id == workspace_id, WorkspaceSearchRun.query_text.like("Snowball%"))
+            .order_by(WorkspaceSearchRun.started_at.desc())
+        )
+    ).scalars().first()
+    return run, run.stats_json["snowball"]
+
+
+async def test_snowball_run_records_seed_stats(session, edge_providers):
+    workspace, run = await _workspace_and_run(session)
+    seed = await _seed_hit(session, workspace, run, title="Seed Alpha")
+
+    await snowball(session, edge_providers, workspace.id, [], [seed.id], backward=True, forward=False)
+
+    snow_run, stats = await _stats_of(session, workspace.id)
+    assert snow_run.query_text == 'Snowball from "Seed Alpha"'
+    assert stats["directions"] == ["cites"]
+    entry = stats["seeds"][0]
+    assert (entry["id"], entry["kind"], entry["title"]) == (str(seed.id), "hit", "Seed Alpha")
+    assert entry["found"] == {"cites": 1, "cited_by": 0}
+    assert entry["new"] == {"cites": 1, "cited_by": 0}
+    assert entry["skipped"] is None and entry["error"] is None
+
+
+async def test_snowball_query_text_counts_extra_seeds(session, edge_providers):
+    workspace, run = await _workspace_and_run(session)
+    a = await _seed_hit(session, workspace, run, title="Seed A")
+    b = await _seed_hit(session, workspace, run, title="Seed B")
+
+    await snowball(session, edge_providers, workspace.id, [], [a.id, b.id], backward=True, forward=True)
+
+    snow_run, stats = await _stats_of(session, workspace.id)
+    assert snow_run.query_text == 'Snowball from "Seed A" and 1 more'
+    assert stats["directions"] == ["cites", "cited_by"]
+
+
+async def test_zero_result_snowball_records_seed_and_error(session, fake_providers):
+    def handle(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith(("/references", "/citations")):
+            return httpx.Response(429)
+        return discovery_fake._handle(request)
+
+    client = _s2_with(handle)
+    providers = replace(fake_providers, clients={**fake_providers.clients, "semantic_scholar": client})
+    workspace, run = await _workspace_and_run(session)
+    seed = await _seed_hit(session, workspace, run, title="Rate limited seed")
+
+    try:
+        result = await snowball(session, providers, workspace.id, [], [seed.id], backward=True, forward=True)
+    finally:
+        await client.aclose()
+
+    assert result.new_hits == 0
+    _, stats = await _stats_of(session, workspace.id)
+    entry = stats["seeds"][0]
+    assert entry["title"] == "Rate limited seed"
+    assert entry["found"] == {"cites": 0, "cited_by": 0}
+    assert entry["error"]
+
+
+async def test_skipped_seed_records_reason(session, fake_providers):
+    def handle(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith(("/references", "/citations")):
+            return httpx.Response(404)
+        return discovery_fake._handle(request)
+
+    client = _s2_with(handle)
+    providers = replace(fake_providers, clients={**fake_providers.clients, "semantic_scholar": client})
+    workspace, run = await _workspace_and_run(session)
+    seed = await _seed_hit(session, workspace, run, title="Unknown seed")
+
+    try:
+        await snowball(session, providers, workspace.id, [], [seed.id], backward=True, forward=False)
+    finally:
+        await client.aclose()
+
+    _, stats = await _stats_of(session, workspace.id)
+    assert stats["seeds"][0]["skipped"] == "not found in Semantic Scholar"
+
+
+async def test_runs_list_exposes_snowball_stats(session, client, fake_providers_all):
+    ws = await client.post("/api/workspaces", json={"name": f"Snowball stats list {uuid.uuid4().hex[:8]}"})
+    workspace_id = uuid.UUID(ws.json()["id"])
+    free_title, free_doi, _ = discovery_fake.PAPERS[0]
+    prior = WorkspaceSearchRun(
+        workspace_id=workspace_id, query_text="prior", filters_json={}, query_overrides_json={},
+        sources_json=["arxiv"], status="exhausted", started_at=datetime.now(timezone.utc), stats_json={},
+    )
+    session.add(prior)
+    await session.flush()
+    ref = ExternalRef(title=free_title, doi=free_doi)
+    session.add(ref)
+    await session.flush()
+    hit = WorkspaceSearchHit(
+        workspace_id=workspace_id, run_id=prior.id, external_ref_id=ref.id, source_method="database_search",
+        normalized_title=normal_title(free_title), first_seen_at=datetime.now(timezone.utc),
+    )
+    session.add(hit)
+    await session.commit()
+
+    resp = await client.post(
+        f"/api/workspaces/{workspace_id}/search/snowball",
+        json={"seed_hit_ids": [str(hit.id)], "backward": True, "forward": False},
+    )
+    assert resp.status_code == 200
+
+    runs = (await client.get(f"/api/workspaces/{workspace_id}/search/runs")).json()
+    by_query = {r["query_text"]: r for r in runs}
+    assert by_query["prior"]["snowball"] is None
+    snow = by_query[f'Snowball from "{free_title}"']["snowball"]
+    assert snow["seeds"][0]["title"] == free_title
+    assert snow["seeds"][0]["found"]["cites"] > 0
+    assert snow["directions"] == ["cites"]
