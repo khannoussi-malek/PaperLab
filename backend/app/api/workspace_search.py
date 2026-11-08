@@ -4,8 +4,9 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, File, Query, Request, UploadFile
 
 from app.api.deps import DiscoveryDep, SessionDep
-from app.core import branches, screening, workspace_search
+from app.core import branches, screening, snowball_next, workspace_search
 from app.core.errors import InvalidInput
+from app.core.hit_links import paths_to, provenance
 from app.core.pipeline import MAX_UPLOAD_PDF_BYTES
 from app.core.prisma_export import prisma_export
 from app.core.queue import INGEST_QUEUE
@@ -16,6 +17,7 @@ from app.schemas.workspace_search import (
     AcquisitionStatus,
     BranchIn,
     BranchOut,
+    NextItem,
     BulkHitReviewUpdate,
     BulkUpdateOut,
     ClearHitsOut,
@@ -25,12 +27,15 @@ from app.schemas.workspace_search import (
     ImportHitsOut,
     ImportHitsRequest,
     PrismaExportOut,
+    ProvenanceOut,
+    ProvLink,
     RankedHitsOut,
     ScreeningCriteriaUpdate,
     ScreeningStateOut,
     SearchRunCreate,
     SearchRunOut,
     SearchRunSummary,
+    SnowballNextOut,
     SnowballOut,
     SnowballRequest,
     Stage1Status,
@@ -191,6 +196,11 @@ async def patch_hit(
     return await workspace_search.review_hit(session, hit_id, workspace_id, payload)
 
 
+@router.get("/hits/{hit_id}")
+async def get_hit_route(workspace_id: uuid.UUID, hit_id: uuid.UUID, session: SessionDep) -> HitOut:
+    return await workspace_search.get_hit(session, hit_id, workspace_id)
+
+
 @router.post("/hits/import")
 async def import_hits(
     workspace_id: uuid.UUID, payload: ImportHitsRequest, session: SessionDep, providers: DiscoveryDep, request: Request
@@ -228,6 +238,16 @@ async def snowball_route(
     return SnowballOut(new_hits=result.new_hits, skipped_seeds=result.skipped_seeds, errors=result.errors)
 
 
+@router.get("/snowball-next")
+async def snowball_next_route(workspace_id: uuid.UUID, session: SessionDep) -> list[NextItem]:
+    return await snowball_next.snowball_next(session, workspace_id)
+
+
+@router.post("/snowball-next/run")
+async def run_snowball_next_route(workspace_id: uuid.UUID, session: SessionDep, providers: DiscoveryDep) -> SnowballNextOut:
+    return await snowball_next.run_snowball_next(session, providers, workspace_id)
+
+
 @router.put("/branch")
 async def set_branch_route(workspace_id: uuid.UUID, payload: BranchIn, session: SessionDep) -> BranchOut:
     return await branches.set_branch(
@@ -246,3 +266,15 @@ async def prisma_export_route(workspace_id: uuid.UUID, session: SessionDep, runs
             raise InvalidInput(f"invalid runs value: {runs!r}") from exc
     export = await prisma_export(session, workspace_id, run_id)
     return export
+
+
+@router.get("/provenance")
+async def provenance_route(
+    workspace_id: uuid.UUID, session: SessionDep, all_hits_run: uuid.UUID | None = None
+) -> ProvenanceOut:
+    return await provenance(session, workspace_id, all_hits_run_id=all_hits_run)
+
+
+@router.get("/hits/{hit_id}/paths")
+async def hit_paths_route(workspace_id: uuid.UUID, hit_id: uuid.UUID, session: SessionDep) -> list[list[ProvLink]]:
+    return await paths_to(session, workspace_id, hit_id)

@@ -28,6 +28,7 @@ import {
   usePapersFollowCompile,
   useWorkspaceMutations,
   useSnowball,
+  usePatchSearchHit,
   useUploadHitPdf,
 } from './queries'
 
@@ -43,6 +44,19 @@ function withQueryClient(client: QueryClient) {
 const paper = (status: string) => ({ status }) as Paper
 const run = (status: string) => ({ status }) as SearchRun
 const hit = (paperId: string | null, runId: string) => ({ paper_id: paperId, run_id: runId }) as Hit
+
+describe('snowball next staleness', () => {
+  it('reviewing a hit refreshes the Snowball next list only, not the whole search family', async () => {
+    vi.spyOn(api, 'patchSearchHit').mockResolvedValue({ id: 'h1', stage1_status: 'relevant' } as Hit)
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const spy = vi.spyOn(client, 'invalidateQueries')
+    const { result } = renderHook(() => usePatchSearchHit('ws-1'), { wrapper: withQueryClient(client) })
+    result.current.mutate({ hitId: 'h1', body: { stage1_status: 'relevant' } })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['workspaces', 'ws-1', 'search', 'snowball-next'] })
+    expect(spy).not.toHaveBeenCalledWith({ queryKey: ['workspaces', 'ws-1', 'search'] })
+  })
+})
 
 describe('papersPollInterval', () => {
   it('polls while any paper is still ingesting', () => {
@@ -144,9 +158,10 @@ describe('prisma cache invalidation', () => {
     result.current.mutate({ seed_paper_ids: ['p1'], backward: true, forward: true })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
 
-    expect(invalidateSpy).toHaveBeenCalledTimes(2)
+    expect(invalidateSpy).toHaveBeenCalledTimes(3)
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: prismaRootKey('ws-1') })
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: readingQueueRootKey('ws-1') })
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['workspaces', 'ws-1', 'search', 'snowball-next'] })
   })
 
   // Task 3: snowballed hits were invisible in the Search tab until an unrelated refetch or a full page reload —

@@ -27,6 +27,12 @@ PAPERS = [
     (LANDING_TITLE, f"{DOI_PREFIX}landing", f"{PDF_HOST}/page.html"),
     (CLOSED_TITLE, f"{DOI_PREFIX}closed", None),
 ]
+SECOND_HOP_TITLE = (
+    "PaperLab Second Hop Fixture"  # cites only the closed paper, so it is two hops from a pagination seed
+)
+SECOND_HOP_DOI = f"{DOI_PREFIX}hop2"
+THIRD_HOP_TITLE = "PaperLab Third Hop Fixture"  # cited by the second-hop paper only
+THIRD_HOP_DOI = f"{DOI_PREFIX}hop3"
 _BODY = "Finding papers starts from a title or an identifier. " * 12
 
 
@@ -487,8 +493,14 @@ def _openalex_handle(request: httpx.Request) -> httpx.Response:
 def _s2_handle(request: httpx.Request) -> httpx.Response:
     s2_papers = [_s2_paper(i, *paper) for i, paper in enumerate(PAPERS)]
     path = request.url.path
+    if path.endswith("/references") and SECOND_HOP_DOI in path:  # a third hop, for the snowball tree's E2E
+        third = _s2_paper(51, THIRD_HOP_TITLE, THIRD_HOP_DOI, None)
+        return httpx.Response(200, json={"offset": 0, "data": [{"citedPaper": third}]})
     if path.endswith("/references"):
         return httpx.Response(200, json={"offset": 0, "data": [{"citedPaper": p} for p in s2_papers]})
+    if path.endswith("/citations") and f"{DOI_PREFIX}closed" in path:  # a second hop, for the snowball tree's E2E
+        second = _s2_paper(50, SECOND_HOP_TITLE, SECOND_HOP_DOI, None)
+        return httpx.Response(200, json={"offset": 0, "data": [{"citingPaper": s2_papers[0]}, {"citingPaper": second}]})
     if path.endswith("/citations"):
         return httpx.Response(200, json={"offset": 0, "data": [{"citingPaper": s2_papers[0]}]})
     if path.startswith("/recommendations/"):

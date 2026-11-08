@@ -24,6 +24,7 @@ const combinedData: PrismaExportOut = {
   automation: [],
   screening_criteria: null,
   notes: [],
+  citation_searching: [], identified_databases: 120,
 }
 
 // Per-run export, mirroring the real backend (workspace_search.py:784): `runs` is always [] on this branch,
@@ -296,4 +297,24 @@ test('Download CSV offers a csv file', async () => {
   vi.useRealTimers()
   // Blob.text() strips the BOM on decode, so check the raw bytes.
   expect([...new Uint8Array(await blob.arrayBuffer()).slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf])
+})
+
+test('shows citation searching per level under Identified via other methods', () => {
+  vi.spyOn(queries, 'usePrismaExport').mockImplementation(
+    () => ({ data: { ...combinedData, citation_searching: [{ level: 1, identified: 3, relevant: 1 }, { level: 2, identified: 2, relevant: 0 }] } }) as ReturnType<typeof queries.usePrismaExport>,
+  )
+  render(<PrismaTab workspaceId="ws-1" />)
+  expect(screen.getByText('Identified via other methods')).toBeInTheDocument()
+  expect(screen.getByText('Citation searching, level 1')).toBeInTheDocument()
+  expect(screen.getByText('3 found, 1 relevant')).toBeInTheDocument()
+  expect(screen.getByText('2 found, 0 relevant')).toBeInTheDocument()
+})
+
+test('the Identified box shows the database count, not the total with snowball hits', () => {
+  vi.spyOn(queries, 'usePrismaExport').mockImplementation(
+    () => ({ data: { ...combinedData, identified: 120, identified_databases: 115, citation_searching: [{ level: 1, identified: 5, relevant: 1 }] } }) as ReturnType<typeof queries.usePrismaExport>,
+  )
+  render(<PrismaTab workspaceId="ws-1" />)
+  expect(screen.getByText('Identified').closest('div')).toHaveTextContent('115')
+  expect(screen.getByText('5 found, 1 relevant')).toBeInTheDocument()
 })

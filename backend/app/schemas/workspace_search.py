@@ -318,6 +318,10 @@ class SnowballOut(BaseModel):
     errors: dict[str, str]
 
 
+class SnowballNextOut(SnowballOut):
+    remaining: int  # go-further items still listed after this batch
+
+
 class EligibilityUpdate(BaseModel):
     status: Literal["include", "exclude"]
     # Free-text, unlike stage1's CHECK'd ExcludeReason enum — SearchRunEligibility.stage2_exclude_reason is a
@@ -333,6 +337,12 @@ class EligibilityOut(BaseModel):
     stage2_status: str | None
     stage2_exclude_reason: str | None
     assessed_at: datetime | None
+
+
+class CitationSearchingLevel(BaseModel):
+    level: int
+    identified: int
+    relevant: int
 
 
 class PrismaExportOut(BaseModel):
@@ -353,6 +363,8 @@ class PrismaExportOut(BaseModel):
     automation: list[str] = []
     notes: list[str] = []
     screening_criteria: str | None = None
+    citation_searching: list[CitationSearchingLevel] = []
+    identified_databases: int = 0  # `identified` minus the snowball hits counted under citation_searching
 
 
 class BranchIn(BaseModel):
@@ -370,3 +382,68 @@ class BranchOut(BaseModel):
     state: str | None
     directions: list[str]
     reason: str | None
+
+
+class NextItem(BaseModel):
+    """One go_further branch with directions not yet snowballed. Exactly one of hit_id and paper_id is set."""
+
+    hit_id: uuid.UUID | None = None
+    paper_id: uuid.UUID | None = None
+    title: str
+    directions_left: list[str]
+
+
+class ProvBranch(BaseModel):
+    state: str
+    directions: list[str]
+    reason: str | None
+
+
+class ProvNode(BaseModel):
+    id: str  # hit id, "paper:<id>" for a hand-added paper, or "run:<id>:unknown"
+    title: str
+    year: int | None = None
+    level: int
+    decision: str | None = None
+    suggestion: str | None = None
+    relevance: int | None = None
+    paper_id: uuid.UUID | None = None
+    branch: ProvBranch | None = None
+    snowballed: list[str] = []  # directions already run from this node
+    paths: int = 0  # incoming links
+    zero_found_error: str | None = None
+
+
+class ProvLink(BaseModel):
+    parent: str  # a node id, or "root:<run_id>" / "root:hand"
+    child: str
+    kind: str
+    run_id: uuid.UUID | None = None
+    created_at: datetime | None = None
+
+
+class ProvRoot(BaseModel):
+    id: str
+    label: str
+    hit_count: int
+    on_tree: int
+    excluded_hidden: int = 0  # excluded hits of this search left off the tree by the cap
+
+
+class LevelStats(BaseModel):
+    level: int
+    found: int
+    already_known: int
+    included: int
+    go_further: int
+    stopped: int
+    done: bool
+    saturated: bool
+
+
+class ProvenanceOut(BaseModel):
+    nodes: list[ProvNode]
+    links: list[ProvLink]
+    roots: list[ProvRoot]
+    levels: list[LevelStats]
+    truncated: bool = False

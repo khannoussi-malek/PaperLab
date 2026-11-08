@@ -11,6 +11,7 @@ const hits = vi.hoisted(() => ({
   byKey: {} as Record<string, { rows: { stage2_status?: string | null }[]; more?: boolean }>,
 }))
 vi.mock('@/api/queries', () => ({
+  useSnowballNext: () => ({ data: [{}, {}, {}] }),
   useWorkspace: () => ({ data: { name: 'W', ...counts }, error: null }),
   useSearchHits: (_w: string, stage1?: string, acq?: string) => {
     const entry = hits.byKey[`${stage1 ?? ''}/${acq ?? ''}`] ?? { rows: [] }
@@ -28,6 +29,7 @@ vi.mock('@/features/workspace-search/ManualAcquisitionTab', () => ({ ManualAcqui
 vi.mock('@/features/workspace-search/PrismaTab', () => ({ PrismaTab: () => null }))
 vi.mock('@/features/workspace-search/ReadingQueueTab', () => ({ ReadingQueueTab: (props: unknown) => { seen.reading = props; return null } }))
 vi.mock('@/features/workspace-search/ScreeningTab', () => ({ ScreeningTab: () => null }))
+vi.mock('@/features/snowball-tree/SnowballTreeTab', () => ({ SnowballTreeTab: () => null }))
 vi.mock('@/features/workspace-search/SearchTab', () => ({ SearchTab: () => null }))
 vi.mock('../evidence/EvidenceTab', () => ({ EvidenceTab: () => null }))
 vi.mock('../manuscripts/ManuscriptList', () => ({ ManuscriptList: () => null }))
@@ -63,13 +65,14 @@ test('the tabs read as two labelled groups in the new order', () => {
   expect(screen.getByText('Your papers')).toBeTruthy()
   expect(screen.getByText('Systematic review')).toBeTruthy()
   expect(tabNames().map((name) => name.split(',')[0])).toEqual([
-    'Papers', 'Notes', 'Chat', 'Evidence', 'Write', 'Search & screen', 'Get PDFs', 'Full-text review', 'Reading list', 'PRISMA report',
+    'Papers', 'Notes', 'Chat', 'Evidence', 'Write', 'Search & screen', 'Snowball tree', 'Get PDFs', 'Full-text review', 'Reading list', 'PRISMA report',
   ])
   expect(screen.getByRole('tab', { name: /^Search & screen, step 1 of 5/ }).textContent).toContain('1 · Search & screen')
 })
 
 test('step tabs are named for their step', () => {
   page()
+  expect(screen.getByRole('tab', { name: 'Snowball tree, 3 to snowball' })).toBeTruthy()
   expect(screen.getByRole('tab', { name: /^Get PDFs, step 2 of 5/ })).toBeTruthy()
 })
 

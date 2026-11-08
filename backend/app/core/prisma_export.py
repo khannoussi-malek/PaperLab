@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import search_run_results
+from app.core.hit_links import provenance
 from app.core.errors import NotFound
 from app.core.source_registry import NAMES
 from app.core.workspace_search import PER_SOURCE_PASS_LIMIT, get_run
@@ -59,6 +60,21 @@ class PrismaExport:
     sources_not_searched: list[str] = field(default_factory=list)  # failed or off in every run, and returned nothing
     notes: list[str] = field(default_factory=list)  # D266: caveats on the counts (e.g. a partial "identified")
     screening_criteria: str | None = None
+    citation_searching: list[dict] = field(default_factory=list)  # [{level, identified, relevant}], snowball hits
+    identified_databases: int = 0  # `identified` without the snowball hits listed under citation_searching
+
+
+async def citation_searching(session: AsyncSession, workspace_id: uuid.UUID, hits) -> list[dict]:
+    """Snowball-reached hits (tree level >= 1) among `hits`, counted per level, from the tree's own BFS levels."""
+    by_id = {str(h.id): h for h in hits}
+    per_level: dict[int, list] = {}
+    for node in (await provenance(session, workspace_id)).nodes:
+        if node.level >= 1 and node.id in by_id:
+            per_level.setdefault(node.level, []).append(by_id[node.id])
+    return [
+        {"level": level, "identified": len(found), "relevant": sum(1 for h in found if h.stage1_status == "relevant")}
+        for level, found in sorted(per_level.items())
+    ]
 
 
 async def prisma_export(session: AsyncSession, workspace_id: uuid.UUID, run_id: uuid.UUID | None) -> PrismaExport:
@@ -180,12 +196,16 @@ async def prisma_export(session: AsyncSession, workspace_id: uuid.UUID, run_id: 
         notes.append(FAILED_NOTE.format(
             sources=", ".join(NAMES.get(s, s) for s in failed), them="them" if len(failed) > 1 else "it"))
 
+    # Per-run export of a database search: its hits are all level 0, so no provenance walk is needed.
+    cited = [] if run_id is not None and all(h.source_method == "database_search" for h in hits) else (
+        await citation_searching(session, workspace_id, hits))
     return PrismaExport(
-        identified=identified, duplicates_removed=duplicates_removed, stage1_screened=stage1_screened,
+        identified=identified, identified_databases=max(identified - sum(c["identified"] for c in cited), 0), duplicates_removed=duplicates_removed, stage1_screened=stage1_screened,
         stage1_excluded=len(excluded), stage1_excluded_by_reason=stage1_excluded_by_reason,
         sought=sought, not_retrieved=not_retrieved, stage2_assessed=stage2_assessed,
         stage2_excluded=stage2_excluded, stage2_excluded_by_reason=stage2_excluded_by_reason,
         included=included, runs=runs_meta,
         automation=automation, notes=notes, screening_criteria=workspace.screening_criteria,
         sources_searched=sources_searched, sources_not_searched=sources_not_searched,
+        citation_searching=cited,
     )

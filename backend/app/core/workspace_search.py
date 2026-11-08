@@ -925,6 +925,14 @@ async def list_hits(
     return items, _encode_cursor(rows[-1][0].first_seen_at, rows[-1][0].id)
 
 
+async def get_hit(session: AsyncSession, hit_id, workspace_id) -> dict:
+    hit = await session.get(WorkspaceSearchHit, hit_id)
+    if hit is None or hit.workspace_id != workspace_id:
+        raise NotFound(f"hit {hit_id} not found")
+    ref = await session.get(ExternalRef, hit.external_ref_id) if hit.external_ref_id else None
+    return _hit_out_dict(hit, ref)
+
+
 async def review_hit(session: AsyncSession, hit_id, workspace_id, update: "HitReviewUpdate") -> dict:
     """Stage-1 screening update for one hit. Scoped to workspace_id (same ownership rule as get_run/stop_run) so a
     hit_id guessed or leaked from another workspace can't be patched through this route."""

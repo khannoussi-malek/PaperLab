@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { useWorkspace } from '@/api/queries'
+import { useSnowballNext, useWorkspace } from '@/api/queries'
 import { AppShell, shellTitle } from '@/components/AppShell'
 import { glass } from '@/components/glass'
 import { delayedIn, fadeIn } from '@/components/motion'
@@ -10,6 +10,7 @@ import { PrismaTab } from '@/features/workspace-search/PrismaTab'
 import { ReadingQueueTab } from '@/features/workspace-search/ReadingQueueTab'
 import { ScreeningTab } from '@/features/workspace-search/ScreeningTab'
 import { SearchTab } from '@/features/workspace-search/SearchTab'
+import { SnowballTreeTab } from '@/features/snowball-tree/SnowballTreeTab'
 import { EvidenceTab } from '../evidence/EvidenceTab'
 import { ManuscriptList } from '../manuscripts/ManuscriptList'
 import { workspaceHref, type TagMatch, type WorkspaceTab } from '@/lib/route'
@@ -33,6 +34,7 @@ type PageProps = { workspaceId: string; tab: WorkspaceTab; runId: string | null;
 export function WorkspacePage({ workspaceId, tab, runId, tags, match }: PageProps) {
   const workspace = useWorkspace(workspaceId)
   const stepCounts = useStepCounts(workspaceId)
+  const toSnowball = useSnowballNext(workspaceId).data?.length
   // A tab switch is a history entry (assign), so Back returns to the previous tab; tag and run changes replace, so
   // they don't flood history. Carries the current runId along so switching tabs and back (or a reload from another
   // tab) doesn't drop it.
@@ -83,7 +85,7 @@ export function WorkspacePage({ workspaceId, tab, runId, tags, match }: PageProp
       )}
       {workspace.data && (
         <Tabs value={tab} onValueChange={(value) => showTab(value as WorkspaceTab)} className="min-h-0 min-w-0 flex-1 gap-4">
-          <WorkspaceTabBar active={tab} counts={{ ...stepCounts, papers: workspace.data.paper_count, notes: workspace.data.note_count }} />
+          <WorkspaceTabBar active={tab} counts={{ ...stepCounts, tree: toSnowball, papers: workspace.data.paper_count, notes: workspace.data.note_count }} />
           <TabsContent value="papers" forceMount className={panel}>
             <WorkspacePapers workspaceId={workspaceId} tags={tags} match={match} onTagsChange={onTagsChange} />
           </TabsContent>
@@ -110,6 +112,9 @@ export function WorkspacePage({ workspaceId, tab, runId, tags, match }: PageProp
               a minimum height: the virtualizer always has a real viewport. */}
           <TabsContent value="search" forceMount className={cn(panel, 'flex flex-col overflow-hidden')}>
             <SearchTab workspaceId={workspaceId} runId={runId} onRunIdChange={setRunId} />
+          </TabsContent>
+          <TabsContent value="tree" className={cn(panel, 'flex flex-col overflow-hidden')}>
+            <SnowballTreeTab workspaceId={workspaceId} />
           </TabsContent>
           <TabsContent value="acquisition" forceMount className={panel}>
             <ManualAcquisitionTab workspaceId={workspaceId} />

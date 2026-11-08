@@ -169,3 +169,109 @@ async def test_branch_on_a_papers_hit_is_stored_on_the_hit(session):
     rows = (await session.scalars(select(WorkspaceBranchState).where(
         WorkspaceBranchState.workspace_id == workspace.id))).all()
     assert [r.paper_id for r in rows] == [None]
+
+
+# --- Snowball next (Task 8) ---
+from app.core import snowball_next  # noqa: E402
+from tests.test_snowball_links import (  # noqa: E402,F401  (fixtures)
+    _s2_with, _seed_hit, _workspace_and_run, edge_providers, fake_providers,
+)
+
+
+async def test_snowball_next_lists_unrun_directions(session, edge_providers):
+    workspace, run = await _workspace_and_run(session)
+    seed = await _seed_hit(session, workspace, run, title="Seed Alpha")
+    fresh = await _seed_hit(session, workspace, run, title="Seed Beta")
+    stopped = await _seed_hit(session, workspace, run, title="Seed Gamma")
+    for hit in (seed, fresh):
+        await branches.set_branch(session, workspace.id, hit_id=hit.id, state="go_further", directions=BOTH, reason=None)
+    await branches.set_branch(session, workspace.id, hit_id=stopped.id, state="stopped", directions=[], reason=None)
+    await workspace_search.snowball(session, edge_providers, workspace.id, [], [seed.id], backward=True, forward=False)
+
+    items = {i.hit_id: i for i in await snowball_next.snowball_next(session, workspace.id)}
+    assert set(items) == {seed.id, fresh.id}
+    assert items[seed.id].directions_left == ["cited_by"] and items[seed.id].title == "Seed Alpha"
+    assert items[fresh.id].directions_left == BOTH
+
+
+async def test_run_snowball_next_empties_the_list(session, edge_providers):
+    workspace, run = await _workspace_and_run(session)
+    one = await _seed_hit(session, workspace, run, title="Seed Alpha")
+    two = await _seed_hit(session, workspace, run, title="Seed Beta")
+    await branches.set_branch(session, workspace.id, hit_id=one.id, state="go_further", directions=BOTH, reason=None)
+    await branches.set_branch(session, workspace.id, hit_id=two.id, state="go_further", directions=["cites"], reason=None)
+
+    out = await snowball_next.run_snowball_next(session, edge_providers, workspace.id)
+    assert out.new_hits > 0
+    assert await snowball_next.snowball_next(session, workspace.id) == []
+
+
+async def test_snowball_next_leaves_out_a_seed_not_found_in_semantic_scholar(session):
+    workspace, run = await _workspace_and_run(session)
+    seed = await _seed_hit(session, workspace, run, title="Seed Alpha")
+    await branches.set_branch(session, workspace.id, hit_id=seed.id, state="go_further", directions=BOTH, reason=None)
+    entry = workspace_search._seed_entry(seed.id, "hit", "Seed Alpha", skipped=workspace_search.NOT_IN_S2, hit_id=seed.id)
+    run.stats_json = {"snowball": {"seeds": [entry], "directions": BOTH}}
+    await session.commit()
+    assert await snowball_next.snowball_next(session, workspace.id) == []
+
+
+async def test_run_snowball_next_takes_a_batch_and_reports_the_rest(session, edge_providers):
+    workspace, run = await _workspace_and_run(session)
+    for i in range(30):
+        hit = await _seed_hit(session, workspace, run, title=f"Seed {i:02d}")
+        await branches.set_branch(session, workspace.id, hit_id=hit.id, state="go_further", directions=["cites"], reason=None)
+
+    out = await snowball_next.run_snowball_next(session, edge_providers, workspace.id)
+    assert out.remaining == 30 - snowball_next.SNOWBALL_NEXT_BATCH == 5
+    assert len(await snowball_next.snowball_next(session, workspace.id)) == 5
+
+
+async def test_remaining_counts_a_batch_item_whose_direction_errored(session, fake_providers):
+    from dataclasses import replace
+
+    import httpx
+
+    from app.providers import discovery_fake
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/citations"):
+            return httpx.Response(429)
+        if request.url.path.endswith("/references"):
+            return httpx.Response(200, json={"offset": 0, "data": []})
+        return discovery_fake._handle(request)
+
+    client = _s2_with(handle)
+    providers = replace(fake_providers, clients={**fake_providers.clients, "semantic_scholar": client})
+    workspace, run = await _workspace_and_run(session)
+    seed = await _seed_hit(session, workspace, run, title="Rate limited")
+    await branches.set_branch(session, workspace.id, hit_id=seed.id, state="go_further", directions=BOTH, reason=None)
+
+    try:
+        out = await snowball_next.run_snowball_next(session, providers, workspace.id)
+    finally:
+        await client.aclose()
+    assert out.remaining == 1
+    (item,) = await snowball_next.snowball_next(session, workspace.id)
+    assert item.directions_left == ["cited_by"]
+
+
+async def test_a_branch_on_a_paper_that_left_the_workspace_is_not_offered_and_can_be_cleared(session, edge_providers):
+    from app.core import workspaces
+    from app.models import Paper
+
+    workspace, _ = await _workspace_and_run(session)
+    paper = Paper(title="Hand paper")
+    session.add(paper)
+    await session.flush()
+    await workspaces.add_paper(session, workspace.id, paper.id)
+    await branches.set_branch(session, workspace.id, paper_id=paper.id, state="go_further", directions=BOTH, reason=None)
+    assert [i.paper_id for i in await snowball_next.snowball_next(session, workspace.id)] == [paper.id]
+
+    await workspaces.remove_paper(session, workspace.id, paper.id)
+    assert await snowball_next.snowball_next(session, workspace.id) == []
+    out = await snowball_next.run_snowball_next(session, edge_providers, workspace.id)
+    assert (out.new_hits, out.remaining) == (0, 0)
+
+    await branches.set_branch(session, workspace.id, paper_id=paper.id, state=None, directions=[], reason=None)
+    assert await session.scalar(select(WorkspaceBranchState).where(WorkspaceBranchState.paper_id == paper.id)) is None

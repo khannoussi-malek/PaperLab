@@ -25,6 +25,7 @@
     --color-accent: var(--accent);
     --color-accent-foreground: var(--accent-foreground);
     --color-destructive: var(--destructive);
+    --color-included: var(--included);
     --color-border: var(--border);
     --color-input: var(--input);
     --color-ring: var(--ring);
@@ -64,6 +65,8 @@
     --accent: #f1f5f9;
     --accent-foreground: #1e293b;
     --destructive: #dc2626;
+    /* Status: a paper the owner included (snowball tree boxes). */
+    --included: #15803d;
     --border: #e2e8f0;
     --input: #cbd5e1;
     --ring: #2563eb;
@@ -112,6 +115,7 @@
     --accent: #334155;
     --accent-foreground: #f1f5f9;
     --destructive: #f87171;
+    --included: #4ade80;
     --border: rgb(255 255 255 / 0.1);
     --input: rgb(255 255 255 / 0.15);
     --ring: #60a5fa;

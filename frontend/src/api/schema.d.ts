@@ -1320,7 +1320,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Get Hit Route */
+        get: operations["get_hit_route_api_workspaces__workspace_id__search_hits__hit_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1381,6 +1382,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/workspaces/{workspace_id}/search/snowball-next": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Snowball Next Route */
+        get: operations["snowball_next_route_api_workspaces__workspace_id__search_snowball_next_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/search/snowball-next/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run Snowball Next Route */
+        post: operations["run_snowball_next_route_api_workspaces__workspace_id__search_snowball_next_run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/workspaces/{workspace_id}/search/branch": {
         parameters: {
             query?: never;
@@ -1407,6 +1442,40 @@ export interface paths {
         };
         /** Prisma Export Route */
         get: operations["prisma_export_route_api_workspaces__workspace_id__search_prisma_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/search/provenance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Provenance Route */
+        get: operations["provenance_route_api_workspaces__workspace_id__search_provenance_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/search/hits/{hit_id}/paths": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Hit Paths Route */
+        get: operations["hit_paths_route_api_workspaces__workspace_id__search_hits__hit_id__paths_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3745,6 +3814,15 @@ export interface components {
             /** Ai Notes */
             ai_notes: number;
         };
+        /** CitationSearchingLevel */
+        CitationSearchingLevel: {
+            /** Level */
+            level: number;
+            /** Identified */
+            identified: number;
+            /** Relevant */
+            relevant: number;
+        };
         /** ClearHitsOut */
         ClearHitsOut: {
             /** Deleted */
@@ -4732,6 +4810,25 @@ export interface components {
             /** Missing Roles */
             missing_roles: ("abstract" | "intro" | "related" | "method" | "results" | "discussion" | "limitations" | "conclusion" | "back" | "other")[];
         };
+        /** LevelStats */
+        LevelStats: {
+            /** Level */
+            level: number;
+            /** Found */
+            found: number;
+            /** Already Known */
+            already_known: number;
+            /** Included */
+            included: number;
+            /** Go Further */
+            go_further: number;
+            /** Stopped */
+            stopped: number;
+            /** Done */
+            done: boolean;
+            /** Saturated */
+            saturated: boolean;
+        };
         /** LinkIn */
         LinkIn: {
             /**
@@ -5070,6 +5167,20 @@ export interface components {
              * @default []
              */
             free_copies: string[];
+        };
+        /**
+         * NextItem
+         * @description One go_further branch with directions not yet snowballed. Exactly one of hit_id and paper_id is set.
+         */
+        NextItem: {
+            /** Hit Id */
+            hit_id?: string | null;
+            /** Paper Id */
+            paper_id?: string | null;
+            /** Title */
+            title: string;
+            /** Directions Left */
+            directions_left: string[];
         };
         /** NoteCountsIn */
         NoteCountsIn: {
@@ -5575,6 +5686,16 @@ export interface components {
             notes: string[];
             /** Screening Criteria */
             screening_criteria?: string | null;
+            /**
+             * Citation Searching
+             * @default []
+             */
+            citation_searching: components["schemas"]["CitationSearchingLevel"][];
+            /**
+             * Identified Databases
+             * @default 0
+             */
+            identified_databases: number;
         };
         /** PromoteRequest */
         PromoteRequest: {
@@ -5587,6 +5708,92 @@ export interface components {
             body: string;
             /** Chunk Ids */
             chunk_ids: string[];
+        };
+        /** ProvBranch */
+        ProvBranch: {
+            /** State */
+            state: string;
+            /** Directions */
+            directions: string[];
+            /** Reason */
+            reason: string | null;
+        };
+        /** ProvLink */
+        ProvLink: {
+            /** Parent */
+            parent: string;
+            /** Child */
+            child: string;
+            /** Kind */
+            kind: string;
+            /** Run Id */
+            run_id?: string | null;
+            /** Created At */
+            created_at?: string | null;
+        };
+        /** ProvNode */
+        ProvNode: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Year */
+            year?: number | null;
+            /** Level */
+            level: number;
+            /** Decision */
+            decision?: string | null;
+            /** Suggestion */
+            suggestion?: string | null;
+            /** Relevance */
+            relevance?: number | null;
+            /** Paper Id */
+            paper_id?: string | null;
+            branch?: components["schemas"]["ProvBranch"] | null;
+            /**
+             * Snowballed
+             * @default []
+             */
+            snowballed: string[];
+            /**
+             * Paths
+             * @default 0
+             */
+            paths: number;
+            /** Zero Found Error */
+            zero_found_error?: string | null;
+        };
+        /** ProvRoot */
+        ProvRoot: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Hit Count */
+            hit_count: number;
+            /** On Tree */
+            on_tree: number;
+            /**
+             * Excluded Hidden
+             * @default 0
+             */
+            excluded_hidden: number;
+        };
+        /** ProvenanceOut */
+        ProvenanceOut: {
+            /** Nodes */
+            nodes: components["schemas"]["ProvNode"][];
+            /** Links */
+            links: components["schemas"]["ProvLink"][];
+            /** Roots */
+            roots: components["schemas"]["ProvRoot"][];
+            /** Levels */
+            levels: components["schemas"]["LevelStats"][];
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
         };
         /** PullDoneEvent */
         PullDoneEvent: {
@@ -6732,6 +6939,19 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** SnowballNextOut */
+        SnowballNextOut: {
+            /** New Hits */
+            new_hits: number;
+            /** Skipped Seeds */
+            skipped_seeds: string[];
+            /** Errors */
+            errors: {
+                [key: string]: string;
+            };
+            /** Remaining */
+            remaining: number;
         };
         /** SnowballOut */
         SnowballOut: {
@@ -9921,6 +10141,38 @@ export interface operations {
             };
         };
     };
+    get_hit_route_api_workspaces__workspace_id__search_hits__hit_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                hit_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HitOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     patch_hit_api_workspaces__workspace_id__search_hits__hit_id__patch: {
         parameters: {
             query?: never;
@@ -10063,6 +10315,68 @@ export interface operations {
             };
         };
     };
+    snowball_next_route_api_workspaces__workspace_id__search_snowball_next_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NextItem"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_snowball_next_route_api_workspaces__workspace_id__search_snowball_next_run_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SnowballNextOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     set_branch_route_api_workspaces__workspace_id__search_branch_put: {
         parameters: {
             query?: never;
@@ -10118,6 +10432,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PrismaExportOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    provenance_route_api_workspaces__workspace_id__search_provenance_get: {
+        parameters: {
+            query?: {
+                all_hits_run?: string | null;
+            };
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProvenanceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    hit_paths_route_api_workspaces__workspace_id__search_hits__hit_id__paths_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                hit_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProvLink"][][];
                 };
             };
             /** @description Validation Error */

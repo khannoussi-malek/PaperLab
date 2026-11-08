@@ -81,3 +81,14 @@ describe('WorkspaceTabBar glass', () => {
     expect(tab.className).not.toContain('data-active:bg-background')
   })
 })
+
+describe('WorkspaceTabBar counts', () => {
+  it('names the Snowball next count on the tree tab', () => {
+    render(
+      <LiquidGlassProvider>
+        <Tabs value="tree"><WorkspaceTabBar active="tree" counts={{ tree: 3 }} /></Tabs>
+      </LiquidGlassProvider>,
+    )
+    expect(screen.getByRole('tab', { name: 'Snowball tree, 3 to snowball' })).toBeInTheDocument()
+  })
+})

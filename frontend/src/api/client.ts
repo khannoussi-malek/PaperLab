@@ -169,6 +169,16 @@ export type RankedHits = components['schemas']['RankedHitsOut']
 export type ClearHitsOut = components['schemas']['ClearHitsOut']
 export type SnowballRequest = components['schemas']['SnowballRequest']
 export type SnowballOut = components['schemas']['SnowballOut']
+export type ProvenanceOut = components['schemas']['ProvenanceOut']
+export type BranchIn = components['schemas']['BranchIn']
+export type BranchOut = components['schemas']['BranchOut']
+export type SnowballNextOut = components['schemas']['SnowballNextOut']
+export type NextItem = components['schemas']['NextItem']
+export type ProvBranch = components['schemas']['ProvBranch']
+export type ProvNode = components['schemas']['ProvNode']
+export type ProvLink = components['schemas']['ProvLink']
+export type ProvRoot = components['schemas']['ProvRoot']
+export type LevelStats = components['schemas']['LevelStats']
 export type EligibilityUpdate = components['schemas']['EligibilityUpdate']
 export type EligibilityOut = components['schemas']['EligibilityOut']
 export type PrismaExportOut = components['schemas']['PrismaExportOut']
@@ -686,6 +696,19 @@ export const api = {
   },
   snowball: (workspaceId: string, body: SnowballRequest) =>
     request<SnowballOut>(`/api/workspaces/${workspaceId}/search/snowball`, sendJson('POST', body)),
+  provenance: (workspaceId: string, allHitsRun?: string) =>
+    request<ProvenanceOut>(
+      `/api/workspaces/${workspaceId}/search/provenance${allHitsRun ? `?all_hits_run=${allHitsRun}` : ''}`,
+    ),
+  setBranch: (workspaceId: string, body: BranchIn) =>
+    request<BranchOut>(`/api/workspaces/${workspaceId}/search/branch`, sendJson('PUT', body)),
+  snowballNext: (workspaceId: string) => request<NextItem[]>(`/api/workspaces/${workspaceId}/search/snowball-next`),
+  runSnowballNext: (workspaceId: string) =>
+    request<SnowballNextOut>(`/api/workspaces/${workspaceId}/search/snowball-next/run`, { method: 'POST' }),
+  getSearchHit: (workspaceId: string, hitId: string) =>
+    request<Hit>(`/api/workspaces/${workspaceId}/search/hits/${hitId}`),
+  hitPaths: (workspaceId: string, hitId: string) =>
+    request<ProvLink[][]>(`/api/workspaces/${workspaceId}/search/hits/${hitId}/paths`),
   setEligibility: (workspaceId: string, paperId: string, runId: string, body: EligibilityUpdate) =>
     request<EligibilityOut>(
       `/api/workspaces/${workspaceId}/papers/${paperId}/eligibility?run=${runId}`,
