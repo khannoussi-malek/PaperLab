@@ -358,7 +358,8 @@ class PrismaExportOut(BaseModel):
 class BranchIn(BaseModel):
     hit_id: uuid.UUID | None = None
     paper_id: uuid.UUID | None = None
-    state: str | None  # required, null clears the decision; checked in core.branches so every caller gets the same InvalidInput
+    # required, null clears the decision; checked in core.branches so every caller gets the same InvalidInput
+    state: str | None
     directions: list[str] = []
     reason: str | None = None
 

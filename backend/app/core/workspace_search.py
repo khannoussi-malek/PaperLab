@@ -31,6 +31,7 @@ from app.core import (
     tags,
     year_range,
 )
+from app.core.branches import default_branch_on_decision
 from app.core.candidates import Candidate, from_s2, merge, normal_title
 from app.core.discovery import Providers, _add_unpaywall_links, download_pdf
 from app.core.references import _same_reference
@@ -367,7 +368,6 @@ async def _insert_hit(
 
 
 from app.core import papers, workspaces
-from app.core.branches import default_branch_on_decision
 from app.core.errors import Conflict, InvalidInput, NotFound
 from app.models import Paper, workspace_papers
 
