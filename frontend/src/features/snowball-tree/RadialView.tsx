@@ -129,7 +129,7 @@ export function RadialView({ data, selected, onSelect, hidden }: Props) {
         ref={frame}
         className="relative min-h-0 flex-1 cursor-grab overflow-hidden rounded-lg border border-border bg-card active:cursor-grabbing"
         onPointerDown={(e) => { if (!(e.target as Element).closest('[role="button"]')) drag.current = { x: e.clientX - view.x, y: e.clientY - view.y } }}
-        onPointerMove={(e) => { if (drag.current) setView((v) => ({ ...v, x: e.clientX - drag.current!.x, y: e.clientY - drag.current!.y })) }}
+        onPointerMove={(e) => { const d = drag.current; if (d) setView((v) => ({ ...v, x: e.clientX - d.x, y: e.clientY - d.y })) }}
         onPointerUp={() => { drag.current = null }}
         onPointerLeave={() => { drag.current = null }}
         onWheel={(e) => setView((v) => ({ ...v, k: Math.min(4, Math.max(0.3, v.k * (e.deltaY < 0 ? 1.1 : 1 / 1.1))) }))}
