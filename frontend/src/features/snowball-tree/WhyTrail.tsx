@@ -17,7 +17,7 @@ export function WhyTrail({ workspaceId, hitId }: { workspaceId: string; hitId: s
     steps.push(l.child === hitId ? 'this paper' : name(l.child))
   }
   return (
-    <div className="text-xs">
+    <div role="region" aria-label="Why is this here?" className="text-xs">
       <p className="font-medium">Why is this here?</p>
       <p className="mt-0.5 text-muted-foreground">{steps.join(' → ')}</p>
       {others.length > 0 && (
