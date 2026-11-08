@@ -3,7 +3,8 @@ import type { SnowballStats } from '@/api/client'
 import { friendlySnowballError, snowballLine } from './snowballText'
 
 const seed = (found: { cites: number; cited_by: number }, o: object = {}) => ({
-  id: 's', kind: 'paper' as const, title: 't', found, new: { cites: 0, cited_by: 0 }, skipped: null, error: null, ...o,
+  id: 's', kind: 'paper' as const, title: 't', found, new: { cites: 0, cited_by: 0 }, skipped: null, error: null,
+  errors: { cites: null, cited_by: null }, done: [], hit_id: null, ...o,
 })
 
 test('snowballLine sums found counts and counts skipped seeds', () => {
@@ -26,5 +27,12 @@ test('friendlySnowballError maps 429 and 401, passes others through', () => {
   const msg = 'Semantic Scholar refused: add a free key in Settings → Paper sources.'
   expect(friendlySnowballError('HTTP 429 from api.semanticscholar.org')).toBe(msg)
   expect(friendlySnowballError('401 Unauthorized')).toBe(msg)
+  expect(friendlySnowballError("Client error '429 Too Many Requests' for url 'https://api.x'")).toBe(msg)
   expect(friendlySnowballError('boom')).toBe('boom')
+})
+
+test('friendlySnowballError ignores a status number inside a DOI or other text', () => {
+  const doi = 'Not found: 10.1234/abc.4291'
+  expect(friendlySnowballError(doi)).toBe(doi)
+  expect(friendlySnowballError('doi 10.429/401x failed')).toBe('doi 10.429/401x failed')
 })
