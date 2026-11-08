@@ -205,10 +205,10 @@ async def test_workspace_search_counts_new_hits_for_every_source_that_found_them
 
     found = {"arxiv": [Candidate(title="Shared paper", doi="10.1/shared", sources=("arxiv", "openalex"))]}
     counted = workspace_search.Counter()
-    added = await workspace_search._store_candidates_as_hits(
+    added, child_ids = await workspace_search._store_candidates_as_hits(
         session, stored_run, "database_search", found, new_by_source=counted
     )
-    assert added == 1 and counted["arxiv"] == 1
+    assert added == 1 and len(child_ids) == 1 and counted["arxiv"] == 1
 
 
 def test_short_error_reads_httpxs_real_message():

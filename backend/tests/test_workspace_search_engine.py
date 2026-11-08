@@ -946,7 +946,7 @@ async def test_insert_hit_is_race_safe_under_a_duplicate_attempt(session):
     first = await _insert_hit(session, run, ref, candidate)
     second = await _insert_hit(session, run, ref, candidate)  # the "concurrent" duplicate attempt
 
-    assert (first, second) == (True, False)  # no crash on the duplicate; only the first actually inserted
+    assert first is not None and second is None  # no crash on the duplicate; only the first actually inserted
     count = await session.scalar(
         select(func.count()).select_from(WorkspaceSearchHit).where(WorkspaceSearchHit.external_ref_id == ref.id)
     )

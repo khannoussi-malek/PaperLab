@@ -33,7 +33,7 @@ def upgrade() -> None:
         sa.Column("created_at", pg.TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("now()")),
         sa.CheckConstraint("kind IN ('search', 'cites', 'cited_by')", name="ck_workspace_hit_links_kind"),
         sa.UniqueConstraint(
-            "child_hit_id", "parent_hit_id", "parent_paper_id", "kind",
+            "child_hit_id", "parent_hit_id", "parent_paper_id", "kind", "run_id",
             name="uq_workspace_hit_links_path", postgresql_nulls_not_distinct=True,
         ),
     )

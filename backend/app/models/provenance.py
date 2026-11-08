@@ -15,7 +15,7 @@ class WorkspaceHitLink(Base):
     __table_args__ = (
         CheckConstraint("kind IN ('search', 'cites', 'cited_by')", name="ck_workspace_hit_links_kind"),
         UniqueConstraint(
-            "child_hit_id", "parent_hit_id", "parent_paper_id", "kind",
+            "child_hit_id", "parent_hit_id", "parent_paper_id", "kind", "run_id",
             name="uq_workspace_hit_links_path", postgresql_nulls_not_distinct=True,
         ),
         Index("ix_workspace_hit_links_workspace_id", "workspace_id"),
