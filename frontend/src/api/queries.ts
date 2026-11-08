@@ -52,6 +52,7 @@ import {
   type SearchRunSummary,
   type SearchRunCreate,
   type SearchSourceIn,
+  type BranchIn,
   type SnowballRequest,
   type NoteCounts,
 } from './client'
@@ -111,6 +112,7 @@ export const keys = {
   screening: (workspaceId: string) => ['workspaces', workspaceId, 'search', 'screening'] as const,
   // A prefix of every usePrismaExport key (whatever `runs`) — small and cheap to invalidate wholesale, unlike
   // searchHitsRoot's multi-thousand-row pool above.
+  snowballNext: (workspaceId: string) => ['workspaces', workspaceId, 'search', 'snowball-next'] as const,
   provenance: (workspaceId: string) => ['workspaces', workspaceId, 'search', 'provenance'] as const,
   prismaRoot: (workspaceId: string) => ['workspaces', workspaceId, 'search', 'prisma'] as const,
   prisma: (workspaceId: string, runs: string) => [...keys.prismaRoot(workspaceId), runs] as const,
@@ -586,6 +588,51 @@ export const usePaths = (workspaceId: string, hitId: string | null) =>
     queryFn: () => api.hitPaths(workspaceId, hitId!),
     enabled: hitId !== null,
   })
+
+/** One hit for the tree's side panel. Nested under the provenance key so every tree refresh re-reads it. */
+export const useSearchHit = (workspaceId: string, hitId: string | null) =>
+  useQuery({
+    queryKey: [...keys.provenance(workspaceId), 'hit', hitId],
+    queryFn: () => api.getSearchHit(workspaceId, hitId!),
+    enabled: hitId !== null,
+  })
+
+/** What a branch or snowball change touches: the tree, the Snowball next list and the runs list. */
+export const refreshTree = (client: QueryClient, workspaceId: string) =>
+  Promise.all([
+    client.invalidateQueries({ queryKey: keys.provenance(workspaceId) }),
+    client.invalidateQueries({ queryKey: keys.snowballNext(workspaceId) }),
+    client.invalidateQueries({ queryKey: keys.searchRuns(workspaceId) }),
+  ])
+
+/** Go further / Stop here / Undecided for one hit or hand-added paper. */
+export function useSetBranch(workspaceId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (body: BranchIn) => api.setBranch(workspaceId, body),
+    onSuccess: () => refreshTree(client, workspaceId),
+  })
+}
+
+/** Go-further branches with a direction not snowballed yet. */
+export const useSnowballNext = (workspaceId: string) =>
+  useQuery({ queryKey: keys.snowballNext(workspaceId), queryFn: () => api.snowballNext(workspaceId) })
+
+/** "Run all" on the Snowball next list: one request, a snowball per direction group on the server. */
+export function useRunSnowballNext(workspaceId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: () => api.runSnowballNext(workspaceId),
+    onSuccess: (result) =>
+      Promise.all([
+        refreshTree(client, workspaceId),
+        client.invalidateQueries({ queryKey: keys.prismaRoot(workspaceId) }),
+        result.new_hits > 0
+          ? client.resetQueries({ queryKey: keys.searchHits(workspaceId, 'all', 'all'), exact: true })
+          : undefined,
+      ]),
+  })
+}
 
 /** The workspace's recent runs, newest first; polls only while one is still running. */
 export const useSearchRuns = (workspaceId: string) =>

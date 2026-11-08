@@ -379,6 +379,15 @@ class BranchOut(BaseModel):
     reason: str | None
 
 
+class NextItem(BaseModel):
+    """One go_further branch with directions not yet snowballed. Exactly one of hit_id and paper_id is set."""
+
+    hit_id: uuid.UUID | None = None
+    paper_id: uuid.UUID | None = None
+    title: str
+    directions_left: list[str]
+
+
 class ProvBranch(BaseModel):
     state: str
     directions: list[str]

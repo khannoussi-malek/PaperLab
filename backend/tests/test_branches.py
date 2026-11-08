@@ -169,3 +169,38 @@ async def test_branch_on_a_papers_hit_is_stored_on_the_hit(session):
     rows = (await session.scalars(select(WorkspaceBranchState).where(
         WorkspaceBranchState.workspace_id == workspace.id))).all()
     assert [r.paper_id for r in rows] == [None]
+
+
+# --- Snowball next (Task 8) ---
+from app.core import snowball_next  # noqa: E402
+from tests.test_snowball_links import (  # noqa: E402,F401  (fixtures)
+    _seed_hit, _workspace_and_run, edge_providers, fake_providers,
+)
+
+
+async def test_snowball_next_lists_unrun_directions(session, edge_providers):
+    workspace, run = await _workspace_and_run(session)
+    seed = await _seed_hit(session, workspace, run, title="Seed Alpha")
+    fresh = await _seed_hit(session, workspace, run, title="Seed Beta")
+    stopped = await _seed_hit(session, workspace, run, title="Seed Gamma")
+    for hit in (seed, fresh):
+        await branches.set_branch(session, workspace.id, hit_id=hit.id, state="go_further", directions=BOTH, reason=None)
+    await branches.set_branch(session, workspace.id, hit_id=stopped.id, state="stopped", directions=[], reason=None)
+    await workspace_search.snowball(session, edge_providers, workspace.id, [], [seed.id], backward=True, forward=False)
+
+    items = {i.hit_id: i for i in await snowball_next.snowball_next(session, workspace.id)}
+    assert set(items) == {seed.id, fresh.id}
+    assert items[seed.id].directions_left == ["cited_by"] and items[seed.id].title == "Seed Alpha"
+    assert items[fresh.id].directions_left == BOTH
+
+
+async def test_run_snowball_next_empties_the_list(session, edge_providers):
+    workspace, run = await _workspace_and_run(session)
+    one = await _seed_hit(session, workspace, run, title="Seed Alpha")
+    two = await _seed_hit(session, workspace, run, title="Seed Beta")
+    await branches.set_branch(session, workspace.id, hit_id=one.id, state="go_further", directions=BOTH, reason=None)
+    await branches.set_branch(session, workspace.id, hit_id=two.id, state="go_further", directions=["cites"], reason=None)
+
+    out = await snowball_next.run_snowball_next(session, edge_providers, workspace.id)
+    assert out.new_hits > 0
+    assert await snowball_next.snowball_next(session, workspace.id) == []

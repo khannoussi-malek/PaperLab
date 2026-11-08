@@ -1,5 +1,6 @@
 import { memo, useMemo, useRef, useState } from 'react'
-import type { LevelStats, ProvenanceOut } from '@/api/client'
+import { ArrowRight } from 'lucide-react'
+import type { LevelStats, ProvenanceOut, ProvNode } from '@/api/client'
 import { cn } from '@/lib/utils'
 import { BOX_H, BOX_W, COL, PARENT_NOT_RECORDED, isUnknown, tidyLayout, type Box, type Layout } from './layout'
 import { decisionWord, levelHeader } from './levelText'
@@ -11,6 +12,8 @@ type Props = {
   folded: Set<string>
   onToggleFold: (id: string) => void
   hidden?: Set<string>
+  /** The box whose Find citing & cited papers call is running. */
+  snowballing?: string | null
 }
 
 const titleOf = (box: Box) => (box.node ? (isUnknown(box.id) ? PARENT_NOT_RECORDED : box.node.title) : box.root!.label)
@@ -27,10 +30,24 @@ const curve = (x1: number, y1: number, x2: number, y2: number) => {
   return `M${x1},${y1} C${mid},${y1} ${mid},${y2} ${x2},${y2}`
 }
 
-function BoxButton({ box, selected, onSelect }: { box: Box; selected: boolean; onSelect: (id: string) => void }) {
+const BRANCH_WORD: Record<string, string> = { go_further: 'go further', stopped: 'stopped' }
+
+/** Open arrow = go further (directions on hover), bar = stopped (reason on hover). */
+function BranchMark({ branch }: { branch: NonNullable<ProvNode['branch']> }) {
+  if (branch.state === 'go_further') {
+    const dirs = branch.directions.map((d) => (d === 'cites' ? 'it cites' : 'cited by')).join(', ')
+    return <span aria-hidden data-branch="go_further" title={`Go further: ${dirs}`} className="shrink-0 text-included"><ArrowRight className="size-3" /></span>
+  }
+  return <span aria-hidden data-branch="stopped" title={branch.reason ? `Stopped: ${branch.reason}` : 'Stopped'} className="h-3 w-0.5 shrink-0 rounded bg-destructive" />
+}
+
+function BoxButton({ box, selected, busy, onSelect }: { box: Box; selected: boolean; busy: boolean; onSelect: (id: string) => void }) {
   const { node, root } = box
   const decision = node ? (node.decision === 'relevant' || node.decision === 'not_relevant' ? node.decision : 'none') : 'root'
-  const label = node ? `${titleOf(box)}, level ${node.level}, ${decisionWord(node.decision)}` : `${root!.label}, search`
+  const branchWord = node?.branch ? BRANCH_WORD[node.branch.state] : undefined
+  const label = node
+    ? `${titleOf(box)}, level ${node.level}, ${decisionWord(node.decision)}${branchWord ? `, ${branchWord}` : ''}`
+    : `${root!.label}, search`
   return (
     <button
       type="button"
@@ -47,9 +64,10 @@ function BoxButton({ box, selected, onSelect }: { box: Box; selected: boolean; o
         selected && 'ring-2 ring-ring',
       )}
     >
-      {/* Task 8 puts the branch-state mark (open arrow / bar) on the right edge of this row. */}
       <span className="flex items-center gap-1">
         <span className="min-w-0 flex-1 truncate font-medium" title={titleOf(box)}>{titleOf(box)}</span>
+        {node?.branch && <BranchMark branch={node.branch} />}
+        {busy && <span className="shrink-0 text-[10px] text-muted-foreground">Snowballing…</span>}
         {node?.suggestion && <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-provenance-llm" />}
         {box.foldedMatches > 0 && <span className="shrink-0 text-[10px] text-muted-foreground">{box.foldedMatches} hidden</span>}
         {box.extraPaths > 0 && <span className="shrink-0 text-[10px] text-muted-foreground">+{box.extraPaths} other paths</span>}
@@ -70,13 +88,14 @@ type CanvasProps = {
   levels: LevelStats[]
   parents: Set<string>
   selected: string | null
+  snowballing: string | null
   folded: Set<string>
   onSelect: (id: string) => void
   onToggleFold: (id: string) => void
 }
 
 /** The boxes and edges. Memoised so a pan or zoom (which only moves the wrapper's transform) never re-renders them. */
-const Canvas = memo(function Canvas({ layout, levels, parents, selected, folded, onSelect, onToggleFold }: CanvasProps) {
+const Canvas = memo(function Canvas({ layout, levels, parents, selected, snowballing, folded, onSelect, onToggleFold }: CanvasProps) {
   const at = useMemo(() => new Map(layout.boxes.map((b) => [b.id, b])), [layout])
   return (
     <>
@@ -103,7 +122,7 @@ const Canvas = memo(function Canvas({ layout, levels, parents, selected, folded,
       </svg>
       {layout.boxes.map((b) => (
         <div key={b.id}>
-          <BoxButton box={b} selected={selected === b.id} onSelect={onSelect} />
+          <BoxButton box={b} selected={selected === b.id} busy={snowballing === b.id} onSelect={onSelect} />
           {parents.has(b.id) && (
             <button
               type="button"
@@ -146,7 +165,7 @@ function Legend() {
   )
 }
 
-export function TreeView({ data, selected, onSelect, folded, onToggleFold, hidden = EMPTY }: Props) {
+export function TreeView({ data, selected, onSelect, folded, onToggleFold, hidden = EMPTY, snowballing = null }: Props) {
   const layout = useMemo(
     () => tidyLayout(data.nodes, data.links, data.roots, folded, hidden),
     [data, folded, hidden],
@@ -181,7 +200,7 @@ export function TreeView({ data, selected, onSelect, folded, onToggleFold, hidde
           style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})`, width: layout.width, height: layout.height + HEADER_H }}
         >
           <Canvas
-            layout={layout} levels={data.levels} parents={parents} selected={selected}
+            layout={layout} levels={data.levels} parents={parents} selected={selected} snowballing={snowballing}
             folded={folded} onSelect={onSelect} onToggleFold={onToggleFold}
           />
         </div>

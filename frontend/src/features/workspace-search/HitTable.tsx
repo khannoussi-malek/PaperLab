@@ -520,6 +520,7 @@ export function HitTable({ workspaceId, run }: { workspaceId: string; run?: Sear
             />
             <HitPreview
               hit={previewed}
+              workspaceId={workspaceId}
               onReview={onReview}
               onAddPdf={(hitId) => importHits.mutate([hitId])}
               addPdfPending={importHits.isPending}

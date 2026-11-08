@@ -117,7 +117,8 @@ export function tidyLayout(
     })
     return y
   }
-  topIds.forEach((id) => place(id, 0))
+  // "Parent not recorded" boxes stand in for a search, but their children are one level up: column 1, under the Level 0 header.
+  topIds.forEach((id) => place(id, isUnknown(id) ? 1 : 0))
 
   const width = Math.max(0, ...boxes.map((b) => b.x)) + BOX_W
   return { boxes, edges, width, height: Math.max(leaf, 1) * ROW }

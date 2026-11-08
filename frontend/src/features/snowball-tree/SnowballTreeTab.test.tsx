@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { render, screen, fireEvent, cleanup, within } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup, within, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, expect, test, vi } from 'vitest'
 import * as queries from '@/api/queries'
-import type { ProvenanceOut } from '@/api/client'
+import { api, type ProvenanceOut } from '@/api/client'
 import { SnowballTreeTab } from './SnowballTreeTab'
 
 const data: ProvenanceOut = {
@@ -27,10 +28,13 @@ const data: ProvenanceOut = {
   ],
 }
 
-function setup() {
-  vi.spyOn(queries, 'useProvenance').mockReturnValue({ data, isPending: false, error: null } as any)
+function setup(d: ProvenanceOut = data) {
+  vi.spyOn(queries, 'useProvenance').mockReturnValue({ data: d, isPending: false, error: null } as any)
   vi.spyOn(queries, 'usePaths').mockReturnValue({ data: undefined } as any)
-  render(<SnowballTreeTab workspaceId="w1" />)
+  vi.spyOn(queries, 'useSearchHit').mockReturnValue({ data: undefined } as any)
+  vi.spyOn(api, 'snowballNext').mockResolvedValue([])
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  render(<QueryClientProvider client={client}><SnowballTreeTab workspaceId="w1" /></QueryClientProvider>)
 }
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
 
@@ -87,4 +91,45 @@ test('a faded ancestor keeps C reachable when only level 1 is shown', () => {
   fireEvent.change(screen.getByLabelText('Decision'), { target: { value: 'relevant' } })
   expect(screen.getByRole('button', { name: /^Seed paper/ }).getAttribute('data-faded')).toBe('true')
   expect(screen.getByRole('button', { name: /^Included child/ }).getAttribute('data-faded')).toBe('false')
+})
+
+const branched: ProvenanceOut = {
+  ...data,
+  nodes: [
+    ...data.nodes,
+    { id: 'S', title: 'Stopped one', level: 1, decision: null, snowballed: [], paths: 1, branch: { state: 'stopped', directions: [], reason: 'too general' } },
+    { id: 'S1', title: 'Below the stop', level: 2, decision: null, snowballed: [], paths: 1 },
+    { id: 'G', title: 'Going on', level: 1, decision: null, snowballed: [], paths: 1, branch: { state: 'go_further', directions: ['cites'], reason: null } },
+  ],
+  links: [
+    ...data.links,
+    { parent: 'A', child: 'S', kind: 'cites', run_id: 's1', created_at: '2026-01-02T00:00:02Z' },
+    { parent: 'A', child: 'G', kind: 'cites', run_id: 's1', created_at: '2026-01-02T00:00:03Z' },
+    { parent: 'S', child: 'S1', kind: 'cites', run_id: 's2', created_at: '2026-01-03T00:00:00Z' },
+  ],
+}
+
+test('boxes carry a branch mark: open arrow for go further, bar for stopped', () => {
+  setup(branched)
+  expect(screen.getByRole('button', { name: 'Going on, level 1, not screened, go further' })).toBeTruthy()
+  expect(screen.getByRole('button', { name: 'Stopped one, level 1, not screened, stopped' })).toBeTruthy()
+  expect(screen.getByRole('button', { name: 'Seed paper, level 0, included' })).toBeTruthy()
+})
+
+test('stopped subtrees are folded until Show stopped is on', () => {
+  setup(branched)
+  expect(screen.queryByRole('button', { name: /^Below the stop/ })).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Show stopped' }))
+  expect(screen.getByRole('button', { name: /^Below the stop/ })).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: 'Hide stopped' }))
+  expect(screen.queryByRole('button', { name: /^Below the stop/ })).toBeNull()
+})
+
+test('Find citing & cited papers snowballs both ways at once and the box says Snowballing…', async () => {
+  setup()
+  const snowball = vi.spyOn(api, 'snowball').mockReturnValue(new Promise(() => {}) as any)
+  fireEvent.click(screen.getByRole('button', { name: 'Included child, level 1, included' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Find citing & cited papers' }))
+  await waitFor(() => expect(snowball).toHaveBeenCalledWith('w1', { seed_hit_ids: ['C'], seed_paper_ids: [], backward: true, forward: true }))
+  expect(await screen.findAllByText('Snowballing…')).toHaveLength(2) // the box and the disabled button
 })

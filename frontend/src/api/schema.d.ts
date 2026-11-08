@@ -1320,7 +1320,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Get Hit Route */
+        get: operations["get_hit_route_api_workspaces__workspace_id__search_hits__hit_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1375,6 +1376,40 @@ export interface paths {
         put?: never;
         /** Snowball Route */
         post: operations["snowball_route_api_workspaces__workspace_id__search_snowball_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/search/snowball-next": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Snowball Next Route */
+        get: operations["snowball_next_route_api_workspaces__workspace_id__search_snowball_next_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/search/snowball-next/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run Snowball Next Route */
+        post: operations["run_snowball_next_route_api_workspaces__workspace_id__search_snowball_next_run_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5132,6 +5167,20 @@ export interface components {
              * @default []
              */
             free_copies: string[];
+        };
+        /**
+         * NextItem
+         * @description One go_further branch with directions not yet snowballed. Exactly one of hit_id and paper_id is set.
+         */
+        NextItem: {
+            /** Hit Id */
+            hit_id?: string | null;
+            /** Paper Id */
+            paper_id?: string | null;
+            /** Title */
+            title: string;
+            /** Directions Left */
+            directions_left: string[];
         };
         /** NoteCountsIn */
         NoteCountsIn: {
@@ -10069,6 +10118,38 @@ export interface operations {
             };
         };
     };
+    get_hit_route_api_workspaces__workspace_id__search_hits__hit_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                hit_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HitOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     patch_hit_api_workspaces__workspace_id__search_hits__hit_id__patch: {
         parameters: {
             query?: never;
@@ -10190,6 +10271,68 @@ export interface operations {
                 "application/json": components["schemas"]["SnowballRequest"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SnowballOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    snowball_next_route_api_workspaces__workspace_id__search_snowball_next_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NextItem"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_snowball_next_route_api_workspaces__workspace_id__search_snowball_next_run_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

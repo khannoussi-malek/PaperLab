@@ -486,6 +486,18 @@ async def _make_hit(session, title: str, workspace_id=None):
     return hit.id
 
 
+async def test_get_hit_returns_one_hit_and_404s_in_another_workspace(session, client):
+    from app.models.workspace_search import WorkspaceSearchHit
+
+    hit_id = await _make_hit(session, "get target")
+    workspace_id = (await session.get(WorkspaceSearchHit, hit_id)).workspace_id
+
+    ok = await client.get(f"/api/workspaces/{workspace_id}/search/hits/{hit_id}")
+    assert ok.status_code == 200 and ok.json()["id"] == str(hit_id)
+    other = await client.get(f"/api/workspaces/{uuid.uuid4()}/search/hits/{hit_id}")
+    assert other.status_code == 404
+
+
 async def test_patch_hit_sets_stage1_fields(session, client):
     from app.models.workspace_search import WorkspaceSearchHit
 

@@ -85,11 +85,11 @@ test('a two-node loop keeps its subtree', () => {
   expect(out.boxes.map((b) => b.id).sort()).toEqual(['A', 'B', 'C', 'root:r1'])
 })
 
-test('a "parent not recorded" node is placed as a root in column 0 with its subtree', () => {
+test('a "parent not recorded" node is placed as a root in column 1, its children in column 2', () => {
   const u = 'run:r9:unknown'
   const ns = [node(u, 0), node('L', 1)]
   const out = tidyLayout(ns, [link(u, 'L')], [], new Set(), new Set())
-  expect(box(out, u).x).toBe(0)
+  expect(box(out, u).x).toBe(COL)
   expect(box(out, 'L').x).toBe(2 * COL)
   expect(out.edges).toHaveLength(1)
 })
