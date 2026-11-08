@@ -1,9 +1,10 @@
 import type { ProvLink, ProvNode, ProvRoot } from '@/api/client'
 
-export const COL = 180
-export const ROW = 40
-export const BOX_W = 150
-export const BOX_H = 30
+export const COL = 300
+export const ROW = 54
+export const BOX_W = 260 // about 40 characters on two lines
+export const ROOT_W = 170 // search-root boxes are narrower than paper boxes
+export const BOX_H = 40
 
 export type Box = {
   id: string
@@ -17,6 +18,8 @@ export type Box = {
   extraPaths: number
   /** For a folded box under a filter: matching papers hidden inside it. */
   foldedMatches: number
+  /** Drawn children, folded or not. */
+  childCount: number
 }
 export type Edge = { from: string; to: string; kind: string; dashed: boolean }
 export type Layout = { boxes: Box[]; edges: Edge[]; width: number; height: number }
@@ -100,7 +103,8 @@ export function tidyLayout(
   const edges: Edge[] = []
   let leaf = 0
   const place = (id: string, col: number): number => {
-    const kids = folded.has(id) ? [] : (children.get(id) ?? []).filter((c) => keep.get(c))
+    const allKids = (children.get(id) ?? []).filter((c) => keep.get(c))
+    const kids = folded.has(id) ? [] : allKids
     const slot = boxes.length // a box goes in before its children, so DOM and tab order run roots -> leaves
     boxes.push(undefined as unknown as Box)
     const ys = kids.map((k) => place(k, (byId.get(k)?.level ?? col) + 1))
@@ -111,6 +115,7 @@ export function tidyLayout(
       id, x: col * COL, y, node, root,
       faded: node ? hidden.has(id) : hidden.size > 0 && (matches.get(id) ?? 0) === 0,
       extraPaths: node && !isUnknown(id) ? Math.max(0, (incoming.get(id) ?? 1) - 1) : 0,
+      childCount: allKids.length,
       foldedMatches: folded.has(id) && hidden.size > 0 ? (matches.get(id) ?? 0) : 0,
     }
     kids.forEach((k) => {
@@ -122,6 +127,18 @@ export function tidyLayout(
   // "Parent not recorded" boxes stand in for a search, but their children are one level up: column 1, under the Level 0 header.
   topIds.forEach((id) => place(id, isUnknown(id) ? 1 : 0))
 
-  const width = Math.max(0, ...boxes.map((b) => b.x)) + BOX_W
+  const width = Math.max(0, ...boxes.map((b) => b.x + (b.node ? BOX_W : ROOT_W)))
   return { boxes, edges, width, height: Math.max(leaf, 1) * ROW }
+}
+
+/** Search roots with more than this many drawn papers start folded. */
+export const FOLD_OVER = 12
+
+/** The roots that start folded: big ones, unless a filter is on (then every root with matches stays open). */
+export function defaultFolded(data: { nodes: ProvNode[]; links: ProvLink[]; roots: ProvRoot[] }, filtering: boolean): Set<string> {
+  if (filtering) return new Set()
+  const ids = new Set(data.nodes.map((n) => n.id))
+  const count = new Map<string, number>()
+  for (const [child, l] of primaryParent(data.links, data.roots, data.nodes)) if (ids.has(child)) count.set(l.parent, (count.get(l.parent) ?? 0) + 1)
+  return new Set([...count].filter(([id, n]) => n > FOLD_OVER && isRootType(id)).map(([id]) => id))
 }

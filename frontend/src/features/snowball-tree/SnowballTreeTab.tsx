@@ -3,6 +3,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { refreshTree, useProvenance, useSearchRuns, useSnowball } from '@/api/queries'
 import { Button } from '@/components/ui/button'
 import { friendlySnowballError } from '@/features/workspace-search/snowballText'
+import { defaultFolded } from './layout'
 import { SidePanel } from './SidePanel'
 import { SnowballNext } from './SnowballNext'
 import { hiddenIds, NO_FILTERS, TreeFilters } from './TreeFilters'
@@ -13,9 +14,13 @@ export function SnowballTreeTab({ workspaceId }: { workspaceId: string }) {
   const [selected, setSelected] = useState<string | null>(null)
   const runs = useSearchRuns(workspaceId).data
   const runLabels = useMemo(() => Object.fromEntries((runs ?? []).map((r) => [r.id, r.query_text])), [runs])
-  const [folded, setFolded] = useState<Set<string>>(new Set())
+  const [flipped, setFlipped] = useState<Set<string>>(new Set()) // boxes the owner folded or unfolded against their default
   const [filters, setFilters] = useState(NO_FILTERS)
   const hidden = useMemo(() => (data ? hiddenIds(data, filters) : new Set<string>()), [data, filters])
+  const folded = useMemo(() => {
+    const base = data ? defaultFolded(data, hidden.size > 0) : new Set<string>()
+    return new Set([...base, ...flipped].filter((id) => base.has(id) !== flipped.has(id)))
+  }, [data, hidden, flipped])
   const [showStopped, setShowStopped] = useState(false)
   const [opened, setOpened] = useState<Set<string>>(new Set()) // stopped boxes the owner unfolded by hand
   const [busy, setBusy] = useState<string | null>(null)
@@ -35,7 +40,7 @@ export function SnowballTreeTab({ workspaceId }: { workspaceId: string }) {
         return next
       }
       if (stopped.has(id) && !showStopped) setOpened(flip)
-      else setFolded(flip)
+      else setFlipped(flip)
     },
     [stopped, showStopped],
   )
