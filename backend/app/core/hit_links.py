@@ -11,17 +11,22 @@ from app.models.workspace_search import WorkspaceSearchHit, WorkspaceSearchRun
 
 MAX_DEPTH = 50
 
-# Walks up through parent hits (cycle-safe via the depth cap). A node ends the walk when it has a search link, a
+# Walks up through parent hits. Cycle-safe: each path never revisits a node, and a node with a search link (a
+# root, level 0) is not expanded further; the depth cap is a last brake. A node ends the walk when it has a search link, a
 # link to a bare paper (that paper counts as level 0, so the node is level 1), or no links at all (legacy data,
 # level 0). The level is the shallowest such node's depth plus its own level.
 _LEVEL_SQL = text(
     """
-    WITH RECURSIVE walk(hit_id, depth) AS (
-        SELECT CAST(:hit_id AS uuid), 0
+    WITH RECURSIVE walk(hit_id, depth, path) AS (
+        SELECT CAST(:hit_id AS uuid), 0, ARRAY[CAST(:hit_id AS uuid)]
         UNION ALL
-        SELECT l.parent_hit_id, w.depth + 1
+        SELECT l.parent_hit_id, w.depth + 1, w.path || l.parent_hit_id
         FROM walk w JOIN workspace_hit_links l ON l.child_hit_id = w.hit_id
         WHERE l.parent_hit_id IS NOT NULL AND w.depth < :max_depth
+          AND NOT l.parent_hit_id = ANY(w.path)
+          AND NOT EXISTS (
+              SELECT 1 FROM workspace_hit_links s WHERE s.child_hit_id = w.hit_id AND s.kind = 'search'
+          )
     )
     SELECT min(w.depth + CASE WHEN has_search THEN 0 WHEN has_paper_parent THEN 1 ELSE 0 END)
     FROM walk w

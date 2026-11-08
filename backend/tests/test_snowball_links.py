@@ -215,3 +215,36 @@ async def test_snowball_links_existing_pool_hit(session, edge_providers):
     assert second.new_hits == 0
     links = await _links_of(session, workspace.id, child_hit_id=child_id)
     assert {link.parent_hit_id for link in links} == {seed.id, other.id}
+
+
+async def test_level_of_terminates_on_a_dense_cyclic_graph(session):
+    from app.core.hit_links import level_of
+
+    workspace, run = await _workspace_and_run(session)
+    root = await _seed_hit(session, workspace, run)  # has the only search link
+    others = []
+    for _ in range(5):
+        ref = ExternalRef(title=f"dense {uuid.uuid4().hex[:8]}")
+        session.add(ref)
+        await session.flush()
+        hit = WorkspaceSearchHit(
+            workspace_id=workspace.id, run_id=run.id, external_ref_id=ref.id, source_method="snowball_backward",
+            normalized_title=uuid.uuid4().hex, first_seen_at=datetime.now(timezone.utc),
+        )
+        session.add(hit)
+        await session.flush()
+        others.append(hit)
+    everyone = [root, *others]
+    for child in everyone:
+        for parent in everyone:
+            if child.id == parent.id:
+                continue
+            for kind in ("cites", "cited_by"):
+                session.add(WorkspaceHitLink(
+                    workspace_id=workspace.id, child_hit_id=child.id, parent_hit_id=parent.id, run_id=run.id,
+                    kind=kind,
+                ))
+    await session.commit()
+
+    assert await level_of(session, root.id) == 0
+    assert [await level_of(session, hit.id) for hit in others] == [1] * 5
