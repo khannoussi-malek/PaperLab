@@ -105,6 +105,8 @@ async def test_branch_route_round_trip(client, session):
     assert resp.json()["state"] is None
     bad = await client.put(url, json={"hit_id": str(hit.id), "state": "go_further"})
     assert bad.status_code == 422
+    missing = await client.put(url, json={"hit_id": str(hit.id)})  # state is required, null clears
+    assert missing.status_code == 422
 
 
 async def test_flipped_decision_updates_a_screening_default(session):
@@ -137,3 +139,33 @@ async def test_default_skips_hits_from_another_workspace(session):
     _, (foreign,) = await make_pool(session, [("z", None)])
     await branches.default_branch_on_decision(session, workspace.id, [foreign.id], "relevant")
     assert await _row(session, foreign) is None
+
+
+async def test_maybe_clears_a_screening_default(session):
+    workspace, (hit,) = await make_pool(session, [("a", None)])
+    await workspace_search.review_hit(session, hit.id, workspace.id, HitReviewUpdate(stage1_status="relevant"))
+    assert (await _row(session, hit)).state == "go_further"
+    await workspace_search.review_hit(session, hit.id, workspace.id, HitReviewUpdate(stage1_status="maybe"))
+    assert await _row(session, hit) is None
+
+
+async def test_branch_on_a_papers_hit_is_stored_on_the_hit(session):
+    from app.core import workspaces
+    from app.models import Paper
+
+    workspace, (hit,) = await make_pool(session, [("a", None)])
+    paper = Paper(title="P", file_path="/p.pdf")
+    session.add(paper)
+    await session.flush()
+    await workspaces.add_paper(session, workspace.id, paper.id)
+    hit.paper_id = paper.id
+    await session.flush()
+
+    out = await branches.set_branch(
+        session, workspace.id, paper_id=paper.id, state="stopped", directions=[], reason="no"
+    )
+    assert (out.hit_id, out.paper_id) == (hit.id, None)
+    assert (await _row(session, hit)).state == "stopped"
+    rows = (await session.scalars(select(WorkspaceBranchState).where(
+        WorkspaceBranchState.workspace_id == workspace.id))).all()
+    assert [r.paper_id for r in rows] == [None]

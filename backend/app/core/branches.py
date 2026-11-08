@@ -8,6 +8,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import InvalidInput, NotFound
+from app.core.hit_links import seed_parent
 from app.models import workspace_papers
 from app.models.provenance import WorkspaceBranchState
 from app.models.workspace_search import WorkspaceSearchHit
@@ -16,6 +17,8 @@ from app.schemas.workspace_search import BranchOut
 DIRECTIONS = ("cites", "cited_by")
 STATES = ("go_further", "stopped")
 REASON_MAX = 200
+# 6 bound parameters per row (5,000 rows = 30,000); asyncpg allows 32,767 per statement.
+INSERT_CHUNK = 5000
 
 
 def _validate(hit_id, paper_id, state, directions, reason) -> list[str]:
@@ -57,6 +60,8 @@ async def set_branch(
     "go_further"."""
     ordered = _validate(hit_id, paper_id, state, directions, reason)
     await _check_target(session, workspace_id, hit_id, paper_id)
+    if paper_id is not None and (parent := await seed_parent(session, workspace_id, paper_id)) is not None:
+        hit_id, paper_id = parent, None  # a paper that has a hit here is that hit's branch
     if state is None:
         await session.execute(delete(WorkspaceBranchState).where(
             WorkspaceBranchState.workspace_id == workspace_id,
@@ -87,15 +92,16 @@ async def default_branch_on_decision(
 ) -> None:
     """Screening's default follows the decision: relevant -> go further both ways, not_relevant -> stopped, undone
     (None) -> no row. Only rows set_by 'screening' are touched, so a hand choice is never overwritten or removed.
-    Ignores hits outside the workspace; does not commit (the caller does). Any other status ('maybe') is a no-op."""
-    if not hit_ids or stage1_status not in ("relevant", "not_relevant", None):
+    Ignores hits outside the workspace; does not commit (the caller does). Any other status ('maybe') is
+    undecided too, so it clears the default like None."""
+    if not hit_ids:
         return
     owned = (await session.scalars(select(WorkspaceSearchHit.id).where(
         WorkspaceSearchHit.id.in_(hit_ids), WorkspaceSearchHit.workspace_id == workspace_id
     ))).all()
     if not owned:
         return
-    if stage1_status is None:
+    if stage1_status not in ("relevant", "not_relevant"):
         await session.execute(delete(WorkspaceBranchState).where(
             WorkspaceBranchState.workspace_id == workspace_id, WorkspaceBranchState.hit_id.in_(owned),
             WorkspaceBranchState.set_by == "screening",
@@ -103,10 +109,12 @@ async def default_branch_on_decision(
         return
     state = "go_further" if stage1_status == "relevant" else "stopped"
     values = {"state": state, "directions": list(DIRECTIONS) if state == "go_further" else [], "reason": None}
-    insert = pg_insert(WorkspaceBranchState).values([
-        {"workspace_id": workspace_id, "hit_id": h, "set_by": "screening", **values} for h in owned
-    ])
-    await session.execute(insert.on_conflict_do_update(
-        constraint="uq_workspace_branch_states_target", set_={**values, "updated_at": datetime.now(timezone.utc)},
-        where=WorkspaceBranchState.set_by == "screening",
-    ))
+    for start in range(0, len(owned), INSERT_CHUNK):
+        insert = pg_insert(WorkspaceBranchState).values([
+            {"workspace_id": workspace_id, "hit_id": h, "set_by": "screening", **values}
+            for h in owned[start:start + INSERT_CHUNK]
+        ])
+        await session.execute(insert.on_conflict_do_update(
+            constraint="uq_workspace_branch_states_target", set_={**values, "updated_at": datetime.now(timezone.utc)},
+            where=WorkspaceBranchState.set_by == "screening",
+        ))
