@@ -518,7 +518,14 @@ def _s2_handle(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={"offset": 0, "data": [{"citedPaper": p} for p in s2_papers]})
     if path.endswith("/citations") and f"{DOI_PREFIX}closed" in path:  # a second hop, for the snowball tree's E2E
         return httpx.Response(
-            200, json={"offset": 0, "data": [{"citingPaper": _s2_paper(50, SECOND_HOP_TITLE, SECOND_HOP_DOI, None)}]}
+            200,
+            json={
+                "offset": 0,
+                "data": [
+                    {"citingPaper": s2_papers[0]},
+                    {"citingPaper": _s2_paper(50, SECOND_HOP_TITLE, SECOND_HOP_DOI, None)},
+                ],
+            },
         )
     if path.endswith("/citations"):
         return httpx.Response(200, json={"offset": 0, "data": [{"citingPaper": s2_papers[0]}]})
