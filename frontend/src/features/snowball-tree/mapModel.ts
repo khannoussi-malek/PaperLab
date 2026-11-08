@@ -16,16 +16,23 @@ export function keyPaperIds(nodes: ProvNode[], n = 10): Set<string> {
   return new Set([...nodes].sort((a, b) => b.paths - a.paths || a.id.localeCompare(b.id)).slice(0, n).map((p) => p.id))
 }
 
+/** One level band's height: the total height asked for split by level, else LEVEL_H each. */
+export function bandHeight(nodes: ProvNode[], height?: number): number {
+  const levels = Math.max(0, ...nodes.map((p) => p.level)) + 1
+  return height ? height / levels : LEVEL_H
+}
+
 /** Fixed places, the same for the same data: x by year, y in the paper's level band, both jittered by a hash of the id. */
-export function mapPositions(nodes: ProvNode[]): Map<string, { x: number; y: number }> {
+export function mapPositions(nodes: ProvNode[], height?: number): Map<string, { x: number; y: number }> {
   const years = nodes.flatMap((p) => (p.year ? [p.year] : []))
   const minYear = Math.min(...years)
+  const band = bandHeight(nodes, height)
   return new Map(
     nodes.map((p) => [
       p.id,
       {
         x: (p.year ? (p.year - minYear) * YEAR_W : NO_YEAR_X) + (unit(p.id, 'x') - 0.5) * YEAR_W * 0.7,
-        y: p.level * LEVEL_H + (unit(p.id, 'y') - 0.5) * LEVEL_H * 0.8,
+        y: p.level * band + (unit(p.id, 'y') - 0.5) * band * 0.8,
       },
     ]),
   )

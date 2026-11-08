@@ -5,10 +5,14 @@ import { cn } from '@/lib/utils'
 import { isUnknown, PARENT_NOT_RECORDED, tidyLayout } from './layout'
 import { toRadial, RING } from './radial'
 import { Legend } from './TreeView'
-import { decisionKey, paperLabel, SVG_TONE } from './viewShared'
+import { decisionKey, paperLabel, type DecisionKey } from './viewShared'
 
 type Props = { data: ProvenanceOut; selected: string | null; onSelect: (id: string | null) => void; hidden: Set<string> }
-const NODE_R = 5
+const SOLID: Record<DecisionKey, string> = { relevant: 'fill-included', not_relevant: 'fill-destructive', none: 'fill-muted-foreground' }
+const FAN_OVER = 40 // a parent with more children than this draws one wedge instead of a line each
+const LABEL_SECTOR = (12 * Math.PI) / 180
+const dotR = (paths: number) => (paths > 1 ? 4 : 3)
+const rootText = (s: string) => (s.length > 18 ? `${s.slice(0, 17)}…` : s)
 
 /** How big is the search, and where does it spread: search roots in the centre, one ring per level. */
 export function RadialView({ data, selected, onSelect, hidden }: Props) {
@@ -21,8 +25,19 @@ export function RadialView({ data, selected, onSelect, hidden }: Props) {
   const drag = useRef<{ x: number; y: number } | null>(null)
   const rings = useMemo(() => [...new Set(data.levels.map((l) => l.level))].sort((a, b) => a - b), [data.levels])
   const outer = Math.max(RING, ...boxes.map((b) => b.radius), ...rings.map((l) => (l + 1) * RING))
-  const fit = size.width ? Math.min(2, (Math.min(size.width, size.height) / 2 - 24) / (outer + NODE_R)) : 1
+  const fit = size.width ? Math.min(2, (Math.min(size.width, size.height) / 2 - 24) / (outer + 8)) : 1
   const scale = fit * view.k
+  const fans = useMemo(() => {
+    const kids = new Map<string, string[]>()
+    for (const e of layout.edges) kids.set(e.from, [...(kids.get(e.from) ?? []), e.to])
+    return [...kids].filter(([, k]) => k.length > FAN_OVER).map(([id, k]) => {
+      const p = at.get(id)!, angles = k.map((c) => at.get(c)!.angle), r = at.get(k[0])!.radius
+      const [a0, a1] = [Math.min(...angles), Math.max(...angles)]
+      const pt = (a: number) => `${r * Math.cos(a)},${r * Math.sin(a)}`
+      return { id, d: `M${p.x},${p.y} L${pt(a0)} A${r},${r} 0 ${a1 - a0 > Math.PI ? 1 : 0} 1 ${pt(a1)} Z` }
+    })
+  }, [layout, at])
+  const fanIds = useMemo(() => new Set(fans.map((f) => f.id)), [fans])
   const tipBox = tip ? at.get(tip) : undefined
   // The hovered (else selected) paper's own way back to its search: every node on it, so the edge into each lights up.
   const path = useMemo(() => {
@@ -52,7 +67,9 @@ export function RadialView({ data, selected, onSelect, hidden }: Props) {
                 <text y={-(l + 1) * RING - 4} textAnchor="middle" className="fill-muted-foreground" fontSize={12 / scale}>{`Level ${l}`}</text>
               </g>
             ))}
+            {fans.map((f) => <path key={f.id} d={f.d} className="fill-muted-foreground" fillOpacity={0.06} />)}
             {layout.edges.map((e) => {
+              if (fanIds.has(e.from) && !path.has(e.to) && (tip ?? selected) !== e.from) return null
               const a = at.get(e.from)!, b = at.get(e.to)!
               const on = path.has(e.to)
               return (
@@ -75,10 +92,24 @@ export function RadialView({ data, selected, onSelect, hidden }: Props) {
                   onClick={pick} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick() } }}
                   onMouseEnter={() => setTip(box.id)} onMouseLeave={() => setTip(null)} onFocus={() => setTip(box.id)} onBlur={() => setTip(null)}
                 >
-                  <circle r={node ? NODE_R : 6} className={SVG_TONE[node ? decisionKey(node) : 'root']} strokeWidth={selected === box.id ? 3 : 1.5} vectorEffect="non-scaling-stroke" />
-                  {node?.branch?.state === 'go_further' && <circle r={NODE_R + 3} fill="none" data-branch="go_further" className="stroke-included" strokeWidth={1.5} />}
-                  {node?.branch?.state === 'stopped' && <circle r={NODE_R + 3} fill="none" data-branch="stopped" className="stroke-destructive" strokeWidth={1.5} strokeDasharray="2 2" />}
+                  <circle r={8} fill="transparent" />
+                  <circle r={node ? dotR(node.paths) : 4} className={node ? SOLID[decisionKey(node)] : 'fill-muted-foreground'} />
+                  {node?.branch?.state === 'go_further' && <circle r={dotR(node.paths) + 2.5} fill="none" data-branch="go_further" className="stroke-included" strokeWidth={1} />}
+                  {node?.branch?.state === 'stopped' && <circle r={dotR(node.paths) + 2.5} fill="none" data-branch="stopped" className="stroke-destructive" strokeWidth={1} strokeDasharray="2 2" />}
+                  {selected === box.id && <circle r={(node ? dotR(node.paths) : 4) + 5} fill="none" className="stroke-foreground" strokeWidth={1.5} />}
                 </g>
+              )
+            })}
+            {boxes.filter((b) => b.box.root && boxes.filter((r) => r.box.root).length > 1 && b.sector[1] - b.sector[0] >= LABEL_SECTOR).map((b) => {
+              const flip = Math.cos(b.angle) < 0
+              return (
+                <text
+                  key={b.box.id} aria-hidden fontSize={10 / scale} className="pointer-events-none fill-muted-foreground"
+                  transform={`translate(${b.x} ${b.y}) rotate(${(b.angle * 180) / Math.PI + (flip ? 180 : 0)}) translate(${(flip ? -9 : 9) / scale} 0)`}
+                  textAnchor={flip ? 'end' : 'start'} dominantBaseline="middle"
+                >
+                  {rootText(b.box.root!.label)}
+                </text>
               )
             })}
             {tipBox && (

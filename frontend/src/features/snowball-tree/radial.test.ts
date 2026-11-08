@@ -53,3 +53,11 @@ test('with children, papers stay inside their root sector and level-0 angles dif
     expect(b.angle).toBeLessThanOrEqual(hi + 1e-9)
   }
 })
+
+test('one search holding 70% of the papers: the smallest sector is at least 6 degrees, the biggest under 60% of the circle', () => {
+  const out = build(25, (r) => (r === 0 ? 56 : 1), 3) // root 0: 56*4=224 of 320 papers (70%)
+  const sectors = out.filter((b) => b.box.root).map((b) => b.sector[1] - b.sector[0])
+  expect(Math.min(...sectors)).toBeGreaterThanOrEqual((MIN_SECTOR * Math.PI) / 180 - 1e-9)
+  expect(Math.max(...sectors)).toBeLessThan(0.6 * 2 * Math.PI)
+  expect(sectors.reduce((s, x) => s + x, 0)).toBeCloseTo(2 * Math.PI)
+})

@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { endId, withAlpha } from '@/features/graph/graphModel'
 import { GraphLoadError } from '@/features/graph/GraphCanvas'
 import { useBoxSize } from '@/features/graph/useBoxSize'
-import { keyPaperIds, LEVEL_H, mapPositions, NO_YEAR_X, YEAR_W, yearTicks } from './mapModel'
+import { bandHeight, keyPaperIds, mapPositions, NO_YEAR_X, YEAR_W, yearTicks } from './mapModel'
 import { Legend } from './TreeView'
 import { decisionKey } from './viewShared'
 
@@ -35,8 +35,12 @@ export function MapView({ data, selected, onSelect, hidden }: Props) {
   }, [])
 
   const key = useMemo(() => keyPaperIds(data.nodes), [data.nodes])
+  // Make the picture as tall as the canvas allows: its width is fixed by the years, so y gets width * (h / w), less 30% margins.
+  const years = data.nodes.flatMap((n) => (n.year ? [n.year] : []))
+  const xExtent = ((years.length ? Math.max(...years) - Math.min(...years) : 0) + 3.5) * YEAR_W
+  const spread = size.width ? Math.max(200, (xExtent * size.height) / size.width * 0.7) : undefined
   const graph = useMemo(() => {
-    const at = mapPositions(data.nodes)
+    const at = mapPositions(data.nodes, spread)
     const nodes: MapNode[] = data.nodes.map((n) => {
       const { x, y } = at.get(n.id)!
       return { id: n.id, title: n.title, level: n.level, year: n.year ?? null, paths: n.paths, decision: decisionKey(n), branch: n.branch?.state ?? null, x, y, fx: x, fy: y }
@@ -44,17 +48,19 @@ export function MapView({ data, selected, onSelect, hidden }: Props) {
     const ids = new Set(nodes.map((n) => n.id))
     const links = data.links.filter((l) => ids.has(l.parent) && ids.has(l.child)).map((l) => ({ source: l.parent, target: l.child, kind: l.kind }))
     return { nodes, links }
-  }, [data])
+  }, [data, spread])
   const noYear = useMemo(() => new Set(data.nodes.filter((n) => !n.year).map((n) => n.id)), [data.nodes])
   const ticks = useMemo(() => yearTicks(data.nodes), [data.nodes])
   const minYear = ticks[0]
-  const bottom = (Math.max(0, ...data.nodes.map((n) => n.level)) + 0.5) * LEVEL_H + 40
+  const band = bandHeight(data.nodes, spread)
+  const levels = Array.from({ length: Math.max(0, ...data.nodes.map((n) => n.level)) + 1 }, (_, i) => i)
+  const bottom = (levels.length - 0.5) * band + 30
 
   // Fit the picture to the canvas once the nodes sit where they are going to stay.
   const ready = Graph !== null && size.width > 0
   useEffect(() => {
     if (!ready) return
-    const t = setTimeout(() => graphRef.current?.zoomToFit(0, 50), 60)
+    const t = setTimeout(() => graphRef.current?.zoomToFit(0, 70), 60)
     return () => clearTimeout(t)
   }, [ready, graph, size.width, size.height])
 
@@ -86,6 +92,8 @@ export function MapView({ data, selected, onSelect, hidden }: Props) {
     ctx.save(); ctx.fillStyle = token('--muted-foreground', '#64748b'); ctx.font = `${12 / scale}px system-ui, sans-serif`; ctx.textAlign = 'center'
     for (const y of ticks) ctx.fillText(String(y), (y - minYear) * YEAR_W, bottom)
     if (data.nodes.some((n) => !n.year)) ctx.fillText('No year', NO_YEAR_X, bottom)
+    ctx.textAlign = 'right'
+    for (const l of levels) ctx.fillText(`Level ${l}`, NO_YEAR_X - YEAR_W * 0.6, l * band)
     ctx.restore()
   }
 

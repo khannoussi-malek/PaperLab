@@ -28,13 +28,15 @@ export function toRadial(layout: Layout): RadialBox[] {
   const tops = layout.boxes.filter((b) => !hasParent.has(b.id))
   tops.forEach((t) => count(t.id))
 
-  const total = tops.reduce((s, t) => s + leaves.get(t.id)!, 0)
+  // sqrt of the papers underneath: small searches get room, the big one still reads as biggest
+  const weight = (id: string) => Math.sqrt(leaves.get(id)!)
+  const total = tops.reduce((s, t) => s + weight(t.id), 0)
   const full = 2 * Math.PI
   const min = (MIN_SECTOR * Math.PI) / 180
-  const small = tops.filter((t) => (leaves.get(t.id)! / total) * full < min)
-  const rest = total - small.reduce((s, t) => s + leaves.get(t.id)!, 0)
+  const small = tops.filter((t) => (weight(t.id) / total) * full < min)
+  const rest = total - small.reduce((s, t) => s + weight(t.id), 0)
   const room = full - small.length * min
-  const width = (id: string) => (small.some((t) => t.id === id) ? min : (leaves.get(id)! / rest) * room)
+  const width = (id: string) => (small.some((t) => t.id === id) ? min : (weight(id) / rest) * room)
 
   const out = new Map<string, RadialBox>()
   const rootCount = layout.boxes.filter((b) => b.root).length
@@ -44,10 +46,10 @@ export function toRadial(layout: Layout): RadialBox[] {
     const radius = box.root ? (rootCount > 1 ? ROOT_RING : 0) : Math.round(box.x / COL) * RING
     out.set(id, { box, angle, radius, x: radius * Math.cos(angle), y: radius * Math.sin(angle), sector: [a0, a1] })
     const k = kids.get(id) ?? []
-    const sum = k.reduce((s, c) => s + leaves.get(c)!, 0)
+    const sum = k.reduce((s, c) => s + weight(c), 0)
     let at = a0
     for (const c of k) {
-      const w = ((a1 - a0) * leaves.get(c)!) / sum
+      const w = ((a1 - a0) * weight(c)) / sum
       place(c, at, at + w)
       at += w
     }

@@ -34,3 +34,10 @@ test('positions are stable: x by year, y by level, no-year lane at the far left'
   expect(one.get('b')!.y).not.toBe(one.get('c')!.y)
   expect(one.get('a')!.y).toBeLessThan(one.get('d')!.y)
 })
+
+test('the y spread follows the height asked for, with room at both ends', () => {
+  const nodes = [...Array.from({ length: 20 }, (_, i) => n(`a${i}`, 0, 2020)), ...Array.from({ length: 20 }, (_, i) => n(`b${i}`, 1, 2021))]
+  const ys = [...mapPositions(nodes, 400).values()].map((p) => p.y)
+  expect(Math.max(...ys) - Math.min(...ys)).toBeGreaterThan(250)
+  expect(Math.max(...ys) - Math.min(...ys)).toBeLessThanOrEqual(400)
+})
