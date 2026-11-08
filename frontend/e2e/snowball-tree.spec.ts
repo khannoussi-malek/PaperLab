@@ -11,7 +11,7 @@ async function waitForRunToFinish(request: APIRequestContext, workspaceId: strin
 }
 
 // Fake titles (backend/app/providers/discovery_fake.py): other sources return the three PAPERS; the fake
-// Semantic Scholar gives any seed all three PAPERS as references, and the closed paper one extra citing work.
+// Semantic Scholar gives any seed all three PAPERS as references, and the closed paper two citing works (the free paper and Second Hop).
 const SEED = 'PaperLab Closed Access Fixture' // a search hit (level 0): the other sources' fakes return the three PAPERS
 const LEVEL_ONE = 'PaperLab Second Hop Fixture' // cites the seed: reached by "cited by"
 const LEVEL_TWO = 'PaperLab Third Hop Fixture' // cited by the level-1 paper: reached by "it cites"
@@ -62,7 +62,7 @@ test('the snowball tree shows levels, runs the next hop, and explains a level-2 
 
   // 4. Open the level-2 paper: its trail uses both arrow kinds.
   await levelTwo.click()
-  const trail = page.getByRole('tabpanel', { name: 'Snowball tree' }).getByText('Why is this here?').locator('..')
+  const trail = page.getByRole('tabpanel', { name: 'Snowball tree' }).getByRole('region', { name: 'Why is this here?' })
   await expect(trail).toContainText('(it cites)')
   await expect(trail).toContainText('(cited by)')
 })
