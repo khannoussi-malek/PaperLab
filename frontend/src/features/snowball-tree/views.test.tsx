@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, fireEvent, cleanup, within } from '@testing-library/react'
+import { act, render, screen, fireEvent, cleanup, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, expect, test, vi } from 'vitest'
 import * as queries from '@/api/queries'
@@ -138,4 +138,16 @@ test('Map: Key papers says so when no paper has more than one route', async () =
   fireEvent.click(screen.getByRole('button', { name: 'Key papers' }))
   expect(screen.getByText('No paper is reached by more than one route yet. Key papers appear as snowballing links them.')).toBeTruthy()
   expect(screen.queryByRole('list', { name: 'Key papers' })).toBeNull()
+})
+
+// Live crash, 2026-11-09: a pointer move and a pointer up in the same batch made the state updater read a drag ref
+// that pointerup had already cleared ("Cannot read properties of null (reading 'x')").
+test.each(['Tree', 'Radial'])('%s: releasing the mouse in the same update as a drag move does not crash', (name) => {
+  setup(); view(name)
+  const frame = document.querySelector('.cursor-grab') as HTMLElement
+  fireEvent.pointerDown(frame, { clientX: 100, clientY: 100 })
+  expect(() => act(() => {
+    fireEvent.pointerMove(frame, { clientX: 140, clientY: 120 })
+    fireEvent.pointerUp(frame)
+  })).not.toThrow()
 })
