@@ -108,7 +108,7 @@ async def level_of(session: AsyncSession, hit_id: uuid.UUID) -> int:
 
 HAND = "root:hand"
 _MIN = datetime.min.replace(tzinfo=timezone.utc)
-PATHS_ENUM_CAP = 1000
+PATHS_STEP_BUDGET = 10_000
 
 
 class _Edge(NamedTuple):
@@ -193,11 +193,13 @@ async def _graph(session, workspace_id, ids, runs, extra_papers=()):
     if paper_ids:
         papers = {p.id: p for p in await session.scalars(select(Paper).where(_in(Paper.id, paper_ids)))}
     started = {rid: r.started_at for rid, r in runs.items()}
-    edges, linked = [], set()
+    edges, linked, refound = [], set(), []
     for lk in links:
         if lk.child_hit_id not in hits or (lk.parent_hit_id and lk.parent_hit_id not in hits):
             continue
         linked.add(lk.child_hit_id)
+        if lk.run_id != hits[lk.child_hit_id][0].run_id:
+            refound.append(str(lk.child_hit_id))  # a raw link from a run that did not first store the hit
         if lk.kind == "search":
             parent = f"root:{lk.run_id}"
         elif lk.parent_hit_id:
@@ -220,7 +222,7 @@ async def _graph(session, workspace_id, ids, runs, extra_papers=()):
     first: dict[tuple, _Edge] = {}
     for e in edges:
         first.setdefault((e.parent, e.child, e.kind), e)
-    return hits, papers, list(first.values())
+    return hits, papers, list(first.values()), refound
 
 
 def _levels(nodes: set[str], edges: list[_Edge]) -> dict[str, int]:
@@ -292,7 +294,7 @@ async def provenance(
                 bare.append(uuid.UUID(seed["id"]))
             except ValueError:
                 pass
-    hits, papers, edges = await _graph(session, workspace_id, ids, runs, bare)
+    hits, papers, edges, refound = await _graph(session, workspace_id, ids, runs, bare)
     bare = [p for p in bare if p in papers]
     for p in bare:
         if not any(e.child == f"paper:{p}" for e in edges):
@@ -334,7 +336,7 @@ async def provenance(
              for e in edges]
     return ProvenanceOut(
         nodes=nodes, links=links, roots=await _roots(session, workspace_id, runs, node_ids, edges, level),
-        levels=_level_stats(nodes, edges, hits, level, runs), truncated=truncated)
+        levels=_level_stats(nodes, edges, hits, level, runs, refound), truncated=truncated)
 
 
 async def _roots(session, workspace_id, runs, node_ids, edges, level) -> list[ProvRoot]:
@@ -342,6 +344,13 @@ async def _roots(session, workspace_id, runs, node_ids, edges, level) -> list[Pr
         select(WorkspaceHitLink.run_id, func.count()).where(
             WorkspaceHitLink.workspace_id == workspace_id, WorkspaceHitLink.kind == "search")
         .group_by(WorkspaceHitLink.run_id))).all())
+    legacy = await session.execute(  # database_search hits with no link at all still belong to their run's root
+        select(WorkspaceSearchHit.run_id, func.count()).where(
+            WorkspaceSearchHit.workspace_id == workspace_id, WorkspaceSearchHit.source_method.not_like("snowball%"),
+            ~exists().where(WorkspaceHitLink.child_hit_id == WorkspaceSearchHit.id),
+        ).group_by(WorkspaceSearchHit.run_id))
+    for run_id, n in legacy:
+        counts[run_id] = counts.get(run_id, 0) + n
     on_tree: dict[str, int] = defaultdict(int)
     for root in _tree_roots(node_ids, edges, level).values():
         if root:
@@ -358,16 +367,13 @@ async def _roots(session, workspace_id, runs, node_ids, edges, level) -> list[Pr
     return roots
 
 
-def _level_stats(nodes: list[ProvNode], edges: list[_Edge], hits, level, runs) -> list[LevelStats]:
+def _level_stats(nodes: list[ProvNode], edges: list[_Edge], hits, level, runs, refound) -> list[LevelStats]:
     deepest = max(level.values(), default=0)
-    hit_run = {str(hid): h.run_id for hid, (h, _, _) in hits.items()}
     out = []
     for lv in range(deepest + 1):
         here = [n for n in nodes if n.level == lv]
         into = [e for e in edges if level.get(e.child) == lv]
-        known = sum(
-            1 for e in into
-            if e.run_id is not None and hit_run.get(e.child, e.run_id) != e.run_id)
+        known = sum(level.get(c) == lv for c in refound)
         go = [n for n in here if n.branch and n.branch.state == "go_further"]
         saturated = False
         if lv == deepest:
@@ -388,30 +394,26 @@ async def paths_to(
     session: AsyncSession, workspace_id: uuid.UUID, hit_id: uuid.UUID, limit: int = 20
 ) -> list[list[ProvLink]]:
     """Every root-to-hit path, shortest first. Walks up from the hit over simple paths only (no repeated node).
-    ponytail: enumeration stops at PATHS_ENUM_CAP paths; a densely cross-linked hit would need a k-shortest-paths
-    search instead."""
+    ponytail: the search stops after PATHS_STEP_BUDGET expansions, so a hit buried in a dense
+    cross-linked graph may return fewer than `limit` paths."""
     owned = await session.scalar(select(WorkspaceSearchHit.id).where(
         WorkspaceSearchHit.id == hit_id, WorkspaceSearchHit.workspace_id == workspace_id))
     if owned is None:
         raise NotFound(f"hit {hit_id} not found")
-    _, _, edges = await _graph(session, workspace_id, {hit_id}, await _runs(session, workspace_id))
+    _, _, edges, _ = await _graph(session, workspace_id, {hit_id}, await _runs(session, workspace_id))
     above = defaultdict(list)
     for e in edges:
         above[e.child].append(e)
-    found: list[list[_Edge]] = []
-
-    def climb(node: str, tail: list[_Edge], visited: set[str]) -> None:
-        if len(found) >= PATHS_ENUM_CAP:
-            return
-        ups = [e for e in above[node] if e.parent not in visited]
+    found: list[tuple[_Edge, ...]] = []
+    queue = deque([(str(hit_id), (), frozenset({str(hit_id)}))])
+    for _ in range(PATHS_STEP_BUDGET):  # breadth-first over partial paths, so complete ones come out shortest first
+        if not queue or len(found) >= limit:
+            break
+        node, tail, visited = queue.popleft()
         if not above[node]:
             found.append(tail)
-        for e in ups:
-            climb(e.parent, [e, *tail], visited | {e.parent})
-
-    climb(str(hit_id), [], {str(hit_id)})
-    found.sort(key=len)
+        queue.extend((e.parent, (e, *tail), visited | {e.parent}) for e in above[node] if e.parent not in visited)
     return [
         [ProvLink(parent=e.parent, child=e.child, kind=e.kind, run_id=e.run_id, created_at=e.created_at) for e in p]
-        for p in found[:limit]
+        for p in found
     ]

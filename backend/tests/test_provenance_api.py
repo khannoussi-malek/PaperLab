@@ -222,3 +222,73 @@ async def test_routes(client, session):
     assert res.status_code == 200
     res = await client.get(f"/api/workspaces/{ws.id}/search/hits/{c.id}/paths")
     assert res.status_code == 200 and len(res.json()) == 1 and len(res.json()[0]) == 3
+
+
+async def test_refound_edge_counts_as_already_known(session):
+    ws, _, _, a, b, _ = await _chain(session)
+    again = await _run(session, ws, minutes=9)
+    await _link(session, ws, again, b, a, "cites", at=9)  # the same a->b edge, found again by a later run
+    lv = {x.level: x for x in (await provenance(session, ws.id)).levels}
+    assert lv[1].already_known == 1
+
+
+async def test_dense_cyclic_graph_returns_quickly_shortest_first(session):
+    ws = await _workspace(session)
+    run = await _run(session, ws)
+    hits = [await _hit(session, ws, run, f"d{i}", n=i) for i in range(20)]
+    await _link(session, ws, run, hits[0])
+    for i, child in enumerate(hits):
+        for j, parent in enumerate(hits):
+            if i != j:
+                await _link(session, ws, run, child, parent, "cites", at=1)
+    paths = await paths_to(session, ws.id, hits[19].id, limit=5)
+    assert 0 < len(paths) <= 5
+    assert [len(p) for p in paths] == sorted(len(p) for p in paths) and len(paths[0]) == 2
+
+
+async def test_tie_break_runs_then_parent_id(session):
+    ws = await _workspace(session)
+    early = await _run(session, ws, minutes=0, query="early")
+    late = await _run(session, ws, minutes=5, query="late")
+    kid = await _hit(session, ws, late, "Kid")
+    await _link(session, ws, late, kid, at=1)  # same created_at from both runs
+    await _link(session, ws, early, kid, at=1)
+    out = await provenance(session, ws.id, all_hits_run_id=late.id)
+    assert [x.parent for x in out.links if x.child == str(kid.id)] == [f"root:{early.id}", f"root:{late.id}"]
+    assert {r.id: r.on_tree for r in out.roots} == {f"root:{early.id}": 1, f"root:{late.id}": 0}
+
+    p1 = await _hit(session, ws, early, "P1", status="relevant")
+    p2 = await _hit(session, ws, early, "P2", status="relevant")
+    for p in (p1, p2):
+        await _link(session, ws, early, p)
+    other = await _hit(session, ws, late, "Other")
+    for p in (p2, p1):
+        await _link(session, ws, late, other, p, "cites", at=3)
+    out = await provenance(session, ws.id)
+    assert [x.parent for x in out.links if x.child == str(other.id)] == sorted([str(p1.id), str(p2.id)])
+
+
+async def test_two_search_links_are_two_paths(session):
+    ws = await _workspace(session)
+    r1, r2 = await _run(session, ws), await _run(session, ws, minutes=3)
+    h = await _hit(session, ws, r1, "Twice")
+    await _link(session, ws, r1, h)
+    await _link(session, ws, r2, h, at=3)
+    paths = await paths_to(session, ws.id, h.id)
+    assert sorted(p[0].parent for p in paths) == sorted([f"root:{r1.id}", f"root:{r2.id}"])
+
+
+async def test_legacy_search_hit_counts_toward_root(session):
+    ws = await _workspace(session)
+    run = await _run(session, ws)
+    await _hit(session, ws, run, "NoLink", status="relevant")
+    (root,) = (await provenance(session, ws.id)).roots
+    assert (root.hit_count, root.on_tree) == (1, 1)
+
+
+async def test_paths_route_404_for_another_workspaces_hit(client, session):
+    ws, *_ = await _chain(session)
+    _, _, _, _, _, foreign = await _chain(session)
+    await session.commit()
+    res = await client.get(f"/api/workspaces/{ws.id}/search/hits/{foreign.id}/paths")
+    assert res.status_code == 404
