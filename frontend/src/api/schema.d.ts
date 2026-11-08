@@ -6233,6 +6233,7 @@ export interface components {
              *     }
              */
             prescreen: components["schemas"]["PrescreenCounts"];
+            snowball?: components["schemas"]["SnowballStats"] | null;
             /**
              * Id
              * Format: uuid
@@ -6329,6 +6330,7 @@ export interface components {
              *     }
              */
             prescreen: components["schemas"]["PrescreenCounts"];
+            snowball?: components["schemas"]["SnowballStats"] | null;
             /**
              * Id
              * Format: uuid
@@ -6712,6 +6714,40 @@ export interface components {
              * @default true
              */
             forward: boolean;
+        };
+        /** SnowballSeed */
+        SnowballSeed: {
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "hit" | "paper";
+            /** Title */
+            title: string;
+            /** Found */
+            found: {
+                [key: string]: number;
+            };
+            /** New */
+            new: {
+                [key: string]: number;
+            };
+            /** Skipped */
+            skipped?: string | null;
+            /** Error */
+            error?: string | null;
+        };
+        /**
+         * SnowballStats
+         * @description What a snowball run did, per seed (stats_json["snowball"]).
+         */
+        SnowballStats: {
+            /** Seeds */
+            seeds: components["schemas"]["SnowballSeed"][];
+            /** Directions */
+            directions: string[];
         };
         /** SourceKeys */
         SourceKeys: {

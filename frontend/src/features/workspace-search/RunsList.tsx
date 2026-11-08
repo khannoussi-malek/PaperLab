@@ -5,6 +5,7 @@ import { Term } from '@/features/workspaces/Term'
 import { cn } from '@/lib/utils'
 import { plural } from '@/features/charts/chartMeta'
 import { relative } from './schedule'
+import { snowballLine } from './snowballText'
 import { continueLabel, continueRefusal, pausedText } from './continueText'
 
 /** The workspace's recent search runs, collapsed under Saved searches; picking one opens it (its id goes in the URL). */
@@ -41,7 +42,9 @@ export function RunsList({
         <Term term="run"><span className="sr-only">What is a run?</span></Term>
       </div>
       {open &&
-        runs.map((r) => (
+        runs.map((r) => {
+          const snow = r.snowball ? snowballLine(r.snowball) : null
+          return (
           <div key={r.id} data-run={r.id} className="grid gap-1">
           <div className="flex items-center gap-2">
             <button
@@ -71,8 +74,11 @@ export function RunsList({
           {cont.error && cont.variables === r.id && (
             <p role="alert" className="text-sm text-destructive">{continueRefusal(cont.error.message)}</p>
           )}
+          {snow && <p className="px-3 text-xs text-muted-foreground">{snow.counts}</p>}
+          {snow?.error && <p role="alert" className="px-3 text-sm text-destructive">{snow.error}</p>}
           </div>
-        ))}
+          )
+        })}
     </section>
   )
 }
