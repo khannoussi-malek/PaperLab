@@ -2,7 +2,7 @@
 
 import uuid
 
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,36 +10,6 @@ from app.models.provenance import WorkspaceHitLink
 from app.models.workspace_search import WorkspaceSearchHit, WorkspaceSearchRun
 
 MAX_DEPTH = 50
-
-# Walks up through parent hits. Cycle-safe: each path never revisits a node, and a node with a search link (a
-# root, level 0) is not expanded further; the depth cap is a last brake.
-# A node ends the walk when it has a search link, a
-# link to a bare paper (that paper counts as level 0, so the node is level 1), or no links at all (legacy data,
-# level 0). The level is the shallowest such node's depth plus its own level.
-_LEVEL_SQL = text(
-    """
-    WITH RECURSIVE walk(hit_id, depth, path) AS (
-        SELECT CAST(:hit_id AS uuid), 0, ARRAY[CAST(:hit_id AS uuid)]
-        UNION ALL
-        SELECT l.parent_hit_id, w.depth + 1, w.path || l.parent_hit_id
-        FROM walk w JOIN workspace_hit_links l ON l.child_hit_id = w.hit_id
-        WHERE l.parent_hit_id IS NOT NULL AND w.depth < :max_depth
-          AND NOT l.parent_hit_id = ANY(w.path)
-          AND NOT EXISTS (
-              SELECT 1 FROM workspace_hit_links s WHERE s.child_hit_id = w.hit_id AND s.kind = 'search'
-          )
-    )
-    SELECT min(w.depth + CASE WHEN has_search THEN 0 WHEN has_paper_parent THEN 1 ELSE 0 END)
-    FROM walk w
-    CROSS JOIN LATERAL (
-        SELECT coalesce(bool_or(kind = 'search'), false) AS has_search,
-               coalesce(bool_or(parent_hit_id IS NULL AND kind <> 'search'), false) AS has_paper_parent,
-               count(*) AS n
-        FROM workspace_hit_links WHERE child_hit_id = w.hit_id
-    ) f
-    WHERE f.has_search OR f.has_paper_parent OR f.n = 0
-    """
-)
 
 
 async def record_links(
@@ -59,6 +29,21 @@ async def record_links(
         await session.execute(pg_insert(WorkspaceHitLink).values(rows).on_conflict_do_nothing())
 
 
+async def already_found_by_saved_search(
+    session: AsyncSession, run: WorkspaceSearchRun, hit_ids: list[uuid.UUID]
+) -> set[uuid.UUID]:
+    """Of these hits, the ones an earlier run of this run's saved search already linked as a search hit."""
+    rows = await session.scalars(
+        select(WorkspaceHitLink.child_hit_id)
+        .join(WorkspaceSearchRun, WorkspaceSearchRun.id == WorkspaceHitLink.run_id)
+        .where(
+            WorkspaceHitLink.child_hit_id.in_(hit_ids), WorkspaceHitLink.kind == "search",
+            WorkspaceSearchRun.saved_search_id == run.saved_search_id, WorkspaceSearchRun.id != run.id,
+        )
+    )
+    return set(rows)
+
+
 async def seed_parent(session: AsyncSession, workspace_id: uuid.UUID, paper_id: uuid.UUID) -> uuid.UUID | None:
     """The earliest hit in the workspace that carries this paper, if any."""
     return await session.scalar(
@@ -70,5 +55,34 @@ async def seed_parent(session: AsyncSession, workspace_id: uuid.UUID, paper_id: 
 
 
 async def level_of(session: AsyncSession, hit_id: uuid.UUID) -> int:
-    level = await session.scalar(_LEVEL_SQL, {"hit_id": hit_id, "max_depth": MAX_DEPTH})
-    return 0 if level is None else level
+    """How many hops a hit is from where it entered the workspace. Walks up breadth-first with a visited set (one
+    query per depth), so a densely cross-linked graph costs one pass, not one per path. A hit with a `search` link
+    is level 0 and not walked past; a link to a bare paper makes the hit one deeper than that paper; a hit with no
+    links at all (legacy data) is level 0. No such hit within MAX_DEPTH: level 0."""
+    best: int | None = None
+    seen = {hit_id}
+    frontier = [hit_id]
+    for depth in range(MAX_DEPTH + 1):
+        if not frontier or (best is not None and depth >= best):
+            break
+        rows = (await session.execute(
+            select(
+                WorkspaceHitLink.child_hit_id, WorkspaceHitLink.parent_hit_id,
+                WorkspaceHitLink.parent_paper_id, WorkspaceHitLink.kind,
+            ).where(WorkspaceHitLink.child_hit_id.in_(frontier))
+        )).all()
+        by_child: dict[uuid.UUID, list] = {h: [] for h in frontier}
+        for row in rows:
+            by_child[row.child_hit_id].append(row)
+        nxt: list[uuid.UUID] = []
+        for hit, links in by_child.items():
+            if not links or any(link.kind == "search" for link in links):
+                best = depth if best is None else min(best, depth)
+                continue  # a root (or legacy hit): not walked past
+            if any(link.parent_hit_id is None for link in links):  # a bare-paper parent counts as level 0
+                best = depth + 1 if best is None else min(best, depth + 1)
+            nxt.extend(
+                p for link in links if (p := link.parent_hit_id) is not None and p not in seen and not seen.add(p)
+            )
+        frontier = nxt
+    return best or 0

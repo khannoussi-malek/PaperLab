@@ -15,6 +15,7 @@ from app.core.workspace_search import search_batch, snowball
 from app.models import Paper
 from app.models.provenance import WorkspaceHitLink
 from app.models.references import ExternalRef
+from app.models.saved_search import SavedSearch
 from app.models.workspace import Workspace
 from app.models.workspace_search import WorkspaceSearchCursor, WorkspaceSearchHit, WorkspaceSearchRun
 from app.providers import discovery_fake, semantic_scholar
@@ -257,6 +258,58 @@ async def test_level_of_terminates_on_a_dense_cyclic_graph(session):
     assert [await level_of(session, hit.id) for hit in others] == [1] * 5
 
 
+async def _cluster(session, workspace, run, size, with_root):
+    """`size` non-search hits, every ordered pair linked both ways; plus one search root linked from hit 0."""
+    hits = []
+    for _ in range(size):
+        ref = ExternalRef(title=f"dense {uuid.uuid4().hex[:8]}")
+        session.add(ref)
+        await session.flush()
+        hit = WorkspaceSearchHit(
+            workspace_id=workspace.id, run_id=run.id, external_ref_id=ref.id, source_method="snowball_backward",
+            normalized_title=uuid.uuid4().hex, first_seen_at=datetime.now(timezone.utc),
+        )
+        session.add(hit)
+        hits.append(hit)
+    await session.flush()
+    session.add_all(
+        WorkspaceHitLink(
+            workspace_id=workspace.id, child_hit_id=c.id, parent_hit_id=p.id, run_id=run.id, kind=kind
+        )
+        for c in hits for p in hits if c.id != p.id for kind in ("cites", "cited_by")
+    )
+    root = None
+    if with_root:
+        root = await _seed_hit(session, workspace, run)
+        session.add(WorkspaceHitLink(
+            workspace_id=workspace.id, child_hit_id=hits[0].id, parent_hit_id=root.id, run_id=run.id, kind="cites"
+        ))
+    await session.commit()
+    return hits, root
+
+
+async def test_level_of_is_fast_on_a_30_node_fully_linked_cluster(session):
+    import time
+
+    workspace, run = await _workspace_and_run(session)
+    hits, root = await _cluster(session, workspace, run, 30, with_root=True)
+    start = time.monotonic()
+    levels = [await level_of(session, hit.id) for hit in hits]
+    assert levels[0] == 1 and levels[1:] == [2] * 29
+    assert await level_of(session, root.id) == 0
+    assert time.monotonic() - start < 2
+
+
+async def test_level_of_a_rootless_cluster_is_legacy_level_zero_and_fast(session):
+    import time
+
+    workspace, run = await _workspace_and_run(session)
+    hits, _ = await _cluster(session, workspace, run, 30, with_root=False)
+    start = time.monotonic()
+    assert await level_of(session, hits[0].id) == 0
+    assert time.monotonic() - start < 2
+
+
 def _s2_with(handle):
     return semantic_scholar.new_client(api_key=None, transport=httpx.MockTransport(handle))
 
@@ -286,6 +339,46 @@ async def test_snowball_run_records_seed_stats(session, edge_providers):
     assert entry["found"] == {"cites": 1, "cited_by": 0}
     assert entry["new"] == {"cites": 1, "cited_by": 0}
     assert entry["skipped"] is None and entry["error"] is None
+    assert entry["errors"] == {"cites": None, "cited_by": None}
+    assert entry["done"] == ["cites"] and entry["hit_id"] == str(seed.id)
+
+
+async def test_partial_failure_records_errors_per_direction(session, fake_providers):
+    def handle(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/citations"):
+            return httpx.Response(429)
+        if request.url.path.endswith("/references"):
+            return httpx.Response(200, json={"offset": 0, "data": []})
+        return discovery_fake._handle(request)
+
+    client = _s2_with(handle)
+    providers = replace(fake_providers, clients={**fake_providers.clients, "semantic_scholar": client})
+    workspace, run = await _workspace_and_run(session)
+    seed = await _seed_hit(session, workspace, run)
+    try:
+        await snowball(session, providers, workspace.id, [], [seed.id], backward=True, forward=True)
+    finally:
+        await client.aclose()
+    _, stats = await _stats_of(session, workspace.id)
+    entry = stats["seeds"][0]
+    assert entry["errors"]["cites"] is None and entry["errors"]["cited_by"]
+    assert entry["done"] == ["cites"] and entry["error"] == entry["errors"]["cited_by"]
+
+
+async def test_paper_seed_stats_carry_its_hit_or_none(session, edge_providers):
+    workspace, run = await _workspace_and_run(session)
+    with_hit = Paper(title="Has hit", doi=f"10.5555/h-{uuid.uuid4().hex[:8]}", file_path="/x.pdf")
+    bare = Paper(title="No hit", doi=f"10.5555/b-{uuid.uuid4().hex[:8]}", file_path="/y.pdf")
+    session.add_all([with_hit, bare])
+    await session.flush()
+    for paper in (with_hit, bare):
+        await workspaces.add_paper(session, workspace.id, paper.id)
+    hit = await _seed_hit(session, workspace, run, paper_id=with_hit.id)
+
+    await snowball(session, edge_providers, workspace.id, [with_hit.id, bare.id], [], backward=True, forward=False)
+
+    _, stats = await _stats_of(session, workspace.id)
+    assert {e["title"]: e["hit_id"] for e in stats["seeds"]} == {"Has hit": str(hit.id), "No hit": None}
 
 
 async def test_snowball_query_text_counts_extra_seeds(session, edge_providers):
@@ -322,6 +415,7 @@ async def test_zero_result_snowball_records_seed_and_error(session, fake_provide
     assert entry["title"] == "Rate limited seed"
     assert entry["found"] == {"cites": 0, "cited_by": 0}
     assert entry["error"]
+    assert entry["errors"]["cites"] and entry["errors"]["cited_by"] and entry["done"] == []
 
 
 async def test_skipped_seed_records_reason(session, fake_providers):
@@ -377,3 +471,30 @@ async def test_runs_list_exposes_snowball_stats(session, client, fake_providers_
     assert snow["seeds"][0]["title"] == free_title
     assert snow["seeds"][0]["found"]["cites"] > 0
     assert snow["directions"] == ["cites"]
+
+
+async def _saved_run(session, workspace, saved):
+    run = await _run(session, workspace)
+    run.saved_search_id = saved.id
+    await session.commit()
+    return run
+
+
+async def test_saved_search_repeat_keeps_one_search_link(session, fake_providers):
+    workspace, _ = await _workspace_and_run(session)
+    saved = SavedSearch(workspace_id=workspace.id, query="bert", schedule="0 6 * * *", timezone="UTC")
+    other = SavedSearch(workspace_id=workspace.id, query="gpt", schedule="0 6 * * *", timezone="UTC")
+    session.add_all([saved, other])
+    await session.flush()
+    first = await _saved_run(session, workspace, saved)
+    await search_batch(session, fake_providers, first)
+    hits = (await session.execute(
+        select(WorkspaceSearchHit).where(WorkspaceSearchHit.workspace_id == workspace.id)
+    )).scalars().all()
+    assert hits
+
+    await search_batch(session, fake_providers, await _saved_run(session, workspace, saved))  # same saved search
+    assert len(await _links_of(session, workspace.id)) == len(hits)
+
+    await search_batch(session, fake_providers, await _saved_run(session, workspace, other))  # a different one
+    assert len(await _links_of(session, workspace.id)) == 2 * len(hits)

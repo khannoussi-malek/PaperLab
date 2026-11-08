@@ -66,7 +66,10 @@ class SnowballSeed(BaseModel):
     found: dict[str, int]
     new: dict[str, int]
     skipped: str | None = None
-    error: str | None = None
+    error: str | None = None  # both directions' messages joined, for the Runs list
+    errors: dict[str, str | None] = {"cites": None, "cited_by": None}
+    done: list[str] = []  # directions that finished without error
+    hit_id: str | None = None  # the seed's hit (a paper seed's earliest hit); None for a hand-added paper
 
 
 class SnowballStats(BaseModel):
@@ -355,7 +358,7 @@ class PrismaExportOut(BaseModel):
 class BranchIn(BaseModel):
     hit_id: uuid.UUID | None = None
     paper_id: uuid.UUID | None = None
-    state: str | None = None  # checked in core.branches so every caller gets the same InvalidInput
+    state: str | None  # required, null clears the decision; checked in core.branches so every caller gets the same InvalidInput
     directions: list[str] = []
     reason: str | None = None
 

@@ -293,6 +293,7 @@ async def _store_candidates_as_hits(
 
     new_hits = 0
     child_ids: list[uuid.UUID] = []
+    existing_ids: set[uuid.UUID] = set()
     for candidate in merged:
         ref = await _find_or_create_external_ref(session, candidate)
         existing_hit = (
@@ -310,6 +311,7 @@ async def _store_candidates_as_hits(
         if existing_hit is not None:
             # already in the pool (this run or an earlier one) — keeps its existing screening decision
             child_ids.append(existing_hit.id)
+            existing_ids.add(existing_hit.id)
             continue
         inserted_id = await _insert_hit(
             session, run, ref, candidate, source_method=source_method,
@@ -328,7 +330,12 @@ async def _store_candidates_as_hits(
                 new_by_source.update(candidate.sources)
         if inserted_id is not None:
             child_ids.append(inserted_id)
-    await hit_links.record_links(session, run, child_ids, kind, parent_hit_id, parent_paper_id)
+    link_ids = child_ids
+    if kind == "search" and run.saved_search_id is not None and existing_ids:
+        # a saved search finds the same paper every time it runs: one search link is the whole story
+        linked = await hit_links.already_found_by_saved_search(session, run, list(existing_ids))
+        link_ids = [c for c in child_ids if c not in linked]
+    await hit_links.record_links(session, run, link_ids, kind, parent_hit_id, parent_paper_id)
     return new_hits, child_ids
 
 
@@ -581,19 +588,37 @@ def _joined(direction_errors: dict[str, str]) -> str | None:
     return "; ".join(direction_errors.values()) or None
 
 
+_ERROR_KEY_KINDS = {"semantic_scholar_backward": "cites", "semantic_scholar_forward": "cited_by"}
+
+
 _DIRECTION_KINDS = {"backward": ("snowball_backward", "cites"), "forward": ("snowball_forward", "cited_by")}
 
 
 def _seed_entry(
     seed_id: uuid.UUID, kind: str, title: str, found: dict[str, int] | None = None, new: dict[str, int] | None = None,
-    skipped: str | None = None, error: str | None = None,
+    skipped: str | None = None, error: str | None = None, hit_id: uuid.UUID | None = None,
+    errors: dict[str, str] | None = None,
 ) -> dict:
-    """One seed's line in stats_json["snowball"]["seeds"]; counts are keyed by link kind (cites / cited_by)."""
+    """One seed's line in stats_json["snowball"]["seeds"]; counts are keyed by link kind (cites / cited_by).
+    `errors` is keyed by link kind too; `done` lists the kinds that came back without error; `hit_id` is the
+    seed's hit (None for a hand-added paper that has none)."""
     zero = {"cites": 0, "cited_by": 0}
+    by_kind = {**{k: None for k in zero}, **(errors or {})}
     return {
         "id": str(seed_id), "kind": kind, "title": title, "found": {**zero, **(found or {})},
         "new": {**zero, **(new or {})}, "skipped": skipped, "error": error,
+        "errors": by_kind, "done": [k for k in (found or {}) if by_kind[k] is None],
+        "hit_id": str(hit_id) if hit_id else None,
     }
+
+
+def _kind_errors(direction_errors: dict[str, str]) -> dict[str, str]:
+    return {_ERROR_KEY_KINDS[key]: message for key, message in direction_errors.items()}
+
+
+def _whole_seed_errors(message: str, backward: bool, forward: bool) -> dict[str, str]:
+    """A failure before any direction ran counts against every direction that was asked for."""
+    return {kind: message for flag, kind in ((backward, "cites"), (forward, "cited_by")) if flag}
 
 
 async def _store_hop(
@@ -665,28 +690,32 @@ async def snowball(
         if member is None:
             raise NotFound(f"paper {paper_id} not in workspace {workspace_id}")
         paper = await session.get(Paper, paper_id)
+        parent_hit_id = await hit_links.seed_parent(session, workspace_id, paper_id)
         try:
             result = await _snowball_from_s2(providers, paper.doi, paper.title, backward, forward)
         except httpx.HTTPError as exc:
             # A failure before either direction's own try/except could run (e.g. the s2_key title-match lookup
             # itself 429ing) — not a per-direction error, so no direction-specific key to give it.
             errors["semantic_scholar"] = str(exc)
-            entries.append(_seed_entry(paper_id, "paper", paper.title, error=str(exc)))
+            entries.append(_seed_entry(
+                paper_id, "paper", paper.title, error=str(exc), hit_id=parent_hit_id,
+                errors=_whole_seed_errors(str(exc), backward, forward),
+            ))
             continue
         if result is None:
             skipped.append(paper_id)
-            entries.append(_seed_entry(paper_id, "paper", paper.title, skipped=NOT_IN_S2))
+            entries.append(_seed_entry(paper_id, "paper", paper.title, skipped=NOT_IN_S2, hit_id=parent_hit_id))
             continue
         found, direction_errors = result
         errors.update(direction_errors)
-        parent_hit_id = await hit_links.seed_parent(session, workspace_id, paper_id)
         level = await hit_links.level_of(session, parent_hit_id) if parent_hit_id else 0
         new = await _store_hop(
             session, run, found, level + 1, parent_hit_id, None if parent_hit_id else paper_id, seed_paper_id=paper_id
         )
         new_hits += sum(new.values())
         entries.append(_seed_entry(
-            paper_id, "paper", paper.title, _found_counts(found), new, error=_joined(direction_errors)
+            paper_id, "paper", paper.title, _found_counts(found), new, error=_joined(direction_errors),
+            hit_id=parent_hit_id, errors=_kind_errors(direction_errors),
         ))
 
     for hit_id in seed_hit_ids:
@@ -697,17 +726,20 @@ async def snowball(
         title = ref.title if ref else hit.normalized_title
         if ref is None:
             skipped.append(hit_id)
-            entries.append(_seed_entry(hit_id, "hit", title, skipped=NOT_IN_S2))
+            entries.append(_seed_entry(hit_id, "hit", title, skipped=NOT_IN_S2, hit_id=hit_id))
             continue
         try:
             result = await _snowball_from_s2(providers, ref.doi, ref.title, backward, forward)
         except httpx.HTTPError as exc:
             errors["semantic_scholar"] = str(exc)
-            entries.append(_seed_entry(hit_id, "hit", title, error=str(exc)))
+            entries.append(_seed_entry(
+                hit_id, "hit", title, error=str(exc), hit_id=hit_id,
+                errors=_whole_seed_errors(str(exc), backward, forward),
+            ))
             continue
         if result is None:
             skipped.append(hit_id)
-            entries.append(_seed_entry(hit_id, "hit", title, skipped=NOT_IN_S2))
+            entries.append(_seed_entry(hit_id, "hit", title, skipped=NOT_IN_S2, hit_id=hit_id))
             continue
         found, direction_errors = result
         errors.update(direction_errors)
@@ -715,7 +747,10 @@ async def snowball(
         # hop; the parent is recorded in workspace_hit_links instead.
         new = await _store_hop(session, run, found, await hit_links.level_of(session, hit_id) + 1, hit_id, None)
         new_hits += sum(new.values())
-        entries.append(_seed_entry(hit_id, "hit", title, _found_counts(found), new, error=_joined(direction_errors)))
+        entries.append(_seed_entry(
+            hit_id, "hit", title, _found_counts(found), new, error=_joined(direction_errors), hit_id=hit_id,
+            errors=_kind_errors(direction_errors),
+        ))
 
     if entries:
         run.query_text = _snowball_query_text(entries[0]["title"], len(entries))
