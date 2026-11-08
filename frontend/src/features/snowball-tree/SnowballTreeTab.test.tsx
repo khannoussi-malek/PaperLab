@@ -155,7 +155,7 @@ test('a seed that ran cleanly and found nothing still shows 0 found, with no err
   setup(withNode({ id: 'X', title: 'Quiet seed', level: 0, decision: null, snowballed: ['cites'], paths: 1, zero_found_error: '' }))
   const box = screen.getByRole('button', { name: /^Quiet seed/ })
   expect(within(box).getByText('0 found')).toBeTruthy()
-  expect(box.querySelectorAll('span.line-clamp-2, span.truncate')).toHaveLength(1) // only the title
+  expect(box.querySelectorAll('span.line-clamp-1, span.line-clamp-2, span.truncate')).toHaveLength(1) // only the title
 })
 
 test('a search root says how many excluded hits the cap left off', () => {
