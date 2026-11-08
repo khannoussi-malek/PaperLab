@@ -61,3 +61,9 @@ test('one search holding 70% of the papers: the smallest sector is at least 6 de
   expect(Math.max(...sectors)).toBeLessThan(0.6 * 2 * Math.PI)
   expect(sectors.reduce((s, x) => s + x, 0)).toBeCloseTo(2 * Math.PI)
 })
+
+test('80 roots never overlap: the sectors add up to at most the full circle', () => {
+  const out = build(80, () => 1, 0)
+  const sectors = out.filter((b) => b.box.root).map((b) => b.sector[1] - b.sector[0])
+  expect(sectors.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(2 * Math.PI + 1e-9)
+})

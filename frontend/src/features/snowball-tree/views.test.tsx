@@ -34,9 +34,9 @@ const data: ProvenanceOut = {
     { level: 1, found: 2, already_known: 0, included: 1, go_further: 0, stopped: 0, done: true, saturated: false },
   ],
 }
-function setup() {
+function setup(d: ProvenanceOut = data) {
   localStorage.clear()
-  vi.spyOn(queries, 'useProvenance').mockReturnValue({ data, isPending: false, error: null } as any)
+  vi.spyOn(queries, 'useProvenance').mockReturnValue({ data: d, isPending: false, error: null } as any)
   vi.spyOn(queries, 'usePaths').mockReturnValue({ data: undefined } as any)
   vi.spyOn(queries, 'useSearchHit').mockReturnValue({ data: undefined } as any)
   vi.spyOn(api, 'snowballNext').mockResolvedValue([])
@@ -106,4 +106,28 @@ test('Outline fades the same papers the Tree fades', () => {
 test('the view choice is remembered for the workspace', () => {
   setup(); view('Outline')
   expect(localStorage.getItem('snowball-tree-view:w1')).toBe('outline')
+})
+
+test('Map: names its frame, and Key papers lists the key papers as buttons that select', async () => {
+  setup(); view('Map')
+  expect(await screen.findByLabelText('Map of the snowball tree')).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: 'Key papers' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Included child' })) // the only paper with more than one route
+  expect(panel().getByText('Included child')).toBeTruthy()
+})
+
+test('Map: leaves out "parent not recorded" boxes', async () => {
+  const withUnknown = { ...data, nodes: [...data.nodes, { id: 'run:x:unknown', title: 'x', level: 0, decision: null, snowballed: [], paths: 1 }] } as ProvenanceOut
+  setup(withUnknown); view('Map')
+  await screen.findByRole('button', { name: 'map:A' })
+  expect(screen.queryByRole('button', { name: 'map:run:x:unknown' })).toBeNull()
+})
+
+test('Radial: a focused paper gets a focus ring', () => {
+  setup(); view('Radial')
+  const b = screen.getByRole('button', { name: 'Included child, level 1, included' })
+  fireEvent.focus(b)
+  expect(document.querySelector('[data-ring="focus"]')).toBeTruthy()
+  fireEvent.blur(b)
+  expect(document.querySelector('[data-ring="focus"]')).toBeNull()
 })

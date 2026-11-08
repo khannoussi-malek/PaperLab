@@ -32,7 +32,7 @@ export function toRadial(layout: Layout): RadialBox[] {
   const weight = (id: string) => Math.sqrt(leaves.get(id)!)
   const total = tops.reduce((s, t) => s + weight(t.id), 0)
   const full = 2 * Math.PI
-  const min = (MIN_SECTOR * Math.PI) / 180
+  const min = Math.min((MIN_SECTOR * Math.PI) / 180, full / Math.max(1, tops.length)) // many roots share the circle rather than overlap
   const small = tops.filter((t) => (weight(t.id) / total) * full < min)
   const rest = total - small.reduce((s, t) => s + weight(t.id), 0)
   const room = full - small.length * min
